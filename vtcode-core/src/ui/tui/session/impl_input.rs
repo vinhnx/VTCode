@@ -7,6 +7,7 @@ impl Session {
 
     pub fn set_input(&mut self, text: impl Into<String>) {
         self.input_manager.set_content(text.into());
+        self.input_compact_mode = self.input_compact_placeholder().is_some();
         self.mark_dirty();
     }
 
@@ -24,6 +25,15 @@ impl Session {
             InlineCommand::AppendLine { kind, segments } => {
                 self.clear_thinking_spinner_if_active(kind);
                 self.push_line(kind, segments);
+                self.transcript_content_changed = true;
+            }
+            InlineCommand::AppendPastedMessage {
+                kind,
+                text,
+                line_count,
+            } => {
+                self.clear_thinking_spinner_if_active(kind);
+                self.append_pasted_message(kind, text, line_count);
                 self.transcript_content_changed = true;
             }
             InlineCommand::Inline { kind, segment } => {
@@ -87,6 +97,7 @@ impl Session {
                     crate::utils::transcript::display_error(&content);
                 } else {
                     self.input_manager.set_content(content);
+                    self.input_compact_mode = self.input_compact_placeholder().is_some();
                     self.scroll_manager.set_offset(0);
                     slash::update_slash_suggestions(self);
                 }

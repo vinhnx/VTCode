@@ -582,6 +582,11 @@ pub enum InlineCommand {
         kind: InlineMessageKind,
         segments: Vec<InlineSegment>,
     },
+    AppendPastedMessage {
+        kind: InlineMessageKind,
+        text: String,
+        line_count: usize,
+    },
     Inline {
         kind: InlineMessageKind,
         segment: InlineSegment,
@@ -784,6 +789,14 @@ impl InlineHandle {
 
     pub fn append_line(&self, kind: InlineMessageKind, segments: Vec<InlineSegment>) {
         self.send_command(InlineCommand::AppendLine { kind, segments });
+    }
+
+    pub fn append_pasted_message(&self, kind: InlineMessageKind, text: String, line_count: usize) {
+        self.send_command(InlineCommand::AppendPastedMessage {
+            kind,
+            text,
+            line_count,
+        });
     }
 
     pub fn inline(&self, kind: InlineMessageKind, segment: InlineSegment) {

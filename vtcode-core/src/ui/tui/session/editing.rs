@@ -22,33 +22,7 @@ impl Session {
             return;
         }
         self.input_manager.insert_char(ch);
-        slash::update_slash_suggestions(self);
-    }
-
-    /// Insert text at the current cursor position
-    ///
-    /// Sanitizes the text to respect newline capacity limits
-    pub(super) fn insert_text(&mut self, text: &str) {
-        let mut remaining_newlines = self.remaining_newline_capacity();
-        let sanitized: String = text
-            .chars()
-            .filter(|&ch| {
-                if ch == '\n' {
-                    if remaining_newlines > 0 {
-                        remaining_newlines -= 1;
-                        true
-                    } else {
-                        false
-                    }
-                } else {
-                    ch != '\r' && ch != '\u{7f}'
-                }
-            })
-            .collect();
-        if sanitized.is_empty() {
-            return;
-        }
-        self.input_manager.insert_text(&sanitized);
+        self.input_compact_mode = self.input_compact_placeholder().is_some();
         slash::update_slash_suggestions(self);
     }
 
@@ -68,6 +42,7 @@ impl Session {
         }
 
         self.input_manager.insert_text(&sanitized);
+        self.input_compact_mode = self.input_compact_placeholder().is_some();
         slash::update_slash_suggestions(self);
     }
 
@@ -86,12 +61,14 @@ impl Session {
     /// Delete the character before the cursor (backspace)
     pub(super) fn delete_char(&mut self) {
         self.input_manager.backspace();
+        self.input_compact_mode = self.input_compact_placeholder().is_some();
         slash::update_slash_suggestions(self);
     }
 
     /// Delete the character at the cursor (forward delete)
     pub(super) fn delete_char_forward(&mut self) {
         self.input_manager.delete();
+        self.input_compact_mode = self.input_compact_placeholder().is_some();
         slash::update_slash_suggestions(self);
     }
 
@@ -148,6 +125,7 @@ impl Session {
 
             self.input_manager.set_content(new_content);
             self.input_manager.set_cursor(delete_start);
+            self.input_compact_mode = self.input_compact_placeholder().is_some();
             slash::update_slash_suggestions(self);
         }
     }
@@ -169,6 +147,7 @@ impl Session {
             let new_content = format!("{}{}", &content[..delete_start], &content[cursor..]);
             self.input_manager.set_content(new_content);
             self.input_manager.set_cursor(delete_start);
+            self.input_compact_mode = self.input_compact_placeholder().is_some();
             slash::update_slash_suggestions(self);
         }
     }
@@ -189,6 +168,7 @@ impl Session {
         if delete_len > 0 {
             let new_content = format!("{}{}", &content[..cursor], &content[cursor + delete_len..]);
             self.input_manager.set_content(new_content);
+            self.input_compact_mode = self.input_compact_placeholder().is_some();
             slash::update_slash_suggestions(self);
         }
     }

@@ -1,5 +1,6 @@
 use super::{PLACEHOLDER_COLOR, Session, measure_text_width, ratatui_style_from_inline};
 use crate::config::constants::ui;
+use crate::tools::file_ops::is_image_path;
 use crate::ui::tui::types::InlineTextStyle;
 use anstyle::{Color as AnsiColorEnum, Effects};
 use ratatui::{
@@ -7,6 +8,9 @@ use ratatui::{
     prelude::*,
     widgets::{Block, Clear, Padding, Paragraph, Wrap},
 };
+use regex::Regex;
+use std::path::Path;
+use std::sync::LazyLock;
 use tui_shimmer::shimmer_spans_with_style_at_phase;
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
@@ -45,8 +49,11 @@ impl Session {
     pub(super) fn render_input(&mut self, frame: &mut Frame<'_>, area: Rect) {
         frame.render_widget(Clear, area);
         if area.height == 0 {
+            self.set_input_area(None);
             return;
         }
+
+        self.set_input_area(Some(area));
 
         let mut input_area = area;
         let mut status_area = None;
@@ -100,7 +107,18 @@ impl Session {
     }
 
     pub(crate) fn desired_input_lines(&self, inner_width: u16) -> u16 {
-        if inner_width == 0 || self.input_manager.content().is_empty() {
+        if inner_width == 0 {
+            return 1;
+        }
+
+        if self.input_compact_mode
+            && self.input_manager.cursor() == self.input_manager.content().len()
+            && self.input_compact_placeholder().is_some()
+        {
+            return 1;
+        }
+
+        if self.input_manager.content().is_empty() {
             return 1;
         }
 
@@ -226,6 +244,31 @@ impl Session {
         let prompt_width = UnicodeWidthStr::width(self.prompt_prefix.as_str()) as u16;
         let prompt_display_width = prompt_width.min(width);
 
+        let cursor_at_end = self.input_manager.cursor() == self.input_manager.content().len();
+        if self.input_compact_mode
+            && cursor_at_end
+            && let Some(placeholder) = self.input_compact_placeholder()
+        {
+            let placeholder_style = InlineTextStyle {
+                color: Some(AnsiColorEnum::Rgb(PLACEHOLDER_COLOR)),
+                bg_color: None,
+                effects: Effects::DIMMED,
+            };
+            let style = ratatui_style_from_inline(
+                &placeholder_style,
+                Some(AnsiColorEnum::Rgb(PLACEHOLDER_COLOR)),
+            );
+            let placeholder_width = UnicodeWidthStr::width(placeholder.as_str()) as u16;
+            return InputRender {
+                text: Text::from(vec![Line::from(vec![
+                    Span::styled(self.prompt_prefix.clone(), prompt_style),
+                    Span::styled(placeholder, style),
+                ])]),
+                cursor_x: prompt_display_width.saturating_add(placeholder_width),
+                cursor_y: 0,
+            };
+        }
+
         if self.input_manager.content().is_empty() {
             let mut spans = Vec::new();
             spans.push(Span::styled(self.prompt_prefix.clone(), prompt_style));
@@ -284,6 +327,46 @@ impl Session {
             cursor_x: layout.cursor_column,
             cursor_y,
         }
+    }
+
+    pub(super) fn input_compact_placeholder(&self) -> Option<String> {
+        let content = self.input_manager.content();
+        let trimmed = content.trim();
+        let attachment_count = self.input_manager.attachments().len();
+        if trimmed.is_empty() && attachment_count == 0 {
+            return None;
+        }
+
+        if let Some(label) = compact_image_label(trimmed) {
+            return Some(format!("[Image: {label}]"));
+        }
+
+        if attachment_count > 0 {
+            let label = if attachment_count == 1 {
+                "1 attachment".to_string()
+            } else {
+                format!("{attachment_count} attachments")
+            };
+            if trimmed.is_empty() {
+                return Some(format!("[Image: {label}]"));
+            }
+            if let Some(compact) = compact_image_placeholders(content) {
+                return Some(format!("[Image: {label}] {compact}"));
+            }
+            return Some(format!("[Image: {label}] {trimmed}"));
+        }
+
+        let line_count = content.split('\n').count();
+        if line_count >= ui::INLINE_PASTE_COLLAPSE_LINE_THRESHOLD {
+            let char_count = content.chars().count();
+            return Some(format!("[Pasted Content {char_count} chars]"));
+        }
+
+        if let Some(compact) = compact_image_placeholders(content) {
+            return Some(compact);
+        }
+
+        None
     }
 
     fn render_input_status_line(&self, width: u16) -> Option<Line<'static>> {
@@ -434,6 +517,147 @@ impl Session {
     pub fn build_input_status_widget_data(&self, width: u16) -> Option<Vec<Span<'static>>> {
         self.render_input_status_line(width).map(|line| line.spans)
     }
+}
+
+fn compact_image_label(content: &str) -> Option<String> {
+    let trimmed = content.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    let unquoted = trimmed
+        .strip_prefix('"')
+        .and_then(|value| value.strip_suffix('"'))
+        .or_else(|| {
+            trimmed
+                .strip_prefix('\'')
+                .and_then(|value| value.strip_suffix('\''))
+        })
+        .unwrap_or(trimmed);
+
+    if unquoted.starts_with("data:image/") {
+        return Some("inline image".to_string());
+    }
+
+    let windows_drive = unquoted.as_bytes().get(1).is_some_and(|ch| *ch == b':')
+        && unquoted
+            .as_bytes()
+            .get(2)
+            .is_some_and(|ch| *ch == b'\\' || *ch == b'/');
+    let starts_like_path = unquoted.starts_with('@')
+        || unquoted.starts_with("file://")
+        || unquoted.starts_with('/')
+        || unquoted.starts_with("./")
+        || unquoted.starts_with("../")
+        || unquoted.starts_with("~/")
+        || windows_drive;
+    if !starts_like_path {
+        return None;
+    }
+
+    let without_at = unquoted.strip_prefix('@').unwrap_or(unquoted);
+    let without_scheme = without_at.strip_prefix("file://").unwrap_or(without_at);
+    let path = Path::new(without_scheme);
+    if !is_image_path(path) {
+        return None;
+    }
+
+    let label = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or(without_scheme);
+    Some(label.to_string())
+}
+
+static IMAGE_PATH_INLINE_REGEX: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
+        r#"(?ix)
+        (?:^|[\s\(\[\{<\"'`])
+        (
+            @?
+            (?:file://)?
+            (?:
+                ~/(?:[^\n/]+/)+
+              | /(?:[^\n/]+/)+
+              | [A-Za-z]:[\\/](?:[^\n\\\/]+[\\/])+
+            )
+            [^\n]*?
+            \.(?:png|jpe?g|gif|bmp|webp|tiff?|svg)
+        )"#,
+    )
+    .expect("Failed to compile inline image path regex")
+});
+
+fn compact_image_placeholders(content: &str) -> Option<String> {
+    let mut matches = Vec::new();
+    for capture in IMAGE_PATH_INLINE_REGEX.captures_iter(content) {
+        let Some(path_match) = capture.get(1) else {
+            continue;
+        };
+        let raw = path_match.as_str();
+        let Some(label) = image_label_for_path(raw) else {
+            continue;
+        };
+        matches.push((path_match.start(), path_match.end(), label));
+    }
+
+    if matches.is_empty() {
+        return None;
+    }
+
+    let mut result = String::with_capacity(content.len());
+    let mut last_end = 0usize;
+    for (start, end, label) in matches {
+        if start < last_end {
+            continue;
+        }
+        result.push_str(&content[last_end..start]);
+        result.push_str(&format!("[Image: {label}]"));
+        last_end = end;
+    }
+    if last_end < content.len() {
+        result.push_str(&content[last_end..]);
+    }
+
+    Some(result)
+}
+
+fn image_label_for_path(raw: &str) -> Option<String> {
+    let trimmed = raw.trim_matches(|ch: char| matches!(ch, '"' | '\'')).trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    let without_at = trimmed.strip_prefix('@').unwrap_or(trimmed);
+    let without_scheme = without_at.strip_prefix("file://").unwrap_or(without_at);
+    let unescaped = unescape_whitespace(without_scheme);
+    let path = Path::new(unescaped.as_str());
+    if !is_image_path(path) {
+        return None;
+    }
+
+    let label = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or(unescaped.as_str());
+    Some(label.to_string())
+}
+
+fn unescape_whitespace(token: &str) -> String {
+    let mut result = String::with_capacity(token.len());
+    let mut chars = token.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if ch == '\\'
+            && let Some(next) = chars.peek()
+            && next.is_ascii_whitespace()
+        {
+            result.push(*next);
+            chars.next();
+            continue;
+        }
+        result.push(ch);
+    }
+    result
 }
 
 fn is_spinner_frame(indicator: &str) -> bool {

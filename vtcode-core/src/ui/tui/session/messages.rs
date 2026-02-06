@@ -65,6 +65,22 @@ impl Session {
         }
     }
 
+    /// Append a large pasted message as a collapsible placeholder.
+    pub(super) fn append_pasted_message(
+        &mut self,
+        kind: InlineMessageKind,
+        text: String,
+        _line_count: usize,
+    ) {
+        self.push_line(
+            kind,
+            vec![InlineSegment {
+                text,
+                style: std::sync::Arc::new(InlineTextStyle::default()),
+            }],
+        );
+    }
+
     /// Append a segment to the transcript, handling newlines and control characters
     pub(super) fn append_inline(&mut self, kind: InlineMessageKind, segment: InlineSegment) {
         let previous_max_offset = self.current_max_scroll_offset();
@@ -126,6 +142,9 @@ impl Session {
     ) {
         let previous_max_offset = self.current_max_scroll_offset();
         let remove_count = min(count, self.lines.len());
+        let first_removed = self.lines.len().saturating_sub(remove_count);
+        self.collapsed_pastes
+            .retain(|paste| paste.line_index < first_removed);
         let first_dirty = self.lines.len().saturating_sub(remove_count);
         for _ in 0..remove_count {
             self.lines.pop();
@@ -141,6 +160,70 @@ impl Session {
         self.mark_line_dirty(first_dirty);
         self.invalidate_scroll_metrics();
         self.adjust_scroll_after_change(previous_max_offset);
+    }
+
+    pub(super) fn expand_collapsed_paste_at_line_index(&mut self, line_index: usize) -> bool {
+        if self.collapsed_pastes.is_empty() {
+            return false;
+        }
+
+        let Some(index) = self
+            .collapsed_pastes
+            .iter()
+            .position(|paste| paste.line_index == line_index)
+        else {
+            return false;
+        };
+
+        let collapsed = self.collapsed_pastes.remove(index);
+        let revision = self.next_revision();
+        let Some(line) = self.lines.get_mut(collapsed.line_index) else {
+            return false;
+        };
+
+        line.segments = vec![InlineSegment {
+            text: collapsed.full_text,
+            style: std::sync::Arc::new(InlineTextStyle::default()),
+        }];
+        line.revision = revision;
+        self.mark_line_dirty(collapsed.line_index);
+        self.invalidate_scroll_metrics();
+        true
+    }
+
+    pub(super) fn expand_collapsed_paste_at_row(&mut self, width: u16, row: usize) -> bool {
+        if self.collapsed_pastes.is_empty() || width == 0 {
+            return false;
+        }
+
+        let message_index = {
+            let cache = self.ensure_reflow_cache(width);
+            if cache.row_offsets.is_empty() {
+                None
+            } else {
+                let idx = match cache.row_offsets.binary_search(&row) {
+                    Ok(idx) => idx,
+                    Err(0) => return false,
+                    Err(pos) => pos.saturating_sub(1),
+                };
+                let start = cache.row_offsets.get(idx).copied().unwrap_or(0);
+                let height = cache
+                    .messages
+                    .get(idx)
+                    .map(|msg| msg.lines.len())
+                    .unwrap_or(1);
+                if row < start.saturating_add(height.max(1)) {
+                    Some(idx)
+                } else {
+                    None
+                }
+            }
+        };
+
+        match message_index {
+            Some(index) => self.expand_collapsed_paste_at_line_index(index),
+            None => false,
+        }
     }
 
     /// Append text to the current or new message line

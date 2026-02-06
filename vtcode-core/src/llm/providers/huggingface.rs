@@ -23,7 +23,6 @@ use serde_json::{Value, json};
 
 use super::common::{
     map_finish_reason_common, override_base_url, parse_response_openai_format, resolve_model,
-    serialize_messages_openai_format,
 };
 use super::error_handling::{format_network_error, format_parse_error};
 
@@ -128,8 +127,99 @@ impl HuggingFaceProvider {
         crate::llm::providers::common::serialize_tools_openai_format(tools)
     }
 
+    fn serialize_messages_huggingface_chat(
+        &self,
+        request: &LLMRequest,
+    ) -> Result<Vec<Value>, LLMError> {
+        use serde_json::{Map, json};
+
+        let mut messages = Vec::with_capacity(request.messages.len());
+
+        for message in &request.messages {
+            message
+                .validate_for_provider(PROVIDER_KEY)
+                .map_err(|e| LLMError::InvalidRequest {
+                    message: e,
+                    metadata: None,
+                })?;
+
+            let mut message_map = Map::with_capacity(4);
+            message_map.insert(
+                "role".to_owned(),
+                Value::String(message.role.as_generic_str().to_owned()),
+            );
+
+            match &message.content {
+                crate::llm::provider::MessageContent::Text(text) => {
+                    message_map.insert("content".to_owned(), Value::String(text.clone()));
+                }
+                crate::llm::provider::MessageContent::Parts(parts) => {
+                    let has_images = parts
+                        .iter()
+                        .any(crate::llm::provider::ContentPart::is_image);
+                    if has_images {
+                        let parts_json: Vec<Value> = parts
+                            .iter()
+                            .map(|part| match part {
+                                crate::llm::provider::ContentPart::Text { text } => {
+                                    json!({ "type": "text", "text": text })
+                                }
+                                crate::llm::provider::ContentPart::Image {
+                                    data,
+                                    mime_type,
+                                    ..
+                                } => {
+                                    json!({
+                                        "type": "image_url",
+                                        "image_url": {
+                                            "url": format!("data:{};base64,{}", mime_type, data)
+                                        }
+                                    })
+                                }
+                            })
+                            .collect();
+                        message_map.insert("content".to_owned(), Value::Array(parts_json));
+                    } else {
+                        let text = message.content.as_text().into_owned();
+                        message_map.insert("content".to_owned(), Value::String(text));
+                    }
+                }
+            }
+
+            if let Some(tool_calls) = &message.tool_calls {
+                let serialized_calls = tool_calls
+                    .iter()
+                    .filter_map(|call| {
+                        call.function.as_ref().map(|func| {
+                            json!({
+                                "id": &call.id,
+                                "type": "function",
+                                "function": {
+                                    "name": &func.name,
+                                    "arguments": &func.arguments
+                                }
+                            })
+                        })
+                    })
+                    .collect::<Vec<_>>();
+                message_map.insert("tool_calls".to_owned(), Value::Array(serialized_calls));
+            }
+
+            if let Some(tool_call_id) = &message.tool_call_id {
+                message_map.insert(
+                    "tool_call_id".to_owned(),
+                    Value::String(tool_call_id.clone()),
+                );
+            }
+
+            messages.push(Value::Object(message_map));
+        }
+
+        Ok(messages)
+    }
+
     fn format_for_chat_completions(&self, request: &LLMRequest) -> Result<Value, LLMError> {
-        let mut messages = serialize_messages_openai_format(request, PROVIDER_KEY)?;
+        let mut messages = self.serialize_messages_huggingface_chat(request)?;
         let is_glm = self.is_glm_model(&request.model);
 
         if let Some(system) = &request.system_prompt {

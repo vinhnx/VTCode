@@ -451,6 +451,9 @@ pub fn content_to_history_messages(
                 crate::gemini::Part::Text { text, .. } => {
                     text_parts.push(text.clone());
                 }
+                crate::gemini::Part::InlineData { .. } => {
+                    text_parts.push("[Image]".to_string());
+                }
                 crate::gemini::Part::FunctionCall { function_call, .. } => {
                     text_parts.push(format!(
                         "[Tool call: {} with args: {}]",

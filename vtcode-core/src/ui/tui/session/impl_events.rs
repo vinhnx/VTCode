@@ -17,7 +17,7 @@ impl Session {
                     self.emit_inline_event(&outbound, events, callback);
                 }
             }
-            CrosstermEvent::Mouse(MouseEvent { kind, .. }) => match kind {
+            CrosstermEvent::Mouse(mouse_event) => match mouse_event.kind {
                 MouseEventKind::ScrollDown => {
                     self.scroll_line_down();
                     self.mark_dirty();
@@ -26,11 +26,16 @@ impl Session {
                     self.scroll_line_up();
                     self.mark_dirty();
                 }
+                MouseEventKind::Down(ratatui::crossterm::event::MouseButton::Left) => {
+                    if !self.handle_input_click(mouse_event) {
+                        self.handle_transcript_click(mouse_event);
+                    }
+                }
                 _ => {}
             },
             CrosstermEvent::Paste(content) => {
                 if self.input_enabled {
-                    self.insert_text(&content);
+                    self.insert_paste_text(&content);
                     self.check_file_reference_trigger();
                     self.check_prompt_reference_trigger();
                     self.mark_dirty();
@@ -48,5 +53,85 @@ impl Session {
             }
             _ => {}
         }
+    }
+
+    pub(crate) fn handle_transcript_click(&mut self, mouse_event: MouseEvent) -> bool {
+        if !matches!(
+            mouse_event.kind,
+            MouseEventKind::Down(ratatui::crossterm::event::MouseButton::Left)
+        ) {
+            return false;
+        }
+
+        let Some(area) = self.transcript_area else {
+            return false;
+        };
+
+        if mouse_event.row < area.y
+            || mouse_event.row >= area.y.saturating_add(area.height)
+            || mouse_event.column < area.x
+            || mouse_event.column >= area.x.saturating_add(area.width)
+        {
+            return false;
+        }
+
+        if self.transcript_width == 0 || self.transcript_rows == 0 {
+            return false;
+        }
+
+        let row_in_view = (mouse_event.row - area.y) as usize;
+        if row_in_view >= self.transcript_rows as usize {
+            return false;
+        }
+
+        let viewport_rows = self.transcript_rows.max(1) as usize;
+        let padding = usize::from(ui::INLINE_TRANSCRIPT_BOTTOM_PADDING);
+        let effective_padding = padding.min(viewport_rows.saturating_sub(1));
+        let total_rows = self.total_transcript_rows(self.transcript_width) + effective_padding;
+        let (top_offset, _clamped_total_rows) =
+            self.prepare_transcript_scroll(total_rows, viewport_rows);
+        let view_top = top_offset.min(self.scroll_manager.max_offset());
+        self.transcript_view_top = view_top;
+
+        let clicked_row = view_top.saturating_add(row_in_view);
+        let expanded = self.expand_collapsed_paste_at_row(self.transcript_width, clicked_row);
+        if expanded {
+            self.mark_dirty();
+        }
+        expanded
+    }
+
+    pub(crate) fn handle_input_click(&mut self, mouse_event: MouseEvent) -> bool {
+        if !matches!(
+            mouse_event.kind,
+            MouseEventKind::Down(ratatui::crossterm::event::MouseButton::Left)
+        ) {
+            return false;
+        }
+
+        let Some(area) = self.input_area else {
+            return false;
+        };
+
+        if mouse_event.row < area.y
+            || mouse_event.row >= area.y.saturating_add(area.height)
+            || mouse_event.column < area.x
+            || mouse_event.column >= area.x.saturating_add(area.width)
+        {
+            return false;
+        }
+
+        let cursor_at_end = self.input_manager.cursor() == self.input_manager.content().len();
+        if !self.input_compact_mode || !cursor_at_end {
+            return false;
+        }
+
+        if self.input_compact_placeholder().is_none() {
+            return false;
+        }
+
+        self.input_compact_mode = false;
+        self.mark_dirty();
+        true
     }
 }

@@ -34,6 +34,7 @@ pub const INLINE_SCROLLBAR_EDGE_PADDING: u16 = 1;
 pub const INLINE_TRANSCRIPT_BOTTOM_PADDING: u16 = 4;
 pub const INLINE_PREVIEW_MAX_CHARS: usize = 56;
 pub const INLINE_PREVIEW_ELLIPSIS: &str = "…";
+pub const INLINE_PASTE_COLLAPSE_LINE_THRESHOLD: usize = 10;
 pub const HEADER_HIGHLIGHT_PREVIEW_MAX_CHARS: usize = 48;
 pub const INLINE_AGENT_MESSAGE_LEFT_PADDING: &str = " ";
 pub const INLINE_AGENT_QUOTE_PREFIX: &str = " •";
@@ -97,9 +98,9 @@ pub const HEADER_INPUT_ENABLED: &str = "Enabled";
 pub const HEADER_INPUT_DISABLED: &str = "Disabled";
 pub const INLINE_USER_PREFIX: &str = " ";
 pub const CHAT_INPUT_PLACEHOLDER_BOOTSTRAP: &str =
-    "Type your message (type @files, /commands, ctrl+r to search, Shift+Tab to switch modes)";
+    "Type your message (@files, /commands, ctrl+r search, Shift+Tab mode, 2x escape to cancel)";
 pub const CHAT_INPUT_PLACEHOLDER_FOLLOW_UP: &str =
-    "Continue (type @files, /commands, ctrl+r to search, Shift+Tab to switch modes)";
+    "Continue (@files, /commands, ctrl+r search, Shift+Tab mode, 2x escape to cancel)";
 pub const HEADER_SHORTCUT_HINT: &str = "Shortcuts: Enter send • Shift+Enter newline • Esc cancel • Ctrl+C interrupt • @ files • # prompts • / commands";
 pub const HEADER_META_SEPARATOR: &str = "   ";
 pub const WELCOME_TEXT_WIDTH: usize = 80;

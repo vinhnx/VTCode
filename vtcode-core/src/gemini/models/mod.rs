@@ -72,6 +72,11 @@ pub enum Part {
         thought_signature: Option<String>,
     },
     #[serde(rename_all = "camelCase")]
+    InlineData {
+        #[serde(rename = "inline_data")]
+        inline_data: InlineData,
+    },
+    #[serde(rename_all = "camelCase")]
     FunctionCall {
         function_call: crate::gemini::function_calling::FunctionCall,
         /// Gemini 3 Pro thought signature for maintaining reasoning context
@@ -105,6 +110,13 @@ impl Part {
 pub struct Tool {
     #[serde(rename = "functionDeclarations")]
     pub function_declarations: Vec<FunctionDeclaration>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InlineData {
+    #[serde(rename = "mime_type")]
+    pub mime_type: String,
+    pub data: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -1,5 +1,4 @@
 use anyhow::{Context, Result};
-
 use vtcode_core::config::loader::ConfigManager;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::dot_config::update_theme_preference;
@@ -50,6 +49,5 @@ pub(crate) fn ensure_turn_bottom_gap(
 
 /// Display a user message using the active user styling
 pub(crate) fn display_user_message(renderer: &mut AnsiRenderer, message: &str) -> Result<()> {
-    renderer.line(MessageStyle::User, message)?;
-    Ok(())
+    renderer.line(MessageStyle::User, message)
 }

@@ -9,7 +9,7 @@ provider = "huggingface"
 api_key_env = "HF_TOKEN"
 
 # Default model to use when no specific model is specified
-default_model = "MiniMaxAI/MiniMax-M2.1:novita"
+default_model = "moonshotai/Kimi-K2.5:novita"
 
 # Visual theme for the terminal interface
 theme = "vitesse-black"

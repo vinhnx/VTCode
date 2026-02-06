@@ -1,10 +1,13 @@
 #![allow(clippy::result_large_err)]
 use crate::config::core::{PromptCachingConfig, ProviderPromptCachingConfig};
 use crate::llm::error_display;
-use crate::llm::provider::{FinishReason, LLMError, LLMRequest, Message, ToolCall, ToolDefinition};
+use crate::llm::provider::{
+    ContentPart, FinishReason, LLMError, LLMRequest, Message, MessageContent, ToolCall,
+    ToolDefinition,
+};
 use crate::llm::types as llm_types;
 use crate::llm::utils::extract_reasoning_content;
-use serde_json::Value;
+use serde_json::{Value, json};
 
 /// Serializes tool definitions to OpenAI-compatible JSON format.
 /// Used by DeepSeek, ZAI, Moonshot, and other OpenAI-compatible providers.
@@ -39,6 +42,52 @@ pub fn serialize_tools_openai_format(tools: &[ToolDefinition]) -> Option<Vec<Val
             })
             .collect(),
     )
+}
+
+/// Serialize message content for OpenAI-compatible chat payloads.
+/// Falls back to a string when there are no image parts.
+pub fn serialize_message_content_openai(content: &MessageContent) -> Value {
+    match content {
+        MessageContent::Text(text) => Value::String(text.clone()),
+        MessageContent::Parts(parts) => {
+            if parts.is_empty() {
+                return Value::String(String::new());
+            }
+
+            let mut has_image = false;
+            let mut serialized_parts = Vec::with_capacity(parts.len());
+            let mut text_only = String::new();
+
+            for part in parts {
+                match part {
+                    ContentPart::Text { text } => {
+                        text_only.push_str(text);
+                        serialized_parts.push(json!({
+                            "type": "text",
+                            "text": text
+                        }));
+                    }
+                    ContentPart::Image {
+                        data, mime_type, ..
+                    } => {
+                        has_image = true;
+                        serialized_parts.push(json!({
+                            "type": "image_url",
+                            "image_url": {
+                                "url": format!("data:{};base64,{}", mime_type, data)
+                            }
+                        }));
+                    }
+                }
+            }
+
+            if has_image {
+                Value::Array(serialized_parts)
+            } else {
+                Value::String(text_only)
+            }
+        }
+    }
 }
 
 pub fn resolve_model(model: Option<String>, default_model: &str) -> String {
@@ -234,7 +283,7 @@ pub fn serialize_messages_openai_format(
         );
         message_map.insert(
             KEY_CONTENT.to_owned(),
-            Value::String(message.content.as_text().into_owned()),
+            serialize_message_content_openai(&message.content),
         );
 
         if let Some(tool_calls) = &message.tool_calls {

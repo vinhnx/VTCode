@@ -1,8 +1,10 @@
 use crate::config::core::AnthropicPromptCacheSettings;
 use crate::llm::error_display;
-use crate::llm::provider::{LLMError, LLMRequest, Message, MessageRole};
+use crate::llm::provider::{
+    ContentPart, LLMError, LLMRequest, Message, MessageContent, MessageRole,
+};
 use crate::llm::providers::anthropic_types::{
-    AnthropicContentBlock, AnthropicMessage, CacheControl,
+    AnthropicContentBlock, AnthropicMessage, CacheControl, ImageSource,
 };
 use serde_json::{Value, json};
 use std::collections::HashSet;
@@ -45,7 +47,6 @@ pub(crate) fn build_messages(
         }
 
         let mut blocks = Vec::new();
-        let content_text = msg.content.as_text();
 
         match msg.role {
             MessageRole::Assistant => {
@@ -56,13 +57,7 @@ pub(crate) fn build_messages(
                 }
                 blocks.extend(build_reasoning_blocks(msg));
 
-                if !msg.content.is_empty() {
-                    blocks.push(AnthropicContentBlock::Text {
-                        text: content_text.to_string(),
-                        citations: None,
-                        cache_control: None,
-                    });
-                }
+                blocks.extend(content_blocks_from_message_content(&msg.content, None));
 
                 blocks.extend(build_tool_use_blocks(msg));
 
@@ -82,7 +77,7 @@ pub(crate) fn build_messages(
                 if let Some(tool_call_id) = &msg.tool_call_id
                     && tool_use_ids.contains(tool_call_id)
                 {
-                    let tool_content_blocks = tool_result_blocks(&content_text);
+                    let tool_content_blocks = tool_result_blocks(msg.content.as_text().as_ref());
                     let content_val = if tool_content_blocks.len() == 1
                         && tool_content_blocks[0]["type"] == "text"
                     {
@@ -104,7 +99,7 @@ pub(crate) fn build_messages(
                     messages.push(AnthropicMessage {
                         role: "user".to_string(),
                         content: vec![AnthropicContentBlock::Text {
-                            text: content_text.to_string(),
+                            text: msg.content.as_text().to_string(),
                             citations: None,
                             cache_control: None,
                         }],
@@ -112,28 +107,26 @@ pub(crate) fn build_messages(
                 }
             }
             _ => {
-                if msg.content.is_empty() {
-                    continue;
-                }
-
                 let mut cache_ctrl = None;
                 let should_cache = msg.role == MessageRole::User
                     && prompt_cache_settings.cache_user_messages
                     && *breakpoints_remaining > 0
-                    && content_text.len() >= prompt_cache_settings.min_message_length_for_cache;
+                    && msg.content.as_text().len()
+                        >= prompt_cache_settings.min_message_length_for_cache;
 
                 if should_cache && let Some(cc) = messages_cache_control.as_ref() {
                     cache_ctrl = Some(cc.clone());
                     *breakpoints_remaining -= 1;
                 }
 
+                let blocks = content_blocks_from_message_content(&msg.content, cache_ctrl);
+                if blocks.is_empty() {
+                    continue;
+                }
+
                 messages.push(AnthropicMessage {
                     role: msg.role.as_anthropic_str().to_string(),
-                    content: vec![AnthropicContentBlock::Text {
-                        text: content_text.to_string(),
-                        citations: None,
-                        cache_control: cache_ctrl,
-                    }],
+                    content: blocks,
                 });
             }
         }
@@ -188,6 +181,62 @@ fn build_reasoning_blocks(msg: &Message) -> Vec<AnthropicContentBlock> {
                     data,
                     cache_control: None,
                 });
+            }
+        }
+    }
+
+    blocks
+}
+
+fn content_blocks_from_message_content(
+    content: &MessageContent,
+    cache_control: Option<CacheControl>,
+) -> Vec<AnthropicContentBlock> {
+    let mut blocks = Vec::new();
+    let mut cache_used = false;
+
+    match content {
+        MessageContent::Text(text) => {
+            if !text.is_empty() {
+                blocks.push(AnthropicContentBlock::Text {
+                    text: text.clone(),
+                    citations: None,
+                    cache_control,
+                });
+            }
+        }
+        MessageContent::Parts(parts) => {
+            for part in parts {
+                match part {
+                    ContentPart::Text { text } => {
+                        if text.is_empty() {
+                            continue;
+                        }
+                        let control = if !cache_used {
+                            cache_control.clone()
+                        } else {
+                            None
+                        };
+                        cache_used = true;
+                        blocks.push(AnthropicContentBlock::Text {
+                            text: text.clone(),
+                            citations: None,
+                            cache_control: control,
+                        });
+                    }
+                    ContentPart::Image {
+                        data, mime_type, ..
+                    } => {
+                        blocks.push(AnthropicContentBlock::Image {
+                            source: ImageSource {
+                                source_type: "base64".to_owned(),
+                                media_type: mime_type.clone(),
+                                data: data.clone(),
+                            },
+                            cache_control: None,
+                        });
+                    }
+                }
             }
         }
     }
