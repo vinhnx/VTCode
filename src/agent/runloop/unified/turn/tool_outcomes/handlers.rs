@@ -680,6 +680,7 @@ async fn execute_and_handle_tool_call_inner<'a>(
         &args_val,
         ctx.ctrl_c_state,
         ctx.ctrl_c_notify,
+        ctx.session_stats.editing_mode,
     )
     .await
     {

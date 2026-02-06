@@ -157,6 +157,7 @@ pub(crate) async fn run_tool_call(
         &args_val,
         ctrl_c_state,
         ctrl_c_notify,
+        ctx.session_stats.editing_mode,
     )
     .await
     {
