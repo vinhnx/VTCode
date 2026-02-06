@@ -104,6 +104,26 @@ impl Provider {
         }
     }
 
+    pub fn is_dynamic(&self) -> bool {
+        self.is_local()
+    }
+
+    pub fn is_local(&self) -> bool {
+        matches!(self, Provider::LmStudio | Provider::Ollama)
+    }
+
+    pub fn local_install_instructions(&self) -> Option<&'static str> {
+        match self {
+            Provider::LmStudio => Some(
+                "LM Studio server is not running. To start:\n  1. Download and install LM Studio from https://lmstudio.ai\n  2. Launch LM Studio\n  3. Click the 'Local Server' toggle to start the server\n  4. Select and load a model in the 'Local Server' tab\n  5. Make sure the server runs on port 1234 (default)",
+            ),
+            Provider::Ollama => Some(
+                "Ollama server is not running. To start:\n  1. Install Ollama from https://ollama.com\n  2. Run 'ollama serve' in a terminal\n  3. Pull models using 'ollama pull <model-name>' (e.g., 'ollama pull llama3:8b')",
+            ),
+            _ => None,
+        }
+    }
+
     /// Determine if the provider supports configurable reasoning effort for the model
     pub fn supports_reasoning_effort(&self, model: &str) -> bool {
         use crate::config::constants::models;

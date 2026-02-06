@@ -6,10 +6,7 @@ use vtcode_core::config::types::ReasoningEffortLevel;
 
 use super::dynamic_models::DynamicModelRegistry;
 use super::options::{ModelOption, picker_provider_order};
-use super::rendering::{
-    CUSTOM_PROVIDER_SUBTITLE, CUSTOM_PROVIDER_TITLE, KEEP_CURRENT_DESCRIPTION,
-    get_lmstudio_setup_instructions, get_ollama_setup_instructions,
-};
+use super::rendering::{CUSTOM_PROVIDER_SUBTITLE, CUSTOM_PROVIDER_TITLE, KEEP_CURRENT_DESCRIPTION};
 use super::selection::{
     ReasoningChoice, SelectionDetail, reasoning_level_description, reasoning_level_label,
     selection_from_option,
@@ -48,30 +45,35 @@ pub(super) fn select_model_with_ratatui_list(
 
     let mut choices = Vec::new();
     for provider in picker_provider_order() {
-        if provider == Provider::LmStudio {
-            let provider_models: Vec<&ModelOption> = options
-                .iter()
-                .filter(|option| option.provider == provider)
-                .collect();
-
-            for option in &provider_models {
-                let mut title = format!("{} • {}", provider.label(), option.display);
-                if option.supports_reasoning {
-                    title.push_str(" [Reasoning]");
-                }
-                let description = format!("ID: {} — {}", option.id, option.description);
-                choices.push(ModelSelectionChoice {
-                    entry: SelectionEntry::new(title, Some(description)),
-                    outcome: ModelSelectionChoiceOutcome::Predefined(selection_from_option(option)),
-                });
+        let provider_models: Vec<&ModelOption> = options
+            .iter()
+            .filter(|option| option.provider == provider)
+            .collect();
+        for option in &provider_models {
+            let mut title = format!("{} • {}", provider.label(), option.display);
+            if option.supports_reasoning {
+                title.push_str(" [Reasoning]");
             }
+            let description = format!("ID: {} — {}", option.id, option.description);
+            choices.push(ModelSelectionChoice {
+                entry: SelectionEntry::new(title, Some(description)),
+                outcome: ModelSelectionChoiceOutcome::Predefined(selection_from_option(option)),
+            });
+        }
+        if provider.is_dynamic() {
             let dynamic_indexes = dynamic_models.indexes_for(provider);
             if dynamic_indexes.is_empty() {
                 if let Some(error) = dynamic_models.error_for(provider) {
                     choices.push(ModelSelectionChoice {
                         entry: SelectionEntry::new(
-                            "LM Studio server not running - Setup instructions",
-                            Some(format!("{error}\n{}", get_lmstudio_setup_instructions())),
+                            format!(
+                                "{} server not running - Setup instructions",
+                                provider.label()
+                            ),
+                            Some(format!(
+                                "{error}\n{}",
+                                provider.local_install_instructions().unwrap_or("")
+                            )),
                         ),
                         outcome: ModelSelectionChoiceOutcome::Manual,
                     });
@@ -82,8 +84,9 @@ pub(super) fn select_model_with_ratatui_list(
                         let title =
                             format!("{} • {} (dynamic)", provider.label(), detail.model_display);
                         let description = format!(
-                            "ID: {} — Locally available LM Studio model",
-                            detail.model_id
+                            "ID: {} — Locally available {} model",
+                            detail.model_id,
+                            provider.label(),
                         );
                         choices.push(ModelSelectionChoice {
                             entry: SelectionEntry::new(title, Some(description)),
@@ -104,88 +107,16 @@ pub(super) fn select_model_with_ratatui_list(
                     outcome: ModelSelectionChoiceOutcome::Refresh,
                 });
             }
-        } else if provider == Provider::Ollama {
-            let provider_models: Vec<&ModelOption> = options
-                .iter()
-                .filter(|option| option.provider == provider)
-                .collect();
-
-            for option in &provider_models {
-                let mut title = format!("{} • {}", provider.label(), option.display);
-                if option.supports_reasoning {
-                    title.push_str(" [Reasoning]");
-                }
-                let description = format!("ID: {} — {}", option.id, option.description);
-                choices.push(ModelSelectionChoice {
-                    entry: SelectionEntry::new(title, Some(description)),
-                    outcome: ModelSelectionChoiceOutcome::Predefined(selection_from_option(option)),
-                });
-            }
-            let dynamic_indexes = dynamic_models.indexes_for(provider);
-            if dynamic_indexes.is_empty() {
-                if let Some(error) = dynamic_models.error_for(provider) {
-                    choices.push(ModelSelectionChoice {
-                        entry: SelectionEntry::new(
-                            "Ollama server not running - Setup instructions",
-                            Some(format!("{error}\n{}", get_ollama_setup_instructions())),
-                        ),
-                        outcome: ModelSelectionChoiceOutcome::Manual,
-                    });
-                }
-            } else {
-                for entry_index in dynamic_indexes {
-                    if let Some(detail) = dynamic_models.detail(entry_index) {
-                        let title =
-                            format!("{} • {} (local)", provider.label(), detail.model_display);
-                        let description =
-                            format!("ID: {} — Locally available Ollama model", detail.model_id);
-                        choices.push(ModelSelectionChoice {
-                            entry: SelectionEntry::new(title, Some(description)),
-                            outcome: ModelSelectionChoiceOutcome::Predefined(detail.clone()),
-                        });
-                    }
-                }
-            }
-
-            if let Some(warning) = dynamic_models.warning_for(provider) {
-                choices.push(ModelSelectionChoice {
-                    entry: SelectionEntry::new(
-                        format!("{} cache notice", provider.label()),
-                        Some(format!(
-                            "{warning} Select 'Refresh local models' to re-query."
-                        )),
+        } else if provider == Provider::HuggingFace {
+            choices.push(ModelSelectionChoice {
+                entry: SelectionEntry::new(
+                    "Hugging Face • Custom model",
+                    Some(
+                        "Enter any HF model id (e.g., huggingface <org>/<model>).".to_string(),
                     ),
-                    outcome: ModelSelectionChoiceOutcome::Refresh,
-                });
-            }
-        } else {
-            let provider_models: Vec<&ModelOption> = options
-                .iter()
-                .filter(|option| option.provider == provider)
-                .collect();
-            for option in &provider_models {
-                let mut title = format!("{} • {}", provider.label(), option.display);
-                if option.supports_reasoning {
-                    title.push_str(" [Reasoning]");
-                }
-                let description = format!("ID: {} — {}", option.id, option.description);
-                choices.push(ModelSelectionChoice {
-                    entry: SelectionEntry::new(title, Some(description)),
-                    outcome: ModelSelectionChoiceOutcome::Predefined(selection_from_option(option)),
-                });
-            }
-
-            if provider == Provider::HuggingFace {
-                choices.push(ModelSelectionChoice {
-                    entry: SelectionEntry::new(
-                        "Hugging Face • Custom model",
-                        Some(
-                            "Enter any HF model id (e.g., huggingface <org>/<model>).".to_string(),
-                        ),
-                    ),
-                    outcome: ModelSelectionChoiceOutcome::Manual,
-                });
-            }
+                ),
+                outcome: ModelSelectionChoiceOutcome::Manual,
+            });
         }
     }
 
