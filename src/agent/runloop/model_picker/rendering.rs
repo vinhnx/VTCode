@@ -98,18 +98,22 @@ pub(super) fn render_step_one_inline(
             });
         }
 
-        if matches!(provider, Provider::LmStudio | Provider::Ollama) {
-            let subtitle = if provider == Provider::LmStudio {
-                "Locally available LM Studio model"
+        if provider.is_dynamic() {
+            let subtitle = if provider.is_local() {
+                format!("Locally available {} model", provider.label())
             } else {
-                "Locally available Ollama model"
+                format!("Available {} model", provider.label())
             };
             for entry_index in &dynamic_indexes {
                 if let Some(detail) = dynamic_models.detail(*entry_index) {
                     items.push(InlineListItem {
                         title: detail.model_display.clone(),
                         subtitle: Some(subtitle.to_string()),
-                        badge: Some("Local".to_string()),
+                        badge: if provider.is_local() {
+                            Some("Local".to_string())
+                        } else {
+                            None
+                        },
                         indent: 2,
                         selection: Some(InlineListSelection::DynamicModel(*entry_index)),
                         search_value: Some(format!(
@@ -135,11 +139,7 @@ pub(super) fn render_step_one_inline(
             if dynamic_indexes.is_empty()
                 && let Some(error) = dynamic_models.error_for(provider)
             {
-                let instructions = if provider == Provider::LmStudio {
-                    get_lmstudio_setup_instructions()
-                } else {
-                    get_ollama_setup_instructions()
-                };
+                let instructions = provider.local_install_instructions().unwrap_or("");
                 items.push(InlineListItem {
                     title: format!("{} server unreachable", provider.label()),
                     subtitle: Some(format!("{error}\n{instructions}")),
@@ -232,7 +232,7 @@ pub(super) fn render_step_one_plain(
 
     let mut first_section = true;
     for provider in picker_provider_order() {
-        if provider == Provider::LmStudio {
+        if provider.is_local() {
             if !first_section {
                 renderer.line(MessageStyle::Info, &provider_group_divider_line())?;
             }
@@ -257,13 +257,17 @@ pub(super) fn render_step_one_plain(
                 renderer.line(MessageStyle::Info, &format!("      note: {}", warning))?;
             }
             let dynamic_indexes = dynamic_models.indexes_for(provider);
+            let provider_label = provider.label();
             if dynamic_indexes.is_empty() {
                 if let Some(error) = dynamic_models.error_for(provider) {
                     renderer.line(
                         MessageStyle::Info,
-                        &format!("LM Studio server not reachable ({error}) • Setup instructions:"),
+                        &format!(
+                            "{} server not reachable ({error}) • Setup instructions:",
+                            provider_label
+                        ),
                     )?;
-                    for line in get_lmstudio_setup_instructions().lines() {
+                    for line in provider.local_install_instructions().unwrap_or("").lines() {
                         renderer.line(MessageStyle::Info, &format!("      {}", line))?;
                     }
                 }
@@ -276,55 +280,8 @@ pub(super) fn render_step_one_plain(
                         )?;
                         renderer.line(
                             MessageStyle::Info,
-                            "      Locally available LM Studio model",
+                            &format!("      Locally available {} model", provider_label),
                         )?;
-                    }
-                }
-            }
-        } else if provider == Provider::Ollama {
-            if !first_section {
-                renderer.line(MessageStyle::Info, &provider_group_divider_line())?;
-            }
-            first_section = false;
-            renderer.line(MessageStyle::Info, &format!("[{}]", provider.label()))?;
-            if let Some(list) = grouped.get(&provider) {
-                for option in list {
-                    let reasoning_marker = if option.supports_reasoning {
-                        " [reasoning]"
-                    } else {
-                        ""
-                    };
-                    renderer.line(
-                        MessageStyle::Info,
-                        &format!("  {} • {}{}", option.display, option.id, reasoning_marker),
-                    )?;
-                    renderer.line(MessageStyle::Info, &format!("      {}", option.description))?;
-                }
-            }
-
-            if let Some(warning) = dynamic_models.warning_for(provider) {
-                renderer.line(MessageStyle::Info, &format!("      note: {}", warning))?;
-            }
-            let dynamic_indexes = dynamic_models.indexes_for(provider);
-            if dynamic_indexes.is_empty() {
-                if let Some(error) = dynamic_models.error_for(provider) {
-                    renderer.line(
-                        MessageStyle::Info,
-                        &format!("Ollama server not reachable ({error}) • Setup instructions:"),
-                    )?;
-                    for line in get_ollama_setup_instructions().lines() {
-                        renderer.line(MessageStyle::Info, &format!("      {}", line))?;
-                    }
-                }
-            } else {
-                for entry_index in dynamic_indexes {
-                    if let Some(detail) = dynamic_models.detail(entry_index) {
-                        renderer.line(
-                            MessageStyle::Info,
-                            &format!("  {} • {} (local)", detail.model_display, detail.model_id),
-                        )?;
-                        renderer
-                            .line(MessageStyle::Info, "      Locally available Ollama model")?;
                     }
                 }
             }
@@ -642,14 +599,4 @@ fn provider_group_divider_line() -> String {
     let title_width = STEP_ONE_TITLE.chars().count();
     let divider_width = modal_width.max(title_width);
     ui::INLINE_USER_MESSAGE_DIVIDER_SYMBOL.repeat(divider_width)
-}
-
-pub(super) fn get_lmstudio_setup_instructions() -> String {
-    "LM Studio server is not running. To start:\n  1. Download and install LM Studio from https://lmstudio.ai\n  2. Launch LM Studio\n  3. Click the 'Local Server' toggle to start the server\n  4. Select and load a model in the 'Local Server' tab\n  5. Make sure the server runs on port 1234 (default)"
-        .to_string()
-}
-
-pub(super) fn get_ollama_setup_instructions() -> String {
-    "Ollama server is not running. To start:\n  1. Install Ollama from https://ollama.com\n  2. Run 'ollama serve' in a terminal\n  3. Pull models using 'ollama pull <model-name>' (e.g., 'ollama pull llama3:8b')"
-        .to_string()
 }
