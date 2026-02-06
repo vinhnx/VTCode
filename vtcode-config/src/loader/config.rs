@@ -4,6 +4,7 @@ use std::fs;
 use std::path::Path;
 
 use crate::acp::AgentClientProtocolConfig;
+use crate::agent_teams::AgentTeamsConfig;
 use crate::context::ContextFeaturesConfig;
 use crate::core::{
     AgentConfig, AnthropicConfig, AuthConfig, AutomationConfig, CommandsConfig,
@@ -135,6 +136,10 @@ pub struct VTCodeConfig {
     /// Subagent system configuration
     #[serde(default)]
     pub subagents: SubagentsConfig,
+
+    /// Agent teams configuration (experimental)
+    #[serde(default)]
+    pub agent_teams: AgentTeamsConfig,
 
     /// Output style configuration
     #[serde(default)]
@@ -394,6 +399,17 @@ enabled = false
 
 # Additional directories to search for subagent definitions
 # additional_agent_dirs = []
+
+# Agent teams (experimental)
+[agent_teams]
+# Enable agent teams (default: false)
+enabled = false
+
+# Maximum number of teammates per team
+# max_teammates = 4
+
+# Default model for agent team subagents
+# default_model = ""
 
 # Tool security configuration
 [tools]

@@ -5,7 +5,7 @@ use anyhow::{Context, Result, anyhow};
 use tempfile::Builder;
 
 use vtcode_core::config::api_keys::{ApiKeySources, get_api_key};
-use vtcode_core::config::loader::VTCodeConfig;
+use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
 use vtcode_core::config::types::{AgentConfig as CoreAgentConfig, UiSurfacePreference};
 use vtcode_core::llm::factory::create_provider_with_config;
 use vtcode_core::llm::provider::LLMProvider;
@@ -183,6 +183,58 @@ pub(crate) async fn finalize_model_selection(
         )?;
     }
 
+    Ok(())
+}
+
+pub(crate) async fn finalize_subagent_model_selection(
+    renderer: &mut AnsiRenderer,
+    selection: ModelSelectionResult,
+    vt_cfg: &mut Option<VTCodeConfig>,
+    workspace: &Path,
+) -> Result<()> {
+    let mut manager = ConfigManager::load().with_context(|| {
+        format!(
+            "Failed to load configuration for workspace {}",
+            workspace.display()
+        )
+    })?;
+    let mut config = manager.config().clone();
+    config.subagents.default_model = Some(selection.model.clone());
+    manager
+        .save_config(&config)
+        .context("Failed to persist subagent model selection")?;
+    *vt_cfg = Some(config);
+
+    renderer.line(
+        MessageStyle::Info,
+        &format!("Subagent default model set to {}.", selection.model_display),
+    )?;
+    Ok(())
+}
+
+pub(crate) async fn finalize_team_model_selection(
+    renderer: &mut AnsiRenderer,
+    selection: ModelSelectionResult,
+    vt_cfg: &mut Option<VTCodeConfig>,
+    workspace: &Path,
+) -> Result<()> {
+    let mut manager = ConfigManager::load().with_context(|| {
+        format!(
+            "Failed to load configuration for workspace {}",
+            workspace.display()
+        )
+    })?;
+    let mut config = manager.config().clone();
+    config.agent_teams.default_model = Some(selection.model.clone());
+    manager
+        .save_config(&config)
+        .context("Failed to persist team model selection")?;
+    *vt_cfg = Some(config);
+
+    renderer.line(
+        MessageStyle::Info,
+        &format!("Team default model set to {}.", selection.model_display),
+    )?;
     Ok(())
 }
 

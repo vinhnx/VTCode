@@ -661,7 +661,6 @@ codex-rs/core/src/codex.rs#L1803
 
 refence and apply to vtcode for plan and rquest user input for plan mode (current git changes)
 
-
 ---
 
 https://platform.claude.com/docs/en/build-with-claude/compaction
@@ -674,3 +673,10 @@ https://platform.claude.com/docs/en/build-with-claude/adaptive-thinking
 
 https://platform.claude.com/docs/en/build-with-claude/effort
 
+--
+
+Planning Mode [X] │
+│ Enable planning mode and onboarding hints
+
+1. sync planning mode on /config with persistant vtcode.toml config for plan/agent mode
+2. change to switcher (agent/plan) instead of separate commands

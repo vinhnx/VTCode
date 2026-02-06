@@ -11,6 +11,14 @@ use vtcode_core::ui::tui::EditingMode;
 pub const PLANNER_AGENT: &str = "planner";
 pub const CODER_AGENT: &str = "coder";
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ModelPickerTarget {
+    #[default]
+    Main,
+    SubagentDefault,
+    TeamDefault,
+}
+
 #[derive(Default)]
 pub(crate) struct SessionStats {
     tools: std::collections::BTreeSet<String>,
@@ -39,6 +47,12 @@ pub(crate) struct SessionStats {
     /// Error recovery state for circuit breaker recovery flow
     #[allow(dead_code)]
     pub error_recovery: Arc<RwLock<ErrorRecoveryState>>,
+
+    /// Agent teams state (in-process only)
+    pub team_state: Option<crate::agent::runloop::unified::team_state::TeamState>,
+
+    /// Target configuration for the active model picker
+    pub model_picker_target: ModelPickerTarget,
 }
 
 impl SessionStats {

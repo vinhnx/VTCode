@@ -19,6 +19,24 @@ VT Code runs subagents in the foreground today; background mode is not currently
 
 Use subagents when you need context isolation, parallel workstreams, or a specialized workflow. Use skills for single-purpose, repeatable actions that do not need a separate context window.
 
+## Agent Teams (MVP)
+
+VT Code also supports experimental **agent teams** built on subagents. Teams are managed through `/team` slash commands and provide a lightweight coordination layer.
+
+Current MVP limitations:
+
+- In-process only (no split panes)
+- Sequential execution (one teammate task at a time)
+- Session-only state (no persistence/resume)
+- Lead-only messaging (no direct teammate chats)
+
+Use subagents directly when you need full control over prompts, tools, or concurrency.
+
+### Subagent Default Model
+
+Use `/subagent model` to open the interactive model picker and save a default
+model for subagents in `vtcode.toml` (`[subagents] default_model`).
+
 ## Quick Start
 
 ### 1. Create a Subagent

@@ -75,6 +75,16 @@ Slash commands expose any Markdown prompt registered in the custom prompt direct
 
 Prompts support positional (`$1`) and named (`$FILE`) placeholders. Configure directories and size limits in `[agent.custom_prompts]` inside `vtcode.toml`, then consult [custom-prompts.md](custom-prompts.md) for format guidance.
 
+## Agent teams
+
+Agent teams are an experimental feature for coordinating multiple subagents in a single session.
+
+- Enable `[agent_teams] enabled = true` and `[subagents] enabled = true` in `vtcode.toml`.
+- Use `/team start` to create a team, then `/team task add` and `/team assign` to delegate tasks.
+- Use `/team model` to set a default model for team subagents.
+- Use `/subagent model` to set a default model for all subagents.
+- See `docs/agent-teams.md` for full usage and limitations.
+
 ## Quick Actions in Chat Input
 
 VT Code provides several quick actions directly in the chat input for faster workflow:
