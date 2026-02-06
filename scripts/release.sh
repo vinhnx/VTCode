@@ -491,6 +491,12 @@ main() {
     else
         print_warning "GitHub CLI not found. Release will continue but binary uploads may fail."
     fi
+    
+    # Check for jq dependency which is needed for parsing cargo metadata
+    if ! command -v jq >/dev/null 2>&1; then
+        print_error 'jq is not installed. Install it with `brew install jq` (macOS) or equivalent for your system.'
+        exit 1
+    fi
 
     local current_version
     current_version=$(get_current_version)
@@ -538,15 +544,121 @@ main() {
 
     # 3. Cargo Release (Publish to crates.io, tag and push)
     print_info "Step 3: Running cargo release (publish to crates.io, tag and push)..."
-    local command=(cargo release "$release_argument" --workspace --config release.toml --execute --no-confirm)
+    
     if [[ "$skip_crates" == 'true' ]]; then
-        command+=(--no-publish)
-    fi
-
-    if [[ "$dry_run" == 'true' ]]; then
-        print_info "Dry run - would run: ${command[*]}"
-    else
+        # Just run cargo release without publishing
+        local command=(cargo release "$release_argument" --workspace --config release.toml --execute --no-confirm --no-publish)
+        if [[ "$dry_run" == 'true' ]]; then
+            print_info "Dry run - would run: ${command[*]}"
+        else
             "${command[@]}"
+        fi
+    else
+        # For publishing, we need to handle dependencies in the correct order
+        # First, run cargo release to update versions but don't publish
+        print_info "Step 3a: Updating versions across workspace (without publishing)..."
+        local version_command=(cargo release "$release_argument" --workspace --config release.toml --execute --no-confirm --no-publish)
+        
+        if [[ "$dry_run" == 'true' ]]; then
+            print_info "Dry run - would run: ${version_command[*]}"
+        else
+            "${version_command[@]}"
+        fi
+        
+        # Step 3b: Publish crates in dependency order to avoid resolution issues
+        if [[ "$dry_run" == 'false' ]]; then
+            print_info "Step 3b: Publishing crates in dependency order..."
+            
+            # Define the order for publishing based on dependency graph
+            # Crates without dependencies should be published first
+            local dependency_order=(
+                "vtcode-commons"
+                "vtcode-config" 
+                "vtcode-exec-events"
+                "vtcode-markdown-store"
+                "vtcode-indexer"
+                "vtcode-bash-runner"
+                "vtcode-file-search"
+                "vtcode-acp-client"
+                "vtcode-llm"
+                "vtcode-lmstudio"
+                "vtcode-tools"
+                "vtcode-core"
+                "vtcode"  # main crate
+            )
+            
+            # Publish each crate in dependency order
+            for crate in "${dependency_order[@]}"; do
+                if [[ -d "$crate" ]]; then
+                    print_info "Publishing $crate..."
+                    (
+                        cd "$crate"
+                        # Check if this crate version is already published by checking local Cargo.toml vs crates.io
+                        local crate_version=$(grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
+                        
+                        # Attempt to publish the crate
+                        # If it fails due to already being published, that's fine
+                        if ! cargo publish; then
+                            # If publish fails, check if it's because it's already published
+                            if cargo search "$crate" --limit 1 | grep -q "$crate_version"; then
+                                print_info "$crate $crate_version already published, skipping..."
+                            else
+                                # If it's a different error, we should investigate
+                                print_warning "Failed to publish $crate, but it's not already published"
+                            fi
+                        else
+                            # Wait a bit for crates.io to register the new version
+                            print_info "Successfully published $crate $crate_version"
+                            sleep 15
+                        fi
+                    )
+                else
+                    print_info "Crate directory $crate not found, skipping..."
+                fi
+            done
+            
+            # Also publish any remaining workspace members that weren't in our explicit order
+            print_info "Step 3c: Publishing any remaining workspace members..."
+            # Get all workspace members
+            local all_members_output
+            all_members_output=$(cargo metadata --format-version 1 --no-deps | jq -r '.packages[] | select(.source==null) | .name')
+            local all_members=()
+            while IFS= read -r line; do
+                if [[ -n "$line" ]]; then
+                    all_members+=("$line")
+                fi
+            done <<< "$all_members_output"
+            
+            for member in "${all_members[@]}"; do
+                # Check if this member was already published via our explicit order
+                local already_attempted=false
+                for published in "${dependency_order[@]}"; do
+                    if [[ "$member" == "$published" ]]; then
+                        already_attempted=true
+                        break
+                    fi
+                done
+                
+                if [[ "$already_attempted" == false && -d "$member" ]]; then
+                    print_info "Publishing remaining crate: $member..."
+                    (
+                        cd "$member"
+                        local member_version=$(grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
+                        
+                        if ! cargo publish; then
+                            if cargo search "$member" --limit 1 | grep -q "$member_version"; then
+                                print_info "$member $member_version already published, skipping..."
+                            else
+                                print_warning "Failed to publish $member, but it's not already published"
+                            fi
+                        else
+                            print_info "Successfully published $member $member_version"
+                            sleep 15
+                        fi
+                    )
+                fi
+            done
+        fi
     fi
 
     if [[ "$dry_run" == 'true' ]]; then
@@ -561,10 +673,10 @@ main() {
         print_warning "Released version $released_version differs from expected $next_version"
     fi
 
-    # 3.5 & 4. GitHub Release Creation and Binary Upload
+    # 4. GitHub Release Creation and Binary Upload
     if [[ "$skip_binaries" == 'false' ]]; then
         print_info "Step 4: Uploading binaries to GitHub Release v$released_version..."
-        
+
         # Use the specialized script to upload binaries, which also creates the release if needed
         local upload_args=(-v "$released_version" --only-upload --notes-file "$RELEASE_NOTES_FILE")
         ./scripts/build-and-upload-binaries.sh "${upload_args[@]}"
