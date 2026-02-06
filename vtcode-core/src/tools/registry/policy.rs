@@ -79,7 +79,7 @@ impl ToolPolicyGateway {
     }
 
     pub async fn sync_available_tools(&mut self, mut available: Vec<String>, mcp_keys: &[String]) {
-        available.extend(mcp_keys.iter().cloned());
+        available.extend_from_slice(mcp_keys);
         available.sort();
         available.dedup();
 

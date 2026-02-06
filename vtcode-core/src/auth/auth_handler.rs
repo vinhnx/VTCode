@@ -99,7 +99,7 @@ impl AuthHandler {
         for (key, value) in &other.env_vars {
             self.env_vars.insert(key.clone(), value.clone());
         }
-        self.args.extend(other.args.iter().cloned());
+        self.args.extend(other.args.clone());
     }
 }
 
