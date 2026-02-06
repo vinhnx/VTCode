@@ -184,14 +184,14 @@ High-quality plan example:
 
 **Token-efficient output handling** (CRITICAL):
 - `cat`/`bat` commands auto-limited to ~1000 chars; use `head -n N` or `tail -n N` for specific ranges
-- Use `read_file` with `start_line`/`end_line` for targeted file sections
+- Use `read_file` with `offset`/`limit` (1-indexed) for targeted file sections
 - For large files: prefer `rg` (ripgrep) pattern search over full content display
 
 **Spooled outputs** (large tool outputs >8KB):
 - Auto-saved to `.vtcode/context/tool_outputs/` with preview in response
-- Access via: `read_file path=".vtcode/context/tool_outputs/FILE.txt" start_line=N end_line=M`
+- Access via: `read_file path=".vtcode/context/tool_outputs/FILE.txt" offset=N limit=M`
 - Search via: `grep_file pattern="..." path=".vtcode/context/tool_outputs/FILE.txt"`
-- **NEVER** re-run commands — use spooled file
+- Do not re-run commands by default — use the spooled file. If `read_file` fails, report the error and ask the user whether to re-run.
 
 **Truncation**: Large outputs show "…N tokens truncated…" — full content in spooled file.
 
