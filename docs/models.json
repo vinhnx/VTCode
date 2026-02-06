@@ -838,6 +838,26 @@
         "output_tokens": 32000,
         "status": "current"
       },
+      "claude-opus-4-6": {
+        "id": "claude-opus-4-6",
+        "name": "Claude Opus 4.6",
+        "description": "Next-gen flagship model with extended and adaptive thinking. 200K context with 1M beta.",
+        "reasoning": true,
+        "effort": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 200000,
+        "output_tokens": 128000,
+        "status": "current"
+      },
       "claude-sonnet-4-5": {
         "id": "claude-sonnet-4-5",
         "name": "Claude Sonnet 4.5 (alias)",

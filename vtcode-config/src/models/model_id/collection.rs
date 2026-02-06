@@ -23,6 +23,7 @@ impl ModelId {
             ModelId::GPT5Nano,
             ModelId::CodexMiniLatest,
             // Anthropic models
+            ModelId::ClaudeOpus46,
             ModelId::ClaudeOpus45,
             ModelId::ClaudeOpus41,
             ModelId::ClaudeSonnet45,

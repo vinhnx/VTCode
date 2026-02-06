@@ -398,6 +398,29 @@ fn openai_presets() -> Vec<ModelPreset> {
 fn anthropic_presets() -> Vec<ModelPreset> {
     vec![
         ModelPreset {
+            id: "claude-opus-4.6".to_string(),
+            model: "claude-opus-4.6".to_string(),
+            display_name: "Claude Opus 4.6".to_string(),
+            description: "Next-gen flagship with adaptive thinking".to_string(),
+            provider: Provider::Anthropic,
+            default_reasoning_effort: ReasoningEffortLevel::Medium,
+            supported_reasoning_efforts: vec![
+                ReasoningEffortPreset {
+                    effort: ReasoningEffortLevel::Medium,
+                    description: "Balanced".to_string(),
+                },
+                ReasoningEffortPreset {
+                    effort: ReasoningEffortLevel::High,
+                    description: "Deep reasoning".to_string(),
+                },
+            ],
+            is_default: false,
+            upgrade: None,
+            show_in_picker: true,
+            supported_in_api: true,
+            context_window: Some(200_000),
+        },
+        ModelPreset {
             id: "claude-opus-4.5".to_string(),
             model: "claude-opus-4.5".to_string(),
             display_name: "Claude Opus 4.5".to_string(),

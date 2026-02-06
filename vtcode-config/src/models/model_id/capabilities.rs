@@ -23,6 +23,7 @@ impl ModelId {
             ModelId::Gemini25Pro
                 | ModelId::GPT5
                 | ModelId::GPT5Codex
+                | ModelId::ClaudeOpus46
                 | ModelId::ClaudeOpus41
                 | ModelId::DeepSeekReasoner
                 | ModelId::XaiGrok4
@@ -72,6 +73,7 @@ impl ModelId {
             ModelId::Gemini25Pro
                 | ModelId::GPT5
                 | ModelId::GPT5Codex
+                | ModelId::ClaudeOpus46
                 | ModelId::ClaudeOpus41
                 | ModelId::ClaudeSonnet45
                 | ModelId::ClaudeSonnet4
@@ -129,6 +131,7 @@ impl ModelId {
             | ModelId::GPT5Nano
             | ModelId::CodexMiniLatest => "5",
             // Anthropic generations
+            ModelId::ClaudeOpus46 => "4.6",
             ModelId::ClaudeOpus45 | ModelId::ClaudeSonnet45 | ModelId::ClaudeHaiku45 => "4.5",
             ModelId::ClaudeOpus41 => "4.1",
             ModelId::ClaudeSonnet4 => "4",

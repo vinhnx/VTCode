@@ -43,6 +43,7 @@ pub const CLAUDE_SONNET_4_5_20250929: &str = anthropic::CLAUDE_SONNET_4_5_202509
 pub const CLAUDE_HAIKU_4_5_20251001: &str = anthropic::CLAUDE_HAIKU_4_5_20251001;
 pub const CLAUDE_OPUS_4_1: &str = anthropic::CLAUDE_OPUS_4_1;
 pub const CLAUDE_OPUS_4_5: &str = anthropic::CLAUDE_OPUS_4_5;
+pub const CLAUDE_OPUS_4_6: &str = anthropic::CLAUDE_OPUS_4_6;
 pub const CLAUDE_SONNET_4_0: &str = anthropic::CLAUDE_SONNET_4_0;
 pub const CLAUDE_OPUS_4_0: &str = anthropic::CLAUDE_OPUS_4_0;
 pub const CLAUDE_3_7_SONNET_LATEST: &str = anthropic::CLAUDE_3_7_SONNET_LATEST;

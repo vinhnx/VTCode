@@ -45,6 +45,8 @@ pub enum ModelId {
     OpenAIGptOss120b,
 
     // Anthropic models
+    /// Claude Opus 4.6 - Next-gen flagship model with extended thinking
+    ClaudeOpus46,
     /// Claude Opus 4.1 - Specialized reasoning model (2025-08-05)
     ClaudeOpus41,
     /// Claude Opus 4.5 - Flagship model with exceptional intelligence (2025-11-01)

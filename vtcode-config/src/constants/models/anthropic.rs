@@ -9,6 +9,7 @@ pub const SUPPORTED_MODELS: &[&str] = &[
     "claude-sonnet-4-5",          // Alias for latest Claude Sonnet 4.5
     "claude-haiku-4-5",           // Alias for latest Claude Haiku 4.5
     "claude-opus-4-5",            // Alias for latest Claude Opus 4.5
+    "claude-opus-4-6",            // Alias for Claude Opus 4.6
     "claude-opus-4-1",            // Alias for latest Claude Opus 4.1
     // Claude 4 series
     "claude-sonnet-4-20250514", // Claude 4 Sonnet
@@ -42,6 +43,7 @@ pub const CLAUDE_3_5_HAIKU_20241022: &str = "claude-3-5-haiku-20241022";
 pub const CLAUDE_HAIKU_4_5: &str = "claude-haiku-4-5";
 pub const CLAUDE_SONNET_4_5: &str = "claude-sonnet-4-5";
 pub const CLAUDE_OPUS_4_5: &str = "claude-opus-4-5";
+pub const CLAUDE_OPUS_4_6: &str = "claude-opus-4-6";
 pub const CLAUDE_OPUS_4_1: &str = "claude-opus-4-1";
 pub const CLAUDE_SONNET_4_0: &str = "claude-sonnet-4-0";
 pub const CLAUDE_OPUS_4_0: &str = "claude-opus-4-0";
@@ -57,10 +59,12 @@ pub const REASONING_MODELS: &[&str] = &[
     CLAUDE_SONNET_4_5_20250929,
     CLAUDE_HAIKU_4_5_20251001,
     CLAUDE_OPUS_4_5_20251101,
+    CLAUDE_OPUS_4_6,
     CLAUDE_OPUS_4_1_20250805,
     CLAUDE_SONNET_4_5,
     CLAUDE_HAIKU_4_5,
     CLAUDE_OPUS_4_5,
+    CLAUDE_OPUS_4_6,
     CLAUDE_OPUS_4_1,
     "claude-sonnet-4-20250514",
     "claude-opus-4-20250514",
