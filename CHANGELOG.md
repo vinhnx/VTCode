@@ -2,6 +2,30 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## v0.77.1 - 2026-02-06
+
+### Chores
+
+- Release (210e6503) (@vinhnx)
+- update tool policy and improve tool registration descriptions (09e87101) (@vinhnx)
+- update config - enable list_skills tool and adjust settings (401cc2f9) (@vinhnx)
+
+### Other
+
+- Update commit (717601ea) (@vinhnx)
+- Add jq dependency check and improve cargo release process (5c9a2c82) (@vinhnx)
+- Add support for effort parameter in Anthropic API and related validation (9519a720) (@vinhnx)
+- Add adaptive thinking support for Claude Opus 4.6 model and update related configurations (19515dee) (@vinhnx)
+- Add context management support to LLM requests and related components (e893cee1) (@vinhnx)
+- Add support for Claude Opus 4.6 model with adaptive thinking and update related configurations (77d0d485) (@vinhnx)
+- Implement tool safety checks, enhance wizard modal, and update configuration (574d60de) (@vinhnx)
+- Add skills-ref commands for skill validation, listing, and prompt generation; update skill discovery paths and manifest structure (df2919d9) (@vinhnx)
+- Enhance input widget styling with padding and background; update configuration theme and editing mode (958f7c38) (@vinhnx)
+- Cleanup TODO.md by removing outdated tasks and enhancing UI transition notes (21d1d5c6) (@vinhnx)
+- Refactor spinner implementation and enhance cursor behavior during status updates (0b6828ac) (@vinhnx)
+- Refactor test assertion for compact_title method in MCP event (4f44b68a) (@vinhnx)
+- Implement command caching and gatekeeper policy; enhance file reading with async logging and performance tracking (e464ee31) (@vinhnx)
+
 ## v0.77.0 - 2026-02-06
 
 ### Chores
