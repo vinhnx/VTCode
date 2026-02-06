@@ -63,7 +63,7 @@ pub fn build_messages_from_conversation(
     messages.push(Message::system(system_instruction.to_string()));
 
     for content in conversation {
-        let mut text = String::new();
+        let mut content_parts = Vec::new();
         let mut tool_calls = Vec::new();
         let mut tool_responses = Vec::new();
 
@@ -72,10 +72,23 @@ pub fn build_messages_from_conversation(
                 Part::Text {
                     text: part_text, ..
                 } => {
-                    if !text.is_empty() {
-                        text.push('\n');
+                    if let Some(crate::llm::provider::ContentPart::Text { text }) =
+                        content_parts.last_mut()
+                    {
+                        if !text.is_empty() {
+                            text.push('\n');
+                        }
+                        text.push_str(part_text);
+                    } else if !part_text.is_empty() {
+                        content_parts
+                            .push(crate::llm::provider::ContentPart::text(part_text.clone()));
                     }
-                    text.push_str(part_text);
+                }
+                Part::InlineData { inline_data } => {
+                    content_parts.push(crate::llm::provider::ContentPart::image(
+                        inline_data.data.clone(),
+                        inline_data.mime_type.clone(),
+                    ));
                 }
                 Part::FunctionCall {
                     function_call,
@@ -107,15 +120,27 @@ pub fn build_messages_from_conversation(
 
         if !tool_responses.is_empty() {
             messages.extend(tool_responses);
-            if !text.is_empty() {
-                messages.push(Message::user(text));
+            if !content_parts.is_empty() {
+                messages.push(Message::user_with_parts(content_parts));
             }
             continue;
         }
 
         let mut message = match content.role.as_str() {
-            "model" => Message::assistant(text),
-            _ => Message::user(text),
+            "model" => {
+                if content_parts.is_empty() {
+                    Message::assistant(String::new())
+                } else {
+                    Message::assistant_with_parts(content_parts)
+                }
+            }
+            _ => {
+                if content_parts.is_empty() {
+                    Message::user(String::new())
+                } else {
+                    Message::user_with_parts(content_parts)
+                }
+            }
         };
 
         if !tool_calls.is_empty() {

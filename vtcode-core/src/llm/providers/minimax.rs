@@ -15,7 +15,7 @@ use futures::StreamExt;
 use reqwest::Client as HttpClient;
 use serde_json::Value;
 
-use super::common::{override_base_url, resolve_model};
+use super::common::{override_base_url, resolve_model, serialize_message_content_openai};
 use super::error_handling::{format_network_error, format_parse_error};
 
 pub struct MinimaxProvider {
@@ -92,7 +92,7 @@ impl MinimaxProvider {
         for message in &request.messages {
             messages.push(serde_json::json!({
                 "role": message.role.as_generic_str(),
-                "content": message.content.as_text()
+                "content": serialize_message_content_openai(&message.content)
             }));
         }
 

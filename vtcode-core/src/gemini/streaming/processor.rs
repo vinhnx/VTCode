@@ -541,6 +541,9 @@ impl StreamingProcessor {
                         _has_valid_content = true;
                     }
                 }
+                Part::InlineData { .. } => {
+                    _has_valid_content = true;
+                }
                 Part::FunctionCall { .. } => {
                     // Function calls are handled separately in the tool execution flow
                     _has_valid_content = true;

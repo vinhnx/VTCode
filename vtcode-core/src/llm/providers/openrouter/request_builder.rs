@@ -3,6 +3,7 @@ use serde_json::{Value, json};
 use crate::config::models::Provider;
 use crate::llm::error_display;
 use crate::llm::provider::{LLMError, LLMProvider, LLMRequest, MessageRole};
+use crate::llm::providers::common::serialize_message_content_openai;
 use crate::llm::rig_adapter::reasoning_parameters_for;
 
 use super::OpenRouterProvider;
@@ -26,7 +27,7 @@ impl OpenRouterProvider {
             let role = msg.role.as_openai_str();
             let mut message = json!({
                 "role": role,
-                "content": msg.content
+                "content": serialize_message_content_openai(&msg.content)
             });
 
             if msg.role == MessageRole::Assistant {

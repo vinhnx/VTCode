@@ -244,6 +244,21 @@ impl AnsiRenderer {
         }
     }
 
+    /// Append a large pasted user message as a placeholder in inline UI.
+    pub fn append_paste_placeholder(&mut self, message: &str, line_count: usize) -> Result<()> {
+        if let Some(sink) = &self.sink {
+            sink.handle.append_pasted_message(
+                InlineMessageKind::User,
+                message.to_string(),
+                line_count,
+            );
+            transcript::append(message);
+            self.last_line_was_empty = message.trim().is_empty();
+            return Ok(());
+        }
+        self.line(MessageStyle::User, message)
+    }
+
     /// Write styled text without a trailing newline
     pub fn inline_with_style(&mut self, style: MessageStyle, text: &str) -> Result<()> {
         if let Some(sink) = &mut self.sink {

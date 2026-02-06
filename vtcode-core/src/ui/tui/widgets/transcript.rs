@@ -60,6 +60,7 @@ impl<'a> TranscriptWidget<'a> {
 impl<'a> Widget for TranscriptWidget<'a> {
     fn render(self, area: Rect, buf: &mut Buffer) {
         if area.height == 0 || area.width == 0 {
+            self.session.set_transcript_area(None);
             return;
         }
 
@@ -72,8 +73,10 @@ impl<'a> Widget for TranscriptWidget<'a> {
         block.render(area, buf);
 
         if inner.height == 0 || inner.width == 0 {
+            self.session.set_transcript_area(None);
             return;
         }
+        self.session.set_transcript_area(Some(inner));
 
         // Clamp effective dimensions to prevent pathological CPU usage with huge terminals
         // See: https://github.com/anthropics/claude-code/issues/21567

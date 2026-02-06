@@ -29,6 +29,15 @@ pub fn handle_command(session: &mut Session, command: InlineCommand) {
             session.push_line(kind, segments);
             session.transcript_content_changed = true;
         }
+        InlineCommand::AppendPastedMessage {
+            kind,
+            text,
+            line_count,
+        } => {
+            session.clear_thinking_spinner_if_active(kind);
+            session.append_pasted_message(kind, text, line_count);
+            session.transcript_content_changed = true;
+        }
         InlineCommand::Inline { kind, segment } => {
             session.clear_thinking_spinner_if_active(kind);
             session.append_inline(kind, segment);
@@ -516,6 +525,7 @@ pub fn request_exit(session: &mut Session) {
 
 pub(super) fn clear_input(session: &mut Session) {
     session.input_manager.clear();
+    session.input_compact_mode = false;
     session.scroll_manager.set_offset(0);
     super::slash::update_slash_suggestions(session);
     session.mark_dirty();

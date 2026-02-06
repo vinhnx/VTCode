@@ -523,19 +523,7 @@ pub(crate) async fn run_interaction_loop(
             }
         };
 
-        match &refined_content {
-            uni::MessageContent::Text(text) => display_user_message(ctx.renderer, text)?,
-            uni::MessageContent::Parts(parts) => {
-                let mut display_parts = Vec::new();
-                for part in parts {
-                    if let uni::ContentPart::Text { text } = part {
-                        display_parts.push(text.as_str());
-                    }
-                }
-                let display_text = display_parts.join(" ");
-                display_user_message(ctx.renderer, &display_text)?;
-            }
-        }
+        display_user_message(ctx.renderer, input)?;
 
         let user_message = match refined_content {
             uni::MessageContent::Text(text) => uni::Message::user(text),

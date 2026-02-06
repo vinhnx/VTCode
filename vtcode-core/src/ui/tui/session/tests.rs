@@ -1,11 +1,13 @@
 use super::prompt_palette;
 use super::*;
+use crate::config::constants::ui;
 use crate::ui::tui::style::ratatui_style_from_inline;
 use crate::ui::tui::{InlineSegment, InlineTextStyle, InlineTheme};
 use ratatui::crossterm::event::{Event as CrosstermEvent, KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
     Terminal,
     backend::TestBackend,
+    layout::Rect,
     style::{Color, Modifier},
     text::{Line, Span},
 };
@@ -80,6 +82,14 @@ fn line_text(line: &Line<'_>) -> String {
         .iter()
         .map(|span| span.content.clone().into_owned())
         .collect()
+}
+
+fn text_content(text: &Text<'static>) -> String {
+    text.lines
+        .iter()
+        .map(line_text)
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 #[test]
@@ -231,6 +241,88 @@ fn paste_preserves_all_newlines() {
     session.handle_event(CrosstermEvent::Paste(pasted.clone()), &tx, None);
 
     assert_eq!(session.input_manager.content(), pasted);
+}
+
+#[test]
+fn pasted_message_displays_full_content() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+
+    let line_total = ui::INLINE_PASTE_COLLAPSE_LINE_THRESHOLD + 1;
+    let pasted_lines: Vec<String> = (1..=line_total).map(|idx| format!("paste-{idx}")).collect();
+    let pasted_text = pasted_lines.join("\n");
+
+    session.append_pasted_message(
+        InlineMessageKind::User,
+        pasted_text.clone(),
+        pasted_lines.len(),
+    );
+
+    let user_line = session
+        .lines
+        .iter()
+        .find(|line| line.kind == InlineMessageKind::User)
+        .expect("user line should exist");
+    let combined: String = user_line
+        .segments
+        .iter()
+        .map(|segment| segment.text.as_str())
+        .collect();
+    assert!(combined.contains("paste-1"));
+    assert!(session.collapsed_pastes.is_empty());
+}
+
+#[test]
+fn input_compact_preview_for_large_paste() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    let line_total = ui::INLINE_PASTE_COLLAPSE_LINE_THRESHOLD + 1;
+    let pasted_lines: Vec<String> = (1..=line_total).map(|idx| format!("line-{idx}")).collect();
+    let pasted_text = pasted_lines.join("\n");
+
+    session.insert_paste_text(&pasted_text);
+
+    let data = session.build_input_widget_data(VIEW_WIDTH, VIEW_ROWS);
+    let rendered = text_content(&data.text);
+    assert!(rendered.contains("[Pasted Content"));
+}
+
+#[test]
+fn input_compact_preview_for_image_path() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    let image_path = "/tmp/Screenshot 2026-02-06 at 3.39.48 PM.png";
+
+    session.insert_paste_text(image_path);
+
+    let data = session.build_input_widget_data(VIEW_WIDTH, VIEW_ROWS);
+    let rendered = text_content(&data.text);
+    assert!(rendered.contains("[Image:"));
+    assert!(rendered.contains("Screenshot 2026-02-06"));
+}
+
+#[test]
+fn input_compact_preview_for_quoted_image_path() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    let image_path = "\"/tmp/Screenshot 2026-02-06 at 3.39.48 PM.png\"";
+
+    session.insert_paste_text(image_path);
+
+    let data = session.build_input_widget_data(VIEW_WIDTH, VIEW_ROWS);
+    let rendered = text_content(&data.text);
+    assert!(rendered.contains("[Image:"));
+    assert!(rendered.contains("Screenshot 2026-02-06"));
+}
+
+#[test]
+fn input_compact_preview_for_image_path_with_text() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    let input = "/tmp/Screenshot 2026-02-06 at 3.39.48 PM.png can you see";
+
+    session.insert_paste_text(input);
+
+    let data = session.build_input_widget_data(VIEW_WIDTH, VIEW_ROWS);
+    let rendered = text_content(&data.text);
+    assert!(rendered.contains("[Image:"));
+    assert!(rendered.contains("Screenshot 2026-02-06"));
+    assert!(rendered.contains("can you see"));
 }
 
 #[test]

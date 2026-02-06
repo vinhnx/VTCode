@@ -11,6 +11,7 @@
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
+use ratatui::layout::Rect;
 use tokio::sync::mpsc::UnboundedSender;
 
 use super::super::types::{
@@ -57,6 +58,14 @@ impl Session {
     /// Mark the session as needing a redraw
     pub fn mark_dirty(&mut self) {
         self.needs_redraw = true;
+    }
+
+    pub(crate) fn set_transcript_area(&mut self, area: Option<Rect>) {
+        self.transcript_area = area;
+    }
+
+    pub(crate) fn set_input_area(&mut self, area: Option<Rect>) {
+        self.input_area = area;
     }
 
     /// Advance animation state on tick and request redraw when a frame changes.
@@ -140,6 +149,8 @@ impl Session {
     /// Clear the screen and reset scroll
     pub(super) fn clear_screen(&mut self) {
         self.lines.clear();
+        self.collapsed_pastes.clear();
+        self.user_scrolled = false;
         self.scroll_manager.set_offset(0);
         self.invalidate_transcript_cache();
         self.invalidate_scroll_metrics();
@@ -250,6 +261,7 @@ impl Session {
         let previous_offset = self.scroll_manager.offset();
         self.scroll_manager.scroll_up(1);
         if self.scroll_manager.offset() != previous_offset {
+            self.user_scrolled = self.scroll_manager.offset() != 0;
             self.visible_lines_cache = None;
         }
     }
@@ -259,6 +271,7 @@ impl Session {
         let previous_offset = self.scroll_manager.offset();
         self.scroll_manager.scroll_down(1);
         if self.scroll_manager.offset() != previous_offset {
+            self.user_scrolled = self.scroll_manager.offset() != 0;
             self.visible_lines_cache = None;
         }
     }
@@ -268,6 +281,7 @@ impl Session {
         let previous_offset = self.scroll_manager.offset();
         self.scroll_manager.scroll_up(self.viewport_height().max(1));
         if self.scroll_manager.offset() != previous_offset {
+            self.user_scrolled = self.scroll_manager.offset() != 0;
             self.visible_lines_cache = None;
         }
     }
@@ -278,6 +292,7 @@ impl Session {
         let previous_offset = self.scroll_manager.offset();
         self.scroll_manager.scroll_down(page);
         if self.scroll_manager.offset() != previous_offset {
+            self.user_scrolled = self.scroll_manager.offset() != 0;
             self.visible_lines_cache = None;
         }
     }

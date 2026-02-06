@@ -16,6 +16,7 @@ impl Session {
     pub(super) fn scroll_to_bottom(&mut self) {
         self.mark_scrolling();
         self.scroll_manager.scroll_to_bottom();
+        self.user_scrolled = false;
         self.mark_dirty();
     }
 }

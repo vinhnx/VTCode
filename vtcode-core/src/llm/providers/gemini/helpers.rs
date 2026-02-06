@@ -3,6 +3,7 @@ use crate::config::constants::models;
 use crate::gemini::streaming::StreamingError;
 use crate::llm::error_display;
 use crate::llm::provider::LLMError;
+use crate::llm::provider::{ContentPart, MessageContent};
 use crate::prompts::system::default_system_prompt;
 
 impl GeminiProvider {
@@ -117,13 +118,9 @@ impl GeminiProvider {
                 continue;
             }
 
-            let content_text = message.content.as_text();
             let mut parts: Vec<Part> = Vec::new();
-            if message.role != MessageRole::Tool && !message.content.is_empty() {
-                parts.push(Part::Text {
-                    text: content_text.into_owned(),
-                    thought_signature: None,
-                });
+            if message.role != MessageRole::Tool {
+                parts.extend(parts_from_message_content(&message.content));
             }
 
             if message.role == MessageRole::Assistant
@@ -359,6 +356,7 @@ impl GeminiProvider {
                 } => {
                     text_content.push_str(&text);
                 }
+                Part::InlineData { .. } => {}
                 Part::FunctionCall {
                     function_call,
                     thought_signature: _,
@@ -547,6 +545,47 @@ impl GeminiProvider {
                     metadata: None,
                 }
             }
+        }
+    }
+}
+
+fn parts_from_message_content(content: &MessageContent) -> Vec<Part> {
+    match content {
+        MessageContent::Text(text) => {
+            if text.is_empty() {
+                Vec::new()
+            } else {
+                vec![Part::Text {
+                    text: text.clone(),
+                    thought_signature: None,
+                }]
+            }
+        }
+        MessageContent::Parts(parts) => {
+            let mut converted = Vec::new();
+            for part in parts {
+                match part {
+                    ContentPart::Text { text } => {
+                        if !text.is_empty() {
+                            converted.push(Part::Text {
+                                text: text.clone(),
+                                thought_signature: None,
+                            });
+                        }
+                    }
+                    ContentPart::Image {
+                        data, mime_type, ..
+                    } => {
+                        converted.push(Part::InlineData {
+                            inline_data: crate::gemini::models::InlineData {
+                                mime_type: mime_type.clone(),
+                                data: data.clone(),
+                            },
+                        });
+                    }
+                }
+            }
+            converted
         }
     }
 }

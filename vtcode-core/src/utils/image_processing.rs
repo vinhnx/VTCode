@@ -108,3 +108,39 @@ pub async fn read_image_file<P: AsRef<Path>>(file_path: P) -> Result<ImageData> 
         size: file_contents.len() as u64,
     })
 }
+
+/// Reads an image file from an absolute path (or already validated path) and converts it to base64.
+///
+/// This skips relative-path safety checks and should only be used when the caller has validated
+/// the path scope and intent.
+pub async fn read_image_file_any_path<P: AsRef<Path>>(file_path: P) -> Result<ImageData> {
+    let path = file_path.as_ref();
+
+    if !has_supported_image_extension(path) {
+        return Err(anyhow::anyhow!(
+            "Unsupported image extension for path: {}",
+            path.display()
+        ));
+    }
+
+    let file_contents = tokio::fs::read(path)
+        .await
+        .with_context(|| format!("Failed to read image file: {}", path.display()))?;
+
+    if file_contents.len() > 20 * 1024 * 1024 {
+        return Err(anyhow::anyhow!(
+            "Image file too large: {} bytes (max 20MB)",
+            file_contents.len()
+        ));
+    }
+
+    let mime_type = detect_mime_type_from_extension(path)?;
+    let base64_data = encode_to_base64(&file_contents);
+
+    Ok(ImageData {
+        base64_data,
+        mime_type,
+        file_path: path.display().to_string(),
+        size: file_contents.len() as u64,
+    })
+}

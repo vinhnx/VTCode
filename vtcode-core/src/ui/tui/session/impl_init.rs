@@ -80,9 +80,11 @@ impl Session {
             // --- Managers (Phase 2) ---
             input_manager: InputManager::new(),
             scroll_manager: ScrollManager::new(initial_transcript_rows),
+            user_scrolled: false,
 
             // --- Message Management ---
             lines: Vec::with_capacity(64),
+            collapsed_pastes: Vec::new(),
             styles: SessionStyles::new(theme.clone()),
             theme,
             appearance,
@@ -96,6 +98,7 @@ impl Session {
             placeholder_style: None,
             input_status_left: None,
             input_status_right: None,
+            input_compact_mode: false,
 
             // --- UI State ---
             slash_palette: SlashPalette::new(),
@@ -113,6 +116,8 @@ impl Session {
             transcript_rows: initial_transcript_rows,
             transcript_width: 0,
             transcript_view_top: 0,
+            transcript_area: None,
+            input_area: None,
 
             // --- Logging ---
             log_receiver: None,

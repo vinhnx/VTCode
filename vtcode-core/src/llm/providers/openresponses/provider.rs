@@ -8,6 +8,7 @@ use crate::llm::provider::{
     FinishReason, LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent,
     ToolCall,
 };
+use crate::llm::providers::common::serialize_message_content_openai;
 use anyhow::Result;
 use async_stream::try_stream;
 use async_trait::async_trait;
@@ -155,11 +156,9 @@ impl OpenResponsesProvider {
 
         for message in &request.messages {
             let role = message.role.as_generic_str();
-            let content = message.content.as_text();
-
             let mut message_obj = json!({
                 "role": role,
-                "content": content
+                "content": serialize_message_content_openai(&message.content)
             });
 
             if let Some(tool_calls) = &message.tool_calls {

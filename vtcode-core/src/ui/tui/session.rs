@@ -109,15 +109,23 @@ pub const PROMPT_COMMAND_PREFIX: &str = "/prompt:";
 const MAX_LOG_LINES: usize = 256;
 const MAX_LOG_DRAIN_PER_TICK: usize = 256;
 
+#[derive(Clone, Debug)]
+struct CollapsedPaste {
+    line_index: usize,
+    full_text: String,
+}
+
 pub struct Session {
     // --- Managers (Phase 2) ---
     /// Manages user input, cursor, and command history
     pub(crate) input_manager: InputManager,
     /// Manages scroll state and viewport metrics
     pub(crate) scroll_manager: ScrollManager,
+    user_scrolled: bool,
 
     // --- Message Management ---
     pub(crate) lines: Vec<MessageLine>,
+    collapsed_pastes: Vec<CollapsedPaste>,
     pub(crate) theme: InlineTheme,
     pub(crate) styles: SessionStyles,
     pub(crate) appearance: AppearanceConfig,
@@ -132,6 +140,7 @@ pub struct Session {
     placeholder_style: Option<InlineTextStyle>,
     pub(crate) input_status_left: Option<String>,
     pub(crate) input_status_right: Option<String>,
+    input_compact_mode: bool,
 
     // --- UI State ---
     slash_palette: SlashPalette,
@@ -151,6 +160,8 @@ pub struct Session {
     pub(crate) transcript_rows: u16,
     pub(crate) transcript_width: u16,
     pub(crate) transcript_view_top: usize,
+    transcript_area: Option<Rect>,
+    input_area: Option<Rect>,
 
     // --- Logging ---
     log_receiver: Option<UnboundedReceiver<LogEntry>>,

@@ -1,6 +1,7 @@
 use crate::llm::error_display;
 use crate::llm::provider::{
-    FinishReason, LLMError, LLMRequest, LLMResponse, MessageRole, ToolCall, Usage,
+    ContentPart, FinishReason, LLMError, LLMRequest, LLMResponse, MessageContent, MessageRole,
+    ToolCall, Usage,
 };
 use crate::llm::providers::openai::types::OpenAIResponsesPayload;
 use crate::prompts::system::default_system_prompt;
@@ -260,13 +261,46 @@ pub fn build_standard_responses_payload(
                 }
             }
             MessageRole::User => {
-                input.push(json!({
-                    "role": "user",
-                    "content": [{
-                        "type": "input_text",
-                        "text": msg.content.as_text()
-                    }]
-                }));
+                let mut content_parts: Vec<Value> = Vec::new();
+                match &msg.content {
+                    MessageContent::Text(text) => {
+                        if !text.trim().is_empty() {
+                            content_parts.push(json!({
+                                "type": "input_text",
+                                "text": text
+                            }));
+                        }
+                    }
+                    MessageContent::Parts(parts) => {
+                        for part in parts {
+                            match part {
+                                ContentPart::Text { text } => {
+                                    if !text.trim().is_empty() {
+                                        content_parts.push(json!({
+                                            "type": "input_text",
+                                            "text": text
+                                        }));
+                                    }
+                                }
+                                ContentPart::Image {
+                                    data, mime_type, ..
+                                } => {
+                                    content_parts.push(json!({
+                                        "type": "input_image",
+                                        "image_url": format!("data:{};base64,{}", mime_type, data)
+                                    }));
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if !content_parts.is_empty() {
+                    input.push(json!({
+                        "role": "user",
+                        "content": content_parts
+                    }));
+                }
             }
             MessageRole::Assistant => {
                 // Inject any persisted reasoning items from previous turns
@@ -391,13 +425,46 @@ pub fn build_codex_responses_payload(
                 }
             }
             MessageRole::User => {
-                input.push(json!({
-                    "role": "user",
-                    "content": [{
-                        "type": "input_text",
-                        "text": msg.content.as_text()
-                    }]
-                }));
+                let mut content_parts: Vec<Value> = Vec::new();
+                match &msg.content {
+                    MessageContent::Text(text) => {
+                        if !text.trim().is_empty() {
+                            content_parts.push(json!({
+                                "type": "input_text",
+                                "text": text
+                            }));
+                        }
+                    }
+                    MessageContent::Parts(parts) => {
+                        for part in parts {
+                            match part {
+                                ContentPart::Text { text } => {
+                                    if !text.trim().is_empty() {
+                                        content_parts.push(json!({
+                                            "type": "input_text",
+                                            "text": text
+                                        }));
+                                    }
+                                }
+                                ContentPart::Image {
+                                    data, mime_type, ..
+                                } => {
+                                    content_parts.push(json!({
+                                        "type": "input_image",
+                                        "image_url": format!("data:{};base64,{}", mime_type, data)
+                                    }));
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if !content_parts.is_empty() {
+                    input.push(json!({
+                        "role": "user",
+                        "content": content_parts
+                    }));
+                }
             }
             MessageRole::Assistant => {
                 // CRITICAL for Codex: Inject any persisted reasoning items from previous turns

@@ -344,6 +344,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
             let submitted = session.input_manager.content().to_owned();
             let submitted_entry = session.input_manager.current_history_entry();
             session.input_manager.clear();
+            session.input_compact_mode = false;
             session.scroll_manager.set_offset(0);
             crate::ui::tui::session::slash::update_slash_suggestions(session);
 
