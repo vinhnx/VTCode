@@ -136,6 +136,7 @@ pub fn convert_to_anthropic_format(
         thinking: thinking_val,
         reasoning: reasoning_val,
         output_config,
+        context_management: request.context_management.clone(),
         stream: request.stream,
     };
 

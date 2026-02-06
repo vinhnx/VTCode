@@ -98,6 +98,7 @@ pub fn create_stream(
                                     delta_map.insert("function".to_string(), Value::Object(func));
                                     aggregator.tool_builders[index].apply_delta(&Value::Object(delta_map));
                                 }
+                                AnthropicStreamDelta::CompactionDelta { .. } => {}
                                 _ => {}
                             }
                         }

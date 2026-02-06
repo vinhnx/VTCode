@@ -57,6 +57,9 @@ pub struct LLMRequest {
     /// Optional beta headers for Anthropic (and potentially others)
     pub betas: Option<Vec<String>>,
 
+    /// Optional provider-specific context management configuration (Anthropic compaction).
+    pub context_management: Option<Value>,
+
     /// Optional prefill text for the assistant response (Anthropic prefilling)
     /// Incompatible with extended thinking
     pub prefill: Option<String>,

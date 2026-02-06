@@ -943,6 +943,7 @@ mod tests {
             stop_sequences: None,
             thinking_budget: None,
             betas: None,
+            context_management: None,
             prefill: None,
             character_reinforcement: false,
             character_name: None,
