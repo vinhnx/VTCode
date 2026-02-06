@@ -62,8 +62,6 @@ fn visible_transcript(session: &mut Session) -> Vec<String> {
     if filler > 0 {
         visible.extend((0..filler).map(|_| Line::default()));
     }
-    session.overlay_queue_lines(&mut visible, width);
-
     visible
         .into_iter()
         .map(|line| {
@@ -361,13 +359,26 @@ fn control_enter_queues_submission() {
 }
 
 #[test]
-fn command_enter_queues_submission() {
+fn tab_queues_submission() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
 
     session.set_input("queued".to_string());
 
-    let queued = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::SUPER));
+    let queued = session.process_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
     assert!(matches!(queued, Some(InlineEvent::QueueSubmit(value)) if value == "queued"));
+}
+
+#[test]
+fn alt_up_edits_latest_queued_input() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+
+    session.handle_command(InlineCommand::SetQueuedInputs {
+        entries: vec!["first".to_string(), "second".to_string()],
+    });
+
+    let event = session.process_key(KeyEvent::new(KeyCode::Up, KeyModifiers::ALT));
+    assert!(matches!(event, Some(InlineEvent::EditQueue)));
+    assert_eq!(session.input_manager.content(), "second");
 }
 
 #[test]
@@ -1231,13 +1242,8 @@ fn timeline_hidden_keeps_navigation_unselected() {
 }
 
 #[test]
-fn queued_inputs_overlay_bottom_rows() {
+fn queued_inputs_rendered_above_input() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
-    session.push_line(
-        InlineMessageKind::Agent,
-        vec![make_segment("Latest response from agent")],
-    );
-
     session.handle_command(InlineCommand::SetQueuedInputs {
         entries: vec![
             "first queued message".to_string(),
@@ -1246,30 +1252,26 @@ fn queued_inputs_overlay_bottom_rows() {
         ],
     });
 
-    let view = visible_transcript(&mut session);
-    let footer: Vec<String> = view.iter().rev().take(10).cloned().collect();
+    let lines = session.queue_input_lines(VIEW_WIDTH);
+    let rendered: Vec<String> = lines.iter().map(line_text).collect();
 
+    assert_eq!(rendered.len(), 3, "queue should show 2 items plus hint");
     assert!(
-        footer.iter().any(|line| line.contains("Follow-ups (3)")),
-        "follow-up header should be visible at the bottom of the transcript"
+        rendered[0].contains("↳ third queued message"),
+        "latest queued message should render first"
     );
     assert!(
-        footer.iter().any(|line| line.contains("1.")),
-        "first queued message label should be rendered"
+        rendered[1].contains("↳ second queued message"),
+        "second-latest queued message should render second"
     );
+    let hint = if cfg!(target_os = "macos") {
+        "⌥ + ↑ edit"
+    } else {
+        "Alt + ↑ edit"
+    };
     assert!(
-        footer.iter().any(|line| line.contains("2.")),
-        "second queued message label should be rendered"
-    );
-    assert!(
-        footer.iter().any(|line| line.contains("3.")),
-        "third queued message label should be rendered"
-    );
-    assert!(
-        footer
-            .iter()
-            .any(|line| line.contains("Ctrl+↑ to edit queue")),
-        "hint line should show how to edit queue"
+        rendered[2].contains(hint),
+        "hint line should render beneath queued messages"
     );
 }
 

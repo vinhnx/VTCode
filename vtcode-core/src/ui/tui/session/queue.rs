@@ -1,6 +1,6 @@
 use super::Session;
 use ratatui::prelude::*;
-use unicode_width::UnicodeWidthStr;
+use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 pub(super) struct QueueOverlay {
     pub(super) width: u16,
@@ -12,6 +12,56 @@ impl Session {
     pub(super) fn set_queued_inputs_entries(&mut self, entries: Vec<String>) {
         self.queued_inputs = entries;
         self.invalidate_queue_overlay();
+    }
+
+    pub(super) fn push_queued_input(&mut self, entry: String) {
+        self.queued_inputs.push(entry);
+        self.invalidate_queue_overlay();
+    }
+
+    pub(super) fn pop_latest_queued_input(&mut self) -> Option<String> {
+        let result = self.queued_inputs.pop();
+        if result.is_some() {
+            self.invalidate_queue_overlay();
+        }
+        result
+    }
+
+    pub(super) fn queue_input_lines(&self, width: u16) -> Vec<Line<'static>> {
+        if width == 0 || self.queued_inputs.is_empty() {
+            return Vec::new();
+        }
+
+        let max_width = width as usize;
+        let mut lines = Vec::new();
+        let mut prefix_style = self.styles.accent_style();
+        prefix_style = prefix_style.add_modifier(Modifier::BOLD);
+        let message_style = self.styles.default_style();
+
+        let prefix = "↳ ";
+        let prefix_width = UnicodeWidthStr::width(prefix);
+        let available = max_width.saturating_sub(prefix_width);
+
+        for entry in self.queued_inputs.iter().rev().take(2) {
+            let trimmed = truncate_to_width(entry, available);
+            let mut spans = Vec::new();
+            spans.push(Span::styled(prefix.to_owned(), prefix_style));
+            spans.push(Span::styled(trimmed, message_style));
+            lines.push(Line::from(spans));
+        }
+
+        let hint = if cfg!(target_os = "macos") {
+            "⌥ + ↑ edit"
+        } else {
+            "Alt + ↑ edit"
+        };
+        let muted_style = self.styles.default_style().add_modifier(Modifier::DIM);
+        lines.push(Line::from(vec![Span::styled(
+            hint.to_string(),
+            muted_style,
+        )]));
+
+        lines
     }
 
     pub(super) fn invalidate_queue_overlay(&mut self) {
@@ -78,29 +128,16 @@ impl Session {
 
         let max_width = width as usize;
         let mut lines = Vec::new();
-        let mut header_style = self.styles.accent_style();
-        header_style = header_style.add_modifier(Modifier::BOLD);
+        let mut prefix_style = self.styles.accent_style();
+        prefix_style = prefix_style.add_modifier(Modifier::BOLD);
         let message_style = self.styles.default_style();
         let muted_style = self.styles.default_style().add_modifier(Modifier::DIM);
 
-        let header_text = if self.queued_inputs.len() == 1 {
-            "Follow-up".to_owned()
-        } else {
-            format!("Follow-ups ({})", self.queued_inputs.len())
-        };
-
-        let mut header_lines =
-            self.wrap_line(Line::from(header_text).style(header_style), max_width);
-        if header_lines.is_empty() {
-            header_lines.push(Line::default());
-        }
-        lines.extend(header_lines);
-
         const DISPLAY_LIMIT: usize = 5;
-        for (index, entry) in self.queued_inputs.iter().take(DISPLAY_LIMIT).enumerate() {
-            let label = format!("  {}. ", index + 1);
+        for entry in self.queued_inputs.iter().take(DISPLAY_LIMIT) {
+            let label = "  ↳ ";
             let mut message_lines =
-                self.wrap_queue_message(&label, entry, max_width, header_style, message_style);
+                self.wrap_queue_message(label, entry, max_width, prefix_style, message_style);
             if message_lines.is_empty() {
                 message_lines.push(Line::default());
             }
@@ -118,8 +155,11 @@ impl Session {
             lines.extend(indicator_lines);
         }
 
-        lines.push(Line::default());
-        let hint = "Ctrl+↑ to edit queue";
+        let hint = if cfg!(target_os = "macos") {
+            "⌥ + ↑ edit"
+        } else {
+            "Alt + ↑ edit"
+        };
         let hint_line = Line::from(vec![Span::styled(format!("  {}", hint), muted_style)]);
         lines.push(hint_line);
 
@@ -172,4 +212,35 @@ impl Session {
 
         lines
     }
+}
+
+fn truncate_to_width(text: &str, max_width: usize) -> String {
+    if max_width == 0 {
+        return String::new();
+    }
+
+    let text_width = UnicodeWidthStr::width(text);
+    if text_width <= max_width {
+        return text.to_string();
+    }
+
+    let ellipsis = "...";
+    let ellipsis_width = 3;
+    let target = max_width.saturating_sub(ellipsis_width);
+    let mut out = String::new();
+    let mut width = 0;
+    for ch in text.chars() {
+        let ch_width = UnicodeWidthChar::width(ch).unwrap_or(0);
+        if width + ch_width > target {
+            break;
+        }
+        out.push(ch);
+        width += ch_width;
+    }
+
+    if width + ellipsis_width <= max_width {
+        out.push_str(ellipsis);
+    }
+
+    out
 }

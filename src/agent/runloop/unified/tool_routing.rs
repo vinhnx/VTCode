@@ -382,6 +382,7 @@ pub(crate) async fn prompt_tool_permission<S: UiSession + ?Sized>(
             | InlineEvent::DiffPreviewApply
             | InlineEvent::DiffPreviewReject
             | InlineEvent::DiffPreviewTrustChanged { .. }
+            | InlineEvent::EditQueue
             | InlineEvent::HistoryPrevious
             | InlineEvent::HistoryNext => {
                 ctrl_c_state.disarm_exit();

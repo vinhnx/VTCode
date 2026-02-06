@@ -26,6 +26,12 @@ impl<'a> InlineQueueState<'a> {
         result
     }
 
+    pub(crate) fn edit_latest(&mut self) -> Option<String> {
+        let result = self.queued_inputs.pop_back();
+        self.sync_handle_queue();
+        result
+    }
+
     pub(crate) fn clear(&mut self) {
         self.queued_inputs.clear();
         self.sync_handle_queue();

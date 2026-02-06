@@ -113,7 +113,7 @@ impl<'a> Widget for TranscriptWidget<'a> {
 
         // Check if we need to mutate the lines (fill empty space or add queue overlay)
         let fill_count = viewport_rows.saturating_sub(cached_lines.len());
-        let needs_mutation = fill_count > 0 || !self.session.queued_inputs.is_empty();
+        let needs_mutation = fill_count > 0;
 
         // Build the lines Vec for Paragraph (which takes ownership)
         // Note: Clone is unavoidable because the cache holds a reference to the Arc
@@ -124,7 +124,6 @@ impl<'a> Widget for TranscriptWidget<'a> {
                 let target_len = lines.len() + fill_count;
                 lines.resize_with(target_len, ratatui::text::Line::default);
             }
-            self.session.overlay_queue_lines(&mut lines, content_width);
             lines
         } else {
             // No mutation needed, just clone for Paragraph

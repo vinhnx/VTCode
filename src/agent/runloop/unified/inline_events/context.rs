@@ -61,6 +61,11 @@ impl<'a> InlineEventContext<'a> {
         let action = match event {
             InlineEvent::Submit(text) => self.input_processor().submit(text),
             InlineEvent::QueueSubmit(text) => self.input_processor().queue_submit(text, queue),
+            InlineEvent::EditQueue => {
+                self.state.reset_interrupt_state();
+                queue.edit_latest();
+                InlineLoopAction::Continue
+            }
             InlineEvent::ListModalSubmit(selection) => {
                 self.state.reset_interrupt_state();
                 self.modal

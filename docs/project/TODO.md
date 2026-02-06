@@ -10,35 +10,6 @@ implement chat input textview keyboard navigation between block of text, for exa
 
 --
 
-implement queue messages UI and handling logic for queue users messages. the part "↳ if user in plan mode, it should automatically switch to agent mode to use full tools in order to
-disovery and and then switch to plan make the plan ask user question if needed
-⌥ + ↑ edit"
-
-example:
-
-```
-
-• Explored
-  └ Read session_setup.rs
-
-• I'm checking session_loop and related code to find where plan_mode_requested is applied since it's not
-  set in initialize_session.
-
-• Explored
-  └ Search plan_mode in session_loop.rs
-    Read session_loop.rs
-
-• Noticing missing active agent update on plan mode init (3m 08s • esc to interrupt)
-
-  ↳ if user in plan mode, it should automatically switch to agent mode to use full tools in order to
-    disovery and and then switch to plan make the plan ask user question if needed
-    ⌥ + ↑ edit
-
-› Explain this codebase
-
-  ? for shortcuts                                                                      27% context left
-```
-
 --
 
 ---
@@ -399,12 +370,6 @@ questions interview.
 ```
 
 ---
-
-Planning Mode [X] │
-│ Enable planning mode and onboarding hints
-
-1. sync planning mode on /config with persistant vtcode.toml config for plan/agent mode
-2. change to switcher (agent/plan) instead of separate commands
 
 --
 
