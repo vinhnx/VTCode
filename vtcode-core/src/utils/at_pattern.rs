@@ -32,8 +32,9 @@ pub async fn parse_at_patterns(input: &str, base_dir: &Path) -> Result<MessageCo
     let protected_ranges: Vec<(usize, usize)> =
         at_matches.iter().map(|m| (m.start, m.end)).collect();
     let raw_matches = find_raw_image_path_matches(input, &protected_ranges);
+    let data_url_matches = find_data_url_matches(input, &protected_ranges);
 
-    if at_matches.is_empty() && raw_matches.is_empty() {
+    if at_matches.is_empty() && raw_matches.is_empty() && data_url_matches.is_empty() {
         return Ok(MessageContent::text(input.to_string()));
     }
 
@@ -51,6 +52,14 @@ pub async fn parse_at_patterns(input: &str, base_dir: &Path) -> Result<MessageCo
             start: m.start,
             end: m.end,
             raw: m.raw,
+        });
+    }
+    for m in data_url_matches {
+        matches.push(PathMatch::DataUrl {
+            start: m.start,
+            end: m.end,
+            mime_type: m.mime_type,
+            data: m.data,
         });
     }
     matches.sort_by_key(|m| m.start());
@@ -127,6 +136,15 @@ pub async fn parse_at_patterns(input: &str, base_dir: &Path) -> Result<MessageCo
                     parts.push(ContentPart::text(raw));
                 }
             }
+            PathMatch::DataUrl {
+                mime_type, data, ..
+            } => {
+                parts.push(ContentPart::Image {
+                    data,
+                    mime_type,
+                    content_type: "image".to_owned(),
+                });
+            }
         }
 
         last_end = match_end;
@@ -160,6 +178,14 @@ struct RawPathMatch {
 }
 
 #[derive(Debug)]
+struct DataUrlMatch {
+    start: usize,
+    end: usize,
+    mime_type: String,
+    data: String,
+}
+
+#[derive(Debug)]
 enum PathMatch {
     At {
         start: usize,
@@ -172,18 +198,26 @@ enum PathMatch {
         end: usize,
         raw: String,
     },
+    DataUrl {
+        start: usize,
+        end: usize,
+        mime_type: String,
+        data: String,
+    },
 }
 
 impl PathMatch {
     fn start(&self) -> usize {
         match self {
             PathMatch::At { start, .. } | PathMatch::Raw { start, .. } => *start,
+            PathMatch::DataUrl { start, .. } => *start,
         }
     }
 
     fn end(&self) -> usize {
         match self {
             PathMatch::At { end, .. } | PathMatch::Raw { end, .. } => *end,
+            PathMatch::DataUrl { end, .. } => *end,
         }
     }
 }
@@ -283,6 +317,42 @@ fn find_raw_image_path_matches(
         collect_unquoted_match(input, start, input.len(), protected_ranges, &mut matches);
     }
 
+    matches
+}
+
+static DATA_IMAGE_URL_REGEX: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
+        r#"(?ix)
+        (?:^|[\s\(\[\{<\"'`])
+        (
+            data:image/[a-z0-9+\-\.]+;base64,[a-z0-9+/=]+
+        )"#,
+    )
+    .expect("Failed to compile data image regex")
+});
+
+fn find_data_url_matches(input: &str, protected_ranges: &[(usize, usize)]) -> Vec<DataUrlMatch> {
+    let mut matches = Vec::new();
+    for capture in DATA_IMAGE_URL_REGEX.captures_iter(input) {
+        let Some(data_match) = capture.get(1) else {
+            continue;
+        };
+        let start = data_match.start();
+        let end = data_match.end();
+        if overlaps_range(start, end, protected_ranges) {
+            continue;
+        }
+        let raw = data_match.as_str();
+        let Some((mime_type, data)) = parse_data_image_url(raw) else {
+            continue;
+        };
+        matches.push(DataUrlMatch {
+            start,
+            end,
+            mime_type,
+            data,
+        });
+    }
     matches
 }
 
@@ -423,6 +493,20 @@ fn looks_like_image_path(token: &str) -> bool {
     }
 
     crate::utils::image_processing::has_supported_image_extension(Path::new(candidate))
+}
+
+fn parse_data_image_url(raw: &str) -> Option<(String, String)> {
+    let trimmed = raw.trim_matches(|ch: char| matches!(ch, '"' | '\''));
+    let rest = trimmed.strip_prefix("data:")?;
+    let (mime_type, data) = rest.split_once(";base64,")?;
+    if !mime_type.starts_with("image/") {
+        return None;
+    }
+    let data = data.trim();
+    if data.is_empty() {
+        return None;
+    }
+    Some((mime_type.to_string(), data.to_string()))
 }
 
 fn resolve_image_path(token: &str, base_dir: &Path) -> Option<PathBuf> {
@@ -778,6 +862,23 @@ mod tests {
                 assert!(text.contains("@https://example.com/image.png"));
             }
             _ => {}
+        }
+    }
+
+    #[tokio::test]
+    async fn test_parse_at_patterns_data_url_image() {
+        let temp_dir = TempDir::new().unwrap();
+        let input = "inline data:image/png;base64,aGVsbG8=";
+
+        let result = parse_at_patterns(input, temp_dir.path()).await.unwrap();
+
+        match result {
+            MessageContent::Parts(parts) => {
+                assert_eq!(parts.len(), 2);
+                assert!(matches!(parts[0], ContentPart::Text { .. }));
+                assert!(matches!(parts[1], ContentPart::Image { .. }));
+            }
+            _ => panic!("Expected multi-part content"),
         }
     }
 }
