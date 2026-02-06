@@ -13,7 +13,16 @@ Subagents are specialized AI assistants that VT Code can delegate tasks to. Each
 
 When VT Code spawns a subagent, it starts with a clean context. The parent agent provides the relevant background in the prompt, and the subagent returns a concise result plus an `agent_id`.
 
-VT Code runs subagents in the foreground today; background mode is not currently supported.
+VT Code runs subagents in the foreground today; background mode is not currently supported. Spawned subagents currently execute as single-turn LLM calls and do not invoke tools yet.
+
+### Auto-Selection Behavior
+
+If you do not specify a subagent, VT Code auto-selects one by scoring:
+- explicit subagent name mentions
+- keyword and phrase matches (built-in agents include curated keywords)
+- overlap with the agent’s description
+
+For ambiguous requests, explicitly set `subagent_type` or mention the agent name in the prompt.
 
 ## When to Use Subagents
 
