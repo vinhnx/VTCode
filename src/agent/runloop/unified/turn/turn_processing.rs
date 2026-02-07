@@ -690,6 +690,7 @@ fn strip_wrapping<'a>(line: &'a str, prefix: &str, suffix: &str) -> Option<&'a s
 }
 
 const MIN_PLAN_MODE_TURNS_BEFORE_INTERVIEW: usize = 1;
+const PLAN_MODE_REMINDER: &str = "• I’m still in Plan Mode, so I can’t implement yet. If you want me to execute the plan, please switch out of Plan Mode (or explicitly say “exit plan mode and implement”).";
 
 fn has_discovery_tool(session_stats: &crate::agent::runloop::unified::state::SessionStats) -> bool {
     use vtcode_core::config::constants::tools;
@@ -732,45 +733,38 @@ fn strip_assistant_text(processing_result: TurnProcessingResult) -> TurnProcessi
     }
 }
 
-fn inject_exit_plan_mode(
+fn append_plan_mode_reminder_text(text: &str) -> String {
+    if text.contains(PLAN_MODE_REMINDER) || text.trim().is_empty() {
+        return text.to_string();
+    }
+
+    let separator = if text.ends_with('\n') { "\n" } else { "\n\n" };
+    format!("{text}{separator}{PLAN_MODE_REMINDER}")
+}
+
+fn maybe_append_plan_mode_reminder(
     processing_result: TurnProcessingResult,
-    conversation_len: usize,
 ) -> TurnProcessingResult {
-    use vtcode_core::config::constants::tools;
-
-    let args = serde_json::json!({
-        "reason": "auto_plan_ready"
-    });
-    let args_json = serde_json::to_string(&args).unwrap_or_else(|_| "{}".to_string());
-    let call_id = format!("call_plan_ready_{}", conversation_len);
-    let call = uni::ToolCall::function(call_id, tools::EXIT_PLAN_MODE.to_string(), args_json);
-
     match processing_result {
         TurnProcessingResult::ToolCalls {
-            mut tool_calls,
+            tool_calls,
             assistant_text,
             reasoning,
-        } => {
-            tool_calls.push(call);
-            TurnProcessingResult::ToolCalls {
-                tool_calls,
-                assistant_text,
+        } => TurnProcessingResult::ToolCalls {
+            tool_calls,
+            assistant_text: append_plan_mode_reminder_text(&assistant_text),
+            reasoning,
+        },
+        TurnProcessingResult::TextResponse { text, reasoning } => {
+            TurnProcessingResult::TextResponse {
+                text: append_plan_mode_reminder_text(&text),
                 reasoning,
             }
         }
-        TurnProcessingResult::TextResponse { text, reasoning } => TurnProcessingResult::ToolCalls {
-            tool_calls: vec![call],
-            assistant_text: text,
-            reasoning,
-        },
-        TurnProcessingResult::Empty | TurnProcessingResult::Completed => {
-            TurnProcessingResult::ToolCalls {
-                tool_calls: vec![call],
-                assistant_text: String::new(),
-                reasoning: None,
-            }
-        }
-        TurnProcessingResult::Cancelled | TurnProcessingResult::Aborted => processing_result,
+        TurnProcessingResult::Empty
+        | TurnProcessingResult::Completed
+        | TurnProcessingResult::Cancelled
+        | TurnProcessingResult::Aborted => processing_result,
     }
 }
 
@@ -792,12 +786,7 @@ pub(crate) fn maybe_force_plan_mode_interview(
             return inject_plan_mode_interview(stripped, session_stats, conversation_len);
         }
 
-        if session_stats.plan_mode_interview_shown() {
-            let stripped = strip_assistant_text(processing_result);
-            return inject_exit_plan_mode(stripped, conversation_len);
-        }
-
-        return processing_result;
+        return maybe_append_plan_mode_reminder(processing_result);
     }
 
     let filter_outcome = filter_interview_tool_calls(
@@ -1206,7 +1195,7 @@ mod tests {
     }
 
     #[test]
-    fn maybe_force_plan_mode_interview_triggers_exit_when_plan_ready() {
+    fn maybe_force_plan_mode_interview_appends_reminder_when_plan_ready() {
         let mut stats = SessionStats::default();
         let processing_result = TurnProcessingResult::TextResponse {
             text: "<proposed_plan>\nPlan content\n</proposed_plan>".to_string(),
@@ -1225,15 +1214,36 @@ mod tests {
         );
 
         match result {
-            TurnProcessingResult::ToolCalls { tool_calls, .. } => {
-                let name = tool_calls
-                    .last()
-                    .and_then(|call| call.function.as_ref())
-                    .map(|func| func.name.as_str())
-                    .unwrap_or("");
-                assert_eq!(name, tools::EXIT_PLAN_MODE);
+            TurnProcessingResult::TextResponse { text, .. } => {
+                assert!(text.contains(super::PLAN_MODE_REMINDER));
             }
-            _ => panic!("Expected tool calls for plan confirmation"),
+            _ => panic!("Expected text response with plan reminder"),
+        }
+    }
+
+    #[test]
+    fn maybe_force_plan_mode_interview_does_not_duplicate_reminder() {
+        let mut stats = SessionStats::default();
+        let text = format!(
+            "<proposed_plan>\nPlan content\n</proposed_plan>\n\n{}",
+            super::PLAN_MODE_REMINDER
+        );
+        let processing_result = TurnProcessingResult::TextResponse {
+            text: text.clone(),
+            reasoning: None,
+        };
+
+        stats.record_tool(tools::READ_FILE);
+        stats.increment_plan_mode_turns();
+        stats.mark_plan_mode_interview_shown();
+
+        let result = maybe_force_plan_mode_interview(processing_result, Some(&text), &mut stats, 3);
+
+        match result {
+            TurnProcessingResult::TextResponse { text, .. } => {
+                assert_eq!(text.matches(super::PLAN_MODE_REMINDER).count(), 1);
+            }
+            _ => panic!("Expected text response with single reminder"),
         }
     }
 

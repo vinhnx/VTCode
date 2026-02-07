@@ -255,8 +255,10 @@ Plan Mode is a read-only exploration phase where mutating tools are normally blo
 - Ask clarifying questions if requirements are ambiguous
 - If you need full tools for discovery, the system will temporarily switch to Edit mode, run the tool, then return you to Plan Mode
 - Avoid modifying files outside `.vtcode/plans/` unless the user has approved implementation
+- When presenting a plan, append this reminder exactly once: "• I’m still in Plan Mode, so I can’t implement yet. If you want me to execute the plan, please switch out of Plan Mode (or explicitly say “exit plan mode and implement”)."
 
 **Exiting Plan Mode** (CRITICAL):
+- Do NOT call `exit_plan_mode` automatically just because a plan is present
 - When user says "start implement", "execute", "proceed", or signals readiness to act:
   1. Call `exit_plan_mode` tool - this triggers the confirmation dialog
   2. User will see the Implementation Blueprint panel with your plan

@@ -42,8 +42,9 @@ vtcode --permission-mode plan
 1. **Start in Plan Mode**: `vtcode --permission-mode plan`
 2. **Describe your goal**: Explain what you want to build or change
 3. **Iterate on the plan**: Ask clarifying questions, explore files, refine the approach
-4. **Exit Plan Mode**: `/plan off`
-5. **Execute the plan**: The agent implements the agreed-upon changes
+4. **Review the plan**: The agent will include a reminder about staying in Plan Mode
+5. **Request execution explicitly**: Say “exit plan mode and implement” or use `/plan off`
+6. **Execute the plan**: The agent will show a confirmation dialog before coding
 
 ## Plan Output Format
 
