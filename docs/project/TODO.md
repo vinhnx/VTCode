@@ -10,6 +10,12 @@ implement chat input textview keyboard navigation between block of text, for exa
 
 --
 
+"• I’m still in Plan Mode, so I can’t implement yet. If you want me to execute the
+plan, please switch out of Plan Mode (or explicitly say “exit plan mode and
+implement”)."
+
+suggeest agent like this to ask user for confirmation before implement the plan. -> switch to agent mode
+
 --
 
 ---
