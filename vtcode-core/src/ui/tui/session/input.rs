@@ -448,7 +448,7 @@ impl Session {
     }
 
     /// Build scroll indicator string with percentage
-    fn build_scroll_indicator(&self) -> String {
+    pub(crate) fn build_scroll_indicator(&self) -> String {
         let percent = self.scroll_manager.progress_percent();
         format!("{} {:>3}%", ui::SCROLL_INDICATOR_FORMAT, percent)
     }

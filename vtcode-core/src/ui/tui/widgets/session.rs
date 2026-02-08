@@ -8,6 +8,7 @@ use super::{
     FilePaletteWidget, FooterWidget, HeaderWidget, LayoutMode, Panel, PromptPaletteWidget,
     SidebarWidget, TranscriptWidget, footer_hints,
 };
+use crate::config::constants::ui;
 use crate::ui::tui::session::{Session, render::apply_view_rows};
 
 /// Root compositor widget that orchestrates rendering of the entire session UI
@@ -346,11 +347,20 @@ impl<'a> SessionWidget<'a> {
             Some(self.session.shimmer_state.phase())
         };
 
+        let scroll_indicator = if ui::SCROLL_INDICATOR_ENABLED {
+            Some(self.session.build_scroll_indicator())
+        } else {
+            None
+        };
         let mut footer = FooterWidget::new(&self.session.styles)
             .left_status(left_status)
             .right_status(right_status)
             .hint(hint)
             .mode(mode);
+
+        if let Some(indicator) = scroll_indicator {
+            footer = footer.scroll_indicator(indicator);
+        }
 
         if let Some(phase) = shimmer_phase {
             footer = footer.shimmer_phase(phase);
