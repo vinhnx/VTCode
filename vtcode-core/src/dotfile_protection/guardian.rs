@@ -201,6 +201,7 @@ impl AccessContext {
 /// - Logs all access attempts
 /// - Manages backups
 /// - Prevents cascading modifications
+#[derive(Clone)]
 pub struct DotfileGuardian {
     /// Configuration.
     config: DotfileProtectionConfig,
@@ -208,10 +209,17 @@ pub struct DotfileGuardian {
     audit_log: Option<Arc<AuditLog>>,
     /// Backup manager.
     backup_manager: Option<Arc<BackupManager>>,
+    /// Protected state
+    state: Arc<Mutex<GuardianState>>,
+}
+
+/// Inner state for DotfileGuardian
+#[derive(Debug, Default)]
+struct GuardianState {
     /// Files modified in current session (for cascade detection).
-    modified_files: Arc<Mutex<HashSet<PathBuf>>>,
+    modified_files: HashSet<PathBuf>,
     /// Pending modifications (waiting for confirmation).
-    pending_modifications: Arc<Mutex<HashSet<PathBuf>>>,
+    pending_modifications: HashSet<PathBuf>,
 }
 
 impl DotfileGuardian {
@@ -253,8 +261,7 @@ impl DotfileGuardian {
             config,
             audit_log,
             backup_manager,
-            modified_files: Arc::new(Mutex::new(HashSet::new())),
-            pending_modifications: Arc::new(Mutex::new(HashSet::new())),
+            state: Arc::new(Mutex::new(GuardianState::default())),
         })
     }
 
@@ -342,8 +349,8 @@ impl DotfileGuardian {
 
         // Track pending modification
         {
-            let mut pending = self.pending_modifications.lock().await;
-            pending.insert(context.file_path.clone());
+            let mut state = self.state.lock().await;
+            state.pending_modifications.insert(context.file_path.clone());
         }
 
         if self.is_whitelisted(&context.file_path)
@@ -387,16 +394,13 @@ impl DotfileGuardian {
         };
         self.log_access(context, outcome).await?;
 
-        // Track modified file (for cascade detection)
+        // Update state
         {
-            let mut modified = self.modified_files.lock().await;
-            modified.insert(context.file_path.clone());
-        }
-
-        // Remove from pending
-        {
-            let mut pending = self.pending_modifications.lock().await;
-            pending.remove(&context.file_path);
+            let mut state = self.state.lock().await;
+            // Track modified file (for cascade detection)
+            state.modified_files.insert(context.file_path.clone());
+            // Remove from pending
+            state.pending_modifications.remove(&context.file_path);
         }
 
         Ok(())
@@ -408,8 +412,8 @@ impl DotfileGuardian {
 
         // Remove from pending
         {
-            let mut pending = self.pending_modifications.lock().await;
-            pending.remove(&context.file_path);
+            let mut state = self.state.lock().await;
+            state.pending_modifications.remove(&context.file_path);
         }
 
         Ok(())
@@ -421,8 +425,8 @@ impl DotfileGuardian {
             return false;
         }
 
-        let modified = self.modified_files.lock().await;
-        !modified.is_empty() && self.is_protected(file_path)
+        let state = self.state.lock().await;
+        !state.modified_files.is_empty() && self.is_protected(file_path)
     }
 
     /// Get the most recent backup for a file.
@@ -464,17 +468,15 @@ impl DotfileGuardian {
 
     /// Reset session state (for new conversation).
     pub async fn reset_session(&self) {
-        let mut modified = self.modified_files.lock().await;
-        modified.clear();
-
-        let mut pending = self.pending_modifications.lock().await;
-        pending.clear();
+        let mut state = self.state.lock().await;
+        state.modified_files.clear();
+        state.pending_modifications.clear();
     }
 
     /// Get list of files modified in this session.
     pub async fn get_modified_files(&self) -> Vec<PathBuf> {
-        let modified = self.modified_files.lock().await;
-        modified.iter().cloned().collect()
+        let state = self.state.lock().await;
+        state.modified_files.iter().cloned().collect()
     }
 
     /// Log an access attempt.
@@ -565,18 +567,18 @@ mod tests {
     use super::*;
     use tempfile::tempdir;
 
-    async fn create_test_guardian() -> DotfileGuardian {
+    async fn create_test_guardian() -> (DotfileGuardian, tempfile::TempDir) {
         let dir = tempdir().unwrap();
         let mut config = DotfileProtectionConfig::default();
         config.audit_log_path = dir.path().join("audit.log").to_string_lossy().into_owned();
         config.backup_directory = dir.path().join("backups").to_string_lossy().into_owned();
 
-        DotfileGuardian::new(config).await.unwrap()
+        (DotfileGuardian::new(config).await.unwrap(), dir)
     }
 
     #[tokio::test]
     async fn test_protection_detection() {
-        let guardian = create_test_guardian().await;
+        let (guardian, _dir) = create_test_guardian().await;
 
         assert!(guardian.is_protected(Path::new(".gitignore")));
         assert!(guardian.is_protected(Path::new(".env")));
@@ -587,7 +589,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_requires_confirmation() {
-        let guardian = create_test_guardian().await;
+        let (guardian, _dir) = create_test_guardian().await;
 
         let context = AccessContext::new(
             ".gitignore",
@@ -610,7 +612,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_blocks_during_automation() {
-        let guardian = create_test_guardian().await;
+        let (guardian, _dir) = create_test_guardian().await;
 
         let context =
             AccessContext::new(".npmrc", AccessType::Write, "npm_install", "test-session")
@@ -623,7 +625,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_blocks_cascading() {
-        let guardian = create_test_guardian().await;
+        let (guardian, _dir) = create_test_guardian().await;
 
         // First modification
         let context1 = AccessContext::new(".gitignore", AccessType::Write, "test", "test-session");
@@ -644,7 +646,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_non_dotfile_allowed() {
-        let guardian = create_test_guardian().await;
+        let (guardian, _dir) = create_test_guardian().await;
 
         let context =
             AccessContext::new("README.md", AccessType::Write, "write_file", "test-session");

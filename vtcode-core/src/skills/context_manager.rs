@@ -141,20 +141,25 @@ pub struct SkillContextEntry {
 }
 
 /// Progressive context manager
+#[derive(Clone)]
 pub struct ContextManager {
     config: ContextConfig,
+    inner: Arc<Mutex<ContextManagerInner>>,
+}
 
+/// Inner state for ContextManager to be wrapped in Arc<Mutex<>>
+struct ContextManagerInner {
     /// Active skill contexts (metadata only)
     active_skills: HashMap<String, SkillContextEntry>,
 
     /// LRU cache for loaded skills
-    loaded_skills: Arc<Mutex<LruCache<String, SkillContextEntry>>>,
+    loaded_skills: LruCache<String, SkillContextEntry>,
 
     /// Current context usage in tokens
-    current_token_usage: Arc<Mutex<usize>>,
+    current_token_usage: usize,
 
     /// Context usage statistics
-    stats: Arc<Mutex<ContextStats>>,
+    stats: ContextStats,
 }
 
 /// Context management statistics
@@ -178,16 +183,18 @@ impl ContextManager {
 
     /// Create new context manager with custom configuration
     pub fn with_config(config: ContextConfig) -> Self {
-        let loaded_skills = Arc::new(Mutex::new(LruCache::new(
+        let loaded_skills = LruCache::new(
             std::num::NonZeroUsize::new(config.max_cached_skills).unwrap(),
-        )));
+        );
 
         Self {
-            config,
-            active_skills: HashMap::new(),
-            loaded_skills,
-            current_token_usage: Arc::new(Mutex::new(0)),
-            stats: Arc::new(Mutex::new(ContextStats::default())),
+            config: config.clone(),
+            inner: Arc::new(Mutex::new(ContextManagerInner {
+                active_skills: HashMap::new(),
+                loaded_skills,
+                current_token_usage: 0,
+                stats: ContextStats::default(),
+            })),
         }
     }
 }
@@ -200,8 +207,10 @@ impl Default for ContextManager {
 
 impl ContextManager {
     /// Register skill metadata (Level 1 loading)
-    pub fn register_skill_metadata(&mut self, manifest: SkillManifest) -> Result<()> {
+    pub fn register_skill_metadata(&self, manifest: SkillManifest) -> Result<()> {
         let name = manifest.name.clone();
+
+        let mut inner = self.inner.lock().expect("ContextManager lock poisoned");
 
         let entry = SkillContextEntry {
             name: name.clone(),
@@ -221,42 +230,35 @@ impl ContextManager {
         };
 
         // Update token usage
-        {
-            let mut usage = self.current_token_usage.lock().unwrap();
-            *usage += self.config.metadata_token_cost;
+        inner.current_token_usage += self.config.metadata_token_cost;
+        inner.stats.current_token_usage = inner.current_token_usage;
+        inner.stats.peak_token_usage = inner.stats.peak_token_usage.max(inner.current_token_usage);
 
-            let mut stats = self.stats.lock().unwrap();
-            stats.current_token_usage = *usage;
-            stats.peak_token_usage = stats.peak_token_usage.max(*usage);
-        }
-
-        self.active_skills.insert(name, entry);
+        inner.active_skills.insert(name, entry);
         info!("Registered skill metadata: {}", manifest.name);
 
         Ok(())
     }
 
     /// Load skill instructions (Level 2 loading)
-    pub async fn load_skill_instructions(&self, name: &str, instructions: String) -> Result<()> {
-        let mut loaded_skills = self.loaded_skills.lock().unwrap();
-        let mut current_usage = self.current_token_usage.lock().unwrap();
-        let mut stats = self.stats.lock().unwrap();
+    pub fn load_skill_instructions(&self, name: &str, instructions: String) -> Result<()> {
+        let mut inner = self.inner.lock().expect("ContextManager lock poisoned");
 
         // Calculate simple size metric (characters) instead of tokens
         let instruction_size = instructions.len();
 
         // Check context budget (using character count instead of tokens)
-        if *current_usage + instruction_size > self.config.max_context_tokens {
+        if inner.current_token_usage + instruction_size > self.config.max_context_tokens {
             // Need to evict skills to make room
-            self.evict_skills_to_make_room(instruction_size)?;
+            self.evict_skills_to_make_room_internal(&mut inner, instruction_size)?;
         }
 
         // Get or create entry
-        let mut entry = match loaded_skills.get_mut(name) {
+        let mut entry = match inner.loaded_skills.get_mut(name) {
             Some(entry) => entry.clone(),
             None => {
                 // Create new entry from active skills
-                match self.active_skills.get(name) {
+                match inner.active_skills.get(name) {
                     Some(active_entry) => active_entry.clone(),
                     None => return Err(anyhow!("Skill '{}' not found in active skills", name)),
                 }
@@ -270,13 +272,13 @@ impl ContextManager {
         entry.memory_size += instructions.len();
 
         // Update usage
-        *current_usage += instruction_size;
-        stats.current_token_usage = *current_usage;
-        stats.peak_token_usage = stats.peak_token_usage.max(*current_usage);
-        stats.total_tokens_loaded += instruction_size as u64;
+        inner.current_token_usage += instruction_size;
+        inner.stats.current_token_usage = inner.current_token_usage;
+        inner.stats.peak_token_usage = inner.stats.peak_token_usage.max(inner.current_token_usage);
+        inner.stats.total_tokens_loaded += instruction_size as u64;
 
         // Cache the entry
-        loaded_skills.put(name.to_string(), entry);
+        inner.loaded_skills.put(name.to_string(), entry);
 
         info!(
             "Loaded instructions for skill: {} ({} chars)",
@@ -287,11 +289,9 @@ impl ContextManager {
     }
 
     /// Load full skill with resources (Level 3 loading)
-    pub async fn load_full_skill(&self, skill: Skill) -> Result<()> {
+    pub fn load_full_skill(&self, skill: Skill) -> Result<()> {
         let name = skill.name().to_string();
-        let mut loaded_skills = self.loaded_skills.lock().unwrap();
-        let mut current_usage = self.current_token_usage.lock().unwrap();
-        let mut stats = self.stats.lock().unwrap();
+        let mut inner = self.inner.lock().expect("ContextManager lock poisoned");
 
         // Calculate size-based cost for resources and instructions (characters instead of tokens)
         let instruction_size = skill.instructions.len();
@@ -299,8 +299,8 @@ impl ContextManager {
         let incremental_cost = instruction_size + resource_size;
 
         // Check context budget
-        if *current_usage + incremental_cost > self.config.max_context_tokens {
-            self.evict_skills_to_make_room(incremental_cost)?;
+        if inner.current_token_usage + incremental_cost > self.config.max_context_tokens {
+            self.evict_skills_to_make_room_internal(&mut inner, incremental_cost)?;
         }
 
         // Create entry
@@ -320,15 +320,15 @@ impl ContextManager {
         };
 
         // Update usage
-        *current_usage += incremental_cost;
-        stats.current_token_usage = *current_usage;
-        stats.peak_token_usage = stats.peak_token_usage.max(*current_usage);
-        stats.total_skills_loaded += 1;
-        stats.total_tokens_loaded += incremental_cost as u64;
+        inner.current_token_usage += incremental_cost;
+        inner.stats.current_token_usage = inner.current_token_usage;
+        inner.stats.peak_token_usage = inner.stats.peak_token_usage.max(inner.current_token_usage);
+        inner.stats.total_skills_loaded += 1;
+        inner.stats.total_tokens_loaded += incremental_cost as u64;
 
         // Cache the entry
         let entry_name = entry.name.clone();
-        loaded_skills.put(name, entry);
+        inner.loaded_skills.put(name, entry);
 
         info!(
             "Loaded full skill: {} ({} tokens)",
@@ -341,24 +341,21 @@ impl ContextManager {
 
     /// Get skill context (with automatic loading)
     pub fn get_skill_context(&self, name: &str) -> Option<SkillContextEntry> {
-        let mut stats = self.stats.lock().unwrap();
+        let mut inner = self.inner.lock().expect("ContextManager lock poisoned");
 
         // Try loaded skills first
-        {
-            let mut loaded_skills = self.loaded_skills.lock().unwrap();
-            if let Some(mut entry) = loaded_skills.get_mut(name).cloned() {
-                entry.usage.access_count += 1;
-                entry.usage.last_access = std::time::Instant::now();
-                stats.cache_hits += 1;
-                return Some(entry);
-            }
+        if let Some(mut entry) = inner.loaded_skills.get_mut(name).cloned() {
+            entry.usage.access_count += 1;
+            entry.usage.last_access = std::time::Instant::now();
+            inner.stats.cache_hits += 1;
+            return Some(entry);
         }
 
         // Fall back to active skills (metadata only)
-        if let Some(mut entry) = self.active_skills.get(name).cloned() {
+        if let Some(mut entry) = inner.active_skills.get(name).cloned() {
             entry.usage.access_count += 1;
             entry.usage.last_access = std::time::Instant::now();
-            stats.cache_misses += 1;
+            inner.stats.cache_misses += 1;
             return Some(entry);
         }
 
@@ -366,29 +363,29 @@ impl ContextManager {
     }
 
     /// Evict skills to make room for new ones
-    fn evict_skills_to_make_room(&self, required_tokens: usize) -> Result<()> {
-        let mut loaded_skills = self.loaded_skills.lock().unwrap();
-        let mut current_usage = self.current_token_usage.lock().unwrap();
-        let mut stats = self.stats.lock().unwrap();
-
+    fn evict_skills_to_make_room_internal(
+        &self,
+        inner: &mut ContextManagerInner,
+        required_tokens: usize,
+    ) -> Result<()> {
         let mut freed_tokens = 0;
         let mut evicted_skills = Vec::new();
 
         // Use LRU eviction
-        while freed_tokens < required_tokens && !loaded_skills.is_empty() {
-            if let Some((name, entry)) = loaded_skills.pop_lru() {
+        while freed_tokens < required_tokens && !inner.loaded_skills.is_empty() {
+            if let Some((name, entry)) = inner.loaded_skills.pop_lru() {
                 freed_tokens += entry.usage.token_cost;
                 evicted_skills.push(name);
 
-                stats.total_skills_evicted += 1;
-                stats.total_tokens_evicted += entry.usage.token_cost as u64;
+                inner.stats.total_skills_evicted += 1;
+                inner.stats.total_tokens_evicted += entry.usage.token_cost as u64;
             } else {
                 break;
             }
         }
 
-        *current_usage -= freed_tokens;
-        stats.current_token_usage = *current_usage;
+        inner.current_token_usage -= freed_tokens;
+        inner.stats.current_token_usage = inner.current_token_usage;
 
         info!(
             "Evicted {} skills to free {} tokens",
@@ -410,29 +407,27 @@ impl ContextManager {
 
     /// Get current context usage statistics
     pub fn get_stats(&self) -> ContextStats {
-        self.stats.lock().unwrap().clone()
+        self.inner.lock().expect("ContextManager lock poisoned").stats.clone()
     }
 
     /// Get current token usage
     pub fn get_token_usage(&self) -> usize {
-        *self.current_token_usage.lock().unwrap()
+        self.inner.lock().expect("ContextManager lock poisoned").current_token_usage
     }
 
     /// Clear all loaded skills (keep metadata)
     pub fn clear_loaded_skills(&self) {
-        let mut loaded_skills = self.loaded_skills.lock().unwrap();
-        let mut current_usage = self.current_token_usage.lock().unwrap();
-        let mut stats = self.stats.lock().unwrap();
+        let mut inner = self.inner.lock().expect("ContextManager lock poisoned");
 
-        let evicted_count = loaded_skills.len();
-        let evicted_tokens = stats.current_token_usage
-            - (self.active_skills.len() * self.config.metadata_token_cost);
+        let evicted_count = inner.loaded_skills.len();
+        let evicted_tokens = inner.stats.current_token_usage
+            - (inner.active_skills.len() * self.config.metadata_token_cost);
 
-        loaded_skills.clear();
-        *current_usage = self.active_skills.len() * self.config.metadata_token_cost;
-        stats.current_token_usage = *current_usage;
-        stats.total_skills_evicted += evicted_count as u64;
-        stats.total_tokens_evicted += evicted_tokens as u64;
+        inner.loaded_skills.clear();
+        inner.current_token_usage = inner.active_skills.len() * self.config.metadata_token_cost;
+        inner.stats.current_token_usage = inner.current_token_usage;
+        inner.stats.total_skills_evicted += evicted_count as u64;
+        inner.stats.total_tokens_evicted += evicted_tokens as u64;
 
         info!(
             "Cleared {} loaded skills ({} tokens)",
@@ -442,21 +437,20 @@ impl ContextManager {
 
     /// Get all active skill names
     pub fn get_active_skills(&self) -> Vec<String> {
-        self.active_skills.keys().cloned().collect()
+        self.inner.lock().expect("ContextManager lock poisoned").active_skills.keys().cloned().collect()
     }
 
     /// Get memory usage estimate
     pub fn get_memory_usage(&self) -> usize {
-        let active_memory: usize = self
+        let inner = self.inner.lock().expect("ContextManager lock poisoned");
+        let active_memory: usize = inner
             .active_skills
             .values()
             .map(|entry| entry.memory_size)
             .sum();
 
-        let loaded_memory: usize = self
+        let loaded_memory: usize = inner
             .loaded_skills
-            .lock()
-            .unwrap()
             .iter()
             .map(|(_, entry)| entry.memory_size)
             .sum();
@@ -507,13 +501,13 @@ impl PersistentContextManager {
 
     /// Save context state to cache
     pub fn save_cache(&self) -> Result<()> {
+        let inner = self.inner.inner.lock().unwrap();
         let cache = ContextCache {
             version: 1,
             timestamp: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)?
                 .as_secs(),
-            active_skills: self
-                .inner
+            active_skills: inner
                 .active_skills
                 .values()
                 .map(|entry| entry.manifest.clone())
@@ -565,7 +559,7 @@ mod tests {
 
     #[test]
     fn test_skill_metadata_registration() {
-        let mut manager = ContextManager::new();
+        let manager = ContextManager::new();
 
         let manifest = SkillManifest {
             name: "test-skill".to_string(),
@@ -583,7 +577,7 @@ mod tests {
 
     #[test]
     fn test_skill_context_retrieval() {
-        let mut manager = ContextManager::new();
+        let manager = ContextManager::new();
 
         let manifest = SkillManifest {
             name: "test-skill".to_string(),

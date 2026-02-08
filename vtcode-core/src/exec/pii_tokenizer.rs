@@ -113,9 +113,15 @@ pub struct PiiToken {
 }
 
 /// Manager for PII tokenization with configurable detection patterns.
+#[derive(Clone)]
 pub struct PiiTokenizer {
     patterns: HashMap<PiiType, Regex>,
-    token_store: Arc<Mutex<HashMap<String, PiiToken>>>,
+    inner: Arc<Mutex<PiiTokenizerInner>>,
+}
+
+/// Inner state for PiiTokenizer
+struct PiiTokenizerInner {
+    token_store: HashMap<String, PiiToken>,
 }
 
 impl PiiTokenizer {
@@ -132,7 +138,9 @@ impl PiiTokenizer {
 
         Ok(Self {
             patterns,
-            token_store: Arc::new(Mutex::new(HashMap::new())),
+            inner: Arc::new(Mutex::new(PiiTokenizerInner {
+                token_store: HashMap::new(),
+            })),
         })
     }
 
@@ -190,12 +198,12 @@ impl PiiTokenizer {
 
         // Store tokens for later de-tokenization
         {
-            let mut store = self
-                .token_store
+            let mut inner = self
+                .inner
                 .lock()
                 .map_err(|e| anyhow::anyhow!("Failed to acquire token store lock: {}", e))?;
-            // Use drain to move ownership, avoiding unnecessary clones
-            store.extend(new_tokens.drain());
+            // Clone tokens into the inner store so we can still return them
+            inner.token_store.extend(new_tokens.clone());
         }
 
         debug!(pii_count = detected.len(), "Tokenized PII in string");
@@ -205,13 +213,13 @@ impl PiiTokenizer {
 
     /// De-tokenize a string using stored token map.
     pub fn detokenize_string(&self, text: &str) -> Result<String> {
-        let store = self
-            .token_store
+        let inner = self
+            .inner
             .lock()
             .map_err(|e| anyhow::anyhow!("Failed to acquire token store lock: {}", e))?;
         let mut result = text.to_string();
 
-        for (token, pii_token) in store.iter() {
+        for (token, pii_token) in inner.token_store.iter() {
             result = result.replace(token, &pii_token.original_value);
         }
 
@@ -220,15 +228,15 @@ impl PiiTokenizer {
 
     /// Clear all stored tokens (for security).
     pub fn clear_tokens(&self) {
-        let mut store = self.token_store.lock().unwrap();
-        store.clear();
+        let mut inner = self.inner.lock().expect("PiiTokenizer lock poisoned");
+        inner.token_store.clear();
         debug!("Cleared all PII tokens");
     }
 
     /// Get audit trail of tokenized data.
     pub fn audit_trail(&self) -> Result<Vec<(String, PiiType, String)>> {
-        let store = self.token_store.lock().unwrap();
-        Ok(store
+        let inner = self.inner.lock().expect("PiiTokenizer lock poisoned");
+        Ok(inner.token_store
             .values()
             .map(|t| (t.token.clone(), t.pii_type, t.created_at.clone()))
             .collect())
@@ -270,7 +278,9 @@ impl Default for PiiTokenizer {
     fn default() -> Self {
         Self::new().unwrap_or_else(|_| Self {
             patterns: Default::default(),
-            token_store: Arc::new(Mutex::new(HashMap::new())),
+            inner: Arc::new(Mutex::new(PiiTokenizerInner {
+                token_store: HashMap::new(),
+            })),
         })
     }
 }
