@@ -2,6 +2,34 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## v0.78.2 - 2026-02-08
+
+### Features
+
+- Display a scroll indicator in the TUI footer and adjust status height calculation based on layout mode. (6c5efc03) (@vinhnx)
+- Introduce compile-time optimization guide and profiling script, and add general performance principles to TODO. (f1257ba9) (@vinhnx)
+- add 'mono' theme and improve TUI modal search input handling. (7fd6334c) (@vinhnx)
+- integrate `tui_input` crate for enhanced input management and modal search functionality (69a24ed3) (@vinhnx)
+- improve plugin validation and enhance path resolution in PTY manager (a2ea12c1) (@vinhnx)
+- add path utilities and normalize ASCII identifiers for improved path handling (5a888daf) (@vinhnx)
+- implement command blocking during running tasks and update configuration for LLM provider (da55d7cd) (@vinhnx)
+- enhance Plan Mode with reminders and execution prompts (ba69b139) (@vinhnx)
+
+### Performance
+
+- Cache session header lines and queued input previews to optimize TUI rendering performance and remove outdated content from TODO.md. (cf87bc80) (@vinhnx)
+
+### Refactors
+
+- Improve string truncation logic to ensure character boundaries are respected (83ebed35) (@vinhnx)
+- Optimize I/O operations with buffered writes and simplify `ToolCallRecord`'s `tool_name` ownership. (a66a3a9d) (@vinhnx)
+- remove scroll indicator from footer widget and associated UI logic. (4f060bed) (@vinhnx)
+
+### Other
+
+- Immprove (e3fc8d93) (@vinhnx)
+- Add team context and teammate management features (b322e6cd) (@vinhnx)
+
 ## v0.78.1 - 2026-02-07
 
 ### Features
