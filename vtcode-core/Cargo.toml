@@ -90,6 +90,7 @@ zip = { version = "7.2", default-features = false, features = ["deflate"] }
 semver = { workspace = true }
 tracing = "0.1"
 tracing-subscriber = "0.3"
+fs2 = { workspace = true }
 # ANSI styling
 anstyle = "1.0"
 anstyle-git = "1.1"

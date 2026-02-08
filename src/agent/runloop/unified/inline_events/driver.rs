@@ -29,6 +29,7 @@ struct InlineEventLoop<'a> {
     provider_client: &'a mut Box<dyn uni::LLMProvider>,
     session_bootstrap: &'a SessionBootstrap,
     full_auto: bool,
+    team_active: bool,
 }
 
 impl<'a> InlineEventLoop<'a> {
@@ -47,6 +48,7 @@ impl<'a> InlineEventLoop<'a> {
             provider_client,
             session_bootstrap,
             full_auto,
+            team_active,
         } = resources;
 
         Self {
@@ -63,6 +65,7 @@ impl<'a> InlineEventLoop<'a> {
             provider_client,
             session_bootstrap,
             full_auto,
+            team_active,
         }
     }
 
@@ -109,6 +112,7 @@ impl<'a> InlineEventLoop<'a> {
         let config = &mut *self.config;
         let vt_cfg = &mut *self.vt_cfg;
         let provider_client = &mut *self.provider_client;
+        let team_active = self.team_active;
 
         let mut context = InlineEventContext::new(
             renderer,
@@ -122,6 +126,7 @@ impl<'a> InlineEventLoop<'a> {
             provider_client,
             session_bootstrap,
             full_auto,
+            team_active,
         );
 
         context.process_event(event, &mut self.queue).await
@@ -157,6 +162,8 @@ impl<'a> InlineEventLoop<'a> {
             InlineLoopAction::Continue => None,
             InlineLoopAction::Submit(_) => None,
             InlineLoopAction::ResumeSession(_) => None,
+            InlineLoopAction::ToggleDelegateMode => None,
+            InlineLoopAction::SwitchTeammate(_) => None,
             InlineLoopAction::PlanApproved { .. } => None,
             InlineLoopAction::PlanEditRequested => None,
             InlineLoopAction::DiffApproved => None,
@@ -179,6 +186,7 @@ pub(crate) struct InlineEventLoopResources<'a> {
     pub provider_client: &'a mut Box<dyn uni::LLMProvider>,
     pub session_bootstrap: &'a SessionBootstrap,
     pub full_auto: bool,
+    pub team_active: bool,
 }
 
 pub(crate) async fn poll_inline_loop_action(

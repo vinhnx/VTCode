@@ -411,6 +411,12 @@ enabled = false
 # Default model for agent team subagents
 # default_model = ""
 
+# Teammate display mode (auto, tmux, in_process)
+# teammate_mode = "auto"
+
+# Optional storage directory override for team state
+# storage_dir = "~/.vtcode"
+
 # Tool security configuration
 [tools]
 # Default policy when no specific policy is defined ("allow", "prompt", "deny")

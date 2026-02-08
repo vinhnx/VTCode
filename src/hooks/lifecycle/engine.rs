@@ -15,7 +15,8 @@ use vtcode_core::config::{HookCommandConfig, HooksConfig};
 use crate::hooks::lifecycle::compiled::CompiledLifecycleHooks;
 use crate::hooks::lifecycle::interpret::{
     HookCommandResult, interpret_post_tool, interpret_pre_tool, interpret_session_end,
-    interpret_session_start, interpret_task_completion, interpret_user_prompt,
+    interpret_session_start, interpret_task_completion, interpret_teammate_idle,
+    interpret_user_prompt,
 };
 use crate::hooks::lifecycle::types::{
     HookMessage, PostToolHookOutcome, PreToolHookDecision, PreToolHookOutcome, SessionEndReason,
@@ -282,6 +283,41 @@ impl LifecycleHookEngine {
         Ok(messages)
     }
 
+    pub async fn run_teammate_idle(
+        &self,
+        teammate: &str,
+        details: Option<&Value>,
+    ) -> Result<Vec<HookMessage>> {
+        let mut messages = Vec::new();
+
+        if self.inner.hooks.teammate_idle.is_empty() {
+            return Ok(messages);
+        }
+
+        let payload = self.build_teammate_idle_payload(teammate, details).await?;
+
+        for group in &self.inner.hooks.teammate_idle {
+            if !group.matcher.matches(teammate) {
+                continue;
+            }
+
+            for command in &group.commands {
+                match self
+                    .execute_command("TeammateIdle", command, &payload)
+                    .await
+                {
+                    Ok(result) => interpret_teammate_idle(command, &result, &mut messages),
+                    Err(err) => messages.push(HookMessage::error(format!(
+                        "TeammateIdle hook `{}` failed: {err}",
+                        command.command
+                    ))),
+                }
+            }
+        }
+
+        Ok(messages)
+    }
+
     pub async fn update_transcript_path(&self, path: Option<PathBuf>) {
         let mut state = self.inner.state.lock().await;
         state.transcript_path = path;
@@ -374,6 +410,23 @@ impl LifecycleHookEngine {
             "hook_event_name": "TaskCompletion",
             "task_name": task_name,
             "status": status,
+            "details": details.cloned().unwrap_or(Value::Null),
+            "transcript_path": transcript_path,
+        }))
+    }
+
+    async fn build_teammate_idle_payload(
+        &self,
+        teammate: &str,
+        details: Option<&Value>,
+    ) -> Result<Value> {
+        let cwd = self.inner.workspace.to_string_lossy().into_owned();
+        let transcript_path = self.current_transcript_path().await;
+        Ok(json!({
+            "session_id": self.inner.session_id,
+            "cwd": cwd,
+            "hook_event_name": "TeammateIdle",
+            "teammate": teammate,
             "details": details.cloned().unwrap_or(Value::Null),
             "transcript_path": transcript_path,
         }))

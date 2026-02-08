@@ -119,6 +119,7 @@ pub(crate) async fn run_tool_call(
             human_in_the_loop: vt_cfg
                 .map(|cfg| cfg.security.human_in_the_loop)
                 .unwrap_or(true),
+            delegate_mode: ctx.session_stats.is_delegate_mode(),
         },
         &name,
         Some(&args_val),

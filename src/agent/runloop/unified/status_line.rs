@@ -37,6 +37,8 @@ pub(crate) struct InputStatusState {
     pub(crate) is_cancelling: bool,
     // Dynamic context discovery status
     pub(crate) spooled_files_count: Option<usize>,
+    pub(crate) team_label: Option<String>,
+    pub(crate) delegate_mode: bool,
 }
 
 const GIT_STATUS_REFRESH_INTERVAL: Duration = Duration::from_secs(2);
@@ -152,6 +154,8 @@ pub(crate) async fn update_input_status_if_changed(
                 state.context_tokens,
                 state.is_cancelling,
                 state.spooled_files_count,
+                state.team_label.as_deref(),
+                state.delegate_mode,
             );
             (state.git_left.clone(), right)
         }
@@ -207,6 +211,8 @@ pub(crate) async fn update_input_status_if_changed(
                         state.context_tokens,
                         state.is_cancelling,
                         state.spooled_files_count,
+                        state.team_label.as_deref(),
+                        state.delegate_mode,
                     );
                     (state.git_left.clone(), right)
                 }
@@ -219,6 +225,8 @@ pub(crate) async fn update_input_status_if_changed(
                     state.context_tokens,
                     state.is_cancelling,
                     state.spooled_files_count,
+                    state.team_label.as_deref(),
+                    state.delegate_mode,
                 );
                 (state.git_left.clone(), right)
             }
@@ -275,6 +283,8 @@ pub(crate) fn build_model_status_with_context(
         total_tokens,
         is_cancelling,
         None,
+        None,
+        false,
     )
 }
 
@@ -286,6 +296,8 @@ pub(crate) fn build_model_status_with_context_and_spooled(
     total_tokens: Option<usize>,
     is_cancelling: bool,
     spooled_files: Option<usize>,
+    team_label: Option<&str>,
+    delegate_mode: bool,
 ) -> Option<String> {
     let mut parts = Vec::new();
 
@@ -319,6 +331,16 @@ pub(crate) fn build_model_status_with_context_and_spooled(
         parts.push(format!("{} spooled", count));
     }
 
+    if let Some(label) = team_label
+        && !label.trim().is_empty()
+    {
+        parts.push(label.trim().to_string());
+    }
+
+    if delegate_mode {
+        parts.push("delegate".to_string());
+    }
+
     if !reasoning.is_empty() {
         parts.push(format!("({})", reasoning));
     }
@@ -329,6 +351,36 @@ pub(crate) fn build_model_status_with_context_and_spooled(
 /// Update spooled files count in status state
 pub(crate) fn update_spooled_files_count(state: &mut InputStatusState, count: usize) {
     state.spooled_files_count = Some(count);
+}
+
+pub(crate) fn update_team_status(
+    state: &mut InputStatusState,
+    session_stats: &crate::agent::runloop::unified::state::SessionStats,
+) {
+    let Some(team_context) = session_stats.team_context.as_ref() else {
+        state.team_label = None;
+        state.delegate_mode = false;
+        return;
+    };
+
+    let label = match team_context.role {
+        vtcode_core::agent_teams::TeamRole::Lead => {
+            let active = session_stats
+                .team_state
+                .as_ref()
+                .and_then(|team| team.active_teammate())
+                .map(|name| format!("team:{} -> {}", team_context.team_name, name))
+                .unwrap_or_else(|| format!("team:{} (lead)", team_context.team_name));
+            active
+        }
+        vtcode_core::agent_teams::TeamRole::Teammate => {
+            let name = team_context.teammate_name.as_deref().unwrap_or("teammate");
+            format!("team:{} as {}", team_context.team_name, name)
+        }
+    };
+
+    state.team_label = Some(label);
+    state.delegate_mode = session_stats.is_delegate_mode();
 }
 
 async fn run_status_line_command(

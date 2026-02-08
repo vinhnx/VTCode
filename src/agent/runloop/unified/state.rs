@@ -51,6 +51,12 @@ pub(crate) struct SessionStats {
     /// Agent teams state (in-process only)
     pub team_state: Option<crate::agent::runloop::unified::team_state::TeamState>,
 
+    /// Team context for this session (lead/teammate)
+    pub team_context: Option<vtcode_core::agent_teams::TeamContext>,
+
+    /// Delegate mode toggle (team coordination only)
+    pub delegate_mode: bool,
+
     /// Target configuration for the active model picker
     pub model_picker_target: ModelPickerTarget,
 }
@@ -76,6 +82,15 @@ impl SessionStats {
     /// Check if currently in autonomous mode
     pub(crate) fn is_autonomous_mode(&self) -> bool {
         self.autonomous_mode
+    }
+
+    pub(crate) fn is_delegate_mode(&self) -> bool {
+        self.delegate_mode
+    }
+
+    pub(crate) fn toggle_delegate_mode(&mut self) -> bool {
+        self.delegate_mode = !self.delegate_mode;
+        self.delegate_mode
     }
 
     /// Set plan mode (for backward compatibility)

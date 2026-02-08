@@ -11,17 +11,23 @@ pub(super) struct CompiledLifecycleHooks {
     pub(super) pre_tool_use: Vec<CompiledHookGroup>,
     pub(super) post_tool_use: Vec<CompiledHookGroup>,
     pub(super) task_completion: Vec<CompiledHookGroup>,
+    pub(super) teammate_idle: Vec<CompiledHookGroup>,
 }
 
 impl CompiledLifecycleHooks {
     pub(super) fn from_config(config: &LifecycleHooksConfig) -> Result<Self> {
+        let mut task_completion = compile_groups(&config.task_completion)?;
+        let mut task_completed = compile_groups(&config.task_completed)?;
+        task_completion.append(&mut task_completed);
+
         Ok(Self {
             session_start: compile_groups(&config.session_start)?,
             session_end: compile_groups(&config.session_end)?,
             user_prompt_submit: compile_groups(&config.user_prompt_submit)?,
             pre_tool_use: compile_groups(&config.pre_tool_use)?,
             post_tool_use: compile_groups(&config.post_tool_use)?,
-            task_completion: compile_groups(&config.task_completion)?,
+            task_completion,
+            teammate_idle: compile_groups(&config.teammate_idle)?,
         })
     }
 
@@ -32,6 +38,7 @@ impl CompiledLifecycleHooks {
             && self.pre_tool_use.is_empty()
             && self.post_tool_use.is_empty()
             && self.task_completion.is_empty()
+            && self.teammate_idle.is_empty()
     }
 }
 

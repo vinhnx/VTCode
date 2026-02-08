@@ -24,6 +24,10 @@ pub struct LifecycleHooksConfig {
     pub post_tool_use: Vec<HookGroupConfig>,
     #[serde(default)]
     pub task_completion: Vec<HookGroupConfig>,
+    #[serde(default)]
+    pub task_completed: Vec<HookGroupConfig>,
+    #[serde(default)]
+    pub teammate_idle: Vec<HookGroupConfig>,
 }
 
 impl LifecycleHooksConfig {
@@ -34,6 +38,8 @@ impl LifecycleHooksConfig {
             && self.pre_tool_use.is_empty()
             && self.post_tool_use.is_empty()
             && self.task_completion.is_empty()
+            && self.task_completed.is_empty()
+            && self.teammate_idle.is_empty()
     }
 }
 
@@ -83,6 +89,8 @@ impl LifecycleHooksConfig {
         validate_groups(&self.pre_tool_use, "pre_tool_use")?;
         validate_groups(&self.post_tool_use, "post_tool_use")?;
         validate_groups(&self.task_completion, "task_completion")?;
+        validate_groups(&self.task_completed, "task_completed")?;
+        validate_groups(&self.teammate_idle, "teammate_idle")?;
         Ok(())
     }
 }

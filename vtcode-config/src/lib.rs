@@ -51,7 +51,7 @@ pub use acp::{
     AgentClientProtocolZedToolsConfig, AgentClientProtocolZedWorkspaceTrustMode,
     WorkspaceTrustLevel,
 };
-pub use agent_teams::AgentTeamsConfig;
+pub use agent_teams::{AgentTeamsConfig, TeammateMode};
 pub use api_keys::ApiKeySources;
 pub use context::{ContextFeaturesConfig, DynamicContextConfig, LedgerConfig};
 pub use core::{

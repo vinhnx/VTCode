@@ -742,7 +742,11 @@ pub enum InlineEvent {
     LaunchEditor,
     ForceCancelPtySession,
     /// Toggle editing mode (Shift+Tab cycles through Edit -> Plan -> Edit)
+    /// When agent teams are active, Shift+Tab toggles delegate mode instead.
     ToggleMode,
+    /// Cycle active teammate (Shift+Up/Down when agent teams are active)
+    TeamPrev,
+    TeamNext,
     /// Plan confirmation result (Claude Code style HITL)
     PlanConfirmation(PlanConfirmationResult),
     /// Diff preview approval - apply edit changes
