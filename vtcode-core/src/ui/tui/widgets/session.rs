@@ -94,16 +94,18 @@ impl<'a> SessionWidget<'a> {
     }
 
     /// Compute the layout regions based on viewport and layout mode
-    fn compute_layout(&self, area: Rect, mode: LayoutMode) -> SessionLayout {
+    /// Compute the layout regions based on viewport and layout mode
+    fn compute_layout(&mut self, area: Rect, mode: LayoutMode) -> SessionLayout {
         let footer_h = mode.footer_height();
         let max_header_pct = mode.max_header_percent();
 
         // Compute header height
-        let header_lines = self
-            .header_lines
-            .as_ref()
-            .unwrap_or(&self.session.header_lines())
-            .clone();
+        let header_lines = if let Some(lines) = self.header_lines.as_ref() {
+            lines.clone()
+        } else {
+            self.session.header_lines()
+        };
+
         let natural_header_h = self
             .session
             .header_height_from_lines(area.width, &header_lines);
@@ -229,11 +231,11 @@ impl Widget for &mut SessionWidget<'_> {
             self.session.file_palette_active || self.session.prompt_palette_active;
 
         // Render header
-        let header_lines = self
-            .header_lines
-            .as_ref()
-            .unwrap_or(&self.session.header_lines())
-            .clone();
+        let header_lines = if let Some(lines) = self.header_lines.as_ref() {
+            lines.clone()
+        } else {
+            self.session.header_lines()
+        };
         HeaderWidget::new(self.session)
             .lines(header_lines)
             .render(layout.header, buf);
@@ -285,20 +287,26 @@ impl<'a> SessionWidget<'a> {
     }
 
     fn render_sidebar(&mut self, area: Rect, buf: &mut Buffer, mode: LayoutMode) {
-        let queue_items: Vec<String> = self
-            .session
-            .queued_inputs
-            .iter()
-            .take(5)
-            .map(|input| {
-                let preview: String = input.chars().take(50).collect();
-                if input.len() > 50 {
-                    format!("{}...", preview)
-                } else {
-                    preview
-                }
-            })
-            .collect();
+        let queue_items: Vec<String> = if let Some(cached) = &self.session.queued_inputs_preview_cache {
+            cached.clone()
+        } else {
+            let items: Vec<String> = self
+                .session
+                .queued_inputs
+                .iter()
+                .take(5)
+                .map(|input| {
+                    let preview: String = input.chars().take(50).collect();
+                    if input.len() > 50 {
+                        format!("{}...", preview)
+                    } else {
+                        preview
+                    }
+                })
+                .collect();
+            self.session.queued_inputs_preview_cache = Some(items.clone());
+            items
+        };
 
         let context_info = self
             .session

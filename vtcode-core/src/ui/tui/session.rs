@@ -215,4 +215,9 @@ pub struct Session {
 
     // --- Diff Preview Modal ---
     pub(crate) diff_preview: Option<crate::ui::tui::types::DiffPreviewState>,
+
+    // --- Performance Caching ---
+    pub(crate) header_lines_cache: Option<Vec<Line<'static>>>,
+    pub(crate) header_height_cache: std::collections::HashMap<u16, u16>,
+    pub(crate) queued_inputs_preview_cache: Option<Vec<String>>,
 }
