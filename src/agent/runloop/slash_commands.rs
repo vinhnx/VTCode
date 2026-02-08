@@ -17,6 +17,39 @@ pub enum ThemePaletteMode {
     Select,
 }
 
+fn extract_flag_value(tokens: &mut Vec<String>, flag: &str) -> Option<String> {
+    let needle = flag.to_ascii_lowercase();
+    if let Some(pos) = tokens
+        .iter()
+        .position(|token| token.to_ascii_lowercase() == needle)
+    {
+        let value = tokens.get(pos + 1).cloned();
+        let end = (pos + 2).min(tokens.len());
+        tokens.drain(pos..end);
+        return value;
+    }
+
+    if let Some(pos) = tokens.iter().position(|token| {
+        token
+            .to_ascii_lowercase()
+            .starts_with(&format!("{}=", needle))
+    }) {
+        let token = tokens.remove(pos);
+        if let Some(value) = token.splitn(2, '=').nth(1) {
+            return Some(value.to_string());
+        }
+    }
+
+    None
+}
+
+fn parse_depends_on(value: &str) -> Vec<u64> {
+    value
+        .split(|ch| ch == ',' || ch == ' ')
+        .filter_map(|item| item.trim().parse::<u64>().ok())
+        .collect()
+}
+
 pub enum SlashCommandOutcome {
     Handled,
     ThemeChanged(String),
@@ -123,20 +156,38 @@ pub enum TeamCommandAction {
         name: Option<String>,
         count: Option<usize>,
         subagent_type: Option<String>,
+        model: Option<String>,
     },
     Add {
         name: String,
         subagent_type: Option<String>,
+        model: Option<String>,
     },
     Remove {
         name: String,
     },
     TaskAdd {
         description: String,
+        depends_on: Vec<u64>,
+    },
+    TaskClaim {
+        task_id: u64,
+    },
+    TaskComplete {
+        task_id: u64,
+        success: bool,
+        summary: Option<String>,
     },
     Assign {
         task_id: u64,
         teammate: String,
+    },
+    Message {
+        recipient: String,
+        message: String,
+    },
+    Broadcast {
+        message: String,
     },
     Tasks,
     Teammates,
@@ -853,66 +904,143 @@ pub async fn handle_slash_command(
             }
 
             let subcommand = tokens[0].to_ascii_lowercase();
+            let mut args = tokens.iter().skip(1).cloned().collect::<Vec<_>>();
+
             match subcommand.as_str() {
-                "start" => Ok(SlashCommandOutcome::ManageTeams {
-                    action: TeamCommandAction::Start {
-                        name: tokens.get(1).cloned(),
-                        count: tokens.get(2).and_then(|v| v.parse::<usize>().ok()),
-                        subagent_type: tokens.get(3).cloned(),
-                    },
-                }),
+                "start" => {
+                    let model = extract_flag_value(&mut args, "--model");
+                    Ok(SlashCommandOutcome::ManageTeams {
+                        action: TeamCommandAction::Start {
+                            name: args.get(0).cloned(),
+                            count: args.get(1).and_then(|v| v.parse::<usize>().ok()),
+                            subagent_type: args.get(2).cloned(),
+                            model,
+                        },
+                    })
+                }
                 "add" => {
-                    if tokens.len() < 2 {
+                    let model = extract_flag_value(&mut args, "--model");
+                    if args.is_empty() {
                         return Ok(SlashCommandOutcome::ManageTeams {
                             action: TeamCommandAction::Help,
                         });
                     }
                     Ok(SlashCommandOutcome::ManageTeams {
                         action: TeamCommandAction::Add {
-                            name: tokens[1].clone(),
-                            subagent_type: tokens.get(2).cloned(),
+                            name: args[0].clone(),
+                            subagent_type: args.get(1).cloned(),
+                            model,
                         },
                     })
                 }
                 "remove" | "rm" => {
-                    if tokens.len() < 2 {
+                    if args.is_empty() {
                         return Ok(SlashCommandOutcome::ManageTeams {
                             action: TeamCommandAction::Help,
                         });
                     }
                     Ok(SlashCommandOutcome::ManageTeams {
                         action: TeamCommandAction::Remove {
-                            name: tokens[1].clone(),
+                            name: args[0].clone(),
                         },
                     })
                 }
                 "task" => {
-                    if tokens.len() >= 2 && tokens[1].eq_ignore_ascii_case("add") {
-                        let description =
-                            tokens.iter().skip(2).cloned().collect::<Vec<_>>().join(" ");
-                        if description.is_empty() {
-                            return Ok(SlashCommandOutcome::ManageTeams {
-                                action: TeamCommandAction::Help,
-                            });
-                        }
+                    if args.is_empty() {
                         return Ok(SlashCommandOutcome::ManageTeams {
-                            action: TeamCommandAction::TaskAdd { description },
+                            action: TeamCommandAction::Help,
                         });
                     }
-                    Ok(SlashCommandOutcome::ManageTeams {
-                        action: TeamCommandAction::Help,
-                    })
+                    let action = args[0].to_ascii_lowercase();
+                    match action.as_str() {
+                        "add" => {
+                            let mut task_args = args.iter().skip(1).cloned().collect::<Vec<_>>();
+                            let depends_value = extract_flag_value(&mut task_args, "--depends-on");
+                            let depends_on = depends_value
+                                .as_deref()
+                                .map(parse_depends_on)
+                                .unwrap_or_default();
+                            let description = task_args.join(" ");
+                            if description.is_empty() {
+                                return Ok(SlashCommandOutcome::ManageTeams {
+                                    action: TeamCommandAction::Help,
+                                });
+                            }
+                            Ok(SlashCommandOutcome::ManageTeams {
+                                action: TeamCommandAction::TaskAdd {
+                                    description,
+                                    depends_on,
+                                },
+                            })
+                        }
+                        "claim" => {
+                            let task_id = args.get(1).and_then(|v| v.parse::<u64>().ok());
+                            if task_id.is_none() {
+                                return Ok(SlashCommandOutcome::ManageTeams {
+                                    action: TeamCommandAction::Help,
+                                });
+                            }
+                            Ok(SlashCommandOutcome::ManageTeams {
+                                action: TeamCommandAction::TaskClaim {
+                                    task_id: task_id.unwrap(),
+                                },
+                            })
+                        }
+                        "complete" => {
+                            let task_id = args.get(1).and_then(|v| v.parse::<u64>().ok());
+                            if task_id.is_none() {
+                                return Ok(SlashCommandOutcome::ManageTeams {
+                                    action: TeamCommandAction::Help,
+                                });
+                            }
+                            let summary = if args.len() > 2 {
+                                Some(args.iter().skip(2).cloned().collect::<Vec<_>>().join(" "))
+                            } else {
+                                None
+                            };
+                            Ok(SlashCommandOutcome::ManageTeams {
+                                action: TeamCommandAction::TaskComplete {
+                                    task_id: task_id.unwrap(),
+                                    success: true,
+                                    summary,
+                                },
+                            })
+                        }
+                        "fail" => {
+                            let task_id = args.get(1).and_then(|v| v.parse::<u64>().ok());
+                            if task_id.is_none() {
+                                return Ok(SlashCommandOutcome::ManageTeams {
+                                    action: TeamCommandAction::Help,
+                                });
+                            }
+                            let summary = if args.len() > 2 {
+                                Some(args.iter().skip(2).cloned().collect::<Vec<_>>().join(" "))
+                            } else {
+                                None
+                            };
+                            Ok(SlashCommandOutcome::ManageTeams {
+                                action: TeamCommandAction::TaskComplete {
+                                    task_id: task_id.unwrap(),
+                                    success: false,
+                                    summary,
+                                },
+                            })
+                        }
+                        _ => Ok(SlashCommandOutcome::ManageTeams {
+                            action: TeamCommandAction::Help,
+                        }),
+                    }
                 }
                 "tasks" => Ok(SlashCommandOutcome::ManageTeams {
                     action: TeamCommandAction::Tasks,
                 }),
                 "assign" => {
-                    if tokens.len() < 3 {
+                    if args.len() < 2 {
                         return Ok(SlashCommandOutcome::ManageTeams {
                             action: TeamCommandAction::Help,
                         });
                     }
-                    let task_id = tokens[1].parse::<u64>().ok();
+                    let task_id = args[0].parse::<u64>().ok();
                     if task_id.is_none() {
                         return Ok(SlashCommandOutcome::ManageTeams {
                             action: TeamCommandAction::Help,
@@ -921,7 +1049,32 @@ pub async fn handle_slash_command(
                     Ok(SlashCommandOutcome::ManageTeams {
                         action: TeamCommandAction::Assign {
                             task_id: task_id.unwrap(),
-                            teammate: tokens[2].clone(),
+                            teammate: args[1].clone(),
+                        },
+                    })
+                }
+                "message" => {
+                    if args.len() < 2 {
+                        return Ok(SlashCommandOutcome::ManageTeams {
+                            action: TeamCommandAction::Help,
+                        });
+                    }
+                    Ok(SlashCommandOutcome::ManageTeams {
+                        action: TeamCommandAction::Message {
+                            recipient: args[0].clone(),
+                            message: args.iter().skip(1).cloned().collect::<Vec<_>>().join(" "),
+                        },
+                    })
+                }
+                "broadcast" => {
+                    if args.is_empty() {
+                        return Ok(SlashCommandOutcome::ManageTeams {
+                            action: TeamCommandAction::Help,
+                        });
+                    }
+                    Ok(SlashCommandOutcome::ManageTeams {
+                        action: TeamCommandAction::Broadcast {
+                            message: args.join(" "),
                         },
                     })
                 }

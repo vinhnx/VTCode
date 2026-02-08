@@ -4,6 +4,30 @@ use crate::config::models::ModelId;
 use clap::{ArgAction, ColorChoice, Parser, Subcommand, ValueEnum, ValueHint};
 use colorchoice_clap::Color as ColorSelection;
 use std::path::PathBuf;
+use vtcode_config::agent_teams::TeammateMode;
+
+#[derive(Clone, Debug, ValueEnum)]
+pub enum TeammateModeArg {
+    Auto,
+    Tmux,
+    InProcess,
+}
+
+impl From<TeammateModeArg> for TeammateMode {
+    fn from(value: TeammateModeArg) -> Self {
+        match value {
+            TeammateModeArg::Auto => TeammateMode::Auto,
+            TeammateModeArg::Tmux => TeammateMode::Tmux,
+            TeammateModeArg::InProcess => TeammateMode::InProcess,
+        }
+    }
+}
+
+#[derive(Clone, Debug, ValueEnum)]
+pub enum TeamRoleArg {
+    Lead,
+    Teammate,
+}
 
 /// Get the long version information following Ratatui recipe pattern
 ///
@@ -75,6 +99,22 @@ pub struct Cli {
         value_hint = ValueHint::DirPath
     )]
     pub workspace: Option<PathBuf>,
+
+    /// Team name to join or lead
+    #[arg(long, global = true, value_name = "TEAM")]
+    pub team: Option<String>,
+
+    /// Teammate name (join as teammate)
+    #[arg(long, global = true, value_name = "NAME")]
+    pub teammate: Option<String>,
+
+    /// Team role override (lead or teammate)
+    #[arg(long, global = true, value_enum)]
+    pub team_role: Option<TeamRoleArg>,
+
+    /// Teammate mode override (auto, tmux, in_process)
+    #[arg(long, global = true, value_enum)]
+    pub teammate_mode: Option<TeammateModeArg>,
 
     /// Enable tree-sitter code analysis
     #[arg(long, global = true)]
@@ -820,6 +860,10 @@ impl Default for Cli {
             provider: Some("gemini".to_owned()),
             api_key_env: "GEMINI_API_KEY".to_owned(),
             workspace: None,
+            team: None,
+            teammate: None,
+            team_role: None,
+            teammate_mode: None,
             enable_tree_sitter: false,
             research_preview: false,
             security_level: "moderate".to_owned(),

@@ -124,6 +124,7 @@
 // Public modules
 pub mod a2a; // Agent2Agent Protocol support
 pub mod acp;
+pub mod agent_teams;
 #[cfg(feature = "anthropic-api")]
 pub mod anthropic_api;
 pub mod audit;

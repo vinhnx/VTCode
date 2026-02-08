@@ -19,6 +19,7 @@ impl TurnDriver<ResumeSession> for UnifiedTurnDriver {
             params.skip_confirmations,
             params.full_auto,
             params.plan_mode,
+            params.team_context,
             params.resume,
         );
         runner.await

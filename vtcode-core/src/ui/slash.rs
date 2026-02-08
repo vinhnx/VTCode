@@ -85,7 +85,7 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
         },
         SlashCommandInfo {
             name: "team",
-            description: "Manage agent teams (usage: /team start|tasks|assign|teammates|stop)",
+            description: "Manage agent teams (usage: /team start|task|assign|message|teammates|stop)",
         },
         SlashCommandInfo {
             name: "subagent",

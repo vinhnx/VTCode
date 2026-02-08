@@ -26,6 +26,7 @@ pub async fn run_single_agent_loop(
     skip_confirmations: bool,
     full_auto: bool,
     plan_mode: bool,
+    team_context: Option<vtcode_core::agent_teams::TeamContext>,
     resume: Option<ResumeSession>,
 ) -> Result<()> {
     // Cache the workspace path to avoid repeated current_dir calls
@@ -45,6 +46,7 @@ pub async fn run_single_agent_loop(
         skip_confirmations,
         full_auto,
         plan_mode,
+        team_context,
         resume,
     );
     driver.drive_turn(params).await

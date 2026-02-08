@@ -9,7 +9,7 @@ mod modal;
 mod queue;
 mod state;
 
-pub(crate) use action::InlineLoopAction;
+pub(crate) use action::{InlineLoopAction, TeamSwitchDirection};
 pub(crate) use context::InlineEventContext;
 pub(crate) use driver::{InlineEventLoopResources, poll_inline_loop_action};
 pub(crate) use interrupts::InlineInterruptCoordinator;

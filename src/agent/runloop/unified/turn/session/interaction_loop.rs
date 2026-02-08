@@ -4,6 +4,7 @@ use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::Notify;
 
+use vtcode_core::agent_teams::TeamRole;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig;
 use vtcode_core::llm::provider as uni;
@@ -18,7 +19,8 @@ use crate::agent::runloop::prompt::refine_and_enrich_prompt;
 use crate::agent::runloop::unified::async_mcp_manager::AsyncMcpManager;
 use crate::agent::runloop::unified::display::display_user_message;
 use crate::agent::runloop::unified::inline_events::{
-    InlineEventLoopResources, InlineInterruptCoordinator, InlineLoopAction, poll_inline_loop_action,
+    InlineEventLoopResources, InlineInterruptCoordinator, InlineLoopAction, TeamSwitchDirection,
+    poll_inline_loop_action,
 };
 
 use crate::agent::runloop::unified::model_selection::{
@@ -175,6 +177,10 @@ pub(crate) async fn run_interaction_loop(
             state.input_status_state,
             spooled_count,
         );
+        crate::agent::runloop::unified::status_line::update_team_status(
+            state.input_status_state,
+            ctx.session_stats,
+        );
 
         // Refresh status line
         if let Err(error) =
@@ -189,6 +195,10 @@ pub(crate) async fn run_interaction_loop(
             .await
         {
             tracing::warn!("Failed to refresh status line: {}", error);
+        }
+
+        if let Err(error) = poll_team_mailbox(ctx).await {
+            tracing::warn!("Failed to read team mailbox: {}", error);
         }
 
         // Context efficiency metrics tracking has been removed along with context trim functionality
@@ -231,12 +241,29 @@ pub(crate) async fn run_interaction_loop(
             provider_client: ctx.provider_client,
             session_bootstrap: ctx.session_bootstrap,
             full_auto: ctx.full_auto,
+            team_active: ctx.session_stats.team_context.is_some(),
         };
 
         let mut input_owned =
             match poll_inline_loop_action(ctx.session, ctx.ctrl_c_notify, resources).await? {
                 InlineLoopAction::Continue => continue,
                 InlineLoopAction::Submit(text) => text,
+                InlineLoopAction::ToggleDelegateMode => {
+                    let enabled = ctx.session_stats.toggle_delegate_mode();
+                    ctx.renderer.line(
+                        MessageStyle::Info,
+                        if enabled {
+                            "Delegate mode enabled (coordination only)."
+                        } else {
+                            "Delegate mode disabled."
+                        },
+                    )?;
+                    continue;
+                }
+                InlineLoopAction::SwitchTeammate(direction) => {
+                    handle_team_switch(ctx, direction).await?;
+                    continue;
+                }
                 InlineLoopAction::Exit(reason) => {
                     return Ok(InteractionOutcome::Exit { reason });
                 }
@@ -372,6 +399,18 @@ pub(crate) async fn run_interaction_loop(
                 input_owned = new_input;
             }
             slash_command_handler::CommandProcessingResult::NotHandled => {}
+        }
+
+        if let Some(target) = direct_message_target(ctx.session_stats) {
+            if !input_owned.trim_start().starts_with('/') {
+                if let Some(team) = ctx.session_stats.team_state.as_mut() {
+                    team.send_message(&target, "lead", input_owned.clone(), None)
+                        .await?;
+                    ctx.renderer
+                        .line(MessageStyle::Info, &format!("Message sent to {}.", target))?;
+                    continue;
+                }
+            }
         }
 
         if let Some(hooks) = ctx.lifecycle_hooks {
@@ -537,4 +576,130 @@ pub(crate) async fn run_interaction_loop(
             input: input.to_string(),
         });
     }
+}
+
+fn direct_message_target(session_stats: &SessionStats) -> Option<String> {
+    let context = session_stats.team_context.as_ref()?;
+    if context.role != TeamRole::Lead {
+        return None;
+    }
+    session_stats
+        .team_state
+        .as_ref()
+        .and_then(|team| team.active_teammate())
+        .map(|name| name.to_string())
+}
+
+async fn handle_team_switch(
+    ctx: &mut InteractionLoopContext<'_>,
+    direction: TeamSwitchDirection,
+) -> Result<()> {
+    let role = ctx.session_stats.team_context.as_ref().map(|ctx| ctx.role);
+    if matches!(role, Some(TeamRole::Teammate)) {
+        ctx.renderer.line(
+            MessageStyle::Info,
+            "Active teammate selection is only available to the lead.",
+        )?;
+        return Ok(());
+    }
+
+    let Some(team) = ctx.session_stats.team_state.as_mut() else {
+        ctx.renderer
+            .line(MessageStyle::Info, "No active team. Use /team start.")?;
+        return Ok(());
+    };
+
+    let mut options = Vec::new();
+    options.push(None);
+    for name in team.teammate_names() {
+        options.push(Some(name));
+    }
+
+    if options.len() <= 1 {
+        ctx.renderer
+            .line(MessageStyle::Info, "No teammates to select.")?;
+        return Ok(());
+    }
+
+    let current = team.active_teammate().map(|name| name.to_string());
+    let current_idx = options
+        .iter()
+        .position(|entry| entry.as_deref() == current.as_deref())
+        .unwrap_or(0);
+
+    let next_idx = match direction {
+        TeamSwitchDirection::Next => (current_idx + 1) % options.len(),
+        TeamSwitchDirection::Previous => {
+            if current_idx == 0 {
+                options.len() - 1
+            } else {
+                current_idx - 1
+            }
+        }
+    };
+
+    let next = options[next_idx].clone();
+    team.set_active_teammate(next.clone()).await?;
+    let label = next.as_deref().unwrap_or("lead");
+    ctx.renderer
+        .line(MessageStyle::Info, &format!("Active teammate: {}.", label))?;
+
+    Ok(())
+}
+
+async fn poll_team_mailbox(ctx: &mut InteractionLoopContext<'_>) -> Result<()> {
+    let team_context = match ctx.session_stats.team_context.as_ref() {
+        Some(context) => context.clone(),
+        None => return Ok(()),
+    };
+
+    if ctx.session_stats.team_state.is_none() {
+        let storage =
+            vtcode_core::agent_teams::TeamStorage::from_config(ctx.vt_cfg.as_ref()).await?;
+        match crate::agent::runloop::unified::team_state::TeamState::load(
+            storage,
+            &team_context.team_name,
+        )
+        .await
+        {
+            Ok(team) => {
+                ctx.session_stats.team_state = Some(team);
+            }
+            Err(err) => {
+                ctx.renderer.line(
+                    MessageStyle::Error,
+                    &format!("Failed to load team '{}': {}", team_context.team_name, err),
+                )?;
+                ctx.session_stats.team_context = None;
+                return Ok(());
+            }
+        }
+    }
+
+    let recipient = match team_context.role {
+        TeamRole::Lead => "lead".to_string(),
+        TeamRole::Teammate => team_context
+            .teammate_name
+            .clone()
+            .unwrap_or_else(|| "teammate".to_string()),
+    };
+
+    let Some(team) = ctx.session_stats.team_state.as_mut() else {
+        return Ok(());
+    };
+
+    let messages = team.read_mailbox(&recipient).await?;
+    for message in messages {
+        let mut header = format!("Team message from {}", message.sender);
+        if let Some(task_id) = message.task_id {
+            header.push_str(&format!(" (task #{})", task_id));
+        }
+        ctx.renderer.line(MessageStyle::Info, &header)?;
+        if !message.content.trim().is_empty() {
+            ctx.renderer
+                .line(MessageStyle::Output, message.content.trim())?;
+        }
+    }
+
+    Ok(())
 }

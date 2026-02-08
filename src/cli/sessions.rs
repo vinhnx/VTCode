@@ -241,6 +241,8 @@ async fn run_single_agent_loop(
         &resume_config,
         skip_confirmations,
         false,
+        false,
+        None,
         Some(resume),
     )
     .await

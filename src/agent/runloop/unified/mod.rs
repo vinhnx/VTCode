@@ -25,6 +25,7 @@ mod shell;
 pub mod state;
 mod status_line;
 pub(crate) mod team_state;
+mod team_tmux;
 mod tool_ledger;
 mod tool_output_handler;
 mod tool_output_handler_unified;

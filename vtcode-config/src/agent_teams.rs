@@ -3,6 +3,21 @@
 use serde::{Deserialize, Serialize};
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum TeammateMode {
+    Auto,
+    Tmux,
+    InProcess,
+}
+
+impl Default for TeammateMode {
+    fn default() -> Self {
+        Self::Auto
+    }
+}
+
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct AgentTeamsConfig {
     /// Enable agent teams (experimental)
@@ -16,6 +31,14 @@ pub struct AgentTeamsConfig {
     /// Default model for agent team subagents
     #[serde(default)]
     pub default_model: Option<String>,
+
+    /// Teammate display mode (auto, tmux, in_process)
+    #[serde(default)]
+    pub teammate_mode: TeammateMode,
+
+    /// Override storage directory for team data
+    #[serde(default)]
+    pub storage_dir: Option<String>,
 }
 
 impl Default for AgentTeamsConfig {
@@ -24,6 +47,8 @@ impl Default for AgentTeamsConfig {
             enabled: false,
             max_teammates: default_max_teammates(),
             default_model: None,
+            teammate_mode: TeammateMode::default(),
+            storage_dir: None,
         }
     }
 }
@@ -41,5 +66,6 @@ mod tests {
         let config = AgentTeamsConfig::default();
         assert!(!config.enabled);
         assert_eq!(config.max_teammates, 4);
+        assert_eq!(config.teammate_mode, TeammateMode::Auto);
     }
 }

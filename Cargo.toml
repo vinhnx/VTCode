@@ -45,6 +45,7 @@ pretty_assertions = "1.4"
 libc = "0.2"
 rand = "0.9"
 semver = "1.0"
+fs2 = "0.4"
 
 [workspace.package]
 version = "0.78.1"

@@ -6324,6 +6324,7 @@ dependencies = [
  "dotenvy",
  "dunce",
  "editor-command",
+ "fs2",
  "futures",
  "futures-lite",
  "glob",

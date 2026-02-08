@@ -52,7 +52,7 @@ pub async fn handle_init_command(workspace: &Path, force: bool, run: bool) -> Re
             checkpointing_max_snapshots: DEFAULT_MAX_SNAPSHOTS,
             checkpointing_max_age_days: Some(DEFAULT_MAX_AGE_DAYS),
         };
-        handle_chat_command(&config, false, false)
+        handle_chat_command(&config, false, false, false, None)
             .await
             .with_context(|| "failed to start chat session")?;
     }

@@ -233,6 +233,12 @@ enabled = false
 # Default model for agent team subagents
 # default_model = ""
 
+# Teammate display mode (auto, tmux, in_process)
+# teammate_mode = "auto"
+
+# Override storage directory for team data
+# storage_dir = "~/.vtcode"
+
 # External editor configuration
 # Uses the editor-command crate to detect and launch the user's preferred editor
 # https://docs.rs/editor-command/latest/editor_command/

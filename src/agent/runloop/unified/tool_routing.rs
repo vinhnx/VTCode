@@ -62,6 +62,7 @@ pub(crate) struct ToolPermissionsContext<'a, S: UiSession + ?Sized> {
     pub hitl_notification_bell: bool,
     pub autonomous_mode: bool,
     pub human_in_the_loop: bool,
+    pub delegate_mode: bool,
 }
 
 fn extract_shell_command_text(tool_name: &str, tool_args: Option<&Value>) -> Option<String> {
@@ -378,6 +379,8 @@ pub(crate) async fn prompt_tool_permission<S: UiSession + ?Sized>(
             | InlineEvent::BackgroundOperation
             | InlineEvent::LaunchEditor
             | InlineEvent::ToggleMode
+            | InlineEvent::TeamPrev
+            | InlineEvent::TeamNext
             | InlineEvent::PlanConfirmation(_)
             | InlineEvent::DiffPreviewApply
             | InlineEvent::DiffPreviewReject
@@ -412,7 +415,16 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
         hitl_notification_bell,
         autonomous_mode,
         human_in_the_loop,
+        delegate_mode,
     } = ctx;
+
+    if delegate_mode {
+        renderer.line(
+            MessageStyle::Info,
+            "Delegate mode active. Tool execution is disabled.",
+        )?;
+        return Ok(ToolPermissionFlow::Denied);
+    }
 
     if !human_in_the_loop {
         return Ok(ToolPermissionFlow::Approved);

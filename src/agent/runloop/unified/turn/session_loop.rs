@@ -88,6 +88,7 @@ pub(crate) async fn run_single_agent_loop_unified(
     _skip_confirmations: bool,
     full_auto: bool,
     plan_mode: bool,
+    team_context: Option<vtcode_core::agent_teams::TeamContext>,
     resume: Option<ResumeSession>,
 ) -> Result<()> {
     // Create a guard that ensures terminal is restored even on early return
@@ -232,6 +233,7 @@ pub(crate) async fn run_single_agent_loop_unified(
         );
 
         let mut session_stats = SessionStats::default();
+        session_stats.team_context = team_context.clone();
         // Phase 4 Integration: Populate session stats with resilient execution components
         session_stats.circuit_breaker = circuit_breaker.clone();
         session_stats.tool_health_tracker = tool_health_tracker.clone();

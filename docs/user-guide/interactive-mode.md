@@ -17,9 +17,10 @@ The VT Code terminal UI includes an interactive mode that combines keyboard-firs
 | `Ctrl+R` | Reverse search the command history. | Matches previous prompts and bash commands. |
 | `Ctrl+V` (macOS/Linux) or `Alt+V` (Windows) | Paste an image from the clipboard. | Works with image-enabled sessions. |
 | `Up/Down arrows` | Navigate through command history. | Recall previous prompts or commands. |
+| `Shift+Up/Down arrows` | Cycle active teammate (lead only). | Requires agent teams. |
 | `Esc` + `Esc` | Rewind the conversation and code to the previous checkpoint. | Restores an earlier snapshot. |
 | `Tab` | Toggle extended thinking (analysis) mode on and off. | Switch between shorter and more verbose reasoning. |
-| `Shift+Tab` or `Alt+M` | Cycle permission modes. | Switches Auto-Accept Mode, Plan Mode, and normal mode. |
+| `Shift+Tab` or `Alt+M` | Cycle permission modes. | Switches Auto-Accept Mode, Plan Mode, and normal mode (delegate mode when teams are active). |
 
 ### Multiline Input
 
@@ -44,7 +45,7 @@ The VT Code terminal UI includes an interactive mode that combines keyboard-firs
 
 ### Agent Teams (Experimental)
 
-Use `/team` commands to coordinate multiple subagents in a single session. This MVP is in-process and sequential. See `docs/agent-teams.md` for enablement and limitations.
+Use `/team` commands to coordinate multiple agent sessions. In-process mode sends messages to teammates; tmux mode opens a split pane for each teammate. See `docs/agent-teams.md` for enablement and limitations.
 
 Use `/team model` or `/subagent model` to set default models interactively.
 

@@ -16,4 +16,5 @@ pub(crate) struct ToolPermissionsContext<'a, S: UiSession + ?Sized> {
     pub hitl_notification_bell: bool,
     pub autonomous_mode: bool,
     pub human_in_the_loop: bool,
+    pub delegate_mode: bool,
 }
