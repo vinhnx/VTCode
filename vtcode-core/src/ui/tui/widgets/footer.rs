@@ -38,7 +38,6 @@ pub struct FooterWidget<'a> {
     show_border: bool,
     spinner: Option<&'a str>,
     shimmer_phase: Option<f32>,
-    scroll_indicator: Option<String>,
 }
 
 impl<'a> FooterWidget<'a> {
@@ -53,15 +52,7 @@ impl<'a> FooterWidget<'a> {
             show_border: false,
             spinner: None,
             shimmer_phase: None,
-            scroll_indicator: None,
         }
-    }
-
-    /// Set the scroll indicator text
-    #[must_use]
-    pub fn scroll_indicator(mut self, indicator: String) -> Self {
-        self.scroll_indicator = Some(indicator);
-        self
     }
 
     /// Set the left status text (e.g., git branch)
@@ -141,31 +132,16 @@ impl<'a> FooterWidget<'a> {
             spans.push(Span::styled(spinner.to_string(), self.styles.muted_style()));
         }
 
-        // Calculate space needed for right status and scroll indicator
+        // Calculate space needed for right status
         let right_text = self.right_status.unwrap_or("");
-        let scroll_text = self.scroll_indicator.as_deref().unwrap_or("");
         let left_len: usize = spans.iter().map(|s| s.content.len()).sum();
         let right_len = right_text.len();
-        let scroll_len = if scroll_text.is_empty() {
-            0
-        } else {
-            scroll_text.len() + 2
-        }; // +2 for padding
         let available = width as usize;
 
-        // Add padding, scroll indicator, and right status if there's room
-        if left_len + right_len + scroll_len + 2 <= available {
-            let padding = available.saturating_sub(left_len + right_len + scroll_len);
+        // Add padding and right status if there's room
+        if left_len + right_len + 2 <= available {
+            let padding = available.saturating_sub(left_len + right_len);
             spans.push(Span::raw(" ".repeat(padding)));
-
-            if !scroll_text.is_empty() {
-                spans.push(Span::styled(
-                    scroll_text.to_string(),
-                    self.styles.muted_style(),
-                ));
-                spans.push(Span::raw("  "));
-            }
-
             spans.push(Span::styled(
                 right_text.to_string(),
                 self.styles.muted_style(),
