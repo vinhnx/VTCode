@@ -171,8 +171,7 @@ impl ToolRegistry {
 
             // Try multiple matching strategies with increasing leniency
             // Strategy 1: Exact line-by-line match with trim()
-            'outer: for i in 0..=(content_lines.len().saturating_sub(old_lines.len())) {
-                let window = &content_lines[i..i + old_lines.len()];
+            'outer: for (i, window) in content_lines.windows(old_lines.len()).enumerate() {
                 if utils::lines_match(window, &old_lines) {
                     let replacement_lines: Vec<&str> = effective_new_str.lines().collect();
 
@@ -194,8 +193,7 @@ impl ToolRegistry {
             // Strategy 2: If still not found, try matching with normalized whitespace
             // (collapse multiple spaces, ignore leading/trailing whitespace)
             if !replacement_occurred {
-                for i in 0..=(content_lines.len().saturating_sub(old_lines.len())) {
-                    let window = &content_lines[i..i + old_lines.len()];
+                for (i, window) in content_lines.windows(old_lines.len()).enumerate() {
                     let window_normalized: Vec<String> = window
                         .iter()
                         .map(|line| line.split_whitespace().collect::<Vec<_>>().join(" "))

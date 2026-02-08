@@ -9,7 +9,9 @@ pub fn estimate_tokens(text: &str) -> usize {
     if text.is_empty() {
         return 0;
     }
-    (text.len() / 4).max(1)
+    // Simple estimation: 1 token ≈ 4 characters.
+    // Use ceiling division: (len + 3) / 4
+    (text.len() + 3) / 4
 }
 
 /// Truncate string to approximate token limit
@@ -26,10 +28,16 @@ pub fn truncate_to_tokens(text: &str, max_tokens: usize) -> String {
         return text.to_string();
     }
 
+    // Ensure we don't slice in the middle of a character
+    let mut end = max_chars;
+    while !text.is_char_boundary(end) {
+        end -= 1;
+    }
+    let truncated = &text[..end];
+
     // Try to truncate at a word boundary
-    let truncated = &text[..max_chars];
     match truncated.rfind(' ') {
-        Some(last_space) if last_space > max_chars / 2 => {
+        Some(last_space) if last_space > end / 2 => {
             let mut result = truncated[..last_space].to_string();
             result.push_str("...");
             result

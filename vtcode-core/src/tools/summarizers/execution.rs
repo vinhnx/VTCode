@@ -219,7 +219,14 @@ fn truncate_command(cmd: &str, max_len: usize) -> String {
     if cmd.len() <= max_len {
         cmd.to_string()
     } else {
-        format!("{}...", &cmd[..max_len.saturating_sub(3)])
+        let target = max_len.saturating_sub(3);
+        let end = cmd
+            .char_indices()
+            .map(|(i, _)| i)
+            .filter(|&i| i <= target)
+            .last()
+            .unwrap_or(0);
+        format!("{}...", &cmd[..end])
     }
 }
 
@@ -228,7 +235,14 @@ fn truncate_line(line: &str, max_len: usize) -> String {
     if line.len() <= max_len {
         line.to_string()
     } else {
-        format!("{}...", &line[..max_len.saturating_sub(3)])
+        let target = max_len.saturating_sub(3);
+        let end = line
+            .char_indices()
+            .map(|(i, _)| i)
+            .filter(|&i| i <= target)
+            .last()
+            .unwrap_or(0);
+        format!("{}...", &line[..end])
     }
 }
 
