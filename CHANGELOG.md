@@ -2,6 +2,18 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## v0.78.3 - 2026-02-08
+
+### Features
+
+- enhance crate publishing process with reliable version parsing and no-verify option (4fb5612c) (@vinhnx)
+- implement delete_word_forward method in Session (5936d8bc) (@vinhnx)
+- add delete_word_forward method to InputManager and update LayoutMode footer behavior (29e2dd09) (@vinhnx)
+
+### Other
+
+- Revert "feat: integrate `tui_input` crate for enhanced input management and modal search functionality" (b6e27465) (@vinhnx)
+
 ## v0.78.2 - 2026-02-08
 
 ### Features
