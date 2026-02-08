@@ -16,6 +16,7 @@ use crate::tools::file_search_bridge::{self, FileSearchConfig};
 use crate::tools::tree_sitter::{
     CodeNavigator, LanguageAnalyzer, NavigationUtils, Position, SymbolInfo, TreeSitterAnalyzer,
 };
+use crate::utils::path::resolve_workspace_path;
 
 /// Code intelligence operations
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -411,27 +412,8 @@ impl CodeIntelligenceTool {
     /// Resolve a file path relative to workspace
     fn resolve_path(&self, file_path: &str) -> Result<PathBuf> {
         let path = Path::new(file_path);
-        let full_path = if path.is_absolute() {
-            path.to_path_buf()
-        } else {
-            self.workspace_root.join(path)
-        };
-
-        // Validate path is within workspace
-        let canonical = full_path
-            .canonicalize()
-            .with_context(|| format!("File not found: {}", file_path))?;
-
-        let workspace_canonical = self
-            .workspace_root
-            .canonicalize()
-            .with_context(|| "Failed to resolve workspace root")?;
-
-        if !canonical.starts_with(&workspace_canonical) {
-            anyhow::bail!("Path is outside workspace: {}", file_path);
-        }
-
-        Ok(canonical)
+        resolve_workspace_path(&self.workspace_root, path)
+            .with_context(|| format!("File not found: {}", file_path))
     }
 
     /// Parse a file and extract symbols

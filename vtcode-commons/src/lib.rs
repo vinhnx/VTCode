@@ -38,6 +38,7 @@ pub use colors::{blend_colors, color_from_hex, contrasting_color, is_light_color
 pub use errors::{DisplayErrorFormatter, ErrorFormatter, ErrorReporter, NoopErrorReporter};
 pub use paths::{
     PathResolver, PathScope, WorkspacePaths, file_name_from_path, is_safe_relative_path,
+    normalize_ascii_identifier, resolve_workspace_path,
 };
 pub use project::{ProjectOverview, build_project_overview};
 pub use reference::{MemoryErrorReporter, MemoryTelemetry, StaticWorkspacePaths};

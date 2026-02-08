@@ -6,6 +6,7 @@ use serde::Serialize;
 use crate::instructions::{InstructionBundle, read_instruction_bundle};
 use crate::skills::model::SkillMetadata;
 use crate::skills::render::render_skills_section;
+use crate::utils::file_utils::canonicalize_with_context;
 use vtcode_config::core::AgentConfig;
 
 pub const PROJECT_DOC_SEPARATOR: &str = "\n\n--- project-doc ---\n\n";
@@ -98,7 +99,7 @@ pub async fn get_user_instructions(
         .ok()
         .flatten();
 
-    let mut section = String::new();
+    let mut section = String::with_capacity(1024);
 
     if let Some(user_inst) = &config.user_instructions {
         section.push_str("## USER INSTRUCTIONS\n");
@@ -164,8 +165,7 @@ fn convert_bundle(bundle: InstructionBundle) -> ProjectDocBundle {
 }
 
 fn resolve_project_root(cwd: &Path) -> Result<PathBuf> {
-    let mut cursor = canonicalize_dir(cwd)
-        .with_context(|| format!("Failed to canonicalize working directory {}", cwd.display()))?;
+    let mut cursor = canonicalize_with_context(cwd, "working directory")?;
 
     loop {
         let git_marker = cursor.join(".git");
@@ -187,15 +187,6 @@ fn resolve_project_root(cwd: &Path) -> Result<PathBuf> {
                 cursor = parent.to_path_buf();
             }
             None => return Ok(cursor),
-        }
-    }
-}
-
-fn canonicalize_dir(path: &Path) -> Result<PathBuf> {
-    match path.canonicalize() {
-        Ok(canonical) => Ok(canonical),
-        Err(err) => {
-            Err(err).with_context(|| format!("Failed to canonicalize path {}", path.display()))
         }
     }
 }

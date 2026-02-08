@@ -8,6 +8,8 @@ use glob::glob;
 use serde::Serialize;
 use tracing::warn;
 
+use crate::utils::file_utils::canonicalize_with_context;
+
 const AGENTS_FILENAME: &str = "AGENTS.md";
 const AGENTS_OVERRIDE_FILENAME: &str = "AGENTS.override.md";
 const GLOBAL_CONFIG_DIRECTORY: &str = ".config/vtcode";
@@ -45,7 +47,13 @@ impl InstructionBundle {
     }
 
     pub fn combined_text(&self) -> String {
-        let mut output = String::new();
+        let capacity = self
+            .segments
+            .iter()
+            .map(|segment| segment.contents.len())
+            .sum::<usize>()
+            .saturating_add(self.segments.len().saturating_sub(1) * 2);
+        let mut output = String::with_capacity(capacity);
         for (index, segment) in self.segments.iter().enumerate() {
             if index > 0 {
                 output.push_str("\n\n");
@@ -87,19 +95,9 @@ pub async fn discover_instruction_sources(
         }
     }
 
-    let root = canonicalize_dir(project_root).with_context(|| {
-        format!(
-            "Failed to canonicalize project root {}",
-            project_root.display()
-        )
-    })?;
+    let root = canonicalize_with_context(project_root, "project root")?;
 
-    let mut cursor = canonicalize_dir(current_dir).with_context(|| {
-        format!(
-            "Failed to canonicalize working directory {}",
-            current_dir.display()
-        )
-    })?;
+    let mut cursor = canonicalize_with_context(current_dir, "working directory")?;
 
     if !cursor.starts_with(&root) {
         cursor = root.clone();
@@ -318,15 +316,6 @@ async fn instruction_exists(path: &Path) -> Result<bool> {
     }
 }
 
-fn canonicalize_dir(path: &Path) -> Result<PathBuf> {
-    match path.canonicalize() {
-        Ok(canonical) => Ok(canonical),
-        Err(err) => {
-            Err(err).with_context(|| format!("Failed to canonicalize path {}", path.display()))
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -360,8 +349,9 @@ mod tests {
         let nested_rule_canon = std::fs::canonicalize(&nested_rule)?;
         let extra_file_canon = std::fs::canonicalize(&extra_file)?;
 
-        let canonical =
-            |path: &PathBuf| std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+        let canonical = |path: &PathBuf| {
+            std::fs::canonicalize(path).expect("failed to canonicalize instruction path")
+        };
 
         let patterns = vec!["docs/*.md".to_owned()];
         let sources = discover_instruction_sources(

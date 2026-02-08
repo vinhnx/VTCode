@@ -1,6 +1,7 @@
 //! MCP-related helper methods for ToolRegistry.
 
 use super::ToolRegistry;
+use crate::utils::path::normalize_ascii_identifier;
 
 impl ToolRegistry {
     pub(super) async fn mcp_policy_keys(&self) -> Vec<String> {
@@ -27,11 +28,5 @@ impl ToolRegistry {
 }
 
 pub(crate) fn normalize_mcp_tool_identifier(value: &str) -> String {
-    let mut normalized = String::new();
-    for ch in value.chars() {
-        if ch.is_ascii_alphanumeric() {
-            normalized.push(ch.to_ascii_lowercase());
-        }
-    }
-    normalized
+    normalize_ascii_identifier(value)
 }

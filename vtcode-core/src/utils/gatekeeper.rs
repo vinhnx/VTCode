@@ -87,7 +87,13 @@ pub fn check_quarantine(path: &Path) {
             return;
         }
 
-        let canonical = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+        let canonical = match path.canonicalize() {
+            Ok(canonical) => canonical,
+            Err(err) => {
+                warn!(path = %path.display(), error = %err, "Failed to canonicalize path");
+                return;
+            }
+        };
 
         if let Some(entry) = policy.cache_entry(&canonical) {
             if !entry.quarantined {

@@ -7,6 +7,7 @@ use super::super::style::ratatui_style_from_inline;
 use super::super::types::{InlineMessageKind, InlineTextStyle, InlineTheme};
 use super::message::{MessageLabels, MessageLine};
 use crate::config::constants::ui;
+use crate::ui::tui::session::styling::normalize_tool_name;
 
 // Note: format_tool_parameters and simplify_tool_display are available in super::text_utils
 // if needed for future use.
@@ -159,18 +160,6 @@ fn strip_tool_status_prefix(text: &str) -> &str {
         }
     }
     text
-}
-
-#[allow(dead_code)]
-fn normalize_tool_name(tool_name: &str) -> &'static str {
-    match tool_name.to_lowercase().as_str() {
-        "grep" | "rg" | "ripgrep" | "grep_file" | "search" | "find" | "ag" => "search",
-        "list" | "ls" | "dir" | "list_files" => "list",
-        "read" | "cat" | "file" | "read_file" => "read",
-        "write" | "edit" | "save" | "insert" | "edit_file" => "write",
-        "run" | "command" | "bash" | "sh" => "run",
-        _ => "other",
-    }
 }
 
 #[allow(dead_code)]
