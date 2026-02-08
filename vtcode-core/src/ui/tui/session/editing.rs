@@ -8,7 +8,6 @@ use crate::ui::tui::session::slash;
 /// - Cursor movement (character, word, line boundaries)
 /// - Input history navigation
 /// - Newline handling with capacity limits
-use unicode_segmentation::UnicodeSegmentation;
 
 use super::Session;
 
@@ -72,63 +71,20 @@ impl Session {
         slash::update_slash_suggestions(self);
     }
 
-    /// Delete the word before the cursor
     pub(super) fn delete_word_backward(&mut self) {
-        if self.input_manager.cursor() == 0 {
-            return;
-        }
-
-        // Find the start of the current word by moving backward
-        let graphemes: Vec<(usize, &str)> = self
-            .input_manager
-            .content()
-            .grapheme_indices(true)
-            .take_while(|(idx, _)| *idx < self.input_manager.cursor())
-            .collect();
-
-        if graphemes.is_empty() {
-            return;
-        }
-
-        let mut index = graphemes.len();
-
-        // Skip any trailing whitespace
-        while index > 0 {
-            let (_, grapheme) = graphemes[index - 1];
-            if !grapheme.chars().all(char::is_whitespace) {
-                break;
-            }
-            index -= 1;
-        }
-
-        // Move backwards until we find whitespace (start of the word)
-        while index > 0 {
-            let (_, grapheme) = graphemes[index - 1];
-            if grapheme.chars().all(char::is_whitespace) {
-                break;
-            }
-            index -= 1;
-        }
-
-        // Calculate the position to delete from
-        let delete_start = if index < graphemes.len() {
-            graphemes[index].0
-        } else {
-            self.input_manager.cursor()
-        };
-
-        // Delete from delete_start to cursor
-        if delete_start < self.input_manager.cursor() {
-            let before = &self.input_manager.content()[..delete_start];
-            let after = &self.input_manager.content()[self.input_manager.cursor()..];
-            let new_content = format!("{}{}", before, after);
-
-            self.input_manager.set_content(new_content);
-            self.input_manager.set_cursor(delete_start);
-            self.input_compact_mode = self.input_compact_placeholder().is_some();
-            slash::update_slash_suggestions(self);
-        }
+        self.input_manager.delete_word_backward();
+        self.input_compact_mode = self.input_compact_placeholder().is_some();
+        slash::update_slash_suggestions(self);
     }
+
+    /// Delete the word at the cursor
+    pub(super) fn delete_word_forward(&mut self) {
+        self.input_manager.delete_word_forward();
+        self.input_compact_mode = self.input_compact_placeholder().is_some();
+        slash::update_slash_suggestions(self);
+    }
+
+
 
     /// Delete from cursor to start of current line (Command+Backspace on macOS)
     pub(super) fn delete_to_start_of_line(&mut self) {
@@ -187,105 +143,17 @@ impl Session {
 
     /// Move cursor left to the start of the previous word
     pub(super) fn move_left_word(&mut self) {
-        if self.input_manager.cursor() == 0 {
-            return;
-        }
-
-        let graphemes: Vec<(usize, &str)> = self
-            .input_manager
-            .content()
-            .grapheme_indices(true)
-            .take_while(|(idx, _)| *idx < self.input_manager.cursor())
-            .collect();
-
-        if graphemes.is_empty() {
-            return;
-        }
-
-        let mut index = graphemes.len();
-
-        // Skip trailing whitespace
-        while index > 0 {
-            let (_, grapheme) = graphemes[index - 1];
-            if !grapheme.chars().all(char::is_whitespace) {
-                break;
-            }
-            index -= 1;
-        }
-
-        // Move to start of word
-        while index > 0 {
-            let (_, grapheme) = graphemes[index - 1];
-            if grapheme.chars().all(char::is_whitespace) {
-                break;
-            }
-            index -= 1;
-        }
-
-        if index < graphemes.len() {
-            self.input_manager.set_cursor(graphemes[index].0);
-        } else {
-            self.input_manager.set_cursor(0);
-        }
+        self.input_manager.move_left_word();
+        slash::update_slash_suggestions(self);
     }
+
 
     /// Move cursor right to the start of the next word
     pub(super) fn move_right_word(&mut self) {
-        if self.input_manager.cursor() >= self.input_manager.content().len() {
-            return;
-        }
-
-        let graphemes: Vec<(usize, &str)> = self
-            .input_manager
-            .content()
-            .grapheme_indices(true)
-            .skip_while(|(idx, _)| *idx < self.input_manager.cursor())
-            .collect();
-
-        if graphemes.is_empty() {
-            self.input_manager.move_cursor_to_end();
-            return;
-        }
-
-        let mut index = 0;
-        let mut skipped_whitespace = false;
-
-        // Skip current whitespace
-        while index < graphemes.len() {
-            let (_, grapheme) = graphemes[index];
-            if !grapheme.chars().all(char::is_whitespace) {
-                break;
-            }
-            skipped_whitespace = true;
-            index += 1;
-        }
-
-        if index >= graphemes.len() {
-            self.input_manager.move_cursor_to_end();
-            return;
-        }
-
-        // If we skipped whitespace, we're at the start of a word
-        if skipped_whitespace {
-            self.input_manager.set_cursor(graphemes[index].0);
-            return;
-        }
-
-        // Otherwise, skip to end of current word
-        while index < graphemes.len() {
-            let (_, grapheme) = graphemes[index];
-            if grapheme.chars().all(char::is_whitespace) {
-                break;
-            }
-            index += 1;
-        }
-
-        if index < graphemes.len() {
-            self.input_manager.set_cursor(graphemes[index].0);
-        } else {
-            self.input_manager.move_cursor_to_end();
-        }
+        self.input_manager.move_right_word();
+        slash::update_slash_suggestions(self);
     }
+
 
     /// Move cursor to the start of the line
     pub(super) fn move_to_start(&mut self) {

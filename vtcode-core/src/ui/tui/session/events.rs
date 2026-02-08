@@ -35,7 +35,7 @@ pub(super) fn handle_event(
                 && let (Some(list), Some(search)) = (modal.list.as_mut(), modal.search.as_mut())
             {
                 search.insert(&content);
-                list.apply_search(&search.query);
+                list.apply_search(search.query());
                 session.mark_dirty();
             } else if let Some(wizard) = session.wizard_modal.as_mut()
                 && let Some(search) = wizard.search.as_mut()
@@ -43,7 +43,7 @@ pub(super) fn handle_event(
                 // Paste into wizard modal search
                 search.insert(&content);
                 if let Some(step) = wizard.steps.get_mut(wizard.current_step) {
-                    step.list.apply_search(&search.query);
+                    step.list.apply_search(search.query());
                 }
                 session.mark_dirty();
             }
@@ -436,12 +436,13 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
         KeyCode::Delete => {
             if session.input_enabled {
                 if has_alt {
-                    session.delete_word_backward();
+                    session.delete_word_forward();
                 } else if has_command {
                     session.delete_to_end_of_line();
                 } else {
                     session.delete_char_forward();
                 }
+
                 session.check_file_reference_trigger();
                 session.check_prompt_reference_trigger();
                 session.mark_dirty();
@@ -742,28 +743,31 @@ pub(super) fn handle_file_palette_key(session: &mut Session, key: &KeyEvent) -> 
             true
         }
         KeyCode::Esc => {
-            crate::ui::tui::session::command::close_file_palette(session);
+            session.close_file_palette();
             session.mark_dirty();
             true
         }
+
         KeyCode::Tab => {
             if let Some(entry) = palette.get_selected() {
                 let path = entry.relative_path.clone();
-                crate::ui::tui::session::command::insert_file_reference(session, &path);
-                crate::ui::tui::session::command::close_file_palette(session);
+                session.insert_file_reference(&path);
+                session.close_file_palette();
                 session.mark_dirty();
             }
             true
         }
+
         KeyCode::Enter => {
             if let Some(entry) = palette.get_selected() {
                 let path = entry.relative_path.clone();
-                crate::ui::tui::session::command::insert_file_reference(session, &path);
-                crate::ui::tui::session::command::close_file_palette(session);
+                session.insert_file_reference(&path);
+                session.close_file_palette();
                 session.mark_dirty();
             }
             true
         }
+
         _ => false,
     }
 }
@@ -810,19 +814,21 @@ pub(super) fn handle_prompt_palette_key(session: &mut Session, key: &KeyEvent) -
             true
         }
         KeyCode::Esc => {
-            crate::ui::tui::session::command::close_prompt_palette(session);
+            session.close_prompt_palette();
             session.mark_dirty();
             true
         }
+
         KeyCode::Tab | KeyCode::Enter => {
             if let Some(entry) = palette.get_selected() {
                 let prompt_name = entry.name.clone();
-                crate::ui::tui::session::command::insert_prompt_reference(session, &prompt_name);
-                crate::ui::tui::session::command::close_prompt_palette(session);
+                session.insert_prompt_reference(&prompt_name);
+                session.close_prompt_palette();
                 session.mark_dirty();
             }
             true
         }
+
         _ => false,
     }
 }

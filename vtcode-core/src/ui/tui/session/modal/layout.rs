@@ -165,15 +165,17 @@ pub fn modal_content_width(
 
     if let Some(search_state) = search {
         let label_width = measure_text_width(search_state.label.as_str());
-        let content_width = if search_state.query.is_empty() {
+        let query = search_state.query();
+        let content_width = if query.is_empty() {
             search_state
                 .placeholder
                 .as_deref()
                 .map(measure_text_width)
                 .unwrap_or(0)
         } else {
-            measure_text_width(search_state.query.as_str())
+            measure_text_width(query)
         };
+
         let search_width = label_width
             .saturating_add(content_width)
             .saturating_add(ui::MODAL_CONTENT_HORIZONTAL_PADDING);

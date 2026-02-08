@@ -43,9 +43,10 @@ impl Session {
                     && let (Some(list), Some(search)) = (modal.list.as_mut(), modal.search.as_mut())
                 {
                     search.insert(&content);
-                    list.apply_search(&search.query);
+                    list.apply_search(search.query());
                     self.mark_dirty();
                 }
+
             }
             CrosstermEvent::Resize(_, rows) => {
                 self.apply_view_rows(rows);
