@@ -516,13 +516,9 @@ impl<'a> ModalWidget<'a> {
                 spans.push(Span::styled(placeholder.clone(), self.styles.detail));
             }
         } else {
-            spans.push(Span::styled(
-                query.to_string(),
-                self.styles.selectable,
-            ));
+            spans.push(Span::styled(query.to_string(), self.styles.selectable));
         }
         spans.push(Span::styled("▌".to_owned(), self.styles.highlight));
-
 
         let block = Block::bordered()
             .title(Span::styled(search_state.label.clone(), self.styles.header))

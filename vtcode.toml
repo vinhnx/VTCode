@@ -12,7 +12,7 @@ api_key_env = "HF_TOKEN"
 default_model = "MiniMaxAI/MiniMax-M2.1:novita"
 
 # Visual theme for the terminal interface
-theme = "vitesse-black"
+theme = "mono"
 
 # Temperature for main LLM responses (0.0-1.0)
 # Lower values = more deterministic, higher values = more creative

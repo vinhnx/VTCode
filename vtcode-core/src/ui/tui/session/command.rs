@@ -2,9 +2,7 @@ use super::Session;
 use crate::config::loader::ConfigManager;
 use crate::ui::tui::session::config_palette::ConfigPalette;
 use crate::ui::tui::session::modal::{ModalListState, ModalSearchState, ModalState};
-use crate::ui::tui::types::{
-    InlineListSearchConfig, InlineListSelection,
-};
+use crate::ui::tui::types::{InlineListSearchConfig, InlineListSelection};
 
 use tui_popup::PopupState;
 
@@ -75,8 +73,14 @@ pub(crate) fn show_plan_confirmation_modal(
         },
     ];
 
-
-    show_list_modal(session, "Plan Confirmation".to_string(), lines, items, None, None);
+    show_list_modal(
+        session,
+        "Plan Confirmation".to_string(),
+        lines,
+        items,
+        None,
+        None,
+    );
 }
 
 /// Show diff preview modal for file edit approval

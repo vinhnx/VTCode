@@ -46,7 +46,6 @@ impl Session {
                     list.apply_search(search.query());
                     self.mark_dirty();
                 }
-
             }
             CrosstermEvent::Resize(_, rows) => {
                 self.apply_view_rows(rows);

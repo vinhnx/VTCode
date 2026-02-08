@@ -274,7 +274,6 @@ impl InputManager {
         self.input = Input::new(entry.content);
     }
 
-
     pub fn apply_history_index(&mut self, index: usize) -> bool {
         let Some(entry) = self.history.get(index).cloned() else {
             return false;
