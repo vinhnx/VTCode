@@ -423,6 +423,22 @@ static REGISTRY: Lazy<HashMap<&'static str, ThemeDefinition>> = Lazy::new(|| {
         },
     );
 
+    map.insert(
+        "mono",
+        ThemeDefinition {
+            id: "mono",
+            label: "Mono",
+            palette: ThemePalette {
+                primary_accent: RgbColor(0xFF, 0xFF, 0xFF),   // Pure white
+                background: RgbColor(0x00, 0x00, 0x00),       // Black
+                foreground: RgbColor(0xDB, 0xD7, 0xCA), // Soft light gray (borrowed from vitesse)
+                secondary_accent: RgbColor(0xBB, 0xBB, 0xBB), // Medium gray
+                alert: RgbColor(0xFF, 0xFF, 0xFF),      // High contrast white for alerts
+                logo_accent: RgbColor(0xFF, 0xFF, 0xFF), // White for logo
+            },
+        },
+    );
+
     register_catppuccin_themes(&mut map);
     map
 });
@@ -740,5 +756,37 @@ pub fn suggest_theme_for_terminal() -> &'static str {
     match detect_color_scheme() {
         ColorScheme::Light => "vitesse-light",
         ColorScheme::Dark | ColorScheme::Unknown => DEFAULT_THEME_ID,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_mono_theme_exists() {
+        let result = ensure_theme("mono");
+        assert!(result.is_ok(), "Mono theme should be registered");
+        assert_eq!(result.unwrap(), "Mono");
+    }
+
+    #[test]
+    fn test_mono_theme_contrast() {
+        let result = validate_theme_contrast("mono");
+        // We expect it to be valid, but we check if there are any major contrast issues
+        assert!(result.errors.is_empty(), "Mono theme should have no errors");
+        // Mono themes might have some warnings if grays are close, but pure black/white should be fine.
+        assert!(result.is_valid);
+    }
+
+    #[test]
+    fn test_all_themes_resolvable() {
+        for id in available_themes() {
+            assert!(
+                ensure_theme(id).is_ok(),
+                "Theme {} should be resolvable",
+                id
+            );
+        }
     }
 }

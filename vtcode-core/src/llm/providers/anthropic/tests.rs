@@ -171,7 +171,7 @@ mod validation_tests {
     #[test]
     fn test_validate_effort_rejects_unsupported_models() {
         let request = LLMRequest {
-            messages: vec![crate::llm::provider::Message::user("hi")],
+            messages: vec![crate::llm::provider::Message::user("hi".to_string())],
             model: models::CLAUDE_SONNET_4_5.to_string(),
             effort: Some("medium".to_string()),
             ..Default::default()
@@ -184,7 +184,7 @@ mod validation_tests {
     fn test_validate_effort_max_only_for_opus_4_6() {
         let config = AnthropicConfig::default();
         let request = LLMRequest {
-            messages: vec![crate::llm::provider::Message::user("hi")],
+            messages: vec![crate::llm::provider::Message::user("hi".to_string())],
             model: models::CLAUDE_OPUS_4_5.to_string(),
             effort: Some("max".to_string()),
             ..Default::default()
@@ -192,7 +192,7 @@ mod validation_tests {
         assert!(validate_request(&request, models::anthropic::DEFAULT_MODEL, &config).is_err());
 
         let request = LLMRequest {
-            messages: vec![crate::llm::provider::Message::user("hi")],
+            messages: vec![crate::llm::provider::Message::user("hi".to_string())],
             model: models::CLAUDE_OPUS_4_6.to_string(),
             effort: Some("max".to_string()),
             ..Default::default()

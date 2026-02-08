@@ -52,7 +52,6 @@ pub struct WizardStepState {
     pub notes: tui_input::Input,
     /// Whether notes input is active for the current step
     pub notes_active: bool,
-
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -143,7 +142,6 @@ impl ModalSearchState {
     }
 }
 
-
 impl ModalState {
     pub fn handle_list_key_event(
         &mut self,
@@ -184,7 +182,6 @@ impl ModalState {
                 _ => {}
             }
         }
-
 
         match key.code {
             KeyCode::Up => {
@@ -681,7 +678,6 @@ impl WizardModalState {
                     notes: tui_input::Input::default(),
                     notes_active,
                 }
-
             })
             .collect();
 
@@ -715,7 +711,11 @@ impl WizardModalState {
                     return ModalListKeyResult::Redraw;
                 }
                 KeyCode::Backspace => {
-                    if step.notes.handle(tui_input::InputRequest::DeletePrevChar).is_some() {
+                    if step
+                        .notes
+                        .handle(tui_input::InputRequest::DeletePrevChar)
+                        .is_some()
+                    {
                         return ModalListKeyResult::Redraw;
                     }
                     return ModalListKeyResult::HandledNoRedraw;
@@ -730,7 +730,6 @@ impl WizardModalState {
                 _ => {}
             }
         }
-
 
         // Search handling (if enabled)
         if let Some(search) = self.search.as_mut() {
@@ -775,7 +774,6 @@ impl WizardModalState {
                 }
             }
         }
-
 
         if self.mode == WizardModalMode::MultiStep
             && !modifiers.control
@@ -960,7 +958,6 @@ impl WizardModalState {
             None
         }
     }
-
 
     pub fn notes_active(&self) -> bool {
         self.steps

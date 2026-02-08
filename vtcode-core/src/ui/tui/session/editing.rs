@@ -1,5 +1,3 @@
-use crate::config::constants::ui;
-use crate::ui::tui::session::slash;
 /// Text editing and cursor movement operations for Session
 ///
 /// This module handles all text manipulation and cursor navigation including:
@@ -8,8 +6,9 @@ use crate::ui::tui::session::slash;
 /// - Cursor movement (character, word, line boundaries)
 /// - Input history navigation
 /// - Newline handling with capacity limits
-
 use super::Session;
+use crate::config::constants::ui;
+use crate::ui::tui::session::slash;
 
 impl Session {
     /// Insert a character at the current cursor position
@@ -84,8 +83,6 @@ impl Session {
         slash::update_slash_suggestions(self);
     }
 
-
-
     /// Delete from cursor to start of current line (Command+Backspace on macOS)
     pub(super) fn delete_to_start_of_line(&mut self) {
         let content = self.input_manager.content();
@@ -147,13 +144,11 @@ impl Session {
         slash::update_slash_suggestions(self);
     }
 
-
     /// Move cursor right to the start of the next word
     pub(super) fn move_right_word(&mut self) {
         self.input_manager.move_right_word();
         slash::update_slash_suggestions(self);
     }
-
 
     /// Move cursor to the start of the line
     pub(super) fn move_to_start(&mut self) {

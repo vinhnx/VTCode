@@ -466,7 +466,6 @@ fn render_modal_search(
     // Simple block cursor for now, since we don't have true cursor position rendering here yet
     spans.push(Span::styled("▌".to_owned(), styles.highlight));
 
-
     let block = Block::bordered()
         .title(Span::styled(search.label.clone(), styles.header))
         .border_type(terminal_capabilities::get_border_type())
