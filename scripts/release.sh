@@ -572,9 +572,11 @@ main() {
             # Define the order for publishing based on dependency graph
             # Crates without dependencies should be published first
             # Note: Only crates with publish = true or unset are included here
+            # Note: vtcode-llm, vtcode-tools, vtcode-lmstudio, vtcode-process-hardening, zed-extension
+            # have publish = false and are not included in this list
             local dependency_order=(
                 "vtcode-commons"
-                "vtcode-config" 
+                "vtcode-config"
                 "vtcode-exec-events"
                 "vtcode-markdown-store"
                 "vtcode-indexer"
@@ -593,29 +595,28 @@ main() {
                         print_info "Skipping $crate (publish = false)..."
                         continue
                     fi
-                    
+
                     print_info "Publishing $crate..."
-                    (
-                        cd "$crate"
-                        # Check if this crate version is already published by checking local Cargo.toml vs crates.io
-                        local crate_version=$(grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
-                        
-                        # Attempt to publish the crate
-                        # If it fails due to already being published, that's fine
-                        if ! cargo publish; then
-                            # If publish fails, check if it's because it's already published
-                            if cargo search "$crate" --limit 1 | grep -q "$crate_version"; then
-                                print_info "$crate $crate_version already published, skipping..."
-                            else
-                                # If it's a different error, we should investigate
-                                print_warning "Failed to publish $crate, but it's not already published"
-                            fi
+
+                    # Get version from package section only (more reliable parsing)
+                    local crate_version
+                    crate_version=$(grep -E '^version\s*=\s*"' "$crate/Cargo.toml" | head -1 | sed 's/version\s*=\s*"\([^"]*\)".*/\1/')
+
+                    # Attempt to publish the crate with --no-verify (build already done in Step 1)
+                    # If it fails due to already being published, that's fine
+                    if ! cargo publish -p "$crate" --no-verify; then
+                        # If publish fails, check if it's because it's already published
+                        if cargo search "$crate" --limit 1 2>/dev/null | grep -q "$crate_version"; then
+                            print_info "$crate $crate_version already published, skipping..."
                         else
-                            # Wait a bit for crates.io to register the new version
-                            print_info "Successfully published $crate $crate_version"
-                            sleep 15
+                            # If it's a different error, we should investigate
+                            print_warning "Failed to publish $crate, but it's not already published"
                         fi
-                    )
+                    else
+                        # Wait a bit for crates.io to register the new version
+                        print_info "Successfully published $crate $crate_version"
+                        sleep 15
+                    fi
                 else
                     print_info "Crate directory $crate not found, skipping..."
                 fi
@@ -649,23 +650,24 @@ main() {
                         print_info "Skipping $member (publish = false)..."
                         continue
                     fi
-                    
+
                     print_info "Publishing remaining crate: $member..."
-                    (
-                        cd "$member"
-                        local member_version=$(grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
-                        
-                        if ! cargo publish; then
-                            if cargo search "$member" --limit 1 | grep -q "$member_version"; then
-                                print_info "$member $member_version already published, skipping..."
-                            else
-                                print_warning "Failed to publish $member, but it's not already published"
-                            fi
+
+                    # Get version from package section only (more reliable parsing)
+                    local member_version
+                    member_version=$(grep -E '^version\s*=\s*"' "$member/Cargo.toml" | head -1 | sed 's/version\s*=\s*"\([^"]*\)".*/\1/')
+
+                    # Attempt to publish the crate with --no-verify (build already done in Step 1)
+                    if ! cargo publish -p "$member" --no-verify; then
+                        if cargo search "$member" --limit 1 2>/dev/null | grep -q "$member_version"; then
+                            print_info "$member $member_version already published, skipping..."
                         else
-                            print_info "Successfully published $member $member_version"
-                            sleep 15
+                            print_warning "Failed to publish $member, but it's not already published"
                         fi
-                    )
+                    else
+                        print_info "Successfully published $member $member_version"
+                        sleep 15
+                    fi
                 fi
             done
         fi
