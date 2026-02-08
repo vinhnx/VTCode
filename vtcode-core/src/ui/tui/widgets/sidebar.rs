@@ -240,6 +240,13 @@ fn truncate_string(s: &str, max_width: usize) -> String {
     } else if max_width <= 3 {
         s.chars().take(max_width).collect()
     } else {
-        format!("{}...", &s[..max_width.saturating_sub(3)])
+        let target = max_width.saturating_sub(3);
+        let end = s
+            .char_indices()
+            .map(|(i, _)| i)
+            .filter(|&i| i <= target)
+            .last()
+            .unwrap_or(0);
+        format!("{}...", &s[..end])
     }
 }

@@ -4,22 +4,6 @@ continue with your recommendation, proceed with outcome. don't stop. review over
 
 --
 
---
-
-By default, accesses to container types such as slices and vectors involve bounds checks in Rust. These can affect performance, e.g. within hot loops, though less often than you might expect.
-
-There are several safe ways to change code so that the compiler knows about container lengths and can optimize away bounds checks.
-
-- Replace direct element accesses in a loop by using iteration.
-- Instead of indexing into a `Vec` within a loop, make a slice of the `Vec` before the loop and then index into the slice within the loop.
-- Add assertions on the ranges of index variables.[**Example 1**](https://github.com/rust-random/rand/pull/960/commits/de9dfdd86851032d942eb583d8d438e06085867b),[**Example 2**](https://github.com/image-rs/jpeg-decoder/pull/167/files).
-
-Getting these to work can be tricky. The [Bounds Check Cookbook](https://github.com/Shnatsel/bounds-check-cookbook/) goes into more detail on this topic.
-
-As a last resort, there are the unsafe methods [`get_unchecked`](https://doc.rust-lang.org/std/primitive.slice.html#method.get_unchecked) and [`get_unchecked_mut`](https://doc.rust-lang.org/std/primitive.slice.html#method.get_unchecked_mut).
-
----
-
 [`Iterator::collect`](https://doc.rust-lang.org/std/iter/trait.Iterator.html#method.collect) converts an iterator into a collection such as `Vec`, which typically requires an allocation. You should avoid calling `collect` if the collection is then only iterated over again.
 
 For this reason, it is often better to return an iterator type like `impl Iterator<Item=T>` from a function than a `Vec<T>`. Note that sometimes additional lifetimes are required on these return types, as [this blog post](https://blog.katona.me/2019/12/29/Rust-Lifetimes-and-Iterators/) explains.[**Example**](https://github.com/rust-lang/rust/pull/77990/commits/660d8a6550a126797aa66a417137e39a5639451b).

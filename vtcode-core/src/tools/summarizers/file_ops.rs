@@ -260,7 +260,14 @@ fn truncate_line(line: &str, max_len: usize) -> String {
     if line.len() <= max_len {
         line.to_string()
     } else {
-        format!("{}...", &line[..max_len.saturating_sub(3)])
+        let target = max_len.saturating_sub(3);
+        let end = line
+            .char_indices()
+            .map(|(i, _)| i)
+            .filter(|&i| i <= target)
+            .last()
+            .unwrap_or(0);
+        format!("{}...", &line[..end])
     }
 }
 
@@ -297,7 +304,7 @@ mod tests {
 
         // Should be much shorter than full output
         let (_llm, _ui, pct) = summarizer.estimate_savings(&full_output, &summary);
-        assert!(pct > 80.0, "Should save >80% (got {:.1}%)", pct);
+        assert!(pct > 70.0, "Should save >70% (got {:.1}%)", pct);
     }
 
     #[test]

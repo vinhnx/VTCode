@@ -106,9 +106,9 @@ impl PatternEngine {
 
         let mut predecessors: HashMap<String, usize> = HashMap::new();
 
-        for i in 0..recent.len() - 1 {
-            if recent[i].tool_name == *last_tool {
-                let pred = &recent[i + 1].tool_name;
+        for w in recent.windows(2) {
+            if w[0].tool_name == *last_tool {
+                let pred = &w[1].tool_name;
                 *predecessors.entry(pred.clone()).or_insert(0) += 1;
             }
         }
@@ -165,6 +165,24 @@ impl PatternEngine {
             };
         }
 
+        // Check for refinement (improving quality) or degradation
+        let qualities: Vec<f32> = events.iter().map(|e| e.quality_score).collect();
+        if qualities.len() >= 3 {
+            // events[0] is newest, so w[0] is newer than w[1]
+            let is_improving = qualities.windows(2).all(|w| w[0] > w[1] + 0.05);
+
+            if is_improving {
+                return DetectedPattern::Refinement;
+            }
+
+            // Check for degradation
+            let is_degrading = qualities.windows(2).all(|w| w[0] < w[1] - 0.05);
+
+            if is_degrading {
+                return DetectedPattern::Degradation;
+            }
+        }
+
         // Check for near loops (fuzzy matching)
         let same_tool = events.iter().all(|e| e.tool_name == first.tool_name);
         if same_tool && events.len() >= 3 {
@@ -175,23 +193,6 @@ impl PatternEngine {
 
             if similarities.iter().all(|&s| s > 0.85) {
                 return DetectedPattern::NearLoop;
-            }
-        }
-
-        // Check for refinement (improving quality)
-        let qualities: Vec<f32> = events.iter().map(|e| e.quality_score).collect();
-        if qualities.len() >= 3 {
-            let is_improving = qualities.windows(2).all(|w| w[1] > w[0] + 0.05);
-
-            if is_improving {
-                return DetectedPattern::Refinement;
-            }
-
-            // Check for degradation
-            let is_degrading = qualities.windows(2).all(|w| w[1] < w[0] - 0.05);
-
-            if is_degrading {
-                return DetectedPattern::Degradation;
             }
         }
 

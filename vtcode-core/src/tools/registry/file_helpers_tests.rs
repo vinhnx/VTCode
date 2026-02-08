@@ -27,8 +27,7 @@ mod edit_file_tests {
             return Err("old_str cannot be empty".to_string());
         }
 
-        for i in 0..=(content_lines.len().saturating_sub(old_lines.len())) {
-            let window = &content_lines[i..i + old_lines.len()];
+        for (i, window) in content_lines.windows(old_lines.len()).enumerate() {
             // Check if lines match when trimmed
             if window
                 .iter()
