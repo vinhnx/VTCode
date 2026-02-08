@@ -80,7 +80,7 @@ mod tests {
         let file_path = temp_dir.path().join("test.txt");
 
         // Create a test file with content
-        let mut temp_file = std::fs::File::create(&file_path).unwrap();
+        let mut temp_file = std::io::BufWriter::new(std::fs::File::create(&file_path).unwrap());
         writeln!(temp_file, "This is test file content").unwrap();
         temp_file.flush().unwrap();
 
@@ -124,7 +124,7 @@ mod tests {
         let file_path = temp_dir.path().join("file with spaces.txt");
 
         // Create a test file with content
-        let mut temp_file = std::fs::File::create(&file_path).unwrap();
+        let mut temp_file = std::io::BufWriter::new(std::fs::File::create(&file_path).unwrap());
         writeln!(temp_file, "Content with spaces in filename").unwrap();
         temp_file.flush().unwrap();
 

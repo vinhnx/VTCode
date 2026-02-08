@@ -47,7 +47,7 @@ fn normalize_args_for_detection(tool_name: &str, args: &serde_json::Value) -> se
 
 #[derive(Debug, Clone)]
 pub struct ToolCallRecord {
-    pub tool_name: &'static str, // Use &'static str for known tool names to avoid allocations
+    pub tool_name: String,
     pub args_hash: u64,
     pub timestamp: Instant,
 }
@@ -124,14 +124,14 @@ impl LoopDetector {
         }
 
         let record = ToolCallRecord {
-            tool_name: Box::leak(tool_name.to_string().into_boxed_str()), // Leak for &'static str
+            tool_name: tool_name.to_string(),
             args_hash,
             timestamp: Instant::now(),
         };
 
         if self.recent_calls.len() >= DETECTION_WINDOW
             && let Some(old) = self.recent_calls.pop_front()
-            && let Some(count) = self.tool_counts.get_mut(old.tool_name)
+            && let Some(count) = self.tool_counts.get_mut(&old.tool_name)
         {
             *count = count.saturating_sub(1);
         }
@@ -327,7 +327,7 @@ impl LoopDetector {
         let history: Vec<(&str, u64)> = self
             .recent_calls
             .iter()
-            .map(|r| (r.tool_name, r.args_hash))
+            .map(|r| (r.tool_name.as_str(), r.args_hash))
             .collect();
 
         let len = history.len();

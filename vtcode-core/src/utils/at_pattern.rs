@@ -578,7 +578,7 @@ mod tests {
         let image_path = temp_dir.path().join("test.png");
 
         // Create a simple PNG file for testing
-        let mut temp_file = std::fs::File::create(&image_path).unwrap();
+        let mut temp_file = std::io::BufWriter::new(std::fs::File::create(&image_path).unwrap());
         // Write a minimal PNG header (not a real image, but valid for testing)
         temp_file
             .write_all(&[
@@ -610,7 +610,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let image_path = temp_dir.path().join("absolute.png");
 
-        let mut temp_file = std::fs::File::create(&image_path).unwrap();
+        let mut temp_file = std::io::BufWriter::new(std::fs::File::create(&image_path).unwrap());
         temp_file
             .write_all(&[
                 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, // PNG header
@@ -637,7 +637,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let image_path = temp_dir.path().join("relative.png");
 
-        let mut temp_file = std::fs::File::create(&image_path).unwrap();
+        let mut temp_file = std::io::BufWriter::new(std::fs::File::create(&image_path).unwrap());
         temp_file
             .write_all(&[
                 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, // PNG header
@@ -664,7 +664,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let image_path = temp_dir.path().join("with space.png");
 
-        let mut temp_file = std::fs::File::create(&image_path).unwrap();
+        let mut temp_file = std::io::BufWriter::new(std::fs::File::create(&image_path).unwrap());
         temp_file
             .write_all(&[
                 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, // PNG header
@@ -693,7 +693,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let image_path = temp_dir.path().join("escaped space.png");
 
-        let mut temp_file = std::fs::File::create(&image_path).unwrap();
+        let mut temp_file = std::io::BufWriter::new(std::fs::File::create(&image_path).unwrap());
         temp_file
             .write_all(&[
                 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, // PNG header
@@ -723,7 +723,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let image_path = temp_dir.path().join("unescaped space.png");
 
-        let mut temp_file = std::fs::File::create(&image_path).unwrap();
+        let mut temp_file = std::io::BufWriter::new(std::fs::File::create(&image_path).unwrap());
         temp_file
             .write_all(&[
                 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, // PNG header
@@ -752,7 +752,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let image_path = temp_dir.path().join(format!("narrow\u{202F}space.png"));
 
-        let mut temp_file = std::fs::File::create(&image_path).unwrap();
+        let mut temp_file = std::io::BufWriter::new(std::fs::File::create(&image_path).unwrap());
         temp_file
             .write_all(&[
                 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, // PNG header
@@ -781,7 +781,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let image_path = temp_dir.path().join("at-absolute.png");
 
-        let mut temp_file = std::fs::File::create(&image_path).unwrap();
+        let mut temp_file = std::io::BufWriter::new(std::fs::File::create(&image_path).unwrap());
         temp_file
             .write_all(&[
                 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, // PNG header
