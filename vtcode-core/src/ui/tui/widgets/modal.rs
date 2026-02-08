@@ -510,13 +510,15 @@ impl<'a> ModalWidget<'a> {
 
     fn render_modal_search(&self, area: Rect, buf: &mut Buffer, search_state: &ModalSearchState) {
         let mut spans = Vec::new();
-        let query = search_state.query();
-        if query.is_empty() {
+        if search_state.query.is_empty() {
             if let Some(placeholder) = &search_state.placeholder {
                 spans.push(Span::styled(placeholder.clone(), self.styles.detail));
             }
         } else {
-            spans.push(Span::styled(query.to_string(), self.styles.selectable));
+            spans.push(Span::styled(
+                search_state.query.clone(),
+                self.styles.selectable,
+            ));
         }
         spans.push(Span::styled("▌".to_owned(), self.styles.highlight));
 
