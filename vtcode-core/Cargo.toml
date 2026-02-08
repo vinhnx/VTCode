@@ -115,6 +115,8 @@ ratatui = { version = "0.30", default-features = false, features = [
     "unstable-widget-ref",
 ] }
 tui-popup = "0.7"
+tui-input = "0.15.0"
+
 
 perg = "0.8.0"
 nucleo-matcher = "0.3"

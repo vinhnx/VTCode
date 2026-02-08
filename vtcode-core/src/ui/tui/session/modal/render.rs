@@ -455,14 +455,17 @@ fn render_modal_search(
     }
 
     let mut spans = Vec::new();
-    if search.query.is_empty() {
+    let query = search.query();
+    if query.is_empty() {
         if let Some(placeholder) = &search.placeholder {
             spans.push(Span::styled(placeholder.clone(), styles.detail));
         }
     } else {
-        spans.push(Span::styled(search.query.clone(), styles.selectable));
+        spans.push(Span::styled(query.to_owned(), styles.selectable));
     }
+    // Simple block cursor for now, since we don't have true cursor position rendering here yet
     spans.push(Span::styled("▌".to_owned(), styles.highlight));
+
 
     let block = Block::bordered()
         .title(Span::styled(search.label.clone(), styles.header))
