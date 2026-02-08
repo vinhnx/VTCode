@@ -89,17 +89,22 @@ pub async fn handle_ask_command(
                 "model": response.model,
             }
         });
-        println!("{}", serde_json::to_string_pretty(&output)?);
+        use std::io::Write;
+        let mut stdout = std::io::stdout().lock();
+        serde_json::to_writer_pretty(&mut stdout, &output)?;
+        writeln!(stdout)?;
     } else {
+        use std::io::Write;
+        let mut stdout = std::io::stdout().lock();
         if is_pipe_output() {
             if let Some(code_only) = extract_code_only(response.content_text()) {
-                print!("{code_only}");
+                write!(stdout, "{code_only}")?;
             } else {
-                println!("{}", response.content_text());
+                writeln!(stdout, "{}", response.content_text())?;
             }
         } else {
             // Print the response content directly (default behavior)
-            println!("{}", response.content_text());
+            writeln!(stdout, "{}", response.content_text())?;
         }
     }
 

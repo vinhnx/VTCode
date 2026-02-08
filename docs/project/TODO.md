@@ -4,11 +4,6 @@ continue with your recommendation, proceed with outcome. don't stop. review over
 
 --
 
-
----
-
----
-
 --
 
 By default, accesses to container types such as slices and vectors involve bounds checks in Rust. These can affect performance, e.g. within hot loops, though less often than you might expect.
