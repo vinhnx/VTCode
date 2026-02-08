@@ -928,7 +928,6 @@ pub fn open_config_palette(session: &mut Session) {
             push_line(session, InlineMessageKind::Error, segments);
         }
     }
->>>>>>> parent of 69a24ed3 (feat: integrate `tui_input` crate for enhanced input management and modal search functionality)
 }
 
 /// Show diff preview modal for file edit approval

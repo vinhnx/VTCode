@@ -47,18 +47,15 @@ impl LayoutMode {
     }
 
     /// Get the footer height for this mode
-    /// Note: Footer is only shown in Wide mode to preserve transcript space
+    /// Footer is disabled in all modes to avoid duplicating header info
     pub fn footer_height(self) -> u16 {
-        match self {
-            LayoutMode::Compact => 0,  // No footer in compact mode
-            LayoutMode::Standard => 0, // No footer - preserve transcript space
-            LayoutMode::Wide => 2,     // Show footer only in wide mode
-        }
+        0
     }
 
     /// Check if footer should be shown
+    /// Footer is disabled to avoid duplicating the header status bar
     pub fn show_footer(self) -> bool {
-        matches!(self, LayoutMode::Wide)
+        false
     }
 
     /// Get the maximum header height as percentage of viewport
@@ -109,17 +106,17 @@ mod tests {
         assert!(!LayoutMode::Compact.allow_sidebar());
         assert_eq!(LayoutMode::Compact.footer_height(), 0);
 
-        // Standard: borders but no footer (preserves transcript space)
+        // Standard: borders but no footer
         assert!(LayoutMode::Standard.show_borders());
         assert!(!LayoutMode::Standard.show_footer());
         assert!(!LayoutMode::Standard.allow_sidebar());
         assert_eq!(LayoutMode::Standard.footer_height(), 0);
 
-        // Wide: full features
+        // Wide: borders + sidebar, but no footer (header already shows status)
         assert!(LayoutMode::Wide.show_borders());
-        assert!(LayoutMode::Wide.show_footer());
+        assert!(!LayoutMode::Wide.show_footer());
         assert!(LayoutMode::Wide.allow_sidebar());
-        assert_eq!(LayoutMode::Wide.footer_height(), 2);
+        assert_eq!(LayoutMode::Wide.footer_height(), 0);
     }
 
     #[test]
