@@ -4,8 +4,6 @@
 /// and command history navigation.
 use std::time::Instant;
 
-use tui_input::{Input, InputRequest};
-
 use crate::llm::provider::ContentPart;
 
 #[derive(Clone, Debug)]
@@ -49,8 +47,10 @@ impl InputHistoryEntry {
 /// Manages user input state including text, cursor, and history
 #[derive(Clone, Debug)]
 pub struct InputManager {
-    /// Input buffer with cursor support
-    input: Input,
+    /// The input text content
+    content: String,
+    /// Current cursor position in the input
+    cursor: usize,
     /// Non-text input elements (e.g. image attachments)
     attachments: Vec<ContentPart>,
     /// Command history entries
@@ -68,7 +68,8 @@ impl InputManager {
     /// Creates a new input manager
     pub fn new() -> Self {
         Self {
-            input: Input::default(),
+            content: String::new(),
+            cursor: 0,
             attachments: Vec::new(),
             history: Vec::new(),
             history_index: None,
@@ -79,91 +80,97 @@ impl InputManager {
 
     /// Returns the current input content
     pub fn content(&self) -> &str {
-        self.input.value()
+        &self.content
     }
 
     /// Sets the input content and resets cursor to end
     pub fn set_content(&mut self, content: String) {
-        self.input = Input::new(content);
+        self.content = content.clone();
+        self.cursor = content.len();
         self.reset_history_navigation();
     }
 
     /// Returns the current cursor position
     pub fn cursor(&self) -> usize {
-        self.input.cursor()
+        self.cursor
     }
 
     /// Sets the cursor position (clamped to valid range)
     pub fn set_cursor(&mut self, pos: usize) {
-        let _ = self.input.handle(InputRequest::SetCursor(pos));
+        self.cursor = pos.min(self.content.len());
     }
 
     /// Moves cursor left by one character (UTF-8 aware)
     pub fn move_cursor_left(&mut self) {
-        let _ = self.input.handle(InputRequest::GoToPrevChar);
+        if self.cursor > 0 {
+            let mut pos = self.cursor - 1;
+            while pos > 0 && !self.content.is_char_boundary(pos) {
+                pos -= 1;
+            }
+            self.cursor = pos;
+        }
     }
 
     /// Moves cursor right by one character (UTF-8 aware)
     pub fn move_cursor_right(&mut self) {
-        let _ = self.input.handle(InputRequest::GoToNextChar);
+        if self.cursor < self.content.len() {
+            let mut pos = self.cursor + 1;
+            while pos < self.content.len() && !self.content.is_char_boundary(pos) {
+                pos += 1;
+            }
+            self.cursor = pos;
+        }
     }
 
     /// Moves cursor to the beginning
     pub fn move_cursor_to_start(&mut self) {
-        let _ = self.input.handle(InputRequest::GoToStart);
+        self.cursor = 0;
     }
 
     /// Moves cursor to the end
     pub fn move_cursor_to_end(&mut self) {
-        let _ = self.input.handle(InputRequest::GoToEnd);
+        self.cursor = self.content.len();
     }
 
     /// Inserts a single character at the current cursor position
     pub fn insert_char(&mut self, ch: char) {
-        let _ = self.input.handle(InputRequest::InsertChar(ch));
+        self.content.insert(self.cursor, ch);
+        self.cursor += ch.len_utf8();
     }
 
     /// Inserts text at the current cursor position
     pub fn insert_text(&mut self, text: &str) {
-        for ch in text.chars() {
-            let _ = self.input.handle(InputRequest::InsertChar(ch));
-        }
+        self.content.insert_str(self.cursor, text);
+        self.cursor += text.len();
     }
 
     /// Deletes the character before the cursor
     pub fn backspace(&mut self) {
-        let _ = self.input.handle(InputRequest::DeletePrevChar);
+        if self.cursor > 0 {
+            let mut pos = self.cursor - 1;
+            while pos > 0 && !self.content.is_char_boundary(pos) {
+                pos -= 1;
+            }
+            self.content.drain(pos..self.cursor);
+            self.cursor = pos;
+        }
     }
 
     /// Deletes the character at the cursor
     pub fn delete(&mut self) {
-        let _ = self.input.handle(InputRequest::DeleteNextChar);
-    }
-
-    /// Moves cursor left by one word
-    pub fn move_left_word(&mut self) {
-        let _ = self.input.handle(InputRequest::GoToPrevWord);
-    }
-
-    /// Moves cursor right by one word
-    pub fn move_right_word(&mut self) {
-        let _ = self.input.handle(InputRequest::GoToNextWord);
-    }
-
-    /// Deletes the word before the cursor
-    pub fn delete_word_backward(&mut self) {
-        let _ = self.input.handle(InputRequest::DeletePrevWord);
-    }
-
-    /// Deletes the word at the cursor
-    pub fn delete_word_forward(&mut self) {
-        let _ = self.input.handle(InputRequest::DeleteNextWord);
+        if self.cursor < self.content.len() {
+            let mut end = self.cursor + 1;
+            while end < self.content.len() && !self.content.is_char_boundary(end) {
+                end += 1;
+            }
+            self.content.drain(self.cursor..end);
+        }
     }
 
     /// Clears all input
-
     pub fn clear(&mut self) {
-        self.input.reset();
+        self.content.clear();
+        self.cursor = 0;
         self.attachments.clear();
         self.reset_history_navigation();
     }
@@ -264,14 +271,15 @@ impl InputManager {
 
     pub fn current_history_entry(&self) -> InputHistoryEntry {
         InputHistoryEntry::from_content_and_attachments(
-            self.input.value().to_string(),
+            self.content.clone(),
             self.attachments.clone(),
         )
     }
 
     pub fn apply_history_entry(&mut self, entry: InputHistoryEntry) {
+        self.content = entry.content.clone();
+        self.cursor = self.content.len();
         self.attachments = entry.attachment_elements();
-        self.input = Input::new(entry.content);
     }
 
     pub fn apply_history_index(&mut self, index: usize) -> bool {

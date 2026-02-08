@@ -49,7 +49,7 @@ pub struct WizardStepState {
     /// The selected answer for this step
     pub answer: Option<InlineListSelection>,
     /// Optional notes for the current step (free text)
-    pub notes: tui_input::Input,
+    pub notes: String,
     /// Whether notes input is active for the current step
     pub notes_active: bool,
 }
@@ -96,7 +96,7 @@ pub struct ModalListItem {
 pub struct ModalSearchState {
     pub label: String,
     pub placeholder: Option<String>,
-    pub input: tui_input::Input,
+    pub query: String,
 }
 
 impl From<InlineListSearchConfig> for ModalSearchState {
@@ -104,7 +104,7 @@ impl From<InlineListSearchConfig> for ModalSearchState {
         Self {
             label: config.label,
             placeholder: config.placeholder,
-            input: tui_input::Input::default(),
+            query: String::new(),
         }
     }
 }
@@ -115,30 +115,27 @@ impl ModalSearchState {
             if matches!(ch, '\n' | '\r') {
                 continue;
             }
-            let _ = self.input.handle(tui_input::InputRequest::InsertChar(ch));
+            self.query.push(ch);
         }
     }
 
     pub fn push_char(&mut self, ch: char) {
-        let _ = self.input.handle(tui_input::InputRequest::InsertChar(ch));
+        self.query.push(ch);
     }
 
     pub fn backspace(&mut self) -> bool {
-        self.input
-            .handle(tui_input::InputRequest::DeletePrevChar)
-            .is_some()
+        if self.query.pop().is_some() {
+            return true;
+        }
+        false
     }
 
     pub fn clear(&mut self) -> bool {
-        if self.input.value().is_empty() {
+        if self.query.is_empty() {
             return false;
         }
-        self.input.reset();
+        self.query.clear();
         true
-    }
-
-    pub fn query(&self) -> &str {
-        self.input.value()
     }
 }
 
@@ -156,26 +153,26 @@ impl ModalState {
             match key.code {
                 KeyCode::Char(ch) if !modifiers.control && !modifiers.alt && !modifiers.command => {
                     search.push_char(ch);
-                    list.apply_search(search.query());
+                    list.apply_search(&search.query);
                     return ModalListKeyResult::Redraw;
                 }
                 KeyCode::Backspace => {
                     if search.backspace() {
-                        list.apply_search(search.query());
+                        list.apply_search(&search.query);
                         return ModalListKeyResult::Redraw;
                     }
                     return ModalListKeyResult::HandledNoRedraw;
                 }
                 KeyCode::Delete => {
                     if search.clear() {
-                        list.apply_search(search.query());
+                        list.apply_search(&search.query);
                         return ModalListKeyResult::Redraw;
                     }
                     return ModalListKeyResult::HandledNoRedraw;
                 }
                 KeyCode::Esc => {
                     if search.clear() {
-                        list.apply_search(search.query());
+                        list.apply_search(&search.query);
                         return ModalListKeyResult::Redraw;
                     }
                 }
@@ -675,7 +672,7 @@ impl WizardModalState {
                     list: ModalListState::new(step.items, step.answer.clone()),
                     completed: step.completed,
                     answer: step.answer,
-                    notes: tui_input::Input::default(),
+                    notes: String::new(),
                     notes_active,
                 }
             })
@@ -707,22 +704,18 @@ impl WizardModalState {
         {
             match key.code {
                 KeyCode::Char(ch) if !modifiers.control && !modifiers.alt && !modifiers.command => {
-                    let _ = step.notes.handle(tui_input::InputRequest::InsertChar(ch));
+                    step.notes.push(ch);
                     return ModalListKeyResult::Redraw;
                 }
                 KeyCode::Backspace => {
-                    if step
-                        .notes
-                        .handle(tui_input::InputRequest::DeletePrevChar)
-                        .is_some()
-                    {
+                    if step.notes.pop().is_some() {
                         return ModalListKeyResult::Redraw;
                     }
                     return ModalListKeyResult::HandledNoRedraw;
                 }
                 KeyCode::Tab | KeyCode::Esc => {
-                    if !step.notes.value().is_empty() {
-                        step.notes.reset();
+                    if !step.notes.is_empty() {
+                        step.notes.clear();
                     }
                     step.notes_active = false;
                     return ModalListKeyResult::Redraw;
@@ -739,34 +732,34 @@ impl WizardModalState {
                         if !modifiers.control && !modifiers.alt && !modifiers.command =>
                     {
                         search.push_char(ch);
-                        step.list.apply_search(search.query());
+                        step.list.apply_search(&search.query);
                         return ModalListKeyResult::Redraw;
                     }
                     KeyCode::Backspace => {
                         if search.backspace() {
-                            step.list.apply_search(search.query());
+                            step.list.apply_search(&search.query);
                             return ModalListKeyResult::Redraw;
                         }
                         return ModalListKeyResult::HandledNoRedraw;
                     }
                     KeyCode::Delete => {
                         if search.clear() {
-                            step.list.apply_search(search.query());
+                            step.list.apply_search(&search.query);
                             return ModalListKeyResult::Redraw;
                         }
                         return ModalListKeyResult::HandledNoRedraw;
                     }
                     KeyCode::Tab => {
-                        if let Some(best_match) = step.list.get_best_matching_item(search.query()) {
-                            search.input = tui_input::Input::new(best_match);
-                            step.list.apply_search(search.query());
+                        if let Some(best_match) = step.list.get_best_matching_item(&search.query) {
+                            search.query = best_match;
+                            step.list.apply_search(&search.query);
                             return ModalListKeyResult::Redraw;
                         }
                         return ModalListKeyResult::HandledNoRedraw;
                     }
                     KeyCode::Esc => {
                         if search.clear() {
-                            step.list.apply_search(search.query());
+                            step.list.apply_search(&search.query);
                             return ModalListKeyResult::Redraw;
                         }
                     }
@@ -899,7 +892,7 @@ impl WizardModalState {
                     selected,
                     other,
                 } => {
-                    let notes = step.notes.value().to_string();
+                    let notes = step.notes.clone();
                     let next_other = if other.is_some() {
                         Some(notes)
                     } else if notes.is_empty() {
@@ -907,7 +900,6 @@ impl WizardModalState {
                     } else {
                         Some(notes)
                     };
-
                     InlineListSelection::RequestUserInputAnswer {
                         question_id,
                         selected,
@@ -952,8 +944,8 @@ impl WizardModalState {
 
     pub fn notes_line(&self) -> Option<String> {
         let step = self.steps.get(self.current_step)?;
-        if step.notes_active || !step.notes.value().is_empty() {
-            Some(format!("› {}", step.notes.value()))
+        if step.notes_active || !step.notes.is_empty() {
+            Some(format!("› {}", step.notes))
         } else {
             None
         }

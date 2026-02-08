@@ -335,7 +335,7 @@ impl DiffPreviewState {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct InlineListItem {
     pub title: String,
     pub subtitle: Option<String>,
