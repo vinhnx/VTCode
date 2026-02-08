@@ -167,6 +167,22 @@ impl InputManager {
         }
     }
 
+    /// Deletes the word ahead of the cursor
+    pub fn delete_word_forward(&mut self) {
+        if self.cursor >= self.content.len() {
+            return;
+        }
+        let rest = &self.content[self.cursor..];
+        let end_offset = rest
+            .char_indices()
+            .skip_while(|(_, c)| !c.is_alphanumeric())
+            .skip_while(|(_, c)| c.is_alphanumeric())
+            .map(|(i, _)| i)
+            .next()
+            .unwrap_or(rest.len());
+        self.content.drain(self.cursor..self.cursor + end_offset);
+    }
+
     /// Clears all input
     pub fn clear(&mut self) {
         self.content.clear();
