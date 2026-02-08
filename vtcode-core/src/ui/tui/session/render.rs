@@ -20,7 +20,6 @@ use super::{
         modal_content_width, render_modal_body, render_wizard_modal_body,
     },
     prompt_palette::PromptPalette,
-    styling::normalize_tool_name as normalize_tool_name_label,
     text_utils,
 };
 use crate::config::constants::ui;
@@ -843,12 +842,6 @@ pub(super) fn render_tool_segments(session: &Session, line: &MessageLine) -> Vec
 #[allow(dead_code)]
 fn simplify_tool_display(text: &str) -> String {
     text_utils::simplify_tool_display(text)
-}
-
-/// Normalize tool names to group similar tools together
-#[allow(dead_code)]
-fn normalize_tool_name(_session: &Session, tool_name: &str) -> String {
-    normalize_tool_name_label(tool_name).to_string()
 }
 
 #[allow(dead_code)]

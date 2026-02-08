@@ -8,6 +8,8 @@ use std::path::{Path, PathBuf};
 
 use tokio::fs;
 
+use crate::utils::path::resolve_workspace_path;
+
 use super::{PluginError, PluginResult};
 
 /// Plugin cache manager
@@ -105,13 +107,7 @@ impl PluginCache {
     fn is_valid_plugin_subdirectory(&self, path: &Path) -> bool {
         // For security, we only allow subdirectories that are within the plugin directory
         // This prevents path traversal attacks
-        if let Ok(canonical_path) = path.canonicalize() {
-            if let Ok(cache_canonical) = self.cache_dir.canonicalize() {
-                return canonical_path.starts_with(cache_canonical);
-            }
-        }
-        // If we can't canonicalize, be conservative and return false
-        false
+        resolve_workspace_path(&self.cache_dir, path).is_ok()
     }
 
     /// Get cached plugin path
