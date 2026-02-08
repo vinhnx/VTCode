@@ -60,20 +60,32 @@ impl Session {
         frame.render_widget(paragraph, area);
     }
 
-    pub(crate) fn header_lines(&self) -> Vec<Line<'static>> {
-        vec![self.header_compact_line()]
+    pub(crate) fn header_lines(&mut self) -> Vec<Line<'static>> {
+        if let Some(cached) = &self.header_lines_cache {
+            return cached.clone();
+        }
+
+        let lines = vec![self.header_compact_line()];
+        self.header_lines_cache = Some(lines.clone());
+        lines
     }
 
-    pub(crate) fn header_height_from_lines(&self, width: u16, lines: &[Line<'static>]) -> u16 {
+    pub(crate) fn header_height_from_lines(&mut self, width: u16, lines: &[Line<'static>]) -> u16 {
         if width == 0 {
             return self.header_rows.max(ui::INLINE_HEADER_HEIGHT);
+        }
+
+        if let Some(&height) = self.header_height_cache.get(&width) {
+            return height;
         }
 
         let paragraph = self.build_header_paragraph(lines);
         let measured = paragraph.line_count(width);
         let resolved = u16::try_from(measured).unwrap_or(u16::MAX);
         // Limit to max 3 lines to accommodate suggestions
-        resolved.clamp(ui::INLINE_HEADER_HEIGHT, 3)
+        let resolved = resolved.clamp(ui::INLINE_HEADER_HEIGHT, 3);
+        self.header_height_cache.insert(width, resolved);
+        resolved
     }
 
     pub(crate) fn build_header_paragraph(&self, lines: &[Line<'static>]) -> Paragraph<'static> {
@@ -89,7 +101,7 @@ impl Session {
     }
 
     #[cfg(test)]
-    pub(super) fn header_height_for_width(&self, width: u16) -> u16 {
+    pub(super) fn header_height_for_width(&mut self, width: u16) -> u16 {
         let lines = self.header_lines();
         self.header_height_from_lines(width, &lines)
     }
@@ -542,7 +554,12 @@ impl Session {
             return text.to_owned();
         }
 
+        // Optimization: return early if string is short (already checked above with grapheme count)
+        // This is safe because count() <= max means it doesn't need truncation.
+
         let mut truncated = String::new();
+        // pre-allocate capacity
+        truncated.reserve(text.len().min(max * 4)); 
         for grapheme in text.graphemes(true).take(max.saturating_sub(1)) {
             truncated.push_str(grapheme);
         }

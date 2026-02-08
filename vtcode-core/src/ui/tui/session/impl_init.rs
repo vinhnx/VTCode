@@ -170,6 +170,11 @@ impl Session {
 
             // --- Diff Preview Modal ---
             diff_preview: None,
+
+            // --- Performance Caching ---
+            header_lines_cache: None,
+            header_height_cache: std::collections::HashMap::new(),
+            queued_inputs_preview_cache: None,
         };
         session.ensure_prompt_style_color();
         session

@@ -58,6 +58,21 @@ impl Session {
     /// Mark the session as needing a redraw
     pub fn mark_dirty(&mut self) {
         self.needs_redraw = true;
+        self.header_lines_cache = None;
+        self.queued_inputs_preview_cache = None;
+    }
+
+    /// Invalidate only the header cache (e.g. when provider/model changes)
+    pub fn invalidate_header_cache(&mut self) {
+        self.header_lines_cache = None;
+        self.header_height_cache.clear();
+        self.mark_dirty();
+    }
+
+    /// Invalidate only the sidebar cache (e.g. when queue changes)
+    pub fn invalidate_sidebar_cache(&mut self) {
+        self.queued_inputs_preview_cache = None;
+        self.mark_dirty();
     }
 
     pub(crate) fn set_transcript_area(&mut self, area: Option<Rect>) {
