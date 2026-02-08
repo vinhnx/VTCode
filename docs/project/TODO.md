@@ -4,16 +4,6 @@ continue with your recommendation, proceed with outcome. don't stop. review over
 
 --
 
-check and fix duplicated status line
-
-```
-iTerm2 | main*                                                                                                                                                                 MiniMaxAI/MiniMax-M2.1:novita | (low)
-? help • / command • @ file • # prompt
-
- Type your message (@files, /commands, ctrl+r: search, Shift+Tab: mode, escape: cancel, tab: queue)
-
-iTerm2 main*                                                                                                                                                            ↕ 100% MiniMaxAI/MiniMax-M2.1:novita | (low)
-```
 
 ---
 
