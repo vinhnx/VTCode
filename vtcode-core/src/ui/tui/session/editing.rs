@@ -129,7 +129,7 @@ impl Session {
         }
     }
 
-    /// Delete the word at the cursor
+    #[allow(dead_code)]
     pub(super) fn delete_word_forward(&mut self) {
         self.input_manager.delete_word_forward();
         self.input_compact_mode = self.input_compact_placeholder().is_some();
