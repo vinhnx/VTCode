@@ -1,6 +1,8 @@
 use super::*;
 use ratatui::crossterm::event::{KeyEventKind, KeyModifiers, MouseEvent, MouseEventKind};
+use std::sync::Arc;
 
+use crate::ui::tui::InlineSegment;
 use crate::ui::tui::session::modal::{ModalKeyModifiers, ModalListKeyResult};
 
 #[allow(dead_code)]
@@ -340,6 +342,10 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                 return None;
             }
 
+            if handle_running_slash_command_block(session) {
+                return None;
+            }
+
             // Check for backslash + Enter quick escape (insert newline without submitting)
             if session.input_manager.content().ends_with('\\') {
                 // Remove the backslash and insert a newline
@@ -388,6 +394,10 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
         }
         KeyCode::Tab => {
             if !session.input_enabled {
+                return None;
+            }
+
+            if handle_running_slash_command_block(session) {
                 return None;
             }
 
@@ -546,6 +556,42 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
             None
         }
         _ => None,
+    }
+}
+
+fn handle_running_slash_command_block(session: &mut Session) -> bool {
+    if !session.is_running_activity() {
+        return false;
+    }
+
+    let Some(command_name) = extract_slash_command_name(session.input_manager.content()) else {
+        return false;
+    };
+
+    let message = format!(
+        "'/{}' is disabled while a task is in progress.",
+        command_name
+    );
+    session.push_line(
+        InlineMessageKind::Warning,
+        vec![InlineSegment {
+            text: message,
+            style: Arc::new(InlineTextStyle::default()),
+        }],
+    );
+    session.transcript_content_changed = true;
+    session.mark_dirty();
+    true
+}
+
+fn extract_slash_command_name(input: &str) -> Option<&str> {
+    let trimmed = input.trim_start();
+    let command_input = trimmed.strip_prefix('/')?;
+    let command = command_input.split_whitespace().next()?;
+    if command.is_empty() {
+        None
+    } else {
+        Some(command)
     }
 }
 

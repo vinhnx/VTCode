@@ -12,12 +12,6 @@ implement chat input textview keyboard navigation between block of text, for exa
 
 ---
 
-show warnings when task is running
-
-■ '/{task}' is disabled while a task is in progress.
-
----
-
 --
 
 ## Recent Code-Level Optimizations (Feb 2026)

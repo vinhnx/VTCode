@@ -97,7 +97,8 @@ impl Session {
         let left = self.input_status_left.as_deref().unwrap_or("");
         let running_status = left.contains("Running command:")
             || left.contains("Running tool:")
-            || left.contains("Running:");
+            || left.contains("Running:")
+            || status_requires_shimmer(left);
         let active_pty = self
             .active_pty_sessions
             .as_ref()
