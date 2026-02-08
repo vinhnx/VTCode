@@ -9,6 +9,17 @@ use crate::ui::tui::{
 
 use super::message::MessageLine;
 
+pub fn normalize_tool_name(tool_name: &str) -> &'static str {
+    match tool_name.to_lowercase().as_str() {
+        "grep" | "rg" | "ripgrep" | "grep_file" | "search" | "find" | "ag" => "search",
+        "list" | "ls" | "dir" | "list_files" => "list",
+        "read" | "cat" | "file" | "read_file" => "read",
+        "write" | "edit" | "save" | "insert" | "edit_file" => "write",
+        "run" | "command" | "bash" | "sh" => "run",
+        _ => "other",
+    }
+}
+
 /// Styling utilities for the Session UI
 pub struct SessionStyles {
     theme: InlineTheme,
@@ -37,29 +48,14 @@ impl SessionStyles {
         style
     }
 
-    /// Normalize tool names to group similar tools together
-    #[allow(dead_code)]
-    pub fn normalize_tool_name(&self, tool_name: &str) -> String {
-        match tool_name.to_lowercase().as_str() {
-            "grep" | "rg" | "ripgrep" | "grep_file" | "search" | "find" | "ag" => {
-                "search".to_owned()
-            }
-            "list" | "ls" | "dir" | "list_files" => "list".to_owned(),
-            "read" | "cat" | "file" | "read_file" => "read".to_owned(),
-            "write" | "edit" | "save" | "insert" | "edit_file" => "write".to_owned(),
-            "run" | "command" | "bash" | "sh" => "run".to_owned(),
-            _ => tool_name.to_owned(),
-        }
-    }
-
     /// Get the inline style for a tool based on its name
     #[allow(dead_code)]
     pub fn tool_inline_style(&self, tool_name: &str) -> InlineTextStyle {
-        let normalized_name = self.normalize_tool_name(tool_name);
+        let normalized_name = normalize_tool_name(tool_name);
         let mut style = InlineTextStyle::default().bold();
 
         // Assign distinctive colors based on normalized tool type
-        style.color = match normalized_name.to_lowercase().as_str() {
+        style.color = match normalized_name {
             "read" => {
                 // Cyan for file reading operations
                 Some(AnsiColor::Cyan.into())

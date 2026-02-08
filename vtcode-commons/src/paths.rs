@@ -31,28 +31,24 @@ pub fn canonicalize_workspace(workspace_root: &Path) -> PathBuf {
     })
 }
 
-/// Return a canonicalised absolute path that is guaranteed to reside inside the
-/// provided `workspace_root`.  If the path is outside the workspace an error is
-/// returned.
-pub fn secure_path(workspace_root: &Path, user_path: &Path) -> Result<PathBuf> {
-    // Resolve relative paths against the workspace root.
-    let joined = if user_path.is_absolute() {
+/// Resolve a path relative to a workspace root and ensure it stays within it.
+pub fn resolve_workspace_path(workspace_root: &Path, user_path: &Path) -> Result<PathBuf> {
+    let candidate = if user_path.is_absolute() {
         user_path.to_path_buf()
     } else {
         workspace_root.join(user_path)
     };
 
-    // Canonicalise to eliminate `..` components and resolve symlinks.
-    let canonical = std::fs::canonicalize(&joined)
-        .with_context(|| format!("Failed to canonicalize path {}", joined.display()))?;
+    let canonical = std::fs::canonicalize(&candidate)
+        .with_context(|| format!("Failed to canonicalize path {}", candidate.display()))?;
 
-    // Ensure the canonical path is within the workspace.
     let workspace_canonical = std::fs::canonicalize(workspace_root).with_context(|| {
         format!(
             "Failed to canonicalize workspace root {}",
             workspace_root.display()
         )
     })?;
+
     if !canonical.starts_with(&workspace_canonical) {
         return Err(anyhow!(
             "Path {} escapes workspace root {}",
@@ -60,7 +56,27 @@ pub fn secure_path(workspace_root: &Path, user_path: &Path) -> Result<PathBuf> {
             workspace_canonical.display()
         ));
     }
+
     Ok(canonical)
+}
+
+/// Return a canonicalised absolute path that is guaranteed to reside inside the
+/// provided `workspace_root`.  If the path is outside the workspace an error is
+/// returned.
+pub fn secure_path(workspace_root: &Path, user_path: &Path) -> Result<PathBuf> {
+    // Resolve relative paths against the workspace root.
+    resolve_workspace_path(workspace_root, user_path)
+}
+
+/// Normalize identifiers to ASCII alphanumerics with lowercase output.
+pub fn normalize_ascii_identifier(value: &str) -> String {
+    let mut normalized = String::new();
+    for ch in value.chars() {
+        if ch.is_ascii_alphanumeric() {
+            normalized.push(ch.to_ascii_lowercase());
+        }
+    }
+    normalized
 }
 
 /// Check if a path string is a safe relative path (no traversal, no absolute).

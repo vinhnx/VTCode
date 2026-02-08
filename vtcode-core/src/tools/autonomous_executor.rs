@@ -68,6 +68,7 @@ impl ToolStats {
 }
 
 use crate::tools::circuit_breaker::CircuitBreaker;
+use crate::utils::path::resolve_workspace_path;
 
 /// Autonomous tool executor with safety checks
 pub struct AutonomousExecutor {
@@ -311,12 +312,7 @@ impl AutonomousExecutor {
 
             // Check if within workspace
             if let Some(workspace) = &self.workspace_dir {
-                let canonical_path = path_obj.canonicalize().ok();
-                let canonical_workspace = workspace.canonicalize().ok();
-
-                if let (Some(p), Some(w)) = (canonical_path, canonical_workspace)
-                    && p.starts_with(&w)
-                {
+                if resolve_workspace_path(workspace, path_obj).is_ok() {
                     return Ok(());
                 }
             }
@@ -335,10 +331,7 @@ impl AutonomousExecutor {
             // Resolve the path and check if it stays within workspace
             if let Some(workspace) = &self.workspace_dir {
                 let resolved = workspace.join(path_str);
-                if let Ok(canonical) = resolved.canonicalize()
-                    && let Ok(canonical_workspace) = workspace.canonicalize()
-                    && !canonical.starts_with(&canonical_workspace)
-                {
+                if resolve_workspace_path(workspace, &resolved).is_err() {
                     anyhow::bail!("Path traversal escapes workspace boundary: {}", path_str);
                 }
             } else {

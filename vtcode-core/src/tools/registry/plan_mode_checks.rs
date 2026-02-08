@@ -2,14 +2,13 @@
 
 use serde_json::Value;
 
+use crate::utils::path::normalize_ascii_identifier;
+
 use super::ToolRegistry;
 
 impl ToolRegistry {
     fn normalize_tool_key(name: &str) -> String {
-        name.chars()
-            .filter(|c| c.is_ascii_alphanumeric())
-            .flat_map(|c| c.to_lowercase())
-            .collect()
+        normalize_ascii_identifier(name)
     }
 
     /// Check if a tool is mutating (modifies files or environment).

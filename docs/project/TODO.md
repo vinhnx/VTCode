@@ -2,16 +2,6 @@
 
 continue with your recommendation, proceed with outcome. don't stop. review overall progress and changes again carefully, can you do better? go on don't ask me
 
----
-
---
-
-implement chat input textview keyboard navigation between block of text, for example, when the user press up/down arrow key, it will move the cursor to the previous/next block of text, this is useful when the user want to edit a specific part of the message and the message is too long that it's hard to navigate with mouse or trackpad. we can define a block of text as a paragraph or a line break, or we can use some heuristic to detect logical blocks of text. this will improve the user experience when editing long messages in the chat input.
-
---
-
----
-
 --
 
 ## Recent Code-Level Optimizations (Feb 2026)
@@ -118,3 +108,13 @@ While these optimizations are incremental, they compound throughout the codebase
 4. **Cleaner Code**: More idiomatic Rust patterns improve maintainability
 
 All optimizations maintain the same behavior and pass existing test suites.
+
+### Next Review Targets
+
+Focus on duplicated logic and DRY opportunities with measurable impact:
+
+- Consolidate repeated canonicalization helpers (`canonicalize_dir`) used in `vtcode-core/src/project_doc.rs` and `vtcode-core/src/instructions.rs` by reusing a single utility (likely `vtcode-commons/src/fs.rs::canonicalize_with_context`).
+- Audit path canonicalization fallbacks (`unwrap_or_else` with `to_path_buf`) in `vtcode-core/src/utils/gatekeeper.rs` and `vtcode-core/src/instructions.rs` tests for consistency and error reporting.
+- Search for repeated `Path::canonicalize` + `starts_with` workspace checks across tool modules and extract a shared helper (use existing patterns in `vtcode-commons/src/paths.rs::secure_path`).
+- Review `normalize_*` helpers across tool registry, UI, and MCP paths for duplicate string normalization logic; consolidate where signatures match.
+- Look for redundant `Vec` allocations during string accumulation in prompt assembly and instruction rendering, and switch to pre-allocated buffers when size is known.
