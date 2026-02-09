@@ -1,6 +1,6 @@
 [package]
 name = "vtcode-tools"
-version = "0.78.6"
+version = "0.78.7"
 edition = "2024"
 authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
 description = "Prototype extraction of VT Code's modular tool registry"
@@ -20,9 +20,9 @@ policies = []
 examples = []
 
 [dependencies]
-vtcode-commons = { path = "../vtcode-commons", version = "0.78.6" }
-vtcode-core = { path = "../vtcode-core", version = "0.78.6" }
-vtcode-acp-client = { path = "../vtcode-acp-client", version = "0.78.6" }
+vtcode-commons = { path = "../vtcode-commons", version = "0.78.7" }
+vtcode-core = { path = "../vtcode-core", version = "0.78.7" }
+vtcode-acp-client = { path = "../vtcode-acp-client", version = "0.78.7" }
 anyhow = { workspace = true }
 async-trait = "0.1"
 serde_json = { workspace = true }
