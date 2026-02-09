@@ -43,6 +43,52 @@ print_distribution() {
     printf '%b\n' "${PURPLE}DISTRIBUTION:${NC} $1"
 }
 
+# Wait for a crate to be available on crates.io with timeout and retry
+# This ensures dependent crates can resolve their dependencies
+wait_for_crates_io() {
+    local crate_name="$1"
+    local version="$2"
+    local max_attempts="${3:-30}"  # Default: 30 attempts
+    local sleep_seconds="${4:-5}"  # Default: 5 seconds between attempts
+    
+    print_info "Waiting for $crate_name v$version to be available on crates.io..."
+    
+    local attempt=1
+    while [[ $attempt -le $max_attempts ]]; do
+        # Check if the crate version is available on crates.io
+        # Using cargo search with exact match
+        if cargo search "$crate_name" --limit 1 2>/dev/null | grep -q "^$crate_name = \"$version\""; then
+            print_success "$crate_name v$version is now available on crates.io"
+            return 0
+        fi
+        
+        # Also try alternative format (some cargo versions output differently)
+        if cargo search "$crate_name" --limit 5 2>/dev/null | grep -E "^$crate_name.*=.*\"$version\"" >/dev/null; then
+            print_success "$crate_name v$version is now available on crates.io"
+            return 0
+        fi
+        
+        # Try one more format - just check if version appears in output
+        local search_output
+        search_output=$(cargo search "$crate_name" --limit 1 2>/dev/null || true)
+        if echo "$search_output" | grep -q "$version"; then
+            print_success "$crate_name v$version is now available on crates.io"
+            return 0
+        fi
+        
+        if [[ $attempt -lt $max_attempts ]]; then
+            print_info "  Attempt $attempt/$max_attempts: not yet available, waiting ${sleep_seconds}s..."
+            sleep "$sleep_seconds"
+        fi
+        
+        ((attempt++))
+    done
+    
+    print_warning "$crate_name v$version may not be fully indexed after $max_attempts attempts"
+    print_warning "Proceeding anyway, but dependent crates may fail to publish"
+    return 1
+}
+
 # Get GitHub username from commit author email
 get_github_username() {
     local email=$1
@@ -613,9 +659,10 @@ main() {
                             print_warning "Failed to publish $crate, but it's not already published"
                         fi
                     else
-                        # Wait a bit for crates.io to register the new version
+                        # Wait for the crate to be fully indexed on crates.io
                         print_info "Successfully published $crate $crate_version"
-                        sleep 15
+                        print_info "Waiting for crates.io to index the new version (required for dependent crates)..."
+                        wait_for_crates_io "$crate" "$crate_version" 30 5
                     fi
                 else
                     print_info "Crate directory $crate not found, skipping..."
@@ -666,7 +713,8 @@ main() {
                         fi
                     else
                         print_info "Successfully published $member $member_version"
-                        sleep 15
+                        print_info "Waiting for crates.io to index the new version..."
+                        wait_for_crates_io "$member" "$member_version" 30 5
                     fi
                 fi
             done
