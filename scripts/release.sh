@@ -644,9 +644,9 @@ main() {
 
                     print_info "Publishing $crate..."
 
-                    # Get version from package section only (more reliable parsing)
+                    # Get version from cargo metadata (more reliable than parsing Cargo.toml)
                     local crate_version
-                    crate_version=$(grep -E '^version\s*=\s*"' "$crate/Cargo.toml" | head -1 | sed 's/version\s*=\s*"\([^"]*\)".*/\1/')
+                    crate_version=$(cargo metadata --format-version 1 --no-deps 2>/dev/null | jq -r --arg name "$crate" '.packages[] | select(.name == $name) | .version')
 
                     # Attempt to publish the crate with --no-verify (build already done in Step 1)
                     # If it fails due to already being published, that's fine
@@ -700,9 +700,9 @@ main() {
 
                     print_info "Publishing remaining crate: $member..."
 
-                    # Get version from package section only (more reliable parsing)
+                    # Get version from cargo metadata (more reliable than parsing Cargo.toml)
                     local member_version
-                    member_version=$(grep -E '^version\s*=\s*"' "$member/Cargo.toml" | head -1 | sed 's/version\s*=\s*"\([^"]*\)".*/\1/')
+                    member_version=$(cargo metadata --format-version 1 --no-deps 2>/dev/null | jq -r --arg name "$member" '.packages[] | select(.name == $name) | .version')
 
                     # Attempt to publish the crate with --no-verify (build already done in Step 1)
                     if ! cargo publish -p "$member" --no-verify; then
