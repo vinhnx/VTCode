@@ -2,6 +2,12 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## v0.78.8 - 2026-02-09
+
+### Refactors
+
+- streamline release process and remove deprecated crate waiting logic (4436c3cc) (@vinhnx)
+
 ## v0.78.7 - 2026-02-09
 
 *No significant changes*
