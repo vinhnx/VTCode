@@ -2,6 +2,13 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## v0.78.5 - 2026-02-09
+
+### Other
+
+- Remove outdated optimization notes and focus on DRY opportunities in the codebase (c9ac418b) (@vinhnx)
+- Refactor to use rustc_hash::FxHashMap for improved performance and memory efficiency; update related structures and configurations. (3b166144) (@vinhnx)
+
 ## v0.78.4 - 2026-02-08
 
 *No significant changes*
