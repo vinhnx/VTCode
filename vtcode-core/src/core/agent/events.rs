@@ -204,12 +204,12 @@ impl ExecEventRecorder {
         let id = self.next_item_id();
         let item = ThreadItem {
             id: id.clone(),
-            details: ThreadItemDetails::CommandExecution(CommandExecutionItem {
+            details: ThreadItemDetails::CommandExecution(Box::new(CommandExecutionItem {
                 command: command.to_string(),
                 aggregated_output: String::new(),
                 exit_code: None,
                 status: CommandExecutionStatus::InProgress,
-            }),
+            })),
         };
         self.record(ThreadEvent::ItemStarted(ItemStartedEvent { item }));
         ActiveCommandHandle {
@@ -227,12 +227,12 @@ impl ExecEventRecorder {
     ) {
         let item = ThreadItem {
             id: handle.id.clone(),
-            details: ThreadItemDetails::CommandExecution(CommandExecutionItem {
+            details: ThreadItemDetails::CommandExecution(Box::new(CommandExecutionItem {
                 command: handle.command.clone(),
                 aggregated_output: aggregated_output.to_string(),
                 exit_code,
                 status,
-            }),
+            })),
         };
         self.record(ThreadEvent::ItemCompleted(ItemCompletedEvent { item }));
     }
@@ -244,10 +244,10 @@ impl ExecEventRecorder {
         };
         let item = ThreadItem {
             id: self.next_item_id(),
-            details: ThreadItemDetails::FileChange(FileChangeItem {
+            details: ThreadItemDetails::FileChange(Box::new(FileChangeItem {
                 changes: vec![change],
                 status: PatchApplyStatus::Completed,
-            }),
+            })),
         };
         self.record(ThreadEvent::ItemCompleted(ItemCompletedEvent { item }));
     }

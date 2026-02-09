@@ -1,7 +1,6 @@
 //! ToolRegistry construction helpers.
 
 use std::borrow::Cow;
-use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::RwLock;
@@ -78,8 +77,8 @@ impl ToolRegistry {
             policy_gateway: Arc::new(tokio::sync::RwLock::new(policy_gateway)),
             pty_sessions,
             mcp_client: Arc::new(std::sync::RwLock::new(None)),
-            mcp_tool_index: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
-            mcp_tool_presence: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
+            mcp_tool_index: Arc::new(tokio::sync::RwLock::new(rustc_hash::FxHashMap::default())),
+            mcp_tool_presence: Arc::new(tokio::sync::RwLock::new(rustc_hash::FxHashMap::default())),
             timeout_policy: Arc::new(std::sync::RwLock::new(ToolTimeoutPolicy::default())),
             execution_history: ToolExecutionHistory::new(100),
             harness_context: HarnessContext::default(),

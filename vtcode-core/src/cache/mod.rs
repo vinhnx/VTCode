@@ -7,8 +7,8 @@
 //! following the pattern from matklad's "Caches in Rust" article.
 
 use anyhow::Result;
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, SystemTime};
 
@@ -87,7 +87,7 @@ pub struct UnifiedCache<K, V> {
 
 /// Internal state for `UnifiedCache`, protected by `RwLock`
 struct UnifiedCacheInner<K, V> {
-    entries: HashMap<K, CacheEntry<V>>,
+    entries: FxHashMap<K, CacheEntry<V>>,
     max_size: usize,
     ttl: Duration,
     stats: CacheStats,
@@ -114,7 +114,7 @@ where
     pub fn new(max_size: usize, ttl: Duration, eviction_policy: EvictionPolicy) -> Self {
         Self {
             inner: RwLock::new(UnifiedCacheInner {
-                entries: HashMap::with_capacity(max_size),
+                entries: FxHashMap::with_capacity_and_hasher(max_size, Default::default()),
                 max_size,
                 ttl,
                 stats: CacheStats {

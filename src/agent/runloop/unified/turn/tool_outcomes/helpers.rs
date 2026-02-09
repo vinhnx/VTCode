@@ -1,5 +1,5 @@
 use crate::agent::runloop::unified::tool_pipeline::{ToolExecutionStatus, ToolPipelineOutcome};
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use vtcode_core::llm::provider as uni;
 
 pub(crate) fn push_tool_response(
@@ -29,7 +29,7 @@ pub(crate) fn resolve_max_tool_retries(
 /// Only successful tool calls are counted towards repetition limits.
 /// Failed, timed out, or cancelled calls are ignored for this purpose.
 pub(crate) fn update_repetition_tracker(
-    repeated_tool_attempts: &mut HashMap<String, usize>,
+    repeated_tool_attempts: &mut FxHashMap<String, usize>,
     outcome: &ToolPipelineOutcome,
     name: &str,
     args: &serde_json::Value,

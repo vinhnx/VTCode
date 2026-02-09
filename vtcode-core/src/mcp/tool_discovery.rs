@@ -189,8 +189,8 @@ impl ToolDiscovery {
     pub async fn list_tools_by_provider(&self) -> Result<Vec<(String, Vec<ToolDiscoveryResult>)>> {
         let tools = self.mcp_client.list_mcp_tools().await?;
 
-        let mut by_provider: std::collections::HashMap<String, Vec<ToolDiscoveryResult>> =
-            std::collections::HashMap::new();
+        let mut by_provider: rustc_hash::FxHashMap<String, Vec<ToolDiscoveryResult>> =
+            rustc_hash::FxHashMap::default();
 
         for tool in tools {
             let result = ToolDiscoveryResult {

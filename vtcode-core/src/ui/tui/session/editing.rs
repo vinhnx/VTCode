@@ -1,3 +1,6 @@
+use super::Session;
+use crate::config::constants::ui;
+use crate::ui::tui::session::slash;
 /// Text editing and cursor movement operations for Session
 ///
 /// This module handles all text manipulation and cursor navigation including:
@@ -7,9 +10,6 @@
 /// - Input history navigation
 /// - Newline handling with capacity limits
 use unicode_segmentation::UnicodeSegmentation;
-use super::Session;
-use crate::config::constants::ui;
-use crate::ui::tui::session::slash;
 
 impl Session {
     /// Insert a character at the current cursor position

@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -15,7 +15,7 @@ use crate::tools::grep_file::GrepSearchManager;
 #[derive(Debug, Default, Clone)]
 pub struct AliasMetrics {
     /// Map of alias name to (canonical_name, usage_count)
-    pub usage: HashMap<String, (String, u64)>,
+    pub usage: FxHashMap<String, (String, u64)>,
 }
 
 #[derive(Debug)]
@@ -28,10 +28,10 @@ struct ToolCacheEntry {
 #[derive(Clone)]
 pub(super) struct ToolInventory {
     workspace_root: PathBuf,
-    tools: Arc<std::sync::RwLock<HashMap<String, Arc<ToolCacheEntry>>>>,
+    tools: Arc<std::sync::RwLock<FxHashMap<String, Arc<ToolCacheEntry>>>>,
     /// Map of lowercase alias name to canonical tool name
-    aliases: Arc<std::sync::RwLock<HashMap<String, String>>>,
-    frequently_used: Arc<std::sync::RwLock<HashSet<String>>>,
+    aliases: Arc<std::sync::RwLock<FxHashMap<String, String>>>,
+    frequently_used: Arc<std::sync::RwLock<FxHashSet<String>>>,
     last_cache_cleanup: Arc<std::sync::RwLock<Instant>>,
     /// HP-7: Maintain sorted list of tool names for O(1) available_tools() calls
     sorted_names: Arc<std::sync::RwLock<Vec<String>>>,
@@ -57,9 +57,9 @@ impl ToolInventory {
 
         Self {
             workspace_root,
-            tools: Arc::new(std::sync::RwLock::new(HashMap::new())),
-            aliases: Arc::new(std::sync::RwLock::new(HashMap::new())),
-            frequently_used: Arc::new(std::sync::RwLock::new(HashSet::new())),
+            tools: Arc::new(std::sync::RwLock::new(FxHashMap::default())),
+            aliases: Arc::new(std::sync::RwLock::new(FxHashMap::default())),
+            frequently_used: Arc::new(std::sync::RwLock::new(FxHashSet::default())),
             last_cache_cleanup: Arc::new(std::sync::RwLock::new(Instant::now())),
             sorted_names: Arc::new(std::sync::RwLock::new(Vec::new())),
             alias_metrics: Arc::new(std::sync::Mutex::new(AliasMetrics::default())),

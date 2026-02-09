@@ -4,7 +4,7 @@
 //! bloom filters for fast negative lookups and LRU cache for positive results.
 
 use lru::LruCache;
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::num::NonZeroUsize;
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
@@ -117,9 +117,9 @@ pub struct ToolDiscoveryCache {
     /// Detailed cache for positive results
     detailed_cache: Arc<RwLock<LruCache<ToolDiscoveryCacheKey, CachedToolDiscoveryEntry>>>,
     /// Cache of all tools for each provider
-    all_tools_cache: Arc<RwLock<HashMap<String, Vec<McpToolInfo>>>>,
+    all_tools_cache: Arc<RwLock<FxHashMap<String, Vec<McpToolInfo>>>>,
     /// Last refresh time for each provider
-    last_refresh: Arc<RwLock<HashMap<String, Instant>>>,
+    last_refresh: Arc<RwLock<FxHashMap<String, Instant>>>,
     /// Cache configuration
     config: CacheConfig,
 }
@@ -151,8 +151,8 @@ impl ToolDiscoveryCache {
         Self {
             bloom_filter: Arc::new(RwLock::new(bloom_filter)),
             detailed_cache: Arc::new(RwLock::new(LruCache::new(cache_size))),
-            all_tools_cache: Arc::new(RwLock::new(HashMap::new())),
-            last_refresh: Arc::new(RwLock::new(HashMap::new())),
+            all_tools_cache: Arc::new(RwLock::new(FxHashMap::default())),
+            last_refresh: Arc::new(RwLock::new(FxHashMap::default())),
             config,
         }
     }

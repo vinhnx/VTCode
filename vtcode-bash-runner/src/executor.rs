@@ -508,12 +508,12 @@ where
         let item_id = self.next_id();
         let starting_item = ThreadItem {
             id: item_id.clone(),
-            details: ThreadItemDetails::CommandExecution(self.command_details(
+            details: ThreadItemDetails::CommandExecution(Box::new(self.command_details(
                 invocation,
                 CommandExecutionStatus::InProgress,
                 None,
                 None,
-            )),
+            ))),
         };
         self.emit_event(ThreadEvent::ItemStarted(ItemStartedEvent {
             item: starting_item,
@@ -527,15 +527,13 @@ where
                     CommandExecutionStatus::Failed
                 };
 
-                let completed_item = ThreadItem {
-                    id: item_id,
-                    details: ThreadItemDetails::CommandExecution(self.command_details(
-                        invocation,
-                        status,
-                        Some(&output),
-                        None,
-                    )),
-                };
+                let completed_item =
+                    ThreadItem {
+                        id: item_id,
+                        details: ThreadItemDetails::CommandExecution(Box::new(
+                            self.command_details(invocation, status, Some(&output), None),
+                        )),
+                    };
                 self.emit_event(ThreadEvent::ItemCompleted(ItemCompletedEvent {
                     item: completed_item,
                 }));
@@ -544,12 +542,12 @@ where
             Err(err) => {
                 let failure = ThreadItem {
                     id: item_id,
-                    details: ThreadItemDetails::CommandExecution(self.command_details(
+                    details: ThreadItemDetails::CommandExecution(Box::new(self.command_details(
                         invocation,
                         CommandExecutionStatus::Failed,
                         None,
                         Some(&err),
-                    )),
+                    ))),
                 };
                 self.emit_event(ThreadEvent::ItemCompleted(ItemCompletedEvent {
                     item: failure,

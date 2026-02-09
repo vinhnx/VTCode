@@ -167,12 +167,12 @@ pub fn tool_started_event(item_id: String, tool_name: &str) -> ThreadEvent {
     ThreadEvent::ItemStarted(ItemStartedEvent {
         item: ThreadItem {
             id: item_id,
-            details: ThreadItemDetails::CommandExecution(CommandExecutionItem {
+            details: ThreadItemDetails::CommandExecution(Box::new(CommandExecutionItem {
                 command: tool_name.to_string(),
                 aggregated_output: String::new(),
                 exit_code: None,
                 status: CommandExecutionStatus::InProgress,
-            }),
+            })),
         },
     })
 }
@@ -186,12 +186,12 @@ pub fn tool_completed_event(
     ThreadEvent::ItemCompleted(ItemCompletedEvent {
         item: ThreadItem {
             id: item_id,
-            details: ThreadItemDetails::CommandExecution(CommandExecutionItem {
+            details: ThreadItemDetails::CommandExecution(Box::new(CommandExecutionItem {
                 command: tool_name.to_string(),
                 aggregated_output: String::new(),
                 exit_code,
                 status,
-            }),
+            })),
         },
     })
 }

@@ -287,26 +287,27 @@ impl<'a> SessionWidget<'a> {
     }
 
     fn render_sidebar(&mut self, area: Rect, buf: &mut Buffer, mode: LayoutMode) {
-        let queue_items: Vec<String> = if let Some(cached) = &self.session.queued_inputs_preview_cache {
-            cached.clone()
-        } else {
-            let items: Vec<String> = self
-                .session
-                .queued_inputs
-                .iter()
-                .take(5)
-                .map(|input| {
-                    let preview: String = input.chars().take(50).collect();
-                    if input.len() > 50 {
-                        format!("{}...", preview)
-                    } else {
-                        preview
-                    }
-                })
-                .collect();
-            self.session.queued_inputs_preview_cache = Some(items.clone());
-            items
-        };
+        let queue_items: Vec<String> =
+            if let Some(cached) = &self.session.queued_inputs_preview_cache {
+                cached.clone()
+            } else {
+                let items: Vec<String> = self
+                    .session
+                    .queued_inputs
+                    .iter()
+                    .take(5)
+                    .map(|input| {
+                        let preview: String = input.chars().take(50).collect();
+                        if input.len() > 50 {
+                            format!("{}...", preview)
+                        } else {
+                            preview
+                        }
+                    })
+                    .collect();
+                self.session.queued_inputs_preview_cache = Some(items.clone());
+                items
+            };
 
         let context_info = self
             .session

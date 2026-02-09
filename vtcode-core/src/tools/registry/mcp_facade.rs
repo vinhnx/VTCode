@@ -1,6 +1,6 @@
 //! MCP client integration for ToolRegistry.
 
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -193,7 +193,7 @@ impl ToolRegistry {
                     return Ok(());
                 }
             };
-            let mut provider_map: HashMap<String, Vec<String>> = HashMap::new();
+            let mut provider_map: FxHashMap<String, Vec<String>> = FxHashMap::default();
 
             for tool in &tools {
                 let registration =
@@ -236,11 +236,16 @@ impl ToolRegistry {
             }
 
             let mcp_index = self.mcp_tool_index.read().await;
+            // Convert FxHashMap to std HashMap for policy manager API compatibility
+            let std_index: std::collections::HashMap<String, Vec<String>> = mcp_index
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect();
             if let Some(allowlist) = self
                 .policy_gateway
                 .write()
                 .await
-                .update_mcp_tools(&mcp_index)
+                .update_mcp_tools(&std_index)
                 .await?
             {
                 mcp_client.update_allowlist(allowlist);

@@ -183,9 +183,8 @@ impl ContextManager {
 
     /// Create new context manager with custom configuration
     pub fn with_config(config: ContextConfig) -> Self {
-        let loaded_skills = LruCache::new(
-            std::num::NonZeroUsize::new(config.max_cached_skills).unwrap(),
-        );
+        let loaded_skills =
+            LruCache::new(std::num::NonZeroUsize::new(config.max_cached_skills).unwrap());
 
         Self {
             config: config.clone(),
@@ -407,12 +406,19 @@ impl ContextManager {
 
     /// Get current context usage statistics
     pub fn get_stats(&self) -> ContextStats {
-        self.inner.lock().expect("ContextManager lock poisoned").stats.clone()
+        self.inner
+            .lock()
+            .expect("ContextManager lock poisoned")
+            .stats
+            .clone()
     }
 
     /// Get current token usage
     pub fn get_token_usage(&self) -> usize {
-        self.inner.lock().expect("ContextManager lock poisoned").current_token_usage
+        self.inner
+            .lock()
+            .expect("ContextManager lock poisoned")
+            .current_token_usage
     }
 
     /// Clear all loaded skills (keep metadata)
@@ -437,7 +443,13 @@ impl ContextManager {
 
     /// Get all active skill names
     pub fn get_active_skills(&self) -> Vec<String> {
-        self.inner.lock().expect("ContextManager lock poisoned").active_skills.keys().cloned().collect()
+        self.inner
+            .lock()
+            .expect("ContextManager lock poisoned")
+            .active_skills
+            .keys()
+            .cloned()
+            .collect()
     }
 
     /// Get memory usage estimate

@@ -949,15 +949,9 @@ impl Session {
             .map(|bg| Style::default().bg(bg))
             .unwrap_or_default();
 
-        let new_spans: Vec<_> = line
-            .spans
-            .iter()
-            .cloned()
-            .chain(std::iter::once(Span::styled(
-                " ".repeat(padding_needed),
-                padding_style,
-            )))
-            .collect();
+        let mut new_spans = Vec::with_capacity(line.spans.len() + 1);
+        new_spans.extend(line.spans.iter().cloned());
+        new_spans.push(Span::styled(" ".repeat(padding_needed), padding_style));
 
         Line::from(new_spans)
     }

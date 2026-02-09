@@ -350,7 +350,9 @@ impl DotfileGuardian {
         // Track pending modification
         {
             let mut state = self.state.lock().await;
-            state.pending_modifications.insert(context.file_path.clone());
+            state
+                .pending_modifications
+                .insert(context.file_path.clone());
         }
 
         if self.is_whitelisted(&context.file_path)

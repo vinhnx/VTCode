@@ -41,34 +41,34 @@ fn sample_timeline() -> Vec<ThreadEvent> {
         ThreadEvent::ItemStarted(ItemStartedEvent {
             item: ThreadItem {
                 id: "command.git-init".into(),
-                details: ThreadItemDetails::CommandExecution(CommandExecutionItem {
+                details: ThreadItemDetails::CommandExecution(Box::new(CommandExecutionItem {
                     command: "git init".into(),
                     aggregated_output: String::new(),
                     exit_code: None,
                     status: CommandExecutionStatus::InProgress,
-                }),
+                })),
             },
         }),
         ThreadEvent::ItemUpdated(ItemUpdatedEvent {
             item: ThreadItem {
                 id: "command.git-init".into(),
-                details: ThreadItemDetails::CommandExecution(CommandExecutionItem {
+                details: ThreadItemDetails::CommandExecution(Box::new(CommandExecutionItem {
                     command: "git init".into(),
                     aggregated_output: "Initialized empty Git repository".into(),
                     exit_code: None,
                     status: CommandExecutionStatus::InProgress,
-                }),
+                })),
             },
         }),
         ThreadEvent::ItemCompleted(ItemCompletedEvent {
             item: ThreadItem {
                 id: "command.git-init".into(),
-                details: ThreadItemDetails::CommandExecution(CommandExecutionItem {
+                details: ThreadItemDetails::CommandExecution(Box::new(CommandExecutionItem {
                     command: "git init".into(),
                     aggregated_output: "Initialized empty Git repository".into(),
                     exit_code: Some(0),
                     status: CommandExecutionStatus::Completed,
-                }),
+                })),
             },
         }),
         ThreadEvent::TurnCompleted(TurnCompletedEvent {

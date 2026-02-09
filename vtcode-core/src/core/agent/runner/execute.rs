@@ -169,7 +169,9 @@ impl AgentRunner {
                     .provider_client
                     .supports_parallel_tool_config(&turn_model)
                 {
-                    Some(crate::llm::provider::ParallelToolConfig::anthropic_optimized())
+                    Some(Box::new(
+                        crate::llm::provider::ParallelToolConfig::anthropic_optimized(),
+                    ))
                 } else {
                     None
                 };

@@ -28,7 +28,7 @@ pub struct LLMRequest {
     pub parallel_tool_calls: Option<bool>,
 
     /// Parallel tool use configuration following Anthropic best practices
-    pub parallel_tool_config: Option<ParallelToolConfig>,
+    pub parallel_tool_config: Option<Box<ParallelToolConfig>>,
 
     /// Reasoning effort level for models that support it (none, low, medium, high)
     /// Applies to: Claude, GPT-5, GPT-5.1, Gemini, Qwen3, DeepSeek with reasoning capability
@@ -71,7 +71,7 @@ pub struct LLMRequest {
     pub character_name: Option<String>,
 
     /// Optional coding agent specific settings
-    pub coding_agent_settings: Option<CodingAgentSettings>,
+    pub coding_agent_settings: Option<Box<CodingAgentSettings>>,
 
     /// Optional turn metadata for git context (remote URLs, commit hash, etc.)
     /// This is sent as X-Turn-Metadata header to providers that support it

@@ -3,7 +3,6 @@ use crate::agent::runloop::unified::turn::context::{
 };
 use anyhow::Result;
 use serde_json::Value;
-use std::collections::HashMap;
 use vtcode_core::utils::ansi::MessageStyle;
 
 use std::sync::Arc;
@@ -227,7 +226,7 @@ fn is_readonly_signature(signature: &str) -> bool {
 pub(crate) async fn handle_turn_balancer(
     ctx: &mut TurnProcessingContext<'_>,
     step_count: usize,
-    repeated_tool_attempts: &mut HashMap<String, usize>,
+    repeated_tool_attempts: &mut rustc_hash::FxHashMap<String, usize>,
     max_tool_loops: usize,
     tool_repeat_limit: usize,
 ) -> TurnHandlerOutcome {
