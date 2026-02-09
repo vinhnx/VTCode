@@ -236,7 +236,8 @@ impl PiiTokenizer {
     /// Get audit trail of tokenized data.
     pub fn audit_trail(&self) -> Result<Vec<(String, PiiType, String)>> {
         let inner = self.inner.lock().expect("PiiTokenizer lock poisoned");
-        Ok(inner.token_store
+        Ok(inner
+            .token_store
             .values()
             .map(|t| (t.token.clone(), t.pii_type, t.created_at.clone()))
             .collect())

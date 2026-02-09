@@ -57,22 +57,9 @@ pub enum AnthropicContentBlock {
         cache_control: Option<CacheControl>,
     },
     #[serde(rename = "tool_use")]
-    ToolUse {
-        id: String,
-        name: String,
-        input: Value,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        cache_control: Option<CacheControl>,
-    },
+    ToolUse(Box<AnthropicToolUseBlock>),
     #[serde(rename = "tool_result")]
-    ToolResult {
-        tool_use_id: String,
-        content: Value, // string or array of blocks
-        #[serde(skip_serializing_if = "Option::is_none")]
-        is_error: Option<bool>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        cache_control: Option<CacheControl>,
-    },
+    ToolResult(Box<AnthropicToolResultBlock>),
     #[serde(rename = "thinking")]
     Thinking {
         thinking: String,
@@ -105,6 +92,27 @@ pub enum AnthropicContentBlock {
         tool_use_id: String,
         content: ToolSearchResultContent,
     },
+}
+
+/// Extracted struct for `AnthropicContentBlock::ToolUse` (boxed to reduce enum size).
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AnthropicToolUseBlock {
+    pub id: String,
+    pub name: String,
+    pub input: Value,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cache_control: Option<CacheControl>,
+}
+
+/// Extracted struct for `AnthropicContentBlock::ToolResult` (boxed to reduce enum size).
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AnthropicToolResultBlock {
+    pub tool_use_id: String,
+    pub content: Value, // string or array of blocks
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub is_error: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cache_control: Option<CacheControl>,
 }
 
 /// Content of a tool search result

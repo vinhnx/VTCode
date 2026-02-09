@@ -8,8 +8,8 @@ use parking_lot::RwLock;
 use rmcp::model::{
     CallToolResult, ClientCapabilities, Implementation, InitializeRequestParams, RootsCapabilities,
 };
+use rustc_hash::FxHashMap;
 use serde_json::{Map, Value, json};
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
@@ -23,11 +23,11 @@ use super::{
 
 pub struct McpClient {
     config: McpClientConfig,
-    providers: RwLock<HashMap<String, Arc<McpProvider>>>,
+    providers: RwLock<FxHashMap<String, Arc<McpProvider>>>,
     allowlist: RwLock<McpAllowListConfig>,
-    tool_provider_index: RwLock<HashMap<String, String>>,
-    resource_provider_index: RwLock<HashMap<String, String>>,
-    prompt_provider_index: RwLock<HashMap<String, String>>,
+    tool_provider_index: RwLock<FxHashMap<String, String>>,
+    resource_provider_index: RwLock<FxHashMap<String, String>>,
+    prompt_provider_index: RwLock<FxHashMap<String, String>>,
     elicitation_handler: Option<Arc<dyn McpElicitationHandler>>,
 }
 
@@ -38,11 +38,11 @@ impl McpClient {
 
         Self {
             config,
-            providers: RwLock::new(HashMap::new()),
+            providers: RwLock::new(FxHashMap::default()),
             allowlist: RwLock::new(allowlist),
-            tool_provider_index: RwLock::new(HashMap::new()),
-            resource_provider_index: RwLock::new(HashMap::new()),
-            prompt_provider_index: RwLock::new(HashMap::new()),
+            tool_provider_index: RwLock::new(FxHashMap::default()),
+            resource_provider_index: RwLock::new(FxHashMap::default()),
+            prompt_provider_index: RwLock::new(FxHashMap::default()),
             elicitation_handler: None,
         }
     }
@@ -74,7 +74,7 @@ impl McpClient {
         let tool_timeout = self.tool_timeout();
         let allowlist_snapshot = self.allowlist.read().clone();
 
-        let mut initialized = HashMap::new();
+        let mut initialized = FxHashMap::default();
 
         for provider_config in &self.config.providers {
             if !provider_config.enabled {
@@ -297,7 +297,7 @@ impl McpClient {
     pub async fn get_prompt(
         &self,
         prompt_name: &str,
-        arguments: Option<HashMap<String, String>>,
+        arguments: Option<std::collections::HashMap<String, String>>,
     ) -> Result<McpPromptDetail> {
         let provider = self.resolve_provider_for_prompt(prompt_name).await?;
         let provider_name = provider.name.clone();
@@ -383,7 +383,7 @@ impl McpClient {
             })?;
 
         // Group tools by provider
-        let mut by_provider: HashMap<String, Vec<&McpToolInfo>> = HashMap::new();
+        let mut by_provider: FxHashMap<String, Vec<&McpToolInfo>> = FxHashMap::default();
         for tool in &tools {
             by_provider
                 .entry(tool.provider.clone())
@@ -445,7 +445,7 @@ impl McpClient {
     fn generate_tools_index(
         &self,
         tools: &[McpToolInfo],
-        by_provider: &HashMap<String, Vec<&McpToolInfo>>,
+        by_provider: &FxHashMap<String, Vec<&McpToolInfo>>,
     ) -> String {
         let mut content = String::new();
         content.push_str("# MCP Tools Index\n\n");
@@ -524,7 +524,8 @@ impl McpClient {
         let allowlist = self.allowlist.read().clone();
         let timeout = self.tool_timeout();
         let mut all_tools = Vec::with_capacity(128);
-        let mut index_updates: HashMap<String, String> = HashMap::with_capacity(128);
+        let mut index_updates: FxHashMap<String, String> =
+            FxHashMap::with_capacity_and_hasher(128, Default::default());
 
         for provider in providers {
             let provider_name = provider.name.clone();

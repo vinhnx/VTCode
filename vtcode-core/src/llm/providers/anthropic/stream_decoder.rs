@@ -64,14 +64,14 @@ pub fn create_stream(
                             });
                         }
                         AnthropicStreamEvent::ContentBlockStart { index, content_block } => {
-                            if let AnthropicContentBlock::ToolUse { id, name, .. } = content_block {
+                            if let AnthropicContentBlock::ToolUse(tool_use) = content_block {
                                 if aggregator.tool_builders.len() <= index {
                                     aggregator.tool_builders.resize_with(index + 1, shared::ToolCallBuilder::default);
                                 }
                                 let mut delta = Map::new();
-                                delta.insert("id".to_string(), Value::String(id));
+                                delta.insert("id".to_string(), Value::String(tool_use.id));
                                 let mut func = Map::new();
-                                func.insert("name".to_string(), Value::String(name));
+                                func.insert("name".to_string(), Value::String(tool_use.name));
                                 delta.insert("function".to_string(), Value::Object(func));
                                 aggregator.tool_builders[index].apply_delta(&Value::Object(delta));
                             }

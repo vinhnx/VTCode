@@ -86,7 +86,7 @@ use crate::tools::handlers::PlanModeState;
 pub(super) use crate::tools::pty::PtyManager;
 use crate::tools::result::ToolResult as SplitToolResult;
 use parking_lot::Mutex; // Use parking_lot for better performance
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::sync::Arc;
 
 // Match agent runner throttle ceiling
@@ -111,8 +111,8 @@ pub struct ToolRegistry {
     policy_gateway: Arc<tokio::sync::RwLock<ToolPolicyGateway>>,
     pty_sessions: PtySessionManager,
     mcp_client: Arc<std::sync::RwLock<Option<Arc<McpClient>>>>,
-    mcp_tool_index: Arc<tokio::sync::RwLock<HashMap<String, Vec<String>>>>,
-    mcp_tool_presence: Arc<tokio::sync::RwLock<HashMap<String, bool>>>,
+    mcp_tool_index: Arc<tokio::sync::RwLock<FxHashMap<String, Vec<String>>>>,
+    mcp_tool_presence: Arc<tokio::sync::RwLock<FxHashMap<String, bool>>>,
     timeout_policy: Arc<std::sync::RwLock<ToolTimeoutPolicy>>,
     execution_history: ToolExecutionHistory,
     harness_context: HarnessContext,

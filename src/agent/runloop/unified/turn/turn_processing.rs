@@ -16,7 +16,7 @@ use crate::agent::runloop::unified::turn::tool_outcomes::ToolOutcomeContext;
 use crate::agent::runloop::unified::ui_interaction::{
     StreamSpinnerOptions, stream_and_render_response_with_options,
 };
-use std::collections::{BTreeSet, HashMap};
+use std::collections::BTreeSet;
 use std::path::PathBuf;
 use vtcode_core::llm::provider::{self as uni, ParallelToolConfig};
 use vtcode_core::prompts::sort_tool_definitions;
@@ -31,7 +31,7 @@ pub(crate) async fn execute_llm_request(
     step_count: usize,
     active_model: &str,
     _max_tokens_opt: Option<u32>,
-    parallel_cfg_opt: Option<ParallelToolConfig>,
+    parallel_cfg_opt: Option<Box<ParallelToolConfig>>,
 ) -> Result<(uni::LLMResponse, bool)> {
     let provider_client = ctx.provider_client.as_ref();
     // Context trim and compaction has been removed - no pruning or enforcement needed
@@ -349,7 +349,7 @@ pub(crate) struct HandleTurnProcessingResultParams<'a> {
     pub processing_result: TurnProcessingResult,
     pub response_streamed: bool,
     pub step_count: usize,
-    pub repeated_tool_attempts: &'a mut HashMap<String, usize>,
+    pub repeated_tool_attempts: &'a mut rustc_hash::FxHashMap<String, usize>,
     pub turn_modified_files: &'a mut BTreeSet<PathBuf>,
     pub session_end_reason: &'a mut crate::hooks::lifecycle::SessionEndReason,
     /// Pre-computed max tool loops limit for efficiency

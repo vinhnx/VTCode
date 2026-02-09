@@ -158,6 +158,7 @@ textwrap = "0.16"
 editor-command = "2.0"
 signal-hook = "0.4"
 rand = "0.9"
+rustc-hash = { workspace = true }
 
 lsp-types = "0.97.0"
 notify-rust = { version = "4.11", optional = true }

@@ -409,11 +409,11 @@ fn responses_payload_omits_parallel_tool_config_when_not_supported() {
         OpenAIProvider::with_model(String::new(), models::openai::GPT_5_CODEX.to_string());
     let mut request = sample_request(models::openai::GPT_5_CODEX);
     request.parallel_tool_calls = Some(true);
-    request.parallel_tool_config = Some(ParallelToolConfig {
+    request.parallel_tool_config = Some(Box::new(ParallelToolConfig {
         disable_parallel_tool_use: true,
         max_parallel_tools: Some(2),
         encourage_parallel: false,
-    });
+    }));
 
     let payload = provider
         .convert_to_openai_responses_format(&request)

@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use rustc_hash::FxHashSet;
 use std::path::Path;
 
 use anyhow::{Result, anyhow};
@@ -30,8 +30,8 @@ const ALWAYS_PROMPT_IN_SAFE_MODE: &[&str] = &[
 #[derive(Clone, Default)]
 pub(super) struct ToolPolicyGateway {
     tool_policy: Option<ToolPolicyManager>,
-    preapproved_tools: HashSet<String>,
-    full_auto_allowlist: Option<HashSet<String>>,
+    preapproved_tools: FxHashSet<String>,
+    full_auto_allowlist: Option<FxHashSet<String>>,
     enforce_safe_mode_prompts: bool,
 }
 
@@ -47,7 +47,7 @@ impl ToolPolicyGateway {
 
         Self {
             tool_policy,
-            preapproved_tools: HashSet::new(),
+            preapproved_tools: FxHashSet::default(),
             full_auto_allowlist: None,
             enforce_safe_mode_prompts: false,
         }
@@ -56,7 +56,7 @@ impl ToolPolicyGateway {
     pub fn with_policy_manager(manager: ToolPolicyManager) -> Self {
         Self {
             tool_policy: Some(manager),
-            preapproved_tools: HashSet::new(),
+            preapproved_tools: FxHashSet::default(),
             full_auto_allowlist: None,
             enforce_safe_mode_prompts: false,
         }
@@ -235,7 +235,7 @@ impl ToolPolicyGateway {
     }
 
     pub fn enable_full_auto_mode(&mut self, allowed_tools: &[String], available_tools: &[String]) {
-        let mut normalized: HashSet<String> = HashSet::new();
+        let mut normalized: FxHashSet<String> = FxHashSet::default();
         if allowed_tools
             .iter()
             .any(|tool| tool.trim() == tools::WILDCARD_ALL)

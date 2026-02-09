@@ -350,9 +350,9 @@ pub enum ThreadItemDetails {
     /// Free-form reasoning text produced during a turn.
     Reasoning(ReasoningItem),
     /// Command execution lifecycle update.
-    CommandExecution(CommandExecutionItem),
+    CommandExecution(Box<CommandExecutionItem>),
     /// File change summary associated with the turn.
-    FileChange(FileChangeItem),
+    FileChange(Box<FileChangeItem>),
     /// MCP tool invocation status.
     McpToolCall(McpToolCallItem),
     /// Web search event emitted by a registered search provider.

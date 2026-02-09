@@ -2,6 +2,9 @@
 //!
 //! Thin binary entry point that delegates to modular CLI handlers.
 
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
 use anyhow::{Context, Result};
 use clap::{CommandFactory, FromArgMatches};
 use colorchoice::ColorChoice as GlobalColorChoice;

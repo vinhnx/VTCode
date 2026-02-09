@@ -559,7 +559,7 @@ impl Session {
 
         let mut truncated = String::new();
         // pre-allocate capacity
-        truncated.reserve(text.len().min(max * 4)); 
+        truncated.reserve(text.len().min(max * 4));
         for grapheme in text.graphemes(true).take(max.saturating_sub(1)) {
             truncated.push_str(grapheme);
         }

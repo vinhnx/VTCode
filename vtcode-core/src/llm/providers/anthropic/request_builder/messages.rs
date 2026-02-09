@@ -4,7 +4,8 @@ use crate::llm::provider::{
     ContentPart, LLMError, LLMRequest, Message, MessageContent, MessageRole,
 };
 use crate::llm::providers::anthropic_types::{
-    AnthropicContentBlock, AnthropicMessage, CacheControl, ImageSource,
+    AnthropicContentBlock, AnthropicMessage, AnthropicToolResultBlock, AnthropicToolUseBlock,
+    CacheControl, ImageSource,
 };
 use serde_json::{Value, json};
 use std::collections::HashSet;
@@ -88,12 +89,14 @@ pub(crate) fn build_messages(
 
                     messages.push(AnthropicMessage {
                         role: "user".to_string(),
-                        content: vec![AnthropicContentBlock::ToolResult {
-                            tool_use_id: tool_call_id.clone(),
-                            content: content_val,
-                            is_error: None,
-                            cache_control: None,
-                        }],
+                        content: vec![AnthropicContentBlock::ToolResult(Box::new(
+                            AnthropicToolResultBlock {
+                                tool_use_id: tool_call_id.clone(),
+                                content: content_val,
+                                is_error: None,
+                                cache_control: None,
+                            },
+                        ))],
                     });
                 } else if !msg.content.is_empty() {
                     messages.push(AnthropicMessage {
@@ -252,12 +255,14 @@ fn build_tool_use_blocks(msg: &Message) -> Vec<AnthropicContentBlock> {
             if let Some(ref func) = call.function {
                 let args: Value =
                     serde_json::from_str(&func.arguments).unwrap_or_else(|_| json!({}));
-                blocks.push(AnthropicContentBlock::ToolUse {
-                    id: call.id.clone(),
-                    name: func.name.clone(),
-                    input: args,
-                    cache_control: None,
-                });
+                blocks.push(AnthropicContentBlock::ToolUse(Box::new(
+                    AnthropicToolUseBlock {
+                        id: call.id.clone(),
+                        name: func.name.clone(),
+                        input: args,
+                        cache_control: None,
+                    },
+                )));
             }
         }
     }
