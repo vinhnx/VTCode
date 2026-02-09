@@ -73,21 +73,6 @@ impl ListDirHandler {
         }
     }
 
-    /// Resolve the path relative to workspace.
-    fn resolve_path(&self, path: Option<&str>, invocation: &ToolInvocation) -> PathBuf {
-        match path {
-            Some(p) => {
-                let path = PathBuf::from(p);
-                if path.is_absolute() {
-                    path
-                } else {
-                    invocation.turn.cwd.join(path)
-                }
-            }
-            None => invocation.turn.cwd.clone(),
-        }
-    }
-
     /// List directory contents.
     async fn list_directory(
         &self,
@@ -206,7 +191,7 @@ impl ToolHandler for ListDirHandler {
 
     async fn handle(&self, invocation: ToolInvocation) -> Result<ToolOutput, ToolCallError> {
         let args = self.parse_args(&invocation)?;
-        let path = self.resolve_path(args.path.as_deref(), &invocation);
+        let path = invocation.turn.resolve_path_ref(args.path.as_deref());
 
         let entries = self.list_directory(&path, &args, 0).await?;
 

@@ -13,7 +13,7 @@ mod ask_user_question;
 mod mcp_support;
 mod mcp_tool_manager;
 mod model_selection;
-mod palettes;
+pub(crate) mod palettes;
 mod plan_confirmation;
 mod plan_mode_switch;
 mod progress;

@@ -82,21 +82,6 @@ impl GrepFilesHandler {
         }
     }
 
-    /// Resolve the search path relative to workspace.
-    fn resolve_path(&self, path: Option<&str>, invocation: &ToolInvocation) -> PathBuf {
-        match path {
-            Some(p) => {
-                let path = PathBuf::from(p);
-                if path.is_absolute() {
-                    path
-                } else {
-                    invocation.turn.cwd.join(path)
-                }
-            }
-            None => invocation.turn.cwd.clone(),
-        }
-    }
-
     /// Search for pattern in files.
     async fn search(
         &self,
@@ -282,7 +267,7 @@ impl ToolHandler for GrepFilesHandler {
 
     async fn handle(&self, invocation: ToolInvocation) -> Result<ToolOutput, ToolCallError> {
         let args = self.parse_args(&invocation)?;
-        let search_path = self.resolve_path(args.path.as_deref(), &invocation);
+        let search_path = invocation.turn.resolve_path_ref(args.path.as_deref());
 
         let matches = self.search(&args, &search_path).await?;
 
