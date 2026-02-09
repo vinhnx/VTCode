@@ -2,6 +2,12 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## v0.78.6 - 2026-02-09
+
+### Features
+
+- add wait_for_crates_io function to ensure crate availability on crates.io (8b4ac577) (@vinhnx)
+
 ## v0.78.5 - 2026-02-09
 
 ### Other
