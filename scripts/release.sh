@@ -43,52 +43,6 @@ print_distribution() {
     printf '%b\n' "${PURPLE}DISTRIBUTION:${NC} $1"
 }
 
-# Wait for a crate to be available on crates.io with timeout and retry
-# This ensures dependent crates can resolve their dependencies
-wait_for_crates_io() {
-    local crate_name="$1"
-    local version="$2"
-    local max_attempts="${3:-30}"  # Default: 30 attempts
-    local sleep_seconds="${4:-5}"  # Default: 5 seconds between attempts
-    
-    print_info "Waiting for $crate_name v$version to be available on crates.io..."
-    
-    local attempt=1
-    while [[ $attempt -le $max_attempts ]]; do
-        # Check if the crate version is available on crates.io
-        # Using cargo search with exact match
-        if cargo search "$crate_name" --limit 1 2>/dev/null | grep -q "^$crate_name = \"$version\""; then
-            print_success "$crate_name v$version is now available on crates.io"
-            return 0
-        fi
-        
-        # Also try alternative format (some cargo versions output differently)
-        if cargo search "$crate_name" --limit 5 2>/dev/null | grep -E "^$crate_name.*=.*\"$version\"" >/dev/null; then
-            print_success "$crate_name v$version is now available on crates.io"
-            return 0
-        fi
-        
-        # Try one more format - just check if version appears in output
-        local search_output
-        search_output=$(cargo search "$crate_name" --limit 1 2>/dev/null || true)
-        if echo "$search_output" | grep -q "$version"; then
-            print_success "$crate_name v$version is now available on crates.io"
-            return 0
-        fi
-        
-        if [[ $attempt -lt $max_attempts ]]; then
-            print_info "  Attempt $attempt/$max_attempts: not yet available, waiting ${sleep_seconds}s..."
-            sleep "$sleep_seconds"
-        fi
-        
-        ((attempt++))
-    done
-    
-    print_warning "$crate_name v$version may not be fully indexed after $max_attempts attempts"
-    print_warning "Proceeding anyway, but dependent crates may fail to publish"
-    return 1
-}
-
 # Get GitHub username from commit author email
 get_github_username() {
     local email=$1
@@ -537,12 +491,6 @@ main() {
     else
         print_warning "GitHub CLI not found. Release will continue but binary uploads may fail."
     fi
-    
-    # Check for jq dependency which is needed for parsing cargo metadata
-    if ! command -v jq >/dev/null 2>&1; then
-        print_error 'jq is not installed. Install it with `brew install jq` (macOS) or equivalent for your system.'
-        exit 1
-    fi
 
     local current_version
     current_version=$(get_current_version)
@@ -590,135 +538,15 @@ main() {
 
     # 3. Cargo Release (Publish to crates.io, tag and push)
     print_info "Step 3: Running cargo release (publish to crates.io, tag and push)..."
-    
+    local command=(cargo release "$release_argument" --workspace --config release.toml --execute --no-confirm)
     if [[ "$skip_crates" == 'true' ]]; then
-        # Just run cargo release without publishing
-        local command=(cargo release "$release_argument" --workspace --config release.toml --execute --no-confirm --no-publish)
-        if [[ "$dry_run" == 'true' ]]; then
-            print_info "Dry run - would run: ${command[*]}"
-        else
-            "${command[@]}"
-        fi
+        command+=(--no-publish)
+    fi
+
+    if [[ "$dry_run" == 'true' ]]; then
+        print_info "Dry run - would run: ${command[*]}"
     else
-        # For publishing, we need to handle dependencies in the correct order
-        # First, run cargo release to update versions but don't publish
-        print_info "Step 3a: Updating versions across workspace (without publishing)..."
-        local version_command=(cargo release "$release_argument" --workspace --config release.toml --execute --no-confirm --no-publish)
-        
-        if [[ "$dry_run" == 'true' ]]; then
-            print_info "Dry run - would run: ${version_command[*]}"
-        else
-            "${version_command[@]}"
-        fi
-        
-        # Step 3b: Publish crates in dependency order to avoid resolution issues
-        if [[ "$dry_run" == 'false' ]]; then
-            print_info "Step 3b: Publishing crates in dependency order..."
-            
-            # Define the order for publishing based on dependency graph
-            # Crates without dependencies should be published first
-            # Note: Only crates with publish = true or unset are included here
-            # Note: vtcode-llm, vtcode-tools, vtcode-lmstudio, vtcode-process-hardening, zed-extension
-            # have publish = false and are not included in this list
-            local dependency_order=(
-                "vtcode-commons"
-                "vtcode-config"
-                "vtcode-exec-events"
-                "vtcode-markdown-store"
-                "vtcode-indexer"
-                "vtcode-bash-runner"
-                "vtcode-file-search"
-                "vtcode-acp-client"
-                "vtcode-core"
-                "vtcode"  # main crate
-            )
-            
-            # Publish each crate in dependency order
-            for crate in "${dependency_order[@]}"; do
-                if [[ -d "$crate" ]]; then
-                    # Check if this crate is allowed to be published
-                    if grep -q "publish = false" "$crate/Cargo.toml"; then
-                        print_info "Skipping $crate (publish = false)..."
-                        continue
-                    fi
-
-                    print_info "Publishing $crate..."
-
-                    # Get version from cargo metadata (more reliable than parsing Cargo.toml)
-                    local crate_version
-                    crate_version=$(cargo metadata --format-version 1 --no-deps 2>/dev/null | jq -r --arg name "$crate" '.packages[] | select(.name == $name) | .version')
-
-                    # Attempt to publish the crate with --no-verify (build already done in Step 1)
-                    # If it fails due to already being published, that's fine
-                    if ! cargo publish -p "$crate" --no-verify; then
-                        # If publish fails, check if it's because it's already published
-                        if cargo search "$crate" --limit 1 2>/dev/null | grep -q "$crate_version"; then
-                            print_info "$crate $crate_version already published, skipping..."
-                        else
-                            # If it's a different error, we should investigate
-                            print_warning "Failed to publish $crate, but it's not already published"
-                        fi
-                    else
-                        # Wait for the crate to be fully indexed on crates.io
-                        print_info "Successfully published $crate $crate_version"
-                        print_info "Waiting for crates.io to index the new version (required for dependent crates)..."
-                        wait_for_crates_io "$crate" "$crate_version" 30 5
-                    fi
-                else
-                    print_info "Crate directory $crate not found, skipping..."
-                fi
-            done
-            
-            # Also publish any remaining workspace members that weren't in our explicit order
-            print_info "Step 3c: Publishing any remaining workspace members..."
-            # Get all workspace members
-            local all_members_output
-            all_members_output=$(cargo metadata --format-version 1 --no-deps | jq -r '.packages[] | select(.source==null) | .name')
-            local all_members=()
-            while IFS= read -r line; do
-                if [[ -n "$line" ]]; then
-                    all_members+=("$line")
-                fi
-            done <<< "$all_members_output"
-            
-            for member in "${all_members[@]}"; do
-                # Check if this member was already published via our explicit order
-                local already_attempted=false
-                for published in "${dependency_order[@]}"; do
-                    if [[ "$member" == "$published" ]]; then
-                        already_attempted=true
-                        break
-                    fi
-                done
-                
-                if [[ "$already_attempted" == false && -d "$member" ]]; then
-                    # Check if this crate is allowed to be published
-                    if grep -q "publish = false" "$member/Cargo.toml"; then
-                        print_info "Skipping $member (publish = false)..."
-                        continue
-                    fi
-
-                    print_info "Publishing remaining crate: $member..."
-
-                    # Get version from cargo metadata (more reliable than parsing Cargo.toml)
-                    local member_version
-                    member_version=$(cargo metadata --format-version 1 --no-deps 2>/dev/null | jq -r --arg name "$member" '.packages[] | select(.name == $name) | .version')
-
-                    # Attempt to publish the crate with --no-verify (build already done in Step 1)
-                    if ! cargo publish -p "$member" --no-verify; then
-                        if cargo search "$member" --limit 1 2>/dev/null | grep -q "$member_version"; then
-                            print_info "$member $member_version already published, skipping..."
-                        else
-                            print_warning "Failed to publish $member, but it's not already published"
-                        fi
-                    else
-                        print_info "Successfully published $member $member_version"
-                        print_info "Waiting for crates.io to index the new version..."
-                        wait_for_crates_io "$member" "$member_version" 30 5
-                    fi
-                fi
-            done
-        fi
+            "${command[@]}"
     fi
 
     if [[ "$dry_run" == 'true' ]]; then
@@ -733,14 +561,78 @@ main() {
         print_warning "Released version $released_version differs from expected $next_version"
     fi
 
-    # 4. GitHub Release Creation and Binary Upload
-    if [[ "$skip_binaries" == 'false' ]]; then
-        print_info "Step 4: Uploading binaries to GitHub Release v$released_version..."
+    # 3.5 GitHub Release Creation and Binary Upload via gh
+     print_info "Step 3.5: Creating GitHub Release with binaries..."
 
-        # Use the specialized script to upload binaries, which also creates the release if needed
-        local upload_args=(-v "$released_version" --only-upload --notes-file "$RELEASE_NOTES_FILE")
-        ./scripts/build-and-upload-binaries.sh "${upload_args[@]}"
+     # Ensure GITHUB_TOKEN is available
+     if [[ -z "${GITHUB_TOKEN:-}" ]] && command -v gh >/dev/null 2>&1; then
+         export GITHUB_TOKEN=$(gh auth token)
+     fi
+
+     # Check if release already exists
+     if gh release view "v$released_version" &>/dev/null; then
+         print_warning "Release v$released_version already exists"
+     else
+         # Read release notes from file
+         local release_body=""
+         if [[ -f "$RELEASE_NOTES_FILE" ]]; then
+             release_body=$(cat "$RELEASE_NOTES_FILE")
+         fi
+
+         # Create GitHub release with release notes
+         if gh release create "v$released_version" \
+             --title "v$released_version" \
+             --notes "$release_body" \
+             --draft=false \
+             --prerelease=false; then
+             print_success "GitHub Release v$released_version created successfully"
+         else
+             print_error "Failed to create GitHub Release"
+             exit 1
+         fi
+     fi
+
+    # 4. Upload Binaries to GitHub Release
+    if [[ "$skip_binaries" == 'false' ]]; then
+        print_info "Step 4: Packaging and uploading binaries to GitHub Release v$released_version..."
+
+        local binaries_dir="/tmp/vtcode-release-$released_version"
+        mkdir -p "$binaries_dir"
+
+        # Build and package binaries
+        print_info "Building binaries for macOS architectures..."
+
+        # x86_64-apple-darwin
+        if cargo build --release --target x86_64-apple-darwin &>/dev/null; then
+            tar -C target/x86_64-apple-darwin/release -czf "$binaries_dir/vtcode-v$released_version-x86_64-apple-darwin.tar.gz" vtcode
+            shasum -a 256 "$binaries_dir/vtcode-v$released_version-x86_64-apple-darwin.tar.gz" > "$binaries_dir/vtcode-v$released_version-x86_64-apple-darwin.sha256"
+            print_success "Built x86_64-apple-darwin"
+        else
+            print_warning "Failed to build x86_64-apple-darwin"
+        fi
+
+        # aarch64-apple-darwin
+        if cargo build --release --target aarch64-apple-darwin &>/dev/null; then
+            tar -C target/aarch64-apple-darwin/release -czf "$binaries_dir/vtcode-v$released_version-aarch64-apple-darwin.tar.gz" vtcode
+            shasum -a 256 "$binaries_dir/vtcode-v$released_version-aarch64-apple-darwin.tar.gz" > "$binaries_dir/vtcode-v$released_version-aarch64-apple-darwin.sha256"
+            print_success "Built aarch64-apple-darwin"
+        else
+            print_warning "Failed to build aarch64-apple-darwin"
+        fi
+
+        # Upload binaries to GitHub Release
+        print_info "Uploading binaries to GitHub Release..."
+        if gh release upload "v$released_version" "$binaries_dir"/*.tar.gz "$binaries_dir"/*.sha256 --clobber; then
+            print_success "Binaries uploaded successfully"
+        else
+            print_error "Failed to upload binaries to GitHub Release"
+            exit 1
+        fi
+
+        # Cleanup
+        rm -rf "$binaries_dir"
     fi
+
 
      # 5. Update Homebrew
      if [[ "$skip_binaries" == 'false' ]]; then
