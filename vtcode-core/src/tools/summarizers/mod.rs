@@ -19,6 +19,22 @@ pub mod execution;
 pub mod file_ops;
 pub mod search;
 
+/// Truncate a line to max length with ellipsis (shared by execution + file_ops summarizers)
+pub(super) fn truncate_line(line: &str, max_len: usize) -> String {
+    if line.len() <= max_len {
+        line.to_string()
+    } else {
+        let target = max_len.saturating_sub(3);
+        let end = line
+            .char_indices()
+            .map(|(i, _)| i)
+            .filter(|&i| i <= target)
+            .last()
+            .unwrap_or(0);
+        format!("{}...", &line[..end])
+    }
+}
+
 /// Trait for tool result summarization strategies
 ///
 /// Each tool type implements its own summarization logic

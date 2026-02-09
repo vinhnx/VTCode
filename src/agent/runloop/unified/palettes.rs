@@ -201,7 +201,7 @@ pub(crate) fn handle_palette_cancel(
     Ok(())
 }
 
-fn format_duration_label(duration: Duration) -> String {
+pub(crate) fn format_duration_label(duration: Duration) -> String {
     let total_seconds = duration.as_secs();
     let hours = total_seconds / 3600;
     let minutes = (total_seconds % 3600) / 60;

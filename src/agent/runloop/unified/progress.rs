@@ -281,22 +281,7 @@ impl ProgressInfo {
 
     /// Format the elapsed time as a human-readable string
     pub fn elapsed_formatted(&self) -> String {
-        format_duration(self.elapsed)
-    }
-}
-
-/// Format a duration as a human-readable string
-#[allow(dead_code)]
-fn format_duration(duration: Duration) -> String {
-    let secs = duration.as_secs();
-    if secs < 60 {
-        format!("{}s", secs)
-    } else if secs < 3600 {
-        format!("{}m {:02}s", secs / 60, secs % 60)
-    } else {
-        let hours = secs / 3600;
-        let minutes = (secs % 3600) / 60;
-        format!("{}h {:02}m", hours, minutes)
+        super::palettes::format_duration_label(self.elapsed)
     }
 }
 
@@ -334,7 +319,7 @@ pub fn spawn_elapsed_time_updater(
             let duration_str = if elapsed.as_secs() < 60 {
                 format!("{:.1}s", elapsed.as_secs_f64())
             } else {
-                format_duration(elapsed)
+                super::palettes::format_duration_label(elapsed)
             };
 
             reporter

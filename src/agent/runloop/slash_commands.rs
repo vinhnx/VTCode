@@ -12,6 +12,8 @@ use vtcode_core::ui::theme;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::session_archive;
 
+use crate::agent::runloop::unified::palettes::format_duration_label;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ThemePaletteMode {
     Select,
@@ -1637,23 +1639,6 @@ fn render_generate_agent_file_usage(renderer: &mut AnsiRenderer) -> Result<()> {
         "  --force  Overwrite an existing AGENTS.md with regenerated content.",
     )?;
     Ok(())
-}
-
-fn format_duration_label(duration: Duration) -> String {
-    let total_seconds = duration.as_secs();
-    let hours = total_seconds / 3600;
-    let minutes = (total_seconds % 3600) / 60;
-    let seconds = total_seconds % 60;
-
-    let mut parts = Vec::new();
-    if hours > 0 {
-        parts.push(format!("{}h", hours));
-    }
-    if minutes > 0 || hours > 0 {
-        parts.push(format!("{}m", minutes));
-    }
-    parts.push(format!("{}s", seconds));
-    parts.join(" ")
 }
 
 fn render_theme_list(renderer: &mut AnsiRenderer) -> Result<()> {

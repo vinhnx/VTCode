@@ -15,7 +15,7 @@
 //!
 //! Target: ~150-250 tokens vs potentially thousands
 
-use super::{Summarizer, truncate_to_tokens};
+use super::{Summarizer, truncate_line, truncate_to_tokens};
 use anyhow::Result;
 use serde_json::Value;
 
@@ -227,22 +227,6 @@ fn truncate_command(cmd: &str, max_len: usize) -> String {
             .last()
             .unwrap_or(0);
         format!("{}...", &cmd[..end])
-    }
-}
-
-/// Truncate output line to max length
-fn truncate_line(line: &str, max_len: usize) -> String {
-    if line.len() <= max_len {
-        line.to_string()
-    } else {
-        let target = max_len.saturating_sub(3);
-        let end = line
-            .char_indices()
-            .map(|(i, _)| i)
-            .filter(|&i| i <= target)
-            .last()
-            .unwrap_or(0);
-        format!("{}...", &line[..end])
     }
 }
 

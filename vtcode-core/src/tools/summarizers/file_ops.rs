@@ -12,7 +12,7 @@
 //!
 //! Target: ~100-200 tokens vs potentially thousands
 
-use super::{Summarizer, truncate_to_tokens};
+use super::{Summarizer, truncate_line, truncate_to_tokens};
 use anyhow::Result;
 use serde_json::Value;
 
@@ -253,22 +253,6 @@ fn parse_edit_output(output: &str) -> EditStats {
     }
 
     stats
-}
-
-/// Truncate a line to max length with ellipsis
-fn truncate_line(line: &str, max_len: usize) -> String {
-    if line.len() <= max_len {
-        line.to_string()
-    } else {
-        let target = max_len.saturating_sub(3);
-        let end = line
-            .char_indices()
-            .map(|(i, _)| i)
-            .filter(|&i| i <= target)
-            .last()
-            .unwrap_or(0);
-        format!("{}...", &line[..end])
-    }
 }
 
 #[cfg(test)]

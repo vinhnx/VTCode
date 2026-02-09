@@ -201,6 +201,11 @@ pub struct TurnContext {
 impl TurnContext {
     /// Resolve a path relative to the current working directory
     pub fn resolve_path(&self, path: Option<String>) -> PathBuf {
+        self.resolve_path_ref(path.as_deref())
+    }
+
+    /// Resolve a path reference relative to the current working directory
+    pub fn resolve_path_ref(&self, path: Option<&str>) -> PathBuf {
         match path {
             Some(p) => {
                 let path = PathBuf::from(p);
