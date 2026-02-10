@@ -246,6 +246,15 @@ impl TaskRunState {
             return preferred_split_at;
         }
 
+        let mut call_indices: HashMap<&str, usize> = HashMap::new();
+        for (i, msg) in self.conversation_messages.iter().enumerate() {
+            if let Some(tool_calls) = &msg.tool_calls {
+                for call in tool_calls {
+                    call_indices.insert(&call.id, i);
+                }
+            }
+        }
+
         let mut safe_split_at = preferred_split_at;
 
         loop {
@@ -253,43 +262,18 @@ impl TaskRunState {
                 break;
             }
 
-            // Check if splitting at safe_split_at is safe.
-            // A split is UNSAFE if there's a tool response in [safe_split_at..len]
-            // whose call is in [0..safe_split_at].
+            let has_orphan = ((safe_split_at + 1)..self.conversation_messages.len()).any(|i| {
+                self.conversation_messages
+                    .get(i)
+                    .and_then(|msg| msg.tool_call_id.as_ref())
+                    .and_then(|id| call_indices.get(id.as_str()))
+                    .is_some_and(|&call_idx| call_idx <= safe_split_at)
+            });
 
-            let mut call_ids_in_discard = HashSet::new();
-            let mut response_ids_in_keep = HashSet::new();
-
-            // Messages 1..safe_split_at+1 are the "discard" set (excluding system prompt at 0)
-            for i in 1..=safe_split_at {
-                if let Some(msg) = self.conversation_messages.get(i)
-                    && let Some(tool_calls) = &msg.tool_calls
-                {
-                    for call in tool_calls {
-                        call_ids_in_discard.insert(call.id.clone());
-                    }
-                }
-            }
-
-            // Messages safe_split_at+1..len are the "keep" set
-            for i in (safe_split_at + 1)..self.conversation_messages.len() {
-                if let Some(msg) = self.conversation_messages.get(i)
-                    && let Some(id) = &msg.tool_call_id
-                {
-                    response_ids_in_keep.insert(id.clone());
-                }
-            }
-
-            // If any response in keep has its call in discard, it's unsafe.
-            let has_orphan_response = response_ids_in_keep
-                .iter()
-                .any(|id| call_ids_in_discard.contains(id));
-
-            if !has_orphan_response {
+            if !has_orphan {
                 break;
             }
 
-            // Move split point earlier to include the call in the keep set.
             safe_split_at -= 1;
         }
 

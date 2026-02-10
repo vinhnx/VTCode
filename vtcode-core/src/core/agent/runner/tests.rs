@@ -11,8 +11,22 @@ fn record_turn_duration_records_once() {
     let mut recorded = false;
     let start = std::time::Instant::now();
 
-    record_turn_duration(&mut durations, &mut total_ms, &mut max_ms, &mut count, &mut recorded, &start);
-    record_turn_duration(&mut durations, &mut total_ms, &mut max_ms, &mut count, &mut recorded, &start);
+    record_turn_duration(
+        &mut durations,
+        &mut total_ms,
+        &mut max_ms,
+        &mut count,
+        &mut recorded,
+        &start,
+    );
+    record_turn_duration(
+        &mut durations,
+        &mut total_ms,
+        &mut max_ms,
+        &mut count,
+        &mut recorded,
+        &start,
+    );
 
     assert_eq!(durations.len(), 1);
     assert_eq!(count, 1);

@@ -159,7 +159,9 @@ fn responses_tools_dedupes_apply_patch_and_function() {
 fn responses_payload_sets_instructions_from_system_prompt() {
     let provider = OpenAIProvider::with_model(String::new(), models::openai::GPT_5.to_string());
     let mut request = sample_request(models::openai::GPT_5);
-    request.system_prompt = Some(std::sync::Arc::new("You are a helpful assistant.".to_owned()));
+    request.system_prompt = Some(std::sync::Arc::new(
+        "You are a helpful assistant.".to_owned(),
+    ));
 
     let payload = provider
         .convert_to_openai_responses_format(&request)
