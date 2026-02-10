@@ -13,6 +13,7 @@ use crate::agent::runloop::unified::plan_confirmation::{
 use crate::agent::runloop::unified::plan_mode_switch::{
     maybe_disable_plan_mode_for_tool, restore_plan_mode_after_tool,
 };
+use crate::agent::runloop::unified::turn::plan_content::parse_plan_content_from_json;
 use crate::agent::runloop::unified::progress::ProgressReporter;
 use crate::agent::runloop::unified::run_loop_context::RunLoopContext;
 use crate::agent::runloop::unified::state::CtrlCState;
@@ -40,6 +41,7 @@ use super::execute_hitl_tool;
 use super::status::{ToolExecutionStatus, ToolPipelineOutcome};
 use super::timeout::{TimeoutWarningGuard, create_timeout_error};
 use super::{DEFAULT_TOOL_TIMEOUT, MAX_RETRY_BACKOFF, RETRY_BACKOFF_BASE};
+use vtcode_core::tools::registry::ToolTimeoutCategory;
 
 pub(crate) async fn run_tool_call(
     ctx: &mut RunLoopContext<'_>,
@@ -63,7 +65,7 @@ pub(crate) async fn run_tool_call(
         }
     };
 
-    let name = function.name.as_str().to_string();
+    let name = function.name.as_str();
     let args_val = match call.parsed_arguments() {
         Ok(args) => args,
         Err(err) => {
@@ -91,11 +93,12 @@ pub(crate) async fn run_tool_call(
         let _ = emitter.emit(tool_started_event(tool_item_id.clone(), &name));
     }
     let max_tool_retries = ctx.harness_state.max_tool_retries as usize;
+    // Resolve tool name through registry (handles aliases and normalization)
     let resolved_name = ctx
         .tool_registry
-        .get_tool(&name)
+        .get_tool(name)
         .map(|tool| tool.name())
-        .unwrap_or(name.as_str());
+        .unwrap_or(name);
 
     // Pre-flight permission check
     match ensure_tool_permission(
@@ -715,6 +718,11 @@ pub(crate) async fn execute_tool_with_timeout_ref(
 }
 
 /// Execute a tool with progress reporting
+/// 
+/// # Timeout Semantics
+/// The `tool_timeout` represents a **total ceiling** across all attempts including retries.
+/// Each attempt receives the *remaining* time, ensuring the total wall time does not
+/// exceed the ceiling (plus small overhead for backoff delays).
 async fn execute_tool_with_progress(
     registry: &ToolRegistry,
     name: &str,
@@ -725,10 +733,14 @@ async fn execute_tool_with_progress(
     tool_timeout: Duration,
     max_tool_retries: usize,
 ) -> ToolExecutionStatus {
+    // Track total deadline to enforce ceiling across all attempts
+    let deadline = Instant::now() + tool_timeout;
+    
     // Execute first attempt
     let mut attempt = 0usize;
     let mut status = {
         let attempt_start = Instant::now();
+        let remaining_timeout = deadline.saturating_duration_since(attempt_start);
         let status = run_single_tool_attempt(
             registry,
             name,
@@ -736,7 +748,7 @@ async fn execute_tool_with_progress(
             ctrl_c_state,
             ctrl_c_notify,
             progress_reporter,
-            tool_timeout,
+            remaining_timeout,
         )
         .await;
 
@@ -764,7 +776,21 @@ async fn execute_tool_with_progress(
                 delay.as_millis()
             ))
             .await;
-        tokio::time::sleep(delay).await;
+        
+        // Cancellable backoff: listen for Ctrl+C/exit signals during retry delay
+        tokio::select! {
+            _ = tokio::time::sleep(delay) => {},
+            _ = ctrl_c_notify.notified() => {
+                return ToolExecutionStatus::Cancelled;
+            }
+        }
+
+        // Check if we've exceeded the total deadline before attempting
+        let now = Instant::now();
+        let remaining_timeout = deadline.saturating_duration_since(now);
+        if remaining_timeout < Duration::from_secs(1) {
+            return create_timeout_error(name, ToolTimeoutCategory::Default, Some(tool_timeout));
+        }
 
         let attempt_start = Instant::now();
         status = run_single_tool_attempt(
@@ -774,7 +800,7 @@ async fn execute_tool_with_progress(
             ctrl_c_state,
             ctrl_c_notify,
             progress_reporter,
-            tool_timeout,
+            remaining_timeout,
         )
         .await;
 
@@ -811,13 +837,13 @@ async fn run_single_tool_attempt(
         .await;
     progress_reporter.set_progress(5).await;
 
-    if let Err(e) = ctrl_c_state.check_cancellation() {
+    if let Err(_e) = ctrl_c_state.check_cancellation() {
         progress_reporter
             .set_message(format!("{} cancelled", name))
             .await;
         progress_reporter.set_progress(100).await;
         warning_guard.cancel().await;
-        return ToolExecutionStatus::Failure { error: e };
+        return ToolExecutionStatus::Cancelled;
     }
 
     progress_reporter
@@ -825,25 +851,26 @@ async fn run_single_tool_attempt(
         .await;
     progress_reporter.set_progress(20).await;
 
+    // Spawn a background task to update progress periodically with elapsed time
+    // This is created once per attempt, outside the execution loop
+    let _progress_update_guard = {
+        use crate::agent::runloop::unified::progress::{
+            ProgressUpdateGuard, spawn_elapsed_time_updater,
+        };
+        let handle =
+            spawn_elapsed_time_updater(progress_reporter.clone(), name.to_string(), 500);
+        ProgressUpdateGuard::new(handle)
+    };
+
     let status = loop {
-        if let Err(e) = ctrl_c_state.check_cancellation() {
+        if let Err(_e) = ctrl_c_state.check_cancellation() {
             progress_reporter
                 .set_message(format!("{} cancelled", name))
                 .await;
             progress_reporter.set_progress(100).await;
             warning_guard.cancel().await;
-            break ToolExecutionStatus::Failure { error: e };
+            break ToolExecutionStatus::Cancelled;
         }
-
-        // Spawn a background task to update progress periodically with elapsed time
-        let _progress_update_guard = {
-            use crate::agent::runloop::unified::progress::{
-                ProgressUpdateGuard, spawn_elapsed_time_updater,
-            };
-            let handle =
-                spawn_elapsed_time_updater(progress_reporter.clone(), name.to_string(), 500);
-            ProgressUpdateGuard::new(handle)
-        };
 
         progress_reporter
             .set_message(format!("Executing {}...", name))
@@ -1094,118 +1121,3 @@ pub(crate) fn process_llm_tool_output(output: Value) -> ToolExecutionStatus {
     }
 }
 
-/// Create a timeout error for a tool execution
-fn parse_plan_content_from_json(json: &Value) -> PlanContent {
-    let title = json
-        .get("title")
-        .and_then(|v| v.as_str())
-        .unwrap_or("Implementation Plan")
-        .to_string();
-
-    let summary = json
-        .get("summary")
-        .or_else(|| json.get("description"))
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .to_string();
-
-    let file_path = json
-        .get("file_path")
-        .and_then(|v| v.as_str())
-        .map(|s| s.to_string());
-
-    let raw_content = json
-        .get("raw_content")
-        .or_else(|| json.get("content"))
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .to_string();
-
-    let open_questions = json
-        .get("open_questions")
-        .and_then(|v| v.as_array())
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|q| q.as_str().map(|s| s.to_string()))
-                .collect()
-        })
-        .unwrap_or_default();
-
-    let mut step_number = 0;
-    let phases: Vec<vtcode_core::ui::tui::PlanPhase> = json
-        .get("phases")
-        .and_then(|v| v.as_array())
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|phase| {
-                    let name = phase.get("name").and_then(|v| v.as_str())?.to_string();
-                    let steps: Vec<vtcode_core::ui::tui::PlanStep> = phase
-                        .get("steps")
-                        .and_then(|v| v.as_array())
-                        .map(|steps_arr| {
-                            steps_arr
-                                .iter()
-                                .filter_map(|step| {
-                                    step_number += 1;
-                                    let step_desc =
-                                        step.get("description").and_then(|v| v.as_str())?;
-                                    let details = step
-                                        .get("details")
-                                        .and_then(|v| v.as_str())
-                                        .map(|s| s.to_string());
-                                    let files = step
-                                        .get("files")
-                                        .and_then(|v| v.as_array())
-                                        .map(|f| {
-                                            f.iter()
-                                                .filter_map(|s| s.as_str().map(|s| s.to_string()))
-                                                .collect()
-                                        })
-                                        .unwrap_or_default();
-                                    let completed = step
-                                        .get("completed")
-                                        .and_then(|v| v.as_bool())
-                                        .unwrap_or(false);
-
-                                    Some(vtcode_core::ui::tui::PlanStep {
-                                        number: step_number,
-                                        description: step_desc.to_string(),
-                                        details,
-                                        files,
-                                        completed,
-                                    })
-                                })
-                                .collect()
-                        })
-                        .unwrap_or_default();
-
-                    let phase_completed = steps.iter().all(|s| s.completed) && !steps.is_empty();
-
-                    Some(vtcode_core::ui::tui::PlanPhase {
-                        name,
-                        steps,
-                        completed: phase_completed,
-                    })
-                })
-                .collect()
-        })
-        .unwrap_or_default();
-
-    let total_steps = phases.iter().map(|p| p.steps.len()).sum();
-    let completed_steps = phases
-        .iter()
-        .flat_map(|p| p.steps.iter())
-        .filter(|s| s.completed)
-        .count();
-
-    PlanContent {
-        title,
-        summary,
-        file_path,
-        phases,
-        open_questions,
-        raw_content,
-        total_steps,
-        completed_steps,
-    }
-}
