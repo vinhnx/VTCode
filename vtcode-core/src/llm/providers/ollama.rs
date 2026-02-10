@@ -399,8 +399,8 @@ impl OllamaProvider {
 
         Some(LLMRequest {
             messages,
-            system_prompt,
-            tools,
+            system_prompt: system_prompt.map(std::sync::Arc::new),
+            tools: tools.map(std::sync::Arc::new),
             model: value
                 .get("model")
                 .and_then(|m| m.as_str())
@@ -436,7 +436,7 @@ impl OllamaProvider {
         {
             messages.push(OllamaChatMessage {
                 role: "system".to_string(),
-                content: Some(system.clone()),
+                content: Some(system.to_string()),
                 tool_calls: None,
                 tool_call_id: None,
                 tool_name: None,

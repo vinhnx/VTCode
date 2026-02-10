@@ -16,6 +16,7 @@ use crate::llm::provider::{LLMRequest, Message, ToolCall};
 use crate::prompts::system::compose_system_instruction_text;
 use crate::utils::colors::style;
 use anyhow::Result;
+use std::sync::Arc;
 use tracing::warn;
 
 impl AgentRunner {
@@ -71,11 +72,12 @@ impl AgentRunner {
             };
 
             // Prepare conversation with task context
-            let system_instruction = compose_system_instruction(&system_prompt, task, contexts);
+            let system_instruction =
+                Arc::new(compose_system_instruction(&system_prompt, task, contexts));
             let conversation = build_conversation(task, contexts);
 
             // Build available tools for this agent
-            let tools = self.build_universal_tools().await?;
+            let tools = Arc::new(self.build_universal_tools().await?);
 
             // Maintain a mirrored conversation history for providers that expect
             // OpenAI/Anthropic style message roles.
@@ -226,8 +228,8 @@ impl AgentRunner {
                 };
                 let request = LLMRequest {
                     messages: task_state.conversation_messages.clone(),
-                    system_prompt: Some(system_instruction.clone()),
-                    tools: Some(tools.clone()),
+                    system_prompt: Some(Arc::clone(&system_instruction)),
+                    tools: Some(Arc::clone(&tools)),
                     model: turn_model.clone(),
                     max_tokens,
                     temperature,
@@ -449,16 +451,17 @@ impl AgentRunner {
             self.runner_println(format_args!("{} Done", agent_prefix));
 
             // Generate meaningful summary based on agent actions
-            let average_turn_duration_ms = if !task_state.turn_durations_ms.is_empty() {
-                Some(
-                    task_state.turn_durations_ms.iter().sum::<u128>() as f64
-                        / task_state.turn_durations_ms.len() as f64,
-                )
+            let average_turn_duration_ms = if task_state.turn_count > 0 {
+                Some(task_state.turn_total_ms as f64 / task_state.turn_count as f64)
             } else {
                 None
             };
 
-            let max_turn_duration_ms = task_state.turn_durations_ms.iter().copied().max();
+            let max_turn_duration_ms = if task_state.turn_count > 0 {
+                Some(task_state.turn_max_ms)
+            } else {
+                None
+            };
 
             let outcome = task_state.completion_outcome.clone(); // Clone to avoid moving
             let summary = self.generate_task_summary(

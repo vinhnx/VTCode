@@ -758,13 +758,14 @@ pub async fn generate_system_instruction_with_config(
     vtcode_config: Option<&crate::config::VTCodeConfig>,
 ) -> Content {
     let cache_key = cache_key(project_root, vtcode_config);
-    let instruction = PROMPT_CACHE.get_or_insert_with(&cache_key, || {
-        futures::executor::block_on(compose_system_instruction_text(
-            project_root,
-            vtcode_config,
-            None, // No prompt_context for backward compatibility
-        ))
-    });
+    let instruction = match PROMPT_CACHE.get(&cache_key) {
+        Some(cached) => cached,
+        None => {
+            let built = compose_system_instruction_text(project_root, vtcode_config, None).await;
+            PROMPT_CACHE.insert(cache_key, built.clone());
+            built
+        }
+    };
 
     // Apply output style if configured
     let styled_instruction = apply_output_style(instruction, vtcode_config, project_root).await;
@@ -777,13 +778,14 @@ pub async fn generate_system_instruction_with_guidelines(
     project_root: &Path,
 ) -> Content {
     let cache_key = cache_key(project_root, None);
-    let instruction = PROMPT_CACHE.get_or_insert_with(&cache_key, || {
-        futures::executor::block_on(compose_system_instruction_text(
-            project_root,
-            None,
-            None, // No prompt_context
-        ))
-    });
+    let instruction = match PROMPT_CACHE.get(&cache_key) {
+        Some(cached) => cached,
+        None => {
+            let built = compose_system_instruction_text(project_root, None, None).await;
+            PROMPT_CACHE.insert(cache_key, built.clone());
+            built
+        }
+    };
     // Apply output style if configured
     let styled_instruction = apply_output_style(instruction, None, project_root).await;
     Content::system_text(styled_instruction)

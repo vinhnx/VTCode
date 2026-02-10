@@ -138,7 +138,6 @@ pub mod editing;
 pub mod error_context;
 pub mod execution_context;
 pub mod execution_tracker;
-pub mod fallback_chains;
 pub mod file_ops;
 pub mod file_search_bridge;
 pub mod file_search_rpc;
@@ -217,10 +216,6 @@ pub use editing::{Patch, PatchError, PatchHunk, PatchLine, PatchOperation};
 pub use error_context::ToolErrorContext;
 pub use execution_context::{ToolExecutionContext, ToolExecutionRecord, ToolPattern};
 pub use execution_tracker::{ExecutionRecord, ExecutionStats, ExecutionStatus, ExecutionTracker};
-pub use fallback_chains::{
-    AbortCondition, ChainStopReason, FallbackChain, FallbackChainExecutor, FallbackChainResult,
-    FallbackStep,
-};
 pub use file_search_rpc::{
     FileMatchRpc, FileSearchRpcHandler, ListFilesRequest, ListFilesResponse, RpcError, RpcRequest,
     RpcResponse, SearchFilesRequest, SearchFilesResponse,

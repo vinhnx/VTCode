@@ -23,7 +23,7 @@ fn sample_tool() -> ToolDefinition {
 fn request_with_tools(model: &str) -> LLMRequest {
     LLMRequest {
         messages: vec![Message::user("hi".to_string())],
-        tools: Some(vec![sample_tool()]),
+        tools: Some(std::sync::Arc::new(vec![sample_tool()])),
         model: model.to_string(),
         tool_choice: Some(ToolChoice::Any),
         parallel_tool_calls: Some(true),

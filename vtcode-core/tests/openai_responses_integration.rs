@@ -156,7 +156,7 @@ async fn mock_responses_api_top_level_tool_calls() {
     let request = LLMRequest {
         messages: vec![Message::user("Check weather".to_string())],
         model: "gpt-5".to_string(),
-        tools: Some(vec![]), // Enable tools to trigger responses path logic if checked
+        tools: Some(std::sync::Arc::new(vec![])), // Enable tools to trigger responses path logic if checked
         ..Default::default()
     };
 

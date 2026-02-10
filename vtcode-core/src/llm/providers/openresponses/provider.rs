@@ -89,7 +89,7 @@ impl OpenResponsesProvider {
             input.push(OutputItem::completed_message(
                 "msg_system",
                 MessageRole::System,
-                vec![ContentPart::input_text(system)],
+                vec![ContentPart::input_text(system.as_str())],
             ));
         }
 
@@ -135,7 +135,7 @@ impl OpenResponsesProvider {
         req.max_output_tokens = request.max_tokens.map(|t| t as u64);
 
         if let Some(tools) = &request.tools {
-            req.tools = Some(tools.clone());
+            req.tools = Some((**tools).clone());
         }
 
         serde_json::to_value(req).map_err(|e| LLMError::Provider {

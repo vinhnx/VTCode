@@ -47,7 +47,7 @@ impl OpenAIProvider {
         // 2. Add developer message (instructions + tools)
         let mut developer_content = DeveloperContent::new();
         if let Some(system_prompt) = &request.system_prompt {
-            developer_content = developer_content.with_instructions(system_prompt);
+            developer_content = developer_content.with_instructions(system_prompt.as_str());
         }
 
         if let Some(tools) = &request.tools {

@@ -1,6 +1,7 @@
 use crate::config::types::{ReasoningEffortLevel, VerbosityLevel};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use std::sync::Arc;
 
 use super::{Message, ToolDefinition};
 
@@ -9,8 +10,8 @@ use super::{Message, ToolDefinition};
 
 pub struct LLMRequest {
     pub messages: Vec<Message>,
-    pub system_prompt: Option<String>,
-    pub tools: Option<Vec<ToolDefinition>>,
+    pub system_prompt: Option<Arc<String>>,
+    pub tools: Option<Arc<Vec<ToolDefinition>>>,
     pub model: String,
     pub max_tokens: Option<u32>,
     pub temperature: Option<f32>,

@@ -15,14 +15,9 @@ impl AgentRunner {
     ) -> Result<()> {
         let can_parallelize = tool_calls.len() > 1
             && tool_calls.iter().all(|call| {
-                if let Some(func) = &call.function {
-                    matches!(
-                        func.name.as_str(),
-                        "list_files" | "read_file" | "grep_file" | "search_tools"
-                    )
-                } else {
-                    false
-                }
+                call.function
+                    .as_ref()
+                    .is_some_and(|func| crate::tools::parallel_tool_batch::ParallelToolBatch::is_parallel_safe(&func.name))
             });
 
         if can_parallelize {

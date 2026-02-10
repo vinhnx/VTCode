@@ -56,7 +56,7 @@ fn sample_list_modal() -> ModalState {
         let query = modal
             .search
             .as_ref()
-            .map(|state| state.query().to_owned())
+            .map(|state| state.query.clone())
             .unwrap_or_default();
         list.apply_search(&query);
     }
@@ -432,7 +432,7 @@ fn list_modal_handles_search_typing() {
         other => panic!("expected redraw, got {:?}", other),
     }
 
-    let query = modal.search.unwrap().query().to_owned();
+    let query = modal.search.unwrap().query.clone();
     assert_eq!(query, "g");
 }
 
@@ -454,7 +454,7 @@ fn list_modal_submit_emits_event() {
 fn list_modal_cancel_emits_event() {
     let mut modal = sample_list_modal();
     if let Some(search) = modal.search.as_mut() {
-        search.input = tui_input::Input::new("value".to_owned());
+        search.query = "value".to_owned();
     }
 
     let key = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
