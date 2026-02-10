@@ -3,6 +3,7 @@ pub(crate) mod context;
 mod finalization;
 pub(crate) mod guards;
 mod harmony;
+pub(crate) mod plan_content;
 pub mod recovery_flow;
 pub(crate) mod session;
 mod session_loop;

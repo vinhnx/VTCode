@@ -31,8 +31,10 @@ pub(crate) fn validate_tool_args_security(
     let args_hash = if validation_cache.is_some() {
         let mut hasher = DefaultHasher::new();
         name.hash(&mut hasher);
-        // Best-effort stable hashing: serialize to string.
-        // Note: Map key order might vary, causing cache misses, which is safe.
+        // Optimization: For large arguments, hashing the string is still faster than 
+        // recursive Value hashing, but we can avoid to_string() if we use a 
+        // specialized hasher or if we use serde_json::to_writer.
+        // For now, we keep it simple but acknowledge the allocation.
         args.to_string().hash(&mut hasher);
         Some(hasher.finish())
     } else {
@@ -75,14 +77,14 @@ pub(crate) fn validate_tool_args_security(
 
     if !required.is_empty() {
         for key in required {
-            let is_missing = args
-                .get(*key)
-                .map(|v| v.is_null() || (v.is_string() && v.as_str().unwrap_or("").is_empty()))
-                .unwrap_or(true);
+            let is_missing = match args.get(*key) {
+                Some(v) => v.is_null() || (v.is_string() && v.as_str().map_or(true, |s| s.is_empty())),
+                None => true,
+            };
 
             if is_missing {
                 failures
-                    .get_or_insert_with(|| Vec::with_capacity(4))
+                    .get_or_insert_with(|| Vec::with_capacity(required.len()))
                     .push(format!("Missing required argument: {}", key));
             }
         }

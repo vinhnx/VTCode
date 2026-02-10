@@ -19,9 +19,7 @@ use crate::agent::runloop::unified::run_loop_context::TurnPhase;
 use crate::agent::runloop::unified::state::CtrlCState;
 use crate::agent::runloop::unified::tool_call_safety::ToolCallSafetyValidator;
 use crate::agent::runloop::unified::turn::context::TurnLoopResult;
-use crate::agent::runloop::unified::turn::utils::{
-    enforce_history_limits, truncate_message_content,
-};
+
 #[allow(unused_imports)]
 use crate::agent::runloop::unified::ui_interaction::PlaceholderSpinner;
 use vtcode_core::acp::ToolPermissionCache;
@@ -325,14 +323,16 @@ pub async fn run_turn_loop(
                 .find(|msg| msg.role == uni::MessageRole::User)
         {
             // Normalize to lower, strip punctuation so paths or extra symbols don't block detection
-            let normalized = last_user_msg
-                .content
-                .as_text()
-                .to_lowercase()
+            // Optimization: Limit to first 500 characters as trigger phrases are usually at the start/end
+            let text = last_user_msg.content.as_text();
+            let normalized = text
                 .chars()
+                .take(500)
                 .map(|c| {
-                    if c.is_alphanumeric() || c.is_whitespace() {
-                        c
+                    if c.is_alphanumeric() {
+                        c.to_ascii_lowercase()
+                    } else if c.is_whitespace() {
+                        ' '
                     } else {
                         ' '
                     }
@@ -431,7 +431,8 @@ pub async fn run_turn_loop(
         }
 
         // Check if we've reached the maximum number of tool loops
-        if step_count > current_max_tool_loops {
+        // Note: step_count starts at 1 (incremented at loop start), so use >= for correct limit enforcement
+        if step_count >= current_max_tool_loops {
             crate::agent::runloop::unified::turn::turn_helpers::display_status(
                 ctx.renderer,
                 &format!("Reached maximum tool loops ({})", current_max_tool_loops),
@@ -524,7 +525,6 @@ pub async fn run_turn_loop(
         };
 
         // === PROACTIVE GUARDS (HP-2: Pre-request checks) ===
-        // === PROACTIVE GUARDS (HP-2: Pre-request checks) ===
         run_proactive_guards(&mut turn_processing_ctx, step_count).await?;
 
         // Execute the LLM request
@@ -553,9 +553,11 @@ pub async fn run_turn_loop(
                     "LLM request failed",
                     &err,
                 )?;
-                let error_text = truncate_message_content(&format!("Request failed: {}", err));
-                working_history.push(uni::Message::assistant(error_text));
-                enforce_history_limits(&mut working_history);
+                // Log error via tracing instead of polluting conversation history
+                // Adding error messages as assistant content can poison future turns
+                tracing::error!(error = %err, step = step_count, "LLM request failed");
+                // Do NOT add error message to working_history - this prevents the model
+                // from learning spurious error patterns and keeps the conversation clean
                 result = TurnLoopResult::Aborted;
                 break;
             }

@@ -37,8 +37,8 @@ pub(crate) async fn handle_tool_execution_result(
             // Add successful tool result to history
 
             let content_for_model = match output {
-                Value::String(s) => s.clone(),
-                Value::Object(obj) => serde_json::to_string(obj).unwrap_or_default(),
+                serde_json::Value::String(s) => s.clone(),
+                serde_json::Value::Object(obj) => serde_json::to_string(obj).unwrap_or_default(),
                 _ => output.to_string(),
             };
 
