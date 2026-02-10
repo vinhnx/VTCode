@@ -1,7 +1,7 @@
 //! Comprehensive tool call verification for all LLM providers
 
-use std::sync::Arc;
 use serde_json::json;
+use std::sync::Arc;
 use vtcode_core::config::constants::models;
 use vtcode_core::config::types::VerbosityLevel;
 use vtcode_core::llm::{

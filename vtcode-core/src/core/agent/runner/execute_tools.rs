@@ -15,9 +15,11 @@ impl AgentRunner {
     ) -> Result<()> {
         let can_parallelize = tool_calls.len() > 1
             && tool_calls.iter().all(|call| {
-                call.function
-                    .as_ref()
-                    .is_some_and(|func| crate::tools::parallel_tool_batch::ParallelToolBatch::is_parallel_safe(&func.name))
+                call.function.as_ref().is_some_and(|func| {
+                    crate::tools::parallel_tool_batch::ParallelToolBatch::is_parallel_safe(
+                        &func.name,
+                    )
+                })
             });
 
         if can_parallelize {

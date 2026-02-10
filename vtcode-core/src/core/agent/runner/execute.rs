@@ -63,6 +63,7 @@ impl AgentRunner {
             let is_simple_task = Self::is_simple_task(task, contexts);
 
             let system_prompt = if is_simple_task {
+                // One-time clone for simple tasks to override prompt mode (not per-turn)
                 let mut config = self.config().clone();
                 config.agent.system_prompt_mode = SystemPromptMode::Minimal;
                 compose_system_instruction_text(self._workspace.as_path(), Some(&config), None)

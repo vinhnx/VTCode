@@ -168,23 +168,8 @@ pub trait Tool: Send + Sync {
         workspace_root: &std::path::Path,
         path: &str,
     ) -> anyhow::Result<std::path::PathBuf> {
-        let path = std::path::Path::new(path);
-        let absolute = if path.is_absolute() {
-            path.to_path_buf()
-        } else {
-            workspace_root.join(path)
-        };
-
-        let normalized = crate::utils::path::normalize_path(&absolute);
-
-        if !normalized.starts_with(workspace_root) {
-            anyhow::bail!(
-                "Path '{}' resolves outside the workspace boundary",
-                path.display()
-            );
-        }
-
-        Ok(normalized)
+        crate::tools::validation::unified_path::validate_and_resolve_path(workspace_root, path)
+            .await
     }
 }
 
