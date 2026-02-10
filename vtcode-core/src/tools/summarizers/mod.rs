@@ -28,8 +28,7 @@ pub(super) fn truncate_line(line: &str, max_len: usize) -> String {
         let end = line
             .char_indices()
             .map(|(i, _)| i)
-            .filter(|&i| i <= target)
-            .last()
+            .rfind(|&i| i <= target)
             .unwrap_or(0);
         format!("{}...", &line[..end])
     }
