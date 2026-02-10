@@ -223,8 +223,7 @@ fn truncate_command(cmd: &str, max_len: usize) -> String {
         let end = cmd
             .char_indices()
             .map(|(i, _)| i)
-            .filter(|&i| i <= target)
-            .last()
+            .rfind(|&i| i <= target)
             .unwrap_or(0);
         format!("{}...", &cmd[..end])
     }
