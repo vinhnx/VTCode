@@ -59,6 +59,9 @@ pub struct LoopDetector {
     last_warning: Option<Instant>,
     max_identical_call_limit: Option<usize>,
     custom_limits: HashMap<String, usize>,
+    /// Cache mapping (tool_name, raw_args) composite hash → normalized_args_hash.
+    /// Avoids re-running normalization + re-serialization on repeated identical calls.
+    norm_cache: HashMap<u64, u64>,
 }
 
 impl LoopDetector {
@@ -74,6 +77,7 @@ impl LoopDetector {
             last_warning: None,
             max_identical_call_limit: normalized_limit,
             custom_limits: HashMap::new(),
+            norm_cache: HashMap::with_capacity(16),
         }
     }
 
@@ -87,16 +91,32 @@ impl LoopDetector {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
 
-        let normalized_args = normalize_args_for_detection(tool_name, args);
-
-        let mut hasher = DefaultHasher::new();
-        // OPTIMIZATION: Hash the value directly instead of converting to string first
-        if let Ok(bytes) = serde_json::to_vec(&normalized_args) {
-            bytes.hash(&mut hasher);
+        let mut raw_hasher = DefaultHasher::new();
+        tool_name.hash(&mut raw_hasher);
+        if let Ok(bytes) = serde_json::to_vec(args) {
+            bytes.hash(&mut raw_hasher);
         } else {
-            normalized_args.to_string().hash(&mut hasher);
+            args.to_string().hash(&mut raw_hasher);
         }
-        let args_hash = hasher.finish();
+        let raw_key = raw_hasher.finish();
+
+        let args_hash = if let Some(&cached) = self.norm_cache.get(&raw_key) {
+            cached
+        } else {
+            let normalized_args = normalize_args_for_detection(tool_name, args);
+            let mut hasher = DefaultHasher::new();
+            if let Ok(bytes) = serde_json::to_vec(&normalized_args) {
+                bytes.hash(&mut hasher);
+            } else {
+                normalized_args.to_string().hash(&mut hasher);
+            }
+            let hash = hasher.finish();
+            if self.norm_cache.len() >= 16 {
+                self.norm_cache.clear();
+            }
+            self.norm_cache.insert(raw_key, hash);
+            hash
+        };
 
         if let Some(limit) = self.max_identical_call_limit
             && Self::should_enforce_identical_limit(tool_name)
@@ -254,6 +274,7 @@ impl LoopDetector {
         self.recent_calls.clear();
         self.tool_counts.clear();
         self.last_warning = None;
+        self.norm_cache.clear();
     }
 
     /// Get limit for a specific tool.

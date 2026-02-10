@@ -7,7 +7,12 @@ pub(crate) fn build_system_prompt(
     cache_control: &Option<CacheControl>,
     breakpoints_remaining: usize,
 ) -> (Option<Value>, usize) {
-    let mut final_system_prompt = request.system_prompt.clone().unwrap_or_default();
+    let mut final_system_prompt = request
+        .system_prompt
+        .as_ref()
+        .map(|s| s.as_str())
+        .unwrap_or_default()
+        .to_string();
 
     if let Some(settings) = &request.coding_agent_settings {
         if let Some(role) = &settings.role_specialization {

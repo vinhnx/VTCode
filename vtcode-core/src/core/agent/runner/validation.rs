@@ -51,7 +51,7 @@ impl AgentRunner {
         // Validate tools if present
         if let Some(tools) = &request.tools {
             let mut seen_names = HashSet::new();
-            for tool in tools {
+            for tool in tools.iter() {
                 self.validate_tool_definition(tool, &mut seen_names)?;
             }
         }

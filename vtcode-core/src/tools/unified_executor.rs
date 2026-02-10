@@ -409,37 +409,7 @@ impl ToolRegistryAdapter {
 
     /// Check if a tool is mutating
     async fn is_tool_mutating(&self, name: &str) -> Result<bool> {
-        // Use well-known read-only tool patterns
-        // These tools are safe to run in plan mode
-        const READ_ONLY_TOOLS: &[&str] = &[
-            "read_file",
-            "list_files",
-            "grep_file",
-            "search_files",
-            "code_intelligence",
-            "get_errors",
-            "agent_info",
-            "search_tools",
-            "list_pty_sessions",
-            "read_pty_session",
-        ];
-
-        const READ_ONLY_PREFIXES: &[&str] = &["read_", "list_", "get_", "search_", "find_"];
-
-        // Check exact matches
-        if READ_ONLY_TOOLS.contains(&name) {
-            return Ok(false);
-        }
-
-        // Check prefixes
-        for prefix in READ_ONLY_PREFIXES {
-            if name.starts_with(prefix) {
-                return Ok(false);
-            }
-        }
-
-        // Default: assume mutating for safety
-        Ok(true)
+        Ok(!crate::tools::parallel_tool_batch::ParallelToolBatch::is_parallel_safe(name))
     }
 }
 

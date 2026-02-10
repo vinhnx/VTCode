@@ -442,7 +442,7 @@ where
 
     Some(LLMRequest {
         messages,
-        system_prompt,
+        system_prompt: system_prompt.map(std::sync::Arc::new),
         model: value
             .get("model")
             .and_then(|m| m.as_str())

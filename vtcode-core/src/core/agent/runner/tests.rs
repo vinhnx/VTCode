@@ -4,14 +4,18 @@ use crate::core::agent::state::record_turn_duration;
 
 #[test]
 fn record_turn_duration_records_once() {
-    let mut durations = Vec::with_capacity(5); // Test only needs capacity for a few durations
+    let mut durations = Vec::with_capacity(5);
+    let mut total_ms = 0u128;
+    let mut max_ms = 0u128;
+    let mut count = 0usize;
     let mut recorded = false;
     let start = std::time::Instant::now();
 
-    record_turn_duration(&mut durations, &mut recorded, &start);
-    record_turn_duration(&mut durations, &mut recorded, &start);
+    record_turn_duration(&mut durations, &mut total_ms, &mut max_ms, &mut count, &mut recorded, &start);
+    record_turn_duration(&mut durations, &mut total_ms, &mut max_ms, &mut count, &mut recorded, &start);
 
     assert_eq!(durations.len(), 1);
+    assert_eq!(count, 1);
 }
 
 #[test]
@@ -56,6 +60,9 @@ fn finalize_outcome_tool_loop_limit() {
 fn into_results_computes_metrics() {
     let mut state = TaskRunState::new(Vec::new(), Vec::new(), 5, 10000);
     state.turn_durations_ms = vec![100, 200, 300];
+    state.turn_total_ms = 600;
+    state.turn_max_ms = 300;
+    state.turn_count = 3;
     state.turns_executed = 3;
     state.completion_outcome = TaskOutcome::Success;
     state.modified_files = vec!["file.rs".to_owned()];

@@ -353,7 +353,7 @@ impl HuggingFaceProvider {
                 MessageRole::System | MessageRole::User => {
                     if msg.role == MessageRole::System && request.system_prompt.is_some() {
                         if let crate::llm::provider::MessageContent::Text(text) = &msg.content {
-                            if Some(text) == request.system_prompt.as_ref() {
+                            if request.system_prompt.as_ref().map(|s| s.as_str()) == Some(text.as_str()) {
                                 continue;
                             }
                         }

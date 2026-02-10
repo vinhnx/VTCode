@@ -304,7 +304,7 @@ impl GeminiProvider {
             system_instruction: request
                 .system_prompt
                 .as_ref()
-                .map(|text| SystemInstruction::new(text.clone()))
+                .map(|text| SystemInstruction::new((**text).clone()))
                 .or_else(|| {
                     if self.prompt_cache_enabled {
                         Some(SystemInstruction::new(default_system_prompt()))

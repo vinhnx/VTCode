@@ -1,5 +1,6 @@
 //! Comprehensive tool call verification for all LLM providers
 
+use std::sync::Arc;
 use serde_json::json;
 use vtcode_core::config::constants::models;
 use vtcode_core::config::types::VerbosityLevel;
@@ -47,8 +48,8 @@ fn test_openai_tool_call_format() {
             assistant_msg,
             tool_msg,
         ],
-        system_prompt: Some("You are a helpful assistant.".to_string()),
-        tools: Some(vec![tool]),
+        system_prompt: Some(Arc::new("You are a helpful assistant.".to_string())),
+        tools: Some(Arc::new(vec![tool])),
         model: models::GPT_5.to_string(),
         max_tokens: None,
         temperature: Some(0.7),
@@ -115,8 +116,8 @@ fn test_anthropic_tool_call_format() {
             assistant_msg,
             tool_msg,
         ],
-        system_prompt: Some("You are a helpful assistant.".to_string()),
-        tools: Some(vec![tool]),
+        system_prompt: Some(Arc::new("You are a helpful assistant.".to_string())),
+        tools: Some(Arc::new(vec![tool])),
         model: models::CLAUDE_SONNET_4_5.to_string(),
         max_tokens: None,
         temperature: Some(0.7),
@@ -183,8 +184,8 @@ fn test_gemini_tool_call_format() {
             assistant_msg,
             tool_msg,
         ],
-        system_prompt: Some("You are a helpful assistant.".to_string()),
-        tools: Some(vec![tool]),
+        system_prompt: Some(Arc::new("You are a helpful assistant.".to_string())),
+        tools: Some(Arc::new(vec![tool])),
         model: "gemini-2.5-flash-preview-05-20".to_string(),
         max_tokens: None,
         temperature: Some(0.7),
@@ -233,7 +234,7 @@ fn test_all_providers_tool_validation() {
     let gemini_request = LLMRequest {
         messages: vec![Message::user("test".to_string())],
         system_prompt: None,
-        tools: Some(vec![tool.clone()]),
+        tools: Some(Arc::new(vec![tool.clone()])),
         model: "gemini-2.5-flash-preview-05-20".to_string(),
         max_tokens: None,
         temperature: Some(0.7),
@@ -263,7 +264,7 @@ fn test_all_providers_tool_validation() {
     let openai_request = LLMRequest {
         messages: vec![Message::user("test".to_string())],
         system_prompt: None,
-        tools: Some(vec![tool.clone()]),
+        tools: Some(Arc::new(vec![tool.clone()])),
         model: models::GPT_5.to_string(),
         max_tokens: None,
         temperature: None,
@@ -293,7 +294,7 @@ fn test_all_providers_tool_validation() {
     let anthropic_request = LLMRequest {
         messages: vec![Message::user("test".to_string())],
         system_prompt: None,
-        tools: Some(vec![tool.clone()]),
+        tools: Some(Arc::new(vec![tool.clone()])),
         model: models::CLAUDE_SONNET_4_5_20250929.to_string(),
         max_tokens: None,
         temperature: None,
@@ -323,7 +324,7 @@ fn test_all_providers_tool_validation() {
     let openrouter_request = LLMRequest {
         messages: vec![Message::user("test".to_string())],
         system_prompt: None,
-        tools: Some(vec![tool.clone()]),
+        tools: Some(Arc::new(vec![tool.clone()])),
         model: models::OPENROUTER_X_AI_GROK_CODE_FAST_1.to_string(),
         max_tokens: None,
         temperature: None,
@@ -358,7 +359,7 @@ fn test_all_providers_tool_validation() {
     let lmstudio_request = LLMRequest {
         messages: vec![Message::user("test".to_string())],
         system_prompt: None,
-        tools: Some(vec![tool.clone()]),
+        tools: Some(Arc::new(vec![tool.clone()])),
         model: models::lmstudio::DEFAULT_MODEL.to_string(),
         max_tokens: None,
         temperature: Some(0.1),
@@ -390,7 +391,7 @@ fn test_all_providers_tool_validation() {
     let ollama_request = LLMRequest {
         messages: vec![Message::user("test".to_string())],
         system_prompt: None,
-        tools: Some(vec![tool]),
+        tools: Some(Arc::new(vec![tool])),
         model: models::ollama::DEFAULT_MODEL.to_string(),
         max_tokens: None,
         temperature: None,
@@ -456,8 +457,8 @@ fn test_openrouter_tool_call_format() {
             assistant_msg,
             tool_msg,
         ],
-        system_prompt: Some("You are a helpful assistant.".to_string()),
-        tools: Some(vec![tool]),
+        system_prompt: Some(Arc::new("You are a helpful assistant.".to_string())),
+        tools: Some(Arc::new(vec![tool])),
         model: models::OPENROUTER_X_AI_GROK_CODE_FAST_1.to_string(),
         max_tokens: None,
         temperature: Some(0.7),

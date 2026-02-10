@@ -88,7 +88,7 @@ pub struct AgentRunner {
     /// API failure tracking for exponential backoff
     failure_tracker: RefCell<ApiFailureTracker>,
     /// Context optimizer for token budget management
-    context_optimizer: RefCell<ContextOptimizer>,
+    context_optimizer: tokio::sync::Mutex<ContextOptimizer>,
     /// Tracks recent streaming failures to avoid repeated double-requests
     streaming_failures: RefCell<u8>,
     /// Records when streaming last failed for cooldown-based re-enablement
@@ -166,7 +166,7 @@ impl AgentRunner {
             max_turns: defaults::DEFAULT_FULL_AUTO_MAX_TURNS,
             loop_detector: RefCell::new(loop_detector),
             failure_tracker: RefCell::new(ApiFailureTracker::new()),
-            context_optimizer: RefCell::new(ContextOptimizer::new()),
+            context_optimizer: tokio::sync::Mutex::new(ContextOptimizer::new()),
             streaming_failures: RefCell::new(0),
             streaming_last_failure: RefCell::new(None),
         })

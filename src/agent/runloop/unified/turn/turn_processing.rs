@@ -100,8 +100,8 @@ pub(crate) async fn execute_llm_request(
     let request = uni::LLMRequest {
         // HP-1: Single clone only when building LLMRequest
         messages: ctx.working_history.to_vec(),
-        system_prompt: Some(system_prompt),
-        tools: current_tools,
+        system_prompt: Some(std::sync::Arc::new(system_prompt)),
+        tools: current_tools.map(std::sync::Arc::new),
         model: active_model.to_string(),
         temperature,
         stream: use_streaming,

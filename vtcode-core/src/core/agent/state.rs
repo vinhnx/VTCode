@@ -90,11 +90,20 @@ impl HistoryValidationReport {
 #[inline]
 pub(crate) fn record_turn_duration(
     turn_durations: &mut Vec<u128>,
+    turn_total_ms: &mut u128,
+    turn_max_ms: &mut u128,
+    turn_count: &mut usize,
     recorded: &mut bool,
     start: &std::time::Instant,
 ) {
     if !*recorded {
-        turn_durations.push(start.elapsed().as_millis());
+        let duration_ms = start.elapsed().as_millis();
+        turn_durations.push(duration_ms);
+        *turn_total_ms += duration_ms;
+        if duration_ms > *turn_max_ms {
+            *turn_max_ms = duration_ms;
+        }
+        *turn_count += 1;
         *recorded = true;
     }
 }
@@ -154,6 +163,9 @@ pub struct TaskRunState {
     pub completion_outcome: TaskOutcome,
     pub turns_executed: usize,
     pub turn_durations_ms: Vec<u128>,
+    pub turn_total_ms: u128,
+    pub turn_max_ms: u128,
+    pub turn_count: usize,
     pub max_tool_loops: usize,
     pub consecutive_tool_loops: usize,
     pub max_tool_loop_streak: usize,
@@ -184,6 +196,9 @@ impl TaskRunState {
             completion_outcome: TaskOutcome::Unknown,
             turns_executed: 0,
             turn_durations_ms: Vec::with_capacity(max_tool_loops), // Pre-allocate for expected number of turns
+            turn_total_ms: 0,
+            turn_max_ms: 0,
+            turn_count: 0,
             last_processed_message_idx: 0,
             max_tool_loops,
             consecutive_tool_loops: 0,
@@ -195,7 +210,14 @@ impl TaskRunState {
     }
 
     pub fn record_turn(&mut self, start: &std::time::Instant, recorded: &mut bool) {
-        record_turn_duration(&mut self.turn_durations_ms, recorded, start);
+        record_turn_duration(
+            &mut self.turn_durations_ms,
+            &mut self.turn_total_ms,
+            &mut self.turn_max_ms,
+            &mut self.turn_count,
+            recorded,
+            start,
+        );
     }
 
     /// Get current budget utilization (0.0 to 1.0)
@@ -318,13 +340,16 @@ impl TaskRunState {
         thread_events: Vec<ThreadEvent>,
         total_duration_ms: u128,
     ) -> TaskResults {
-        let total_turn_duration_ms: u128 = self.turn_durations_ms.iter().sum();
-        let average_turn_duration_ms = if !self.turn_durations_ms.is_empty() {
-            Some(total_turn_duration_ms as f64 / self.turn_durations_ms.len() as f64)
+        let average_turn_duration_ms = if self.turn_count > 0 {
+            Some(self.turn_total_ms as f64 / self.turn_count as f64)
         } else {
             None
         };
-        let max_turn_duration_ms = self.turn_durations_ms.iter().copied().max();
+        let max_turn_duration_ms = if self.turn_count > 0 {
+            Some(self.turn_max_ms)
+        } else {
+            None
+        };
         let completion_outcome = self.completion_outcome;
 
         TaskResults {

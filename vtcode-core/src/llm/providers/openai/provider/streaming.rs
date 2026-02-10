@@ -32,7 +32,7 @@ impl OpenAIProvider {
 
         let prefer_responses_stream = matches!(responses_state, ResponsesApiState::Required)
             || (matches!(responses_state, ResponsesApiState::Allowed)
-                && request.tools.as_ref().is_none_or(Vec::is_empty));
+                && request.tools.as_ref().is_none_or(|t| t.is_empty()));
 
         if !prefer_responses_stream {
             return self.stream_chat_completions(&request).await;

@@ -39,7 +39,7 @@ impl OpenAIProvider {
         let responses_state = self.responses_api_state(&request.model);
         let attempt_responses = !matches!(responses_state, ResponsesApiState::Disabled)
             && (matches!(responses_state, ResponsesApiState::Required)
-                || request.tools.as_ref().is_none_or(Vec::is_empty));
+                || request.tools.as_ref().is_none_or(|t| t.is_empty()));
         #[cfg(debug_assertions)]
         let request_timer = Instant::now();
         #[cfg(debug_assertions)]

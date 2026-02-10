@@ -160,7 +160,9 @@ impl acp::Agent for ZedAgent {
         let has_local_tools = self.acp_tool_registry.has_local_tools();
         let tools_allowed =
             provider_supports_tools && (!enabled_tools.is_empty() || has_local_tools);
-        let tool_definitions = self.tool_definitions(provider_supports_tools, &enabled_tools);
+        let tool_definitions = self
+            .tool_definitions(provider_supports_tools, &enabled_tools)
+            .map(std::sync::Arc::new);
         let mut messages = self.resolved_messages(&session);
         let allow_streaming = supports_streaming && !tools_allowed;
 
