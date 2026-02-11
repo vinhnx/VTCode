@@ -60,6 +60,7 @@ pub use declarations::{
     build_function_declarations_for_level, build_function_declarations_with_mode,
 };
 pub use error::{ToolErrorType, ToolExecutionError, classify_error};
+pub use execution_facade::ToolPreflightOutcome;
 pub use execution_history::{HarnessContextSnapshot, ToolExecutionHistory, ToolExecutionRecord};
 pub use harness::HarnessContext;
 pub use justification::{ApprovalPattern, JustificationManager, ToolJustification};
@@ -122,6 +123,9 @@ pub struct ToolRegistry {
 
     /// MP-3: Circuit breaker for MCP client failures
     mcp_circuit_breaker: Arc<circuit_breaker::McpCircuitBreaker>,
+    /// Shared per-tool circuit breaker state used by the runloop.
+    shared_circuit_breaker:
+        Arc<std::sync::RwLock<Option<Arc<crate::tools::circuit_breaker::CircuitBreaker>>>>,
     initialized: Arc<std::sync::atomic::AtomicBool>,
     // Security & Identity
     shell_policy: Arc<RwLock<ShellPolicyChecker>>,

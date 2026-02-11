@@ -3,18 +3,29 @@ use vtcode_core::config::loader::ConfigManager;
 use vtcode_core::prompts::PromptContext;
 use vtcode_core::prompts::system::compose_system_instruction_text;
 
-pub(crate) async fn read_system_prompt(workspace: &Path, session_addendum: Option<&str>) -> String {
-    // Build PromptContext with available information (workspace and current directory)
-    // Tool information will be added when tools are initialized
+pub(crate) async fn read_system_prompt(
+    workspace: &Path,
+    session_addendum: Option<&str>,
+    available_tools: &[String],
+) -> String {
+    // Build PromptContext with available information (workspace, current directory, tools)
     let mut prompt_context = PromptContext {
         workspace: Some(workspace.to_path_buf()),
-        skip_standard_instructions: true,
+        skip_standard_instructions: false,
         ..Default::default()
     };
 
     // Set current working directory
     if let Ok(cwd) = std::env::current_dir() {
         prompt_context.set_current_directory(cwd);
+    }
+
+    // Populate available tools so dynamic tool-aware guidelines match runtime capabilities.
+    for tool in available_tools {
+        prompt_context.add_tool(tool.clone());
+    }
+    if !prompt_context.available_tools.is_empty() {
+        prompt_context.infer_capability_level();
     }
 
     // Load configuration
@@ -53,9 +64,6 @@ Use tools immediately. Stop when done or blocked.
 - Use cargo, rustfmt, clippy. Handle errors with Result/anyhow."#
             .to_string();
     }
-
-    // Note: PROJECT OVERVIEW and AGENTS.MD are now handled by compose_system_instruction_text
-    // The old code duplicated AGENTS.MD loading - removed to avoid duplication
 
     if let Some(addendum) = session_addendum {
         let trimmed = addendum.trim();

@@ -602,6 +602,7 @@ pub async fn run_turn_loop(
             allow_plan_interview,
             turn_config.ask_questions_enabled,
             Some(&validation_cache),
+            Some(turn_processing_ctx.tool_registry),
         )?;
         if turn_processing_ctx.session_stats.is_plan_mode() && turn_config.ask_questions_enabled {
             processing_result = maybe_force_plan_mode_interview(

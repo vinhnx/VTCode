@@ -413,9 +413,17 @@ pub(crate) async fn initialize_session(
     recover_history_from_crash(&mut conversation_history);
 
     let trajectory = build_trajectory_logger(&config.workspace, vt_cfg);
+    let available_tools = {
+        let tool_defs = tools.read().await;
+        tool_defs
+            .iter()
+            .map(|def| def.function_name().to_string())
+            .collect::<Vec<_>>()
+    };
     let base_system_prompt = read_system_prompt(
         &config.workspace,
         session_bootstrap.prompt_addendum.as_deref(),
+        &available_tools,
     )
     .await;
 
@@ -714,6 +722,11 @@ pub(crate) async fn initialize_session(
         warn!("Failed to initialize dynamic context directories: {}", err);
     }
 
+    let circuit_breaker = Arc::new(vtcode_core::tools::circuit_breaker::CircuitBreaker::new(
+        vtcode_config_circuit_breaker_to_core(vt_cfg, config),
+    ));
+    tool_registry.set_shared_circuit_breaker(circuit_breaker.clone());
+
     Ok(SessionState {
         session_bootstrap,
         provider_client,
@@ -737,9 +750,7 @@ pub(crate) async fn initialize_session(
         safety_validator: Arc::new(RwLock::new(ToolCallSafetyValidator::new())),
         // Phase 4 Integration: Resilient execution components
         // Use agent.circuit_breaker config if available, otherwise use defaults
-        circuit_breaker: Arc::new(vtcode_core::tools::circuit_breaker::CircuitBreaker::new(
-            vtcode_config_circuit_breaker_to_core(vt_cfg, config),
-        )),
+        circuit_breaker,
         tool_health_tracker: Arc::new(vtcode_core::tools::health::ToolHealthTracker::new(50)), // Keep last 50 execution stats per tool
         rate_limiter: Arc::new(
             vtcode_core::tools::adaptive_rate_limiter::AdaptiveRateLimiter::default(),

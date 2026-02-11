@@ -3,10 +3,36 @@
 use serde_json::Value;
 
 use crate::mcp::McpToolExecutor;
+use crate::tools::names::canonical_tool_name;
 
 use super::ToolRegistry;
 
 impl ToolRegistry {
+    /// Suggest a fallback tool for a failed invocation using lightweight heuristics.
+    pub async fn suggest_fallback_tool(&self, failed_tool: &str) -> Option<String> {
+        let failed = canonical_tool_name(failed_tool);
+        let failed_name: &str = failed.as_ref();
+        let candidates: &[&str] = match failed.as_ref() {
+            "read_file" => &["list_files", "grep_file", "unified_search"],
+            "list_files" => &["read_file", "grep_file", "unified_search"],
+            "grep_file" => &["read_file", "unified_search", "code_intelligence"],
+            "code_intelligence" => &["grep_file", "read_file", "unified_search"],
+            "run_pty_cmd" | "shell" | "unified_exec" => &["unified_search", "grep_file"],
+            "write_file" | "edit_file" | "apply_patch" | "unified_file" => {
+                &["read_file", "grep_file", "unified_search"]
+            }
+            _ => &["unified_search", "grep_file", "read_file"],
+        };
+
+        let available = self.available_tools().await;
+        for candidate in candidates {
+            if *candidate != failed_name && available.iter().any(|tool| tool == candidate) {
+                return Some((*candidate).to_string());
+            }
+        }
+        None
+    }
+
     /// Get a list of all available tools, including MCP tools.
     pub async fn available_tools(&self) -> Vec<String> {
         // Use try_read to avoid blocking on contested locks

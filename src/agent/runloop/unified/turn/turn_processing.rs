@@ -443,6 +443,7 @@ pub(crate) fn process_llm_response(
     validation_cache: Option<
         &std::sync::Arc<vtcode_core::tools::validation_cache::ValidationCache>,
     >,
+    tool_registry: Option<&vtcode_core::tools::ToolRegistry>,
 ) -> Result<TurnProcessingResult> {
     use crate::agent::runloop::unified::turn::harmony::strip_harmony_syntax;
     use vtcode_core::config::constants::tools;
@@ -475,7 +476,7 @@ pub(crate) fn process_llm_response(
         // Validate required arguments and security before adding the tool call.
         // This prevents executing tools with empty args or security violations.
         if let Some(validation_failures) =
-            validate_tool_args_security(&name, &args, validation_cache)
+            validate_tool_args_security(&name, &args, validation_cache, tool_registry)
         {
             // Show warning about validation failures but don't add the tool call.
             // This allows the model to continue naturally instead of failing execution.
@@ -1060,7 +1061,7 @@ mod tests {
         };
 
         let mut renderer = AnsiRenderer::stdout();
-        let result = process_llm_response(&response, &mut renderer, 0, true, true, None)
+        let result = process_llm_response(&response, &mut renderer, 0, true, true, None, None)
             .expect("processing should succeed");
 
         match result {
@@ -1087,7 +1088,7 @@ mod tests {
         };
 
         let mut renderer = AnsiRenderer::stdout();
-        let result = process_llm_response(&response, &mut renderer, 0, false, true, None)
+        let result = process_llm_response(&response, &mut renderer, 0, false, true, None, None)
             .expect("processing should succeed");
 
         match result {
