@@ -1,7 +1,17 @@
 use std::path::Path;
 use vtcode_core::config::loader::ConfigManager;
+use vtcode_core::config::types::SystemPromptMode;
 use vtcode_core::prompts::PromptContext;
-use vtcode_core::prompts::system::compose_system_instruction_text;
+use vtcode_core::prompts::system::{
+    compose_system_instruction_text, default_system_prompt, minimal_system_prompt,
+};
+
+fn fallback_base_system_prompt(vt_cfg: Option<&vtcode_core::config::VTCodeConfig>) -> &'static str {
+    match vt_cfg.map(|cfg| cfg.agent.system_prompt_mode) {
+        Some(SystemPromptMode::Minimal) => minimal_system_prompt(),
+        _ => default_system_prompt(),
+    }
+}
 
 pub(crate) async fn read_system_prompt(
     workspace: &Path,
@@ -38,31 +48,9 @@ pub(crate) async fn read_system_prompt(
         compose_system_instruction_text(workspace, vt_cfg.as_ref(), Some(&prompt_context)).await;
 
     // Fallback prompt if composition fails (should rarely happen)
+    // Use centralized vtcode-core prompt variants to preserve safety/loop/plan guidance.
     if prompt.is_empty() {
-        prompt = r#"# VT Code - Rust Coding Assistant
-
-Use tools immediately. Stop when done or blocked.
-
-## Rules
-- Stay in workspace. Confirm destructive ops (rm, force-push). No secrets.
-- Read files before editing. Verify changes with tests/cargo check.
-- Direct tone, 1-2 sentence summaries. No code dumps or emojis.
-
-## Execution
-1. UNDERSTAND: Parse request
-2. GATHER: Search before reading files
-3. EXECUTE: Fewest tool calls, quote paths
-4. VERIFY: Check results
-5. REPLY: Stop once solved
-
-## Tool Safety
-- Prefer read-only first. Retry transient errors once.
-- After 3+ low-signal calls, reassess approach.
-
-## Rust
-- Idiomatic code with proper ownership/borrowing
-- Use cargo, rustfmt, clippy. Handle errors with Result/anyhow."#
-            .to_string();
+        prompt = fallback_base_system_prompt(vt_cfg.as_ref()).to_string();
     }
 
     if let Some(addendum) = session_addendum {
@@ -74,4 +62,27 @@ Use tools immediately. Stop when done or blocked.
     }
 
     prompt
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use vtcode_core::config::VTCodeConfig;
+    use vtcode_core::config::types::SystemPromptMode;
+
+    #[test]
+    fn test_fallback_base_system_prompt_defaults_to_default() {
+        assert_eq!(fallback_base_system_prompt(None), default_system_prompt());
+    }
+
+    #[test]
+    fn test_fallback_base_system_prompt_uses_minimal_mode() {
+        let mut config = VTCodeConfig::default();
+        config.agent.system_prompt_mode = SystemPromptMode::Minimal;
+
+        assert_eq!(
+            fallback_base_system_prompt(Some(&config)),
+            minimal_system_prompt()
+        );
+    }
 }

@@ -118,7 +118,7 @@ You are a coding agent for VT Code, a terminal-based IDE. Precise, safe, helpful
 **Complete autonomously**:
 - Resolve tasks fully before yielding; do not ask for confirmation on intermediate steps
 - Iterate on feedback proactively (up to reasonable limits)
-- When stuck twice on same error, change approach immediately
+- When repeatedly stuck on the same error, change approach immediately
 - Fix root cause, not surface patches
 
 **Bias for action** (CRITICAL for autonomous operation):
@@ -291,7 +291,7 @@ const MINIMAL_SYSTEM_PROMPT: &str = r#"You are VT Code, a coding assistant for V
 
 **Autonomy**:
 - Complete tasks fully before yielding; iterate on feedback proactively
-- When stuck twice, change approach
+- When repeatedly stuck, change approach
 - Fix root cause, not patches
 - Run tests/checks yourself after changes
 - Proceed with reasonable assumptions; only ask when genuinely blocked
@@ -359,7 +359,7 @@ Complex refactoring and multi-file analysis. Methodical, outcome-focused, expert
 **Complete autonomously**:
 - Resolve tasks fully; don't ask for permission on intermediate steps
 - Iterate proactively on feedback (up to reasonable limits)
-- When stuck twice on same error, pivot immediately to alternative approach
+- When repeatedly stuck on the same error, pivot to an alternative approach
 - Fix root cause, not surface-level patches
 
 **Ambition in context**:
@@ -398,10 +398,10 @@ __UNIFIED_TOOL_GUIDANCE__
 
 ## Loop Prevention & Constraints
 
-- **Same tool+params twice**: Change approach immediately
-- **10+ calls without progress**: Explain blockers clearly and pivot
-- **90%+ context**: Summarize state, prep for reset
-- **Transient errors**: Retry once; reassess after 3+ low-signal calls
+- **Repeated identical calls**: Change approach instead of repeating unchanged calls
+- **Stalled progress**: Explain blockers briefly and pivot
+- **Loop guards**: Follow runtime-configured tool loop and repeated-call limits
+- **Transient errors**: Retry likely transient failures, then adjust approach
 
 ## AGENTS.md Precedence
 
@@ -1004,6 +1004,16 @@ mod tests {
             "Default prompt should be ~2700 tokens (after deduplication), got ~{}",
             approx_tokens
         );
+    }
+
+    #[test]
+    fn test_prompt_text_avoids_hardcoded_loop_thresholds() {
+        assert!(!DEFAULT_SYSTEM_PROMPT.contains("stuck twice"));
+        assert!(!MINIMAL_SYSTEM_PROMPT.contains("stuck twice"));
+        assert!(!DEFAULT_SPECIALIZED_PROMPT.contains("stuck twice"));
+        assert!(!DEFAULT_SPECIALIZED_PROMPT.contains("10+ calls without progress"));
+        assert!(!DEFAULT_SPECIALIZED_PROMPT.contains("Same tool+params twice"));
+        assert!(DEFAULT_SPECIALIZED_PROMPT.contains("runtime-configured"));
     }
 
     // ENHANCEMENT TESTS

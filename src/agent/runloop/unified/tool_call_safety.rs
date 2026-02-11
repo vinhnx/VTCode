@@ -75,7 +75,7 @@ impl ToolCallSafetyValidator {
             plan_mode_active: false,
             workspace_trust: WorkspaceTrust::Trusted,
             approval_risk_threshold: RiskLevel::Medium,
-            enforce_rate_limits: false,
+            enforce_rate_limits: true,
         };
 
         Self {
@@ -241,7 +241,10 @@ mod tests {
 
         assert!(validator.validate_call("read_file").await.is_ok());
         assert!(validator.validate_call("read_file").await.is_ok());
-        assert!(validator.validate_call("read_file").await.is_err());
+        assert!(matches!(
+            validator.validate_call("read_file").await,
+            Err(SafetyError::RateLimitExceeded { .. })
+        ));
     }
 
     #[tokio::test]

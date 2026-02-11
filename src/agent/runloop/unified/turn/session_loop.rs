@@ -8,7 +8,6 @@ use tokio_util::sync::CancellationToken;
 
 use tokio::time::{Duration, sleep, timeout};
 use vtcode::config_watcher::SimpleConfigWatcher;
-use vtcode_core::config::constants::defaults;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::resolve_timeout;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
@@ -102,7 +101,7 @@ pub(crate) async fn run_single_agent_loop_unified(
 
     // Idle detection state
     let mut _consecutive_idle_cycles = 0;
-    let mut last_activity_time = Instant::now();
+    let mut last_activity_time: Option<Instant> = None;
 
     // Initialize config watcher for smart reloading with optimized settings
     let mut config_watcher = SimpleConfigWatcher::new(config.workspace.clone());
@@ -322,7 +321,6 @@ pub(crate) async fn run_single_agent_loop_unified(
                     &mut interaction_state,
                 ).await?
             };
-
             use crate::agent::runloop::unified::turn::session::interaction_loop::InteractionOutcome;
 
             let input = match interaction_outcome {
@@ -362,35 +360,6 @@ pub(crate) async fn run_single_agent_loop_unified(
             // Removed: Context window enforcement to respect token limits
 
             let mut working_history = conversation_history.clone();
-            let _max_tool_loops = vt_cfg
-                .as_ref()
-                .map(|cfg| cfg.tools.max_tool_loops)
-                .filter(|&value| value > 0)
-                .unwrap_or(defaults::DEFAULT_MAX_TOOL_LOOPS);
-
-            // Unused turn-level locals removed after refactor
-            let _tool_repeat_limit = vt_cfg
-                .as_ref()
-                .map(|cfg| cfg.tools.max_repeated_tool_calls)
-                .filter(|&value| value > 0)
-                .unwrap_or(defaults::DEFAULT_MAX_REPEATED_TOOL_CALLS);
-            // repeated tool attempts now managed in the turn loop; omitted here
-
-            // Initialize loop detection
-            let _loop_detection_enabled = vt_cfg
-                .as_ref()
-                .map(|cfg| !cfg.model.skip_loop_detection)
-                .unwrap_or(true);
-            let _loop_detection_threshold = vt_cfg
-                .as_ref()
-                .map(|cfg| cfg.model.loop_detection_threshold)
-                .unwrap_or(3);
-            let _loop_detection_interactive = vt_cfg
-                .as_ref()
-                .map(|cfg| cfg.model.loop_detection_interactive)
-                .unwrap_or(true);
-            // loop detection instance not used in the session loop path
-            let mut _loop_detection_disabled_for_session = false;
 
             // New unified turn loop: use TurnLoopContext and run_turn_loop
             let timeout_secs = resolve_timeout(
@@ -450,9 +419,8 @@ pub(crate) async fn run_single_agent_loop_unified(
                     std::mem::take(&mut working_history)
                 } else {
                     history_backup
-                        .as_ref()
+                        .take()
                         .expect("history_backup must be set after first attempt")
-                        .clone()
                 };
 
                 let result = timeout(
@@ -540,6 +508,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                     )
                     .ok();
             }
+            last_activity_time = Some(Instant::now());
 
             // Phase 4: Memory hygiene
             // Check global file cache pressure and evict if necessary
@@ -645,7 +614,6 @@ pub(crate) async fn run_single_agent_loop_unified(
 
             // Reset idle counters when starting a new session
             _consecutive_idle_cycles = 0;
-            last_activity_time = Instant::now();
             continue;
         }
 
@@ -658,8 +626,10 @@ pub(crate) async fn run_single_agent_loop_unified(
         }
 
         // Idle detection and back-off mechanism (optimized: use pre-computed config)
-        if idle_config.enabled {
-            let idle_duration = last_activity_time.elapsed().as_millis() as u64;
+        if idle_config.enabled
+            && let Some(last_activity) = last_activity_time
+        {
+            let idle_duration = last_activity.elapsed().as_millis() as u64;
 
             if idle_duration >= idle_config.timeout_ms {
                 _consecutive_idle_cycles += 1;
