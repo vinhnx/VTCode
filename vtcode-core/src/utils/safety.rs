@@ -4,9 +4,12 @@
 //! or resource-intensive operations to ensure user control and efficiency.
 
 use crate::config::models::ModelId;
-use crate::ui::user_confirmation::{AgentMode, UserConfirmation};
+use crate::ui::user_confirmation::{AgentMode, ProModelConfirmationResult, UserConfirmation};
 use crate::utils::colors::style;
 use anyhow::Result;
+use std::sync::atomic::{AtomicBool, Ordering};
+
+static PRO_MODEL_AUTO_ACCEPT: AtomicBool = AtomicBool::new(false);
 
 /// Safety validation utilities for VT Code operations
 pub struct SafetyValidator;
@@ -39,6 +42,14 @@ impl SafetyValidator {
                 return Ok(requested_model.to_string());
             }
 
+            if PRO_MODEL_AUTO_ACCEPT.load(Ordering::Relaxed) {
+                println!(
+                    "{}",
+                    style("Using Gemini 2.5 Pro model (auto-accept enabled)").cyan()
+                );
+                return Ok(requested_model.to_string());
+            }
+
             if let Some(task) = task_description {
                 println!("{}", style("Model Selection Review").cyan().bold());
                 println!("Task: {}", style(task).cyan());
@@ -46,13 +57,18 @@ impl SafetyValidator {
             }
 
             // Ask for explicit confirmation before using the most capable model
-            let confirmed = UserConfirmation::confirm_pro_model_usage(current_default.as_str())?;
-            if !confirmed {
-                println!(
-                    "Falling back to default model: {}",
-                    current_default.display_name()
-                );
-                return Ok(current_default.to_string());
+            match UserConfirmation::confirm_pro_model_usage(current_default.as_str())? {
+                ProModelConfirmationResult::Yes => {}
+                ProModelConfirmationResult::YesAutoAccept => {
+                    PRO_MODEL_AUTO_ACCEPT.store(true, Ordering::Relaxed);
+                }
+                ProModelConfirmationResult::No => {
+                    println!(
+                        "Falling back to default model: {}",
+                        current_default.display_name()
+                    );
+                    return Ok(current_default.to_string());
+                }
             }
         }
 

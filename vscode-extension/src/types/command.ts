@@ -82,6 +82,26 @@ export abstract class BaseCommand implements ICommand {
         return true;
     }
 
+    protected async flushIdeContextSnapshot(
+        context: CommandContext
+    ): Promise<void> {
+        try {
+            const contextFlushed = await vscode.commands.executeCommand<boolean>(
+                "vtcode.flushIdeContextSnapshot"
+            );
+            if (contextFlushed === false) {
+                context.output?.appendLine(
+                    "[warn] IDE context snapshot is unavailable; continuing without supplemental context."
+                );
+            }
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            context.output?.appendLine(
+                `[warn] Failed to refresh IDE context snapshot: ${message}`
+            );
+        }
+    }
+
     abstract execute(context: CommandContext): Promise<void>;
 
     canExecute(context: CommandContext): boolean {

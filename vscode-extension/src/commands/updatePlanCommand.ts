@@ -48,7 +48,7 @@ export class UpdatePlanCommand extends BaseCommand {
             return;
         }
 
-        // Note: IDE context flushing would be added here
+        await this.flushIdeContextSnapshot(context);
         await vscode.tasks.executeTask(taskToRun);
     }
 }

@@ -143,9 +143,10 @@ fn test_no_tools_in_constants_without_declarations() {
         "web_fetch",
     ];
 
-    // Tools with declarations (from declarations.rs grep results)
+    // Tools with declarations (from declarations.rs)
     let tools_with_declarations: HashSet<&str> = HashSet::from_iter(
         vec![
+            "list_files",
             "grep_file",
             "run_pty_cmd",
             "search_tools",
@@ -169,7 +170,6 @@ fn test_no_tools_in_constants_without_declarations() {
         .copied(),
     );
 
-    // Note: list_files may not have declarations and need investigation
     let tools_in_constants_set: HashSet<_> = tools_in_constants.iter().copied().collect();
     let missing_declarations: Vec<_> = tools_in_constants_set
         .difference(&tools_with_declarations)
@@ -181,8 +181,11 @@ fn test_no_tools_in_constants_without_declarations() {
         eprintln!("Tools without declarations: {:?}", missing_declarations);
     }
 
-    // This is informational - some tools may intentionally not have declarations
-    // (e.g., internally managed tools)
+    assert!(
+        missing_declarations.is_empty(),
+        "The following tools are missing declarations: {:?}",
+        missing_declarations
+    );
 }
 
 #[test]

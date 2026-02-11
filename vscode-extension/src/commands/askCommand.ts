@@ -22,15 +22,15 @@ export class AskCommand extends BaseCommand {
             ignoreFocusOut: true,
         });
 
-        if (!question || !question.trim()) {
+        const trimmedQuestion = question?.trim();
+        if (!trimmedQuestion) {
             return;
         }
 
         try {
-            // Note: IDE context integration would be added here
-            const promptWithContext = question; // Simplified for now
+            await this.flushIdeContextSnapshot(context);
 
-            await runVtcodeCommand(["ask", promptWithContext], {
+            await runVtcodeCommand(["ask", trimmedQuestion], {
                 title: "Asking VT Code…",
                 output: context.output,
             });
