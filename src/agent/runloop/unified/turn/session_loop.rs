@@ -365,7 +365,7 @@ pub(crate) async fn run_single_agent_loop_unified(
             // Removed: Tool response pruning
             // Removed: Context window enforcement to respect token limits
 
-            let working_history = conversation_history.clone();
+            let mut working_history = conversation_history.clone();
             let _max_tool_loops = vt_cfg
                 .as_ref()
                 .map(|cfg| cfg.tools.max_tool_loops)
@@ -403,6 +403,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                     .map(|cfg| cfg.optimization.agent_execution.max_execution_time_secs),
             );
             let mut attempts = 0;
+            let mut history_backup: Option<Vec<vtcode_core::llm::provider::Message>> = None;
             let outcome = match loop {
                 let mut auto_exit_plan_mode_attempted = false;
                 let mut harness_state = HarnessTurnState::new(
@@ -449,11 +450,20 @@ pub(crate) async fn run_single_agent_loop_unified(
                     full_auto,
                 );
 
+                let history_for_turn = if attempts == 0 {
+                    std::mem::take(&mut working_history)
+                } else {
+                    history_backup
+                        .as_ref()
+                        .expect("history_backup must be set after first attempt")
+                        .clone()
+                };
+
                 let result = timeout(
                     Duration::from_secs(timeout_secs),
                     crate::agent::runloop::unified::turn::run_turn_loop(
                         &input,
-                        working_history.clone(),
+                        history_for_turn,
                         turn_loop_ctx,
                         &mut session_end_reason,
                     ),
@@ -463,6 +473,9 @@ pub(crate) async fn run_single_agent_loop_unified(
                 match result {
                     Ok(inner) => break inner,
                     Err(_) => {
+                        if history_backup.is_none() {
+                            history_backup = Some(conversation_history.clone());
+                        }
                         attempts += 1;
                         tool_registry.terminate_all_pty_sessions();
                         renderer.line(
@@ -493,7 +506,9 @@ pub(crate) async fn run_single_agent_loop_unified(
                     let _ = renderer.line(MessageStyle::Error, &format!("Error: {}", err));
                     TurnLoopOutcome {
                         result: RunLoopTurnLoopResult::Aborted,
-                        working_history,
+                        working_history: history_backup
+                            .or_else(|| if working_history.is_empty() { None } else { Some(working_history) })
+                            .unwrap_or_else(|| conversation_history.clone()),
                         turn_modified_files: std::collections::BTreeSet::new(),
                     }
                 }

@@ -2,11 +2,70 @@ use crate::agent::runloop::unified::tool_pipeline::{ToolExecutionStatus, ToolPip
 use once_cell::sync::Lazy;
 use rustc_hash::FxHashMap;
 use std::sync::{Arc, RwLock};
+use std::time::{Duration, Instant};
 use vtcode_core::llm::provider as uni;
 
 /// String interning pool for tool signatures to reduce allocations (~15% reduction)
 static SIGNATURE_POOL: Lazy<RwLock<FxHashMap<String, Arc<str>>>> =
     Lazy::new(|| RwLock::new(FxHashMap::default()));
+
+/// Optimized loop detection with interned signatures and exponential backoff
+pub(crate) struct LoopTracker {
+    attempts: FxHashMap<Arc<str>, (usize, Instant)>,
+    #[allow(dead_code)]
+    backoff_base: Duration,
+}
+
+impl LoopTracker {
+    pub(crate) fn new() -> Self {
+        Self {
+            attempts: FxHashMap::with_capacity_and_hasher(16, Default::default()),
+            backoff_base: Duration::from_secs(5),
+        }
+    }
+
+    /// Record an attempt and return the count
+    pub(crate) fn record(&mut self, signature: &str) -> usize {
+        let key: Arc<str> = Arc::from(signature);
+        let entry = self.attempts.entry(key).or_insert((0, Instant::now()));
+        entry.0 += 1;
+        entry.1 = Instant::now();
+        entry.0
+    }
+
+    /// Check if a warning should be emitted (with exponential backoff)
+    #[allow(dead_code)]
+    pub(crate) fn should_warn(&self, signature: &str, threshold: usize) -> bool {
+        if let Some((count, last_time)) = self.attempts.get(signature) {
+            if *count < threshold {
+                return false;
+            }
+            let excess = count.saturating_sub(threshold);
+            let backoff = self.backoff_base * 3u32.pow(excess.min(5) as u32);
+            last_time.elapsed() >= backoff
+        } else {
+            false
+        }
+    }
+
+    /// Get the maximum repetition count, optionally filtering by a predicate on the signature
+    pub(crate) fn max_count_filtered<F>(&self, exclude: F) -> usize
+    where
+        F: Fn(&str) -> bool,
+    {
+        self.attempts
+            .iter()
+            .filter_map(|(sig, (count, _))| {
+                if exclude(sig) {
+                    None
+                } else {
+                    Some(*count)
+                }
+            })
+            .max()
+            .unwrap_or(0)
+    }
+}
 
 pub(crate) fn push_tool_response(
     history: &mut Vec<uni::Message>,
@@ -51,15 +110,14 @@ pub(crate) fn resolve_max_tool_retries(
 /// Only successful tool calls are counted towards repetition limits.
 /// Failed, timed out, or cancelled calls are ignored for this purpose.
 pub(crate) fn update_repetition_tracker(
-    repeated_tool_attempts: &mut FxHashMap<String, usize>,
+    loop_tracker: &mut LoopTracker,
     outcome: &ToolPipelineOutcome,
     name: &str,
     args: &serde_json::Value,
 ) {
     if matches!(&outcome.status, ToolExecutionStatus::Success { .. }) {
         let signature_key = signature_key_for(name, args);
-        let current_count = repeated_tool_attempts.entry(signature_key).or_insert(0);
-        *current_count += 1;
+        loop_tracker.record(&signature_key);
     }
 }
 pub(crate) fn serialize_output(output: &serde_json::Value) -> String {

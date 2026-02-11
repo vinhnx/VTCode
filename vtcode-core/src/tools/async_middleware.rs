@@ -68,14 +68,58 @@ impl AsyncMiddlewareChain {
     /// Execute request through chain (simplified)
     pub async fn execute_simple<F>(&self, request: ToolRequest, executor: F) -> ToolResult
     where
-        F: Fn(ToolRequest) -> ToolResult + Send,
+        F: Fn(ToolRequest) -> ToolResult + Send + Sync + 'static,
     {
         if self.middlewares.is_empty() {
             return executor(request);
         }
 
-        // Simple sequential execution for now
-        executor(request)
+        let executor = Arc::new(executor);
+        let middlewares = self.middlewares.clone();
+
+        fn build_chain(
+            middlewares: &[Arc<dyn AsyncMiddleware>],
+            executor: Arc<dyn Fn(ToolRequest) -> ToolResult + Send + Sync>,
+        ) -> Box<
+            dyn Fn(
+                    ToolRequest,
+                )
+                    -> std::pin::Pin<Box<dyn std::future::Future<Output = ToolResult> + Send>>
+                + Send
+                + Sync,
+        > {
+            if middlewares.is_empty() {
+                Box::new(move |req: ToolRequest| {
+                    let result = executor(req);
+                    Box::pin(async move { result })
+                })
+            } else {
+                let current = middlewares[0].clone();
+                let rest = build_chain(&middlewares[1..], executor);
+                let rest = Arc::new(rest);
+                Box::new(move |req: ToolRequest| {
+                    let current = current.clone();
+                    let rest = rest.clone();
+                    Box::pin(async move {
+                        let next: Box<
+                            dyn Fn(
+                                    ToolRequest,
+                                ) -> std::pin::Pin<
+                                    Box<dyn std::future::Future<Output = ToolResult> + Send>,
+                                > + Send
+                                + Sync,
+                        > = Box::new(move |r: ToolRequest| {
+                            let rest = rest.clone();
+                            Box::pin(async move { rest(r).await })
+                        });
+                        current.execute(req, next).await
+                    })
+                })
+            }
+        }
+
+        let chain = build_chain(&middlewares, executor);
+        chain(request).await
     }
 }
 

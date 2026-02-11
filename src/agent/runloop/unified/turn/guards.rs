@@ -228,7 +228,7 @@ fn is_readonly_signature(signature: &str) -> bool {
 pub(crate) async fn handle_turn_balancer(
     ctx: &mut TurnProcessingContext<'_>,
     step_count: usize,
-    repeated_tool_attempts: &mut rustc_hash::FxHashMap<String, usize>,
+    repeated_tool_attempts: &mut crate::agent::runloop::unified::turn::tool_outcomes::helpers::LoopTracker,
     max_tool_loops: usize,
     tool_repeat_limit: usize,
 ) -> TurnHandlerOutcome {
@@ -249,17 +249,7 @@ pub(crate) async fn handle_turn_balancer(
 
     // --- Turn balancer: cap low-signal churn ---
     // Exclude read-only tools from repeated count (they're legitimate exploration)
-    let max_repeated = repeated_tool_attempts
-        .iter()
-        .filter_map(|(signature, count)| {
-            if is_readonly_signature(signature) {
-                None // Exclude read-only tools
-            } else {
-                Some(*count)
-            }
-        })
-        .max()
-        .unwrap_or(0);
+    let max_repeated = repeated_tool_attempts.max_count_filtered(is_readonly_signature);
 
     if crate::agent::runloop::unified::turn::utils::should_trigger_turn_balancer(
         step_count,
