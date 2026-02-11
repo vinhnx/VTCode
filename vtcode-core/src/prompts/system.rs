@@ -63,6 +63,16 @@ const UNIFIED_TOOL_GUIDANCE: &str = r#"**Search & exploration**:
 - Stay in WORKSPACE_DIR; confirm destructive ops (rm, force-push)
 - **After command output**: Always acknowledge the result briefly and suggest next steps"#;
 
+/// Shared Plan Mode header used by both static and incremental prompt builders.
+pub const PLAN_MODE_READ_ONLY_HEADER: &str = "# PLAN MODE (READ-ONLY)";
+/// Shared Plan Mode notice line describing temporary discovery auto-switching.
+pub const PLAN_MODE_READ_ONLY_NOTICE_LINE: &str = "Plan Mode is active. Mutating tools are normally blocked except for `.vtcode/plans/` directory. The system may temporarily switch to Edit mode for discovery tools and then return.";
+/// Shared Plan Mode instruction line for transitioning to implementation.
+pub const PLAN_MODE_EXIT_INSTRUCTION_LINE: &str =
+    "Call `exit_plan_mode` when ready to transition to implementation.";
+/// Shared reminder appended when presenting plans while still in Plan Mode.
+pub const PLAN_MODE_IMPLEMENT_REMINDER: &str = "• I’m still in Plan Mode, so I can’t implement yet. If you want me to execute the plan, please switch out of Plan Mode (or explicitly say “exit plan mode and implement”).";
+
 /// DEFAULT SYSTEM PROMPT (v5.2 - Codex-aligned, provider-agnostic, production ready)
 /// Incorporates key patterns from OpenAI Codex prompting guide while remaining
 /// generic for all providers (Gemini, Anthropic, OpenAI, xAI, DeepSeek, etc.)

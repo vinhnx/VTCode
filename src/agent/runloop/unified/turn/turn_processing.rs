@@ -759,7 +759,7 @@ fn strip_wrapping<'a>(line: &'a str, prefix: &str, suffix: &str) -> Option<&'a s
 }
 
 const MIN_PLAN_MODE_TURNS_BEFORE_INTERVIEW: usize = 1;
-const PLAN_MODE_REMINDER: &str = "• I’m still in Plan Mode, so I can’t implement yet. If you want me to execute the plan, please switch out of Plan Mode (or explicitly say “exit plan mode and implement”).";
+const PLAN_MODE_REMINDER: &str = vtcode_core::prompts::system::PLAN_MODE_IMPLEMENT_REMINDER;
 
 fn has_discovery_tool(session_stats: &crate::agent::runloop::unified::state::SessionStats) -> bool {
     use vtcode_core::config::constants::tools;

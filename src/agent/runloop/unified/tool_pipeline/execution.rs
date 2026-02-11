@@ -125,6 +125,17 @@ pub(crate) async fn run_tool_call(
         .get_tool(name)
         .map(|tool| tool.name())
         .unwrap_or(name);
+    let finish_with_status = |status: ToolExecutionStatus| {
+        let outcome = ToolPipelineOutcome::from_status(status);
+        emit_tool_completion_for_status(
+            harness_emitter,
+            tool_started_emitted,
+            &tool_item_id,
+            name,
+            &outcome.status,
+        );
+        outcome
+    };
 
     if !prevalidated {
         // Pre-flight permission check
@@ -158,51 +169,17 @@ pub(crate) async fn run_tool_call(
         {
             Ok(ToolPermissionFlow::Approved) => {}
             Ok(ToolPermissionFlow::Denied) => {
-                let outcome = ToolPipelineOutcome::from_status(ToolExecutionStatus::Failure {
+                return Ok(finish_with_status(ToolExecutionStatus::Failure {
                     error: anyhow::anyhow!("Tool permission denied"),
-                });
-                emit_tool_completion_for_status(
-                    harness_emitter,
-                    tool_started_emitted,
-                    &tool_item_id,
-                    name,
-                    &outcome.status,
-                );
-                return Ok(outcome);
+                }));
             }
-            Ok(ToolPermissionFlow::Interrupted) => {
-                let outcome = ToolPipelineOutcome::from_status(ToolExecutionStatus::Cancelled);
-                emit_tool_completion_for_status(
-                    harness_emitter,
-                    tool_started_emitted,
-                    &tool_item_id,
-                    name,
-                    &outcome.status,
-                );
-                return Ok(outcome);
-            }
-            Ok(ToolPermissionFlow::Exit) => {
-                let outcome = ToolPipelineOutcome::from_status(ToolExecutionStatus::Cancelled);
-                emit_tool_completion_for_status(
-                    harness_emitter,
-                    tool_started_emitted,
-                    &tool_item_id,
-                    name,
-                    &outcome.status,
-                );
-                return Ok(outcome);
+            Ok(ToolPermissionFlow::Interrupted | ToolPermissionFlow::Exit) => {
+                return Ok(finish_with_status(ToolExecutionStatus::Cancelled));
             }
             Err(e) => {
-                let outcome =
-                    ToolPipelineOutcome::from_status(ToolExecutionStatus::Failure { error: e });
-                emit_tool_completion_for_status(
-                    harness_emitter,
-                    tool_started_emitted,
-                    &tool_item_id,
-                    name,
-                    &outcome.status,
-                );
-                return Ok(outcome);
+                return Ok(finish_with_status(ToolExecutionStatus::Failure {
+                    error: e,
+                }));
             }
         }
     }

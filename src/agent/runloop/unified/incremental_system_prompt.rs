@@ -7,12 +7,16 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 fn append_plan_mode_notice(prompt: &mut String) {
-    if prompt.contains("# PLAN MODE (READ-ONLY)") {
+    if prompt.contains(vtcode_core::prompts::system::PLAN_MODE_READ_ONLY_HEADER) {
         return;
     }
-    prompt.push_str("\n# PLAN MODE (READ-ONLY)\n");
-    prompt.push_str("Plan Mode is active. Mutating tools are normally blocked except for `.vtcode/plans/` directory. The system may temporarily switch to Edit mode for discovery tools and then return.\n");
-    prompt.push_str("Call `exit_plan_mode` when ready to transition to implementation.\n");
+    prompt.push('\n');
+    prompt.push_str(vtcode_core::prompts::system::PLAN_MODE_READ_ONLY_HEADER);
+    prompt.push('\n');
+    prompt.push_str(vtcode_core::prompts::system::PLAN_MODE_READ_ONLY_NOTICE_LINE);
+    prompt.push('\n');
+    prompt.push_str(vtcode_core::prompts::system::PLAN_MODE_EXIT_INSTRUCTION_LINE);
+    prompt.push('\n');
 }
 
 /// Cached system prompt that avoids redundant rebuilding
@@ -792,10 +796,8 @@ mod tests {
             .await;
 
         assert!(prompt.contains("Custom planner agent prompt."));
-        assert!(prompt.contains("# PLAN MODE (READ-ONLY)"));
-        assert!(
-            prompt.contains("Call `exit_plan_mode` when ready to transition to implementation.")
-        );
+        assert!(prompt.contains(vtcode_core::prompts::system::PLAN_MODE_READ_ONLY_HEADER));
+        assert!(prompt.contains(vtcode_core::prompts::system::PLAN_MODE_EXIT_INSTRUCTION_LINE));
     }
 
     #[tokio::test]
