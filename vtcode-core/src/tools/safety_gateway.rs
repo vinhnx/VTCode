@@ -117,6 +117,9 @@ pub struct SafetyGatewayConfig {
     pub workspace_trust: WorkspaceTrust,
     /// Risk threshold for requiring approval
     pub approval_risk_threshold: RiskLevel,
+    /// Enforce short-window rate limiting (per-second/per-minute).
+    /// Turn/session limits are always enforced.
+    pub enforce_rate_limits: bool,
 }
 
 impl Default for SafetyGatewayConfig {
@@ -140,6 +143,7 @@ impl Default for SafetyGatewayConfig {
             plan_mode_active: false,
             workspace_trust: WorkspaceTrust::Trusted,
             approval_risk_threshold: RiskLevel::Medium,
+            enforce_rate_limits: true,
         }
     }
 }
@@ -532,22 +536,24 @@ impl SafetyGateway {
     ) -> Result<(), SafetyError> {
         self.prune_rate_windows(state, now);
 
-        if state.calls_per_second.len() >= self.config.rate_limit_per_second {
-            return Err(SafetyError::RateLimitExceeded {
-                current: state.calls_per_second.len(),
-                max: self.config.rate_limit_per_second,
-                window: "1s",
-            });
-        }
+        if self.config.enforce_rate_limits {
+            if state.calls_per_second.len() >= self.config.rate_limit_per_second {
+                return Err(SafetyError::RateLimitExceeded {
+                    current: state.calls_per_second.len(),
+                    max: self.config.rate_limit_per_second,
+                    window: "1s",
+                });
+            }
 
-        if let Some(limit) = self.config.rate_limit_per_minute
-            && state.calls_per_minute.len() >= limit
-        {
-            return Err(SafetyError::RateLimitExceeded {
-                current: state.calls_per_minute.len(),
-                max: limit,
-                window: "60s",
-            });
+            if let Some(limit) = self.config.rate_limit_per_minute
+                && state.calls_per_minute.len() >= limit
+            {
+                return Err(SafetyError::RateLimitExceeded {
+                    current: state.calls_per_minute.len(),
+                    max: limit,
+                    window: "60s",
+                });
+            }
         }
 
         if state.current_turn_count >= self.config.max_per_turn {

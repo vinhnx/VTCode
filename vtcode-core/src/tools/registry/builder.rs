@@ -84,6 +84,7 @@ impl ToolRegistry {
             harness_context: HarnessContext::default(),
             resiliency: Arc::new(Mutex::new(ResiliencyContext::default())),
             mcp_circuit_breaker: Arc::new(circuit_breaker::McpCircuitBreaker::new()),
+            shared_circuit_breaker: Arc::new(RwLock::new(None)),
             initialized: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             tool_call_counter: Arc::new(std::sync::atomic::AtomicU64::new(0)),
             pty_poll_counter: Arc::new(std::sync::atomic::AtomicU64::new(0)),

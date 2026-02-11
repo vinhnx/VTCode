@@ -19,15 +19,9 @@ fn record_tool_execution(
     tool_name: &str,
     start_time: std::time::Instant,
     success: bool,
-    is_argument_error: bool,
+    _is_argument_error: bool,
 ) {
     let duration = start_time.elapsed();
-    if success {
-        ctx.circuit_breaker.record_success_for_tool(tool_name);
-    } else {
-        ctx.circuit_breaker
-            .record_failure_for_tool(tool_name, is_argument_error);
-    }
     ctx.tool_health_tracker
         .record_execution(tool_name, success, duration);
     ctx.telemetry.record_tool_usage(tool_name, success);
@@ -160,8 +154,21 @@ async fn handle_failure<'a>(
     let error_msg = format!("Tool '{}' execution failed: {}", tool_name, error);
     tracing::debug!(tool = %tool_name, error = %error, "Tool execution failed");
 
+    let fallback_tool = t_ctx
+        .ctx
+        .tool_registry
+        .suggest_fallback_tool(tool_name)
+        .await;
     // Push error to history
-    let error_content = serde_json::json!({"error": error_msg});
+    let error_content = if let Some(tool) = fallback_tool {
+        serde_json::json!({
+            "error": error_msg,
+            "fallback_tool": tool,
+            "fallback_suggestion": format!("Try '{}' as a fallback approach.", tool),
+        })
+    } else {
+        serde_json::json!({"error": error_msg})
+    };
     push_tool_response(
         t_ctx.ctx.working_history,
         tool_call_id,
@@ -185,7 +192,20 @@ async fn handle_timeout(
     let error_msg = format!("Tool '{}' timed out: {}", tool_name, error.message);
     tracing::debug!(tool = %tool_name, error = %error.message, "Tool timed out");
 
-    let error_content = serde_json::json!({"error": error_msg});
+    let fallback_tool = t_ctx
+        .ctx
+        .tool_registry
+        .suggest_fallback_tool(tool_name)
+        .await;
+    let error_content = if let Some(tool) = fallback_tool {
+        serde_json::json!({
+            "error": error_msg,
+            "fallback_tool": tool,
+            "fallback_suggestion": format!("Try '{}' if timeout persists.", tool),
+        })
+    } else {
+        serde_json::json!({"error": error_msg})
+    };
     push_tool_response(
         t_ctx.ctx.working_history,
         tool_call_id,

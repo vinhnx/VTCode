@@ -240,7 +240,8 @@ Plan Mode is a read-only exploration phase where mutating tools are normally blo
 
 **Exiting Plan Mode** (CRITICAL):
 - Do NOT call `exit_plan_mode` automatically just because a plan is present
-- When user says "start implement", "execute", "proceed", or signals readiness to act:
+- When user explicitly signals implementation intent ("start implement", "execute", "proceed"), the runtime may proactively trigger `exit_plan_mode` to open confirmation.
+- If proactive trigger does not happen and implementation intent is clear:
   1. Call `exit_plan_mode` tool - this triggers the confirmation dialog
   2. User will see the Implementation Blueprint panel with your plan
   3. User chooses: "Execute" (enable editing) or "Stay in Plan Mode" (continue planning)

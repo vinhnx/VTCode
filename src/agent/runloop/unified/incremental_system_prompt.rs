@@ -13,6 +13,13 @@ pub struct IncrementalSystemPrompt {
     cached_prompt: Arc<RwLock<CachedPrompt>>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum PromptAssemblyMode {
+    #[default]
+    AppendInstructions,
+    BaseIncludesInstructions,
+}
+
 #[derive(Clone)]
 struct CachedPrompt {
     /// The actual prompt content
@@ -23,6 +30,8 @@ struct CachedPrompt {
     context_hash: u64,
     /// Number of retry attempts this prompt was built for
     retry_attempts: usize,
+    /// Assembly mode for this prompt
+    assembly_mode: PromptAssemblyMode,
 }
 
 impl IncrementalSystemPrompt {
@@ -33,6 +42,7 @@ impl IncrementalSystemPrompt {
                 config_hash: 0,
                 context_hash: 0,
                 retry_attempts: usize::MAX, // Force rebuild on first use
+                assembly_mode: PromptAssemblyMode::AppendInstructions,
             })),
         }
     }
@@ -43,6 +53,7 @@ impl IncrementalSystemPrompt {
         config_hash: u64,
         context_hash: u64,
         retry_attempts: usize,
+        prompt_assembly_mode: PromptAssemblyMode,
         context: &SystemPromptContext,
         agent_config: Option<&vtcode_config::core::AgentConfig>,
     ) -> String {
@@ -52,6 +63,7 @@ impl IncrementalSystemPrompt {
         if read_guard.config_hash == config_hash
             && read_guard.context_hash == context_hash
             && read_guard.retry_attempts == retry_attempts
+            && read_guard.assembly_mode == prompt_assembly_mode
             && !read_guard.content.is_empty()
         {
             return read_guard.content.clone();
@@ -66,6 +78,7 @@ impl IncrementalSystemPrompt {
             config_hash,
             context_hash,
             retry_attempts,
+            prompt_assembly_mode,
             context,
             agent_config,
         )
@@ -79,6 +92,7 @@ impl IncrementalSystemPrompt {
         config_hash: u64,
         context_hash: u64,
         retry_attempts: usize,
+        prompt_assembly_mode: PromptAssemblyMode,
         context: &SystemPromptContext,
         agent_config: Option<&vtcode_config::core::AgentConfig>,
     ) -> String {
@@ -88,6 +102,7 @@ impl IncrementalSystemPrompt {
         if write_guard.config_hash == config_hash
             && write_guard.context_hash == context_hash
             && write_guard.retry_attempts == retry_attempts
+            && write_guard.assembly_mode == prompt_assembly_mode
             && !write_guard.content.is_empty()
         {
             return write_guard.content.clone();
@@ -95,7 +110,13 @@ impl IncrementalSystemPrompt {
 
         // Build the new prompt
         let new_content = self
-            .build_prompt_content(base_system_prompt, retry_attempts, context, agent_config)
+            .build_prompt_content(
+                base_system_prompt,
+                retry_attempts,
+                prompt_assembly_mode,
+                context,
+                agent_config,
+            )
             .await;
 
         // Update cache
@@ -103,6 +124,7 @@ impl IncrementalSystemPrompt {
         write_guard.config_hash = config_hash;
         write_guard.context_hash = context_hash;
         write_guard.retry_attempts = retry_attempts;
+        write_guard.assembly_mode = prompt_assembly_mode;
 
         new_content
     }
@@ -112,6 +134,7 @@ impl IncrementalSystemPrompt {
         &self,
         base_system_prompt: &str,
         retry_attempts: usize,
+        prompt_assembly_mode: PromptAssemblyMode,
         context: &SystemPromptContext,
         agent_config: Option<&vtcode_config::core::AgentConfig>,
     ) -> String {
@@ -228,30 +251,49 @@ impl IncrementalSystemPrompt {
         }
 
         // Unified Instructions (Project Docs, User Inst, Skills)
-        if let Some(cfg) = agent_config {
-            let skill_metadata: Vec<SkillMetadata> = context
-                .discovered_skills
-                .iter()
-                .map(|s| SkillMetadata {
-                    name: s.manifest.name.clone(),
-                    description: s.manifest.description.clone(),
-                    short_description: s.manifest.when_to_use.clone(),
-                    path: s.path.clone(),
-                    scope: s.scope,
-                    manifest: Some(s.manifest.clone()),
-                })
-                .collect();
-            let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
-            if let Some(unified) = get_user_instructions(cfg, &cwd, Some(&skill_metadata[..])).await
-            {
-                let _ = writeln!(prompt, "\n# INSTRUCTIONS\n{}", unified);
-            }
-        } else {
-            // Fallback if config is missing (basic skills rendering)
-            if !context.discovered_skills.is_empty() {
+        if prompt_assembly_mode == PromptAssemblyMode::AppendInstructions {
+            if let Some(cfg) = agent_config {
+                let skill_metadata: Vec<SkillMetadata> = context
+                    .discovered_skills
+                    .iter()
+                    .map(|s| SkillMetadata {
+                        name: s.manifest.name.clone(),
+                        description: s.manifest.description.clone(),
+                        short_description: s.manifest.when_to_use.clone(),
+                        path: s.path.clone(),
+                        scope: s.scope,
+                        manifest: Some(s.manifest.clone()),
+                    })
+                    .collect();
+                let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+                if let Some(unified) =
+                    get_user_instructions(cfg, &cwd, Some(&skill_metadata[..])).await
+                {
+                    let _ = writeln!(prompt, "\n# INSTRUCTIONS\n{}", unified);
+                }
+            } else if !context.discovered_skills.is_empty() {
+                // Fallback if config is missing (basic skills rendering)
                 let _ = writeln!(
                     prompt,
                     "\n# SKILLS\nUse `list_skills` to see available capabilities."
+                );
+            }
+        } else if !context.discovered_skills.is_empty() {
+            // Base prompt already includes instruction hierarchy; append only active skill names.
+            let mut skill_names = context
+                .discovered_skills
+                .iter()
+                .map(|s| s.name().to_string())
+                .collect::<Vec<_>>();
+            skill_names.sort();
+
+            let preview = skill_names.iter().take(12).cloned().collect::<Vec<_>>();
+            let _ = writeln!(prompt, "\n# ACTIVE SKILLS\n{}", preview.join(", "));
+            if skill_names.len() > preview.len() {
+                let _ = writeln!(
+                    prompt,
+                    "(+{} more active skills)",
+                    skill_names.len() - preview.len()
                 );
             }
         }
@@ -267,6 +309,7 @@ impl IncrementalSystemPrompt {
         write_guard.config_hash = 0;
         write_guard.context_hash = 0;
         write_guard.retry_attempts = usize::MAX;
+        write_guard.assembly_mode = PromptAssemblyMode::AppendInstructions;
     }
 
     /// Get cache statistics
@@ -292,6 +335,7 @@ pub struct SystemPromptConfig {
     pub enable_retry_context: bool,
     pub enable_token_tracking: bool,
     pub max_retry_attempts: usize,
+    pub prompt_assembly_mode: PromptAssemblyMode,
 }
 
 impl SystemPromptConfig {
@@ -301,6 +345,7 @@ impl SystemPromptConfig {
         enable_retry_context: bool,
         enable_token_tracking: bool,
         max_retry_attempts: usize,
+        prompt_assembly_mode: PromptAssemblyMode,
     ) -> Self {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
@@ -313,6 +358,7 @@ impl SystemPromptConfig {
             enable_retry_context,
             enable_token_tracking,
             max_retry_attempts,
+            prompt_assembly_mode,
         }
     }
 
@@ -325,6 +371,7 @@ impl SystemPromptConfig {
         self.enable_retry_context.hash(&mut hasher);
         self.enable_token_tracking.hash(&mut hasher);
         self.max_retry_attempts.hash(&mut hasher);
+        self.prompt_assembly_mode.hash(&mut hasher);
         hasher.finish()
     }
 }
@@ -410,14 +457,30 @@ mod tests {
 
         // First call - should build from scratch (includes context section)
         let prompt1 = prompt_builder
-            .get_system_prompt(base_prompt, 1, 1, 0, &context, None)
+            .get_system_prompt(
+                base_prompt,
+                1,
+                1,
+                0,
+                PromptAssemblyMode::AppendInstructions,
+                &context,
+                None,
+            )
             .await;
         assert!(prompt1.contains("Test system prompt"));
         assert!(prompt1.contains("[Context]"));
 
         // Second call with same parameters - should use cache
         let prompt2 = prompt_builder
-            .get_system_prompt(base_prompt, 1, 1, 0, &context, None)
+            .get_system_prompt(
+                base_prompt,
+                1,
+                1,
+                0,
+                PromptAssemblyMode::AppendInstructions,
+                &context,
+                None,
+            )
             .await;
         assert_eq!(prompt1, prompt2);
 
@@ -448,12 +511,28 @@ mod tests {
         };
         // Build initial prompt
         let _ = prompt_builder
-            .get_system_prompt(base_prompt, 1, 1, 0, &context, None)
+            .get_system_prompt(
+                base_prompt,
+                1,
+                1,
+                0,
+                PromptAssemblyMode::AppendInstructions,
+                &context,
+                None,
+            )
             .await;
 
         // Rebuild with different retry attempts
         let prompt = prompt_builder
-            .rebuild_prompt(base_prompt, 1, 1, 1, &context, None)
+            .rebuild_prompt(
+                base_prompt,
+                1,
+                1,
+                1,
+                PromptAssemblyMode::AppendInstructions,
+                &context,
+                None,
+            )
             .await;
 
         assert!(prompt.contains("Retry #1"));
@@ -461,8 +540,20 @@ mod tests {
 
     #[tokio::test]
     async fn test_prompt_config_hash() {
-        let config1 = SystemPromptConfig::new("Test", true, false, 3);
-        let config2 = SystemPromptConfig::new("Test", true, false, 3);
+        let config1 = SystemPromptConfig::new(
+            "Test",
+            true,
+            false,
+            3,
+            PromptAssemblyMode::AppendInstructions,
+        );
+        let config2 = SystemPromptConfig::new(
+            "Test",
+            true,
+            false,
+            3,
+            PromptAssemblyMode::AppendInstructions,
+        );
 
         assert_eq!(config1.hash(), config2.hash());
     }
@@ -488,7 +579,15 @@ mod tests {
         };
 
         let prompt = prompt_builder
-            .get_system_prompt(base_prompt, 1, 1, 0, &context, None)
+            .get_system_prompt(
+                base_prompt,
+                1,
+                1,
+                0,
+                PromptAssemblyMode::AppendInstructions,
+                &context,
+                None,
+            )
             .await;
 
         assert!(prompt.contains("<budget:token_budget>200000</budget:token_budget>"));
@@ -517,7 +616,15 @@ mod tests {
         };
 
         let prompt = prompt_builder
-            .get_system_prompt(base_prompt, 1, 1, 0, &context, None)
+            .get_system_prompt(
+                base_prompt,
+                1,
+                1,
+                0,
+                PromptAssemblyMode::AppendInstructions,
+                &context,
+                None,
+            )
             .await;
 
         assert!(prompt.contains("<budget:token_budget>200000</budget:token_budget>"));
@@ -546,7 +653,15 @@ mod tests {
         };
 
         let prompt = prompt_builder
-            .get_system_prompt(base_prompt, 1, 1, 0, &context, None)
+            .get_system_prompt(
+                base_prompt,
+                1,
+                1,
+                0,
+                PromptAssemblyMode::AppendInstructions,
+                &context,
+                None,
+            )
             .await;
 
         assert!(prompt.contains("<budget:token_budget>200000</budget:token_budget>"));
@@ -575,7 +690,15 @@ mod tests {
         };
 
         let prompt = prompt_builder
-            .get_system_prompt(base_prompt, 1, 1, 0, &context, None)
+            .get_system_prompt(
+                base_prompt,
+                1,
+                1,
+                0,
+                PromptAssemblyMode::AppendInstructions,
+                &context,
+                None,
+            )
             .await;
 
         assert!(prompt.contains("<budget:token_budget>200000</budget:token_budget>"));
@@ -608,7 +731,15 @@ mod tests {
         };
 
         let prompt = prompt_builder
-            .get_system_prompt(base_prompt, 1, 1, 0, &context, None)
+            .get_system_prompt(
+                base_prompt,
+                1,
+                1,
+                0,
+                PromptAssemblyMode::AppendInstructions,
+                &context,
+                None,
+            )
             .await;
 
         assert!(!prompt.contains("<budget:token_budget>"));

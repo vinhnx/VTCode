@@ -249,6 +249,18 @@ pub(crate) async fn validate_tool_call<'a>(
 
     ctx.harness_state.record_tool_call();
 
+    if let Err(err) = ctx
+        .tool_registry
+        .preflight_validate_call(tool_name, args_val)
+    {
+        push_tool_response(
+            ctx.working_history,
+            tool_call_id.to_string(),
+            serde_json::json!({"error": err.to_string()}).to_string(),
+        );
+        return Ok(ValidationResult::Blocked);
+    }
+
     // Phase 4 Check: Per-tool Circuit Breaker
     if !ctx.circuit_breaker.allow_request_for_tool(tool_name) {
         let error_msg = format!(

@@ -10,7 +10,7 @@ use vtcode_core::compaction::{CompactionConfig, compact_history};
 use vtcode_core::llm::provider as uni;
 
 use crate::agent::runloop::unified::incremental_system_prompt::{
-    IncrementalSystemPrompt, SystemPromptConfig, SystemPromptContext,
+    IncrementalSystemPrompt, PromptAssemblyMode, SystemPromptConfig, SystemPromptContext,
 };
 
 /// Parameters for building system prompts
@@ -249,6 +249,7 @@ impl ContextManager {
             retry_attempts > 0,
             false,
             3, // This could be configurable
+            PromptAssemblyMode::BaseIncludesInstructions,
         );
 
         // Determine if model supports context awareness (Claude 4.5+)
@@ -296,6 +297,7 @@ impl ContextManager {
                 config.hash(),
                 context.hash(),
                 retry_attempts,
+                config.prompt_assembly_mode,
                 &context,
                 self.agent_config.as_ref(),
             )

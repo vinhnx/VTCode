@@ -81,7 +81,9 @@ pub(crate) async fn run_tool_call(
     };
     let tool_item_id = call.id.clone();
 
-    if let Some(validation_failures) = validate_tool_args_security(name, &args_val, None) {
+    if let Some(validation_failures) =
+        validate_tool_args_security(name, &args_val, None, Some(ctx.tool_registry))
+    {
         return Ok(ToolPipelineOutcome::from_status(
             ToolExecutionStatus::Failure {
                 error: anyhow!(

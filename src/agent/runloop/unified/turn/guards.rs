@@ -22,6 +22,7 @@ pub(crate) fn validate_tool_args_security(
     name: &str,
     args: &serde_json::Value,
     validation_cache: Option<&Arc<ValidationCache>>,
+    tool_registry: Option<&vtcode_core::tools::ToolRegistry>,
 ) -> Option<Vec<String>> {
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
@@ -52,6 +53,23 @@ pub(crate) fn validate_tool_args_security(
             return None; // Valid cached
         }
         // If invalid (false), we continue to re-validate to generate error messages
+    }
+
+    if let Some(registry) = tool_registry {
+        let preflight = registry.preflight_validate_call(name, args);
+        match preflight {
+            Ok(_) => {
+                if let Some(hash) = args_hash
+                    && let Some(cache) = validation_cache
+                {
+                    cache.insert(name, hash, true);
+                }
+                return None;
+            }
+            Err(err) => {
+                return Some(vec![err.to_string()]);
+            }
+        }
     }
 
     use vtcode_core::config::constants::tools as tool_names;
@@ -139,7 +157,7 @@ pub(crate) fn validate_required_tool_args(
     // This function is kept for backward compatibility if needed,
     // but the logic is now superset in validate_tool_args_security.
     // We map the new result back to the old signature roughly.
-    let result = validate_tool_args_security(name, args, None);
+    let result = validate_tool_args_security(name, args, None, None);
     result.map(|_failures| {
         // Convert dynamic strings to static error messages for compatibility
         // THIS IS A LOSS OF DETAIL but necessary to match signature.

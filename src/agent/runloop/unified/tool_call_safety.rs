@@ -75,6 +75,7 @@ impl ToolCallSafetyValidator {
             plan_mode_active: false,
             workspace_trust: WorkspaceTrust::Trusted,
             approval_risk_threshold: RiskLevel::Medium,
+            enforce_rate_limits: false,
         };
 
         Self {
