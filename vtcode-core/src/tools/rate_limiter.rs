@@ -217,37 +217,61 @@ impl PerToolRateLimiter {
 
 /// Adaptive rate limiter that supports priority-based acquisition.
 pub struct AdaptiveRateLimiter {
-    per_tool: Mutex<PerToolRateLimiter>,
-    priority_weights: HashMap<String, f64>,
+    // Delegate adaptive behavior to the canonical limiter to avoid duplicated
+    // token-bucket implementations drifting over time.
+    inner: crate::tools::adaptive_rate_limiter::AdaptiveRateLimiter,
+    priority_weights: Mutex<HashMap<String, f64>>,
+}
+
+fn priority_from_weight(weight: f64) -> crate::tools::adaptive_rate_limiter::Priority {
+    if weight >= 2.0 {
+        crate::tools::adaptive_rate_limiter::Priority::Critical
+    } else if weight >= 1.25 {
+        crate::tools::adaptive_rate_limiter::Priority::High
+    } else if weight < 0.75 {
+        crate::tools::adaptive_rate_limiter::Priority::Low
+    } else {
+        crate::tools::adaptive_rate_limiter::Priority::Normal
+    }
 }
 
 impl AdaptiveRateLimiter {
     pub fn new() -> Self {
         Self {
-            per_tool: Mutex::new(PerToolRateLimiter::new()),
-            priority_weights: HashMap::new(),
+            inner: crate::tools::adaptive_rate_limiter::AdaptiveRateLimiter::default(),
+            priority_weights: Mutex::new(HashMap::new()),
         }
     }
 
     /// Set priority weight for a tool. Higher weight = higher priority (more likely to succeed / less delay).
     /// Default weight is 1.0.
     pub fn set_priority(&mut self, tool: &str, weight: f64) {
-        self.priority_weights.insert(tool.to_string(), weight);
+        if let Ok(mut priorities) = self.priority_weights.lock() {
+            priorities.insert(tool.to_string(), weight);
+        }
+        self.inner.set_priority(tool, priority_from_weight(weight));
     }
 
     /// Try to acquire a token for a tool, considering its priority.
     /// Priority weight > 1.0 increases refill rate and burst capacity.
     /// Priority < 1.0 decreases them.
     pub fn try_acquire_with_priority(&self, tool: &str) -> Result<()> {
-        let weight = self.priority_weights.get(tool).copied().unwrap_or(1.0);
-
-        let mut limiter = self
-            .per_tool
+        let priority = self
+            .priority_weights
             .lock()
-            .map_err(|e| anyhow!("adaptive limiter poisoned: {}", e))?;
+            .map_err(|e| anyhow!("adaptive limiter priority map poisoned: {}", e))?
+            .get(tool)
+            .copied()
+            .map(priority_from_weight)
+            .unwrap_or(crate::tools::adaptive_rate_limiter::Priority::Normal);
 
-        // Pass the weight as the speed multiplier
-        limiter.try_acquire_for_scaled(tool, weight)
+        self.inner.set_priority(tool, priority);
+        self.inner.try_acquire(tool).map_err(|wait_hint| {
+            anyhow!(
+                "tool rate limit exceeded (retry_after_ms={})",
+                wait_hint.as_millis()
+            )
+        })
     }
 }
 
