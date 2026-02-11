@@ -128,6 +128,33 @@ impl ContextManager {
         }
     }
 
+    /// Validate that ContextManager token tracking matches provider-reported usage
+    /// Logs a warning if delta > 5% to catch tracking inconsistencies
+    #[cfg(debug_assertions)]
+    pub(crate) fn validate_token_tracking(&self, provider_usage: &Option<uni::Usage>) {
+        if let Some(usage) = provider_usage {
+            let provider_total = usage.total_tokens as usize;
+            let manager_total = self.cached_stats.total_token_usage;
+
+            if provider_total > 0 {
+                let delta = if provider_total > manager_total {
+                    (provider_total - manager_total) as f64 / provider_total as f64
+                } else {
+                    (manager_total - provider_total) as f64 / provider_total as f64
+                };
+
+                if delta > 0.05 {
+                    tracing::warn!(
+                        provider_tokens = provider_total,
+                        manager_tokens = manager_total,
+                        delta_percent = delta * 100.0,
+                        "Token tracking divergence detected between ContextManager and Provider"
+                    );
+                }
+            }
+        }
+    }
+
     pub(crate) async fn compact_history_if_needed(
         &mut self,
         history: &[uni::Message],
@@ -234,11 +261,18 @@ impl ContextManager {
             ""
         };
 
+        // Compute token usage ratio from ContextManager's cached stats (single source of truth)
+        let token_usage_ratio = if let Some(context_size) = params.context_window_size {
+            self.usage_ratio(context_size)
+        } else {
+            0.0
+        };
+
         let context = SystemPromptContext {
             conversation_length: attempt_history.len(),
             tool_usage_count: self.cached_stats.tool_usage_count,
             error_count: self.cached_stats.error_count,
-            token_usage_ratio: 0.0,
+            token_usage_ratio,
             full_auto: params.full_auto,
             plan_mode: params.plan_mode,
             active_agent_name: params.active_agent_name.unwrap_or("coder".to_string()),
