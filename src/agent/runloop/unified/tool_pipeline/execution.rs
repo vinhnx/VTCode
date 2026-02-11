@@ -56,6 +56,7 @@ pub(crate) async fn run_tool_call(
     skip_confirmations: bool,
     vt_cfg: Option<&VTCodeConfig>,
     turn_index: usize,
+    prevalidated: bool,
 ) -> Result<ToolPipelineOutcome, anyhow::Error> {
     let function = match call.function.as_ref() {
         Some(func) => func,
@@ -81,30 +82,32 @@ pub(crate) async fn run_tool_call(
     };
     let tool_item_id = call.id.clone();
 
-    if let Some(validation_failures) =
-        validate_tool_args_security(name, &args_val, None, Some(ctx.tool_registry))
-    {
-        return Ok(ToolPipelineOutcome::from_status(
-            ToolExecutionStatus::Failure {
-                error: anyhow!(
-                    "Tool argument validation failed: {}",
-                    validation_failures.join("; ")
-                ),
-            },
-        ));
-    }
-
-    if let Some(safety_validator) = ctx.safety_validator {
-        let validation = {
-            let mut validator = safety_validator.write().await;
-            validator.validate_call(name).await
-        };
-        if let Err(err) = validation {
+    if !prevalidated {
+        if let Some(validation_failures) =
+            validate_tool_args_security(name, &args_val, None, Some(ctx.tool_registry))
+        {
             return Ok(ToolPipelineOutcome::from_status(
                 ToolExecutionStatus::Failure {
-                    error: anyhow!("Safety validation failed: {}", err),
+                    error: anyhow!(
+                        "Tool argument validation failed: {}",
+                        validation_failures.join("; ")
+                    ),
                 },
             ));
+        }
+
+        if let Some(safety_validator) = ctx.safety_validator {
+            let validation = {
+                let mut validator = safety_validator.write().await;
+                validator.validate_call(name).await
+            };
+            if let Err(err) = validation {
+                return Ok(ToolPipelineOutcome::from_status(
+                    ToolExecutionStatus::Failure {
+                        error: anyhow!("Safety validation failed: {}", err),
+                    },
+                ));
+            }
         }
     }
 
@@ -122,82 +125,84 @@ pub(crate) async fn run_tool_call(
         .map(|tool| tool.name())
         .unwrap_or(name);
 
-    // Pre-flight permission check
-    match ensure_tool_permission(
-        crate::agent::runloop::unified::tool_routing::ToolPermissionsContext {
-            tool_registry: ctx.tool_registry,
-            renderer: ctx.renderer,
-            handle: ctx.handle,
-            session: ctx.session,
-            default_placeholder: default_placeholder.clone(),
-            ctrl_c_state,
-            ctrl_c_notify,
-            hooks: lifecycle_hooks,
-            justification: None,
-            approval_recorder: Some(ctx.approval_recorder),
-            decision_ledger: Some(ctx.decision_ledger),
-            tool_permission_cache: Some(ctx.tool_permission_cache),
-            hitl_notification_bell: vt_cfg
-                .map(|cfg| cfg.security.hitl_notification_bell)
-                .unwrap_or(true),
-            autonomous_mode: ctx.session_stats.is_autonomous_mode(),
-            human_in_the_loop: vt_cfg
-                .map(|cfg| cfg.security.human_in_the_loop)
-                .unwrap_or(true),
-            delegate_mode: ctx.session_stats.is_delegate_mode(),
-        },
-        name,
-        Some(&args_val),
-    )
-    .await
-    {
-        Ok(ToolPermissionFlow::Approved) => {}
-        Ok(ToolPermissionFlow::Denied) => {
-            let outcome = ToolPipelineOutcome::from_status(ToolExecutionStatus::Failure {
-                error: anyhow::anyhow!("Tool permission denied"),
-            });
-            emit_tool_completion_for_status(
-                harness_emitter,
-                tool_started_emitted,
-                &tool_item_id,
-                name,
-                &outcome.status,
-            );
-            return Ok(outcome);
-        }
-        Ok(ToolPermissionFlow::Interrupted) => {
-            let outcome = ToolPipelineOutcome::from_status(ToolExecutionStatus::Cancelled);
-            emit_tool_completion_for_status(
-                harness_emitter,
-                tool_started_emitted,
-                &tool_item_id,
-                name,
-                &outcome.status,
-            );
-            return Ok(outcome);
-        }
-        Ok(ToolPermissionFlow::Exit) => {
-            let outcome = ToolPipelineOutcome::from_status(ToolExecutionStatus::Cancelled);
-            emit_tool_completion_for_status(
-                harness_emitter,
-                tool_started_emitted,
-                &tool_item_id,
-                name,
-                &outcome.status,
-            );
-            return Ok(outcome);
-        }
-        Err(e) => {
-            let outcome =
-                ToolPipelineOutcome::from_status(ToolExecutionStatus::Failure { error: e });
-            emit_tool_completion_for_status(
-                harness_emitter,
-                tool_started_emitted,
-                &tool_item_id,
-                name,
-                &outcome.status,
-            );
-            return Ok(outcome);
+    if !prevalidated {
+        // Pre-flight permission check
+        match ensure_tool_permission(
+            crate::agent::runloop::unified::tool_routing::ToolPermissionsContext {
+                tool_registry: ctx.tool_registry,
+                renderer: ctx.renderer,
+                handle: ctx.handle,
+                session: ctx.session,
+                default_placeholder: default_placeholder.clone(),
+                ctrl_c_state,
+                ctrl_c_notify,
+                hooks: lifecycle_hooks,
+                justification: None,
+                approval_recorder: Some(ctx.approval_recorder),
+                decision_ledger: Some(ctx.decision_ledger),
+                tool_permission_cache: Some(ctx.tool_permission_cache),
+                hitl_notification_bell: vt_cfg
+                    .map(|cfg| cfg.security.hitl_notification_bell)
+                    .unwrap_or(true),
+                autonomous_mode: ctx.session_stats.is_autonomous_mode(),
+                human_in_the_loop: vt_cfg
+                    .map(|cfg| cfg.security.human_in_the_loop)
+                    .unwrap_or(true),
+                delegate_mode: ctx.session_stats.is_delegate_mode(),
+            },
+            name,
+            Some(&args_val),
+        )
+        .await
+        {
+            Ok(ToolPermissionFlow::Approved) => {}
+            Ok(ToolPermissionFlow::Denied) => {
+                let outcome = ToolPipelineOutcome::from_status(ToolExecutionStatus::Failure {
+                    error: anyhow::anyhow!("Tool permission denied"),
+                });
+                emit_tool_completion_for_status(
+                    harness_emitter,
+                    tool_started_emitted,
+                    &tool_item_id,
+                    name,
+                    &outcome.status,
+                );
+                return Ok(outcome);
+            }
+            Ok(ToolPermissionFlow::Interrupted) => {
+                let outcome = ToolPipelineOutcome::from_status(ToolExecutionStatus::Cancelled);
+                emit_tool_completion_for_status(
+                    harness_emitter,
+                    tool_started_emitted,
+                    &tool_item_id,
+                    name,
+                    &outcome.status,
+                );
+                return Ok(outcome);
+            }
+            Ok(ToolPermissionFlow::Exit) => {
+                let outcome = ToolPipelineOutcome::from_status(ToolExecutionStatus::Cancelled);
+                emit_tool_completion_for_status(
+                    harness_emitter,
+                    tool_started_emitted,
+                    &tool_item_id,
+                    name,
+                    &outcome.status,
+                );
+                return Ok(outcome);
+            }
+            Err(e) => {
+                let outcome =
+                    ToolPipelineOutcome::from_status(ToolExecutionStatus::Failure { error: e });
+                emit_tool_completion_for_status(
+                    harness_emitter,
+                    tool_started_emitted,
+                    &tool_item_id,
+                    name,
+                    &outcome.status,
+                );
+                return Ok(outcome);
+            }
         }
     }
 

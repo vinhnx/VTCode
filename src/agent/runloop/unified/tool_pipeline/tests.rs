@@ -258,6 +258,7 @@ async fn test_run_tool_call_unknown_tool_failure() {
         true,
         None,
         0,
+        false,
     )
     .await
     .expect("run_tool_call must run");
@@ -324,6 +325,7 @@ async fn test_run_tool_call_respects_max_tool_calls_budget() {
         true,
         None,
         0,
+        false,
     )
     .await
     .expect("run_tool_call must run");
@@ -406,6 +408,7 @@ async fn test_run_tool_call_auto_switches_plan_mode_for_mutating_tool() {
         true,
         None,
         0,
+        false,
     )
     .await
     .expect("run_tool_call must run");

@@ -7,6 +7,9 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 fn append_plan_mode_notice(prompt: &mut String) {
+    if prompt.contains("# PLAN MODE (READ-ONLY)") {
+        return;
+    }
     prompt.push_str("\n# PLAN MODE (READ-ONLY)\n");
     prompt.push_str("Plan Mode is active. Mutating tools are normally blocked except for `.vtcode/plans/` directory. The system may temporarily switch to Edit mode for discovery tools and then return.\n");
     prompt.push_str("Call `exit_plan_mode` when ready to transition to implementation.\n");

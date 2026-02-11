@@ -19,11 +19,14 @@ fn record_tool_execution(
     tool_name: &str,
     start_time: std::time::Instant,
     success: bool,
-    _is_argument_error: bool,
+    is_argument_error: bool,
 ) {
     let duration = start_time.elapsed();
     ctx.tool_health_tracker
         .record_execution(tool_name, success, duration);
+    if !is_argument_error {
+        ctx.autonomous_executor.record_execution(tool_name, success);
+    }
     ctx.telemetry.record_tool_usage(tool_name, success);
 }
 
