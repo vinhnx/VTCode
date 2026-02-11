@@ -10,6 +10,9 @@ use tracing::debug;
 use crate::agent::runloop::unified::plan_confirmation::{
     PlanConfirmationOutcome, execute_plan_confirmation, plan_confirmation_outcome_to_json,
 };
+use crate::agent::runloop::unified::plan_mode_state::{
+    transition_to_edit_mode, transition_to_plan_mode,
+};
 use crate::agent::runloop::unified::plan_mode_switch::{
     maybe_disable_plan_mode_for_tool, restore_plan_mode_after_tool,
 };
@@ -78,7 +81,7 @@ pub(crate) async fn run_tool_call(
     };
     let tool_item_id = call.id.clone();
 
-    if let Some(validation_failures) = validate_tool_args_security(&name, &args_val, None) {
+    if let Some(validation_failures) = validate_tool_args_security(name, &args_val, None) {
         return Ok(ToolPipelineOutcome::from_status(
             ToolExecutionStatus::Failure {
                 error: anyhow!(
@@ -89,8 +92,22 @@ pub(crate) async fn run_tool_call(
         ));
     }
 
+    if let Some(safety_validator) = ctx.safety_validator {
+        let validation = {
+            let mut validator = safety_validator.write().await;
+            validator.validate_call(name).await
+        };
+        if let Err(err) = validation {
+            return Ok(ToolPipelineOutcome::from_status(
+                ToolExecutionStatus::Failure {
+                    error: anyhow!("Safety validation failed: {}", err),
+                },
+            ));
+        }
+    }
+
     if let Some(emitter) = ctx.harness_emitter {
-        let _ = emitter.emit(tool_started_event(tool_item_id.clone(), &name));
+        let _ = emitter.emit(tool_started_event(tool_item_id.clone(), name));
     }
     let max_tool_retries = ctx.harness_state.max_tool_retries as usize;
     // Resolve tool name through registry (handles aliases and normalization)
@@ -124,7 +141,7 @@ pub(crate) async fn run_tool_call(
                 .unwrap_or(true),
             delegate_mode: ctx.session_stats.is_delegate_mode(),
         },
-        &name,
+        name,
         Some(&args_val),
     )
     .await
@@ -183,7 +200,7 @@ pub(crate) async fn run_tool_call(
             };
             let _ = emitter.emit(tool_completed_event(
                 tool_item_id.clone(),
-                &name,
+                name,
                 status,
                 None,
             ));
@@ -198,14 +215,15 @@ pub(crate) async fn run_tool_call(
         ctx.handle,
         resolved_name,
         &args_val,
-    )?;
+    )
+    .await?;
 
     // Special-case enter_plan_mode: execute tool and enable plan mode in registry.
     // This ensures the registry's plan_read_only_mode flag is set when agent enters plan mode.
     if name == tools::ENTER_PLAN_MODE {
         let tool_result = execute_tool_with_timeout_ref(
             ctx.tool_registry,
-            &name,
+            name,
             &args_val,
             ctrl_c_state,
             ctrl_c_notify,
@@ -219,13 +237,14 @@ pub(crate) async fn run_tool_call(
             let status = output.get("status").and_then(|s| s.as_str());
             // Enable plan mode unless we were already in plan mode
             if status == Some("success") {
-                ctx.tool_registry.enable_plan_mode();
-                ctx.session_stats.set_plan_mode(true);
-                // Update TUI header indicator (OpenCode-style event handling)
-                ctx.handle
-                    .set_editing_mode(vtcode_core::ui::EditingMode::Plan);
-                // Switch to planner agent profile for system prompt
-                ctx.session_stats.switch_to_planner();
+                transition_to_plan_mode(
+                    ctx.tool_registry,
+                    ctx.session_stats,
+                    ctx.handle,
+                    false,
+                    false,
+                )
+                .await;
                 tracing::info!(
                     target: "vtcode.plan_mode",
                     "Agent entered Plan Mode with planner profile (read-only, mutating tools blocked)"
@@ -242,7 +261,7 @@ pub(crate) async fn run_tool_call(
             };
             let _ = emitter.emit(tool_completed_event(
                 tool_item_id.clone(),
-                &name,
+                name,
                 status,
                 None,
             ));
@@ -261,7 +280,7 @@ pub(crate) async fn run_tool_call(
         // Execute the exit_plan_mode tool to get the plan summary
         let tool_result = execute_tool_with_timeout_ref(
             ctx.tool_registry,
-            &name,
+            name,
             &args_val,
             ctrl_c_state,
             ctrl_c_notify,
@@ -322,20 +341,13 @@ pub(crate) async fn run_tool_call(
                             outcome,
                             PlanConfirmationOutcome::Execute | PlanConfirmationOutcome::AutoAccept
                         ) {
-                            // CRITICAL: Disable plan mode in the tool registry to allow mutating tools
-                            ctx.tool_registry.disable_plan_mode();
-                            // Keep shared plan state aligned with registry toggle
-                            let plan_state = ctx.tool_registry.plan_mode_state();
-                            plan_state.disable();
-                            plan_state.set_plan_file(None).await;
-                            // Also update the UI editing mode indicator
-                            ctx.session_stats
-                                .set_editing_mode(vtcode_core::ui::EditingMode::Edit);
-                            // Update TUI header indicator (OpenCode-style event handling)
-                            ctx.handle
-                                .set_editing_mode(vtcode_core::ui::EditingMode::Edit);
-                            // Switch to coder agent profile for implementation
-                            ctx.session_stats.switch_to_coder();
+                            transition_to_edit_mode(
+                                ctx.tool_registry,
+                                ctx.session_stats,
+                                ctx.handle,
+                                true,
+                            )
+                            .await;
                             tracing::info!(
                                 target: "vtcode.plan_mode",
                                 "User approved plan execution, transitioning to coder profile (mutating tools enabled)"
@@ -366,18 +378,8 @@ pub(crate) async fn run_tool_call(
                 ));
             } else if !require_confirmation {
                 // Confirmation disabled via config, auto-approve
-                // CRITICAL: Disable plan mode in the tool registry to allow mutating tools
-                ctx.tool_registry.disable_plan_mode();
-                let plan_state = ctx.tool_registry.plan_mode_state();
-                plan_state.disable();
-                plan_state.set_plan_file(None).await;
-                ctx.session_stats
-                    .set_editing_mode(vtcode_core::ui::EditingMode::Edit);
-                // Update TUI header indicator (OpenCode-style event handling)
-                ctx.handle
-                    .set_editing_mode(vtcode_core::ui::EditingMode::Edit);
-                // Switch to coder agent profile for implementation
-                ctx.session_stats.switch_to_coder();
+                transition_to_edit_mode(ctx.tool_registry, ctx.session_stats, ctx.handle, true)
+                    .await;
                 tracing::info!(
                     target: "vtcode.plan_mode",
                     "Plan confirmation disabled via config, auto-approving with coder profile (mutating tools enabled)"
@@ -409,7 +411,7 @@ pub(crate) async fn run_tool_call(
             };
             let _ = emitter.emit(tool_completed_event(
                 tool_item_id.clone(),
-                &name,
+                name,
                 status,
                 None,
             ));
@@ -419,8 +421,8 @@ pub(crate) async fn run_tool_call(
 
     // Determine read-only tools for caching
     // Enhanced caching: Determine if tool is cacheable based on tool type and arguments
-    let is_cacheable_tool = is_tool_cacheable(&name, &args_val);
-    let cache_target = cache_target_path(&name, &args_val);
+    let is_cacheable_tool = is_tool_cacheable(name, &args_val);
+    let cache_target = cache_target_path(name, &args_val);
 
     // Attempt cache retrieval for cacheable tools
     if is_cacheable_tool {
@@ -429,7 +431,7 @@ pub(crate) async fn run_tool_call(
             .workspace_root()
             .to_string_lossy()
             .to_string();
-        let cache_key = create_enhanced_cache_key(&name, &args_val, &cache_target, &workspace_path);
+        let cache_key = create_enhanced_cache_key(name, &args_val, &cache_target, &workspace_path);
 
         let mut cache = ctx.tool_result_cache.write().await;
         if let Some(cached_output) = cache.get(&cache_key) {
@@ -476,7 +478,7 @@ pub(crate) async fn run_tool_call(
         .set_message(format!("Starting {}...", name))
         .await;
 
-    let status_message = build_tool_status_message(&name, &args_val);
+    let status_message = build_tool_status_message(name, &args_val);
     let tool_spinner = PlaceholderSpinner::with_progress(
         ctx.handle,
         Some("".to_string()),
@@ -487,7 +489,7 @@ pub(crate) async fn run_tool_call(
 
     let outcome = execute_tool_with_timeout_ref(
         ctx.tool_registry,
-        &name,
+        name,
         &args_val,
         ctrl_c_state,
         ctrl_c_notify,
@@ -510,7 +512,7 @@ pub(crate) async fn run_tool_call(
                     .to_string_lossy()
                     .to_string();
                 let cache_key =
-                    create_enhanced_cache_key(&name, &args_val, &cache_target, &workspace_path);
+                    create_enhanced_cache_key(name, &args_val, &cache_target, &workspace_path);
                 let mut cache = ctx.tool_result_cache.write().await;
                 if let Some(cached_output) = cache.get(&cache_key) {
                     // We have a cached result from a previous successful call - return it
@@ -552,7 +554,7 @@ pub(crate) async fn run_tool_call(
                 .to_string_lossy()
                 .to_string();
             let cache_key =
-                create_enhanced_cache_key(&name, &args_val, &cache_target, &workspace_path);
+                create_enhanced_cache_key(name, &args_val, &cache_target, &workspace_path);
             let mut cache = ctx.tool_result_cache.write().await;
             let output_json = serde_json::to_string(&output).unwrap_or_else(|_| "{}".to_string());
             cache.insert_arc(cache_key, Arc::new(output_json));
@@ -565,7 +567,8 @@ pub(crate) async fn run_tool_call(
         ctx.renderer,
         ctx.handle,
         restore_plan_mode,
-    )?;
+    )
+    .await?;
 
     let mut pipeline_outcome = ToolPipelineOutcome::from_status(outcome);
 
@@ -576,7 +579,7 @@ pub(crate) async fn run_tool_call(
             // record confirmed changes in trajectory inside ctx.traj
             ctx.traj.log_tool_call(
                 turn_index,
-                &name,
+                name,
                 &args_val,
                 pipeline_outcome.command_success,
             );
@@ -596,7 +599,7 @@ pub(crate) async fn run_tool_call(
         // Log that the tool was invoked but made no file modifications
         ctx.traj.log_tool_call(
             turn_index,
-            &name,
+            name,
             &args_val,
             pipeline_outcome.command_success,
         );
@@ -610,7 +613,7 @@ pub(crate) async fn run_tool_call(
         };
         let _ = emitter.emit(tool_completed_event(
             tool_item_id.clone(),
-            &name,
+            name,
             status,
             None,
         ));

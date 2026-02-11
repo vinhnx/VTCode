@@ -16,6 +16,7 @@ use crate::agent::runloop::tool_output::resolve_stdout_tail_limit;
 use crate::agent::runloop::unified::plan_confirmation::{
     PlanConfirmationOutcome, execute_plan_confirmation, plan_confirmation_outcome_to_json,
 };
+use crate::agent::runloop::unified::plan_mode_state::transition_to_edit_mode;
 use crate::agent::runloop::unified::plan_mode_switch::{
     maybe_disable_plan_mode_for_tool, restore_plan_mode_after_tool,
 };
@@ -328,7 +329,7 @@ pub(crate) async fn validate_tool_call<'a>(
     loop {
         let validation_result = {
             let mut validator = ctx.safety_validator.write().await;
-            validator.validate_call(tool_name)
+            validator.validate_call(tool_name).await
         };
 
         match validation_result {
@@ -852,15 +853,13 @@ async fn execute_and_handle_tool_call_inner<'a>(
                                 PlanConfirmationOutcome::Execute
                                     | PlanConfirmationOutcome::AutoAccept
                             ) {
-                                ctx.tool_registry.disable_plan_mode();
-                                let plan_state = ctx.tool_registry.plan_mode_state();
-                                plan_state.disable();
-                                plan_state.set_plan_file(None).await;
-                                ctx.session_stats
-                                    .set_editing_mode(vtcode_core::ui::EditingMode::Edit);
-                                ctx.handle
-                                    .set_editing_mode(vtcode_core::ui::EditingMode::Edit);
-                                ctx.session_stats.switch_to_coder();
+                                transition_to_edit_mode(
+                                    ctx.tool_registry,
+                                    ctx.session_stats,
+                                    ctx.handle,
+                                    true,
+                                )
+                                .await;
                             }
                             plan_confirmation_outcome_to_json(&outcome)
                         }
@@ -880,15 +879,8 @@ async fn execute_and_handle_tool_call_inner<'a>(
                     },
                 )
                 } else if !require_confirmation {
-                    ctx.tool_registry.disable_plan_mode();
-                    let plan_state = ctx.tool_registry.plan_mode_state();
-                    plan_state.disable();
-                    plan_state.set_plan_file(None).await;
-                    ctx.session_stats
-                        .set_editing_mode(vtcode_core::ui::EditingMode::Edit);
-                    ctx.handle
-                        .set_editing_mode(vtcode_core::ui::EditingMode::Edit);
-                    ctx.session_stats.switch_to_coder();
+                    transition_to_edit_mode(ctx.tool_registry, ctx.session_stats, ctx.handle, true)
+                        .await;
 
                     ToolPipelineOutcome::from_status(
                     crate::agent::runloop::unified::tool_pipeline::ToolExecutionStatus::Success {
@@ -937,7 +929,8 @@ async fn execute_and_handle_tool_call_inner<'a>(
         ctx.handle,
         canonical,
         &args_val,
-    )?;
+    )
+    .await?;
 
     let progress_reporter = if let Some(r) = batch_progress_reporter {
         r.clone()
@@ -1081,7 +1074,8 @@ async fn execute_and_handle_tool_call_inner<'a>(
         ctx.renderer,
         ctx.handle,
         restore_plan_mode,
-    )?;
+    )
+    .await?;
 
     handle_result?;
 

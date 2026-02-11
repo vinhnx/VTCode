@@ -11,6 +11,7 @@
 //! - Unified error handling via `UnifiedToolError`
 //! - Trust level enforcement at the executor level
 
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use serde_json::Value;
@@ -84,6 +85,17 @@ pub async fn execute_golden_path(
     ctx: &ToolExecutionContext,
     config: &GoldenPathConfig,
 ) -> Result<GoldenPathResult, UnifiedToolError> {
+    let safety_gateway = create_safety_gateway(config, ctx);
+    execute_golden_path_with_gateway(registry, tool_name, args, ctx, &safety_gateway).await
+}
+
+async fn execute_golden_path_with_gateway(
+    registry: &ToolRegistry,
+    tool_name: &str,
+    args: Value,
+    ctx: &ToolExecutionContext,
+    safety_gateway: &SafetyGateway,
+) -> Result<GoldenPathResult, UnifiedToolError> {
     let invocation = create_invocation(tool_name, &args, ctx);
     let start = Instant::now();
 
@@ -95,18 +107,28 @@ pub async fn execute_golden_path(
         "golden path execution starting"
     );
 
-    // 1. Safety check
-    let safety_gateway = create_safety_gateway(config);
-    let safety_decision = safety_gateway.check_safety(ctx, tool_name, &args).await;
+    // 1. Safety check and atomic rate-limit reservation
+    let safety_result = safety_gateway
+        .check_and_record_with_id(ctx, tool_name, &args, Some(invocation.id))
+        .await;
 
-    let approval_state = match &safety_decision {
+    let approval_state = match &safety_result.decision {
         SafetyDecision::Allow => ApprovalState::PreApproved {
             reason: "Safety check passed".to_string(),
         },
         SafetyDecision::Deny(reason) => {
+            let message = if let Some(retry_after) = safety_result.retry_after {
+                format!(
+                    "Safety check denied: {} (retry after {:.1}s)",
+                    reason,
+                    retry_after.as_secs_f64()
+                )
+            } else {
+                format!("Safety check denied: {}", reason)
+            };
             return Err(create_error(
                 UnifiedErrorKind::PolicyViolation,
-                format!("Safety check denied: {}", reason),
+                message,
                 tool_name,
                 &invocation.id,
                 start.elapsed(),
@@ -211,11 +233,22 @@ pub async fn execute_batch_golden_path(
 
     // Execute read-only tools in parallel
     if !read_only.is_empty() {
+        let safety_gateway = Arc::new(create_safety_gateway(config, ctx));
         let futures: Vec<_> = read_only
             .into_iter()
             .map(|(name, args)| {
                 let ctx = ctx.for_retry();
-                async move { execute_golden_path(registry, name, args, &ctx, config).await }
+                let safety_gateway = Arc::clone(&safety_gateway);
+                async move {
+                    execute_golden_path_with_gateway(
+                        registry,
+                        name,
+                        args,
+                        &ctx,
+                        safety_gateway.as_ref(),
+                    )
+                    .await
+                }
             })
             .collect();
 
@@ -224,9 +257,11 @@ pub async fn execute_batch_golden_path(
     }
 
     // Execute mutating tools sequentially
+    let safety_gateway = create_safety_gateway(config, ctx);
     for (name, args) in mutating {
         let ctx = ctx.for_retry();
-        let result = execute_golden_path(registry, name, args, &ctx, config).await;
+        let result =
+            execute_golden_path_with_gateway(registry, name, args, &ctx, &safety_gateway).await;
         results.push(result);
     }
 
@@ -243,15 +278,14 @@ fn create_invocation(tool_name: &str, args: &Value, ctx: &ToolExecutionContext) 
 }
 
 /// Create a safety gateway with the given configuration
-fn create_safety_gateway(config: &GoldenPathConfig) -> SafetyGateway {
+fn create_safety_gateway(config: &GoldenPathConfig, ctx: &ToolExecutionContext) -> SafetyGateway {
     let gateway_config = SafetyGatewayConfig {
         max_per_turn: config.max_per_turn.unwrap_or(100),
         max_per_session: config.max_per_session.unwrap_or(1000),
-        rate_limit_per_second: 5,
-        rate_limit_per_minute: None,
-        plan_mode_active: config.plan_mode_enforced,
+        plan_mode_active: config.plan_mode_enforced || ctx.policy_config.plan_mode_enforced,
         workspace_trust: WorkspaceTrust::Trusted,
         approval_risk_threshold: RiskLevel::Medium,
+        ..SafetyGatewayConfig::default()
     };
 
     SafetyGateway::with_config(gateway_config)

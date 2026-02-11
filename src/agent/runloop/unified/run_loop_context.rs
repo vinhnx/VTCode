@@ -1,4 +1,5 @@
 use crate::agent::runloop::unified::state::SessionStats;
+use crate::agent::runloop::unified::tool_call_safety::ToolCallSafetyValidator;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
@@ -93,6 +94,7 @@ pub(crate) struct RunLoopContext<'a> {
     pub mcp_panel_state: &'a mut McpPanelState,
     pub approval_recorder: &'a ApprovalRecorder,
     pub session: &'a mut InlineSession,
+    pub safety_validator: Option<&'a Arc<RwLock<ToolCallSafetyValidator>>>,
     pub traj: &'a TrajectoryLogger,
     pub harness_state: &'a mut HarnessTurnState,
     pub harness_emitter: Option<&'a HarnessEventEmitter>,
