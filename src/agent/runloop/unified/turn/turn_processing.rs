@@ -26,6 +26,22 @@ use vtcode_core::turn_metadata;
 use vtcode_core::utils::ansi::AnsiRenderer;
 use vtcode_core::utils::ansi::MessageStyle;
 
+fn is_retryable_llm_error(message: &str) -> bool {
+    let msg = message.to_ascii_lowercase();
+    [
+        "rate limit",
+        "timeout",
+        "500",
+        "502",
+        "503",
+        "service unavailable",
+        "connection",
+        "network",
+    ]
+    .iter()
+    .any(|needle| msg.contains(needle))
+}
+
 /// Execute an LLM request and return the response
 pub(crate) async fn execute_llm_request(
     ctx: &mut TurnProcessingContext<'_>,
@@ -62,13 +78,15 @@ pub(crate) async fn execute_llm_request(
         .await?;
 
     // Keep prompt guidance aligned with runtime harness enforcement limits.
-    let _ = writeln!(
-        system_prompt,
-        "\n[Harness Limits]\n- max_tool_calls_per_turn: {}\n- max_tool_wall_clock_secs: {}\n- max_tool_retries: {}",
-        ctx.harness_state.max_tool_calls,
-        ctx.harness_state.max_tool_wall_clock.as_secs(),
-        ctx.harness_state.max_tool_retries
-    );
+    if !system_prompt.contains("[Harness Limits]") {
+        let _ = writeln!(
+            system_prompt,
+            "\n[Harness Limits]\n- max_tool_calls_per_turn: {}\n- max_tool_wall_clock_secs: {}\n- max_tool_retries: {}",
+            ctx.harness_state.max_tool_calls,
+            ctx.harness_state.max_tool_wall_clock.as_secs(),
+            ctx.harness_state.max_tool_retries
+        );
+    }
 
     // HP-6: Cache provider capabilities to avoid repeated trait method calls (2-3 calls → 1 per turn)
     let capabilities = uni::get_cached_capabilities(provider_client, active_model);
@@ -216,24 +234,7 @@ pub(crate) async fn execute_llm_request(
 
             match stream_result {
                 Ok((response, emitted)) => Ok((response, emitted)),
-                Err(ref err) => {
-                    // Only retry streaming errors if we haven't emitted any tokens yet (best effort)
-                    let msg = err.to_string();
-                    let is_retryable = msg.contains("rate limit")
-                        || msg.contains("timeout")
-                        || msg.contains("500")
-                        || msg.contains("502")
-                        || msg.contains("503")
-                        || msg.contains("service unavailable")
-                        || msg.contains("connection")
-                        || msg.contains("network");
-
-                    if is_retryable {
-                        Err(anyhow::anyhow!(msg)) // Return err to retry loop
-                    } else {
-                        Err(anyhow::anyhow!(msg))
-                    }
-                }
+                Err(ref err) => Err(anyhow::anyhow!(err.to_string())),
             }
         } else {
             let provider_name = provider_client.name().to_string();
@@ -296,14 +297,7 @@ pub(crate) async fn execute_llm_request(
             }
             Err(err) => {
                 let msg = err.to_string();
-                let is_retryable = msg.contains("rate limit")
-                    || msg.contains("timeout")
-                    || msg.contains("500")
-                    || msg.contains("502")
-                    || msg.contains("503")
-                    || msg.contains("service unavailable")
-                    || msg.contains("connection")
-                    || msg.contains("network");
+                let is_retryable = is_retryable_llm_error(&msg);
 
                 // Special check for user interruption - never retry
                 if !crate::agent::runloop::unified::turn::turn_helpers::should_continue_operation(

@@ -1,40 +1,23 @@
 //! Tool outcome handling helpers for turn execution.
 
 use anyhow::Result;
-use std::collections::VecDeque;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
-use tokio::sync::Mutex;
 use vtcode_core::llm::provider as uni;
 
 use vtcode_core::tools::registry::{ToolErrorType, ToolExecutionError};
-use vtcode_core::ui::tui::{InlineMessageKind, InlineSegment, InlineTextStyle};
 use vtcode_core::utils::ansi::MessageStyle;
 
-use crate::agent::runloop::tool_output::resolve_stdout_tail_limit;
-use crate::agent::runloop::unified::plan_confirmation::{
-    PlanConfirmationOutcome, execute_plan_confirmation, plan_confirmation_outcome_to_json,
-};
-use crate::agent::runloop::unified::plan_mode_state::transition_to_edit_mode;
-use crate::agent::runloop::unified::plan_mode_switch::{
-    maybe_disable_plan_mode_for_tool, restore_plan_mode_after_tool,
-};
 use crate::agent::runloop::unified::progress::ProgressReporter;
 use crate::agent::runloop::unified::tool_call_safety::SafetyError;
-use crate::agent::runloop::unified::tool_pipeline::{
-    ToolPipelineOutcome, execute_hitl_tool, execute_tool_with_timeout_ref,
-};
+use crate::agent::runloop::unified::tool_pipeline::run_tool_call;
 use crate::agent::runloop::unified::tool_routing::{
     ensure_tool_permission, prompt_session_limit_increase,
 };
 use crate::agent::runloop::unified::turn::context::{
     TurnHandlerOutcome, TurnLoopResult, TurnProcessingContext,
 };
-use crate::agent::runloop::unified::turn::plan_content::parse_plan_content_from_json;
+use crate::agent::runloop::unified::turn::guards::validate_tool_args_security;
 use vtcode_core::config::constants::tools;
-use vtcode_core::tools::names::canonical_tool_name;
-use vtcode_core::ui::tui::PlanContent;
 
 use super::execution_result::handle_tool_execution_result;
 use super::helpers::{push_tool_response, resolve_max_tool_retries, update_repetition_tracker};
@@ -58,116 +41,6 @@ pub struct ToolOutcomeContext<'a, 'b> {
     pub ctx: &'b mut TurnProcessingContext<'a>,
     pub repeated_tool_attempts: &'b mut super::helpers::LoopTracker,
     pub turn_modified_files: &'b mut std::collections::BTreeSet<std::path::PathBuf>,
-}
-
-struct PtyStreamState {
-    lines: VecDeque<String>,
-    current_line: String,
-    displayed_count: usize,
-    total_lines: usize,
-}
-
-impl PtyStreamState {
-    fn new() -> Self {
-        Self {
-            lines: VecDeque::new(),
-            current_line: String::new(),
-            displayed_count: 0,
-            total_lines: 0,
-        }
-    }
-
-    fn apply_chunk(&mut self, chunk: &str, limit: usize) {
-        if limit == 0 {
-            self.lines.clear();
-            self.current_line.clear();
-            self.displayed_count = 0;
-            self.total_lines = 0;
-            return;
-        }
-
-        let mut chars = chunk.chars().peekable();
-        while let Some(ch) = chars.next() {
-            match ch {
-                '\r' => {
-                    if matches!(chars.peek(), Some('\n')) {
-                        let _ = chars.next();
-                        self.push_line(limit);
-                    } else {
-                        self.current_line.clear();
-                    }
-                }
-                '\n' => {
-                    self.push_line(limit);
-                }
-                _ => {
-                    self.current_line.push(ch);
-                }
-            }
-        }
-    }
-
-    fn push_line(&mut self, limit: usize) {
-        let trimmed = self.current_line.trim_end();
-        if trimmed.trim().is_empty() {
-            self.current_line.clear();
-            return;
-        }
-        self.lines.push_back(trimmed.to_string());
-        self.total_lines += 1;
-        self.current_line.clear();
-        while self.lines.len() > limit {
-            self.lines.pop_front();
-        }
-    }
-
-    fn render_lines(&self, limit: usize) -> Vec<String> {
-        if limit == 0 {
-            return Vec::new();
-        }
-
-        let has_current = !self.current_line.trim().is_empty();
-        let total = self.total_lines + usize::from(has_current);
-        if total == 0 {
-            return Vec::new();
-        }
-
-        let mut truncated = false;
-        let mut tail_limit = limit;
-        if total > limit {
-            truncated = true;
-            tail_limit = tail_limit.saturating_sub(1);
-        }
-
-        let start = total.saturating_sub(tail_limit);
-        let base_index = self.total_lines.saturating_sub(self.lines.len());
-        let mut rendered = Vec::new();
-        if truncated {
-            rendered.push("[... truncated ...]".to_string());
-        }
-
-        let mut idx = 0usize;
-        for line in &self.lines {
-            let absolute = base_index + idx;
-            if absolute >= start {
-                rendered.push(line.clone());
-            }
-            idx += 1;
-        }
-        let current_index = base_index + self.lines.len();
-        if has_current && current_index >= start {
-            rendered.push(self.current_line.trim_end().to_string());
-        }
-
-        rendered
-    }
-
-    fn last_display_line(&self) -> Option<String> {
-        if !self.current_line.trim().is_empty() {
-            return Some(self.current_line.trim_end().to_string());
-        }
-        self.lines.back().cloned()
-    }
 }
 
 /// Unified handler for a single tool call (whether native or textual).
@@ -248,6 +121,24 @@ pub(crate) async fn validate_tool_call<'a>(
     }
 
     ctx.harness_state.record_tool_call();
+
+    if let Some(validation_failures) =
+        validate_tool_args_security(tool_name, args_val, None, Some(ctx.tool_registry))
+    {
+        push_tool_response(
+            ctx.working_history,
+            tool_call_id.to_string(),
+            serde_json::json!({
+                "error": format!(
+                    "Tool argument validation failed: {}",
+                    validation_failures.join("; ")
+                ),
+                "validation_stage": "security",
+            })
+            .to_string(),
+        );
+        return Ok(ValidationResult::Blocked);
+    }
 
     if let Err(err) = ctx
         .tool_registry
@@ -527,6 +418,38 @@ async fn acquire_adaptive_rate_limit_slot<'a>(
     Ok(Some(ValidationResult::Blocked))
 }
 
+fn can_parallelize_batch_tool_call(
+    ctx: &TurnProcessingContext<'_>,
+    tool_name: &str,
+    args_val: &serde_json::Value,
+) -> bool {
+    let canonical = vtcode_core::tools::names::canonical_tool_name(tool_name);
+    let canonical = canonical.as_ref();
+
+    if matches!(
+        canonical,
+        tools::ENTER_PLAN_MODE
+            | tools::EXIT_PLAN_MODE
+            | tools::ASK_USER_QUESTION
+            | tools::REQUEST_USER_INPUT
+            | tools::ASK_QUESTIONS
+            | tools::RUN_PTY_CMD
+            | tools::UNIFIED_EXEC
+            | tools::SEND_PTY_INPUT
+            | tools::SHELL
+    ) {
+        return false;
+    }
+
+    match ctx
+        .tool_registry
+        .preflight_validate_call(canonical, args_val)
+    {
+        Ok(outcome) => outcome.readonly_classification,
+        Err(_) => false,
+    }
+}
+
 pub(crate) async fn handle_tool_call_batch<'a, 'b>(
     t_ctx: &mut ToolOutcomeContext<'a, 'b>,
     tool_calls: &[&uni::ToolCall],
@@ -572,6 +495,25 @@ pub(crate) async fn handle_tool_call_batch<'a, 'b>(
     }
 
     if validated_calls.is_empty() {
+        return Ok(None);
+    }
+
+    let can_parallelize = validated_calls.iter().all(|(_, tool_name, args_val)| {
+        can_parallelize_batch_tool_call(t_ctx.ctx, tool_name, args_val)
+    });
+    if !can_parallelize {
+        for (tool_call, tool_name, args_val) in validated_calls {
+            execute_and_handle_tool_call(
+                t_ctx.ctx,
+                t_ctx.repeated_tool_attempts,
+                t_ctx.turn_modified_files,
+                tool_call.id.clone(),
+                &tool_name,
+                args_val,
+                None,
+            )
+            .await?;
+        }
         return Ok(None);
     }
 
@@ -677,7 +619,7 @@ async fn execute_and_handle_tool_call_inner<'a>(
     tool_call_id: String,
     tool_name: &str,
     args_val: serde_json::Value,
-    batch_progress_reporter: Option<&ProgressReporter>,
+    _batch_progress_reporter: Option<&ProgressReporter>,
 ) -> Result<()> {
     // Show pre-execution indicator for file modification operations
     if crate::agent::runloop::unified::tool_summary::is_file_modification_tool(tool_name, &args_val)
@@ -688,374 +630,35 @@ async fn execute_and_handle_tool_call_inner<'a>(
             &args_val,
         )?;
     }
-
-    // Caching Logic (Read-Only Tools)
-    let is_read_only = tool_name == "read_file"
-        || tool_name == "list_dir"
-        || tool_name == "search_files"
-        || tool_name == "codebase_search"
-        || tool_name == "grep_search";
-
-    use vtcode_core::tools::result_cache::ToolCacheKey;
-
-    let cache_key = if is_read_only {
-        Some(ToolCacheKey::from_json(tool_name, &args_val, ""))
-    } else {
-        None
-    };
-
-    // Check cache
-    if let Some(ref key) = cache_key {
-        let mut tool_cache_guard = ctx.tool_result_cache.write().await;
-        if let Some(cached_output) = tool_cache_guard.get(key) {
-            #[cfg(debug_assertions)]
-            tracing::debug!("Cache hit for tool: {}", tool_name);
-
-            let cached_json: serde_json::Value =
-                serde_json::from_str(&cached_output).unwrap_or(serde_json::json!({}));
-
-            let outcome = ToolPipelineOutcome::from_status(
-                crate::agent::runloop::unified::tool_pipeline::ToolExecutionStatus::Success {
-                    output: cached_json,
-                    stdout: None,
-                    modified_files: vec![],
-                    command_success: true,
-                    has_more: false,
-                },
-            );
-
-            let mut t_ctx_local = ToolOutcomeContext {
-                ctx: &mut *ctx,
-                repeated_tool_attempts: &mut *repeated_tool_attempts,
-                turn_modified_files: &mut *turn_modified_files,
-            };
-
-            handle_tool_execution_result(
-                &mut t_ctx_local,
-                tool_call_id,
-                tool_name,
-                &args_val,
-                &outcome,
-                std::time::Instant::now(),
-            )
-            .await?;
-
-            return Ok(());
-        }
-    }
-
     let tool_execution_start = std::time::Instant::now();
-    let max_tool_retries = resolve_max_tool_retries(tool_name, ctx.vt_cfg);
-    let canonical_name = canonical_tool_name(tool_name);
-    let canonical: &str = canonical_name.as_ref();
-
-    if let Some(hitl_result) = execute_hitl_tool(
-        canonical,
-        ctx.handle,
-        ctx.session,
-        &args_val,
-        ctx.ctrl_c_state,
-        ctx.ctrl_c_notify,
-        ctx.session_stats.editing_mode,
-    )
-    .await
-    {
-        let pipeline_outcome = ToolPipelineOutcome::from_status(match hitl_result {
-            Ok(value) => {
-                crate::agent::runloop::unified::tool_pipeline::ToolExecutionStatus::Success {
-                    output: value,
-                    stdout: None,
-                    modified_files: vec![],
-                    command_success: true,
-                    has_more: false,
-                }
-            }
-            Err(error) => {
-                crate::agent::runloop::unified::tool_pipeline::ToolExecutionStatus::Failure {
-                    error,
-                }
-            }
-        });
-
-        let mut t_ctx = ToolOutcomeContext {
-            ctx,
-            repeated_tool_attempts,
-            turn_modified_files,
-        };
-
-        handle_tool_execution_result(
-            &mut t_ctx,
-            tool_call_id,
-            tool_name,
-            &args_val,
-            &pipeline_outcome,
-            tool_execution_start,
+    let synthesized_call = uni::ToolCall::function(
+        tool_call_id.clone(),
+        tool_name.to_string(),
+        serde_json::to_string(&args_val).unwrap_or_else(|_| "{}".to_string()),
+    );
+    let pipeline_outcome = {
+        let ctrl_c_state = ctx.ctrl_c_state;
+        let ctrl_c_notify = ctx.ctrl_c_notify;
+        let default_placeholder = ctx.default_placeholder.clone();
+        let lifecycle_hooks = ctx.lifecycle_hooks;
+        let vt_cfg = ctx.vt_cfg;
+        let turn_index = ctx.working_history.len();
+        let mut turn_loop_ctx = ctx.as_turn_loop_context();
+        let mut run_loop_ctx = turn_loop_ctx.as_run_loop_context();
+        run_tool_call(
+            &mut run_loop_ctx,
+            &synthesized_call,
+            ctrl_c_state,
+            ctrl_c_notify,
+            default_placeholder,
+            lifecycle_hooks,
+            true,
+            vt_cfg,
+            turn_index,
+            true,
         )
-        .await?;
-
-        return Ok(());
-    }
-
-    if canonical == tools::EXIT_PLAN_MODE {
-        let tool_result = execute_tool_with_timeout_ref(
-            ctx.tool_registry,
-            tool_name,
-            &args_val,
-            ctx.ctrl_c_state,
-            ctx.ctrl_c_notify,
-            None,
-            max_tool_retries,
-        )
-        .await;
-
-        let pipeline_outcome =
-            if let crate::agent::runloop::unified::tool_pipeline::ToolExecutionStatus::Success {
-                ref output,
-                ..
-            } = tool_result
-            {
-                let require_confirmation = ctx
-                    .vt_cfg
-                    .map(|cfg| cfg.agent.require_plan_confirmation)
-                    .unwrap_or(true);
-
-                let status = output.get("status").and_then(|s| s.as_str());
-                let requires_confirmation_from_result = output
-                    .get("requires_confirmation")
-                    .and_then(|r| r.as_bool())
-                    .unwrap_or(false);
-
-                if status == Some("pending_confirmation")
-                    && requires_confirmation_from_result
-                    && require_confirmation
-                {
-                    let plan_content = if let Some(raw_content) =
-                        output.get("plan_content").and_then(|v| v.as_str())
-                    {
-                        let title = output
-                            .get("plan_summary")
-                            .and_then(|s| s.get("title"))
-                            .and_then(|t| t.as_str())
-                            .unwrap_or("Implementation Plan")
-                            .to_string();
-                        let file_path = output
-                            .get("plan_file")
-                            .and_then(|p| p.as_str())
-                            .map(|s| s.to_string());
-                        PlanContent::from_markdown(title, raw_content, file_path)
-                    } else {
-                        parse_plan_content_from_json(
-                            &output.get("plan_summary").cloned().unwrap_or_default(),
-                        )
-                    };
-
-                    let confirmation_outcome = execute_plan_confirmation(
-                        ctx.handle,
-                        ctx.session,
-                        plan_content,
-                        ctx.ctrl_c_state,
-                        ctx.ctrl_c_notify,
-                    )
-                    .await;
-
-                    let final_output = match confirmation_outcome {
-                        Ok(outcome) => {
-                            if matches!(
-                                outcome,
-                                PlanConfirmationOutcome::Execute
-                                    | PlanConfirmationOutcome::AutoAccept
-                            ) {
-                                transition_to_edit_mode(
-                                    ctx.tool_registry,
-                                    ctx.session_stats,
-                                    ctx.handle,
-                                    true,
-                                )
-                                .await;
-                            }
-                            plan_confirmation_outcome_to_json(&outcome)
-                        }
-                        Err(e) => serde_json::json!({
-                            "status": "error",
-                            "error": format!("Plan confirmation failed: {}", e)
-                        }),
-                    };
-
-                    ToolPipelineOutcome::from_status(
-                    crate::agent::runloop::unified::tool_pipeline::ToolExecutionStatus::Success {
-                        output: final_output,
-                        stdout: None,
-                        modified_files: vec![],
-                        command_success: true,
-                        has_more: false,
-                    },
-                )
-                } else if !require_confirmation {
-                    transition_to_edit_mode(ctx.tool_registry, ctx.session_stats, ctx.handle, true)
-                        .await;
-
-                    ToolPipelineOutcome::from_status(
-                    crate::agent::runloop::unified::tool_pipeline::ToolExecutionStatus::Success {
-                        output: serde_json::json!({
-                            "status": "approved",
-                            "action": "execute",
-                            "auto_accept": true,
-                            "message": "Plan confirmation disabled. Proceeding with implementation."
-                        }),
-                        stdout: None,
-                        modified_files: vec![],
-                        command_success: true,
-                        has_more: false,
-                    },
-                )
-                } else {
-                    ToolPipelineOutcome::from_status(tool_result)
-                }
-            } else {
-                ToolPipelineOutcome::from_status(tool_result)
-            };
-
-        let mut t_ctx = ToolOutcomeContext {
-            ctx,
-            repeated_tool_attempts,
-            turn_modified_files,
-        };
-
-        handle_tool_execution_result(
-            &mut t_ctx,
-            tool_call_id,
-            tool_name,
-            &args_val,
-            &pipeline_outcome,
-            tool_execution_start,
-        )
-        .await?;
-
-        return Ok(());
-    }
-
-    let restore_plan_mode = maybe_disable_plan_mode_for_tool(
-        ctx.session_stats,
-        ctx.tool_registry,
-        ctx.renderer,
-        ctx.handle,
-        canonical,
-        &args_val,
-    )
-    .await?;
-
-    let progress_reporter = if let Some(r) = batch_progress_reporter {
-        r.clone()
-    } else {
-        ProgressReporter::new()
+        .await?
     };
-
-    let _spinner = if batch_progress_reporter.is_none() {
-        Some(
-            crate::agent::runloop::unified::ui_interaction::PlaceholderSpinner::with_progress(
-                ctx.handle,
-                ctx.input_status_state.left.clone(),
-                ctx.input_status_state.right.clone(),
-                format!("Executing {}...", tool_name),
-                Some(&progress_reporter),
-            ),
-        )
-    } else {
-        None
-    };
-
-    let progress_reporter_clone = progress_reporter.clone();
-    let handle_clone = ctx.handle.clone();
-    let is_pty_command = tool_name == vtcode_core::config::constants::tools::RUN_PTY_CMD
-        || tool_name == vtcode_core::config::constants::tools::UNIFIED_EXEC
-        || tool_name == vtcode_core::config::constants::tools::SEND_PTY_INPUT;
-    let pty_tail_limit = resolve_stdout_tail_limit(ctx.vt_cfg);
-    let pty_stream_state = Arc::new(Mutex::new(PtyStreamState::new()));
-    let pty_stream_active = Arc::new(AtomicBool::new(true));
-    let pty_stream_active_clone = pty_stream_active.clone();
-
-    ctx.tool_registry
-        .set_progress_callback(Arc::new(move |name: &str, output: &str| {
-            let reporter = progress_reporter_clone.clone();
-            let output_owned = output.to_string();
-            let handle = handle_clone.clone();
-            let is_pty = is_pty_command || name == "run_pty_cmd" || name == "unified_exec";
-            let stream_state = pty_stream_state.clone();
-            let stream_active = pty_stream_active_clone.clone();
-            let tail_limit = pty_tail_limit;
-
-            tokio::spawn(async move {
-                if !stream_active.load(Ordering::Relaxed) {
-                    return;
-                }
-
-                if is_pty && !output_owned.is_empty() {
-                    let cleaned_output = vtcode_core::utils::ansi_parser::strip_ansi(&output_owned);
-
-                    let (replace_count, segments, last_line) = {
-                        let mut state = stream_state.lock().await;
-                        state.apply_chunk(&cleaned_output, tail_limit);
-                        let rendered = state.render_lines(tail_limit);
-                        let style = std::sync::Arc::new(InlineTextStyle::default());
-                        let segments: Vec<Vec<InlineSegment>> = rendered
-                            .iter()
-                            .map(|line| {
-                                vec![InlineSegment {
-                                    text: line.clone(),
-                                    style: style.clone(),
-                                }]
-                            })
-                            .collect();
-                        let replace_count = state.displayed_count;
-                        state.displayed_count = segments.len();
-                        let last_line = state.last_display_line();
-                        (replace_count, segments, last_line)
-                    };
-
-                    if !segments.is_empty() && stream_active.load(Ordering::Relaxed) {
-                        handle.replace_last(replace_count, InlineMessageKind::Pty, segments);
-                    }
-
-                    if let Some(last_line) = last_line {
-                        reporter.set_message(last_line).await;
-                    }
-                } else if let Some(last_line) = output_owned.lines().last() {
-                    let clean_line = vtcode_core::utils::ansi_parser::strip_ansi(last_line);
-                    let trimmed = clean_line.trim();
-                    if !trimmed.is_empty() {
-                        reporter.set_message(trimmed.to_string()).await;
-                    }
-                }
-            });
-        }));
-
-    let tool_result = execute_tool_with_timeout_ref(
-        ctx.tool_registry,
-        tool_name,
-        &args_val,
-        ctx.ctrl_c_state,
-        ctx.ctrl_c_notify,
-        Some(&progress_reporter),
-        max_tool_retries,
-    )
-    .await;
-
-    pty_stream_active.store(false, Ordering::Relaxed);
-    ctx.tool_registry.clear_progress_callback();
-
-    let pipeline_outcome = ToolPipelineOutcome::from_status(tool_result);
-
-    if let Some(ref key) = cache_key
-        && let crate::agent::runloop::unified::tool_pipeline::ToolExecutionStatus::Success {
-            ref output,
-            ..
-        } = pipeline_outcome.status
-    {
-        let output_json = serde_json::to_string(output).unwrap_or_else(|_| "{}".to_string());
-        let mut cache: tokio::sync::RwLockWriteGuard<'_, vtcode_core::tools::ToolResultCache> =
-            ctx.tool_result_cache.write().await;
-        cache.insert_arc(key.clone(), Arc::new(output_json));
-    }
 
     update_repetition_tracker(
         repeated_tool_attempts,
@@ -1079,15 +682,6 @@ async fn execute_and_handle_tool_call_inner<'a>(
         tool_execution_start,
     )
     .await;
-
-    restore_plan_mode_after_tool(
-        ctx.session_stats,
-        ctx.tool_registry,
-        ctx.renderer,
-        ctx.handle,
-        restore_plan_mode,
-    )
-    .await?;
 
     handle_result?;
 

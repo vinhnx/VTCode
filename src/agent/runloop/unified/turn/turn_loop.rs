@@ -431,6 +431,7 @@ pub async fn run_turn_loop(
                     true,
                     ctx.vt_cfg,
                     step_count,
+                    false,
                 )
                 .await;
 
