@@ -36,6 +36,37 @@ pub(crate) enum ValidationResult {
 const MAX_RATE_LIMIT_ACQUIRE_ATTEMPTS: usize = 4;
 const MAX_RATE_LIMIT_WAIT: Duration = Duration::from_secs(5);
 
+fn build_failure_error_content(error: String, failure_kind: &'static str) -> String {
+    serde_json::json!({
+        "error": error,
+        "failure_kind": failure_kind,
+    })
+    .to_string()
+}
+
+fn build_validation_error_content(error: String, validation_stage: &'static str) -> String {
+    serde_json::json!({
+        "error": error,
+        "failure_kind": "validation",
+        "validation_stage": validation_stage,
+        "retryable": false,
+    })
+    .to_string()
+}
+
+fn build_rate_limit_error_content(tool_name: &str, retry_after_ms: u64) -> String {
+    serde_json::json!({
+        "error": format!(
+            "Tool '{}' is temporarily rate limited. Try again after a short delay.",
+            tool_name
+        ),
+        "failure_kind": "rate_limit",
+        "rate_limited": true,
+        "retry_after_ms": retry_after_ms,
+    })
+    .to_string()
+}
+
 /// Consolidated state for tool outcomes to reduce signature bloat and ensure DRY across handlers.
 pub struct ToolOutcomeContext<'a, 'b> {
     pub ctx: &'b mut TurnProcessingContext<'a>,
@@ -102,7 +133,7 @@ pub(crate) async fn validate_tool_call<'a>(
         push_tool_response(
             ctx.working_history,
             tool_call_id.to_string(),
-            serde_json::json!({"error": error_msg}).to_string(),
+            build_failure_error_content(error_msg, "policy"),
         );
         return Ok(ValidationResult::Blocked);
     }
@@ -115,7 +146,7 @@ pub(crate) async fn validate_tool_call<'a>(
         push_tool_response(
             ctx.working_history,
             tool_call_id.to_string(),
-            serde_json::json!({"error": error_msg}).to_string(),
+            build_failure_error_content(error_msg, "policy"),
         );
         return Ok(ValidationResult::Blocked);
     }
@@ -128,14 +159,13 @@ pub(crate) async fn validate_tool_call<'a>(
         push_tool_response(
             ctx.working_history,
             tool_call_id.to_string(),
-            serde_json::json!({
-                "error": format!(
+            build_validation_error_content(
+                format!(
                     "Tool argument validation failed: {}",
                     validation_failures.join("; ")
                 ),
-                "validation_stage": "security",
-            })
-            .to_string(),
+                "security",
+            ),
         );
         return Ok(ValidationResult::Blocked);
     }
@@ -147,7 +177,10 @@ pub(crate) async fn validate_tool_call<'a>(
         push_tool_response(
             ctx.working_history,
             tool_call_id.to_string(),
-            serde_json::json!({"error": err.to_string()}).to_string(),
+            build_validation_error_content(
+                format!("Tool preflight validation failed: {}", err),
+                "preflight",
+            ),
         );
         return Ok(ValidationResult::Blocked);
     }
@@ -162,7 +195,7 @@ pub(crate) async fn validate_tool_call<'a>(
         push_tool_response(
             ctx.working_history,
             tool_call_id.to_string(),
-            serde_json::json!({"error": error_msg}).to_string(),
+            build_failure_error_content(error_msg, "circuit_breaker"),
         );
         return Ok(ValidationResult::Blocked);
     }
@@ -220,7 +253,7 @@ pub(crate) async fn validate_tool_call<'a>(
             push_tool_response(
                 ctx.working_history,
                 tool_call_id.to_string(),
-                serde_json::json!({"error": error_msg}).to_string(),
+                build_failure_error_content(error_msg, "loop_detection"),
             );
             return Ok(ValidationResult::Blocked);
         } else {
@@ -256,8 +289,10 @@ pub(crate) async fn validate_tool_call<'a>(
                         push_tool_response(
                             ctx.working_history,
                             tool_call_id.to_string(),
-                            serde_json::json!({"error": "Session tool limit reached and not increased by user"})
-                                .to_string(),
+                            build_failure_error_content(
+                                "Session tool limit reached and not increased by user".to_string(),
+                                "safety_limit",
+                            ),
                         );
                         return Ok(ValidationResult::Blocked);
                     }
@@ -271,8 +306,10 @@ pub(crate) async fn validate_tool_call<'a>(
                 push_tool_response(
                     ctx.working_history,
                     tool_call_id.to_string(),
-                    serde_json::json!({"error": format!("Safety validation failed: {}", err)})
-                        .to_string(),
+                    build_failure_error_content(
+                        format!("Safety validation failed: {}", err),
+                        "safety_validation",
+                    ),
                 );
                 return Ok(ValidationResult::Blocked);
             }
@@ -378,15 +415,7 @@ async fn acquire_adaptive_rate_limit_slot<'a>(
                     push_tool_response(
                         ctx.working_history,
                         tool_call_id.to_string(),
-                        serde_json::json!({
-                            "error": format!(
-                                "Tool '{}' is temporarily rate limited. Try again after a short delay.",
-                                tool_name
-                            ),
-                            "rate_limited": true,
-                            "retry_after_ms": retry_after_ms,
-                        })
-                        .to_string(),
+                        build_rate_limit_error_content(tool_name, retry_after_ms),
                     );
                     return Ok(Some(ValidationResult::Blocked));
                 }

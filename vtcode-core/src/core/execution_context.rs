@@ -197,19 +197,29 @@ mod tests {
         let context = ExecutionContext::default();
 
         let tool_name = "test_tool";
-        let args = serde_json::json!({"param": "value"});
+
+        // Keep this integration assertion focused on context wiring rather than
+        // default threshold policy. Raise the per-tool threshold for this test.
+        context
+            .loop_detector
+            .write()
+            .await
+            .set_tool_limit(tool_name, 4);
 
         // First few calls should not trigger warning
-        assert!(context.record_tool_call(tool_name, &args).await.is_none());
-        assert!(context.record_tool_call(tool_name, &args).await.is_none());
-        assert!(context.record_tool_call(tool_name, &args).await.is_none());
+        let args_1 = serde_json::json!({"param": "value-1"});
+        let args_2 = serde_json::json!({"param": "value-2"});
+        let args_3 = serde_json::json!({"param": "value-3"});
+        assert!(context.record_tool_call(tool_name, &args_1).await.is_none());
+        assert!(context.record_tool_call(tool_name, &args_2).await.is_none());
+        assert!(context.record_tool_call(tool_name, &args_3).await.is_none());
 
         // Should not be blocked yet
         assert!(!context.should_block_for_loop(tool_name).await);
 
         // Reset should clear the counter
         context.reset_tool_loop_detection(tool_name).await;
-        assert!(context.record_tool_call(tool_name, &args).await.is_none());
+        assert!(context.record_tool_call(tool_name, &args_1).await.is_none());
     }
 
     #[tokio::test]

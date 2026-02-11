@@ -791,10 +791,7 @@ fn is_loop_detection_status(status: &ToolExecutionStatus) -> bool {
 }
 
 fn is_retry_safe_tool(registry: &ToolRegistry, name: &str, args: &Value) -> bool {
-    registry
-        .preflight_validate_call(name, args)
-        .map(|preflight| preflight.readonly_classification)
-        .unwrap_or_else(|_| !registry.is_mutating_tool(name))
+    registry.is_retry_safe_call(name, args)
 }
 
 fn build_tool_status_message(tool_name: &str, args: &Value) -> String {

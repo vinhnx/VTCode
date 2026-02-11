@@ -76,6 +76,14 @@ impl ToolRegistry {
         allowed_plan_write || allowed_unified_readonly
     }
 
+    /// Check whether a tool invocation is safe to retry.
+    ///
+    /// Retries are allowed for read-only operations and for unified tools when
+    /// their specific action is read-only (`unified_file:read`, `unified_exec:poll|list`).
+    pub fn is_retry_safe_call(&self, tool_name: &str, args: &Value) -> bool {
+        !self.is_mutating_tool(tool_name) || self.is_readonly_unified_action(tool_name, args)
+    }
+
     /// Check if a tool operation is targeting the plans directory.
     /// In plan mode, writes to .vtcode/plans/ are allowed for the agent to write its plan.
     pub(super) fn is_plan_file_operation(&self, tool_name: &str, args: &Value) -> bool {
@@ -186,5 +194,53 @@ impl ToolRegistry {
             tool_names::UNIFIED_SEARCH => true,
             _ => false,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ToolRegistry;
+    use crate::config::constants::tools;
+    use anyhow::Result;
+    use serde_json::json;
+    use tempfile::TempDir;
+
+    #[tokio::test]
+    async fn retry_safe_for_readonly_calls() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+
+        assert!(registry.is_retry_safe_call(
+            tools::UNIFIED_FILE,
+            &json!({"action": "read", "path": "README.md"})
+        ));
+        assert!(registry.is_retry_safe_call(
+            tools::UNIFIED_EXEC,
+            &json!({"action": "poll", "session_id": 42})
+        ));
+        assert!(registry.is_retry_safe_call(tools::READ_FILE, &json!({"path": "README.md"})));
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn retry_unsafe_for_mutating_calls() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+
+        assert!(!registry.is_retry_safe_call(
+            tools::UNIFIED_FILE,
+            &json!({"action": "write", "path": "foo.txt", "content": "x"})
+        ));
+        assert!(!registry.is_retry_safe_call(
+            tools::UNIFIED_EXEC,
+            &json!({"action": "run", "command": "echo hi"})
+        ));
+        assert!(!registry.is_retry_safe_call(
+            tools::WRITE_FILE,
+            &json!({"path": "foo.txt", "content": "x"})
+        ));
+
+        Ok(())
     }
 }

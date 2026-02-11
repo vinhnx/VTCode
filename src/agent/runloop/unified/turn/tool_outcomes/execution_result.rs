@@ -30,6 +30,27 @@ fn record_tool_execution(
     ctx.telemetry.record_tool_usage(tool_name, success);
 }
 
+fn build_error_content(
+    error_msg: String,
+    fallback_tool: Option<String>,
+    failure_kind: &'static str,
+) -> serde_json::Value {
+    if let Some(tool) = fallback_tool {
+        let suggestion = format!("Try '{}' as a fallback approach.", tool);
+        serde_json::json!({
+            "error": error_msg,
+            "failure_kind": failure_kind,
+            "fallback_tool": tool,
+            "fallback_suggestion": suggestion,
+        })
+    } else {
+        serde_json::json!({
+            "error": error_msg,
+            "failure_kind": failure_kind,
+        })
+    }
+}
+
 /// Main handler for tool execution results.
 ///
 /// This function coordinates:
@@ -162,16 +183,7 @@ async fn handle_failure<'a>(
         .tool_registry
         .suggest_fallback_tool(tool_name)
         .await;
-    // Push error to history
-    let error_content = if let Some(tool) = fallback_tool {
-        serde_json::json!({
-            "error": error_msg,
-            "fallback_tool": tool,
-            "fallback_suggestion": format!("Try '{}' as a fallback approach.", tool),
-        })
-    } else {
-        serde_json::json!({"error": error_msg})
-    };
+    let error_content = build_error_content(error_msg, fallback_tool, "execution");
     push_tool_response(
         t_ctx.ctx.working_history,
         tool_call_id,
@@ -200,15 +212,7 @@ async fn handle_timeout(
         .tool_registry
         .suggest_fallback_tool(tool_name)
         .await;
-    let error_content = if let Some(tool) = fallback_tool {
-        serde_json::json!({
-            "error": error_msg,
-            "fallback_tool": tool,
-            "fallback_suggestion": format!("Try '{}' if timeout persists.", tool),
-        })
-    } else {
-        serde_json::json!({"error": error_msg})
-    };
+    let error_content = build_error_content(error_msg, fallback_tool, "timeout");
     push_tool_response(
         t_ctx.ctx.working_history,
         tool_call_id,
