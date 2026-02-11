@@ -1,4 +1,5 @@
 use anyhow::Result;
+use std::fmt::Write as _;
 #[cfg(debug_assertions)]
 use std::time::Instant;
 use tokio::task;
@@ -45,7 +46,7 @@ pub(crate) async fn execute_llm_request(
     // Fetch the active agent's system prompt body from built-in definitions
     let active_agent_prompt_body = vtcode_core::subagents::get_agent_prompt_body(active_agent_name);
 
-    let system_prompt = ctx
+    let mut system_prompt = ctx
         .context_manager
         .build_system_prompt(
             ctx.working_history,
@@ -59,6 +60,15 @@ pub(crate) async fn execute_llm_request(
             },
         )
         .await?;
+
+    // Keep prompt guidance aligned with runtime harness enforcement limits.
+    let _ = writeln!(
+        system_prompt,
+        "\n[Harness Limits]\n- max_tool_calls_per_turn: {}\n- max_tool_wall_clock_secs: {}\n- max_tool_retries: {}",
+        ctx.harness_state.max_tool_calls,
+        ctx.harness_state.max_tool_wall_clock.as_secs(),
+        ctx.harness_state.max_tool_retries
+    );
 
     // HP-6: Cache provider capabilities to avoid repeated trait method calls (2-3 calls → 1 per turn)
     let capabilities = uni::get_cached_capabilities(provider_client, active_model);

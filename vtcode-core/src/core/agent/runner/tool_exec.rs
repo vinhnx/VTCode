@@ -29,9 +29,17 @@ impl AgentRunner {
                 continue;
             };
             let name = func.name.clone();
-            let args = call
-                .parsed_arguments()
-                .unwrap_or_else(|_| serde_json::json!({}));
+            let args = match call.parsed_arguments() {
+                Ok(args) => args,
+                Err(err) => {
+                    let error_msg = format!("Invalid arguments for tool '{}': {}", name, err);
+                    if !self.quiet {
+                        println!("{} {} {}", agent_prefix, style("(ERR)").red(), error_msg);
+                    }
+                    task_state.push_tool_error(call.id.clone(), &name, error_msg, is_gemini);
+                    continue;
+                }
+            };
             let args = self.normalize_tool_args(&name, &args, task_state);
             if self.check_for_loop(&name, &args, task_state) {
                 return Ok(());
@@ -167,9 +175,17 @@ impl AgentRunner {
                 Some(func) => func.name.clone(),
                 None => continue,
             };
-            let args = call
-                .parsed_arguments()
-                .unwrap_or_else(|_| serde_json::json!({}));
+            let args = match call.parsed_arguments() {
+                Ok(args) => args,
+                Err(err) => {
+                    let error_msg = format!("Invalid arguments for tool '{}': {}", name, err);
+                    if !self.quiet {
+                        println!("{} {} {}", agent_prefix, style("(ERR)").red(), error_msg);
+                    }
+                    task_state.push_tool_error(call.id.clone(), &name, error_msg, is_gemini);
+                    continue;
+                }
+            };
             let args = self.normalize_tool_args(&name, &args, task_state);
 
             if self.check_for_loop(&name, &args, task_state) {
