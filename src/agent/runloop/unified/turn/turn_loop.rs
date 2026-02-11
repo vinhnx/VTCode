@@ -1,5 +1,4 @@
 use anyhow::Result;
-use rustc_hash::FxHashMap;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -273,9 +272,9 @@ pub async fn run_turn_loop(
 
     let mut step_count = 0;
     let mut current_max_tool_loops = turn_config.max_tool_loops;
-    // Optimization: Pre-allocate HashMap with expected capacity to reduce rehashing
-    let mut repeated_tool_attempts: FxHashMap<String, usize> =
-        FxHashMap::with_capacity_and_hasher(16, Default::default());
+    // Optimization: Interned signatures with exponential backoff for loop detection
+    let mut repeated_tool_attempts =
+        crate::agent::runloop::unified::turn::tool_outcomes::helpers::LoopTracker::new();
 
     // Reset safety validator for a new turn
     {

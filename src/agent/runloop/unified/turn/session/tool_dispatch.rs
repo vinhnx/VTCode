@@ -1,5 +1,4 @@
 use anyhow::Result;
-use rustc_hash::FxHashMap;
 use std::collections::BTreeSet;
 
 use crate::agent::runloop::unified::display::display_user_message;
@@ -61,7 +60,7 @@ pub(crate) async fn handle_direct_tool_execution(
         ctx.input_status_state,
     );
 
-    let mut repeated_tool_attempts = FxHashMap::default();
+    let mut repeated_tool_attempts = crate::agent::runloop::unified::turn::tool_outcomes::helpers::LoopTracker::new();
     let mut turn_modified_files = BTreeSet::new();
 
     let mut t_ctx = ToolOutcomeContext {

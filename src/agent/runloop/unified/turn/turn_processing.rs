@@ -351,7 +351,7 @@ pub(crate) struct HandleTurnProcessingResultParams<'a> {
     pub processing_result: TurnProcessingResult,
     pub response_streamed: bool,
     pub step_count: usize,
-    pub repeated_tool_attempts: &'a mut rustc_hash::FxHashMap<String, usize>,
+    pub repeated_tool_attempts: &'a mut crate::agent::runloop::unified::turn::tool_outcomes::helpers::LoopTracker,
     pub turn_modified_files: &'a mut BTreeSet<PathBuf>,
     pub session_end_reason: &'a mut crate::hooks::lifecycle::SessionEndReason,
     /// Pre-computed max tool loops limit for efficiency

@@ -52,7 +52,7 @@ pub(crate) enum ValidationResult {
 /// Consolidated state for tool outcomes to reduce signature bloat and ensure DRY across handlers.
 pub struct ToolOutcomeContext<'a, 'b> {
     pub ctx: &'b mut TurnProcessingContext<'a>,
-    pub repeated_tool_attempts: &'b mut rustc_hash::FxHashMap<String, usize>,
+    pub repeated_tool_attempts: &'b mut super::helpers::LoopTracker,
     pub turn_modified_files: &'b mut std::collections::BTreeSet<std::path::PathBuf>,
 }
 
@@ -573,7 +573,7 @@ pub(crate) async fn handle_tool_call_batch<'a, 'b>(
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn execute_and_handle_tool_call<'a, 'b>(
     ctx: &'b mut TurnProcessingContext<'a>,
-    repeated_tool_attempts: &'b mut rustc_hash::FxHashMap<String, usize>,
+    repeated_tool_attempts: &'b mut super::helpers::LoopTracker,
     turn_modified_files: &'b mut std::collections::BTreeSet<std::path::PathBuf>,
     tool_call_id: String,
     tool_name: &str,
@@ -598,7 +598,7 @@ pub(crate) fn execute_and_handle_tool_call<'a, 'b>(
 
 async fn execute_and_handle_tool_call_inner<'a>(
     ctx: &mut TurnProcessingContext<'a>,
-    repeated_tool_attempts: &mut rustc_hash::FxHashMap<String, usize>,
+    repeated_tool_attempts: &mut super::helpers::LoopTracker,
     turn_modified_files: &mut std::collections::BTreeSet<std::path::PathBuf>,
     tool_call_id: String,
     tool_name: &str,

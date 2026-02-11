@@ -1,6 +1,10 @@
-//! Middleware pattern for tool execution with observability and extensibility
+//! **DEPRECATED**: Prefer `async_middleware` for new code.
 //!
-//! Allows stacking of concerns: error handling, caching, logging, metrics,
+//! Sync middleware pattern for tool execution. This module is maintained for
+//! backward compatibility. New middleware should use `AsyncMiddleware` from
+//! `async_middleware.rs` which supports proper async chaining.
+//!
+//! Original: Allows stacking of concerns: error handling, caching, logging, metrics,
 //! retries without modifying core tool execution logic.
 
 use crate::tools::improvements_errors::{EventType, ObservabilityContext};
