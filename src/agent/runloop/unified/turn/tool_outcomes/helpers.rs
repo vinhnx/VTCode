@@ -55,13 +55,11 @@ impl LoopTracker {
     {
         self.attempts
             .iter()
-            .filter_map(|(sig, (count, _))| {
-                if exclude(sig) {
-                    None
-                } else {
-                    Some(*count)
-                }
-            })
+            .filter_map(
+                |(sig, (count, _))| {
+                    if exclude(sig) { None } else { Some(*count) }
+                },
+            )
             .max()
             .unwrap_or(0)
     }

@@ -653,11 +653,15 @@ pub async fn run_turn_loop(
             TurnHandlerOutcome::Continue => {
                 // Update token usage before continuing loop
                 ctx.context_manager.update_token_usage(&response_usage);
+                #[cfg(debug_assertions)]
+                ctx.context_manager.validate_token_tracking(&response_usage);
                 continue;
             }
             TurnHandlerOutcome::Break(outcome_result) => {
                 // Update token usage before breaking
                 ctx.context_manager.update_token_usage(&response_usage);
+                #[cfg(debug_assertions)]
+                ctx.context_manager.validate_token_tracking(&response_usage);
                 result = outcome_result;
                 break;
             }

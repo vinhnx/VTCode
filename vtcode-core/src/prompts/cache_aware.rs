@@ -74,11 +74,31 @@ mod tests {
     #[test]
     fn sort_tool_definitions_prioritizes_unified_tools() {
         let tools = vec![
-            ToolDefinition::function("zebra_tool".to_string(), "z".to_string(), serde_json::json!({})),
-            ToolDefinition::function("unified_search".to_string(), "search".to_string(), serde_json::json!({})),
-            ToolDefinition::function("ask_user_question".to_string(), "ask".to_string(), serde_json::json!({})),
-            ToolDefinition::function("alpha_tool".to_string(), "a".to_string(), serde_json::json!({})),
-            ToolDefinition::function("unified_file".to_string(), "file".to_string(), serde_json::json!({})),
+            ToolDefinition::function(
+                "zebra_tool".to_string(),
+                "z".to_string(),
+                serde_json::json!({}),
+            ),
+            ToolDefinition::function(
+                "unified_search".to_string(),
+                "search".to_string(),
+                serde_json::json!({}),
+            ),
+            ToolDefinition::function(
+                "ask_user_question".to_string(),
+                "ask".to_string(),
+                serde_json::json!({}),
+            ),
+            ToolDefinition::function(
+                "alpha_tool".to_string(),
+                "a".to_string(),
+                serde_json::json!({}),
+            ),
+            ToolDefinition::function(
+                "unified_file".to_string(),
+                "file".to_string(),
+                serde_json::json!({}),
+            ),
         ];
 
         let sorted = sort_tool_definitions(tools);

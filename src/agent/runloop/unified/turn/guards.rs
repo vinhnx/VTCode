@@ -31,8 +31,8 @@ pub(crate) fn validate_tool_args_security(
     let args_hash = if validation_cache.is_some() {
         let mut hasher = DefaultHasher::new();
         name.hash(&mut hasher);
-        // Optimization: For large arguments, hashing the string is still faster than 
-        // recursive Value hashing, but we can avoid to_string() if we use a 
+        // Optimization: For large arguments, hashing the string is still faster than
+        // recursive Value hashing, but we can avoid to_string() if we use a
         // specialized hasher or if we use serde_json::to_writer.
         // For now, we keep it simple but acknowledge the allocation.
         args.to_string().hash(&mut hasher);
@@ -78,7 +78,9 @@ pub(crate) fn validate_tool_args_security(
     if !required.is_empty() {
         for key in required {
             let is_missing = match args.get(*key) {
-                Some(v) => v.is_null() || (v.is_string() && v.as_str().map_or(true, |s| s.is_empty())),
+                Some(v) => {
+                    v.is_null() || (v.is_string() && v.as_str().map_or(true, |s| s.is_empty()))
+                }
                 None => true,
             };
 

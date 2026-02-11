@@ -215,12 +215,13 @@ impl Agent {
     }
 
     /// Get mutable tool registry reference
-    /// 
+    ///
     /// # Errors
     /// Returns an error if the Arc has outstanding references (another clone exists).
     pub fn tool_registry_mut(&mut self) -> anyhow::Result<&mut ToolRegistry> {
-        Arc::get_mut(&mut self.tool_registry)
-            .ok_or_else(|| anyhow::anyhow!("ToolRegistry has outstanding references; cannot get mutable access"))
+        Arc::get_mut(&mut self.tool_registry).ok_or_else(|| {
+            anyhow::anyhow!("ToolRegistry has outstanding references; cannot get mutable access")
+        })
     }
 
     /// Get model-agnostic client reference

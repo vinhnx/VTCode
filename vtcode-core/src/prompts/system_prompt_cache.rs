@@ -35,9 +35,7 @@ impl Default for SystemPromptCache {
 impl SystemPromptCache {
     pub fn new() -> Self {
         Self {
-            entries: RwLock::new(LruCache::new(
-                NonZeroUsize::new(MAX_CACHE_SIZE).unwrap(),
-            )),
+            entries: RwLock::new(LruCache::new(NonZeroUsize::new(MAX_CACHE_SIZE).unwrap())),
         }
     }
 

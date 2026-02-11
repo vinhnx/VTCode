@@ -13,12 +13,12 @@ use crate::agent::runloop::unified::plan_confirmation::{
 use crate::agent::runloop::unified::plan_mode_switch::{
     maybe_disable_plan_mode_for_tool, restore_plan_mode_after_tool,
 };
-use crate::agent::runloop::unified::turn::plan_content::parse_plan_content_from_json;
 use crate::agent::runloop::unified::progress::ProgressReporter;
 use crate::agent::runloop::unified::run_loop_context::RunLoopContext;
 use crate::agent::runloop::unified::state::CtrlCState;
 use crate::agent::runloop::unified::tool_routing::ToolPermissionFlow;
 use crate::agent::runloop::unified::turn::guards::validate_tool_args_security;
+use crate::agent::runloop::unified::turn::plan_content::parse_plan_content_from_json;
 use vtcode_core::config::constants::tools;
 use vtcode_core::exec::cancellation;
 use vtcode_core::tools::registry::ToolErrorType;
@@ -718,7 +718,7 @@ pub(crate) async fn execute_tool_with_timeout_ref(
 }
 
 /// Execute a tool with progress reporting
-/// 
+///
 /// # Timeout Semantics
 /// The `tool_timeout` represents a **total ceiling** across all attempts including retries.
 /// Each attempt receives the *remaining* time, ensuring the total wall time does not
@@ -735,7 +735,7 @@ async fn execute_tool_with_progress(
 ) -> ToolExecutionStatus {
     // Track total deadline to enforce ceiling across all attempts
     let deadline = Instant::now() + tool_timeout;
-    
+
     // Execute first attempt
     let mut attempt = 0usize;
     let mut status = {
@@ -776,7 +776,7 @@ async fn execute_tool_with_progress(
                 delay.as_millis()
             ))
             .await;
-        
+
         // Cancellable backoff: listen for Ctrl+C/exit signals during retry delay
         tokio::select! {
             _ = tokio::time::sleep(delay) => {},
@@ -857,8 +857,7 @@ async fn run_single_tool_attempt(
         use crate::agent::runloop::unified::progress::{
             ProgressUpdateGuard, spawn_elapsed_time_updater,
         };
-        let handle =
-            spawn_elapsed_time_updater(progress_reporter.clone(), name.to_string(), 500);
+        let handle = spawn_elapsed_time_updater(progress_reporter.clone(), name.to_string(), 500);
         ProgressUpdateGuard::new(handle)
     };
 
@@ -1120,4 +1119,3 @@ pub(crate) fn process_llm_tool_output(output: Value) -> ToolExecutionStatus {
         has_more,
     }
 }
-

@@ -507,7 +507,13 @@ pub(crate) async fn run_single_agent_loop_unified(
                     TurnLoopOutcome {
                         result: RunLoopTurnLoopResult::Aborted,
                         working_history: history_backup
-                            .or_else(|| if working_history.is_empty() { None } else { Some(working_history) })
+                            .or_else(|| {
+                                if working_history.is_empty() {
+                                    None
+                                } else {
+                                    Some(working_history)
+                                }
+                            })
                             .unwrap_or_else(|| conversation_history.clone()),
                         turn_modified_files: std::collections::BTreeSet::new(),
                     }

@@ -174,26 +174,23 @@ pub mod web_fetch;
 
 // Production-grade improvements modules
 pub mod adaptive_rate_limiter;
-pub mod async_pipeline;
-pub mod circuit_breaker; // For Phase 3
-pub mod health; // Pre-emptively exporting for next step
-pub mod optimized_registry;
-pub mod output_spooler;
-pub mod parallel_executor; // Pre-emptively exporting for next step
-pub mod parallel_tool_batch;
-pub mod request_response;
-
-// Production-grade improvements modules
 pub mod async_middleware;
+pub mod async_pipeline;
+pub mod circuit_breaker;
+pub mod golden_path_orchestrator;
+pub mod health;
 pub mod improvement_algorithms;
-pub mod improvements_cache; // Deprecated (pending migration) - kept for backward compatibility
+pub mod improvements_cache; // Deprecated - use crate::cache::UnifiedCache instead
 pub mod improvements_config;
 pub mod improvements_errors;
 pub mod improvements_registry_ext;
-pub mod middleware;
-
-pub mod golden_path_orchestrator;
+pub mod middleware; // Deprecated - prefer async_middleware
+pub mod optimized_registry;
+pub mod output_spooler;
+pub mod parallel_executor;
+pub mod parallel_tool_batch;
 pub mod pattern_engine;
+pub mod request_response;
 pub mod unified_error;
 pub mod unified_executor;
 
@@ -266,11 +263,6 @@ pub use async_middleware::{
 pub use improvement_algorithms::{
     MLScoreComponents, PatternDetector, PatternState, TimeDecayedScore, jaro_winkler_similarity,
 };
-// Deprecated exports - use crate::cache instead
-#[allow(deprecated)]
-pub use improvements_cache::CacheStats as LruCacheStats;
-#[allow(deprecated)]
-pub use improvements_cache::LruCache;
 pub use improvements_config::{
     CacheConfig, ContextConfig, FallbackConfig, ImprovementsConfig, PatternConfig,
     SimilarityConfig, TimeDecayConfig,
