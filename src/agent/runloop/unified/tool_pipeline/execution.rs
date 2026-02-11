@@ -7,6 +7,7 @@ use tokio::sync::Notify;
 use tokio::time;
 use tracing::{debug, warn};
 
+use crate::agent::runloop::tool_output::resolve_stdout_tail_limit;
 use crate::agent::runloop::unified::plan_confirmation::{
     PlanConfirmationOutcome, execute_plan_confirmation, plan_confirmation_outcome_to_json,
 };
@@ -41,6 +42,7 @@ use vtcode_core::exec::events::CommandExecutionStatus;
 
 use super::cache::{cache_target_path, create_enhanced_cache_key, is_tool_cacheable};
 use super::execute_hitl_tool;
+use super::pty_stream::PtyStreamRuntime;
 use super::status::{ToolExecutionStatus, ToolPipelineOutcome};
 use super::timeout::{TimeoutWarningGuard, create_timeout_error};
 use super::{DEFAULT_TOOL_TIMEOUT, MAX_RETRY_BACKOFF, RETRY_BACKOFF_BASE};
@@ -546,6 +548,21 @@ pub(crate) async fn run_tool_call(
         Some(&progress_reporter),
     );
 
+    let should_stream_pty = matches!(
+        resolved_name,
+        tools::RUN_PTY_CMD | tools::UNIFIED_EXEC | tools::SEND_PTY_INPUT
+    );
+    let mut pty_stream_runtime: Option<PtyStreamRuntime> = None;
+    let previous_progress_callback = if should_stream_pty {
+        let tail_limit = resolve_stdout_tail_limit(vt_cfg);
+        let (runtime, callback) =
+            PtyStreamRuntime::start(ctx.handle.clone(), progress_reporter.clone(), tail_limit);
+        pty_stream_runtime = Some(runtime);
+        Some(ctx.tool_registry.replace_progress_callback(Some(callback)))
+    } else {
+        None
+    };
+
     let outcome = execute_tool_with_timeout_ref(
         ctx.tool_registry,
         name,
@@ -556,6 +573,13 @@ pub(crate) async fn run_tool_call(
         max_tool_retries,
     )
     .await;
+
+    if let Some(previous) = previous_progress_callback {
+        let _ = ctx.tool_registry.replace_progress_callback(previous);
+    }
+    if let Some(runtime) = pty_stream_runtime {
+        runtime.shutdown().await;
+    }
 
     // Handle loop detection for read-only tools: if blocked, try to return cached result
     let outcome = if is_cacheable_tool && is_loop_detection_status(&outcome) {
