@@ -233,6 +233,20 @@ pub(crate) async fn handle_turn_balancer(
     tool_repeat_limit: usize,
 ) -> TurnHandlerOutcome {
     use vtcode_core::llm::provider as uni;
+
+    // Optimization: Skip check with exponential backoff to reduce iteration frequency
+    // Check intervals: 1, 2, 4, 8, 16, 32... steps
+    let check_interval = if step_count <= 4 {
+        1 // Check every step in early turns
+    } else {
+        // Exponential backoff: 2^(floor(log2(step_count/4)))
+        1_usize << ((step_count / 4).ilog2())
+    };
+
+    if step_count % check_interval != 0 {
+        return TurnHandlerOutcome::Continue;
+    }
+
     // --- Turn balancer: cap low-signal churn ---
     // Exclude read-only tools from repeated count (they're legitimate exploration)
     let max_repeated = repeated_tool_attempts
