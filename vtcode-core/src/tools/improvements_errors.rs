@@ -227,47 +227,23 @@ pub struct LoggingSink;
 
 impl ObservabilitySink for LoggingSink {
     fn record_event(&self, event: ImprovementEvent) {
+        macro_rules! log_event {
+            ($level:ident) => {
+                tracing::$level!(
+                    component = %event.component,
+                    event_type = ?event.event_type,
+                    message = %event.message,
+                    metric = event.metric,
+                    timestamp = event.timestamp,
+                    "improvement_event"
+                )
+            };
+        }
         match event.event_type {
-            EventType::ErrorOccurred => {
-                tracing::error!(
-                    component = %event.component,
-                    event_type = ?event.event_type,
-                    message = %event.message,
-                    metric = event.metric,
-                    timestamp = event.timestamp,
-                    "improvement_event"
-                );
-            }
-            EventType::PatternDetected => {
-                tracing::debug!(
-                    component = %event.component,
-                    event_type = ?event.event_type,
-                    message = %event.message,
-                    metric = event.metric,
-                    timestamp = event.timestamp,
-                    "improvement_event"
-                );
-            }
-            EventType::CacheHit => {
-                tracing::trace!(
-                    component = %event.component,
-                    event_type = ?event.event_type,
-                    message = %event.message,
-                    metric = event.metric,
-                    timestamp = event.timestamp,
-                    "improvement_event"
-                );
-            }
-            _ => {
-                tracing::info!(
-                    component = %event.component,
-                    event_type = ?event.event_type,
-                    message = %event.message,
-                    metric = event.metric,
-                    timestamp = event.timestamp,
-                    "improvement_event"
-                );
-            }
+            EventType::ErrorOccurred => log_event!(error),
+            EventType::PatternDetected => log_event!(debug),
+            EventType::CacheHit => log_event!(trace),
+            _ => log_event!(info),
         }
     }
 

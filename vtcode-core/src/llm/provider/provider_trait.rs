@@ -25,10 +25,7 @@ static CAPABILITY_CACHE: Lazy<RwLock<FxHashMap<String, ProviderCapabilities>>> =
     Lazy::new(|| RwLock::new(FxHashMap::default()));
 
 /// Extract and cache provider capabilities for a given provider and model
-pub fn get_cached_capabilities(
-    provider: &dyn LLMProvider,
-    model: &str,
-) -> ProviderCapabilities {
+pub fn get_cached_capabilities(provider: &dyn LLMProvider, model: &str) -> ProviderCapabilities {
     let cache_key = format!("{}::{}", provider.name(), model);
 
     // Check if already cached

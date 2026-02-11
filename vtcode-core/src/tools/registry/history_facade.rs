@@ -6,11 +6,6 @@ use std::time::Duration;
 use super::{ToolExecutionRecord, ToolRegistry};
 
 impl ToolRegistry {
-    /// Get recent tool execution records.
-    pub fn get_recent_tool_executions(&self, count: usize) -> Vec<ToolExecutionRecord> {
-        self.execution_history.get_recent_records(count)
-    }
-
     /// Get recent tool executions (successes and failures).
     pub fn get_recent_tool_records(&self, count: usize) -> Vec<ToolExecutionRecord> {
         self.execution_history.get_recent_records(count)

@@ -19,7 +19,6 @@ use crate::agent::runloop::unified::plan_confirmation::{
 use crate::agent::runloop::unified::plan_mode_switch::{
     maybe_disable_plan_mode_for_tool, restore_plan_mode_after_tool,
 };
-use crate::agent::runloop::unified::turn::plan_content::parse_plan_content_from_json;
 use crate::agent::runloop::unified::progress::ProgressReporter;
 use crate::agent::runloop::unified::tool_call_safety::SafetyError;
 use crate::agent::runloop::unified::tool_pipeline::{
@@ -31,6 +30,7 @@ use crate::agent::runloop::unified::tool_routing::{
 use crate::agent::runloop::unified::turn::context::{
     TurnHandlerOutcome, TurnLoopResult, TurnProcessingContext,
 };
+use crate::agent::runloop::unified::turn::plan_content::parse_plan_content_from_json;
 use vtcode_core::config::constants::tools;
 use vtcode_core::tools::names::canonical_tool_name;
 use vtcode_core::ui::tui::PlanContent;
@@ -1026,4 +1026,3 @@ async fn execute_and_handle_tool_call_inner<'a>(
 
     Ok(())
 }
-
