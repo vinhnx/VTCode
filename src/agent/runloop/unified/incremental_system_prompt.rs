@@ -6,6 +6,12 @@
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
+fn append_plan_mode_notice(prompt: &mut String) {
+    prompt.push_str("\n# PLAN MODE (READ-ONLY)\n");
+    prompt.push_str("Plan Mode is active. Mutating tools are normally blocked except for `.vtcode/plans/` directory. The system may temporarily switch to Edit mode for discovery tools and then return.\n");
+    prompt.push_str("Call `exit_plan_mode` when ready to transition to implementation.\n");
+}
+
 /// Cached system prompt that avoids redundant rebuilding
 #[derive(Clone)]
 pub struct IncrementalSystemPrompt {
@@ -177,7 +183,10 @@ impl IncrementalSystemPrompt {
         let has_context = context.conversation_length > 0
             || context.tool_usage_count > 0
             || context.error_count > 0
-            || context.token_usage_ratio > 0.0;
+            || context.token_usage_ratio > 0.0
+            || context.full_auto
+            || context.plan_mode
+            || context.active_agent_prompt.is_some();
 
         if has_context {
             let _ = writeln!(prompt, "\n[Context]");
@@ -224,10 +233,17 @@ impl IncrementalSystemPrompt {
             }
 
             if context.full_auto {
-                let _ = writeln!(
-                    prompt,
-                    "\n# FULL-AUTO: Complete task autonomously until done or blocked."
-                );
+                if context.plan_mode {
+                    let _ = writeln!(
+                        prompt,
+                        "\n# FULL-AUTO (PLAN MODE): Work autonomously within Plan Mode constraints."
+                    );
+                } else {
+                    let _ = writeln!(
+                        prompt,
+                        "\n# FULL-AUTO: Complete task autonomously until done or blocked."
+                    );
+                }
             }
 
             // Inject active agent's system prompt (replaces hardcoded plan mode injection)
@@ -235,18 +251,12 @@ impl IncrementalSystemPrompt {
             if let Some(ref agent_prompt) = context.active_agent_prompt {
                 // Use the subagent's system prompt directly
                 let _ = writeln!(prompt, "\n{}", agent_prompt);
-            } else if context.plan_mode {
-                // Legacy fallback: if no active agent prompt but plan_mode is set,
-                // inject minimal plan mode notice (backward compatibility)
-                let _ = writeln!(prompt, "\n# PLAN MODE (READ-ONLY)");
-                let _ = writeln!(
-                    prompt,
-                    "Plan Mode is active. Mutating tools are normally blocked except for `.vtcode/plans/` directory. The system may temporarily switch to Edit mode for discovery tools and then return."
-                );
-                let _ = writeln!(
-                    prompt,
-                    "Call `exit_plan_mode` when ready to transition to implementation."
-                );
+            }
+
+            // Always append runtime plan-mode guardrails when plan mode is active,
+            // even when subagent prompts are injected.
+            if context.plan_mode {
+                append_plan_mode_notice(&mut prompt);
             }
         }
 
@@ -744,5 +754,84 @@ mod tests {
 
         assert!(!prompt.contains("<budget:token_budget>"));
         assert!(!prompt.contains("<system_warning>"));
+    }
+
+    #[tokio::test]
+    async fn test_plan_mode_notice_appended_with_active_agent_prompt() {
+        let prompt_builder = IncrementalSystemPrompt::new();
+        let base_prompt = "You are a helpful assistant.";
+        let context = SystemPromptContext {
+            conversation_length: 0,
+            tool_usage_count: 0,
+            error_count: 0,
+            token_usage_ratio: 0.0,
+            full_auto: false,
+            plan_mode: true,
+            active_agent_name: "planner".to_string(),
+            active_agent_prompt: Some("Custom planner agent prompt.".to_string()),
+            discovered_skills: Vec::new(),
+            context_window_size: None,
+            current_token_usage: None,
+            supports_context_awareness: false,
+            token_budget_guidance: "",
+        };
+
+        let prompt = prompt_builder
+            .get_system_prompt(
+                base_prompt,
+                1,
+                1,
+                0,
+                PromptAssemblyMode::AppendInstructions,
+                &context,
+                None,
+            )
+            .await;
+
+        assert!(prompt.contains("Custom planner agent prompt."));
+        assert!(prompt.contains("# PLAN MODE (READ-ONLY)"));
+        assert!(
+            prompt.contains("Call `exit_plan_mode` when ready to transition to implementation.")
+        );
+    }
+
+    #[tokio::test]
+    async fn test_full_auto_is_constrained_in_plan_mode() {
+        let prompt_builder = IncrementalSystemPrompt::new();
+        let base_prompt = "You are a helpful assistant.";
+        let context = SystemPromptContext {
+            conversation_length: 0,
+            tool_usage_count: 0,
+            error_count: 0,
+            token_usage_ratio: 0.0,
+            full_auto: true,
+            plan_mode: true,
+            active_agent_name: "planner".to_string(),
+            active_agent_prompt: None,
+            discovered_skills: Vec::new(),
+            context_window_size: None,
+            current_token_usage: None,
+            supports_context_awareness: false,
+            token_budget_guidance: "",
+        };
+
+        let prompt = prompt_builder
+            .get_system_prompt(
+                base_prompt,
+                1,
+                1,
+                0,
+                PromptAssemblyMode::AppendInstructions,
+                &context,
+                None,
+            )
+            .await;
+
+        assert!(
+            prompt.contains(
+                "# FULL-AUTO (PLAN MODE): Work autonomously within Plan Mode constraints."
+            )
+        );
+        assert!(!prompt.contains("# FULL-AUTO: Complete task autonomously until done or blocked."));
     }
 }

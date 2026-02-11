@@ -5,7 +5,7 @@ use anyhow::{Error, anyhow};
 use serde_json::Value;
 use tokio::sync::Notify;
 use tokio::time;
-use tracing::debug;
+use tracing::{debug, warn};
 
 use crate::agent::runloop::unified::plan_confirmation::{
     PlanConfirmationOutcome, execute_plan_confirmation, plan_confirmation_outcome_to_json,
@@ -30,7 +30,7 @@ use vtcode_core::ui::tui::PlanContent;
 
 use crate::agent::runloop::git::confirm_changes_with_git_diff;
 use crate::agent::runloop::unified::inline_events::harness::{
-    tool_completed_event, tool_started_event,
+    HarnessEventEmitter, tool_completed_event, tool_started_event,
 };
 use crate::agent::runloop::unified::tool_routing::ensure_tool_permission;
 use crate::agent::runloop::unified::ui_interaction::PlaceholderSpinner;
@@ -108,8 +108,11 @@ pub(crate) async fn run_tool_call(
         }
     }
 
-    if let Some(emitter) = ctx.harness_emitter {
+    let harness_emitter = ctx.harness_emitter;
+    let mut tool_started_emitted = false;
+    if let Some(emitter) = harness_emitter {
         let _ = emitter.emit(tool_started_event(tool_item_id.clone(), name));
+        tool_started_emitted = true;
     }
     let max_tool_retries = ctx.harness_state.max_tool_retries as usize;
     // Resolve tool name through registry (handles aliases and normalization)
@@ -150,26 +153,51 @@ pub(crate) async fn run_tool_call(
     {
         Ok(ToolPermissionFlow::Approved) => {}
         Ok(ToolPermissionFlow::Denied) => {
-            return Ok(ToolPipelineOutcome::from_status(
-                ToolExecutionStatus::Failure {
-                    error: anyhow::anyhow!("Tool permission denied"),
-                },
-            ));
+            let outcome = ToolPipelineOutcome::from_status(ToolExecutionStatus::Failure {
+                error: anyhow::anyhow!("Tool permission denied"),
+            });
+            emit_tool_completion_for_status(
+                harness_emitter,
+                tool_started_emitted,
+                &tool_item_id,
+                name,
+                &outcome.status,
+            );
+            return Ok(outcome);
         }
         Ok(ToolPermissionFlow::Interrupted) => {
-            return Ok(ToolPipelineOutcome::from_status(
-                ToolExecutionStatus::Cancelled,
-            ));
+            let outcome = ToolPipelineOutcome::from_status(ToolExecutionStatus::Cancelled);
+            emit_tool_completion_for_status(
+                harness_emitter,
+                tool_started_emitted,
+                &tool_item_id,
+                name,
+                &outcome.status,
+            );
+            return Ok(outcome);
         }
         Ok(ToolPermissionFlow::Exit) => {
-            return Ok(ToolPipelineOutcome::from_status(
-                ToolExecutionStatus::Cancelled,
-            ));
+            let outcome = ToolPipelineOutcome::from_status(ToolExecutionStatus::Cancelled);
+            emit_tool_completion_for_status(
+                harness_emitter,
+                tool_started_emitted,
+                &tool_item_id,
+                name,
+                &outcome.status,
+            );
+            return Ok(outcome);
         }
         Err(e) => {
-            return Ok(ToolPipelineOutcome::from_status(
-                ToolExecutionStatus::Failure { error: e },
-            ));
+            let outcome =
+                ToolPipelineOutcome::from_status(ToolExecutionStatus::Failure { error: e });
+            emit_tool_completion_for_status(
+                harness_emitter,
+                tool_started_emitted,
+                &tool_item_id,
+                name,
+                &outcome.status,
+            );
+            return Ok(outcome);
         }
     }
 
@@ -194,23 +222,17 @@ pub(crate) async fn run_tool_call(
             },
             Err(error) => ToolExecutionStatus::Failure { error },
         });
-        if let Some(emitter) = ctx.harness_emitter {
-            let status = if matches!(outcome.status, ToolExecutionStatus::Success { .. }) {
-                CommandExecutionStatus::Completed
-            } else {
-                CommandExecutionStatus::Failed
-            };
-            let _ = emitter.emit(tool_completed_event(
-                tool_item_id.clone(),
-                name,
-                status,
-                None,
-            ));
-        }
+        emit_tool_completion_for_status(
+            harness_emitter,
+            tool_started_emitted,
+            &tool_item_id,
+            name,
+            &outcome.status,
+        );
         return Ok(outcome);
     }
 
-    let restore_plan_mode = maybe_disable_plan_mode_for_tool(
+    let restore_plan_mode = match maybe_disable_plan_mode_for_tool(
         ctx.session_stats,
         ctx.tool_registry,
         ctx.renderer,
@@ -218,7 +240,20 @@ pub(crate) async fn run_tool_call(
         resolved_name,
         &args_val,
     )
-    .await?;
+    .await
+    {
+        Ok(value) => value,
+        Err(error) => {
+            emit_tool_completion_status(
+                harness_emitter,
+                tool_started_emitted,
+                &tool_item_id,
+                name,
+                CommandExecutionStatus::Failed,
+            );
+            return Err(error);
+        }
+    };
 
     // Special-case enter_plan_mode: execute tool and enable plan mode in registry.
     // This ensures the registry's plan_read_only_mode flag is set when agent enters plan mode.
@@ -255,19 +290,13 @@ pub(crate) async fn run_tool_call(
         }
 
         let outcome = ToolPipelineOutcome::from_status(tool_result);
-        if let Some(emitter) = ctx.harness_emitter {
-            let status = if matches!(outcome.status, ToolExecutionStatus::Success { .. }) {
-                CommandExecutionStatus::Completed
-            } else {
-                CommandExecutionStatus::Failed
-            };
-            let _ = emitter.emit(tool_completed_event(
-                tool_item_id.clone(),
-                name,
-                status,
-                None,
-            ));
-        }
+        emit_tool_completion_for_status(
+            harness_emitter,
+            tool_started_emitted,
+            &tool_item_id,
+            name,
+            &outcome.status,
+        );
         return Ok(outcome);
     }
 
@@ -369,15 +398,21 @@ pub(crate) async fn run_tool_call(
                     }),
                 };
 
-                return Ok(ToolPipelineOutcome::from_status(
-                    ToolExecutionStatus::Success {
-                        output: final_output,
-                        stdout: None,
-                        modified_files: vec![],
-                        command_success: true,
-                        has_more: false,
-                    },
-                ));
+                let outcome = ToolPipelineOutcome::from_status(ToolExecutionStatus::Success {
+                    output: final_output,
+                    stdout: None,
+                    modified_files: vec![],
+                    command_success: true,
+                    has_more: false,
+                });
+                emit_tool_completion_for_status(
+                    harness_emitter,
+                    tool_started_emitted,
+                    &tool_item_id,
+                    name,
+                    &outcome.status,
+                );
+                return Ok(outcome);
             } else if !require_confirmation {
                 // Confirmation disabled via config, auto-approve
                 transition_to_edit_mode(ctx.tool_registry, ctx.session_stats, ctx.handle, true)
@@ -386,38 +421,38 @@ pub(crate) async fn run_tool_call(
                     target: "vtcode.plan_mode",
                     "Plan confirmation disabled via config, auto-approving with coder profile (mutating tools enabled)"
                 );
-                return Ok(ToolPipelineOutcome::from_status(
-                    ToolExecutionStatus::Success {
-                        output: serde_json::json!({
-                            "status": "approved",
-                            "action": "execute",
-                            "auto_accept": true,
-                            "message": "Plan confirmation disabled. Proceeding with implementation."
-                        }),
-                        stdout: None,
-                        modified_files: vec![],
-                        command_success: true,
-                        has_more: false,
-                    },
-                ));
+                let outcome = ToolPipelineOutcome::from_status(ToolExecutionStatus::Success {
+                    output: serde_json::json!({
+                        "status": "approved",
+                        "action": "execute",
+                        "auto_accept": true,
+                        "message": "Plan confirmation disabled. Proceeding with implementation."
+                    }),
+                    stdout: None,
+                    modified_files: vec![],
+                    command_success: true,
+                    has_more: false,
+                });
+                emit_tool_completion_for_status(
+                    harness_emitter,
+                    tool_started_emitted,
+                    &tool_item_id,
+                    name,
+                    &outcome.status,
+                );
+                return Ok(outcome);
             }
         }
 
         // Fall through: return the original tool result if no special handling needed
         let outcome = ToolPipelineOutcome::from_status(tool_result);
-        if let Some(emitter) = ctx.harness_emitter {
-            let status = if matches!(outcome.status, ToolExecutionStatus::Success { .. }) {
-                CommandExecutionStatus::Completed
-            } else {
-                CommandExecutionStatus::Failed
-            };
-            let _ = emitter.emit(tool_completed_event(
-                tool_item_id.clone(),
-                name,
-                status,
-                None,
-            ));
-        }
+        emit_tool_completion_for_status(
+            harness_emitter,
+            tool_started_emitted,
+            &tool_item_id,
+            name,
+            &outcome.status,
+        );
         return Ok(outcome);
     }
 
@@ -437,25 +472,42 @@ pub(crate) async fn run_tool_call(
 
         let mut cache = ctx.tool_result_cache.write().await;
         if let Some(cached_output) = cache.get(&cache_key) {
-            let cached_json: serde_json::Value =
-                serde_json::from_str(&cached_output).unwrap_or(serde_json::json!({}));
+            match parse_cached_output(&cached_output) {
+                Ok(cached_json) => {
+                    // Telemetry: Log cache hit
+                    tracing::debug!(
+                        target: "vtcode.performance.cache",
+                        "Cache hit for tool: {} (workspace: {})",
+                        name,
+                        workspace_path
+                    );
 
-            // Telemetry: Log cache hit
-            tracing::debug!(
-                target: "vtcode.performance.cache",
-                "Cache hit for tool: {} (workspace: {})",
-                name,
-                workspace_path
-            );
-
-            let status = ToolExecutionStatus::Success {
-                output: cached_json,
-                stdout: None,
-                modified_files: vec![],
-                command_success: true,
-                has_more: false,
-            };
-            return Ok(ToolPipelineOutcome::from_status(status));
+                    let outcome = ToolPipelineOutcome::from_status(ToolExecutionStatus::Success {
+                        output: cached_json,
+                        stdout: None,
+                        modified_files: vec![],
+                        command_success: true,
+                        has_more: false,
+                    });
+                    emit_tool_completion_for_status(
+                        harness_emitter,
+                        tool_started_emitted,
+                        &tool_item_id,
+                        name,
+                        &outcome.status,
+                    );
+                    return Ok(outcome);
+                }
+                Err(error) => {
+                    warn!(
+                        target: "vtcode.performance.cache",
+                        tool = name,
+                        error = %error,
+                        "Discarding malformed cached output"
+                    );
+                    cache.invalidate_for_path(&cache_target);
+                }
+            }
         } else {
             // Telemetry: Log cache miss
             tracing::debug!(
@@ -501,36 +553,45 @@ pub(crate) async fn run_tool_call(
     .await;
 
     // Handle loop detection for read-only tools: if blocked, try to return cached result
-    let outcome = if is_cacheable_tool {
-        if let ToolExecutionStatus::Success { output, .. } = &outcome {
-            // Check if this is actually a loop detection error wrapped as success
-            if let Some(loop_detected) = output.get("loop_detected").and_then(|v| v.as_bool())
-                && loop_detected
-            {
-                // Tool was blocked due to loop detection - try to get cached result
-                let workspace_path = ctx
-                    .tool_registry
-                    .workspace_root()
-                    .to_string_lossy()
-                    .to_string();
-                let cache_key =
-                    create_enhanced_cache_key(name, &args_val, &cache_target, &workspace_path);
-                let mut cache = ctx.tool_result_cache.write().await;
-                if let Some(cached_output) = cache.get(&cache_key) {
-                    // We have a cached result from a previous successful call - return it
-                    let cached_json: serde_json::Value =
-                        serde_json::from_str(&cached_output).unwrap_or(serde_json::json!({}));
+    let outcome = if is_cacheable_tool && is_loop_detection_status(&outcome) {
+        // Tool was blocked due to loop detection - try to get cached result
+        let workspace_path = ctx
+            .tool_registry
+            .workspace_root()
+            .to_string_lossy()
+            .to_string();
+        let cache_key = create_enhanced_cache_key(name, &args_val, &cache_target, &workspace_path);
+        let mut cache = ctx.tool_result_cache.write().await;
+        if let Some(cached_output) = cache.get(&cache_key) {
+            match parse_cached_output(&cached_output) {
+                Ok(cached_json) => {
                     drop(cache);
                     tool_spinner.finish();
-                    return Ok(ToolPipelineOutcome::from_status(
-                        ToolExecutionStatus::Success {
+                    let cached_outcome =
+                        ToolPipelineOutcome::from_status(ToolExecutionStatus::Success {
                             output: cached_json,
                             stdout: None,
                             modified_files: vec![],
                             command_success: true,
                             has_more: false,
-                        },
-                    ));
+                        });
+                    emit_tool_completion_for_status(
+                        harness_emitter,
+                        tool_started_emitted,
+                        &tool_item_id,
+                        name,
+                        &cached_outcome.status,
+                    );
+                    return Ok(cached_outcome);
+                }
+                Err(error) => {
+                    warn!(
+                        target: "vtcode.performance.cache",
+                        tool = name,
+                        error = %error,
+                        "Discarding malformed cached output after loop detection"
+                    );
+                    cache.invalidate_for_path(&cache_target);
                 }
             }
         }
@@ -563,21 +624,45 @@ pub(crate) async fn run_tool_call(
         }
     }
 
-    restore_plan_mode_after_tool(
+    if let Err(error) = restore_plan_mode_after_tool(
         ctx.session_stats,
         ctx.tool_registry,
         ctx.renderer,
         ctx.handle,
         restore_plan_mode,
     )
-    .await?;
+    .await
+    {
+        emit_tool_completion_status(
+            harness_emitter,
+            tool_started_emitted,
+            &tool_item_id,
+            name,
+            CommandExecutionStatus::Failed,
+        );
+        return Err(error);
+    }
 
     let mut pipeline_outcome = ToolPipelineOutcome::from_status(outcome);
 
     // If tool made file modifications, optionally confirm with git diff and either keep or revert
     if !pipeline_outcome.modified_files.is_empty() {
         let modified_files = pipeline_outcome.modified_files.clone();
-        if confirm_changes_with_git_diff(&modified_files, skip_confirmations).await? {
+        let keep_changes =
+            match confirm_changes_with_git_diff(&modified_files, skip_confirmations).await {
+                Ok(value) => value,
+                Err(error) => {
+                    emit_tool_completion_status(
+                        harness_emitter,
+                        tool_started_emitted,
+                        &tool_item_id,
+                        name,
+                        CommandExecutionStatus::Failed,
+                    );
+                    return Err(error);
+                }
+            };
+        if keep_changes {
             // record confirmed changes in trajectory inside ctx.traj
             ctx.traj.log_tool_call(
                 turn_index,
@@ -607,22 +692,80 @@ pub(crate) async fn run_tool_call(
         );
     }
 
-    if let Some(emitter) = ctx.harness_emitter {
-        let status = if matches!(pipeline_outcome.status, ToolExecutionStatus::Success { .. }) {
-            CommandExecutionStatus::Completed
-        } else {
-            CommandExecutionStatus::Failed
-        };
+    emit_tool_completion_for_status(
+        harness_emitter,
+        tool_started_emitted,
+        &tool_item_id,
+        name,
+        &pipeline_outcome.status,
+    );
+
+    // Ledger recording is left to the run loop where a decision id is available. Return the pipeline outcome only.
+    Ok(pipeline_outcome)
+}
+
+fn emit_tool_completion_status(
+    harness_emitter: Option<&HarnessEventEmitter>,
+    tool_started_emitted: bool,
+    tool_item_id: &str,
+    tool_name: &str,
+    status: CommandExecutionStatus,
+) {
+    if !tool_started_emitted {
+        return;
+    }
+
+    if let Some(emitter) = harness_emitter {
         let _ = emitter.emit(tool_completed_event(
-            tool_item_id.clone(),
-            name,
+            tool_item_id.to_string(),
+            tool_name,
             status,
             None,
         ));
     }
+}
 
-    // Ledger recording is left to the run loop where a decision id is available. Return the pipeline outcome only.
-    Ok(pipeline_outcome)
+fn emit_tool_completion_for_status(
+    harness_emitter: Option<&HarnessEventEmitter>,
+    tool_started_emitted: bool,
+    tool_item_id: &str,
+    tool_name: &str,
+    tool_status: &ToolExecutionStatus,
+) {
+    let status = if matches!(tool_status, ToolExecutionStatus::Success { .. }) {
+        CommandExecutionStatus::Completed
+    } else {
+        CommandExecutionStatus::Failed
+    };
+    emit_tool_completion_status(
+        harness_emitter,
+        tool_started_emitted,
+        tool_item_id,
+        tool_name,
+        status,
+    );
+}
+
+fn parse_cached_output(cached_output: &str) -> serde_json::Result<Value> {
+    serde_json::from_str(cached_output)
+}
+
+fn is_loop_detection_status(status: &ToolExecutionStatus) -> bool {
+    match status {
+        ToolExecutionStatus::Success { output, .. } => output
+            .get("loop_detected")
+            .and_then(|value| value.as_bool())
+            .unwrap_or(false),
+        ToolExecutionStatus::Failure { error } => error.to_string().contains("LOOP DETECTION"),
+        _ => false,
+    }
+}
+
+fn is_retry_safe_tool(registry: &ToolRegistry, name: &str, args: &Value) -> bool {
+    registry
+        .preflight_validate_call(name, args)
+        .map(|preflight| preflight.readonly_classification)
+        .unwrap_or_else(|_| !registry.is_mutating_tool(name))
 }
 
 fn build_tool_status_message(tool_name: &str, args: &Value) -> String {
@@ -701,6 +844,15 @@ pub(crate) async fn execute_tool_with_timeout_ref(
         .timeout_policy()
         .ceiling_for(timeout_category)
         .unwrap_or(DEFAULT_TOOL_TIMEOUT);
+    let retry_allowed = is_retry_safe_tool(registry, name, args);
+
+    if !retry_allowed && max_tool_retries > 0 {
+        debug!(
+            target: "vtcode.tool.exec",
+            tool = name,
+            "tool classified as non-idempotent; retries disabled"
+        );
+    }
 
     // Execute with progress tracking
     let result = execute_tool_with_progress(
@@ -711,6 +863,8 @@ pub(crate) async fn execute_tool_with_timeout_ref(
         ctrl_c_notify,
         progress_reporter,
         timeout_ceiling,
+        timeout_category,
+        retry_allowed,
         max_tool_retries,
     )
     .await;
@@ -736,6 +890,8 @@ async fn execute_tool_with_progress(
     ctrl_c_notify: &Arc<Notify>,
     progress_reporter: &ProgressReporter,
     tool_timeout: Duration,
+    timeout_category: ToolTimeoutCategory,
+    retry_allowed: bool,
     max_tool_retries: usize,
 ) -> ToolExecutionStatus {
     // Track total deadline to enforce ceiling across all attempts
@@ -770,7 +926,9 @@ async fn execute_tool_with_progress(
     };
 
     // Retry on recoverable errors with bounded backoff
-    while let Some(delay) = retry_delay_for_status(&status, attempt, max_tool_retries) {
+    while let Some(delay) =
+        retry_delay_for_status(&status, attempt, max_tool_retries, retry_allowed)
+    {
         attempt += 1;
         progress_reporter
             .set_message(format!(
@@ -794,7 +952,7 @@ async fn execute_tool_with_progress(
         let now = Instant::now();
         let remaining_timeout = deadline.saturating_duration_since(now);
         if remaining_timeout < Duration::from_secs(1) {
-            return create_timeout_error(name, ToolTimeoutCategory::Default, Some(tool_timeout));
+            return create_timeout_error(name, timeout_category, Some(tool_timeout));
         }
 
         let attempt_start = Instant::now();
@@ -984,8 +1142,9 @@ fn retry_delay_for_status(
     status: &ToolExecutionStatus,
     attempt: usize,
     max_tool_retries: usize,
+    retry_allowed: bool,
 ) -> Option<Duration> {
-    if attempt >= max_tool_retries {
+    if !retry_allowed || attempt >= max_tool_retries {
         return None;
     }
 
@@ -1013,12 +1172,13 @@ fn retry_delay_for_status(
 }
 
 fn backoff_for_attempt(attempt: usize) -> Duration {
-    let exp = 2_u64.saturating_pow(attempt.min(4) as u32); // cap exponent growth
-    let jitter = Duration::from_millis(((attempt as u64 * 37) % 120).min(120));
+    let retry_number = attempt.saturating_add(1);
+    let exp = 2_u64.saturating_pow(retry_number.saturating_sub(1).min(4) as u32); // cap exponent growth
+    let jitter = Duration::from_millis(((retry_number as u64 * 53) % 150) + 75);
     let backoff = RETRY_BACKOFF_BASE
         .saturating_mul(exp as u32)
         .saturating_add(jitter);
-    backoff.min(MAX_RETRY_BACKOFF)
+    std::cmp::max(backoff, Duration::from_millis(350)).min(MAX_RETRY_BACKOFF)
 }
 
 fn status_label(status: &ToolExecutionStatus) -> &'static str {
@@ -1122,5 +1282,67 @@ pub(crate) fn process_llm_tool_output(output: Value) -> ToolExecutionStatus {
         modified_files,
         command_success,
         has_more,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+    use tempfile::TempDir;
+
+    #[test]
+    fn first_retry_backoff_is_non_zero_and_meaningful() {
+        let delay = backoff_for_attempt(0);
+        assert!(delay >= Duration::from_millis(350));
+        assert!(delay <= MAX_RETRY_BACKOFF);
+    }
+
+    #[test]
+    fn retry_delay_honors_retry_safety_gate() {
+        let timeout_status = create_timeout_error(
+            "read_file",
+            ToolTimeoutCategory::Default,
+            Some(Duration::from_secs(1)),
+        );
+
+        assert!(retry_delay_for_status(&timeout_status, 0, 2, true).is_some());
+        assert!(retry_delay_for_status(&timeout_status, 0, 2, false).is_none());
+    }
+
+    #[tokio::test]
+    async fn retry_safety_allows_read_only_and_blocks_mutating() {
+        let temp_dir = TempDir::new().expect("temp dir");
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+
+        assert!(is_retry_safe_tool(
+            &registry,
+            tools::READ_FILE,
+            &json!({"path": "Cargo.toml"})
+        ));
+        assert!(!is_retry_safe_tool(
+            &registry,
+            tools::WRITE_FILE,
+            &json!({"path": "scratch.txt", "content": "x"})
+        ));
+    }
+
+    #[test]
+    fn loop_detection_status_detects_failure_marker() {
+        let status = process_llm_tool_output(json!({
+            "error": {
+                "message": "Tool blocked after repeated invocations"
+            },
+            "loop_detected": true,
+            "repeat_count": 3,
+            "tool": "read_file"
+        }));
+
+        assert!(is_loop_detection_status(&status));
+    }
+
+    #[test]
+    fn malformed_cached_json_is_rejected() {
+        assert!(parse_cached_output("{not-valid-json").is_err());
     }
 }

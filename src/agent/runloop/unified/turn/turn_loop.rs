@@ -278,7 +278,7 @@ pub async fn run_turn_loop(
             turn_config.max_session_turns
         };
         let mut validator = ctx.safety_validator.write().await;
-        validator.set_limits(turn_config.max_tool_loops, max_session_turns);
+        validator.set_limits(current_max_tool_loops, max_session_turns);
         validator.start_turn().await;
     }
 
@@ -309,8 +309,14 @@ pub async fn run_turn_loop(
                     ctx.renderer,
                     &format!("Warning: {}", msg),
                 )?;
-                // Inject warning into history?
-                working_history.push(uni::Message::system(format!("SYSTEM ALERT: {}", msg)));
+                let alert = format!("SYSTEM ALERT: {}", msg);
+                let duplicate_alert = working_history.last().is_some_and(|last| {
+                    last.role == uni::MessageRole::System
+                        && last.content.as_text_borrowed() == Some(alert.as_str())
+                });
+                if !duplicate_alert {
+                    working_history.push(uni::Message::system(alert));
+                }
             }
             PreRequestAction::Compact(msg) => {
                 crate::agent::runloop::unified::turn::turn_helpers::display_status(
@@ -641,7 +647,7 @@ pub async fn run_turn_loop(
             repeated_tool_attempts: &mut repeated_tool_attempts,
             turn_modified_files: &mut turn_modified_files,
             session_end_reason,
-            max_tool_loops: turn_config.max_tool_loops,
+            max_tool_loops: current_max_tool_loops,
             tool_repeat_limit: turn_config.tool_repeat_limit,
         })
         .await?
