@@ -7,12 +7,14 @@ use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use crate::agent::runloop::unified::async_mcp_manager::{AsyncMcpManager, McpInitStatus};
 use crate::agent::runloop::unified::mcp_tool_manager::McpToolManager;
+use crate::agent::runloop::unified::tool_catalog::ToolCatalogState;
 
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn handle_mcp_updates(
     mcp_manager: &AsyncMcpManager,
     tool_registry: &mut vtcode_core::tools::registry::ToolRegistry,
     tools: &Arc<tokio::sync::RwLock<Vec<uni::ToolDefinition>>>,
+    tool_catalog: &ToolCatalogState,
     renderer: &mut AnsiRenderer,
     mcp_catalog_initialized: &mut bool,
     last_mcp_refresh: &mut Instant,
@@ -28,23 +30,11 @@ pub(crate) async fn handle_mcp_updates(
                         let mut registered_tools = 0usize;
                         match tool_registry.list_mcp_tools().await {
                             Ok(mcp_tools) => {
-                                let new_definitions =
-                                    crate::agent::runloop::unified::session_setup::build_mcp_tool_definitions(
-                                        &mcp_tools,
-                                    );
-                                registered_tools = new_definitions.len();
-                                {
-                                    let mut guard = tools.write().await;
-                                    guard.retain(|tool| {
-                                        tool.function
-                                            .as_ref()
-                                            .is_none_or(|f| !f.name.starts_with("mcp_"))
-                                    });
-                                    guard.extend(new_definitions);
-                                };
+                                registered_tools = mcp_tools.len();
                                 McpToolManager::enumerate_mcp_tools_after_initial_setup(
                                     tool_registry,
                                     tools,
+                                    tool_catalog,
                                     mcp_tools,
                                     last_known_mcp_tools,
                                 )
@@ -98,23 +88,11 @@ pub(crate) async fn handle_mcp_updates(
             if current_tool_keys != *last_known_mcp_tools {
                 match tool_registry.refresh_mcp_tools().await {
                     Ok(()) => match tool_registry.list_mcp_tools().await {
-                        Ok(new_mcp_tools) => {
-                            let new_definitions =
-                                crate::agent::runloop::unified::session_setup::build_mcp_tool_definitions(
-                                    &new_mcp_tools,
-                                );
-                            {
-                                let mut guard = tools.write().await;
-                                guard.retain(|tool| {
-                                    tool.function
-                                        .as_ref()
-                                        .is_none_or(|f| !f.name.starts_with("mcp_"))
-                                });
-                                guard.extend(new_definitions);
-                            };
+                        Ok(_) => {
                             McpToolManager::enumerate_mcp_tools_after_refresh(
                                 tool_registry,
                                 tools,
+                                tool_catalog,
                                 last_known_mcp_tools,
                             )
                             .await?;

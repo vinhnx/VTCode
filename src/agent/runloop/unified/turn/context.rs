@@ -1,5 +1,6 @@
 use crate::agent::runloop::mcp_events;
 use crate::agent::runloop::unified::state::SessionStats;
+use crate::agent::runloop::unified::tool_catalog::ToolCatalogState;
 use std::sync::Arc;
 use std::sync::RwLock;
 use std::time::Instant;
@@ -26,7 +27,7 @@ macro_rules! populate_turn_processing_context {
         $dest.working_history = $working_history;
         $dest.tool_registry = $src.tool_registry;
         $dest.tools = $src.tools;
-        $dest.cached_tools = $src.cached_tools;
+        $dest.tool_catalog = $src.tool_catalog;
         $dest.ctrl_c_state = $src.ctrl_c_state;
         $dest.ctrl_c_notify = $src.ctrl_c_notify;
         $dest.vt_cfg = $src.vt_cfg;
@@ -67,7 +68,7 @@ macro_rules! populate_turn_loop_context {
         $dest.decision_ledger = $src.decision_ledger;
         $dest.tool_registry = $src.tool_registry;
         $dest.tools = $src.tools;
-        $dest.cached_tools = $src.cached_tools;
+        $dest.tool_catalog = $src.tool_catalog;
         $dest.ctrl_c_state = $src.ctrl_c_state;
         $dest.ctrl_c_notify = $src.ctrl_c_notify;
         $dest.context_manager = $src.context_manager;
@@ -157,8 +158,7 @@ pub(crate) struct TurnProcessingContext<'a> {
     pub working_history: &'a mut Vec<uni::Message>,
     pub tool_registry: &'a mut vtcode_core::tools::registry::ToolRegistry,
     pub tools: &'a Arc<tokio::sync::RwLock<Vec<uni::ToolDefinition>>>,
-    /// Cached tool definitions for efficient reuse (HP-3 optimization)
-    pub cached_tools: &'a Option<Arc<Vec<uni::ToolDefinition>>>,
+    pub tool_catalog: &'a Arc<ToolCatalogState>,
     pub ctrl_c_state: &'a Arc<CtrlCState>,
     pub ctrl_c_notify: &'a Arc<Notify>,
     pub vt_cfg: Option<&'a VTCodeConfig>,
@@ -209,7 +209,7 @@ impl<'a> TurnProcessingContext<'a> {
             decision_ledger: self.decision_ledger,
             tool_registry: self.tool_registry,
             tools: self.tools,
-            cached_tools: self.cached_tools,
+            tool_catalog: self.tool_catalog,
             ctrl_c_state: self.ctrl_c_state,
             ctrl_c_notify: self.ctrl_c_notify,
             context_manager: self.context_manager,

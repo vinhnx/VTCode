@@ -26,6 +26,7 @@ use crate::tools::invocation::ToolInvocationId;
 use crate::tools::registry::{
     RiskLevel, ToolRiskContext, ToolRiskScorer, ToolSource, WorkspaceTrust,
 };
+use crate::tools::tool_intent::classify_tool_intent;
 use crate::tools::unified_executor::ToolExecutionContext;
 use vtcode_config::core::DotfileProtectionConfig;
 
@@ -310,6 +311,14 @@ impl SafetyGateway {
         self.mutating_tools.contains(tool_name)
     }
 
+    fn is_destructive_call(&self, tool_name: &str, args: &Value) -> bool {
+        self.is_destructive(tool_name) || classify_tool_intent(tool_name, args).destructive
+    }
+
+    fn is_mutating_call(&self, tool_name: &str, args: &Value) -> bool {
+        self.is_mutating(tool_name) || classify_tool_intent(tool_name, args).mutating
+    }
+
     /// Main entry point: check safety for a tool invocation
     ///
     /// Returns a SafetyDecision indicating whether execution can proceed.
@@ -441,7 +450,7 @@ impl SafetyGateway {
             return decision;
         }
 
-        if self.config.plan_mode_active && self.is_mutating(tool_name) {
+        if self.config.plan_mode_active && self.is_mutating_call(tool_name, args) {
             let reason = format!(
                 "Tool '{}' is blocked in plan mode (read-only). Switch to edit mode to execute.",
                 tool_name
@@ -501,7 +510,7 @@ impl SafetyGateway {
             return SafetyDecision::NeedsApproval(justification);
         }
 
-        if self.is_destructive(tool_name) {
+        if self.is_destructive_call(tool_name, args) {
             let justification = format!(
                 "Tool '{}' is destructive and may modify files or execute commands.",
                 tool_name
@@ -634,12 +643,9 @@ impl SafetyGateway {
             return None;
         }
 
-        // For unified_file, only check write/edit/delete actions
-        if tool_name == "unified_file" {
-            let action = args.get("action").and_then(|v| v.as_str()).unwrap_or("");
-            if !matches!(action, "write" | "edit" | "delete" | "append") {
-                return None;
-            }
+        // For unified_file, only check mutating actions.
+        if tool_name == "unified_file" && !self.is_mutating_call(tool_name, args) {
+            return None;
         }
 
         // Extract file path from arguments
@@ -760,10 +766,10 @@ impl SafetyGateway {
             ToolRiskContext::new(tool_name.to_string(), source, self.config.workspace_trust);
 
         // Set flags based on tool type
-        if self.is_mutating(tool_name) {
+        if self.is_mutating_call(tool_name, args) {
             ctx = ctx.as_write();
         }
-        if self.is_destructive(tool_name) {
+        if self.is_destructive_call(tool_name, args) {
             ctx = ctx.as_destructive();
         }
 
@@ -792,7 +798,7 @@ impl SafetyGateway {
         parts.push(format!("Tool: {}", tool_name));
         parts.push(format!("Risk level: {}", risk_level));
 
-        if self.is_destructive(tool_name) {
+        if self.is_destructive_call(tool_name, args) {
             parts.push("This tool may modify or delete files.".to_string());
         }
 

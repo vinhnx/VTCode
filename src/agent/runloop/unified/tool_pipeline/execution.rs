@@ -4,7 +4,6 @@ use std::time::{Duration, Instant};
 use anyhow::{Error, anyhow};
 use serde_json::Value;
 use tokio::sync::Notify;
-use tokio::time;
 use tracing::{debug, warn};
 
 use crate::agent::runloop::tool_output::resolve_stdout_tail_limit;
@@ -101,7 +100,7 @@ pub(crate) async fn run_tool_call(
         if let Some(safety_validator) = ctx.safety_validator {
             let validation = {
                 let mut validator = safety_validator.write().await;
-                validator.validate_call(name).await
+                validator.validate_call(name, &args_val).await
             };
             if let Err(err) = validation {
                 return Ok(ToolPipelineOutcome::from_status(
@@ -1085,7 +1084,8 @@ async fn run_single_tool_attempt(
 
         enum ExecutionControl {
             Continue,
-            Completed(Result<Result<Value, Error>, time::error::Elapsed>),
+            Completed(Result<Value, Error>),
+            TimedOut,
             Cancelled,
         }
 
@@ -1102,20 +1102,10 @@ async fn run_single_tool_attempt(
                 }
             }
 
-            result = vtcode_core::utils::async_utils::with_timeout(exec_future, tool_timeout, "tool execution") => {
+            result = tokio::time::timeout(tool_timeout, exec_future) => {
                 match result {
-                    Ok(val) => ExecutionControl::Completed(Ok(val)),
-                    Err(e) => {
-                        // Check if it's a timeout or other error
-                        if e.to_string().contains("timed out") {
-                            // We can't easily construct tokio::time::error::Elapsed,
-                            // but we can return it via a timeout call that always fails
-                            let elapsed = time::timeout(Duration::from_nanos(0), async {}).await.unwrap_err();
-                            ExecutionControl::Completed(Err(elapsed))
-                        } else {
-                            ExecutionControl::Completed(Ok(Err(e)))
-                        }
-                    }
+                    Ok(val) => ExecutionControl::Completed(val),
+                    Err(_) => ExecutionControl::TimedOut,
                 }
             },
         };
@@ -1133,28 +1123,28 @@ async fn run_single_tool_attempt(
             }
             ExecutionControl::Completed(result) => {
                 break match result {
-                    Ok(Ok(output)) => {
+                    Ok(output) => {
                         progress_reporter
                             .set_message(format!("{} completed", name))
                             .await;
                         progress_reporter.set_progress(100).await;
                         process_llm_tool_output(output)
                     }
-                    Ok(Err(error)) => {
+                    Err(error) => {
                         progress_reporter
                             .set_message(format!("{} failed", name))
                             .await;
                         ToolExecutionStatus::Failure { error }
                     }
-                    Err(_) => {
-                        token.cancel();
-                        progress_reporter
-                            .set_message(format!("{} timed out", name))
-                            .await;
-                        let timeout_category = registry.timeout_category_for(name).await;
-                        create_timeout_error(name, timeout_category, Some(tool_timeout))
-                    }
                 };
+            }
+            ExecutionControl::TimedOut => {
+                token.cancel();
+                progress_reporter
+                    .set_message(format!("{} timed out", name))
+                    .await;
+                let timeout_category = registry.timeout_category_for(name).await;
+                break create_timeout_error(name, timeout_category, Some(tool_timeout));
             }
         }
     };

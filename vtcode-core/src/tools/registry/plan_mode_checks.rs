@@ -66,12 +66,13 @@ impl ToolRegistry {
     /// Returns true for non-mutating tools and plan-safe exceptions like
     /// writing to `.vtcode/plans/` or read-only unified tool actions.
     pub fn is_plan_mode_allowed(&self, tool_name: &str, args: &Value) -> bool {
-        if !self.is_mutating_tool(tool_name) {
+        let intent = crate::tools::tool_intent::classify_tool_intent(tool_name, args);
+        if !intent.mutating {
             return true;
         }
 
         let allowed_plan_write = self.is_plan_file_operation(tool_name, args);
-        let allowed_unified_readonly = self.is_readonly_unified_action(tool_name, args);
+        let allowed_unified_readonly = intent.readonly_unified_action;
 
         allowed_plan_write || allowed_unified_readonly
     }
@@ -81,7 +82,7 @@ impl ToolRegistry {
     /// Retries are allowed for read-only operations and for unified tools when
     /// their specific action is read-only (`unified_file:read`, `unified_exec:poll|list`).
     pub fn is_retry_safe_call(&self, tool_name: &str, args: &Value) -> bool {
-        !self.is_mutating_tool(tool_name) || self.is_readonly_unified_action(tool_name, args)
+        crate::tools::tool_intent::classify_tool_intent(tool_name, args).retry_safe
     }
 
     /// Check if a tool operation is targeting the plans directory.
@@ -144,56 +145,9 @@ impl ToolRegistry {
 
     /// Check if a unified tool call represents a read-only action.
     /// Allows `unified_file` with action "read" and `unified_exec` with actions "poll" or "list".
+    #[allow(dead_code)]
     pub(super) fn is_readonly_unified_action(&self, tool_name: &str, args: &Value) -> bool {
-        use crate::config::constants::tools as tool_names;
-        use crate::tools::names::canonical_tool_name;
-
-        let canonical = canonical_tool_name(tool_name);
-        let normalized = canonical.as_ref();
-
-        match normalized {
-            tool_names::UNIFIED_FILE => {
-                let action = args
-                    .get("action")
-                    .and_then(|v| v.as_str())
-                    .or_else(|| {
-                        if args.get("old_str").is_some() {
-                            Some("edit")
-                        } else if args.get("patch").is_some() {
-                            Some("patch")
-                        } else if args.get("content").is_some() {
-                            Some("write")
-                        } else if args.get("destination").is_some() {
-                            Some("move")
-                        } else {
-                            Some("read")
-                        }
-                    })
-                    .unwrap_or("read");
-                action.eq_ignore_ascii_case("read")
-            }
-            tool_names::UNIFIED_EXEC => {
-                let action = args.get("action").and_then(|v| v.as_str()).or_else(|| {
-                    if args.get("command").is_some() {
-                        Some("run")
-                    } else if args.get("code").is_some() {
-                        Some("code")
-                    } else if args.get("input").is_some() {
-                        Some("write")
-                    } else if args.get("session_id").is_some() {
-                        Some("poll")
-                    } else {
-                        None
-                    }
-                });
-                matches!(
-                    action.map(|value| value.to_ascii_lowercase()),
-                    Some(action) if action == "poll" || action == "list"
-                )
-            }
-            tool_names::UNIFIED_SEARCH => true,
-            _ => false,
-        }
+        crate::tools::tool_intent::classify_tool_intent(tool_name, args).readonly_unified_action
     }
 }
 

@@ -165,6 +165,7 @@ pub mod skills;
 pub mod summarizers;
 pub mod terminal_app;
 pub mod tool_effectiveness;
+pub mod tool_intent;
 pub mod traits;
 pub mod tree_sitter;
 pub mod types;

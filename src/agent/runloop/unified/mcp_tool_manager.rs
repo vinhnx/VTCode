@@ -2,6 +2,8 @@ use tracing::warn;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::mcp::McpToolInfo;
 
+use crate::agent::runloop::unified::tool_catalog::ToolCatalogState;
+
 pub struct McpToolManager;
 
 impl McpToolManager {
@@ -9,6 +11,7 @@ impl McpToolManager {
     pub async fn enumerate_mcp_tools_after_refresh(
         tool_registry: &mut vtcode_core::tools::ToolRegistry,
         tools: &tokio::sync::RwLock<Vec<uni::ToolDefinition>>,
+        tool_catalog: &ToolCatalogState,
         last_known_mcp_tools: &mut Vec<String>, // This becomes the new current tool list
     ) -> anyhow::Result<()> {
         match tool_registry.list_mcp_tools().await {
@@ -24,6 +27,7 @@ impl McpToolManager {
                     });
                     guard.extend(new_definitions);
                 };
+                tool_catalog.bump_version();
 
                 // Calculate which tools are newly added by comparing with last known tools
                 let current_tool_keys: Vec<String> = new_mcp_tools
@@ -47,6 +51,7 @@ impl McpToolManager {
     pub async fn enumerate_mcp_tools_after_initial_setup(
         _tool_registry: &mut vtcode_core::tools::ToolRegistry,
         tools: &tokio::sync::RwLock<Vec<uni::ToolDefinition>>,
+        tool_catalog: &ToolCatalogState,
         mcp_tools: Vec<McpToolInfo>, // Passed in from initial setup
         last_known_mcp_tools: &mut Vec<String>, // This becomes the new current tool list
     ) -> anyhow::Result<()> {
@@ -60,6 +65,7 @@ impl McpToolManager {
             });
             guard.extend(new_definitions);
         };
+        tool_catalog.bump_version();
 
         // Calculate which tools are newly added by comparing with last known tools
         let initial_tool_keys: Vec<String> = mcp_tools

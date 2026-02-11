@@ -28,6 +28,7 @@ use crate::agent::runloop::unified::model_selection::{
 };
 use crate::agent::runloop::unified::palettes::ActivePalette;
 use crate::agent::runloop::unified::state::{CtrlCState, ModelPickerTarget, SessionStats};
+use crate::agent::runloop::unified::tool_catalog::ToolCatalogState;
 use crate::agent::runloop::welcome::SessionBootstrap;
 
 use crate::agent::runloop::unified::turn::session::{
@@ -49,7 +50,7 @@ pub(crate) struct InteractionLoopContext<'a> {
     pub async_mcp_manager: &'a Option<Arc<AsyncMcpManager>>,
     pub tool_registry: &'a mut vtcode_core::tools::registry::ToolRegistry,
     pub tools: &'a Arc<tokio::sync::RwLock<Vec<uni::ToolDefinition>>>,
-    pub cached_tools: &'a Option<Arc<Vec<uni::ToolDefinition>>>,
+    pub tool_catalog: &'a Arc<ToolCatalogState>,
     pub conversation_history: &'a mut Vec<uni::Message>,
     pub decision_ledger:
         &'a Arc<tokio::sync::RwLock<vtcode_core::core::decision_tracker::DecisionTracker>>,
@@ -108,7 +109,7 @@ impl<'a> InteractionLoopContext<'a> {
             working_history: self.conversation_history,
             tool_registry: self.tool_registry,
             tools: self.tools,
-            cached_tools: self.cached_tools,
+            tool_catalog: self.tool_catalog,
             ctrl_c_state: self.ctrl_c_state,
             ctrl_c_notify: self.ctrl_c_notify,
             vt_cfg: self.vt_cfg.as_ref(),
@@ -218,6 +219,7 @@ pub(crate) async fn run_interaction_loop(
                 mcp_manager,
                 ctx.tool_registry,
                 ctx.tools,
+                ctx.tool_catalog,
                 ctx.renderer,
                 state.mcp_catalog_initialized,
                 state.last_mcp_refresh,

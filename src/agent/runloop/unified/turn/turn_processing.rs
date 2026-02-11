@@ -20,7 +20,6 @@ use crate::agent::runloop::unified::ui_interaction::{
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 use vtcode_core::llm::provider::{self as uni, ParallelToolConfig};
-use vtcode_core::prompts::sort_tool_definitions;
 use vtcode_core::turn_metadata;
 
 use vtcode_core::utils::ansi::AnsiRenderer;
@@ -164,12 +163,17 @@ pub(crate) async fn execute_llm_request(
             Some(0.7)
         };
 
-    // HP-3: Use cached tools instead of acquiring lock and cloning
-    let current_tools = ctx
-        .cached_tools
-        .as_ref()
-        .map(|arc| sort_tool_definitions((**arc).clone()));
+    // HP-3: Use a versioned tool-catalog snapshot to avoid stale tool definitions.
+    let current_tools = ctx.tool_catalog.sorted_snapshot(ctx.tools).await;
     let has_tools = current_tools.is_some();
+    if let Some(defs) = current_tools.as_ref() {
+        let _ = writeln!(
+            system_prompt,
+            "\n[Runtime Tool Catalog]\n- version: {}\n- available_tools: {}",
+            ctx.tool_catalog.current_version(),
+            defs.len()
+        );
+    }
     let parallel_config = if has_tools && capabilities.parallel_tool_config {
         parallel_cfg_opt.clone()
     } else {
@@ -188,7 +192,7 @@ pub(crate) async fn execute_llm_request(
         // HP-1: Single clone only when building LLMRequest
         messages: ctx.working_history.to_vec(),
         system_prompt: Some(std::sync::Arc::new(system_prompt)),
-        tools: current_tools.map(std::sync::Arc::new),
+        tools: current_tools,
         model: active_model.to_string(),
         temperature,
         stream: use_streaming,
