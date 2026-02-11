@@ -201,6 +201,42 @@ impl<'a> TurnLoopContext<'a> {
 
 // For `TurnLoopContext`, we will reuse the generic `handle_pipeline_output` via an adapter below.
 
+/// Optimization: Pre-computed turn configuration to avoid repeated Option unwrapping
+#[derive(Debug, Clone)]
+struct PrecomputedTurnConfig {
+    max_tool_loops: usize,
+    tool_repeat_limit: usize,
+    max_session_turns: usize,
+    ask_questions_enabled: bool,
+}
+
+/// Extract frequently accessed config values once per turn to reduce overhead
+#[inline]
+fn extract_turn_config(vt_cfg: Option<&VTCodeConfig>) -> PrecomputedTurnConfig {
+    vt_cfg
+        .map(|cfg| PrecomputedTurnConfig {
+            max_tool_loops: if cfg.tools.max_tool_loops > 0 {
+                cfg.tools.max_tool_loops
+            } else {
+                vtcode_core::config::constants::defaults::DEFAULT_MAX_TOOL_LOOPS
+            },
+            tool_repeat_limit: if cfg.tools.max_repeated_tool_calls > 0 {
+                cfg.tools.max_repeated_tool_calls
+            } else {
+                vtcode_core::config::constants::defaults::DEFAULT_MAX_REPEATED_TOOL_CALLS
+            },
+            max_session_turns: cfg.agent.max_conversation_turns,
+            ask_questions_enabled: cfg.chat.ask_questions.enabled,
+        })
+        .unwrap_or(PrecomputedTurnConfig {
+            max_tool_loops: vtcode_core::config::constants::defaults::DEFAULT_MAX_TOOL_LOOPS,
+            tool_repeat_limit:
+                vtcode_core::config::constants::defaults::DEFAULT_MAX_REPEATED_TOOL_CALLS,
+            max_session_turns: 150,
+            ask_questions_enabled: true,
+        })
+}
+
 #[allow(clippy::too_many_arguments)]
 pub async fn run_turn_loop(
     _input: &str,
@@ -232,15 +268,11 @@ pub async fn run_turn_loop(
     // NOTE: The user input is already in working_history from the caller (session_loop or run_loop)
     // Do NOT add it again here, as it will cause duplicate messages in the conversation
 
-    // Process up to max_tool_loops iterations to handle tool calls
-    let max_tool_loops = ctx
-        .vt_cfg
-        .map(|cfg| cfg.tools.max_tool_loops)
-        .filter(|&value| value > 0)
-        .unwrap_or(vtcode_core::config::constants::defaults::DEFAULT_MAX_TOOL_LOOPS);
+    // Optimization: Extract all frequently accessed config values once
+    let turn_config = extract_turn_config(ctx.vt_cfg);
 
     let mut step_count = 0;
-    let mut current_max_tool_loops = max_tool_loops;
+    let mut current_max_tool_loops = turn_config.max_tool_loops;
     // Optimization: Pre-allocate HashMap with expected capacity to reduce rehashing
     let mut repeated_tool_attempts: FxHashMap<String, usize> =
         FxHashMap::with_capacity_and_hasher(16, Default::default());
@@ -250,21 +282,12 @@ pub async fn run_turn_loop(
         let max_session_turns = if ctx.session_stats.is_plan_mode() {
             usize::MAX
         } else {
-            ctx.vt_cfg
-                .map(|c| c.agent.max_conversation_turns)
-                .unwrap_or(150)
+            turn_config.max_session_turns
         };
         let mut validator = ctx.safety_validator.write().await;
-        validator.set_limits(max_tool_loops, max_session_turns);
+        validator.set_limits(turn_config.max_tool_loops, max_session_turns);
         validator.start_turn();
     }
-
-    // Optimization: Pre-compute tool repeat limit once
-    let tool_repeat_limit = ctx
-        .vt_cfg
-        .map(|cfg| cfg.tools.max_repeated_tool_calls)
-        .filter(|&value| value > 0)
-        .unwrap_or(vtcode_core::config::constants::defaults::DEFAULT_MAX_REPEATED_TOOL_CALLS);
 
     loop {
         step_count += 1;
@@ -566,12 +589,6 @@ pub async fn run_turn_loop(
         // Track token usage for context awareness before any borrows occur
         let response_usage = response.usage.clone();
 
-        let ask_questions_enabled = ctx
-            .vt_cfg
-            .as_ref()
-            .map(|cfg| cfg.chat.ask_questions.enabled)
-            .unwrap_or(true);
-
         if turn_processing_ctx.session_stats.is_plan_mode() {
             turn_processing_ctx
                 .session_stats
@@ -580,7 +597,7 @@ pub async fn run_turn_loop(
 
         // Process the LLM response
         let allow_plan_interview = turn_processing_ctx.session_stats.is_plan_mode()
-            && ask_questions_enabled
+            && turn_config.ask_questions_enabled
             && crate::agent::runloop::unified::turn::turn_processing::plan_mode_interview_ready(
                 turn_processing_ctx.session_stats,
             );
@@ -589,10 +606,10 @@ pub async fn run_turn_loop(
             turn_processing_ctx.renderer,
             turn_processing_ctx.working_history.len(),
             allow_plan_interview,
-            ask_questions_enabled,
+            turn_config.ask_questions_enabled,
             Some(&validation_cache),
         )?;
-        if turn_processing_ctx.session_stats.is_plan_mode() && ask_questions_enabled {
+        if turn_processing_ctx.session_stats.is_plan_mode() && turn_config.ask_questions_enabled {
             processing_result = maybe_force_plan_mode_interview(
                 processing_result,
                 response.content.as_deref(),
@@ -629,8 +646,8 @@ pub async fn run_turn_loop(
             repeated_tool_attempts: &mut repeated_tool_attempts,
             turn_modified_files: &mut turn_modified_files,
             session_end_reason,
-            max_tool_loops,
-            tool_repeat_limit,
+            max_tool_loops: turn_config.max_tool_loops,
+            tool_repeat_limit: turn_config.tool_repeat_limit,
         })
         .await?
         {

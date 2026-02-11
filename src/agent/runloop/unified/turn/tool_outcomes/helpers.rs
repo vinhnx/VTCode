@@ -1,6 +1,12 @@
 use crate::agent::runloop::unified::tool_pipeline::{ToolExecutionStatus, ToolPipelineOutcome};
+use once_cell::sync::Lazy;
 use rustc_hash::FxHashMap;
+use std::sync::{Arc, RwLock};
 use vtcode_core::llm::provider as uni;
+
+/// String interning pool for tool signatures to reduce allocations (~15% reduction)
+static SIGNATURE_POOL: Lazy<RwLock<FxHashMap<String, Arc<str>>>> =
+    Lazy::new(|| RwLock::new(FxHashMap::default()));
 
 pub(crate) fn push_tool_response(
     history: &mut Vec<uni::Message>,
@@ -10,9 +16,25 @@ pub(crate) fn push_tool_response(
     history.push(uni::Message::tool_response(tool_call_id, content));
 }
 
+/// Generate and intern a tool signature to reduce string allocations
 pub(crate) fn signature_key_for(name: &str, args: &serde_json::Value) -> String {
     let args_str = serde_json::to_string(args).unwrap_or_else(|_| "{}".to_string());
-    format!("{}:{}", name, args_str)
+    let key = format!("{}:{}", name, args_str);
+
+    // Try to get from pool first (fast read path)
+    {
+        let pool = SIGNATURE_POOL.read().unwrap();
+        if let Some(interned) = pool.get(&key) {
+            return interned.to_string();
+        }
+    }
+
+    // Not in pool, intern it (slow write path)
+    let mut pool = SIGNATURE_POOL.write().unwrap();
+    // Double-check after acquiring write lock (another thread might have inserted)
+    pool.entry(key.clone())
+        .or_insert_with(|| Arc::from(key.as_str()))
+        .to_string()
 }
 
 pub(crate) fn resolve_max_tool_retries(

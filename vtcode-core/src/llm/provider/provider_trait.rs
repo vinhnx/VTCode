@@ -1,8 +1,62 @@
 use async_stream::try_stream;
 use async_trait::async_trait;
+use once_cell::sync::Lazy;
+use rustc_hash::FxHashMap;
+use std::sync::RwLock;
 
 use super::{LLMRequest, LLMResponse, LLMStream, LLMStreamEvent};
 pub use vtcode_commons::llm::{LLMError, LLMErrorMetadata};
+
+/// Cached provider capabilities to reduce repeated trait method calls
+#[derive(Debug, Clone)]
+pub struct ProviderCapabilities {
+    pub streaming: bool,
+    pub reasoning: bool,
+    pub reasoning_effort: bool,
+    pub tools: bool,
+    pub parallel_tool_config: bool,
+    pub structured_output: bool,
+    pub context_caching: bool,
+    pub vision: bool,
+}
+
+/// Global cache for provider capabilities (provider_name::model -> capabilities)
+static CAPABILITY_CACHE: Lazy<RwLock<FxHashMap<String, ProviderCapabilities>>> =
+    Lazy::new(|| RwLock::new(FxHashMap::default()));
+
+/// Extract and cache provider capabilities for a given provider and model
+pub fn get_cached_capabilities(
+    provider: &dyn LLMProvider,
+    model: &str,
+) -> ProviderCapabilities {
+    let cache_key = format!("{}::{}", provider.name(), model);
+
+    // Check if already cached
+    {
+        let cache = CAPABILITY_CACHE.read().unwrap();
+        if let Some(caps) = cache.get(&cache_key) {
+            return caps.clone();
+        }
+    }
+
+    // Compute capabilities
+    let caps = ProviderCapabilities {
+        streaming: provider.supports_streaming(),
+        reasoning: provider.supports_reasoning(model),
+        reasoning_effort: provider.supports_reasoning_effort(model),
+        tools: provider.supports_tools(model),
+        parallel_tool_config: provider.supports_parallel_tool_config(model),
+        structured_output: provider.supports_structured_output(model),
+        context_caching: provider.supports_context_caching(model),
+        vision: provider.supports_vision(model),
+    };
+
+    // Cache for future use
+    let mut cache = CAPABILITY_CACHE.write().unwrap();
+    cache.insert(cache_key, caps.clone());
+
+    caps
+}
 
 /// Universal LLM provider trait
 #[async_trait]
