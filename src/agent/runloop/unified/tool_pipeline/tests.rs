@@ -5,6 +5,7 @@ use crate::agent::runloop::unified::state::CtrlCState;
 
 use serde_json::json;
 use std::sync::Arc;
+use std::{io::IsTerminal, io::stdin};
 use tokio::sync::Notify;
 use vtcode_core::acp::PermissionGrant;
 use vtcode_core::acp::permission_cache::ToolPermissionCache;
@@ -197,6 +198,11 @@ fn test_process_tool_output_loop_detection() {
 
 #[tokio::test]
 async fn test_run_tool_call_unknown_tool_failure() {
+    if !stdin().is_terminal() {
+        eprintln!("Skipping TUI-dependent test in non-interactive environment");
+        return;
+    }
+
     let mut test_ctx = TestContext::new().await;
     let mut registry = test_ctx.registry;
 
@@ -264,6 +270,11 @@ async fn test_run_tool_call_unknown_tool_failure() {
 
 #[tokio::test]
 async fn test_run_tool_call_respects_max_tool_calls_budget() {
+    if !stdin().is_terminal() {
+        eprintln!("Skipping TUI-dependent test in non-interactive environment");
+        return;
+    }
+
     let mut test_ctx = TestContext::new().await;
     let mut registry = test_ctx.registry;
 
@@ -327,6 +338,11 @@ async fn test_run_tool_call_respects_max_tool_calls_budget() {
 
 #[tokio::test]
 async fn test_run_tool_call_auto_switches_plan_mode_for_mutating_tool() {
+    if !stdin().is_terminal() {
+        eprintln!("Skipping TUI-dependent test in non-interactive environment");
+        return;
+    }
+
     let mut test_ctx = TestContext::new().await;
     let mut registry = test_ctx.registry;
 

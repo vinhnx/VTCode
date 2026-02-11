@@ -8,8 +8,9 @@
 #[cfg(test)]
 #[allow(deprecated)]
 mod real_workflow_tests {
+    use crate::tools::improvements_cache::LruCache;
     use crate::tools::{
-        DetectedPattern, ExecutionEvent, LruCache, ObservabilityContext, PatternEngine,
+        DetectedPattern, ExecutionEvent, ObservabilityContext, PatternEngine,
         ToolRegistryImprovement,
     };
     use std::sync::Arc;
