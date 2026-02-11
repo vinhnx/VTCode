@@ -69,7 +69,7 @@ impl SafetyDecision {
 }
 
 /// Errors from safety checks
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Clone)]
 pub enum SafetyError {
     #[error("Rate limit exceeded: {current} calls in {window} (max: {max})")]
     RateLimitExceeded {
@@ -87,6 +87,17 @@ pub enum SafetyError {
     CommandPolicyDenied(String),
     #[error("Dotfile protection violation: {0}")]
     DotfileProtectionViolation(String),
+}
+
+/// Result of a safety check with optional retry hint metadata.
+#[derive(Debug, Clone)]
+pub struct SafetyCheckResult {
+    /// Final decision for this invocation.
+    pub decision: SafetyDecision,
+    /// Suggested delay before retrying if the decision is a rate-limit denial.
+    pub retry_after: Option<Duration>,
+    /// Structured error when denial is produced by a safety limit.
+    pub violation: Option<SafetyError>,
 }
 
 /// Configuration for the safety gateway
@@ -246,10 +257,22 @@ impl SafetyGateway {
         self.config.max_per_session = max_per_session;
     }
 
+    /// Update rate-limiter thresholds.
+    pub fn set_rate_limits(
+        &mut self,
+        rate_limit_per_second: usize,
+        rate_limit_per_minute: Option<usize>,
+    ) {
+        if rate_limit_per_second > 0 {
+            self.config.rate_limit_per_second = rate_limit_per_second;
+        }
+        self.config.rate_limit_per_minute = rate_limit_per_minute.filter(|v| *v > 0);
+    }
+
     /// Increase session limit dynamically
-    pub async fn increase_session_limit(&self, increment: usize) {
-        let _state = self.rate_state.lock().await;
+    pub fn increase_session_limit(&mut self, increment: usize) {
         let new_max = self.config.max_per_session.saturating_add(increment);
+        self.config.max_per_session = new_max;
         tracing::info!("Session tool limit increased to {}", new_max);
     }
 
@@ -313,7 +336,6 @@ impl SafetyGateway {
             "SafetyGateway: checking safety"
         );
 
-        // 1. Check rate limits
         if let Err(err) = self.check_rate_limits().await {
             tracing::warn!(
                 invocation_id = %inv_id,
@@ -323,7 +345,86 @@ impl SafetyGateway {
             return SafetyDecision::Deny(err.to_string());
         }
 
-        // 2. Check dotfile protection for file operations
+        self.evaluate_non_rate_decision(ctx, tool_name, args, &inv_id)
+            .await
+    }
+
+    /// Check safety and atomically reserve a rate-limit slot on success.
+    ///
+    /// This avoids split check/record races by validating rate limits and recording
+    /// execution under a single lock acquisition.
+    pub async fn check_and_record(
+        &self,
+        ctx: &ToolExecutionContext,
+        tool_name: &str,
+        args: &Value,
+    ) -> SafetyCheckResult {
+        self.check_and_record_with_id(ctx, tool_name, args, None)
+            .await
+    }
+
+    /// Check safety with correlation ID and atomically reserve a rate-limit slot.
+    pub async fn check_and_record_with_id(
+        &self,
+        ctx: &ToolExecutionContext,
+        tool_name: &str,
+        args: &Value,
+        invocation_id: Option<ToolInvocationId>,
+    ) -> SafetyCheckResult {
+        let inv_id = invocation_id
+            .map(|id| id.short())
+            .unwrap_or_else(|| "unknown".to_string());
+        tracing::debug!(
+            invocation_id = %inv_id,
+            tool = %tool_name,
+            "SafetyGateway: checking and recording safety"
+        );
+
+        let decision = self
+            .evaluate_non_rate_decision(ctx, tool_name, args, &inv_id)
+            .await;
+
+        if decision.is_denied() {
+            return SafetyCheckResult {
+                decision,
+                retry_after: None,
+                violation: None,
+            };
+        }
+
+        let now = Instant::now();
+        let mut state = self.rate_state.lock().await;
+        match self.check_rate_limits_locked(&mut state, now) {
+            Ok(()) => {
+                self.record_execution_locked(&mut state, now);
+                SafetyCheckResult {
+                    decision,
+                    retry_after: None,
+                    violation: None,
+                }
+            }
+            Err(err) => {
+                tracing::warn!(
+                    invocation_id = %inv_id,
+                    error = %err,
+                    "SafetyGateway: rate limit exceeded during atomic reservation"
+                );
+                SafetyCheckResult {
+                    decision: SafetyDecision::Deny(err.to_string()),
+                    retry_after: self.retry_after_for_violation(&err, &state, now),
+                    violation: Some(err),
+                }
+            }
+        }
+    }
+
+    async fn evaluate_non_rate_decision(
+        &self,
+        ctx: &ToolExecutionContext,
+        tool_name: &str,
+        args: &Value,
+        inv_id: &str,
+    ) -> SafetyDecision {
         if let Some(decision) = self
             .check_dotfile_protection(tool_name, args, &ctx.session_id)
             .await
@@ -336,7 +437,6 @@ impl SafetyGateway {
             return decision;
         }
 
-        // 3. Check plan mode restrictions
         if self.config.plan_mode_active && self.is_mutating(tool_name) {
             let reason = format!(
                 "Tool '{}' is blocked in plan mode (read-only). Switch to edit mode to execute.",
@@ -350,7 +450,6 @@ impl SafetyGateway {
             return SafetyDecision::Deny(reason);
         }
 
-        // 4. Check command policy for shell commands
         if let Some(ref policy) = self.command_policy
             && (tool_name == "shell" || tool_name == "run_pty_cmd")
             && let Some(command) = args.get("command").and_then(|v| v.as_str())
@@ -365,7 +464,6 @@ impl SafetyGateway {
             return SafetyDecision::Deny(reason);
         }
 
-        // 5. Check if preapproved
         if self.is_preapproved(tool_name).await {
             tracing::debug!(
                 invocation_id = %inv_id,
@@ -375,7 +473,6 @@ impl SafetyGateway {
             return SafetyDecision::Allow;
         }
 
-        // 6. Check trust level bypass
         if ctx.trust_level.can_bypass_approval() {
             tracing::debug!(
                 invocation_id = %inv_id,
@@ -386,7 +483,6 @@ impl SafetyGateway {
             return SafetyDecision::Allow;
         }
 
-        // 7. Calculate risk and determine if approval is needed
         let risk_ctx = self.build_risk_context(tool_name, args);
         let risk_level = ToolRiskScorer::calculate_risk(&risk_ctx);
 
@@ -401,7 +497,6 @@ impl SafetyGateway {
             return SafetyDecision::NeedsApproval(justification);
         }
 
-        // 8. Check if destructive and requires confirmation
         if self.is_destructive(tool_name) {
             let justification = format!(
                 "Tool '{}' is destructive and may modify files or execute commands.",
@@ -415,33 +510,28 @@ impl SafetyGateway {
             return SafetyDecision::NeedsApproval(justification);
         }
 
-        // Default: allow low-risk, non-destructive tools
         SafetyDecision::Allow
     }
 
     /// Record that a tool call was executed (for rate limiting)
     pub async fn record_execution(&self) {
         let mut state = self.rate_state.lock().await;
-        state.current_turn_count += 1;
-        state.session_count += 1;
-        state.calls_per_second.push(Instant::now());
-        state.calls_per_minute.push(Instant::now());
+        self.record_execution_locked(&mut state, Instant::now());
     }
 
     /// Check rate limits without recording
     async fn check_rate_limits(&self) -> Result<(), SafetyError> {
         let mut state = self.rate_state.lock().await;
-        let now = Instant::now();
+        self.check_rate_limits_locked(&mut state, Instant::now())
+    }
 
-        // Clean up old entries
-        state
-            .calls_per_second
-            .retain(|&t| now.duration_since(t) <= Duration::from_secs(1));
-        state
-            .calls_per_minute
-            .retain(|&t| now.duration_since(t) <= Duration::from_secs(60));
+    fn check_rate_limits_locked(
+        &self,
+        state: &mut RateLimiterState,
+        now: Instant,
+    ) -> Result<(), SafetyError> {
+        self.prune_rate_windows(state, now);
 
-        // Check per-second limit
         if state.calls_per_second.len() >= self.config.rate_limit_per_second {
             return Err(SafetyError::RateLimitExceeded {
                 current: state.calls_per_second.len(),
@@ -450,7 +540,6 @@ impl SafetyGateway {
             });
         }
 
-        // Check per-minute limit
         if let Some(limit) = self.config.rate_limit_per_minute
             && state.calls_per_minute.len() >= limit
         {
@@ -461,14 +550,12 @@ impl SafetyGateway {
             });
         }
 
-        // Check turn limit
         if state.current_turn_count >= self.config.max_per_turn {
             return Err(SafetyError::TurnLimitReached {
                 max: self.config.max_per_turn,
             });
         }
 
-        // Check session limit
         if state.session_count >= self.config.max_per_session {
             return Err(SafetyError::SessionLimitReached {
                 max: self.config.max_per_session,
@@ -476,6 +563,41 @@ impl SafetyGateway {
         }
 
         Ok(())
+    }
+
+    fn record_execution_locked(&self, state: &mut RateLimiterState, now: Instant) {
+        state.current_turn_count = state.current_turn_count.saturating_add(1);
+        state.session_count = state.session_count.saturating_add(1);
+        state.calls_per_second.push(now);
+        state.calls_per_minute.push(now);
+    }
+
+    fn prune_rate_windows(&self, state: &mut RateLimiterState, now: Instant) {
+        state
+            .calls_per_second
+            .retain(|&t| now.duration_since(t) <= Duration::from_secs(1));
+        state
+            .calls_per_minute
+            .retain(|&t| now.duration_since(t) <= Duration::from_secs(60));
+    }
+
+    fn retry_after_for_violation(
+        &self,
+        violation: &SafetyError,
+        state: &RateLimiterState,
+        now: Instant,
+    ) -> Option<Duration> {
+        match violation {
+            SafetyError::RateLimitExceeded { window: "1s", .. } => state
+                .calls_per_second
+                .first()
+                .map(|first| Duration::from_secs(1).saturating_sub(now.duration_since(*first))),
+            SafetyError::RateLimitExceeded { window: "60s", .. } => state
+                .calls_per_minute
+                .first()
+                .map(|first| Duration::from_secs(60).saturating_sub(now.duration_since(*first))),
+            _ => None,
+        }
     }
 
     /// Check dotfile protection for file operations.
@@ -822,6 +944,34 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_atomic_check_and_record_rate_limited() {
+        let mut config = SafetyGatewayConfig::default();
+        config.rate_limit_per_second = 2;
+        let gateway = SafetyGateway::with_config(config);
+        let ctx = make_ctx();
+
+        let first = gateway
+            .check_and_record(&ctx, "read_file", &serde_json::json!({}))
+            .await;
+        assert!(first.decision.is_allowed());
+
+        let second = gateway
+            .check_and_record(&ctx, "read_file", &serde_json::json!({}))
+            .await;
+        assert!(second.decision.is_allowed());
+
+        let third = gateway
+            .check_and_record(&ctx, "read_file", &serde_json::json!({}))
+            .await;
+        assert!(third.decision.is_denied());
+        assert!(third.retry_after.is_some());
+        assert!(matches!(
+            third.violation,
+            Some(SafetyError::RateLimitExceeded { .. })
+        ));
+    }
+
+    #[tokio::test]
     async fn test_command_policy_enforcement() {
         let mut commands_config = CommandsConfig::default();
         commands_config.deny_list.push("rm".to_string());
@@ -864,5 +1014,29 @@ mod tests {
         let stats_after = gateway.get_stats().await;
         assert_eq!(stats_after.turn_count, 0);
         assert_eq!(stats_after.session_count, 2); // Session count preserved
+    }
+
+    #[tokio::test]
+    async fn test_increase_session_limit_updates_limit() {
+        let mut gateway = SafetyGateway::new();
+        gateway.set_limits(10, 1);
+        let ctx = make_ctx();
+
+        let first = gateway
+            .check_and_record(&ctx, "read_file", &serde_json::json!({}))
+            .await;
+        assert!(first.decision.is_allowed());
+
+        let second = gateway
+            .check_and_record(&ctx, "read_file", &serde_json::json!({}))
+            .await;
+        assert!(second.decision.is_denied());
+
+        gateway.increase_session_limit(1);
+
+        let third = gateway
+            .check_and_record(&ctx, "read_file", &serde_json::json!({}))
+            .await;
+        assert!(third.decision.is_allowed());
     }
 }

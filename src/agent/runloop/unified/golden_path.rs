@@ -91,12 +91,8 @@ pub fn create_execution_context(
 pub fn create_safety_gateway(ctx: &RunLoopContext<'_>) -> SafetyGateway {
     let config = SafetyGatewayConfig {
         max_per_turn: ctx.harness_state.max_tool_calls,
-        max_per_session: 1000, // Default, can be overridden
-        rate_limit_per_second: 5,
-        rate_limit_per_minute: None,
         plan_mode_active: ctx.tool_registry.is_plan_mode(),
-        workspace_trust: vtcode_core::tools::WorkspaceTrust::Trusted,
-        approval_risk_threshold: vtcode_core::tools::RiskLevel::Medium,
+        ..SafetyGatewayConfig::default()
     };
 
     let gateway = SafetyGateway::with_config(config);

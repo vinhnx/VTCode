@@ -1,15 +1,16 @@
-//! Tool call safety validation and safeguards
+//! Tool call safety validation and safeguards.
 //!
-//! Enforces safety boundaries for tool execution:
-//! - Per-turn tool limits
-//! - Tool call rate limiting
-//! - Destructive operation confirmation
-//! - Argument validation
+//! This adapter keeps the runloop-facing API stable while delegating safety
+//! checks to `vtcode_core::tools::SafetyGateway` for single-source consistency.
 
-// No anyhow imports needed since we use thiserror for SafetyError and std::result::Result everywhere.
+use anyhow::anyhow;
+use serde_json::{Map, Value};
 use std::collections::HashSet;
-use std::time::{Duration, Instant};
 use thiserror::Error;
+use vtcode_core::tools::{
+    RiskLevel, SafetyDecision, SafetyError as GatewaySafetyError, SafetyGateway,
+    SafetyGatewayConfig, UnifiedExecutionContext, WorkspaceTrust,
+};
 
 /// Safety violation errors
 #[derive(Debug, Error)]
@@ -32,22 +33,16 @@ pub enum SafetyError {
 pub struct ToolCallSafetyValidator {
     /// Destructive tools that require explicit confirmation
     destructive_tools: HashSet<&'static str>,
-    /// Per-turn tool limit
-    max_per_turn: usize,
     /// Total tool limit per session
     max_per_session: usize,
-    /// Current per-turn tool count
-    current_turn_count: usize,
-    /// Total calls made in this session
-    session_count: usize,
     /// Call rate limit (max calls per second)
     rate_limit_per_second: usize,
     /// Optional per-minute cap to prevent bursts that dodge the per-second window
     rate_limit_per_minute: Option<usize>,
-    /// Tools called in current window
-    calls_in_window: Vec<Instant>,
-    /// Tools called in the current minute window
-    calls_in_minute: Vec<Instant>,
+    /// Shared safety gateway for canonical checks
+    safety_gateway: SafetyGateway,
+    /// Validator-scoped execution context
+    gateway_ctx: UnifiedExecutionContext,
 }
 
 impl ToolCallSafetyValidator {
@@ -59,7 +54,6 @@ impl ToolCallSafetyValidator {
         destructive.insert("shell");
         destructive.insert("apply_patch");
 
-        // Allow overriding the rate limit without a config migration so we can tune in prod.
         let rate_limit_per_second = std::env::var("VTCODE_TOOL_RATE_LIMIT_PER_SECOND")
             .ok()
             .and_then(|v| v.parse::<usize>().ok())
@@ -71,34 +65,44 @@ impl ToolCallSafetyValidator {
             .and_then(|v| v.parse::<usize>().ok())
             .filter(|v| *v > 0);
 
+        let max_per_turn = 10;
+        let max_per_session = 100;
+        let gateway_config = SafetyGatewayConfig {
+            max_per_turn,
+            max_per_session,
+            rate_limit_per_second,
+            rate_limit_per_minute,
+            plan_mode_active: false,
+            workspace_trust: WorkspaceTrust::Trusted,
+            approval_risk_threshold: RiskLevel::Medium,
+        };
+
         Self {
             destructive_tools: destructive,
-            max_per_turn: 10,
-            max_per_session: 100,
-            current_turn_count: 0,
-            session_count: 0,
+            max_per_session,
             rate_limit_per_second,
-            calls_in_window: Vec::new(),
             rate_limit_per_minute,
-            calls_in_minute: Vec::new(),
+            safety_gateway: SafetyGateway::with_config(gateway_config),
+            gateway_ctx: UnifiedExecutionContext::new("runloop-safety-validator"),
         }
     }
 
     /// Reset per-turn counters; call at the start of a turn
-    pub fn start_turn(&mut self) {
-        self.current_turn_count = 0;
-        self.reset_rate_limit();
+    pub async fn start_turn(&mut self) {
+        self.safety_gateway.start_turn().await;
     }
 
     /// Override per-turn and session limits based on runtime config
     pub fn set_limits(&mut self, max_per_turn: usize, max_per_session: usize) {
-        self.max_per_turn = max_per_turn;
         self.max_per_session = max_per_session;
+        self.safety_gateway
+            .set_limits(max_per_turn, max_per_session);
     }
 
     /// Increase the session tool limit
     pub fn increase_session_limit(&mut self, increment: usize) {
         self.max_per_session = self.max_per_session.saturating_add(increment);
+        self.safety_gateway.increase_session_limit(increment);
         tracing::info!("Session tool limit increased to {}", self.max_per_session);
     }
 
@@ -111,12 +115,16 @@ impl ToolCallSafetyValidator {
     pub fn set_rate_limit_per_second(&mut self, limit: usize) {
         if limit > 0 {
             self.rate_limit_per_second = limit;
+            self.safety_gateway
+                .set_rate_limits(self.rate_limit_per_second, self.rate_limit_per_minute);
         }
     }
 
     #[allow(dead_code)]
     pub fn set_rate_limit_per_minute(&mut self, limit: Option<usize>) {
         self.rate_limit_per_minute = limit.filter(|v| *v > 0);
+        self.safety_gateway
+            .set_rate_limits(self.rate_limit_per_second, self.rate_limit_per_minute);
     }
 
     #[allow(dead_code)]
@@ -130,77 +138,26 @@ impl ToolCallSafetyValidator {
     }
 
     /// Validate a tool call before execution
-    pub fn validate_call(
+    pub async fn validate_call(
         &mut self,
         tool_name: &str,
     ) -> std::result::Result<CallValidation, SafetyError> {
-        // Check if tool is destructive
         let is_destructive = self.destructive_tools.contains(tool_name);
+        let args = Value::Object(Map::new());
 
-        // Check rate limit
-        self.enforce_rate_limit()?;
-        self.enforce_minute_rate_limit()?;
+        let result = self
+            .safety_gateway
+            .check_and_record(&self.gateway_ctx, tool_name, &args)
+            .await;
 
-        // Enforce per-turn and session limits
-        if self.current_turn_count >= self.max_per_turn {
-            return Err(SafetyError::TurnLimitReached {
-                max: self.max_per_turn,
-            });
+        match result.decision {
+            SafetyDecision::Allow | SafetyDecision::NeedsApproval(_) => Ok(CallValidation {
+                is_destructive,
+                requires_confirmation: is_destructive,
+                execution_allowed: true,
+            }),
+            SafetyDecision::Deny(reason) => Err(map_gateway_violation(result.violation, &reason)),
         }
-        if self.session_count >= self.max_per_session {
-            return Err(SafetyError::SessionLimitReached {
-                max: self.max_per_session,
-            });
-        }
-
-        self.current_turn_count += 1;
-        self.session_count += 1;
-
-        Ok(CallValidation {
-            is_destructive,
-            requires_confirmation: is_destructive,
-            execution_allowed: true,
-        })
-    }
-
-    /// Enforce rate limiting
-    fn enforce_rate_limit(&mut self) -> std::result::Result<(), SafetyError> {
-        let now = Instant::now();
-        self.calls_in_window
-            .retain(|&t| now.duration_since(t) <= Duration::from_secs(1));
-
-        if self.calls_in_window.len() >= self.rate_limit_per_second {
-            return Err(SafetyError::RateLimitExceeded {
-                current: self.calls_in_window.len(),
-                max: self.rate_limit_per_second,
-                window: "1s",
-            });
-        }
-
-        self.calls_in_window.push(now);
-        Ok(())
-    }
-
-    fn enforce_minute_rate_limit(&mut self) -> std::result::Result<(), SafetyError> {
-        let now = Instant::now();
-        let limit = match self.rate_limit_per_minute {
-            Some(l) => l,
-            None => return Ok(()),
-        };
-
-        self.calls_in_minute
-            .retain(|&t| now.duration_since(t) <= Duration::from_secs(60));
-
-        if self.calls_in_minute.len() >= limit {
-            return Err(SafetyError::RateLimitExceeded {
-                current: self.calls_in_minute.len(),
-                max: limit,
-                window: "60s",
-            });
-        }
-
-        self.calls_in_minute.push(now);
-        Ok(())
     }
 
     /// Check if tool is destructive
@@ -216,9 +173,29 @@ impl ToolCallSafetyValidator {
     }
 
     /// Reset rate limit tracking
-    pub fn reset_rate_limit(&mut self) {
-        self.calls_in_window.clear();
-        self.calls_in_minute.clear();
+    #[allow(dead_code)]
+    pub async fn reset_rate_limit(&mut self) {
+        self.start_turn().await;
+    }
+}
+
+fn map_gateway_violation(violation: Option<GatewaySafetyError>, reason: &str) -> SafetyError {
+    match violation {
+        Some(GatewaySafetyError::TurnLimitReached { max }) => SafetyError::TurnLimitReached { max },
+        Some(GatewaySafetyError::SessionLimitReached { max }) => {
+            SafetyError::SessionLimitReached { max }
+        }
+        Some(GatewaySafetyError::RateLimitExceeded {
+            current,
+            max,
+            window,
+        }) => SafetyError::RateLimitExceeded {
+            current,
+            max,
+            window,
+        },
+        Some(err) => SafetyError::Other(anyhow!(err.to_string())),
+        None => SafetyError::Other(anyhow!(reason.to_string())),
     }
 }
 
@@ -255,51 +232,45 @@ mod tests {
         assert!(!validator.is_destructive("grep_file"));
     }
 
-    #[test]
-    fn test_rate_limiting() {
+    #[tokio::test]
+    async fn test_rate_limiting() {
         let mut validator = ToolCallSafetyValidator::new();
-        validator.rate_limit_per_second = 2;
-        validator.start_turn();
+        validator.set_rate_limit_per_second(2);
+        validator.start_turn().await;
 
-        // First two calls should succeed
-        assert!(validator.validate_call("read_file").is_ok());
-        assert!(validator.validate_call("read_file").is_ok());
-
-        // Third call within same second should fail
-        assert!(validator.validate_call("read_file").is_err());
+        assert!(validator.validate_call("read_file").await.is_ok());
+        assert!(validator.validate_call("read_file").await.is_ok());
+        assert!(validator.validate_call("read_file").await.is_err());
     }
 
-    #[test]
-    fn test_validation_structure() {
+    #[tokio::test]
+    async fn test_validation_structure() {
         let mut validator = ToolCallSafetyValidator::new();
-        validator.start_turn();
+        validator.start_turn().await;
 
-        let validation = validator.validate_call("read_file").unwrap();
+        let validation = validator.validate_call("read_file").await.unwrap();
         assert!(!validation.is_destructive);
         assert!(!validation.requires_confirmation);
         assert!(validation.execution_allowed);
 
-        let validation = validator.validate_call("delete_file").unwrap();
+        let validation = validator.validate_call("delete_file").await.unwrap();
         assert!(validation.is_destructive);
         assert!(validation.requires_confirmation);
         assert!(validation.execution_allowed);
     }
 
-    #[test]
-    fn test_turn_and_session_limits() {
+    #[tokio::test]
+    async fn test_turn_and_session_limits() {
         let mut validator = ToolCallSafetyValidator::new();
-        validator.max_per_turn = 2;
-        validator.max_per_session = 3;
+        validator.set_limits(2, 3);
 
-        // First turn
-        validator.start_turn();
-        assert!(validator.validate_call("read_file").is_ok());
-        assert!(validator.validate_call("read_file").is_ok());
-        assert!(validator.validate_call("read_file").is_err()); // turn limit
+        validator.start_turn().await;
+        assert!(validator.validate_call("read_file").await.is_ok());
+        assert!(validator.validate_call("read_file").await.is_ok());
+        assert!(validator.validate_call("read_file").await.is_err());
 
-        // Second turn: should respect session total
-        validator.start_turn();
-        assert!(validator.validate_call("read_file").is_ok()); // third session call
-        assert!(validator.validate_call("read_file").is_err()); // session limit
+        validator.start_turn().await;
+        assert!(validator.validate_call("read_file").await.is_ok());
+        assert!(validator.validate_call("read_file").await.is_err());
     }
 }

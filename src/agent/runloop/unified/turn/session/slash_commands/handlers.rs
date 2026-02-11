@@ -30,6 +30,9 @@ use crate::agent::runloop::unified::model_selection::finalize_model_selection;
 use crate::agent::runloop::unified::palettes::{
     ActivePalette, apply_prompt_style, show_sessions_palette, show_theme_palette,
 };
+use crate::agent::runloop::unified::plan_mode_state::{
+    transition_to_edit_mode, transition_to_plan_mode,
+};
 use crate::agent::runloop::unified::state::{ModelPickerTarget, SessionStats};
 use crate::agent::runloop::unified::team_state::TeamState;
 use crate::agent::runloop::unified::tool_routing::{ToolPermissionFlow, ensure_tool_permission};
@@ -1969,8 +1972,6 @@ pub async fn handle_toggle_plan_mode(
     ctx: SlashCommandContext<'_>,
     enable: Option<bool>,
 ) -> Result<SlashCommandControl> {
-    use vtcode_core::ui::tui::EditingMode;
-
     let current = ctx.session_stats.is_plan_mode();
     let new_state = match enable {
         Some(value) => value,
@@ -1989,23 +1990,8 @@ pub async fn handle_toggle_plan_mode(
         return Ok(SlashCommandControl::Continue);
     }
 
-    ctx.session_stats.set_plan_mode(new_state);
-
-    // Update header display to show editing mode indicator
-    let new_mode = if new_state {
-        EditingMode::Plan
-    } else {
-        EditingMode::Edit
-    };
-    ctx.handle.set_editing_mode(new_mode);
-
     if new_state {
-        ctx.tool_registry.enable_plan_mode();
-        let plan_state = ctx.tool_registry.plan_mode_state();
-        plan_state.enable();
-        plan_state.set_plan_file(None).await;
-        plan_state.set_plan_baseline(None).await;
-        ctx.session_stats.switch_to_planner();
+        transition_to_plan_mode(ctx.tool_registry, ctx.session_stats, ctx.handle, true, true).await;
         ctx.renderer.line(
             MessageStyle::Info,
             "Plan Mode enabled (planner profile active)",
@@ -2024,11 +2010,7 @@ pub async fn handle_toggle_plan_mode(
             "Allowed tools: read_file, list_files, grep_file, code_intelligence, unified_search, ask_questions, request_user_input, spawn_subagent",
         )?;
     } else {
-        ctx.tool_registry.disable_plan_mode();
-        let plan_state = ctx.tool_registry.plan_mode_state();
-        plan_state.disable();
-        plan_state.set_plan_file(None).await;
-        ctx.session_stats.switch_to_coder();
+        transition_to_edit_mode(ctx.tool_registry, ctx.session_stats, ctx.handle, true).await;
         ctx.renderer.line(
             MessageStyle::Info,
             "Edit Mode enabled (coder profile active)",
@@ -2123,18 +2105,17 @@ pub async fn handle_cycle_mode(ctx: SlashCommandContext<'_>) -> Result<SlashComm
     use vtcode_core::ui::tui::EditingMode;
 
     let new_mode = ctx.session_stats.cycle_mode();
-    ctx.handle.set_editing_mode(new_mode);
-
-    // Handle registry state based on new mode
     if new_mode == EditingMode::Plan {
-        ctx.tool_registry.enable_plan_mode();
-        let plan_state = ctx.tool_registry.plan_mode_state();
-        plan_state.enable();
+        transition_to_plan_mode(
+            ctx.tool_registry,
+            ctx.session_stats,
+            ctx.handle,
+            false,
+            false,
+        )
+        .await;
     } else {
-        ctx.tool_registry.disable_plan_mode();
-        let plan_state = ctx.tool_registry.plan_mode_state();
-        plan_state.disable();
-        plan_state.set_plan_file(None).await;
+        transition_to_edit_mode(ctx.tool_registry, ctx.session_stats, ctx.handle, true).await;
     }
 
     match new_mode {

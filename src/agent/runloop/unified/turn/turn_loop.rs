@@ -184,6 +184,7 @@ impl<'a> TurnLoopContext<'a> {
             mcp_panel_state: self.mcp_panel_state,
             approval_recorder: self.approval_recorder,
             session: self.session,
+            safety_validator: Some(self.safety_validator),
             traj: self.traj,
             harness_state: self.harness_state,
             harness_emitter: self.harness_emitter,
@@ -278,7 +279,7 @@ pub async fn run_turn_loop(
         };
         let mut validator = ctx.safety_validator.write().await;
         validator.set_limits(turn_config.max_tool_loops, max_session_turns);
-        validator.start_turn();
+        validator.start_turn().await;
     }
 
     loop {
@@ -398,6 +399,7 @@ pub async fn run_turn_loop(
                     mcp_panel_state: ctx.mcp_panel_state,
                     approval_recorder: ctx.approval_recorder,
                     session: ctx.session,
+                    safety_validator: Some(ctx.safety_validator),
                     traj: ctx.traj,
                     harness_state: ctx.harness_state,
                     harness_emitter: ctx.harness_emitter,

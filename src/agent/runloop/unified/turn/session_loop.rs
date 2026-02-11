@@ -34,6 +34,7 @@ use vtcode_core::utils::session_archive::{SessionMessage, SessionProgressArgs};
 
 use crate::agent::runloop::ResumeSession;
 use crate::agent::runloop::model_picker::ModelPickerState;
+use crate::agent::runloop::unified::plan_mode_state::transition_to_plan_mode;
 
 use super::context::TurnLoopResult as RunLoopTurnLoopResult;
 use super::finalization::finalize_session;
@@ -242,12 +243,7 @@ pub(crate) async fn run_single_agent_loop_unified(
 
         // Initialize plan mode from CLI flag
         if plan_mode {
-            tool_registry.enable_plan_mode();
-            let plan_state = tool_registry.plan_mode_state();
-            plan_state.enable();
-            session_stats.switch_to_planner();
-            session_stats.set_plan_mode(true);
-            handle.set_editing_mode(vtcode_core::ui::tui::EditingMode::Plan);
+            transition_to_plan_mode(&tool_registry, &mut session_stats, &handle, true, true).await;
         }
         // Optimization: Pre-allocate with small capacity for typical usage
         let mut linked_directories: Vec<LinkedDirectory> = Vec::with_capacity(4);

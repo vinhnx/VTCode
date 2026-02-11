@@ -237,7 +237,7 @@ pub use result_metadata::{
     EnhancedToolResult, ResultCompleteness, ResultMetadata, ResultScorer, ScorerRegistry,
 };
 pub use safety_gateway::{
-    SafetyDecision, SafetyError, SafetyGateway, SafetyGatewayConfig, SafetyStats,
+    SafetyCheckResult, SafetyDecision, SafetyError, SafetyGateway, SafetyGatewayConfig, SafetyStats,
 };
 pub use search_metrics::{SearchMetric, SearchMetrics, SearchMetricsStats};
 pub use shell_snapshot::{

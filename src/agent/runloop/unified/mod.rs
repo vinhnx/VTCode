@@ -15,6 +15,7 @@ mod mcp_tool_manager;
 mod model_selection;
 pub(crate) mod palettes;
 mod plan_confirmation;
+mod plan_mode_state;
 mod plan_mode_switch;
 mod progress;
 mod prompts;

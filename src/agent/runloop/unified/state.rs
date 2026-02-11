@@ -108,11 +108,6 @@ impl SessionStats {
         }
     }
 
-    /// Set the editing mode directly
-    pub(crate) fn set_editing_mode(&mut self, mode: EditingMode) {
-        self.editing_mode = mode;
-    }
-
     /// Set autonomous mode
     pub(crate) fn set_autonomous_mode(&mut self, enabled: bool) {
         self.autonomous_mode = enabled;
