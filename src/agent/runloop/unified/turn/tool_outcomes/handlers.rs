@@ -265,7 +265,7 @@ pub(crate) async fn validate_tool_call<'a>(
     loop {
         let validation_result = {
             let mut validator = ctx.safety_validator.write().await;
-            validator.validate_call(tool_name).await
+            validator.validate_call(tool_name, args_val).await
         };
 
         match validation_result {

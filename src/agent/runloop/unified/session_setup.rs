@@ -24,6 +24,7 @@ use super::async_mcp_manager::AsyncMcpManager;
 use super::palettes::apply_prompt_style;
 use super::prompts::read_system_prompt;
 use super::state::CtrlCState;
+use super::tool_catalog::ToolCatalogState;
 use crate::agent::runloop::ResumeSession;
 use crate::agent::runloop::ui::{build_inline_header_context, render_session_banner};
 use crate::agent::runloop::unified::turn::utils::render_hook_messages;
@@ -96,8 +97,7 @@ pub(crate) struct SessionState {
     pub provider_client: Box<dyn uni::LLMProvider>,
     pub tool_registry: ToolRegistry,
     pub tools: Arc<RwLock<Vec<uni::ToolDefinition>>>,
-    /// Cached tool definitions for efficient reuse across turns (HP-3 optimization)
-    pub cached_tools: Option<Arc<Vec<uni::ToolDefinition>>>,
+    pub tool_catalog: Arc<ToolCatalogState>,
     pub conversation_history: Vec<uni::Message>,
     pub decision_ledger: Arc<RwLock<DecisionTracker>>,
     pub trajectory: TrajectoryLogger,
@@ -700,15 +700,8 @@ pub(crate) async fn initialize_session(
         .unwrap_or_else(|| PathBuf::from(".vtcode/cache"));
     let approval_recorder = Arc::new(ApprovalRecorder::new(cache_dir));
 
-    // HP-3: Cache tool definitions once for efficient reuse across turns
-    let cached_tools = {
-        let guard = tools.read().await;
-        if guard.is_empty() {
-            None
-        } else {
-            Some(Arc::new(guard.clone()))
-        }
-    };
+    let tool_catalog = Arc::new(ToolCatalogState::new());
+    tool_catalog.bump_version();
 
     // Initialize dynamic context discovery directories
     if let Some(cfg) = vt_cfg
@@ -732,7 +725,7 @@ pub(crate) async fn initialize_session(
         provider_client,
         tool_registry,
         tools,
-        cached_tools,
+        tool_catalog,
         conversation_history,
         decision_ledger,
         trajectory,

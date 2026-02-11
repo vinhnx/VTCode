@@ -142,19 +142,19 @@ impl ToolCallSafetyValidator {
     pub async fn validate_call(
         &mut self,
         tool_name: &str,
+        args: &Value,
     ) -> std::result::Result<CallValidation, SafetyError> {
-        let is_destructive = self.destructive_tools.contains(tool_name);
-        let args = Value::Object(Map::new());
+        let intent = vtcode_core::tools::tool_intent::classify_tool_intent(tool_name, args);
 
         let result = self
             .safety_gateway
-            .check_and_record(&self.gateway_ctx, tool_name, &args)
+            .check_and_record(&self.gateway_ctx, tool_name, args)
             .await;
 
         match result.decision {
             SafetyDecision::Allow | SafetyDecision::NeedsApproval(_) => Ok(CallValidation {
-                is_destructive,
-                requires_confirmation: is_destructive,
+                is_destructive: intent.destructive,
+                requires_confirmation: intent.destructive,
                 execution_allowed: true,
             }),
             SafetyDecision::Deny(reason) => Err(map_gateway_violation(result.violation, &reason)),
@@ -165,6 +165,11 @@ impl ToolCallSafetyValidator {
     #[allow(dead_code)]
     pub fn is_destructive(&self, tool_name: &str) -> bool {
         self.destructive_tools.contains(tool_name)
+            || vtcode_core::tools::tool_intent::classify_tool_intent(
+                tool_name,
+                &Value::Object(Map::new()),
+            )
+            .destructive
     }
 
     /// Get list of destructive tools
@@ -223,6 +228,7 @@ pub struct CallValidation {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
     #[test]
     fn test_destructive_tool_detection() {
@@ -239,10 +245,20 @@ mod tests {
         validator.set_rate_limit_per_second(2);
         validator.start_turn().await;
 
-        assert!(validator.validate_call("read_file").await.is_ok());
-        assert!(validator.validate_call("read_file").await.is_ok());
+        assert!(
+            validator
+                .validate_call("read_file", &json!({}))
+                .await
+                .is_ok()
+        );
+        assert!(
+            validator
+                .validate_call("read_file", &json!({}))
+                .await
+                .is_ok()
+        );
         assert!(matches!(
-            validator.validate_call("read_file").await,
+            validator.validate_call("read_file", &json!({})).await,
             Err(SafetyError::RateLimitExceeded { .. })
         ));
     }
@@ -252,12 +268,18 @@ mod tests {
         let mut validator = ToolCallSafetyValidator::new();
         validator.start_turn().await;
 
-        let validation = validator.validate_call("read_file").await.unwrap();
+        let validation = validator
+            .validate_call("read_file", &json!({}))
+            .await
+            .unwrap();
         assert!(!validation.is_destructive);
         assert!(!validation.requires_confirmation);
         assert!(validation.execution_allowed);
 
-        let validation = validator.validate_call("delete_file").await.unwrap();
+        let validation = validator
+            .validate_call("delete_file", &json!({}))
+            .await
+            .unwrap();
         assert!(validation.is_destructive);
         assert!(validation.requires_confirmation);
         assert!(validation.execution_allowed);
@@ -269,12 +291,37 @@ mod tests {
         validator.set_limits(2, 3);
 
         validator.start_turn().await;
-        assert!(validator.validate_call("read_file").await.is_ok());
-        assert!(validator.validate_call("read_file").await.is_ok());
-        assert!(validator.validate_call("read_file").await.is_err());
+        assert!(
+            validator
+                .validate_call("read_file", &json!({}))
+                .await
+                .is_ok()
+        );
+        assert!(
+            validator
+                .validate_call("read_file", &json!({}))
+                .await
+                .is_ok()
+        );
+        assert!(
+            validator
+                .validate_call("read_file", &json!({}))
+                .await
+                .is_err()
+        );
 
         validator.start_turn().await;
-        assert!(validator.validate_call("read_file").await.is_ok());
-        assert!(validator.validate_call("read_file").await.is_err());
+        assert!(
+            validator
+                .validate_call("read_file", &json!({}))
+                .await
+                .is_ok()
+        );
+        assert!(
+            validator
+                .validate_call("read_file", &json!({}))
+                .await
+                .is_err()
+        );
     }
 }

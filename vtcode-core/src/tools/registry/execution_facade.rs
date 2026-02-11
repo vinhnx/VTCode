@@ -100,8 +100,8 @@ impl ToolRegistry {
             ));
         }
 
-        let readonly_classification = !self.is_mutating_tool(&normalized_tool_name)
-            || self.is_readonly_unified_action(&normalized_tool_name, args);
+        let intent = crate::tools::tool_intent::classify_tool_intent(&normalized_tool_name, args);
+        let readonly_classification = !intent.mutating;
         let plan_mode_allowed =
             !self.is_plan_mode() || self.is_plan_mode_allowed(&normalized_tool_name, args);
         if !plan_mode_allowed {
