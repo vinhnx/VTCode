@@ -59,11 +59,12 @@ pub(crate) async fn handle_tool_calls<'a, 'b>(
                 return Ok(Some(o));
             }
         } else {
-            let call_id = &group.tool_calls[0].2;
-            if let Some(tc) = tool_calls.iter().find(|tc| &tc.id == call_id) {
-                let outcome = handle_tool_call(t_ctx, tc).await?;
-                if let Some(o) = outcome {
-                    return Ok(Some(o));
+            for (_, _, call_id) in &group.tool_calls {
+                if let Some(tc) = tool_calls.iter().find(|tc| &tc.id == call_id) {
+                    let outcome = handle_tool_call(t_ctx, tc).await?;
+                    if let Some(o) = outcome {
+                        return Ok(Some(o));
+                    }
                 }
             }
         }

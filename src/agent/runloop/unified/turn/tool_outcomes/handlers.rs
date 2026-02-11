@@ -49,6 +49,9 @@ pub(crate) enum ValidationResult {
     Outcome(TurnHandlerOutcome),
 }
 
+const MAX_RATE_LIMIT_ACQUIRE_ATTEMPTS: usize = 4;
+const MAX_RATE_LIMIT_WAIT: Duration = Duration::from_secs(5);
+
 /// Consolidated state for tool outcomes to reduce signature bloat and ensure DRY across handlers.
 pub struct ToolOutcomeContext<'a, 'b> {
     pub ctx: &'b mut TurnProcessingContext<'a>,
@@ -261,38 +264,8 @@ pub(crate) async fn validate_tool_call<'a>(
     }
 
     // Phase 4 Check: Adaptive Rate Limiter
-    match ctx.rate_limiter.try_acquire(tool_name) {
-        Ok(_) => {}
-        Err(wait_time) => {
-            if wait_time.as_secs_f64() > 0.0 {
-                if ctx.ctrl_c_state.is_cancel_requested() {
-                    return Ok(ValidationResult::Outcome(TurnHandlerOutcome::Break(
-                        TurnLoopResult::Cancelled,
-                    )));
-                }
-                if ctx.ctrl_c_state.is_exit_requested() {
-                    return Ok(ValidationResult::Outcome(TurnHandlerOutcome::Break(
-                        TurnLoopResult::Exit,
-                    )));
-                }
-
-                tokio::select! {
-                    _ = tokio::time::sleep(wait_time) => {},
-                    _ = ctx.ctrl_c_notify.notified() => {
-                        if ctx.ctrl_c_state.is_exit_requested() {
-                            return Ok(ValidationResult::Outcome(TurnHandlerOutcome::Break(
-                                TurnLoopResult::Exit,
-                            )));
-                        }
-                        if ctx.ctrl_c_state.is_cancel_requested() {
-                            return Ok(ValidationResult::Outcome(TurnHandlerOutcome::Break(
-                                TurnLoopResult::Cancelled,
-                            )));
-                        }
-                    }
-                }
-            }
-        }
+    if let Some(outcome) = acquire_adaptive_rate_limit_slot(ctx, tool_call_id, tool_name).await? {
+        return Ok(outcome);
     }
 
     // Phase 4 Check: Adaptive Loop Detection
@@ -469,6 +442,78 @@ pub(crate) async fn validate_tool_call<'a>(
     }
 }
 
+async fn acquire_adaptive_rate_limit_slot<'a>(
+    ctx: &mut TurnProcessingContext<'a>,
+    tool_call_id: &str,
+    tool_name: &str,
+) -> Result<Option<ValidationResult>> {
+    for attempt in 0..MAX_RATE_LIMIT_ACQUIRE_ATTEMPTS {
+        match ctx.rate_limiter.try_acquire(tool_name) {
+            Ok(_) => return Ok(None),
+            Err(wait_time) => {
+                if ctx.ctrl_c_state.is_cancel_requested() {
+                    return Ok(Some(ValidationResult::Outcome(TurnHandlerOutcome::Break(
+                        TurnLoopResult::Cancelled,
+                    ))));
+                }
+                if ctx.ctrl_c_state.is_exit_requested() {
+                    return Ok(Some(ValidationResult::Outcome(TurnHandlerOutcome::Break(
+                        TurnLoopResult::Exit,
+                    ))));
+                }
+
+                let bounded_wait = wait_time.min(MAX_RATE_LIMIT_WAIT);
+                if attempt + 1 >= MAX_RATE_LIMIT_ACQUIRE_ATTEMPTS {
+                    let retry_after_ms = bounded_wait.as_millis() as u64;
+                    tracing::warn!(
+                        tool = %tool_name,
+                        attempts = MAX_RATE_LIMIT_ACQUIRE_ATTEMPTS,
+                        retry_after_ms,
+                        "Adaptive rate limiter blocked tool execution after repeated attempts"
+                    );
+                    push_tool_response(
+                        ctx.working_history,
+                        tool_call_id.to_string(),
+                        serde_json::json!({
+                            "error": format!(
+                                "Tool '{}' is temporarily rate limited. Try again after a short delay.",
+                                tool_name
+                            ),
+                            "rate_limited": true,
+                            "retry_after_ms": retry_after_ms,
+                        })
+                        .to_string(),
+                    );
+                    return Ok(Some(ValidationResult::Blocked));
+                }
+
+                if bounded_wait.is_zero() {
+                    tokio::task::yield_now().await;
+                    continue;
+                }
+
+                tokio::select! {
+                    _ = tokio::time::sleep(bounded_wait) => {},
+                    _ = ctx.ctrl_c_notify.notified() => {
+                        if ctx.ctrl_c_state.is_exit_requested() {
+                            return Ok(Some(ValidationResult::Outcome(TurnHandlerOutcome::Break(
+                                TurnLoopResult::Exit,
+                            ))));
+                        }
+                        if ctx.ctrl_c_state.is_cancel_requested() {
+                            return Ok(Some(ValidationResult::Outcome(TurnHandlerOutcome::Break(
+                                TurnLoopResult::Cancelled,
+                            ))));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(Some(ValidationResult::Blocked))
+}
+
 pub(crate) async fn handle_tool_call_batch<'a, 'b>(
     t_ctx: &mut ToolOutcomeContext<'a, 'b>,
     tool_calls: &[&uni::ToolCall],
@@ -485,8 +530,24 @@ pub(crate) async fn handle_tool_call_batch<'a, 'b>(
             None => continue, // Skip non-function calls
         };
         let tool_name = func.name.as_str();
-        let args_val: serde_json::Value =
-            serde_json::from_str(&func.arguments).unwrap_or(serde_json::json!({}));
+        let args_val: serde_json::Value = match serde_json::from_str(&func.arguments) {
+            Ok(args) => args,
+            Err(err) => {
+                push_tool_response(
+                    t_ctx.ctx.working_history,
+                    tool_call.id.clone(),
+                    serde_json::json!({
+                        "error": format!(
+                            "Invalid tool arguments for '{}': {}",
+                            tool_name,
+                            err
+                        )
+                    })
+                    .to_string(),
+                );
+                continue;
+            }
+        };
 
         match validate_tool_call(t_ctx.ctx, &tool_call.id, tool_name, &args_val).await? {
             ValidationResult::Outcome(outcome) => return Ok(Some(outcome)),
