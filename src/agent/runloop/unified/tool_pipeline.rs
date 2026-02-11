@@ -4,6 +4,7 @@ use std::time::Duration;
 mod cache;
 mod execution;
 mod hitl;
+mod pty_stream;
 mod status;
 #[cfg(test)]
 mod tests;
