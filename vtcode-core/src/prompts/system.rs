@@ -44,6 +44,25 @@ use std::fmt::Write as _;
 use std::path::Path;
 use tracing::warn;
 
+/// Unified tool guidance referenced by all prompt variants to reduce duplication
+const UNIFIED_TOOL_GUIDANCE: &str = r#"**Search & exploration**:
+- Prefer `unified_search` (action='grep') for fast searches over repeated `read` calls
+- Use `unified_search` (action='intelligence') for semantic queries
+- Read complete files once; don't re-invoke `read` on same file
+- Use `unified_exec` with `rg` (ripgrep) for patterns—much faster than `grep`
+
+**Code modification**:
+- `unified_file` (action='edit') for surgical changes; action='write' for new or full replacements
+- Never re-read after applying patch (tool fails if unsuccessful)
+- Use `git log` and `git blame` for code history context
+- **Never**: `git commit`, `git push`, or branch creation unless explicitly requested
+
+**Command execution**:
+- `unified_exec` for all shell commands (one-off, interactive, long-running)
+- Prefer `rg` over `grep` for pattern matching
+- Stay in WORKSPACE_DIR; confirm destructive ops (rm, force-push)
+- **After command output**: Always acknowledge the result briefly and suggest next steps"#;
+
 /// DEFAULT SYSTEM PROMPT (v5.2 - Codex-aligned, provider-agnostic, production ready)
 /// Incorporates key patterns from OpenAI Codex prompting guide while remaining
 /// generic for all providers (Gemini, Anthropic, OpenAI, xAI, DeepSeek, etc.)
@@ -164,23 +183,7 @@ High-quality plan example:
 
 **Parallel tool calling**: When multiple independent operations are needed, call them simultaneously. Examples: reading multiple files, searching across different directories, running independent checks.
 
-**Search & exploration**:
-- Prefer `unified_search` (action='grep') for fast searches over repeated `read` calls
-- Use `unified_search` (action='intelligence') for semantic queries ("Where do we validate JWT tokens?")
-- Read complete files once; don't re-invoke `read` on same file
-- Use `unified_exec` with `rg` (ripgrep) for patterns—much faster than `grep`
-
-**Code modification**:
-- `unified_file` (action='edit') for surgical changes; action='write' for new or full replacements
-- Never re-read after applying patch (tool fails if unsuccessful)
-- Use `git log` and `git blame` for code history context
-- **Never**: `git commit`, `git push`, or branch creation unless explicitly requested
-
-**Command execution**:
-- `unified_exec` for all shell commands (one-off, interactive, long-running)
-- Prefer `rg` over `grep` for pattern matching
-- Stay in WORKSPACE_DIR; confirm destructive ops (rm, force-push)
-- **After command output**: Always acknowledge the result briefly (success/failure, key findings) and suggest next steps or ask if user wants to proceed
+__UNIFIED_TOOL_GUIDANCE__
 
 **Token-efficient output handling** (CRITICAL):
 - `cat`/`bat` commands auto-limited to ~1000 chars; use `head -n N` or `tail -n N` for specific ranges
@@ -292,9 +295,8 @@ const MINIMAL_SYSTEM_PROMPT: &str = r#"You are VT Code, a coding assistant for V
 - Run tests/checks yourself after changes
 - Proceed with reasonable assumptions; only ask when genuinely blocked
 
-**Search**: `unified_search` for all discovery (grep, list, intelligence); prefer `grep` over repeated reads
-**Modify**: `unified_file` for all file operations (read, write, edit, patch, delete); `edit` for surgical changes, `write` for new
-**Execute**: `unified_exec` for all shell commands (one-off, interactive, long-running); use `rg` over `grep`; stay in WORKSPACE_DIR
+__UNIFIED_TOOL_GUIDANCE__
+
 **Discover**: `list_skills` and `load_skill` to find/activate tools (hidden by default)
 
 **Delegation**:
@@ -379,24 +381,7 @@ Complex refactoring and multi-file analysis. Methodical, outcome-focused, expert
 
 ## Tool Strategy
 
-**Search & exploration**:
-- Prefer `unified_search` (action='grep') for fast searches over repeated `read` calls
-- Use `unified_search` (action='intelligence') for semantic queries ("Where do we validate authentication?")
-- Read complete files once; never re-invoke `read` on same file
-- Use `unified_exec` with `rg` (ripgrep) for pattern matching—much faster than `grep`
-
-**Code modification**:
-- `unified_file` (action='edit') for surgical changes; action='write' for new or full replacements
-- Edit in dependency order; validate params before execution
-- Never re-read after applying patch—tool fails if unsuccessful
-- Use `git log` and `git blame` for historical context
-- **Never**: `git commit`, `git push`, or branch changes unless explicitly requested
-
-**Command execution**:
-- `unified_exec` for all shell commands (one-off, interactive, long-running)
-- Prefer `rg` over `grep` for pattern matching
-- Stay in WORKSPACE_DIR; confirm destructive ops (rm, force-push)
-- **After command output**: Always acknowledge the result briefly (success/failure, key findings) and suggest next steps or ask if user wants to proceed
+__UNIFIED_TOOL_GUIDANCE__
 
 **Verification**:
 - Run specific tests first (function-level) to catch issues efficiently
@@ -561,6 +546,11 @@ pub async fn compose_system_instruction_text(
     let estimated_capacity = base_len + config_overhead + instruction_hierarchy_size + 1024; // +512 for enhancements
     let mut instruction = String::with_capacity(estimated_capacity);
     instruction.push_str(base_prompt);
+
+    // Replace unified tool guidance placeholder with actual constant
+    if instruction.contains("__UNIFIED_TOOL_GUIDANCE__") {
+        instruction = instruction.replace("__UNIFIED_TOOL_GUIDANCE__", UNIFIED_TOOL_GUIDANCE);
+    }
 
     // ENHANCEMENT 1: Dynamic tool-aware guidelines (behavioral - goes early)
     if let Some(ctx) = prompt_context {

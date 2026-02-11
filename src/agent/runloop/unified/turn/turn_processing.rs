@@ -60,9 +60,12 @@ pub(crate) async fn execute_llm_request(
         )
         .await?;
 
-    let use_streaming = provider_client.supports_streaming();
+    // HP-6: Cache provider capabilities to avoid repeated trait method calls (2-3 calls → 1 per turn)
+    let capabilities = uni::get_cached_capabilities(provider_client, active_model);
+
+    let use_streaming = capabilities.streaming;
     let reasoning_effort = ctx.vt_cfg.as_ref().and_then(|cfg| {
-        if provider_client.supports_reasoning_effort(active_model) {
+        if capabilities.reasoning_effort {
             Some(cfg.agent.reasoning_effort)
         } else {
             None
@@ -82,12 +85,11 @@ pub(crate) async fn execute_llm_request(
         .as_ref()
         .map(|arc| sort_tool_definitions((**arc).clone()));
     let has_tools = current_tools.is_some();
-    let parallel_config =
-        if has_tools && provider_client.supports_parallel_tool_config(active_model) {
-            parallel_cfg_opt.clone()
-        } else {
-            None
-        };
+    let parallel_config = if has_tools && capabilities.parallel_tool_config {
+        parallel_cfg_opt.clone()
+    } else {
+        None
+    };
     let tool_choice = if has_tools {
         Some(uni::ToolChoice::auto())
     } else {

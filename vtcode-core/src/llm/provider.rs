@@ -58,7 +58,9 @@ mod tool;
 
 pub use call::{FunctionCall, ToolCall};
 pub use message::{ContentPart, Message, MessageContent, MessageRole};
-pub use provider_trait::{LLMError, LLMErrorMetadata, LLMProvider};
+pub use provider_trait::{
+    LLMError, LLMErrorMetadata, LLMProvider, ProviderCapabilities, get_cached_capabilities,
+};
 pub use request::{
     CodingAgentSettings, LLMRequest, ParallelToolConfig, SpecificFunctionChoice,
     SpecificToolChoice, ToolChoice,
