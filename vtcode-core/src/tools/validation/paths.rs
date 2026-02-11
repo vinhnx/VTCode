@@ -30,7 +30,13 @@ pub fn validate_path_safety(path: &str) -> Result<()> {
             "/etc", "/usr", "/bin", "/sbin", "/var", "/boot", "/root", "/dev",
         ];
         for prefix in UNIX_CRITICAL {
-            if path.starts_with(prefix) {
+            let is_var_temp_exception = *prefix == "/var"
+                && (path.starts_with("/var/folders/")
+                    || path == "/var/folders"
+                    || path.starts_with("/var/tmp/")
+                    || path == "/var/tmp");
+
+            if !is_var_temp_exception && matches_critical_prefix(path, prefix) {
                 bail!("Access to system directory denied: {}", prefix);
             }
         }
@@ -58,4 +64,37 @@ pub fn validate_path_safety(path: &str) -> Result<()> {
     }
 
     Ok(())
+}
+
+fn matches_critical_prefix(path: &str, prefix: &str) -> bool {
+    path == prefix
+        || path
+            .strip_prefix(prefix)
+            .is_some_and(|rest| rest.starts_with('/'))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validate_path_safety;
+
+    #[test]
+    fn allows_macos_temp_paths_under_var_folders() {
+        assert!(validate_path_safety("/var/folders/ab/cd/tmp123/file.txt").is_ok());
+    }
+
+    #[test]
+    fn still_blocks_sensitive_var_paths() {
+        assert!(validate_path_safety("/var/db/shadow").is_err());
+        assert!(validate_path_safety("/var").is_err());
+    }
+
+    #[test]
+    fn allows_non_critical_prefix_matches() {
+        assert!(validate_path_safety("/varnish/cache/file").is_ok());
+    }
+
+    #[test]
+    fn allows_var_tmp_paths() {
+        assert!(validate_path_safety("/var/tmp/vtcode/run.log").is_ok());
+    }
 }

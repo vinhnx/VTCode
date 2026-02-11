@@ -1,3 +1,4 @@
+use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
@@ -79,6 +80,47 @@ impl AdaptiveRateLimiter {
             default_refill_rate,
         }
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{AdaptiveRateLimiter, Priority};
+    use std::time::Duration;
+
+    #[test]
+    fn returns_wait_hint_when_bucket_exhausted() {
+        let limiter = AdaptiveRateLimiter::new(1.0, 1.0);
+        assert!(limiter.try_acquire("tool").is_ok());
+        let wait_hint = limiter
+            .try_acquire("tool")
+            .expect_err("second immediate call should be rate-limited");
+        assert!(wait_hint > Duration::ZERO);
+    }
+
+    #[test]
+    fn high_priority_wait_is_shorter_than_low_priority() {
+        let limiter = AdaptiveRateLimiter::new(0.2, 1.0);
+        limiter.set_priority("high", Priority::High);
+        limiter.set_priority("low", Priority::Low);
+
+        let high_wait = limiter
+            .try_acquire("high")
+            .expect_err("high-priority call should be limited");
+        let low_wait = limiter
+            .try_acquire("low")
+            .expect_err("low-priority call should be limited");
+
+        assert!(high_wait < low_wait);
+    }
+}
+
+/// Shared adaptive limiter for non-session-scoped execution flows (e.g. skill sub-LLM loops).
+pub static GLOBAL_ADAPTIVE_RATE_LIMITER: Lazy<AdaptiveRateLimiter> =
+    Lazy::new(AdaptiveRateLimiter::default);
+
+/// Acquire from the shared adaptive limiter.
+pub fn try_acquire_global(tool_name: &str) -> Result<(), Duration> {
+    GLOBAL_ADAPTIVE_RATE_LIMITER.try_acquire(tool_name)
 }
 
 impl Default for AdaptiveRateLimiter {

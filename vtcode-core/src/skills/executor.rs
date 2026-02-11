@@ -21,6 +21,7 @@ use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 use serde_json::Value;
 use std::borrow::Cow;
+use std::time::Duration;
 use tracing::{debug, info, warn};
 
 /// Execute a skill with LLM sub-call support (Phase 5)
@@ -70,18 +71,39 @@ pub async fn execute_skill_with_sub_llm(
     // Loop: Make LLM request and handle tool calls
     const MAX_ITERATIONS: usize = 10;
     const BACKOFF_BASE_MS: u64 = 50; // initial back‑off delay
+    const MAX_RATE_LIMIT_WAIT_CYCLES: usize = 20;
+    const SKILL_RATE_LIMIT_KEY: &str = "skill_sub_llm";
     let mut iterations = 0;
     let mut backoff = BACKOFF_BASE_MS;
+    let mut wait_cycles = 0usize;
 
     loop {
         // Rate‑limit tool execution before each iteration
-        if let Err(e) = crate::tools::rate_limiter::try_acquire() {
+        if let Err(wait_hint) =
+            crate::tools::adaptive_rate_limiter::try_acquire_global(SKILL_RATE_LIMIT_KEY)
+        {
+            wait_cycles += 1;
+            if wait_cycles > MAX_RATE_LIMIT_WAIT_CYCLES {
+                return Err(anyhow!(
+                    "Skill execution stayed rate-limited for too long ({} cycles)",
+                    MAX_RATE_LIMIT_WAIT_CYCLES
+                ));
+            }
+
+            let delay = wait_hint
+                .max(Duration::from_millis(backoff))
+                .min(Duration::from_secs(2));
             // If rate limited, wait a bit and retry without counting as an iteration
-            warn!("Rate limit hit: {} – backing off {}ms", e, backoff);
-            tokio::time::sleep(std::time::Duration::from_millis(backoff)).await;
+            warn!(
+                "Rate limit hit for skill execution – backing off {}ms",
+                delay.as_millis()
+            );
+            tokio::time::sleep(delay).await;
             backoff = (backoff * 2).min(2000); // cap back‑off at 2 s
             continue;
         }
+        wait_cycles = 0;
+        backoff = BACKOFF_BASE_MS;
 
         iterations += 1;
         if iterations > MAX_ITERATIONS {
