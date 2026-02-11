@@ -8,8 +8,8 @@
 //! - Audit logging & caching
 
 use crate::command_safety::{
-    CommandDatabase, SafeCommandRegistry, SafetyAuditLogger, SafetyDecision, SafetyDecisionCache,
-    command_might_be_dangerous, parse_bash_lc_commands,
+    AuditEntry, CommandDatabase, SafeCommandRegistry, SafetyAuditLogger, SafetyDecision,
+    SafetyDecisionCache, command_might_be_dangerous, parse_bash_lc_commands,
 };
 use anyhow::Result;
 use std::path::PathBuf;
@@ -81,6 +81,23 @@ pub struct UnifiedCommandEvaluator {
 }
 
 impl UnifiedCommandEvaluator {
+    async fn log_audit_entry(
+        &self,
+        command: &[String],
+        allowed: bool,
+        reason: impl Into<String>,
+        decision_type: &str,
+    ) {
+        self.audit_logger
+            .log(AuditEntry::new(
+                command.to_vec(),
+                allowed,
+                reason.into(),
+                decision_type.to_string(),
+            ))
+            .await;
+    }
+
     /// Create a new unified evaluator with default components
     pub fn new() -> Self {
         Self {
@@ -135,7 +152,8 @@ impl UnifiedCommandEvaluator {
                 secondary_reasons: vec![],
                 resolved_path: None,
             };
-            // Note: Audit logging could be added here via async task
+            self.log_audit_entry(command, false, "matches dangerous patterns", "Dangerous")
+                .await;
             self.cache
                 .put(
                     command_text.clone(),
@@ -156,7 +174,8 @@ impl UnifiedCommandEvaluator {
                     secondary_reasons: vec!["registry rule".into()],
                     resolved_path: None,
                 };
-                // Note: Audit logging could be added here via async task
+                self.log_audit_entry(command, false, reason.clone(), "Deny")
+                    .await;
                 self.cache
                     .put(command_text.clone(), false, reason.clone())
                     .await;
@@ -231,7 +250,8 @@ impl UnifiedCommandEvaluator {
             secondary_reasons: vec!["passed all safety checks".into()],
             resolved_path: None,
         };
-        // Note: Audit logging could be added here via async task
+        self.log_audit_entry(command, true, "passed all safety checks", "Allow")
+            .await;
         self.cache
             .put(command_text, true, "passed all safety checks".into())
             .await;
@@ -338,6 +358,35 @@ mod tests {
         let result2 = evaluator.evaluate(&cmd).await.unwrap();
         assert!(result2.allowed);
         matches!(result2.primary_reason, EvaluationReason::CacheHit(true, _));
+        assert_eq!(evaluator.audit_logger().count().await, 1);
+    }
+
+    #[tokio::test]
+    async fn dangerous_command_is_audited() {
+        let evaluator = UnifiedCommandEvaluator::new();
+        evaluator
+            .evaluate(&["rm".to_string(), "-rf".to_string(), "/".to_string()])
+            .await
+            .unwrap();
+
+        let entries = evaluator.audit_logger().entries().await;
+        assert_eq!(entries.len(), 1);
+        assert!(!entries[0].allowed);
+        assert_eq!(entries[0].decision_type, "Dangerous");
+    }
+
+    #[tokio::test]
+    async fn safe_command_is_audited() {
+        let evaluator = UnifiedCommandEvaluator::new();
+        evaluator
+            .evaluate(&["git".to_string(), "status".to_string()])
+            .await
+            .unwrap();
+
+        let entries = evaluator.audit_logger().entries().await;
+        assert_eq!(entries.len(), 1);
+        assert!(entries[0].allowed);
+        assert_eq!(entries[0].decision_type, "Allow");
     }
 
     #[tokio::test]

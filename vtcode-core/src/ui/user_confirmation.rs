@@ -24,10 +24,21 @@ pub enum ToolConfirmationResult {
     Feedback(String),
 }
 
+/// Result of prompting for Gemini Pro model usage
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProModelConfirmationResult {
+    /// Approve for this invocation only
+    Yes,
+    /// Approve this and future invocations in the current process
+    YesAutoAccept,
+    /// Deny and fallback to default model
+    No,
+}
+
 impl UserConfirmation {
     /// Ask for confirmation before switching to the most capable model (Gemini 2.5 Pro)
     /// This is critical for ensuring user control over potentially expensive operations
-    pub fn confirm_pro_model_usage(current_model: &str) -> Result<bool> {
+    pub fn confirm_pro_model_usage(current_model: &str) -> Result<ProModelConfirmationResult> {
         use crate::config::constants::models;
         println!("{}", style("Model Upgrade Required").red().bold());
         println!("Current model: {}", style(current_model).cyan());
@@ -60,21 +71,20 @@ impl UserConfirmation {
                     "{}",
                     style("✓ Using Gemini 2.5 Pro model for this task").green()
                 );
-                Ok(true)
+                Ok(ProModelConfirmationResult::Yes)
             }
             1 => {
                 println!(
                     "{}",
                     style("✓ Using Gemini 2.5 Pro model (will auto-accept in future)").green()
                 );
-                // Note: Auto-accept logic would need to be implemented in the caller
-                Ok(true)
+                Ok(ProModelConfirmationResult::YesAutoAccept)
             }
             2 => {
                 println!("{}", style("✗ Keeping current model").red());
-                Ok(false)
+                Ok(ProModelConfirmationResult::No)
             }
-            _ => Ok(false),
+            _ => Ok(ProModelConfirmationResult::No),
         }
     }
 

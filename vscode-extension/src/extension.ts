@@ -400,9 +400,11 @@ export function activate(context: vscode.ExtensionContext) {
         "vtcode.flushIdeContextSnapshot",
         async () => {
             if (!ideContextBridge) {
+                syncIdeContextEnvironmentVariable();
                 return false;
             }
             await ideContextBridge.flush();
+            syncIdeContextEnvironmentVariable();
             return true;
         }
     );
@@ -900,6 +902,7 @@ async function initializeIdeContextBridge(
     const fileUri = vscode.Uri.joinPath(storageRoot, "vtcode-ide-context.md");
     const bridge = new IdeContextFileBridge(fileUri);
     ideContextBridge = bridge;
+    syncIdeContextEnvironmentVariable();
     context.subscriptions.push(bridge);
 
     await bridge.flush();
@@ -925,6 +928,9 @@ async function initializeIdeContextBridge(
 }
 
 export function deactivate() {
+    ideContextBridge = undefined;
+    syncIdeContextEnvironmentVariable();
+
     if (outputChannel) {
         outputChannel.dispose();
         outputChannel = undefined;
@@ -2975,6 +2981,16 @@ function truncateForPrompt(
 
 function getIdeContextFilePath(): string | undefined {
     return ideContextBridge?.filePath;
+}
+
+function syncIdeContextEnvironmentVariable(): void {
+    const contextPath = getIdeContextFilePath();
+    if (contextPath) {
+        process.env[IDE_CONTEXT_ENV_VARIABLE] = contextPath;
+        return;
+    }
+
+    delete process.env[IDE_CONTEXT_ENV_VARIABLE];
 }
 
 function isDocumentVisible(document: vscode.TextDocument): boolean {
