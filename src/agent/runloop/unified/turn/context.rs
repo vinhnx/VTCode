@@ -235,6 +235,30 @@ impl<'a> TurnProcessingContext<'a> {
         }
     }
 
+    /// Creates a RunLoopContext directly from this TurnProcessingContext,
+    /// skipping the intermediate TurnLoopContext conversion.
+    pub fn as_run_loop_context(
+        &mut self,
+    ) -> crate::agent::runloop::unified::run_loop_context::RunLoopContext<'_> {
+        crate::agent::runloop::unified::run_loop_context::RunLoopContext {
+            renderer: self.renderer,
+            handle: self.handle,
+            tool_registry: self.tool_registry,
+            tools: self.tools,
+            tool_result_cache: self.tool_result_cache,
+            tool_permission_cache: self.tool_permission_cache,
+            decision_ledger: self.decision_ledger,
+            session_stats: self.session_stats,
+            mcp_panel_state: self.mcp_panel_state,
+            approval_recorder: self.approval_recorder,
+            session: self.session,
+            safety_validator: Some(self.safety_validator),
+            traj: self.traj,
+            harness_state: self.harness_state,
+            harness_emitter: self.harness_emitter,
+        }
+    }
+
     pub fn handle_assistant_response(
         &mut self,
         text: String,
