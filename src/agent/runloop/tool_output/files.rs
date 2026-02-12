@@ -473,31 +473,127 @@ pub(crate) fn render_list_dir_output(
 }
 
 pub(crate) fn render_read_file_output(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> {
-    // Show file metadata with aligned formatting (no size information)
-    if let Some(encoding) = get_string(val, "encoding") {
-        renderer.line(
-            MessageStyle::ToolDetail,
-            &format!("{:16} {}", "encoding", encoding),
-        )?;
+    // Batch read: show compact per-file summary
+    if let Some(items) = val.get("items").and_then(Value::as_array) {
+        let files_read = get_u64(val, "files_read").unwrap_or(items.len() as u64);
+        let files_ok = get_u64(val, "files_succeeded").unwrap_or(0);
+        let failed = files_read.saturating_sub(files_ok);
+
+        let mut summary = format!("{} file{} read", files_ok, if files_ok == 1 { "" } else { "s" });
+        if failed > 0 {
+            summary.push_str(&format!(", {} failed", failed));
+        }
+        renderer.line(MessageStyle::ToolDetail, &summary)?;
+
+        for item in items.iter().take(MAX_BATCH_DISPLAY_FILES) {
+            if let Some(fp) = item.get("file_path").and_then(Value::as_str) {
+                let short = shorten_path(fp, 60);
+                if item.get("error").is_some() {
+                    renderer.line(MessageStyle::ToolError, &format!("  ✗ {}", short))?;
+                } else {
+                    let lines_info = item
+                        .get("ranges")
+                        .and_then(Value::as_array)
+                        .map(|ranges| {
+                            let total_lines: u64 = ranges
+                                .iter()
+                                .filter_map(|r| r.get("lines_read").and_then(Value::as_u64))
+                                .sum();
+                            format!(" ({} lines)", total_lines)
+                        })
+                        .unwrap_or_default();
+                    renderer.line(
+                        MessageStyle::ToolDetail,
+                        &format!("  ✓ {}{}", short, lines_info),
+                    )?;
+                }
+            }
+        }
+        if items.len() > MAX_BATCH_DISPLAY_FILES {
+            renderer.line(
+                MessageStyle::ToolDetail,
+                &format!("  … +{} more", items.len() - MAX_BATCH_DISPLAY_FILES),
+            )?;
+        }
+        return Ok(());
     }
 
-    // Removed size display to comply with request of no file size information
+    // Single file read: show line range and content preview
     if let Some(start) = get_u64(val, "start_line")
         && let Some(end) = get_u64(val, "end_line")
     {
+        let count = end.saturating_sub(start) + 1;
         renderer.line(
             MessageStyle::ToolDetail,
-            &format!("{:16} {}-{}", "lines", start, end),
+            &format!("lines {}-{} ({} lines)", start, end, count),
         )?;
     }
 
-    if let Some(content) = get_string(val, "content")
-        && looks_like_diff_content(content)
-    {
-        let git_styles = GitStyles::new();
-        let ls_styles = LsStyles::from_env();
-        renderer.line(MessageStyle::ToolDetail, "▼ diff")?;
-        render_diff_content(renderer, content, &git_styles, &ls_styles)?;
+    if let Some(content) = get_string(val, "content") {
+        if looks_like_diff_content(content) {
+            let git_styles = GitStyles::new();
+            let ls_styles = LsStyles::from_env();
+            renderer.line(MessageStyle::ToolDetail, "▼ diff")?;
+            render_diff_content(renderer, content, &git_styles, &ls_styles)?;
+        } else {
+            render_content_preview(renderer, content)?;
+        }
+    }
+
+    Ok(())
+}
+
+const MAX_BATCH_DISPLAY_FILES: usize = 10;
+const MAX_PREVIEW_LINES: usize = 4;
+const MAX_PREVIEW_LINE_LEN: usize = 80;
+
+fn shorten_path(path: &str, max_len: usize) -> String {
+    if path.len() <= max_len {
+        return path.to_string();
+    }
+    if let Some(name) = std::path::Path::new(path).file_name() {
+        let name_str = name.to_string_lossy();
+        if let Some(parent) = std::path::Path::new(path).parent() {
+            let parent_str = parent.to_string_lossy();
+            let budget = max_len.saturating_sub(name_str.len() + 4);
+            if budget > 0 && parent_str.len() > budget {
+                return format!("…{}/{}", &parent_str[parent_str.len() - budget..], name_str);
+            }
+        }
+        return name_str.to_string();
+    }
+    truncate_text_safe(path, max_len).to_string()
+}
+
+fn strip_line_number(line: &str) -> &str {
+    let trimmed = line.trim_start();
+    if let Some(pos) = trimmed.find(':') {
+        let prefix = &trimmed[..pos];
+        if !prefix.is_empty() && prefix.chars().all(|c| c.is_ascii_digit()) {
+            let rest = &trimmed[pos + 1..];
+            return rest.strip_prefix(' ').unwrap_or(rest);
+        }
+    }
+    line
+}
+
+fn render_content_preview(renderer: &mut AnsiRenderer, content: &str) -> Result<()> {
+    let meaningful: Vec<&str> = content
+        .lines()
+        .map(strip_line_number)
+        .map(|l| l.trim())
+        .filter(|l| !l.is_empty())
+        .take(MAX_PREVIEW_LINES)
+        .collect();
+
+    if meaningful.is_empty() {
+        return Ok(());
+    }
+
+    renderer.line(MessageStyle::ToolDetail, "▼ preview")?;
+    for line in &meaningful {
+        let display = truncate_text_safe(line, MAX_PREVIEW_LINE_LEN);
+        renderer.line(MessageStyle::ToolDetail, &format!("  {}", display))?;
     }
 
     Ok(())
@@ -587,5 +683,26 @@ index 0000000..1111111 100644
             .expect("plus header exists");
         assert_eq!(lines[plus_index + 1], "• Diff file2.txt (+1 -1)");
         assert!(lines.iter().any(|line| line == "@@ -2 +2 @@"));
+    }
+
+    #[test]
+    fn strip_line_number_removes_prefix() {
+        assert_eq!(strip_line_number("  42: fn main() {"), "fn main() {");
+        assert_eq!(strip_line_number("1:hello"), "hello");
+        assert_eq!(strip_line_number("no_number_here"), "no_number_here");
+        assert_eq!(strip_line_number("abc: not a number"), "abc: not a number");
+    }
+
+    #[test]
+    fn shorten_path_preserves_short() {
+        assert_eq!(shorten_path("/src/main.rs", 60), "/src/main.rs");
+    }
+
+    #[test]
+    fn shorten_path_truncates_long() {
+        let long = "/very/long/deeply/nested/path/to/some/file.rs";
+        let short = shorten_path(long, 30);
+        assert!(short.len() <= 45);
+        assert!(short.contains("file.rs"));
     }
 }

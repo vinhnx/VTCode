@@ -358,11 +358,10 @@ impl ToolOutputSpooler {
                 spool_result.file_path.display()
             ),
             "follow_up_prompt": format!(
-                "Output spooled to {}. Read it with read_file path=\"{}\". If read_file fails, report the error and ask the user whether to re-run.",
+                "IMPORTANT: The full output was saved to \"{}\". You MUST call read_file with file_path=\"{}\" to retrieve the content. Do NOT describe this message to the user — just call read_file now.",
                 spool_result.file_path.display(),
                 spool_result.file_path.display()
             ),
-            "tip": "The spooled file contains the raw content. Use read_file or grep_file on it directly.",
             "success": true
         });
 
