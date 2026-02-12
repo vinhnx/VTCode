@@ -358,7 +358,7 @@ mod tests {
         let args = json!({"command": "git diff"});
         let result = json!({
             "spooled_to_file": true,
-            "file_path": ".vtcode/context/tool_outputs/unified_exec_123.txt",
+            "spool_path": ".vtcode/context/tool_outputs/unified_exec_123.txt",
             "success": true
         });
 
