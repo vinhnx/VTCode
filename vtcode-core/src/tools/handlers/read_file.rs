@@ -299,7 +299,8 @@ impl ReadFileHandler {
             "content": content_parts.join("\n\n"),
             "items": results,
             "files_read": results.len(),
-            "files_succeeded": results.iter().filter(|r| r.error.is_none()).count()
+            "files_succeeded": results.iter().filter(|r| r.error.is_none()).count(),
+            "no_spool": true
         }))
     }
 
@@ -428,7 +429,8 @@ impl Tool for ReadFileHandler {
 
         Ok(json!({
             "content": content,
-            "success": true
+            "success": true,
+            "no_spool": true
         }))
     }
 

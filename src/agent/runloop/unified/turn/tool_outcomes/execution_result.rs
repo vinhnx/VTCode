@@ -6,6 +6,8 @@ use vtcode_core::llm::provider as uni;
 use vtcode_core::tools::error_messages::agent_execution;
 use vtcode_core::utils::ansi::MessageStyle;
 
+use vtcode_core::config::constants::tools::{READ_FILE, UNIFIED_FILE};
+
 use crate::agent::runloop::mcp_events;
 use crate::agent::runloop::unified::tool_output_handler::handle_pipeline_output_from_turn_ctx;
 use crate::agent::runloop::unified::tool_pipeline::{ToolExecutionStatus, ToolPipelineOutcome};
@@ -133,6 +135,46 @@ pub(crate) async fn handle_tool_execution_result<'a>(
     Ok(())
 }
 
+fn maybe_inline_spooled(tool_name: &str, output: &serde_json::Value) -> String {
+    let is_spooled = output
+        .get("spooled_to_file")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
+    if !is_spooled {
+        return serialize_output(output);
+    }
+
+    if (tool_name == READ_FILE || tool_name == UNIFIED_FILE)
+        && let Some(file_path) = output.get("file_path").and_then(|v| v.as_str())
+    {
+        match std::fs::read_to_string(file_path) {
+            Ok(content) => {
+                tracing::debug!(
+                    tool = tool_name,
+                    path = file_path,
+                    "Auto-inlined spooled read_file output"
+                );
+                return serde_json::json!({
+                    "content": content,
+                    "success": true,
+                })
+                .to_string();
+            }
+            Err(e) => {
+                tracing::warn!(
+                    tool = tool_name,
+                    path = file_path,
+                    error = %e,
+                    "Failed to auto-inline spooled file, falling back to spool reference"
+                );
+            }
+        }
+    }
+
+    serialize_output(output)
+}
+
 async fn handle_success<'a>(
     t_ctx: &mut super::handlers::ToolOutcomeContext<'a, '_>,
     tool_call_id: String,
@@ -141,7 +183,7 @@ async fn handle_success<'a>(
     pipeline_outcome: &ToolPipelineOutcome,
     output: &serde_json::Value,
 ) -> Result<()> {
-    let content_for_model = serialize_output(output);
+    let content_for_model = maybe_inline_spooled(tool_name, output);
     push_tool_response(t_ctx.ctx.working_history, tool_call_id, content_for_model);
 
     // Handle UI output and file modifications

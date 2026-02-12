@@ -202,6 +202,7 @@ impl FileOpsTool {
                             ))
                             .content(content)
                             .field("path", json!(self.workspace_relative_display(&canonical)))
+                            .field("no_spool", json!(true))
                             .data("size_bytes", json!(size_bytes))
                             .build_json();
 
@@ -247,7 +248,8 @@ impl FileOpsTool {
                     self.workspace_relative_display(&canonical)
                 ))
                 .content(content)
-                .field("path", json!(self.workspace_relative_display(&canonical)));
+                .field("path", json!(self.workspace_relative_display(&canonical)))
+                .field("no_spool", json!(true));
 
             // Merge legacy metadata
             if let Some(obj) = metadata.as_object() {
