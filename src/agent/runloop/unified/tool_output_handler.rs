@@ -17,6 +17,42 @@ use vtcode_core::utils::ansi::MessageStyle;
 use crate::agent::runloop::unified::run_loop_context::RunLoopContext;
 use crate::agent::runloop::unified::tool_pipeline::{ToolExecutionStatus, ToolPipelineOutcome};
 
+fn record_mcp_success_event(
+    mcp_panel_state: &mut McpPanelState,
+    tool_name: &str,
+    args_val: &serde_json::Value,
+) {
+    let mut mcp_event = crate::agent::runloop::mcp_events::McpEvent::new(
+        "mcp".to_string(),
+        tool_name.to_string(),
+        Some(args_val.to_string()),
+    );
+    mcp_event.success(None);
+    mcp_panel_state.add_event(mcp_event);
+}
+
+fn compute_last_tool_stdout(command_success: bool, stdout: &Option<String>) -> Option<String> {
+    if command_success {
+        stdout.clone()
+    } else {
+        None
+    }
+}
+
+async fn collect_modified_files_and_invalidate_cache(
+    modified_files: &[String],
+    tool_result_cache: Option<&Arc<RwLock<ToolResultCache>>>,
+) -> Vec<PathBuf> {
+    let turn_modified_files: Vec<PathBuf> = modified_files.iter().map(PathBuf::from).collect();
+    if let Some(cache_arc) = tool_result_cache {
+        let mut cache = cache_arc.write().await;
+        for file in modified_files {
+            cache.invalidate_for_path(file);
+        }
+    }
+    turn_modified_files
+}
+
 pub(crate) async fn handle_pipeline_output(
     ctx: &mut RunLoopContext<'_>,
     name: &str,
@@ -41,13 +77,7 @@ pub(crate) async fn handle_pipeline_output(
 
             // Handle MCP events and rendering
             if let Some(tool_name) = name.strip_prefix("mcp_") {
-                let mut mcp_event = crate::agent::runloop::mcp_events::McpEvent::new(
-                    "mcp".to_string(),
-                    tool_name.to_string(),
-                    Some(args_val.to_string()),
-                );
-                mcp_event.success(None);
-                ctx.mcp_panel_state.add_event(mcp_event);
+                record_mcp_success_event(ctx.mcp_panel_state, tool_name, args_val);
             } else {
                 render_tool_output_common(
                     ctx.renderer,
@@ -60,24 +90,19 @@ pub(crate) async fn handle_pipeline_output(
                 .await?;
             }
 
-            last_tool_stdout = if *command_success {
-                stdout.clone()
-            } else {
-                None
-            };
+            last_tool_stdout = compute_last_tool_stdout(*command_success, stdout);
 
             // Check for write effects and handle modified files
-            if check_write_effect_common(name) {
-                any_write_effect = true;
-            }
+            any_write_effect |= check_write_effect_common(name);
 
             if !modified_files.is_empty() {
-                for file in modified_files.iter() {
-                    turn_modified_files.push(PathBuf::from(file));
-                    // invalidate cache for modified files
-                    let mut cache = ctx.tool_result_cache.write().await;
-                    cache.invalidate_for_path(file);
-                }
+                turn_modified_files.extend(
+                    collect_modified_files_and_invalidate_cache(
+                        modified_files,
+                        Some(ctx.tool_result_cache),
+                    )
+                    .await,
+                );
             }
         }
         ToolExecutionStatus::Failure { error } => {
@@ -113,7 +138,6 @@ pub(crate) async fn handle_pipeline_output_renderer(
     outcome: &ToolPipelineOutcome,
     vt_config: Option<&VTCodeConfig>,
 ) -> Result<(bool, Vec<PathBuf>, Option<String>)> {
-    use crate::agent::runloop::mcp_events;
     use crate::agent::runloop::tool_output::render_tool_output;
     use crate::agent::runloop::unified::tool_summary::{
         render_tool_call_summary, stream_label_from_output,
@@ -135,13 +159,7 @@ pub(crate) async fn handle_pipeline_output_renderer(
             session_stats.record_tool(name);
 
             if let Some(tool_name) = name.strip_prefix("mcp_") {
-                let mut mcp_event = mcp_events::McpEvent::new(
-                    "mcp".to_string(),
-                    tool_name.to_string(),
-                    Some(args_val.to_string()),
-                );
-                mcp_event.success(None);
-                mcp_panel_state.add_event(mcp_event);
+                record_mcp_success_event(mcp_panel_state, tool_name, args_val);
             } else {
                 let stream_label = stream_label_from_output(output, *command_success);
                 render_tool_call_summary(renderer, name, args_val, stream_label)?;
@@ -149,37 +167,22 @@ pub(crate) async fn handle_pipeline_output_renderer(
 
             render_tool_output(renderer, Some(name), output, vt_config).await?;
 
-            last_tool_stdout = if *command_success {
-                stdout.clone()
-            } else {
-                None
-            };
+            last_tool_stdout = compute_last_tool_stdout(*command_success, stdout);
 
-            if matches!(
-                name,
-                "write_file" | "edit_file" | "create_file" | "delete_file"
-            ) {
-                any_write_effect = true;
-            }
+            any_write_effect |= check_write_effect_common(name);
 
             if !modified_files.is_empty() {
-                for file in modified_files.iter() {
-                    turn_modified_files.push(PathBuf::from(file));
-                    // invalidate cache for modified files if available
-                    if let Some(cache_arc) = tool_result_cache {
-                        let mut cache = cache_arc.write().await;
-                        cache.invalidate_for_path(file);
-                    }
-                }
+                turn_modified_files.extend(
+                    collect_modified_files_and_invalidate_cache(modified_files, tool_result_cache)
+                        .await,
+                );
             }
         }
         ToolExecutionStatus::Failure { error } => {
-            let err_msg = format!("Tool '{}' failure: {:?}", name, error);
-            renderer.line(MessageStyle::Error, &err_msg)?;
+            render_error_common(renderer, name, &error.to_string(), "failure")?;
         }
         ToolExecutionStatus::Timeout { error } => {
-            let err_msg = format!("Tool '{}' timed out: {:?}", name, error);
-            renderer.line(MessageStyle::Error, &err_msg)?;
+            render_error_common(renderer, name, &error.message, "timed out")?;
         }
         ToolExecutionStatus::Cancelled => {
             renderer.line(MessageStyle::Info, "Tool execution cancelled")?;

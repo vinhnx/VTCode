@@ -217,7 +217,7 @@ fn extract_turn_config(vt_cfg: Option<&VTCodeConfig>) -> PrecomputedTurnConfig {
 pub async fn run_turn_loop(
     _input: &str,
     mut working_history: Vec<uni::Message>,
-    ctx: TurnLoopContext<'_>,
+    mut ctx: TurnLoopContext<'_>,
     session_end_reason: &mut crate::hooks::lifecycle::SessionEndReason,
 ) -> Result<TurnLoopOutcome> {
     use crate::agent::runloop::unified::context_manager::PreRequestAction;
@@ -336,8 +336,6 @@ pub async fn run_turn_loop(
                 .map(|c| {
                     if c.is_alphanumeric() {
                         c.to_ascii_lowercase()
-                    } else if c.is_whitespace() {
-                        ' '
                     } else {
                         ' '
                     }
@@ -372,47 +370,37 @@ pub async fn run_turn_loop(
                 .any(|phrase| normalized.contains(phrase));
 
             if should_exit_plan {
-                use crate::agent::runloop::unified::run_loop_context::RunLoopContext;
                 use crate::agent::runloop::unified::tool_pipeline::run_tool_call;
-                use vtcode_core::llm::provider as uni;
-
-                let mut run_ctx = RunLoopContext {
-                    renderer: ctx.renderer,
-                    handle: ctx.handle,
-                    tool_registry: ctx.tool_registry,
-                    tools: ctx.tools,
-                    tool_result_cache: ctx.tool_result_cache,
-                    tool_permission_cache: ctx.tool_permission_cache,
-                    decision_ledger: ctx.decision_ledger,
-                    session_stats: ctx.session_stats,
-                    mcp_panel_state: ctx.mcp_panel_state,
-                    approval_recorder: ctx.approval_recorder,
-                    session: ctx.session,
-                    safety_validator: Some(ctx.safety_validator),
-                    traj: ctx.traj,
-                    harness_state: ctx.harness_state,
-                    harness_emitter: ctx.harness_emitter,
+                use crate::agent::runloop::unified::turn::tool_outcomes::helpers::{
+                    EXIT_PLAN_MODE_REASON_USER_REQUESTED_IMPLEMENTATION, build_exit_plan_mode_args,
+                    build_step_exit_plan_mode_call_id,
                 };
+                use vtcode_core::llm::provider::ToolCall;
 
                 // Build a synthetic tool call for exit_plan_mode
-                let args = serde_json::json!({
-                    "reason": "user_requested_implementation"
-                });
-                let call = uni::ToolCall::function(
-                    format!("call_{}_exit_plan_mode", step_count),
+                let args =
+                    build_exit_plan_mode_args(EXIT_PLAN_MODE_REASON_USER_REQUESTED_IMPLEMENTATION);
+                let call = ToolCall::function(
+                    build_step_exit_plan_mode_call_id(step_count),
                     tool_names::EXIT_PLAN_MODE.to_string(),
                     serde_json::to_string(&args).unwrap_or_else(|_| "{}".to_string()),
                 );
+                let ctrl_c_state = ctx.ctrl_c_state;
+                let ctrl_c_notify = ctx.ctrl_c_notify;
+                let default_placeholder = ctx.default_placeholder.clone();
+                let lifecycle_hooks = ctx.lifecycle_hooks;
+                let vt_cfg = ctx.vt_cfg;
+                let mut run_ctx = ctx.as_run_loop_context();
 
                 let outcome = run_tool_call(
                     &mut run_ctx,
                     &call,
-                    ctx.ctrl_c_state,
-                    ctx.ctrl_c_notify,
-                    ctx.default_placeholder.clone(),
-                    ctx.lifecycle_hooks,
+                    ctrl_c_state,
+                    ctrl_c_notify,
+                    default_placeholder,
+                    lifecycle_hooks,
                     true,
-                    ctx.vt_cfg,
+                    vt_cfg,
                     step_count,
                     false,
                 )

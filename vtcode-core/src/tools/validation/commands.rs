@@ -1,3 +1,4 @@
+use crate::command_safety::shell_string_might_be_dangerous;
 use anyhow::{Result, bail};
 
 /// Validates that a command is safe to execute.
@@ -28,24 +29,22 @@ pub fn validate_command_safety(command: &str) -> Result<()> {
     // Optimization: Create lowercase only once, defer until needed
     let cmd_lower = command.to_lowercase();
 
-    // Block specifically dangerous commands
-    // Optimization: Use static array, check shorter prefixes first
-    static DANGEROUS_PREFIXES: &[&str] = &[
-        "rm ",
-        "dd ",
+    // Reuse centralized dangerous-command detection (git/rm/mkfs/dd/etc).
+    if shell_string_might_be_dangerous(command) {
+        bail!("Potential dangerous command detected");
+    }
+
+    // Extra command patterns not covered by the structured command safety engine.
+    static ADDITIONAL_DANGEROUS_PREFIXES: &[&str] = &[
         "rmdir",
-        "mkfs",
         ":(){:|:&};:",
-        "shutdown",
-        "reboot",
-        "init ",
         "wget ",
         "curl ",
         "chmod 777",
         "chown root",
     ];
 
-    for prefix in DANGEROUS_PREFIXES {
+    for prefix in ADDITIONAL_DANGEROUS_PREFIXES {
         if cmd_lower.starts_with(prefix)
             || cmd_lower.contains(&format!("; {}", prefix))
             || cmd_lower.contains(&format!("| {}", prefix))
@@ -69,4 +68,27 @@ fn is_in_quotes(s: &str, pos: usize) -> bool {
     let single_quotes = before.matches('\'').count();
     let double_quotes = before.matches('"').count();
     (single_quotes % 2 == 1) || (double_quotes % 2 == 1)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validate_command_safety;
+
+    #[test]
+    fn rejects_centrally_dangerous_command() {
+        let result = validate_command_safety("git reset --hard HEAD~1");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn rejects_additional_dangerous_prefix() {
+        let result = validate_command_safety("wget https://example.com/file.sh");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn allows_safe_command() {
+        let result = validate_command_safety("ls -la");
+        assert!(result.is_ok());
+    }
 }

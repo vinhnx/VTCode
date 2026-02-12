@@ -120,26 +120,49 @@ impl ToolRegistry {
         // Capture harness context snapshot for structured telemetry and history
         let context_snapshot = self.harness_context_snapshot();
         let context_payload = context_snapshot.to_json();
+        let record_failure = |tool_name: String,
+                              is_mcp_tool: bool,
+                              mcp_provider: Option<String>,
+                              args: Value,
+                              error_msg: String,
+                              timeout_category: Option<String>,
+                              base_timeout_ms: Option<u64>,
+                              adaptive_timeout_ms: Option<u64>,
+                              effective_timeout_ms: Option<u64>,
+                              circuit_breaker: bool| {
+            self.execution_history
+                .add_record(ToolExecutionRecord::failure(
+                    tool_name,
+                    requested_name.clone(),
+                    is_mcp_tool,
+                    mcp_provider,
+                    args,
+                    error_msg,
+                    context_snapshot.clone(),
+                    timeout_category,
+                    base_timeout_ms,
+                    adaptive_timeout_ms,
+                    effective_timeout_ms,
+                    circuit_breaker,
+                ));
+        };
 
         let preflight = match self.preflight_validate_call(&tool_name, args) {
             Ok(outcome) => outcome,
             Err(err) => {
                 let err_msg = err.to_string();
-                self.execution_history
-                    .add_record(ToolExecutionRecord::failure(
-                        tool_name_owned.clone(),
-                        requested_name.clone(),
-                        false,
-                        None,
-                        args_for_recording.clone(),
-                        err_msg,
-                        context_snapshot.clone(),
-                        None,
-                        None,
-                        None,
-                        None,
-                        false,
-                    ));
+                record_failure(
+                    tool_name_owned.clone(),
+                    false,
+                    None,
+                    args_for_recording.clone(),
+                    err_msg,
+                    None,
+                    None,
+                    None,
+                    None,
+                    false,
+                );
                 return Err(err);
             }
         };
@@ -156,21 +179,18 @@ impl ToolRegistry {
                 "Tool '{}' is temporarily disabled due to high failure rate (Circuit Breaker OPEN).",
                 display_name
             );
-            self.execution_history
-                .add_record(ToolExecutionRecord::failure(
-                    tool_name_owned.clone(),
-                    requested_name.clone(),
-                    false,
-                    None,
-                    args_for_recording.clone(),
-                    error_msg.clone(),
-                    context_snapshot.clone(),
-                    None,
-                    None,
-                    None,
-                    None,
-                    true,
-                ));
+            record_failure(
+                tool_name_owned.clone(),
+                false,
+                None,
+                args_for_recording.clone(),
+                error_msg.clone(),
+                None,
+                None,
+                None,
+                None,
+                true,
+            );
             return Err(anyhow!(error_msg).context("tool denied by circuit breaker"));
         }
 
@@ -279,21 +299,18 @@ impl ToolRegistry {
                     obj.insert("tool".into(), json!(display_name));
                 }
 
-                self.execution_history
-                    .add_record(ToolExecutionRecord::failure(
-                        tool_name_owned,
-                        requested_name.clone(),
-                        false,
-                        None,
-                        args_for_recording,
-                        "Tool call blocked due to repeated identical invocations".to_string(),
-                        context_snapshot.clone(),
-                        timeout_category_label.clone(),
-                        base_timeout_ms,
-                        adaptive_timeout_ms,
-                        None,
-                        false,
-                    ));
+                record_failure(
+                    tool_name_owned,
+                    false,
+                    None,
+                    args_for_recording,
+                    "Tool call blocked due to repeated identical invocations".to_string(),
+                    timeout_category_label.clone(),
+                    base_timeout_ms,
+                    adaptive_timeout_ms,
+                    None,
+                    false,
+                );
 
                 return Ok(payload);
             }
@@ -315,21 +332,18 @@ impl ToolRegistry {
                 ),
             );
 
-            self.execution_history
-                .add_record(ToolExecutionRecord::failure(
-                    tool_name_owned.clone(),
-                    requested_name.clone(),
-                    false,
-                    None,
-                    args_for_recording.clone(),
-                    "Tool execution denied by policy".to_string(),
-                    context_snapshot.clone(),
-                    timeout_category_label.clone(),
-                    base_timeout_ms,
-                    adaptive_timeout_ms,
-                    None,
-                    false,
-                ));
+            record_failure(
+                tool_name_owned.clone(),
+                false,
+                None,
+                args_for_recording.clone(),
+                "Tool execution denied by policy".to_string(),
+                timeout_category_label.clone(),
+                base_timeout_ms,
+                adaptive_timeout_ms,
+                None,
+                false,
+            );
 
             return Err(anyhow!(
                 "Tool '{}' is not permitted while full-auto mode is active",
@@ -370,21 +384,18 @@ impl ToolRegistry {
                 error_msg.clone(),
             );
 
-            self.execution_history
-                .add_record(ToolExecutionRecord::failure(
-                    tool_name_owned.clone(),
-                    requested_name.clone(),
-                    false,
-                    None,
-                    args_for_recording.clone(),
-                    error_msg.clone(),
-                    context_snapshot.clone(),
-                    timeout_category_label.clone(),
-                    base_timeout_ms,
-                    adaptive_timeout_ms,
-                    None,
-                    false,
-                ));
+            record_failure(
+                tool_name_owned.clone(),
+                false,
+                None,
+                args_for_recording.clone(),
+                error_msg.clone(),
+                timeout_category_label.clone(),
+                base_timeout_ms,
+                adaptive_timeout_ms,
+                None,
+                false,
+            );
 
             return Err(anyhow!("{}", error_msg).context("tool denied by policy"));
         }
@@ -404,21 +415,18 @@ impl ToolRegistry {
                     err.to_string(),
                 );
 
-                self.execution_history
-                    .add_record(ToolExecutionRecord::failure(
-                        tool_name_owned,
-                        requested_name.clone(),
-                        false,
-                        None,
-                        args_for_recording,
-                        format!("Failed to apply policy constraints: {}", err),
-                        context_snapshot.clone(),
-                        timeout_category_label.clone(),
-                        base_timeout_ms,
-                        adaptive_timeout_ms,
-                        None,
-                        false,
-                    ));
+                record_failure(
+                    tool_name_owned,
+                    false,
+                    None,
+                    args_for_recording,
+                    format!("Failed to apply policy constraints: {}", err),
+                    timeout_category_label.clone(),
+                    base_timeout_ms,
+                    adaptive_timeout_ms,
+                    None,
+                    false,
+                );
 
                 return Ok(error.to_json_value());
             }
@@ -488,21 +496,18 @@ impl ToolRegistry {
                     err.to_string(),
                 );
 
-                self.execution_history
-                    .add_record(ToolExecutionRecord::failure(
-                        tool_name_owned,
-                        requested_name.clone(),
-                        is_mcp_tool,
-                        mcp_provider.clone(),
-                        args_for_recording,
-                        format!("Failed to resolve MCP tool '{}': {}", display_name, err),
-                        context_snapshot.clone(),
-                        timeout_category_label.clone(),
-                        base_timeout_ms,
-                        adaptive_timeout_ms,
-                        None,
-                        false,
-                    ));
+                record_failure(
+                    tool_name_owned,
+                    is_mcp_tool,
+                    mcp_provider.clone(),
+                    args_for_recording,
+                    format!("Failed to resolve MCP tool '{}': {}", display_name, err),
+                    timeout_category_label.clone(),
+                    base_timeout_ms,
+                    adaptive_timeout_ms,
+                    None,
+                    false,
+                );
 
                 return Ok(error.to_json_value());
             }
@@ -513,21 +518,18 @@ impl ToolRegistry {
                 format!("Unknown tool: {}", display_name),
             );
 
-            self.execution_history
-                .add_record(ToolExecutionRecord::failure(
-                    tool_name_owned,
-                    requested_name.clone(),
-                    is_mcp_tool,
-                    mcp_provider.clone(),
-                    args_for_recording,
-                    format!("Unknown tool: {}", display_name),
-                    context_snapshot.clone(),
-                    timeout_category_label.clone(),
-                    base_timeout_ms,
-                    adaptive_timeout_ms,
-                    None,
-                    false,
-                ));
+            record_failure(
+                tool_name_owned,
+                is_mcp_tool,
+                mcp_provider.clone(),
+                args_for_recording,
+                format!("Unknown tool: {}", display_name),
+                timeout_category_label.clone(),
+                base_timeout_ms,
+                adaptive_timeout_ms,
+                None,
+                false,
+            );
 
             return Ok(error.to_json_value());
         }
@@ -556,21 +558,18 @@ impl ToolRegistry {
                 payload = %payload,
                 "Skipping MCP tool execution due to circuit breaker"
             );
-            self.execution_history
-                .add_record(ToolExecutionRecord::failure(
-                    tool_name_owned,
-                    requested_name,
-                    is_mcp_tool,
-                    mcp_provider.clone(),
-                    args_for_recording,
-                    format!("MCP circuit breaker {:?}; execution skipped", diag.state),
-                    context_snapshot.clone(),
-                    timeout_category_label.clone(),
-                    base_timeout_ms,
-                    adaptive_timeout_ms,
-                    None,
-                    false,
-                ));
+            record_failure(
+                tool_name_owned,
+                is_mcp_tool,
+                mcp_provider.clone(),
+                args_for_recording,
+                format!("MCP circuit breaker {:?}; execution skipped", diag.state),
+                timeout_category_label.clone(),
+                base_timeout_ms,
+                adaptive_timeout_ms,
+                None,
+                false,
+            );
             return Ok(payload);
         }
 
@@ -604,21 +603,18 @@ impl ToolRegistry {
                         err.to_string(),
                     );
 
-                    self.execution_history
-                        .add_record(ToolExecutionRecord::failure(
-                            tool_name_owned,
-                            requested_name.clone(),
-                            is_mcp_tool,
-                            mcp_provider.clone(),
-                            args_for_recording,
-                            "Failed to start PTY session".to_string(),
-                            context_snapshot.clone(),
-                            timeout_category_label.clone(),
-                            base_timeout_ms,
-                            adaptive_timeout_ms,
-                            None,
-                            false,
-                        ));
+                    record_failure(
+                        tool_name_owned,
+                        is_mcp_tool,
+                        mcp_provider.clone(),
+                        args_for_recording,
+                        "Failed to start PTY session".to_string(),
+                        timeout_category_label.clone(),
+                        base_timeout_ms,
+                        adaptive_timeout_ms,
+                        None,
+                        false,
+                    );
 
                     return Ok(error.to_json_value());
                 }
@@ -729,21 +725,18 @@ impl ToolRegistry {
                     error_msg.clone(),
                 );
 
-                self.execution_history
-                    .add_record(ToolExecutionRecord::failure(
-                        tool_name_owned.clone(),
-                        requested_name.clone(),
-                        is_mcp_tool,
-                        mcp_provider.clone(),
-                        args_for_recording.clone(),
-                        error_msg,
-                        context_snapshot.clone(),
-                        timeout_category_label.clone(),
-                        base_timeout_ms,
-                        adaptive_timeout_ms,
-                        effective_timeout_ms,
-                        false,
-                    ));
+                record_failure(
+                    tool_name_owned.clone(),
+                    is_mcp_tool,
+                    mcp_provider.clone(),
+                    args_for_recording.clone(),
+                    error_msg,
+                    timeout_category_label.clone(),
+                    base_timeout_ms,
+                    adaptive_timeout_ms,
+                    effective_timeout_ms,
+                    false,
+                );
 
                 Ok(error.to_json_value())
             }
@@ -771,21 +764,18 @@ impl ToolRegistry {
                     if let Some(breaker) = shared_circuit_breaker.as_ref() {
                         breaker.record_failure_for_tool(&tool_name_owned, false);
                     }
-                    self.execution_history
-                        .add_record(ToolExecutionRecord::failure(
-                            tool_name_owned,
-                            requested_name,
-                            is_mcp_tool,
-                            mcp_provider,
-                            args_for_recording,
-                            "Tool execution timed out".to_string(),
-                            context_snapshot.clone(),
-                            timeout_category_label.clone(),
-                            base_timeout_ms,
-                            adaptive_timeout_ms,
-                            Some(timeout_ms),
-                            false,
-                        ));
+                    record_failure(
+                        tool_name_owned,
+                        is_mcp_tool,
+                        mcp_provider,
+                        args_for_recording,
+                        "Tool execution timed out".to_string(),
+                        timeout_category_label.clone(),
+                        base_timeout_ms,
+                        adaptive_timeout_ms,
+                        Some(timeout_ms),
+                        false,
+                    );
                     return Ok(timeout_payload);
                 }
             }
@@ -882,21 +872,18 @@ impl ToolRegistry {
                     obj.insert("circuit_breaker".into(), serde_json::Value::Bool(tripped));
                 }
 
-                self.execution_history
-                    .add_record(ToolExecutionRecord::failure(
-                        tool_name_owned,
-                        requested_name,
-                        is_mcp_tool,
-                        mcp_provider,
-                        args_for_recording,
-                        format!("Tool execution failed: {}", err),
-                        context_snapshot.clone(),
-                        timeout_category_label.clone(),
-                        base_timeout_ms,
-                        adaptive_timeout_ms,
-                        effective_timeout_ms,
-                        tripped,
-                    ));
+                record_failure(
+                    tool_name_owned,
+                    is_mcp_tool,
+                    mcp_provider,
+                    args_for_recording,
+                    format!("Tool execution failed: {}", err),
+                    timeout_category_label.clone(),
+                    base_timeout_ms,
+                    adaptive_timeout_ms,
+                    effective_timeout_ms,
+                    tripped,
+                );
 
                 Ok(payload)
             }

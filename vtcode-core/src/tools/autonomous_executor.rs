@@ -6,6 +6,7 @@
 //! - Loop detection and prevention
 //! - Context-aware decision making
 
+use crate::command_safety::shell_string_might_be_dangerous;
 use crate::config::constants::tools;
 use crate::core::loop_detector::LoopDetector;
 use anyhow::{Context, Result};
@@ -236,26 +237,18 @@ impl AutonomousExecutor {
 
     /// Check if shell command is destructive
     fn is_destructive_command(&self, cmd: &str) -> bool {
+        if shell_string_might_be_dangerous(cmd) {
+            return true;
+        }
+
         let cmd_lower = cmd.to_lowercase();
 
-        // Enhanced destructive patterns
-        let destructive_patterns = [
-            // File deletion
-            "rm -rf",
-            "rm -fr",
-            "rm -r",
-            "rm --recursive",
-            // Git destructive operations
-            "git reset --hard",
-            "git push --force",
-            "git push -f",
-            "git clean -fd",
-            "git clean -fdx",
-            "git branch -D",
-            // System operations
+        // Additional destructive patterns that are not captured by the centralized
+        // command safety evaluator.
+        let supplemental_patterns = [
             "truncate",
-            "dd if=",
             "> /dev/",
+            "dd if=",
             "mkfs",
             "fdisk",
             "format",
@@ -267,11 +260,11 @@ impl AutonomousExecutor {
             "cargo uninstall",
             "pip uninstall",
             // Permissions
-            "chmod -R",
-            "chown -R",
+            "chmod -r",
+            "chown -r",
         ];
 
-        destructive_patterns
+        supplemental_patterns
             .iter()
             .any(|pattern| cmd_lower.contains(pattern))
     }
@@ -509,11 +502,7 @@ impl AutonomousExecutor {
         if let Ok(mut history) = self.rate_history.write() {
             let entries = history.entry(tool_name.to_string()).or_default();
             entries.push_back(now);
-            while let Some(front) = entries.front()
-                && now.duration_since(*front) > self.rate_limit_window
-            {
-                entries.pop_front();
-            }
+            prune_expired_timestamps(entries, now, self.rate_limit_window);
         }
     }
 
@@ -525,20 +514,11 @@ impl AutonomousExecutor {
         if let Ok(history) = self.rate_history.read() {
             if let Some(entries) = history.get(tool_name) {
                 // Quick check: if all entries are within window and at limit, we're rate limited
-                if entries
+                let oldest_within_window = entries
                     .front()
-                    .is_some_and(|front| now.duration_since(*front) <= self.rate_limit_window)
-                    && entries.len() >= self.rate_limit_max_calls
-                {
-                    return true;
-                }
-                // If entries exist but are under limit and no expired entries, not rate limited
-                if entries
-                    .front()
-                    .is_some_and(|front| now.duration_since(*front) <= self.rate_limit_window)
-                    && entries.len() < self.rate_limit_max_calls
-                {
-                    return false;
+                    .is_some_and(|front| now.duration_since(*front) <= self.rate_limit_window);
+                if oldest_within_window {
+                    return entries.len() >= self.rate_limit_max_calls;
                 }
             } else {
                 // No entries for this tool, definitely not rate limited
@@ -549,14 +529,20 @@ impl AutonomousExecutor {
         // Fall back to write lock only when we need to clean up expired entries
         if let Ok(mut history) = self.rate_history.write() {
             let entries = history.entry(tool_name.to_string()).or_default();
-            while let Some(front) = entries.front()
-                && now.duration_since(*front) > self.rate_limit_window
-            {
-                entries.pop_front();
-            }
+            prune_expired_timestamps(entries, now, self.rate_limit_window);
             return entries.len() >= self.rate_limit_max_calls;
         }
         false
+    }
+}
+
+fn prune_expired_timestamps(entries: &mut VecDeque<Instant>, now: Instant, window: Duration) {
+    while let Some(front) = entries.front() {
+        if now.duration_since(*front) > window {
+            entries.pop_front();
+        } else {
+            break;
+        }
     }
 }
 
@@ -590,7 +576,11 @@ mod tests {
         for cmd in destructive_cmds {
             let args = json!({"command": cmd});
             let policy = executor.get_policy("shell", &args);
-            assert_eq!(policy, AutonomousPolicy::RequireConfirmation);
+            assert_eq!(
+                policy,
+                AutonomousPolicy::RequireConfirmation,
+                "unexpected policy for command: {cmd}"
+            );
         }
     }
 
