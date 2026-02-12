@@ -108,6 +108,67 @@ pub fn file_name_from_path(path: &str) -> String {
         .unwrap_or_else(|| path.to_string())
 }
 
+/// Canonicalize a path, walking up to find the nearest existing ancestor for new files.
+///
+/// This function handles paths to files that may not yet exist by finding the
+/// nearest existing parent directory, canonicalizing that, and then appending
+/// the remaining path components.
+///
+/// # Safety
+/// This function is critical for security. It prevents symlink escapes by:
+/// 1. Finding the nearest existing ancestor directory
+/// 2. Canonicalizing that directory (resolves symlinks)
+/// 3. Appending the remaining path components
+///
+/// # Arguments
+/// * `normalized` - A normalized path (output from `normalize_path`)
+///
+/// # Returns
+/// The canonical path, or the normalized path if no parent exists
+pub async fn canonicalize_allow_missing(normalized: &Path) -> Result<PathBuf> {
+    // If the path exists, canonicalize it directly
+    if tokio::fs::try_exists(normalized).await.unwrap_or(false) {
+        return tokio::fs::canonicalize(normalized).await.map_err(|e| {
+            anyhow!(
+                "Failed to resolve canonical path for '{}': {}",
+                normalized.display(),
+                e
+            )
+        });
+    }
+
+    // Walk up the directory tree to find the nearest existing ancestor
+    let mut current = normalized.to_path_buf();
+    while let Some(parent) = current.parent() {
+        if tokio::fs::try_exists(parent).await.unwrap_or(false) {
+            // Canonicalize the existing parent
+            let canonical_parent = tokio::fs::canonicalize(parent).await.map_err(|e| {
+                anyhow!(
+                    "Failed to resolve canonical path for '{}': {}",
+                    parent.display(),
+                    e
+                )
+            })?;
+
+            // Get the remaining path components
+            let remainder = normalized
+                .strip_prefix(parent)
+                .unwrap_or_else(|_| Path::new(""));
+
+            // Return the canonical parent + remaining components
+            return if remainder.as_os_str().is_empty() {
+                Ok(canonical_parent)
+            } else {
+                Ok(canonical_parent.join(remainder))
+            };
+        }
+        current = parent.to_path_buf();
+    }
+
+    // No existing parent found, return normalized path as-is
+    Ok(normalized.to_path_buf())
+}
+
 /// Provides the root directories an application uses to store data.
 pub trait WorkspacePaths: Send + Sync {
     /// Absolute path to the application's workspace root.
@@ -242,5 +303,66 @@ mod tests {
             PathBuf::from("/tmp/project/config/settings.toml")
         );
         assert_eq!(paths.cache_dir(), Some(PathBuf::from("/tmp/project/cache")));
+    }
+
+    #[tokio::test]
+    async fn test_canonicalize_existing_file() {
+        // Create a temporary directory and file
+        let temp_dir = std::env::temp_dir();
+        let test_file = temp_dir.join("vtcode_test_existing.txt");
+        tokio::fs::write(&test_file, b"test").await.unwrap();
+
+        let canonical = canonicalize_allow_missing(&test_file).await.unwrap();
+
+        // Should get the canonical path
+        assert!(canonical.is_absolute());
+        assert!(canonical.exists());
+
+        // Cleanup
+        tokio::fs::remove_file(&test_file).await.ok();
+    }
+
+    #[tokio::test]
+    async fn test_canonicalize_missing_file() {
+        // Use a path that doesn't exist but has an existing parent
+        let temp_dir = std::env::temp_dir();
+        let missing_file = temp_dir.join("vtcode_test_missing_dir/missing_file.txt");
+
+        let canonical = canonicalize_allow_missing(&missing_file).await.unwrap();
+
+        // Should get canonical parent + missing components
+        assert!(canonical.is_absolute());
+        assert!(canonical.to_string_lossy().contains("missing_file.txt"));
+    }
+
+    #[tokio::test]
+    async fn test_canonicalize_deeply_missing_path() {
+        // Use a path with multiple missing parent directories
+        let temp_dir = std::env::temp_dir();
+        let deep_missing = temp_dir.join("vtcode_test_a/b/c/d/file.txt");
+
+        let canonical = canonicalize_allow_missing(&deep_missing).await.unwrap();
+
+        // Should get canonical temp_dir + missing components
+        assert!(canonical.is_absolute());
+        assert!(canonical.to_string_lossy().contains("vtcode_test_a"));
+    }
+
+    #[tokio::test]
+    async fn test_canonicalize_missing_file_with_existing_parent() {
+        // Create a parent directory
+        let temp_dir = std::env::temp_dir();
+        let test_dir = temp_dir.join("vtcode_test_parent");
+        tokio::fs::create_dir_all(&test_dir).await.unwrap();
+
+        let missing_file = test_dir.join("missing.txt");
+        let canonical = canonicalize_allow_missing(&missing_file).await.unwrap();
+
+        // Should get canonical parent + missing filename
+        assert!(canonical.is_absolute());
+        assert!(canonical.to_string_lossy().ends_with("missing.txt"));
+
+        // Cleanup
+        tokio::fs::remove_dir(&test_dir).await.ok();
     }
 }

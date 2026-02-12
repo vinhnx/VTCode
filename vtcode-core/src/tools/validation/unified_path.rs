@@ -1,4 +1,4 @@
-use anyhow::{Result, anyhow, bail};
+use anyhow::{Result, bail};
 use std::path::{Path, PathBuf};
 
 /// Consolidated path validation combining safety checks, normalization, and workspace bounds.
@@ -29,7 +29,7 @@ pub async fn validate_and_resolve_path(workspace_root: &Path, path_str: &str) ->
     }
 
     // Step 3: Canonical resolve + re-check (catches symlink escapes)
-    let canonical = canonicalize_allow_missing(&normalized).await?;
+    let canonical = crate::utils::path::canonicalize_allow_missing(&normalized).await?;
     let canonical_root = if tokio::fs::try_exists(workspace_root).await.unwrap_or(false) {
         tokio::fs::canonicalize(workspace_root)
             .await
@@ -46,41 +46,4 @@ pub async fn validate_and_resolve_path(workspace_root: &Path, path_str: &str) ->
     }
 
     Ok(canonical)
-}
-
-/// Canonicalize a path, walking up to find the nearest existing ancestor for new files.
-async fn canonicalize_allow_missing(normalized: &Path) -> Result<PathBuf> {
-    if tokio::fs::try_exists(normalized).await.unwrap_or(false) {
-        return tokio::fs::canonicalize(normalized).await.map_err(|e| {
-            anyhow!(
-                "Failed to resolve canonical path for '{}': {}",
-                normalized.display(),
-                e
-            )
-        });
-    }
-
-    let mut current = normalized.to_path_buf();
-    while let Some(parent) = current.parent() {
-        if tokio::fs::try_exists(parent).await.unwrap_or(false) {
-            let canonical_parent = tokio::fs::canonicalize(parent).await.map_err(|e| {
-                anyhow!(
-                    "Failed to resolve canonical path for '{}': {}",
-                    parent.display(),
-                    e
-                )
-            })?;
-            let remainder = normalized
-                .strip_prefix(parent)
-                .unwrap_or_else(|_| Path::new(""));
-            return if remainder.as_os_str().is_empty() {
-                Ok(canonical_parent)
-            } else {
-                Ok(canonical_parent.join(remainder))
-            };
-        }
-        current = parent.to_path_buf();
-    }
-
-    Ok(normalized.to_path_buf())
 }

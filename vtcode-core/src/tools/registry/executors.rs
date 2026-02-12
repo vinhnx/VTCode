@@ -5,6 +5,7 @@ use crate::tools::file_tracker::FileTracker;
 use crate::tools::registry::declarations::{
     UnifiedExecAction, UnifiedFileAction, UnifiedSearchAction,
 };
+use crate::tools::tool_intent;
 use crate::tools::traits::Tool;
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64;
@@ -34,22 +35,7 @@ impl ToolRegistry {
     }
 
     pub(super) async fn execute_unified_exec(&self, args: Value) -> Result<Value> {
-        let action_str = args
-            .get("action")
-            .and_then(|v| v.as_str())
-            .or_else(|| {
-                if args.get("command").is_some() {
-                    Some("run")
-                } else if args.get("code").is_some() {
-                    Some("code")
-                } else if args.get("input").is_some() {
-                    Some("write")
-                } else if args.get("session_id").is_some() {
-                    Some("poll")
-                } else {
-                    None
-                }
-            })
+        let action_str = tool_intent::unified_exec_action(&args)
             .ok_or_else(|| anyhow!("Missing action in unified_exec"))?;
 
         let action: UnifiedExecAction = serde_json::from_value(json!(action_str))
@@ -66,22 +52,7 @@ impl ToolRegistry {
     }
 
     pub(super) async fn execute_unified_file(&self, args: Value) -> Result<Value> {
-        let action_str = args
-            .get("action")
-            .and_then(|v| v.as_str())
-            .or_else(|| {
-                if args.get("old_str").is_some() {
-                    Some("edit")
-                } else if args.get("patch").is_some() {
-                    Some("patch")
-                } else if args.get("content").is_some() {
-                    Some("write")
-                } else if args.get("destination").is_some() {
-                    Some("move")
-                } else {
-                    Some("read")
-                }
-            })
+        let action_str = tool_intent::unified_file_action(&args)
             .ok_or_else(|| anyhow!("Missing action in unified_file"))?;
 
         let action: UnifiedFileAction = serde_json::from_value(json!(action_str))
@@ -116,29 +87,7 @@ impl ToolRegistry {
     pub(super) async fn execute_unified_search(&self, args: Value) -> Result<Value> {
         let mut args = args;
 
-        let action_str = args
-            .get("action")
-            .and_then(|v| v.as_str())
-            .or_else(|| {
-                // Smart action inference based on parameters
-                if args.get("pattern").is_some() || args.get("query").is_some() {
-                    Some("grep")
-                } else if args.get("keyword").is_some() {
-                    Some("tools")
-                } else if args.get("operation").is_some() {
-                    Some("intelligence")
-                } else if args.get("url").is_some() {
-                    Some("web")
-                } else if args.get("sub_action").is_some() || args.get("name").is_some() {
-                    Some("skill")
-                } else if args.get("scope").is_some() {
-                    Some("errors")
-                } else if args.get("path").is_some() {
-                    Some("list")
-                } else {
-                    None
-                }
-            })
+        let action_str = tool_intent::unified_search_action(&args)
             .ok_or_else(|| anyhow!("Missing action in unified_search. Valid actions: grep, list, intelligence, tools, errors, agent, web, skill"))?;
 
         let action: UnifiedSearchAction = serde_json::from_value(json!(action_str))
