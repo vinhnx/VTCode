@@ -51,7 +51,7 @@ impl Default for LargeOutputConfig {
             .unwrap_or_else(|_| PathBuf::from("."));
         Self {
             base_dir: home.join(".vtcode").join("tmp"),
-            threshold_bytes: 4_000, // 4KB (~1000 chars) for token efficiency
+            threshold_bytes: 50_000, // 50KB — aligned with DEFAULT_SPOOL_THRESHOLD in streams.rs
             session_id: None,
         }
     }

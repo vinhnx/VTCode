@@ -22,11 +22,61 @@ use tokio::fs;
 use tokio::sync::RwLock;
 use tracing::{debug, info};
 
-/// Default threshold for spooling tool output to files (8KB)
-pub const DEFAULT_SPOOL_THRESHOLD_BYTES: usize = 8192;
+/// Default threshold for spooling tool output to files (200KB)
+/// Matches the byte fuse in output_processing.rs and avoids unnecessary spooling
+/// for modern context windows.
+pub const DEFAULT_SPOOL_THRESHOLD_BYTES: usize = 200_000;
 
 /// Maximum age for spooled files before cleanup (1 hour)
 const MAX_SPOOL_AGE_SECS: u64 = 3600;
+
+const CONDENSE_HEAD_BYTES: usize = 8_000;
+const CONDENSE_TAIL_BYTES: usize = 4_000;
+
+fn floor_char_boundary(s: &str, index: usize) -> usize {
+    if index >= s.len() {
+        return s.len();
+    }
+    let mut i = index;
+    while i > 0 && !s.is_char_boundary(i) {
+        i -= 1;
+    }
+    i
+}
+
+fn ceil_char_boundary(s: &str, index: usize) -> usize {
+    if index >= s.len() {
+        return s.len();
+    }
+    let mut i = index;
+    while i < s.len() && !s.is_char_boundary(i) {
+        i += 1;
+    }
+    i
+}
+
+fn condense_content(content: &str) -> String {
+    let byte_len = content.len();
+    let max_inline = CONDENSE_HEAD_BYTES + CONDENSE_TAIL_BYTES;
+    if byte_len <= max_inline {
+        return content.to_string();
+    }
+
+    let head_end = floor_char_boundary(content, CONDENSE_HEAD_BYTES);
+    let tail_start_raw = byte_len.saturating_sub(CONDENSE_TAIL_BYTES);
+    let tail_start = ceil_char_boundary(content, tail_start_raw);
+
+    let omitted = byte_len
+        .saturating_sub(head_end)
+        .saturating_sub(byte_len - tail_start);
+
+    format!(
+        "{}\n\n… [{} bytes omitted — full content in spool file] …\n\n{}",
+        &content[..head_end],
+        omitted,
+        &content[tail_start..]
+    )
+}
 
 /// Configuration for the output spooler
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -82,12 +132,8 @@ pub struct SpoolResult {
     pub file_path: PathBuf,
     /// Original size in bytes
     pub original_bytes: usize,
-    /// Approximate token count (bytes / 4)
-    pub approx_tokens: usize,
-    /// First N lines preview
-    pub preview: String,
-    /// Total line count
-    pub total_lines: usize,
+    /// Full content written to the spool file
+    pub content: String,
 }
 
 /// Tool Output Spooler for writing large outputs to files
@@ -135,9 +181,20 @@ impl ToolOutputSpooler {
         {
             return false;
         }
+        self.estimate_size(value) > self.config.threshold_bytes
+    }
 
-        let serialized = value.to_string();
-        serialized.len() > self.config.threshold_bytes
+    fn estimate_size(&self, value: &Value) -> usize {
+        if let Some(s) = value.get("content").and_then(|v| v.as_str()) {
+            return s.len();
+        }
+        if let Some(s) = value.get("output").and_then(|v| v.as_str()) {
+            return s.len();
+        }
+        if let Some(s) = value.as_str() {
+            return s.len();
+        }
+        value.to_string().len()
     }
 
     /// Spool a tool output to a file and return a reference
@@ -257,30 +314,21 @@ impl ToolOutputSpooler {
         };
 
         let original_bytes = content.len();
-        let total_lines = content.lines().count();
-        let approx_tokens = original_bytes / 4;
 
-        // Generate preview (first 10 lines or 500 chars)
-        let preview = generate_preview(&content, 10, 500);
-
-        // Write to file
         fs::write(&file_path, &content)
             .await
             .with_context(|| format!("Failed to write tool output to: {}", file_path.display()))?;
 
-        // Track the file for cleanup
         {
             let mut files = self.spooled_files.write().await;
             files.push(file_path.clone());
 
-            // Enforce max files limit
             if files.len() > self.config.max_files {
                 let old_file = files.remove(0);
                 let _ = fs::remove_file(&old_file).await;
             }
         }
 
-        // Calculate relative path from workspace
         let relative_path = file_path
             .strip_prefix(&self.workspace_root)
             .unwrap_or(&file_path)
@@ -289,8 +337,6 @@ impl ToolOutputSpooler {
         info!(
             tool = tool_name,
             bytes = original_bytes,
-            tokens = approx_tokens,
-            lines = total_lines,
             path = %relative_path.display(),
             is_mcp = is_mcp,
             "Spooled large tool output to file"
@@ -299,17 +345,14 @@ impl ToolOutputSpooler {
         Ok(SpoolResult {
             file_path: relative_path,
             original_bytes,
-            approx_tokens,
-            preview,
-            total_lines,
+            content,
         })
     }
 
-    /// Process a tool output, spooling if necessary
+    /// Process a tool output, spooling if necessary.
     ///
-    /// Returns the original value if below threshold, or a file reference if spooled.
-    /// Preserves critical execution metadata (exit_code, success, wall_time) so the
-    /// LLM knows the command completed without needing to read the spooled file.
+    /// Returns the original value if below threshold, or a condensed
+    /// head+tail payload with a `spool_path` reference if spooled.
     pub async fn process_output(
         &self,
         tool_name: &str,
@@ -322,14 +365,10 @@ impl ToolOutputSpooler {
 
         let spool_result = self.spool_output(tool_name, &value, is_mcp).await?;
 
-        // Extract execution metadata from the original value if present
-        // These fields are critical for the LLM to understand command completion status
         let exit_code = value.get("exit_code").cloned();
         let success = value.get("success").cloned();
-        let wall_time = value.get("wall_time").cloned();
         let error = value.get("error").cloned();
         let stderr = value.get("stderr").and_then(|v| v.as_str()).map(|s| {
-            // Include truncated stderr for error context
             if s.len() > 500 {
                 format!("{}... (truncated)", &s[..500])
             } else {
@@ -337,51 +376,30 @@ impl ToolOutputSpooler {
             }
         });
 
-        // For read_file, include the original source path so agent knows what was read
         let source_path = if tool_name == "read_file" || tool_name == "unified_file" {
             value.get("path").and_then(|v| v.as_str()).map(String::from)
         } else {
             None
         };
 
-        // Build response with preserved metadata
-        // Use clearer instructions that guide the agent to read the spooled file directly
+        let condensed = condense_content(&spool_result.content);
+        let spool_path_str = spool_result.file_path.to_string_lossy();
+
         let mut response = json!({
+            "content": condensed,
             "spooled_to_file": true,
-            "file_path": spool_result.file_path.to_string_lossy(),
-            "original_bytes": spool_result.original_bytes,
-            "approx_tokens": spool_result.approx_tokens,
-            "total_lines": spool_result.total_lines,
-            "preview": spool_result.preview,
-            "note": format!(
-                "Full output saved to spooled file. Read it with: read_file path=\"{}\" (use offset/limit for ranges).",
-                spool_result.file_path.display()
-            ),
-            "follow_up_prompt": format!(
-                "IMPORTANT: The full output was saved to \"{}\". You MUST call read_file with file_path=\"{}\" to retrieve the content. Do NOT describe this message to the user — just call read_file now.",
-                spool_result.file_path.display(),
-                spool_result.file_path.display()
-            ),
-            "success": true
+            "spool_path": spool_path_str,
         });
 
-        // Add source path for read_file so agent knows what file was read
-        if let Some(src) = source_path {
-            if let Some(obj) = response.as_object_mut() {
+        if let Some(obj) = response.as_object_mut() {
+            if let Some(src) = source_path {
                 obj.insert("source_path".to_string(), json!(src));
             }
-        }
-
-        // Preserve execution metadata for LLM decision-making
-        if let Some(obj) = response.as_object_mut() {
             if let Some(code) = exit_code {
                 obj.insert("exit_code".to_string(), code);
             }
             if let Some(succ) = success {
                 obj.insert("success".to_string(), succ);
-            }
-            if let Some(time) = wall_time {
-                obj.insert("wall_time".to_string(), time);
             }
             if let Some(err) = error {
                 obj.insert("error".to_string(), err);
@@ -458,38 +476,6 @@ fn sanitize_tool_name(name: &str) -> String {
             }
         })
         .collect()
-}
-
-/// Generate a preview of content (first N lines or max chars)
-fn generate_preview(content: &str, max_lines: usize, max_chars: usize) -> String {
-    let mut preview = String::new();
-    let mut char_count = 0;
-
-    for (i, line) in content.lines().enumerate() {
-        if i >= max_lines || char_count >= max_chars {
-            if i < content.lines().count() {
-                preview.push_str("\n...[truncated]");
-            }
-            break;
-        }
-
-        if i > 0 {
-            preview.push('\n');
-            char_count += 1;
-        }
-
-        let remaining = max_chars.saturating_sub(char_count);
-        if line.len() > remaining {
-            preview.push_str(&line[..remaining]);
-            preview.push_str("...");
-            break;
-        } else {
-            preview.push_str(line);
-            char_count += line.len();
-        }
-    }
-
-    preview
 }
 
 /// Extension trait for integrating spooler with tool results
@@ -578,8 +564,6 @@ mod tests {
 
         assert!(result.file_path.to_string_lossy().contains("test_tool"));
         assert!(result.original_bytes > 0);
-        assert!(result.total_lines > 0);
-        assert!(!result.preview.is_empty());
 
         // Verify file was created
         let full_path = temp.path().join(&result.file_path);
@@ -614,10 +598,12 @@ mod tests {
             .await
             .unwrap();
 
-        // Should return file reference
         assert!(result.get("spooled_to_file").is_some());
-        assert!(result.get("file_path").is_some());
-        assert!(result.get("preview").is_some());
+        assert!(result.get("content").is_some());
+        assert!(result.get("spool_path").is_some());
+        assert!(result.get("file_path").is_none());
+        assert!(result.get("truncated").is_none());
+        assert!(result.get("omitted_bytes").is_none());
     }
 
     #[test]
@@ -625,16 +611,6 @@ mod tests {
         assert_eq!(sanitize_tool_name("read_file"), "read_file");
         assert_eq!(sanitize_tool_name("mcp/fetch"), "mcp_fetch");
         assert_eq!(sanitize_tool_name("tool-name"), "tool_name");
-    }
-
-    #[test]
-    fn test_generate_preview() {
-        let content = "Line 1\nLine 2\nLine 3\nLine 4\nLine 5";
-        let preview = generate_preview(content, 3, 100);
-        assert!(preview.contains("Line 1"));
-        assert!(preview.contains("Line 2"));
-        assert!(preview.contains("Line 3"));
-        assert!(preview.contains("...[truncated]"));
     }
 
     #[tokio::test]
@@ -662,13 +638,11 @@ mod tests {
         let source_path = result.get("source_path").and_then(|v| v.as_str()).unwrap();
         assert_eq!(source_path, "test.rs");
 
-        // Preview should show raw code, not JSON wrapper
-        let preview = result.get("preview").and_then(|v| v.as_str()).unwrap();
-        assert!(preview.contains("fn main()"));
-        assert!(!preview.contains("\"success\"")); // Should not show JSON structure
+        let content_field = result.get("content").and_then(|v| v.as_str()).unwrap();
+        assert!(content_field.contains("fn main()"));
+        assert!(!content_field.contains("\"success\"")); // Should not show JSON structure
 
-        // Verify spooled file contains raw content, not JSON
-        let spooled_path = result.get("file_path").and_then(|v| v.as_str()).unwrap();
+        let spooled_path = result.get("spool_path").and_then(|v| v.as_str()).unwrap();
         let spooled_content = std::fs::read_to_string(temp.path().join(spooled_path)).unwrap();
         assert_eq!(spooled_content, file_content);
         assert!(!spooled_content.contains("\"success\"")); // Raw content, not JSON
@@ -700,11 +674,11 @@ mod tests {
         assert!(result.get("spooled_to_file").is_some());
 
         // Verify spooled file contains raw output, not JSON wrapper
-        let spooled_path = result.get("file_path").and_then(|v| v.as_str()).unwrap();
+        let spooled_path = result.get("spool_path").and_then(|v| v.as_str()).unwrap();
         let spooled_content = std::fs::read_to_string(temp.path().join(spooled_path)).unwrap();
         assert_eq!(spooled_content, command_output);
-        assert!(!spooled_content.contains("\"output\"")); // Raw content, not JSON
-        assert!(!spooled_content.contains("\"exit_code\"")); // Raw content, not JSON
+        assert!(!spooled_content.contains("\"output\""));
+        assert!(!spooled_content.contains("\"exit_code\""));
     }
 
     #[tokio::test]
@@ -716,7 +690,6 @@ mod tests {
 
         let command_output = "Some command output text\nwith multiple lines\nfor testing";
 
-        // Test send_pty_input
         let send_input_response = json!({
             "output": command_output,
             "wall_time": 0.123,
@@ -729,12 +702,11 @@ mod tests {
             .unwrap();
 
         assert!(result.get("spooled_to_file").is_some());
-        let spooled_path = result.get("file_path").and_then(|v| v.as_str()).unwrap();
+        let spooled_path = result.get("spool_path").and_then(|v| v.as_str()).unwrap();
         let spooled_content = std::fs::read_to_string(temp.path().join(spooled_path)).unwrap();
         assert_eq!(spooled_content, command_output);
-        assert!(!spooled_content.contains("\"output\"")); // Raw content, not JSON
+        assert!(!spooled_content.contains("\"output\""));
 
-        // Test read_pty_session
         let read_session_response = json!({
             "output": command_output,
             "wall_time": 0.456
@@ -746,10 +718,10 @@ mod tests {
             .unwrap();
 
         assert!(result.get("spooled_to_file").is_some());
-        let spooled_path = result.get("file_path").and_then(|v| v.as_str()).unwrap();
+        let spooled_path = result.get("spool_path").and_then(|v| v.as_str()).unwrap();
         let spooled_content = std::fs::read_to_string(temp.path().join(spooled_path)).unwrap();
         assert_eq!(spooled_content, command_output);
-        assert!(!spooled_content.contains("\"output\"")); // Raw content, not JSON
+        assert!(!spooled_content.contains("\"output\""));
     }
 
     #[tokio::test]
@@ -762,7 +734,6 @@ mod tests {
         let command_output =
             "   Compiling vtcode-core v0.68.1\n   Checking vtcode-core v0.68.1\n    Finished dev";
 
-        // Simulate a unified_exec response (delegates to run_pty_cmd)
         let unified_exec_response = json!({
             "output": command_output,
             "exit_code": 0,
@@ -775,15 +746,13 @@ mod tests {
             .await
             .unwrap();
 
-        // Should return file reference
         assert!(result.get("spooled_to_file").is_some());
 
-        // Verify spooled file contains raw output, not JSON wrapper
-        let spooled_path = result.get("file_path").and_then(|v| v.as_str()).unwrap();
+        let spooled_path = result.get("spool_path").and_then(|v| v.as_str()).unwrap();
         let spooled_content = std::fs::read_to_string(temp.path().join(spooled_path)).unwrap();
         assert_eq!(spooled_content, command_output);
-        assert!(!spooled_content.contains("\"output\"")); // Raw content, not JSON
-        assert!(!spooled_content.contains("\"exit_code\"")); // Raw content, not JSON
+        assert!(!spooled_content.contains("\"output\""));
+        assert!(!spooled_content.contains("\"exit_code\""));
     }
 
     #[tokio::test]
@@ -796,8 +765,6 @@ mod tests {
         let command_output =
             "   Compiling vtcode-core v0.68.1\n   Checking vtcode-core v0.68.1\n    Finished dev";
 
-        // Simulate a double-serialized response (Value::String containing JSON)
-        // This can happen if the value was serialized somewhere in the pipeline
         let inner_json = json!({
             "output": command_output,
             "exit_code": 0,
@@ -811,14 +778,12 @@ mod tests {
             .await
             .unwrap();
 
-        // Should return file reference
         assert!(result.get("spooled_to_file").is_some());
 
-        // Verify spooled file contains raw output, not JSON wrapper
-        let spooled_path = result.get("file_path").and_then(|v| v.as_str()).unwrap();
+        let spooled_path = result.get("spool_path").and_then(|v| v.as_str()).unwrap();
         let spooled_content = std::fs::read_to_string(temp.path().join(spooled_path)).unwrap();
         assert_eq!(spooled_content, command_output);
-        assert!(!spooled_content.contains("\"output\"")); // Raw content, not JSON
+        assert!(!spooled_content.contains("\"output\""));
     }
 
     #[tokio::test]
@@ -830,7 +795,6 @@ mod tests {
 
         let command_output = "total 32\ndrwxr-xr-x  10 user  staff   320 Jan  1 12:00 .";
 
-        // Test bash tool
         let bash_response = json!({
             "output": command_output,
             "exit_code": 0,
@@ -843,11 +807,10 @@ mod tests {
             .unwrap();
 
         assert!(result.get("spooled_to_file").is_some());
-        let spooled_path = result.get("file_path").and_then(|v| v.as_str()).unwrap();
+        let spooled_path = result.get("spool_path").and_then(|v| v.as_str()).unwrap();
         let spooled_content = std::fs::read_to_string(temp.path().join(spooled_path)).unwrap();
         assert_eq!(spooled_content, command_output);
 
-        // Test shell tool
         let shell_response = json!({
             "output": command_output,
             "exit_code": 0,
@@ -860,8 +823,72 @@ mod tests {
             .unwrap();
 
         assert!(result.get("spooled_to_file").is_some());
-        let spooled_path = result.get("file_path").and_then(|v| v.as_str()).unwrap();
+        let spooled_path = result.get("spool_path").and_then(|v| v.as_str()).unwrap();
         let spooled_content = std::fs::read_to_string(temp.path().join(spooled_path)).unwrap();
         assert_eq!(spooled_content, command_output);
+    }
+
+    #[test]
+    fn test_condense_content_short() {
+        let short = "a".repeat(CONDENSE_HEAD_BYTES + CONDENSE_TAIL_BYTES);
+        let result = condense_content(&short);
+        assert_eq!(result, short);
+    }
+
+    #[test]
+    fn test_condense_content_long() {
+        let total = 20_000;
+        let long_content = "a".repeat(total);
+        let result = condense_content(&long_content);
+        assert!(result.contains("bytes omitted"));
+        assert!(result.len() < total);
+        assert!(result.starts_with(&"a".repeat(100)));
+        assert!(result.ends_with(&"a".repeat(100)));
+    }
+
+    #[test]
+    fn test_condense_content_utf8_boundary() {
+        let mut content = "a".repeat(CONDENSE_HEAD_BYTES - 1);
+        content.push('é'); // 2-byte char at boundary
+        content.push_str(&"b".repeat(20_000));
+        let result = condense_content(&content);
+        assert!(result.contains("bytes omitted"));
+        assert!(result.is_char_boundary(0));
+    }
+
+    #[tokio::test]
+    async fn test_estimate_size_content_field() {
+        let temp = tempdir().unwrap();
+        let spooler = ToolOutputSpooler::new(temp.path());
+
+        let val = json!({"content": "hello world"});
+        assert_eq!(spooler.estimate_size(&val), 11);
+    }
+
+    #[tokio::test]
+    async fn test_estimate_size_output_field() {
+        let temp = tempdir().unwrap();
+        let spooler = ToolOutputSpooler::new(temp.path());
+
+        let val = json!({"output": "some output"});
+        assert_eq!(spooler.estimate_size(&val), 11);
+    }
+
+    #[tokio::test]
+    async fn test_estimate_size_string_value() {
+        let temp = tempdir().unwrap();
+        let spooler = ToolOutputSpooler::new(temp.path());
+
+        let val = json!("raw string");
+        assert_eq!(spooler.estimate_size(&val), 10);
+    }
+
+    #[tokio::test]
+    async fn test_estimate_size_fallback() {
+        let temp = tempdir().unwrap();
+        let spooler = ToolOutputSpooler::new(temp.path());
+
+        let val = json!({"some_key": 42});
+        assert!(spooler.estimate_size(&val) > 0);
     }
 }

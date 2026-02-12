@@ -60,7 +60,7 @@ const INLINE_STREAM_MAX_LINES: usize = 30;
 /// Maximum line length before truncation to prevent TUI hang
 const MAX_LINE_LENGTH: usize = 150;
 /// Size threshold (bytes) below which output is displayed inline vs. spooled
-const DEFAULT_SPOOL_THRESHOLD: usize = 4_000; // 4KB for token efficiency
+const DEFAULT_SPOOL_THRESHOLD: usize = 50_000; // 50KB — UI render truncation
 /// Maximum number of lines to display in code fence blocks
 const MAX_CODE_LINES: usize = 500;
 /// Preview window lines used by large-output previewing (kept local)
@@ -76,7 +76,7 @@ const VERY_LARGE_OUTPUT_THRESHOLD_MB: usize = 500_000;
 /// Size threshold (bytes) at which to skip preview entirely
 const EXTREME_OUTPUT_THRESHOLD_MB: usize = 2_000_000;
 /// Size threshold (bytes) for using new large output handler with hashed directories
-const LARGE_OUTPUT_NOTIFICATION_THRESHOLD: usize = 4_000; // 4KB for token efficiency
+const LARGE_OUTPUT_NOTIFICATION_THRESHOLD: usize = 50_000; // 50KB — triggers spool-to-file for UI
 
 /// Determine preview line count based on content size
 fn calculate_preview_lines(content_size: usize) -> usize {
