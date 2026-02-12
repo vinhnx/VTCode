@@ -8,9 +8,7 @@ impl ModelId {
             ModelId::Gemini25FlashPreview
                 | ModelId::Gemini25Flash
                 | ModelId::Gemini25FlashLite
-                | ModelId::ZaiGlm45Flash
-                | ModelId::ZaiGlm46VFlash
-                | ModelId::ZaiGlm46VFlashX
+                | ModelId::Gemini3FlashPreview
                 | ModelId::MinimaxM21Lightning
                 | ModelId::OllamaGemini3FlashPreviewCloud
         )
@@ -22,6 +20,7 @@ impl ModelId {
             self,
             ModelId::Gemini25Pro
                 | ModelId::GPT5
+                | ModelId::GPT52
                 | ModelId::GPT5Codex
                 | ModelId::ClaudeOpus46
                 | ModelId::ClaudeOpus41
@@ -31,8 +30,7 @@ impl ModelId {
                 | ModelId::ZaiGlm4PlusDeepThinking
                 | ModelId::ZaiGlm47
                 | ModelId::ZaiGlm47DeepThinking
-                | ModelId::ZaiGlm46
-                | ModelId::ZaiGlm46DeepThinking
+                | ModelId::ZaiGlm5
                 | ModelId::MinimaxM21
                 | ModelId::OllamaGlm47Cloud
                 | ModelId::OllamaMinimaxM21Cloud
@@ -50,16 +48,13 @@ impl ModelId {
             ModelId::Gemini25FlashPreview
                 | ModelId::Gemini25Flash
                 | ModelId::Gemini25FlashLite
+                | ModelId::Gemini3FlashPreview
                 | ModelId::GPT5Mini
                 | ModelId::GPT5Nano
                 | ModelId::ClaudeHaiku45
+                | ModelId::ClaudeHaiku35
                 | ModelId::DeepSeekChat
                 | ModelId::XaiGrok4Code
-                | ModelId::ZaiGlm45Air
-                | ModelId::ZaiGlm45Airx
-                | ModelId::ZaiGlm45Flash
-                | ModelId::ZaiGlm46VFlash
-                | ModelId::ZaiGlm46VFlashX
         )
     }
 
@@ -71,12 +66,17 @@ impl ModelId {
         matches!(
             self,
             ModelId::Gemini25Pro
+                | ModelId::Gemini3FlashPreview
                 | ModelId::GPT5
+                | ModelId::GPT52
                 | ModelId::GPT5Codex
                 | ModelId::ClaudeOpus46
+                | ModelId::ClaudeOpus45
                 | ModelId::ClaudeOpus41
+                | ModelId::ClaudeOpus4
                 | ModelId::ClaudeSonnet45
                 | ModelId::ClaudeSonnet4
+                | ModelId::ClaudeSonnet37
                 | ModelId::DeepSeekReasoner
                 | ModelId::XaiGrok4
                 | ModelId::XaiGrok4CodeLatest
@@ -84,8 +84,7 @@ impl ModelId {
                 | ModelId::ZaiGlm4PlusDeepThinking
                 | ModelId::ZaiGlm47
                 | ModelId::ZaiGlm47DeepThinking
-                | ModelId::ZaiGlm46
-                | ModelId::ZaiGlm46DeepThinking
+                | ModelId::ZaiGlm5
                 | ModelId::MoonshotKimiK25
         )
     }
@@ -99,8 +98,7 @@ impl ModelId {
             self,
             ModelId::ZaiGlm4PlusDeepThinking
                 | ModelId::ZaiGlm47DeepThinking
-                | ModelId::ZaiGlm46DeepThinking
-                | ModelId::ZaiGlm45DeepThinking
+                | ModelId::ZaiGlm5
         ) || self.provider().supports_reasoning_effort(self.as_str())
     }
 
@@ -123,18 +121,27 @@ impl ModelId {
             | ModelId::Gemini25Flash
             | ModelId::Gemini25FlashLite
             | ModelId::Gemini25Pro => "2.5",
-            ModelId::Gemini3ProPreview => "3",
+            ModelId::Gemini3ProPreview | ModelId::Gemini3FlashPreview => "3",
             // OpenAI generations
+            ModelId::GPT52 | ModelId::GPT52Codex => "5.2",
             ModelId::GPT5
             | ModelId::GPT5Codex
             | ModelId::GPT5Mini
             | ModelId::GPT5Nano
-            | ModelId::CodexMiniLatest => "5",
+            | ModelId::GPT51
+            | ModelId::GPT51Codex
+            | ModelId::GPT51CodexMax
+            | ModelId::GPT51Mini
+            | ModelId::CodexMiniLatest
+            | ModelId::OpenAIGptOss20b
+            | ModelId::OpenAIGptOss120b => "5",
             // Anthropic generations
             ModelId::ClaudeOpus46 => "4.6",
             ModelId::ClaudeOpus45 | ModelId::ClaudeSonnet45 | ModelId::ClaudeHaiku45 => "4.5",
             ModelId::ClaudeOpus41 => "4.1",
-            ModelId::ClaudeSonnet4 => "4",
+            ModelId::ClaudeOpus4 | ModelId::ClaudeSonnet4 => "4",
+            ModelId::ClaudeSonnet37 => "3.7",
+            ModelId::ClaudeHaiku35 => "3.5",
             // DeepSeek generations
             ModelId::DeepSeekChat | ModelId::DeepSeekReasoner => "V3.2-Exp",
             // xAI generations
@@ -146,15 +153,7 @@ impl ModelId {
             // Z.AI generations
             ModelId::ZaiGlm4Plus | ModelId::ZaiGlm4PlusDeepThinking => "4-Plus",
             ModelId::ZaiGlm47 | ModelId::ZaiGlm47DeepThinking => "4.7",
-            ModelId::ZaiGlm46 | ModelId::ZaiGlm46DeepThinking => "4.6",
-            ModelId::ZaiGlm46V | ModelId::ZaiGlm46VFlash | ModelId::ZaiGlm46VFlashX => "4.6",
-            ModelId::ZaiGlm45
-            | ModelId::ZaiGlm45DeepThinking
-            | ModelId::ZaiGlm45Air
-            | ModelId::ZaiGlm45X
-            | ModelId::ZaiGlm45Airx
-            | ModelId::ZaiGlm45Flash
-            | ModelId::ZaiGlm45V => "4.5",
+            ModelId::ZaiGlm5 => "GLM-5",
             ModelId::ZaiGlm432b0414128k => "4-32B",
             ModelId::MoonshotKimiK25 => "K2.5",
             ModelId::OllamaGptOss20b => "oss",
@@ -167,7 +166,6 @@ impl ModelId {
             ModelId::OllamaKimiK2ThinkingCloud => "kimi-k2-thinking",
             ModelId::OllamaKimiK25Cloud => "kimi-k2.5",
             ModelId::OllamaQwen3Coder480bCloud => "qwen3-coder-cloud",
-            ModelId::OllamaGlm46Cloud => "glm-cloud",
             ModelId::OllamaMinimaxM2Cloud => "minimax-cloud",
             ModelId::LmStudioMetaLlama38BInstruct => "meta-llama-3",
             ModelId::LmStudioMetaLlama318BInstruct => "meta-llama-3.1",
@@ -184,6 +182,7 @@ impl ModelId {
             ModelId::HuggingFaceKimiK2Thinking => "k2",
             ModelId::HuggingFaceKimiK25Novita => "k2.5",
             ModelId::HuggingFaceMinimaxM21Novita => "m2.1",
+            ModelId::HuggingFaceGlm5Novita => "GLM-5",
             ModelId::HuggingFaceOpenAIGptOss20b | ModelId::HuggingFaceOpenAIGptOss120b => "oss",
             _ => unreachable!(),
         }

@@ -22,7 +22,7 @@
 //! | Anthropic | ✓ | claude-4.1-opus, claude-4-sonnet |
 //! | xAI | ✓ | grok-2-latest, grok-2-mini |
 //! | DeepSeek | ✓ | deepseek-chat, deepseek-reasoner |
-//! | Z.AI | ✓ | glm-4.6 |
+//! | Z.AI | ✓ | glm-4.7, glm-5 |
 //! | Ollama | ✓ | gpt-oss:20b (local) |
 //!
 //! ## Basic Usage

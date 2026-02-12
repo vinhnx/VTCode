@@ -21,13 +21,32 @@ impl ModelId {
             ModelId::Gemini3ProPreview => {
                 "Preview of next-generation Gemini 3 Pro model with advanced reasoning and capabilities"
             }
+            ModelId::Gemini3FlashPreview => {
+                "Our most intelligent model built for speed, combining frontier intelligence with superior search and grounding"
+            }
             // OpenAI models
             ModelId::GPT5 => "Latest most capable OpenAI model with advanced reasoning",
+            ModelId::GPT52 => {
+                "Latest flagship OpenAI model with improved reasoning, xhigh effort, and built-in compaction support"
+            }
+            ModelId::GPT52Codex => {
+                "GPT-5.2 variant optimized for agentic coding tasks with reasoning effort support"
+            }
             ModelId::GPT5Codex => {
                 "Code-focused GPT-5 variant optimized for tool calling and structured outputs"
             }
             ModelId::GPT5Mini => "Latest efficient OpenAI model, great for most tasks",
             ModelId::GPT5Nano => "Latest most cost-effective OpenAI model",
+            ModelId::GPT51 => {
+                "Enhanced most capable OpenAI model with improved reasoning and capabilities"
+            }
+            ModelId::GPT51Codex => {
+                "Code-focused GPT-5.1 variant optimized for tool calling and structured outputs"
+            }
+            ModelId::GPT51CodexMax => {
+                "Maximum context code-focused GPT-5.1 variant optimized for large codebases"
+            }
+            ModelId::GPT51Mini => "Enhanced efficient OpenAI model with improved capabilities",
             ModelId::CodexMiniLatest => "Latest Codex model optimized for code generation",
             ModelId::OpenAIGptOss20b => {
                 "OpenAI's open-source 20B parameter GPT-OSS model using harmony tokenization"
@@ -52,6 +71,9 @@ impl ModelId {
             ModelId::ClaudeSonnet4 => {
                 "Previous balanced Anthropic model maintained for compatibility"
             }
+            ModelId::ClaudeOpus4 => "Previous generation premium flagship model",
+            ModelId::ClaudeSonnet37 => "Latest model in the Claude 3 family with extended thinking",
+            ModelId::ClaudeHaiku35 => "Highly efficient model for high-volume tasks",
             // DeepSeek models
             ModelId::DeepSeekChat => {
                 "DeepSeek V3.2 - Fast, efficient chat model for immediate responses"
@@ -77,20 +99,9 @@ impl ModelId {
             ModelId::ZaiGlm47Flash => {
                 "Z.AI GLM-4.7-Flash 30B-class SOTA lightweight model - Completely free, high-speed, optimized for agentic coding with enhanced reasoning capabilities"
             }
-            ModelId::ZaiGlm46 | ModelId::ZaiGlm46DeepThinking => {
-                "Previous Z.AI GLM flagship with long-context reasoning and coding strengths"
+            ModelId::ZaiGlm5 => {
+                "Z.ai flagship GLM-5 foundation model engineered for complex systems design and long-horizon agent workflows"
             }
-            ModelId::ZaiGlm46V | ModelId::ZaiGlm46VFlash | ModelId::ZaiGlm46VFlashX => {
-                "Vision-capable GLM 4.6 release optimized for multimodal understanding"
-            }
-            ModelId::ZaiGlm45 | ModelId::ZaiGlm45DeepThinking => {
-                "Balanced GLM 4.5 release for general assistant tasks"
-            }
-            ModelId::ZaiGlm45Air => "Efficient GLM 4.5 Air variant tuned for lower latency",
-            ModelId::ZaiGlm45X => "Enhanced GLM 4.5 X variant with improved reasoning",
-            ModelId::ZaiGlm45Airx => "Hybrid GLM 4.5 AirX variant blending efficiency with quality",
-            ModelId::ZaiGlm45Flash => "Low-latency GLM 4.5 Flash optimized for responsiveness",
-            ModelId::ZaiGlm45V => "Vision-capable GLM 4.5 release for multimodal tasks",
             ModelId::ZaiGlm432b0414128k => {
                 "Legacy GLM 4 32B deployment offering extended 128K context window"
             }
@@ -139,9 +150,6 @@ impl ModelId {
             }
             ModelId::OllamaQwen3Coder480bCloud => {
                 "Cloud-hosted Qwen3 Coder 480B model accessed through Ollama Cloud for coding tasks"
-            }
-            ModelId::OllamaGlm46Cloud => {
-                "Cloud-hosted GLM-4.6 model accessed through Ollama Cloud for reasoning and coding"
             }
             ModelId::OllamaMinimaxM2Cloud => {
                 "Cloud-hosted MiniMax-M2 model accessed through Ollama Cloud for reasoning tasks"
@@ -196,6 +204,9 @@ impl ModelId {
             }
             ModelId::HuggingFaceXiaomiMimoV2FlashNovita => {
                 "Xiaomi MiMo-V2-Flash via Novita on HuggingFace router."
+            }
+            ModelId::HuggingFaceGlm5Novita => {
+                "Z.ai GLM-5 flagship model via Novita inference provider on HuggingFace router."
             }
             ModelId::HuggingFaceQwen3CoderNextNovita => {
                 "Qwen3-Coder-Next via Novita inference provider on HuggingFace router. Coding-optimized model with reasoning capabilities."

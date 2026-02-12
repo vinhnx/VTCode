@@ -15,11 +15,18 @@ impl ModelId {
             ModelId::Gemini25FlashLite => models::GEMINI_2_5_FLASH_LITE,
             ModelId::Gemini25Pro => models::GEMINI_2_5_PRO,
             ModelId::Gemini3ProPreview => models::GEMINI_3_PRO_PREVIEW,
+            ModelId::Gemini3FlashPreview => models::GEMINI_3_FLASH_PREVIEW,
             // OpenAI models
             ModelId::GPT5 => models::GPT_5,
+            ModelId::GPT52 => models::GPT_5_2,
+            ModelId::GPT52Codex => models::openai::GPT_5_2_CODEX,
             ModelId::GPT5Codex => models::GPT_5_CODEX,
             ModelId::GPT5Mini => models::GPT_5_MINI,
             ModelId::GPT5Nano => models::GPT_5_NANO,
+            ModelId::GPT51 => models::GPT_5_1,
+            ModelId::GPT51Codex => models::GPT_5_1_CODEX,
+            ModelId::GPT51CodexMax => models::GPT_5_1_CODEX_MAX,
+            ModelId::GPT51Mini => models::GPT_5_1_MINI,
             ModelId::CodexMiniLatest => models::CODEX_MINI_LATEST,
             ModelId::OpenAIGptOss20b => models::openai::GPT_OSS_20B,
             ModelId::OpenAIGptOss120b => models::openai::GPT_OSS_120B,
@@ -30,6 +37,9 @@ impl ModelId {
             ModelId::ClaudeSonnet45 => models::CLAUDE_SONNET_4_5,
             ModelId::ClaudeHaiku45 => models::CLAUDE_HAIKU_4_5,
             ModelId::ClaudeSonnet4 => models::CLAUDE_SONNET_4_5_20250929,
+            ModelId::ClaudeOpus4 => models::CLAUDE_OPUS_4_0,
+            ModelId::ClaudeSonnet37 => models::CLAUDE_3_7_SONNET_LATEST,
+            ModelId::ClaudeHaiku35 => models::CLAUDE_3_5_HAIKU_LATEST,
             // DeepSeek models
             ModelId::DeepSeekChat => models::DEEPSEEK_CHAT,
             ModelId::DeepSeekReasoner => models::DEEPSEEK_REASONER,
@@ -45,18 +55,7 @@ impl ModelId {
             ModelId::ZaiGlm47 => models::zai::GLM_4_7,
             ModelId::ZaiGlm47DeepThinking => models::zai::GLM_4_7_DEEP_THINKING,
             ModelId::ZaiGlm47Flash => models::zai::GLM_4_7_FLASH,
-            ModelId::ZaiGlm46 => models::zai::GLM_4_6,
-            ModelId::ZaiGlm46DeepThinking => models::zai::GLM_4_6_DEEP_THINKING,
-            ModelId::ZaiGlm46V => models::zai::GLM_4_6V,
-            ModelId::ZaiGlm46VFlash => models::zai::GLM_4_6V_FLASH,
-            ModelId::ZaiGlm46VFlashX => models::zai::GLM_4_6V_FLASHX,
-            ModelId::ZaiGlm45 => models::zai::GLM_4_5,
-            ModelId::ZaiGlm45DeepThinking => models::zai::GLM_4_5_DEEP_THINKING,
-            ModelId::ZaiGlm45Air => models::zai::GLM_4_5_AIR,
-            ModelId::ZaiGlm45X => models::zai::GLM_4_5_X,
-            ModelId::ZaiGlm45Airx => models::zai::GLM_4_5_AIRX,
-            ModelId::ZaiGlm45Flash => models::zai::GLM_4_5_FLASH,
-            ModelId::ZaiGlm45V => models::zai::GLM_4_5V,
+            ModelId::ZaiGlm5 => models::zai::GLM_5,
             ModelId::ZaiGlm432b0414128k => models::zai::GLM_4_32B_0414_128K,
             // Moonshot models
             ModelId::MoonshotKimiK25 => models::moonshot::KIMI_K2_5,
@@ -74,7 +73,6 @@ impl ModelId {
             ModelId::OllamaMinimaxM21Cloud => models::ollama::MINIMAX_M21_CLOUD,
             ModelId::OllamaGemini3FlashPreviewCloud => models::ollama::GEMINI_3_FLASH_PREVIEW_CLOUD,
             ModelId::OllamaQwen3Coder480bCloud => models::ollama::QWEN3_CODER_480B_CLOUD,
-            ModelId::OllamaGlm46Cloud => models::ollama::GLM_46_CLOUD,
             ModelId::OllamaGemini3ProPreviewLatestCloud => {
                 models::ollama::GEMINI_3_PRO_PREVIEW_LATEST_CLOUD
             }
@@ -93,6 +91,7 @@ impl ModelId {
             ModelId::HuggingFaceOpenAIGptOss20b => models::huggingface::OPENAI_GPT_OSS_20B,
             ModelId::HuggingFaceOpenAIGptOss120b => models::huggingface::OPENAI_GPT_OSS_120B,
             ModelId::HuggingFaceGlm47 => models::huggingface::ZAI_GLM_47,
+            ModelId::HuggingFaceGlm47Novita => models::huggingface::ZAI_GLM_47_NOVITA,
             ModelId::HuggingFaceGlm47FlashNovita => models::huggingface::ZAI_GLM_47_FLASH_NOVITA,
             ModelId::HuggingFaceKimiK2Thinking => models::huggingface::MOONSHOT_KIMI_K2_THINKING,
             ModelId::HuggingFaceKimiK25Novita => models::huggingface::MOONSHOT_KIMI_K2_5_NOVITA,
@@ -101,6 +100,7 @@ impl ModelId {
             ModelId::HuggingFaceXiaomiMimoV2FlashNovita => {
                 models::huggingface::XIAOMI_MIMO_V2_FLASH_NOVITA
             }
+            ModelId::HuggingFaceGlm5Novita => models::huggingface::ZAI_GLM_5_NOVITA,
             ModelId::HuggingFaceQwen3CoderNextNovita => {
                 models::huggingface::QWEN3_CODER_NEXT_NOVITA
             }

@@ -112,7 +112,17 @@ pub fn reasoning_parameters_for(provider: Provider, effort: ReasoningEffortLevel
                 .ok()
                 .map(|value| json!({ "thinking_config": value }))
         }
-        Provider::HuggingFace => None,
+        Provider::HuggingFace => {
+            match effort {
+                ReasoningEffortLevel::None => None,
+                ReasoningEffortLevel::Minimal => Some(json!({ "reasoning_effort": "minimal" })),
+                ReasoningEffortLevel::Low => Some(json!({ "reasoning_effort": "low" })),
+                ReasoningEffortLevel::Medium => Some(json!({ "reasoning_effort": "medium" })),
+                ReasoningEffortLevel::High | ReasoningEffortLevel::XHigh => {
+                    Some(json!({ "reasoning_effort": "high" }))
+                }
+            }
+        }
         Provider::Moonshot => {
             // Moonshot Kimi-K2-Thinking supports enhanced reasoning configuration
             let reasoning_config = match effort {
@@ -143,7 +153,27 @@ pub fn reasoning_parameters_for(provider: Provider, effort: ReasoningEffortLevel
         Provider::Minimax => None,
         Provider::Ollama => None,
         Provider::LmStudio => None,
-        Provider::ZAI => None,
+        Provider::ZAI => {
+            match effort {
+                ReasoningEffortLevel::None => None,
+                ReasoningEffortLevel::Minimal => Some(json!({
+                    "thinking": { "type": "enabled" },
+                    "thinking_effort": "minimal"
+                })),
+                ReasoningEffortLevel::Low => Some(json!({
+                    "thinking": { "type": "enabled" },
+                    "thinking_effort": "low"
+                })),
+                ReasoningEffortLevel::Medium => Some(json!({
+                    "thinking": { "type": "enabled" },
+                    "thinking_effort": "medium"
+                })),
+                ReasoningEffortLevel::High | ReasoningEffortLevel::XHigh => Some(json!({
+                    "thinking": { "type": "enabled" },
+                    "thinking_effort": "high"
+                })),
+            }
+        }
         _ => None,
     }
 }

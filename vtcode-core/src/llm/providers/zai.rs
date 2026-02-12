@@ -132,6 +132,18 @@ impl ZAIProvider {
             );
         }
 
+        if let Some(effort) = request.reasoning_effort {
+            use crate::config::models::Provider;
+            use crate::llm::rig_adapter::reasoning_parameters_for;
+            if let Some(reasoning_params) = reasoning_parameters_for(Provider::ZAI, effort) {
+                if let Some(params_obj) = reasoning_params.as_object() {
+                    for (k, v) in params_obj {
+                        payload.insert(k.clone(), v.clone());
+                    }
+                }
+            }
+        }
+
         Ok(Value::Object(payload))
     }
 }
@@ -140,6 +152,14 @@ impl ZAIProvider {
 impl LLMProvider for ZAIProvider {
     fn name(&self) -> &str {
         PROVIDER_KEY
+    }
+
+    fn supports_reasoning(&self, _model: &str) -> bool {
+        true
+    }
+
+    fn supports_reasoning_effort(&self, model: &str) -> bool {
+        model.contains("glm")
     }
 
     async fn generate(&self, mut request: LLMRequest) -> Result<LLMResponse, LLMError> {
@@ -245,6 +265,12 @@ impl LLMProvider for ZAIProvider {
                             if let Some(content) = delta.get("content").and_then(|c| c.as_str()) {
                                 for event in aggregator.handle_content(content) {
                                     let _ = tx.send(Ok(event));
+                                }
+                            }
+
+                            if let Some(reasoning) = delta.get("reasoning_content").and_then(|c| c.as_str()) {
+                                if let Some(d) = aggregator.handle_reasoning(reasoning) {
+                                    let _ = tx.send(Ok(LLMStreamEvent::Reasoning { delta: d }));
                                 }
                             }
 

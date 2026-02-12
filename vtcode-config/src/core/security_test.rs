@@ -27,6 +27,7 @@ fn test_serialize_deserialize_security_config() {
         encrypt_payloads: false,
         integrity_checks: true,
         hitl_notification_bell: true,
+        gatekeeper: super::GatekeeperConfig::default(),
     };
 
     let serialized = serde_json::to_string(&original).unwrap();

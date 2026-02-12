@@ -768,6 +768,26 @@
           "structured_output": true,
           "vision": true
         }
+      },
+      "zai-org/GLM-5:novita": {
+        "id": "zai-org/GLM-5:novita",
+        "name": "GLM-5 (Novita)",
+        "description": "Z.ai's flagship open-source foundation model engineered for complex systems design and long-horizon agent workflows. Built for expert developers, it delivers production-grade performance on large-scale programming tasks, rivaling leading closed-source models. With advanced agentic planning, deep backend reasoning, and iterative self-correction, GLM-5 moves beyond code generation to full-system construction and autonomous execution.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 202752,
+        "capabilities": {
+          "structured_output": true,
+          "reasoning_effort": true
+        }
       }
     }
   },
@@ -1391,10 +1411,10 @@
           "tool_streaming": true
         }
       },
-      "glm-4.6": {
-        "id": "glm-4.6",
-        "name": "GLM 4.6",
-        "description": "Z.AI GLM 4.6 long-context reasoning model.",
+      "glm-5": {
+        "id": "glm-5",
+        "name": "GLM-5",
+        "description": "Z.ai flagship GLM-5 foundation model engineered for complex systems design and long-horizon agent workflows. Built for expert developers, it delivers production-grade performance on large-scale programming tasks, rivaling leading closed-source models. With advanced agentic planning, deep backend reasoning, and iterative self-correction, GLM-5 moves beyond code generation to full-system construction and autonomous execution.",
         "reasoning": true,
         "tool_call": true,
         "modalities": {
@@ -1406,7 +1426,7 @@
           ]
         },
         "context": 200000,
-        "max_output_tokens": 131072,
+        "max_output_tokens": 128000,
         "capabilities": {
           "thinking": true,
           "streaming": true,
@@ -1414,103 +1434,16 @@
           "context_caching": true,
           "structured_output": true,
           "tool_streaming": true
-        }
-      },
-      "glm-4.6:thinking": {
-        "id": "glm-4.6:thinking",
-        "name": "GLM 4.6 (Deep Thinking)",
-        "description": "Z.AI GLM 4.6 with forced Deep Thinking mode enabled.",
-        "reasoning": true,
-        "tool_call": true,
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
         },
-        "context": 200000,
-        "max_output_tokens": 131072,
-        "capabilities": {
-          "thinking": true,
-          "streaming": true,
-          "function_calling": true,
-          "context_caching": true,
-          "structured_output": true,
-          "tool_streaming": true
-        }
-      },
-      "glm-4.6v": {
-        "id": "glm-4.6v",
-        "name": "GLM 4.6V",
-        "description": "Vision-capable GLM 4.6 release.",
-        "reasoning": true,
-        "tool_call": true,
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "context": 128000,
-        "max_output_tokens": 32768,
-        "capabilities": {
-          "thinking": true,
-          "streaming": true,
-          "function_calling": true,
-          "vision": true
-        }
-      },
-      "glm-4.6v-flash": {
-        "id": "glm-4.6v-flash",
-        "name": "GLM 4.6V Flash",
-        "description": "Low-latency vision GLM 4.6 release.",
-        "reasoning": true,
-        "tool_call": true,
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "context": 128000,
-        "max_output_tokens": 32768,
-        "capabilities": {
-          "thinking": true,
-          "streaming": true,
-          "function_calling": true,
-          "vision": true
-        }
-      },
-      "glm-4.6v-flashx": {
-        "id": "glm-4.6v-flashx",
-        "name": "GLM 4.6V FlashX",
-        "description": "Hybrid vision GLM 4.6 release.",
-        "reasoning": true,
-        "tool_call": true,
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "context": 128000,
-        "max_output_tokens": 32768,
-        "capabilities": {
-          "thinking": true,
-          "streaming": true,
-          "function_calling": true,
-          "vision": true
+        "vtcode": {
+          "variant": "ZaiGlm5",
+          "constant": "Z_AI_GLM_5",
+          "display": "GLM-5",
+          "description": "Z.AI flagship foundation model for complex systems engineering and long-horizon tasks.",
+          "efficient": false,
+          "top_tier": true,
+          "generation": "GLM-5",
+          "doc_comment": "GLM-5 - Z.AI flagship GLM-5 model"
         }
       },
       "glm-4.5": {
@@ -2218,7 +2151,6 @@
           "doc_comment": "OpenAI GPT-5 Codex - OpenRouter listing for GPT-5 Codex"
         }
       },
-
       "openai/gpt-oss-120b": {
         "id": "openai/gpt-oss-120b",
         "name": "OpenAI: gpt-oss-120b",
@@ -2966,37 +2898,6 @@
           "doc_comment": "Grok Code Fast 1 - Fast OpenRouter coding model powered by xAI Grok"
         }
       },
-      "z-ai/glm-4.6": {
-        "id": "z-ai/glm-4.6",
-        "name": "Z.AI: GLM 4.6",
-        "reasoning": true,
-        "tool_call": true,
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "context": 202752,
-        "max_output_tokens": 202752,
-        "cost": {
-          "input": 5e-07,
-          "output": 1.75e-06
-        },
-        "vtcode": {
-          "variant": "OpenRouterZaiGlm46",
-          "constant": "Z_AI_GLM_4_6",
-          "vendor": "zai",
-          "display": "GLM 4.6",
-          "description": "Z.AI GLM 4.6 long-context reasoning model",
-          "efficient": false,
-          "top_tier": true,
-          "generation": "GLM-4.6",
-          "doc_comment": "GLM 4.6 - Z.AI GLM 4.6 long-context reasoning model"
-        }
-      },
       "amazon/nova-2-lite-v1": {
         "id": "amazon/nova-2-lite-v1",
         "name": "Amazon: Nova 2 Lite",
@@ -3414,37 +3315,6 @@
           "doc_comment": "OpenAI o1-pro - OpenAI o1-pro advanced reasoning model via OpenRouter"
         }
       },
-      "z-ai/glm-4.6v": {
-        "id": "z-ai/glm-4.6v",
-        "name": "Z.AI: GLM 4.6V",
-        "reasoning": true,
-        "tool_call": true,
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "context": 202752,
-        "max_output_tokens": 202752,
-        "cost": {
-          "input": 5.5e-07,
-          "output": 1.8e-06
-        },
-        "vtcode": {
-          "variant": "OpenRouterZaiGlm46V",
-          "constant": "Z_AI_GLM_4_6V",
-          "vendor": "zai",
-          "display": "GLM 4.6V",
-          "description": "Z.AI GLM 4.6V enhanced vision model",
-          "efficient": false,
-          "top_tier": true,
-          "generation": "GLM-4.6V",
-          "doc_comment": "GLM 4.6V - Z.AI GLM 4.6V enhanced vision model"
-        }
-      },
       "z-ai/glm-4.7": {
         "id": "z-ai/glm-4.7",
         "name": "Z.AI: GLM 4.7",
@@ -3501,6 +3371,33 @@
           "top_tier": false,
           "generation": "GLM-4.7",
           "doc_comment": "GLM 4.7 Flash - Z.AI GLM-4.7-Flash lightweight model"
+        }
+      },
+      "z-ai/glm-5": {
+        "id": "z-ai/glm-5",
+        "name": "Z.AI: GLM-5",
+        "description": "Z.ai's flagship open-source foundation model engineered for complex systems design and long-horizon agent workflows. Built for expert developers, it delivers production-grade performance on large-scale programming tasks, rivaling leading closed-source models. With advanced agentic planning, deep backend reasoning, and iterative self-correction, GLM-5 moves beyond code generation to full-system construction and autonomous execution.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 202752,
+        "vtcode": {
+          "variant": "OpenRouterZaiGlm5",
+          "constant": "Z_AI_GLM_5",
+          "vendor": "zai",
+          "display": "GLM-5",
+          "description": "Z.ai flagship GLM-5 model via OpenRouter",
+          "efficient": false,
+          "top_tier": true,
+          "generation": "GLM-5",
+          "doc_comment": "GLM-5 - Z.AI GLM-5 flagship foundation model via OpenRouter"
         }
       }
     },
@@ -3846,21 +3743,6 @@
       "qwen3-coder:480b-cloud": {
         "id": "qwen3-coder:480b-cloud",
         "name": "Qwen3 Coder 480B (cloud)",
-        "reasoning": true,
-        "tool_call": true,
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "context": 131072
-      },
-      "glm-4.6:cloud": {
-        "id": "glm-4.6:cloud",
-        "name": "GLM 4.6 (cloud)",
         "reasoning": true,
         "tool_call": true,
         "modalities": {

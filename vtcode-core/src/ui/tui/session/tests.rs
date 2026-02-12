@@ -7,7 +7,6 @@ use ratatui::crossterm::event::{Event as CrosstermEvent, KeyCode, KeyEvent, KeyM
 use ratatui::{
     Terminal,
     backend::TestBackend,
-    layout::Rect,
     style::{Color, Modifier},
     text::{Line, Span},
 };

@@ -85,6 +85,7 @@ impl FromStr for ModelId {
             s if s == models::huggingface::XIAOMI_MIMO_V2_FLASH_NOVITA => {
                 Ok(ModelId::HuggingFaceXiaomiMimoV2FlashNovita)
             }
+            s if s == models::huggingface::ZAI_GLM_5_NOVITA => Ok(ModelId::HuggingFaceGlm5Novita),
             // xAI models
             s if s == models::xai::GROK_4 => Ok(ModelId::XaiGrok4),
             s if s == models::xai::GROK_4_MINI => Ok(ModelId::XaiGrok4Mini),
@@ -94,14 +95,7 @@ impl FromStr for ModelId {
             // Z.AI models
             s if s == models::zai::GLM_4_7 => Ok(ModelId::ZaiGlm47),
             s if s == models::zai::GLM_4_7_DEEP_THINKING => Ok(ModelId::ZaiGlm47DeepThinking),
-            s if s == models::zai::GLM_4_6 => Ok(ModelId::ZaiGlm46),
-            s if s == models::zai::GLM_4_6_DEEP_THINKING => Ok(ModelId::ZaiGlm46DeepThinking),
-            s if s == models::zai::GLM_4_5 => Ok(ModelId::ZaiGlm45),
-            s if s == models::zai::GLM_4_5_DEEP_THINKING => Ok(ModelId::ZaiGlm45DeepThinking),
-            s if s == models::zai::GLM_4_5_AIR => Ok(ModelId::ZaiGlm45Air),
-            s if s == models::zai::GLM_4_5_X => Ok(ModelId::ZaiGlm45X),
-            s if s == models::zai::GLM_4_5_AIRX => Ok(ModelId::ZaiGlm45Airx),
-            s if s == models::zai::GLM_4_5_FLASH => Ok(ModelId::ZaiGlm45Flash),
+            s if s == models::zai::GLM_5 => Ok(ModelId::ZaiGlm5),
             s if s == models::zai::GLM_4_32B_0414_128K => Ok(ModelId::ZaiGlm432b0414128k),
             // Moonshot models
             s if s == models::moonshot::KIMI_K2_5 => Ok(ModelId::MoonshotKimiK25),
@@ -123,7 +117,6 @@ impl FromStr for ModelId {
             s if s == models::ollama::QWEN3_CODER_480B_CLOUD => {
                 Ok(ModelId::OllamaQwen3Coder480bCloud)
             }
-            s if s == models::ollama::GLM_46_CLOUD => Ok(ModelId::OllamaGlm46Cloud),
             s if s == models::ollama::GLM_47_CLOUD => Ok(ModelId::OllamaGlm47Cloud),
             s if s == models::ollama::GEMINI_3_PRO_PREVIEW_LATEST_CLOUD => {
                 Ok(ModelId::OllamaGemini3ProPreviewLatestCloud)

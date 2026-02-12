@@ -275,6 +275,18 @@ impl HuggingFaceProvider {
             payload["top_k"] = json!(top_k);
         }
 
+        if let Some(effort) = request.reasoning_effort {
+            use crate::config::models::Provider;
+            use crate::llm::rig_adapter::reasoning_parameters_for;
+            if let Some(reasoning_params) = reasoning_parameters_for(Provider::HuggingFace, effort) {
+                if let Some(params_obj) = reasoning_params.as_object() {
+                    for (k, v) in params_obj {
+                        payload[k] = v.clone();
+                    }
+                }
+            }
+        }
+
         if request.output_format.is_some() && !is_glm {
             payload["response_format"] = json!({ "type": "json_object" });
         }

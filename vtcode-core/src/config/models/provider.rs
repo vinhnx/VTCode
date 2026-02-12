@@ -144,7 +144,7 @@ impl Provider {
             Provider::LmStudio => false,
             Provider::Moonshot => models::moonshot::REASONING_MODELS.contains(&model),
             Provider::XAI => model == models::xai::GROK_4 || model == models::xai::GROK_4_CODE,
-            Provider::ZAI => model == models::zai::GLM_4_6 || model == models::zai::GLM_4_7,
+            Provider::ZAI => models::zai::REASONING_MODELS.contains(&model),
             Provider::Minimax => {
                 model == models::minimax::MINIMAX_M2_1
                     || model == models::minimax::MINIMAX_M2_1_LIGHTNING

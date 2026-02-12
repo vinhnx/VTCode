@@ -665,8 +665,6 @@ mod tests {
         // Update with output
         tracker.update_with_output("test output");
         let progress = tracker.get_progress();
-        // elapsed_ms may be 0 if test runs very fast (<1ms)
-        assert!(progress.elapsed_ms >= 0);
         // Verify message was updated
         assert!(!progress.message.is_empty() || progress.percentage > 0.0);
     }
