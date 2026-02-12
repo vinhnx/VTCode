@@ -69,7 +69,7 @@ impl ToolStats {
 }
 
 use crate::tools::circuit_breaker::CircuitBreaker;
-use crate::utils::path::resolve_workspace_path;
+use crate::utils::path::{normalize_path, resolve_workspace_path};
 
 /// Autonomous tool executor with safety checks
 pub struct AutonomousExecutor {
@@ -298,7 +298,9 @@ impl AutonomousExecutor {
 
             // Check if within workspace
             if let Some(workspace) = &self.workspace_dir {
-                if resolve_workspace_path(workspace, path_obj).is_ok() {
+                if resolve_workspace_path(workspace, path_obj).is_ok()
+                    || is_within_workspace_lexically(workspace, path_obj)
+                {
                     return Ok(());
                 }
             }
@@ -316,8 +318,11 @@ impl AutonomousExecutor {
 
             // Resolve the path and check if it stays within workspace
             if let Some(workspace) = &self.workspace_dir {
-                let resolved = workspace.join(path_str);
-                if resolve_workspace_path(workspace, &resolved).is_err() {
+                let path_obj = Path::new(path_str);
+                let canonical_ok =
+                    resolve_workspace_path(workspace, &workspace.join(path_obj)).is_ok();
+                let lexical_ok = is_within_workspace_lexically(workspace, path_obj);
+                if !canonical_ok && !lexical_ok {
                     anyhow::bail!("Path traversal escapes workspace boundary: {}", path_str);
                 }
             } else {
@@ -370,7 +375,7 @@ impl AutonomousExecutor {
             // No path = root
             anyhow::bail!(
                 "list_files requires explicit path. \
-                 Root directory listing is blocked to prevent loops."
+                 root directory listing is blocked to prevent loops."
             );
         }
         Ok(())
@@ -544,6 +549,16 @@ fn prune_expired_timestamps(entries: &mut VecDeque<Instant>, now: Instant, windo
             break;
         }
     }
+}
+
+fn is_within_workspace_lexically(workspace: &Path, candidate: &Path) -> bool {
+    let normalized_workspace = normalize_path(workspace);
+    let normalized_candidate = if candidate.is_absolute() {
+        normalize_path(candidate)
+    } else {
+        normalize_path(&normalized_workspace.join(candidate))
+    };
+    normalized_candidate.starts_with(&normalized_workspace)
 }
 
 #[cfg(test)]
