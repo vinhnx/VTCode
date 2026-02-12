@@ -3,6 +3,7 @@
 use anyhow::Result;
 use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::llm::provider as uni;
+use vtcode_core::tools::error_messages::agent_execution;
 use vtcode_core::utils::ansi::MessageStyle;
 
 use crate::agent::runloop::mcp_events;
@@ -170,7 +171,7 @@ async fn handle_failure<'a>(
     tool_start_time: std::time::Instant,
 ) -> Result<()> {
     let error_str = error.to_string();
-    let is_plan_mode_denial = error_str.contains("tool denied by plan mode");
+    let is_plan_mode_denial = agent_execution::is_plan_mode_denial(&error_str);
     let should_auto_exit = is_plan_mode_denial
         && t_ctx.ctx.session_stats.is_plan_mode()
         && !t_ctx
@@ -322,7 +323,7 @@ pub(crate) fn record_mcp_tool_event(
     tool_name: &str,
     status: &ToolExecutionStatus,
 ) {
-    record_mcp_event_to_panel(&mut t_ctx.ctx.mcp_panel_state, tool_name, status);
+    record_mcp_event_to_panel(t_ctx.ctx.mcp_panel_state, tool_name, status);
 }
 
 /// Record MCP tool execution event directly to the MCP panel state.

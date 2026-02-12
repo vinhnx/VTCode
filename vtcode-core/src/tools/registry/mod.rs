@@ -13,6 +13,7 @@ mod dual_output;
 mod error;
 mod execution_facade;
 mod execution_history;
+mod execution_kernel;
 mod executors;
 mod file_helpers;
 mod harness;
@@ -60,8 +61,8 @@ pub use declarations::{
     build_function_declarations_for_level, build_function_declarations_with_mode,
 };
 pub use error::{ToolErrorType, ToolExecutionError, classify_error};
-pub use execution_facade::ToolPreflightOutcome;
 pub use execution_history::{HarnessContextSnapshot, ToolExecutionHistory, ToolExecutionRecord};
+pub use execution_kernel::ToolPreflightOutcome;
 pub use harness::HarnessContext;
 pub use justification::{ApprovalPattern, JustificationManager, ToolJustification};
 pub use justification_extractor::JustificationExtractor;
