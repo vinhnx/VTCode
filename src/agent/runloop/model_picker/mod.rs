@@ -888,12 +888,7 @@ mod tests {
     #[test]
     fn model_picker_lists_new_zai_models() {
         let options = MODEL_OPTIONS.as_slice();
-        assert!(has_model(options, ModelId::ZaiGlm46));
-        assert!(has_model(options, ModelId::ZaiGlm45));
-        assert!(has_model(options, ModelId::ZaiGlm45Air));
-        assert!(has_model(options, ModelId::ZaiGlm45X));
-        assert!(has_model(options, ModelId::ZaiGlm45Airx));
-        assert!(has_model(options, ModelId::ZaiGlm45Flash));
+        assert!(has_model(options, ModelId::ZaiGlm47));
         assert!(has_model(options, ModelId::ZaiGlm432b0414128k));
     }
 
@@ -908,7 +903,6 @@ mod tests {
         assert!(has_model(options, ModelId::OllamaKimiK2ThinkingCloud));
         assert!(has_model(options, ModelId::OllamaKimiK25Cloud));
         assert!(has_model(options, ModelId::OllamaQwen3Coder480bCloud));
-        assert!(has_model(options, ModelId::OllamaGlm46Cloud));
         assert!(has_model(options, ModelId::OllamaGlm47Cloud));
         assert!(has_model(options, ModelId::OllamaMinimaxM21Cloud));
         assert!(has_model(options, ModelId::OllamaGemini3FlashPreviewCloud));

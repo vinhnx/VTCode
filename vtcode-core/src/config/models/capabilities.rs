@@ -65,8 +65,8 @@ impl ModelId {
             ModelId::DeepSeekReasoner => Some(ModelId::DeepSeekChat),
             ModelId::XaiGrok4 => Some(ModelId::XaiGrok4Mini),
             ModelId::XaiGrok4Code => Some(ModelId::XaiGrok4CodeLatest),
-            ModelId::ZaiGlm47 => Some(ModelId::ZaiGlm45Flash),
-            ModelId::ZaiGlm46 => Some(ModelId::ZaiGlm45Flash),
+            ModelId::ZaiGlm47 => Some(ModelId::ZaiGlm47Flash),
+            ModelId::ZaiGlm5 => Some(ModelId::ZaiGlm47Flash),
             ModelId::ClaudeOpus46
             | ModelId::ClaudeOpus45
             | ModelId::ClaudeOpus4
@@ -93,7 +93,6 @@ impl ModelId {
                 | ModelId::Gemini25Flash
                 | ModelId::Gemini25FlashLite
                 | ModelId::Gemini3FlashPreview
-                | ModelId::ZaiGlm45Flash
                 | ModelId::OpenRouterStepfunStep35FlashFree
                 | ModelId::MinimaxM21Lightning
                 | ModelId::OllamaGemini3FlashPreviewCloud
@@ -112,11 +111,9 @@ impl ModelId {
                 | ModelId::ClaudeOpus41
                 | ModelId::DeepSeekReasoner
                 | ModelId::XaiGrok4
+                | ModelId::ZaiGlm5
                 | ModelId::ZaiGlm47
                 | ModelId::ZaiGlm47DeepThinking
-                | ModelId::ZaiGlm46
-                | ModelId::ZaiGlm46DeepThinking
-                | ModelId::ZaiGlm45DeepThinking
                 | ModelId::OpenRouterStepfunStep35FlashFree
                 | ModelId::MinimaxM21
                 | ModelId::OllamaGlm47Cloud
@@ -142,9 +139,6 @@ impl ModelId {
                 | ModelId::ClaudeHaiku35
                 | ModelId::DeepSeekChat
                 | ModelId::XaiGrok4Code
-                | ModelId::ZaiGlm45Air
-                | ModelId::ZaiGlm45Airx
-                | ModelId::ZaiGlm45Flash
         )
     }
 
@@ -170,10 +164,9 @@ impl ModelId {
                 | ModelId::DeepSeekReasoner
                 | ModelId::XaiGrok4
                 | ModelId::XaiGrok4CodeLatest
+                | ModelId::ZaiGlm5
                 | ModelId::ZaiGlm47
                 | ModelId::ZaiGlm47DeepThinking
-                | ModelId::ZaiGlm46
-                | ModelId::ZaiGlm46DeepThinking
                 | ModelId::OpenRouterStepfunStep35FlashFree
                 | ModelId::MoonshotKimiK25
         )
@@ -235,7 +228,8 @@ impl ModelId {
             ModelId::HuggingFaceOpenAIGptOss120b => "oss",
             ModelId::HuggingFaceGlm47
             | ModelId::HuggingFaceGlm47Novita
-            | ModelId::HuggingFaceGlm47FlashNovita => "4.7",
+            | ModelId::HuggingFaceGlm47FlashNovita
+            | ModelId::HuggingFaceGlm5Novita => "5",
             ModelId::HuggingFaceKimiK2Thinking => "k2",
             ModelId::HuggingFaceKimiK25Novita => "k2.5",
             ModelId::HuggingFaceMinimaxM21Novita => "m2.1",
@@ -248,14 +242,8 @@ impl ModelId {
             | ModelId::XaiGrok4CodeLatest
             | ModelId::XaiGrok4Vision => "4",
             // Z.AI generations
+            ModelId::ZaiGlm5 => "5",
             ModelId::ZaiGlm47 | ModelId::ZaiGlm47DeepThinking | ModelId::ZaiGlm47Flash => "4.7",
-            ModelId::ZaiGlm46 | ModelId::ZaiGlm46DeepThinking => "4.6",
-            ModelId::ZaiGlm45
-            | ModelId::ZaiGlm45DeepThinking
-            | ModelId::ZaiGlm45Air
-            | ModelId::ZaiGlm45X
-            | ModelId::ZaiGlm45Airx
-            | ModelId::ZaiGlm45Flash => "4.5",
             ModelId::ZaiGlm432b0414128k => "4-32B",
             // Moonshot generations
             ModelId::MoonshotKimiK25 => "K2.5",
@@ -270,7 +258,6 @@ impl ModelId {
             ModelId::OllamaKimiK25Cloud => "kimi-k2.5",
 
             ModelId::OllamaQwen3Coder480bCloud => "qwen3",
-            ModelId::OllamaGlm46Cloud => "glm-4.6",
             ModelId::OllamaGemini3ProPreviewLatestCloud => "gemini-3",
             ModelId::OllamaDevstral2123bCloud => "devstral-2",
             ModelId::OllamaMinimaxM2Cloud => "minimax-m2",
@@ -292,7 +279,6 @@ impl ModelId {
             | ModelId::OpenRouterGrok4Fast
             | ModelId::OpenRouterGrok41Fast
             | ModelId::OpenRouterGrok4
-            | ModelId::OpenRouterZaiGlm46
             | ModelId::OpenRouterMoonshotaiKimiK20905
             | ModelId::OpenRouterMoonshotaiKimiK2Thinking
             | ModelId::OpenRouterQwen3Max
@@ -341,9 +327,9 @@ impl ModelId {
             | ModelId::OpenRouterOpenAIGpt52Codex
             | ModelId::OpenRouterOpenAIGpt52Pro
             | ModelId::OpenRouterOpenAIO1Pro
-            | ModelId::OpenRouterZaiGlm46V
             | ModelId::OpenRouterZaiGlm47
             | ModelId::OpenRouterZaiGlm47Flash
+            | ModelId::OpenRouterZaiGlm5
             | ModelId::OpenRouterStepfunStep35FlashFree
             | ModelId::OpenRouterMoonshotaiKimiK25 => "unknown", // fallback generation for OpenRouter models
         }

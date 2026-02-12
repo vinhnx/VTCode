@@ -595,23 +595,6 @@ fn zai_presets() -> Vec<ModelPreset> {
             supported_in_api: true,
             context_window: Some(128_000),
         },
-        ModelPreset {
-            id: "glm-4.6".to_string(),
-            model: "glm-4.6".to_string(),
-            display_name: "GLM-4.6".to_string(),
-            description: "GLM reasoning model".to_string(),
-            provider: Provider::ZAI,
-            default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![ReasoningEffortPreset {
-                effort: ReasoningEffortLevel::Medium,
-                description: "Balanced".to_string(),
-            }],
-            is_default: false,
-            upgrade: None,
-            show_in_picker: true,
-            supported_in_api: true,
-            context_window: Some(128_000),
-        },
     ]
 }
 

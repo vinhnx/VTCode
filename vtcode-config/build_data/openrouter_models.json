@@ -823,37 +823,6 @@
         "doc_comment": "Kimi K2 Thinking - MoonshotAI reasoning-tier Kimi K2 release optimized for long-horizon agents"
       }
     },
-    "z-ai/glm-4.6v": {
-      "id": "z-ai/glm-4.6v",
-      "name": "Z.AI: GLM 4.6V",
-      "reasoning": true,
-      "tool_call": true,
-      "modalities": {
-        "input": [
-          "text"
-        ],
-        "output": [
-          "text"
-        ]
-      },
-      "context": 202752,
-      "max_output_tokens": 202752,
-      "cost": {
-        "input": 5.5e-07,
-        "output": 1.8e-06
-      },
-      "vtcode": {
-        "variant": "OpenRouterZaiGlm46V",
-        "constant": "Z_AI_GLM_4_6V",
-        "vendor": "zai",
-        "display": "GLM 4.6V",
-        "description": "Z.AI GLM 4.6V enhanced vision model",
-        "efficient": false,
-        "top_tier": true,
-        "generation": "GLM-4.6V",
-        "doc_comment": "GLM 4.6V - Z.AI GLM 4.6V enhanced vision model"
-      }
-    },
     "openai/gpt-5": {
       "id": "openai/gpt-5",
       "name": "OpenAI: GPT-5",
@@ -1699,9 +1668,10 @@
         "doc_comment": "Grok Code Fast 1 - Fast OpenRouter coding model powered by xAI Grok"
       }
     },
-    "z-ai/glm-4.6": {
-      "id": "z-ai/glm-4.6",
-      "name": "Z.AI: GLM 4.6",
+    "z-ai/glm-5": {
+      "id": "z-ai/glm-5",
+      "name": "Z.AI: GLM-5",
+      "description": "Z.ai's flagship open-source foundation model engineered for complex systems design and long-horizon agent workflows.",
       "reasoning": true,
       "tool_call": true,
       "modalities": {
@@ -1713,21 +1683,16 @@
         ]
       },
       "context": 202752,
-      "max_output_tokens": 202752,
-      "cost": {
-        "input": 5e-07,
-        "output": 1.75e-06
-      },
       "vtcode": {
-        "variant": "OpenRouterZaiGlm46",
-        "constant": "Z_AI_GLM_4_6",
+        "variant": "OpenRouterZaiGlm5",
+        "constant": "Z_AI_GLM_5",
         "vendor": "zai",
-        "display": "GLM 4.6",
-        "description": "Z.AI GLM 4.6 long-context reasoning model",
+        "display": "GLM-5",
+        "description": "Z.ai flagship GLM-5 model via OpenRouter",
         "efficient": false,
         "top_tier": true,
-        "generation": "GLM-4.6",
-        "doc_comment": "GLM 4.6 - Z.AI GLM 4.6 long-context reasoning model"
+        "generation": "GLM-5",
+        "doc_comment": "GLM-5 - Z.AI GLM-5 flagship foundation model via OpenRouter"
       }
     }
   },

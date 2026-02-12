@@ -27,16 +27,30 @@ pub enum ModelId {
     Gemini25Pro,
     /// Gemini 3 Pro Preview - Preview of next-generation Gemini model
     Gemini3ProPreview,
+    /// Gemini 3 Flash Preview - Our most intelligent model built for speed, combining frontier intelligence with superior search and grounding
+    Gemini3FlashPreview,
 
     // OpenAI models
     /// GPT-5 - Latest most capable OpenAI model (2025-08-07)
     GPT5,
+    /// GPT-5.2 - Latest flagship general-purpose OpenAI model (2025-12-11)
+    GPT52,
+    /// GPT-5.2 Codex - Code-focused GPT-5.2 variant optimized for agentic coding
+    GPT52Codex,
     /// GPT-5 Codex - Code-focused GPT-5 variant using the Responses API
     GPT5Codex,
     /// GPT-5 Mini - Latest efficient OpenAI model (2025-08-07)
     GPT5Mini,
     /// GPT-5 Nano - Latest most cost-effective OpenAI model (2025-08-07)
     GPT5Nano,
+    /// GPT-5.1 - Enhanced latest most capable OpenAI model with improved reasoning (2025-11-14)
+    GPT51,
+    /// GPT-5.1 Codex - Code-focused GPT-5.1 variant using the Responses API
+    GPT51Codex,
+    /// GPT-5.1 Codex Max - Maximum context code-focused GPT-5.1 variant
+    GPT51CodexMax,
+    /// GPT-5.1 Mini - Enhanced efficient OpenAI model with improved capabilities (2025-11-14)
+    GPT51Mini,
     /// Codex Mini Latest - Latest Codex model for code generation (2025-05-16)
     CodexMiniLatest,
     /// GPT-OSS 20B - OpenAI's open-source 20B parameter model using harmony
@@ -57,6 +71,12 @@ pub enum ModelId {
     ClaudeHaiku45,
     /// Claude Sonnet 4 - Previous balanced Anthropic model (2025-05-14)
     ClaudeSonnet4,
+    /// Claude Opus 4 - Previous flagship model (2025-05-14)
+    ClaudeOpus4,
+    /// Claude Sonnet 3.7 - Latest Claude 3 Sonnet (2025-02-19)
+    ClaudeSonnet37,
+    /// Claude Haiku 3.5 - Latest Claude 3 Haiku (2024-10-22)
+    ClaudeHaiku35,
 
     // DeepSeek models
     /// DeepSeek V3.2 Chat - Fast non-thinking mode
@@ -72,6 +92,8 @@ pub enum ModelId {
     HuggingFaceOpenAIGptOss120b,
     /// Z.AI GLM-4.7 via Hugging Face router
     HuggingFaceGlm47,
+    /// Z.AI GLM-4.7 via Novita on Hugging Face router
+    HuggingFaceGlm47Novita,
     /// Z.AI GLM-4.7-Flash via Novita on Hugging Face router
     HuggingFaceGlm47FlashNovita,
     /// MoonshotAI Kimi K2 Thinking via Hugging Face router
@@ -84,6 +106,8 @@ pub enum ModelId {
     HuggingFaceDeepseekV32Novita,
     /// Xiaomi MiMo-V2-Flash via Novita on Hugging Face router
     HuggingFaceXiaomiMimoV2FlashNovita,
+    /// Z.AI GLM-5 via Novita on Hugging Face router
+    HuggingFaceGlm5Novita,
     /// Qwen3-Coder-Next via Novita inference provider on Hugging Face router
     HuggingFaceQwen3CoderNextNovita,
 
@@ -110,30 +134,8 @@ pub enum ModelId {
     ZaiGlm47DeepThinking,
     /// GLM-4.7 Flash - Lightweight GLM-4.7 model optimized for agentic coding
     ZaiGlm47Flash,
-    /// GLM-4.6 - Previous flagship GLM reasoning model
-    ZaiGlm46,
-    /// GLM-4.6 Deep Thinking - GLM-4.6 with forced reasoning
-    ZaiGlm46DeepThinking,
-    /// GLM-4.6V - Vision-capable GLM release
-    ZaiGlm46V,
-    /// GLM-4.6V-Flash - Latency-optimised vision GLM
-    ZaiGlm46VFlash,
-    /// GLM-4.6V-FlashX - Hybrid vision GLM variant
-    ZaiGlm46VFlashX,
-    /// GLM-4.5 - Balanced GLM release for general tasks
-    ZaiGlm45,
-    /// GLM-4.5 Deep Thinking - GLM-4.5 with forced reasoning
-    ZaiGlm45DeepThinking,
-    /// GLM-4.5-Air - Efficient GLM variant
-    ZaiGlm45Air,
-    /// GLM-4.5-X - Enhanced capability GLM variant
-    ZaiGlm45X,
-    /// GLM-4.5-AirX - Hybrid efficient GLM variant
-    ZaiGlm45Airx,
-    /// GLM-4.5-Flash - Low-latency GLM variant
-    ZaiGlm45Flash,
-    /// GLM-4.5V - Vision-capable GLM release
-    ZaiGlm45V,
+    /// GLM-5 - Flagship Z.ai foundation model for complex systems
+    ZaiGlm5,
     /// GLM-4-32B-0414-128K - Legacy long-context GLM deployment
     ZaiGlm432b0414128k,
 
@@ -162,8 +164,6 @@ pub enum ModelId {
     OllamaKimiK25Cloud,
     /// Qwen3 Coder 480B Cloud - Cloud-hosted Qwen3 Coder model served via Ollama Cloud
     OllamaQwen3Coder480bCloud,
-    /// GLM-4.6 Cloud - Cloud-hosted GLM-4.6 model served via Ollama Cloud
-    OllamaGlm46Cloud,
     /// Gemini 3 Pro Preview Latest Cloud - Google Gemini 3 Pro Preview via Ollama Cloud
     OllamaGemini3ProPreviewLatestCloud,
     /// Devstral 2 123B Cloud - Mistral Devstral 2 123B model via Ollama Cloud
@@ -210,8 +210,6 @@ pub enum ModelId {
     OpenRouterGrok41Fast,
     /// Grok 4 - Flagship Grok 4 endpoint exposed through OpenRouter
     OpenRouterGrok4,
-    /// GLM 4.6 - Z.AI GLM 4.6 long-context reasoning model
-    OpenRouterZaiGlm46,
     /// Kimi K2 0905 - MoonshotAI Kimi K2 0905 MoE release optimised for coding agents
     OpenRouterMoonshotaiKimiK20905,
     /// Kimi K2 Thinking - MoonshotAI reasoning-tier Kimi K2 release optimized for long-horizon agents
@@ -311,12 +309,12 @@ pub enum ModelId {
     OpenRouterOpenAIGpt52Pro,
     /// OpenAI o1-pro - OpenAI o1-pro advanced reasoning model via OpenRouter
     OpenRouterOpenAIO1Pro,
-    /// GLM 4.6V - Z.AI GLM 4.6V enhanced vision model
-    OpenRouterZaiGlm46V,
     /// GLM 4.7 - Z.AI GLM 4.7 next-generation reasoning model
     OpenRouterZaiGlm47,
     /// Step 3.5 Flash (free) - StepFun's most capable open-source reasoning model via OpenRouter
     OpenRouterStepfunStep35FlashFree,
     /// GLM 4.7 Flash - Z.AI GLM-4.7-Flash lightweight model via OpenRouter
     OpenRouterZaiGlm47Flash,
+    /// GLM-5 - Z.AI GLM-5 flagship foundation model via OpenRouter
+    OpenRouterZaiGlm5,
 }

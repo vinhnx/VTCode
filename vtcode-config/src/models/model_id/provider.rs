@@ -13,11 +13,18 @@ impl ModelId {
             | ModelId::Gemini25Flash
             | ModelId::Gemini25FlashLite
             | ModelId::Gemini25Pro
-            | ModelId::Gemini3ProPreview => Provider::Gemini,
+            | ModelId::Gemini3ProPreview
+            | ModelId::Gemini3FlashPreview => Provider::Gemini,
             ModelId::GPT5
+            | ModelId::GPT52
+            | ModelId::GPT52Codex
             | ModelId::GPT5Codex
             | ModelId::GPT5Mini
             | ModelId::GPT5Nano
+            | ModelId::GPT51
+            | ModelId::GPT51Codex
+            | ModelId::GPT51CodexMax
+            | ModelId::GPT51Mini
             | ModelId::CodexMiniLatest
             | ModelId::OpenAIGptOss20b
             | ModelId::OpenAIGptOss120b => Provider::OpenAI,
@@ -26,18 +33,23 @@ impl ModelId {
             | ModelId::ClaudeOpus41
             | ModelId::ClaudeSonnet45
             | ModelId::ClaudeHaiku45
-            | ModelId::ClaudeSonnet4 => Provider::Anthropic,
+            | ModelId::ClaudeSonnet4
+            | ModelId::ClaudeOpus4
+            | ModelId::ClaudeSonnet37
+            | ModelId::ClaudeHaiku35 => Provider::Anthropic,
             ModelId::DeepSeekChat | ModelId::DeepSeekReasoner => Provider::DeepSeek,
             ModelId::HuggingFaceDeepseekV32
             | ModelId::HuggingFaceOpenAIGptOss20b
             | ModelId::HuggingFaceOpenAIGptOss120b
             | ModelId::HuggingFaceGlm47
+            | ModelId::HuggingFaceGlm47Novita
             | ModelId::HuggingFaceGlm47FlashNovita
             | ModelId::HuggingFaceKimiK2Thinking
             | ModelId::HuggingFaceKimiK25Novita
             | ModelId::HuggingFaceMinimaxM21Novita
             | ModelId::HuggingFaceDeepseekV32Novita
             | ModelId::HuggingFaceXiaomiMimoV2FlashNovita
+            | ModelId::HuggingFaceGlm5Novita
             | ModelId::HuggingFaceQwen3CoderNextNovita => Provider::HuggingFace,
             ModelId::XaiGrok4
             | ModelId::XaiGrok4Mini
@@ -49,18 +61,7 @@ impl ModelId {
             | ModelId::ZaiGlm47
             | ModelId::ZaiGlm47DeepThinking
             | ModelId::ZaiGlm47Flash
-            | ModelId::ZaiGlm46
-            | ModelId::ZaiGlm46DeepThinking
-            | ModelId::ZaiGlm46V
-            | ModelId::ZaiGlm46VFlash
-            | ModelId::ZaiGlm46VFlashX
-            | ModelId::ZaiGlm45
-            | ModelId::ZaiGlm45DeepThinking
-            | ModelId::ZaiGlm45Air
-            | ModelId::ZaiGlm45X
-            | ModelId::ZaiGlm45Airx
-            | ModelId::ZaiGlm45Flash
-            | ModelId::ZaiGlm45V
+            | ModelId::ZaiGlm5
             | ModelId::ZaiGlm432b0414128k => Provider::ZAI,
             ModelId::MoonshotKimiK25 => Provider::Moonshot,
             ModelId::OllamaGptOss20b
@@ -73,7 +74,6 @@ impl ModelId {
             | ModelId::OllamaKimiK2ThinkingCloud
             | ModelId::OllamaKimiK25Cloud
             | ModelId::OllamaQwen3Coder480bCloud
-            | ModelId::OllamaGlm46Cloud
             | ModelId::OllamaGemini3ProPreviewLatestCloud
             | ModelId::OllamaGemini3FlashPreviewCloud
             | ModelId::OllamaDevstral2123bCloud

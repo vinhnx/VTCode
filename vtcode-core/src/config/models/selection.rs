@@ -26,7 +26,6 @@ impl ModelId {
             ModelId::DeepSeekReasoner,
             ModelId::XaiGrok4,
             ModelId::ZaiGlm47,
-            ModelId::ZaiGlm46,
             ModelId::OpenRouterGrokCodeFast1,
         ]
     }
@@ -78,7 +77,7 @@ impl ModelId {
             Provider::OpenRouter => ModelId::OpenRouterGrokCodeFast1,
             Provider::Ollama => ModelId::OllamaQwen317b,
             Provider::LmStudio => ModelId::LmStudioQwen257BInstruct,
-            Provider::ZAI => ModelId::ZaiGlm45Flash,
+            Provider::ZAI => ModelId::ZaiGlm47Flash,
         }
     }
 

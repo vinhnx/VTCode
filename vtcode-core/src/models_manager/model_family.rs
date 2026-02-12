@@ -313,7 +313,7 @@ pub fn find_family_for_model(slug: &str) -> ModelFamily {
     }
 
     // Z.AI GLM models
-    if slug.contains("glm-4.7") || slug.contains("glm-4.6") {
+    if slug.contains("glm-4.7") || slug.contains("glm-5") {
         return model_family!(
             slug, "glm-4", Provider::ZAI,
             context_window: Some(DEFAULT_CONTEXT_WINDOW),

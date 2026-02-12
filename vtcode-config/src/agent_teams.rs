@@ -59,7 +59,7 @@ fn default_max_teammates() -> usize {
 
 #[cfg(test)]
 mod tests {
-    use super::AgentTeamsConfig;
+    use super::{AgentTeamsConfig, TeammateMode};
 
     #[test]
     fn defaults() {

@@ -55,6 +55,7 @@ impl ModelId {
             ModelId::HuggingFaceMinimaxM21Novita => "MiniMax-M2.1 (Novita)",
             ModelId::HuggingFaceDeepseekV32Novita => "DeepSeek V3.2 (Novita)",
             ModelId::HuggingFaceXiaomiMimoV2FlashNovita => "MiMo-V2-Flash (Novita)",
+            ModelId::HuggingFaceGlm5Novita => "GLM-5 (Novita)",
             // xAI models
             ModelId::XaiGrok4 => "Grok-4",
             ModelId::XaiGrok4Mini => "Grok-4 Mini",
@@ -65,14 +66,7 @@ impl ModelId {
             ModelId::ZaiGlm47 => "GLM 4.7",
             ModelId::ZaiGlm47DeepThinking => "GLM 4.7 (Deep Thinking)",
             ModelId::ZaiGlm47Flash => "GLM 4.7 Flash",
-            ModelId::ZaiGlm46 => "GLM 4.6",
-            ModelId::ZaiGlm46DeepThinking => "GLM 4.6 (Deep Thinking)",
-            ModelId::ZaiGlm45 => "GLM 4.5",
-            ModelId::ZaiGlm45DeepThinking => "GLM 4.5 (Deep Thinking)",
-            ModelId::ZaiGlm45Air => "GLM 4.5 Air",
-            ModelId::ZaiGlm45X => "GLM 4.5 X",
-            ModelId::ZaiGlm45Airx => "GLM 4.5 AirX",
-            ModelId::ZaiGlm45Flash => "GLM 4.5 Flash",
+            ModelId::ZaiGlm5 => "GLM-5",
             ModelId::ZaiGlm432b0414128k => "GLM 4 32B 0414 128K",
             // Moonshot models
             ModelId::MoonshotKimiK25 => "Kimi K2.5",
@@ -88,7 +82,6 @@ impl ModelId {
             ModelId::OllamaKimiK25Cloud => "Kimi K2.5 (cloud)",
 
             ModelId::OllamaQwen3Coder480bCloud => "Qwen3 Coder 480B (cloud)",
-            ModelId::OllamaGlm46Cloud => "GLM 4.6 (cloud)",
             ModelId::OllamaGemini3ProPreviewLatestCloud => "Gemini 3 Pro Preview (cloud)",
             ModelId::OllamaDevstral2123bCloud => "Devstral 2 123B (cloud)",
             ModelId::OllamaMinimaxM2Cloud => "MiniMax-M2 (cloud)",
@@ -106,7 +99,6 @@ impl ModelId {
             ModelId::MinimaxM21 => "MiniMax-M2.1",
             ModelId::MinimaxM21Lightning => "MiniMax-M2.1-lightning",
             ModelId::MinimaxM2 => "MiniMax-M2",
-            // OpenRouter models
             _ => unreachable!(),
         }
     }
@@ -216,6 +208,9 @@ impl ModelId {
             ModelId::HuggingFaceXiaomiMimoV2FlashNovita => {
                 "Xiaomi MiMo-V2-Flash via Novita on HuggingFace router."
             }
+            ModelId::HuggingFaceGlm5Novita => {
+                "Z.AI GLM-5 via Novita inference provider on HuggingFace router. Flagship foundation model for complex systems."
+            }
             // xAI models
             ModelId::XaiGrok4 => "Flagship Grok 4 model with long context and tool use",
             ModelId::XaiGrok4Mini => "Efficient Grok 4 Mini tuned for low latency",
@@ -234,20 +229,9 @@ impl ModelId {
             ModelId::ZaiGlm47Flash => {
                 "Z.AI GLM-4.7-Flash 30B-class SOTA lightweight model - Completely free, high-speed, optimized for agentic coding with enhanced reasoning"
             }
-            ModelId::ZaiGlm46 => {
-                "Latest Z.AI GLM flagship with long-context reasoning and coding strengths"
+            ModelId::ZaiGlm5 => {
+                "Z.ai's flagship open-source foundation model engineered for complex systems design and long-horizon agent workflows. Built for expert developers, it delivers production-grade performance on large-scale programming tasks, rivaling leading closed-source models. With advanced agentic planning, deep backend reasoning, and iterative self-correction, GLM-5 moves beyond code generation to full-system construction and autonomous execution."
             }
-            ModelId::ZaiGlm46DeepThinking => {
-                "Latest Z.AI GLM flagship with forced Deep Thinking mode for enhanced logical analysis"
-            }
-            ModelId::ZaiGlm45 => "Balanced GLM 4.5 release for general assistant tasks",
-            ModelId::ZaiGlm45DeepThinking => {
-                "Balanced GLM 4.5 model with forced Deep Thinking for multi-step problem solving"
-            }
-            ModelId::ZaiGlm45Air => "Efficient GLM 4.5 Air variant tuned for lower latency",
-            ModelId::ZaiGlm45X => "Enhanced GLM 4.5 X variant with improved reasoning",
-            ModelId::ZaiGlm45Airx => "Hybrid GLM 4.5 AirX variant blending efficiency with quality",
-            ModelId::ZaiGlm45Flash => "Low-latency GLM 4.5 Flash optimized for responsiveness",
             ModelId::ZaiGlm432b0414128k => {
                 "Legacy GLM 4 32B deployment offering extended 128K context window"
             }
@@ -303,9 +287,6 @@ impl ModelId {
             ModelId::OllamaQwen3Coder480bCloud => {
                 "Qwen3 Coder 480B expert model provided by Ollama Cloud for complex code generation"
             }
-            ModelId::OllamaGlm46Cloud => {
-                "GLM 4.6 reasoning model offered by Ollama Cloud with extended context support"
-            }
             ModelId::OllamaNemotron3Nano30bCloud => {
                 "NVIDIA Nemotron-3-Nano 30B deployed via Ollama Cloud for efficient inference"
             }
@@ -342,7 +323,6 @@ impl ModelId {
             | ModelId::OpenRouterGrok4Fast
             | ModelId::OpenRouterGrok41Fast
             | ModelId::OpenRouterGrok4
-            | ModelId::OpenRouterZaiGlm46
             | ModelId::OpenRouterQwen3Max
             | ModelId::OpenRouterQwen3235bA22b
             | ModelId::OpenRouterQwen3235bA22b2507
@@ -391,9 +371,9 @@ impl ModelId {
             | ModelId::OpenRouterOpenAIGpt52Codex
             | ModelId::OpenRouterOpenAIGpt52Pro
             | ModelId::OpenRouterOpenAIO1Pro
-            | ModelId::OpenRouterZaiGlm46V
             | ModelId::OpenRouterZaiGlm47
             | ModelId::OpenRouterZaiGlm47Flash
+            | ModelId::OpenRouterZaiGlm5
             | ModelId::OpenRouterStepfunStep35FlashFree
             | ModelId::OpenRouterMoonshotaiKimiK25 => unreachable!(),
         }
@@ -449,6 +429,7 @@ impl ModelId {
             ModelId::HuggingFaceMinimaxM21Novita,
             ModelId::HuggingFaceDeepseekV32Novita,
             ModelId::HuggingFaceXiaomiMimoV2FlashNovita,
+            ModelId::HuggingFaceGlm5Novita,
             // xAI models
             ModelId::XaiGrok4,
             ModelId::XaiGrok4Mini,
@@ -459,14 +440,7 @@ impl ModelId {
             ModelId::ZaiGlm47,
             ModelId::ZaiGlm47DeepThinking,
             ModelId::ZaiGlm47Flash,
-            ModelId::ZaiGlm46,
-            ModelId::ZaiGlm46DeepThinking,
-            ModelId::ZaiGlm45,
-            ModelId::ZaiGlm45DeepThinking,
-            ModelId::ZaiGlm45Air,
-            ModelId::ZaiGlm45X,
-            ModelId::ZaiGlm45Airx,
-            ModelId::ZaiGlm45Flash,
+            ModelId::ZaiGlm5,
             ModelId::ZaiGlm432b0414128k,
             // Moonshot models
             ModelId::MoonshotKimiK25,
@@ -481,7 +455,6 @@ impl ModelId {
             ModelId::OllamaKimiK2ThinkingCloud,
             ModelId::OllamaKimiK25Cloud,
             ModelId::OllamaQwen3Coder480bCloud,
-            ModelId::OllamaGlm46Cloud,
             ModelId::OllamaGlm47Cloud,
             ModelId::OllamaGemini3ProPreviewLatestCloud,
             ModelId::OllamaGemini3FlashPreviewCloud,

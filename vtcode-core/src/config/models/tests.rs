@@ -56,12 +56,7 @@ fn test_model_string_conversion() {
     );
     assert_eq!(ModelId::XaiGrok4Vision.as_str(), models::xai::GROK_4_VISION);
     // Z.AI models
-    assert_eq!(ModelId::ZaiGlm46.as_str(), models::zai::GLM_4_6);
-    assert_eq!(ModelId::ZaiGlm45.as_str(), models::zai::GLM_4_5);
-    assert_eq!(ModelId::ZaiGlm45Air.as_str(), models::zai::GLM_4_5_AIR);
-    assert_eq!(ModelId::ZaiGlm45X.as_str(), models::zai::GLM_4_5_X);
-    assert_eq!(ModelId::ZaiGlm45Airx.as_str(), models::zai::GLM_4_5_AIRX);
-    assert_eq!(ModelId::ZaiGlm45Flash.as_str(), models::zai::GLM_4_5_FLASH);
+    assert_eq!(ModelId::ZaiGlm5.as_str(), models::zai::GLM_5);
     assert_eq!(
         ModelId::ZaiGlm432b0414128k.as_str(),
         models::zai::GLM_4_32B_0414_128K
@@ -195,28 +190,8 @@ fn test_model_from_string() {
         ModelId::ZaiGlm47
     );
     assert_eq!(
-        models::zai::GLM_4_6.parse::<ModelId>().unwrap(),
-        ModelId::ZaiGlm46
-    );
-    assert_eq!(
-        models::zai::GLM_4_5.parse::<ModelId>().unwrap(),
-        ModelId::ZaiGlm45
-    );
-    assert_eq!(
-        models::zai::GLM_4_5_AIR.parse::<ModelId>().unwrap(),
-        ModelId::ZaiGlm45Air
-    );
-    assert_eq!(
-        models::zai::GLM_4_5_X.parse::<ModelId>().unwrap(),
-        ModelId::ZaiGlm45X
-    );
-    assert_eq!(
-        models::zai::GLM_4_5_AIRX.parse::<ModelId>().unwrap(),
-        ModelId::ZaiGlm45Airx
-    );
-    assert_eq!(
-        models::zai::GLM_4_5_FLASH.parse::<ModelId>().unwrap(),
-        ModelId::ZaiGlm45Flash
+        models::zai::GLM_5.parse::<ModelId>().unwrap(),
+        ModelId::ZaiGlm5
     );
     assert_eq!(
         models::zai::GLM_4_32B_0414_128K.parse::<ModelId>().unwrap(),
@@ -268,7 +243,6 @@ fn test_model_providers() {
     assert_eq!(ModelId::DeepSeekChat.provider(), Provider::DeepSeek);
     assert_eq!(ModelId::XaiGrok4.provider(), Provider::XAI);
     assert_eq!(ModelId::ZaiGlm47.provider(), Provider::ZAI);
-    assert_eq!(ModelId::ZaiGlm46.provider(), Provider::ZAI);
     assert_eq!(ModelId::OllamaGptOss20b.provider(), Provider::Ollama);
     assert_eq!(ModelId::OllamaGptOss120bCloud.provider(), Provider::Ollama);
     assert_eq!(ModelId::OllamaQwen317b.provider(), Provider::Ollama);
@@ -384,7 +358,7 @@ fn test_provider_defaults() {
     );
     assert_eq!(
         ModelId::default_subagent_for_provider(Provider::ZAI),
-        ModelId::ZaiGlm45Flash
+        ModelId::ZaiGlm47Flash
     );
     assert_eq!(
         ModelId::default_subagent_for_provider(Provider::Moonshot),
@@ -427,7 +401,6 @@ fn test_model_variants() {
     assert!(ModelId::Gemini25Flash.is_flash_variant());
     assert!(ModelId::Gemini25FlashLite.is_flash_variant());
     assert!(!ModelId::GPT5.is_flash_variant());
-    assert!(ModelId::ZaiGlm45Flash.is_flash_variant());
 
     // Pro variants
     assert!(ModelId::Gemini25Pro.is_pro_variant());
@@ -437,7 +410,6 @@ fn test_model_variants() {
     assert!(ModelId::ClaudeOpus46.is_pro_variant());
     assert!(ModelId::DeepSeekReasoner.is_pro_variant());
     assert!(ModelId::ZaiGlm47.is_pro_variant());
-    assert!(ModelId::ZaiGlm46.is_pro_variant());
     assert!(!ModelId::Gemini25FlashPreview.is_pro_variant());
 
     // Efficient variants
@@ -448,9 +420,6 @@ fn test_model_variants() {
     assert!(ModelId::ClaudeHaiku45.is_efficient_variant());
     assert!(ModelId::XaiGrok4Code.is_efficient_variant());
     assert!(ModelId::DeepSeekChat.is_efficient_variant());
-    assert!(ModelId::ZaiGlm45Air.is_efficient_variant());
-    assert!(ModelId::ZaiGlm45Airx.is_efficient_variant());
-    assert!(ModelId::ZaiGlm45Flash.is_efficient_variant());
     assert!(!ModelId::GPT5.is_efficient_variant());
 
     for entry in openrouter_generated::ENTRIES {
@@ -469,7 +438,6 @@ fn test_model_variants() {
     assert!(ModelId::XaiGrok4CodeLatest.is_top_tier());
     assert!(ModelId::DeepSeekReasoner.is_top_tier());
     assert!(ModelId::ZaiGlm47.is_top_tier());
-    assert!(ModelId::ZaiGlm46.is_top_tier());
     assert!(!ModelId::Gemini25FlashPreview.is_top_tier());
     assert!(!ModelId::ClaudeHaiku45.is_top_tier());
 
@@ -513,12 +481,6 @@ fn test_model_generation() {
     assert_eq!(ModelId::XaiGrok4Vision.generation(), "4");
     // Z.AI generations
     assert_eq!(ModelId::ZaiGlm47.generation(), "4.7");
-    assert_eq!(ModelId::ZaiGlm46.generation(), "4.6");
-    assert_eq!(ModelId::ZaiGlm45.generation(), "4.5");
-    assert_eq!(ModelId::ZaiGlm45Air.generation(), "4.5");
-    assert_eq!(ModelId::ZaiGlm45X.generation(), "4.5");
-    assert_eq!(ModelId::ZaiGlm45Airx.generation(), "4.5");
-    assert_eq!(ModelId::ZaiGlm45Flash.generation(), "4.5");
     assert_eq!(ModelId::ZaiGlm432b0414128k.generation(), "4-32B");
     assert_eq!(ModelId::OllamaGptOss20b.generation(), "oss");
     assert_eq!(ModelId::OllamaGptOss120bCloud.generation(), "oss-cloud");
@@ -528,7 +490,6 @@ fn test_model_generation() {
         "deepseek-v3.2"
     );
     assert_eq!(ModelId::OllamaQwen3Coder480bCloud.generation(), "qwen3");
-    assert_eq!(ModelId::OllamaGlm46Cloud.generation(), "glm-4.6");
     assert_eq!(
         ModelId::OllamaNemotron3Nano30bCloud.generation(),
         "nemotron-3"
@@ -590,12 +551,7 @@ fn test_models_for_provider() {
     assert!(xai_models.contains(&ModelId::XaiGrok4Vision));
 
     let zai_models = ModelId::models_for_provider(Provider::ZAI);
-    assert!(zai_models.contains(&ModelId::ZaiGlm46));
-    assert!(zai_models.contains(&ModelId::ZaiGlm45));
-    assert!(zai_models.contains(&ModelId::ZaiGlm45Air));
-    assert!(zai_models.contains(&ModelId::ZaiGlm45X));
-    assert!(zai_models.contains(&ModelId::ZaiGlm45Airx));
-    assert!(zai_models.contains(&ModelId::ZaiGlm45Flash));
+    assert!(zai_models.contains(&ModelId::ZaiGlm5));
     assert!(zai_models.contains(&ModelId::ZaiGlm432b0414128k));
 
     let moonshot_models = ModelId::models_for_provider(Provider::Moonshot);
@@ -611,12 +567,11 @@ fn test_models_for_provider() {
     assert!(ollama_models.contains(&ModelId::OllamaKimiK2ThinkingCloud));
     assert!(ollama_models.contains(&ModelId::OllamaKimiK25Cloud));
     assert!(ollama_models.contains(&ModelId::OllamaQwen3Coder480bCloud));
-    assert!(ollama_models.contains(&ModelId::OllamaGlm46Cloud));
     assert!(ollama_models.contains(&ModelId::OllamaGemini3ProPreviewLatestCloud));
     assert!(ollama_models.contains(&ModelId::OllamaDevstral2123bCloud));
     assert!(ollama_models.contains(&ModelId::OllamaMinimaxM2Cloud));
     assert!(ollama_models.contains(&ModelId::OllamaNemotron3Nano30bCloud));
-    assert_eq!(ollama_models.len(), 18);
+    assert_eq!(ollama_models.len(), 17);
 
     let lmstudio_models = ModelId::models_for_provider(Provider::LmStudio);
     assert!(lmstudio_models.contains(&ModelId::LmStudioMetaLlama38BInstruct));
@@ -643,6 +598,5 @@ fn test_fallback_models() {
     assert!(fallbacks.contains(&ModelId::ClaudeSonnet45));
     assert!(fallbacks.contains(&ModelId::DeepSeekReasoner));
     assert!(fallbacks.contains(&ModelId::XaiGrok4));
-    assert!(fallbacks.contains(&ModelId::ZaiGlm46));
     assert!(fallbacks.contains(&ModelId::OpenRouterGrokCodeFast1));
 }

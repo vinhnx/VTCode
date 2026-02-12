@@ -13,7 +13,6 @@ pub const SUPPORTED_MODELS: &[&str] = &[
     KIMI_K2_1T_CLOUD,
     KIMI_K2_5_CLOUD,
     QWEN3_CODER_480B_CLOUD,
-    GLM_46_CLOUD,
     GLM_47_CLOUD,
     GEMINI_3_PRO_PREVIEW_LATEST_CLOUD,
     GEMINI_3_FLASH_PREVIEW_CLOUD,
@@ -36,7 +35,6 @@ pub const REASONING_MODELS: &[&str] = &[
     KIMI_K2_1T_CLOUD,
     KIMI_K2_5_CLOUD,
     QWEN3_CODER_480B_CLOUD,
-    GLM_46_CLOUD,
     GLM_47_CLOUD,
     GEMINI_3_PRO_PREVIEW_LATEST_CLOUD,
     GEMINI_3_FLASH_PREVIEW_CLOUD,
@@ -51,7 +49,6 @@ pub const REASONING_LEVEL_MODELS: &[&str] = &[
     GPT_OSS_20B,
     GPT_OSS_20B_CLOUD,
     GPT_OSS_120B_CLOUD,
-    GLM_46_CLOUD,
     GLM_47_CLOUD,
     MINIMAX_M2_CLOUD,
     MINIMAX_M21_CLOUD,
@@ -69,7 +66,6 @@ pub const KIMI_K2_THINKING_CLOUD: &str = "kimi-k2-thinking:cloud";
 pub const KIMI_K2_1T_CLOUD: &str = "kimi-k2:1t-cloud";
 pub const KIMI_K2_5_CLOUD: &str = "kimi-k2.5:cloud";
 pub const QWEN3_CODER_480B_CLOUD: &str = "qwen3-coder:480b-cloud";
-pub const GLM_46_CLOUD: &str = "glm-4.6:cloud";
 pub const GLM_47_CLOUD: &str = "glm-4.7:cloud";
 pub const GEMINI_3_PRO_PREVIEW_LATEST_CLOUD: &str = "gemini-3-pro-preview:latest";
 pub const GEMINI_3_FLASH_PREVIEW_CLOUD: &str = "gemini-3-flash-preview:cloud";
