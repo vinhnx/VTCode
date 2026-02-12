@@ -20,10 +20,10 @@ use crate::agent::runloop::unified::progress::ProgressReporter;
 use crate::agent::runloop::unified::run_loop_context::RunLoopContext;
 use crate::agent::runloop::unified::state::CtrlCState;
 use crate::agent::runloop::unified::tool_routing::ToolPermissionFlow;
-use crate::agent::runloop::unified::turn::guards::validate_tool_args_security;
 use crate::agent::runloop::unified::turn::plan_content::parse_plan_content_from_json;
 use vtcode_core::config::constants::tools;
 use vtcode_core::exec::cancellation;
+use vtcode_core::tools::error_messages::agent_execution;
 use vtcode_core::tools::registry::ToolErrorType;
 use vtcode_core::tools::registry::{ToolRegistry, classify_error};
 use vtcode_core::ui::tui::PlanContent;
@@ -84,15 +84,10 @@ pub(crate) async fn run_tool_call(
     let tool_item_id = call.id.clone();
 
     if !prevalidated {
-        if let Some(validation_failures) =
-            validate_tool_args_security(name, &args_val, None, Some(ctx.tool_registry))
-        {
+        if let Err(err) = ctx.tool_registry.preflight_validate_call(name, &args_val) {
             return Ok(ToolPipelineOutcome::from_status(
                 ToolExecutionStatus::Failure {
-                    error: anyhow!(
-                        "Tool argument validation failed: {}",
-                        validation_failures.join("; ")
-                    ),
+                    error: anyhow!("Tool argument validation failed: {}", err),
                 },
             ));
         }
@@ -1204,16 +1199,10 @@ pub(crate) fn process_llm_tool_output(output: Value) -> ToolExecutionStatus {
             .and_then(|m| m.as_str())
             .unwrap_or("Tool blocked due to repeated identical invocations");
 
-        // Create a structured, explicit error message that clearly instructs the LLM to stop
-        // Format: Use clear directives and structured information for better LLM understanding
-        let clear_error_msg = format!(
-            "LOOP DETECTION: Tool '{}' has been called {} times with identical parameters and is now blocked.\n\n\
-                ACTION REQUIRED: DO NOT retry this tool call. The tool execution has been prevented to avoid infinite loops.\n\n\
-                If you need the result from this tool:\n\
-                1. Check if you already have the result from a previous successful call in your conversation history\n\
-                2. If not available, use a different approach or modify your request\n\n\
-                Original error: {}",
-            tool_name, repeat_count, base_error_msg
+        let clear_error_msg = agent_execution::loop_detection_block_message(
+            tool_name,
+            repeat_count,
+            Some(base_error_msg),
         );
         return ToolExecutionStatus::Failure {
             error: anyhow::anyhow!(clear_error_msg),

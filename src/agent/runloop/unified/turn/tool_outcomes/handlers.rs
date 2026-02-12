@@ -16,7 +16,6 @@ use crate::agent::runloop::unified::tool_routing::{
 use crate::agent::runloop::unified::turn::context::{
     TurnHandlerOutcome, TurnLoopResult, TurnProcessingContext,
 };
-use crate::agent::runloop::unified::turn::guards::validate_tool_args_security;
 use vtcode_core::config::constants::tools;
 
 use super::execution_result::handle_tool_execution_result;
@@ -149,26 +148,6 @@ pub(crate) async fn validate_tool_call<'a>(
     }
 
     ctx.harness_state.record_tool_call();
-
-    if let Some(validation_failures) = validate_tool_args_security(
-        tool_name,
-        args_val,
-        Some(&ctx.session_stats.validation_cache),
-        Some(ctx.tool_registry),
-    ) {
-        push_tool_response(
-            ctx.working_history,
-            tool_call_id.to_string(),
-            build_validation_error_content(
-                format!(
-                    "Tool argument validation failed: {}",
-                    validation_failures.join("; ")
-                ),
-                "security",
-            ),
-        );
-        return Ok(ValidationResult::Blocked);
-    }
 
     if let Err(err) = ctx
         .tool_registry

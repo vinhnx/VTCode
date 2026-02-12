@@ -10,6 +10,7 @@ pub mod custom;
 pub mod custom_slash_commands;
 pub mod generator;
 pub mod guidelines;
+pub mod harness_limits;
 pub mod output_styles;
 pub mod system;
 pub mod system_prompt_cache;
@@ -26,6 +27,7 @@ pub use custom_slash_commands::{
 };
 pub use generator::{SystemPromptGenerator, generate_system_instruction_with_config};
 pub use guidelines::{generate_tool_guidelines, infer_capability_level};
+pub use harness_limits::upsert_harness_limits_section;
 pub use system::{
     apply_output_style, generate_lightweight_instruction, generate_specialized_instruction,
     generate_system_instruction,

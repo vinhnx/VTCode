@@ -20,6 +20,7 @@ use crate::agent::runloop::unified::ui_interaction::{
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 use vtcode_core::llm::provider::{self as uni, ParallelToolConfig};
+use vtcode_core::prompts::upsert_harness_limits_section;
 use vtcode_core::turn_metadata;
 
 use vtcode_core::utils::ansi::AnsiRenderer;
@@ -39,66 +40,6 @@ fn is_retryable_llm_error(message: &str) -> bool {
     ]
     .iter()
     .any(|needle| msg.contains(needle))
-}
-
-fn find_prompt_section_bounds(prompt: &str, section_header: &str) -> Option<(usize, usize)> {
-    fn is_section_header_line(line: &str) -> bool {
-        let trimmed = line.trim();
-        trimmed.starts_with('[') && trimmed.ends_with(']')
-    }
-
-    let mut offset = 0usize;
-    let mut section_start = None;
-
-    for line in prompt.split_inclusive('\n') {
-        let trimmed = line.trim();
-        if section_start.is_none() && trimmed == section_header {
-            section_start = Some(offset);
-            offset += line.len();
-            continue;
-        }
-
-        if let Some(start) = section_start
-            && is_section_header_line(line)
-        {
-            return Some((start, offset));
-        }
-
-        offset += line.len();
-    }
-
-    section_start.map(|start| (start, prompt.len()))
-}
-
-fn upsert_harness_limits_section(
-    prompt: &mut String,
-    max_tool_calls_per_turn: usize,
-    max_tool_wall_clock_secs: u64,
-    max_tool_retries: u32,
-) {
-    while let Some((section_start, section_end)) =
-        find_prompt_section_bounds(prompt, "[Harness Limits]")
-    {
-        prompt.replace_range(section_start..section_end, "");
-    }
-
-    while prompt.ends_with('\n') {
-        prompt.pop();
-    }
-
-    if prompt.is_empty() {
-        let _ = writeln!(
-            prompt,
-            "[Harness Limits]\n- max_tool_calls_per_turn: {}\n- max_tool_wall_clock_secs: {}\n- max_tool_retries: {}",
-            max_tool_calls_per_turn, max_tool_wall_clock_secs, max_tool_retries
-        );
-    } else {
-        let _ = writeln!(
-            prompt,
-            "\n[Harness Limits]\n- max_tool_calls_per_turn: {}\n- max_tool_wall_clock_secs: {}\n- max_tool_retries: {}",
-            max_tool_calls_per_turn, max_tool_wall_clock_secs, max_tool_retries
-        );
-    }
 }
 
 /// Execute an LLM request and return the response
