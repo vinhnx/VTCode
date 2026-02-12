@@ -30,7 +30,10 @@ fn record_tool_execution(
     ctx.telemetry.record_tool_usage(tool_name, success);
 }
 
-fn build_error_content(
+/// Build standardized error content for tool failures.
+///
+/// This is the canonical error content builder used across all tool execution paths.
+pub(crate) fn build_error_content(
     error_msg: String,
     fallback_tool: Option<String>,
     failure_kind: &'static str,
@@ -311,8 +314,22 @@ async fn handle_plan_mode_auto_exit<'a, 'b>(
     Ok(())
 }
 
-fn record_mcp_tool_event(
+/// Record MCP tool execution event for the UI panel.
+///
+/// This is the canonical MCP event recorder used across all tool execution paths.
+pub(crate) fn record_mcp_tool_event(
     t_ctx: &mut super::handlers::ToolOutcomeContext<'_, '_>,
+    tool_name: &str,
+    status: &ToolExecutionStatus,
+) {
+    record_mcp_event_to_panel(&mut t_ctx.ctx.mcp_panel_state, tool_name, status);
+}
+
+/// Record MCP tool execution event directly to the MCP panel state.
+///
+/// This is the low-level MCP event recorder that can be called from any context.
+pub(super) fn record_mcp_event_to_panel(
+    mcp_panel_state: &mut mcp_events::McpPanelState,
     tool_name: &str,
     status: &ToolExecutionStatus,
 ) {
@@ -353,5 +370,5 @@ fn record_mcp_tool_event(
         ToolExecutionStatus::Progress(_) => {}
     }
 
-    t_ctx.ctx.mcp_panel_state.add_event(mcp_event);
+    mcp_panel_state.add_event(mcp_event);
 }

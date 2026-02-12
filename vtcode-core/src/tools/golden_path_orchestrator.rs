@@ -292,7 +292,6 @@ fn create_safety_gateway(config: &GoldenPathConfig, ctx: &ToolExecutionContext) 
     SafetyGateway::with_config(gateway_config)
 }
 
-
 /// Create a unified error with context
 fn create_error(
     kind: UnifiedErrorKind,

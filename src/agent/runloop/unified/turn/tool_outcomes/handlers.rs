@@ -37,14 +37,11 @@ const MAX_RATE_LIMIT_ACQUIRE_ATTEMPTS: usize = 4;
 const MAX_RATE_LIMIT_WAIT: Duration = Duration::from_secs(5);
 
 fn build_failure_error_content(error: String, failure_kind: &'static str) -> String {
-    serde_json::json!({
-        "error": error,
-        "failure_kind": failure_kind,
-    })
-    .to_string()
+    super::execution_result::build_error_content(error, None, failure_kind).to_string()
 }
 
 fn build_validation_error_content(error: String, validation_stage: &'static str) -> String {
+    // Validation errors have additional fields, so we construct them directly
     serde_json::json!({
         "error": error,
         "failure_kind": "validation",
@@ -153,9 +150,12 @@ pub(crate) async fn validate_tool_call<'a>(
 
     ctx.harness_state.record_tool_call();
 
-    if let Some(validation_failures) =
-        validate_tool_args_security(tool_name, args_val, None, Some(ctx.tool_registry))
-    {
+    if let Some(validation_failures) = validate_tool_args_security(
+        tool_name,
+        args_val,
+        Some(&ctx.session_stats.validation_cache),
+        Some(ctx.tool_registry),
+    ) {
         push_tool_response(
             ctx.working_history,
             tool_call_id.to_string(),
@@ -672,8 +672,7 @@ async fn execute_and_handle_tool_call_inner<'a>(
         let lifecycle_hooks = ctx.lifecycle_hooks;
         let vt_cfg = ctx.vt_cfg;
         let turn_index = ctx.working_history.len();
-        let mut turn_loop_ctx = ctx.as_turn_loop_context();
-        let mut run_loop_ctx = turn_loop_ctx.as_run_loop_context();
+        let mut run_loop_ctx = ctx.as_run_loop_context();
         run_tool_call(
             &mut run_loop_ctx,
             &synthesized_call,

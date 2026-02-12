@@ -857,13 +857,27 @@ fn format_instruction_path(path: &Path, project_root: &Path, home_dir: Option<&P
 }
 
 fn cache_key(project_root: &Path, vtcode_config: Option<&crate::config::VTCodeConfig>) -> String {
-    let root = project_root.display().to_string();
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+
+    let mut hasher = DefaultHasher::new();
+
+    // Core key: project root
+    project_root.hash(&mut hasher);
+
     if let Some(cfg) = vtcode_config {
-        let max_bytes = cfg.agent.instruction_max_bytes;
-        let files = cfg.agent.instruction_files.join(";");
-        return format!("sys_prompt_async:{root}:{max_bytes}:{files}");
+        // Config fields that affect prompt generation
+        cfg.agent.instruction_max_bytes.hash(&mut hasher);
+        cfg.agent.instruction_files.hash(&mut hasher);
+        cfg.agent.include_working_directory.hash(&mut hasher);
+        cfg.agent.include_temporal_context.hash(&mut hasher);
+        // Use discriminant since SystemPromptMode doesn't derive Hash
+        std::mem::discriminant(&cfg.agent.system_prompt_mode).hash(&mut hasher);
+    } else {
+        "default".hash(&mut hasher);
     }
-    format!("sys_prompt_async:{root}:default")
+
+    format!("sys_prompt:{:016x}", hasher.finish())
 }
 
 /// Generate a minimal system instruction (pi-inspired, <1K tokens)

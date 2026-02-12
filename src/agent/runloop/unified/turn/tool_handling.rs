@@ -8,7 +8,6 @@ use vtcode_core::core::trajectory::TrajectoryLogger;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::utils::ansi::MessageStyle;
 
-use crate::agent::runloop::mcp_events;
 use crate::agent::runloop::unified::tool_pipeline::{ToolExecutionStatus, ToolPipelineOutcome};
 use crate::agent::runloop::unified::turn::turn_loop::TurnLoopContext;
 use crate::agent::runloop::unified::turn::utils::{
@@ -149,50 +148,13 @@ pub(crate) async fn handle_tool_execution_result(
         }
     }
 
-    // Handle MCP events
+    // Handle MCP events using the shared MCP event recorder
     if tool_name.starts_with("mcp_") {
-        match tool_result {
-            ToolExecutionStatus::Success { output, .. } => {
-                let mut mcp_event = mcp_events::McpEvent::new(
-                    "mcp".to_string(),
-                    tool_name.to_string(),
-                    Some(serde_json::to_string(output).unwrap_or_else(|_| "{}".to_string())),
-                );
-                mcp_event.success(None);
-                ctx.mcp_panel_state.add_event(mcp_event);
-            }
-            ToolExecutionStatus::Failure { error } => {
-                let mut mcp_event = mcp_events::McpEvent::new(
-                    "mcp".to_string(),
-                    tool_name.to_string(),
-                    Some(serde_json::json!({"error": error.to_string()}).to_string()),
-                );
-                mcp_event.failure(Some(error.to_string()));
-                ctx.mcp_panel_state.add_event(mcp_event);
-            }
-            ToolExecutionStatus::Timeout { error } => {
-                let error_str = &error.message;
-                let mut mcp_event = mcp_events::McpEvent::new(
-                    "mcp".to_string(),
-                    tool_name.to_string(),
-                    Some(serde_json::json!({"error": error_str}).to_string()),
-                );
-                mcp_event.failure(Some(error_str.clone()));
-                ctx.mcp_panel_state.add_event(mcp_event);
-            }
-            ToolExecutionStatus::Cancelled => {
-                let mut mcp_event = mcp_events::McpEvent::new(
-                    "mcp".to_string(),
-                    tool_name.to_string(),
-                    Some(serde_json::json!({"error": "Cancelled"}).to_string()),
-                );
-                mcp_event.failure(Some("Cancelled".to_string()));
-                ctx.mcp_panel_state.add_event(mcp_event);
-            }
-            ToolExecutionStatus::Progress(_) => {
-                // Progress events are handled internally, no MCP event needed
-            }
-        }
+        super::tool_outcomes::execution_result::record_mcp_event_to_panel(
+            &mut ctx.mcp_panel_state,
+            tool_name,
+            tool_result,
+        );
     }
 
     Ok(())
