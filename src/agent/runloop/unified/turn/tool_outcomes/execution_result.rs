@@ -11,7 +11,10 @@ use crate::agent::runloop::unified::tool_output_handler::handle_pipeline_output_
 use crate::agent::runloop::unified::tool_pipeline::{ToolExecutionStatus, ToolPipelineOutcome};
 use crate::agent::runloop::unified::turn::turn_helpers::display_status;
 
-use super::helpers::{check_is_argument_error, push_tool_response, serialize_output};
+use super::helpers::{
+    EXIT_PLAN_MODE_REASON_AUTO_TRIGGER_ON_DENIAL, build_exit_plan_mode_args,
+    build_exit_plan_mode_call_id, check_is_argument_error, push_tool_response, serialize_output,
+};
 
 use crate::agent::runloop::unified::turn::context::TurnProcessingContext;
 
@@ -182,17 +185,7 @@ async fn handle_failure<'a>(
     let error_msg = format!("Tool '{}' execution failed: {}", tool_name, error);
     tracing::debug!(tool = %tool_name, error = %error, "Tool execution failed");
 
-    let fallback_tool = t_ctx
-        .ctx
-        .tool_registry
-        .suggest_fallback_tool(tool_name)
-        .await;
-    let error_content = build_error_content(error_msg, fallback_tool, "execution");
-    push_tool_response(
-        t_ctx.ctx.working_history,
-        tool_call_id,
-        error_content.to_string(),
-    );
+    push_tool_error_response(t_ctx, tool_call_id, tool_name, error_msg, "execution").await;
 
     // Handle auto-exit from Plan Mode if applicable
     if should_auto_exit {
@@ -211,19 +204,29 @@ async fn handle_timeout(
     let error_msg = format!("Tool '{}' timed out: {}", tool_name, error.message);
     tracing::debug!(tool = %tool_name, error = %error.message, "Tool timed out");
 
+    push_tool_error_response(t_ctx, tool_call_id, tool_name, error_msg, "timeout").await;
+
+    Ok(())
+}
+
+async fn push_tool_error_response(
+    t_ctx: &mut super::handlers::ToolOutcomeContext<'_, '_>,
+    tool_call_id: String,
+    tool_name: &str,
+    error_msg: String,
+    failure_kind: &'static str,
+) {
     let fallback_tool = t_ctx
         .ctx
         .tool_registry
         .suggest_fallback_tool(tool_name)
         .await;
-    let error_content = build_error_content(error_msg, fallback_tool, "timeout");
+    let error_content = build_error_content(error_msg, fallback_tool, failure_kind);
     push_tool_response(
         t_ctx.ctx.working_history,
         tool_call_id,
         error_content.to_string(),
     );
-
-    Ok(())
 }
 
 async fn handle_cancelled(
@@ -290,14 +293,12 @@ async fn handle_plan_mode_auto_exit<'a, 'b>(
     }
     *t_ctx.ctx.auto_exit_plan_mode_attempted = true;
 
-    let exit_args = serde_json::json!({
-        "reason": "auto_trigger_on_plan_denial"
-    });
+    let exit_args = build_exit_plan_mode_args(EXIT_PLAN_MODE_REASON_AUTO_TRIGGER_ON_DENIAL);
 
     // Generate a unique ID for the injected call
-    let exit_call_id = format!(
-        "call_auto_exit_plan_mode_{}",
-        trigger_start_time.elapsed().as_millis()
+    let exit_call_id = build_exit_plan_mode_call_id(
+        "call_auto_exit_plan_mode",
+        trigger_start_time.elapsed().as_millis(),
     );
 
     // HP-6: Use the unified execute_and_handle_tool_call so that recording and side-effects happen correctly

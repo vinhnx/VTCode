@@ -2,6 +2,8 @@
 
 use super::types::*;
 use crate::command_safety::UnifiedCommandEvaluator;
+use crate::command_safety::command_might_be_dangerous;
+use crate::command_safety::unified::EvaluationReason;
 use crate::config::CommandsConfig;
 use crate::execpolicy::{sanitize_working_dir, validate_command};
 use crate::tools::command_policy::CommandPolicyEvaluator;
@@ -82,6 +84,13 @@ impl CommandTool {
 
         // Unified command evaluation: combines safety rules + policy rules
         let confirm_ok = input.confirm.unwrap_or(false);
+        let risky_command = is_risky_command(command);
+        if risky_command && !confirm_ok {
+            return Err(anyhow!(
+                "Command appears destructive; set the `confirm` field to true to proceed."
+            ));
+        }
+
         let policy_allowed = self.policy.allows(command);
 
         // Use unified evaluator with policy layer
@@ -91,17 +100,22 @@ impl CommandTool {
             .await?;
 
         if !eval_result.allowed {
-            // If unified evaluator denied, forward to validator for custom checks
-            validate_command(command, &self.workspace_root, &working_dir, confirm_ok).await?;
+            // If unified evaluator denied, still allow explicitly confirmed risky commands
+            // when they are permitted by the configured policy.
+            let allow_confirmed_risky = risky_command
+                && confirm_ok
+                && policy_allowed
+                && matches!(
+                    eval_result.primary_reason,
+                    EvaluationReason::DangerousCommand(_)
+                );
+            if !allow_confirmed_risky {
+                // If unified evaluator denied, forward to validator for custom checks
+                validate_command(command, &self.workspace_root, &working_dir, confirm_ok).await?;
+            }
         }
 
-        // Require explicit confirmation for high-risk operations even if evaluator allows them
-        if is_risky_command(command) && !confirm_ok {
-            return Err(anyhow!(
-                "Command appears destructive; set the `confirm` field to true to proceed."
-            ));
-        }
-        if is_risky_command(command) && confirm_ok {
+        if risky_command && confirm_ok {
             // Record audit for the explicitly confirmed destructive command
             log_audit_for_command(
                 &format_command(command),
@@ -183,40 +197,29 @@ fn is_risky_command(command: &[String]) -> bool {
     if command.is_empty() {
         return false;
     }
+
+    // Centralized detection for dangerous command patterns (git/rm/mkfs/dd/etc.).
+    if command_might_be_dangerous(command) {
+        return true;
+    }
+
     let program = command[0].as_str();
     let args = &command[1..];
 
-    match program {
-        "git" => {
-            if args.is_empty() {
-                return false;
-            }
-            if args[0] == "reset"
-                && args
-                    .iter()
-                    .any(|a| a == "--hard" || a == "--merge" || a == "--keep")
-            {
-                return true;
-            }
-            if args[0] == "push" && args.iter().any(|a| a == "--force" || a == "-f") {
-                return true;
-            }
-            if args[0] == "clean" && args.iter().any(|a| a == "-f" || a == "-x" || a == "-d") {
-                return true;
-            }
-            false
-        }
-        "rm" => {
-            args.iter()
-                .any(|a| a == "-rf" || a == "-r" || a == "-f" || a == "-rf/")
-                || args.iter().any(|a| a == "/")
-        }
-        "docker" => args
-            .iter()
-            .any(|a| a == "run" && args.iter().any(|b| b == "--privileged")),
-        "kubectl" => true, // kubectl operations can be destructive; require confirmation
-        _ => false,
+    // Supplemental checks outside centralized detection coverage.
+    if program == "rm" && args.iter().any(|a| a == "/") {
+        return true;
     }
+
+    if program == "docker"
+        && args
+            .iter()
+            .any(|a| a == "run" && args.iter().any(|b| b == "--privileged"))
+    {
+        return true;
+    }
+
+    program == "kubectl" // kubectl operations can be destructive; require confirmation
 }
 
 #[allow(dead_code)]

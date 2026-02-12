@@ -69,6 +69,26 @@ pub fn is_safe_command(registry: &SafeCommandRegistry, command: &[String]) -> bo
     matches!(registry.is_safe(command), SafetyDecision::Allow)
 }
 
+/// Evaluate a shell command string by parsing it into subcommands and checking
+/// each with the centralized dangerous-command detector.
+///
+/// Falls back to whitespace tokenization when structured parsing fails.
+pub fn shell_string_might_be_dangerous(command: &str) -> bool {
+    if let Ok(parsed_commands) = shell_parser::parse_shell_commands(command)
+        && parsed_commands
+            .iter()
+            .any(|cmd| !cmd.is_empty() && command_might_be_dangerous(cmd))
+    {
+        return true;
+    }
+
+    let fallback_tokens: Vec<String> = command
+        .split_whitespace()
+        .map(ToString::to_string)
+        .collect();
+    !fallback_tokens.is_empty() && command_might_be_dangerous(&fallback_tokens)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -77,5 +97,12 @@ mod tests {
     fn empty_command_is_not_safe() {
         let registry = SafeCommandRegistry::new();
         assert!(!is_safe_command(&registry, &[]));
+    }
+
+    #[test]
+    fn shell_string_detects_dangerous_sequence() {
+        assert!(shell_string_might_be_dangerous(
+            "echo ok && git reset --hard HEAD~1"
+        ));
     }
 }
