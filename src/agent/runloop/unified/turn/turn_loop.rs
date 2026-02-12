@@ -30,22 +30,6 @@ use vtcode_core::utils::ansi::AnsiRenderer;
 use crate::agent::runloop::mcp_events;
 use vtcode_core::config::types::AgentConfig;
 
-#[allow(dead_code)]
-pub enum LlmHandleOutcome {
-    Success,
-    Failure,
-    Cancelled,
-}
-
-#[allow(dead_code)]
-pub enum TurnResultKind {
-    Completed,
-    Cancelled,
-    Failed,
-}
-
-// Note: the module references are kept similar to original file; compiler will resolve them.
-
 pub struct TurnLoopOutcome {
     pub result: TurnLoopResult,
     pub working_history: Vec<uni::Message>,

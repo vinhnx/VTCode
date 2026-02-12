@@ -85,7 +85,9 @@ pub fn classify_tool_intent(tool_name: &str, args: &Value) -> ToolIntent {
     }
 }
 
-fn unified_file_action(args: &Value) -> Option<&str> {
+/// Determine the action for unified_file tool based on args.
+/// Returns the action string or a default if inference is possible.
+pub fn unified_file_action(args: &Value) -> Option<&str> {
     args.get("action").and_then(|v| v.as_str()).or_else(|| {
         if args.get("old_str").is_some() {
             Some("edit")
@@ -101,7 +103,9 @@ fn unified_file_action(args: &Value) -> Option<&str> {
     })
 }
 
-fn unified_exec_action(args: &Value) -> Option<&str> {
+/// Determine the action for unified_exec tool based on args.
+/// Returns the action string or None if no inference is possible.
+pub fn unified_exec_action(args: &Value) -> Option<&str> {
     args.get("action").and_then(|v| v.as_str()).or_else(|| {
         if args.get("command").is_some() {
             Some("run")
@@ -111,6 +115,31 @@ fn unified_exec_action(args: &Value) -> Option<&str> {
             Some("write")
         } else if args.get("session_id").is_some() {
             Some("poll")
+        } else {
+            None
+        }
+    })
+}
+
+/// Determine the action for unified_search tool based on args.
+/// Returns the action string or None if no inference is possible.
+pub fn unified_search_action(args: &Value) -> Option<&str> {
+    args.get("action").and_then(|v| v.as_str()).or_else(|| {
+        // Smart action inference based on parameters
+        if args.get("pattern").is_some() || args.get("query").is_some() {
+            Some("grep")
+        } else if args.get("keyword").is_some() {
+            Some("tools")
+        } else if args.get("operation").is_some() {
+            Some("intelligence")
+        } else if args.get("url").is_some() {
+            Some("web")
+        } else if args.get("sub_action").is_some() || args.get("name").is_some() {
+            Some("skill")
+        } else if args.get("scope").is_some() {
+            Some("errors")
+        } else if args.get("path").is_some() {
+            Some("list")
         } else {
             None
         }

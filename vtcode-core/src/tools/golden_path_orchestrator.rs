@@ -20,6 +20,7 @@ use tracing::{debug, warn};
 use crate::tools::invocation::{InvocationBuilder, ToolInvocation, ToolInvocationId};
 use crate::tools::registry::{RiskLevel, ToolRegistry, WorkspaceTrust};
 use crate::tools::safety_gateway::{SafetyDecision, SafetyGateway, SafetyGatewayConfig};
+use crate::tools::tool_intent::classify_tool_intent;
 use crate::tools::unified_error::{UnifiedErrorKind, UnifiedToolError};
 use crate::tools::unified_executor::{ApprovalState, ToolExecutionContext, TrustLevel};
 
@@ -147,7 +148,7 @@ async fn execute_golden_path_with_gateway(
 
     // 2. Check plan mode enforcement
     if ctx.policy_config.plan_mode_enforced
-        && is_mutating_tool(tool_name)
+        && classify_tool_intent(tool_name, &args).mutating
         && !ctx.trust_level.can_mutate()
     {
         return Err(create_error(
@@ -229,7 +230,7 @@ pub async fn execute_batch_golden_path(
     // Partition into read-only and mutating
     let (read_only, mutating): (Vec<_>, Vec<_>) = calls
         .into_iter()
-        .partition(|(name, _)| !is_mutating_tool(name));
+        .partition(|(name, args)| !classify_tool_intent(name, args).mutating);
 
     // Execute read-only tools in parallel
     if !read_only.is_empty() {
@@ -291,20 +292,6 @@ fn create_safety_gateway(config: &GoldenPathConfig, ctx: &ToolExecutionContext) 
     SafetyGateway::with_config(gateway_config)
 }
 
-/// Check if a tool is mutating (modifies state)
-fn is_mutating_tool(name: &str) -> bool {
-    matches!(
-        name,
-        "write_file"
-            | "create_file"
-            | "apply_patch"
-            | "delete_file"
-            | "shell_command"
-            | "bash"
-            | "run_pty_cmd"
-            | "write_to_pty"
-    )
-}
 
 /// Create a unified error with context
 fn create_error(
@@ -417,12 +404,17 @@ mod tests {
 
     #[test]
     fn test_is_mutating_tool() {
-        assert!(is_mutating_tool("write_file"));
-        assert!(is_mutating_tool("bash"));
-        assert!(is_mutating_tool("apply_patch"));
-        assert!(!is_mutating_tool("read_file"));
-        assert!(!is_mutating_tool("grep_file"));
-        assert!(!is_mutating_tool("list_files"));
+        use serde_json::json;
+
+        // Mutating tools
+        assert!(classify_tool_intent("write_file", &json!({})).mutating);
+        assert!(classify_tool_intent("bash", &json!({})).mutating);
+        assert!(classify_tool_intent("apply_patch", &json!({})).mutating);
+
+        // Read-only tools
+        assert!(!classify_tool_intent("read_file", &json!({})).mutating);
+        assert!(!classify_tool_intent("grep_file", &json!({})).mutating);
+        assert!(!classify_tool_intent("list_files", &json!({})).mutating);
     }
 
     #[test]

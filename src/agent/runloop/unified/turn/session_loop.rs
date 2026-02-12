@@ -71,17 +71,6 @@ fn extract_idle_config(vt_cfg: Option<&VTCodeConfig>) -> IdleDetectionConfig {
         })
 }
 
-#[allow(dead_code)]
-enum TurnLoopResult {
-    Completed,
-    Aborted,
-    Cancelled,
-    Blocked { reason: Option<String> },
-}
-
-#[allow(dead_code)]
-const SELF_REVIEW_MIN_LENGTH: usize = 240;
-
 pub(crate) async fn run_single_agent_loop_unified(
     config: &CoreAgentConfig,
     _vt_cfg: Option<VTCodeConfig>,

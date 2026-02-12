@@ -1,5 +1,5 @@
 use super::FileOpsTool;
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Result, anyhow};
 use std::path::{Path, PathBuf};
 
 impl FileOpsTool {
@@ -59,38 +59,7 @@ impl FileOpsTool {
     }
 
     pub(super) async fn canonicalize_allow_missing(&self, normalized: &Path) -> Result<PathBuf> {
-        if tokio::fs::try_exists(normalized).await? {
-            return tokio::fs::canonicalize(normalized).await.with_context(|| {
-                format!(
-                    "Failed to resolve canonical path for '{}'.",
-                    normalized.display()
-                )
-            });
-        }
-
-        let mut current = normalized.to_path_buf();
-        while let Some(parent) = current.parent() {
-            if tokio::fs::try_exists(parent).await? {
-                let canonical_parent =
-                    tokio::fs::canonicalize(parent).await.with_context(|| {
-                        format!(
-                            "Failed to resolve canonical path for '{}'.",
-                            parent.display()
-                        )
-                    })?;
-                let remainder = normalized
-                    .strip_prefix(parent)
-                    .unwrap_or_else(|_| Path::new(""));
-                return if remainder.as_os_str().is_empty() {
-                    Ok(canonical_parent)
-                } else {
-                    Ok(canonical_parent.join(remainder))
-                };
-            }
-            current = parent.to_path_buf();
-        }
-
-        Ok(normalized.to_path_buf())
+        crate::utils::path::canonicalize_allow_missing(normalized).await
     }
 
     pub(super) fn resolve_file_path(&self, path: &str) -> Result<Vec<PathBuf>> {

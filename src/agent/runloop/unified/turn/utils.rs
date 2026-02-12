@@ -149,14 +149,6 @@ impl UIRedrawBatcher {
     }
 }
 
-#[allow(dead_code)]
-pub(super) fn safe_force_redraw(handle: &InlineHandle, last_forced_redraw: &mut Instant) {
-    if last_forced_redraw.elapsed() > std::time::Duration::from_millis(100) {
-        handle.force_redraw();
-        *last_forced_redraw = Instant::now();
-    }
-}
-
 pub(crate) fn render_hook_messages(
     renderer: &mut AnsiRenderer,
     messages: &[HookMessage],
