@@ -1361,6 +1361,25 @@ pub fn render_modal(session: &mut Session, frame: &mut Frame<'_>, viewport: Rect
         return;
     }
 
+    // Auto-approve modals when skip_confirmations is set (for tests and headless mode)
+    if session.skip_confirmations {
+        if let Some(mut modal) = session.modal.take() {
+            if let Some(list) = &mut modal.list {
+                if let Some(selection) = list.current_selection() {
+                    // Note: We can't easily emit an event from here without access to the sender.
+                    // Instead, we just clear the modal and assume the tool execution logic
+                    // or whatever triggered the modal will check skip_confirmations as well.
+                    // This is handled in ensure_tool_permission.
+                }
+            }
+            session.input_enabled = modal.restore_input;
+            session.cursor_visible = modal.restore_cursor;
+            session.needs_full_clear = true;
+            session.needs_redraw = true;
+            return;
+        }
+    }
+
     let styles = modal_render_styles(session);
     if let Some(wizard) = session.wizard_modal.as_mut() {
         let is_multistep = wizard.mode == crate::ui::tui::types::WizardModalMode::MultiStep;

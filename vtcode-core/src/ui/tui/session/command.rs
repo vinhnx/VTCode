@@ -176,6 +176,12 @@ pub fn handle_command(session: &mut Session, command: InlineCommand) {
         } => {
             show_diff_preview(session, file_path, before, after, hunks, current_hunk);
         }
+        InlineCommand::SetSkipConfirmations(skip) => {
+            session.skip_confirmations = skip;
+            if skip {
+                close_modal(session);
+            }
+        }
         InlineCommand::Shutdown => {
             request_exit(session);
         }

@@ -8,10 +8,6 @@ impl ModelId {
         }
         match self {
             // Gemini models
-            ModelId::Gemini25FlashPreview => "Gemini 2.5 Flash Preview",
-            ModelId::Gemini25Flash => "Gemini 2.5 Flash",
-            ModelId::Gemini25FlashLite => "Gemini 2.5 Flash Lite",
-            ModelId::Gemini25Pro => "Gemini 2.5 Pro",
             ModelId::Gemini3ProPreview => "Gemini 3 Pro Preview",
             ModelId::Gemini3FlashPreview => "Gemini 3 Flash",
             // OpenAI models
@@ -46,15 +42,7 @@ impl ModelId {
             ModelId::XaiGrok4CodeLatest => "Grok-4 Code Latest",
             ModelId::XaiGrok4Vision => "Grok-4 Vision",
             // Z.AI models
-            ModelId::ZaiGlm4Plus => "GLM 4 Plus",
-            ModelId::ZaiGlm4PlusDeepThinking => "GLM 4 Plus Deep Thinking",
-            ModelId::ZaiGlm47 => "GLM 4.7",
-            ModelId::ZaiGlm47DeepThinking => "GLM 4.7 Deep Thinking",
-            ModelId::ZaiGlm47Flash => "GLM 4.7 Flash",
             ModelId::ZaiGlm5 => "GLM 5",
-            ModelId::ZaiGlm432b0414128k => "GLM 4 32B 0414 128K",
-            // Moonshot models
-            ModelId::MoonshotKimiK25 => "Kimi K2.5",
             // Ollama models
             ModelId::OllamaGptOss20b => "GPT-OSS 20B (local)",
             ModelId::OllamaGptOss20bCloud => "GPT-OSS 20B (cloud)",
@@ -63,14 +51,12 @@ impl ModelId {
             ModelId::OllamaDeepseekV32Cloud => "DeepSeek V3.2 (cloud)",
             ModelId::OllamaQwen3Next80bCloud => "Qwen3 Next 80B (cloud)",
             ModelId::OllamaMistralLarge3675bCloud => "Mistral Large 3 675B (cloud)",
-            ModelId::OllamaKimiK2ThinkingCloud => "Kimi K2 Thinking (cloud)",
-            ModelId::OllamaKimiK25Cloud => "Kimi K2.5 (cloud)",
             ModelId::OllamaQwen3Coder480bCloud => "Qwen3 Coder 480B (cloud)",
             ModelId::OllamaGemini3ProPreviewLatestCloud => "Gemini 3 Pro Preview (cloud)",
             ModelId::OllamaGemini3FlashPreviewCloud => "Gemini 3 Flash Preview (cloud)",
             ModelId::OllamaDevstral2123bCloud => "Devstral 2 123B (cloud)",
             ModelId::OllamaMinimaxM2Cloud => "MiniMax-M2 (cloud)",
-            ModelId::OllamaGlm47Cloud => "GLM-4.7 (cloud)",
+            ModelId::OllamaGlm5Cloud => "GLM-5 (cloud)",
             ModelId::OllamaMinimaxM21Cloud => "MiniMax-M2.1 (cloud)",
             ModelId::OllamaNemotron3Nano30bCloud => "Nemotron-3-Nano 30B (cloud)",
             ModelId::LmStudioMetaLlama38BInstruct => "Meta Llama 3 8B (LM Studio)",
@@ -83,11 +69,6 @@ impl ModelId {
             ModelId::HuggingFaceDeepseekV32 => "DeepSeek V3.2 (HF)",
             ModelId::HuggingFaceOpenAIGptOss20b => "GPT-OSS 20B (HF)",
             ModelId::HuggingFaceOpenAIGptOss120b => "GPT-OSS 120B (HF)",
-            ModelId::HuggingFaceGlm47 => "GLM-4.7 (HF)",
-            ModelId::HuggingFaceGlm47Novita => "GLM-4.7 (Novita)",
-            ModelId::HuggingFaceGlm47FlashNovita => "GLM-4.7-Flash (Novita)",
-            ModelId::HuggingFaceKimiK2Thinking => "Kimi K2 Thinking (HF)",
-            ModelId::HuggingFaceKimiK25Novita => "Kimi K2.5 (Novita)",
             ModelId::HuggingFaceMinimaxM21Novita => "MiniMax-M2.1 (Novita)",
             ModelId::HuggingFaceDeepseekV32Novita => "DeepSeek V3.2 (Novita)",
             ModelId::HuggingFaceXiaomiMimoV2FlashNovita => "MiMo-V2-Flash (Novita)",

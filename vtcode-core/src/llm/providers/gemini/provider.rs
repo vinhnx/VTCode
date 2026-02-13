@@ -14,7 +14,7 @@ impl GeminiProvider {
     pub fn new(api_key: String) -> Self {
         Self::with_model_internal(
             api_key,
-            models::google::GEMINI_2_5_FLASH.to_string(),
+            models::google::GEMINI_3_FLASH_PREVIEW.to_string(),
             None,
             None,
             TimeoutsConfig::default(),
@@ -54,7 +54,7 @@ impl GeminiProvider {
         _anthropic: Option<AnthropicConfig>,
     ) -> Self {
         let api_key_value = api_key.unwrap_or_default();
-        let model_value = resolve_model(model, models::google::GEMINI_2_5_FLASH);
+        let model_value = resolve_model(model, models::google::GEMINI_3_FLASH_PREVIEW);
 
         Self::with_model_internal(
             api_key_value,

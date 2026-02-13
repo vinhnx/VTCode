@@ -134,9 +134,9 @@
         "doc_comment": "Grok 4 - Flagship Grok 4 endpoint exposed through OpenRouter"
       }
     },
-    "z-ai/glm-4.6": {
-      "id": "z-ai/glm-4.6",
-      "name": "Z.AI: GLM 4.6",
+    "z-ai/glm-5": {
+      "id": "z-ai/glm-5",
+      "name": "Z.AI: GLM 5",
       "reasoning": true,
       "tool_call": true,
       "modalities": {
@@ -154,25 +154,26 @@
         "output": 1.75e-06
       },
       "vtcode": {
-        "variant": "OpenRouterZaiGlm46",
-        "constant": "Z_AI_GLM_4_6",
+        "variant": "OpenRouterZaiGlm5",
+        "constant": "Z_AI_GLM_5",
         "vendor": "zai",
-        "display": "GLM 4.6",
-        "description": "Z.AI GLM 4.6 long-context reasoning model",
+        "display": "GLM 5",
+        "description": "Z.AI GLM 5 long-context reasoning model",
         "efficient": false,
         "top_tier": true,
-        "generation": "GLM-4.6",
-        "doc_comment": "GLM 4.6 - Z.AI GLM 4.6 long-context reasoning model"
+        "generation": "GLM-5",
+        "doc_comment": "GLM 5 - Z.AI GLM 5 long-context reasoning model"
       }
     },
-    "moonshotai/kimi-k2-0905": {
-      "id": "moonshotai/kimi-k2-0905",
-      "name": "MoonshotAI: Kimi K2 0905",
-      "reasoning": false,
+    "moonshotai/kimi-k2.5": {
+      "id": "moonshotai/kimi-k2.5",
+      "name": "MoonshotAI: Kimi K2.5",
+      "reasoning": true,
       "tool_call": true,
       "modalities": {
         "input": [
-          "text"
+          "text",
+          "image"
         ],
         "output": [
           "text"
@@ -185,15 +186,15 @@
         "output": 1.9e-06
       },
       "vtcode": {
-        "variant": "OpenRouterMoonshotaiKimiK20905",
-        "constant": "MOONSHOTAI_KIMI_K2_0905",
+        "variant": "OpenRouterMoonshotaiKimiK25",
+        "constant": "MOONSHOTAI_KIMI_K2_5",
         "vendor": "moonshotai",
-        "display": "Kimi K2 0905",
-        "description": "MoonshotAI Kimi K2 0905 MoE release optimised for coding agents",
+        "display": "Kimi K2.5",
+        "description": "Latest MoonshotAI Kimi K2.5 release optimised for coding agents",
         "efficient": false,
         "top_tier": true,
-        "generation": "K2-0905",
-        "doc_comment": "Kimi K2 0905 - MoonshotAI Kimi K2 0905 MoE release optimised for coding agents"
+        "generation": "K2.5",
+        "doc_comment": "Kimi K2.5 - MoonshotAI Kimi K2.5 release optimised for coding agents"
       }
     },
     "qwen/qwen3-max": {

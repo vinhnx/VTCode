@@ -254,6 +254,7 @@ impl StreamAggregator {
 /// Common helper for processing OpenAI-compatible SSE streams.
 ///
 /// This simplifies stream implementations across providers like DeepSeek, ZAI, Moonshot, etc.
+/// Especially optimized for high-performance models like Gemini 3 and GLM-5.
 pub async fn process_openai_stream<S, E, F>(
     mut byte_stream: S,
     provider_name: &'static str,

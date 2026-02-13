@@ -101,7 +101,7 @@ The script generates:
 
 ### Model Comparison Chart
 
-![Comparison Chart](../../docs/benchmarks/reports/comparison_gemini-2.5-flash-lite_vs_gpt-5-nano.png)
+![Comparison Chart](../../docs/benchmarks/reports/comparison_gemini-3-flash-preview_vs_gpt-5-nano.png)
 
 **Key Observations:**
 
@@ -113,9 +113,9 @@ The script generates:
 
 ### Individual Model Chart
 
-![Gemini Chart](../../docs/benchmarks/reports/HE_20251022-135834_gemini-2.5-flash-lite_tools-0_N164_chart.png)
+![Gemini Chart](../../docs/benchmarks/reports/HE_20251022-135834_gemini-3-flash-preview_tools-0_N164_chart.png)
 
-**gemini-2.5-flash-lite Observations:**
+**gemini-3-flash-preview Observations:**
 
 1. **Pass Rate**: 61.6% - good for development and rapid iteration
 2. **Speed**: Sub-second latency (0.97s) - 10x faster than gpt-5-nano

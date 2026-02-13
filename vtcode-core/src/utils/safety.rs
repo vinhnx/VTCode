@@ -25,19 +25,19 @@ impl SafetyValidator {
         use crate::config::constants::models;
         // Parse the requested model
         let model_id = match requested_model {
-            s if s == models::GEMINI_2_5_PRO => Some(ModelId::Gemini25Pro),
-            s if s == models::GEMINI_2_5_FLASH_PREVIEW => Some(ModelId::Gemini25FlashPreview),
+            s if s == models::google::GEMINI_3_PRO_PREVIEW => Some(ModelId::Gemini3ProPreview),
+            s if s == models::google::GEMINI_3_FLASH_PREVIEW => Some(ModelId::Gemini3FlashPreview),
             _ => None,
         };
 
         // Check if this is the most capable (and expensive) model
-        if let Some(ModelId::Gemini25Pro) = model_id {
+        if let Some(ModelId::Gemini3ProPreview) = model_id {
             let current_default = ModelId::default();
 
             if skip_confirmations {
                 println!(
                     "{}",
-                    style("Using Gemini 2.5 Pro model (confirmations skipped)").cyan()
+                    style("Using Gemini 3 Pro model (confirmations skipped)").cyan()
                 );
                 return Ok(requested_model.to_string());
             }
@@ -45,7 +45,7 @@ impl SafetyValidator {
             if PRO_MODEL_AUTO_ACCEPT.load(Ordering::Relaxed) {
                 println!(
                     "{}",
-                    style("Using Gemini 2.5 Pro model (auto-accept enabled)").cyan()
+                    style("Using Gemini 3 Pro model (auto-accept enabled)").cyan()
                 );
                 return Ok(requested_model.to_string());
             }
@@ -98,7 +98,7 @@ impl SafetyValidator {
         match (from_id, to_id) {
             (Some(from), Some(to)) => {
                 // Switching to Pro model requires confirmation
-                !matches!(to, ModelId::Gemini25Pro) || matches!(from, ModelId::Gemini25Pro)
+                !matches!(to, ModelId::Gemini3ProPreview) || matches!(from, ModelId::Gemini3ProPreview)
             }
             _ => true, // Unknown models are allowed
         }
@@ -123,13 +123,13 @@ impl SafetyValidator {
         // Model-specific recommendations
         use crate::config::constants::models;
         match model {
-            s if s == models::GEMINI_2_5_FLASH_PREVIEW => {
+            s if s == models::google::GEMINI_3_FLASH_PREVIEW => {
                 println!("{}", style("[FAST] Using balanced model:").green());
                 println!("• Good quality responses");
                 println!("• Reasonable cost");
                 println!("• Fast response times");
             }
-            s if s == models::GEMINI_2_5_PRO => {
+            s if s == models::google::GEMINI_3_PRO_PREVIEW => {
                 println!("{}", style("Using most capable model:").cyan());
                 println!("• Highest quality responses");
                 println!("• Higher cost per token");
@@ -163,8 +163,8 @@ impl SafetyValidator {
         let mut warnings = Vec::new();
 
         // Check for expensive model usage
-        if model == models::GEMINI_2_5_PRO {
-            warnings.push("Using most expensive model (Gemini 2.5 Pro)");
+        if model == models::google::GEMINI_3_PRO_PREVIEW {
+            warnings.push("Using most expensive model (Gemini 3 Pro)");
         }
 
         // Single-agent mode uses standard resource usage

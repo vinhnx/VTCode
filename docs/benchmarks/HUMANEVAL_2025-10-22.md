@@ -5,7 +5,7 @@
 VT Code was evaluated on the complete HumanEval benchmark (164 programming problems) using two models:
 
 1. **gpt-5-nano (OpenAI):** Achieved **94.5% pass@1 rate** - frontier-tier performance, ranking in TOP 5 globally, very affordable pricing
-2. **gemini-2.5-flash-lite (Google):** Achieved **61.6% pass@1 rate** - 10x faster, completely free, perfect for rapid iteration
+2. **gemini-3-flash-preview (Google):** Achieved **61.6% pass@1 rate** - 10x faster, completely free, perfect for rapid iteration
 
 Strategic choice based on budget and accuracy needs.
 
@@ -24,13 +24,13 @@ Strategic choice based on budget and accuracy needs.
 | Model | Provider | Max Tokens | Cost |
 |-------|----------|------------|------|
 | gpt-5-nano | OpenAI | 1024 | ~$0.10-0.30/1M |
-| gemini-2.5-flash-lite | Google | 1024 | $0.00 (free) |
+| gemini-3-flash-preview | Google | 1024 | $0.00 (free) |
 
 ## Results
 
 ### Visual Overview
 
-![Model Comparison](../../docs/benchmarks/reports/comparison_gemini-2.5-flash-lite_vs_gpt-5-nano.png)
+![Model Comparison](../../docs/benchmarks/reports/comparison_gemini-3-flash-preview_vs_gpt-5-nano.png)
 
 **Comparison Chart:** Shows side-by-side performance of both models including pass rates, latency distributions, and detailed metrics.
 
@@ -78,7 +78,7 @@ Strategic choice based on budget and accuracy needs.
 | Output Tokens      | 0\*         |
 | **Estimated Cost** | **$0.0000** |
 
-> **Note:** Token counts not currently reported by vtcode. The `gemini-2.5-flash-lite` model is in Google's free tier, resulting in zero actual cost for this benchmark.
+> **Note:** Token counts not currently reported by vtcode. The `gemini-3-flash-preview` model is in Google's free tier, resulting in zero actual cost for this benchmark.
 
 ## Methodology
 
@@ -155,7 +155,7 @@ Of the 63 failed tests:
 | ------------------------- | -------------- | --------------------------------- |
 | GPT-4                     | ~67-80%        | Higher capability, higher cost    |
 | Claude 3 Opus             | ~70-84%        | Strong reasoning, premium pricing |
-| **gemini-2.5-flash-lite** | **61.6%**      | **Fast, free, good balance**      |
+| **gemini-3-flash-preview** | **61.6%**      | **Fast, free, good balance**      |
 | GPT-3.5                   | ~48-65%        | Older generation baseline         |
 | Code-specific models      | ~70-85%        | Specialized for coding tasks      |
 
@@ -178,7 +178,7 @@ cargo build --release
 ```bash
 make bench-humaneval \
   PROVIDER=gemini \
-  MODEL='gemini-2.5-flash-lite' \
+  MODEL='gemini-3-flash-preview' \
   N_HE=164 \
   SEED=42 \
   USE_TOOLS=0 \
@@ -197,7 +197,7 @@ export GEMINI_API_KEY="your_api_key_here"
 
 ```json
 {
-    "report_path": "reports/HE_20251022-135834_gemini-2.5-flash-lite_tools-0_N164.json",
+    "report_path": "reports/HE_20251022-135834_gemini-3-flash-preview_tools-0_N164.json",
     "summary": {
         "n": 164,
         "pass_at_1": 0.6158536585365854,
@@ -241,7 +241,7 @@ export GEMINI_API_KEY="your_api_key_here"
 
 ## References
 
--   **Full Report:** [reports/HE_20251022-135834_gemini-2.5-flash-lite_tools-0_N164.json](../../docs/benchmarks/reports/HE_20251022-135834_gemini-2.5-flash-lite_tools-0_N164.json)
+-   **Full Report:** [reports/HE_20251022-135834_gemini-3-flash-preview_tools-0_N164.json](../../docs/benchmarks/reports/HE_20251022-135834_gemini-3-flash-preview_tools-0_N164.json)
 -   **Benchmark Script:** [scripts/bench_humaneval.py](../../scripts/bench_humaneval.py)
 -   **HumanEval Paper:** [Evaluating Large Language Models Trained on Code](https://arxiv.org/abs/2107.03374)
 -   **Dataset:** [openai/human-eval](https://github.com/openai/human-eval)

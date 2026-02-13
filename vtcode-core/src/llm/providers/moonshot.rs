@@ -34,7 +34,7 @@ impl MoonshotProvider {
     pub fn new(api_key: String) -> Self {
         Self::with_model_internal(
             api_key,
-            models::moonshot::DEFAULT_MODEL.to_string(),
+            "kimi-latest".to_string(),
             None,
             None,
         )
@@ -68,7 +68,7 @@ impl MoonshotProvider {
         _anthropic: Option<AnthropicConfig>,
     ) -> Self {
         let api_key_value = api_key.unwrap_or_default();
-        let model_value = resolve_model(model, models::moonshot::DEFAULT_MODEL);
+        let model_value = resolve_model(model, "kimi-latest");
 
         Self::with_model_internal(api_key_value, model_value, base_url, timeouts)
     }

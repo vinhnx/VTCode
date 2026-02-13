@@ -440,7 +440,7 @@ mod tests {
         vt_cfg.agent.onboarding.chat_placeholder = Some("Type your plan".into());
 
         let runtime_cfg = CoreAgentConfig {
-            model: vtcode_core::config::constants::models::google::GEMINI_2_5_FLASH_PREVIEW
+            model: vtcode_core::config::constants::models::google::GEMINI_3_FLASH_PREVIEW
                 .to_string(),
             api_key: "test".to_string(),
             provider: "gemini".to_string(),
@@ -524,7 +524,7 @@ mod tests {
             .expect("Failed to write README.md");
 
         let runtime_cfg = CoreAgentConfig {
-            model: vtcode_core::config::constants::models::google::GEMINI_2_5_FLASH_PREVIEW
+            model: vtcode_core::config::constants::models::google::GEMINI_3_FLASH_PREVIEW
                 .to_string(),
             api_key: "test".to_string(),
             provider: "gemini".to_string(),
@@ -589,7 +589,7 @@ mod tests {
         vt_cfg.agent.onboarding.chat_placeholder = Some("Type your plan".into());
 
         let runtime_cfg = CoreAgentConfig {
-            model: vtcode_core::config::constants::models::google::GEMINI_2_5_FLASH_PREVIEW
+            model: vtcode_core::config::constants::models::google::GEMINI_3_FLASH_PREVIEW
                 .to_string(),
             api_key: "test".to_string(),
             provider: "gemini".to_string(),

@@ -240,7 +240,7 @@ MBPP          HumanEval          SWE-bench
 - Free with VT Code
 
 ```bash
-make bench-humaneval PROVIDER=gemini MODEL='gemini-2.5-flash-lite'
+make bench-humaneval PROVIDER=gemini MODEL='gemini-3-flash-preview'
 ```
 
 ### 2. Comprehensive Evaluation
@@ -325,7 +325,7 @@ SWE-bench Score ≈ HumanEval Score × 0.2-0.3
 
 ```bash
 # 1. Daily: Quick validation with HumanEval
-make bench-humaneval PROVIDER=gemini MODEL='gemini-2.5-flash-lite'
+make bench-humaneval PROVIDER=gemini MODEL='gemini-3-flash-preview'
 
 # 2. Weekly: Add MBPP for broader coverage
 python3 scripts/bench_mbpp.py N_TASKS=50

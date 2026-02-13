@@ -22,6 +22,11 @@ impl LLMProvider for OpenRouterProvider {
         true
     }
 
+    fn supports_tools(&self, model: &str) -> bool {
+        use crate::config::constants::models;
+        !models::openrouter::TOOL_UNAVAILABLE_MODELS.contains(&model)
+    }
+
     async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
         let model = request.model.clone();
         let openai_request = self.convert_to_openrouter_format(&request)?;

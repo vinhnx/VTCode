@@ -16,18 +16,10 @@ mod provider;
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ModelId {
     // Gemini models
-    /// Gemini 2.5 Flash Preview - Latest fast model with advanced capabilities
-    #[default]
-    Gemini25FlashPreview,
-    /// Gemini 2.5 Flash - Legacy alias for flash preview
-    Gemini25Flash,
-    /// Gemini 2.5 Flash Lite - Legacy alias for flash preview (lite)
-    Gemini25FlashLite,
-    /// Gemini 2.5 Pro - Latest most capable Gemini model
-    Gemini25Pro,
     /// Gemini 3 Pro Preview - Preview of next-generation Gemini model
     Gemini3ProPreview,
     /// Gemini 3 Flash Preview - Our most intelligent model built for speed, combining frontier intelligence with superior search and grounding
+    #[default]
     Gemini3FlashPreview,
 
     // OpenAI models
@@ -90,16 +82,6 @@ pub enum ModelId {
     HuggingFaceOpenAIGptOss20b,
     /// OpenAI GPT-OSS 120B via Hugging Face router
     HuggingFaceOpenAIGptOss120b,
-    /// Z.AI GLM-4.7 via Hugging Face router
-    HuggingFaceGlm47,
-    /// Z.AI GLM-4.7 via Novita on Hugging Face router
-    HuggingFaceGlm47Novita,
-    /// Z.AI GLM-4.7-Flash via Novita on Hugging Face router
-    HuggingFaceGlm47FlashNovita,
-    /// MoonshotAI Kimi K2 Thinking via Hugging Face router
-    HuggingFaceKimiK2Thinking,
-    /// MoonshotAI Kimi K2.5 via Novita on Hugging Face router
-    HuggingFaceKimiK25Novita,
     /// MiniMax M2.1 via Novita on Hugging Face router - Enhanced reasoning
     HuggingFaceMinimaxM21Novita,
     /// DeepSeek V3.2 via Novita on Hugging Face router
@@ -123,25 +105,10 @@ pub enum ModelId {
     /// Grok-4 Vision - Multimodal Grok model
     XaiGrok4Vision,
 
-    // Z.AI models
-    /// GLM-4-Plus - Flagship GLM model with top-tier reasoning
-    ZaiGlm4Plus,
-    /// GLM-4-Plus Deep Thinking - Flagship GLM with forced reasoning
-    ZaiGlm4PlusDeepThinking,
-    /// GLM-4.7 - Latest flagship GLM reasoning model
-    ZaiGlm47,
-    /// GLM-4.7 Deep Thinking - GLM-4.7 with forced reasoning
-    ZaiGlm47DeepThinking,
-    /// GLM-4.7 Flash - Lightweight GLM-4.7 model optimized for agentic coding
-    ZaiGlm47Flash,
     /// GLM-5 - Flagship Z.ai foundation model for complex systems
     ZaiGlm5,
-    /// GLM-4-32B-0414-128K - Legacy long-context GLM deployment
-    ZaiGlm432b0414128k,
 
     // Moonshot models
-    /// Kimi K2.5 - Versatile multimodal model with reasoning support
-    MoonshotKimiK25,
 
     // Ollama models
     /// GPT-OSS 20B - Open-weight GPT-OSS 20B model served via Ollama locally
@@ -158,10 +125,6 @@ pub enum ModelId {
     OllamaQwen3Next80bCloud,
     /// Mistral Large 3 675B Cloud - Mistral Large 3 reasoning model via Ollama Cloud
     OllamaMistralLarge3675bCloud,
-    /// Kimi K2 Thinking Cloud - MoonshotAI Kimi K2 thinking model via Ollama Cloud
-    OllamaKimiK2ThinkingCloud,
-    /// Kimi K2.5 Cloud - MoonshotAI Kimi K2.5 multimodal model via Ollama Cloud
-    OllamaKimiK25Cloud,
     /// Qwen3 Coder 480B Cloud - Cloud-hosted Qwen3 Coder model served via Ollama Cloud
     OllamaQwen3Coder480bCloud,
     /// Gemini 3 Pro Preview Latest Cloud - Google Gemini 3 Pro Preview via Ollama Cloud
@@ -170,8 +133,8 @@ pub enum ModelId {
     OllamaDevstral2123bCloud,
     /// MiniMax-M2 Cloud - Cloud-hosted MiniMax-M2 model served via Ollama Cloud
     OllamaMinimaxM2Cloud,
-    /// GLM-4.7 Cloud - Cloud-hosted GLM-4.7 model served via Ollama Cloud
-    OllamaGlm47Cloud,
+    /// GLM-5 Cloud - Cloud-hosted GLM-5 model served via Ollama Cloud
+    OllamaGlm5Cloud,
     /// MiniMax-M2.1 Cloud - Cloud-hosted MiniMax-M2.1 model served via Ollama Cloud
     OllamaMinimaxM21Cloud,
     /// Gemini 3 Flash Preview Cloud - Google Gemini 3 Flash Preview via Ollama Cloud
@@ -210,12 +173,6 @@ pub enum ModelId {
     OpenRouterGrok41Fast,
     /// Grok 4 - Flagship Grok 4 endpoint exposed through OpenRouter
     OpenRouterGrok4,
-    /// Kimi K2 0905 - MoonshotAI Kimi K2 0905 MoE release optimised for coding agents
-    OpenRouterMoonshotaiKimiK20905,
-    /// Kimi K2 Thinking - MoonshotAI reasoning-tier Kimi K2 release optimized for long-horizon agents
-    OpenRouterMoonshotaiKimiK2Thinking,
-    /// Kimi K2.5 - MoonshotAI Kimi K2.5 versatile multimodal model supporting text and vision input
-    OpenRouterMoonshotaiKimiK25,
     /// Qwen3 Max - Flagship Qwen3 mixture for general reasoning
     OpenRouterQwen3Max,
     /// Qwen3 235B A22B - Mixture-of-experts Qwen3 235B general model
@@ -309,12 +266,8 @@ pub enum ModelId {
     OpenRouterOpenAIGpt52Pro,
     /// OpenAI o1-pro - OpenAI o1-pro advanced reasoning model via OpenRouter
     OpenRouterOpenAIO1Pro,
-    /// GLM 4.7 - Z.AI GLM 4.7 next-generation reasoning model
-    OpenRouterZaiGlm47,
     /// Step 3.5 Flash (free) - StepFun's most capable open-source reasoning model via OpenRouter
     OpenRouterStepfunStep35FlashFree,
-    /// GLM 4.7 Flash - Z.AI GLM-4.7-Flash lightweight model via OpenRouter
-    OpenRouterZaiGlm47Flash,
     /// GLM-5 - Z.AI GLM-5 flagship foundation model via OpenRouter
     OpenRouterZaiGlm5,
 }

@@ -184,7 +184,7 @@ VT Code uses a comprehensive TOML configuration system. The `init` command creat
 ```toml
 # Agent settings
 [agent]
-model = "gemini-2.5-flash-lite"  # Your preferred model
+model = "gemini-3-flash-preview"  # Your preferred model
 max_conversation_turns = 1000
 verbose_logging = false
 

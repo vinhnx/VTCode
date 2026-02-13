@@ -195,14 +195,6 @@ pub fn find_family_for_model(slug: &str) -> ModelFamily {
             supports_reasoning_summaries: true,
         );
     }
-    if slug.starts_with("gemini-2.5") {
-        return model_family!(
-            slug, "gemini-2.5", Provider::Gemini,
-            context_window: Some(LARGE_CONTEXT_WINDOW),
-            supports_thinking: true,
-            supports_parallel_tool_calls: true,
-        );
-    }
     if slug.starts_with("gemini") {
         return model_family!(
             slug, "gemini", Provider::Gemini,
@@ -313,9 +305,9 @@ pub fn find_family_for_model(slug: &str) -> ModelFamily {
     }
 
     // Z.AI GLM models
-    if slug.contains("glm-4.7") || slug.contains("glm-5") {
+    if slug.contains("glm-5") {
         return model_family!(
-            slug, "glm-4", Provider::ZAI,
+            slug, "glm-5", Provider::ZAI,
             context_window: Some(DEFAULT_CONTEXT_WINDOW),
             supports_thinking: true,
         );
@@ -391,8 +383,8 @@ mod tests {
 
     #[test]
     fn test_gemini_family_detection() {
-        let family = find_family_for_model("gemini-2.5-flash");
-        assert_eq!(family.family, "gemini-2.5");
+        let family = find_family_for_model("gemini-3-flash-preview");
+        assert_eq!(family.family, "gemini-3");
         assert_eq!(family.provider, Provider::Gemini);
         assert!(family.context_window.unwrap() >= LARGE_CONTEXT_WINDOW);
     }

@@ -78,7 +78,7 @@ pub struct Cli {
     )]
     pub workspace_path: Option<PathBuf>,
 
-    /// LLM Model ID (e.g., gpt-5, claude-sonnet-4-5, gemini-2.5-flash)
+    /// LLM Model ID (e.g., gpt-5, claude-sonnet-4-5, gemini-3-flash-preview)
     #[arg(long, global = true)]
     pub model: Option<String>,
 
@@ -914,7 +914,7 @@ impl Cli {
     ///
     /// Supported keys (top-level): model, api_key_env, verbose, log_level, workspace
     /// Example:
-    ///   model = "gemini-2.5-flash-preview-05-20"
+    ///   model = "gemini-3-flash-preview"
     ///   api_key_env = "GEMINI_API_KEY"
     ///   verbose = true
     ///   log_level = "info"

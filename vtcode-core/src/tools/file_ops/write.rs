@@ -83,6 +83,7 @@ impl FileOpsTool {
                     .open(&file_path)
                     .await?;
                 file.write_all(input.content.as_bytes()).await?;
+                file.flush().await?;
             }
             "skip_if_exists" => {
                 if file_exists {

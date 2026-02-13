@@ -210,7 +210,7 @@ fn gemini_presets() -> Vec<ModelPreset> {
                     description: "Deep reasoning".to_string(),
                 },
             ],
-            is_default: false,
+            is_default: true,
             upgrade: None,
             show_in_picker: true,
             supported_in_api: true,
@@ -221,56 +221,6 @@ fn gemini_presets() -> Vec<ModelPreset> {
             model: "gemini-3-pro-preview".to_string(),
             display_name: "Gemini 3 Pro Preview".to_string(),
             description: "Preview of next-generation Gemini with advanced reasoning".to_string(),
-            provider: Provider::Gemini,
-            default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Medium,
-                    description: "Balanced reasoning".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::High,
-                    description: "Deep reasoning".to_string(),
-                },
-            ],
-            is_default: false,
-            upgrade: None,
-            show_in_picker: true,
-            supported_in_api: true,
-            context_window: Some(1_048_576),
-        },
-        ModelPreset {
-            id: "gemini-2.5-flash".to_string(),
-            model: "gemini-2.5-flash".to_string(),
-            display_name: "Gemini 2.5 Flash".to_string(),
-            description: "Best price-performance for large scale processing".to_string(),
-            provider: Provider::Gemini,
-            default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Low,
-                    description: "Fastest responses".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Medium,
-                    description: "Balanced".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::High,
-                    description: "Maximum reasoning".to_string(),
-                },
-            ],
-            is_default: true,
-            upgrade: None,
-            show_in_picker: true,
-            supported_in_api: true,
-            context_window: Some(1_048_576),
-        },
-        ModelPreset {
-            id: "gemini-2.5-pro".to_string(),
-            model: "gemini-2.5-pro".to_string(),
-            display_name: "Gemini 2.5 Pro".to_string(),
-            description: "State-of-the-art thinking model for complex problems".to_string(),
             provider: Provider::Gemini,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
             supported_reasoning_efforts: vec![
@@ -573,10 +523,10 @@ fn xai_presets() -> Vec<ModelPreset> {
 fn zai_presets() -> Vec<ModelPreset> {
     vec![
         ModelPreset {
-            id: "glm-4.7".to_string(),
-            model: "glm-4.7".to_string(),
-            display_name: "GLM-4.7".to_string(),
-            description: "Latest flagship GLM reasoning model".to_string(),
+            id: "glm-5".to_string(),
+            model: "glm-5".to_string(),
+            display_name: "GLM-5".to_string(),
+            description: "Z.ai's flagship open-source foundation model for complex systems".to_string(),
             provider: Provider::ZAI,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
             supported_reasoning_efforts: vec![
@@ -593,7 +543,7 @@ fn zai_presets() -> Vec<ModelPreset> {
             upgrade: None,
             show_in_picker: true,
             supported_in_api: true,
-            context_window: Some(128_000),
+            context_window: Some(200_000),
         },
     ]
 }
@@ -666,10 +616,10 @@ fn ollama_presets() -> Vec<ModelPreset> {
 
 fn moonshot_presets() -> Vec<ModelPreset> {
     vec![ModelPreset {
-        id: "kimi-k2-thinking".to_string(),
-        model: "kimi-k2-thinking".to_string(),
-        display_name: "Kimi K2 Thinking".to_string(),
-        description: "Moonshot reasoning-tier model".to_string(),
+        id: "kimi-k2.5".to_string(),
+        model: "kimi-k2.5".to_string(),
+        display_name: "Kimi K2.5".to_string(),
+        description: "Latest Moonshot flagship model".to_string(),
         provider: Provider::Moonshot,
         default_reasoning_effort: ReasoningEffortLevel::Medium,
         supported_reasoning_efforts: vec![
@@ -686,7 +636,7 @@ fn moonshot_presets() -> Vec<ModelPreset> {
         upgrade: None,
         show_in_picker: true,
         supported_in_api: true,
-        context_window: Some(128_000),
+        context_window: Some(262_144),
     }]
 }
 

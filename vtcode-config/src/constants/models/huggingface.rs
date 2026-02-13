@@ -11,11 +11,6 @@ pub const SUPPORTED_MODELS: &[&str] = &[
     // Additional supported models
     DEEPSEEK_V32,
     OPENAI_GPT_OSS_20B,
-    ZAI_GLM_47,
-    ZAI_GLM_47_NOVITA,
-    ZAI_GLM_47_FLASH_NOVITA,
-    MOONSHOT_KIMI_K2_THINKING,
-    MOONSHOT_KIMI_K2_5_NOVITA,
     // Novita inference provider models
     MINIMAX_M2_1_NOVITA,
     DEEPSEEK_V32_NOVITA,
@@ -36,11 +31,6 @@ pub const DEEPSEEK_R1: &str = "deepseek-ai/DeepSeek-R1";
 // Additional supported models
 pub const DEEPSEEK_V32: &str = "deepseek-ai/DeepSeek-V3.2";
 pub const OPENAI_GPT_OSS_20B: &str = "openai/gpt-oss-20b";
-pub const ZAI_GLM_47: &str = "zai-org/GLM-4.7:zai-org";
-pub const ZAI_GLM_47_NOVITA: &str = "zai-org/GLM-4.7:novita";
-pub const ZAI_GLM_47_FLASH_NOVITA: &str = "zai-org/GLM-4.7-Flash:novita";
-pub const MOONSHOT_KIMI_K2_THINKING: &str = "moonshotai/Kimi-K2-Thinking";
-pub const MOONSHOT_KIMI_K2_5_NOVITA: &str = "moonshotai/Kimi-K2.5:novita";
 
 pub const MINIMAX_M2_1_NOVITA: &str = "MiniMaxAI/MiniMax-M2.1:novita";
 pub const DEEPSEEK_V32_NOVITA: &str = "deepseek-ai/DeepSeek-V3.2:novita";
@@ -57,11 +47,6 @@ pub const REASONING_MODELS: &[&str] = &[
     // Additional reasoning models
     DEEPSEEK_V32,
     OPENAI_GPT_OSS_20B,
-    ZAI_GLM_47,
-    ZAI_GLM_47_NOVITA,
-    ZAI_GLM_47_FLASH_NOVITA,
-    MOONSHOT_KIMI_K2_THINKING,
-    MOONSHOT_KIMI_K2_5_NOVITA,
     DEEPSEEK_V32_NOVITA,
     MINIMAX_M2_1_NOVITA,
     XIAOMI_MIMO_V2_FLASH_NOVITA,

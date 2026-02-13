@@ -9,11 +9,8 @@ pub const SUPPORTED_MODELS: &[&str] = &[
     DEEPSEEK_V32_CLOUD,
     QWEN3_NEXT_80B_CLOUD,
     MISTRAL_LARGE_3_675B_CLOUD,
-    KIMI_K2_THINKING_CLOUD,
-    KIMI_K2_1T_CLOUD,
-    KIMI_K2_5_CLOUD,
     QWEN3_CODER_480B_CLOUD,
-    GLM_47_CLOUD,
+    GLM_5_CLOUD,
     GEMINI_3_PRO_PREVIEW_LATEST_CLOUD,
     GEMINI_3_FLASH_PREVIEW_CLOUD,
     DEVSTRAL_2_123B_CLOUD,
@@ -31,11 +28,8 @@ pub const REASONING_MODELS: &[&str] = &[
     DEEPSEEK_V32_CLOUD,
     QWEN3_NEXT_80B_CLOUD,
     MISTRAL_LARGE_3_675B_CLOUD,
-    KIMI_K2_THINKING_CLOUD,
-    KIMI_K2_1T_CLOUD,
-    KIMI_K2_5_CLOUD,
     QWEN3_CODER_480B_CLOUD,
-    GLM_47_CLOUD,
+    GLM_5_CLOUD,
     GEMINI_3_PRO_PREVIEW_LATEST_CLOUD,
     GEMINI_3_FLASH_PREVIEW_CLOUD,
     DEVSTRAL_2_123B_CLOUD,
@@ -49,7 +43,7 @@ pub const REASONING_LEVEL_MODELS: &[&str] = &[
     GPT_OSS_20B,
     GPT_OSS_20B_CLOUD,
     GPT_OSS_120B_CLOUD,
-    GLM_47_CLOUD,
+    GLM_5_CLOUD,
     MINIMAX_M2_CLOUD,
     MINIMAX_M21_CLOUD,
     GEMINI_3_FLASH_PREVIEW_CLOUD,
@@ -62,11 +56,8 @@ pub const QWEN3_1_7B: &str = "qwen3:1.7b";
 pub const DEEPSEEK_V32_CLOUD: &str = "deepseek-v3.2:cloud";
 pub const QWEN3_NEXT_80B_CLOUD: &str = "qwen3-next:80b-cloud";
 pub const MISTRAL_LARGE_3_675B_CLOUD: &str = "mistral-large-3:675b-cloud";
-pub const KIMI_K2_THINKING_CLOUD: &str = "kimi-k2-thinking:cloud";
-pub const KIMI_K2_1T_CLOUD: &str = "kimi-k2:1t-cloud";
-pub const KIMI_K2_5_CLOUD: &str = "kimi-k2.5:cloud";
 pub const QWEN3_CODER_480B_CLOUD: &str = "qwen3-coder:480b-cloud";
-pub const GLM_47_CLOUD: &str = "glm-4.7:cloud";
+pub const GLM_5_CLOUD: &str = "glm-5:cloud";
 pub const GEMINI_3_PRO_PREVIEW_LATEST_CLOUD: &str = "gemini-3-pro-preview:latest";
 pub const GEMINI_3_FLASH_PREVIEW_CLOUD: &str = "gemini-3-flash-preview:cloud";
 pub const DEVSTRAL_2_123B_CLOUD: &str = "devstral-2:123b-cloud";

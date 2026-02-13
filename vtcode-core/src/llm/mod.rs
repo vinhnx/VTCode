@@ -17,12 +17,12 @@
 //!
 //! | Provider | Status | Models |
 //! |----------|--------|---------|
-//! | Gemini | ✓ | gemini-2.5-pro, gemini-2.5-flash-preview-05-20 |
+//! | Gemini | ✓ | gemini-3-pro-preview, gemini-3-flash-preview |
 //! | OpenAI | ✓ | gpt-5, gpt-5-mini, gpt-5-nano |
 //! | Anthropic | ✓ | claude-4.1-opus, claude-4-sonnet |
 //! | xAI | ✓ | grok-2-latest, grok-2-mini |
 //! | DeepSeek | ✓ | deepseek-chat, deepseek-reasoner |
-//! | Z.AI | ✓ | glm-4.7, glm-5 |
+//! | Z.AI | ✓ | glm-5 |
 //! | Ollama | ✓ | gpt-oss:20b (local) |
 //!
 //! ## Basic Usage
@@ -37,7 +37,7 @@
 //!     let providers = ProviderConfigs {
 //!         gemini: Some(vtcode_core::utils::dot_config::ProviderConfig {
 //!             api_key: std::env::var("GEMINI_API_KEY")?,
-//!             model: "gemini-2.5-flash".to_string(),
+//!             model: "gemini-3-flash-preview".to_string(),
 //!             ..Default::default()
 //!         }),
 //!         ..Default::default()
@@ -69,7 +69,7 @@
 //! let config = ProviderConfigs {
 //!     gemini: Some(ProviderConfig {
 //!         api_key: "your-api-key".to_string(),
-//!         model: "gemini-2.5-flash".to_string(),
+//!         model: "gemini-3-flash-preview".to_string(),
 //!         temperature: Some(0.7),
 //!         max_tokens: Some(4096),
 //!         ..Default::default()

@@ -320,6 +320,7 @@ pub(crate) async fn validate_tool_call<'a>(
                 .map(|cfg| cfg.security.human_in_the_loop)
                 .unwrap_or(true),
             delegate_mode: ctx.session_stats.is_delegate_mode(),
+            skip_confirmations: false, // Normal tool calls should prompt if configured
         },
         tool_name,
         Some(args_val),

@@ -215,7 +215,7 @@ VT Code is evaluated on industry-standard benchmarks to measure code generation 
 
 ### HumanEval Results
 
-**Latest:** `gemini-2.5-flash-lite` achieves **61.6% pass@1** on the complete HumanEval dataset (164 tasks)
+**Latest:** `gemini-3-flash-preview` achieves **61.6% pass@1** on the complete HumanEval dataset (164 tasks)
 
 | Metric         | Value             |
 | -------------- | ----------------- |
@@ -232,7 +232,7 @@ VT Code is evaluated on industry-standard benchmarks to measure code generation 
 
 ```bash
 # Run full HumanEval benchmark
-make bench-humaneval PROVIDER=gemini MODEL='gemini-2.5-flash-lite'
+make bench-humaneval PROVIDER=gemini MODEL='gemini-3-flash-preview'
 
 # Compare multiple models
 python3 scripts/compare_benchmarks.py reports/HE_*.json

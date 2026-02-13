@@ -43,7 +43,7 @@ impl FileTracker {
             for file_path in matches {
                 if let Ok(metadata) = tokio::fs::metadata(&file_path).await
                     && let Ok(modified) = metadata.modified()
-                    && modified > since
+                    && modified >= since
                     && metadata.is_file()
                 {
                     new_files.push(TrackedFile {

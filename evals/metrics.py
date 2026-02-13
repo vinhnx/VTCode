@@ -44,7 +44,7 @@ class LLMGrader(Metric):
         args = [
             "./target/release/vtcode",
             "--provider", "gemini", # Use a cheap provider for grading
-            "--model", "gemini-2.5-flash",
+            "--model", "gemini-3-flash-preview",
             "ask", prompt
         ]
 

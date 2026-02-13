@@ -9,11 +9,7 @@ impl ModelId {
             return Provider::OpenRouter;
         }
         match self {
-            ModelId::Gemini25FlashPreview
-            | ModelId::Gemini25Flash
-            | ModelId::Gemini25FlashLite
-            | ModelId::Gemini25Pro
-            | ModelId::Gemini3ProPreview
+            ModelId::Gemini3ProPreview
             | ModelId::Gemini3FlashPreview => Provider::Gemini,
             ModelId::GPT5
             | ModelId::GPT52
@@ -41,11 +37,6 @@ impl ModelId {
             ModelId::HuggingFaceDeepseekV32
             | ModelId::HuggingFaceOpenAIGptOss20b
             | ModelId::HuggingFaceOpenAIGptOss120b
-            | ModelId::HuggingFaceGlm47
-            | ModelId::HuggingFaceGlm47Novita
-            | ModelId::HuggingFaceGlm47FlashNovita
-            | ModelId::HuggingFaceKimiK2Thinking
-            | ModelId::HuggingFaceKimiK25Novita
             | ModelId::HuggingFaceMinimaxM21Novita
             | ModelId::HuggingFaceDeepseekV32Novita
             | ModelId::HuggingFaceXiaomiMimoV2FlashNovita
@@ -56,14 +47,7 @@ impl ModelId {
             | ModelId::XaiGrok4Code
             | ModelId::XaiGrok4CodeLatest
             | ModelId::XaiGrok4Vision => Provider::XAI,
-            ModelId::ZaiGlm4Plus
-            | ModelId::ZaiGlm4PlusDeepThinking
-            | ModelId::ZaiGlm47
-            | ModelId::ZaiGlm47DeepThinking
-            | ModelId::ZaiGlm47Flash
-            | ModelId::ZaiGlm5
-            | ModelId::ZaiGlm432b0414128k => Provider::ZAI,
-            ModelId::MoonshotKimiK25 => Provider::Moonshot,
+            ModelId::ZaiGlm5 => Provider::ZAI,
             ModelId::OllamaGptOss20b
             | ModelId::OllamaGptOss20bCloud
             | ModelId::OllamaGptOss120bCloud
@@ -71,8 +55,6 @@ impl ModelId {
             | ModelId::OllamaDeepseekV32Cloud
             | ModelId::OllamaQwen3Next80bCloud
             | ModelId::OllamaMistralLarge3675bCloud
-            | ModelId::OllamaKimiK2ThinkingCloud
-            | ModelId::OllamaKimiK25Cloud
             | ModelId::OllamaQwen3Coder480bCloud
             | ModelId::OllamaGemini3ProPreviewLatestCloud
             | ModelId::OllamaGemini3FlashPreviewCloud
@@ -80,7 +62,7 @@ impl ModelId {
             | ModelId::OllamaMinimaxM2Cloud
             | ModelId::OllamaMinimaxM21Cloud
             | ModelId::OllamaNemotron3Nano30bCloud
-            | ModelId::OllamaGlm47Cloud => Provider::Ollama,
+            | ModelId::OllamaGlm5Cloud => Provider::Ollama,
             ModelId::LmStudioMetaLlama38BInstruct
             | ModelId::LmStudioMetaLlama318BInstruct
             | ModelId::LmStudioQwen257BInstruct

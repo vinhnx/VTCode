@@ -31,7 +31,7 @@ fn test_provider_factory() {
         Some("anthropic".to_string())
     );
     assert_eq!(
-        factory.provider_from_model("gemini-2.5-flash"),
+        factory.provider_from_model("gemini-3-flash-preview"),
         Some("gemini".to_string())
     );
 }
@@ -39,7 +39,7 @@ fn test_provider_factory() {
 #[test]
 fn test_provider_creation() {
     // Test creating providers
-    let gemini = create_provider_for_model("gemini-2.5-flash", "test_key".to_string(), None);
+    let gemini = create_provider_for_model("gemini-3-flash-preview", "test_key".to_string(), None);
     assert!(gemini.is_ok());
 
     let openai = create_provider_for_model("gpt-5", "test_key".to_string(), None);
@@ -54,7 +54,7 @@ fn test_provider_creation() {
 fn test_unified_client_creation() {
     // Test creating providers for different models
     let gemini_client = create_provider_for_model(
-        "gemini-2.5-flash-lite-preview-06-17",
+        "gemini-3-flash-preview",
         "test_key".to_string(),
         None,
     );
@@ -113,7 +113,7 @@ fn test_backward_compatibility() {
 
     // Test that the old make_client function still works
     use std::str::FromStr;
-    let model = ModelId::from_str("gemini-2.5-flash").unwrap();
+    let model = ModelId::from_str("gemini-3-flash-preview").unwrap();
     let client = make_client("test_key".to_string(), model).expect("client should be created");
 
     // Should be able to get model ID

@@ -13,7 +13,7 @@ async fn test_custom_slash_command_loading() {
         commands_dir.join("review.md"),
         r#"---
 description: Review code
-argument-hint: [file]
+argument-hint: file
 ---
 Please review the file: $1
 "#,
@@ -33,7 +33,7 @@ Please review the file: $1
     let command = registry.get("review").unwrap();
     assert_eq!(command.name, "review");
     assert_eq!(command.description.as_deref(), Some("Review code"));
-    assert_eq!(command.argument_hint.as_deref(), Some("[file]"));
+    assert_eq!(command.argument_hint.as_deref(), Some("file"));
 
     // Test command expansion
     let expanded = command.expand_content("main.rs");

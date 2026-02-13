@@ -59,10 +59,6 @@ fn constants_cover_models_json() {
                 validated_providers.insert("xai");
                 Some(models::xai::SUPPORTED_MODELS)
             }
-            "moonshot" => {
-                validated_providers.insert("moonshot");
-                Some(models::moonshot::SUPPORTED_MODELS)
-            }
             "zai" => {
                 validated_providers.insert("zai");
                 Some(models::zai::SUPPORTED_MODELS)
@@ -147,7 +143,6 @@ fn constants_cover_models_json() {
         "openrouter",
         "deepseek",
         "xai",
-        "moonshot",
         "zai",
     ];
     for expected in &expected_providers {
@@ -195,24 +190,20 @@ fn model_helpers_validation_edge_cases() {
         models::openrouter::DEFAULT_MODEL
     ));
     assert!(model_helpers::is_valid("xai", models::xai::DEFAULT_MODEL));
-    assert!(model_helpers::is_valid(
-        "moonshot",
-        models::moonshot::DEFAULT_MODEL
-    ));
     assert!(model_helpers::is_valid("zai", models::zai::DEFAULT_MODEL));
 }
 
 #[test]
 fn backwards_compatibility_constants() {
     // Ensure old constant names still work
-    assert!(!models::GEMINI_2_5_FLASH.is_empty());
+    assert!(!models::GEMINI_3_FLASH_PREVIEW.is_empty());
     assert!(!models::GPT_5.is_empty());
     assert!(!models::CLAUDE_SONNET_4_5.is_empty());
     assert!(!models::CLAUDE_HAIKU_4_5.is_empty());
     assert!(!models::CLAUDE_SONNET_4_5_20250929.is_empty());
 
     // Test that backwards compatibility constants match the new structure
-    assert_eq!(models::GEMINI_2_5_FLASH, models::google::GEMINI_2_5_FLASH);
+    assert_eq!(models::GEMINI_3_FLASH_PREVIEW, models::google::GEMINI_3_FLASH_PREVIEW);
     assert_eq!(models::GPT_5, models::openai::GPT_5);
     assert_eq!(
         models::CLAUDE_SONNET_4_5,

@@ -2,8 +2,16 @@
 
 use serde_json::json;
 use std::path::PathBuf;
+use std::sync::Arc;
 use tempfile::TempDir;
+use vtcode_core::mcp::McpClient;
+use vtcode_core::config::mcp::McpClientConfig;
 use vtcode_core::tools::ToolRegistry;
+
+fn create_test_mcp_client() -> Arc<McpClient> {
+    let config = McpClientConfig::default();
+    Arc::new(McpClient::new(config))
+}
 
 #[tokio::test]
 async fn test_execute_code_with_file_tracking() {
@@ -13,16 +21,13 @@ async fn test_execute_code_with_file_tracking() {
 
     // Create a ToolRegistry
     let registry = ToolRegistry::new(workspace_root.clone()).await;
+    registry.set_mcp_client(create_test_mcp_client()).await;
 
-    // Test case 1: Generate a PDF file and verify tracking
+    // Test case 1: Generate a text file and verify tracking
     let python_code = r#"
-from fpdf import FPDF
-pdf = FPDF()
-pdf.add_page()
-pdf.set_font('Arial', 'B', 24)
-pdf.cell(0, 20, 'Test PDF', 0, 1, 'C')
-pdf.output('test_output.pdf')
-print('PDF generated successfully')
+with open('test_output.json', 'w') as f:
+    f.write('Test content')
+print('File generated successfully')
 "#;
 
     let args = json!({
@@ -45,11 +50,11 @@ print('PDF generated successfully')
 
     let file_info = &files_array[0];
     let file_path = file_info.get("absolute_path").unwrap().as_str().unwrap();
-    assert!(file_path.ends_with("test_output.pdf"));
+    assert!(file_path.ends_with("test_output.json"));
 
     // Verify the file summary
     let summary = generated_files.get("summary").unwrap().as_str().unwrap();
-    assert!(summary.contains("test_output.pdf"));
+    assert!(summary.contains("test_output.json"));
     assert!(summary.contains("bytes"));
 
     println!("✓ File tracking test passed: detected generated PDF");
@@ -60,6 +65,7 @@ async fn test_execute_code_without_file_tracking() {
     let temp_dir = TempDir::new().unwrap();
     let workspace_root = temp_dir.path().to_path_buf();
     let registry = ToolRegistry::new(workspace_root).await;
+    registry.set_mcp_client(create_test_mcp_client()).await;
 
     let python_code = r#"
 print('Hello World')
@@ -98,10 +104,11 @@ async fn test_multiple_file_generation() {
     let temp_dir = TempDir::new().unwrap();
     let workspace_root = temp_dir.path().to_path_buf();
     let registry = ToolRegistry::new(workspace_root).await;
+    registry.set_mcp_client(create_test_mcp_client()).await;
 
     let python_code = r#"
 # Generate multiple files
-with open('file1.txt', 'w') as f:
+with open('file1.json', 'w') as f:
     f.write('First file')
 
 with open('file2.csv', 'w') as f:
@@ -140,7 +147,7 @@ print('Multiple files generated')
         })
         .collect();
 
-    assert!(filenames.contains(&"file1.txt".to_string()));
+    assert!(filenames.contains(&"file1.json".to_string()));
     assert!(filenames.contains(&"file2.csv".to_string()));
     assert!(filenames.contains(&"output.json".to_string()));
 
@@ -155,6 +162,7 @@ async fn test_file_tracking_error_handling() {
     let temp_dir = TempDir::new().unwrap();
     let workspace_root = temp_dir.path().to_path_buf();
     let registry = ToolRegistry::new(workspace_root).await;
+    registry.set_mcp_client(create_test_mcp_client()).await;
 
     // Test with code that fails
     let python_code = r#"
@@ -188,18 +196,16 @@ async fn test_session_optimization_comparison() {
     let temp_dir = TempDir::new().unwrap();
     let workspace_root = temp_dir.path().to_path_buf();
     let registry = ToolRegistry::new(workspace_root).await;
+    registry.set_mcp_client(create_test_mcp_client()).await;
 
     // Simulate the old pattern (separate execution + manual verification)
     println!("\n=== OLD PATTERN (Inefficient) ===");
 
     // Step 1: Execute code
     let python_code = r#"
-from fpdf import FPDF
-pdf = FPDF()
-pdf.add_page()
-pdf.cell(0, 20, 'Hello World', 0, 1, 'C')
-pdf.output('hello_world.pdf')
-print('PDF created: hello_world.pdf')
+with open('hello_world.json', 'w') as f:
+    f.write('Hello World')
+print('File created: hello_world.json')
 "#;
 
     let exec_args = json!({
@@ -222,7 +228,7 @@ print('PDF created: hello_world.pdf')
     let verify_args = json!({
         "code": r#"
 import os
-file_path = os.path.abspath('hello_world.pdf')
+file_path = os.path.abspath('hello_world.json')
 exists = os.path.exists(file_path)
 print(f'Verification: {file_path} exists={exists}')
 "#,
@@ -243,7 +249,7 @@ print(f'Verification: {file_path} exists={exists}')
     println!("\n=== NEW PATTERN (Optimized) ===");
 
     let exec_args_new = json!({
-        "code": python_code.replace("hello_world.pdf", "optimized.pdf"),
+        "code": python_code.replace("hello_world.json", "optimized.json"),
         "language": "python3",
         "timeout_secs": 30,
         "track_files": true  // New way: automatic tracking

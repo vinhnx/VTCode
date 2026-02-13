@@ -10,10 +10,6 @@ impl ModelId {
         }
         match self {
             // Gemini models
-            ModelId::Gemini25FlashPreview => models::GEMINI_2_5_FLASH_PREVIEW,
-            ModelId::Gemini25Flash => models::GEMINI_2_5_FLASH,
-            ModelId::Gemini25FlashLite => models::GEMINI_2_5_FLASH_LITE,
-            ModelId::Gemini25Pro => models::GEMINI_2_5_PRO,
             ModelId::Gemini3ProPreview => models::GEMINI_3_PRO_PREVIEW,
             ModelId::Gemini3FlashPreview => models::GEMINI_3_FLASH_PREVIEW,
             // OpenAI models
@@ -50,15 +46,8 @@ impl ModelId {
             ModelId::XaiGrok4CodeLatest => models::xai::GROK_4_CODE_LATEST,
             ModelId::XaiGrok4Vision => models::xai::GROK_4_VISION,
             // Z.AI models
-            ModelId::ZaiGlm4Plus => models::zai::GLM_4_PLUS,
-            ModelId::ZaiGlm4PlusDeepThinking => models::zai::GLM_4_PLUS_DEEP_THINKING,
-            ModelId::ZaiGlm47 => models::zai::GLM_4_7,
-            ModelId::ZaiGlm47DeepThinking => models::zai::GLM_4_7_DEEP_THINKING,
-            ModelId::ZaiGlm47Flash => models::zai::GLM_4_7_FLASH,
             ModelId::ZaiGlm5 => models::zai::GLM_5,
-            ModelId::ZaiGlm432b0414128k => models::zai::GLM_4_32B_0414_128K,
             // Moonshot models
-            ModelId::MoonshotKimiK25 => models::moonshot::KIMI_K2_5,
             // Ollama models
             ModelId::OllamaGptOss20b => models::ollama::GPT_OSS_20B,
             ModelId::OllamaGptOss20bCloud => models::ollama::GPT_OSS_20B_CLOUD,
@@ -67,9 +56,7 @@ impl ModelId {
             ModelId::OllamaDeepseekV32Cloud => models::ollama::DEEPSEEK_V32_CLOUD,
             ModelId::OllamaQwen3Next80bCloud => models::ollama::QWEN3_NEXT_80B_CLOUD,
             ModelId::OllamaMistralLarge3675bCloud => models::ollama::MISTRAL_LARGE_3_675B_CLOUD,
-            ModelId::OllamaKimiK2ThinkingCloud => models::ollama::KIMI_K2_THINKING_CLOUD,
-            ModelId::OllamaKimiK25Cloud => models::ollama::KIMI_K2_5_CLOUD,
-            ModelId::OllamaGlm47Cloud => models::ollama::GLM_47_CLOUD,
+            ModelId::OllamaGlm5Cloud => models::ollama::GLM_5_CLOUD,
             ModelId::OllamaMinimaxM21Cloud => models::ollama::MINIMAX_M21_CLOUD,
             ModelId::OllamaGemini3FlashPreviewCloud => models::ollama::GEMINI_3_FLASH_PREVIEW_CLOUD,
             ModelId::OllamaQwen3Coder480bCloud => models::ollama::QWEN3_CODER_480B_CLOUD,
@@ -90,11 +77,6 @@ impl ModelId {
             ModelId::HuggingFaceDeepseekV32 => models::huggingface::DEEPSEEK_V32,
             ModelId::HuggingFaceOpenAIGptOss20b => models::huggingface::OPENAI_GPT_OSS_20B,
             ModelId::HuggingFaceOpenAIGptOss120b => models::huggingface::OPENAI_GPT_OSS_120B,
-            ModelId::HuggingFaceGlm47 => models::huggingface::ZAI_GLM_47,
-            ModelId::HuggingFaceGlm47Novita => models::huggingface::ZAI_GLM_47_NOVITA,
-            ModelId::HuggingFaceGlm47FlashNovita => models::huggingface::ZAI_GLM_47_FLASH_NOVITA,
-            ModelId::HuggingFaceKimiK2Thinking => models::huggingface::MOONSHOT_KIMI_K2_THINKING,
-            ModelId::HuggingFaceKimiK25Novita => models::huggingface::MOONSHOT_KIMI_K2_5_NOVITA,
             ModelId::HuggingFaceMinimaxM21Novita => models::huggingface::MINIMAX_M2_1_NOVITA,
             ModelId::HuggingFaceDeepseekV32Novita => models::huggingface::DEEPSEEK_V32_NOVITA,
             ModelId::HuggingFaceXiaomiMimoV2FlashNovita => {

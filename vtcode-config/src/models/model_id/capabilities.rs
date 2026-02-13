@@ -5,10 +5,7 @@ impl ModelId {
     pub fn is_flash_variant(&self) -> bool {
         matches!(
             self,
-            ModelId::Gemini25FlashPreview
-                | ModelId::Gemini25Flash
-                | ModelId::Gemini25FlashLite
-                | ModelId::Gemini3FlashPreview
+            ModelId::Gemini3FlashPreview
                 | ModelId::MinimaxM21Lightning
                 | ModelId::OllamaGemini3FlashPreviewCloud
         )
@@ -18,23 +15,17 @@ impl ModelId {
     pub fn is_pro_variant(&self) -> bool {
         matches!(
             self,
-            ModelId::Gemini25Pro
-                | ModelId::GPT5
+            ModelId::GPT5
                 | ModelId::GPT52
                 | ModelId::GPT5Codex
                 | ModelId::ClaudeOpus46
                 | ModelId::ClaudeOpus41
                 | ModelId::DeepSeekReasoner
                 | ModelId::XaiGrok4
-                | ModelId::ZaiGlm4Plus
-                | ModelId::ZaiGlm4PlusDeepThinking
-                | ModelId::ZaiGlm47
-                | ModelId::ZaiGlm47DeepThinking
                 | ModelId::ZaiGlm5
                 | ModelId::MinimaxM21
-                | ModelId::OllamaGlm47Cloud
+                | ModelId::OllamaGlm5Cloud
                 | ModelId::OllamaMinimaxM21Cloud
-                | ModelId::MoonshotKimiK25
         )
     }
 
@@ -45,10 +36,7 @@ impl ModelId {
         }
         matches!(
             self,
-            ModelId::Gemini25FlashPreview
-                | ModelId::Gemini25Flash
-                | ModelId::Gemini25FlashLite
-                | ModelId::Gemini3FlashPreview
+            ModelId::Gemini3FlashPreview
                 | ModelId::GPT5Mini
                 | ModelId::GPT5Nano
                 | ModelId::ClaudeHaiku45
@@ -65,8 +53,7 @@ impl ModelId {
         }
         matches!(
             self,
-            ModelId::Gemini25Pro
-                | ModelId::Gemini3FlashPreview
+            ModelId::Gemini3FlashPreview
                 | ModelId::GPT5
                 | ModelId::GPT52
                 | ModelId::GPT5Codex
@@ -80,12 +67,7 @@ impl ModelId {
                 | ModelId::DeepSeekReasoner
                 | ModelId::XaiGrok4
                 | ModelId::XaiGrok4CodeLatest
-                | ModelId::ZaiGlm4Plus
-                | ModelId::ZaiGlm4PlusDeepThinking
-                | ModelId::ZaiGlm47
-                | ModelId::ZaiGlm47DeepThinking
                 | ModelId::ZaiGlm5
-                | ModelId::MoonshotKimiK25
         )
     }
 
@@ -96,9 +78,7 @@ impl ModelId {
         }
         matches!(
             self,
-            ModelId::ZaiGlm4PlusDeepThinking
-                | ModelId::ZaiGlm47DeepThinking
-                | ModelId::ZaiGlm5
+            ModelId::ZaiGlm5
         ) || self.provider().supports_reasoning_effort(self.as_str())
     }
 
@@ -117,10 +97,6 @@ impl ModelId {
         }
         match self {
             // Gemini generations
-            ModelId::Gemini25FlashPreview
-            | ModelId::Gemini25Flash
-            | ModelId::Gemini25FlashLite
-            | ModelId::Gemini25Pro => "2.5",
             ModelId::Gemini3ProPreview | ModelId::Gemini3FlashPreview => "3",
             // OpenAI generations
             ModelId::GPT52 | ModelId::GPT52Codex => "5.2",
@@ -151,11 +127,7 @@ impl ModelId {
             | ModelId::XaiGrok4CodeLatest
             | ModelId::XaiGrok4Vision => "4",
             // Z.AI generations
-            ModelId::ZaiGlm4Plus | ModelId::ZaiGlm4PlusDeepThinking => "4-Plus",
-            ModelId::ZaiGlm47 | ModelId::ZaiGlm47DeepThinking => "4.7",
             ModelId::ZaiGlm5 => "GLM-5",
-            ModelId::ZaiGlm432b0414128k => "4-32B",
-            ModelId::MoonshotKimiK25 => "K2.5",
             ModelId::OllamaGptOss20b => "oss",
             ModelId::OllamaGptOss20bCloud => "oss-cloud",
             ModelId::OllamaGptOss120bCloud => "oss-cloud",
@@ -163,8 +135,6 @@ impl ModelId {
             ModelId::OllamaDeepseekV32Cloud => "deepseek-v3.2",
             ModelId::OllamaQwen3Next80bCloud => "qwen3-next",
             ModelId::OllamaMistralLarge3675bCloud => "mistral-large-3",
-            ModelId::OllamaKimiK2ThinkingCloud => "kimi-k2-thinking",
-            ModelId::OllamaKimiK25Cloud => "kimi-k2.5",
             ModelId::OllamaQwen3Coder480bCloud => "qwen3-coder-cloud",
             ModelId::OllamaMinimaxM2Cloud => "minimax-cloud",
             ModelId::LmStudioMetaLlama38BInstruct => "meta-llama-3",
@@ -178,9 +148,6 @@ impl ModelId {
             ModelId::HuggingFaceDeepseekV32 | ModelId::HuggingFaceDeepseekV32Novita => "v3.2",
             ModelId::HuggingFaceXiaomiMimoV2FlashNovita => "v2-flash",
             ModelId::HuggingFaceQwen3CoderNextNovita => "qwen3-coder-next",
-            ModelId::HuggingFaceGlm47 => "4.7",
-            ModelId::HuggingFaceKimiK2Thinking => "k2",
-            ModelId::HuggingFaceKimiK25Novita => "k2.5",
             ModelId::HuggingFaceMinimaxM21Novita => "m2.1",
             ModelId::HuggingFaceGlm5Novita => "GLM-5",
             ModelId::HuggingFaceOpenAIGptOss20b | ModelId::HuggingFaceOpenAIGptOss120b => "oss",

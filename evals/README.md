@@ -19,13 +19,13 @@ The `eval_engine.py` script orchestrates the evaluation process.
 
 **Basic Usage:**
 ```bash
-python3 evals/eval_engine.py --cases evals/test_cases.json --provider gemini --model gemini-2.5-flash
+python3 evals/eval_engine.py --cases evals/test_cases.json --provider gemini --model gemini-3-flash-preview
 ```
 
 **Arguments:**
 - `--cases`: Path to the test cases JSON file (default: `evals/test_cases.json`).
 - `--provider`: The LLM provider to evaluate (e.g., `gemini`, `openai`, `anthropic`).
-- `--model`: The specific model ID to evaluate (e.g., `gemini-2.5-flash`, `gpt-4`).
+- `--model`: The specific model ID to evaluate (e.g., `gemini-3-flash-preview`, `gpt-4`).
 
 ## Directory Structure
 
@@ -69,4 +69,4 @@ Reports are saved in the `reports/` directory with a timestamp. They include:
 
 ## Grading with LLMs
 
-The `llm_grader` metric uses `vtcode ask` internally to perform evaluations. By default, it uses `gemini-2.5-flash` for grading to keep costs low and ensure reliability. You can configure this in `evals/metrics.py`.
+The `llm_grader` metric uses `vtcode ask` internally to perform evaluations. By default, it uses `gemini-3-flash-preview` for grading to keep costs low and ensure reliability. You can configure this in `evals/metrics.py`.

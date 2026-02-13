@@ -674,6 +674,7 @@ pub enum InlineCommand {
         hunks: Vec<DiffHunk>,
         current_hunk: usize,
     },
+    SetSkipConfirmations(bool),
     Shutdown,
 }
 
@@ -1020,6 +1021,10 @@ impl InlineHandle {
             current_hunk: resolved_hunk,
         });
     }
+
+    pub fn set_skip_confirmations(&self, skip: bool) {
+        self.send_command(InlineCommand::SetSkipConfirmations(skip));
+    }
 }
 
 pub struct InlineSession {
@@ -1030,6 +1035,10 @@ pub struct InlineSession {
 impl InlineSession {
     pub async fn next_event(&mut self) -> Option<InlineEvent> {
         self.events.recv().await
+    }
+
+    pub fn set_skip_confirmations(&mut self, skip: bool) {
+        self.handle.set_skip_confirmations(skip);
     }
 
     pub fn clone_inline_handle(&self) -> InlineHandle {

@@ -26,7 +26,7 @@ const MODEL_CACHE_FILE: &str = "models_cache.json";
 const DEFAULT_MODEL_CACHE_TTL: Duration = Duration::from_secs(300);
 
 /// Default model for Gemini provider
-const GEMINI_DEFAULT_MODEL: &str = "gemini-2.5-flash";
+const GEMINI_DEFAULT_MODEL: &str = "gemini-3-flash-preview";
 
 /// Default model for OpenAI provider
 const OPENAI_DEFAULT_MODEL: &str = "gpt-5";
@@ -275,12 +275,12 @@ impl ModelsManager {
             Provider::Anthropic => ANTHROPIC_DEFAULT_MODEL.to_string(),
             Provider::DeepSeek => "deepseek-reasoner".to_string(),
             Provider::XAI => "grok-4".to_string(),
-            Provider::ZAI => "glm-4.7".to_string(),
+            Provider::ZAI => "glm-5".to_string(),
             Provider::Minimax => "minimax-m2.1".to_string(),
             Provider::OpenRouter => "deepseek/deepseek-chat".to_string(),
             Provider::Ollama => "gpt-oss:20b".to_string(),
             Provider::LmStudio => "qwen2.5-7b-instruct".to_string(),
-            Provider::Moonshot => "kimi-k2-thinking".to_string(),
+            Provider::Moonshot => "kimi-k2.5".to_string(),
             Provider::HuggingFace => "deepseek-ai/DeepSeek-V3-0324".to_string(),
         }
     }
@@ -516,22 +516,22 @@ mod tests {
     #[tokio::test]
     async fn test_construct_model_family() {
         let manager = ModelsManager::new();
-        let family = manager.construct_model_family("gemini-2.5-flash").await;
-        assert_eq!(family.family, "gemini-2.5");
+        let family = manager.construct_model_family("gemini-3-flash-preview").await;
+        assert_eq!(family.family, "gemini-3");
         assert_eq!(family.provider, Provider::Gemini);
     }
 
     #[tokio::test]
     async fn test_find_model() {
         let manager = ModelsManager::new();
-        let model = manager.find_model("gemini-2.5-flash").await;
+        let model = manager.find_model("gemini-3-flash-preview").await;
         assert!(model.is_some());
     }
 
     #[tokio::test]
     async fn test_model_exists() {
         let manager = ModelsManager::new();
-        assert!(manager.model_exists("gemini-2.5-flash").await);
+        assert!(manager.model_exists("gemini-3-flash-preview").await);
         assert!(!manager.model_exists("nonexistent-model").await);
     }
 

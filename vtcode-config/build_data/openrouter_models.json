@@ -856,37 +856,6 @@
         "doc_comment": "OpenAI GPT-5 - OpenAI GPT-5 model accessed through OpenRouter"
       }
     },
-    "z-ai/glm-4.7": {
-      "id": "z-ai/glm-4.7",
-      "name": "Z.AI: GLM 4.7",
-      "reasoning": true,
-      "tool_call": true,
-      "modalities": {
-        "input": [
-          "text"
-        ],
-        "output": [
-          "text"
-        ]
-      },
-      "context": 202752,
-      "max_output_tokens": 202752,
-      "cost": {
-        "input": 6e-07,
-        "output": 2e-06
-      },
-      "vtcode": {
-        "variant": "OpenRouterZaiGlm47",
-        "constant": "Z_AI_GLM_4_7",
-        "vendor": "zai",
-        "display": "GLM 4.7",
-        "description": "Z.AI GLM 4.7 next-generation reasoning model",
-        "efficient": false,
-        "top_tier": true,
-        "generation": "GLM-4.7",
-        "doc_comment": "GLM 4.7 - Z.AI GLM 4.7 next-generation reasoning model"
-      }
-    },
     "openai/gpt-5-chat": {
       "id": "openai/gpt-5-chat",
       "name": "OpenAI: GPT-5 Chat",

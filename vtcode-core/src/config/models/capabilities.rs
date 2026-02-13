@@ -53,8 +53,7 @@ impl ModelId {
         }
 
         let direct = match self {
-            ModelId::Gemini25Pro => Some(ModelId::Gemini25Flash),
-            ModelId::Gemini3ProPreview => Some(ModelId::Gemini25Flash),
+            ModelId::Gemini3ProPreview => Some(ModelId::Gemini3FlashPreview),
             ModelId::GPT52 => Some(ModelId::GPT5Mini),
             ModelId::GPT52Codex => Some(ModelId::CodexMiniLatest),
             ModelId::GPT5 => Some(ModelId::GPT5Mini),
@@ -65,8 +64,7 @@ impl ModelId {
             ModelId::DeepSeekReasoner => Some(ModelId::DeepSeekChat),
             ModelId::XaiGrok4 => Some(ModelId::XaiGrok4Mini),
             ModelId::XaiGrok4Code => Some(ModelId::XaiGrok4CodeLatest),
-            ModelId::ZaiGlm47 => Some(ModelId::ZaiGlm47Flash),
-            ModelId::ZaiGlm5 => Some(ModelId::ZaiGlm47Flash),
+            ModelId::ZaiGlm5 => Some(ModelId::OllamaGlm5Cloud),
             ModelId::ClaudeOpus46
             | ModelId::ClaudeOpus45
             | ModelId::ClaudeOpus4
@@ -89,10 +87,7 @@ impl ModelId {
     pub fn is_flash_variant(&self) -> bool {
         matches!(
             self,
-            ModelId::Gemini25FlashPreview
-                | ModelId::Gemini25Flash
-                | ModelId::Gemini25FlashLite
-                | ModelId::Gemini3FlashPreview
+            ModelId::Gemini3FlashPreview
                 | ModelId::OpenRouterStepfunStep35FlashFree
                 | ModelId::MinimaxM21Lightning
                 | ModelId::OllamaGemini3FlashPreviewCloud
@@ -103,8 +98,7 @@ impl ModelId {
     pub fn is_pro_variant(&self) -> bool {
         matches!(
             self,
-            ModelId::Gemini25Pro
-                | ModelId::GPT5
+            ModelId::GPT5
                 | ModelId::GPT52
                 | ModelId::GPT5Codex
                 | ModelId::ClaudeOpus46
@@ -112,13 +106,11 @@ impl ModelId {
                 | ModelId::DeepSeekReasoner
                 | ModelId::XaiGrok4
                 | ModelId::ZaiGlm5
-                | ModelId::ZaiGlm47
-                | ModelId::ZaiGlm47DeepThinking
                 | ModelId::OpenRouterStepfunStep35FlashFree
                 | ModelId::MinimaxM21
-                | ModelId::OllamaGlm47Cloud
+                | ModelId::OllamaGlm5Cloud
                 | ModelId::OllamaMinimaxM21Cloud
-                | ModelId::MoonshotKimiK25
+                | ModelId::HuggingFaceQwen3CoderNextNovita
         )
     }
 
@@ -129,10 +121,7 @@ impl ModelId {
         }
         matches!(
             self,
-            ModelId::Gemini25FlashPreview
-                | ModelId::Gemini25Flash
-                | ModelId::Gemini25FlashLite
-                | ModelId::Gemini3FlashPreview
+            ModelId::Gemini3FlashPreview
                 | ModelId::GPT5Mini
                 | ModelId::GPT5Nano
                 | ModelId::ClaudeHaiku45
@@ -149,8 +138,7 @@ impl ModelId {
         }
         matches!(
             self,
-            ModelId::Gemini25Pro
-                | ModelId::Gemini3FlashPreview
+            ModelId::Gemini3FlashPreview
                 | ModelId::GPT52
                 | ModelId::GPT5
                 | ModelId::GPT5Codex
@@ -165,10 +153,8 @@ impl ModelId {
                 | ModelId::XaiGrok4
                 | ModelId::XaiGrok4CodeLatest
                 | ModelId::ZaiGlm5
-                | ModelId::ZaiGlm47
-                | ModelId::ZaiGlm47DeepThinking
                 | ModelId::OpenRouterStepfunStep35FlashFree
-                | ModelId::MoonshotKimiK25
+                | ModelId::HuggingFaceQwen3CoderNextNovita
         )
     }
 
@@ -195,10 +181,6 @@ impl ModelId {
         }
         match self {
             // Gemini generations
-            ModelId::Gemini25FlashPreview
-            | ModelId::Gemini25Flash
-            | ModelId::Gemini25FlashLite
-            | ModelId::Gemini25Pro => "2.5",
             ModelId::Gemini3ProPreview | ModelId::Gemini3FlashPreview => "3",
             // OpenAI generations
             ModelId::GPT52 | ModelId::GPT52Codex => "5.2",
@@ -226,15 +208,11 @@ impl ModelId {
             ModelId::HuggingFaceDeepseekV32 => "V3.2-Exp",
             ModelId::HuggingFaceOpenAIGptOss20b => "oss",
             ModelId::HuggingFaceOpenAIGptOss120b => "oss",
-            ModelId::HuggingFaceGlm47
-            | ModelId::HuggingFaceGlm47Novita
-            | ModelId::HuggingFaceGlm47FlashNovita
-            | ModelId::HuggingFaceGlm5Novita => "5",
-            ModelId::HuggingFaceKimiK2Thinking => "k2",
-            ModelId::HuggingFaceKimiK25Novita => "k2.5",
             ModelId::HuggingFaceMinimaxM21Novita => "m2.1",
             ModelId::HuggingFaceDeepseekV32Novita => "v3.2",
             ModelId::HuggingFaceXiaomiMimoV2FlashNovita => "v2-flash",
+            ModelId::HuggingFaceGlm5Novita => "5",
+            ModelId::HuggingFaceQwen3CoderNextNovita => "qwen3-coder-next",
             // xAI generations
             ModelId::XaiGrok4
             | ModelId::XaiGrok4Mini
@@ -243,10 +221,6 @@ impl ModelId {
             | ModelId::XaiGrok4Vision => "4",
             // Z.AI generations
             ModelId::ZaiGlm5 => "5",
-            ModelId::ZaiGlm47 | ModelId::ZaiGlm47DeepThinking | ModelId::ZaiGlm47Flash => "4.7",
-            ModelId::ZaiGlm432b0414128k => "4-32B",
-            // Moonshot generations
-            ModelId::MoonshotKimiK25 => "K2.5",
             ModelId::OllamaGptOss20b => "oss",
             ModelId::OllamaGptOss20bCloud => "oss-cloud",
             ModelId::OllamaGptOss120bCloud => "oss-cloud",
@@ -254,15 +228,12 @@ impl ModelId {
             ModelId::OllamaDeepseekV32Cloud => "deepseek-v3.2",
             ModelId::OllamaQwen3Next80bCloud => "qwen3-next",
             ModelId::OllamaMistralLarge3675bCloud => "mistral-large-3",
-            ModelId::OllamaKimiK2ThinkingCloud => "kimi-k2-thinking",
-            ModelId::OllamaKimiK25Cloud => "kimi-k2.5",
-
             ModelId::OllamaQwen3Coder480bCloud => "qwen3",
             ModelId::OllamaGemini3ProPreviewLatestCloud => "gemini-3",
             ModelId::OllamaDevstral2123bCloud => "devstral-2",
             ModelId::OllamaMinimaxM2Cloud => "minimax-m2",
             ModelId::OllamaNemotron3Nano30bCloud => "nemotron-3",
-            ModelId::OllamaGlm47Cloud => "glm-4.7",
+            ModelId::OllamaGlm5Cloud => "glm-5",
             ModelId::OllamaMinimaxM21Cloud => "minimax-m2.1",
             ModelId::OllamaGemini3FlashPreviewCloud => "gemini-3",
             ModelId::LmStudioMetaLlama38BInstruct => "meta-llama-3",
@@ -279,8 +250,6 @@ impl ModelId {
             | ModelId::OpenRouterGrok4Fast
             | ModelId::OpenRouterGrok41Fast
             | ModelId::OpenRouterGrok4
-            | ModelId::OpenRouterMoonshotaiKimiK20905
-            | ModelId::OpenRouterMoonshotaiKimiK2Thinking
             | ModelId::OpenRouterQwen3Max
             | ModelId::OpenRouterQwen3235bA22b
             | ModelId::OpenRouterQwen3235bA22b2507
@@ -326,12 +295,10 @@ impl ModelId {
             | ModelId::OpenRouterOpenAIGpt52Chat
             | ModelId::OpenRouterOpenAIGpt52Codex
             | ModelId::OpenRouterOpenAIGpt52Pro
-            | ModelId::OpenRouterOpenAIO1Pro
-            | ModelId::OpenRouterZaiGlm47
-            | ModelId::OpenRouterZaiGlm47Flash
             | ModelId::OpenRouterZaiGlm5
-            | ModelId::OpenRouterStepfunStep35FlashFree
-            | ModelId::OpenRouterMoonshotaiKimiK25 => "unknown", // fallback generation for OpenRouter models
+            | ModelId::OpenRouterOpenAIO1Pro
+            | ModelId::OpenRouterMoonshotaiKimiK25
+            | ModelId::OpenRouterStepfunStep35FlashFree => "unknown", // fallback generation for OpenRouter models
         }
     }
 

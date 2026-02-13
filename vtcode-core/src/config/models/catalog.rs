@@ -10,10 +10,6 @@ impl ModelId {
         }
         match self {
             // Gemini models
-            ModelId::Gemini25FlashPreview => "Gemini 2.5 Flash Preview",
-            ModelId::Gemini25Flash => "Gemini 2.5 Flash",
-            ModelId::Gemini25FlashLite => "Gemini 2.5 Flash Lite",
-            ModelId::Gemini25Pro => "Gemini 2.5 Pro",
             ModelId::Gemini3ProPreview => "Gemini 3 Pro Preview",
             ModelId::Gemini3FlashPreview => "Gemini 3 Flash",
             // OpenAI models
@@ -47,15 +43,11 @@ impl ModelId {
             ModelId::HuggingFaceDeepseekV32 => "DeepSeek V3.2 (HF)",
             ModelId::HuggingFaceOpenAIGptOss20b => "GPT-OSS 20B (HF)",
             ModelId::HuggingFaceOpenAIGptOss120b => "GPT-OSS 120B (HF)",
-            ModelId::HuggingFaceGlm47 => "GLM-4.7 (HF)",
-            ModelId::HuggingFaceGlm47Novita => "GLM-4.7 (Novita)",
-            ModelId::HuggingFaceGlm47FlashNovita => "GLM-4.7-Flash (Novita)",
-            ModelId::HuggingFaceKimiK2Thinking => "Kimi K2 Thinking (HF)",
-            ModelId::HuggingFaceKimiK25Novita => "Kimi K2.5 (Novita)",
             ModelId::HuggingFaceMinimaxM21Novita => "MiniMax-M2.1 (Novita)",
             ModelId::HuggingFaceDeepseekV32Novita => "DeepSeek V3.2 (Novita)",
             ModelId::HuggingFaceXiaomiMimoV2FlashNovita => "MiMo-V2-Flash (Novita)",
             ModelId::HuggingFaceGlm5Novita => "GLM-5 (Novita)",
+            ModelId::HuggingFaceQwen3CoderNextNovita => "Qwen3-Coder-Next (Novita)",
             // xAI models
             ModelId::XaiGrok4 => "Grok-4",
             ModelId::XaiGrok4Mini => "Grok-4 Mini",
@@ -63,13 +55,7 @@ impl ModelId {
             ModelId::XaiGrok4CodeLatest => "Grok-4 Code Latest",
             ModelId::XaiGrok4Vision => "Grok-4 Vision",
             // Z.AI models
-            ModelId::ZaiGlm47 => "GLM 4.7",
-            ModelId::ZaiGlm47DeepThinking => "GLM 4.7 (Deep Thinking)",
-            ModelId::ZaiGlm47Flash => "GLM 4.7 Flash",
             ModelId::ZaiGlm5 => "GLM-5",
-            ModelId::ZaiGlm432b0414128k => "GLM 4 32B 0414 128K",
-            // Moonshot models
-            ModelId::MoonshotKimiK25 => "Kimi K2.5",
             // Ollama models
             ModelId::OllamaGptOss20b => "GPT-OSS 20B (local)",
             ModelId::OllamaGptOss20bCloud => "GPT-OSS 20B (cloud)",
@@ -78,15 +64,12 @@ impl ModelId {
             ModelId::OllamaDeepseekV32Cloud => "DeepSeek V3.2 (cloud)",
             ModelId::OllamaQwen3Next80bCloud => "Qwen3 Next 80B (cloud)",
             ModelId::OllamaMistralLarge3675bCloud => "Mistral Large 3 675B (cloud)",
-            ModelId::OllamaKimiK2ThinkingCloud => "Kimi K2 Thinking (cloud)",
-            ModelId::OllamaKimiK25Cloud => "Kimi K2.5 (cloud)",
-
             ModelId::OllamaQwen3Coder480bCloud => "Qwen3 Coder 480B (cloud)",
             ModelId::OllamaGemini3ProPreviewLatestCloud => "Gemini 3 Pro Preview (cloud)",
             ModelId::OllamaDevstral2123bCloud => "Devstral 2 123B (cloud)",
             ModelId::OllamaMinimaxM2Cloud => "MiniMax-M2 (cloud)",
             ModelId::OllamaNemotron3Nano30bCloud => "Nemotron-3-Nano 30B (cloud)",
-            ModelId::OllamaGlm47Cloud => "GLM-4.7 (cloud)",
+            ModelId::OllamaGlm5Cloud => "GLM-5 (cloud)",
             ModelId::OllamaMinimaxM21Cloud => "MiniMax-M2.1 (cloud)",
             ModelId::OllamaGemini3FlashPreviewCloud => "Gemini 3 Flash Preview (cloud)",
             ModelId::LmStudioMetaLlama38BInstruct => "Meta Llama 3 8B (LM Studio)",
@@ -109,16 +92,6 @@ impl ModelId {
         }
         match self {
             // Gemini models
-            ModelId::Gemini25FlashPreview => {
-                "Latest fast Gemini model with advanced multimodal capabilities"
-            }
-            ModelId::Gemini25Flash => {
-                "Legacy alias for Gemini 2.5 Flash Preview (same capabilities)"
-            }
-            ModelId::Gemini25FlashLite => {
-                "Legacy alias for Gemini 2.5 Flash Preview optimized for efficiency"
-            }
-            ModelId::Gemini25Pro => "Latest most capable Gemini model with reasoning",
             ModelId::Gemini3ProPreview => {
                 "Preview of next-generation Gemini 3 Pro model with advanced reasoning and capabilities"
             }
@@ -184,21 +157,6 @@ impl ModelId {
             ModelId::HuggingFaceOpenAIGptOss120b => {
                 "OpenAI GPT-OSS 120B available through Hugging Face Inference Providers"
             }
-            ModelId::HuggingFaceGlm47 => {
-                "Z.AI GLM-4.7 long-context reasoning model served via Hugging Face router"
-            }
-            ModelId::HuggingFaceGlm47Novita => {
-                "Z.AI GLM-4.7 via Novita inference provider on HuggingFace router."
-            }
-            ModelId::HuggingFaceGlm47FlashNovita => {
-                "Z.AI GLM-4.7-Flash via Novita inference provider on HuggingFace router. Lightweight model optimized for agentic coding."
-            }
-            ModelId::HuggingFaceKimiK2Thinking => {
-                "MoonshotAI Kimi K2 Thinking routed through Hugging Face"
-            }
-            ModelId::HuggingFaceKimiK25Novita => {
-                "MoonshotAI Kimi K2.5 via Novita inference provider on Hugging Face router"
-            }
             ModelId::HuggingFaceMinimaxM21Novita => {
                 "MiniMax-M2.1 model via Novita inference provider on HuggingFace router. Enhanced reasoning capabilities."
             }
@@ -211,6 +169,9 @@ impl ModelId {
             ModelId::HuggingFaceGlm5Novita => {
                 "Z.AI GLM-5 via Novita inference provider on HuggingFace router. Flagship foundation model for complex systems."
             }
+            ModelId::HuggingFaceQwen3CoderNextNovita => {
+                "Qwen3-Coder-Next via Novita inference provider on HuggingFace router. Coding-optimized model with reasoning capabilities."
+            }
             // xAI models
             ModelId::XaiGrok4 => "Flagship Grok 4 model with long context and tool use",
             ModelId::XaiGrok4Mini => "Efficient Grok 4 Mini tuned for low latency",
@@ -220,25 +181,10 @@ impl ModelId {
             }
             ModelId::XaiGrok4Vision => "Multimodal Grok 4 model with image understanding",
             // Z.AI models
-            ModelId::ZaiGlm47 => {
-                "Latest Z.AI GLM flagship reasoning model with improved capabilities and 200K context"
-            }
-            ModelId::ZaiGlm47DeepThinking => {
-                "Latest Z.AI GLM flagship with forced Deep Thinking mode for complex reasoning tasks"
-            }
-            ModelId::ZaiGlm47Flash => {
-                "Z.AI GLM-4.7-Flash 30B-class SOTA lightweight model - Completely free, high-speed, optimized for agentic coding with enhanced reasoning"
-            }
             ModelId::ZaiGlm5 => {
                 "Z.ai's flagship open-source foundation model engineered for complex systems design and long-horizon agent workflows. Built for expert developers, it delivers production-grade performance on large-scale programming tasks, rivaling leading closed-source models. With advanced agentic planning, deep backend reasoning, and iterative self-correction, GLM-5 moves beyond code generation to full-system construction and autonomous execution."
             }
-            ModelId::ZaiGlm432b0414128k => {
-                "Legacy GLM 4 32B deployment offering extended 128K context window"
-            }
-            // Moonshot models
-            ModelId::MoonshotKimiK25 => {
-                "Kimi K2.5 multimodal model supporting text + vision, thinking modes, tool calls, JSON mode, and long-context reasoning"
-            }
+            // Ollama models
             ModelId::OllamaGptOss20b => {
                 "Local GPT-OSS 20B deployment served via Ollama with no external API dependency"
             }
@@ -260,13 +206,7 @@ impl ModelId {
             ModelId::OllamaMistralLarge3675bCloud => {
                 "Mistral Large 3 675B reasoning model via Ollama Cloud for complex problem-solving"
             }
-            ModelId::OllamaKimiK2ThinkingCloud => {
-                "MoonshotAI Kimi K2 thinking model via Ollama Cloud with explicit reasoning traces"
-            }
-            ModelId::OllamaKimiK25Cloud => {
-                "MoonshotAI Kimi K2.5 versatile multimodal model via Ollama Cloud with reasoning support"
-            }
-            ModelId::OllamaGlm47Cloud => "Advancing the Coding Capability",
+            ModelId::OllamaGlm5Cloud => "Cloud-hosted GLM-5 model served via Ollama Cloud",
             ModelId::OllamaMinimaxM21Cloud => {
                 "Exceptional multilingual capabilities to elevate code engineering"
             }
@@ -356,8 +296,6 @@ impl ModelId {
             | ModelId::OpenRouterDeepSeekV32
             | ModelId::OpenRouterDeepseekReasoner
             | ModelId::OpenRouterDeepSeekV32Speciale
-            | ModelId::OpenRouterMoonshotaiKimiK20905
-            | ModelId::OpenRouterMoonshotaiKimiK2Thinking
             | ModelId::OpenRouterAmazonNova2LiteV1
             | ModelId::OpenRouterMistralaiMistralLarge2512
             | ModelId::OpenRouterNexAgiDeepseekV31NexN1
@@ -371,11 +309,9 @@ impl ModelId {
             | ModelId::OpenRouterOpenAIGpt52Codex
             | ModelId::OpenRouterOpenAIGpt52Pro
             | ModelId::OpenRouterOpenAIO1Pro
-            | ModelId::OpenRouterZaiGlm47
-            | ModelId::OpenRouterZaiGlm47Flash
-            | ModelId::OpenRouterZaiGlm5
             | ModelId::OpenRouterStepfunStep35FlashFree
-            | ModelId::OpenRouterMoonshotaiKimiK25 => unreachable!(),
+            | ModelId::OpenRouterMoonshotaiKimiK25
+            | ModelId::OpenRouterZaiGlm5 => unreachable!(),
         }
     }
 
@@ -386,10 +322,6 @@ impl ModelId {
     pub fn all_models() -> Vec<ModelId> {
         let mut models = vec![
             // Gemini models
-            ModelId::Gemini25FlashPreview,
-            ModelId::Gemini25Flash,
-            ModelId::Gemini25FlashLite,
-            ModelId::Gemini25Pro,
             ModelId::Gemini3ProPreview,
             ModelId::Gemini3FlashPreview,
             // OpenAI models
@@ -421,15 +353,11 @@ impl ModelId {
             ModelId::HuggingFaceDeepseekV32,
             ModelId::HuggingFaceOpenAIGptOss20b,
             ModelId::HuggingFaceOpenAIGptOss120b,
-            ModelId::HuggingFaceGlm47,
-            ModelId::HuggingFaceGlm47Novita,
-            ModelId::HuggingFaceGlm47FlashNovita,
-            ModelId::HuggingFaceKimiK2Thinking,
-            ModelId::HuggingFaceKimiK25Novita,
             ModelId::HuggingFaceMinimaxM21Novita,
             ModelId::HuggingFaceDeepseekV32Novita,
             ModelId::HuggingFaceXiaomiMimoV2FlashNovita,
             ModelId::HuggingFaceGlm5Novita,
+            ModelId::HuggingFaceQwen3CoderNextNovita,
             // xAI models
             ModelId::XaiGrok4,
             ModelId::XaiGrok4Mini,
@@ -437,13 +365,7 @@ impl ModelId {
             ModelId::XaiGrok4CodeLatest,
             ModelId::XaiGrok4Vision,
             // Z.AI models
-            ModelId::ZaiGlm47,
-            ModelId::ZaiGlm47DeepThinking,
-            ModelId::ZaiGlm47Flash,
             ModelId::ZaiGlm5,
-            ModelId::ZaiGlm432b0414128k,
-            // Moonshot models
-            ModelId::MoonshotKimiK25,
             // Ollama models
             ModelId::OllamaGptOss20b,
             ModelId::OllamaGptOss20bCloud,
@@ -452,10 +374,8 @@ impl ModelId {
             ModelId::OllamaDeepseekV32Cloud,
             ModelId::OllamaQwen3Next80bCloud,
             ModelId::OllamaMistralLarge3675bCloud,
-            ModelId::OllamaKimiK2ThinkingCloud,
-            ModelId::OllamaKimiK25Cloud,
             ModelId::OllamaQwen3Coder480bCloud,
-            ModelId::OllamaGlm47Cloud,
+            ModelId::OllamaGlm5Cloud,
             ModelId::OllamaGemini3ProPreviewLatestCloud,
             ModelId::OllamaGemini3FlashPreviewCloud,
             ModelId::OllamaDevstral2123bCloud,

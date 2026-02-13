@@ -244,13 +244,10 @@ mod tests {
         let models_json = r#"{
   "google": {
     "id": "google",
-    "default_model": "gemini-2.5-flash",
+    "default_model": "gemini-3-flash-preview",
     "models": {
-      "gemini-2.5-flash": {
-        "context": 1000000
-      },
-      "gemini-2.5-pro": {
-        "context": 2000000
+      "gemini-3-flash-preview": {
+        "context": 1048576
       }
     }
   },
@@ -273,7 +270,7 @@ mod tests {
         let dir = create_test_models_db();
         let db = ModelsDatabase::from_file(&dir.path().join("models.json")).unwrap();
 
-        assert!(db.model_exists("google", "gemini-2.5-flash"));
+        assert!(db.model_exists("google", "gemini-3-flash-preview"));
         assert!(db.model_exists("openai", "gpt-5"));
         assert!(!db.model_exists("google", "nonexistent"));
     }
@@ -284,8 +281,8 @@ mod tests {
         let db = ModelsDatabase::from_file(&dir.path().join("models.json")).unwrap();
 
         assert_eq!(
-            db.get_context_window("google", "gemini-2.5-flash"),
-            Some(1000000)
+            db.get_context_window("google", "gemini-3-flash-preview"),
+            Some(1048576)
         );
         assert_eq!(db.get_context_window("openai", "gpt-5"), Some(128000));
         assert_eq!(db.get_context_window("google", "nonexistent"), None);
@@ -297,7 +294,7 @@ mod tests {
         let validator = ConfigValidator::new(&dir.path().join("models.json")).unwrap();
         let mut config = VTCodeConfig::default();
         config.agent.provider = "google".to_owned();
-        config.agent.default_model = "gemini-2.5-flash".to_owned();
+        config.agent.default_model = "gemini-3-flash-preview".to_owned();
 
         let result = validator.validate(&config).unwrap();
         // Model exists, so no error about model
@@ -322,8 +319,8 @@ mod tests {
         let validator = ConfigValidator::new(&dir.path().join("models.json")).unwrap();
         let mut config = VTCodeConfig::default();
         config.agent.provider = "google".to_owned();
-        config.agent.default_model = "gemini-2.5-flash".to_owned();
-        config.context.max_context_tokens = 2000000; // Exceeds 1000000 limit
+        config.agent.default_model = "gemini-3-flash-preview".to_owned();
+        config.context.max_context_tokens = 2000000; // Exceeds 1048576 limit
 
         let result = validator.validate(&config).unwrap();
         assert!(result.warnings.iter().any(|w| w.contains("exceeds")));
