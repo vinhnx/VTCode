@@ -89,17 +89,17 @@ verify_checksums() {
     print_info "Formula version: $version"
 
     # Check if release exists on GitHub
-    if ! gh release view "v$version" >/dev/null 2>&1; then
-        print_warning "Release v$version not found on GitHub"
+    if ! gh release view "$version" >/dev/null 2>&1; then
+        print_warning "Release $version not found on GitHub"
         return 1
     fi
 
-    print_success "Release v$version found on GitHub"
+    print_success "Release $version found on GitHub"
 
     # Get asset list
     print_info "Checking for binaries..."
 
-    local assets=$(gh release view "v$version" --json assets --jq '.assets | length')
+    local assets=$(gh release view "$version" --json assets --jq '.assets | length')
     print_info "Found $assets assets in release"
 
     if [ "$assets" -lt 4 ]; then
@@ -109,7 +109,7 @@ verify_checksums() {
     fi
 
     # Check for sha256 files
-    local sha256_count=$(gh release view "v$version" --json assets --jq '.assets[] | select(.name | endswith(".sha256")) | .name' | wc -l || echo "0")
+    local sha256_count=$(gh release view "$version" --json assets --jq '.assets[] | select(.name | endswith(".sha256")) | .name' | wc -l || echo "0")
     print_info "Found $sha256_count checksum files"
 
     # Try to download and verify checksums
@@ -119,7 +119,7 @@ verify_checksums() {
         local temp_dir=$(mktemp -d)
         trap "rm -rf $temp_dir" EXIT
 
-        if gh release download "v$version" --dir "$temp_dir" --pattern "*.sha256" 2>/dev/null; then
+        if gh release download "$version" --dir "$temp_dir" --pattern "*.sha256" 2>/dev/null; then
             print_success "Downloaded checksum files"
 
             # Extract checksums from downloaded files

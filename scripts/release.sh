@@ -303,10 +303,10 @@ update_changelog_from_commits() {
     local version=$1
     local dry_run_flag=$2
 
-    print_info "Generating changelog for version v$version from commits..."
+    print_info "Generating changelog for version $version from commits..."
 
     local previous_tag
-    previous_tag=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1)
+    previous_tag=$(git tag --sort=-v:refname | grep -E '^v?[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1)
 
     local commits_range="HEAD"
     if [[ -n "$previous_tag" ]]; then
@@ -330,7 +330,7 @@ update_changelog_from_commits() {
         echo ""
         echo "$structured_changelog"
         echo ""
-        echo "**Full Changelog**: https://github.com/vinhnx/vtcode/compare/${previous_tag}...v${version}"
+        echo "**Full Changelog**: https://github.com/vinhnx/vtcode/compare/${previous_tag}...${version}"
     } > "$RELEASE_NOTES_FILE"
 
     if [[ "$dry_run_flag" == 'true' ]]; then
@@ -342,13 +342,13 @@ update_changelog_from_commits() {
 
     # Format for CHANGELOG.md (with version header)
     local changelog_entry
-    changelog_entry="## v$version - $date_str"$'\n\n'
+    changelog_entry="## $version - $date_str"$'\n\n'
     changelog_entry="${changelog_entry}${structured_changelog}"$'\n'
 
     if [[ -f CHANGELOG.md ]]; then
         # Check if this version already exists in the changelog
-        if grep -q "^## v$version " CHANGELOG.md; then
-            print_warning "Version v$version already exists in CHANGELOG.md, skipping update"
+        if grep -q "^## $version " CHANGELOG.md; then
+            print_warning "Version $version already exists in CHANGELOG.md, skipping update"
         else
             # Insert new entry after the header
             local header
@@ -377,8 +377,8 @@ update_changelog_from_commits() {
         GIT_AUTHOR_EMAIL="noreply@vtcode.com" \
         GIT_COMMITTER_NAME="vtcode-release-bot" \
         GIT_COMMITTER_EMAIL="noreply@vtcode.com" \
-        git commit -m "docs: update changelog for v$version [skip ci]"
-        print_success "Changelog updated and committed for version v$version"
+        git commit -m "docs: update changelog for $version [skip ci]"
+        print_success "Changelog updated and committed for version $version"
     else
         print_info "No changes to CHANGELOG.md to commit."
     fi
@@ -516,7 +516,7 @@ main() {
     fi
 
     if [[ "$dry_run" == 'true' ]]; then
-        print_warning "Running in dry-run mode for v$next_version"
+        print_warning "Running in dry-run mode for $next_version"
     else
         print_warning "Releasing version: $next_version"
     fi
@@ -570,8 +570,8 @@ main() {
      fi
 
      # Check if release already exists
-     if gh release view "v$released_version" &>/dev/null; then
-         print_warning "Release v$released_version already exists"
+     if gh release view "$released_version" &>/dev/null; then
+         print_warning "Release $released_version already exists"
      else
          # Read release notes from file
          local release_body=""
@@ -580,12 +580,12 @@ main() {
          fi
 
          # Create GitHub release with release notes
-         if gh release create "v$released_version" \
-             --title "v$released_version" \
+         if gh release create "$released_version" \
+             --title "$released_version" \
              --notes "$release_body" \
              --draft=false \
              --prerelease=false; then
-             print_success "GitHub Release v$released_version created successfully"
+             print_success "GitHub Release $released_version created successfully"
          else
              print_error "Failed to create GitHub Release"
              exit 1
@@ -594,7 +594,7 @@ main() {
 
     # 4. Upload Binaries to GitHub Release
     if [[ "$skip_binaries" == 'false' ]]; then
-        print_info "Step 4: Packaging and uploading binaries to GitHub Release v$released_version..."
+        print_info "Step 4: Packaging and uploading binaries to GitHub Release $released_version..."
 
         local binaries_dir="/tmp/vtcode-release-$released_version"
         mkdir -p "$binaries_dir"
@@ -604,8 +604,8 @@ main() {
 
         # x86_64-apple-darwin
         if cargo build --release --target x86_64-apple-darwin &>/dev/null; then
-            tar -C target/x86_64-apple-darwin/release -czf "$binaries_dir/vtcode-v$released_version-x86_64-apple-darwin.tar.gz" vtcode
-            shasum -a 256 "$binaries_dir/vtcode-v$released_version-x86_64-apple-darwin.tar.gz" > "$binaries_dir/vtcode-v$released_version-x86_64-apple-darwin.sha256"
+            tar -C target/x86_64-apple-darwin/release -czf "$binaries_dir/vtcode-$released_version-x86_64-apple-darwin.tar.gz" vtcode
+            shasum -a 256 "$binaries_dir/vtcode-$released_version-x86_64-apple-darwin.tar.gz" > "$binaries_dir/vtcode-$released_version-x86_64-apple-darwin.sha256"
             print_success "Built x86_64-apple-darwin"
         else
             print_warning "Failed to build x86_64-apple-darwin"
@@ -613,8 +613,8 @@ main() {
 
         # aarch64-apple-darwin
         if cargo build --release --target aarch64-apple-darwin &>/dev/null; then
-            tar -C target/aarch64-apple-darwin/release -czf "$binaries_dir/vtcode-v$released_version-aarch64-apple-darwin.tar.gz" vtcode
-            shasum -a 256 "$binaries_dir/vtcode-v$released_version-aarch64-apple-darwin.tar.gz" > "$binaries_dir/vtcode-v$released_version-aarch64-apple-darwin.sha256"
+            tar -C target/aarch64-apple-darwin/release -czf "$binaries_dir/vtcode-$released_version-aarch64-apple-darwin.tar.gz" vtcode
+            shasum -a 256 "$binaries_dir/vtcode-$released_version-aarch64-apple-darwin.tar.gz" > "$binaries_dir/vtcode-$released_version-aarch64-apple-darwin.sha256"
             print_success "Built aarch64-apple-darwin"
         else
             print_warning "Failed to build aarch64-apple-darwin"
@@ -622,7 +622,7 @@ main() {
 
         # Upload binaries to GitHub Release
         print_info "Uploading binaries to GitHub Release..."
-        if gh release upload "v$released_version" "$binaries_dir"/*.tar.gz "$binaries_dir"/*.sha256 --clobber; then
+        if gh release upload "$released_version" "$binaries_dir"/*.tar.gz "$binaries_dir"/*.sha256 --clobber; then
             print_success "Binaries uploaded successfully"
         else
             print_error "Failed to upload binaries to GitHub Release"
@@ -645,7 +645,7 @@ main() {
          trigger_docs_rs_rebuild "$released_version" false
      fi
 
-     print_success "Release process finished for v$released_version"
+     print_success "Release process finished for $released_version"
      print_info "Distribution:"
      print_info "  ✓ Cargo (crates.io)"
      print_info "  ✓ GitHub Releases (macOS built locally)"

@@ -164,7 +164,7 @@ for crate in "${CRATES[@]}"; do
         run_cmd "cargo publish --dry-run -p vtcode-bash-runner"
     fi
     publish_cmd "$crate"
-    tag="${crate}-v0.1.0"
+    tag="${crate}-0.1.0"
     maybe_tag "${tag}"
     post_publish_follow_up "${crate}"
     echo "Completed processing for ${crate}."

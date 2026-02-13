@@ -62,7 +62,7 @@ Options:
 Release script will:
 - Bump version in Cargo.toml
 - Run `cargo-release` (handles crate publishing)
-- Create git tag (e.g., `v0.58.3`)
+- Create git tag (e.g., `0.58.3`)
 - Push to remote
 
 #### 3. GitHub Actions Run
@@ -73,7 +73,7 @@ The `release-on-tag.yml` workflow activates:
 on:
   push:
     tags:
-      - "v*"
+      - "[0-9]*"
 ```
 
 This workflow:
@@ -90,7 +90,7 @@ This workflow:
 **Check**: Are binaries uploaded to GitHub Release?
 ```bash
 # Check if release has assets
-gh release view v0.58.3 --json assets --jq '.assets | length'
+gh release view 0.58.3 --json assets --jq '.assets | length'
 ```
 
 **Solution**: 
@@ -107,8 +107,8 @@ gh release view v0.58.3 --json assets --jq '.assets | length'
 ```bash
 # Manually verify checksums
 cd dist/
-shasum -a 256 vtcode-v0.58.3-aarch64-apple-darwin.tar.gz
-shasum -a 256 vtcode-v0.58.3-x86_64-apple-darwin.tar.gz
+shasum -a 256 vtcode-0.58.3-aarch64-apple-darwin.tar.gz
+shasum -a 256 vtcode-0.58.3-x86_64-apple-darwin.tar.gz
 
 # Manually update formula if needed
 # Edit homebrew/vtcode.rb and replace sha256 values
@@ -125,7 +125,7 @@ git diff homebrew/vtcode.rb
 
 # If needed, manually push
 cd homebrew && git add vtcode.rb
-git commit -m "chore: update homebrew formula to v0.58.3"
+git commit -m "chore: update homebrew formula to 0.58.3"
 git push origin main
 ```
 
@@ -138,11 +138,11 @@ If the automated process fails, manually update Homebrew:
 VERSION=$(grep '^version = ' Cargo.toml | sed 's/.*"\([^"]*\)".*/\1/')
 
 # 2. Get checksums from GitHub Release
-gh release download v$VERSION --dir dist --pattern "*.sha256"
+gh release download $VERSION --dir dist --pattern "*.sha256"
 
 # 3. Read checksums
-X86_64_SHA=$(cat dist/vtcode-v$VERSION-x86_64-apple-darwin.sha256)
-ARM64_SHA=$(cat dist/vtcode-v$VERSION-aarch64-apple-darwin.sha256)
+X86_64_SHA=$(cat dist/vtcode-$VERSION-x86_64-apple-darwin.sha256)
+ARM64_SHA=$(cat dist/vtcode-$VERSION-aarch64-apple-darwin.sha256)
 
 # 4. Update formula
 cat > homebrew/vtcode.rb << EOF
@@ -154,10 +154,10 @@ class Vtcode < Formula
 
   on_macos do
     if Hardware::CPU.arm?
-      url "https://github.com/vinhnx/vtcode/releases/download/v#{version}/vtcode-v#{version}-aarch64-apple-darwin.tar.gz"
+      url "https://github.com/vinhnx/vtcode/releases/download/#{version}/vtcode-#{version}-aarch64-apple-darwin.tar.gz"
       sha256 "$ARM64_SHA"
     else
-      url "https://github.com/vinhnx/vtcode/releases/download/v#{version}/vtcode-v#{version}-x86_64-apple-darwin.tar.gz"
+      url "https://github.com/vinhnx/vtcode/releases/download/#{version}/vtcode-#{version}-x86_64-apple-darwin.tar.gz"
       sha256 "$X86_64_SHA"
     end
   end
@@ -167,7 +167,7 @@ EOF
 
 # 5. Commit and push
 git add homebrew/vtcode.rb
-git commit -m "chore: update homebrew formula to v$VERSION"
+git commit -m "chore: update homebrew formula to $VERSION"
 git push origin main
 ```
 

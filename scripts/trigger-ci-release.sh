@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # Trigger GitHub Actions release workflow for cross-platform builds
-# Usage: ./scripts/trigger-ci-release.sh v0.74.3
+# Usage: ./scripts/trigger-ci-release.sh 0.74.3
 
 set -euo pipefail
 
@@ -29,15 +29,15 @@ print_warning() {
 
 if [[ $# -ne 1 ]]; then
     print_error "Usage: $0 <tag>"
-    print_info "Example: $0 v0.74.3"
+    print_info "Example: $0 0.74.3"
     exit 1
 fi
 
 TAG="$1"
 
 # Validate tag format
-if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-    print_error "Invalid tag format: $TAG (expected v0.74.3)"
+if ! [[ "$TAG" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    print_error "Invalid tag format: $TAG (expected 0.74.3)"
     exit 1
 fi
 

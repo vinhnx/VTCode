@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Tag to release (e.g., v0.73.0)'
+        description: 'Tag to release (e.g., 0.73.0)'
         required: true
         type: string
 
@@ -145,7 +145,7 @@ jobs:
         id: changelog
         run: |
           # Get the previous tag
-          PREV_TAG=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | grep -v "${{ github.event.inputs.tag }}" | head -n 1)
+          PREV_TAG=$(git tag --sort=-v:refname | grep -E '^v?[0-9]+\.[0-9]+\.[0-9]+$' | grep -v "${{ github.event.inputs.tag }}" | head -n 1)
 
           # Install conventional-changelog-cli if not available
           npm install -g conventional-changelog-cli@^2.2.2 || echo "npm not available, using fallback"

@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 
-# Quick status checker for VT Code v0.58.6 release
+# Quick status checker for VT Code 0.58.6 release
 
 REPO="vinhnx/vtcode"
-RELEASE_TAG="v0.58.6"
+RELEASE_TAG="0.58.6"
 GITHUB_API="https://api.github.com/repos/$REPO/releases/tags/$RELEASE_TAG"
 
 # Colors
@@ -18,16 +18,16 @@ NC='\033[0m'
 get_platform() {
     case "$(uname -s)-$(uname -m)" in
         Darwin-arm64)
-            echo "aarch64-apple-darwin|macOS Apple Silicon|vtcode-v0.58.6-aarch64-apple-darwin.tar.gz"
+            echo "aarch64-apple-darwin|macOS Apple Silicon|vtcode-0.58.6-aarch64-apple-darwin.tar.gz"
             ;;
         Darwin-x86_64)
-            echo "x86_64-apple-darwin|macOS Intel|vtcode-v0.58.6-x86_64-apple-darwin.tar.gz"
+            echo "x86_64-apple-darwin|macOS Intel|vtcode-0.58.6-x86_64-apple-darwin.tar.gz"
             ;;
         Linux-x86_64)
-            echo "x86_64-unknown-linux-gnu|Linux|vtcode-v0.58.6-x86_64-unknown-linux-gnu.tar.gz"
+            echo "x86_64-unknown-linux-gnu|Linux|vtcode-0.58.6-x86_64-unknown-linux-gnu.tar.gz"
             ;;
         MINGW*-x86_64|MSYS*-x86_64)
-            echo "x86_64-pc-windows-msvc|Windows|vtcode-v0.58.6-x86_64-pc-windows-msvc.zip"
+            echo "x86_64-pc-windows-msvc|Windows|vtcode-0.58.6-x86_64-pc-windows-msvc.zip"
             ;;
         *)
             echo "unknown|Unknown|unknown"
@@ -37,7 +37,7 @@ get_platform() {
 }
 
 printf '%b\n' "${MAGENTA}════════════════════════════════════════════════════${NC}"
-printf '%b\n' "${MAGENTA}  VT Code v0.58.6 Release Status${NC}"
+printf '%b\n' "${MAGENTA}  VT Code 0.58.6 Release Status${NC}"
 printf '%b\n' "${MAGENTA}════════════════════════════════════════════════════${NC}"
 echo ""
 

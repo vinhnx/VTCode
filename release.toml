@@ -5,8 +5,8 @@ consolidate-commits = true
 push = true
 push-remote = "origin"
 publish = true
-tag-name = "v{{version}}"
-tag-message = "Release v{{version}}"
+tag-name = "{{version}}"
+tag-message = "Release {{version}}"
 [rate-limit]
 new-packages = 5
 existing-packages = 300

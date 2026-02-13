@@ -7,7 +7,7 @@ set -euo pipefail
 
 # Configuration
 REPO="vinhnx/vtcode"
-RELEASE_TAG="v0.58.6"
+RELEASE_TAG="0.58.6"
 GITHUB_API="https://api.github.com/repos/$REPO/releases/tags/$RELEASE_TAG"
 POLL_INTERVAL=5  # seconds
 MAX_WAIT=1800    # 30 minutes max
@@ -24,16 +24,16 @@ NC='\033[0m'
 get_required_assets() {
     case "$(uname -s)-$(uname -m)" in
         Darwin-arm64)
-            echo "vtcode-v0.58.6-aarch64-apple-darwin.tar.gz"
+            echo "vtcode-0.58.6-aarch64-apple-darwin.tar.gz"
             ;;
         Darwin-x86_64)
-            echo "vtcode-v0.58.6-x86_64-apple-darwin.tar.gz"
+            echo "vtcode-0.58.6-x86_64-apple-darwin.tar.gz"
             ;;
         Linux-x86_64)
-            echo "vtcode-v0.58.6-x86_64-unknown-linux-gnu.tar.gz"
+            echo "vtcode-0.58.6-x86_64-unknown-linux-gnu.tar.gz"
             ;;
         MINGW*-x86_64|MSYS*-x86_64)
-            echo "vtcode-v0.58.6-x86_64-pc-windows-msvc.zip"
+            echo "vtcode-0.58.6-x86_64-pc-windows-msvc.zip"
             ;;
         *)
             echo "ERROR: Unsupported platform" >&2
@@ -137,7 +137,7 @@ show_status() {
 # Show help
 show_help() {
     cat <<'HELP'
-VT Code Release Monitor - Wait for v0.58.6 binaries
+VT Code Release Monitor - Wait for 0.58.6 binaries
 
 Usage: ./scripts/wait-for-release.sh [options]
 
@@ -186,7 +186,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Main polling loop
-log_info "Waiting for VT Code v0.58.6 binaries to be available..."
+log_info "Waiting for VT Code 0.58.6 binaries to be available..."
 log_info "Release: https://github.com/$REPO/releases/tag/$RELEASE_TAG"
 log_info "Polling every $POLL_INTERVAL seconds (max wait: $MAX_WAIT seconds)"
 echo ""
