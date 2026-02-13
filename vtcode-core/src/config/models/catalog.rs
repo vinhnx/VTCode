@@ -310,7 +310,8 @@ impl ModelId {
             | ModelId::OpenRouterOpenAIGpt52Pro
             | ModelId::OpenRouterOpenAIO1Pro
             | ModelId::OpenRouterStepfunStep35FlashFree
-            | ModelId::OpenRouterMoonshotaiKimiK25
+            | ModelId::OpenRouterMoonshotaiKimiK20905
+            | ModelId::OpenRouterMoonshotaiKimiK2Thinking
             | ModelId::OpenRouterZaiGlm5 => unreachable!(),
         }
     }

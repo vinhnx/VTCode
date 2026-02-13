@@ -256,8 +256,10 @@ pub enum ModelId {
     OpenRouterOpenAIO1Pro,
     /// Step 3.5 Flash (free) - StepFun's most capable open-source reasoning model via OpenRouter
     OpenRouterStepfunStep35FlashFree,
-    /// Kimi K2.5 - MoonshotAI Kimi K2.5 release optimised for coding agents via OpenRouter
-    OpenRouterMoonshotaiKimiK25,
     /// GLM-5 - Z.AI GLM-5 flagship foundation model via OpenRouter
     OpenRouterZaiGlm5,
+    /// MoonshotAI: Kimi K2 0905 - MoonshotAI Kimi K2 0905 MoE release optimised for coding agents
+    OpenRouterMoonshotaiKimiK20905,
+    /// MoonshotAI: Kimi K2 Thinking - MoonshotAI reasoning-tier Kimi K2 release optimized for long-horizon agents
+    OpenRouterMoonshotaiKimiK2Thinking,
 }

@@ -270,4 +270,8 @@ pub enum ModelId {
     OpenRouterStepfunStep35FlashFree,
     /// GLM-5 - Z.AI GLM-5 flagship foundation model via OpenRouter
     OpenRouterZaiGlm5,
+    /// MoonshotAI: Kimi K2 0905 - MoonshotAI Kimi K2 0905 MoE release optimised for coding agents
+    OpenRouterMoonshotaiKimiK20905,
+    /// MoonshotAI: Kimi K2 Thinking - MoonshotAI reasoning-tier Kimi K2 release optimized for long-horizon agents
+    OpenRouterMoonshotaiKimiK2Thinking,
 }
