@@ -2,6 +2,29 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.79.4 - 2026-02-14
+
+### Features
+
+- implement plan mode toggle and strip proposed plan blocks in rendering (79f0327d) (@vinhnx)
+- add skill bundle import/export functionality with zip support (dea5b5b7) (@vinhnx)
+- add Qwen3 Coder Next model support and update related constants (5a4303e0) (@vinhnx)
+- add MiniMax M2.5 model support across various providers and update related constants (968963f1) (@vinhnx)
+
+### Documentation
+
+- update documentation and improve clarity on execution plans, architectural invariants, and quality scores feat: enhance system instruction generation to replace placeholders with unified tool guidance (27c61ef7) (@vinhnx)
+
+### Chores
+
+- Release (69df0e20) (@vinhnx)
+- Release (10e4f284) (@vinhnx)
+
+### Other
+
+- Add support for inline skill bundles and network policies in skills (ddb9d280) (@vinhnx)
+- Add architectural invariants, core beliefs, execution plans, quality score, and tech debt tracker documentation (80cf6d68) (@vinhnx)
+
 ## 0.79.3 - 2026-02-13
 
 ### Features
