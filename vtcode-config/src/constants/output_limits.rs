@@ -92,11 +92,13 @@ mod tests {
         let mut output = String::new();
         let mut truncated = false;
 
-        collect_with_truncation(&mut output, "first", 8, &mut truncated);
-        let len_after_first = output.len();
-
-        collect_with_truncation(&mut output, "second", 8, &mut truncated);
-        assert_eq!(output.len(), len_after_first);
+        // Triggers initial truncation
+        collect_with_truncation(&mut output, "first content", 5, &mut truncated);
+        let len_after_marker = output.len();
         assert!(truncated);
+
+        // Should not append marker again
+        collect_with_truncation(&mut output, "second content", 5, &mut truncated);
+        assert_eq!(output.len(), len_after_marker);
     }
 }

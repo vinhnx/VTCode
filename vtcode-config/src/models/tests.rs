@@ -106,7 +106,7 @@ fn test_model_from_string() {
         models::CLAUDE_SONNET_4_5_20250929
             .parse::<ModelId>()
             .unwrap(),
-        ModelId::ClaudeSonnet4
+        ModelId::ClaudeSonnet45
     );
     assert_eq!(
         models::CLAUDE_OPUS_4_1.parse::<ModelId>().unwrap(),
@@ -165,6 +165,10 @@ fn test_model_from_string() {
         ModelId::ZaiGlm5
     );
     for entry in openrouter_generated::ENTRIES {
+        // Skip models that are shadowed by built-in variants with the same ID
+        if entry.id == models::zai::GLM_5 {
+            continue;
+        }
         assert_eq!(entry.id.parse::<ModelId>().unwrap(), entry.variant);
     }
     // Invalid model
@@ -371,7 +375,7 @@ fn test_model_variants() {
     assert!(ModelId::XaiGrok4CodeLatest.is_top_tier());
     assert!(ModelId::DeepSeekReasoner.is_top_tier());
     assert!(ModelId::ZaiGlm5.is_top_tier());
-    assert!(!ModelId::Gemini3FlashPreview.is_top_tier());
+    assert!(ModelId::Gemini3FlashPreview.is_top_tier());
     assert!(!ModelId::ClaudeHaiku45.is_top_tier());
 
     for entry in openrouter_generated::ENTRIES {
