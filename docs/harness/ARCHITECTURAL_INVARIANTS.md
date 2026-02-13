@@ -202,3 +202,15 @@ When adding a new invariant:
 2. Implement automated enforcement (Clippy lint, CI script, or pre-commit hook).
 3. Fix all existing violations before merging.
 4. Add a tech debt item (`docs/harness/TECH_DEBT_TRACKER.md`) if existing violations cannot be fixed immediately.
+
+## Known Violations
+
+Not all invariants are fully enforced yet. Known violations are tracked in `docs/harness/TECH_DEBT_TRACKER.md`:
+
+| Invariant | Debt Item | Status |
+|-----------|-----------|--------|
+| #2 File Size Limits | TD-005 | TUI event handler modules likely exceed 500 lines |
+| #4 Structured Logging | — | Not yet audited; some legacy `println!` may exist |
+| #10 Lint Error Messages | — | Custom lints with remediation not yet implemented |
+
+Adding CI enforcement for invariants is itself tracked as future work. Until enforcement exists, these invariants are enforced by code review and agent discipline.

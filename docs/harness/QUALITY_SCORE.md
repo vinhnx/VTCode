@@ -17,7 +17,7 @@ Last reviewed: 2026-02-13
 | Test Coverage    | B     | Provider factory and request shaping have unit tests. Failover paths need more integration tests. |
 | API Stability    | B     | Multi-provider factory pattern is stable. Model metadata in `docs/models.json` is maintained. |
 | Agent Legibility | B     | Clear provider abstraction. Agents can add providers by following existing patterns. |
-| Error Handling   | A     | Uses `anyhow::Result` with context throughout. Automatic failover on provider errors. |
+| Error Handling   | A     | Uses `anyhow::Result` with context throughout. Automatic failover on provider errors. (see `vtcode-llm/src/lib.rs`) |
 | Documentation    | B     | Provider guides exist (`docs/PROVIDER_GUIDES.md`). Internal architecture could use more inline docs. |
 
 **Overall: B**
@@ -31,7 +31,7 @@ Last reviewed: 2026-02-13
 | Dimension        | Grade | Notes |
 |------------------|-------|-------|
 | Test Coverage    | B     | Core traits tested. Unified tools (`unified_exec`, `unified_file`, `unified_search`) have coverage. Some of the 54+ handlers lack dedicated tests. |
-| API Stability    | A     | `Tool`, `ModeTool`, `CacheableTool` traits are stable and well-composed. |
+| API Stability    | A     | `Tool`, `ModeTool`, `CacheableTool` traits are stable and well-composed. (see `vtcode-tools/src/lib.rs`, `vtcode-core/src/tools/unified_error.rs`) |
 | Agent Legibility | A     | Trait-driven composition makes it clear how to add new tools. Registry pattern is predictable. |
 | Error Handling   | A     | `UnifiedToolError` with `ErrorSeverity` and `is_retryable()`. Circuit breaker per tool. |
 | Documentation    | B     | Architecture doc covers tool system. Individual tool docs vary in quality. |
@@ -65,7 +65,7 @@ Last reviewed: 2026-02-13
 | Test Coverage    | C     | Process hardening is OS-specific, hard to test in CI. Command safety has tests but sandbox coverage is thin. |
 | API Stability    | B     | Security boundaries are well-defined. Tool policies (allow/deny/prompt) are stable. |
 | Agent Legibility | B     | `docs/PROCESS_HARDENING.md`, `docs/SECURITY.md` exist. Agents understand the safety model. |
-| Error Handling   | A     | Specific exit codes for hardening failures (5, 6, 7). Command safety uses explicit deny/allow. |
+| Error Handling   | A     | Specific exit codes for hardening failures (5, 6, 7). Command safety uses explicit deny/allow. (see `vtcode-process-hardening/src/lib.rs` exit codes) |
 | Documentation    | B     | Multiple security docs exist but spread across `docs/SECURITY.md`, `docs/SANDBOX_*.md`, `docs/COMMAND_SAFETY_*.md`. Could be consolidated. |
 
 **Overall: B**

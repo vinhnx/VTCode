@@ -20,6 +20,7 @@ vtcode/                          # Binary entrypoint (src/main.rs)
 ├── vtcode-bash-runner/          # Shell execution engine
 ├── vtcode-markdown-store/       # Document storage
 ├── vtcode-indexer/              # Code indexing
+├── vtcode-file-search/          # File search utilities
 ├── vtcode-exec-events/          # Event definitions
 ├── vtcode-acp-client/           # Agent Client Protocol bridge
 └── vtcode-process-hardening/    # Process hardening & security
@@ -61,7 +62,7 @@ cargo clippy && cargo fmt --check && cargo check && cargo nextest run
 - Architecture overview → [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 - Configuration precedence → [`docs/config/CONFIGURATION_PRECEDENCE.md`](docs/config/CONFIGURATION_PRECEDENCE.md)
 - Process hardening → [`docs/PROCESS_HARDENING.md`](docs/PROCESS_HARDENING.md)
-- Security model → `docs/SECURITY_MODEL.md`
+- Security model → [`docs/security/SECURITY_MODEL.md`](docs/security/SECURITY_MODEL.md)
 
 ### Protocol Integrations
 - MCP (Model Context Protocol) → [`docs/mcp/`](docs/mcp/) (start at `docs/mcp/00_START_HERE.md`)
