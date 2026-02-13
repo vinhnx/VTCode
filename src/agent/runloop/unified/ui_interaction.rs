@@ -485,6 +485,9 @@ pub(crate) struct StreamSpinnerOptions {
     /// This is useful when the task continues after streaming (e.g., tool execution).
     /// Default is false for backward compatibility.
     pub defer_finish: bool,
+    /// If true, hide `<proposed_plan>...</proposed_plan>` blocks from rendered output.
+    /// This should only be enabled while Plan Mode is active.
+    pub strip_proposed_plan_blocks: bool,
 }
 
 /// Stream and render response with default options.
@@ -583,7 +586,9 @@ pub(crate) async fn stream_and_render_response_with_options(
     const MAX_PENDING_CONTENT_BYTES: usize = 4_096;
 
     let mut suppress_reasoning_due_to_duplication = false;
-    let mut plan_parser = ProposedPlanStreamParser::new();
+    let mut plan_parser = options
+        .strip_proposed_plan_blocks
+        .then(ProposedPlanStreamParser::new);
 
     // Track streaming progress
     let mut token_count = 0;
@@ -623,7 +628,11 @@ pub(crate) async fn stream_and_render_response_with_options(
         match event_result {
             Ok(LLMStreamEvent::Token { delta }) => {
                 token_count += 1;
-                let visible_delta = plan_parser.consume(&delta);
+                let visible_delta = if let Some(parser) = plan_parser.as_mut() {
+                    parser.consume(&delta)
+                } else {
+                    delta
+                };
                 if !reasoning_emitted && reasoning_token_count > 0 && !reasoning_state.is_deferred()
                 {
                     let rendered = reasoning_state
@@ -705,20 +714,22 @@ pub(crate) async fn stream_and_render_response_with_options(
     // Stream completed successfully - finish spinner unless deferred
     finish_spinner(&mut spinner_active, false);
 
-    let trailing_plan_parse = plan_parser.finish();
-    if !trailing_plan_parse.stripped_text.is_empty() {
-        if !reasoning_accumulated.trim().is_empty() && !emitted_tokens {
-            pending_content.push_str(&trailing_plan_parse.stripped_text);
-            if pending_content.len() >= MAX_PENDING_CONTENT_BYTES {
-                content_suppressed = true;
-            }
-        } else {
-            aggregated.push_str(&trailing_plan_parse.stripped_text);
-            if supports_streaming_markdown {
-                rendered_line_count = renderer
-                    .stream_markdown_response(&aggregated, rendered_line_count)
-                    .map_err(|err| map_render_error(provider_name, err))?;
-                emitted_tokens = true;
+    if let Some(parser) = plan_parser.as_mut() {
+        let trailing_plan_parse = parser.finish();
+        if !trailing_plan_parse.stripped_text.is_empty() {
+            if !reasoning_accumulated.trim().is_empty() && !emitted_tokens {
+                pending_content.push_str(&trailing_plan_parse.stripped_text);
+                if pending_content.len() >= MAX_PENDING_CONTENT_BYTES {
+                    content_suppressed = true;
+                }
+            } else {
+                aggregated.push_str(&trailing_plan_parse.stripped_text);
+                if supports_streaming_markdown {
+                    rendered_line_count = renderer
+                        .stream_markdown_response(&aggregated, rendered_line_count)
+                        .map_err(|err| map_render_error(provider_name, err))?;
+                    emitted_tokens = true;
+                }
             }
         }
     }
@@ -791,11 +802,15 @@ pub(crate) async fn stream_and_render_response_with_options(
     // CRITICAL: Ensure content is ALWAYS displayed.
     // If response has content but we didn't stream any tokens, render it now.
     // This handles providers that send content only in the Completed event.
-    let content_for_render = response
-        .content
-        .as_deref()
-        .map(extract_proposed_plan)
-        .map(|extraction| extraction.stripped_text);
+    let content_for_render = if options.strip_proposed_plan_blocks {
+        response
+            .content
+            .as_deref()
+            .map(extract_proposed_plan)
+            .map(|extraction| extraction.stripped_text)
+    } else {
+        response.content.clone()
+    };
     let has_renderable_content = content_for_render
         .as_deref()
         .map(|content| !content.trim().is_empty())
@@ -1052,5 +1067,67 @@ mod tests {
             "should mark emitted tokens when reasoning is rendered"
         );
         assert!(resp.content.is_none(), "content should remain none");
+    }
+
+    #[tokio::test]
+    async fn keeps_proposed_plan_tags_visible_outside_plan_mode() {
+        let provider = CompletedOnlyProvider {
+            content: Some("<proposed_plan>\n- Step 1\n</proposed_plan>".to_string()),
+            reasoning: None,
+        };
+        let request = build_request();
+        let spinner = build_spinner();
+        let mut renderer = AnsiRenderer::stdout();
+        let ctrl_c_state = CtrlCState::new();
+        let ctrl_c_notify = Arc::new(Notify::new());
+
+        let (_resp, emitted) = stream_and_render_response(
+            &provider,
+            request,
+            &spinner,
+            &mut renderer,
+            &Arc::new(ctrl_c_state),
+            &ctrl_c_notify,
+        )
+        .await
+        .expect("stream should succeed");
+
+        assert!(
+            emitted,
+            "outside plan mode, proposed_plan blocks should remain visible"
+        );
+    }
+
+    #[tokio::test]
+    async fn strips_proposed_plan_tags_when_option_enabled() {
+        let provider = CompletedOnlyProvider {
+            content: Some("<proposed_plan>\n- Step 1\n</proposed_plan>".to_string()),
+            reasoning: None,
+        };
+        let request = build_request();
+        let spinner = build_spinner();
+        let mut renderer = AnsiRenderer::stdout();
+        let ctrl_c_state = CtrlCState::new();
+        let ctrl_c_notify = Arc::new(Notify::new());
+
+        let (_resp, emitted) = stream_and_render_response_with_options(
+            &provider,
+            request,
+            &spinner,
+            &mut renderer,
+            &Arc::new(ctrl_c_state),
+            &ctrl_c_notify,
+            StreamSpinnerOptions {
+                defer_finish: false,
+                strip_proposed_plan_blocks: true,
+            },
+        )
+        .await
+        .expect("stream should succeed");
+
+        assert!(
+            !emitted,
+            "when stripping is enabled, pure proposed_plan content should be hidden"
+        );
     }
 }
