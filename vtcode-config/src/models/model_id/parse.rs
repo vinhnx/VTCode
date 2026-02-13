@@ -67,6 +67,7 @@ impl FromStr for ModelId {
             // Z.AI models
             s if s == models::zai::GLM_5 => Ok(ModelId::ZaiGlm5),
             // Moonshot models
+            s if s == models::moonshot::MINIMAX_M2_5 => Ok(ModelId::MoonshotMinimaxM25),
             s if s == models::ollama::GPT_OSS_20B => Ok(ModelId::OllamaGptOss20b),
             s if s == models::ollama::GPT_OSS_20B_CLOUD => Ok(ModelId::OllamaGptOss20bCloud),
             s if s == models::ollama::GPT_OSS_120B_CLOUD => Ok(ModelId::OllamaGptOss120bCloud),
@@ -108,6 +109,7 @@ impl FromStr for ModelId {
             }
             s if s == models::minimax::MINIMAX_M2_1 => Ok(ModelId::MinimaxM21),
             s if s == models::minimax::MINIMAX_M2_1_LIGHTNING => Ok(ModelId::MinimaxM21Lightning),
+            s if s == models::minimax::MINIMAX_M2_5 => Ok(ModelId::MinimaxM25),
             s if s == models::minimax::MINIMAX_M2 => Ok(ModelId::MinimaxM2),
             // Hugging Face models
             s if s == models::huggingface::DEEPSEEK_V32 => Ok(ModelId::HuggingFaceDeepseekV32),
@@ -120,6 +122,9 @@ impl FromStr for ModelId {
             s if s == models::huggingface::MINIMAX_M2_1_NOVITA => {
                 Ok(ModelId::HuggingFaceMinimaxM21Novita)
             }
+            s if s == models::huggingface::MINIMAX_M2_5_NOVITA => {
+                Ok(ModelId::HuggingFaceMinimaxM25Novita)
+            }
             s if s == models::huggingface::DEEPSEEK_V32_NOVITA => {
                 Ok(ModelId::HuggingFaceDeepseekV32Novita)
             }
@@ -130,6 +135,7 @@ impl FromStr for ModelId {
             s if s == models::huggingface::QWEN3_CODER_NEXT_NOVITA => {
                 Ok(ModelId::HuggingFaceQwen3CoderNextNovita)
             }
+            s if s == "minimax/minimax-m2.5" => Ok(ModelId::OpenRouterMinimaxM25),
             _ => {
                 if let Some(model) = Self::parse_openrouter_model(s) {
                     Ok(model)

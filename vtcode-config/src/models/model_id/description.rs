@@ -148,9 +148,13 @@ impl ModelId {
             ModelId::MinimaxM21Lightning => {
                 "Fast version of MiniMax-M2.1 for rapid conversational tasks"
             }
+            ModelId::MinimaxM25 => {
+                "Latest MiniMax-M2.5 model with further improvements in reasoning and coding"
+            }
             ModelId::MinimaxM2 => {
                 "MiniMax-M2 via Anthropic-compatible API with reasoning and tool use"
             }
+            ModelId::MoonshotMinimaxM25 => "MiniMax-M2.5 served via Moonshot API",
             ModelId::HuggingFaceDeepseekV32 => {
                 "DeepSeek-V3.2 via Hugging Face router for advanced reasoning"
             }
@@ -158,6 +162,9 @@ impl ModelId {
             ModelId::HuggingFaceOpenAIGptOss120b => "OpenAI GPT-OSS 120B via Hugging Face router",
             ModelId::HuggingFaceMinimaxM21Novita => {
                 "MiniMax-M2.1 model via Novita inference provider on HuggingFace router. Enhanced reasoning capabilities."
+            }
+            ModelId::HuggingFaceMinimaxM25Novita => {
+                "MiniMax-M2.5 model via Novita inference provider on HuggingFace router. Latest MiniMax flagship."
             }
             ModelId::HuggingFaceDeepseekV32Novita => {
                 "DeepSeek-V3.2 via Novita inference provider on HuggingFace router."
@@ -171,6 +178,7 @@ impl ModelId {
             ModelId::HuggingFaceQwen3CoderNextNovita => {
                 "Qwen3-Coder-Next via Novita inference provider on HuggingFace router. Coding-optimized model with reasoning capabilities."
             }
+            ModelId::OpenRouterMinimaxM25 => "MiniMax-M2.5 flagship model via OpenRouter",
             _ => unreachable!(),
         }
     }

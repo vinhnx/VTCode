@@ -14,6 +14,7 @@ mod generated_constants {
     pub const X_AI_GROK_CODE_FAST_1: &str = "x-ai/grok-code-fast-1";
     pub const QWEN3_CODER: &str = "qwen/qwen3-coder";
     pub const ANTHROPIC_CLAUDE_SONNET_4_5: &str = "anthropic/claude-sonnet-4.5";
+    pub const MINIMAX_M2_5: &str = "minimax/minimax-m2.5";
 
     pub mod vendor {
         pub mod openrouter {

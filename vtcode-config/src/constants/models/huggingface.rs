@@ -13,6 +13,7 @@ pub const SUPPORTED_MODELS: &[&str] = &[
     OPENAI_GPT_OSS_20B,
     // Novita inference provider models
     MINIMAX_M2_1_NOVITA,
+    MINIMAX_M2_5_NOVITA,
     DEEPSEEK_V32_NOVITA,
     XIAOMI_MIMO_V2_FLASH_NOVITA,
     QWEN3_CODER_NEXT_NOVITA,
@@ -33,6 +34,7 @@ pub const DEEPSEEK_V32: &str = "deepseek-ai/DeepSeek-V3.2:huggingface";
 pub const OPENAI_GPT_OSS_20B: &str = "openai/gpt-oss-20b:huggingface";
 
 pub const MINIMAX_M2_1_NOVITA: &str = "MiniMaxAI/MiniMax-M2.1:novita";
+pub const MINIMAX_M2_5_NOVITA: &str = "MiniMaxAI/MiniMax-M2.5:novita";
 pub const DEEPSEEK_V32_NOVITA: &str = "deepseek-ai/DeepSeek-V3.2:novita";
 pub const XIAOMI_MIMO_V2_FLASH_NOVITA: &str = "XiaomiMiMo/MiMo-V2-Flash:novita";
 pub const QWEN3_CODER_NEXT_NOVITA: &str = "Qwen/Qwen3-Coder-Next:novita";
@@ -49,6 +51,7 @@ pub const REASONING_MODELS: &[&str] = &[
     OPENAI_GPT_OSS_20B,
     DEEPSEEK_V32_NOVITA,
     MINIMAX_M2_1_NOVITA,
+    MINIMAX_M2_5_NOVITA,
     XIAOMI_MIMO_V2_FLASH_NOVITA,
     QWEN3_CODER_NEXT_NOVITA,
 ];
