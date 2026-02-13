@@ -753,20 +753,23 @@ fn cache_key(project_root: &Path, vtcode_config: Option<&crate::config::VTCodeCo
 
 /// Generate a minimal system instruction (pi-inspired, <1K tokens)
 pub fn generate_minimal_instruction() -> Content {
-    // OPTIMIZATION: MINIMAL_SYSTEM_PROMPT is &'static str, use directly
-    Content::system_text(MINIMAL_SYSTEM_PROMPT)
+    let instruction =
+        MINIMAL_SYSTEM_PROMPT.replace("__UNIFIED_TOOL_GUIDANCE__", UNIFIED_TOOL_GUIDANCE);
+    Content::system_text(instruction)
 }
 
 /// Generate a lightweight system instruction for simple operations
 pub fn generate_lightweight_instruction() -> Content {
-    // OPTIMIZATION: DEFAULT_LIGHTWEIGHT_PROMPT is &'static str, use directly
-    Content::system_text(DEFAULT_LIGHTWEIGHT_PROMPT)
+    let instruction =
+        DEFAULT_LIGHTWEIGHT_PROMPT.replace("__UNIFIED_TOOL_GUIDANCE__", UNIFIED_TOOL_GUIDANCE);
+    Content::system_text(instruction)
 }
 
 /// Generate a specialized system instruction for advanced operations
 pub fn generate_specialized_instruction() -> Content {
-    // OPTIMIZATION: DEFAULT_SPECIALIZED_PROMPT is &'static str, use directly
-    Content::system_text(DEFAULT_SPECIALIZED_PROMPT)
+    let instruction =
+        DEFAULT_SPECIALIZED_PROMPT.replace("__UNIFIED_TOOL_GUIDANCE__", UNIFIED_TOOL_GUIDANCE);
+    Content::system_text(instruction)
 }
 
 #[cfg(test)]
@@ -1142,6 +1145,39 @@ mod tests {
         assert!(
             result.contains("unified_file") && result.contains("before"),
             "Should have read-before-edit guideline"
+        );
+    }
+
+    #[test]
+    fn test_no_uninterpolated_placeholders() {
+        let _minimal = generate_minimal_instruction();
+        let _lightweight = generate_lightweight_instruction();
+        let _specialized = generate_specialized_instruction();
+
+        let minimal_text =
+            MINIMAL_SYSTEM_PROMPT.replace("__UNIFIED_TOOL_GUIDANCE__", UNIFIED_TOOL_GUIDANCE);
+        let lightweight_text =
+            DEFAULT_LIGHTWEIGHT_PROMPT.replace("__UNIFIED_TOOL_GUIDANCE__", UNIFIED_TOOL_GUIDANCE);
+        let specialized_text =
+            DEFAULT_SPECIALIZED_PROMPT.replace("__UNIFIED_TOOL_GUIDANCE__", UNIFIED_TOOL_GUIDANCE);
+
+        assert!(
+            !minimal_text.contains("__UNIFIED_TOOL_GUIDANCE__"),
+            "Minimal prompt has uninterpolated placeholder"
+        );
+        assert!(
+            !lightweight_text.contains("__UNIFIED_TOOL_GUIDANCE__"),
+            "Lightweight prompt has uninterpolated placeholder"
+        );
+        assert!(
+            !specialized_text.contains("__UNIFIED_TOOL_GUIDANCE__"),
+            "Specialized prompt has uninterpolated placeholder"
+        );
+        assert!(
+            !DEFAULT_SYSTEM_PROMPT
+                .replace("__UNIFIED_TOOL_GUIDANCE__", UNIFIED_TOOL_GUIDANCE)
+                .contains("__UNIFIED_TOOL_GUIDANCE__"),
+            "Default prompt has uninterpolated placeholder"
         );
     }
 }
