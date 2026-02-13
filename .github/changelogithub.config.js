@@ -19,7 +19,7 @@ module.exports = {
     /bump version/i,
     /update version/i,
     /version bump/i,
-    /release v\d+\.\d+\.\d+/i,
+    /release v?\d+\.\d+\.\d+/i,
     /chore.*version/i,
     /chore.*release/i,
     /build.*version/i,

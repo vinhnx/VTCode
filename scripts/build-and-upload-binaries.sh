@@ -232,11 +232,11 @@ build_binaries() {
 
     # macOS x86_64
     cp "target/x86_64-apple-darwin/release/vtcode" "$dist_dir/vtcode"
-    (cd "$dist_dir" && tar -czf "vtcode-v$version-x86_64-apple-darwin.tar.gz" vtcode && rm vtcode)
+    (cd "$dist_dir" && tar -czf "vtcode-$version-x86_64-apple-darwin.tar.gz" vtcode && rm vtcode)
 
     # macOS aarch64
     cp "target/aarch64-apple-darwin/release/vtcode" "$dist_dir/vtcode"
-    (cd "$dist_dir" && tar -czf "vtcode-v$version-aarch64-apple-darwin.tar.gz" vtcode && rm vtcode)
+    (cd "$dist_dir" && tar -czf "vtcode-$version-aarch64-apple-darwin.tar.gz" vtcode && rm vtcode)
 
     # Create macOS Universal Binary
     if [ -f "target/x86_64-apple-darwin/release/vtcode" ] && [ -f "target/aarch64-apple-darwin/release/vtcode" ]; then
@@ -246,14 +246,14 @@ build_binaries() {
             "target/aarch64-apple-darwin/release/vtcode" \
             -output "$dist_dir/vtcode-universal"
 
-        (cd "$dist_dir" && tar -czf "vtcode-v$version-universal-apple-darwin.tar.gz" vtcode-universal && rm vtcode-universal)
+        (cd "$dist_dir" && tar -czf "vtcode-$version-universal-apple-darwin.tar.gz" vtcode-universal && rm vtcode-universal)
         print_success "macOS Universal Binary created"
     fi
 
     # Linux
     if [ "$build_linux" = true ] && [ -f "target/x86_64-unknown-linux-gnu/release/vtcode" ]; then
         cp "target/x86_64-unknown-linux-gnu/release/vtcode" "$dist_dir/vtcode"
-        (cd "$dist_dir" && tar -czf "vtcode-v$version-x86_64-unknown-linux-gnu.tar.gz" vtcode && rm vtcode)
+        (cd "$dist_dir" && tar -czf "vtcode-$version-x86_64-unknown-linux-gnu.tar.gz" vtcode && rm vtcode)
     fi
 
     print_success "Binaries build and packaging process completed"
@@ -295,7 +295,7 @@ build_binaries_local() {
         # Package x86_64
         if [ -f "target/x86_64-apple-darwin/release/vtcode" ]; then
             cp "target/x86_64-apple-darwin/release/vtcode" "$dist_dir/vtcode"
-            (cd "$dist_dir" && tar -czf "vtcode-v$version-x86_64-apple-darwin.tar.gz" vtcode && rm vtcode)
+            (cd "$dist_dir" && tar -czf "vtcode-$version-x86_64-apple-darwin.tar.gz" vtcode && rm vtcode)
             print_success "x86_64 binary packaged"
         else
             print_warning "x86_64 binary not found"
@@ -304,7 +304,7 @@ build_binaries_local() {
         # Package aarch64
         if [ -f "target/aarch64-apple-darwin/release/vtcode" ]; then
             cp "target/aarch64-apple-darwin/release/vtcode" "$dist_dir/vtcode"
-            (cd "$dist_dir" && tar -czf "vtcode-v$version-aarch64-apple-darwin.tar.gz" vtcode && rm vtcode)
+            (cd "$dist_dir" && tar -czf "vtcode-$version-aarch64-apple-darwin.tar.gz" vtcode && rm vtcode)
             print_success "aarch64 binary packaged"
         else
             print_warning "aarch64 binary not found"
@@ -317,7 +317,7 @@ build_binaries_local() {
                 "target/x86_64-apple-darwin/release/vtcode" \
                 "target/aarch64-apple-darwin/release/vtcode" \
                 -output "$dist_dir/vtcode-universal"
-            (cd "$dist_dir" && tar -czf "vtcode-v$version-universal-apple-darwin.tar.gz" vtcode-universal && rm vtcode-universal)
+            (cd "$dist_dir" && tar -czf "vtcode-$version-universal-apple-darwin.tar.gz" vtcode-universal && rm vtcode-universal)
             print_success "Universal binary created"
         fi
         
@@ -335,7 +335,7 @@ build_binaries_local() {
         # Package Linux binary
         print_info "Packaging Linux binary..."
         cp "target/x86_64-unknown-linux-gnu/release/vtcode" "$dist_dir/vtcode"
-        (cd "$dist_dir" && tar -czf "vtcode-v$version-x86_64-unknown-linux-gnu.tar.gz" vtcode && rm vtcode)
+        (cd "$dist_dir" && tar -czf "vtcode-$version-x86_64-unknown-linux-gnu.tar.gz" vtcode && rm vtcode)
         print_success "Local Linux build completed"
     else
         print_error "Unsupported platform: $OSTYPE"
@@ -430,7 +430,7 @@ poll_github_release() {
 upload_binaries() {
     local version=$1
     local dist_dir="dist"
-    local tag="v$version"
+    local tag="$version"
     local notes_file="$2"
 
     if [ "$DRY_RUN" = true ]; then
@@ -444,11 +444,11 @@ upload_binaries() {
     if ! gh release view "$tag" >/dev/null 2>&1; then
         if ! poll_github_release "$tag"; then
             print_info "Creating GitHub release $tag..."
-            local notes_args=("--title" "v$version")
+            local notes_args=("--title" "$version")
             if [ -n "$notes_file" ] && [ -f "$notes_file" ]; then
                 notes_args+=("--notes-file" "$notes_file")
             else
-                notes_args+=("--notes" "Release v$version")
+                notes_args+=("--notes" "Release $version")
             fi
             gh release create "$tag" "${notes_args[@]}"
         fi
@@ -480,15 +480,15 @@ update_homebrew_formula() {
     fi
 
     if [ "$DRY_RUN" = true ]; then
-        print_info "Dry run: would update Homebrew formula to v$version"
+        print_info "Dry run: would update Homebrew formula to $version"
         return 0
     fi
 
     print_info "Updating Homebrew formula at $formula_path..."
 
-    local x86_64_macos_sha=$(cat "dist/vtcode-v$version-x86_64-apple-darwin.sha256" 2>/dev/null || echo "")
-    local aarch64_macos_sha=$(cat "dist/vtcode-v$version-aarch64-apple-darwin.sha256" 2>/dev/null || echo "")
-    local universal_macos_sha=$(cat "dist/vtcode-v$version-universal-apple-darwin.sha256" 2>/dev/null || echo "")
+    local x86_64_macos_sha=$(cat "dist/vtcode-$version-x86_64-apple-darwin.sha256" 2>/dev/null || echo "")
+    local aarch64_macos_sha=$(cat "dist/vtcode-$version-aarch64-apple-darwin.sha256" 2>/dev/null || echo "")
+    local universal_macos_sha=$(cat "dist/vtcode-$version-universal-apple-darwin.sha256" 2>/dev/null || echo "")
 
     if [ -z "$x86_64_macos_sha" ] || [ -z "$aarch64_macos_sha" ]; then
         print_error "Missing macOS checksums, cannot update Homebrew formula"
@@ -523,7 +523,7 @@ PYTHON_SCRIPT
     
     # Commit and push
     git add "$formula_path"
-    git commit -m "chore: update homebrew formula to v$version" || true
+    git commit -m "chore: update homebrew formula to $version" || true
     git push origin main || print_warning "Failed to push Homebrew update"
 }
 
@@ -584,7 +584,7 @@ main() {
         fi
     fi
 
-    print_success "Process completed for v$version"
+    print_success "Process completed for $version"
 }
 
 # Run main function
