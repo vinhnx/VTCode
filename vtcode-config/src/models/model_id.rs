@@ -113,6 +113,8 @@ pub enum ModelId {
     // Moonshot models
     /// MiniMax-M2.5 - MiniMax model served via Moonshot API
     MoonshotMinimaxM25,
+    /// Qwen3-Coder-Next - Qwen3 Coder Next model served via Moonshot API
+    MoonshotQwen3CoderNext,
 
     // Ollama models
     /// GPT-OSS 20B - Open-weight GPT-OSS 20B model served via Ollama locally

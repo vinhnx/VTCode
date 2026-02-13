@@ -157,7 +157,9 @@ impl ModelId {
             ModelId::MinimaxM2 => "M2",
             ModelId::HuggingFaceDeepseekV32 | ModelId::HuggingFaceDeepseekV32Novita => "v3.2",
             ModelId::HuggingFaceXiaomiMimoV2FlashNovita => "v2-flash",
-            ModelId::HuggingFaceQwen3CoderNextNovita => "qwen3-coder-next",
+            ModelId::HuggingFaceQwen3CoderNextNovita
+            | ModelId::OpenRouterQwen3CoderNext
+            | ModelId::MoonshotQwen3CoderNext => "qwen3-coder-next",
             ModelId::HuggingFaceMinimaxM21Novita => "m2.1",
             ModelId::HuggingFaceGlm5Novita => "GLM-5",
             ModelId::HuggingFaceOpenAIGptOss20b | ModelId::HuggingFaceOpenAIGptOss120b => "oss",

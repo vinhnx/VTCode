@@ -49,6 +49,7 @@ impl ModelId {
             ModelId::ZaiGlm5,
             // Moonshot models
             ModelId::MoonshotMinimaxM25,
+            ModelId::MoonshotQwen3CoderNext,
             // Ollama models
             ModelId::OllamaGptOss20b,
             ModelId::OllamaGptOss20bCloud,
@@ -88,6 +89,7 @@ impl ModelId {
             ModelId::HuggingFaceGlm5Novita,
             ModelId::HuggingFaceQwen3CoderNextNovita,
             ModelId::OpenRouterMinimaxM25,
+            ModelId::OpenRouterQwen3CoderNext,
         ];
         models.extend(Self::openrouter_models());
         models
