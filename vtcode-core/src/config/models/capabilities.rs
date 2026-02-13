@@ -297,7 +297,8 @@ impl ModelId {
             | ModelId::OpenRouterOpenAIGpt52Pro
             | ModelId::OpenRouterZaiGlm5
             | ModelId::OpenRouterOpenAIO1Pro
-            | ModelId::OpenRouterMoonshotaiKimiK25
+            | ModelId::OpenRouterMoonshotaiKimiK20905
+            | ModelId::OpenRouterMoonshotaiKimiK2Thinking
             | ModelId::OpenRouterStepfunStep35FlashFree => "unknown", // fallback generation for OpenRouter models
         }
     }
