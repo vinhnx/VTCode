@@ -259,6 +259,9 @@ pub enum ThreadEvent {
     /// Indicates that an item reached a terminal state.
     #[serde(rename = "item.completed")]
     ItemCompleted(ItemCompletedEvent),
+    /// Streaming delta for a plan item in Plan Mode.
+    #[serde(rename = "plan.delta")]
+    PlanDelta(PlanDeltaEvent),
     /// Represents a fatal error.
     #[serde(rename = "error")]
     Error(ThreadErrorEvent),
@@ -333,6 +336,19 @@ pub struct ItemUpdatedEvent {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
+pub struct PlanDeltaEvent {
+    /// Identifier of the thread emitting this plan delta.
+    pub thread_id: String,
+    /// Identifier of the current turn.
+    pub turn_id: String,
+    /// Identifier of the plan item receiving the delta.
+    pub item_id: String,
+    /// Incremental plan text chunk.
+    pub delta: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
 pub struct ThreadItem {
     /// Stable identifier associated with the item.
     pub id: String,
@@ -347,6 +363,8 @@ pub struct ThreadItem {
 pub enum ThreadItemDetails {
     /// Message authored by the agent.
     AgentMessage(AgentMessageItem),
+    /// Structured plan content authored by the agent in Plan Mode.
+    Plan(PlanItem),
     /// Free-form reasoning text produced during a turn.
     Reasoning(ReasoningItem),
     /// Command execution lifecycle update.
@@ -365,6 +383,13 @@ pub enum ThreadItemDetails {
 #[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
 pub struct AgentMessageItem {
     /// Textual content of the agent message.
+    pub text: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
+pub struct PlanItem {
+    /// Plan markdown content.
     pub text: String,
 }
 

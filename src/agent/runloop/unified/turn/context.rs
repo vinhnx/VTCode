@@ -1,4 +1,8 @@
 use crate::agent::runloop::mcp_events;
+use crate::agent::runloop::unified::plan_confirmation::{
+    PlanConfirmationOutcome, execute_plan_confirmation,
+};
+use crate::agent::runloop::unified::plan_mode_state::transition_to_edit_mode;
 use crate::agent::runloop::unified::state::SessionStats;
 use crate::agent::runloop::unified::tool_catalog::ToolCatalogState;
 use std::sync::Arc;
@@ -7,8 +11,13 @@ use std::time::Instant;
 use tokio::sync::Notify;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::core::agent::snapshots::SnapshotManager;
+use vtcode_core::exec::events::{
+    ItemCompletedEvent, ItemStartedEvent, PlanDeltaEvent, PlanItem, ThreadEvent, ThreadItem,
+    ThreadItemDetails,
+};
 use vtcode_core::llm::provider as uni;
 use vtcode_core::ui::tui::InlineHandle;
+use vtcode_core::ui::tui::PlanContent;
 use vtcode_core::utils::ansi::AnsiRenderer;
 
 use crate::agent::runloop::unified::state::CtrlCState;
@@ -116,6 +125,7 @@ pub(crate) enum TurnProcessingResult {
     TextResponse {
         text: String,
         reasoning: Option<String>,
+        proposed_plan: Option<String>,
     },
     /// Turn resulted in no actionable output
     Empty,
@@ -306,10 +316,83 @@ impl<'a> TurnProcessingContext<'a> {
         &mut self,
         text: String,
         reasoning: Option<String>,
+        proposed_plan: Option<String>,
         response_streamed: bool,
     ) -> anyhow::Result<TurnHandlerOutcome> {
         self.handle_assistant_response(text, reasoning, response_streamed)?;
+
+        if self.session_stats.is_plan_mode()
+            && let Some(plan_text) = proposed_plan
+        {
+            self.emit_plan_events(&plan_text).await;
+            self.maybe_prompt_plan_implementation(plan_text).await?;
+        }
+
         Ok(TurnHandlerOutcome::Break(TurnLoopResult::Completed))
+    }
+
+    async fn emit_plan_events(&self, plan_text: &str) {
+        let Some(emitter) = self.harness_emitter else {
+            return;
+        };
+
+        let turn_id = self.harness_state.turn_id.0.clone();
+        let thread_id = self.harness_state.run_id.0.clone();
+        let item_id = format!("{turn_id}-plan");
+
+        let start_item = ThreadItem {
+            id: item_id.clone(),
+            details: ThreadItemDetails::Plan(PlanItem {
+                text: String::new(),
+            }),
+        };
+        let _ = emitter.emit(ThreadEvent::ItemStarted(ItemStartedEvent {
+            item: start_item,
+        }));
+
+        let _ = emitter.emit(ThreadEvent::PlanDelta(PlanDeltaEvent {
+            thread_id,
+            turn_id: turn_id.clone(),
+            item_id: item_id.clone(),
+            delta: plan_text.to_string(),
+        }));
+
+        let completed_item = ThreadItem {
+            id: item_id,
+            details: ThreadItemDetails::Plan(PlanItem {
+                text: plan_text.to_string(),
+            }),
+        };
+        let _ = emitter.emit(ThreadEvent::ItemCompleted(ItemCompletedEvent {
+            item: completed_item,
+        }));
+    }
+
+    async fn maybe_prompt_plan_implementation(&mut self, plan_text: String) -> anyhow::Result<()> {
+        let plan = PlanContent::from_markdown(
+            "Implementation Plan".to_string(),
+            &plan_text,
+            None::<String>,
+        );
+
+        let confirmation = execute_plan_confirmation(
+            self.handle,
+            self.session,
+            plan,
+            self.ctrl_c_state,
+            self.ctrl_c_notify,
+        )
+        .await?;
+
+        if matches!(
+            confirmation,
+            PlanConfirmationOutcome::Execute | PlanConfirmationOutcome::AutoAccept
+        ) {
+            transition_to_edit_mode(self.tool_registry, self.session_stats, self.handle, true)
+                .await;
+        }
+
+        Ok(())
     }
 }
 

@@ -45,6 +45,28 @@ impl SkillVersion {
     }
 }
 
+/// How a skill is referenced in a container
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum SkillSource {
+    /// Reference to a registered skill by ID
+    #[serde(rename = "skill_reference")]
+    Reference {
+        skill_id: String,
+        #[serde(default)]
+        version: SkillVersion,
+    },
+    /// Inline base64-encoded zip bundle (no pre-registration needed)
+    #[serde(rename = "inline")]
+    Inline {
+        /// Base64-encoded zip bundle
+        bundle_b64: String,
+        /// Optional SHA-256 hash for caching/deduplication
+        #[serde(skip_serializing_if = "Option::is_none")]
+        sha256: Option<String>,
+    },
+}
+
 /// Specification for a single skill in a container
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SkillSpec {
@@ -98,6 +120,9 @@ pub struct SkillContainer {
     pub id: Option<String>,
     /// Skills to load in this container (max 8)
     pub skills: Vec<SkillSpec>,
+    /// Inline skill bundles (base64-encoded zips, no pre-registration needed)
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub inline_bundles: Vec<SkillSource>,
 }
 
 impl SkillContainer {
@@ -105,7 +130,8 @@ impl SkillContainer {
     pub fn new() -> Self {
         Self {
             id: None,
-            skills: Vec::with_capacity(8), // Pre-allocate for max capacity
+            skills: Vec::with_capacity(8),
+            inline_bundles: Vec::new(),
         }
     }
 
@@ -114,6 +140,7 @@ impl SkillContainer {
         Self {
             id: None,
             skills: vec![spec],
+            inline_bundles: Vec::new(),
         }
     }
 
@@ -121,7 +148,8 @@ impl SkillContainer {
     pub fn with_id(id: impl Into<String>) -> Self {
         Self {
             id: Some(id.into()),
-            skills: Vec::with_capacity(8), // Pre-allocate for max capacity
+            skills: Vec::with_capacity(8),
+            inline_bundles: Vec::new(),
         }
     }
 
@@ -171,6 +199,29 @@ impl SkillContainer {
     /// Add custom skill
     pub fn add_custom(&mut self, skill_id: impl Into<String>) -> anyhow::Result<()> {
         self.add_skill(SkillSpec::custom(skill_id))
+    }
+
+    /// Add an inline skill bundle (base64-encoded zip, no pre-registration needed)
+    ///
+    /// Also registers a corresponding `SkillSpec` so the skill is tracked in `skills`.
+    ///
+    /// # Errors
+    /// Returns error if adding would exceed the maximum of 8 skills.
+    pub fn add_inline(&mut self, bundle_b64: String, sha256: Option<String>) -> anyhow::Result<()> {
+        if self.skills.len() >= 8 {
+            anyhow::bail!("Container already has maximum skills (8)");
+        }
+        let spec = SkillSpec {
+            skill_type: SkillType::Custom,
+            skill_id: sha256
+                .clone()
+                .unwrap_or_else(|| format!("inline-{}", self.skills.len())),
+            version: SkillVersion::Latest,
+        };
+        self.skills.push(spec);
+        self.inline_bundles
+            .push(SkillSource::Inline { bundle_b64, sha256 });
+        Ok(())
     }
 
     /// Get number of skills in container
@@ -435,5 +486,105 @@ mod tests {
         assert_eq!(deserialized.len(), 2);
         assert!(deserialized.has_skill("xlsx"));
         assert!(deserialized.has_skill("my-skill"));
+    }
+
+    #[test]
+    fn test_skill_source_reference_roundtrip() {
+        let source = SkillSource::Reference {
+            skill_id: "my-skill".to_string(),
+            version: SkillVersion::Latest,
+        };
+        let json = serde_json::to_string(&source).unwrap();
+        let deserialized: SkillSource = serde_json::from_str(&json).unwrap();
+        assert_eq!(source, deserialized);
+    }
+
+    #[test]
+    fn test_skill_source_inline_roundtrip() {
+        let source = SkillSource::Inline {
+            bundle_b64: "UEsFBgAAAAAAAA==".to_string(),
+            sha256: Some("abc123".to_string()),
+        };
+        let json = serde_json::to_string(&source).unwrap();
+        assert!(json.contains("\"type\":\"inline\""));
+        let deserialized: SkillSource = serde_json::from_str(&json).unwrap();
+        assert_eq!(source, deserialized);
+    }
+
+    #[test]
+    fn test_skill_source_inline_no_sha() {
+        let source = SkillSource::Inline {
+            bundle_b64: "UEsFBgAAAAAAAA==".to_string(),
+            sha256: None,
+        };
+        let json = serde_json::to_string(&source).unwrap();
+        assert!(!json.contains("sha256"));
+        let deserialized: SkillSource = serde_json::from_str(&json).unwrap();
+        assert_eq!(source, deserialized);
+    }
+
+    #[test]
+    fn test_add_inline_with_sha() {
+        let mut container = SkillContainer::new();
+        container
+            .add_inline("UEsFBgAAAAAAAA==".to_string(), Some("deadbeef".to_string()))
+            .unwrap();
+
+        assert_eq!(container.len(), 1);
+        assert!(container.has_skill("deadbeef"));
+        assert_eq!(container.inline_bundles.len(), 1);
+        assert!(matches!(
+            &container.inline_bundles[0],
+            SkillSource::Inline { sha256: Some(h), .. } if h == "deadbeef"
+        ));
+    }
+
+    #[test]
+    fn test_add_inline_without_sha() {
+        let mut container = SkillContainer::new();
+        container
+            .add_inline("UEsFBgAAAAAAAA==".to_string(), None)
+            .unwrap();
+
+        assert_eq!(container.len(), 1);
+        assert!(container.has_skill("inline-0"));
+        assert_eq!(container.inline_bundles.len(), 1);
+    }
+
+    #[test]
+    fn test_add_inline_max_skills() {
+        let mut container = SkillContainer::new();
+        for i in 0..8 {
+            container
+                .add_skill(SkillSpec::custom(format!("skill{i}")))
+                .unwrap();
+        }
+        let result = container.add_inline("data".to_string(), None);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_container_serialization_with_inline_bundles() {
+        let mut container = SkillContainer::new();
+        container.add_anthropic("xlsx").unwrap();
+        container
+            .add_inline("UEsFBgAAAAAAAA==".to_string(), Some("hash1".to_string()))
+            .unwrap();
+
+        let json = serde_json::to_string(&container).unwrap();
+        assert!(json.contains("inline_bundles"));
+
+        let deserialized: SkillContainer = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.len(), 2);
+        assert_eq!(deserialized.inline_bundles.len(), 1);
+    }
+
+    #[test]
+    fn test_container_serialization_omits_empty_inline_bundles() {
+        let mut container = SkillContainer::new();
+        container.add_anthropic("xlsx").unwrap();
+
+        let json = serde_json::to_string(&container).unwrap();
+        assert!(!json.contains("inline_bundles"));
     }
 }

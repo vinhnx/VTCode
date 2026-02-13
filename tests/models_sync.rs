@@ -203,7 +203,10 @@ fn backwards_compatibility_constants() {
     assert!(!models::CLAUDE_SONNET_4_5_20250929.is_empty());
 
     // Test that backwards compatibility constants match the new structure
-    assert_eq!(models::GEMINI_3_FLASH_PREVIEW, models::google::GEMINI_3_FLASH_PREVIEW);
+    assert_eq!(
+        models::GEMINI_3_FLASH_PREVIEW,
+        models::google::GEMINI_3_FLASH_PREVIEW
+    );
     assert_eq!(models::GPT_5, models::openai::GPT_5);
     assert_eq!(
         models::CLAUDE_SONNET_4_5,

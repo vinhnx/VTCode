@@ -102,6 +102,7 @@
 
 pub mod authoring;
 pub mod auto_verification;
+pub mod bundle;
 pub mod cli_bridge;
 pub mod container;
 pub mod container_validation;
@@ -127,13 +128,20 @@ pub mod templates;
 pub mod types;
 pub mod validation;
 pub mod validation_report;
+pub mod versioning;
 
 pub use authoring::{
     SkillAuthor, SkillFrontmatter, ValidationReport as AuthoringValidationReport,
     render_skills_lean,
 };
+pub use bundle::{
+    ImportedSkillInfo, SkillStoreIndex, SkillVersionIndex, export_skill_bundle,
+    import_inline_bundle, import_skill_bundle, load_skill_index,
+};
 pub use cli_bridge::{CliToolBridge, CliToolConfig, CliToolResult, discover_cli_tools};
-pub use container::{SkillContainer, SkillSpec, SkillType, SkillVersion};
+pub use container::{
+    SkillContainer, SkillSource as ContainerSkillSource, SkillSpec, SkillType, SkillVersion,
+};
 pub use container_validation::{
     ContainerSkillsRequirement, ContainerSkillsValidator, ContainerValidationResult,
     IncompatibleSkillInfo,
@@ -148,7 +156,7 @@ pub use document_processor::{
     DocumentMetadata, DocumentProcessor, DocumentProcessorConfig, DocumentType, ProcessedDocument,
 };
 pub use enhanced_validator::ComprehensiveSkillValidator;
-pub use executor::execute_skill_with_sub_llm;
+pub use executor::{execute_skill_with_sub_llm, filter_tools_for_skill};
 pub use file_references::FileReferenceValidator;
 pub use loader::{
     EnhancedSkill, EnhancedSkillLoader, SkillLoaderConfig, SkillRoot, detect_skill_mentions,
@@ -173,7 +181,11 @@ pub use templates::{
     SkillTemplate, SkillTemplateBuilder, TemplateEngine, TemplateType, TemplateVariable,
 };
 pub use types::{
-    Skill, SkillContext, SkillManifest, SkillRegistryEntry, SkillResource, SkillScope,
+    Skill, SkillContext, SkillManifest, SkillNetworkPolicy, SkillRegistryEntry, SkillResource,
+    SkillScope,
 };
 pub use validation::{SkillValidator, ValidationConfig, ValidationReport, ValidationStatus};
 pub use validation_report::{SkillValidationReport, ValidationIssue, ValidationLevel};
+pub use versioning::{
+    ResolvedSkillRef, SkillLockfile, SkillSource, resolve_default_version, resolve_version,
+};

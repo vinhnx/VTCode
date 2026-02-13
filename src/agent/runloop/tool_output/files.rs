@@ -479,7 +479,11 @@ pub(crate) fn render_read_file_output(renderer: &mut AnsiRenderer, val: &Value) 
         let files_ok = get_u64(val, "files_succeeded").unwrap_or(0);
         let failed = files_read.saturating_sub(files_ok);
 
-        let mut summary = format!("{} file{} read", files_ok, if files_ok == 1 { "" } else { "s" });
+        let mut summary = format!(
+            "{} file{} read",
+            files_ok,
+            if files_ok == 1 { "" } else { "s" }
+        );
         if failed > 0 {
             summary.push_str(&format!(", {} failed", failed));
         }

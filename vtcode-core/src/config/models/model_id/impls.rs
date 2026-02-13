@@ -157,8 +157,7 @@ impl ModelId {
             return Provider::OpenRouter;
         }
         match self {
-            ModelId::Gemini3ProPreview
-            | ModelId::Gemini3FlashPreview => Provider::Gemini,
+            ModelId::Gemini3ProPreview | ModelId::Gemini3FlashPreview => Provider::Gemini,
             ModelId::GPT5
             | ModelId::GPT52
             | ModelId::GPT52Codex

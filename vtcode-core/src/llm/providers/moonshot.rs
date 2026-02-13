@@ -32,12 +32,7 @@ pub struct MoonshotProvider {
 
 impl MoonshotProvider {
     pub fn new(api_key: String) -> Self {
-        Self::with_model_internal(
-            api_key,
-            "kimi-latest".to_string(),
-            None,
-            None,
-        )
+        Self::with_model_internal(api_key, "kimi-latest".to_string(), None, None)
     }
 
     pub fn with_model(api_key: String, model: String) -> Self {

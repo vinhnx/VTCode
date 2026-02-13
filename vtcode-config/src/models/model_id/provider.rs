@@ -9,8 +9,7 @@ impl ModelId {
             return Provider::OpenRouter;
         }
         match self {
-            ModelId::Gemini3ProPreview
-            | ModelId::Gemini3FlashPreview => Provider::Gemini,
+            ModelId::Gemini3ProPreview | ModelId::Gemini3FlashPreview => Provider::Gemini,
             ModelId::GPT5
             | ModelId::GPT52
             | ModelId::GPT52Codex
@@ -75,8 +74,9 @@ impl ModelId {
             | ModelId::MinimaxM21Lightning
             | ModelId::MinimaxM25
             | ModelId::MinimaxM2 => Provider::Minimax,
-            ModelId::OpenRouterMinimaxM25
-            | ModelId::OpenRouterQwen3CoderNext => Provider::OpenRouter,
+            ModelId::OpenRouterMinimaxM25 | ModelId::OpenRouterQwen3CoderNext => {
+                Provider::OpenRouter
+            }
             _ => unreachable!(),
         }
     }

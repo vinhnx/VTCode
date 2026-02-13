@@ -13,9 +13,6 @@ use crate::agent::runloop::unified::plan_confirmation::{
 use crate::agent::runloop::unified::plan_mode_state::{
     transition_to_edit_mode, transition_to_plan_mode,
 };
-use crate::agent::runloop::unified::plan_mode_switch::{
-    maybe_disable_plan_mode_for_tool, restore_plan_mode_after_tool,
-};
 use crate::agent::runloop::unified::progress::ProgressReporter;
 use crate::agent::runloop::unified::run_loop_context::RunLoopContext;
 use crate::agent::runloop::unified::state::CtrlCState;
@@ -87,7 +84,10 @@ pub(crate) async fn run_tool_call(
         if ctx.harness_state.tool_budget_exhausted() {
             return Ok(ToolPipelineOutcome::from_status(
                 ToolExecutionStatus::Failure {
-                    error: anyhow::anyhow!("Tool permission denied: exceeded max tool calls per turn ({})", ctx.harness_state.max_tool_calls),
+                    error: anyhow::anyhow!(
+                        "Tool permission denied: exceeded max tool calls per turn ({})",
+                        ctx.harness_state.max_tool_calls
+                    ),
                 },
             ));
         }
@@ -139,6 +139,12 @@ pub(crate) async fn run_tool_call(
         );
         outcome
     };
+
+    if ctx.session_stats.is_plan_mode() && resolved_name == "update_plan" {
+        return Ok(finish_with_status(ToolExecutionStatus::Failure {
+            error: anyhow!("update_plan is a TODO/checklist tool and is not allowed in Plan mode"),
+        }));
+    }
 
     if !prevalidated {
         ctx.harness_state.record_tool_call();
@@ -220,29 +226,6 @@ pub(crate) async fn run_tool_call(
         );
         return Ok(outcome);
     }
-
-    let restore_plan_mode = match maybe_disable_plan_mode_for_tool(
-        ctx.session_stats,
-        ctx.tool_registry,
-        ctx.renderer,
-        ctx.handle,
-        resolved_name,
-        &args_val,
-    )
-    .await
-    {
-        Ok(value) => value,
-        Err(error) => {
-            emit_tool_completion_status(
-                harness_emitter,
-                tool_started_emitted,
-                &tool_item_id,
-                name,
-                CommandExecutionStatus::Failed,
-            );
-            return Err(error);
-        }
-    };
 
     // Special-case enter_plan_mode: execute tool and enable plan mode in registry.
     // This ensures the registry's plan_read_only_mode flag is set when agent enters plan mode.
@@ -633,25 +616,6 @@ pub(crate) async fn run_tool_call(
             let output_json = serde_json::to_string(&output).unwrap_or_else(|_| "{}".to_string());
             cache.insert_arc(cache_key, Arc::new(output_json));
         }
-    }
-
-    if let Err(error) = restore_plan_mode_after_tool(
-        ctx.session_stats,
-        ctx.tool_registry,
-        ctx.renderer,
-        ctx.handle,
-        restore_plan_mode,
-    )
-    .await
-    {
-        emit_tool_completion_status(
-            harness_emitter,
-            tool_started_emitted,
-            &tool_item_id,
-            name,
-            CommandExecutionStatus::Failed,
-        );
-        return Err(error);
     }
 
     let mut pipeline_outcome = ToolPipelineOutcome::from_status(outcome);

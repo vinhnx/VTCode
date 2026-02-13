@@ -6,7 +6,6 @@ use vtcode_core::llm::provider as uni;
 use vtcode_core::tools::error_messages::agent_execution;
 use vtcode_core::utils::ansi::MessageStyle;
 
-
 use crate::agent::runloop::mcp_events;
 use crate::agent::runloop::unified::tool_output_handler::handle_pipeline_output_from_turn_ctx;
 use crate::agent::runloop::unified::tool_pipeline::{ToolExecutionStatus, ToolPipelineOutcome};

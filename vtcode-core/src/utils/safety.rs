@@ -98,7 +98,8 @@ impl SafetyValidator {
         match (from_id, to_id) {
             (Some(from), Some(to)) => {
                 // Switching to Pro model requires confirmation
-                !matches!(to, ModelId::Gemini3ProPreview) || matches!(from, ModelId::Gemini3ProPreview)
+                !matches!(to, ModelId::Gemini3ProPreview)
+                    || matches!(from, ModelId::Gemini3ProPreview)
             }
             _ => true, // Unknown models are allowed
         }

@@ -24,10 +24,7 @@ mod minimax_integration_tests {
     #[test]
     fn test_minimax_api_base_url_constant() {
         // Test that the MiniMax API base URL constant is defined
-        assert_eq!(
-            urls::MINIMAX_API_BASE,
-            "https://api.minimax.io/anthropic"
-        );
+        assert_eq!(urls::MINIMAX_API_BASE, "https://api.minimax.io/anthropic");
     }
 
     #[test]

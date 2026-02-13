@@ -107,6 +107,11 @@ impl ResponseBuilder {
             ThreadEvent::ItemCompleted(evt) => {
                 self.handle_item_completed(&evt.item, emitter);
             }
+            ThreadEvent::PlanDelta(_) => {
+                // Plan deltas are VT Code-specific extension events and are intentionally
+                // ignored by the Open Responses bridge. The completed Plan item carries
+                // the full final plan content.
+            }
 
             ThreadEvent::Error(evt) => {
                 self.response
@@ -127,6 +132,7 @@ impl ResponseBuilder {
         // Initialize prev_text from initial content to prevent duplicate deltas
         let initial_text = match &item.details {
             ThreadItemDetails::AgentMessage(msg) => msg.text.clone(),
+            ThreadItemDetails::Plan(plan) => plan.text.clone(),
             ThreadItemDetails::Reasoning(r) => r.text.clone(),
             _ => String::new(),
         };
@@ -363,6 +369,15 @@ impl ResponseBuilder {
                 encrypted_content: None,
             }),
 
+            ThreadItemDetails::Plan(plan) => OutputItem::Custom(CustomItem {
+                id: item.id.clone(),
+                status,
+                custom_type: "vtcode:plan".to_string(),
+                data: json!({
+                    "text": plan.text,
+                }),
+            }),
+
             ThreadItemDetails::CommandExecution(cmd) => {
                 OutputItem::FunctionCall(FunctionCallItem {
                     id: item.id.clone(),
@@ -474,7 +489,7 @@ mod tests {
     use super::*;
     use crate::open_responses::{ResponseStreamEvent, events::VecStreamEmitter};
     use vtcode_exec_events::{
-        AgentMessageItem, ItemCompletedEvent, ItemStartedEvent, ThreadStartedEvent,
+        AgentMessageItem, ItemCompletedEvent, ItemStartedEvent, PlanItem, ThreadStartedEvent,
         TurnCompletedEvent, Usage,
     };
 
@@ -722,5 +737,31 @@ mod tests {
             delta_event.is_some(),
             "Should emit full text as delta for non-append updates"
         );
+    }
+
+    #[test]
+    fn test_plan_item_maps_to_custom_output() {
+        let mut builder = ResponseBuilder::new("gpt-5");
+        let mut emitter = VecStreamEmitter::new();
+
+        let item = ThreadItem {
+            id: "plan_1".to_string(),
+            details: ThreadItemDetails::Plan(PlanItem {
+                text: "- Step 1\n- Step 2".to_string(),
+            }),
+        };
+        builder.process_event(
+            &ThreadEvent::ItemCompleted(ItemCompletedEvent { item }),
+            &mut emitter,
+        );
+
+        assert_eq!(builder.response().output.len(), 1);
+        match &builder.response().output[0] {
+            OutputItem::Custom(custom) => {
+                assert_eq!(custom.custom_type, "vtcode:plan");
+                assert_eq!(custom.data["text"], "- Step 1\n- Step 2");
+            }
+            _ => panic!("expected custom output for plan item"),
+        }
     }
 }

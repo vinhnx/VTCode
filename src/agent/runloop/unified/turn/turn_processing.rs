@@ -7,6 +7,7 @@ use tokio::task;
 use tracing::debug;
 
 use crate::agent::runloop::unified::extract_action_from_messages;
+use crate::agent::runloop::unified::plan_blocks::extract_proposed_plan;
 use crate::agent::runloop::unified::turn::context::{
     TurnHandlerOutcome, TurnLoopResult, TurnProcessingContext, TurnProcessingResult,
 };
@@ -411,10 +412,19 @@ pub(crate) async fn handle_turn_processing_result<'a>(
             )
             .await);
         }
-        TurnProcessingResult::TextResponse { text, reasoning } => {
+        TurnProcessingResult::TextResponse {
+            text,
+            reasoning,
+            proposed_plan,
+        } => {
             params
                 .ctx
-                .handle_text_response(text.clone(), reasoning.clone(), params.response_streamed)
+                .handle_text_response(
+                    text.clone(),
+                    reasoning.clone(),
+                    proposed_plan.clone(),
+                    params.response_streamed,
+                )
                 .await
         }
         TurnProcessingResult::Empty | TurnProcessingResult::Completed => {
@@ -434,6 +444,7 @@ pub(crate) fn process_llm_response(
     response: &vtcode_core::llm::provider::LLMResponse,
     renderer: &mut AnsiRenderer,
     conversation_len: usize,
+    plan_mode_active: bool,
     allow_plan_interview: bool,
     ask_questions_enabled: bool,
     validation_cache: Option<
@@ -446,6 +457,7 @@ pub(crate) fn process_llm_response(
     use vtcode_core::llm::provider as uni;
 
     let mut final_text = response.content.clone();
+    let mut proposed_plan: Option<String> = None;
     let mut tool_calls = response.tool_calls.clone().unwrap_or_default();
     let mut interpreted_textual_call = false;
     let mut is_harmony = false;
@@ -461,6 +473,15 @@ pub(crate) fn process_llm_response(
         } else {
             final_text = Some("".to_string());
         }
+    }
+
+    if plan_mode_active
+        && tool_calls.is_empty()
+        && let Some(ref text) = final_text
+    {
+        let extraction = extract_proposed_plan(text);
+        final_text = Some(extraction.stripped_text);
+        proposed_plan = extraction.plan_text;
     }
 
     if tool_calls.is_empty()
@@ -551,11 +572,12 @@ pub(crate) fn process_llm_response(
     }
 
     if let Some(text) = final_text
-        && (!text.trim().is_empty() || is_harmony)
+        && (!text.trim().is_empty() || is_harmony || proposed_plan.is_some())
     {
         return Ok(TurnProcessingResult::TextResponse {
             text,
             reasoning: response.reasoning.clone(),
+            proposed_plan,
         });
     }
 
@@ -765,10 +787,20 @@ fn maybe_append_plan_mode_reminder(
             assistant_text: append_plan_mode_reminder_text(&assistant_text),
             reasoning,
         },
-        TurnProcessingResult::TextResponse { text, reasoning } => {
+        TurnProcessingResult::TextResponse {
+            text,
+            reasoning,
+            proposed_plan,
+        } => {
+            let reminder_text = if text.trim().is_empty() && proposed_plan.is_some() {
+                PLAN_MODE_REMINDER.to_string()
+            } else {
+                append_plan_mode_reminder_text(&text)
+            };
             TurnProcessingResult::TextResponse {
-                text: append_plan_mode_reminder_text(&text),
+                text: reminder_text,
                 reasoning,
+                proposed_plan,
             }
         }
         TurnProcessingResult::Empty
@@ -914,7 +946,11 @@ fn inject_plan_mode_interview(
                 reasoning,
             }
         }
-        TurnProcessingResult::TextResponse { text, reasoning } => TurnProcessingResult::ToolCalls {
+        TurnProcessingResult::TextResponse {
+            text,
+            reasoning,
+            proposed_plan: _,
+        } => TurnProcessingResult::ToolCalls {
             tool_calls: vec![call],
             assistant_text: text,
             reasoning,
@@ -999,6 +1035,7 @@ fn filter_interview_tool_calls(
             TurnProcessingResult::TextResponse {
                 text: assistant_text,
                 reasoning,
+                proposed_plan: None,
             }
         }
     } else {
@@ -1057,8 +1094,9 @@ mod tests {
         };
 
         let mut renderer = AnsiRenderer::stdout();
-        let result = process_llm_response(&response, &mut renderer, 0, true, true, None, None)
-            .expect("processing should succeed");
+        let result =
+            process_llm_response(&response, &mut renderer, 0, false, true, true, None, None)
+                .expect("processing should succeed");
 
         match result {
             TurnProcessingResult::ToolCalls { tool_calls, .. } => {
@@ -1084,14 +1122,48 @@ mod tests {
         };
 
         let mut renderer = AnsiRenderer::stdout();
-        let result = process_llm_response(&response, &mut renderer, 0, false, true, None, None)
-            .expect("processing should succeed");
+        let result =
+            process_llm_response(&response, &mut renderer, 0, false, false, true, None, None)
+                .expect("processing should succeed");
 
         match result {
             TurnProcessingResult::TextResponse { text, .. } => {
                 assert!(text.contains("First question"));
             }
             _ => panic!("Expected text response without tool calls"),
+        }
+    }
+
+    #[test]
+    fn process_llm_response_strips_proposed_plan_in_plan_mode() {
+        let response = LLMResponse {
+            content: Some("Intro\n<proposed_plan>\n- Step 1\n</proposed_plan>\nOutro".to_string()),
+            tool_calls: None,
+            model: "test".to_string(),
+            usage: None,
+            finish_reason: FinishReason::Stop,
+            reasoning: None,
+            reasoning_details: None,
+            tool_references: Vec::new(),
+            request_id: None,
+            organization_id: None,
+        };
+
+        let mut renderer = AnsiRenderer::stdout();
+        let result =
+            process_llm_response(&response, &mut renderer, 0, true, false, true, None, None)
+                .expect("processing should succeed");
+
+        match result {
+            TurnProcessingResult::TextResponse {
+                text,
+                proposed_plan,
+                ..
+            } => {
+                assert_eq!(text, "Intro\n\nOutro");
+                assert_eq!(proposed_plan.as_deref(), Some("- Step 1"));
+            }
+            _ => panic!("Expected stripped text response with proposed plan"),
         }
     }
 
@@ -1115,6 +1187,7 @@ mod tests {
         let processing_result = TurnProcessingResult::TextResponse {
             text: "Proceeding without explicit questions.".to_string(),
             reasoning: None,
+            proposed_plan: None,
         };
 
         stats.record_tool(tools::READ_FILE);
@@ -1152,6 +1225,7 @@ mod tests {
         let processing_result = TurnProcessingResult::TextResponse {
             text: "What should I do next?".to_string(),
             reasoning: None,
+            proposed_plan: None,
         };
 
         stats.increment_plan_mode_turns();
@@ -1179,6 +1253,7 @@ mod tests {
         let processing_result = TurnProcessingResult::TextResponse {
             text: "<proposed_plan>\nPlan content\n</proposed_plan>".to_string(),
             reasoning: None,
+            proposed_plan: None,
         };
 
         stats.record_tool(tools::READ_FILE);
@@ -1210,6 +1285,7 @@ mod tests {
         let processing_result = TurnProcessingResult::TextResponse {
             text: "<proposed_plan>\nPlan content\n</proposed_plan>".to_string(),
             reasoning: None,
+            proposed_plan: None,
         };
 
         stats.record_tool(tools::READ_FILE);
@@ -1241,6 +1317,7 @@ mod tests {
         let processing_result = TurnProcessingResult::TextResponse {
             text: text.clone(),
             reasoning: None,
+            proposed_plan: None,
         };
 
         stats.record_tool(tools::READ_FILE);

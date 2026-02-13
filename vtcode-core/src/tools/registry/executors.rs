@@ -37,10 +37,10 @@ impl ToolRegistry {
     pub(super) async fn execute_unified_exec(&self, args: Value) -> Result<Value> {
         let action_str = tool_intent::unified_exec_action(&args)
             .ok_or_else(|| anyhow!("Missing action in unified_exec"))?;
-                let action: UnifiedExecAction = serde_json::from_value(json!(action_str))
-                    .with_context(|| format!("Invalid action: {}", action_str))?;
-        
-                match action {
+        let action: UnifiedExecAction = serde_json::from_value(json!(action_str))
+            .with_context(|| format!("Invalid action: {}", action_str))?;
+
+        match action {
             UnifiedExecAction::Run => self.execute_run_pty_cmd(args).await,
             UnifiedExecAction::Write => self.execute_send_pty_input(args).await,
             UnifiedExecAction::Poll => self.execute_read_pty_session(args).await,

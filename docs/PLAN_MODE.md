@@ -14,6 +14,8 @@ In Plan Mode, the agent **cannot**:
 - Run shell commands or tests
 - Execute any mutating operations
 
+`update_plan` is also unavailable in Plan Mode. Plan output should use `<proposed_plan>...</proposed_plan>`.
+
 ## Benefits
 
 1. **Better code quality**: By the time you start coding, the agent knows exactly what to do and has all the context it needs
@@ -42,30 +44,26 @@ vtcode --permission-mode plan
 1. **Start in Plan Mode**: `vtcode --permission-mode plan`
 2. **Describe your goal**: Explain what you want to build or change
 3. **Iterate on the plan**: Ask clarifying questions, explore files, refine the approach
-4. **Review the plan**: The agent will include a reminder about staying in Plan Mode
-5. **Request execution explicitly**: Say “exit plan mode and implement” or use `/plan off`
-6. **Execute the plan**: The agent will show a confirmation dialog before coding
+4. **Review the plan**: The agent emits a structured `<proposed_plan>` block and a Plan item
+5. **Choose next action**: Use the implementation prompt to switch to Edit mode or continue planning
+6. **Execute the plan**: If approved, coding proceeds in Edit mode
 
 ## Plan Output Format
 
-When in Plan Mode, the agent produces structured implementation plans in Markdown:
+When in Plan Mode, the agent produces structured implementation plans inside a dedicated block:
 
 ```markdown
+<proposed_plan>
 ## Summary
 Brief description of the goal.
 
 ## Steps
-1. **Step 1**: Description
-   - Files to modify: `src/foo.rs`, `src/bar.rs`
-   - Functions to add: `validate_input()`, `process_data()`
+1. Step with concrete files/symbols
+2. Step with verification detail
 
-2. **Step 2**: Description
-   - Tests to add: `tests/foo_test.rs`
-   - Edge cases to handle: empty input, invalid format
-
-## Questions
-- Should we handle case X?
-- What's the expected behavior for edge case Y?
+## Risks
+- Key tradeoff or dependency
+</proposed_plan>
 ```
 
 ## Best Practices

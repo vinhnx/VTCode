@@ -126,11 +126,7 @@ fn infer_provider_respects_override_and_model() {
 #[test]
 fn test_provider_creation() {
     // Test creating providers directly
-    let gemini = create_provider_for_model(
-        "gemini-3-flash-preview",
-        "test_key".to_string(),
-        None,
-    );
+    let gemini = create_provider_for_model("gemini-3-flash-preview", "test_key".to_string(), None);
     assert!(gemini.is_ok());
 
     let openai = create_provider_for_model(models::GPT_5, "test_key".to_string(), None);
@@ -164,11 +160,8 @@ fn test_provider_creation() {
 #[test]
 fn test_unified_client_creation() {
     // Test creating unified clients for different providers
-    let gemini_client = create_provider_for_model(
-        "gemini-3-flash-preview",
-        "test_key".to_string(),
-        None,
-    );
+    let gemini_client =
+        create_provider_for_model("gemini-3-flash-preview", "test_key".to_string(), None);
     assert!(gemini_client.is_ok());
     if let Ok(client) = gemini_client {
         assert_eq!(client.name(), "gemini");

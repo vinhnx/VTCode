@@ -18,6 +18,14 @@ pub struct SkillYaml {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub version: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "default-version")]
+    #[serde(alias = "default_version")]
+    pub default_version: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "latest-version")]
+    #[serde(alias = "latest_version")]
+    pub latest_version: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub author: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub license: Option<String>,
@@ -43,6 +51,10 @@ pub struct SkillYaml {
     #[serde(rename = "when-to-use")]
     #[serde(alias = "when_to_use")]
     pub when_to_use: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "when-not-to-use")]
+    #[serde(alias = "when_not_to_use")]
+    pub when_not_to_use: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "argument-hint")]
     #[serde(alias = "argument_hint")]
@@ -72,6 +84,10 @@ pub struct SkillYaml {
     /// Tool dependencies for this skill (Agent Skills spec extension)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tools: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "network")]
+    #[serde(alias = "network_policy")]
+    pub network_policy: Option<crate::skills::types::SkillNetworkPolicy>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -179,6 +195,8 @@ pub fn parse_skill_content_with_defaults(
         name,
         description,
         version: yaml.version,
+        default_version: yaml.default_version,
+        latest_version: yaml.latest_version,
         author: yaml.author,
         license: yaml.license,
         model: yaml.model,
@@ -187,6 +205,7 @@ pub fn parse_skill_content_with_defaults(
         allowed_tools: allowed_tools_string,
         disable_model_invocation: yaml.disable_model_invocation,
         when_to_use: yaml.when_to_use,
+        when_not_to_use: yaml.when_not_to_use,
         argument_hint: yaml.argument_hint,
         user_invocable: yaml.user_invocable,
         context: yaml.context,
@@ -198,6 +217,7 @@ pub fn parse_skill_content_with_defaults(
         variety: crate::skills::types::SkillVariety::AgentSkill,
         metadata: yaml.metadata,
         tools: yaml.tools,
+        network_policy: yaml.network_policy,
     };
 
     manifest.validate()?;
@@ -282,6 +302,12 @@ license: MIT
 #   version: "1.0"
 #   author: your-org
 #   custom: "value"
+# when-not-to-use: "Don't use for one-off tasks or live API calls"
+# default-version: "1.0.0"  # Pinned version for production
+# latest-version: "1.1.0"  # Latest available version
+# network:
+#   allowed_domains: ["api.example.com"]
+#   denied_domains: []
 ---
 
 # {} Skill

@@ -1983,7 +1983,7 @@ pub async fn handle_toggle_plan_mode(
         ctx.renderer.line(
             MessageStyle::Info,
             if current {
-                "Plan Mode is already enabled (read-only by default; discovery tools may auto-switch)."
+                "Plan Mode is already enabled (strict read-only)."
             } else {
                 "Plan Mode is already disabled."
             },
@@ -2003,7 +2003,7 @@ pub async fn handle_toggle_plan_mode(
         )?;
         ctx.renderer.line(
             MessageStyle::Output,
-            "  Mutating tools are normally blocked; discovery calls may auto-switch to full tools and return.",
+            "  Mutating tools are blocked; optional plan-file writes under `.vtcode/plans/` remain allowed.",
         )?;
         ctx.renderer.line(MessageStyle::Output, "")?;
         ctx.renderer.line(

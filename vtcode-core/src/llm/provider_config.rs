@@ -10,7 +10,8 @@ pub struct GeminiProviderConfig;
 impl ProviderConfig for GeminiProviderConfig {
     const PROVIDER_KEY: &'static str = "gemini";
     const DISPLAY_NAME: &'static str = "Gemini";
-    const DEFAULT_MODEL: &'static str = crate::config::constants::models::google::GEMINI_3_FLASH_PREVIEW;
+    const DEFAULT_MODEL: &'static str =
+        crate::config::constants::models::google::GEMINI_3_FLASH_PREVIEW;
     const API_BASE_URL: &'static str = crate::config::constants::urls::GEMINI_API_BASE;
     const BASE_URL_ENV_VAR: Option<&'static str> =
         Some(crate::config::constants::env_vars::GEMINI_BASE_URL);

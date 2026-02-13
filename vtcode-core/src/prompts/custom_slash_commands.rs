@@ -108,10 +108,17 @@ impl CustomSlashCommandRegistry {
                                 commands.insert(key, command);
                             }
                             Ok(None) => {
-                                eprintln!("DEBUG: from_file returned Ok(None) for {}", path.display());
+                                eprintln!(
+                                    "DEBUG: from_file returned Ok(None) for {}",
+                                    path.display()
+                                );
                             }
                             Err(err) => {
-                                eprintln!("DEBUG: from_file errored for {}: {}", path.display(), err);
+                                eprintln!(
+                                    "DEBUG: from_file errored for {}: {}",
+                                    path.display(),
+                                    err
+                                );
                                 warn!(
                                     "failed to load custom slash command from {}: {err:#}",
                                     path.display()
@@ -207,7 +214,11 @@ impl CustomSlashCommand {
         let metadata = fs::metadata(path).await.map_err(|e| {
             anyhow::anyhow!("failed to read metadata for {}: {}", path.display(), e)
         })?;
-        eprintln!("DEBUG: metadata len: {}, max_bytes: {}", metadata.len(), max_bytes);
+        eprintln!(
+            "DEBUG: metadata len: {}, max_bytes: {}",
+            metadata.len(),
+            max_bytes
+        );
         if metadata.len() as usize > max_bytes {
             warn!(
                 "custom slash command `{}` exceeds max_file_size_kb ({:.1} KB) - skipping",

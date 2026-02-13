@@ -24,6 +24,64 @@ use std::borrow::Cow;
 use std::time::Duration;
 use tracing::{debug, info, warn};
 
+/// Network-capable tool names that should be filtered based on skill network policy
+const NETWORK_TOOLS: &[&str] = &[
+    "http",
+    "fetch",
+    "browser",
+    "web_search",
+    "read_web_page",
+    "curl",
+];
+
+/// Filter available tools based on skill's network policy
+///
+/// - If skill has no network policy: remove network-capable tools
+/// - If skill has allowed_domains: keep network tools but log the constraint
+/// - If skill has denied_domains: keep network tools but log the constraint
+pub fn filter_tools_for_skill(skill: &Skill, tools: Vec<ToolDefinition>) -> Vec<ToolDefinition> {
+    let network_policy = &skill.manifest.network_policy;
+
+    match network_policy {
+        None => tools
+            .into_iter()
+            .filter(|t| {
+                let name_lower = t
+                    .function
+                    .as_ref()
+                    .map(|f| f.name.to_lowercase())
+                    .unwrap_or_default();
+                let is_network = NETWORK_TOOLS.iter().any(|nt| name_lower.contains(nt));
+                if is_network {
+                    debug!(
+                        "Filtered network tool '{}' for skill '{}' (no network policy)",
+                        name_lower,
+                        skill.name()
+                    );
+                }
+                !is_network
+            })
+            .collect(),
+        Some(policy) => {
+            if !policy.allowed_domains.is_empty() {
+                info!(
+                    "Skill '{}' has network allowlist: {:?}",
+                    skill.name(),
+                    policy.allowed_domains
+                );
+            }
+            if !policy.denied_domains.is_empty() {
+                info!(
+                    "Skill '{}' has network denylist: {:?}",
+                    skill.name(),
+                    policy.denied_domains
+                );
+            }
+            tools
+        }
+    }
+}
+
 /// Execute a skill with LLM sub-call support (Phase 5)
 ///
 /// Creates a sub-conversation where:
@@ -50,6 +108,9 @@ pub async fn execute_skill_with_sub_llm(
     model: String,
 ) -> Result<String> {
     debug!("Executing skill '{}' with LLM sub-call", skill.name());
+
+    // Apply network policy filtering
+    let available_tools = filter_tools_for_skill(skill, available_tools);
 
     // Build conversation starting with user input
     let mut messages = vec![Message::user(user_input.clone())];
@@ -399,6 +460,67 @@ mod tests {
         let res = result.unwrap();
         assert_eq!(res["skill_name"], "test-skill");
         assert_eq!(res["status"], "executing");
+    }
+
+    #[test]
+    fn test_filter_tools_no_network_policy() {
+        let manifest = SkillManifest {
+            name: "test-skill".to_string(),
+            description: "Test".to_string(),
+            network_policy: None,
+            vtcode_native: Some(true),
+            ..Default::default()
+        };
+        let skill = Skill::new(manifest, PathBuf::from("/tmp"), "instructions".to_string())
+            .expect("failed to create skill");
+
+        let tools = vec![
+            ToolDefinition::function(
+                "read_file".to_string(),
+                "Read".to_string(),
+                serde_json::json!({}),
+            ),
+            ToolDefinition::function(
+                "web_search".to_string(),
+                "Search".to_string(),
+                serde_json::json!({}),
+            ),
+        ];
+        let filtered = filter_tools_for_skill(&skill, tools);
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].function.as_ref().unwrap().name, "read_file");
+    }
+
+    #[test]
+    fn test_filter_tools_with_network_policy() {
+        use crate::skills::types::SkillNetworkPolicy;
+        let manifest = SkillManifest {
+            name: "test-skill".to_string(),
+            description: "Test".to_string(),
+            network_policy: Some(SkillNetworkPolicy {
+                allowed_domains: vec!["api.example.com".to_string()],
+                denied_domains: vec![],
+            }),
+            vtcode_native: Some(true),
+            ..Default::default()
+        };
+        let skill = Skill::new(manifest, PathBuf::from("/tmp"), "instructions".to_string())
+            .expect("failed to create skill");
+
+        let tools = vec![
+            ToolDefinition::function(
+                "read_file".to_string(),
+                "Read".to_string(),
+                serde_json::json!({}),
+            ),
+            ToolDefinition::function(
+                "web_search".to_string(),
+                "Search".to_string(),
+                serde_json::json!({}),
+            ),
+        ];
+        let filtered = filter_tools_for_skill(&skill, tools);
+        assert_eq!(filtered.len(), 2);
     }
 
     #[test]

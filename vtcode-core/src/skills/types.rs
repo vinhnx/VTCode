@@ -23,6 +23,15 @@ pub enum SkillVariety {
     BuiltIn,
 }
 
+/// Network access policy for a skill
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SkillNetworkPolicy {
+    #[serde(default)]
+    pub allowed_domains: Vec<String>,
+    #[serde(default)]
+    pub denied_domains: Vec<String>,
+}
+
 /// Skill manifest metadata from SKILL.md frontmatter
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SkillManifest {
@@ -32,6 +41,16 @@ pub struct SkillManifest {
     pub description: String,
     /// Optional version string
     pub version: Option<String>,
+    /// Optional default version for pinning
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "default-version")]
+    #[serde(alias = "default_version")]
+    pub default_version: Option<String>,
+    /// Optional latest known version
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "latest-version")]
+    #[serde(alias = "latest_version")]
+    pub latest_version: Option<String>,
     /// Optional author name
     pub author: Option<String>,
     /// Optional license string for the skill
@@ -63,6 +82,11 @@ pub struct SkillManifest {
     #[serde(rename = "when-to-use")]
     #[serde(alias = "when_to_use")]
     pub when_to_use: Option<String>,
+    /// Optional guidance on when NOT to use the skill
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "when-not-to-use")]
+    #[serde(alias = "when_not_to_use")]
+    pub when_not_to_use: Option<String>,
     /// Optional argument hint for slash command style usage
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "argument-hint")]
@@ -104,6 +128,11 @@ pub struct SkillManifest {
     /// Tool dependencies for this skill (Agent Skills spec extension)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tools: Option<Vec<String>>,
+    /// Optional network access policy
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "network")]
+    #[serde(alias = "network_policy")]
+    pub network_policy: Option<SkillNetworkPolicy>,
 }
 
 impl Default for SkillManifest {
@@ -112,6 +141,8 @@ impl Default for SkillManifest {
             name: String::new(),
             description: String::new(),
             version: None,
+            default_version: None,
+            latest_version: None,
             author: None,
             license: None,
             model: None,
@@ -120,6 +151,7 @@ impl Default for SkillManifest {
             allowed_tools: None,
             disable_model_invocation: None,
             when_to_use: None,
+            when_not_to_use: None,
             argument_hint: None,
             user_invocable: None,
             context: None,
@@ -131,6 +163,7 @@ impl Default for SkillManifest {
             variety: SkillVariety::AgentSkill,
             metadata: None,
             tools: None,
+            network_policy: None,
         }
     }
 }
@@ -318,6 +351,52 @@ impl SkillManifest {
                 "compatibility must be between 1-500 characters if provided, got {} characters",
                 compatibility.len()
             );
+        }
+
+        // Validate when-not-to-use field
+        if let Some(when_not_to_use) = &self.when_not_to_use
+            && when_not_to_use.len() > 512
+        {
+            anyhow::bail!(
+                "when-not-to-use exceeds maximum length: {} characters (max 512)",
+                when_not_to_use.len()
+            );
+        }
+
+        // Validate default-version field
+        if let Some(default_version) = &self.default_version
+            && default_version.len() > 64
+        {
+            anyhow::bail!(
+                "default-version exceeds maximum length: {} characters (max 64)",
+                default_version.len()
+            );
+        }
+
+        // Validate latest-version field
+        if let Some(latest_version) = &self.latest_version
+            && latest_version.len() > 64
+        {
+            anyhow::bail!(
+                "latest-version exceeds maximum length: {} characters (max 64)",
+                latest_version.len()
+            );
+        }
+
+        // Validate network policy
+        if let Some(network_policy) = &self.network_policy {
+            if network_policy.allowed_domains.len() > 32 {
+                anyhow::bail!(
+                    "network allowed_domains exceeds maximum entries: {} (max 32)",
+                    network_policy.allowed_domains.len()
+                );
+            }
+            if network_policy.denied_domains.len() > 32 {
+                anyhow::bail!(
+                    "network denied_domains exceeds maximum entries: {} (max 32)",
+                    network_policy.denied_domains.len()
+                );
+            }
         }
 
         Ok(())

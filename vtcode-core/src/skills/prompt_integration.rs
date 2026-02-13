@@ -29,6 +29,7 @@ const SKILL_USAGE_RULES: &str = r#"
   2. Load referenced files (scripts/, references/) only if needed
   3. Prefer running existing scripts vs. retyping code
 - **Missing/blocked**: State issue briefly and continue with fallback approach
+- **Routing**: Check both "use when" and "avoid when" hints before activating a skill
 "#;
 
 /// Generate skills section for system prompt (full mode - backward compatible)
@@ -129,11 +130,21 @@ fn render_skills_lean(skills: &[SkillMetadata]) -> String {
             SkillScope::Admin => "admin",
         };
 
-        let _ = writeln!(
-            prompt,
+        let mut line = format!(
             "- {}{}: {} (dir: {}, scope: {})",
             skill.name, mode_flag, skill.description, location, scope
         );
+
+        if let Some(manifest) = &skill.manifest {
+            if let Some(ref when_to_use) = manifest.when_to_use {
+                line.push_str(&format!("; use: {}", when_to_use));
+            }
+            if let Some(ref when_not_to_use) = manifest.when_not_to_use {
+                line.push_str(&format!("; avoid: {}", when_not_to_use));
+            }
+        }
+
+        let _ = writeln!(prompt, "{}", line);
     }
 
     if overflow > 0 {
@@ -198,6 +209,21 @@ pub fn generate_skills_prompt_xml(skills: &[SkillMetadata]) -> String {
                     xml_escape(allowed_tools)
                 );
             }
+
+            if let Some(ref when_to_use) = manifest.when_to_use {
+                let _ = writeln!(
+                    xml,
+                    "    <when-to-use>{}</when-to-use>",
+                    xml_escape(when_to_use)
+                );
+            }
+            if let Some(ref when_not_to_use) = manifest.when_not_to_use {
+                let _ = writeln!(
+                    xml,
+                    "    <when-not-to-use>{}</when-not-to-use>",
+                    xml_escape(when_not_to_use)
+                );
+            }
         }
 
         xml.push_str("  </skill>\n");
@@ -245,24 +271,8 @@ pub fn test_skills_prompt_generation() {
         description: "Analyze PDF documents".to_string(),
         version: Some("1.0.0".to_string()),
         author: Some("Test".to_string()),
-        license: None,
-        model: None,
-        mode: None,
         vtcode_native: Some(true),
-        allowed_tools: None,
-        disable_model_invocation: None,
-        when_to_use: None,
-        argument_hint: None,
-        user_invocable: None,
-        context: None,
-        agent: None,
-        hooks: None,
-        requires_container: None,
-        disallow_container: None,
-        compatibility: None,
-        variety: crate::skills::types::SkillVariety::AgentSkill,
-        metadata: None,
-        tools: None,
+        ..Default::default()
     };
 
     let skill = SkillMetadata {
@@ -308,24 +318,8 @@ mod tests {
             description: "Test skill description".to_string(),
             version: Some("1.0.0".to_string()),
             author: Some("Test Author".to_string()),
-            license: None,
-            model: None,
-            mode: None,
             vtcode_native: Some(true),
-            allowed_tools: None,
-            disable_model_invocation: None,
-            when_to_use: None,
-            argument_hint: None,
-            user_invocable: None,
-            context: None,
-            agent: None,
-            hooks: None,
-            requires_container: None,
-            disallow_container: None,
-            compatibility: None,
-            variety: crate::skills::types::SkillVariety::AgentSkill,
-            metadata: None,
-            tools: None,
+            ..Default::default()
         };
 
         let skill = SkillMetadata {
@@ -367,24 +361,8 @@ mod tests {
                 description: format!("Example skill number {}", i),
                 version: Some("2.1.0".to_string()),
                 author: Some("Developer Name".to_string()),
-                license: None,
-                model: None,
-                mode: None,
                 vtcode_native: Some(true),
-                allowed_tools: None,
-                disable_model_invocation: None,
-                when_to_use: None,
-                argument_hint: None,
-                user_invocable: None,
-                context: None,
-                agent: None,
-                hooks: None,
-                requires_container: None,
-                disallow_container: None,
-                compatibility: None,
-                variety: crate::skills::types::SkillVariety::AgentSkill,
-                metadata: None,
-                tools: None,
+                ..Default::default()
             };
 
             let skill = SkillMetadata {
@@ -427,26 +405,10 @@ mod tests {
         let manifest = SkillManifest {
             name: "test-xml-skill".to_string(),
             description: "Test XML generation".to_string(),
-            version: None,
-            author: None,
-            license: None,
-            model: None,
-            mode: None,
-            vtcode_native: None,
             allowed_tools: Some("Read Write Bash".to_string()),
-            disable_model_invocation: None,
-            when_to_use: None,
-            argument_hint: None,
-            user_invocable: None,
-            context: None,
-            agent: None,
-            hooks: None,
-            requires_container: None,
-            disallow_container: None,
             compatibility: Some("Designed for VT Code".to_string()),
-            variety: crate::skills::types::SkillVariety::AgentSkill,
             metadata: Some(metadata),
-            tools: None,
+            ..Default::default()
         };
 
         let skill = SkillMetadata {
@@ -486,26 +448,7 @@ mod tests {
         let manifest = SkillManifest {
             name: "test-escape".to_string(),
             description: "Test <special> & \"characters\"".to_string(),
-            version: None,
-            author: None,
-            license: None,
-            model: None,
-            mode: None,
-            vtcode_native: None,
-            allowed_tools: None,
-            disable_model_invocation: None,
-            when_to_use: None,
-            argument_hint: None,
-            user_invocable: None,
-            context: None,
-            agent: None,
-            hooks: None,
-            requires_container: None,
-            disallow_container: None,
-            compatibility: None,
-            variety: crate::skills::types::SkillVariety::AgentSkill,
-            metadata: None,
-            tools: None,
+            ..Default::default()
         };
 
         let skill = SkillMetadata {
@@ -535,26 +478,7 @@ mod tests {
         let manifest = SkillManifest {
             name: "test-format".to_string(),
             description: "Test format selection".to_string(),
-            version: None,
-            author: None,
-            license: None,
-            model: None,
-            mode: None,
-            vtcode_native: None,
-            allowed_tools: None,
-            disable_model_invocation: None,
-            when_to_use: None,
-            argument_hint: None,
-            user_invocable: None,
-            context: None,
-            agent: None,
-            hooks: None,
-            requires_container: None,
-            disallow_container: None,
-            compatibility: None,
-            variety: crate::skills::types::SkillVariety::AgentSkill,
-            metadata: None,
-            tools: None,
+            ..Default::default()
         };
 
         let skill = SkillMetadata {
