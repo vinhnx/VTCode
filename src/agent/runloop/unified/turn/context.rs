@@ -369,6 +369,17 @@ impl<'a> TurnProcessingContext<'a> {
     }
 
     async fn maybe_prompt_plan_implementation(&mut self, plan_text: String) -> anyhow::Result<()> {
+        let require_confirmation = self
+            .vt_cfg
+            .map(|cfg| cfg.agent.require_plan_confirmation)
+            .unwrap_or(true);
+
+        if !require_confirmation {
+            transition_to_edit_mode(self.tool_registry, self.session_stats, self.handle, true)
+                .await;
+            return Ok(());
+        }
+
         let plan = PlanContent::from_markdown(
             "Implementation Plan".to_string(),
             &plan_text,

@@ -223,6 +223,7 @@ pub(crate) async fn execute_llm_request(
             // Defer spinner finish if tools are available - keeps loading indicator active
             let spinner_options = StreamSpinnerOptions {
                 defer_finish: has_tools,
+                strip_proposed_plan_blocks: ctx.session_stats.is_plan_mode(),
             };
             let stream_result = stream_and_render_response_with_options(
                 provider_client,
