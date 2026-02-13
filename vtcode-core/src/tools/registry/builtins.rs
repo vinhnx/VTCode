@@ -6,7 +6,7 @@ use crate::tools::ask_user_question::AskUserQuestionTool;
 use crate::tools::handlers::{EnterPlanModeTool, ExitPlanModeTool, PlanModeState};
 use crate::tools::request_user_input::RequestUserInputTool;
 
-use super::progressive_docs::minimal_tool_signatures;
+use super::progressive_docs::{build_minimal_declarations, minimal_tool_signatures};
 use super::registration::ToolRegistration;
 use super::{ToolInventory, ToolRegistry};
 
@@ -251,10 +251,16 @@ pub(super) fn builtin_tool_registrations(
         // - spawn_subagent
     ];
 
-    // Apply descriptions from signatures where available
+    // Apply descriptions and schemas from signatures where available
+    let decls = build_minimal_declarations(&sigs);
     for reg in &mut registrations {
         if let Some(sig) = sigs.get(reg.name()) {
-            *reg = reg.clone().with_description(sig.brief);
+            if let Some(decl) = decls.iter().find(|d| d.name == reg.name()) {
+                *reg = reg
+                    .clone()
+                    .with_description(sig.brief)
+                    .with_parameter_schema(decl.parameters.clone());
+            }
         }
     }
 

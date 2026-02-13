@@ -167,6 +167,7 @@ pub(crate) async fn run_single_agent_loop_unified(
             &mut session_state,
             resume_ref,
             full_auto,
+            _skip_confirmations,
         )
         .await?;
 

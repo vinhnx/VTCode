@@ -26,7 +26,7 @@ mod minimax_integration_tests {
         // Test that the MiniMax API base URL constant is defined
         assert_eq!(
             urls::MINIMAX_API_BASE,
-            "https://api.minimax.io/anthropic/v1"
+            "https://api.minimax.io/anthropic"
         );
     }
 

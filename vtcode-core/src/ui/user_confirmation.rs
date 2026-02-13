@@ -36,7 +36,7 @@ pub enum ProModelConfirmationResult {
 }
 
 impl UserConfirmation {
-    /// Ask for confirmation before switching to the most capable model (Gemini 2.5 Pro)
+    /// Ask for confirmation before switching to the most capable model (Gemini 3 Pro)
     /// This is critical for ensuring user control over potentially expensive operations
     pub fn confirm_pro_model_usage(current_model: &str) -> Result<ProModelConfirmationResult> {
         use crate::config::constants::models;
@@ -44,10 +44,10 @@ impl UserConfirmation {
         println!("Current model: {}", style(current_model).cyan());
         println!(
             "Requested model: {}",
-            style(models::GEMINI_2_5_PRO).cyan().bold()
+            style(models::google::GEMINI_3_PRO_PREVIEW).cyan().bold()
         );
         println!();
-        println!("The Gemini 2.5 Pro model is the most capable but also:");
+        println!("The Gemini 3 Pro model is the most capable but also:");
         println!("• More expensive per token");
         println!("• Slower response times");
         println!("• Higher resource usage");
@@ -69,14 +69,14 @@ impl UserConfirmation {
             0 => {
                 println!(
                     "{}",
-                    style("✓ Using Gemini 2.5 Pro model for this task").green()
+                    style("✓ Using Gemini 3 Pro model for this task").green()
                 );
                 Ok(ProModelConfirmationResult::Yes)
             }
             1 => {
                 println!(
                     "{}",
-                    style("✓ Using Gemini 2.5 Pro model (will auto-accept in future)").green()
+                    style("✓ Using Gemini 3 Pro model (will auto-accept in future)").green()
                 );
                 Ok(ProModelConfirmationResult::YesAutoAccept)
             }

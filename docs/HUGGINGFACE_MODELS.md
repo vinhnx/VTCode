@@ -16,7 +16,7 @@
 | `openai/gpt-oss-20b` | GPT-OSS 20B | 131K | Yes | Yes | Yes | Balanced performance |
 | `zai-org/GLM-4.6` | GLM-4.6 | 131K | Yes | Yes | Yes | General reasoning |
 | `zai-org/GLM-4.7` | GLM-4.7 | 131K | Yes | Yes | Yes | Latest GLM version |
-| `moonshotai/Kimi-K2-Thinking` | Kimi K2 Thinking | 131K | Yes | Yes | Yes | Reasoning tasks |
+| `moonshotai/Kimi-K2.5` | Kimi K2.5 | 262K | Yes | Yes | Yes | Reasoning tasks |
 
 ## Via Novita Provider
 

@@ -5,13 +5,13 @@
 | Model                 | Pass@1    | Latency (P50) | Cost           | Date       | Tier         |
 | --------------------- | --------- | ------------- | -------------- | ---------- | ------------ |
 | **gpt-5-nano**        | **94.5%** | 10.4s         | ~$0.10-0.30/1M | 2025-10-22 | **Frontier** |
-| gemini-2.5-flash-lite | 61.6%     | 0.97s         | $0.00 (free)   | 2025-10-22 | Mid-Range    |
+| gemini-3-flash-preview | 61.6%     | 0.97s         | $0.00 (free)   | 2025-10-22 | Mid-Range    |
 
 ## Latest Results
 
 ### gpt-5-nano (2025-10-22) - FRONTIER-TIER PERFORMANCE
 
-![Comparison Chart](../../docs/benchmarks/reports/comparison_gemini-2.5-flash-lite_vs_gpt-5-nano.png)
+![Comparison Chart](../../docs/benchmarks/reports/comparison_gemini-3-flash-preview_vs_gpt-5-nano.png)
 
 **Performance:**
 
@@ -29,9 +29,9 @@
 
 **Full Report:** [GPT5_NANO_VS_GEMINI.md](GPT5_NANO_VS_GEMINI.md)
 
-### gemini-2.5-flash-lite (2025-10-22) - SPEED CHAMPION
+### gemini-3-flash-preview (2025-10-22) - SPEED CHAMPION
 
-![Benchmark Chart](../../docs/benchmarks/reports/HE_20251022-135834_gemini-2.5-flash-lite_tools-0_N164_chart.png)
+![Benchmark Chart](../../docs/benchmarks/reports/HE_20251022-135834_gemini-3-flash-preview_tools-0_N164_chart.png)
 
 **Performance:**
 
@@ -52,10 +52,10 @@
 
 ```bash
 # Full benchmark
-make bench-humaneval PROVIDER=gemini MODEL='gemini-2.5-flash-lite'
+make bench-humaneval PROVIDER=gemini MODEL='gemini-3-flash-preview'
 
 # Quick test (10 tasks)
-make bench-humaneval PROVIDER=gemini MODEL='gemini-2.5-flash-lite' N_HE=10
+make bench-humaneval PROVIDER=gemini MODEL='gemini-3-flash-preview' N_HE=10
 
 # Generate charts
 python3 scripts/generate_benchmark_chart.py reports/HE_*.json
@@ -66,7 +66,7 @@ python3 scripts/generate_benchmark_chart.py reports/HE_*.json
 ASCII chart available via:
 
 ```bash
-python3 scripts/generate_benchmark_chart.py reports/HE_20251022-135834_gemini-2.5-flash-lite_tools-0_N164.json
+python3 scripts/generate_benchmark_chart.py reports/HE_20251022-135834_gemini-3-flash-preview_tools-0_N164.json
 ```
 
 Output:
@@ -86,5 +86,5 @@ Output:
 
 -   **Detailed Analysis:** [HUMANEVAL_2025-10-22.md](HUMANEVAL_2025-10-22.md)
 -   **Methodology:** [README.md](README.md)
--   **Raw Data:** `../../docs/benchmarks/reports/HE_20251022-135834_gemini-2.5-flash-lite_tools-0_N164.json`
+-   **Raw Data:** `../../docs/benchmarks/reports/HE_20251022-135834_gemini-3-flash-preview_tools-0_N164.json`
 -   **Scripts:** `../../scripts/bench_humaneval.py`, `../../scripts/generate_benchmark_chart.py`

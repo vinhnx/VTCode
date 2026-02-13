@@ -63,6 +63,7 @@ pub(crate) struct ToolPermissionsContext<'a, S: UiSession + ?Sized> {
     pub autonomous_mode: bool,
     pub human_in_the_loop: bool,
     pub delegate_mode: bool,
+    pub skip_confirmations: bool,
 }
 
 fn extract_shell_command_text(tool_name: &str, tool_args: Option<&Value>) -> Option<String> {
@@ -416,7 +417,12 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
         autonomous_mode,
         human_in_the_loop,
         delegate_mode,
+        skip_confirmations,
     } = ctx;
+
+    if skip_confirmations {
+        return Ok(ToolPermissionFlow::Approved);
+    }
 
     if delegate_mode {
         renderer.line(

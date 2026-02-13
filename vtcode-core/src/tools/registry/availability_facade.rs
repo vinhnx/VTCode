@@ -91,6 +91,14 @@ impl ToolRegistry {
         // First check if it's a regular tool
         if let Some(registration) = self.inventory.get_registration(tool_name) {
             if let Some(schema) = registration.parameter_schema() {
+                // Wrap in full declaration if it's just parameters
+                if schema.get("properties").is_some() && schema.get("name").is_none() {
+                    return Some(serde_json::json!({
+                        "name": tool_name,
+                        "description": registration.metadata().description().unwrap_or(""),
+                        "parameters": schema
+                    }));
+                }
                 return Some(schema.clone());
             }
         }
@@ -101,7 +109,11 @@ impl ToolRegistry {
             if self.mcp_circuit_breaker.allow_request() {
                 if let Ok(tools) = client.list_mcp_tools().await {
                     if let Some(mcp_tool) = tools.into_iter().find(|t| t.name == tool_name) {
-                        return Some(mcp_tool.input_schema);
+                        return Some(serde_json::json!({
+                            "name": tool_name,
+                            "description": mcp_tool.description,
+                            "parameters": mcp_tool.input_schema
+                        }));
                     }
                 }
             }

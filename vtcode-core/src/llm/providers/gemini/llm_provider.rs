@@ -23,9 +23,7 @@ impl LLMProvider for GeminiProvider {
     }
 
     fn effective_context_size(&self, model: &str) -> usize {
-        if model.contains("2.5")
-            || model.contains("3")
-            || model.contains("2.0")
+        if model.contains("3")
             || model.contains("1.5-pro")
         {
             2_097_152
@@ -206,7 +204,7 @@ impl LLMProvider for GeminiProvider {
 
         if let Some(max_tokens) = request.max_tokens {
             let model = request.model.as_str();
-            let max_output_tokens = if model.contains("2.5") || model.contains("3") {
+            let max_output_tokens = if model.contains("3") {
                 65536
             } else {
                 8192

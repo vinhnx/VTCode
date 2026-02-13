@@ -1,14 +1,10 @@
 /// Default model - using stable version for production reliability
-pub const DEFAULT_MODEL: &str = "gemini-2.5-flash";
+pub const DEFAULT_MODEL: &str = "gemini-3-flash-preview";
 
 pub const SUPPORTED_MODELS: &[&str] = &[
     "gemini-3-pro-preview",       // Latest flagship model with advanced reasoning
     "gemini-3-flash-preview",     // Fast version of Gemini 3 Pro with 3-level thinking
     "gemini-3-pro-image-preview", // Image generation model with 4K resolution
-    "gemini-2.5-pro",
-    "gemini-2.5-flash",
-    "gemini-2.5-flash-lite",
-    "gemini-2.5-flash-preview-05-20",
     "gemini-1.5-pro",
     "gemini-1.5-flash",
 ];
@@ -20,10 +16,6 @@ pub const SUPPORTED_MODELS: &[&str] = &[
 pub const REASONING_MODELS: &[&str] = &[
     "gemini-3-pro-preview",
     "gemini-3-flash-preview",
-    "gemini-2.5-pro",
-    "gemini-2.5-flash",
-    "gemini-2.5-flash-lite",
-    "gemini-2.5-flash-preview-05-20",
     "gemini-1.5-pro",
     "gemini-1.5-flash",
 ];
@@ -41,10 +33,6 @@ pub const IMAGE_GENERATION_MODELS: &[&str] = &["gemini-3-pro-image-preview"];
 pub const CACHING_MODELS: &[&str] = &[
     "gemini-3-pro-preview",
     "gemini-3-flash-preview",
-    "gemini-2.5-pro",
-    "gemini-2.5-flash",
-    "gemini-2.5-flash-lite",
-    "gemini-2.5-flash-preview-05-20",
     "gemini-1.5-pro",
     "gemini-1.5-flash",
 ];
@@ -55,19 +43,11 @@ pub const CACHING_MODELS: &[&str] = &[
 pub const CODE_EXECUTION_MODELS: &[&str] = &[
     "gemini-3-pro-preview",
     "gemini-3-flash-preview",
-    "gemini-2.5-pro",
-    "gemini-2.5-flash",
-    "gemini-2.5-flash-lite",
-    "gemini-2.5-flash-preview-05-20",
     "gemini-1.5-pro",
     "gemini-1.5-flash",
 ];
 
 // Convenience constants for commonly used models
-pub const GEMINI_2_5_PRO: &str = "gemini-2.5-pro";
-pub const GEMINI_2_5_FLASH: &str = "gemini-2.5-flash";
-pub const GEMINI_2_5_FLASH_LITE: &str = "gemini-2.5-flash-lite";
-pub const GEMINI_2_5_FLASH_PREVIEW: &str = "gemini-2.5-flash-preview-05-20";
 pub const GEMINI_3_PRO_PREVIEW: &str = "gemini-3-pro-preview";
 pub const GEMINI_3_FLASH_PREVIEW: &str = "gemini-3-flash-preview";
 pub const GEMINI_3_PRO_IMAGE_PREVIEW: &str = "gemini-3-pro-image-preview";

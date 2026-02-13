@@ -778,6 +778,7 @@ pub(crate) async fn initialize_session_ui(
     session_state: &mut SessionState,
     resume_state: Option<&ResumeSession>,
     full_auto: bool,
+    skip_confirmations: bool,
 ) -> Result<SessionUISetup> {
     use crate::hooks::lifecycle::{LifecycleHookEngine, SessionEndReason, SessionStartTrigger};
     use vtcode_core::config::constants::ui;
@@ -841,7 +842,7 @@ pub(crate) async fn initialize_session_ui(
         .tool_registry
         .set_active_pty_sessions(pty_counter.clone());
 
-    let session = spawn_session_with_prompts(
+    let mut session = spawn_session_with_prompts(
         theme_spec.clone(),
         default_placeholder.clone(),
         config.ui_surface,
@@ -854,6 +855,11 @@ pub(crate) async fn initialize_session_ui(
             .unwrap_or_default(),
     )
     .context("failed to launch inline session")?;
+
+    if skip_confirmations {
+        session.set_skip_confirmations(true);
+    }
+
     let handle = session.clone_inline_handle();
     let highlight_config = vt_cfg
         .as_ref()

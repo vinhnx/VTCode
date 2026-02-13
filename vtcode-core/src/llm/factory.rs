@@ -139,7 +139,6 @@ impl LLMFactory {
             || m.starts_with("zai-org/")
             || m.starts_with("moonshotai/")
             || m.starts_with("minimaxai/")
-            || m.starts_with("qwen/")
         {
             Some("huggingface".to_owned())
         } else if m.starts_with("mistral-")

@@ -27,7 +27,7 @@ fn test_provider_factory_basic() {
     assert!(providers.contains(&"ollama".to_string()));
     assert!(providers.contains(&"lmstudio".to_string()));
     assert!(providers.contains(&"minimax".to_string()));
-    assert_eq!(providers.len(), 11);
+    assert_eq!(providers.len(), 13);
 }
 
 #[test]
@@ -47,7 +47,7 @@ fn test_provider_auto_detection() {
         Some("anthropic".to_string())
     );
     assert_eq!(
-        factory.provider_from_model("gemini-2.5-flash-preview-05-20"),
+        factory.provider_from_model("gemini-3-flash-preview"),
         Some("gemini".to_string())
     );
     assert_eq!(
@@ -59,7 +59,7 @@ fn test_provider_auto_detection() {
         Some("xai".to_string())
     );
     assert_eq!(
-        factory.provider_from_model("kimi-k2-0905"),
+        factory.provider_from_model("kimi-k2.5"),
         Some("moonshot".to_string())
     );
     assert_eq!(
@@ -73,7 +73,7 @@ fn test_provider_auto_detection() {
 fn test_unified_client_creation() {
     // Test creating providers directly using the factory
     let gemini = create_provider_for_model(
-        "gemini-2.5-flash-preview-05-20",
+        "gemini-3-flash-preview",
         "test_key".to_string(),
         None,
     );
@@ -96,7 +96,7 @@ fn test_unified_client_creation() {
     let xai = create_provider_for_model(models::xai::GROK_4, "test_key".to_string(), None);
     assert!(xai.is_ok());
 
-    let moonshot = create_provider_for_model("kimi-k2-0905", "test_key".to_string(), None);
+    let moonshot = create_provider_for_model("kimi-k2.5", "test_key".to_string(), None);
     assert!(moonshot.is_ok());
 
     let ollama = create_provider_for_model(models::ollama::DEFAULT_MODEL, String::new(), None);

@@ -84,6 +84,14 @@ pub(crate) async fn run_tool_call(
     let tool_item_id = call.id.clone();
 
     if !prevalidated {
+        if ctx.harness_state.tool_budget_exhausted() {
+            return Ok(ToolPipelineOutcome::from_status(
+                ToolExecutionStatus::Failure {
+                    error: anyhow::anyhow!("Tool permission denied: exceeded max tool calls per turn ({})", ctx.harness_state.max_tool_calls),
+                },
+            ));
+        }
+
         if let Err(err) = ctx.tool_registry.preflight_validate_call(name, &args_val) {
             return Ok(ToolPipelineOutcome::from_status(
                 ToolExecutionStatus::Failure {
@@ -133,6 +141,8 @@ pub(crate) async fn run_tool_call(
     };
 
     if !prevalidated {
+        ctx.harness_state.record_tool_call();
+
         // Pre-flight permission check
         match ensure_tool_permission(
             crate::agent::runloop::unified::tool_routing::ToolPermissionsContext {
@@ -156,6 +166,7 @@ pub(crate) async fn run_tool_call(
                     .map(|cfg| cfg.security.human_in_the_loop)
                     .unwrap_or(true),
                 delegate_mode: ctx.session_stats.is_delegate_mode(),
+                skip_confirmations,
             },
             name,
             Some(&args_val),

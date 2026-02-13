@@ -37,7 +37,7 @@ fn convert_to_gemini_request_maps_history_and_system_prompt() {
         ],
         system_prompt: Some(std::sync::Arc::new("System prompt".to_string())),
         tools: Some(std::sync::Arc::new(vec![tool_def])),
-        model: models::google::GEMINI_2_5_FLASH_PREVIEW.to_string(),
+        model: models::google::GEMINI_3_FLASH_PREVIEW.to_string(),
         max_tokens: Some(256),
         temperature: Some(0.4),
         tool_choice: Some(ToolChoice::Specific(SpecificToolChoice {
@@ -113,7 +113,7 @@ fn convert_from_gemini_response_extracts_tool_calls() {
     };
 
     let llm_response =
-        GeminiProvider::convert_from_gemini_response(response, "gemini-2.5-flash".to_string())
+        GeminiProvider::convert_from_gemini_response(response, models::google::GEMINI_3_FLASH_PREVIEW.to_string())
             .expect("conversion should succeed");
 
     assert_eq!(llm_response.content.as_deref(), Some("Here you go"));
@@ -359,7 +359,7 @@ fn thought_signature_preserved_in_function_call_response() {
     };
 
     let llm_response =
-        GeminiProvider::convert_from_gemini_response(response, "gemini-3-pro-preview".to_string())
+        GeminiProvider::convert_from_gemini_response(response, models::google::GEMINI_3_PRO_PREVIEW.to_string())
             .expect("conversion should succeed");
 
     let tool_calls = llm_response.tool_calls.expect("should have tool calls");
@@ -398,7 +398,7 @@ fn thought_signature_roundtrip_in_request() {
                 origin_tool: None,
             },
         ],
-        model: "gemini-3-pro-preview".to_string(),
+        model: models::google::GEMINI_3_PRO_PREVIEW.to_string(),
         ..Default::default()
     };
 
@@ -458,7 +458,7 @@ fn parallel_function_calls_single_signature() {
     };
 
     let llm_response =
-        GeminiProvider::convert_from_gemini_response(response, "gemini-3-pro-preview".to_string())
+        GeminiProvider::convert_from_gemini_response(response, models::google::GEMINI_3_PRO_PREVIEW.to_string())
             .expect("conversion should succeed");
 
     let tool_calls = llm_response.tool_calls.expect("should have tool calls");
@@ -482,12 +482,11 @@ fn gemini_provider_supports_reasoning_effort_for_gemini3() {
 
     // Test that the provider correctly identifies Gemini 3 Pro as supporting reasoning effort
     assert!(Provider::Gemini.supports_reasoning_effort(models::google::GEMINI_3_PRO_PREVIEW));
-    assert!(Provider::Gemini.supports_reasoning_effort(models::google::GEMINI_2_5_PRO));
-    assert!(Provider::Gemini.supports_reasoning_effort(models::google::GEMINI_2_5_FLASH));
+    assert!(Provider::Gemini.supports_reasoning_effort(models::google::GEMINI_3_FLASH_PREVIEW));
 
     // Test model IDs as well
     assert!(ModelId::Gemini3ProPreview.supports_reasoning_effort());
-    assert!(ModelId::Gemini25Pro.supports_reasoning_effort());
+    assert!(ModelId::Gemini3FlashPreview.supports_reasoning_effort());
 }
 
 #[test]
@@ -512,10 +511,6 @@ fn gemini3_flash_extended_thinking_levels() {
     let pro_levels =
         GeminiProvider::supported_thinking_levels(models::google::GEMINI_3_PRO_PREVIEW);
     assert_eq!(pro_levels, vec!["low", "high"]);
-
-    let flash_25_levels =
-        GeminiProvider::supported_thinking_levels(models::google::GEMINI_2_5_FLASH);
-    assert_eq!(flash_25_levels, vec!["low", "high"]);
 }
 
 #[test]
@@ -625,7 +620,7 @@ fn convert_to_gemini_request_includes_advanced_parameters() {
 
     let request = LLMRequest {
         messages: vec![Message::user("test".to_string())],
-        model: models::google::GEMINI_2_5_FLASH.to_string(),
+        model: models::google::GEMINI_3_FLASH_PREVIEW.to_string(),
         top_p: Some(0.9),
         top_k: Some(40),
         presence_penalty: Some(0.6),
@@ -663,7 +658,7 @@ fn convert_to_gemini_request_includes_json_mode() {
 
     let request = LLMRequest {
         messages: vec![Message::user("test".to_string())],
-        model: models::google::GEMINI_2_5_FLASH.to_string(),
+        model: models::google::GEMINI_3_FLASH_PREVIEW.to_string(),
         output_format: Some(json!("json")),
         ..Default::default()
     };

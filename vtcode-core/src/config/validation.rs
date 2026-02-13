@@ -299,11 +299,11 @@ mod tests {
 
     #[test]
     fn validates_known_model() {
-        // This will succeed if google provider and gemini-2.5-flash exist
-        let result = validate_model_exists("google", "gemini-2.5-flash");
+        // This will succeed if google provider and gemini-3-flash-preview exist
+        let result = validate_model_exists("google", "gemini-3-flash-preview");
         assert!(
             result.is_ok(),
-            "Should validate gemini-2.5-flash for google provider"
+            "Should validate gemini-3-flash-preview for google provider"
         );
     }
 
@@ -321,7 +321,7 @@ mod tests {
 
     #[test]
     fn gets_context_window() {
-        let result = get_model_context_window("google", "gemini-2.5-flash");
+        let result = get_model_context_window("google", "gemini-3-flash-preview");
         assert!(result.is_ok(), "Should get context window");
 
         let context = result.unwrap();

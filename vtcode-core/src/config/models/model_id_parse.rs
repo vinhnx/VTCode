@@ -21,10 +21,8 @@ impl FromStr for ModelId {
         }
         match s {
             // Gemini models
-            s if s == models::GEMINI_2_5_FLASH_PREVIEW => Ok(ModelId::Gemini25FlashPreview),
-            s if s == models::GEMINI_2_5_FLASH => Ok(ModelId::Gemini25Flash),
-            s if s == models::GEMINI_2_5_FLASH_LITE => Ok(ModelId::Gemini25FlashLite),
-            s if s == models::GEMINI_2_5_PRO => Ok(ModelId::Gemini25Pro),
+            s if s == models::GEMINI_3_PRO_PREVIEW => Ok(ModelId::Gemini3ProPreview),
+            s if s == models::GEMINI_3_FLASH_PREVIEW => Ok(ModelId::Gemini3FlashPreview),
             // OpenAI models
             s if s == models::GPT_5 => Ok(ModelId::GPT5),
             s if s == models::openai::GPT_5_2 => Ok(ModelId::GPT52),
@@ -68,14 +66,6 @@ impl FromStr for ModelId {
             s if s == models::huggingface::OPENAI_GPT_OSS_120B => {
                 Ok(ModelId::HuggingFaceOpenAIGptOss120b)
             }
-            s if s == models::huggingface::ZAI_GLM_47 => Ok(ModelId::HuggingFaceGlm47),
-            s if s == models::huggingface::ZAI_GLM_47_NOVITA => Ok(ModelId::HuggingFaceGlm47Novita),
-            s if s == models::huggingface::MOONSHOT_KIMI_K2_THINKING => {
-                Ok(ModelId::HuggingFaceKimiK2Thinking)
-            }
-            s if s == models::huggingface::MOONSHOT_KIMI_K2_5_NOVITA => {
-                Ok(ModelId::HuggingFaceKimiK25Novita)
-            }
             s if s == models::huggingface::MINIMAX_M2_1_NOVITA => {
                 Ok(ModelId::HuggingFaceMinimaxM21Novita)
             }
@@ -93,12 +83,8 @@ impl FromStr for ModelId {
             s if s == models::xai::GROK_4_CODE_LATEST => Ok(ModelId::XaiGrok4CodeLatest),
             s if s == models::xai::GROK_4_VISION => Ok(ModelId::XaiGrok4Vision),
             // Z.AI models
-            s if s == models::zai::GLM_4_7 => Ok(ModelId::ZaiGlm47),
-            s if s == models::zai::GLM_4_7_DEEP_THINKING => Ok(ModelId::ZaiGlm47DeepThinking),
             s if s == models::zai::GLM_5 => Ok(ModelId::ZaiGlm5),
-            s if s == models::zai::GLM_4_32B_0414_128K => Ok(ModelId::ZaiGlm432b0414128k),
             // Moonshot models
-            s if s == models::moonshot::KIMI_K2_5 => Ok(ModelId::MoonshotKimiK25),
             // Ollama models
             s if s == models::ollama::GPT_OSS_20B => Ok(ModelId::OllamaGptOss20b),
             s if s == models::ollama::GPT_OSS_20B_CLOUD => Ok(ModelId::OllamaGptOss20bCloud),
@@ -109,15 +95,10 @@ impl FromStr for ModelId {
             s if s == models::ollama::MISTRAL_LARGE_3_675B_CLOUD => {
                 Ok(ModelId::OllamaMistralLarge3675bCloud)
             }
-            s if s == models::ollama::KIMI_K2_THINKING_CLOUD => {
-                Ok(ModelId::OllamaKimiK2ThinkingCloud)
-            }
-            s if s == models::ollama::KIMI_K2_5_CLOUD => Ok(ModelId::OllamaKimiK25Cloud),
-
             s if s == models::ollama::QWEN3_CODER_480B_CLOUD => {
                 Ok(ModelId::OllamaQwen3Coder480bCloud)
             }
-            s if s == models::ollama::GLM_47_CLOUD => Ok(ModelId::OllamaGlm47Cloud),
+            s if s == models::ollama::GLM_5_CLOUD => Ok(ModelId::OllamaGlm5Cloud),
             s if s == models::ollama::GEMINI_3_PRO_PREVIEW_LATEST_CLOUD => {
                 Ok(ModelId::OllamaGemini3ProPreviewLatestCloud)
             }

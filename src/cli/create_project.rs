@@ -84,7 +84,7 @@ edition = "2021"
 fn create_vtcode_config(project_path: &Path) -> Result<()> {
     let config_content = r#"# VT Code Configuration
 [model]
-name = "gemini-2.5-flash-preview-05-20"
+name = "gemini-3-flash-preview"
 
 [workspace]
 path = "."

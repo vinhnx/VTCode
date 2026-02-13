@@ -12,10 +12,6 @@ impl ModelId {
     pub fn all_models() -> Vec<ModelId> {
         let mut models = vec![
             // Gemini models
-            ModelId::Gemini25FlashPreview,
-            ModelId::Gemini25Flash,
-            ModelId::Gemini25FlashLite,
-            ModelId::Gemini25Pro,
             ModelId::Gemini3ProPreview,
             ModelId::Gemini3FlashPreview,
             // OpenAI models
@@ -50,15 +46,8 @@ impl ModelId {
             ModelId::XaiGrok4CodeLatest,
             ModelId::XaiGrok4Vision,
             // Z.AI models
-            ModelId::ZaiGlm4Plus,
-            ModelId::ZaiGlm4PlusDeepThinking,
-            ModelId::ZaiGlm47,
-            ModelId::ZaiGlm47DeepThinking,
-            ModelId::ZaiGlm47Flash,
             ModelId::ZaiGlm5,
-            ModelId::ZaiGlm432b0414128k,
             // Moonshot models
-            ModelId::MoonshotKimiK25,
             // Ollama models
             ModelId::OllamaGptOss20b,
             ModelId::OllamaGptOss20bCloud,
@@ -67,10 +56,8 @@ impl ModelId {
             ModelId::OllamaDeepseekV32Cloud,
             ModelId::OllamaQwen3Next80bCloud,
             ModelId::OllamaMistralLarge3675bCloud,
-            ModelId::OllamaKimiK2ThinkingCloud,
-            ModelId::OllamaKimiK25Cloud,
             ModelId::OllamaQwen3Coder480bCloud,
-            ModelId::OllamaGlm47Cloud,
+            ModelId::OllamaGlm5Cloud,
             ModelId::OllamaGemini3ProPreviewLatestCloud,
             ModelId::OllamaGemini3FlashPreviewCloud,
             ModelId::OllamaDevstral2123bCloud,
@@ -92,10 +79,6 @@ impl ModelId {
             ModelId::HuggingFaceDeepseekV32,
             ModelId::HuggingFaceOpenAIGptOss20b,
             ModelId::HuggingFaceOpenAIGptOss120b,
-            ModelId::HuggingFaceGlm47,
-            ModelId::HuggingFaceGlm47FlashNovita,
-            ModelId::HuggingFaceKimiK2Thinking,
-            ModelId::HuggingFaceKimiK25Novita,
             ModelId::HuggingFaceMinimaxM21Novita,
             ModelId::HuggingFaceDeepseekV32Novita,
             ModelId::HuggingFaceXiaomiMimoV2FlashNovita,

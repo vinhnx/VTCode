@@ -30,7 +30,7 @@ fn test_provider_factory_creation() {
     assert!(providers.contains(&"ollama".to_string()));
     assert!(providers.contains(&"lmstudio".to_string()));
     assert!(providers.contains(&"minimax".to_string()));
-    assert_eq!(providers.len(), 11);
+    assert_eq!(providers.len(), 13);
 }
 
 #[test]
@@ -63,15 +63,11 @@ fn test_provider_auto_detection() {
 
     // Test Gemini models
     assert_eq!(
-        factory.provider_from_model("gemini-2.5-flash"),
+        factory.provider_from_model("gemini-3-flash-preview"),
         Some("gemini".to_string())
     );
     assert_eq!(
-        factory.provider_from_model("gemini-2.5-flash-lite"),
-        Some("gemini".to_string())
-    );
-    assert_eq!(
-        factory.provider_from_model("gemini-2.5-pro"),
+        factory.provider_from_model("gemini-3-pro-preview"),
         Some("gemini".to_string())
     );
 
@@ -107,7 +103,7 @@ fn test_provider_auto_detection() {
 
     // Test Moonshot models
     assert_eq!(
-        factory.provider_from_model("kimi-k2-0905"),
+        factory.provider_from_model("kimi-k2.5"),
         Some("moonshot".to_string())
     );
 
@@ -117,7 +113,7 @@ fn test_provider_auto_detection() {
 
 #[test]
 fn infer_provider_respects_override_and_model() {
-    let provider = infer_provider(Some("openai"), "gemini-2.5-flash");
+    let provider = infer_provider(Some("openai"), "gemini-3-flash-preview");
     assert_eq!(provider, Some(Provider::OpenAI));
 
     let provider = infer_provider(None, models::CLAUDE_SONNET_4_5);
@@ -131,7 +127,7 @@ fn infer_provider_respects_override_and_model() {
 fn test_provider_creation() {
     // Test creating providers directly
     let gemini = create_provider_for_model(
-        "gemini-2.5-flash-preview-05-20",
+        "gemini-3-flash-preview",
         "test_key".to_string(),
         None,
     );
@@ -154,7 +150,7 @@ fn test_provider_creation() {
     let xai = create_provider_for_model(models::xai::GROK_4, "test_key".to_string(), None);
     assert!(xai.is_ok());
 
-    let moonshot = create_provider_for_model("kimi-k2-0905", "test_key".to_string(), None);
+    let moonshot = create_provider_for_model("kimi-k2.5", "test_key".to_string(), None);
     assert!(moonshot.is_ok());
 
     let ollama = create_provider_for_model(models::ollama::DEFAULT_MODEL, String::new(), None);
@@ -169,7 +165,7 @@ fn test_provider_creation() {
 fn test_unified_client_creation() {
     // Test creating unified clients for different providers
     let gemini_client = create_provider_for_model(
-        "gemini-2.5-flash-preview-05-20",
+        "gemini-3-flash-preview",
         "test_key".to_string(),
         None,
     );
@@ -207,7 +203,7 @@ fn test_unified_client_creation() {
         assert_eq!(client.name(), "xai");
     }
 
-    let moonshot_client = create_provider_for_model("kimi-k2-0905", "test_key".to_string(), None);
+    let moonshot_client = create_provider_for_model("kimi-k2.5", "test_key".to_string(), None);
     assert!(moonshot_client.is_ok());
     if let Ok(client) = moonshot_client {
         assert_eq!(client.name(), "moonshot");
@@ -251,12 +247,9 @@ fn test_provider_supported_models() {
     // Test that providers report correct supported models
     let gemini = GeminiProvider::new("test_key".to_string());
     let gemini_models = gemini.supported_models();
-    assert!(gemini_models.contains(&"gemini-2.5-flash".to_string()));
-    assert!(gemini_models.contains(&"gemini-2.5-flash-lite".to_string()));
-    assert!(gemini_models.contains(&"gemini-2.5-pro".to_string()));
-    assert!(gemini_models.contains(&"gemini-2.5-flash-lite-preview-06-17".to_string()));
-    assert!(gemini_models.contains(&"gemini-2.5-flash-preview-05-20".to_string()));
-    assert!(gemini_models.len() >= 5);
+    assert!(gemini_models.contains(&"gemini-3-flash-preview".to_string()));
+    assert!(gemini_models.contains(&"gemini-3-pro-preview".to_string()));
+    assert!(gemini_models.len() >= 2);
 
     let openai = OpenAIProvider::new("test_key".to_string());
     let openai_models = openai.supported_models();
@@ -289,7 +282,7 @@ fn test_provider_supported_models() {
 
     let moonshot = MoonshotProvider::new("test_key".to_string());
     let moonshot_models = moonshot.supported_models();
-    assert!(moonshot_models.contains(&"kimi-k2-0905".to_string()));
+    assert!(moonshot_models.contains(&"kimi-k2.5".to_string()));
     assert_eq!(moonshot_models.len(), 1);
 }
 
@@ -334,7 +327,7 @@ fn test_request_validation() {
         messages: vec![Message::user("test".to_string())],
         system_prompt: None,
         tools: None,
-        model: "gemini-2.5-flash-lite-preview-06-17".to_string(),
+        model: "gemini-3-flash-preview".to_string(),
         max_tokens: None,
         temperature: None,
         stream: false,
@@ -610,7 +603,7 @@ fn test_backward_compatibility() {
 
     // Test that the old make_client function still works
     use std::str::FromStr;
-    let model = ModelId::from_str("gemini-2.5-flash-preview-05-20").unwrap();
+    let model = ModelId::from_str("gemini-3-flash-preview").unwrap();
     let client = make_client("test_key".to_string(), model).expect("client should be created");
 
     // Should be able to get model ID

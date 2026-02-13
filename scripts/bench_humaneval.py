@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # HumanEval pass@1 + latency; vtcode-based; Gemini-friendly.
 # - Provider default: gemini
-# - Model default: gemini-2.5-flash-lite
+# - Model default: gemini-3-flash-preview
 # - Retries/backoff + sleep; robust code extraction; error surfacing.
 
 import os, re, json, time, tempfile, subprocess, sys, random, pathlib
@@ -16,7 +16,7 @@ except ModuleNotFoundError:
 # -------- Config (env) --------
 N = int(os.getenv("N_HE", "164"))                     # <= 164
 PROVIDER = os.getenv("PROVIDER", "gemini")            # gemini | openrouter | ollama ...
-MODEL = os.getenv("MODEL", "gemini-2.5-flash-lite")   # adjust to your catalog
+MODEL = os.getenv("MODEL", "gemini-3-flash-preview")   # adjust to your catalog
 USE_TOOLS = os.getenv("USE_TOOLS", "0") != "0"        # 0 => --no-tools
 TEMP = float(os.getenv("TEMP", "0.0"))
 MAX_OUT = int(os.getenv("MAX_OUT", "1024"))

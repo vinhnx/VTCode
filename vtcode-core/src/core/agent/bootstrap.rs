@@ -252,7 +252,7 @@ mod tests {
     async fn builds_default_component_set() {
         let temp_dir = tempfile::tempdir().expect("temp dir");
         let agent_config = AgentConfig {
-            model: models::GEMINI_2_5_FLASH_PREVIEW.to_string(),
+            model: models::google::GEMINI_3_FLASH_PREVIEW.to_string(),
             api_key: "test-api-key".to_owned(),
             provider: Provider::Gemini.to_string(),
             api_key_env: Provider::Gemini.default_api_key_env().to_string(),
@@ -286,7 +286,7 @@ mod tests {
     async fn allows_overriding_components() {
         let temp_dir = tempfile::tempdir().expect("temp dir");
         let agent_config = AgentConfig {
-            model: models::GEMINI_2_5_FLASH_PREVIEW.to_string(),
+            model: models::google::GEMINI_3_FLASH_PREVIEW.to_string(),
             api_key: "test-api-key".to_owned(),
             provider: Provider::Gemini.to_string(),
             api_key_env: Provider::Gemini.default_api_key_env().to_string(),
@@ -362,7 +362,7 @@ mod tests {
 
     fn sample_config(workspace: &std::path::Path) -> AgentConfig {
         AgentConfig {
-            model: models::GEMINI_2_5_FLASH_PREVIEW.to_string(),
+            model: models::google::GEMINI_3_FLASH_PREVIEW.to_string(),
             api_key: "test-api-key".to_owned(),
             provider: Provider::Gemini.to_string(),
             api_key_env: Provider::Gemini.default_api_key_env().to_string(),

@@ -123,33 +123,6 @@ pub fn reasoning_parameters_for(provider: Provider, effort: ReasoningEffortLevel
                 }
             }
         }
-        Provider::Moonshot => {
-            // Moonshot Kimi-K2-Thinking supports enhanced reasoning configuration
-            let reasoning_config = match effort {
-                ReasoningEffortLevel::None => return None,
-                ReasoningEffortLevel::Minimal => json!({
-                    "reasoning_effort": "minimal",
-                    "reasoning_steps_limit": 20,
-                    "reasoning_token_budget": 16000
-                }),
-                ReasoningEffortLevel::Low => json!({
-                    "reasoning_effort": "low",
-                    "reasoning_steps_limit": 60,
-                    "reasoning_token_budget": 48000
-                }),
-                ReasoningEffortLevel::Medium => json!({
-                    "reasoning_effort": "medium",
-                    "reasoning_steps_limit": 120,
-                    "reasoning_token_budget": 96000
-                }),
-                ReasoningEffortLevel::High | ReasoningEffortLevel::XHigh => json!({
-                    "reasoning_effort": "high",
-                    "reasoning_steps_limit": 300,
-                    "reasoning_token_budget": 128000
-                }),
-            };
-            Some(reasoning_config)
-        }
         Provider::Minimax => None,
         Provider::Ollama => None,
         Provider::LmStudio => None,

@@ -47,7 +47,7 @@ impl ManPageGenerator {
             .control("SH", ["OPTIONS"])
             .control("TP", [])
             .text([bold("-m"), roman(", "), bold("--model"), roman(" "), italic("MODEL")])
-            .text([roman("Specify the LLM model to use (default: gemini-2.5-flash-preview-05-20)")])
+            .text([roman("Specify the LLM model to use (default: gemini-3-flash-preview)")])
             .control("TP", [])
             .text([bold("-p"), roman(", "), bold("--provider"), roman(" "), italic("PROVIDER")])
             .text([
@@ -260,7 +260,7 @@ impl ManPageGenerator {
             .text([roman("Start basic chat session:")])
             .text([bold("  vtcode chat")])
             .text([roman("Start with specific model:")])
-            .text([bold("  vtcode --model gemini-2.5-pro chat")])
+            .text([bold("  vtcode --model gemini-3-pro-preview chat")])
             .control("SH", ["SEE ALSO"])
             .text([bold("vtcode(1)"), roman(", "), bold("vtcode-ask(1)"), roman(", "), bold("vtcode-analyze(1)")])
             .render();

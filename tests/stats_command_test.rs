@@ -5,7 +5,7 @@ use tokio::time::{Duration, sleep};
 use vtcode_core::{
     Agent,
     config::ReasoningEffortLevel,
-    config::constants::models::google::GEMINI_2_5_FLASH_PREVIEW,
+    config::constants::models::google::GEMINI_3_FLASH_PREVIEW,
     config::core::PromptCachingConfig,
     config::types::{AgentConfig, ModelSelectionSource, UiSurfacePreference},
     core::agent::snapshots::{
@@ -19,7 +19,7 @@ use vtcode_core::{
 async fn test_handle_stats_command_returns_agent_metrics() -> Result<()> {
     let temp_dir = TempDir::new()?;
     let config = AgentConfig {
-        model: GEMINI_2_5_FLASH_PREVIEW.to_string(),
+        model: GEMINI_3_FLASH_PREVIEW.to_string(),
         api_key: "test_key".to_string(),
         provider: "gemini".to_string(),
         api_key_env: "GEMINI_API_KEY".to_string(),

@@ -2,6 +2,7 @@
 //!
 //! This module provides a way to extract reasoning from content blocks
 //! that use tags like `<think>`, `<thought>`, or `<reasoning>` during streaming.
+//! Especially useful for Gemini 3 and GLM-5 models.
 
 use crate::llm::provider::LLMStreamEvent;
 

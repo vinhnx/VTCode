@@ -104,7 +104,7 @@ mod tests {
         // Test the logging functionality that would be called in the agent loop
         logger.log_route(
             1,
-            "gemini-2.5-flash",
+            "gemini-3-flash-preview",
             "standard",
             "test user input for logging",
         );
@@ -122,7 +122,7 @@ mod tests {
         let record: serde_json::Value = serde_json::from_str(lines[0]).unwrap();
         assert_eq!(record["kind"], "route");
         assert_eq!(record["turn"], 1);
-        assert_eq!(record["selected_model"], "gemini-2.5-flash");
+        assert_eq!(record["selected_model"], "gemini-3-flash-preview");
         assert_eq!(record["class"], "standard");
         assert_eq!(record["input_preview"], "test user input for logging");
         assert!(record["ts"].is_number());

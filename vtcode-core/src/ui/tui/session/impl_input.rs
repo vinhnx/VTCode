@@ -173,6 +173,12 @@ impl Session {
             } => {
                 command::show_diff_preview(self, file_path, before, after, hunks, current_hunk);
             }
+            InlineCommand::SetSkipConfirmations(skip) => {
+                self.skip_confirmations = skip;
+                if skip {
+                    self.close_modal();
+                }
+            }
             InlineCommand::Shutdown => {
                 self.request_exit();
             }

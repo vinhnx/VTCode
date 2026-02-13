@@ -41,14 +41,14 @@ pub(crate) async fn refine_user_prompt_if_enabled(
     cfg: &CoreAgentConfig,
     vt_cfg: Option<&VTCodeConfig>,
 ) -> String {
-    if std::env::var("VTCODE_PROMPT_REFINER_STUB").is_ok() {
-        return format!("[REFINED] {}", raw);
-    }
     let Some(vtc) = vt_cfg else {
         return raw.to_string();
     };
     if !vtc.agent.refine_prompts_enabled {
         return raw.to_string();
+    }
+    if std::env::var("VTCODE_PROMPT_REFINER_STUB").is_ok() {
+        return format!("[REFINED] {}", raw);
     }
 
     if !should_attempt_refinement(raw) {
@@ -551,7 +551,7 @@ mod tests {
         }
 
         let cfg = CoreAgentConfig {
-            model: vtcode_core::config::constants::models::google::GEMINI_2_5_FLASH_PREVIEW
+            model: vtcode_core::config::constants::models::google::GEMINI_3_FLASH_PREVIEW
                 .to_string(),
             api_key: "test".to_string(),
             provider: "gemini".to_string(),

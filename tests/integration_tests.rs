@@ -77,6 +77,7 @@ default_policy = "deny"
 
 [tools.policies]
 read_file = "allow"
+unified_file = "allow"
 "#;
 
         std::fs::write(workspace.join("vtcode.toml"), config_contents).unwrap();

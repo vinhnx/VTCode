@@ -13,7 +13,7 @@ use vtcode_core::{
 #[test]
 fn test_gemini_module_integration() {
     // Test that we can create a Gemini client with different configurations
-    let client = Client::new("test_key".to_string(), "gemini-2.5-flash".to_string());
+    let client = Client::new("test_key".to_string(), "gemini-3-flash-preview".to_string());
     assert_eq!(client.config().user_agent, "vtcode/1.0.0");
 
     // Test different client configurations
@@ -28,7 +28,7 @@ fn test_gemini_module_integration() {
 fn test_config_module_integration() {
     // Test that we can create and use configurations
     let config = VTCodeConfig::default();
-    assert_eq!(config.agent.provider, "openai");
+    assert_eq!(config.agent.provider, "anthropic");
     assert_eq!(config.tools.default_policy, ToolPolicy::Prompt);
 
     // Test that we can load configuration (will use defaults if no file)
@@ -47,6 +47,7 @@ fn test_config_module_integration() {
                 | "deepseek"
                 | "ollama"
                 | "lmstudio"
+                | "huggingface"
         ),
         "unexpected provider '{}' in loaded config",
         loaded_config.agent.provider

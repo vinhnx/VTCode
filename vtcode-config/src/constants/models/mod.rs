@@ -13,10 +13,6 @@ pub mod xai;
 pub mod zai;
 
 // Backwards compatibility - keep old constants working
-pub const GEMINI_2_5_FLASH_PREVIEW: &str = google::GEMINI_2_5_FLASH_PREVIEW;
-pub const GEMINI_2_5_FLASH: &str = google::GEMINI_2_5_FLASH;
-pub const GEMINI_2_5_PRO: &str = google::GEMINI_2_5_PRO;
-pub const GEMINI_2_5_FLASH_LITE: &str = google::GEMINI_2_5_FLASH_LITE;
 pub const GEMINI_3_PRO_PREVIEW: &str = google::GEMINI_3_PRO_PREVIEW;
 pub const GEMINI_3_FLASH_PREVIEW: &str = google::GEMINI_3_FLASH_PREVIEW;
 pub const GPT_5: &str = openai::GPT_5;

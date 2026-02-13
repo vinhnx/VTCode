@@ -65,7 +65,7 @@ impl TestContext {
         let registry = create_test_registry(&workspace).await;
         let active_styles = theme::active_styles();
         let theme_spec = theme_from_styles(&active_styles);
-        let session = spawn_session(
+        let mut session = spawn_session(
             theme_spec,
             None,
             vtcode_core::config::types::UiSurfacePreference::default(),
@@ -74,6 +74,8 @@ impl TestContext {
             None,
         )
         .unwrap();
+        // Skip confirmations for tests to ensure non-interactive success
+        session.set_skip_confirmations(true);
         let handle = session.clone_inline_handle();
         let renderer = create_test_renderer(&handle);
         let approval_recorder = vtcode_core::tools::ApprovalRecorder::new(workspace.clone());
@@ -198,11 +200,6 @@ fn test_process_tool_output_loop_detection() {
 
 #[tokio::test]
 async fn test_run_tool_call_unknown_tool_failure() {
-    if !stdin().is_terminal() {
-        eprintln!("Skipping TUI-dependent test in non-interactive environment");
-        return;
-    }
-
     let mut test_ctx = TestContext::new().await;
     let mut registry = test_ctx.registry;
 
@@ -271,12 +268,8 @@ async fn test_run_tool_call_unknown_tool_failure() {
 
 #[tokio::test]
 async fn test_run_tool_call_respects_max_tool_calls_budget() {
-    if !stdin().is_terminal() {
-        eprintln!("Skipping TUI-dependent test in non-interactive environment");
-        return;
-    }
-
     let mut test_ctx = TestContext::new().await;
+    test_ctx.session.set_skip_confirmations(false);
     let mut registry = test_ctx.registry;
 
     let permission_cache_arc = Arc::new(tokio::sync::RwLock::new(ToolPermissionCache::new()));
@@ -289,6 +282,7 @@ async fn test_run_tool_call_respects_max_tool_calls_budget() {
     let tools = Arc::new(tokio::sync::RwLock::new(Vec::new()));
 
     let mut harness_state = build_harness_state_with(1);
+    harness_state.record_tool_call(); // Exhaust the budget (1/1)
     let mut ctx = crate::agent::runloop::unified::run_loop_context::RunLoopContext {
         renderer: &mut test_ctx.renderer,
         handle: &test_ctx.handle,
@@ -322,13 +316,15 @@ async fn test_run_tool_call_respects_max_tool_calls_budget() {
         &ctrl_c_notify,
         None,
         None,
-        true,
+        false,
         None,
         0,
         false,
     )
     .await
     .expect("run_tool_call must run");
+
+    println!("Outcome status: {:?}", outcome.status);
 
     match outcome.status {
         ToolExecutionStatus::Failure { error } => {
@@ -340,11 +336,6 @@ async fn test_run_tool_call_respects_max_tool_calls_budget() {
 
 #[tokio::test]
 async fn test_run_tool_call_auto_switches_plan_mode_for_mutating_tool() {
-    if !stdin().is_terminal() {
-        eprintln!("Skipping TUI-dependent test in non-interactive environment");
-        return;
-    }
-
     let mut test_ctx = TestContext::new().await;
     let mut registry = test_ctx.registry;
 
@@ -408,10 +399,12 @@ async fn test_run_tool_call_auto_switches_plan_mode_for_mutating_tool() {
         true,
         None,
         0,
-        false,
+        true,
     )
     .await
     .expect("run_tool_call must run");
+
+    println!("Auto-switch test outcome status: {:?}", outcome.status);
 
     assert!(matches!(
         outcome.status,

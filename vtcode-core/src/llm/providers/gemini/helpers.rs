@@ -19,12 +19,10 @@ impl GeminiProvider {
 
     /// Get maximum input token limit for a model
     pub fn max_input_tokens(model: &str) -> usize {
-        if model.contains("2.5")
-            || model.contains("3")
-            || model.contains("2.0")
+        if model.contains("3")
             || model.contains("1.5-pro")
         {
-            2_097_152 // 2M tokens for Gemini 1.5 Pro, 2.x and 3.x models
+            2_097_152 // 2M tokens for Gemini 1.5 Pro and 3.x models
         } else {
             1_048_576 // 1M tokens for other current models
         }
@@ -32,8 +30,8 @@ impl GeminiProvider {
 
     /// Get maximum output token limit for a model
     pub fn max_output_tokens(model: &str) -> usize {
-        if model.contains("2.5") || model.contains("3") {
-            65_536 // 65K tokens for Gemini 2.5 and 3 models
+        if model.contains("3") {
+            65_536 // 65K tokens for Gemini 3 models
         } else {
             8_192 // Conservative default
         }
@@ -51,8 +49,8 @@ impl GeminiProvider {
         if model.contains("gemini-3-flash") {
             // Gemini 3 Flash supports all levels
             vec!["minimal", "low", "medium", "high"]
-        } else if model.contains("gemini-3") || model.contains("gemini-2.5") {
-            // Gemini 3 Pro and Gemini 2.5 models support low and high
+        } else if model.contains("gemini-3") {
+            // Gemini 3 Pro supports low and high
             vec!["low", "high"]
         } else {
             // Unknown model, conservative default

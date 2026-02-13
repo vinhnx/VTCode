@@ -8,16 +8,6 @@ impl ModelId {
         }
         match self {
             // Gemini models
-            ModelId::Gemini25FlashPreview => {
-                "Latest fast Gemini model with advanced multimodal capabilities"
-            }
-            ModelId::Gemini25Flash => {
-                "Legacy alias for Gemini 2.5 Flash Preview (same capabilities)"
-            }
-            ModelId::Gemini25FlashLite => {
-                "Legacy alias for Gemini 2.5 Flash Preview optimized for efficiency"
-            }
-            ModelId::Gemini25Pro => "Latest most capable Gemini model with reasoning",
             ModelId::Gemini3ProPreview => {
                 "Preview of next-generation Gemini 3 Pro model with advanced reasoning and capabilities"
             }
@@ -90,24 +80,10 @@ impl ModelId {
             }
             ModelId::XaiGrok4Vision => "Multimodal Grok 4 model with image understanding",
             // Z.AI models
-            ModelId::ZaiGlm4Plus | ModelId::ZaiGlm4PlusDeepThinking => {
-                "Z.AI flagship model with top-tier capability in reasoning, writing, and tool-use"
-            }
-            ModelId::ZaiGlm47 | ModelId::ZaiGlm47DeepThinking => {
-                "Latest Z.AI GLM flagship with enhanced reasoning, 200k context and coding strengths"
-            }
-            ModelId::ZaiGlm47Flash => {
-                "Z.AI GLM-4.7-Flash 30B-class SOTA lightweight model - Completely free, high-speed, optimized for agentic coding with enhanced reasoning capabilities"
-            }
             ModelId::ZaiGlm5 => {
                 "Z.ai flagship GLM-5 foundation model engineered for complex systems design and long-horizon agent workflows"
             }
-            ModelId::ZaiGlm432b0414128k => {
-                "Legacy GLM 4 32B deployment offering extended 128K context window"
-            }
-            ModelId::MoonshotKimiK25 => {
-                "Kimi K2.5 multimodal model supporting text + vision, thinking modes, tool calls, JSON mode, and long-context reasoning"
-            }
+            // Ollama models
             ModelId::OllamaGptOss20b => {
                 "Local GPT-OSS 20B deployment served via Ollama with no external API dependency"
             }
@@ -129,13 +105,7 @@ impl ModelId {
             ModelId::OllamaMistralLarge3675bCloud => {
                 "Mistral Large 3 675B reasoning model via Ollama Cloud for complex problem-solving"
             }
-            ModelId::OllamaKimiK2ThinkingCloud => {
-                "MoonshotAI Kimi K2 thinking model via Ollama Cloud with explicit reasoning traces"
-            }
-            ModelId::OllamaKimiK25Cloud => {
-                "MoonshotAI Kimi K2.5 versatile multimodal model via Ollama Cloud with reasoning support"
-            }
-            ModelId::OllamaGlm47Cloud => "Advancing the Coding Capability",
+            ModelId::OllamaGlm5Cloud => "Cloud-hosted GLM-5 model served via Ollama Cloud",
             ModelId::OllamaMinimaxM21Cloud => {
                 "Exceptional multilingual capabilities to elevate code engineering"
             }
@@ -186,16 +156,6 @@ impl ModelId {
             }
             ModelId::HuggingFaceOpenAIGptOss20b => "OpenAI GPT-OSS 20B via Hugging Face router",
             ModelId::HuggingFaceOpenAIGptOss120b => "OpenAI GPT-OSS 120B via Hugging Face router",
-            ModelId::HuggingFaceGlm47 => "Z.AI GLM-4.7 via Hugging Face router",
-            ModelId::HuggingFaceGlm47FlashNovita => {
-                "Z.AI GLM-4.7-Flash via Novita inference provider on HuggingFace router. Lightweight model optimized for agentic coding."
-            }
-            ModelId::HuggingFaceKimiK2Thinking => {
-                "MoonshotAI Kimi K2 Thinking via Hugging Face router"
-            }
-            ModelId::HuggingFaceKimiK25Novita => {
-                "MoonshotAI Kimi K2.5 via Novita inference provider on Hugging Face router"
-            }
             ModelId::HuggingFaceMinimaxM21Novita => {
                 "MiniMax-M2.1 model via Novita inference provider on HuggingFace router. Enhanced reasoning capabilities."
             }

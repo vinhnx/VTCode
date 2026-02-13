@@ -464,11 +464,11 @@ mod integration_tests {
         );
     }
 
-    #[tokio::test]
-    async fn test_tool_descriptions_are_trimmed() {
+    #[test]
+    fn test_tool_descriptions_are_trimmed() {
         // Validate that all tool descriptions in the system are properly trimmed
         let temp_dir = TempDir::new().unwrap();
-        let _registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+        // Skip registry creation as it is async and we use snapshot helper instead
 
         // This would require accessing tool descriptions via registry API
         // For demonstration, we validate the schema structure
@@ -486,8 +486,8 @@ mod integration_tests {
         }
     }
 
-    #[tokio::test]
-    async fn test_tool_parameter_schemas_are_consistent() {
+    #[test]
+    fn test_tool_parameter_schemas_are_consistent() {
         let schemas = snapshot_current_tool_schemas().unwrap();
 
         for (tool_name, schema) in schemas {

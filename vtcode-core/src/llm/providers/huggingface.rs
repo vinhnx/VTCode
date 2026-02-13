@@ -110,7 +110,7 @@ impl HuggingFaceProvider {
             });
         }
 
-        if lower.contains("glm-4") && !model.contains(':') {
+        if lower.contains("glm-5") && !model.contains(':') {
             return Err(LLMError::Provider {
                 message: format_llm_error(
                     PROVIDER_NAME,

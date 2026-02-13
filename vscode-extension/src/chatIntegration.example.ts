@@ -142,7 +142,7 @@ const packageJsonUpdates = {
                 },
                 "vtcode.chat.defaultModel": {
                     type: "string",
-                    default: "gemini-2.5-flash-lite",
+                    default: "gemini-3-flash-preview",
                     description: "Default LLM model to use for chat",
                 },
             },

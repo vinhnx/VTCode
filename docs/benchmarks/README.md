@@ -22,14 +22,14 @@ VT Code is evaluated on industry-standard benchmarks to measure:
 
 **MAJOR ACHIEVEMENT: gpt-5-nano achieves frontier-tier performance (94.5%)**
 
-![Comparison Chart](../../docs/benchmarks/reports/comparison_gemini-2.5-flash-lite_vs_gpt-5-nano.png)
+![Comparison Chart](../../docs/benchmarks/reports/comparison_gemini-3-flash-preview_vs_gpt-5-nano.png)
 
 **Two models benchmarked:**
 
 | Model                 | Provider | Pass@1    | Passed  | Failed | Latency (P50) | Cost           |
 | --------------------- | -------- | --------- | ------- | ------ | ------------- | -------------- |
 | **gpt-5-nano**        | OpenAI   | **94.5%** | 155/164 | 9/164  | 10.4s         | ~$0.10-0.30/1M |
-| gemini-2.5-flash-lite | Google   | 61.6%     | 101/164 | 63/164 | 0.97s         | $0.00 (free)   |
+| gemini-3-flash-preview | Google   | 61.6%     | 101/164 | 63/164 | 0.97s         | $0.00 (free)   |
 
 **Configuration:** `temperature=0.0`, `seed=42`, `timeout=120s`
 
@@ -43,7 +43,7 @@ VT Code is evaluated on industry-standard benchmarks to measure:
 -   10-50x cheaper than premium competitors
 -   10.4s median latency
 
-**gemini-2.5-flash-lite:**
+**gemini-3-flash-preview:**
 
 -   10x faster (0.97s)
 -   Completely FREE (Google free tier)
@@ -54,7 +54,7 @@ VT Code is evaluated on industry-standard benchmarks to measure:
 **Strategic Choice:**
 
 -   Use **gpt-5-nano** for production validation and critical tasks
--   Use **gemini-2.5-flash-lite** for development and prototyping
+-   Use **gemini-3-flash-preview** for development and prototyping
 
 See [GPT5_NANO_VS_GEMINI.md](GPT5_NANO_VS_GEMINI.md) for detailed comparison.
 | Estimated Cost | $0.0000 |
@@ -65,7 +65,7 @@ See [GPT5_NANO_VS_GEMINI.md](GPT5_NANO_VS_GEMINI.md) for detailed comparison.
 
 | Model                      | Pass@1 | Latency (P50) | Cost (est.) |
 | -------------------------- | ------ | ------------- | ----------- |
-| gemini-2.5-flash-lite      | 61.6%  | 0.97s         | $0.00       |
+| gemini-3-flash-preview      | 61.6%  | 0.97s         | $0.00       |
 | _More results coming soon_ | -      | -             | -           |
 
 ### Methodology
@@ -92,10 +92,10 @@ cargo build --release
 
 ```bash
 # Run full benchmark (164 tasks)
-make bench-humaneval PROVIDER=gemini MODEL='gemini-2.5-flash-lite'
+make bench-humaneval PROVIDER=gemini MODEL='gemini-3-flash-preview'
 
 # Run subset for quick testing
-make bench-humaneval PROVIDER=gemini MODEL='gemini-2.5-flash-lite' N_HE=10
+make bench-humaneval PROVIDER=gemini MODEL='gemini-3-flash-preview' N_HE=10
 
 # Run with custom parameters
 make bench-humaneval \
@@ -112,7 +112,7 @@ make bench-humaneval \
 | Variable       | Default                 | Description                                    |
 | -------------- | ----------------------- | ---------------------------------------------- |
 | `PROVIDER`     | `gemini`                | LLM provider (gemini, openai, anthropic, etc.) |
-| `MODEL`        | `gemini-2.5-flash-lite` | Model identifier                               |
+| `MODEL`        | `gemini-3-flash-preview` | Model identifier                               |
 | `N_HE`         | `164`                   | Number of tasks to run (max 164)               |
 | `SEED`         | `1337`                  | Random seed for reproducibility                |
 | `USE_TOOLS`    | `0`                     | Enable tool usage (0=disabled, 1=enabled)      |
