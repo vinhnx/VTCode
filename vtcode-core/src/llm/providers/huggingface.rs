@@ -278,7 +278,8 @@ impl HuggingFaceProvider {
         if let Some(effort) = request.reasoning_effort {
             use crate::config::models::Provider;
             use crate::llm::rig_adapter::reasoning_parameters_for;
-            if let Some(reasoning_params) = reasoning_parameters_for(Provider::HuggingFace, effort) {
+            if let Some(reasoning_params) = reasoning_parameters_for(Provider::HuggingFace, effort)
+            {
                 if let Some(params_obj) = reasoning_params.as_object() {
                     for (k, v) in params_obj {
                         payload[k] = v.clone();

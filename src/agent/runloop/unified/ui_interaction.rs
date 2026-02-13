@@ -5,6 +5,9 @@ use std::time::Duration;
 use super::progress::{ProgressReporter, ProgressState};
 #[allow(unused_imports)]
 use super::reasoning::{analyze_reasoning, is_giving_up_reasoning};
+use crate::agent::runloop::unified::plan_blocks::{
+    ProposedPlanStreamParser, extract_proposed_plan,
+};
 use vtcode_core::llm::providers::clean_reasoning_text;
 
 use anyhow::{Error, Result};
@@ -580,6 +583,7 @@ pub(crate) async fn stream_and_render_response_with_options(
     const MAX_PENDING_CONTENT_BYTES: usize = 4_096;
 
     let mut suppress_reasoning_due_to_duplication = false;
+    let mut plan_parser = ProposedPlanStreamParser::new();
 
     // Track streaming progress
     let mut token_count = 0;
@@ -619,6 +623,7 @@ pub(crate) async fn stream_and_render_response_with_options(
         match event_result {
             Ok(LLMStreamEvent::Token { delta }) => {
                 token_count += 1;
+                let visible_delta = plan_parser.consume(&delta);
                 if !reasoning_emitted && reasoning_token_count > 0 && !reasoning_state.is_deferred()
                 {
                     let rendered = reasoning_state
@@ -641,15 +646,18 @@ pub(crate) async fn stream_and_render_response_with_options(
                 // Don't finish spinner during streaming if defer_finish is enabled
                 // This keeps the loading indicator active for better UX during tool execution
                 finish_spinner(&mut spinner_active, false);
+                if visible_delta.is_empty() {
+                    continue;
+                }
                 if !reasoning_accumulated.trim().is_empty() && !emitted_tokens {
-                    pending_content.push_str(&delta);
+                    pending_content.push_str(&visible_delta);
                     if pending_content.len() >= MAX_PENDING_CONTENT_BYTES {
                         content_suppressed = true;
                     }
                     continue;
                 }
 
-                aggregated.push_str(&delta);
+                aggregated.push_str(&visible_delta);
                 if supports_streaming_markdown {
                     rendered_line_count = renderer
                         .stream_markdown_response(&aggregated, rendered_line_count)
@@ -696,6 +704,24 @@ pub(crate) async fn stream_and_render_response_with_options(
 
     // Stream completed successfully - finish spinner unless deferred
     finish_spinner(&mut spinner_active, false);
+
+    let trailing_plan_parse = plan_parser.finish();
+    if !trailing_plan_parse.stripped_text.is_empty() {
+        if !reasoning_accumulated.trim().is_empty() && !emitted_tokens {
+            pending_content.push_str(&trailing_plan_parse.stripped_text);
+            if pending_content.len() >= MAX_PENDING_CONTENT_BYTES {
+                content_suppressed = true;
+            }
+        } else {
+            aggregated.push_str(&trailing_plan_parse.stripped_text);
+            if supports_streaming_markdown {
+                rendered_line_count = renderer
+                    .stream_markdown_response(&aggregated, rendered_line_count)
+                    .map_err(|err| map_render_error(provider_name, err))?;
+                emitted_tokens = true;
+            }
+        }
+    }
 
     let response = match final_response {
         Some(response) => response,
@@ -765,7 +791,17 @@ pub(crate) async fn stream_and_render_response_with_options(
     // CRITICAL: Ensure content is ALWAYS displayed.
     // If response has content but we didn't stream any tokens, render it now.
     // This handles providers that send content only in the Completed event.
-    if !content_suppressed && let Some(content) = response.content.as_deref() {
+    let content_for_render = response
+        .content
+        .as_deref()
+        .map(extract_proposed_plan)
+        .map(|extraction| extraction.stripped_text);
+    let has_renderable_content = content_for_render
+        .as_deref()
+        .map(|content| !content.trim().is_empty())
+        .unwrap_or(false);
+
+    if !content_suppressed && let Some(content) = content_for_render.as_deref() {
         let content_trimmed = content.trim();
         if !content_trimmed.is_empty() {
             let reasoning_dupes_content = response
@@ -819,7 +855,7 @@ pub(crate) async fn stream_and_render_response_with_options(
 
     // Finalize reasoning display (only if we haven't already in the content block above)
     let rendered_reasoning_before = reasoning_state.rendered_reasoning();
-    if response.content.is_none()
+    if !has_renderable_content
         || aggregated.trim().is_empty()
         || suppress_reasoning_due_to_duplication
     {
@@ -838,7 +874,7 @@ pub(crate) async fn stream_and_render_response_with_options(
     // In that case, render the reasoning as the user-visible response to avoid an empty output.
     if !emitted_tokens
         && aggregated.trim().is_empty()
-        && response.content.is_none()
+        && !has_renderable_content
         && !rendered_reasoning_before
         && let Some(reasoning) = response.reasoning.as_deref()
     {

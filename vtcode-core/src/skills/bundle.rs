@@ -45,13 +45,14 @@ pub fn export_skill_bundle(skill_root: &Path) -> Result<Vec<u8>> {
     let mut buf = Vec::new();
     {
         let cursor = std::io::Cursor::new(&mut buf);
-        let mut zip_writer =
-            zip::ZipWriter::new(cursor);
+        let mut zip_writer = zip::ZipWriter::new(cursor);
         let options = zip::write::SimpleFileOptions::default()
             .compression_method(zip::CompressionMethod::Deflated);
 
         add_dir_to_zip(&mut zip_writer, skill_root, skill_root, options)?;
-        zip_writer.finish().context("Failed to finalize zip archive")?;
+        zip_writer
+            .finish()
+            .context("Failed to finalize zip archive")?;
     }
 
     info!(
@@ -86,8 +87,8 @@ fn add_dir_to_zip<W: Write + std::io::Seek>(
             zip_writer
                 .start_file(&name, options)
                 .with_context(|| format!("starting file {name}"))?;
-            let data = fs::read(&path)
-                .with_context(|| format!("reading file {}", path.display()))?;
+            let data =
+                fs::read(&path).with_context(|| format!("reading file {}", path.display()))?;
             zip_writer.write_all(&data)?;
         }
     }
@@ -113,9 +114,7 @@ pub fn import_skill_bundle(zip_bytes: &[u8], dest_store: &Path) -> Result<Import
     extract_zip_safely(zip_bytes, temp_path)?;
 
     let skill_md_path = find_skill_md(temp_path)?;
-    let skill_root = skill_md_path
-        .parent()
-        .unwrap_or(temp_path);
+    let skill_root = skill_md_path.parent().unwrap_or(temp_path);
 
     validate_extracted_bundle(skill_root)?;
 
@@ -196,10 +195,7 @@ fn extract_zip_safely(zip_bytes: &[u8], dest: &Path) -> Result<()> {
         let out_path = dest.join(&raw_name);
 
         if !out_path.starts_with(dest) {
-            bail!(
-                "Zip entry escapes destination: {}",
-                out_path.display()
-            );
+            bail!("Zip entry escapes destination: {}", out_path.display());
         }
 
         if file.is_dir() {
@@ -265,9 +261,7 @@ fn validate_extracted_bundle(skill_root: &Path) -> Result<()> {
     validate_dir_recursive(skill_root, skill_root, &mut file_count, &mut total_size)?;
 
     if file_count > MAX_FILE_COUNT as u64 {
-        bail!(
-            "Bundle contains {file_count} files, exceeds maximum {MAX_FILE_COUNT}"
-        );
+        bail!("Bundle contains {file_count} files, exceeds maximum {MAX_FILE_COUNT}");
     }
 
     Ok(())
@@ -288,9 +282,7 @@ fn validate_dir_recursive(
         }
 
         let canonical = path.canonicalize().unwrap_or_else(|_| path.clone());
-        let root_canonical = root
-            .canonicalize()
-            .unwrap_or_else(|_| root.to_path_buf());
+        let root_canonical = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
         if !canonical.starts_with(&root_canonical) {
             bail!(
                 "Path traversal detected: {} escapes bundle root",

@@ -268,7 +268,9 @@ impl LLMProvider for ZAIProvider {
                                 }
                             }
 
-                            if let Some(reasoning) = delta.get("reasoning_content").and_then(|c| c.as_str()) {
+                            if let Some(reasoning) =
+                                delta.get("reasoning_content").and_then(|c| c.as_str())
+                            {
                                 if let Some(d) = aggregator.handle_reasoning(reasoning) {
                                     let _ = tx.send(Ok(LLMStreamEvent::Reasoning { delta: d }));
                                 }

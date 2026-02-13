@@ -4,8 +4,8 @@ use serde_json::json;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tempfile::TempDir;
-use vtcode_core::mcp::McpClient;
 use vtcode_core::config::mcp::McpClientConfig;
+use vtcode_core::mcp::McpClient;
 use vtcode_core::tools::ToolRegistry;
 
 fn create_test_mcp_client() -> Arc<McpClient> {

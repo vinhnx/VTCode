@@ -65,8 +65,8 @@ const UNIFIED_TOOL_GUIDANCE: &str = r#"**Search & exploration**:
 
 /// Shared Plan Mode header used by both static and incremental prompt builders.
 pub const PLAN_MODE_READ_ONLY_HEADER: &str = "# PLAN MODE (READ-ONLY)";
-/// Shared Plan Mode notice line describing temporary discovery auto-switching.
-pub const PLAN_MODE_READ_ONLY_NOTICE_LINE: &str = "Plan Mode is active. Mutating tools are normally blocked except for `.vtcode/plans/` directory. The system may temporarily switch to Edit mode for discovery tools and then return.";
+/// Shared Plan Mode notice line describing strict read-only enforcement.
+pub const PLAN_MODE_READ_ONLY_NOTICE_LINE: &str = "Plan Mode is active. Mutating tools are blocked except for optional plan artifact writes under `.vtcode/plans/`.";
 /// Shared Plan Mode instruction line for transitioning to implementation.
 pub const PLAN_MODE_EXIT_INSTRUCTION_LINE: &str =
     "Call `exit_plan_mode` when ready to transition to implementation.";
@@ -159,6 +159,7 @@ Use plans for non-trivial, multi-step work (4+ steps, dependencies, ambiguity):
 - If scope changes mid-task, call `update_plan` with rationale
 - After completion, mark all `completed`; do NOT repeat the plan in output
 - For complex multi-hour tasks, use ExecPlans (see `docs/harness/EXEC_PLANS.md`)
+- In Plan Mode, `update_plan` is not allowed; use `<proposed_plan>...</proposed_plan>` output instead
 
 ## Tool Guidelines
 
@@ -185,7 +186,6 @@ __UNIFIED_TOOL_GUIDANCE__
 
 Plan Mode blocks mutating tools. Read-only tools always available. Exception: `.vtcode/plans/` is writable.
 
-- System may temporarily switch to Edit mode for discovery, then return
 - When user signals implementation intent, call `exit_plan_mode` for confirmation dialog
 - Do NOT auto-exit just because a plan exists
 
@@ -199,7 +199,6 @@ When you guess wrong about commands or workflows, report it -- the system improv
 2. Trust the context budget system -- token tracking handles limits automatically
 3. Focus on quality over speed
 4. Do NOT mention context limits, token counts, or "wrapping up" in outputs"#;
-
 
 pub fn default_system_prompt() -> &'static str {
     DEFAULT_SYSTEM_PROMPT

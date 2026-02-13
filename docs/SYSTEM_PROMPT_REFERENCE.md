@@ -89,6 +89,7 @@ Use plans for non-trivial, multi-step work (4+ steps, dependencies, ambiguity):
 - Mark steps `completed` as you finish; keep exactly one `in_progress`
 - If scope changes mid-task, call `update_plan` with rationale
 - After completion, mark all steps `completed`; do NOT repeat the plan in output
+- In Plan Mode, `update_plan` is blocked; use `<proposed_plan>...</proposed_plan>` instead
 
 High-quality plan example:
 1. Read existing tool trait definitions

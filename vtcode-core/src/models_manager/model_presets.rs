@@ -521,31 +521,29 @@ fn xai_presets() -> Vec<ModelPreset> {
 }
 
 fn zai_presets() -> Vec<ModelPreset> {
-    vec![
-        ModelPreset {
-            id: "glm-5".to_string(),
-            model: "glm-5".to_string(),
-            display_name: "GLM-5".to_string(),
-            description: "Z.ai's flagship open-source foundation model for complex systems".to_string(),
-            provider: Provider::ZAI,
-            default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Medium,
-                    description: "Balanced".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::High,
-                    description: "Deep thinking".to_string(),
-                },
-            ],
-            is_default: true,
-            upgrade: None,
-            show_in_picker: true,
-            supported_in_api: true,
-            context_window: Some(200_000),
-        },
-    ]
+    vec![ModelPreset {
+        id: "glm-5".to_string(),
+        model: "glm-5".to_string(),
+        display_name: "GLM-5".to_string(),
+        description: "Z.ai's flagship open-source foundation model for complex systems".to_string(),
+        provider: Provider::ZAI,
+        default_reasoning_effort: ReasoningEffortLevel::Medium,
+        supported_reasoning_efforts: vec![
+            ReasoningEffortPreset {
+                effort: ReasoningEffortLevel::Medium,
+                description: "Balanced".to_string(),
+            },
+            ReasoningEffortPreset {
+                effort: ReasoningEffortLevel::High,
+                description: "Deep thinking".to_string(),
+            },
+        ],
+        is_default: true,
+        upgrade: None,
+        show_in_picker: true,
+        supported_in_api: true,
+        context_window: Some(200_000),
+    }]
 }
 
 fn minimax_presets() -> Vec<ModelPreset> {

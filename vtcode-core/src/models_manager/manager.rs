@@ -516,7 +516,9 @@ mod tests {
     #[tokio::test]
     async fn test_construct_model_family() {
         let manager = ModelsManager::new();
-        let family = manager.construct_model_family("gemini-3-flash-preview").await;
+        let family = manager
+            .construct_model_family("gemini-3-flash-preview")
+            .await;
         assert_eq!(family.family, "gemini-3");
         assert_eq!(family.provider, Provider::Gemini);
     }

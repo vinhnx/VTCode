@@ -112,9 +112,11 @@ fn convert_from_gemini_response_extracts_tool_calls() {
         usage_metadata: None,
     };
 
-    let llm_response =
-        GeminiProvider::convert_from_gemini_response(response, models::google::GEMINI_3_FLASH_PREVIEW.to_string())
-            .expect("conversion should succeed");
+    let llm_response = GeminiProvider::convert_from_gemini_response(
+        response,
+        models::google::GEMINI_3_FLASH_PREVIEW.to_string(),
+    )
+    .expect("conversion should succeed");
 
     assert_eq!(llm_response.content.as_deref(), Some("Here you go"));
     let calls = llm_response
@@ -358,9 +360,11 @@ fn thought_signature_preserved_in_function_call_response() {
         usage_metadata: None,
     };
 
-    let llm_response =
-        GeminiProvider::convert_from_gemini_response(response, models::google::GEMINI_3_PRO_PREVIEW.to_string())
-            .expect("conversion should succeed");
+    let llm_response = GeminiProvider::convert_from_gemini_response(
+        response,
+        models::google::GEMINI_3_PRO_PREVIEW.to_string(),
+    )
+    .expect("conversion should succeed");
 
     let tool_calls = llm_response.tool_calls.expect("should have tool calls");
     assert_eq!(tool_calls.len(), 1);
@@ -457,9 +461,11 @@ fn parallel_function_calls_single_signature() {
         usage_metadata: None,
     };
 
-    let llm_response =
-        GeminiProvider::convert_from_gemini_response(response, models::google::GEMINI_3_PRO_PREVIEW.to_string())
-            .expect("conversion should succeed");
+    let llm_response = GeminiProvider::convert_from_gemini_response(
+        response,
+        models::google::GEMINI_3_PRO_PREVIEW.to_string(),
+    )
+    .expect("conversion should succeed");
 
     let tool_calls = llm_response.tool_calls.expect("should have tool calls");
     assert_eq!(tool_calls.len(), 2);

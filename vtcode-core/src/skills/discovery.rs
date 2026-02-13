@@ -504,24 +504,8 @@ pub fn tool_config_to_skill_context(config: &CliToolConfig) -> Result<SkillConte
         description: config.description.clone(),
         version: Some("1.0.0".to_string()),
         author: Some("VT Code CLI Discovery".to_string()),
-        license: None,
-        model: None,
-        mode: None,
-        vtcode_native: None,
-        allowed_tools: None,
-        disable_model_invocation: None,
-        when_to_use: None,
-        argument_hint: None,
-        user_invocable: None,
-        context: None,
-        agent: None,
-        hooks: None,
-        requires_container: None,
-        disallow_container: None,
-        compatibility: None,
         variety: SkillVariety::SystemUtility,
-        metadata: None,
-        tools: None,
+        ..Default::default()
     };
 
     Ok(SkillContext::MetadataOnly(

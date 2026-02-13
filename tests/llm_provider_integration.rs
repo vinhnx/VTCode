@@ -53,11 +53,8 @@ fn test_provider_creation() {
 #[test]
 fn test_unified_client_creation() {
     // Test creating providers for different models
-    let gemini_client = create_provider_for_model(
-        "gemini-3-flash-preview",
-        "test_key".to_string(),
-        None,
-    );
+    let gemini_client =
+        create_provider_for_model("gemini-3-flash-preview", "test_key".to_string(), None);
     assert!(gemini_client.is_ok());
 
     let openai_client = create_provider_for_model("gpt-5", "test_key".to_string(), None);

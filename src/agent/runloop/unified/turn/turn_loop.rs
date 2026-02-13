@@ -577,6 +577,7 @@ pub async fn run_turn_loop(
             &response,
             turn_processing_ctx.renderer,
             turn_processing_ctx.working_history.len(),
+            turn_processing_ctx.session_stats.is_plan_mode(),
             allow_plan_interview,
             turn_config.ask_questions_enabled,
             Some(&validation_cache),

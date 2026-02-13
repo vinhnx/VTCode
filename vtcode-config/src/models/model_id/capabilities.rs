@@ -76,10 +76,7 @@ impl ModelId {
         if let Some(meta) = self.openrouter_metadata() {
             return meta.reasoning;
         }
-        matches!(
-            self,
-            ModelId::ZaiGlm5
-        ) || self.provider().supports_reasoning_effort(self.as_str())
+        matches!(self, ModelId::ZaiGlm5) || self.provider().supports_reasoning_effort(self.as_str())
     }
 
     /// Determine whether the model supports tool calls/function execution

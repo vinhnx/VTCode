@@ -318,7 +318,10 @@ show_sidebar = false
 
     // Load config
     let mut manager = ConfigManager::load_from_workspace(workspace).expect("failed to load config");
-    assert_eq!(manager.config().ui.display_mode, crate::UiDisplayMode::Minimal);
+    assert_eq!(
+        manager.config().ui.display_mode,
+        crate::UiDisplayMode::Minimal
+    );
 
     // Modify config (simulating /config palette changes)
     let mut modified_config = manager.config().clone();

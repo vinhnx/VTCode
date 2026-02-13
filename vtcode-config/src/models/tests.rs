@@ -9,7 +9,10 @@ fn test_model_string_conversion() {
         ModelId::Gemini3FlashPreview.as_str(),
         models::GEMINI_3_FLASH_PREVIEW
     );
-    assert_eq!(ModelId::Gemini3ProPreview.as_str(), models::GEMINI_3_PRO_PREVIEW);
+    assert_eq!(
+        ModelId::Gemini3ProPreview.as_str(),
+        models::GEMINI_3_PRO_PREVIEW
+    );
     // OpenAI models
     assert_eq!(ModelId::GPT5.as_str(), models::GPT_5);
     assert_eq!(ModelId::GPT5Codex.as_str(), models::GPT_5_CODEX);
@@ -527,10 +530,7 @@ fn test_ollama_cloud_models() {
             ModelId::OllamaMinimaxM2Cloud,
             models::ollama::MINIMAX_M2_CLOUD,
         ),
-        (
-            ModelId::OllamaGlm5Cloud,
-            models::ollama::GLM_5_CLOUD,
-        ),
+        (ModelId::OllamaGlm5Cloud, models::ollama::GLM_5_CLOUD),
     ];
 
     for (model_id, expected_str) in model_pairs {
