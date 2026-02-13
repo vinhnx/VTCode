@@ -2,6 +2,52 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## v0.79.0 - 2026-02-13
+
+### Features
+
+- complete model migration, fix test failures, and enhance UI stability (32f252ec) (@vinhnx)
+- add pty_stream module and integrate it into tool pipeline execution (17b0c9d6) (@vinhnx)
+
+### Refactors
+
+- increase spooling thresholds and improve output handling for large tool outputs (dbae38d2) (@vinhnx)
+- enhance file output handling and add no_spool flag for read operations (a3c134c4) (@vinhnx)
+- enhance path validation logic and add lexical workspace check (605ea1ec) (@vinhnx)
+- modularize tool output handling and enhance command safety validation (88146309) (@vinhnx)
+- enhance tool validation and error messaging, modularize execution logic (2f6d20f0) (@vinhnx)
+- streamline MCP event handling and enhance error content construction (9510ef79) (@vinhnx)
+- remove dead code and streamline path handling functions (35289283) (@vinhnx)
+- replace hardcoded Plan Mode strings with constants for consistency and maintainability (5d4d2407) (@vinhnx)
+- update TODO with comprehensive code audit and optimization guidelines (4f96ff24) (@vinhnx)
+- streamline error handling and validation logic; enhance retry safety checks (754ce484) (@vinhnx)
+- enhance IDE context flushing and user confirmation handling; improve command auditing (b00d3b7f) (@vinhnx)
+- improve tool validation and error handling; enhance test coverage for non-interactive environments (4b47208b) (@vinhnx)
+- enhance error handling for tool arguments and improve rate limiting logic (386ce6aa) (@vinhnx)
+- remove unused imports in turn_loop.rs for cleaner code (936e1885) (@vinhnx)
+- improve code formatting and readability across multiple files (393f63e9) (@vinhnx)
+- replace FxHashMap with LoopTracker for tool attempt tracking; optimize loop detection and history management (bb831f19) (@vinhnx)
+- add token tracking validation in ContextManager; optimize turn balancer check intervals (4dd087c9) (@vinhnx)
+- optimize tool signature handling and caching; enhance turn configuration extraction and prompt caching (b42c331a) (@vinhnx)
+- comprehensive optimization of agent loop and tool execution pipeline (e97e91c0) (@vinhnx)
+- improve code readability and structure across multiple files (2b5a2895) (@vinhnx)
+- optimize line truncation logic in summarizers (4996c6ad) (@vinhnx)
+- consolidate path resolution logic and remove redundant functions (d0a10bad) (@vinhnx)
+
+### Tests
+
+- skip TUI-dependent tests in non-interactive environments (4559d31e) (@vinhnx)
+
+### Other
+
+- Update models and configurations for Gemini 3 and GLM-5; adjust tool capabilities and user confirmations (7f05b778) (@vinhnx)
+- Add GLM-5 model support and remove deprecated GLM-4.5/4.6 models (29d0992a) (@vinhnx)
+- Implement tool catalog state management and integrate into MCP tool lifecycle (18c73b54) (@vinhnx)
+- Enhance plan mode handling and tool safety validation; refactor prompt management and session loop logic (63a40249) (@vinhnx)
+- Add prompt assembly mode and enhance tool validation (480ed33a) (@vinhnx)
+- Add safety validation and transition functions for plan mode handling (9db46b25) (@vinhnx)
+- Refactor optimizer and tool result handling; enhance turn duration recording; update validation and state management; optimize loop detection; improve LLM request handling; remove fallback chains module; streamline tool execution checks; fix TUI modal search handling; adjust integration tests for tool usage. (9df107c3) (@vinhnx)
+
 ## v0.78.8 - 2026-02-09
 
 ### Refactors
