@@ -2,6 +2,7 @@ use super::*;
 
 use crate::defaults::{self, SyntaxHighlightingDefaults, WorkspacePathsDefaults};
 use crate::loader::layers::ConfigLayerSource;
+use serial_test::serial;
 use std::fs;
 use std::io::Write;
 use std::sync::Arc;
@@ -9,6 +10,7 @@ use tempfile::NamedTempFile;
 use vtcode_commons::reference::StaticWorkspacePaths;
 
 #[test]
+#[serial]
 fn test_layered_config_loading() {
     let workspace = assert_fs::TempDir::new().expect("failed to create workspace");
     let workspace_root = workspace.path();
@@ -51,6 +53,7 @@ fn test_layered_config_loading() {
 }
 
 #[test]
+#[serial]
 fn test_config_builder_overrides() {
     let workspace = assert_fs::TempDir::new().expect("failed to create workspace");
     let workspace_root = workspace.path();
@@ -261,6 +264,7 @@ default_policy = "prompt"
 }
 
 #[test]
+#[serial]
 fn config_defaults_provider_overrides_paths_and_theme() {
     let workspace = assert_fs::TempDir::new().expect("failed to create workspace");
     let workspace_root = workspace.path();
@@ -298,6 +302,7 @@ fn config_defaults_provider_overrides_paths_and_theme() {
 }
 
 #[test]
+#[serial]
 fn save_config_updates_disk_file() {
     let temp_dir = tempfile::tempdir().unwrap();
     let workspace = temp_dir.path();
@@ -306,19 +311,19 @@ fn save_config_updates_disk_file() {
     // Write initial config
     let initial_config = r#"
 [ui]
-display_mode = "full"
-show_sidebar = true
+display_mode = "minimal"
+show_sidebar = false
 "#;
     fs::write(&config_path, initial_config).expect("failed to write initial config");
 
     // Load config
     let mut manager = ConfigManager::load_from_workspace(workspace).expect("failed to load config");
-    assert_eq!(manager.config().ui.display_mode, crate::UiDisplayMode::Full);
+    assert_eq!(manager.config().ui.display_mode, crate::UiDisplayMode::Minimal);
 
     // Modify config (simulating /config palette changes)
     let mut modified_config = manager.config().clone();
-    modified_config.ui.display_mode = crate::UiDisplayMode::Minimal;
-    modified_config.ui.show_sidebar = false;
+    modified_config.ui.display_mode = crate::UiDisplayMode::Full;
+    modified_config.ui.show_sidebar = true;
 
     // Save config
     manager
@@ -328,13 +333,13 @@ show_sidebar = true
     // Verify disk file was updated
     let saved_content = fs::read_to_string(&config_path).expect("failed to read saved config");
     assert!(
-        saved_content.contains("display_mode = \"minimal\""),
-        "saved config should contain minimal display_mode. Got:\n{}",
+        saved_content.contains("display_mode = \"full\""),
+        "saved config should contain full display_mode. Got:\n{}",
         saved_content
     );
     assert!(
-        saved_content.contains("show_sidebar = false"),
-        "saved config should contain show_sidebar = false. Got:\n{}",
+        saved_content.contains("show_sidebar = true"),
+        "saved config should contain show_sidebar = true. Got:\n{}",
         saved_content
     );
 
@@ -343,16 +348,16 @@ show_sidebar = true
         ConfigManager::load_from_workspace(workspace).expect("failed to reload config");
     assert_eq!(
         new_manager.config().ui.display_mode,
-        crate::UiDisplayMode::Minimal,
-        "reloaded config should have minimal display_mode"
+        crate::UiDisplayMode::Full,
+        "reloaded config should have full display_mode"
     );
 
     // Force disk read by loading from file directly
     let new_manager2 =
         ConfigManager::load_from_file(&config_path).expect("failed to reload from file");
     assert!(
-        !new_manager2.config().ui.show_sidebar,
-        "reloaded config should have show_sidebar = false, got: {}",
+        new_manager2.config().ui.show_sidebar,
+        "reloaded config should have show_sidebar = true, got: {}",
         new_manager2.config().ui.show_sidebar
     );
 }

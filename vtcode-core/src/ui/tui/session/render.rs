@@ -1365,7 +1365,7 @@ pub fn render_modal(session: &mut Session, frame: &mut Frame<'_>, viewport: Rect
     if session.skip_confirmations {
         if let Some(mut modal) = session.modal.take() {
             if let Some(list) = &mut modal.list {
-                if let Some(selection) = list.current_selection() {
+                if let Some(_selection) = list.current_selection() {
                     // Note: We can't easily emit an event from here without access to the sender.
                     // Instead, we just clear the modal and assume the tool execution logic
                     // or whatever triggered the modal will check skip_confirmations as well.

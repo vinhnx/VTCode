@@ -8,11 +8,17 @@ impl FromStr for ModelId {
     type Err = ModelParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+        use crate::constants::models;
+
+        // Explicitly handle built-in models that might be shadowed by OpenRouter
+        if s == models::zai::GLM_5 {
+            return Ok(ModelId::ZaiGlm5);
+        }
+
         if let Some(model) = Self::parse_openrouter_model(s) {
             return Ok(model);
         }
 
-        use crate::constants::models;
         match s {
             // Gemini models
             s if s == models::GEMINI_3_PRO_PREVIEW => Ok(ModelId::Gemini3ProPreview),
@@ -124,7 +130,13 @@ impl FromStr for ModelId {
             s if s == models::huggingface::QWEN3_CODER_NEXT_NOVITA => {
                 Ok(ModelId::HuggingFaceQwen3CoderNextNovita)
             }
-            _ => Err(ModelParseError::InvalidModel(s.to_string())),
+            _ => {
+                if let Some(model) = Self::parse_openrouter_model(s) {
+                    Ok(model)
+                } else {
+                    Err(ModelParseError::InvalidModel(s.to_string()))
+                }
+            }
         }
     }
 }

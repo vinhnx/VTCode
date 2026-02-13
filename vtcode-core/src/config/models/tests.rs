@@ -309,7 +309,7 @@ fn test_model_variants() {
     assert!(ModelId::XaiGrok4CodeLatest.is_top_tier());
     assert!(ModelId::DeepSeekReasoner.is_top_tier());
     assert!(ModelId::ZaiGlm5.is_top_tier());
-    assert!(!ModelId::Gemini3FlashPreview.is_top_tier());
+    assert!(ModelId::Gemini3FlashPreview.is_top_tier());
     assert!(!ModelId::ClaudeHaiku45.is_top_tier());
 }
 

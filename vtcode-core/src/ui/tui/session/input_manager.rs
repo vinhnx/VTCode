@@ -194,6 +194,13 @@ impl InputManager {
     /// Adds an entry to history and resets navigation
     pub fn add_to_history(&mut self, entry: InputHistoryEntry) {
         if !entry.is_empty() {
+            // Avoid duplicates
+            if let Some(last) = self.history.last() {
+                if last.content == entry.content && last.elements == entry.elements {
+                    self.reset_history_navigation();
+                    return;
+                }
+            }
             self.history.push(entry);
         }
         self.reset_history_navigation();

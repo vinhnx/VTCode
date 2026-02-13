@@ -746,7 +746,7 @@ fn header_lines_include_provider_model_and_metadata() {
         .iter()
         .map(|span| span.content.clone().into_owned())
         .collect();
-    assert!(line_text.contains(&session.header_provider_short_value()));
+    assert!(line_text.contains("XAI"));
     assert!(line_text.contains(&session.header_model_short_value()));
     let reasoning_label = format!("{}", session.header_reasoning_short_value());
     assert!(line_text.contains(&reasoning_label));

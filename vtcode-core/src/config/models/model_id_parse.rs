@@ -16,9 +16,16 @@ impl FromStr for ModelId {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         use crate::config::constants::models;
+
+        // Explicitly handle built-in models that might be shadowed by OpenRouter
+        if s == models::zai::GLM_5 {
+            return Ok(ModelId::ZaiGlm5);
+        }
+
         if let Some(model) = Self::parse_openrouter_model(s) {
             return Ok(model);
         }
+
         match s {
             // Gemini models
             s if s == models::GEMINI_3_PRO_PREVIEW => Ok(ModelId::Gemini3ProPreview),
@@ -76,6 +83,9 @@ impl FromStr for ModelId {
                 Ok(ModelId::HuggingFaceXiaomiMimoV2FlashNovita)
             }
             s if s == models::huggingface::ZAI_GLM_5_NOVITA => Ok(ModelId::HuggingFaceGlm5Novita),
+            s if s == models::huggingface::QWEN3_CODER_NEXT_NOVITA => {
+                Ok(ModelId::HuggingFaceQwen3CoderNextNovita)
+            }
             // xAI models
             s if s == models::xai::GROK_4 => Ok(ModelId::XaiGrok4),
             s if s == models::xai::GROK_4_MINI => Ok(ModelId::XaiGrok4Mini),
