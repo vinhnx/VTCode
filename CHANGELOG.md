@@ -2,6 +2,17 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.79.3 - 2026-02-13
+
+### Features
+
+- add Qwen3 Coder Next model support and update related constants (5a4303e0) (@vinhnx)
+- add MiniMax M2.5 model support across various providers and update related constants (968963f1) (@vinhnx)
+
+### Chores
+
+- Release (10e4f284) (@vinhnx)
+
 ## 0.79.2 - 2026-02-13
 
 ### Features
