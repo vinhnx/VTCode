@@ -49,6 +49,7 @@ impl ModelId {
             ModelId::ZaiGlm5 => models::zai::GLM_5,
             // Moonshot models
             ModelId::MoonshotMinimaxM25 => models::moonshot::MINIMAX_M2_5,
+            ModelId::MoonshotQwen3CoderNext => models::moonshot::QWEN3_CODER_NEXT,
             // Ollama models
             ModelId::OllamaGptOss20b => models::ollama::GPT_OSS_20B,
             ModelId::OllamaGptOss20bCloud => models::ollama::GPT_OSS_20B_CLOUD,
@@ -95,6 +96,7 @@ impl ModelId {
             ModelId::MinimaxM2 => models::minimax::MINIMAX_M2,
             // OpenRouter models
             ModelId::OpenRouterMinimaxM25 => "minimax/minimax-m2.5",
+            ModelId::OpenRouterQwen3CoderNext => "qwen/qwen3-coder-next",
             _ => unreachable!(),
         }
     }

@@ -155,6 +155,7 @@ impl ModelId {
                 "MiniMax-M2 via Anthropic-compatible API with reasoning and tool use"
             }
             ModelId::MoonshotMinimaxM25 => "MiniMax-M2.5 served via Moonshot API",
+            ModelId::MoonshotQwen3CoderNext => "Qwen3 Coder Next model served via Moonshot API",
             ModelId::HuggingFaceDeepseekV32 => {
                 "DeepSeek-V3.2 via Hugging Face router for advanced reasoning"
             }
@@ -179,6 +180,9 @@ impl ModelId {
                 "Qwen3-Coder-Next via Novita inference provider on HuggingFace router. Coding-optimized model with reasoning capabilities."
             }
             ModelId::OpenRouterMinimaxM25 => "MiniMax-M2.5 flagship model via OpenRouter",
+            ModelId::OpenRouterQwen3CoderNext => {
+                "Next-generation Qwen3 coding model optimized for agentic workflows via OpenRouter"
+            }
             _ => unreachable!(),
         }
     }

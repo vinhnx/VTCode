@@ -49,7 +49,7 @@ impl ModelId {
             | ModelId::XaiGrok4CodeLatest
             | ModelId::XaiGrok4Vision => Provider::XAI,
             ModelId::ZaiGlm5 => Provider::ZAI,
-            ModelId::MoonshotMinimaxM25 => Provider::Moonshot,
+            ModelId::MoonshotMinimaxM25 | ModelId::MoonshotQwen3CoderNext => Provider::Moonshot,
             ModelId::OllamaGptOss20b
             | ModelId::OllamaGptOss20bCloud
             | ModelId::OllamaGptOss120bCloud
@@ -75,7 +75,8 @@ impl ModelId {
             | ModelId::MinimaxM21Lightning
             | ModelId::MinimaxM25
             | ModelId::MinimaxM2 => Provider::Minimax,
-            ModelId::OpenRouterMinimaxM25 => Provider::OpenRouter,
+            ModelId::OpenRouterMinimaxM25
+            | ModelId::OpenRouterQwen3CoderNext => Provider::OpenRouter,
             _ => unreachable!(),
         }
     }

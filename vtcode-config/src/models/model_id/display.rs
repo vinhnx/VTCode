@@ -76,12 +76,14 @@ impl ModelId {
             ModelId::HuggingFaceGlm5Novita => "GLM-5 (Novita)",
             ModelId::HuggingFaceQwen3CoderNextNovita => "Qwen3-Coder-Next (Novita)",
             ModelId::OpenRouterMinimaxM25 => "MiniMax-M2.5 (OpenRouter)",
+            ModelId::OpenRouterQwen3CoderNext => "Qwen3-Coder-Next (OpenRouter)",
             // MiniMax models
             ModelId::MinimaxM21 => "MiniMax-M2.1",
             ModelId::MinimaxM21Lightning => "MiniMax-M2.1-lightning",
             ModelId::MinimaxM25 => "MiniMax-M2.5",
             ModelId::MinimaxM2 => "MiniMax-M2",
             ModelId::MoonshotMinimaxM25 => "MiniMax-M2.5 (Moonshot)",
+            ModelId::MoonshotQwen3CoderNext => "Qwen3-Coder-Next (Moonshot)",
             // OpenRouter models
             _ => unreachable!(),
         }

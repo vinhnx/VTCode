@@ -68,6 +68,7 @@ impl FromStr for ModelId {
             s if s == models::zai::GLM_5 => Ok(ModelId::ZaiGlm5),
             // Moonshot models
             s if s == models::moonshot::MINIMAX_M2_5 => Ok(ModelId::MoonshotMinimaxM25),
+            s if s == models::moonshot::QWEN3_CODER_NEXT => Ok(ModelId::MoonshotQwen3CoderNext),
             s if s == models::ollama::GPT_OSS_20B => Ok(ModelId::OllamaGptOss20b),
             s if s == models::ollama::GPT_OSS_20B_CLOUD => Ok(ModelId::OllamaGptOss20bCloud),
             s if s == models::ollama::GPT_OSS_120B_CLOUD => Ok(ModelId::OllamaGptOss120bCloud),
@@ -136,6 +137,7 @@ impl FromStr for ModelId {
                 Ok(ModelId::HuggingFaceQwen3CoderNextNovita)
             }
             s if s == "minimax/minimax-m2.5" => Ok(ModelId::OpenRouterMinimaxM25),
+            s if s == "qwen/qwen3-coder-next" => Ok(ModelId::OpenRouterQwen3CoderNext),
             _ => {
                 if let Some(model) = Self::parse_openrouter_model(s) {
                     Ok(model)
