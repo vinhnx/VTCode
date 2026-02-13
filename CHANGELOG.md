@@ -2,6 +2,12 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.79.2 - 2026-02-13
+
+### Features
+
+- add MiniMax M2.5 model support across various providers and update related constants (968963f1) (@vinhnx)
+
 ## v0.79.1 - 2026-02-13
 
 ### Features
