@@ -150,6 +150,10 @@ impl ModelId {
             ModelId::LmStudioGemma29BIt => "gemma-2",
             ModelId::LmStudioPhi31Mini4kInstruct => "phi-3.1",
             ModelId::MinimaxM21 | ModelId::MinimaxM21Lightning => "M2.1",
+            ModelId::MinimaxM25
+            | ModelId::HuggingFaceMinimaxM25Novita
+            | ModelId::MoonshotMinimaxM25
+            | ModelId::OpenRouterMinimaxM25 => "M2.5",
             ModelId::MinimaxM2 => "M2",
             ModelId::HuggingFaceDeepseekV32 | ModelId::HuggingFaceDeepseekV32Novita => "v3.2",
             ModelId::HuggingFaceXiaomiMimoV2FlashNovita => "v2-flash",

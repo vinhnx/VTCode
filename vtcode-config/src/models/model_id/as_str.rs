@@ -48,6 +48,7 @@ impl ModelId {
             // Z.AI models
             ModelId::ZaiGlm5 => models::zai::GLM_5,
             // Moonshot models
+            ModelId::MoonshotMinimaxM25 => models::moonshot::MINIMAX_M2_5,
             // Ollama models
             ModelId::OllamaGptOss20b => models::ollama::GPT_OSS_20B,
             ModelId::OllamaGptOss20bCloud => models::ollama::GPT_OSS_20B_CLOUD,
@@ -78,6 +79,7 @@ impl ModelId {
             ModelId::HuggingFaceOpenAIGptOss20b => models::huggingface::OPENAI_GPT_OSS_20B,
             ModelId::HuggingFaceOpenAIGptOss120b => models::huggingface::OPENAI_GPT_OSS_120B,
             ModelId::HuggingFaceMinimaxM21Novita => models::huggingface::MINIMAX_M2_1_NOVITA,
+            ModelId::HuggingFaceMinimaxM25Novita => models::huggingface::MINIMAX_M2_5_NOVITA,
             ModelId::HuggingFaceDeepseekV32Novita => models::huggingface::DEEPSEEK_V32_NOVITA,
             ModelId::HuggingFaceXiaomiMimoV2FlashNovita => {
                 models::huggingface::XIAOMI_MIMO_V2_FLASH_NOVITA
@@ -89,8 +91,10 @@ impl ModelId {
             // MiniMax models
             ModelId::MinimaxM21 => models::minimax::MINIMAX_M2_1,
             ModelId::MinimaxM21Lightning => models::minimax::MINIMAX_M2_1_LIGHTNING,
+            ModelId::MinimaxM25 => models::minimax::MINIMAX_M2_5,
             ModelId::MinimaxM2 => models::minimax::MINIMAX_M2,
             // OpenRouter models
+            ModelId::OpenRouterMinimaxM25 => "minimax/minimax-m2.5",
             _ => unreachable!(),
         }
     }

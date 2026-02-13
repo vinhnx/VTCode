@@ -88,6 +88,8 @@ pub enum ModelId {
     HuggingFaceDeepseekV32Novita,
     /// Xiaomi MiMo-V2-Flash via Novita on Hugging Face router
     HuggingFaceXiaomiMimoV2FlashNovita,
+    /// MiniMax M2.5 via Novita on Hugging Face router
+    HuggingFaceMinimaxM25Novita,
     /// Z.AI GLM-5 via Novita on Hugging Face router
     HuggingFaceGlm5Novita,
     /// Qwen3-Coder-Next via Novita inference provider on Hugging Face router
@@ -109,6 +111,8 @@ pub enum ModelId {
     ZaiGlm5,
 
     // Moonshot models
+    /// MiniMax-M2.5 - MiniMax model served via Moonshot API
+    MoonshotMinimaxM25,
 
     // Ollama models
     /// GPT-OSS 20B - Open-weight GPT-OSS 20B model served via Ollama locally
@@ -147,6 +151,8 @@ pub enum ModelId {
     MinimaxM21,
     /// MiniMax-M2.1-lightning - Fast version of MiniMax-M2.1
     MinimaxM21Lightning,
+    /// MiniMax-M2.5 - Latest MiniMax model with further improvements in reasoning and coding
+    MinimaxM25,
     /// MiniMax-M2 - MiniMax reasoning-focused model
     MinimaxM2,
 
@@ -274,4 +280,6 @@ pub enum ModelId {
     OpenRouterMoonshotaiKimiK20905,
     /// MoonshotAI: Kimi K2 Thinking - MoonshotAI reasoning-tier Kimi K2 release optimized for long-horizon agents
     OpenRouterMoonshotaiKimiK2Thinking,
+    /// MiniMax-M2.5 - MiniMax flagship model via OpenRouter
+    OpenRouterMinimaxM25,
 }

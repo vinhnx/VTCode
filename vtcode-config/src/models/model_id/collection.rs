@@ -48,6 +48,7 @@ impl ModelId {
             // Z.AI models
             ModelId::ZaiGlm5,
             // Moonshot models
+            ModelId::MoonshotMinimaxM25,
             // Ollama models
             ModelId::OllamaGptOss20b,
             ModelId::OllamaGptOss20bCloud,
@@ -74,16 +75,19 @@ impl ModelId {
             // MiniMax models
             ModelId::MinimaxM21,
             ModelId::MinimaxM21Lightning,
+            ModelId::MinimaxM25,
             ModelId::MinimaxM2,
             // Hugging Face models
             ModelId::HuggingFaceDeepseekV32,
             ModelId::HuggingFaceOpenAIGptOss20b,
             ModelId::HuggingFaceOpenAIGptOss120b,
             ModelId::HuggingFaceMinimaxM21Novita,
+            ModelId::HuggingFaceMinimaxM25Novita,
             ModelId::HuggingFaceDeepseekV32Novita,
             ModelId::HuggingFaceXiaomiMimoV2FlashNovita,
             ModelId::HuggingFaceGlm5Novita,
             ModelId::HuggingFaceQwen3CoderNextNovita,
+            ModelId::OpenRouterMinimaxM25,
         ];
         models.extend(Self::openrouter_models());
         models

@@ -585,10 +585,10 @@ fn default_model_for_provider(provider: Provider) -> &'static str {
         Provider::OpenRouter => models::openrouter::DEFAULT_MODEL,
         Provider::Ollama => models::ollama::DEFAULT_MODEL,
         Provider::LmStudio => models::lmstudio::DEFAULT_MODEL,
-        Provider::Moonshot => models::google::DEFAULT_MODEL, // Fallback to Gemini if Moonshot is empty
+        Provider::Moonshot => models::minimax::MINIMAX_M2_5,
         Provider::XAI => models::xai::DEFAULT_MODEL,
         Provider::ZAI => models::zai::DEFAULT_MODEL,
-        Provider::Minimax => models::MINIMAX_M2,
+        Provider::Minimax => models::minimax::MINIMAX_M2_5,
     }
 }
 

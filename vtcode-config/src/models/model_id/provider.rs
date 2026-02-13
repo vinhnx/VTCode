@@ -38,6 +38,7 @@ impl ModelId {
             | ModelId::HuggingFaceOpenAIGptOss20b
             | ModelId::HuggingFaceOpenAIGptOss120b
             | ModelId::HuggingFaceMinimaxM21Novita
+            | ModelId::HuggingFaceMinimaxM25Novita
             | ModelId::HuggingFaceDeepseekV32Novita
             | ModelId::HuggingFaceXiaomiMimoV2FlashNovita
             | ModelId::HuggingFaceGlm5Novita
@@ -48,6 +49,7 @@ impl ModelId {
             | ModelId::XaiGrok4CodeLatest
             | ModelId::XaiGrok4Vision => Provider::XAI,
             ModelId::ZaiGlm5 => Provider::ZAI,
+            ModelId::MoonshotMinimaxM25 => Provider::Moonshot,
             ModelId::OllamaGptOss20b
             | ModelId::OllamaGptOss20bCloud
             | ModelId::OllamaGptOss120bCloud
@@ -69,9 +71,11 @@ impl ModelId {
             | ModelId::LmStudioGemma22BIt
             | ModelId::LmStudioGemma29BIt
             | ModelId::LmStudioPhi31Mini4kInstruct => Provider::LmStudio,
-            ModelId::MinimaxM21 | ModelId::MinimaxM21Lightning | ModelId::MinimaxM2 => {
-                Provider::Minimax
-            }
+            ModelId::MinimaxM21
+            | ModelId::MinimaxM21Lightning
+            | ModelId::MinimaxM25
+            | ModelId::MinimaxM2 => Provider::Minimax,
+            ModelId::OpenRouterMinimaxM25 => Provider::OpenRouter,
             _ => unreachable!(),
         }
     }
