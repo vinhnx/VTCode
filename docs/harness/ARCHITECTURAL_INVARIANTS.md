@@ -1,0 +1,204 @@
+# Architectural Invariants
+
+Mechanical enforcement rules for VTCode. These are not suggestions — they are invariants that must hold at all times. Violations should be caught by CI, not code review.
+
+Each invariant includes a **remediation** instruction so agents can fix violations without asking for help.
+
+---
+
+## 1. Layer Dependency Rules
+
+VTCode modules form a strict dependency DAG. No reverse imports.
+
+```
+types / commons
+    ↓
+  config
+    ↓
+   core
+    ↓
+  tools
+    ↓
+  agent (runloop, subagents)
+    ↓
+   TUI (src/)
+```
+
+Side crates with no upstream dependents:
+- `vtcode-bash-runner` — used by core/exec
+- `vtcode-markdown-store` — used by core
+- `vtcode-indexer` — used by core/tree_sitter
+- `vtcode-exec-events` — event definitions, used by core
+- `vtcode-acp-client` — Zed integration, used by agent
+- `vtcode-process-hardening` — pre-main, no deps on workspace crates
+- `vtcode-file-search` — used by core/tools
+
+**Violation**: a lower-layer crate imports from a higher-layer crate.
+**Remediation**: move the shared type/function down to the lowest common layer (usually `vtcode-commons` or `vtcode-config`). Never add a reverse dependency.
+
+---
+
+## 2. File Size Limits
+
+Each Rust source file should be ≤500 lines. Files exceeding this limit should be split into focused submodules.
+
+**Violation**: `wc -l` > 500 on a `.rs` file.
+**Remediation**: extract logical sections into submodules within the same directory. Use `mod.rs` to re-export public items. Preserve the public API surface.
+
+---
+
+## 3. Naming Conventions
+
+Enforced mechanically:
+
+| Element     | Convention    | Example                    |
+|-------------|---------------|----------------------------|
+| Functions   | `snake_case`  | `execute_tool`             |
+| Variables   | `snake_case`  | `provider_name`            |
+| Types       | `PascalCase`  | `ToolRegistry`             |
+| Structs     | `PascalCase`  | `McpProvider`              |
+| Enums       | `PascalCase`  | `SafetyDecision`           |
+| Constants   | `SCREAMING_SNAKE_CASE` | `DEFAULT_TIMEOUT` |
+| Modules     | `snake_case`  | `golden_path`              |
+| Crates      | `kebab-case`  | `vtcode-core`              |
+
+**Violation**: naming does not match the convention for its element type.
+**Remediation**: rename the item. Use your editor's rename refactoring to update all references. If it's a public API, check for downstream usage first.
+
+---
+
+## 4. Structured Logging
+
+All log statements must use the `tracing` crate with structured fields. No `println!` or `eprintln!` in library code (TUI binary `src/` may use `eprintln!` for fatal startup errors only).
+
+```rust
+// Correct
+tracing::info!(provider = %name, model = %model_id, "Sending LLM request");
+
+// Incorrect
+println!("Sending request to {} with model {}", name, model_id);
+```
+
+**Violation**: `println!` or `eprintln!` in any crate except `src/` startup code.
+**Remediation**: replace with `tracing::info!`, `tracing::warn!`, `tracing::error!`, or `tracing::debug!` using structured fields.
+
+---
+
+## 5. No `unwrap()`
+
+Never use `.unwrap()` or `.expect()` in production code. Use `anyhow::Result<T>` with `.with_context()`.
+
+```rust
+// Correct
+let config = tokio::fs::read_to_string(path)
+    .await
+    .with_context(|| format!("Failed to read config at {}", path))?;
+
+// Incorrect
+let config = tokio::fs::read_to_string(path).await.unwrap();
+```
+
+Exception: test code (`#[cfg(test)]` modules) may use `.unwrap()` when the test should panic on failure.
+
+**Violation**: `.unwrap()` or `.expect()` outside of `#[cfg(test)]`.
+**Remediation**: replace with `.with_context(|| "descriptive message")?`. The context message should describe what was being attempted, not just what failed.
+
+---
+
+## 6. No Hardcoded Model IDs
+
+Model identifiers change frequently. All model references must come from `docs/models.json` or `vtcode-core/src/config/constants.rs`.
+
+```rust
+// Correct
+use vtcode_core::config::constants::DEFAULT_MODEL_ID;
+
+// Incorrect
+let model = "gpt-4o-mini";
+```
+
+**Violation**: string literal matching a known model ID pattern (e.g., `"gpt-"`, `"claude-"`, `"gemini-"`) in non-test code.
+**Remediation**: add the model to `docs/models.json` and reference it via constants. If it's a default, add it to `vtcode-core/src/config/constants.rs`.
+
+---
+
+## 7. Documentation Location
+
+All `.md` documentation files go in `docs/`. The only exception is `README.md` in the repository root.
+
+**Violation**: a `.md` file in the repository root that is not `README.md`, `AGENTS.md`, `CLAUDE.md`, `CONTRIBUTING.md`, `CHANGELOG.md`, or `LICENSE`.
+**Remediation**: move the file to the appropriate `docs/` subdirectory.
+
+---
+
+## 8. Workspace Boundary Enforcement
+
+All file operations (read, write, list, search) must validate that paths are within the workspace root. No file tool should access paths outside the workspace without explicit user approval.
+
+```rust
+// At the tool boundary, before any file operation:
+let canonical = path.canonicalize()
+    .with_context(|| format!("Failed to resolve path: {}", path.display()))?;
+if !canonical.starts_with(&workspace_root) {
+    anyhow::bail!("Path {} is outside workspace boundary", path.display());
+}
+```
+
+**Violation**: file operation without workspace boundary check.
+**Remediation**: add path validation at the tool's entry point (the API boundary), not deep inside helper functions. Use the existing `validate_path` utility if available.
+
+---
+
+## 9. Parse at Boundaries
+
+Validate and parse inputs where they enter the system — at API boundaries, config loading, and tool argument parsing. Internal functions should receive validated types, not raw strings.
+
+```rust
+// At the boundary (tool argument parsing):
+let line_number: usize = args["line"]
+    .as_u64()
+    .with_context(|| "line must be a positive integer")?
+    as usize;
+
+// Internal function receives validated type:
+fn process_line(content: &str, line: usize) -> Result<String> { ... }
+```
+
+**Violation**: raw string parsing or validation deep inside business logic.
+**Remediation**: move validation to the boundary function. Define typed structs for parsed inputs. Internal functions should receive these typed structs.
+
+---
+
+## 10. Lint Error Messages
+
+Custom lint rules, Clippy configurations, and CI checks must include remediation instructions in their error messages. An agent reading the error should know how to fix it without searching.
+
+```
+// Good error message:
+error: File exceeds 500-line limit (623 lines).
+  Remediation: split into submodules. Extract logical sections into
+  separate files and re-export from mod.rs.
+
+// Bad error message:
+error: File too long.
+```
+
+**Violation**: CI check or lint rule that produces an error without remediation guidance.
+**Remediation**: update the check's error message to include a "Remediation:" section with specific instructions.
+
+---
+
+## Enforcement
+
+These invariants should be enforced by:
+
+1. **Clippy lints** — configured in workspace `Cargo.toml` under `[workspace.lints]`.
+2. **CI checks** — `cargo clippy`, `cargo fmt --check`, custom scripts.
+3. **Pre-commit hooks** — optional but recommended for file size and naming.
+4. **Code review** — last line of defense, not the primary enforcement mechanism.
+
+When adding a new invariant:
+1. Add it to this document with violation description and remediation.
+2. Implement automated enforcement (Clippy lint, CI script, or pre-commit hook).
+3. Fix all existing violations before merging.
+4. Add a tech debt item (`docs/harness/TECH_DEBT_TRACKER.md`) if existing violations cannot be fixed immediately.
