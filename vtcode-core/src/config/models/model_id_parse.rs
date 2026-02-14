@@ -73,8 +73,8 @@ impl FromStr for ModelId {
             s if s == models::huggingface::OPENAI_GPT_OSS_120B => {
                 Ok(ModelId::HuggingFaceOpenAIGptOss120b)
             }
-            s if s == models::huggingface::MINIMAX_M2_1_NOVITA => {
-                Ok(ModelId::HuggingFaceMinimaxM21Novita)
+            s if s == models::huggingface::MINIMAX_M2_5_NOVITA => {
+                Ok(ModelId::HuggingFaceMinimaxM25Novita)
             }
             s if s == models::huggingface::DEEPSEEK_V32_NOVITA => {
                 Ok(ModelId::HuggingFaceDeepseekV32Novita)
@@ -119,7 +119,7 @@ impl FromStr for ModelId {
                 Ok(ModelId::OllamaDevstral2123bCloud)
             }
             s if s == models::ollama::MINIMAX_M2_CLOUD => Ok(ModelId::OllamaMinimaxM2Cloud),
-            s if s == models::ollama::MINIMAX_M21_CLOUD => Ok(ModelId::OllamaMinimaxM21Cloud),
+            s if s == models::ollama::MINIMAX_M25_CLOUD => Ok(ModelId::OllamaMinimaxM25Cloud),
             s if s == models::ollama::NEMOTRON_3_NANO_30B_CLOUD => {
                 Ok(ModelId::OllamaNemotron3Nano30bCloud)
             }
@@ -136,8 +136,7 @@ impl FromStr for ModelId {
                 Ok(ModelId::LmStudioPhi31Mini4kInstruct)
             }
             // MiniMax models
-            s if s == models::minimax::MINIMAX_M2_1 => Ok(ModelId::MinimaxM21),
-            s if s == models::minimax::MINIMAX_M2_1_LIGHTNING => Ok(ModelId::MinimaxM21Lightning),
+            s if s == models::minimax::MINIMAX_M2_5 => Ok(ModelId::MinimaxM25),
             s if s == models::minimax::MINIMAX_M2 => Ok(ModelId::MinimaxM2),
             _ => Err(ModelParseError::InvalidModel(s.into())),
         }

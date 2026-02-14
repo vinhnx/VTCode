@@ -765,7 +765,7 @@ All notable changes to vtcode will be documented in this file.
 
 ### Refactors
     - refactor: enhance rendering logic for consistent tool output styling, simplify message spans, and update spinner handling for better readability
-    - refactor: remove DESIGN_SYSTEM.md, update default model to minimax-m2.1:cloud, and improve TUI spinner handling with `is_spinner_frame` function
+    - refactor: remove DESIGN_SYSTEM.md, update default model to minimax-m2.5:cloud, and improve TUI spinner handling with `is_spinner_frame` function
     - refactor: update authorship information across multiple crates, enhance TUI performance with increased tick rates, and integrate new tui-shimmer dependency for improved UI effects
     - refactor: add follow-up prompts for truncated outputs and improve spooled file handling messages for enhanced user guidance
     - refactor: enhance command status handling, improve loop detection logic, and update tool execution messages for clarity
@@ -797,7 +797,7 @@ All notable changes to vtcode will be documented in this file.
 
 ### Refactors
     - refactor: enhance rendering logic for consistent tool output styling, simplify message spans, and update spinner handling for better readability
-    - refactor: remove DESIGN_SYSTEM.md, update default model to minimax-m2.1:cloud, and improve TUI spinner handling with `is_spinner_frame` function
+    - refactor: remove DESIGN_SYSTEM.md, update default model to minimax-m2.5:cloud, and improve TUI spinner handling with `is_spinner_frame` function
     - refactor: update authorship information across multiple crates, enhance TUI performance with increased tick rates, and integrate new tui-shimmer dependency for improved UI effects
     - refactor: add follow-up prompts for truncated outputs and improve spooled file handling messages for enhanced user guidance
     - refactor: enhance command status handling, improve loop detection logic, and update tool execution messages for clarity

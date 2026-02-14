@@ -467,7 +467,6 @@ mod integration_tests {
     #[test]
     fn test_tool_descriptions_are_trimmed() {
         // Validate that all tool descriptions in the system are properly trimmed
-        let temp_dir = TempDir::new().unwrap();
         // Skip registry creation as it is async and we use snapshot helper instead
 
         // This would require accessing tool descriptions via registry API

@@ -274,6 +274,11 @@ impl SafetyGateway {
         self.config.rate_limit_per_minute = rate_limit_per_minute.filter(|v| *v > 0);
     }
 
+    /// Enable or disable rate-limit enforcement while preserving counters.
+    pub fn set_rate_limit_enforcement(&mut self, enabled: bool) {
+        self.config.enforce_rate_limits = enabled;
+    }
+
     /// Increase session limit dynamically
     pub fn increase_session_limit(&mut self, increment: usize) {
         let new_max = self.config.max_per_session.saturating_add(increment);

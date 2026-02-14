@@ -32,6 +32,7 @@ fn is_retryable_llm_error(message: &str) -> bool {
     [
         "rate limit",
         "timeout",
+        "internal server error",
         "500",
         "502",
         "503",
@@ -1060,6 +1061,18 @@ mod tests {
     use crate::agent::runloop::unified::state::SessionStats;
     use vtcode_core::config::constants::tools;
     use vtcode_core::llm::provider::{FinishReason, LLMResponse};
+
+    #[test]
+    fn retryable_llm_error_includes_internal_server_error_message() {
+        assert!(is_retryable_llm_error(
+            "Provider error: Internal Server Error"
+        ));
+    }
+
+    #[test]
+    fn retryable_llm_error_excludes_non_transient_messages() {
+        assert!(!is_retryable_llm_error("Provider error: Invalid API key"));
+    }
 
     #[test]
     fn extract_interview_questions_from_numbered_lines() {

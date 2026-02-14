@@ -5,7 +5,6 @@ use crate::agent::runloop::unified::state::CtrlCState;
 
 use serde_json::json;
 use std::sync::Arc;
-use std::{io::IsTerminal, io::stdin};
 use tokio::sync::Notify;
 use vtcode_core::acp::PermissionGrant;
 use vtcode_core::acp::permission_cache::ToolPermissionCache;
@@ -16,7 +15,7 @@ use vtcode_core::tools::registry::ToolRegistry;
 use vtcode_core::tools::registry::ToolTimeoutCategory;
 use vtcode_core::tools::result_cache::ToolResultCache;
 use vtcode_core::ui::theme;
-use vtcode_core::ui::tui::{spawn_session, theme_from_styles};
+use vtcode_core::ui::tui::{InlineHandle, InlineSession, spawn_session, theme_from_styles};
 use vtcode_core::utils::ansi::AnsiRenderer;
 
 /// Helper function to create test registry with common setup
@@ -29,6 +28,15 @@ fn create_test_renderer(
     handle: &vtcode_core::ui::tui::InlineHandle,
 ) -> vtcode_core::utils::ansi::AnsiRenderer {
     AnsiRenderer::with_inline_ui(handle.clone(), Default::default())
+}
+
+fn create_headless_session() -> InlineSession {
+    let (command_tx, _command_rx) = tokio::sync::mpsc::unbounded_channel();
+    let (_event_tx, event_rx) = tokio::sync::mpsc::unbounded_channel();
+    InlineSession {
+        handle: InlineHandle::new_for_tests(command_tx),
+        events: event_rx,
+    }
 }
 
 fn build_harness_state() -> crate::agent::runloop::unified::run_loop_context::HarnessTurnState {
@@ -65,15 +73,20 @@ impl TestContext {
         let registry = create_test_registry(&workspace).await;
         let active_styles = theme::active_styles();
         let theme_spec = theme_from_styles(&active_styles);
-        let mut session = spawn_session(
+        let mut session = match spawn_session(
             theme_spec,
             None,
             vtcode_core::config::types::UiSurfacePreference::default(),
             10,
             None,
             None,
-        )
-        .unwrap();
+        ) {
+            Ok(session) => session,
+            Err(err) if err.to_string().contains("stdin is not a terminal") => {
+                create_headless_session()
+            }
+            Err(err) => panic!("failed to spawn test session: {err:#}"),
+        };
         // Skip confirmations for tests to ensure non-interactive success
         session.set_skip_confirmations(true);
         let handle = session.clone_inline_handle();
@@ -335,7 +348,7 @@ async fn test_run_tool_call_respects_max_tool_calls_budget() {
 }
 
 #[tokio::test]
-async fn test_run_tool_call_auto_switches_plan_mode_for_mutating_tool() {
+async fn test_run_tool_call_prevalidated_blocks_mutation_in_plan_mode() {
     let mut test_ctx = TestContext::new().await;
     let mut registry = test_ctx.registry;
 
@@ -404,12 +417,14 @@ async fn test_run_tool_call_auto_switches_plan_mode_for_mutating_tool() {
     .await
     .expect("run_tool_call must run");
 
-    println!("Auto-switch test outcome status: {:?}", outcome.status);
+    println!("Plan-mode guard test outcome status: {:?}", outcome.status);
 
-    assert!(matches!(
-        outcome.status,
-        ToolExecutionStatus::Success { .. }
-    ));
+    match outcome.status {
+        ToolExecutionStatus::Failure { error } => {
+            assert!(error.to_string().contains("plan mode"));
+        }
+        other => panic!("Expected plan mode failure, got: {:?}", other),
+    }
     assert!(session_stats.is_plan_mode());
     assert!(registry.is_plan_mode());
     assert!(registry.plan_mode_state().is_active());

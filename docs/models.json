@@ -729,26 +729,10 @@
     "api": "https://api.minimax.chat/v1",
     "doc": "https://platform.minimaxi.com/document/ChatCompletion%20V2",
     "models": {
-      "MiniMax-M2.1": {
-        "id": "MiniMax-M2.1",
-        "name": "MiniMax-M2.1",
-        "description": "Latest MiniMax-M2.1 model with enhanced code understanding and reasoning",
-        "reasoning": true,
-        "tool_call": true,
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "context": 204800
-      },
-      "MiniMax-M2.1-lightning": {
-        "id": "MiniMax-M2.1-lightning",
-        "name": "MiniMax-M2.1-lightning",
-        "description": "Fast version of MiniMax-M2.1 for rapid conversational tasks",
+      "MiniMax-M2.5": {
+        "id": "MiniMax-M2.5",
+        "name": "MiniMax-M2.5",
+        "description": "Latest MiniMax-M2.5 model with enhanced code understanding and reasoning",
         "reasoning": true,
         "tool_call": true,
         "modalities": {
@@ -2813,9 +2797,9 @@
         },
         "context": 131072
       },
-      "minimax-m2.1:cloud": {
-        "id": "minimax-m2.1:cloud",
-        "name": "MiniMax-M2.1 (cloud)",
+      "minimax-m2.5:cloud": {
+        "id": "minimax-m2.5:cloud",
+        "name": "MiniMax-M2.5 (cloud)",
         "description": "Exceptional multilingual capabilities to elevate code engineering",
         "reasoning": true,
         "tool_call": true,

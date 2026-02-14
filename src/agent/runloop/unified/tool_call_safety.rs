@@ -75,7 +75,9 @@ impl ToolCallSafetyValidator {
             plan_mode_active: false,
             workspace_trust: WorkspaceTrust::Trusted,
             approval_risk_threshold: RiskLevel::Medium,
-            enforce_rate_limits: true,
+            // The runloop enforces adaptive per-tool throttling separately.
+            // Keep SafetyGateway focused on turn/session budgets by default.
+            enforce_rate_limits: false,
         };
 
         Self {
@@ -119,6 +121,11 @@ impl ToolCallSafetyValidator {
             self.safety_gateway
                 .set_rate_limits(self.rate_limit_per_second, self.rate_limit_per_minute);
         }
+    }
+
+    #[allow(dead_code)]
+    pub fn set_rate_limit_enforcement(&mut self, enabled: bool) {
+        self.safety_gateway.set_rate_limit_enforcement(enabled);
     }
 
     #[allow(dead_code)]
@@ -243,6 +250,7 @@ mod tests {
     async fn test_rate_limiting() {
         let mut validator = ToolCallSafetyValidator::new();
         validator.set_rate_limit_per_second(2);
+        validator.set_rate_limit_enforcement(true);
         validator.start_turn().await;
 
         assert!(

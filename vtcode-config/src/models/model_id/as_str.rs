@@ -59,7 +59,7 @@ impl ModelId {
             ModelId::OllamaQwen3Next80bCloud => models::ollama::QWEN3_NEXT_80B_CLOUD,
             ModelId::OllamaMistralLarge3675bCloud => models::ollama::MISTRAL_LARGE_3_675B_CLOUD,
             ModelId::OllamaGlm5Cloud => models::ollama::GLM_5_CLOUD,
-            ModelId::OllamaMinimaxM21Cloud => models::ollama::MINIMAX_M21_CLOUD,
+            ModelId::OllamaMinimaxM25Cloud => models::ollama::MINIMAX_M25_CLOUD,
             ModelId::OllamaGemini3FlashPreviewCloud => models::ollama::GEMINI_3_FLASH_PREVIEW_CLOUD,
             ModelId::OllamaQwen3Coder480bCloud => models::ollama::QWEN3_CODER_480B_CLOUD,
             ModelId::OllamaGemini3ProPreviewLatestCloud => {
@@ -79,7 +79,6 @@ impl ModelId {
             ModelId::HuggingFaceDeepseekV32 => models::huggingface::DEEPSEEK_V32,
             ModelId::HuggingFaceOpenAIGptOss20b => models::huggingface::OPENAI_GPT_OSS_20B,
             ModelId::HuggingFaceOpenAIGptOss120b => models::huggingface::OPENAI_GPT_OSS_120B,
-            ModelId::HuggingFaceMinimaxM21Novita => models::huggingface::MINIMAX_M2_1_NOVITA,
             ModelId::HuggingFaceMinimaxM25Novita => models::huggingface::MINIMAX_M2_5_NOVITA,
             ModelId::HuggingFaceDeepseekV32Novita => models::huggingface::DEEPSEEK_V32_NOVITA,
             ModelId::HuggingFaceXiaomiMimoV2FlashNovita => {
@@ -90,8 +89,6 @@ impl ModelId {
                 models::huggingface::QWEN3_CODER_NEXT_NOVITA
             }
             // MiniMax models
-            ModelId::MinimaxM21 => models::minimax::MINIMAX_M2_1,
-            ModelId::MinimaxM21Lightning => models::minimax::MINIMAX_M2_1_LIGHTNING,
             ModelId::MinimaxM25 => models::minimax::MINIMAX_M2_5,
             ModelId::MinimaxM2 => models::minimax::MINIMAX_M2,
             // OpenRouter models

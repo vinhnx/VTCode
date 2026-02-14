@@ -6,7 +6,6 @@ impl ModelId {
         matches!(
             self,
             ModelId::Gemini3FlashPreview
-                | ModelId::MinimaxM21Lightning
                 | ModelId::OllamaGemini3FlashPreviewCloud
         )
     }
@@ -23,9 +22,9 @@ impl ModelId {
                 | ModelId::DeepSeekReasoner
                 | ModelId::XaiGrok4
                 | ModelId::ZaiGlm5
-                | ModelId::MinimaxM21
+                | ModelId::MinimaxM25
                 | ModelId::OllamaGlm5Cloud
-                | ModelId::OllamaMinimaxM21Cloud
+                | ModelId::OllamaMinimaxM25Cloud
         )
     }
 
@@ -134,7 +133,7 @@ impl ModelId {
             ModelId::OllamaMistralLarge3675bCloud => "mistral-large-3",
             ModelId::OllamaQwen3Coder480bCloud => "qwen3-coder-cloud",
             ModelId::OllamaMinimaxM2Cloud => "minimax-cloud",
-            ModelId::OllamaMinimaxM21Cloud => "minimax-cloud",
+            ModelId::OllamaMinimaxM25Cloud => "minimax-cloud",
             ModelId::OllamaGlm5Cloud => "glm-5-cloud",
             ModelId::OllamaGemini3ProPreviewLatestCloud => "gemini-3-pro-cloud",
             ModelId::OllamaGemini3FlashPreviewCloud => "gemini-3-flash-cloud",
@@ -146,7 +145,6 @@ impl ModelId {
             ModelId::LmStudioGemma22BIt => "gemma-2",
             ModelId::LmStudioGemma29BIt => "gemma-2",
             ModelId::LmStudioPhi31Mini4kInstruct => "phi-3.1",
-            ModelId::MinimaxM21 | ModelId::MinimaxM21Lightning => "M2.1",
             ModelId::MinimaxM25
             | ModelId::HuggingFaceMinimaxM25Novita
             | ModelId::MoonshotMinimaxM25
@@ -157,7 +155,6 @@ impl ModelId {
             ModelId::HuggingFaceQwen3CoderNextNovita
             | ModelId::OpenRouterQwen3CoderNext
             | ModelId::MoonshotQwen3CoderNext => "qwen3-coder-next",
-            ModelId::HuggingFaceMinimaxM21Novita => "m2.1",
             ModelId::HuggingFaceGlm5Novita => "GLM-5",
             ModelId::HuggingFaceOpenAIGptOss20b | ModelId::HuggingFaceOpenAIGptOss120b => "oss",
             _ => unreachable!(),

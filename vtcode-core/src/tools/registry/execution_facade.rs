@@ -32,6 +32,23 @@ impl ToolRegistry {
     /// Reference-taking version of execute_tool to avoid cloning by callers
     /// that already have access to an existing `Value`.
     pub async fn execute_tool_ref(&self, name: &str, args: &Value) -> Result<Value> {
+        self.execute_tool_ref_internal(name, args, false).await
+    }
+
+    /// Reference-taking execution entrypoint for calls that were already preflight-validated.
+    ///
+    /// This avoids re-running argument/schema/path/command preflight in hot paths
+    /// where validation already happened in the runloop.
+    pub async fn execute_tool_ref_prevalidated(&self, name: &str, args: &Value) -> Result<Value> {
+        self.execute_tool_ref_internal(name, args, true).await
+    }
+
+    async fn execute_tool_ref_internal(
+        &self,
+        name: &str,
+        args: &Value,
+        prevalidated: bool,
+    ) -> Result<Value> {
         // PERFORMANCE OPTIMIZATION: Use memory pool for string allocations if enabled
         let _pool_guard = if self.optimization_config.memory_pool.enabled {
             Some(self.memory_pool.get_string())
@@ -147,28 +164,63 @@ impl ToolRegistry {
                 ));
         };
 
-        let preflight = match self.preflight_validate_call(&tool_name, args) {
-            Ok(outcome) => outcome,
-            Err(err) => {
-                let err_msg = err.to_string();
-                record_failure(
-                    tool_name_owned.clone(),
-                    false,
-                    None,
-                    args_for_recording.clone(),
-                    err_msg,
-                    None,
-                    None,
-                    None,
-                    None,
-                    false,
-                );
-                return Err(err);
+        let readonly_classification = if prevalidated {
+            #[cfg(debug_assertions)]
+            {
+                if let Err(err) = self.preflight_validate_call(&tool_name, args) {
+                    if !agent_execution::is_plan_mode_denial(&err.to_string()) {
+                        debug_assert!(
+                            false,
+                            "prevalidated execution received invalid call for '{}': {}",
+                            tool_name, err
+                        );
+                    }
+                }
+            }
+            !crate::tools::tool_intent::classify_tool_intent(&tool_name, args).mutating
+        } else {
+            match self.preflight_validate_call(&tool_name, args) {
+                Ok(outcome) => outcome.readonly_classification,
+                Err(err) => {
+                    let err_msg = err.to_string();
+                    record_failure(
+                        tool_name_owned.clone(),
+                        false,
+                        None,
+                        args_for_recording.clone(),
+                        err_msg,
+                        None,
+                        None,
+                        None,
+                        None,
+                        false,
+                    );
+                    return Err(err);
+                }
             }
         };
 
-        if preflight.readonly_classification {
-            debug!(tool = %tool_name, "Preflight classified tool as read-only");
+        if readonly_classification {
+            debug!(tool = %tool_name, "Validation classified tool as read-only");
+        }
+
+        // Defense-in-depth: prevalidated fast path skips full preflight, but plan-mode
+        // mutating-tool enforcement remains a hard safety invariant.
+        if self.is_plan_mode() && !self.is_plan_mode_allowed(&tool_name, args) {
+            let error_msg = agent_execution::plan_mode_denial_message(&display_name);
+            record_failure(
+                tool_name_owned.clone(),
+                false,
+                None,
+                args_for_recording.clone(),
+                error_msg.clone(),
+                None,
+                None,
+                None,
+                None,
+                false,
+            );
+            return Err(anyhow!(error_msg).context(agent_execution::PLAN_MODE_DENIED_CONTEXT));
         }
 
         let shared_circuit_breaker = self.shared_circuit_breaker();

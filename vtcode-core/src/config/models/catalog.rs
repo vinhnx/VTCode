@@ -43,7 +43,7 @@ impl ModelId {
             ModelId::HuggingFaceDeepseekV32 => "DeepSeek V3.2 (HF)",
             ModelId::HuggingFaceOpenAIGptOss20b => "GPT-OSS 20B (HF)",
             ModelId::HuggingFaceOpenAIGptOss120b => "GPT-OSS 120B (HF)",
-            ModelId::HuggingFaceMinimaxM21Novita => "MiniMax-M2.1 (Novita)",
+            ModelId::HuggingFaceMinimaxM25Novita => "MiniMax-M2.5 (Novita)",
             ModelId::HuggingFaceDeepseekV32Novita => "DeepSeek V3.2 (Novita)",
             ModelId::HuggingFaceXiaomiMimoV2FlashNovita => "MiMo-V2-Flash (Novita)",
             ModelId::HuggingFaceGlm5Novita => "GLM-5 (Novita)",
@@ -70,7 +70,7 @@ impl ModelId {
             ModelId::OllamaMinimaxM2Cloud => "MiniMax-M2 (cloud)",
             ModelId::OllamaNemotron3Nano30bCloud => "Nemotron-3-Nano 30B (cloud)",
             ModelId::OllamaGlm5Cloud => "GLM-5 (cloud)",
-            ModelId::OllamaMinimaxM21Cloud => "MiniMax-M2.1 (cloud)",
+            ModelId::OllamaMinimaxM25Cloud => "MiniMax-M2.5 (cloud)",
             ModelId::OllamaGemini3FlashPreviewCloud => "Gemini 3 Flash Preview (cloud)",
             ModelId::LmStudioMetaLlama38BInstruct => "Meta Llama 3 8B (LM Studio)",
             ModelId::LmStudioMetaLlama318BInstruct => "Meta Llama 3.1 8B (LM Studio)",
@@ -79,8 +79,7 @@ impl ModelId {
             ModelId::LmStudioGemma29BIt => "Gemma 2 9B (LM Studio)",
             ModelId::LmStudioPhi31Mini4kInstruct => "Phi-3.1 Mini 4K (LM Studio)",
             // MiniMax models
-            ModelId::MinimaxM21 => "MiniMax-M2.1",
-            ModelId::MinimaxM21Lightning => "MiniMax-M2.1-lightning",
+            ModelId::MinimaxM25 => "MiniMax-M2.5",
             ModelId::MinimaxM2 => "MiniMax-M2",
             _ => unreachable!(),
         }
@@ -157,8 +156,8 @@ impl ModelId {
             ModelId::HuggingFaceOpenAIGptOss120b => {
                 "OpenAI GPT-OSS 120B available through Hugging Face Inference Providers"
             }
-            ModelId::HuggingFaceMinimaxM21Novita => {
-                "MiniMax-M2.1 model via Novita inference provider on HuggingFace router. Enhanced reasoning capabilities."
+            ModelId::HuggingFaceMinimaxM25Novita => {
+                "MiniMax-M2.5 model via Novita inference provider on HuggingFace router. Enhanced reasoning capabilities."
             }
             ModelId::HuggingFaceDeepseekV32Novita => {
                 "DeepSeek-V3.2 via Novita inference provider on HuggingFace router."
@@ -207,7 +206,7 @@ impl ModelId {
                 "Mistral Large 3 675B reasoning model via Ollama Cloud for complex problem-solving"
             }
             ModelId::OllamaGlm5Cloud => "Cloud-hosted GLM-5 model served via Ollama Cloud",
-            ModelId::OllamaMinimaxM21Cloud => {
+            ModelId::OllamaMinimaxM25Cloud => {
                 "Exceptional multilingual capabilities to elevate code engineering"
             }
             ModelId::OllamaGemini3FlashPreviewCloud => {
@@ -249,11 +248,8 @@ impl ModelId {
                 "Phi-3.1 Mini 4K hosted in LM Studio for compact reasoning and experimentation"
             }
             // MiniMax models
-            ModelId::MinimaxM21 => {
-                "Latest MiniMax-M2.1 model with enhanced code understanding and reasoning"
-            }
-            ModelId::MinimaxM21Lightning => {
-                "Fast version of MiniMax-M2.1 for rapid conversational tasks"
+            ModelId::MinimaxM25 => {
+                "Latest MiniMax-M2.5 model with enhanced code understanding and reasoning"
             }
             ModelId::MinimaxM2 => {
                 "MiniMax-M2 via Anthropic-compatible API with reasoning and tool use"
@@ -354,7 +350,7 @@ impl ModelId {
             ModelId::HuggingFaceDeepseekV32,
             ModelId::HuggingFaceOpenAIGptOss20b,
             ModelId::HuggingFaceOpenAIGptOss120b,
-            ModelId::HuggingFaceMinimaxM21Novita,
+            ModelId::HuggingFaceMinimaxM25Novita,
             ModelId::HuggingFaceDeepseekV32Novita,
             ModelId::HuggingFaceXiaomiMimoV2FlashNovita,
             ModelId::HuggingFaceGlm5Novita,
@@ -381,7 +377,7 @@ impl ModelId {
             ModelId::OllamaGemini3FlashPreviewCloud,
             ModelId::OllamaDevstral2123bCloud,
             ModelId::OllamaMinimaxM2Cloud,
-            ModelId::OllamaMinimaxM21Cloud,
+            ModelId::OllamaMinimaxM25Cloud,
             ModelId::OllamaNemotron3Nano30bCloud,
             // LM Studio models
             ModelId::LmStudioMetaLlama38BInstruct,
@@ -391,8 +387,7 @@ impl ModelId {
             ModelId::LmStudioGemma29BIt,
             ModelId::LmStudioPhi31Mini4kInstruct,
             // MiniMax models
-            ModelId::MinimaxM21,
-            ModelId::MinimaxM21Lightning,
+            ModelId::MinimaxM25,
             ModelId::MinimaxM2,
         ];
         models.extend(Self::openrouter_models());

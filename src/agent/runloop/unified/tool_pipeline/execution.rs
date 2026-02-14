@@ -67,7 +67,7 @@ pub(crate) async fn run_tool_call(
         }
     };
 
-    let name = function.name.as_str();
+    let requested_name = function.name.as_str();
     let args_val = match call.parsed_arguments() {
         Ok(args) => args,
         Err(err) => {
@@ -78,7 +78,38 @@ pub(crate) async fn run_tool_call(
             ));
         }
     };
-    let tool_item_id = call.id.clone();
+    run_tool_call_with_args(
+        ctx,
+        call.id.clone(),
+        requested_name,
+        &args_val,
+        ctrl_c_state,
+        ctrl_c_notify,
+        default_placeholder,
+        lifecycle_hooks,
+        skip_confirmations,
+        vt_cfg,
+        turn_index,
+        prevalidated,
+    )
+    .await
+}
+
+pub(crate) async fn run_tool_call_with_args(
+    ctx: &mut RunLoopContext<'_>,
+    tool_item_id: String,
+    requested_name: &str,
+    args_val: &Value,
+    ctrl_c_state: &Arc<CtrlCState>,
+    ctrl_c_notify: &Arc<Notify>,
+    default_placeholder: Option<String>,
+    lifecycle_hooks: Option<&LifecycleHookEngine>,
+    skip_confirmations: bool,
+    vt_cfg: Option<&VTCodeConfig>,
+    turn_index: usize,
+    prevalidated: bool,
+) -> Result<ToolPipelineOutcome, anyhow::Error> {
+    let mut canonical_name = requested_name.to_string();
 
     if !prevalidated {
         if ctx.harness_state.tool_budget_exhausted() {
@@ -92,18 +123,24 @@ pub(crate) async fn run_tool_call(
             ));
         }
 
-        if let Err(err) = ctx.tool_registry.preflight_validate_call(name, &args_val) {
-            return Ok(ToolPipelineOutcome::from_status(
-                ToolExecutionStatus::Failure {
-                    error: anyhow!("Tool argument validation failed: {}", err),
-                },
-            ));
+        match ctx
+            .tool_registry
+            .preflight_validate_call(requested_name, &args_val)
+        {
+            Ok(preflight) => canonical_name = preflight.normalized_tool_name,
+            Err(err) => {
+                return Ok(ToolPipelineOutcome::from_status(
+                    ToolExecutionStatus::Failure {
+                        error: anyhow!("Tool argument validation failed: {}", err),
+                    },
+                ));
+            }
         }
 
         if let Some(safety_validator) = ctx.safety_validator {
             let validation = {
                 let mut validator = safety_validator.write().await;
-                validator.validate_call(name, &args_val).await
+                validator.validate_call(&canonical_name, &args_val).await
             };
             if let Err(err) = validation {
                 return Ok(ToolPipelineOutcome::from_status(
@@ -113,7 +150,10 @@ pub(crate) async fn run_tool_call(
                 ));
             }
         }
+    } else if let Some(tool) = ctx.tool_registry.get_tool(requested_name) {
+        canonical_name = tool.name().to_string();
     }
+    let name = canonical_name.as_str();
 
     let harness_emitter = ctx.harness_emitter;
     let mut tool_started_emitted = false;
@@ -122,12 +162,6 @@ pub(crate) async fn run_tool_call(
         tool_started_emitted = true;
     }
     let max_tool_retries = ctx.harness_state.max_tool_retries as usize;
-    // Resolve tool name through registry (handles aliases and normalization)
-    let resolved_name = ctx
-        .tool_registry
-        .get_tool(name)
-        .map(|tool| tool.name())
-        .unwrap_or(name);
     let finish_with_status = |status: ToolExecutionStatus| {
         let outcome = ToolPipelineOutcome::from_status(status);
         emit_tool_completion_for_status(
@@ -140,7 +174,7 @@ pub(crate) async fn run_tool_call(
         outcome
     };
 
-    if ctx.session_stats.is_plan_mode() && resolved_name == "update_plan" {
+    if ctx.session_stats.is_plan_mode() && name == "update_plan" {
         return Ok(finish_with_status(ToolExecutionStatus::Failure {
             error: anyhow!("update_plan is a TODO/checklist tool and is not allowed in Plan mode"),
         }));
@@ -197,7 +231,7 @@ pub(crate) async fn run_tool_call(
     }
 
     if let Some(hitl_result) = execute_hitl_tool(
-        resolved_name,
+        name,
         ctx.handle,
         ctx.session,
         &args_val,
@@ -230,7 +264,7 @@ pub(crate) async fn run_tool_call(
     // Special-case enter_plan_mode: execute tool and enable plan mode in registry.
     // This ensures the registry's plan_read_only_mode flag is set when agent enters plan mode.
     if name == tools::ENTER_PLAN_MODE {
-        let tool_result = execute_tool_with_timeout_ref(
+        let tool_result = execute_tool_with_timeout_ref_prevalidated(
             ctx.tool_registry,
             name,
             &args_val,
@@ -281,7 +315,7 @@ pub(crate) async fn run_tool_call(
             .unwrap_or(true);
 
         // Execute the exit_plan_mode tool to get the plan summary
-        let tool_result = execute_tool_with_timeout_ref(
+        let tool_result = execute_tool_with_timeout_ref_prevalidated(
             ctx.tool_registry,
             name,
             &args_val,
@@ -514,7 +548,7 @@ pub(crate) async fn run_tool_call(
     );
 
     let should_stream_pty = matches!(
-        resolved_name,
+        name,
         tools::RUN_PTY_CMD | tools::UNIFIED_EXEC | tools::SEND_PTY_INPUT
     );
     let mut pty_stream_runtime: Option<PtyStreamRuntime> = None;
@@ -528,7 +562,7 @@ pub(crate) async fn run_tool_call(
         None
     };
 
-    let outcome = execute_tool_with_timeout_ref(
+    let outcome = execute_tool_with_timeout_ref_prevalidated(
         ctx.tool_registry,
         name,
         &args_val,
@@ -801,6 +835,52 @@ pub(crate) async fn execute_tool_with_timeout_ref(
     progress_reporter: Option<&ProgressReporter>,
     max_tool_retries: usize,
 ) -> ToolExecutionStatus {
+    execute_tool_with_timeout_ref_mode(
+        registry,
+        name,
+        args,
+        ctrl_c_state,
+        ctrl_c_notify,
+        progress_reporter,
+        max_tool_retries,
+        false,
+    )
+    .await
+}
+
+/// Execute a tool with timeout/progress for an already prevalidated call.
+pub(crate) async fn execute_tool_with_timeout_ref_prevalidated(
+    registry: &ToolRegistry,
+    name: &str,
+    args: &Value,
+    ctrl_c_state: &Arc<CtrlCState>,
+    ctrl_c_notify: &Arc<Notify>,
+    progress_reporter: Option<&ProgressReporter>,
+    max_tool_retries: usize,
+) -> ToolExecutionStatus {
+    execute_tool_with_timeout_ref_mode(
+        registry,
+        name,
+        args,
+        ctrl_c_state,
+        ctrl_c_notify,
+        progress_reporter,
+        max_tool_retries,
+        true,
+    )
+    .await
+}
+
+async fn execute_tool_with_timeout_ref_mode(
+    registry: &ToolRegistry,
+    name: &str,
+    args: &Value,
+    ctrl_c_state: &Arc<CtrlCState>,
+    ctrl_c_notify: &Arc<Notify>,
+    progress_reporter: Option<&ProgressReporter>,
+    max_tool_retries: usize,
+    prevalidated: bool,
+) -> ToolExecutionStatus {
     // Use provided progress reporter or create a new one
     let mut local_progress_reporter = None;
     let progress_reporter = if let Some(reporter) = progress_reporter {
@@ -838,6 +918,7 @@ pub(crate) async fn execute_tool_with_timeout_ref(
         timeout_category,
         retry_allowed,
         max_tool_retries,
+        prevalidated,
     )
     .await;
 
@@ -865,6 +946,7 @@ async fn execute_tool_with_progress(
     timeout_category: ToolTimeoutCategory,
     retry_allowed: bool,
     max_tool_retries: usize,
+    prevalidated: bool,
 ) -> ToolExecutionStatus {
     // Track total deadline to enforce ceiling across all attempts
     let deadline = Instant::now() + tool_timeout;
@@ -882,6 +964,7 @@ async fn execute_tool_with_progress(
             ctrl_c_notify,
             progress_reporter,
             remaining_timeout,
+            prevalidated,
         )
         .await;
 
@@ -936,6 +1019,7 @@ async fn execute_tool_with_progress(
             ctrl_c_notify,
             progress_reporter,
             remaining_timeout,
+            prevalidated,
         )
         .await;
 
@@ -961,6 +1045,7 @@ async fn run_single_tool_attempt(
     ctrl_c_notify: &Arc<Notify>,
     progress_reporter: &ProgressReporter,
     tool_timeout: Duration,
+    prevalidated: bool,
 ) -> ToolExecutionStatus {
     let start_time = Instant::now();
     let warning_fraction = registry.timeout_policy().warning_fraction();
@@ -1014,7 +1099,11 @@ async fn run_single_tool_attempt(
         let exec_future = cancellation::with_tool_cancellation(token.clone(), async {
             progress_reporter.set_progress(40).await;
 
-            let result = registry.execute_tool_ref(name, args).await;
+            let result = if prevalidated {
+                registry.execute_tool_ref_prevalidated(name, args).await
+            } else {
+                registry.execute_tool_ref(name, args).await
+            };
 
             progress_reporter
                 .set_message(format!("Processing {} results...", name))

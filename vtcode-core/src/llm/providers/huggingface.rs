@@ -104,7 +104,7 @@ impl HuggingFaceProvider {
             return Err(LLMError::Provider {
                 message: format_llm_error(
                     PROVIDER_NAME,
-                    "MiniMax models require explicit provider selection (:novita suffix). \n                    Use 'MiniMaxAI/MiniMax-M2.1:novita'.",
+                    "MiniMax models require explicit provider selection (:novita suffix). \n                    Use 'MiniMaxAI/MiniMax-M2.5:novita'.",
                 ),
                 metadata: None,
             });

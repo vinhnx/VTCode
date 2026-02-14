@@ -43,7 +43,7 @@ impl ModelId {
             Provider::LmStudio => ModelId::LmStudioMetaLlama318BInstruct,
             Provider::ZAI => ModelId::ZaiGlm5,
             Provider::Moonshot => ModelId::Gemini3ProPreview, // Fallback to Gemini if no Moonshot models
-            Provider::Minimax => ModelId::MinimaxM21,
+            Provider::Minimax => ModelId::MinimaxM25,
             Provider::HuggingFace => ModelId::HuggingFaceOpenAIGptOss120b,
         }
     }
@@ -61,7 +61,7 @@ impl ModelId {
             Provider::LmStudio => ModelId::LmStudioQwen257BInstruct,
             Provider::ZAI => ModelId::OllamaGlm5Cloud,
             Provider::Moonshot => ModelId::Gemini3FlashPreview, // Fallback to Gemini if no Moonshot models
-            Provider::Minimax => ModelId::MinimaxM21Lightning,
+            Provider::Minimax => ModelId::MinimaxM25,
             Provider::HuggingFace => ModelId::HuggingFaceOpenAIGptOss20b,
         }
     }
@@ -79,7 +79,7 @@ impl ModelId {
             Provider::LmStudio => ModelId::LmStudioMetaLlama318BInstruct,
             Provider::ZAI => ModelId::ZaiGlm5,
             Provider::Moonshot => ModelId::Gemini3FlashPreview, // Fallback to Gemini if no Moonshot models
-            Provider::Minimax => ModelId::MinimaxM21,
+            Provider::Minimax => ModelId::MinimaxM25,
             Provider::HuggingFace => ModelId::HuggingFaceOpenAIGptOss120b,
         }
     }

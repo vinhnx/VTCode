@@ -241,6 +241,53 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn executes_prevalidated_tool_path() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+
+        registry
+            .register_tool(ToolRegistration::from_tool_instance(
+                CUSTOM_TOOL_NAME,
+                CapabilityLevel::CodeSearch,
+                CustomEchoTool,
+            ))
+            .await?;
+        registry.allow_all_tools().await?;
+
+        let args = json!({"input": "value"});
+        let response = registry
+            .execute_tool_ref_prevalidated(CUSTOM_TOOL_NAME, &args)
+            .await?;
+        assert!(response["success"].as_bool().unwrap_or(false));
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn prevalidated_execution_enforces_plan_mode_guards() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+        registry.allow_all_tools().await?;
+        registry.enable_plan_mode();
+        registry.plan_mode_state().enable();
+
+        let blocked_path = temp_dir.path().join("blocked.txt");
+        let args = json!({
+            "path": blocked_path.to_string_lossy().to_string(),
+            "content": "should-not-write"
+        });
+
+        let err = registry
+            .execute_tool_ref_prevalidated(tools::WRITE_FILE, &args)
+            .await
+            .expect_err("plan mode should block prevalidated mutating tool call");
+        assert!(err.to_string().contains("plan mode"));
+        assert!(!blocked_path.exists());
+
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn execution_history_records_harness_context() -> Result<()> {
         let temp_dir = TempDir::new()?;
         let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;

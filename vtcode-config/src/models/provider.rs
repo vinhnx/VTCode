@@ -111,8 +111,7 @@ impl Provider {
             Provider::XAI => model == models::xai::GROK_4 || model == models::xai::GROK_4_CODE,
             Provider::ZAI => models::zai::REASONING_MODELS.contains(&model),
             Provider::Minimax => {
-                model == models::minimax::MINIMAX_M2_1
-                    || model == models::minimax::MINIMAX_M2_1_LIGHTNING
+                model == models::minimax::MINIMAX_M2_5
                     || model == models::minimax::MINIMAX_M2
             }
             Provider::HuggingFace => models::huggingface::REASONING_MODELS.contains(&model),

@@ -548,9 +548,9 @@ fn zai_presets() -> Vec<ModelPreset> {
 
 fn minimax_presets() -> Vec<ModelPreset> {
     vec![ModelPreset {
-        id: "minimax-m2.1".to_string(),
-        model: "minimax-m2.1".to_string(),
-        display_name: "MiniMax M2.1".to_string(),
+        id: "minimax-m2.5".to_string(),
+        model: "minimax-m2.5".to_string(),
+        display_name: "MiniMax M2.5".to_string(),
         description: "Enhanced code understanding and reasoning".to_string(),
         provider: Provider::Minimax,
         default_reasoning_effort: ReasoningEffortLevel::Medium,

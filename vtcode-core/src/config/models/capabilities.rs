@@ -70,7 +70,7 @@ impl ModelId {
             | ModelId::ClaudeOpus4
             | ModelId::ClaudeOpus41 => Some(ModelId::ClaudeSonnet45),
             ModelId::ClaudeSonnet37 => Some(ModelId::ClaudeSonnet45),
-            ModelId::MinimaxM21 => Some(ModelId::MinimaxM21Lightning),
+            ModelId::MinimaxM25 => Some(ModelId::MinimaxM2),
             _ => None,
         };
 
@@ -89,7 +89,6 @@ impl ModelId {
             self,
             ModelId::Gemini3FlashPreview
                 | ModelId::OpenRouterStepfunStep35FlashFree
-                | ModelId::MinimaxM21Lightning
                 | ModelId::OllamaGemini3FlashPreviewCloud
         )
     }
@@ -107,9 +106,9 @@ impl ModelId {
                 | ModelId::XaiGrok4
                 | ModelId::ZaiGlm5
                 | ModelId::OpenRouterStepfunStep35FlashFree
-                | ModelId::MinimaxM21
+                | ModelId::MinimaxM25
                 | ModelId::OllamaGlm5Cloud
-                | ModelId::OllamaMinimaxM21Cloud
+                | ModelId::OllamaMinimaxM25Cloud
                 | ModelId::HuggingFaceQwen3CoderNextNovita
         )
     }
@@ -208,7 +207,7 @@ impl ModelId {
             ModelId::HuggingFaceDeepseekV32 => "V3.2-Exp",
             ModelId::HuggingFaceOpenAIGptOss20b => "oss",
             ModelId::HuggingFaceOpenAIGptOss120b => "oss",
-            ModelId::HuggingFaceMinimaxM21Novita => "m2.1",
+            ModelId::HuggingFaceMinimaxM25Novita => "m2.5",
             ModelId::HuggingFaceDeepseekV32Novita => "v3.2",
             ModelId::HuggingFaceXiaomiMimoV2FlashNovita => "v2-flash",
             ModelId::HuggingFaceGlm5Novita => "5",
@@ -234,7 +233,7 @@ impl ModelId {
             ModelId::OllamaMinimaxM2Cloud => "minimax-m2",
             ModelId::OllamaNemotron3Nano30bCloud => "nemotron-3",
             ModelId::OllamaGlm5Cloud => "glm-5",
-            ModelId::OllamaMinimaxM21Cloud => "minimax-m2.1",
+            ModelId::OllamaMinimaxM25Cloud => "minimax-m2.5",
             ModelId::OllamaGemini3FlashPreviewCloud => "gemini-3",
             ModelId::LmStudioMetaLlama38BInstruct => "meta-llama-3",
             ModelId::LmStudioMetaLlama318BInstruct => "meta-llama-3.1",
@@ -243,7 +242,7 @@ impl ModelId {
             ModelId::LmStudioGemma29BIt => "gemma-2",
             ModelId::LmStudioPhi31Mini4kInstruct => "phi-3.1",
             // MiniMax models
-            ModelId::MinimaxM21 | ModelId::MinimaxM21Lightning => "M2.1",
+            ModelId::MinimaxM25 => "M2.5",
             ModelId::MinimaxM2 => "m2",
             // OpenRouter models - fallback for any OpenRouter model without metadata
             ModelId::OpenRouterGrokCodeFast1
