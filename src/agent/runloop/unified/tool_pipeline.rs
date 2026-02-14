@@ -10,7 +10,10 @@ mod status;
 mod tests;
 mod timeout;
 
-pub(crate) use execution::{execute_tool_with_timeout_ref, run_tool_call};
+pub(crate) use execution::{
+    execute_tool_with_timeout_ref, execute_tool_with_timeout_ref_prevalidated, run_tool_call,
+    run_tool_call_with_args,
+};
 pub(crate) use hitl::execute_hitl_tool;
 pub(crate) use status::{ToolExecutionStatus, ToolPipelineOutcome};
 

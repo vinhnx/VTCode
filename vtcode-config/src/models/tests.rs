@@ -485,7 +485,7 @@ fn test_models_for_provider() {
     assert!(ollama_models.contains(&ModelId::OllamaGemini3FlashPreviewCloud));
     assert!(ollama_models.contains(&ModelId::OllamaDevstral2123bCloud));
     assert!(ollama_models.contains(&ModelId::OllamaMinimaxM2Cloud));
-    assert!(ollama_models.contains(&ModelId::OllamaMinimaxM21Cloud));
+    assert!(ollama_models.contains(&ModelId::OllamaMinimaxM25Cloud));
     assert!(ollama_models.contains(&ModelId::OllamaNemotron3Nano30bCloud));
     assert!(ollama_models.contains(&ModelId::OllamaGlm5Cloud));
 

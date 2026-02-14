@@ -625,7 +625,7 @@ fn convert_anthropic_to_llm_request(request: AnthropicMessagesRequest) -> Result
             );
             converted_tools.push(tool_def);
         }
-        Some(converted_tools)
+        Some(Arc::new(converted_tools))
     } else {
         None
     };
@@ -657,6 +657,7 @@ fn convert_anthropic_to_llm_request(request: AnthropicMessagesRequest) -> Result
         context_management: request.context_management,
         thinking_budget: None,
         prefill: None,
+        metadata: None,
     })
 }
 

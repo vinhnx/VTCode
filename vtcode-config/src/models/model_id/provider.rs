@@ -36,7 +36,6 @@ impl ModelId {
             ModelId::HuggingFaceDeepseekV32
             | ModelId::HuggingFaceOpenAIGptOss20b
             | ModelId::HuggingFaceOpenAIGptOss120b
-            | ModelId::HuggingFaceMinimaxM21Novita
             | ModelId::HuggingFaceMinimaxM25Novita
             | ModelId::HuggingFaceDeepseekV32Novita
             | ModelId::HuggingFaceXiaomiMimoV2FlashNovita
@@ -61,7 +60,7 @@ impl ModelId {
             | ModelId::OllamaGemini3FlashPreviewCloud
             | ModelId::OllamaDevstral2123bCloud
             | ModelId::OllamaMinimaxM2Cloud
-            | ModelId::OllamaMinimaxM21Cloud
+            | ModelId::OllamaMinimaxM25Cloud
             | ModelId::OllamaNemotron3Nano30bCloud
             | ModelId::OllamaGlm5Cloud => Provider::Ollama,
             ModelId::LmStudioMetaLlama38BInstruct
@@ -70,9 +69,7 @@ impl ModelId {
             | ModelId::LmStudioGemma22BIt
             | ModelId::LmStudioGemma29BIt
             | ModelId::LmStudioPhi31Mini4kInstruct => Provider::LmStudio,
-            ModelId::MinimaxM21
-            | ModelId::MinimaxM21Lightning
-            | ModelId::MinimaxM25
+            ModelId::MinimaxM25
             | ModelId::MinimaxM2 => Provider::Minimax,
             ModelId::OpenRouterMinimaxM25 | ModelId::OpenRouterQwen3CoderNext => {
                 Provider::OpenRouter

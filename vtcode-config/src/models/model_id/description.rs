@@ -106,7 +106,7 @@ impl ModelId {
                 "Mistral Large 3 675B reasoning model via Ollama Cloud for complex problem-solving"
             }
             ModelId::OllamaGlm5Cloud => "Cloud-hosted GLM-5 model served via Ollama Cloud",
-            ModelId::OllamaMinimaxM21Cloud => {
+            ModelId::OllamaMinimaxM25Cloud => {
                 "Exceptional multilingual capabilities to elevate code engineering"
             }
             ModelId::OllamaGemini3FlashPreviewCloud => {
@@ -142,12 +142,6 @@ impl ModelId {
             ModelId::LmStudioPhi31Mini4kInstruct => {
                 "Phi-3.1 Mini 4K hosted in LM Studio for compact reasoning and experimentation"
             }
-            ModelId::MinimaxM21 => {
-                "Latest MiniMax-M2.1 model with enhanced code understanding and reasoning"
-            }
-            ModelId::MinimaxM21Lightning => {
-                "Fast version of MiniMax-M2.1 for rapid conversational tasks"
-            }
             ModelId::MinimaxM25 => {
                 "Latest MiniMax-M2.5 model with further improvements in reasoning and coding"
             }
@@ -161,11 +155,8 @@ impl ModelId {
             }
             ModelId::HuggingFaceOpenAIGptOss20b => "OpenAI GPT-OSS 20B via Hugging Face router",
             ModelId::HuggingFaceOpenAIGptOss120b => "OpenAI GPT-OSS 120B via Hugging Face router",
-            ModelId::HuggingFaceMinimaxM21Novita => {
-                "MiniMax-M2.1 model via Novita inference provider on HuggingFace router. Enhanced reasoning capabilities."
-            }
             ModelId::HuggingFaceMinimaxM25Novita => {
-                "MiniMax-M2.5 model via Novita inference provider on HuggingFace router. Latest MiniMax flagship."
+                "MiniMax-M2.5 model via Novita inference provider on HuggingFace router. Enhanced reasoning capabilities."
             }
             ModelId::HuggingFaceDeepseekV32Novita => {
                 "DeepSeek-V3.2 via Novita inference provider on HuggingFace router."

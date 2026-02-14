@@ -89,7 +89,7 @@ impl FromStr for ModelId {
                 Ok(ModelId::OllamaGemini3FlashPreviewCloud)
             }
             s if s == models::ollama::MINIMAX_M2_CLOUD => Ok(ModelId::OllamaMinimaxM2Cloud),
-            s if s == models::ollama::MINIMAX_M21_CLOUD => Ok(ModelId::OllamaMinimaxM21Cloud),
+            s if s == models::ollama::MINIMAX_M25_CLOUD => Ok(ModelId::OllamaMinimaxM25Cloud),
             s if s == models::ollama::DEVSTRAL_2_123B_CLOUD => {
                 Ok(ModelId::OllamaDevstral2123bCloud)
             }
@@ -108,8 +108,6 @@ impl FromStr for ModelId {
             s if s == models::lmstudio::PHI_31_MINI_4K_INSTRUCT => {
                 Ok(ModelId::LmStudioPhi31Mini4kInstruct)
             }
-            s if s == models::minimax::MINIMAX_M2_1 => Ok(ModelId::MinimaxM21),
-            s if s == models::minimax::MINIMAX_M2_1_LIGHTNING => Ok(ModelId::MinimaxM21Lightning),
             s if s == models::minimax::MINIMAX_M2_5 => Ok(ModelId::MinimaxM25),
             s if s == models::minimax::MINIMAX_M2 => Ok(ModelId::MinimaxM2),
             // Hugging Face models
@@ -119,9 +117,6 @@ impl FromStr for ModelId {
             }
             s if s == models::huggingface::OPENAI_GPT_OSS_120B => {
                 Ok(ModelId::HuggingFaceOpenAIGptOss120b)
-            }
-            s if s == models::huggingface::MINIMAX_M2_1_NOVITA => {
-                Ok(ModelId::HuggingFaceMinimaxM21Novita)
             }
             s if s == models::huggingface::MINIMAX_M2_5_NOVITA => {
                 Ok(ModelId::HuggingFaceMinimaxM25Novita)

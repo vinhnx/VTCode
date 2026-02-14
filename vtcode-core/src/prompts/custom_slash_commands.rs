@@ -3,7 +3,7 @@ use serde::Deserialize;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use tokio::fs;
-use tracing::warn;
+use tracing::{debug, warn};
 
 /// Configuration for custom slash commands
 #[derive(Debug, Clone)]
@@ -55,7 +55,7 @@ impl CustomSlashCommandRegistry {
 
         let directories = resolve_directories(&settings, workspace);
         for d in &directories {
-            eprintln!("DEBUG: custom slash command dir: {}", d.display());
+            debug!("custom slash command dir: {}", d.display());
         }
         let max_bytes = if settings.max_file_size_kb == 0 {
             usize::MAX
@@ -83,19 +83,19 @@ impl CustomSlashCommandRegistry {
                 Ok(mut entries) => {
                     while let Ok(Some(entry)) = entries.next_entry().await {
                         let path = entry.path();
-                        eprintln!("DEBUG: found entry: {}", path.display());
+                        debug!("found entry: {}", path.display());
                         if !path.is_file() {
-                            eprintln!("DEBUG: not a file: {}", path.display());
+                            debug!("not a file: {}", path.display());
                             continue;
                         }
                         if !is_markdown_file(&path) {
-                            eprintln!("DEBUG: not a markdown file: {}", path.display());
+                            debug!("not a markdown file: {}", path.display());
                             continue;
                         }
 
                         match CustomSlashCommand::from_file(&path, max_bytes).await {
                             Ok(Some(command)) => {
-                                eprintln!("DEBUG: loaded command: {}", command.name);
+                                debug!("loaded command: {}", command.name);
                                 let key = command.name.to_ascii_lowercase();
                                 if commands.contains_key(&key) {
                                     warn!(
@@ -108,17 +108,10 @@ impl CustomSlashCommandRegistry {
                                 commands.insert(key, command);
                             }
                             Ok(None) => {
-                                eprintln!(
-                                    "DEBUG: from_file returned Ok(None) for {}",
-                                    path.display()
-                                );
+                                debug!("from_file returned Ok(None) for {}", path.display());
                             }
                             Err(err) => {
-                                eprintln!(
-                                    "DEBUG: from_file errored for {}: {}",
-                                    path.display(),
-                                    err
-                                );
+                                debug!("from_file errored for {}: {}", path.display(), err);
                                 warn!(
                                     "failed to load custom slash command from {}: {err:#}",
                                     path.display()
@@ -186,7 +179,7 @@ pub struct CustomSlashCommand {
 
 impl CustomSlashCommand {
     async fn from_file(path: &Path, max_bytes: usize) -> Result<Option<Self>> {
-        eprintln!("DEBUG: from_file: {}", path.display());
+        debug!("from_file: {}", path.display());
         let Some(stem) = path.file_stem().and_then(|value| value.to_str()) else {
             warn!(
                 "skipping custom slash command with non-UTF-8 filename: {}",
@@ -214,11 +207,7 @@ impl CustomSlashCommand {
         let metadata = fs::metadata(path).await.map_err(|e| {
             anyhow::anyhow!("failed to read metadata for {}: {}", path.display(), e)
         })?;
-        eprintln!(
-            "DEBUG: metadata len: {}, max_bytes: {}",
-            metadata.len(),
-            max_bytes
-        );
+        debug!("metadata len: {}, max_bytes: {}", metadata.len(), max_bytes);
         if metadata.len() as usize > max_bytes {
             warn!(
                 "custom slash command `{}` exceeds max_file_size_kb ({:.1} KB) - skipping",
@@ -235,7 +224,7 @@ impl CustomSlashCommand {
                 e
             )
         })?;
-        eprintln!("DEBUG: contents len: {}", contents.len());
+        debug!("contents len: {}", contents.len());
 
         Self::from_contents(stem, path, &contents)
     }
@@ -456,7 +445,7 @@ enum AllowedToolsField {
 /// Parse frontmatter from markdown content
 fn split_frontmatter(contents: &str) -> Result<(Option<CustomSlashCommandFrontmatter>, &str)> {
     if !contents.starts_with("---") {
-        eprintln!("DEBUG: contents does not start with ---");
+        debug!("contents does not start with ---");
         return Ok((None, contents));
     }
     let Some(remaining) = contents.strip_prefix("---") else {
@@ -594,7 +583,7 @@ mod tests {
         fs::create_dir_all(&commands_dir).await.unwrap();
         fs::write(
             commands_dir.join("review.md"),
-            "---\ndescription: Review code\nargument-hint: [file]\n---\nReview the file: $ARGUMENTS"
+            "---\ndescription: Review code\nargument-hint: '[file]'\n---\nReview the file: $ARGUMENTS"
         ).await.unwrap();
 
         let mut cfg = CustomSlashCommandConfig::default();

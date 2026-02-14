@@ -11,10 +11,7 @@ use super::ToolRegistry;
 #[derive(Debug, Clone)]
 pub struct ToolPreflightOutcome {
     pub normalized_tool_name: String,
-    pub validated_args: Value,
     pub readonly_classification: bool,
-    pub plan_mode_allowed: bool,
-    pub validation_warnings: Vec<String>,
 }
 
 fn required_args_for_tool(tool_name: &str) -> &'static [&'static str] {
@@ -93,18 +90,13 @@ pub(super) fn preflight_validate_call(
 
     let intent = crate::tools::tool_intent::classify_tool_intent(&normalized_tool_name, args);
     let readonly_classification = !intent.mutating;
-    let plan_mode_allowed =
-        !registry.is_plan_mode() || registry.is_plan_mode_allowed(&normalized_tool_name, args);
-    if !plan_mode_allowed {
+    if registry.is_plan_mode() && !registry.is_plan_mode_allowed(&normalized_tool_name, args) {
         let msg = agent_execution::plan_mode_denial_message(&normalized_tool_name);
         return Err(anyhow!(msg).context(agent_execution::PLAN_MODE_DENIED_CONTEXT));
     }
 
     Ok(ToolPreflightOutcome {
         normalized_tool_name,
-        validated_args: args.clone(),
         readonly_classification,
-        plan_mode_allowed,
-        validation_warnings: Vec::new(),
     })
 }

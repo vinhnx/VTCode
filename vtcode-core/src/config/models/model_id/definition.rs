@@ -69,8 +69,8 @@ pub enum ModelId {
     HuggingFaceOpenAIGptOss20b,
     /// OpenAI GPT-OSS 120B via Hugging Face router
     HuggingFaceOpenAIGptOss120b,
-    /// MiniMax M2.1 via Novita on Hugging Face router - Enhanced reasoning
-    HuggingFaceMinimaxM21Novita,
+    /// MiniMax M2.5 via Novita on Hugging Face router
+    HuggingFaceMinimaxM25Novita,
     /// DeepSeek V3.2 via Novita on Hugging Face router
     HuggingFaceDeepseekV32Novita,
     /// Xiaomi MiMo-V2-Flash via Novita on Hugging Face router
@@ -123,8 +123,8 @@ pub enum ModelId {
     OllamaMinimaxM2Cloud,
     /// GLM-5 Cloud - Cloud-hosted GLM-5 model served via Ollama Cloud
     OllamaGlm5Cloud,
-    /// MiniMax-M2.1 Cloud - Cloud-hosted MiniMax-M2.1 model served via Ollama Cloud
-    OllamaMinimaxM21Cloud,
+    /// MiniMax-M2.5 Cloud - Cloud-hosted MiniMax-M2.5 model served via Ollama Cloud
+    OllamaMinimaxM25Cloud,
     /// Gemini 3 Flash Preview Cloud - Google Gemini 3 Flash Preview via Ollama Cloud
     OllamaGemini3FlashPreviewCloud,
     /// Nemotron-3-Nano 30B Cloud - NVIDIA Nemotron-3-Nano 30B via Ollama Cloud
@@ -145,10 +145,8 @@ pub enum ModelId {
     LmStudioPhi31Mini4kInstruct,
 
     // MiniMax models
-    /// MiniMax-M2.1 - Latest MiniMax model with enhanced code understanding and reasoning
-    MinimaxM21,
-    /// MiniMax-M2.1-lightning - Fast version of MiniMax-M2.1
-    MinimaxM21Lightning,
+    /// MiniMax-M2.5 - Latest MiniMax model with enhanced code understanding and reasoning
+    MinimaxM25,
     /// MiniMax-M2 - MiniMax reasoning-focused model via Anthropic-compatible API
     MinimaxM2,
 

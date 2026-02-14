@@ -276,7 +276,7 @@ impl ModelsManager {
             Provider::DeepSeek => "deepseek-reasoner".to_string(),
             Provider::XAI => "grok-4".to_string(),
             Provider::ZAI => "glm-5".to_string(),
-            Provider::Minimax => "minimax-m2.1".to_string(),
+            Provider::Minimax => "minimax-m2.5".to_string(),
             Provider::OpenRouter => "deepseek/deepseek-chat".to_string(),
             Provider::Ollama => "gpt-oss:20b".to_string(),
             Provider::LmStudio => "qwen2.5-7b-instruct".to_string(),

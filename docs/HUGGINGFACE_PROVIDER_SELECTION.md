@@ -41,7 +41,7 @@ These models are **only** available via Novita on HuggingFace:
 | Model | Reasoning | Tools | Context | Cost |
 |-------|-----------|-------|---------|------|
 | `MiniMaxAI/MiniMax-M2:novita` | No | No | 200K | $0.30/$1.20 |
-| `MiniMaxAI/MiniMax-M2.1:novita` | Yes | Yes | 200K | TBD |
+| `MiniMaxAI/MiniMax-M2.5:novita` | Yes | Yes | 200K | TBD |
 | `deepseek-ai/DeepSeek-V3.2:novita` | Yes | Yes | 160K | $0.27/$0.40 (cheapest) |
 | `XiaomiMiMo/MiMo-V2-Flash:novita` | Yes | Yes | 256K | $0.10/$0.29 |
 
@@ -64,7 +64,7 @@ if is_huggingface {
     if lower_model.contains("minimax-m2") && !request.model.contains(':') {
         return Err(provider::LLMError::Provider {
             message: "MiniMax models require the ':novita' suffix. \
-                     Use 'MiniMaxAI/MiniMax-M2:novita' or 'MiniMaxAI/MiniMax-M2.1:novita' to access via Novita provider.",
+                     Use 'MiniMaxAI/MiniMax-M2:novita' or 'MiniMaxAI/MiniMax-M2.5:novita' to access via Novita provider.",
             // ...
         });
     }

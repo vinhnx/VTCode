@@ -44,7 +44,7 @@ impl ModelId {
             ModelId::HuggingFaceDeepseekV32 => models::huggingface::DEEPSEEK_V32,
             ModelId::HuggingFaceOpenAIGptOss20b => models::huggingface::OPENAI_GPT_OSS_20B,
             ModelId::HuggingFaceOpenAIGptOss120b => models::huggingface::OPENAI_GPT_OSS_120B,
-            ModelId::HuggingFaceMinimaxM21Novita => models::huggingface::MINIMAX_M2_1_NOVITA,
+            ModelId::HuggingFaceMinimaxM25Novita => models::huggingface::MINIMAX_M2_5_NOVITA,
             ModelId::HuggingFaceDeepseekV32Novita => models::huggingface::DEEPSEEK_V32_NOVITA,
             ModelId::HuggingFaceXiaomiMimoV2FlashNovita => {
                 models::huggingface::XIAOMI_MIMO_V2_FLASH_NOVITA
@@ -78,7 +78,7 @@ impl ModelId {
             ModelId::OllamaGemini3FlashPreviewCloud => models::ollama::GEMINI_3_FLASH_PREVIEW_CLOUD,
             ModelId::OllamaDevstral2123bCloud => models::ollama::DEVSTRAL_2_123B_CLOUD,
             ModelId::OllamaMinimaxM2Cloud => models::ollama::MINIMAX_M2_CLOUD,
-            ModelId::OllamaMinimaxM21Cloud => models::ollama::MINIMAX_M21_CLOUD,
+            ModelId::OllamaMinimaxM25Cloud => models::ollama::MINIMAX_M25_CLOUD,
             ModelId::OllamaNemotron3Nano30bCloud => models::ollama::NEMOTRON_3_NANO_30B_CLOUD,
             ModelId::LmStudioMetaLlama38BInstruct => models::lmstudio::META_LLAMA_3_8B_INSTRUCT,
             ModelId::LmStudioMetaLlama318BInstruct => models::lmstudio::META_LLAMA_31_8B_INSTRUCT,
@@ -87,8 +87,7 @@ impl ModelId {
             ModelId::LmStudioGemma29BIt => models::lmstudio::GEMMA_2_9B_IT,
             ModelId::LmStudioPhi31Mini4kInstruct => models::lmstudio::PHI_31_MINI_4K_INSTRUCT,
             // MiniMax models
-            ModelId::MinimaxM21 => models::minimax::MINIMAX_M2_1,
-            ModelId::MinimaxM21Lightning => models::minimax::MINIMAX_M2_1_LIGHTNING,
+            ModelId::MinimaxM25 => models::minimax::MINIMAX_M2_5,
             ModelId::MinimaxM2 => models::minimax::MINIMAX_M2,
             // OpenRouter models - fallback for any OpenRouter model without metadata
             ModelId::OpenRouterGrokCodeFast1
@@ -184,7 +183,7 @@ impl ModelId {
             ModelId::HuggingFaceDeepseekV32
             | ModelId::HuggingFaceOpenAIGptOss20b
             | ModelId::HuggingFaceOpenAIGptOss120b
-            | ModelId::HuggingFaceMinimaxM21Novita
+            | ModelId::HuggingFaceMinimaxM25Novita
             | ModelId::HuggingFaceDeepseekV32Novita
             | ModelId::HuggingFaceXiaomiMimoV2FlashNovita
             | ModelId::HuggingFaceGlm5Novita
@@ -207,7 +206,7 @@ impl ModelId {
             | ModelId::OllamaGemini3FlashPreviewCloud
             | ModelId::OllamaDevstral2123bCloud
             | ModelId::OllamaMinimaxM2Cloud
-            | ModelId::OllamaMinimaxM21Cloud
+            | ModelId::OllamaMinimaxM25Cloud
             | ModelId::OllamaGlm5Cloud
             | ModelId::OllamaNemotron3Nano30bCloud => Provider::Ollama,
             ModelId::LmStudioMetaLlama38BInstruct
@@ -216,7 +215,7 @@ impl ModelId {
             | ModelId::LmStudioGemma22BIt
             | ModelId::LmStudioGemma29BIt
             | ModelId::LmStudioPhi31Mini4kInstruct => Provider::LmStudio,
-            ModelId::MinimaxM21 | ModelId::MinimaxM21Lightning | ModelId::MinimaxM2 => {
+            ModelId::MinimaxM25 | ModelId::MinimaxM2 => {
                 Provider::Minimax
             }
             // OpenRouter models - fallback for any OpenRouter model without metadata

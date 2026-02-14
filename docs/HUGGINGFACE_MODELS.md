@@ -23,7 +23,7 @@
 | Model ID | Name | Context | Reasoning | Tools | Structured Output | Best For |
 |----------|------|---------|-----------|-------|-------------------|----------|
 | `MiniMaxAI/MiniMax-M2:novita` | MiniMax-M2 (Novita) | 200K | No | No | No | Text generation |
-| `MiniMaxAI/MiniMax-M2.1:novita` | MiniMax-M2.1 (Novita) | 200K | Yes | Yes | Yes | Enhanced reasoning |
+| `MiniMaxAI/MiniMax-M2.5:novita` | MiniMax-M2.5 (Novita) | 200K | Yes | Yes | Yes | Enhanced reasoning |
 | `deepseek-ai/DeepSeek-V3.2:novita` | DeepSeek-V3.2 (Novita) | 160K | Yes | Yes | Yes | Cost-optimized reasoning |
 | `XiaomiMiMo/MiMo-V2-Flash:novita` | MiMo-V2-Flash (Novita) | 256K | Yes | Yes | Yes | Fast, long-context |
 
