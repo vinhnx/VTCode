@@ -1,12 +1,13 @@
 //! Caching layer for grep file search results to avoid redundant searches
 //!
-//! This module provides an LRU cache for search results, keyed by search parameters
+//! This module provides a cache for search results, keyed by search parameters
 //! to eliminate duplicate searches for identical patterns and paths.
+//!
+//! Uses `UnifiedCache` from `crate::cache` for LRU eviction, TTL, and stats.
 
 use super::grep_file::{GrepSearchInput, GrepSearchResult};
-use lru::LruCache;
-use std::num::NonZeroUsize;
-use std::sync::{Arc, Mutex};
+use crate::cache::{CacheKey, EvictionPolicy, UnifiedCache, DEFAULT_CACHE_TTL};
+use std::sync::Arc;
 
 /// Cache key for search results - includes all parameters that affect search results
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
@@ -22,6 +23,15 @@ struct SearchCacheKey {
     search_hidden: bool,
     search_binary: bool,
     literal: bool,
+}
+
+impl CacheKey for SearchCacheKey {
+    fn to_cache_key(&self) -> String {
+        format!(
+            "grep:{}:{}:{}:{}",
+            self.pattern, self.path, self.case_sensitive, self.max_results
+        )
+    }
 }
 
 impl From<&GrepSearchInput> for SearchCacheKey {
@@ -42,32 +52,32 @@ impl From<&GrepSearchInput> for SearchCacheKey {
     }
 }
 
-/// Thread-safe LRU cache for search results
+/// Thread-safe cache for search results backed by `UnifiedCache`
 pub struct GrepSearchCache {
-    cache: Arc<Mutex<LruCache<SearchCacheKey, Arc<GrepSearchResult>>>>,
+    cache: UnifiedCache<SearchCacheKey, GrepSearchResult>,
 }
 
 impl GrepSearchCache {
     /// Create a new cache with the specified capacity
     pub fn new(capacity: usize) -> Self {
-        let cache_size = NonZeroUsize::new(capacity).unwrap_or(NonZeroUsize::new(100).unwrap());
         Self {
-            cache: Arc::new(Mutex::new(LruCache::new(cache_size))),
+            cache: UnifiedCache::new(capacity, DEFAULT_CACHE_TTL, EvictionPolicy::Lru),
         }
     }
 
     /// Get cached result if available
     pub fn get(&self, input: &GrepSearchInput) -> Option<Arc<GrepSearchResult>> {
         let key = SearchCacheKey::from(input);
-        let mut cache = self.cache.lock().unwrap();
-        cache.get(&key).cloned()
+        self.cache.get(&key)
     }
 
     /// Cache a search result
     pub fn put(&self, input: &GrepSearchInput, result: GrepSearchResult) {
         let key = SearchCacheKey::from(input);
-        let mut cache = self.cache.lock().unwrap();
-        cache.put(key, Arc::new(result));
+        let size_bytes = std::mem::size_of::<GrepSearchResult>() as u64
+            + result.query.len() as u64
+            + result.matches.iter().map(|m| m.to_string().len() as u64).sum::<u64>();
+        self.cache.insert(key, result, size_bytes);
     }
 
     /// Check if this search should be cached (only cache successful, non-empty results)
@@ -77,14 +87,13 @@ impl GrepSearchCache {
 
     /// Clear the cache
     pub fn clear(&self) {
-        let mut cache = self.cache.lock().unwrap();
-        cache.clear();
+        self.cache.clear();
     }
 
     /// Get cache statistics
     pub fn stats(&self) -> (usize, usize) {
-        let cache = self.cache.lock().unwrap();
-        (cache.len(), cache.cap().get())
+        let stats = self.cache.stats();
+        (stats.current_size, stats.max_size)
     }
 }
 

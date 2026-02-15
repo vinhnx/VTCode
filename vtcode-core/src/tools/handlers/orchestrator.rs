@@ -153,18 +153,8 @@ pub struct SandboxConfig {
     pub restrict_filesystem: bool,
 }
 
-/// Error during sandbox transformation
-#[derive(Debug, thiserror::Error)]
-pub enum SandboxTransformError {
-    #[error("missing sandbox executable")]
-    MissingSandboxExecutable,
-
-    #[error("sandbox not available on this platform")]
-    SandboxUnavailable,
-
-    #[error("sandbox configuration error: {0}")]
-    ConfigError(String),
-}
+// Re-export from sandboxing module (canonical definition)
+pub use super::sandboxing::SandboxTransformError;
 
 /// Tool execution context for runtimes
 pub struct ToolCtx<'a> {
@@ -174,21 +164,8 @@ pub struct ToolCtx<'a> {
     pub tool_name: String,
 }
 
-/// Error from tool runtime execution
-#[derive(Debug, thiserror::Error)]
-pub enum ToolError {
-    #[error("Tool rejected: {0}")]
-    Rejected(String),
-
-    #[error("Internal error: {0}")]
-    Codex(#[from] anyhow::Error),
-
-    #[error("Sandbox error: {0}")]
-    Sandbox(#[from] SandboxTransformError),
-
-    #[error("Timeout after {0}ms")]
-    Timeout(u64),
-}
+// Re-export from sandboxing module (canonical definition)
+pub use super::sandboxing::ToolError;
 
 /// Trait for tool runtimes (from Codex)
 ///
@@ -282,7 +259,7 @@ impl ToolOrchestrator {
 
         match runtime.run(req, &attempt, ctx).await {
             Ok(out) => Ok(out),
-            Err(ToolError::Sandbox(_)) if runtime.escalate_on_failure() => {
+            Err(ToolError::SandboxDenied(_)) if runtime.escalate_on_failure() => {
                 // Retry without sandbox if escalation is allowed
                 tracing::debug!("Sandbox failed, escalating to unsandboxed execution");
                 let escalated = self.sandbox.create_escalated_attempt(&policy);

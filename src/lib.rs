@@ -166,6 +166,7 @@ pub mod config_watcher;
 pub mod ide_context;
 pub mod interactive_list;
 pub mod tools;
+#[allow(dead_code)]
 mod workspace_trust;
 
 pub mod startup;

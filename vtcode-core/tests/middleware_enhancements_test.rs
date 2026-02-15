@@ -1,3 +1,5 @@
+#![allow(deprecated)]
+
 use std::sync::Arc;
 use vtcode_core::exec::agent_optimization::AgentBehaviorAnalyzer;
 use vtcode_core::tools::middleware::{

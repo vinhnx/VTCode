@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 
+use crate::tools::error_helpers::require_field;
 use crate::tools::file_search_bridge::{self, FileSearchConfig};
 use crate::tools::tree_sitter::{
     CodeNavigator, LanguageAnalyzer, NavigationUtils, Position, SymbolInfo, TreeSitterAnalyzer,
@@ -182,16 +183,9 @@ impl CodeIntelligenceTool {
         &self,
         input: &CodeIntelligenceInput,
     ) -> Result<CodeIntelligenceOutput> {
-        let file_path = input
-            .file_path
-            .as_ref()
-            .with_context(|| "file_path is required for goto_definition")?;
-        let line = input
-            .line
-            .with_context(|| "line is required for goto_definition")?;
-        let character = input
-            .character
-            .with_context(|| "character is required for goto_definition")?;
+        let file_path = require_field(input.file_path.as_ref(), "file_path", "goto_definition")?;
+        let line = require_field(input.line, "line", "goto_definition")?;
+        let character = require_field(input.character, "character", "goto_definition")?;
 
         let full_path = self.resolve_path(file_path)?;
         let (symbols, _source_code) = self.parse_file_and_extract_symbols(&full_path).await?;
@@ -231,16 +225,10 @@ impl CodeIntelligenceTool {
         &self,
         input: &CodeIntelligenceInput,
     ) -> Result<CodeIntelligenceOutput> {
-        let file_path = input
-            .file_path
-            .as_ref()
-            .with_context(|| "file_path is required for find_references")?;
-        let line = input
-            .line
-            .with_context(|| "line is required for find_references")?;
-        let character = input
-            .character
-            .with_context(|| "character is required for find_references")?;
+        let file_path =
+            require_field(input.file_path.as_ref(), "file_path", "find_references")?;
+        let line = require_field(input.line, "line", "find_references")?;
+        let character = require_field(input.character, "character", "find_references")?;
 
         let full_path = self.resolve_path(file_path)?;
         let (symbols, _source_code) = self.parse_file_and_extract_symbols(&full_path).await?;
@@ -285,14 +273,9 @@ impl CodeIntelligenceTool {
 
     /// Get hover information for a symbol
     async fn hover(&self, input: &CodeIntelligenceInput) -> Result<CodeIntelligenceOutput> {
-        let file_path = input
-            .file_path
-            .as_ref()
-            .with_context(|| "file_path is required for hover")?;
-        let line = input.line.with_context(|| "line is required for hover")?;
-        let character = input
-            .character
-            .with_context(|| "character is required for hover")?;
+        let file_path = require_field(input.file_path.as_ref(), "file_path", "hover")?;
+        let line = require_field(input.line, "line", "hover")?;
+        let character = require_field(input.character, "character", "hover")?;
 
         let full_path = self.resolve_path(file_path)?;
         let (symbols, _source_code) = self.parse_file_and_extract_symbols(&full_path).await?;

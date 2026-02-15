@@ -122,7 +122,6 @@ pub(crate) async fn handle_tool_execution_result<'a>(
         ToolExecutionStatus::Cancelled => {
             handle_cancelled(t_ctx, tool_call_id, tool_name).await?;
         }
-        ToolExecutionStatus::Progress(_) => {}
     }
 
     // 2. Record MCP specific events
@@ -347,10 +346,6 @@ pub(super) fn record_mcp_event_to_panel(
     tool_name: &str,
     status: &ToolExecutionStatus,
 ) {
-    if matches!(status, ToolExecutionStatus::Progress(_)) {
-        return;
-    }
-
     let data_preview = match status {
         ToolExecutionStatus::Success { output, .. } => Some(serialize_output(output)),
         ToolExecutionStatus::Failure { error } => {
@@ -362,7 +357,6 @@ pub(super) fn record_mcp_event_to_panel(
         ToolExecutionStatus::Cancelled => {
             Some(serde_json::json!({"error": "Cancelled"}).to_string())
         }
-        ToolExecutionStatus::Progress(_) => None,
     };
 
     let mut mcp_event =
@@ -381,7 +375,6 @@ pub(super) fn record_mcp_event_to_panel(
         ToolExecutionStatus::Cancelled => {
             mcp_event.failure(Some("Cancelled".to_string()));
         }
-        ToolExecutionStatus::Progress(_) => {}
     }
 
     mcp_panel_state.add_event(mcp_event);

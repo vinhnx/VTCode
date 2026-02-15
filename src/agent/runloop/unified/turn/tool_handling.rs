@@ -142,10 +142,7 @@ pub(crate) async fn handle_tool_execution_result(
             ));
             enforce_history_limits(working_history);
         }
-        ToolExecutionStatus::Progress(_) => {
-            // Progress events are handled internally by the tool execution system
-            // Just continue without adding to the conversation history
-        }
+
     }
 
     // Handle MCP events using the shared MCP event recorder

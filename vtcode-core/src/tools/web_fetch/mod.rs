@@ -5,6 +5,7 @@
 
 use super::traits::Tool;
 use crate::config::constants::tools;
+use crate::tools::error_helpers::with_path_context;
 use anyhow::{Context, Result, anyhow};
 use async_trait::async_trait;
 use reqwest::header::{ACCEPT, HeaderMap, HeaderValue, USER_AGENT};
@@ -257,8 +258,7 @@ impl WebFetchTool {
             return Ok((Vec::new(), Vec::new()));
         }
 
-        let content = fs::read_to_string(&expanded_path)
-            .with_context(|| format!("Failed to read blocklist from {}", path))?;
+        let content = with_path_context(fs::read_to_string(&expanded_path), "read blocklist from", path)?;
 
         #[derive(Deserialize)]
         struct BlocklistFile {
@@ -266,8 +266,8 @@ impl WebFetchTool {
             blocked_patterns: Option<Vec<String>>,
         }
 
-        let blocklist: BlocklistFile = serde_json::from_str(&content)
-            .with_context(|| format!("Failed to parse blocklist JSON from {}", path))?;
+        let blocklist: BlocklistFile =
+            with_path_context(serde_json::from_str(&content), "parse blocklist JSON from", path)?;
 
         Ok((
             blocklist.blocked_domains.unwrap_or_default(),
@@ -283,16 +283,15 @@ impl WebFetchTool {
             return Ok(Vec::new());
         }
 
-        let content = fs::read_to_string(&expanded_path)
-            .with_context(|| format!("Failed to read whitelist from {}", path))?;
+        let content = with_path_context(fs::read_to_string(&expanded_path), "read whitelist from", path)?;
 
         #[derive(Deserialize)]
         struct WhitelistFile {
             allowed_domains: Option<Vec<String>>,
         }
 
-        let whitelist: WhitelistFile = serde_json::from_str(&content)
-            .with_context(|| format!("Failed to parse whitelist JSON from {}", path))?;
+        let whitelist: WhitelistFile =
+            with_path_context(serde_json::from_str(&content), "parse whitelist JSON from", path)?;
 
         Ok(whitelist.allowed_domains.unwrap_or_default())
     }

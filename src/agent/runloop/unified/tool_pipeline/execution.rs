@@ -1239,7 +1239,6 @@ fn status_label(status: &ToolExecutionStatus) -> &'static str {
         ToolExecutionStatus::Failure { .. } => "failure",
         ToolExecutionStatus::Timeout { .. } => "timeout",
         ToolExecutionStatus::Cancelled => "cancelled",
-        ToolExecutionStatus::Progress(_) => "progress",
     }
 }
 

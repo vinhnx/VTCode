@@ -1,36 +1,49 @@
-use std::collections::HashMap;
-use std::sync::RwLock;
-use std::time::{Duration, Instant};
+use std::time::Duration;
+
+use crate::cache::{CacheKey, EvictionPolicy, UnifiedCache};
+
+/// Cache key for validation results.
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+struct ValidationKey {
+    tool: String,
+    args_hash: u64,
+}
+
+impl CacheKey for ValidationKey {
+    fn to_cache_key(&self) -> String {
+        format!("{}:{}", self.tool, self.args_hash)
+    }
+}
 
 /// Cache for validation results to avoid repetitive checks for the same tool/args combination.
 pub struct ValidationCache {
-    cache: RwLock<HashMap<(String, u64), (bool, Instant)>>,
-    ttl: Duration,
+    cache: UnifiedCache<ValidationKey, bool>,
 }
 
 impl ValidationCache {
     /// Create a new validation cache with the specified TTL.
     pub fn new(ttl: Duration) -> Self {
         Self {
-            cache: RwLock::new(HashMap::new()),
-            ttl,
+            cache: UnifiedCache::new(1000, ttl, EvictionPolicy::TtlOnly),
         }
     }
 
     /// Check if a validation result is cached and valid.
     pub fn check(&self, tool: &str, args_hash: u64) -> Option<bool> {
-        let cache = self.cache.read().ok()?;
-        cache
-            .get(&(tool.to_string(), args_hash))
-            .filter(|(_, ts)| ts.elapsed() < self.ttl)
-            .map(|(result, _)| *result)
+        let key = ValidationKey {
+            tool: tool.to_string(),
+            args_hash,
+        };
+        self.cache.get_owned(&key)
     }
 
     /// Insert a validation result into the cache.
     pub fn insert(&self, tool: &str, args_hash: u64, result: bool) {
-        if let Ok(mut cache) = self.cache.write() {
-            cache.insert((tool.to_string(), args_hash), (result, Instant::now()));
-        }
+        let key = ValidationKey {
+            tool: tool.to_string(),
+            args_hash,
+        };
+        self.cache.insert(key, result, 1); // bool is tiny
     }
 }
 

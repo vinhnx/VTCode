@@ -6496,6 +6496,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "tracing",
+ "vtcode-commons",
  "vtcode-config",
  "which",
  "wiremock",

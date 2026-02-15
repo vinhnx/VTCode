@@ -20,6 +20,7 @@ const LAYER_METRICS: &str = "metrics";
 const LAYER_CIRCUIT_BREAKER: &str = "circuit_breaker";
 
 /// Result of middleware chain execution
+#[deprecated(since = "0.1.0", note = "Use async_middleware::ToolResult instead")]
 #[derive(Debug, Clone)]
 pub struct MiddlewareResult {
     /// Execution successful
@@ -48,6 +49,7 @@ impl MiddlewareResult {
 }
 
 /// Errors that can occur during middleware chain execution
+#[deprecated(since = "0.1.0", note = "Use async_middleware error handling instead")]
 #[derive(Debug, Clone)]
 pub enum MiddlewareError {
     ExecutionFailed(&'static str),
@@ -70,6 +72,7 @@ impl fmt::Display for MiddlewareError {
 }
 
 /// Metadata about execution through middleware
+#[deprecated(since = "0.1.0", note = "Use async_middleware types instead")]
 #[derive(Debug, Clone, Default)]
 pub struct ExecutionMetadata {
     /// Total execution time (ms)
@@ -89,6 +92,7 @@ pub struct ExecutionMetadata {
 }
 
 /// Core middleware trait
+#[deprecated(since = "0.1.0", note = "Use async_middleware::AsyncMiddleware instead")]
 pub trait Middleware: Send + Sync {
     /// Middleware identifier
     fn name(&self) -> &str;
@@ -102,6 +106,7 @@ pub trait Middleware: Send + Sync {
 }
 
 /// Tool execution request
+#[deprecated(since = "0.1.0", note = "Use async_middleware::ToolRequest instead")]
 #[derive(Debug, Clone)]
 pub struct ToolRequest {
     /// Tool name
@@ -118,6 +123,7 @@ pub struct ToolRequest {
 }
 
 /// Request metadata
+#[deprecated(since = "0.1.0", note = "Use async_middleware types instead")]
 #[derive(Debug, Clone)]
 pub struct RequestMetadata {
     /// Request ID for tracing
@@ -157,6 +163,7 @@ impl Default for RequestMetadata {
 }
 
 /// Logging middleware
+#[deprecated(since = "0.1.0", note = "Use async_middleware::AsyncLoggingMiddleware instead")]
 pub struct LoggingMiddleware {
     #[allow(dead_code)]
     level: tracing::Level,
@@ -222,6 +229,7 @@ struct CacheEntry {
 }
 
 /// Caching middleware with staleness detection
+#[deprecated(since = "0.1.0", note = "Use async_middleware::AsyncCachingMiddleware instead")]
 pub struct CachingMiddleware {
     cache: Arc<std::sync::RwLock<std::collections::HashMap<String, CacheEntry>>>,
     /// Maximum age of cache entries in seconds (default: 300 = 5 minutes)
@@ -352,6 +360,7 @@ impl Middleware for CachingMiddleware {
 }
 
 /// Retry middleware with exponential backoff
+#[deprecated(since = "0.1.0", note = "Use async_middleware::AsyncRetryMiddleware instead")]
 pub struct RetryMiddleware {
     max_attempts: u32,
     initial_backoff_ms: u64,
@@ -405,6 +414,7 @@ impl Middleware for RetryMiddleware {
     }
 }
 /// Validation middleware
+#[deprecated(since = "0.1.0", note = "Use async_middleware types instead")]
 pub struct ValidationMiddleware {
     obs_context: Arc<ObservabilityContext>,
 }
@@ -590,6 +600,7 @@ impl Middleware for CircuitBreakerMiddleware {
 }
 
 /// Middleware chain executor
+#[deprecated(since = "0.1.0", note = "Use async_middleware::AsyncMiddlewareChain instead")]
 pub struct MiddlewareChain {
     middlewares: Vec<Arc<dyn Middleware>>,
 }

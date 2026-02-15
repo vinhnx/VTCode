@@ -33,10 +33,10 @@ impl LMStudioClient {
                 )
             })?;
 
-        let client = reqwest::Client::builder()
-            .connect_timeout(std::time::Duration::from_secs(5))
-            .build()
-            .unwrap_or_else(|_| reqwest::Client::new());
+        let client = vtcode_commons::http::create_client_with_timeouts(
+            std::time::Duration::from_secs(5),
+            std::time::Duration::from_secs(30),
+        );
 
         let instance = LMStudioClient {
             client,
@@ -202,10 +202,10 @@ impl LMStudioClient {
     /// Low-level constructor given a raw host root (testing only).
     #[cfg(test)]
     fn from_host_root(host_root: impl Into<String>) -> Self {
-        let client = reqwest::Client::builder()
-            .connect_timeout(std::time::Duration::from_secs(5))
-            .build()
-            .unwrap_or_else(|_| reqwest::Client::new());
+        let client = vtcode_commons::http::create_client_with_timeouts(
+            std::time::Duration::from_secs(5),
+            std::time::Duration::from_secs(30),
+        );
 
         Self {
             client,
