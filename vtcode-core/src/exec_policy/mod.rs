@@ -21,8 +21,8 @@
 //! let result = manager.check_approval(&["cargo", "build"]).await;
 //! ```
 
-pub mod command_validation;
 mod approval;
+pub mod command_validation;
 mod manager;
 mod parser;
 mod policy;

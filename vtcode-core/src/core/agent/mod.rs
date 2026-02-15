@@ -11,6 +11,7 @@ pub mod display;
 pub mod error_recovery;
 pub mod events;
 pub mod runner;
+pub mod session;
 pub mod snapshots;
 pub mod state;
 pub mod stats;

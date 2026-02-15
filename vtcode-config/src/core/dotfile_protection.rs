@@ -333,8 +333,7 @@ impl DotfileProtectionConfig {
     fn matches_pattern(path: &str, pattern: &str) -> bool {
         if pattern.contains('*') {
             // Handle wildcard patterns
-            if pattern.ends_with("/*") {
-                let prefix = &pattern[..pattern.len() - 2];
+            if let Some(prefix) = pattern.strip_suffix("/*") {
                 path.starts_with(prefix)
                     || path.contains(&format!("/{}/", prefix.trim_start_matches('.')))
             } else if pattern.ends_with(".*") {

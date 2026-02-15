@@ -1,6 +1,6 @@
 use super::AgentRunner;
 use crate::core::agent::events::ExecEventRecorder;
-use crate::core::agent::state::TaskRunState;
+use crate::core::agent::session::AgentSessionState;
 use crate::llm::provider::ToolCall;
 use anyhow::Result;
 
@@ -8,7 +8,7 @@ impl AgentRunner {
     pub(super) async fn handle_tool_calls(
         &mut self,
         tool_calls: Vec<ToolCall>,
-        task_state: &mut TaskRunState,
+        session_state: &mut AgentSessionState,
         event_recorder: &mut ExecEventRecorder,
         agent_prefix: &str,
         is_gemini: bool,
@@ -25,7 +25,7 @@ impl AgentRunner {
         if can_parallelize {
             self.execute_parallel_tool_calls(
                 tool_calls,
-                task_state,
+                session_state,
                 event_recorder,
                 agent_prefix,
                 is_gemini,
@@ -34,7 +34,7 @@ impl AgentRunner {
         } else {
             self.execute_sequential_tool_calls(
                 tool_calls,
-                task_state,
+                session_state,
                 event_recorder,
                 agent_prefix,
                 is_gemini,

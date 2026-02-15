@@ -202,10 +202,7 @@ impl TeamStorage {
             return Ok(0);
         }
         let state: Value = read_json_file(&path).await?;
-        Ok(state
-            .get("offset")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(0))
+        Ok(state.get("offset").and_then(|v| v.as_u64()).unwrap_or(0))
     }
 
     pub async fn save_mailbox_offset(

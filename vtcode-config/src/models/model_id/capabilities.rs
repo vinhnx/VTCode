@@ -5,8 +5,7 @@ impl ModelId {
     pub fn is_flash_variant(&self) -> bool {
         matches!(
             self,
-            ModelId::Gemini3FlashPreview
-                | ModelId::OllamaGemini3FlashPreviewCloud
+            ModelId::Gemini3FlashPreview | ModelId::OllamaGemini3FlashPreviewCloud
         )
     }
 

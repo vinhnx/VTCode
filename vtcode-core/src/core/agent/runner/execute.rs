@@ -9,14 +9,16 @@ use crate::core::agent::conversation::{
     build_conversation, build_messages_from_conversation, compose_system_instruction,
 };
 use crate::core::agent::events::ExecEventRecorder;
-use crate::core::agent::state::TaskRunState;
+use crate::core::agent::session::AgentSessionState;
+use crate::core::agent::session::controller::AgentSessionController;
+use crate::core::agent::steering::SteeringMessage;
 use crate::core::agent::task::{ContextItem, Task, TaskOutcome, TaskResults};
 use crate::gemini::{Content, Part};
-use crate::core::agent::steering::SteeringMessage;
 use crate::llm::provider::{LLMRequest, Message, ToolCall};
 use crate::prompts::system::compose_system_instruction_text;
 use crate::utils::colors::style;
 use anyhow::Result;
+use parking_lot::Mutex;
 use std::sync::Arc;
 use tracing::warn;
 
@@ -92,22 +94,32 @@ impl AgentRunner {
             let preserve_recent_turns = self.config().context.preserve_recent_turns;
             let max_context_tokens = self.config().context.max_context_tokens;
 
-            let mut task_state = TaskRunState::new(
-                conversation,
-                conversation_messages,
+            let mut session_state = AgentSessionState::new(
+                self.session_id.clone(),
+                self.max_turns,
                 max_tool_loops,
                 max_context_tokens,
             );
-            // Pre-reserve capacity for conversation messages to avoid reallocations
-            // Typical: 2-3 messages per turn (user input + assistant response + potential tool calls)
-            task_state.conversation_messages.reserve(self.max_turns * 3);
+            session_state.conversation = conversation;
+            session_state.messages = conversation_messages;
+
+            let mut controller = AgentSessionController::new(
+                session_state,
+                None, // Unified event sink can be added later
+                Some(
+                    self.event_sink
+                        .clone()
+                        .unwrap_or_else(|| Arc::new(Mutex::new(Box::new(|_| {})))),
+                ),
+            );
 
             if let Err(err) = self.tool_registry.initialize_async().await {
                 warn!(
                     error = %err,
                     "Tool registry initialization failed at task start"
                 );
-                task_state
+                controller
+                    .state
                     .warnings
                     .push(format!("Tool registry init failed: {err}"));
             }
@@ -123,14 +135,16 @@ impl AgentRunner {
                                 agent_prefix,
                                 style("Stopped by steering signal.").red().bold()
                             ));
-                            task_state.completion_outcome = TaskOutcome::Cancelled;
+                            controller.state.outcome = TaskOutcome::Cancelled;
                             break;
                         }
                         SteeringMessage::Pause => {
                             self.runner_println(format_args!(
                                 "{} {}",
                                 agent_prefix,
-                                style("Paused by steering signal. Waiting for Resume...").yellow().bold()
+                                style("Paused by steering signal. Waiting for Resume...")
+                                    .yellow()
+                                    .bold()
                             ));
                             // Wait for resume
                             loop {
@@ -143,46 +157,45 @@ impl AgentRunner {
                                     ));
                                     break;
                                 } else if let Some(SteeringMessage::Stop) = self.check_steering() {
-                                    task_state.completion_outcome = TaskOutcome::Cancelled;
+                                    controller.state.outcome = TaskOutcome::Cancelled;
                                     break;
                                 }
                             }
-                            if matches!(task_state.completion_outcome, TaskOutcome::Cancelled) {
+                            if matches!(controller.state.outcome, TaskOutcome::Cancelled) {
                                 break;
                             }
                         }
                         SteeringMessage::Resume => {} // Already running
                         SteeringMessage::InjectInput(input) => {
-                             self.runner_println(format_args!(
+                            self.runner_println(format_args!(
                                 "{} {}: {}",
                                 agent_prefix,
                                 style("Injected Input").cyan().bold(),
                                 input
                             ));
-                            task_state.conversation.push(Content::user_text(input.clone()));
-                            task_state.conversation_messages.push(Message::user(input));
+                            controller.state.add_user_message(input);
                         }
                     }
                 }
 
                 // Check context utilization before each turn
-                let utilization = task_state.utilization();
+                let utilization = controller.state.utilization();
                 if utilization > 0.90 {
                     // At 90%+ utilization, warn and consider stopping
                     warn!("Context at {:.1}% - approaching limit", utilization * 100.0);
-                    task_state.warnings.push(format!(
+                    controller.state.warnings.push(format!(
                         "Token budget at {}% - approaching context limit",
                         (utilization * 100.0) as u32
                     ));
                     // Continue but warn - actual compaction handled by ContextOptimizer internally
                 }
 
-                if task_state.has_completed {
-                    task_state.completion_outcome = TaskOutcome::Success;
+                if controller.state.is_completed {
+                    controller.state.outcome = TaskOutcome::Success;
                     break;
                 }
 
-                task_state.turns_executed = turn + 1;
+                controller.state.stats.turns_executed = turn + 1;
                 let turn_started_at = std::time::Instant::now();
                 let mut turn_recorded = false;
 
@@ -213,7 +226,7 @@ impl AgentRunner {
                 // Context compaction before the request
                 self.summarize_conversation_if_needed(
                     &system_instruction,
-                    &mut task_state,
+                    &mut controller.state,
                     preserve_recent_turns,
                     utilization,
                 );
@@ -238,10 +251,12 @@ impl AgentRunner {
 
                 // Optimize: Only rebuild messages for Gemini incrementally from last processed index
                 if matches!(provider_kind, ModelProvider::Gemini)
-                    && task_state.conversation.len() > task_state.last_processed_message_idx
+                    && controller.state.conversation.len()
+                        > controller.state.last_processed_message_idx
                 {
                     // Incremental append instead of full rebuild
-                    for content in &task_state.conversation[task_state.last_processed_message_idx..]
+                    for content in &controller.state.conversation
+                        [controller.state.last_processed_message_idx..]
                     {
                         let mut text = String::new();
                         for part in &content.parts {
@@ -259,9 +274,10 @@ impl AgentRunner {
                             "model" => Message::assistant(text),
                             _ => Message::user(text),
                         };
-                        task_state.conversation_messages.push(message);
+                        controller.state.messages.push(message);
                     }
-                    task_state.last_processed_message_idx = task_state.conversation.len();
+                    controller.state.last_processed_message_idx =
+                        controller.state.conversation.len();
                 }
 
                 let reasoning_effort =
@@ -280,7 +296,7 @@ impl AgentRunner {
                     Some(0.7)
                 };
                 let request = LLMRequest {
-                    messages: task_state.conversation_messages.clone(),
+                    messages: controller.state.messages.clone(),
                     system_prompt: Some(Arc::clone(&system_instruction)),
                     tools: Some(Arc::clone(&tools)),
                     model: turn_model.clone(),
@@ -298,7 +314,7 @@ impl AgentRunner {
                         &request,
                         &mut event_recorder,
                         &agent_prefix,
-                        &mut task_state.warnings,
+                        &mut controller.state.warnings,
                         turn,
                     )
                     .await?;
@@ -344,7 +360,7 @@ impl AgentRunner {
                 if self.handle_loop_detection(
                     &resp_summary.content,
                     &agent_prefix,
-                    &mut task_state,
+                    &mut controller.state,
                     &mut event_recorder,
                     &turn_started_at,
                     &mut turn_recorded,
@@ -359,11 +375,8 @@ impl AgentRunner {
                     .is_none_or(|calls| calls.is_empty())
                     && let Some(args_value) = detect_textual_run_pty_cmd(&resp_summary.content)
                 {
-                    let call_id = format!(
-                        "textual_call_{}_{}",
-                        turn,
-                        task_state.conversation_messages.len()
-                    );
+                    let call_id =
+                        format!("textual_call_{}_{}", turn, controller.state.messages.len());
                     effective_tool_calls = Some(vec![ToolCall::function(
                         call_id,
                         tools::RUN_PTY_CMD.to_owned(),
@@ -381,24 +394,25 @@ impl AgentRunner {
                 }
                 .with_reasoning(resp_summary.reasoning.clone());
 
-                task_state.conversation_messages.push(assistant_msg.clone());
+                controller.state.messages.push(assistant_msg.clone());
 
                 // Legacy conversation sync for Gemini
                 if is_gemini {
-                    task_state.conversation.push(Content {
+                    controller.state.conversation.push(Content {
                         role: ROLE_MODEL.into(),
                         parts: vec![Part::Text {
                             text: resp_summary.content.clone(),
                             thought_signature: None,
                         }],
                     });
-                    task_state.last_processed_message_idx = task_state.conversation.len();
+                    controller.state.last_processed_message_idx =
+                        controller.state.conversation.len();
                 }
 
                 if let Some(tool_calls) = effective_tool_calls.filter(|tc| !tc.is_empty()) {
                     self.handle_tool_calls(
                         tool_calls,
-                        &mut task_state,
+                        &mut controller.state,
                         &mut event_recorder,
                         &agent_prefix,
                         is_gemini,
@@ -406,8 +420,8 @@ impl AgentRunner {
                     .await?;
                 }
 
-                if !task_state.has_completed && !resp_summary.content.is_empty() {
-                    if check_for_response_loop(&resp_summary.content, &mut task_state) {
+                if !controller.state.is_completed && !resp_summary.content.is_empty() {
+                    if check_for_response_loop(&resp_summary.content, &mut controller.state) {
                         self.runner_println(format_args!(
                             "[{}] {}",
                             self.agent_type,
@@ -426,8 +440,8 @@ impl AgentRunner {
                             self.agent_type,
                             style("Completion indicator detected.").green().bold()
                         ));
-                        task_state.has_completed = true;
-                        task_state.completion_outcome = TaskOutcome::Success;
+                        controller.state.is_completed = true;
+                        controller.state.outcome = TaskOutcome::Success;
                         break;
                     }
                 }
@@ -437,66 +451,72 @@ impl AgentRunner {
                     .as_ref()
                     .is_some_and(|tc| !tc.is_empty());
                 if had_tool_call {
-                    let loops = task_state.register_tool_loop();
-                    if loops >= task_state.max_tool_loops {
+                    let loops = controller.state.register_tool_loop();
+                    if loops >= controller.state.constraints.max_tool_loops {
                         let warning_message = format!(
                             "Reached tool-call limit of {} iterations; pausing autonomous loop",
-                            task_state.max_tool_loops
+                            controller.state.constraints.max_tool_loops
                         );
                         self.record_warning(
                             &agent_prefix,
-                            &mut task_state,
+                            &mut controller.state,
                             &mut event_recorder,
                             warning_message,
                         );
-                        task_state.mark_tool_loop_limit_hit();
-                        task_state.record_turn(&turn_started_at, &mut turn_recorded);
+                        controller.state.mark_tool_loop_limit_hit();
+                        controller
+                            .state
+                            .record_turn(&turn_started_at, &mut turn_recorded);
                         break;
                     }
-                    task_state.consecutive_idle_turns = 0;
+                    controller.state.consecutive_idle_turns = 0;
                 } else {
-                    task_state.reset_tool_loop_guard();
-                    if !task_state.has_completed {
-                        task_state.consecutive_idle_turns =
-                            task_state.consecutive_idle_turns.saturating_add(1);
-                        if task_state.consecutive_idle_turns >= IDLE_TURN_LIMIT {
+                    controller.state.reset_tool_loop_guard();
+                    if !controller.state.is_completed {
+                        controller.state.consecutive_idle_turns =
+                            controller.state.consecutive_idle_turns.saturating_add(1);
+                        if controller.state.consecutive_idle_turns >= IDLE_TURN_LIMIT {
                             let warning_message = format!(
                                 "No tool calls or completion for {} consecutive turns; halting to avoid idle loop",
-                                task_state.consecutive_idle_turns
+                                controller.state.consecutive_idle_turns
                             );
                             self.record_warning(
                                 &agent_prefix,
-                                &mut task_state,
+                                &mut controller.state,
                                 &mut event_recorder,
                                 warning_message,
                             );
-                            task_state.completion_outcome = TaskOutcome::StoppedNoAction;
-                            task_state.record_turn(&turn_started_at, &mut turn_recorded);
+                            controller.state.outcome = TaskOutcome::StoppedNoAction;
+                            controller
+                                .state
+                                .record_turn(&turn_started_at, &mut turn_recorded);
                             break;
                         }
                     }
                 }
 
-                let should_continue =
-                    had_tool_call || (!task_state.has_completed && (turn + 1) < self.max_turns);
+                let should_continue = had_tool_call
+                    || (!controller.state.is_completed && (turn + 1) < self.max_turns);
 
                 // Record turn duration for the successfully completed turn
-                task_state.record_turn(&turn_started_at, &mut turn_recorded);
+                controller
+                    .state
+                    .record_turn(&turn_started_at, &mut turn_recorded);
 
                 if !should_continue {
-                    if task_state.has_completed {
-                        task_state.completion_outcome = TaskOutcome::Success;
+                    if controller.state.is_completed {
+                        controller.state.outcome = TaskOutcome::Success;
                     } else if (turn + 1) >= self.max_turns {
-                        task_state.completion_outcome =
+                        controller.state.outcome =
                             TaskOutcome::turn_limit_reached(self.max_turns, turn + 1);
                     } else {
-                        task_state.completion_outcome = TaskOutcome::StoppedNoAction;
+                        controller.state.outcome = TaskOutcome::StoppedNoAction;
                     }
                     break;
                 }
             }
 
-            task_state.finalize_outcome(self.max_turns);
+            controller.state.finalize_outcome(self.max_turns);
 
             let total_duration_ms = run_started_at.elapsed().as_millis();
 
@@ -504,27 +524,27 @@ impl AgentRunner {
             self.runner_println(format_args!("{} Done", agent_prefix));
 
             // Generate meaningful summary based on agent actions
-            let average_turn_duration_ms = if task_state.turn_count > 0 {
-                Some(task_state.turn_total_ms as f64 / task_state.turn_count as f64)
+            let average_turn_duration_ms = if controller.state.turn_count > 0 {
+                Some(controller.state.turn_total_ms as f64 / controller.state.turn_count as f64)
             } else {
                 None
             };
 
-            let max_turn_duration_ms = if task_state.turn_count > 0 {
-                Some(task_state.turn_max_ms)
+            let max_turn_duration_ms = if controller.state.turn_count > 0 {
+                Some(controller.state.turn_max_ms)
             } else {
                 None
             };
 
-            let outcome = task_state.completion_outcome.clone(); // Clone to avoid moving
+            let outcome = controller.state.outcome.clone(); // Clone to avoid moving
             let summary = self.generate_task_summary(
                 task,
-                &task_state.modified_files,
-                &task_state.executed_commands,
-                &task_state.warnings,
-                &task_state.conversation,
-                task_state.turns_executed,
-                task_state.max_tool_loop_streak,
+                &controller.state.modified_files,
+                &controller.state.executed_commands,
+                &controller.state.warnings,
+                &controller.state.conversation,
+                controller.state.stats.turns_executed,
+                controller.state.max_tool_loop_streak,
                 max_tool_loops,
                 outcome,
                 total_duration_ms,
@@ -543,15 +563,17 @@ impl AgentRunner {
                 ));
             }
 
-            if !task_state.completion_outcome.is_success() {
-                event_recorder.turn_failed(&task_state.completion_outcome.description());
+            if !controller.state.outcome.is_success() {
+                event_recorder.turn_failed(&controller.state.outcome.description());
             }
 
             event_recorder.turn_completed();
             let thread_events = event_recorder.into_events();
 
             // Return task results
-            Ok(task_state.into_results(summary, thread_events, total_duration_ms))
+            Ok(controller
+                .state
+                .into_results(summary, thread_events, total_duration_ms))
         };
 
         self.tool_registry.set_harness_task(None);

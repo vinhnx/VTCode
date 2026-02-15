@@ -2,7 +2,7 @@ use super::AgentRunner;
 use super::constants::ROLE_USER;
 use super::types::ToolFailureContext;
 use crate::core::agent::events::ExecEventRecorder;
-use crate::core::agent::state::TaskRunState;
+use crate::core::agent::session::AgentSessionState;
 use crate::exec::events::CommandExecutionStatus;
 use crate::gemini::{Content, Part};
 use crate::utils::colors::style;
@@ -12,7 +12,7 @@ impl AgentRunner {
     pub(super) fn record_warning(
         &self,
         agent_prefix: &str,
-        task_state: &mut TaskRunState,
+        session_state: &mut AgentSessionState,
         event_recorder: &mut ExecEventRecorder,
         warning_message: impl Into<String>,
     ) {
@@ -26,7 +26,7 @@ impl AgentRunner {
             );
         }
         event_recorder.warning(&warning_message);
-        task_state.warnings.push(warning_message);
+        session_state.warnings.push(warning_message);
     }
 
     pub(super) fn record_tool_failure(
@@ -53,10 +53,13 @@ impl AgentRunner {
         );
         failure_ctx.event_recorder.warning(&failure_text);
         // Move failure_text into warnings first, then reference for conversation
-        failure_ctx.task_state.warnings.push(failure_text.clone());
+        failure_ctx
+            .session_state
+            .warnings
+            .push(failure_text.clone());
 
         if let Some(call_id) = tool_response_id {
-            failure_ctx.task_state.push_tool_error(
+            failure_ctx.session_state.push_tool_error(
                 call_id.to_string(),
                 tool_name,
                 failure_text,
@@ -64,7 +67,7 @@ impl AgentRunner {
             );
         } else {
             // Fallback for when we don't have a call_id (should be rare in Codex-style)
-            failure_ctx.task_state.conversation.push(Content {
+            failure_ctx.session_state.conversation.push(Content {
                 role: ROLE_USER.into(),
                 parts: vec![Part::Text {
                     text: failure_text,
@@ -78,7 +81,7 @@ impl AgentRunner {
     pub(super) fn record_tool_denied(
         &self,
         agent_prefix: &str,
-        task_state: &mut TaskRunState,
+        session_state: &mut AgentSessionState,
         event_recorder: &mut ExecEventRecorder,
         call_id: &str,
         tool_name: &str,
@@ -94,9 +97,9 @@ impl AgentRunner {
                 detail
             );
         }
-        task_state.warnings.push(detail.clone());
+        session_state.warnings.push(detail.clone());
 
-        task_state.push_tool_error(call_id.to_string(), tool_name, detail.clone(), is_gemini);
+        session_state.push_tool_error(call_id.to_string(), tool_name, detail.clone(), is_gemini);
 
         if let Some(event) = command_event {
             event_recorder.command_finished(event, CommandExecutionStatus::Failed, None, &detail);

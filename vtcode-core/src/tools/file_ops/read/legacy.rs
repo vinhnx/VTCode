@@ -15,8 +15,11 @@ impl FileOpsTool {
         file_path: &Path,
         input: &Input,
     ) -> Result<(String, Value, bool)> {
-        let file_metadata =
-            with_file_context(tokio::fs::metadata(file_path).await, "read metadata for", file_path)?;
+        let file_metadata = with_file_context(
+            tokio::fs::metadata(file_path).await,
+            "read metadata for",
+            file_path,
+        )?;
 
         if !file_metadata.is_file() {
             return Err(anyhow!("Path is not a file: {}", file_path.display()));

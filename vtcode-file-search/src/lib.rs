@@ -230,10 +230,10 @@ pub fn run(config: FileSearchConfig) -> anyhow::Result<FileSearchResults> {
             };
 
             // Try to add to results
-            if let Ok(mut list) = best_list.lock() {
-                if list.try_add(path, &pattern_text_clone).is_some() {
-                    total_match_count_clone.fetch_add(1, Ordering::Relaxed);
-                }
+            if let Ok(mut list) = best_list.lock()
+                && list.try_add(path, &pattern_text_clone).is_some()
+            {
+                total_match_count_clone.fetch_add(1, Ordering::Relaxed);
             }
 
             ignore::WalkState::Continue

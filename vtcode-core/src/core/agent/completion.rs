@@ -1,4 +1,4 @@
-use crate::core::agent::state::TaskRunState;
+use crate::core::agent::session::AgentSessionState;
 use crate::llm::provider::MessageRole;
 
 /// Checks if the agent's response indicates that the task has been completed.
@@ -67,7 +67,7 @@ pub fn check_completion_indicators(response_text: &str) -> bool {
 
 /// Check for repetitive text in assistant responses to catch non-tool-calling loops.
 /// Returns true if a loop is detected.
-pub fn check_for_response_loop(response_text: &str, task_state: &mut TaskRunState) -> bool {
+pub fn check_for_response_loop(response_text: &str, session_state: &mut AgentSessionState) -> bool {
     if response_text.len() < 10 {
         return false;
     }
@@ -78,8 +78,8 @@ pub fn check_for_response_loop(response_text: &str, task_state: &mut TaskRunStat
         .collect::<Vec<_>>()
         .join(" ");
 
-    let repeated = task_state
-        .conversation_messages
+    let repeated = session_state
+        .messages
         .iter()
         .rev()
         .filter(|m| m.role == MessageRole::Assistant)
@@ -97,13 +97,9 @@ pub fn check_for_response_loop(response_text: &str, task_state: &mut TaskRunStat
     if repeated {
         let warning =
             "Repetitive assistant response detected. Breaking potential loop.".to_string();
-        // Since we don't have access to runner_println here, we just return true and let the caller handle logging if needed,
-        // or we modify the task state directly.
-        // In the original code, it logged using runner_println.
-        // We will push to warnings in task_state.
-
-        task_state.warnings.push(warning);
-        task_state.consecutive_idle_turns = task_state.consecutive_idle_turns.saturating_add(1);
+        session_state.warnings.push(warning);
+        session_state.consecutive_idle_turns =
+            session_state.consecutive_idle_turns.saturating_add(1);
         return true;
     }
 

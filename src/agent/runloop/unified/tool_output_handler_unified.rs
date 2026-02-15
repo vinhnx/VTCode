@@ -189,7 +189,6 @@ pub async fn handle_tool_outcome_unified<C: ToolOutputContext>(
                 .await?;
             }
         }
-
     }
 
     Ok((any_write_effect, turn_modified_files, last_tool_stdout))
