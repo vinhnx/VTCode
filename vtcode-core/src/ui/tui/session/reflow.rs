@@ -481,13 +481,47 @@ impl Session {
             return vec![Line::from(spans)];
         }
 
+        // Check if content is a diff line (starts with - or +, excluding --- and +++ headers)
+        let is_diff_line = content
+            .first()
+            .map(|span| {
+                let text: &str = span.content.as_ref();
+                let trimmed = text.trim_start();
+                (trimmed.starts_with('-') && !trimmed.starts_with("---"))
+                    || (trimmed.starts_with('+') && !trimmed.starts_with("+++"))
+            })
+            .unwrap_or(false);
+
+        // Extract diff prefix if present (the '- ' or '+ ' part)
+        let diff_prefix: Option<String> = if is_diff_line {
+            content.first().and_then(|span| {
+                let text: &str = span.content.as_ref();
+                // Find the prefix (e.g., "- " or "+ ") including leading whitespace
+                if let Some(pos) = text.find(|c: char| c == '-' || c == '+') {
+                    let prefix = &text[..=pos];
+                    // Include the space after the prefix if present
+                    let full_prefix =
+                        if text.len() > pos + 1 && text.chars().nth(pos + 1) == Some(' ') {
+                            &text[..=pos + 1]
+                        } else {
+                            prefix
+                        };
+                    Some(full_prefix.to_string())
+                } else {
+                    None
+                }
+            })
+        } else {
+            None
+        };
+
         let mut wrapped = self.wrap_line(Line::from(content), content_width);
         if wrapped.is_empty() {
             wrapped.push(Line::default());
         }
 
         // Add borders to each wrapped line
-        for line in wrapped.iter_mut() {
+        for (idx, line) in wrapped.iter_mut().enumerate() {
             let line_width = line.spans.iter().map(|s| s.width()).sum::<usize>();
             let padding = if show_right_border {
                 content_width.saturating_sub(line_width)
@@ -496,6 +530,16 @@ impl Session {
             };
 
             let mut new_spans = vec![Span::styled(first_prefix.to_owned(), border_style)];
+
+            // For diff lines, preserve the diff prefix on continuation lines
+            if idx > 0
+                && let Some(ref prefix) = diff_prefix
+            {
+                // Add the diff prefix with dimmed style to match diff appearance
+                let prefix_style = border_style.add_modifier(Modifier::DIM);
+                new_spans.push(Span::styled(prefix.clone(), prefix_style));
+            }
+
             new_spans.append(&mut line.spans);
             if padding > 0 {
                 new_spans.push(Span::styled(" ".repeat(padding), Style::default()));

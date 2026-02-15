@@ -187,10 +187,7 @@ impl BackupManager {
     /// Convert a file path to a safe filename for backup.
     fn safe_filename(&self, path: &Path) -> String {
         path.to_string_lossy()
-            .replace('/', "_")
-            .replace('\\', "_")
-            .replace(':', "_")
-            .replace('.', "_")
+            .replace(['/', '\\', ':', '.'], "_")
             .trim_start_matches('_')
             .to_string()
     }

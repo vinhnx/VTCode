@@ -225,10 +225,10 @@ struct GuardianState {
 impl DotfileGuardian {
     /// Expand tilde (~) in paths to home directory.
     fn expand_path(path: &str) -> String {
-        if path.starts_with("~/") {
-            if let Some(home) = dirs::home_dir() {
-                return home.join(&path[2..]).to_string_lossy().into_owned();
-            }
+        if let Some(stripped) = path.strip_prefix("~/")
+            && let Some(home) = dirs::home_dir()
+        {
+            return home.join(stripped).to_string_lossy().into_owned();
         }
         path.to_string()
     }
@@ -376,16 +376,16 @@ impl DotfileGuardian {
         is_whitelisted: bool,
     ) -> Result<()> {
         // Create backup before modification
-        if let Some(ref backup_manager) = self.backup_manager {
-            if context.file_path.exists() {
-                backup_manager
-                    .create_backup(
-                        &context.file_path,
-                        format!("Before {} by {}", context.access_type, context.initiator),
-                        &context.session_id,
-                    )
-                    .await?;
-            }
+        if let Some(ref backup_manager) = self.backup_manager
+            && context.file_path.exists()
+        {
+            backup_manager
+                .create_backup(
+                    &context.file_path,
+                    format!("Before {} by {}", context.access_type, context.initiator),
+                    &context.session_id,
+                )
+                .await?;
         }
 
         // Log the confirmed access
@@ -501,13 +501,13 @@ impl DotfileGuardian {
                 entry = entry.during_automation();
             }
 
-            if context.is_cascading {
-                if let Some(ref triggered_by) = context.triggered_by {
-                    entry = entry.with_context(format!(
-                        "Cascading from: {}",
-                        triggered_by.to_string_lossy()
-                    ));
-                }
+            if context.is_cascading
+                && let Some(ref triggered_by) = context.triggered_by
+            {
+                entry = entry.with_context(format!(
+                    "Cascading from: {}",
+                    triggered_by.to_string_lossy()
+                ));
             }
 
             log.log(entry).await?;

@@ -169,7 +169,7 @@ impl AuditEntry {
         if let Some(ref ctx) = self.context {
             hasher.update(ctx.as_bytes());
         }
-        hasher.update(&[self.during_automation as u8]);
+        hasher.update([self.during_automation as u8]);
         format!("{:x}", hasher.finalize())
     }
 
@@ -231,10 +231,10 @@ impl AuditLog {
             if line.trim().is_empty() {
                 continue;
             }
-            if let Ok(entry) = serde_json::from_str::<AuditEntry>(&line) {
-                if let Some(hash) = entry.entry_hash {
-                    last_hash = hash;
-                }
+            if let Ok(entry) = serde_json::from_str::<AuditEntry>(&line)
+                && let Some(hash) = entry.entry_hash
+            {
+                last_hash = hash;
             }
         }
 

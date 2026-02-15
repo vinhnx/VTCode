@@ -178,7 +178,11 @@ pub(super) fn collect_param_details(args: &Value, keys: &HashSet<String>) -> Vec
     };
     let include_all = keys.is_empty();
     for (key, value) in map {
-        if matches!(key.as_str(), "command" | "bash_command" | "cmd") {
+        // Skip command-related keys and edit_file content keys (too verbose)
+        if matches!(
+            key.as_str(),
+            "command" | "bash_command" | "cmd" | "old_str" | "new_str"
+        ) {
             continue;
         }
         if !include_all && keys.contains(key) {

@@ -1714,4 +1714,33 @@ mod tests {
         let result = normalize_code_indentation(code, Some("rust"), true);
         assert_eq!(result, code);
     }
+
+    #[test]
+    fn test_diff_summary_counts_function_signature_change() {
+        // Test case matching the user's TODO scenario - function signature change
+        let diff = "diff --git a/ask.rs b/ask.rs\n\
+index 0000000..1111111 100644\n\
+--- a/ask.rs\n\
++++ b/ask.rs\n\
+@@ -172,7 +172,7 @@\n\
+          blocks\n\
+      }\n\
+ \n\
+-    fn select_best_code_block<'a>(blocks: &'a [CodeFenceBlock]) -> Option<&'a CodeFenceBlock> {\n\
++    fn select_best_code_block(blocks: &[CodeFenceBlock]) -> Option<&CodeFenceBlock> {\n\
+          let mut best = None;\n\
+          let mut best_score = (0usize, 0u8);\n\
+          for block in blocks {";
+
+        let lines = normalize_diff_lines(diff);
+
+        // Find the summary line
+        let summary_line = lines
+            .iter()
+            .find(|l| l.starts_with("• Diff "))
+            .expect("should have summary line");
+
+        // Should show (+1 -1) not (+0 -0)
+        assert_eq!(summary_line, "• Diff ask.rs (+1 -1)");
+    }
 }

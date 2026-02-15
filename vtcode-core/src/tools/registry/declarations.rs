@@ -378,7 +378,7 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
                     "action": {
                         "type": "string",
                         "enum": ["read", "write", "edit", "patch", "delete", "move", "copy"],
-                        "description": "Action to perform. If not provided, inferred: 'edit' if old_str present, 'write' if content present, else 'read'."
+                        "description": "Action to perform. If not provided, inferred: 'edit' if old_str present, 'patch' if patch/input patch content present, 'write' if content present, 'move' if destination present, 'read' if a path key is present."
                     },
                     "path": {"type": "string", "description": "File path (relative to workspace root)."},
                     "content": {"type": "string", "description": "New content for 'write' action."},

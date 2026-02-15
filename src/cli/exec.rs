@@ -6,7 +6,7 @@ use vtcode_core::config::VTCodeConfig;
 use vtcode_core::config::WorkspaceTrustLevel;
 use vtcode_core::config::models::ModelId;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
-use vtcode_core::core::agent::runner::AgentRunner;
+use vtcode_core::core::agent::runner::{AgentRunner, RunnerSettings};
 use vtcode_core::core::agent::task::{ContextItem, Task};
 use vtcode_core::core::agent::types::AgentType;
 use vtcode_core::exec::events::{ThreadEvent, ThreadItemDetails};
@@ -132,8 +132,10 @@ async fn handle_exec_command_impl(
         config.api_key.clone(),
         config.workspace.clone(),
         session_id,
-        Some(config.reasoning_effort),
-        None,
+        RunnerSettings {
+            reasoning_effort: Some(config.reasoning_effort),
+            verbosity: None,
+        },
         None,
     )
     .await?;

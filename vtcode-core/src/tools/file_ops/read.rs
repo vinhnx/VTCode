@@ -39,6 +39,25 @@ fn is_new_read_request(args: &Value) -> bool {
     new_keys.iter().any(|key| args.get(*key).is_some())
 }
 
+fn looks_like_patch_payload(args: &Value) -> bool {
+    fn looks_like_patch_text(text: &str) -> bool {
+        let trimmed = text.trim_start();
+        trimmed.starts_with("*** Begin Patch")
+            || trimmed.starts_with("*** Update File:")
+            || trimmed.starts_with("*** Add File:")
+            || trimmed.starts_with("*** Delete File:")
+    }
+
+    args.get("patch")
+        .and_then(Value::as_str)
+        .is_some_and(looks_like_patch_text)
+        || args
+            .get("input")
+            .and_then(Value::as_str)
+            .is_some_and(looks_like_patch_text)
+        || args.as_str().is_some_and(looks_like_patch_text)
+}
+
 fn build_read_handler_args(args: &Value, canonical_path: &std::path::Path) -> Value {
     let mut handler_args_json = args.clone();
     if let Some(obj) = handler_args_json.as_object_mut() {
@@ -120,6 +139,14 @@ impl FileOpsTool {
         let mut perf = PerfSpan::new("vtcode.perf.read_file_ms");
 
         let path_args: PathArgs = serde_json::from_value(args.clone()).map_err(|_| {
+            if looks_like_patch_payload(&args) {
+                return anyhow!(
+                    "Error: Patch content was sent to read_file.\n\
+                    Use the patch path instead: unified_file with {{\"action\":\"patch\",\"patch\":\"...\"}} \
+                    (or {{\"action\":\"patch\",\"input\":\"...\"}}).\n\
+                    read_file requires a path parameter."
+                );
+            }
             let received = serde_json::to_string(&args).unwrap_or_else(|_| "{}".to_string());
             anyhow!(
                 "Error: Invalid 'read_file' arguments. Missing required path parameter.\n\
@@ -520,5 +547,21 @@ mod read_tests {
             result["metadata"]["applied_max_tokens"].as_u64().unwrap(),
             max_tokens as u64
         );
+    }
+
+    #[tokio::test]
+    async fn test_read_file_patch_payload_returns_actionable_error() {
+        let temp_dir = TempDir::new().unwrap();
+        let workspace_root = temp_dir.path().to_path_buf();
+        let grep_manager = std::sync::Arc::new(GrepSearchManager::new(workspace_root.clone()));
+        let file_ops = FileOpsTool::new(workspace_root, grep_manager);
+
+        let args = json!({
+            "input": "*** Begin Patch\n*** End Patch\n"
+        });
+        let err = file_ops.read_file(args).await.unwrap_err().to_string();
+
+        assert!(err.contains("Patch content was sent to read_file"));
+        assert!(err.contains("\"action\":\"patch\""));
     }
 }

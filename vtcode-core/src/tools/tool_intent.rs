@@ -88,17 +88,37 @@ pub fn classify_tool_intent(tool_name: &str, args: &Value) -> ToolIntent {
 /// Determine the action for unified_file tool based on args.
 /// Returns the action string or a default if inference is possible.
 pub fn unified_file_action(args: &Value) -> Option<&str> {
+    fn looks_like_patch_text(text: &str) -> bool {
+        let trimmed = text.trim_start();
+        trimmed.starts_with("*** Begin Patch")
+            || trimmed.starts_with("*** Update File:")
+            || trimmed.starts_with("*** Add File:")
+            || trimmed.starts_with("*** Delete File:")
+    }
+
     args.get("action").and_then(|v| v.as_str()).or_else(|| {
+        let has_read_path = args.get("path").is_some()
+            || args.get("file_path").is_some()
+            || args.get("filepath").is_some()
+            || args.get("target_path").is_some();
+        let patch_in_input = args
+            .get("input")
+            .and_then(|v| v.as_str())
+            .is_some_and(looks_like_patch_text);
+        let raw_patch = args.as_str().is_some_and(looks_like_patch_text);
+
         if args.get("old_str").is_some() {
             Some("edit")
-        } else if args.get("patch").is_some() {
+        } else if args.get("patch").is_some() || patch_in_input || raw_patch {
             Some("patch")
         } else if args.get("content").is_some() {
             Some("write")
         } else if args.get("destination").is_some() {
             Some("move")
-        } else {
+        } else if has_read_path {
             Some("read")
+        } else {
+            None
         }
     })
 }
@@ -154,7 +174,7 @@ pub fn unified_search_action(args: &Value) -> Option<&str> {
 
 #[cfg(test)]
 mod tests {
-    use super::classify_tool_intent;
+    use super::{classify_tool_intent, unified_file_action};
     use crate::config::constants::tools;
     use serde_json::json;
 
@@ -219,5 +239,30 @@ mod tests {
         assert!(intent.mutating);
         assert!(intent.destructive);
         assert!(!intent.readonly_unified_action);
+    }
+
+    #[test]
+    fn unified_file_input_patch_infers_patch() {
+        let args = json!({
+            "input": "*** Begin Patch\n*** End Patch\n"
+        });
+        let action = unified_file_action(&args);
+        assert_eq!(action, Some("patch"));
+    }
+
+    #[test]
+    fn unified_file_raw_patch_infers_patch() {
+        let args = json!("*** Begin Patch\n*** Update File: src/main.rs\n*** End Patch\n");
+        let action = unified_file_action(&args);
+        assert_eq!(action, Some("patch"));
+    }
+
+    #[test]
+    fn unified_file_unknown_args_require_action() {
+        let args = json!({
+            "unexpected": true
+        });
+        let action = unified_file_action(&args);
+        assert_eq!(action, None);
     }
 }

@@ -6,7 +6,7 @@ use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use super::styles::{GitStyles, LsStyles, select_line_style};
 #[path = "files_diff.rs"]
 mod files_diff;
-pub(super) use files_diff::{colorize_diff_summary_line, format_diff_content_lines};
+pub(super) use files_diff::format_diff_content_lines;
 
 /// Constants for line and content limits (compact display)
 const MAX_DIFF_LINE_LENGTH: usize = 100; // Reduced for compact view
@@ -80,7 +80,7 @@ pub(crate) fn render_write_file_preview(
     }
 
     if !diff_content.is_empty() {
-        renderer.line(MessageStyle::ToolDetail, "▼ diff")?;
+        renderer.line(MessageStyle::ToolDetail, "")?;
         render_diff_content(renderer, diff_content, git_styles, ls_styles)?;
     }
 
@@ -326,7 +326,7 @@ pub(crate) fn render_read_file_output(renderer: &mut AnsiRenderer, val: &Value) 
         if looks_like_diff_content(content) {
             let git_styles = GitStyles::new();
             let ls_styles = LsStyles::from_env();
-            renderer.line(MessageStyle::ToolDetail, "▼ diff")?;
+            renderer.line(MessageStyle::ToolDetail, "")?;
             render_diff_content(renderer, content, &git_styles, &ls_styles)?;
         } else {
             render_content_preview(renderer, content)?;
@@ -403,17 +403,6 @@ fn render_diff_content(
 
     for line in lines_to_render {
         let truncated = truncate_text_safe(&line, MAX_DIFF_LINE_LENGTH);
-        if let Some(summary_line) =
-            colorize_diff_summary_line(truncated, renderer.capabilities().supports_color())
-        {
-            renderer.line_with_override_style(
-                MessageStyle::ToolDetail,
-                MessageStyle::ToolDetail.style(),
-                &summary_line,
-            )?;
-            continue;
-        }
-
         if let Some(style) =
             select_line_style(Some(tools::WRITE_FILE), truncated, git_styles, ls_styles)
         {
@@ -424,6 +413,21 @@ fn render_diff_content(
     }
 
     Ok(())
+}
+
+pub(super) fn colorize_diff_summary_line(line: &str, _supports_color: bool) -> Option<String> {
+    let trimmed = line.trim_start();
+    let is_summary = trimmed.contains(" file changed")
+        || trimmed.contains(" files changed")
+        || trimmed.contains(" insertion(+)")
+        || trimmed.contains(" insertions(+)")
+        || trimmed.contains(" deletion(-)")
+        || trimmed.contains(" deletions(-)");
+    if is_summary {
+        Some(line.to_string())
+    } else {
+        None
+    }
 }
 
 fn looks_like_diff_content(content: &str) -> bool {

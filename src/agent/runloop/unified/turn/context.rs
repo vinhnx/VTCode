@@ -24,6 +24,8 @@ use vtcode_core::utils::ansi::AnsiRenderer;
 
 use crate::agent::runloop::unified::state::CtrlCState;
 
+const AUTONOMOUS_CONTINUE_DIRECTIVE: &str = "Do not stop with intent-only updates (for example: 'let me check...'). Execute the next concrete action now, then provide a completion summary or explicit blocker with next action.";
+
 #[macro_export]
 macro_rules! populate_turn_processing_context {
     ($dest:ident, $src:expr, $working_history:expr) => {
@@ -336,7 +338,18 @@ impl<'a> TurnProcessingContext<'a> {
         proposed_plan: Option<String>,
         response_streamed: bool,
     ) -> anyhow::Result<TurnHandlerOutcome> {
+        let should_force_continue = should_continue_autonomously_after_interim_text(
+            self.full_auto,
+            self.session_stats.is_plan_mode(),
+            self.working_history,
+            &text,
+        );
         self.handle_assistant_response(text, reasoning, response_streamed)?;
+
+        if should_force_continue {
+            push_system_directive_once(self.working_history, AUTONOMOUS_CONTINUE_DIRECTIVE);
+            return Ok(TurnHandlerOutcome::Continue);
+        }
 
         if self.session_stats.is_plan_mode()
             && let Some(plan_text) = proposed_plan
@@ -442,5 +455,246 @@ fn push_assistant_message(history: &mut Vec<uni::Message>, msg: uni::Message) {
         last.reasoning = msg.reasoning;
     } else {
         history.push(msg);
+    }
+}
+
+fn should_continue_autonomously_after_interim_text(
+    full_auto: bool,
+    plan_mode: bool,
+    history: &[uni::Message],
+    text: &str,
+) -> bool {
+    if !full_auto || plan_mode {
+        return false;
+    }
+
+    if !is_interim_progress_update(text) {
+        return false;
+    }
+
+    if last_user_message_is_follow_up(history) {
+        return true;
+    }
+
+    has_recent_tool_activity(history)
+}
+
+fn push_system_directive_once(history: &mut Vec<uni::Message>, directive: &str) {
+    let already_present = history.iter().rev().take(3).any(|message| {
+        message.role == uni::MessageRole::System && message.content.as_text().trim() == directive
+    });
+    if !already_present {
+        history.push(uni::Message::system(directive.to_string()));
+    }
+}
+
+fn last_user_message_is_follow_up(history: &[uni::Message]) -> bool {
+    history
+        .iter()
+        .rev()
+        .find(|message| message.role == uni::MessageRole::User)
+        .is_some_and(|message| is_follow_up_prompt_like(message.content.as_text().as_ref()))
+}
+
+fn has_recent_tool_activity(history: &[uni::Message]) -> bool {
+    history.iter().rev().take(16).any(|message| {
+        message.role == uni::MessageRole::Tool
+            || message.tool_call_id.is_some()
+            || message.tool_calls.is_some()
+    })
+}
+
+fn is_follow_up_prompt_like(input: &str) -> bool {
+    let normalized = input
+        .trim()
+        .trim_matches(|c: char| c.is_ascii_whitespace() || c.is_ascii_punctuation())
+        .to_ascii_lowercase();
+    if normalized.starts_with("continue autonomously from the last stalled turn") {
+        return true;
+    }
+    let words: Vec<&str> = normalized.split_whitespace().collect();
+    matches!(
+        words.as_slice(),
+        ["continue"]
+            | ["retry"]
+            | ["proceed"]
+            | ["go", "on"]
+            | ["go", "ahead"]
+            | ["keep", "going"]
+            | ["please", "continue"]
+            | ["continue", "please"]
+            | ["please", "retry"]
+            | ["retry", "please"]
+            | ["continue", "with", "recommendation"]
+            | ["continue", "with", "your", "recommendation"]
+    )
+}
+
+fn is_interim_progress_update(text: &str) -> bool {
+    let trimmed = text.trim();
+    if trimmed.is_empty() || trimmed.len() > 280 {
+        return false;
+    }
+
+    let lower = trimmed.to_ascii_lowercase();
+    let intent_prefixes = [
+        "let me ",
+        "i'll ",
+        "i will ",
+        "i need to ",
+        "i am going to ",
+        "i'm going to ",
+        "now i need to ",
+        "continuing ",
+        "next i need to ",
+        "next, i'll ",
+        "now i'll ",
+        "let us ",
+    ];
+    let starts_with_intent = intent_prefixes
+        .iter()
+        .any(|prefix| lower.starts_with(prefix));
+    if !starts_with_intent {
+        return false;
+    }
+
+    let user_input_markers = [
+        "could you",
+        "can you",
+        "please provide",
+        "need your",
+        "need you to",
+        "which option",
+    ];
+    if trimmed.contains('?')
+        || user_input_markers
+            .iter()
+            .any(|marker| lower.contains(marker))
+    {
+        return false;
+    }
+
+    let conclusive_markers = [
+        "completed",
+        "done",
+        "fixed",
+        "resolved",
+        "summary",
+        "final review",
+        "final blocker",
+        "next action",
+        "what changed",
+        "validation",
+        "passed",
+        "passes",
+        "cannot proceed",
+        "can't proceed",
+        "blocked by",
+        "all set",
+    ];
+    !conclusive_markers
+        .iter()
+        .any(|marker| lower.contains(marker))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn follow_up_prompt_detection_accepts_continue_variants() {
+        assert!(is_follow_up_prompt_like("continue"));
+        assert!(is_follow_up_prompt_like("continue."));
+        assert!(is_follow_up_prompt_like("go on"));
+        assert!(is_follow_up_prompt_like("please continue"));
+        assert!(is_follow_up_prompt_like(
+            "Continue autonomously from the last stalled turn. Stall reason: x."
+        ));
+        assert!(!is_follow_up_prompt_like("run cargo clippy and fix"));
+    }
+
+    #[test]
+    fn interim_progress_detection_requires_non_conclusive_intent_text() {
+        assert!(is_interim_progress_update(
+            "Let me fix the second collapsible if statement:"
+        ));
+        assert!(is_interim_progress_update(
+            "Let me fix the second collapsible if statement in the Anthropic provider:"
+        ));
+        assert!(is_interim_progress_update(
+            "Now I need to update the function body to use settings.reasoning_effort and settings.verbosity:"
+        ));
+        assert!(is_interim_progress_update(
+            "I'll continue with the next fix."
+        ));
+        assert!(!is_interim_progress_update(
+            "I need you to choose which option to apply."
+        ));
+        assert!(!is_interim_progress_update(
+            "Completed. All requested fixes are done."
+        ));
+        assert!(!is_interim_progress_update(
+            "Final review: two blockers remain with next action."
+        ));
+    }
+
+    #[test]
+    fn autonomous_continue_triggers_for_follow_up_and_interim_text() {
+        let history = vec![uni::Message::user("continue".to_string())];
+        assert!(should_continue_autonomously_after_interim_text(
+            true,
+            false,
+            &history,
+            "Let me fix the next issue."
+        ));
+        assert!(!should_continue_autonomously_after_interim_text(
+            true,
+            true,
+            &history,
+            "Let me fix the next issue."
+        ));
+        assert!(!should_continue_autonomously_after_interim_text(
+            false,
+            false,
+            &history,
+            "Let me fix the next issue."
+        ));
+    }
+
+    #[test]
+    fn autonomous_continue_triggers_for_interim_text_after_tool_activity() {
+        let history = vec![
+            uni::Message::user("run cargo clippy and fix".to_string()),
+            uni::Message::assistant("I will run cargo clippy now.".to_string()).with_tool_calls(
+                vec![uni::ToolCall::function(
+                    "call_1".to_string(),
+                    "run_pty_cmd".to_string(),
+                    "{}".to_string(),
+                )],
+            ),
+            uni::Message::tool_response("call_1".to_string(), "warning: ...".to_string()),
+        ];
+
+        assert!(should_continue_autonomously_after_interim_text(
+            true,
+            false,
+            &history,
+            "Now I need to update the function body to use settings.reasoning_effort and settings.verbosity:"
+        ));
+    }
+
+    #[test]
+    fn autonomous_continue_does_not_trigger_without_follow_up_or_tool_activity() {
+        let history = vec![
+            uni::Message::user("run cargo clippy and fix".to_string()),
+            uni::Message::assistant("I will start now.".to_string()),
+        ];
+
+        assert!(!should_continue_autonomously_after_interim_text(
+            true,
+            false,
+            &history,
+            "Now I need to update the function body to use settings.reasoning_effort and settings.verbosity:"
+        ));
     }
 }

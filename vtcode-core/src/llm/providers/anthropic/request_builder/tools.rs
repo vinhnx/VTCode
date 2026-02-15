@@ -38,15 +38,13 @@ pub(crate) fn build_tools(
         })
         .collect();
 
-    if *breakpoints_remaining > 0 {
-        if let Some(cc) = cache_control.as_ref() {
-            if let Some(last_tool) = built_tools.last_mut() {
-                if let AnthropicTool::Function(func_tool) = last_tool {
-                    func_tool.cache_control = Some(cc.clone());
-                }
-                *breakpoints_remaining -= 1;
-            }
-        }
+    if *breakpoints_remaining > 0
+        && let Some(cc) = cache_control.as_ref()
+        && let Some(last_tool) = built_tools.last_mut()
+        && let AnthropicTool::Function(func_tool) = last_tool
+    {
+        func_tool.cache_control = Some(cc.clone());
+        *breakpoints_remaining -= 1;
     }
 
     if built_tools.is_empty() {
@@ -96,12 +94,12 @@ pub(crate) fn build_tool_choice(
         .as_ref()
         .map(|tc| tc.to_provider_format("anthropic"));
 
-    if thinking_val.is_some() {
-        if let Some(ref choice) = final_tool_choice {
-            let choice_type = choice.get("type").and_then(|t| t.as_str()).unwrap_or("");
-            if choice_type != "auto" && choice_type != "none" && !choice_type.is_empty() {
-                final_tool_choice = Some(json!({"type": "auto"}));
-            }
+    if thinking_val.is_some()
+        && let Some(ref choice) = final_tool_choice
+    {
+        let choice_type = choice.get("type").and_then(|t| t.as_str()).unwrap_or("");
+        if choice_type != "auto" && choice_type != "none" && !choice_type.is_empty() {
+            final_tool_choice = Some(json!({"type": "auto"}));
         }
     }
 

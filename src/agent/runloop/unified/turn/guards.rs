@@ -3,6 +3,7 @@ use crate::agent::runloop::unified::turn::context::{
 };
 use anyhow::Result;
 use serde_json::Value;
+use std::borrow::Cow;
 use vtcode_core::utils::ansi::MessageStyle;
 
 use std::sync::Arc;
@@ -185,16 +186,27 @@ pub(crate) async fn run_proactive_guards(
 /// Check if a tool signature represents a read-only operation
 /// Signature format: "tool_name:args_json" where args_json is serialized Value
 fn is_readonly_signature(signature: &str) -> bool {
-    // Split signature into tool name and args JSON
-    let Some(colon_pos) = signature.find(':') else {
+    // Prefer `:{` / `:[` separators so tool names containing `::` don't break parsing.
+    let colon_pos = signature
+        .find(":{")
+        .or_else(|| signature.find(":["))
+        .or_else(|| signature.find(':'));
+    let Some(colon_pos) = colon_pos else {
         return false;
     };
-    let tool_name = &signature[..colon_pos];
+    let tool_name = normalize_turn_balancer_tool_name(&signature[..colon_pos]);
     let args_json = &signature[colon_pos + 1..];
 
-    // Always read-only tools (legacy and unified)
+    let tool_name_str: &str = tool_name.as_ref();
+
+    if let Ok(args) = serde_json::from_str::<Value>(args_json) {
+        return !vtcode_core::tools::tool_intent::classify_tool_intent(tool_name_str, &args)
+            .mutating;
+    }
+
+    // Fallback for malformed signature payloads.
     if matches!(
-        tool_name,
+        tool_name_str,
         tool_names::READ_FILE
             | tool_names::GREP_FILE
             | tool_names::LIST_FILES
@@ -206,43 +218,38 @@ fn is_readonly_signature(signature: &str) -> bool {
         return true;
     }
 
-    // For unified tools, parse JSON args to check action parameter
-    // Try parsing as JSON (Value Display may serialize with varying formats)
-    if let Ok(args) = serde_json::from_str::<Value>(args_json) {
-        // unified_file: read action is read-only
-        if tool_name == tool_names::UNIFIED_FILE
-            && let Some(action) = args.get("action").and_then(|v| v.as_str())
-        {
-            return action == "read";
-        }
-        // If no action but has mutating fields, it's not read-only
-        // Default to mutating if unclear
-        // unified_exec: poll and list actions are read-only
-        if tool_name == tool_names::UNIFIED_EXEC
-            && let Some(action) = args.get("action").and_then(|v| v.as_str())
-        {
-            return matches!(action, "poll" | "list");
-        }
-    } else {
-        // If JSON parsing fails, fall back to string matching for robustness
-        // This handles cases where Value Display might not produce valid JSON
-        if tool_name == tool_names::UNIFIED_FILE {
-            // Check for read action in various JSON formats
-            let lower_json = args_json.to_lowercase();
-            return lower_json.contains(r#""action":"read""#)
-                || lower_json.contains(r#""action": "read""#)
-                || lower_json.contains(r#"'action':'read'"#);
-        }
-        if tool_name == tool_names::UNIFIED_EXEC {
-            let lower_json = args_json.to_lowercase();
-            return lower_json.contains(r#""action":"poll""#)
-                || lower_json.contains(r#""action":"list""#)
-                || lower_json.contains(r#""action": "poll""#)
-                || lower_json.contains(r#""action": "list""#);
-        }
+    if tool_name_str == tool_names::UNIFIED_FILE {
+        let lower_json = args_json.to_ascii_lowercase();
+        return lower_json.contains(r#""action":"read""#)
+            || lower_json.contains(r#""action": "read""#)
+            || lower_json.contains(r#"'action':'read'"#);
+    }
+    if tool_name_str == tool_names::UNIFIED_EXEC {
+        let lower_json = args_json.to_ascii_lowercase();
+        return lower_json.contains(r#""action":"poll""#)
+            || lower_json.contains(r#""action":"list""#)
+            || lower_json.contains(r#""action": "poll""#)
+            || lower_json.contains(r#""action": "list""#);
     }
 
     false
+}
+
+fn normalize_turn_balancer_tool_name(name: &str) -> Cow<'_, str> {
+    let lowered = name.trim().to_ascii_lowercase();
+    match lowered.as_str() {
+        "read file" | "repo_browser.read_file" => Cow::Borrowed(tool_names::READ_FILE),
+        "write file" | "repo_browser.write_file" => Cow::Borrowed(tool_names::WRITE_FILE),
+        "edit file" => Cow::Borrowed(tool_names::EDIT_FILE),
+        "search text" | "list files" | "code intelligence" | "list tools" | "list errors"
+        | "show agent info" | "fetch" => Cow::Borrowed(tool_names::UNIFIED_SEARCH),
+        "run command (pty)" | "run command" | "run code" | "exec code" | "bash"
+        | "container.exec" => Cow::Borrowed(tool_names::UNIFIED_EXEC),
+        "apply patch" | "delete file" | "move file" | "copy file" | "file operation" => {
+            Cow::Borrowed(tool_names::UNIFIED_FILE)
+        }
+        _ => Cow::Owned(lowered),
+    }
 }
 
 pub(crate) async fn handle_turn_balancer(
@@ -303,4 +310,27 @@ pub(crate) async fn handle_turn_balancer(
     }
 
     TurnHandlerOutcome::Continue
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_readonly_signature;
+
+    #[test]
+    fn readonly_signature_handles_alias_and_search_signatures() {
+        assert!(is_readonly_signature(r#"read file:{"path":"README.md"}"#));
+        assert!(is_readonly_signature(
+            r#"search text:{"pattern":"match provider_event","path":"vtcode-core/src/anthropic_api/server.rs"}"#
+        ));
+        assert!(is_readonly_signature(
+            r#"unified_search:{"pattern":"LLMStreamEvent::","path":"vtcode-core/src/anthropic_api/server.rs"}"#
+        ));
+    }
+
+    #[test]
+    fn readonly_signature_keeps_exec_run_non_readonly() {
+        assert!(!is_readonly_signature(
+            r#"unified_exec:{"action":"run","command":"cargo check"}"#
+        ));
+    }
 }
