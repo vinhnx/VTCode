@@ -155,7 +155,9 @@ impl AgentRunner {
                                         style("Resumed by steering signal.").green().bold()
                                     ));
                                     break;
-                                } else if let Some(SteeringMessage::SteerStop) = self.check_steering() {
+                                } else if let Some(SteeringMessage::SteerStop) =
+                                    self.check_steering()
+                                {
                                     controller.state.outcome = TaskOutcome::Cancelled;
                                     break;
                                 }

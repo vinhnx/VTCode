@@ -573,43 +573,95 @@ fn minimax_presets() -> Vec<ModelPreset> {
 }
 
 fn openrouter_presets() -> Vec<ModelPreset> {
-    vec![ModelPreset {
-        id: "openrouter/deepseek/deepseek-chat".to_string(),
-        model: "deepseek/deepseek-chat".to_string(),
-        display_name: "DeepSeek V3.2 (OpenRouter)".to_string(),
-        description: "DeepSeek via OpenRouter".to_string(),
-        provider: Provider::OpenRouter,
-        default_reasoning_effort: ReasoningEffortLevel::Medium,
-        supported_reasoning_efforts: vec![ReasoningEffortPreset {
-            effort: ReasoningEffortLevel::Medium,
-            description: "Balanced".to_string(),
-        }],
-        is_default: true,
-        upgrade: None,
-        show_in_picker: true,
-        supported_in_api: true,
-        context_window: Some(128_000),
-    }]
+    vec![
+        ModelPreset {
+            id: "openrouter/deepseek/deepseek-chat".to_string(),
+            model: "deepseek/deepseek-chat".to_string(),
+            display_name: "DeepSeek V3.2 (OpenRouter)".to_string(),
+            description: "DeepSeek via OpenRouter".to_string(),
+            provider: Provider::OpenRouter,
+            default_reasoning_effort: ReasoningEffortLevel::Medium,
+            supported_reasoning_efforts: vec![ReasoningEffortPreset {
+                effort: ReasoningEffortLevel::Medium,
+                description: "Balanced".to_string(),
+            }],
+            is_default: true,
+            upgrade: None,
+            show_in_picker: true,
+            supported_in_api: true,
+            context_window: Some(128_000),
+        },
+        ModelPreset {
+            id: "openrouter/moonshotai/kimi-k2.5".to_string(),
+            model: "moonshotai/kimi-k2.5".to_string(),
+            display_name: "Kimi K2.5 (OpenRouter)".to_string(),
+            description: "MoonshotAI Kimi K2.5 with long-context and multimodal capabilities"
+                .to_string(),
+            provider: Provider::OpenRouter,
+            default_reasoning_effort: ReasoningEffortLevel::Medium,
+            supported_reasoning_efforts: vec![
+                ReasoningEffortPreset {
+                    effort: ReasoningEffortLevel::Medium,
+                    description: "Balanced".to_string(),
+                },
+                ReasoningEffortPreset {
+                    effort: ReasoningEffortLevel::High,
+                    description: "Deep thinking".to_string(),
+                },
+            ],
+            is_default: false,
+            upgrade: None,
+            show_in_picker: true,
+            supported_in_api: true,
+            context_window: Some(256_000),
+        },
+    ]
 }
 
 fn ollama_presets() -> Vec<ModelPreset> {
-    vec![ModelPreset {
-        id: "ollama/gpt-oss:20b".to_string(),
-        model: "gpt-oss:20b".to_string(),
-        display_name: "GPT-OSS 20B (Ollama)".to_string(),
-        description: "Open-weight GPT-OSS served locally".to_string(),
-        provider: Provider::Ollama,
-        default_reasoning_effort: ReasoningEffortLevel::Medium,
-        supported_reasoning_efforts: vec![ReasoningEffortPreset {
-            effort: ReasoningEffortLevel::Medium,
-            description: "Balanced".to_string(),
-        }],
-        is_default: true,
-        upgrade: None,
-        show_in_picker: true,
-        supported_in_api: true,
-        context_window: Some(96_000),
-    }]
+    vec![
+        ModelPreset {
+            id: "ollama/gpt-oss:20b".to_string(),
+            model: "gpt-oss:20b".to_string(),
+            display_name: "GPT-OSS 20B (Ollama)".to_string(),
+            description: "Open-weight GPT-OSS served locally".to_string(),
+            provider: Provider::Ollama,
+            default_reasoning_effort: ReasoningEffortLevel::Medium,
+            supported_reasoning_efforts: vec![ReasoningEffortPreset {
+                effort: ReasoningEffortLevel::Medium,
+                description: "Balanced".to_string(),
+            }],
+            is_default: true,
+            upgrade: None,
+            show_in_picker: true,
+            supported_in_api: true,
+            context_window: Some(96_000),
+        },
+        ModelPreset {
+            id: "ollama/kimi-k2.5:cloud".to_string(),
+            model: "kimi-k2.5:cloud".to_string(),
+            display_name: "Kimi K2.5 (Ollama Cloud)".to_string(),
+            description: "MoonshotAI Kimi K2.5 with long-context and multimodal capabilities"
+                .to_string(),
+            provider: Provider::Ollama,
+            default_reasoning_effort: ReasoningEffortLevel::Medium,
+            supported_reasoning_efforts: vec![
+                ReasoningEffortPreset {
+                    effort: ReasoningEffortLevel::Medium,
+                    description: "Balanced".to_string(),
+                },
+                ReasoningEffortPreset {
+                    effort: ReasoningEffortLevel::High,
+                    description: "Deep thinking".to_string(),
+                },
+            ],
+            is_default: false,
+            upgrade: None,
+            show_in_picker: true,
+            supported_in_api: true,
+            context_window: Some(256_000),
+        },
+    ]
 }
 
 fn moonshot_presets() -> Vec<ModelPreset> {
@@ -659,23 +711,48 @@ fn lmstudio_presets() -> Vec<ModelPreset> {
 }
 
 fn huggingface_presets() -> Vec<ModelPreset> {
-    vec![ModelPreset {
-        id: "huggingface/deepseek-v3.2".to_string(),
-        model: "deepseek-ai/DeepSeek-V3-0324".to_string(),
-        display_name: "DeepSeek V3.2 (Hugging Face)".to_string(),
-        description: "DeepSeek via Hugging Face Inference".to_string(),
-        provider: Provider::HuggingFace,
-        default_reasoning_effort: ReasoningEffortLevel::Medium,
-        supported_reasoning_efforts: vec![ReasoningEffortPreset {
-            effort: ReasoningEffortLevel::Medium,
-            description: "Balanced".to_string(),
-        }],
-        is_default: true,
-        upgrade: None,
-        show_in_picker: true,
-        supported_in_api: true,
-        context_window: Some(128_000),
-    }]
+    vec![
+        ModelPreset {
+            id: "huggingface/deepseek-v3.2".to_string(),
+            model: "deepseek-ai/DeepSeek-V3-0324".to_string(),
+            display_name: "DeepSeek V3.2 (Hugging Face)".to_string(),
+            description: "DeepSeek via Hugging Face Inference".to_string(),
+            provider: Provider::HuggingFace,
+            default_reasoning_effort: ReasoningEffortLevel::Medium,
+            supported_reasoning_efforts: vec![ReasoningEffortPreset {
+                effort: ReasoningEffortLevel::Medium,
+                description: "Balanced".to_string(),
+            }],
+            is_default: true,
+            upgrade: None,
+            show_in_picker: true,
+            supported_in_api: true,
+            context_window: Some(128_000),
+        },
+        ModelPreset {
+            id: "huggingface/kimi-k2.5-novita".to_string(),
+            model: "moonshotai/Kimi-K2.5:novita".to_string(),
+            display_name: "Kimi K2.5 (Hugging Face)".to_string(),
+            description: "MoonshotAI Kimi K2.5 via Hugging Face Inference (Novita)".to_string(),
+            provider: Provider::HuggingFace,
+            default_reasoning_effort: ReasoningEffortLevel::Medium,
+            supported_reasoning_efforts: vec![
+                ReasoningEffortPreset {
+                    effort: ReasoningEffortLevel::Medium,
+                    description: "Balanced".to_string(),
+                },
+                ReasoningEffortPreset {
+                    effort: ReasoningEffortLevel::High,
+                    description: "Deep thinking".to_string(),
+                },
+            ],
+            is_default: false,
+            upgrade: None,
+            show_in_picker: true,
+            supported_in_api: true,
+            context_window: Some(256_000),
+        },
+    ]
 }
 
 /// Get all model presets (for testing)
