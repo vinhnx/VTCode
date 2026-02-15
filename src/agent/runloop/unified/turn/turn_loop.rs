@@ -23,7 +23,9 @@ use vtcode_core::llm::provider as uni;
 use vtcode_core::tools::ToolResultCache;
 use vtcode_core::tools::{ApprovalRecorder, ToolRegistry};
 use vtcode_core::ui::tui::{InlineHandle, InlineSession};
+// use vtcode_core::ui::tui::{InlineHandle, InlineSession};
 use vtcode_core::utils::ansi::AnsiRenderer;
+use vtcode_core::core::agent::steering::SteeringMessage;
 
 // Using `tool_output_handler::handle_pipeline_output_from_turn_ctx` adapter where needed
 
@@ -72,6 +74,7 @@ pub struct TurnLoopContext<'a> {
     pub provider_client: &'a mut Box<dyn uni::LLMProvider>,
     pub traj: &'a TrajectoryLogger,
     pub full_auto: bool,
+    pub steering_receiver: &'a mut Option<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>,
 }
 
 impl<'a> TurnLoopContext<'a> {
@@ -113,6 +116,7 @@ impl<'a> TurnLoopContext<'a> {
         provider_client: &'a mut Box<dyn uni::LLMProvider>,
         traj: &'a TrajectoryLogger,
         full_auto: bool,
+        steering_receiver: &'a mut Option<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>,
     ) -> Self {
         Self {
             renderer,
@@ -149,6 +153,7 @@ impl<'a> TurnLoopContext<'a> {
             provider_client,
             traj,
             full_auto,
+            steering_receiver,
         }
     }
 
@@ -266,6 +271,56 @@ pub async fn run_turn_loop(
     }
 
     loop {
+        // Check for steering messages
+        if let Some(receiver) = ctx.steering_receiver {
+             match receiver.try_recv() {
+                Ok(SteeringMessage::Stop) => {
+                     crate::agent::runloop::unified::turn::turn_helpers::display_status(
+                        ctx.renderer,
+                        "Stopped by steering signal.",
+                    )?;
+                    result = TurnLoopResult::Cancelled;
+                    break;
+                }
+                Ok(SteeringMessage::Pause) => {
+                     crate::agent::runloop::unified::turn::turn_helpers::display_status(
+                        ctx.renderer,
+                        "Paused by steering signal. Waiting for Resume...",
+                    )?;
+                    // Wait for resume
+                     loop {
+                        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+                        match receiver.try_recv() {
+                            Ok(SteeringMessage::Resume) => {
+                                 crate::agent::runloop::unified::turn::turn_helpers::display_status(
+                                    ctx.renderer,
+                                    "Resumed by steering signal.",
+                                )?;
+                                break;
+                            }
+                             Ok(SteeringMessage::Stop) => {
+                                result = TurnLoopResult::Cancelled;
+                                break;
+                            }
+                            _ => {}
+                        }
+                    }
+                     if matches!(result, TurnLoopResult::Cancelled) {
+                        break;
+                    }
+                }
+                Ok(SteeringMessage::Resume) => {}
+                Ok(SteeringMessage::InjectInput(input)) => {
+                     crate::agent::runloop::unified::turn::turn_helpers::display_status(
+                        ctx.renderer,
+                        &format!("Injected Input: {}", input),
+                    )?;
+                     working_history.push(uni::Message::user(input));
+                }
+                Err(_) => {}
+             }
+        }
+
         step_count += 1;
         ctx.telemetry.record_turn();
 
@@ -537,6 +592,7 @@ pub async fn run_turn_loop(
             error_recovery: ctx.error_recovery,
             harness_state: ctx.harness_state,
             harness_emitter: ctx.harness_emitter,
+            steering_receiver: ctx.steering_receiver,
         };
 
         // === PROACTIVE GUARDS (HP-2: Pre-request checks) ===

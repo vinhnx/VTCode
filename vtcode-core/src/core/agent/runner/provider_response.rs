@@ -32,14 +32,14 @@ impl AgentRunner {
             .ceiling_duration(self.config().timeouts.default_ceiling_seconds);
         let mut streaming_disabled = false;
         if supports_streaming {
-            if let Some(last_failure) = *self.streaming_last_failure.borrow()
+            if let Some(last_failure) = *self.streaming_last_failure.lock()
                 && last_failure.elapsed().as_secs() >= STREAMING_COOLDOWN_SECS
             {
-                *self.streaming_failures.borrow_mut() = 0;
-                self.streaming_last_failure.borrow_mut().take();
+                *self.streaming_failures.lock() = 0;
+                self.streaming_last_failure.lock().take();
             }
             streaming_disabled =
-                *self.streaming_failures.borrow() >= super::constants::MAX_STREAMING_FAILURES;
+                *self.streaming_failures.lock() >= super::constants::MAX_STREAMING_FAILURES;
         }
         let mut agent_message_streamed = false;
         let mut reasoning_recorded = false;
@@ -80,11 +80,10 @@ impl AgentRunner {
                                 break;
                             }
                             Err(err) => {
-                                let mut failures = self.streaming_failures.borrow_mut();
+                                let mut failures = self.streaming_failures.lock();
                                 *failures = failures.saturating_add(1);
-                                self.streaming_last_failure
-                                    .replace(Some(std::time::Instant::now()));
-                                self.failure_tracker.borrow_mut().record_failure();
+                                *self.streaming_last_failure.lock() = Some(std::time::Instant::now());
+                                self.failure_tracker.lock().record_failure();
                                 if !self.quiet {
                                     println!(
                                         "{} {} Streaming error: {}",
@@ -105,11 +104,10 @@ impl AgentRunner {
                     }
                 }
                 Ok(Err(err)) => {
-                    let mut failures = self.streaming_failures.borrow_mut();
+                    let mut failures = self.streaming_failures.lock();
                     *failures = failures.saturating_add(1);
-                    self.streaming_last_failure
-                        .replace(Some(std::time::Instant::now()));
-                    self.failure_tracker.borrow_mut().record_failure();
+                    *self.streaming_last_failure.lock() = Some(std::time::Instant::now());
+                    self.failure_tracker.lock().record_failure();
                     if !self.quiet {
                         println!(
                             "{} {} Streaming fallback: {}",
@@ -123,11 +121,10 @@ impl AgentRunner {
                     warnings.push(warning);
                 }
                 Err(_) => {
-                    let mut failures = self.streaming_failures.borrow_mut();
+                    let mut failures = self.streaming_failures.lock();
                     *failures = failures.saturating_add(1);
-                    self.streaming_last_failure
-                        .replace(Some(std::time::Instant::now()));
-                    self.failure_tracker.borrow_mut().record_failure();
+                    *self.streaming_last_failure.lock() = Some(std::time::Instant::now());
+                    self.failure_tracker.lock().record_failure();
                     let timeout_display = streaming_deadline
                         .map(|d| format!("{d:?}"))
                         .unwrap_or_else(|| "configured streaming timeout".to_string());
@@ -151,8 +148,8 @@ impl AgentRunner {
         }
 
         if let Some(mut response) = streaming_response {
-            *self.streaming_failures.borrow_mut() = 0;
-            self.streaming_last_failure.borrow_mut().take();
+            *self.streaming_failures.lock() = 0;
+            self.streaming_last_failure.lock().take();
             let response_text = response.content.take().unwrap_or_default();
             if !response_text.is_empty() {
                 aggregated_text = response_text;
@@ -204,11 +201,11 @@ impl AgentRunner {
         }
 
         // Check circuit breaker before fallback
-        if self.failure_tracker.borrow().should_circuit_break() {
-            let backoff = self.failure_tracker.borrow().backoff_duration();
+        if self.failure_tracker.lock().should_circuit_break() {
+            let backoff = self.failure_tracker.lock().backoff_duration();
             warn!(
                 "Circuit breaker active after {} consecutive failures. Waiting {:?} before retry.",
-                self.failure_tracker.borrow().consecutive_failures,
+                self.failure_tracker.lock().consecutive_failures,
                 backoff
             );
             tokio::time::sleep(backoff).await;
@@ -231,7 +228,7 @@ impl AgentRunner {
             Ok(Ok(resp)) => resp,
             Ok(Err(e)) => {
                 // Record failure for exponential backoff
-                self.failure_tracker.borrow_mut().record_failure();
+                self.failure_tracker.lock().record_failure();
                 if !self.quiet {
                     println!(
                         "{} {} Failed",
@@ -247,7 +244,7 @@ impl AgentRunner {
                 ));
             }
             Err(_) => {
-                self.failure_tracker.borrow_mut().record_failure();
+                self.failure_tracker.lock().record_failure();
                 let warning = match generation_deadline {
                     Some(limit) => format!("LLM request timed out after {:?}", limit),
                     None => "LLM request timed out".to_string(),
@@ -274,9 +271,9 @@ impl AgentRunner {
         let reasoning = response.reasoning.clone();
 
         // Reset failure tracker on success
-        self.failure_tracker.borrow_mut().reset();
-        *self.streaming_failures.borrow_mut() = self.streaming_failures.borrow().saturating_sub(1);
-        self.streaming_last_failure.borrow_mut().take();
+        self.failure_tracker.lock().reset();
+        *self.streaming_failures.lock() = self.streaming_failures.lock().saturating_sub(1);
+        self.streaming_last_failure.lock().take();
 
         Ok(ProviderResponseSummary {
             response,

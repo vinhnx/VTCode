@@ -9,7 +9,8 @@ use vtcode_core::config::VTCodeConfig;
 use vtcode_core::config::WorkspaceTrustLevel;
 use vtcode_core::config::models::ModelId;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
-use vtcode_core::core::agent::runner::{AgentRunner, ContextItem, Task};
+use vtcode_core::core::agent::runner::AgentRunner;
+use vtcode_core::core::agent::task::{ContextItem, Task};
 use vtcode_core::core::agent::types::AgentType;
 use vtcode_core::{RunnerTaskOutcome, RunnerTaskResults};
 
@@ -211,6 +212,7 @@ pub async fn handle_benchmark_command(
         config.workspace.clone(),
         session_id,
         Some(config.reasoning_effort),
+        None,
         None,
     )
     .await?;

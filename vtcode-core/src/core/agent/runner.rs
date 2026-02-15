@@ -7,7 +7,8 @@ use crate::config::models::ModelId;
 use crate::config::types::{ReasoningEffortLevel, VerbosityLevel};
 use crate::core::agent::events::EventSink;
 use crate::core::agent::state::ApiFailureTracker;
-pub use crate::core::agent::task::{ContextItem, Task, TaskOutcome, TaskResults};
+use crate::core::agent::steering::SteeringMessage;
+use crate::core::agent::task::{ContextItem, Task, TaskOutcome, TaskResults};
 use crate::core::agent::types::AgentType;
 use crate::core::context_optimizer::ContextOptimizer;
 use crate::core::loop_detector::LoopDetector;
@@ -20,10 +21,10 @@ use crate::prompts::system::compose_system_instruction_text;
 use crate::tools::{ToolRegistry, build_function_declarations};
 
 use anyhow::{Result, anyhow};
-use std::cell::RefCell;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Instant;
+use parking_lot::Mutex;
 use tracing::warn;
 
 mod config_helpers;
@@ -82,17 +83,19 @@ pub struct AgentRunner {
     /// Maximum number of autonomous turns before halting
     max_turns: usize,
     /// Loop detector to prevent infinite exploration
-    loop_detector: RefCell<LoopDetector>,
+    loop_detector: parking_lot::Mutex<LoopDetector>,
     /// Cached shell policy patterns to avoid recompilation
 
     /// API failure tracking for exponential backoff
-    failure_tracker: RefCell<ApiFailureTracker>,
+    failure_tracker: parking_lot::Mutex<ApiFailureTracker>,
     /// Context optimizer for token budget management
     context_optimizer: tokio::sync::Mutex<ContextOptimizer>,
     /// Tracks recent streaming failures to avoid repeated double-requests
-    streaming_failures: RefCell<u8>,
+    streaming_failures: parking_lot::Mutex<u8>,
     /// Records when streaming last failed for cooldown-based re-enablement
-    streaming_last_failure: RefCell<Option<Instant>>,
+    streaming_last_failure: parking_lot::Mutex<Option<Instant>>,
+    /// Receiver for steering messages (e.g., stop, pause)
+    steering_receiver: Option<Mutex<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>>,
 }
 
 impl AgentRunner {
@@ -116,6 +119,7 @@ impl AgentRunner {
         session_id: String,
         reasoning_effort: Option<ReasoningEffortLevel>,
         verbosity: Option<VerbosityLevel>,
+        steering_receiver: Option<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>,
     ) -> Result<Self> {
         // Create client based on model
         let client: AnyClient = make_client(api_key.clone(), model)?;
@@ -164,12 +168,25 @@ impl AgentRunner {
             quiet: false,
             event_sink: None,
             max_turns: defaults::DEFAULT_FULL_AUTO_MAX_TURNS,
-            loop_detector: RefCell::new(loop_detector),
-            failure_tracker: RefCell::new(ApiFailureTracker::new()),
+            loop_detector: parking_lot::Mutex::new(loop_detector),
+            failure_tracker: parking_lot::Mutex::new(ApiFailureTracker::new()),
             context_optimizer: tokio::sync::Mutex::new(ContextOptimizer::new()),
-            streaming_failures: RefCell::new(0),
-            streaming_last_failure: RefCell::new(None),
+            streaming_failures: parking_lot::Mutex::new(0),
+            streaming_last_failure: parking_lot::Mutex::new(None),
+            steering_receiver: steering_receiver.map(Mutex::new),
         })
+    }
+
+    /// Check for pending steering messages
+    pub fn check_steering(&self) -> Option<SteeringMessage> {
+        if let Some(receiver_mutex) = &self.steering_receiver {
+            match receiver_mutex.lock().try_recv() {
+                Ok(msg) => Some(msg),
+                Err(_) => None,
+            }
+        } else {
+            None
+        }
     }
 
     /// Enable or disable console output for this runner.

@@ -15,6 +15,7 @@ use vtcode_core::utils::session_archive::find_session_by_identifier;
 use crate::agent::runloop::ResumeSession;
 use crate::agent::runloop::model_picker::{ModelPickerProgress, ModelPickerState};
 use crate::agent::runloop::prompt::refine_and_enrich_prompt;
+use vtcode_core::core::agent::steering::SteeringMessage;
 
 use crate::agent::runloop::unified::async_mcp_manager::AsyncMcpManager;
 use crate::agent::runloop::unified::display::display_user_message;
@@ -88,6 +89,7 @@ pub(crate) struct InteractionLoopContext<'a> {
         &'a Arc<std::sync::RwLock<vtcode_core::core::agent::error_recovery::ErrorRecoveryState>>,
     pub last_forced_redraw: &'a mut std::time::Instant,
     pub harness_config: vtcode_config::core::agent::AgentHarnessConfig,
+    pub steering_receiver: &'a mut Option<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>,
 }
 
 impl<'a> InteractionLoopContext<'a> {
@@ -133,6 +135,7 @@ impl<'a> InteractionLoopContext<'a> {
             error_recovery: self.error_recovery,
             harness_state,
             harness_emitter: self.harness_emitter,
+            steering_receiver: self.steering_receiver,
         }
     }
 }

@@ -37,7 +37,9 @@ use crate::agent::runloop::unified::plan_mode_state::transition_to_plan_mode;
 
 use super::context::TurnLoopResult as RunLoopTurnLoopResult;
 use super::finalization::finalize_session;
+// use super::finalization::finalize_session;
 use super::turn_loop::TurnLoopOutcome;
+use vtcode_core::core::agent::steering::SteeringMessage;
 
 use crate::agent::runloop::unified::palettes::ActivePalette;
 use crate::agent::runloop::unified::session_setup::{
@@ -79,6 +81,7 @@ pub(crate) async fn run_single_agent_loop_unified(
     plan_mode: bool,
     team_context: Option<vtcode_core::agent_teams::TeamContext>,
     resume: Option<ResumeSession>,
+    mut steering_receiver: Option<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>,
 ) -> Result<()> {
     // Create a guard that ensures terminal is restored even on early return
     // This is important because the TUI task may not shutdown cleanly
@@ -292,6 +295,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                     error_recovery: &session_state.error_recovery,
                     last_forced_redraw: &mut last_forced_redraw,
                     harness_config: harness_config.clone(),
+                    steering_receiver: &mut steering_receiver,
                 };
 
                 let mut interaction_state =
@@ -403,6 +407,7 @@ pub(crate) async fn run_single_agent_loop_unified(
                     &mut provider_client,
                     &traj,
                     full_auto,
+                    &mut steering_receiver,
                 );
 
                 let history_for_turn = if attempts == 0 {

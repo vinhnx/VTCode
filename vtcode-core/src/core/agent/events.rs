@@ -6,7 +6,8 @@ use crate::exec::events::{
     PatchChangeKind, ReasoningItem, ThreadEvent, ThreadItem, ThreadItemDetails, ThreadStartedEvent,
     TurnCompletedEvent, TurnFailedEvent, TurnStartedEvent, Usage,
 };
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use parking_lot::Mutex;
 use tracing::warn;
 
 /// Callback type alias for streaming structured events.
@@ -51,14 +52,8 @@ impl ExecEventRecorder {
 
     fn record(&mut self, event: ThreadEvent) {
         if let Some(sink) = &self.event_sink {
-            match sink.lock() {
-                Ok(mut callback) => {
-                    callback(&event);
-                }
-                Err(err) => {
-                    warn!("Failed to acquire event sink lock: {}", err);
-                }
-            }
+            let mut callback = sink.lock();
+            callback(&event);
         }
         self.events.push(event);
     }
