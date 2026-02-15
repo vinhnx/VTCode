@@ -18,7 +18,6 @@ pub use vtcode_core::mcp::cli::handle_mcp_command;
 pub mod analyze;
 pub mod benchmark;
 pub mod exec;
-mod plugin_marketplace;
 pub mod skills;
 pub mod skills_ref;
 pub mod update;
@@ -27,11 +26,7 @@ pub use vtcode_core::cli::args::AskCommandOptions;
 
 pub use benchmark::BenchmarkCommandOptions;
 pub use exec::ExecCommandOptions;
-pub use plugin_marketplace::{
-    handle_marketplace_add, handle_marketplace_list, handle_marketplace_remove,
-    handle_plugin_disable, handle_plugin_enable, handle_plugin_install, handle_plugin_list,
-    handle_plugin_uninstall, handle_plugin_validate,
-};
+
 mod snapshots;
 
 // Re-export the handle_acp_command from acp module

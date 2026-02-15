@@ -11,13 +11,13 @@ use crate::acp::tooling::{
 };
 use agent_client_protocol::{self as acp, AgentSideConnection, Client};
 use anyhow::Result;
-use path_clean::PathClean;
 use serde_json::{Value, json};
 use std::path::PathBuf;
 use tracing::warn;
 use vtcode_core::config::constants::tools;
 use vtcode_core::tools::traits::Tool;
 use vtcode_core::utils::ansi_parser::strip_ansi;
+use vtcode_core::utils::path::ensure_path_within_workspace;
 
 impl ZedAgent {
     pub(super) async fn execute_local_tool(
@@ -251,8 +251,9 @@ impl ZedAgent {
             .filter(|value| !value.trim().is_empty())
         {
             let resolved = self.parse_resource_path(uri)?;
-            let workspace_root = self.workspace_root().to_path_buf().clean();
-            let normalized = resolved.clean();
+            let workspace_root = self.workspace_root();
+            let normalized = ensure_path_within_workspace(&resolved, workspace_root)
+                .map_err(|_| "list_files path must stay within the workspace".to_string())?;
 
             if normalized == workspace_root {
                 return Ok(Some(".".into()));
