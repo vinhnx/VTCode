@@ -1424,6 +1424,24 @@ pub async fn handle_manage_teams(
             return start_model_picker(ctx).await;
         }
         TeamCommandAction::Stop => {
+            if let Some(team) = ctx.session_stats.team_state.as_ref() {
+                let teammate_names: Vec<String> = team.teammate_names();
+                let team_ref = ctx.session_stats.team_state.as_ref().unwrap();
+                for name in &teammate_names {
+                    let proto = vtcode_core::agent_teams::TeamProtocolMessage {
+                        r#type: vtcode_core::agent_teams::TeamProtocolType::ShutdownRequest,
+                        details: None,
+                    };
+                    if let Err(err) = team_ref.send_protocol(name, "lead", proto, None).await {
+                        tracing::warn!("Failed to send shutdown to {}: {}", name, err);
+                    }
+                }
+            }
+            // Shutdown in-process runners
+            if let Some(runner) = ctx.session_stats.in_process_runner.as_ref() {
+                runner.shutdown_all();
+            }
+            ctx.session_stats.in_process_runner = None;
             ctx.session_stats.team_state = None;
             ctx.session_stats.team_context = None;
             ctx.session_stats.delegate_mode = false;
@@ -1534,7 +1552,8 @@ pub async fn handle_manage_teams(
                 "Use /team task add <description> to queue work.",
             )?;
 
-            if resolve_teammate_mode(ctx.vt_cfg) == vtcode_config::agent_teams::TeammateMode::Tmux {
+            let mode = resolve_teammate_mode(ctx.vt_cfg);
+            if mode == vtcode_config::agent_teams::TeammateMode::Tmux {
                 if let Err(err) = crate::agent::runloop::unified::team_tmux::spawn_tmux_teammates(
                     &team_name,
                     ctx.config.workspace.as_path(),
@@ -1543,6 +1562,26 @@ pub async fn handle_manage_teams(
                     ctx.renderer
                         .line(MessageStyle::Error, &format!("TMUX spawn failed: {}", err))?;
                 }
+            } else if mode == vtcode_config::agent_teams::TeammateMode::InProcess {
+                let team = ctx.session_stats.team_state.as_ref().unwrap();
+                let mut runner =
+                    vtcode_core::agent_teams::InProcessTeamRunner::new(team_name.clone());
+                for tm in &team.config.teammates {
+                    let spawn_cfg = vtcode_core::agent_teams::TeammateSpawnConfig {
+                        teammate: tm.clone(),
+                        team_name: team_name.clone(),
+                        api_key: ctx.config.api_key.clone(),
+                        poll_interval: std::time::Duration::from_millis(500),
+                        vt_cfg: ctx.vt_cfg.clone(),
+                    };
+                    if let Err(err) = runner.spawn_teammate(spawn_cfg) {
+                        ctx.renderer.line(
+                            MessageStyle::Error,
+                            &format!("Failed to spawn in-process '{}': {}", tm.name, err),
+                        )?;
+                    }
+                }
+                ctx.session_stats.in_process_runner = Some(runner);
             }
 
             Ok(SlashCommandControl::Continue)
@@ -1709,6 +1748,15 @@ pub async fn handle_manage_teams(
                         });
                         let _ = hooks.run_teammate_idle(assigned, Some(&details)).await;
                     }
+                }
+                // Send idle_notification protocol message to lead
+                {
+                    let team = ctx.session_stats.team_state.as_ref().expect("team state");
+                    let proto = vtcode_core::agent_teams::TeamProtocolMessage {
+                        r#type: vtcode_core::agent_teams::TeamProtocolType::IdleNotification,
+                        details: Some(serde_json::json!({ "reason": "available" })),
+                    };
+                    let _ = team.send_protocol("lead", assigned, proto, None).await;
                 }
             }
 
@@ -1887,6 +1935,15 @@ pub async fn handle_manage_teams(
                     Some(task_id),
                 )
                 .await?;
+                let proto = vtcode_core::agent_teams::TeamProtocolMessage {
+                    r#type: vtcode_core::agent_teams::TeamProtocolType::TaskUpdate,
+                    details: Some(serde_json::json!({
+                        "task_id": task_id,
+                        "action": "assigned",
+                        "teammate": teammate,
+                    })),
+                };
+                let _ = team.send_protocol("lead", "system", proto, Some(task_id)).await;
             };
             ctx.renderer.line(
                 MessageStyle::Info,

@@ -664,7 +664,16 @@ async fn poll_team_mailbox(ctx: &mut InteractionLoopContext<'_>) -> Result<()> {
         )
         .await
         {
-            Ok(team) => {
+            Ok(mut team) => {
+                // Restore persisted mailbox offset so we don't re-read old messages
+                let r = match team_context.role {
+                    TeamRole::Lead => "lead",
+                    TeamRole::Teammate => team_context
+                        .teammate_name
+                        .as_deref()
+                        .unwrap_or("teammate"),
+                };
+                let _ = team.load_persisted_offset(r).await;
                 ctx.session_stats.team_state = Some(team);
             }
             Err(err) => {
@@ -690,18 +699,98 @@ async fn poll_team_mailbox(ctx: &mut InteractionLoopContext<'_>) -> Result<()> {
         return Ok(());
     };
 
+    // Reload tasks so we see changes from tmux teammates.
+    team.reload_tasks().await?;
+
     let messages = team.read_mailbox(&recipient).await?;
-    for message in messages {
+    for message in &messages {
+        if let Some(proto) = &message.protocol {
+            let injected = handle_team_protocol(ctx, &message.sender, proto)?;
+            if let Some(text) = injected {
+                ctx.conversation_history
+                    .push(uni::Message::system(text));
+            }
+            continue;
+        }
+
+        let text = message.content.as_deref().unwrap_or("").trim();
+        if text.is_empty() {
+            continue;
+        }
+
         let mut header = format!("Team message from {}", message.sender);
         if let Some(task_id) = message.task_id {
             header.push_str(&format!(" (task #{})", task_id));
         }
         ctx.renderer.line(MessageStyle::Info, &header)?;
-        if !message.content.trim().is_empty() {
-            ctx.renderer
-                .line(MessageStyle::Output, message.content.trim())?;
-        }
+        ctx.renderer.line(MessageStyle::Output, text)?;
+
+        let injected = if let Some(task_id) = message.task_id {
+            format!(
+                "[Team message from {} re task #{}]\n{}",
+                message.sender, task_id, text
+            )
+        } else {
+            format!("[Team message from {}]\n{}", message.sender, text)
+        };
+        ctx.conversation_history
+            .push(uni::Message::user(injected));
     }
 
     Ok(())
+}
+
+/// Handle protocol messages, returning an optional string to inject into
+/// conversation history so the model can act on lifecycle events.
+fn handle_team_protocol(
+    ctx: &mut InteractionLoopContext<'_>,
+    sender: &str,
+    proto: &vtcode_core::agent_teams::TeamProtocolMessage,
+) -> Result<Option<String>> {
+    use vtcode_core::agent_teams::TeamProtocolType;
+    let inject = match proto.r#type {
+        TeamProtocolType::IdleNotification => {
+            ctx.renderer.line(
+                MessageStyle::Info,
+                &format!("Teammate '{}' is now idle.", sender),
+            )?;
+            Some(format!(
+                "[vtcode:team_protocol] Teammate '{}' is idle and available for new tasks.",
+                sender
+            ))
+        }
+        TeamProtocolType::ShutdownRequest => {
+            ctx.renderer.line(
+                MessageStyle::Warning,
+                &format!("Teammate '{}' requested shutdown.", sender),
+            )?;
+            Some(format!(
+                "[vtcode:team_protocol] Teammate '{}' requested shutdown.",
+                sender
+            ))
+        }
+        TeamProtocolType::ShutdownApproved => {
+            ctx.renderer.line(
+                MessageStyle::Info,
+                &format!("Shutdown approved for '{}'.", sender),
+            )?;
+            Some(format!(
+                "[vtcode:team_protocol] Shutdown approved for '{}'.",
+                sender
+            ))
+        }
+        TeamProtocolType::TaskUpdate => {
+            let detail = proto
+                .details
+                .as_ref()
+                .map(|d| d.to_string())
+                .unwrap_or_default();
+            ctx.renderer.line(
+                MessageStyle::Info,
+                &format!("Task update from '{}': {}", sender, detail),
+            )?;
+            None // Task updates are visible via task reload; avoid context bloat.
+        }
+    };
+    Ok(inject)
 }

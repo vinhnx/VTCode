@@ -54,6 +54,9 @@ pub(crate) struct SessionStats {
     /// Team context for this session (lead/teammate)
     pub team_context: Option<vtcode_core::agent_teams::TeamContext>,
 
+    /// In-process teammate runners (persistent tokio tasks)
+    pub in_process_runner: Option<vtcode_core::agent_teams::InProcessTeamRunner>,
+
     /// Delegate mode toggle (team coordination only)
     pub delegate_mode: bool,
 

@@ -315,6 +315,26 @@ pub async fn run_turn_loop(
                     )
                     .await?;
                 working_history = compacted;
+
+                // Re-inject team state after compaction so the model
+                // doesn't lose awareness of the team (Cozempic fix).
+                // Remove any stale snapshot first to avoid accumulation.
+                if let Some(team) = ctx.session_stats.team_state.as_ref() {
+                    let snapshot = team.prompt_snapshot();
+                    if !snapshot.is_empty() {
+                        working_history.retain(|msg| {
+                            !(msg.role == uni::MessageRole::System
+                                && msg
+                                    .content
+                                    .as_text_borrowed()
+                                    .is_some_and(|t| t.starts_with("[vtcode:team_state]")))
+                        });
+                        working_history.push(uni::Message::system(format!(
+                            "[vtcode:team_state]\n{}",
+                            snapshot
+                        )));
+                    }
+                }
             }
             PreRequestAction::Proceed => {}
         }
