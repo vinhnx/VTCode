@@ -97,7 +97,8 @@ pub struct AgentRunner {
     /// Tracks the latest reasoning stage name for the current turn
     last_reasoning_stage: parking_lot::Mutex<Option<String>>,
     /// Receiver for steering messages (e.g., stop, pause)
-    steering_receiver: parking_lot::Mutex<Option<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>>,
+    steering_receiver:
+        parking_lot::Mutex<Option<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>>,
 }
 
 impl AgentRunner {

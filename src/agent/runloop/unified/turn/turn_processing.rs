@@ -17,15 +17,17 @@ use crate::agent::runloop::unified::turn::guards::{
 use crate::agent::runloop::unified::turn::tool_outcomes::ToolOutcomeContext;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
+use vtcode_config::constants::defaults::{DEFAULT_MAX_CONVERSATION_TURNS, DEFAULT_MAX_TOOL_LOOPS};
+use vtcode_config::context::default_max_context_tokens;
 use vtcode_core::llm::provider::{self as uni, ParallelToolConfig};
 use vtcode_core::llm::providers::split_reasoning_from_text;
 use vtcode_core::prompts::upsert_harness_limits_section;
 use vtcode_core::turn_metadata;
 
+use std::sync::Arc;
+use std::sync::Mutex;
 use vtcode_core::utils::ansi::AnsiRenderer;
 use vtcode_core::utils::ansi::MessageStyle;
-use std::sync::Mutex;
-use std::sync::Arc;
 
 struct UnsafeSendContext {
     renderer: usize,
@@ -105,12 +107,13 @@ pub(crate) async fn execute_llm_request(
             None
         }
     });
-    let temperature =
-        if reasoning_effort.is_some() && matches!(provider_name.as_str(), "anthropic" | "minimax") {
-            None
-        } else {
-            Some(0.7)
-        };
+    let temperature = if reasoning_effort.is_some()
+        && matches!(provider_name.as_str(), "anthropic" | "minimax")
+    {
+        None
+    } else {
+        Some(0.7)
+    };
 
     // HP-3: Use a versioned tool-catalog snapshot to avoid stale tool definitions.
     let current_tools = ctx.tool_catalog.sorted_snapshot(ctx.tools).await;
@@ -228,54 +231,67 @@ pub(crate) async fn execute_llm_request(
 
         let step_result = if use_streaming {
             // Defer spinner finish if tools are available - keeps loading indicator active
-            
+
             let state = ::vtcode_core::core::agent::session::AgentSessionState::new(
                 "chat_session".to_string(),
-                100, // Default max turns
-                20,  // Default max tool loops
-                100000, // Default max tokens
+                DEFAULT_MAX_CONVERSATION_TURNS,
+                DEFAULT_MAX_TOOL_LOOPS,
+                default_max_context_tokens(),
             );
-            
-            let mut controller = ::vtcode_core::core::agent::session::controller::AgentSessionController::new(state, None, None);
-            
+
+            let mut controller =
+                ::vtcode_core::core::agent::session::controller::AgentSessionController::new(
+                    state, None, None,
+                );
+
             // Bridge events to renderer
             // Use a Send-safe pointer wrapper since we're using unsafe anyway
             let send_ctx = UnsafeSendContext {
                 renderer: ctx.renderer as *mut ::vtcode_core::utils::ansi::AnsiRenderer as usize,
-                handle: ctx.handle as *const ::vtcode_core::ui::tui::InlineHandle as *mut ::vtcode_core::ui::tui::InlineHandle as usize,
+                handle: ctx.handle as *const ::vtcode_core::ui::tui::InlineHandle
+                    as *mut ::vtcode_core::ui::tui::InlineHandle as usize,
             };
-            
-            let event_sink = Arc::new(Mutex::new(Box::new(move |event: ::vtcode_core::core::agent::events::AgentEvent| {
-                unsafe {
+
+            let event_sink = Arc::new(Mutex::new(Box::new(
+                move |event: ::vtcode_core::core::agent::events::AgentEvent| unsafe {
                     use ::vtcode_core::core::agent::events::AgentEvent;
                     match event {
                         AgentEvent::OutputDelta { delta } => {
-                            let r: &mut ::vtcode_core::utils::ansi::AnsiRenderer = &mut *(send_ctx.renderer as *mut ::vtcode_core::utils::ansi::AnsiRenderer);
+                            let r: &mut ::vtcode_core::utils::ansi::AnsiRenderer = &mut *(send_ctx
+                                .renderer
+                                as *mut ::vtcode_core::utils::ansi::AnsiRenderer);
                             let _ = r.render_token_delta(&delta);
                         }
                         AgentEvent::ThinkingDelta { delta } => {
-                            let r: &mut ::vtcode_core::utils::ansi::AnsiRenderer = &mut *(send_ctx.renderer as *mut ::vtcode_core::utils::ansi::AnsiRenderer);
+                            let r: &mut ::vtcode_core::utils::ansi::AnsiRenderer = &mut *(send_ctx
+                                .renderer
+                                as *mut ::vtcode_core::utils::ansi::AnsiRenderer);
                             let _ = r.render_reasoning_delta(&delta);
                         }
                         AgentEvent::ThinkingStage { stage } => {
-                            let h: &mut ::vtcode_core::ui::tui::InlineHandle = &mut *(send_ctx.handle as *mut ::vtcode_core::ui::tui::InlineHandle);
+                            let h: &mut ::vtcode_core::ui::tui::InlineHandle = &mut *(send_ctx
+                                .handle
+                                as *mut ::vtcode_core::ui::tui::InlineHandle);
                             h.set_input_status(Some(stage), None);
                         }
                         _ => {}
                     }
-                }
-            }) as Box<dyn FnMut(::vtcode_core::core::agent::events::AgentEvent) + Send>));
-            
+                },
+            )
+                as Box<dyn FnMut(::vtcode_core::core::agent::events::AgentEvent) + Send>));
+
             controller.set_event_handler(event_sink);
-            
+
             let mut steering = None;
-            let res: Result<(uni::LLMResponse, String, Option<String>)> = controller.run_turn(
-                ctx.provider_client,
-                request.clone(),
-                &mut steering,
-                Some(std::time::Duration::from_secs(60)),
-            ).await;
-            
+            let res: Result<(uni::LLMResponse, String, Option<String>)> = controller
+                .run_turn(
+                    ctx.provider_client,
+                    request.clone(),
+                    &mut steering,
+                    Some(std::time::Duration::from_secs(60)),
+                )
+                .await;
+
             match res {
                 Ok((response, _content, _reasoning)) => Ok((response, true)),
                 Err(err) => Err(anyhow::anyhow!(err.to_string())),
@@ -294,7 +310,7 @@ pub(crate) async fn execute_llm_request(
                 tokio::pin!(generate_future);
                 let cancel_notifier = ctx.ctrl_c_notify.notified();
                 tokio::pin!(cancel_notifier);
-                
+
                 let outcome = tokio::select! {
                     res = &mut generate_future => res.map_err(anyhow::Error::from),
                     _ = &mut cancel_notifier => {
@@ -307,7 +323,7 @@ pub(crate) async fn execute_llm_request(
                         }))
                     }
                 };
-                
+
                 match outcome {
                     Ok(response) => Ok((response, false)),
                     Err(err) => Err(err),

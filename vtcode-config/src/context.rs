@@ -199,7 +199,7 @@ fn default_max_entries() -> usize {
 fn default_include_in_prompt() -> bool {
     true
 }
-fn default_max_context_tokens() -> usize {
+pub fn default_max_context_tokens() -> usize {
     90000
 }
 

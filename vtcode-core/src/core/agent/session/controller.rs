@@ -5,8 +5,8 @@ use crate::core::agent::session::AgentSessionState;
 use crate::exec::events::ThreadEvent; // Temporary compatibility
 use crate::llm::provider::{LLMProvider, LLMRequest, LLMStreamEvent, Usage};
 use anyhow::Result;
-use std::sync::Mutex;
 use std::sync::Arc;
+use std::sync::Mutex;
 
 /// A sink for unified agent events.
 pub type AgentEventSink = Arc<Mutex<Box<dyn FnMut(AgentEvent) + Send>>>;
@@ -95,7 +95,9 @@ impl AgentSessionController {
         &mut self,
         provider: &mut Box<dyn LLMProvider>,
         request: LLMRequest,
-        steering: &mut Option<tokio::sync::mpsc::UnboundedReceiver<crate::core::agent::steering::SteeringMessage>>,
+        steering: &mut Option<
+            tokio::sync::mpsc::UnboundedReceiver<crate::core::agent::steering::SteeringMessage>,
+        >,
         timeout: Option<std::time::Duration>,
     ) -> Result<(crate::llm::provider::LLMResponse, String, Option<String>)> {
         let turn_id = format!("turn_{}", self.state.stats.turns_executed);
@@ -128,7 +130,9 @@ impl AgentSessionController {
                         break;
                     }
                     Ok(crate::core::agent::steering::SteeringMessage::Pause) => {
-                        self.emit(AgentEvent::ThinkingStage { stage: "Paused".to_string() });
+                        self.emit(AgentEvent::ThinkingStage {
+                            stage: "Paused".to_string(),
+                        });
                         // Wait for resume
                         loop {
                             tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
@@ -141,8 +145,12 @@ impl AgentSessionController {
                                 _ => {}
                             }
                         }
-                        if finish_reason == "cancelled" { break; }
-                        self.emit(AgentEvent::ThinkingStage { stage: "Resumed".to_string() });
+                        if finish_reason == "cancelled" {
+                            break;
+                        }
+                        self.emit(AgentEvent::ThinkingStage {
+                            stage: "Resumed".to_string(),
+                        });
                     }
                     Ok(crate::core::agent::steering::SteeringMessage::InjectInput(input)) => {
                         // For now, history injection happens after the turn in most VTCode logic
@@ -212,16 +220,16 @@ impl AgentSessionController {
         if !full_reasoning.is_empty() {
             assistant_msg = assistant_msg.with_reasoning(Some(full_reasoning.clone()));
         }
-        
+
         // Handle tool calls in the response summary
         let mut tool_calls = None;
         if let Some(calls) = aggregated_tool_calls.clone() {
             assistant_msg = assistant_msg.with_tool_calls(calls.clone());
             tool_calls = Some(calls);
         }
-        
+
         self.state.messages.push(assistant_msg.clone());
-        
+
         // Handle Gemini content conversion if needed (legacy)
         let parts = vec![crate::gemini::Part::Text {
             text: full_text.clone(),
@@ -246,8 +254,8 @@ impl AgentSessionController {
             crate::llm::provider::LLMResponse {
                 content: Some(full_text.clone()),
                 tool_calls: tool_calls.clone(),
-                finish_reason: if finish_reason == "tool_calls" { 
-                    crate::llm::provider::FinishReason::ToolCalls 
+                finish_reason: if finish_reason == "tool_calls" {
+                    crate::llm::provider::FinishReason::ToolCalls
                 } else if finish_reason == "cancelled" {
                     crate::llm::provider::FinishReason::Error("Cancelled".to_string())
                 } else {
@@ -257,7 +265,11 @@ impl AgentSessionController {
                 ..Default::default()
             },
             full_text,
-            if full_reasoning.is_empty() { None } else { Some(full_reasoning) }
+            if full_reasoning.is_empty() {
+                None
+            } else {
+                Some(full_reasoning)
+            },
         ))
     }
 }

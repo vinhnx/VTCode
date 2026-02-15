@@ -319,7 +319,7 @@ impl AgentRunner {
                         Some(std::time::Duration::from_secs(60)), // Standard timeout
                     )
                     .await?;
-                
+
                 // Put steering back for next turn
                 if let Some(rx) = steering_captured {
                     *self.steering_receiver.lock() = Some(rx);
@@ -339,7 +339,10 @@ impl AgentRunner {
                 self.warn_on_empty_response(
                     &agent_prefix,
                     response.content.as_deref().unwrap_or(""),
-                    response.tool_calls.as_ref().is_some_and(|tc| !tc.is_empty()),
+                    response
+                        .tool_calls
+                        .as_ref()
+                        .is_some_and(|tc| !tc.is_empty()),
                 );
 
                 if !response.content_text().trim().is_empty() {
@@ -358,16 +361,16 @@ impl AgentRunner {
                 }
 
                 let mut effective_tool_calls = response.tool_calls.clone();
-                
+
                 // HP-4: Detect textual commands in empty/near-empty responses if no structured tool calls
                 if effective_tool_calls.is_none()
                     && response.content_text().len() < 150
                     && let Some(args_value) = detect_textual_run_pty_cmd(response.content_text())
                 {
                     let tc = ToolCall::function(
-                        format!("call_text_{}", turn), 
-                        "run_pty_command".to_string(), 
-                        args_value.to_string()
+                        format!("call_text_{}", turn),
+                        "run_pty_command".to_string(),
+                        args_value.to_string(),
                     );
                     effective_tool_calls = Some(vec![tc]);
                 }
@@ -376,7 +379,7 @@ impl AgentRunner {
 
                 if !controller.state.is_completed && !response.content_text().is_empty() {
                     if check_for_response_loop(response.content_text(), &mut controller.state) {
-                         self.runner_println(format_args!(
+                        self.runner_println(format_args!(
                             "[{}] {}",
                             self.agent_type,
                             style(
@@ -393,7 +396,7 @@ impl AgentRunner {
                     }
 
                     if check_completion_indicators(response.content_text()) {
-                         self.runner_println(format_args!(
+                        self.runner_println(format_args!(
                             "[{}] {}",
                             self.agent_type,
                             style("Completion indicator detected.").green().bold()
@@ -404,7 +407,11 @@ impl AgentRunner {
                     }
                 }
 
-                if let Some(tool_calls) = effective_tool_calls.as_ref().filter(|tc| !tc.is_empty()).cloned() {
+                if let Some(tool_calls) = effective_tool_calls
+                    .as_ref()
+                    .filter(|tc| !tc.is_empty())
+                    .cloned()
+                {
                     self.handle_tool_calls(
                         tool_calls,
                         &mut controller.state,
@@ -415,8 +422,14 @@ impl AgentRunner {
                     .await?;
                 }
 
-                let had_tool_call = response.tool_calls.as_ref().is_some_and(|tc| !tc.is_empty())
-                    || (effective_tool_calls.as_ref().is_some() && effective_tool_calls.as_ref().unwrap().iter().any(|tc| tc.function.as_ref().map(|f| f.name.as_str()) == Some("run_pty_command")));
+                let had_tool_call = response
+                    .tool_calls
+                    .as_ref()
+                    .is_some_and(|tc| !tc.is_empty())
+                    || (effective_tool_calls.as_ref().is_some()
+                        && effective_tool_calls.as_ref().unwrap().iter().any(|tc| {
+                            tc.function.as_ref().map(|f| f.name.as_str()) == Some("run_pty_command")
+                        }));
                 if had_tool_call {
                     let loops = controller.state.register_tool_loop();
                     if loops >= controller.state.constraints.max_tool_loops {
