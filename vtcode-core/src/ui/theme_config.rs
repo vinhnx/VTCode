@@ -4,6 +4,7 @@
 //! This allows users to customize colors beyond system defaults.
 
 use crate::utils::CachedStyleParser;
+use crate::utils::file_utils::read_file_with_context_sync;
 use anstyle::Style as AnsiStyle;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
@@ -33,7 +34,7 @@ impl ThemeConfig {
     /// Load theme configuration from a TOML file
     pub fn load_from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
         let path = path.as_ref();
-        let content = std::fs::read_to_string(path)
+        let content = read_file_with_context_sync(path, "theme file")
             .with_context(|| format!("Failed to read theme file: {}", path.display()))?;
 
         let config: ThemeConfig = toml::from_str(&content)

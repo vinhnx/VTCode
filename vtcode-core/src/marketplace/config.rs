@@ -6,9 +6,9 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
-use tokio::fs;
 
 use crate::marketplace::MarketplaceSource;
+use crate::utils::file_utils::{read_file_with_context, write_file_with_context};
 
 /// Configuration for marketplace settings that integrates with VT Code's config system
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
@@ -131,12 +131,7 @@ impl MarketplaceSettings {
             return Ok(Self::default());
         }
 
-        let content = fs::read_to_string(config_path).await.with_context(|| {
-            format!(
-                "Failed to read marketplace config file: {}",
-                config_path.display()
-            )
-        })?;
+        let content = read_file_with_context(config_path, "marketplace config file").await?;
 
         let settings: MarketplaceSettings = toml::from_str(&content).with_context(|| {
             format!(
@@ -150,22 +145,10 @@ impl MarketplaceSettings {
 
     /// Save marketplace settings to a configuration file
     pub async fn save_to_file(&self, config_path: &PathBuf) -> Result<()> {
-        // Create parent directory if it doesn't exist
-        if let Some(parent) = config_path.parent() {
-            fs::create_dir_all(parent).await.with_context(|| {
-                format!("Failed to create config directory: {}", parent.display())
-            })?;
-        }
-
         let content =
             toml::to_string(&self).with_context(|| "Failed to serialize marketplace settings")?;
 
-        fs::write(config_path, content).await.with_context(|| {
-            format!(
-                "Failed to write marketplace config file: {}",
-                config_path.display()
-            )
-        })?;
+        write_file_with_context(config_path, &content, "marketplace config file").await?;
 
         Ok(())
     }

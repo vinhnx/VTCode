@@ -6,6 +6,9 @@
 //! - Lockfile-based pinning for reproducibility
 //! - Fallback to manifest `version` field
 
+use crate::utils::file_utils::{
+    ensure_dir_exists_sync, read_file_with_context_sync, write_file_with_context_sync,
+};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -58,7 +61,7 @@ impl SkillLockfile {
         if !path.exists() {
             return Ok(Self::default());
         }
-        let content = std::fs::read_to_string(&path)
+        let content = read_file_with_context_sync(&path, "skills lockfile")
             .with_context(|| format!("Failed to read lockfile at {}", path.display()))?;
         serde_json::from_str(&content)
             .with_context(|| format!("Failed to parse lockfile at {}", path.display()))
@@ -67,9 +70,9 @@ impl SkillLockfile {
     /// Save lockfile to a directory
     pub fn save(&self, dir: &Path) -> Result<()> {
         let path = dir.join(LOCKFILE_NAME);
-        std::fs::create_dir_all(dir)?;
+        ensure_dir_exists_sync(dir)?;
         let content = serde_json::to_string_pretty(self)?;
-        std::fs::write(&path, content)
+        write_file_with_context_sync(&path, &content, "skills lockfile")
             .with_context(|| format!("Failed to write lockfile at {}", path.display()))?;
         info!("Saved skill lockfile to {}", path.display());
         Ok(())

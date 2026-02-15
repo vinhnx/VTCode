@@ -2,6 +2,7 @@
 //!
 //! Provides timestamped backups with retention policies to safely modify terminal configs.
 
+use crate::utils::file_utils::ensure_dir_exists_sync;
 use anyhow::{Context, Result};
 use chrono::Local;
 use std::fs;
@@ -38,7 +39,7 @@ impl ConfigBackupManager {
 
         // Create parent directory if needed
         if let Some(parent) = backup_path.parent() {
-            fs::create_dir_all(parent).with_context(|| {
+            ensure_dir_exists_sync(parent).with_context(|| {
                 format!("Failed to create backup directory: {}", parent.display())
             })?;
         }
@@ -66,7 +67,7 @@ impl ConfigBackupManager {
 
         // Create parent directory if needed
         if let Some(parent) = original_path.parent() {
-            fs::create_dir_all(parent).with_context(|| {
+            ensure_dir_exists_sync(parent).with_context(|| {
                 format!("Failed to create config directory: {}", parent.display())
             })?;
         }

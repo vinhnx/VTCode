@@ -1,5 +1,9 @@
 //! Trace storage implementation for persisting Agent Trace records.
 
+use crate::utils::file_utils::{
+    ensure_dir_exists, ensure_dir_exists_sync, read_file_with_context, read_file_with_context_sync,
+    write_file_with_context, write_file_with_context_sync,
+};
 use anyhow::{Context, Result};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -38,11 +42,8 @@ impl TraceStore {
 
     /// Ensure the trace storage directory exists.
     pub fn ensure_dir(&self) -> Result<()> {
-        if !self.base_dir.exists() {
-            fs::create_dir_all(&self.base_dir).with_context(|| {
-                format!("Failed to create trace directory: {:?}", self.base_dir)
-            })?;
-        }
+        ensure_dir_exists_sync(&self.base_dir)
+            .with_context(|| format!("Failed to create trace directory: {:?}", self.base_dir))?;
         Ok(())
     }
 
@@ -58,7 +59,8 @@ impl TraceStore {
         let json = serde_json::to_string_pretty(trace)
             .with_context(|| "Failed to serialize trace record")?;
 
-        fs::write(&path, json).with_context(|| format!("Failed to write trace to {:?}", path))?;
+        write_file_with_context_sync(&path, &json, "trace record")
+            .with_context(|| format!("Failed to write trace to {:?}", path))?;
 
         Ok(path)
     }
@@ -71,7 +73,7 @@ impl TraceStore {
 
     /// Read a trace record from a specific path.
     pub fn read_trace_from_path(&self, path: &Path) -> Result<TraceRecord> {
-        let content = fs::read_to_string(path)
+        let content = read_file_with_context_sync(path, "trace record")
             .with_context(|| format!("Failed to read trace: {:?}", path))?;
 
         let trace: TraceRecord = serde_json::from_str(&content)
@@ -172,13 +174,9 @@ impl TraceStore {
 
     /// Ensure the trace storage directory exists (async).
     pub async fn ensure_dir_async(&self) -> Result<()> {
-        if !self.base_dir.exists() {
-            tokio::fs::create_dir_all(&self.base_dir)
-                .await
-                .with_context(|| {
-                    format!("Failed to create trace directory: {:?}", self.base_dir)
-                })?;
-        }
+        ensure_dir_exists(&self.base_dir)
+            .await
+            .with_context(|| format!("Failed to create trace directory: {:?}", self.base_dir))?;
         Ok(())
     }
 
@@ -192,7 +190,7 @@ impl TraceStore {
         let json = serde_json::to_string_pretty(trace)
             .with_context(|| "Failed to serialize trace record")?;
 
-        tokio::fs::write(&path, json)
+        write_file_with_context(&path, &json, "trace record")
             .await
             .with_context(|| format!("Failed to write trace to {:?}", path))?;
 
@@ -201,7 +199,7 @@ impl TraceStore {
 
     /// Read a trace record from a specific path (async).
     pub async fn read_trace_from_path_async(&self, path: &Path) -> Result<TraceRecord> {
-        let content = tokio::fs::read_to_string(path)
+        let content = read_file_with_context(path, "trace record")
             .await
             .with_context(|| format!("Failed to read trace: {:?}", path))?;
 
