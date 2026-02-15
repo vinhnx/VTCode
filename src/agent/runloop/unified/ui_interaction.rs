@@ -5,20 +5,14 @@ use std::time::Duration;
 use super::progress::{ProgressReporter, ProgressState};
 #[allow(unused_imports)]
 use super::reasoning::{analyze_reasoning, is_giving_up_reasoning};
-use crate::agent::runloop::unified::plan_blocks::{
-    ProposedPlanStreamParser, extract_proposed_plan,
-};
-use vtcode_core::llm::providers::clean_reasoning_text;
 
-use anyhow::{Error, Result};
-use futures::StreamExt;
+use anyhow::Result;
 use tokio::sync::{Notify, mpsc};
 use tokio::task;
 use tokio::time::sleep;
 
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
-use vtcode_core::llm::error_display;
-use vtcode_core::llm::provider::{self as uni, LLMStreamEvent};
+use vtcode_core::llm::provider as uni;
 use vtcode_core::ui::tui::InlineHandle;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
@@ -107,23 +101,21 @@ impl Drop for PlaceholderGuard {
     }
 }
 
-const SPINNER_UPDATE_INTERVAL_MS: u64 = 150; // Slightly slower for better performance
+const SPINNER_UPDATE_INTERVAL_MS: u64 = 150;
 
-/// Create a mini progress bar string using Unicode block characters
 fn create_mini_progress_bar(percentage: u8, width: usize) -> String {
     if width == 0 {
         return String::new();
     }
 
     let filled = (percentage as usize * width) / 100;
-    let mut bar = String::with_capacity(width + 4); // Extra space for brackets and partial block
+    let mut bar = String::with_capacity(width + 4);
 
-    bar.push('▐'); // Left bracket
+    bar.push('▐');
     for i in 0..width {
         if i < filled {
             bar.push('█');
         } else if i == filled && !percentage.is_multiple_of(100 / width as u8) {
-            // Show partial progress for more precision
             let partial = match (percentage % (100 / width as u8)) * 8 / (100 / width as u8) {
                 0..=1 => '▏',
                 2..=3 => '▎',
@@ -136,7 +128,7 @@ fn create_mini_progress_bar(percentage: u8, width: usize) -> String {
             bar.push('░');
         }
     }
-    bar.push('▌'); // Right bracket
+    bar.push('▌');
 
     bar
 }
@@ -150,7 +142,6 @@ pub(crate) struct PlaceholderSpinner {
     task: task::JoinHandle<()>,
     progress_state: Option<Arc<ProgressState>>,
     message_sender: Option<mpsc::UnboundedSender<String>>,
-    /// When true, don't restore UI status on finish - allows subsequent operations to take over
     defer_restore: Arc<AtomicBool>,
 }
 
@@ -175,24 +166,18 @@ impl PlaceholderSpinner {
         let restore_on_stop_left = restore_left.clone();
         let restore_on_stop_right = restore_right.clone();
         let status_right = restore_right.clone();
-
-        // Clone the progress reporter if it exists
         let progress_reporter_arc = progress_reporter.cloned().map(Arc::new);
 
-        // Create message update channel
         let (message_sender, mut message_receiver) = mpsc::unbounded_channel::<String>();
         let message_sender_clone = message_sender.clone();
-
         let initial_display = message_with_hint.clone();
 
-        // Set initial status
         spinner_handle.set_input_status(Some(initial_display.clone()), status_right.clone());
 
         let task = task::spawn(async move {
             let mut current_message = message_with_hint;
             let mut last_display = initial_display;
             while spinner_active.load(Ordering::SeqCst) {
-                // Check for message updates
                 while let Ok(new_message) = message_receiver.try_recv() {
                     current_message = if new_message.is_empty() {
                         "Press Ctrl+C to cancel".to_string()
@@ -201,21 +186,18 @@ impl PlaceholderSpinner {
                     };
                 }
 
-                // Get progress information if available
                 let progress_info = if let Some(progress_reporter) = progress_reporter_arc.as_ref()
                 {
                     let progress = progress_reporter.progress_info().await;
                     let mut parts = vec![progress.message.clone()];
 
                     if progress.total > 0 && progress.percentage > 0 {
-                        // Add mini progress bar (width 8 for more compact display) and percentage
                         let progress_bar = create_mini_progress_bar(progress.percentage, 8);
                         parts.push(format!("{} {:.0}%", progress_bar, progress.percentage));
                     }
 
                     let eta = progress.eta_formatted();
                     if eta != "Calculating..." && eta != "0s" {
-                        // Only show ETA if it's meaningful (not "Calculating..." or "0s")
                         parts.push(eta);
                     }
                     parts.join("  ")
@@ -229,7 +211,6 @@ impl PlaceholderSpinner {
                     format!("{}: {}", current_message, progress_info)
                 };
 
-                // Update the status with spinner animation and progress
                 if display != last_display {
                     spinner_handle.set_input_status(Some(display.clone()), status_right.clone());
                     last_display = display;
@@ -237,7 +218,6 @@ impl PlaceholderSpinner {
                 sleep(Duration::from_millis(SPINNER_UPDATE_INTERVAL_MS)).await;
             }
 
-            // Restore input status when done
             spinner_handle.set_input_status(restore_on_stop_left, restore_on_stop_right);
         });
 
@@ -253,7 +233,6 @@ impl PlaceholderSpinner {
         }
     }
 
-    /// Create a new spinner without progress reporting (backward compatibility)
     pub(crate) fn new(
         handle: &InlineHandle,
         restore_left: Option<String>,
@@ -261,25 +240,19 @@ impl PlaceholderSpinner {
         message: impl Into<String>,
     ) -> Self {
         let mut spinner = Self::with_progress(handle, restore_left, restore_right, message, None);
-        // For backward compatibility, we don't expose message_sender for the old API
         spinner.message_sender = None;
         spinner
     }
 
-    /// Set defer_restore flag - when true, don't restore UI status on finish
-    /// This allows subsequent operations (like tool execution) to maintain
-    /// their own loading indicators without flicker.
     pub(crate) fn set_defer_restore(&self, defer: bool) {
         self.defer_restore.store(defer, Ordering::SeqCst);
     }
 
-    /// Get the progress state if available
     #[allow(dead_code)]
     pub(crate) fn progress_state(&self) -> Option<Arc<ProgressState>> {
         self.progress_state.clone()
     }
 
-    /// Update the spinner message dynamically
     #[allow(dead_code)]
     pub(crate) fn update_message(&self, message: impl Into<String>) {
         if let Some(sender) = &self.message_sender {
@@ -291,20 +264,17 @@ impl PlaceholderSpinner {
         self.finish_with_restore(!self.defer_restore.load(Ordering::SeqCst));
     }
 
-    /// Finish the spinner with explicit control over whether to restore UI status.
-    /// When `restore` is false, the status bar will keep its current state,
-    /// allowing subsequent operations to seamlessly continue the loading indicator.
+    pub(crate) fn set_reasoning_stage(&self, stage: Option<String>) {
+        self.handle.set_reasoning_stage(stage);
+    }
+
     pub(crate) fn finish_with_restore(&self, restore: bool) {
         if self.active.swap(false, Ordering::SeqCst) {
-            // Abort the spinner task first to prevent it from updating the input status
-            // after we restore it (race condition fix)
             self.task.abort();
-            // Only restore the UI state if requested
             if restore {
                 self.handle
                     .set_input_status(self.restore_left.clone(), self.restore_right.clone());
             }
-            // Note: We don't change input enabled/visible state since we didn't disable it in the first place
         }
     }
 }
@@ -316,182 +286,12 @@ impl Drop for PlaceholderSpinner {
     }
 }
 
-fn map_render_error(provider_name: &str, err: Error) -> uni::LLMError {
-    let formatted_error = error_display::format_llm_error(
-        provider_name,
-        &format!("Failed to render streaming output: {}", err),
-    );
-    uni::LLMError::Provider {
-        message: formatted_error,
-        metadata: None,
-    }
-}
-
-fn reasoning_matches_content(reasoning: &str, content: &str) -> bool {
-    fn normalize_for_compare(text: &str) -> String {
-        clean_reasoning_text(text)
-            .chars()
-            .filter(|ch| !ch.is_whitespace())
-            .collect::<String>()
-    }
-
-    let cleaned_reasoning = normalize_for_compare(reasoning);
-    let cleaned_content = normalize_for_compare(content);
-    !cleaned_reasoning.is_empty()
-        && !cleaned_content.is_empty()
-        && cleaned_reasoning == cleaned_content
-}
-
-fn common_prefix_len(a: &str, b: &str) -> usize {
-    let mut len = 0;
-    for (left, right) in a.chars().zip(b.chars()) {
-        if left != right {
-            break;
-        }
-        len += left.len_utf8();
-    }
-    len
-}
-
-#[derive(Default)]
-struct StreamingReasoningState {
-    // Tracks buffered reasoning delta during streaming
-    buffered: String,
-    // Whether reasoning should be rendered inline during streaming
-    render_inline: bool,
-    // Whether reasoning output should be rendered at all during streaming
-    render_output: bool,
-    // Defer rendering until we can compare content vs reasoning
-    defer_rendering: bool,
-    // Track whether we've started streaming (for prefix)
-    started: bool,
-    // Whether reasoning output has been rendered
-    rendered_any: bool,
-}
-
-impl StreamingReasoningState {
-    fn new(_inline_enabled: bool) -> Self {
-        Self {
-            buffered: String::new(),
-            render_inline: false,
-            render_output: true,
-            defer_rendering: true,
-            started: false,
-            rendered_any: false,
-        }
-    }
-
-    fn handle_delta(&mut self, renderer: &mut AnsiRenderer, delta: &str) -> Result<bool> {
-        if !self.render_output || !self.render_inline || self.defer_rendering {
-            self.buffered.push_str(delta);
-            return Ok(false);
-        }
-
-        // For inline rendering: stream reasoning like response tokens
-        renderer.inline_with_style(MessageStyle::Reasoning, delta)?;
-        self.rendered_any = true;
-        Ok(true)
-    }
-
-    fn flush_pending(&mut self, renderer: &mut AnsiRenderer) -> Result<bool> {
-        if !self.render_output {
-            self.buffered.clear();
-            return Ok(false);
-        }
-        if !self.buffered.is_empty() {
-            let cleaned = clean_reasoning_text(&self.buffered);
-            if !cleaned.is_empty() {
-                // If we have buffered content and are rendering inline, add newline first
-                if self.render_inline && self.started {
-                    renderer.inline_with_style(MessageStyle::Reasoning, "\n")?;
-                }
-                renderer.line(MessageStyle::Reasoning, &cleaned)?;
-                self.rendered_any = true;
-            }
-            self.buffered.clear();
-            return Ok(self.rendered_any);
-        }
-        Ok(false)
-    }
-
-    fn finalize(
-        &mut self,
-        renderer: &mut AnsiRenderer,
-        final_reasoning: Option<&str>,
-        reasoning_already_emitted: bool,
-        suppress_reasoning: bool,
-    ) -> Result<()> {
-        if !self.render_output {
-            self.buffered.clear();
-            return Ok(());
-        }
-        if suppress_reasoning {
-            self.buffered.clear();
-            return Ok(());
-        }
-
-        // Flush any buffered reasoning first
-        self.flush_pending(renderer)?;
-        if self.rendered_any {
-            return Ok(());
-        }
-
-        // Only render final reasoning if it wasn't already emitted during streaming
-        // This prevents duplicate reasoning output
-        if !reasoning_already_emitted
-            && let Some(reasoning_text) = final_reasoning
-            && !reasoning_text.trim().is_empty()
-        {
-            let cleaned_reasoning = clean_reasoning_text(reasoning_text);
-            if !cleaned_reasoning.trim().is_empty() {
-                renderer.line(MessageStyle::Reasoning, &cleaned_reasoning)?;
-                self.rendered_any = true;
-
-                // Chain-of-Thought Monitoring: Analyze reasoning for concerns
-                // This enables early intervention if the agent is going down a wrong path
-                use super::reasoning::analyze_reasoning;
-                let analysis = analyze_reasoning(&cleaned_reasoning);
-                if analysis.has_concerns() {
-                    // Log concern for debugging/visibility
-                    // In production, this could trigger UI indicators or interrupt
-                    tracing::debug!(
-                        concern = ?analysis.priority_concern(),
-                        "Reasoning concern detected in CoT output"
-                    );
-                }
-            }
-        }
-        Ok(())
-    }
-
-    fn handle_stream_failure(&mut self, _renderer: &mut AnsiRenderer) -> Result<()> {
-        self.buffered.clear();
-        Ok(())
-    }
-
-    fn rendered_reasoning(&self) -> bool {
-        self.rendered_any
-    }
-
-    fn is_deferred(&self) -> bool {
-        self.defer_rendering
-    }
-}
-
-/// Options for controlling spinner behavior during response streaming
 #[derive(Default, Clone, Copy)]
 pub(crate) struct StreamSpinnerOptions {
-    /// If true, defer stopping the spinner until the caller explicitly finishes it.
-    /// This is useful when the task continues after streaming (e.g., tool execution).
-    /// Default is false for backward compatibility.
     pub defer_finish: bool,
-    /// If true, hide `<proposed_plan>...</proposed_plan>` blocks from rendered output.
-    /// This should only be enabled while Plan Mode is active.
     pub strip_proposed_plan_blocks: bool,
 }
 
-/// Stream and render response with default options.
-/// For more control over spinner behavior, use `stream_and_render_response_with_options`.
 #[allow(dead_code)]
 pub(crate) async fn stream_and_render_response(
     provider: &dyn uni::LLMProvider,
@@ -513,9 +313,6 @@ pub(crate) async fn stream_and_render_response(
     .await
 }
 
-/// Stream and render response with configurable spinner options.
-/// When `options.defer_finish` is true, the spinner will not be stopped during streaming,
-/// allowing the caller to keep the loading indicator active for subsequent operations.
 pub(crate) async fn stream_and_render_response_with_options(
     provider: &dyn uni::LLMProvider,
     request: uni::LLMRequest,
@@ -525,612 +322,14 @@ pub(crate) async fn stream_and_render_response_with_options(
     ctrl_c_notify: &Arc<Notify>,
     options: StreamSpinnerOptions,
 ) -> Result<(uni::LLMResponse, bool), uni::LLMError> {
-    let provider_name = provider.name();
-
-    // Check for cancellation before starting stream
-    if ctrl_c_state.is_cancel_requested() {
-        spinner.finish_with_restore(true);
-        return Err(uni::LLMError::Provider {
-            message: error_display::format_llm_error(provider_name, "Interrupted by user"),
-            metadata: None,
-        });
-    }
-
-    let supports_streaming_markdown = renderer.supports_streaming_markdown();
-
-    // Start stream with cancellation support
-    let stream_future = provider.stream(request);
-    tokio::pin!(stream_future);
-
-    if ctrl_c_state.is_cancel_requested() || ctrl_c_state.is_exit_requested() {
-        spinner.finish_with_restore(true);
-        return Err(uni::LLMError::Provider {
-            message: error_display::format_llm_error(provider_name, "Interrupted by user"),
-            metadata: None,
-        });
-    }
-
-    let mut stream = tokio::select! {
-        biased;
-        _ = ctrl_c_notify.notified() => {
-            spinner.finish_with_restore(true);
-            return Err(uni::LLMError::Provider { message: error_display::format_llm_error(provider_name, "Interrupted by user"), metadata: None });
-        }
-        result = stream_future => result?,
-    };
-
-    let mut final_response: Option<uni::LLMResponse> = None;
-    let mut aggregated = String::new();
-    let mut spinner_active = true;
-    let mut rendered_line_count = 0usize;
-    // Finish spinner helper - respects defer_finish option
-    let finish_spinner = |active: &mut bool, force: bool| {
-        // If defer_finish is enabled and not forcing, just mark as inactive for tracking
-        // but don't actually stop the spinner - caller will handle it
-        if *active {
-            if force {
-                spinner.finish_with_restore(true);
-                *active = false;
-            } else if !options.defer_finish {
-                spinner.finish();
-                *active = false;
-            }
-        }
-    };
-    let mut emitted_tokens = false;
-    let mut reasoning_state = StreamingReasoningState::new(supports_streaming_markdown);
-    let mut spinner_message_updated = false;
-    let mut reasoning_accumulated = String::new();
-    let mut pending_content = String::new();
-    let mut content_suppressed = false;
-    const MAX_PENDING_CONTENT_BYTES: usize = 4_096;
-
-    let mut suppress_reasoning_due_to_duplication = false;
-    let mut plan_parser = options
-        .strip_proposed_plan_blocks
-        .then(ProposedPlanStreamParser::new);
-
-    // Track streaming progress
-    let mut token_count = 0;
-    let mut reasoning_token_count = 0;
-    let mut last_progress_update = std::time::Instant::now();
-    let mut reasoning_emitted = false;
-
-    loop {
-        if ctrl_c_state.is_cancel_requested() || ctrl_c_state.is_exit_requested() {
-            finish_spinner(&mut spinner_active, true); // Force finish on cancellation
-            reasoning_state
-                .handle_stream_failure(renderer)
-                .map_err(|err| map_render_error(provider_name, err))?;
-            return Err(uni::LLMError::Provider {
-                message: error_display::format_llm_error(provider_name, "Interrupted by user"),
-                metadata: None,
-            });
-        }
-
-        let maybe_event = tokio::select! {
-            biased;
-
-            _ = ctrl_c_notify.notified() => {
-                finish_spinner(&mut spinner_active, true); // Force finish on cancellation
-                reasoning_state
-                    .handle_stream_failure(renderer)
-                    .map_err(|err| map_render_error(provider_name, err))?;
-                return Err(uni::LLMError::Provider { message: error_display::format_llm_error(provider_name, "Interrupted by user"), metadata: None });
-            }
-            event = stream.next() => event,
-        };
-
-        let Some(event_result) = maybe_event else {
-            break;
-        };
-
-        match event_result {
-            Ok(LLMStreamEvent::Token { delta }) => {
-                token_count += 1;
-                let visible_delta = if let Some(parser) = plan_parser.as_mut() {
-                    parser.consume(&delta)
-                } else {
-                    delta
-                };
-                if !reasoning_emitted && reasoning_token_count > 0 && !reasoning_state.is_deferred()
-                {
-                    let rendered = reasoning_state
-                        .flush_pending(renderer)
-                        .map_err(|err| map_render_error(provider_name, err))?;
-                    if rendered {
-                        reasoning_emitted = true;
-                    }
-                }
-
-                if !spinner_message_updated {
-                    spinner.update_message("Receiving response...");
-                    spinner_message_updated = true;
-                } else if last_progress_update.elapsed() >= std::time::Duration::from_millis(500) {
-                    // Update progress message every 500ms with token count
-                    spinner
-                        .update_message(format!("Receiving response... ({} tokens)", token_count));
-                    last_progress_update = std::time::Instant::now();
-                }
-                // Don't finish spinner during streaming if defer_finish is enabled
-                // This keeps the loading indicator active for better UX during tool execution
-                finish_spinner(&mut spinner_active, false);
-                if visible_delta.is_empty() {
-                    continue;
-                }
-                if !reasoning_accumulated.trim().is_empty() && !emitted_tokens {
-                    pending_content.push_str(&visible_delta);
-                    if pending_content.len() >= MAX_PENDING_CONTENT_BYTES {
-                        content_suppressed = true;
-                    }
-                    continue;
-                }
-
-                aggregated.push_str(&visible_delta);
-                if supports_streaming_markdown {
-                    rendered_line_count = renderer
-                        .stream_markdown_response(&aggregated, rendered_line_count)
-                        .map_err(|err| map_render_error(provider_name, err))?;
-                    emitted_tokens = true;
-                }
-            }
-            Ok(LLMStreamEvent::Reasoning { delta }) => {
-                reasoning_token_count += 1;
-                if !spinner_message_updated {
-                    spinner.update_message("Processing reasoning...");
-                    spinner_message_updated = true;
-                } else if last_progress_update.elapsed() >= std::time::Duration::from_millis(500) {
-                    // Update progress message every 500ms with reasoning token count
-                    spinner.update_message(format!(
-                        "Processing reasoning... ({} tokens)",
-                        reasoning_token_count
-                    ));
-                    last_progress_update = std::time::Instant::now();
-                }
-                // Don't finish spinner during reasoning if defer_finish is enabled
-                finish_spinner(&mut spinner_active, false);
-                reasoning_accumulated.push_str(&delta);
-                let rendered = reasoning_state
-                    .handle_delta(renderer, &delta)
-                    .map_err(|err| map_render_error(provider_name, err))?;
-                // Mark reasoning as emitted to prevent duplicate rendering in finalize()
-                if rendered {
-                    reasoning_emitted = true;
-                }
-            }
-            Ok(LLMStreamEvent::ReasoningStage { stage }) => {
-                spinner.handle.set_reasoning_stage(Some(stage));
-            }
-            Ok(LLMStreamEvent::Completed { response }) => {
-                final_response = Some(*response);
-            }
-            Err(err) => {
-                finish_spinner(&mut spinner_active, true); // Force finish on error
-                reasoning_state
-                    .handle_stream_failure(renderer)
-                    .map_err(|render_err| map_render_error(provider_name, render_err))?;
-                return Err(err);
-            }
-        }
-    }
-
-    // Stream completed successfully - finish spinner unless deferred
-    finish_spinner(&mut spinner_active, false);
-
-    if let Some(parser) = plan_parser.as_mut() {
-        let trailing_plan_parse = parser.finish();
-        if !trailing_plan_parse.stripped_text.is_empty() {
-            if !reasoning_accumulated.trim().is_empty() && !emitted_tokens {
-                pending_content.push_str(&trailing_plan_parse.stripped_text);
-                if pending_content.len() >= MAX_PENDING_CONTENT_BYTES {
-                    content_suppressed = true;
-                }
-            } else {
-                aggregated.push_str(&trailing_plan_parse.stripped_text);
-                if supports_streaming_markdown {
-                    rendered_line_count = renderer
-                        .stream_markdown_response(&aggregated, rendered_line_count)
-                        .map_err(|err| map_render_error(provider_name, err))?;
-                    emitted_tokens = true;
-                }
-            }
-        }
-    }
-
-    let response = match final_response {
-        Some(response) => response,
-        None => {
-            reasoning_state
-                .handle_stream_failure(renderer)
-                .map_err(|err| map_render_error(provider_name, err))?;
-            finish_spinner(&mut spinner_active, true);
-            let formatted_error = error_display::format_llm_error(
-                provider_name,
-                "Stream ended without a completion event",
-            );
-            return Err(uni::LLMError::Provider {
-                message: formatted_error,
-                metadata: None,
-            });
-        }
-    };
-
-    if !pending_content.is_empty() && !content_suppressed {
-        let reasoning_for_compare = response
-            .reasoning
-            .as_deref()
-            .unwrap_or(reasoning_accumulated.as_str());
-        if !reasoning_for_compare.trim().is_empty()
-            && reasoning_matches_content(reasoning_for_compare, &pending_content)
-        {
-            suppress_reasoning_due_to_duplication = true;
-        }
-    }
-
-    if !pending_content.is_empty() && !content_suppressed {
-        let prefix_len = common_prefix_len(&reasoning_accumulated, &pending_content);
-        let reasoning_prefix =
-            !reasoning_accumulated.is_empty() && prefix_len == reasoning_accumulated.len();
-        let pending = std::mem::take(&mut pending_content);
-        let render_text = if reasoning_prefix {
-            pending.get(prefix_len..).unwrap_or("").to_string()
-        } else {
-            pending
-        };
-
-        if reasoning_prefix
-            && render_text.is_empty()
-            && (reasoning_state.rendered_reasoning() || reasoning_emitted)
-        {
-            content_suppressed = true;
-        } else {
-            aggregated.push_str(&render_text);
-            if supports_streaming_markdown {
-                let prev_count = if aggregated.trim().is_empty() {
-                    0
-                } else {
-                    rendered_line_count
-                };
-                renderer
-                    .stream_markdown_response(&aggregated, prev_count)
-                    .map_err(|err| map_render_error(provider_name, err))?;
-                emitted_tokens = true;
-            }
-            if reasoning_prefix && (reasoning_state.rendered_reasoning() || reasoning_emitted) {
-                content_suppressed = true;
-            }
-        }
-    }
-
-    // CRITICAL: Ensure content is ALWAYS displayed.
-    // If response has content but we didn't stream any tokens, render it now.
-    // This handles providers that send content only in the Completed event.
-    let content_for_render = if options.strip_proposed_plan_blocks {
-        response
-            .content
-            .as_deref()
-            .map(extract_proposed_plan)
-            .map(|extraction| extraction.stripped_text)
-    } else {
-        response.content.clone()
-    };
-    let has_renderable_content = content_for_render
-        .as_deref()
-        .map(|content| !content.trim().is_empty())
-        .unwrap_or(false);
-
-    if !content_suppressed && let Some(content) = content_for_render.as_deref() {
-        let content_trimmed = content.trim();
-        if !content_trimmed.is_empty() {
-            let reasoning_dupes_content = response
-                .reasoning
-                .as_deref()
-                .map(|reasoning| reasoning_matches_content(reasoning, content))
-                .unwrap_or(false);
-
-            if reasoning_dupes_content {
-                suppress_reasoning_due_to_duplication = true;
-            }
-
-            // Check if we already rendered this content via Token events
-            let already_rendered = emitted_tokens
-                && !aggregated.trim().is_empty()
-                && aggregated.trim() == content_trimmed;
-
-            if !already_rendered {
-                // Content wasn't rendered yet - render it now
-                // First, flush any pending reasoning
-                reasoning_state
-                    .finalize(
-                        renderer,
-                        response.reasoning.as_deref(),
-                        reasoning_emitted,
-                        suppress_reasoning_due_to_duplication,
-                    )
-                    .map_err(|err| map_render_error(provider_name, err))?;
-
-                // Now render the actual content
-                if supports_streaming_markdown {
-                    // If we had some streamed content, replace it; otherwise add new
-                    let prev_count = if aggregated.trim().is_empty() {
-                        0
-                    } else {
-                        rendered_line_count
-                    };
-                    renderer
-                        .stream_markdown_response(content, prev_count)
-                        .map_err(|err| map_render_error(provider_name, err))?;
-                } else {
-                    renderer
-                        .line(MessageStyle::Response, content)
-                        .map_err(|err| map_render_error(provider_name, err))?;
-                }
-                emitted_tokens = true;
-                aggregated = content.to_string();
-            }
-        }
-    }
-
-    // Finalize reasoning display (only if we haven't already in the content block above)
-    let rendered_reasoning_before = reasoning_state.rendered_reasoning();
-    if !has_renderable_content
-        || aggregated.trim().is_empty()
-        || suppress_reasoning_due_to_duplication
-    {
-        let suppress_reasoning = suppress_reasoning_due_to_duplication;
-        reasoning_state
-            .finalize(
-                renderer,
-                response.reasoning.as_deref(),
-                reasoning_emitted,
-                suppress_reasoning,
-            )
-            .map_err(|err| map_render_error(provider_name, err))?;
-    }
-
-    // Fallback: Some providers only populate `reasoning` (no streamed tokens, no `content`).
-    // In that case, render the reasoning as the user-visible response to avoid an empty output.
-    if !emitted_tokens
-        && aggregated.trim().is_empty()
-        && !has_renderable_content
-        && !rendered_reasoning_before
-        && let Some(reasoning) = response.reasoning.as_deref()
-    {
-        let reasoning_trimmed = clean_reasoning_text(reasoning.trim());
-        if !reasoning_trimmed.is_empty() {
-            if supports_streaming_markdown {
-                renderer
-                    .stream_markdown_response(&reasoning_trimmed, 0)
-                    .map_err(|err| map_render_error(provider_name, err))?;
-            } else {
-                renderer
-                    .line(MessageStyle::Response, &reasoning_trimmed)
-                    .map_err(|err| map_render_error(provider_name, err))?;
-            }
-            emitted_tokens = true;
-        }
-    }
-
-    Ok((response, emitted_tokens))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use futures::stream;
-    use std::sync::Arc;
-    use tokio::sync::{Notify, mpsc};
-    use vtcode_core::ui::tui::InlineCommand;
-
-    #[derive(Clone)]
-    struct CompletedOnlyProvider {
-        content: Option<String>,
-        reasoning: Option<String>,
-    }
-
-    #[async_trait::async_trait]
-    impl uni::LLMProvider for CompletedOnlyProvider {
-        fn name(&self) -> &str {
-            "test-provider"
-        }
-
-        fn supports_streaming(&self) -> bool {
-            true
-        }
-
-        async fn generate(
-            &self,
-            _request: uni::LLMRequest,
-        ) -> Result<uni::LLMResponse, uni::LLMError> {
-            Ok(uni::LLMResponse {
-                content: self.content.clone(),
-                model: "mock-model".to_string(),
-                tool_calls: None,
-                usage: None,
-                finish_reason: uni::FinishReason::Stop,
-                reasoning: self.reasoning.clone(),
-                reasoning_details: None,
-                organization_id: None,
-                request_id: None,
-                tool_references: vec![],
-            })
-        }
-
-        async fn stream(&self, request: uni::LLMRequest) -> Result<uni::LLMStream, uni::LLMError> {
-            let response = self.generate(request).await?;
-            Ok(Box::pin(stream::once(async {
-                Ok(uni::LLMStreamEvent::Completed {
-                    response: Box::new(response),
-                })
-            })))
-        }
-
-        fn supported_models(&self) -> Vec<String> {
-            vec!["test-model".to_string()]
-        }
-
-        fn validate_request(&self, _request: &uni::LLMRequest) -> Result<(), uni::LLMError> {
-            Ok(())
-        }
-    }
-
-    fn build_request() -> uni::LLMRequest {
-        uni::LLMRequest {
-            messages: Vec::new(),
-            system_prompt: None,
-            tools: None,
-            model: "test-model".to_string(),
-            max_tokens: None,
-            temperature: None,
-            stream: true,
-            output_format: None,
-            tool_choice: None,
-            parallel_tool_calls: None,
-            parallel_tool_config: None,
-            reasoning_effort: None,
-            effort: None,
-            verbosity: None,
-            top_p: None,
-            top_k: None,
-            presence_penalty: None,
-            frequency_penalty: None,
-            stop_sequences: None,
-            thinking_budget: None,
-            betas: None,
-            context_management: None,
-            prefill: None,
-            character_reinforcement: false,
-            character_name: None,
-            coding_agent_settings: None,
-            metadata: None,
-        }
-    }
-
-    fn build_spinner() -> PlaceholderSpinner {
-        let (tx, _rx) = mpsc::unbounded_channel::<InlineCommand>();
-        let handle = InlineHandle::new_for_tests(tx);
-        PlaceholderSpinner::new(&handle, None, None, "")
-    }
-
-    #[tokio::test]
-    async fn renders_completed_only_content() {
-        let provider = CompletedOnlyProvider {
-            content: Some("hello world".to_string()),
-            reasoning: None,
-        };
-        let request = build_request();
-        let spinner = build_spinner();
-        let mut renderer = AnsiRenderer::stdout();
-        let ctrl_c_state = CtrlCState::new();
-        let ctrl_c_notify = Arc::new(Notify::new());
-
-        let (resp, emitted) = stream_and_render_response(
-            &provider,
-            request,
-            &spinner,
-            &mut renderer,
-            &Arc::new(ctrl_c_state),
-            &ctrl_c_notify,
-        )
-        .await
-        .expect("stream should succeed");
-
-        assert!(
-            emitted,
-            "should mark emitted tokens when content is rendered"
-        );
-        assert_eq!(resp.content.as_deref(), Some("hello world"));
-    }
-
-    #[tokio::test]
-    async fn renders_reasoning_when_no_content() {
-        let provider = CompletedOnlyProvider {
-            content: None,
-            reasoning: Some("because reason".to_string()),
-        };
-        let request = build_request();
-        let spinner = build_spinner();
-        let mut renderer = AnsiRenderer::stdout();
-        let ctrl_c_state = CtrlCState::new();
-        let ctrl_c_notify = Arc::new(Notify::new());
-
-        let (resp, emitted) = stream_and_render_response(
-            &provider,
-            request,
-            &spinner,
-            &mut renderer,
-            &Arc::new(ctrl_c_state),
-            &ctrl_c_notify,
-        )
-        .await
-        .expect("stream should succeed");
-
-        assert!(
-            emitted,
-            "should mark emitted tokens when reasoning is rendered"
-        );
-        assert!(resp.content.is_none(), "content should remain none");
-    }
-
-    #[tokio::test]
-    async fn keeps_proposed_plan_tags_visible_outside_plan_mode() {
-        let provider = CompletedOnlyProvider {
-            content: Some("<proposed_plan>\n- Step 1\n</proposed_plan>".to_string()),
-            reasoning: None,
-        };
-        let request = build_request();
-        let spinner = build_spinner();
-        let mut renderer = AnsiRenderer::stdout();
-        let ctrl_c_state = CtrlCState::new();
-        let ctrl_c_notify = Arc::new(Notify::new());
-
-        let (_resp, emitted) = stream_and_render_response(
-            &provider,
-            request,
-            &spinner,
-            &mut renderer,
-            &Arc::new(ctrl_c_state),
-            &ctrl_c_notify,
-        )
-        .await
-        .expect("stream should succeed");
-
-        assert!(
-            emitted,
-            "outside plan mode, proposed_plan blocks should remain visible"
-        );
-    }
-
-    #[tokio::test]
-    async fn strips_proposed_plan_tags_when_option_enabled() {
-        let provider = CompletedOnlyProvider {
-            content: Some("<proposed_plan>\n- Step 1\n</proposed_plan>".to_string()),
-            reasoning: None,
-        };
-        let request = build_request();
-        let spinner = build_spinner();
-        let mut renderer = AnsiRenderer::stdout();
-        let ctrl_c_state = CtrlCState::new();
-        let ctrl_c_notify = Arc::new(Notify::new());
-
-        let (_resp, emitted) = stream_and_render_response_with_options(
-            &provider,
-            request,
-            &spinner,
-            &mut renderer,
-            &Arc::new(ctrl_c_state),
-            &ctrl_c_notify,
-            StreamSpinnerOptions {
-                defer_finish: false,
-                strip_proposed_plan_blocks: true,
-            },
-        )
-        .await
-        .expect("stream should succeed");
-
-        assert!(
-            !emitted,
-            "when stripping is enabled, pure proposed_plan content should be hidden"
-        );
-    }
+    super::ui_interaction_stream::stream_and_render_response_with_options_impl(
+        provider,
+        request,
+        spinner,
+        renderer,
+        ctrl_c_state,
+        ctrl_c_notify,
+        options,
+    )
+    .await
 }

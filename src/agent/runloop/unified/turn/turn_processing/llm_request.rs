@@ -1,0 +1,435 @@
+use anyhow::Result;
+use std::fmt::Write as _;
+use std::sync::Arc;
+use std::sync::Mutex;
+#[cfg(debug_assertions)]
+use std::time::Instant;
+use tokio::task;
+#[cfg(debug_assertions)]
+use tracing::debug;
+use vtcode_config::constants::defaults::{DEFAULT_MAX_CONVERSATION_TURNS, DEFAULT_MAX_TOOL_LOOPS};
+use vtcode_config::context::default_max_context_tokens;
+use vtcode_core::llm::provider::{self as uni, ParallelToolConfig};
+use vtcode_core::prompts::upsert_harness_limits_section;
+use vtcode_core::turn_metadata;
+
+use crate::agent::runloop::unified::extract_action_from_messages;
+use crate::agent::runloop::unified::turn::context::TurnProcessingContext;
+
+struct UnsafeSendContext {
+    renderer: usize,
+    handle: usize,
+}
+unsafe impl Send for UnsafeSendContext {}
+unsafe impl Sync for UnsafeSendContext {}
+
+fn is_retryable_llm_error(message: &str) -> bool {
+    let msg = message.to_ascii_lowercase();
+    [
+        "rate limit",
+        "timeout",
+        "internal server error",
+        "500",
+        "502",
+        "503",
+        "service unavailable",
+        "connection",
+        "network",
+    ]
+    .iter()
+    .any(|needle| msg.contains(needle))
+}
+
+/// Execute an LLM request and return the response.
+pub(crate) async fn execute_llm_request(
+    ctx: &mut TurnProcessingContext<'_>,
+    step_count: usize,
+    active_model: &str,
+    _max_tokens_opt: Option<u32>,
+    parallel_cfg_opt: Option<Box<ParallelToolConfig>>,
+) -> Result<(uni::LLMResponse, bool)> {
+    let provider_name = ctx.provider_client.name().to_string();
+    let plan_mode = ctx.session_stats.is_plan_mode();
+    let context_window_size = ctx.provider_client.effective_context_size(active_model);
+
+    let active_agent_name = ctx.session_stats.active_agent();
+    let active_agent_prompt_body = vtcode_core::subagents::get_agent_prompt_body(active_agent_name);
+
+    let mut system_prompt = ctx
+        .context_manager
+        .build_system_prompt(
+            ctx.working_history,
+            step_count,
+            crate::agent::runloop::unified::context_manager::SystemPromptParams {
+                full_auto: ctx.full_auto,
+                plan_mode,
+                context_window_size: Some(context_window_size),
+                active_agent_name: Some(active_agent_name.to_string()),
+                active_agent_prompt: active_agent_prompt_body,
+            },
+        )
+        .await?;
+
+    upsert_harness_limits_section(
+        &mut system_prompt,
+        ctx.harness_state.max_tool_calls,
+        ctx.harness_state.max_tool_wall_clock.as_secs(),
+        ctx.harness_state.max_tool_retries,
+    );
+
+    let capabilities = uni::get_cached_capabilities(&**ctx.provider_client, active_model);
+    let use_streaming = capabilities.streaming;
+    let reasoning_effort = ctx.vt_cfg.as_ref().and_then(|cfg| {
+        if capabilities.reasoning_effort {
+            Some(cfg.agent.reasoning_effort)
+        } else {
+            None
+        }
+    });
+    let temperature = if reasoning_effort.is_some()
+        && matches!(provider_name.as_str(), "anthropic" | "minimax")
+    {
+        None
+    } else {
+        Some(0.7)
+    };
+
+    let current_tools = ctx.tool_catalog.sorted_snapshot(ctx.tools).await;
+    let has_tools = current_tools.is_some();
+    if let Some(defs) = current_tools.as_ref() {
+        let _ = writeln!(
+            system_prompt,
+            "\n[Runtime Tool Catalog]\n- version: {}\n- available_tools: {}",
+            ctx.tool_catalog.current_version(),
+            defs.len()
+        );
+    }
+    let parallel_config = if has_tools && capabilities.parallel_tool_config {
+        parallel_cfg_opt.clone()
+    } else {
+        None
+    };
+    let tool_choice = if has_tools {
+        Some(uni::ToolChoice::auto())
+    } else {
+        None
+    };
+    let metadata = turn_metadata::build_turn_metadata_value(&ctx.config.workspace).ok();
+
+    let request = uni::LLMRequest {
+        messages: ctx.working_history.to_vec(),
+        system_prompt: Some(std::sync::Arc::new(system_prompt)),
+        tools: current_tools,
+        model: active_model.to_string(),
+        temperature,
+        stream: use_streaming,
+        tool_choice,
+        parallel_tool_config: parallel_config,
+        reasoning_effort,
+        metadata,
+        ..Default::default()
+    };
+    let action_suggestion = extract_action_from_messages(ctx.working_history);
+
+    if let Err(err) = ctx.provider_client.as_ref().validate_request(&request) {
+        return Err(anyhow::Error::new(err));
+    }
+
+    const MAX_RETRIES: usize = 3;
+    let mut llm_result = Err(anyhow::anyhow!("LLM request failed to execute"));
+
+    #[cfg(debug_assertions)]
+    let mut request_timer = Instant::now();
+
+    for attempt in 0..MAX_RETRIES {
+        if attempt > 0 {
+            use crate::agent::runloop::unified::turn::turn_helpers::calculate_backoff;
+            let delay = calculate_backoff(attempt - 1, 500, 10_000);
+            let delay_secs = delay.as_secs_f64();
+            crate::agent::runloop::unified::turn::turn_helpers::display_status(
+                ctx.renderer,
+                &format!(
+                    "LLM request failed, retrying in {:.1}s... (attempt {}/{})",
+                    delay_secs,
+                    attempt + 1,
+                    MAX_RETRIES
+                ),
+            )?;
+            tokio::time::sleep(delay).await;
+        }
+
+        let spinner_msg = if attempt > 0 {
+            let action = action_suggestion.clone();
+            if action.is_empty() {
+                format!("Retrying request (attempt {}/{})", attempt + 1, MAX_RETRIES)
+            } else {
+                format!("{} (Retry {}/{})", action, attempt + 1, MAX_RETRIES)
+            }
+        } else {
+            action_suggestion.clone()
+        };
+
+        use crate::agent::runloop::unified::ui_interaction::PlaceholderSpinner;
+        let _spinner = PlaceholderSpinner::new(
+            ctx.handle,
+            ctx.input_status_state.left.clone(),
+            ctx.input_status_state.right.clone(),
+            spinner_msg,
+        );
+        if has_tools {
+            _spinner.set_defer_restore(true);
+        }
+        task::yield_now().await;
+
+        #[cfg(debug_assertions)]
+        {
+            request_timer = Instant::now();
+            let tool_count = request.tools.as_ref().map_or(0, |tools| tools.len());
+            debug!(
+                target = "vtcode::agent::llm",
+                model = %request.model,
+                streaming = use_streaming,
+                step = step_count,
+                messages = request.messages.len(),
+                tools = tool_count,
+                attempt = attempt + 1,
+                "Dispatching provider request"
+            );
+        }
+
+        let step_result = if use_streaming {
+            let state = ::vtcode_core::core::agent::session::AgentSessionState::new(
+                "chat_session".to_string(),
+                DEFAULT_MAX_CONVERSATION_TURNS,
+                DEFAULT_MAX_TOOL_LOOPS,
+                default_max_context_tokens(),
+            );
+
+            let mut controller =
+                ::vtcode_core::core::agent::session::controller::AgentSessionController::new(
+                    state, None, None,
+                );
+
+            let send_ctx = UnsafeSendContext {
+                renderer: ctx.renderer as *mut ::vtcode_core::utils::ansi::AnsiRenderer as usize,
+                handle: ctx.handle as *const ::vtcode_core::ui::tui::InlineHandle
+                    as *mut ::vtcode_core::ui::tui::InlineHandle as usize,
+            };
+
+            let event_sink = Arc::new(Mutex::new(Box::new(
+                move |event: ::vtcode_core::core::agent::events::AgentEvent| unsafe {
+                    use ::vtcode_core::core::agent::events::AgentEvent;
+                    match event {
+                        AgentEvent::OutputDelta { delta } => {
+                            let r: &mut ::vtcode_core::utils::ansi::AnsiRenderer = &mut *(send_ctx
+                                .renderer
+                                as *mut ::vtcode_core::utils::ansi::AnsiRenderer);
+                            let _ = r.render_token_delta(&delta);
+                        }
+                        AgentEvent::ThinkingDelta { delta } => {
+                            let r: &mut ::vtcode_core::utils::ansi::AnsiRenderer = &mut *(send_ctx
+                                .renderer
+                                as *mut ::vtcode_core::utils::ansi::AnsiRenderer);
+                            let _ = r.render_reasoning_delta(&delta);
+                        }
+                        AgentEvent::ThinkingStage { stage } => {
+                            let h: &mut ::vtcode_core::ui::tui::InlineHandle = &mut *(send_ctx
+                                .handle
+                                as *mut ::vtcode_core::ui::tui::InlineHandle);
+                            h.set_input_status(Some(stage), None);
+                        }
+                        _ => {}
+                    }
+                },
+            )
+                as Box<dyn FnMut(::vtcode_core::core::agent::events::AgentEvent) + Send>));
+
+            controller.set_event_handler(event_sink);
+
+            let mut steering = None;
+            let res: Result<(uni::LLMResponse, String, Option<String>)> = controller
+                .run_turn(
+                    ctx.provider_client,
+                    request.clone(),
+                    &mut steering,
+                    Some(std::time::Duration::from_secs(60)),
+                )
+                .await;
+
+            match res {
+                Ok((response, _content, _reasoning)) => Ok((response, true)),
+                Err(err) => Err(anyhow::anyhow!(err.to_string())),
+            }
+        } else if ctx.ctrl_c_state.is_cancel_requested() || ctx.ctrl_c_state.is_exit_requested() {
+            Err(anyhow::Error::new(uni::LLMError::Provider {
+                message: vtcode_core::llm::error_display::format_llm_error(
+                    &provider_name,
+                    "Interrupted by user",
+                ),
+                metadata: None,
+            }))
+        } else {
+            let generate_future = ctx.provider_client.generate(request.clone());
+            tokio::pin!(generate_future);
+            let cancel_notifier = ctx.ctrl_c_notify.notified();
+            tokio::pin!(cancel_notifier);
+
+            let outcome = tokio::select! {
+                res = &mut generate_future => res.map_err(anyhow::Error::from),
+                _ = &mut cancel_notifier => {
+                    Err(anyhow::Error::from(uni::LLMError::Provider {
+                        message: vtcode_core::llm::error_display::format_llm_error(
+                            &provider_name,
+                            "Interrupted by user",
+                        ),
+                        metadata: None,
+                    }))
+                }
+            };
+
+            match outcome {
+                Ok(response) => Ok((response, false)),
+                Err(err) => Err(err),
+            }
+        };
+
+        #[cfg(debug_assertions)]
+        {
+            debug!(
+                target = "vtcode::agent::llm",
+                model = %active_model,
+                streaming = use_streaming,
+                step = step_count,
+                elapsed_ms = request_timer.elapsed().as_millis(),
+                succeeded = step_result.is_ok(),
+                attempt = attempt + 1,
+                "Provider request finished"
+            );
+        }
+
+        match step_result {
+            Ok(val) => {
+                llm_result = Ok(val);
+                _spinner.finish();
+                break;
+            }
+            Err(err) => {
+                let msg = err.to_string();
+                let is_retryable = is_retryable_llm_error(&msg);
+
+                if !crate::agent::runloop::unified::turn::turn_helpers::should_continue_operation(
+                    ctx.ctrl_c_state,
+                ) {
+                    llm_result = Err(err);
+                    _spinner.finish();
+                    break;
+                }
+
+                if is_retryable && attempt < MAX_RETRIES - 1 {
+                    _spinner.finish();
+                    continue;
+                }
+
+                llm_result = Err(err);
+                _spinner.finish();
+                break;
+            }
+        }
+    }
+
+    #[cfg(debug_assertions)]
+    {
+        debug!(
+            target = "vtcode::agent::llm",
+            model = %active_model,
+            streaming = use_streaming,
+            step = step_count,
+            elapsed_ms = request_timer.elapsed().as_millis(),
+            succeeded = llm_result.is_ok(),
+            "Provider request finished"
+        );
+    }
+
+    let (response, response_streamed) = match llm_result {
+        Ok(result) => result,
+        Err(error) => {
+            return Err(error);
+        }
+    };
+    Ok((response, response_streamed))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn retryable_llm_error_includes_internal_server_error_message() {
+        assert!(is_retryable_llm_error(
+            "Provider error: Internal Server Error"
+        ));
+    }
+
+    #[test]
+    fn retryable_llm_error_excludes_non_transient_messages() {
+        assert!(!is_retryable_llm_error("Provider error: Invalid API key"));
+    }
+
+    #[test]
+    fn upsert_harness_limits_adds_single_section() {
+        let mut prompt = "Base prompt".to_string();
+
+        upsert_harness_limits_section(&mut prompt, 12, 180, 2);
+
+        assert_eq!(prompt.matches("[Harness Limits]").count(), 1);
+        assert!(prompt.contains("- max_tool_calls_per_turn: 12"));
+        assert!(prompt.contains("- max_tool_wall_clock_secs: 180"));
+        assert!(prompt.contains("- max_tool_retries: 2"));
+    }
+
+    #[test]
+    fn upsert_harness_limits_replaces_existing_values() {
+        let mut prompt = "Base prompt\n[Harness Limits]\n- max_tool_calls_per_turn: 3\n- max_tool_wall_clock_secs: 60\n- max_tool_retries: 1\n".to_string();
+
+        upsert_harness_limits_section(&mut prompt, 9, 240, 4);
+
+        assert_eq!(prompt.matches("[Harness Limits]").count(), 1);
+        assert!(prompt.contains("- max_tool_calls_per_turn: 9"));
+        assert!(prompt.contains("- max_tool_wall_clock_secs: 240"));
+        assert!(prompt.contains("- max_tool_retries: 4"));
+        assert!(!prompt.contains("- max_tool_calls_per_turn: 3"));
+    }
+
+    #[test]
+    fn upsert_harness_limits_preserves_trailing_prompt_sections() {
+        let mut prompt = "Base prompt\n[Harness Limits]\n- max_tool_calls_per_turn: 3\n- max_tool_wall_clock_secs: 60\n- max_tool_retries: 1\n[Additional Context]\nKeep this section".to_string();
+
+        upsert_harness_limits_section(&mut prompt, 11, 90, 3);
+
+        assert_eq!(prompt.matches("[Harness Limits]").count(), 1);
+        assert!(prompt.contains("[Additional Context]\nKeep this section"));
+        assert!(prompt.ends_with("- max_tool_retries: 3\n"));
+    }
+
+    #[test]
+    fn upsert_harness_limits_replaces_indented_section_header() {
+        let mut prompt = "Base prompt\n  [Harness Limits]\n- max_tool_calls_per_turn: 1\n- max_tool_wall_clock_secs: 1\n- max_tool_retries: 1\n".to_string();
+
+        upsert_harness_limits_section(&mut prompt, 5, 30, 2);
+
+        assert_eq!(prompt.matches("[Harness Limits]").count(), 1);
+        assert!(prompt.contains("- max_tool_calls_per_turn: 5"));
+        assert!(!prompt.contains("- max_tool_calls_per_turn: 1"));
+    }
+
+    #[test]
+    fn upsert_harness_limits_removes_duplicate_sections() {
+        let mut prompt = "Base prompt\n[Harness Limits]\n- max_tool_calls_per_turn: 2\n- max_tool_wall_clock_secs: 10\n- max_tool_retries: 1\n[Other]\nkeep\n[Harness Limits]\n- max_tool_calls_per_turn: 3\n- max_tool_wall_clock_secs: 20\n- max_tool_retries: 2\n".to_string();
+
+        upsert_harness_limits_section(&mut prompt, 7, 70, 3);
+
+        assert_eq!(prompt.matches("[Harness Limits]").count(), 1);
+        assert!(prompt.contains("- max_tool_calls_per_turn: 7"));
+        assert!(prompt.contains("[Other]\nkeep"));
+    }
+}
