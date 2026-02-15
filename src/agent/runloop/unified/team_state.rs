@@ -5,8 +5,8 @@ use chrono::Utc;
 
 use vtcode_core::agent_teams::storage::build_task_completion_details;
 use vtcode_core::agent_teams::{
-    TeamConfig, TeamMailboxMessage, TeamStorage, TeamTask, TeamTaskList, TeamTaskStatus,
-    TeammateConfig,
+    TeamConfig, TeamMailboxMessage, TeamProtocolMessage, TeamStorage, TeamTask, TeamTaskList,
+    TeamTaskStatus, TeammateConfig,
 };
 
 #[derive(Debug, Clone)]
@@ -249,13 +249,52 @@ impl TeamState {
     ) -> Result<()> {
         let message = TeamMailboxMessage {
             sender: sender.to_string(),
-            content,
+            content: Some(content),
+            protocol: None,
+            id: None,
+            read: false,
             timestamp: Utc::now(),
             task_id,
         };
         self.storage
             .append_mailbox_message(&self.config.name, recipient, &message)
             .await
+    }
+
+    pub async fn send_protocol(
+        &self,
+        recipient: &str,
+        sender: &str,
+        protocol: TeamProtocolMessage,
+        task_id: Option<u64>,
+    ) -> Result<()> {
+        let message = TeamMailboxMessage {
+            sender: sender.to_string(),
+            content: None,
+            protocol: Some(protocol),
+            id: None,
+            read: false,
+            timestamp: Utc::now(),
+            task_id,
+        };
+        self.storage
+            .append_mailbox_message(&self.config.name, recipient, &message)
+            .await
+    }
+
+    pub async fn load_persisted_offset(&mut self, recipient: &str) -> Result<()> {
+        let offset = self
+            .storage
+            .load_mailbox_offset(&self.config.name, recipient)
+            .await?;
+        if offset > 0 {
+            self.mailbox_offsets.insert(recipient.to_string(), offset);
+        }
+        Ok(())
+    }
+
+    pub fn prompt_snapshot(&self) -> String {
+        self.config.prompt_snapshot(&self.tasks)
     }
 
     pub async fn read_mailbox(&mut self, recipient: &str) -> Result<Vec<TeamMailboxMessage>> {
@@ -266,6 +305,9 @@ impl TeamState {
             .await?;
         self.mailbox_offsets
             .insert(recipient.to_string(), new_offset);
+        self.storage
+            .save_mailbox_offset(&self.config.name, recipient, new_offset)
+            .await?;
         Ok(messages)
     }
 }

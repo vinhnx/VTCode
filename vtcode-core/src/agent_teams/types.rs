@@ -1,3 +1,5 @@
+use std::fmt::Write;
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
@@ -39,6 +41,98 @@ pub struct TeamConfig {
     pub lead_session_id: Option<String>,
     #[serde(default)]
     pub version: u32,
+}
+
+impl TeamConfig {
+    pub fn prompt_snapshot(&self, tasks: &TeamTaskList) -> String {
+        let mut out = format!("## Team: {}\n", self.name);
+
+        // Teammates with metadata
+        if self.teammates.is_empty() {
+            let _ = writeln!(out, "Teammates: (none)");
+        } else {
+            let _ = writeln!(out, "Teammates:");
+            for t in &self.teammates {
+                let model = t.model.as_deref().unwrap_or("default");
+                let active_marker = if self.active_teammate.as_deref() == Some(&t.name) {
+                    " ← active"
+                } else {
+                    ""
+                };
+                let _ = writeln!(
+                    out,
+                    "  - {} ({}, {}){active_marker}",
+                    t.name, t.subagent_type, model,
+                );
+            }
+        }
+
+        // Active tasks
+        let active_tasks: Vec<&TeamTask> = tasks
+            .tasks
+            .iter()
+            .filter(|t| matches!(t.status, TeamTaskStatus::Pending | TeamTaskStatus::InProgress))
+            .collect();
+        if active_tasks.is_empty() {
+            let _ = writeln!(out, "Tasks: none pending");
+        } else {
+            let _ = writeln!(out, "Tasks ({} active):", active_tasks.len());
+            for t in &active_tasks {
+                let assignee = t.assigned_to.as_deref().unwrap_or("unassigned");
+                let status = match t.status {
+                    TeamTaskStatus::Pending => "pending",
+                    TeamTaskStatus::InProgress => "in_progress",
+                    _ => "other",
+                };
+                let desc = truncate_str(&t.description, 200);
+                let _ = writeln!(out, "  - [{status}] #{}: {desc} ({assignee})", t.id);
+            }
+        }
+
+        // Recent outcomes (last 3 completed/failed with summaries)
+        let mut recent: Vec<&TeamTask> = tasks
+            .tasks
+            .iter()
+            .filter(|t| {
+                matches!(t.status, TeamTaskStatus::Completed | TeamTaskStatus::Failed)
+                    && t.result_summary.is_some()
+            })
+            .collect();
+        recent.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+        let recent = &recent[..recent.len().min(3)];
+        if !recent.is_empty() {
+            let _ = writeln!(out, "Recent outcomes:");
+            for t in recent {
+                let status = match t.status {
+                    TeamTaskStatus::Completed => "done",
+                    TeamTaskStatus::Failed => "failed",
+                    _ => "other",
+                };
+                let summary = t
+                    .result_summary
+                    .as_deref()
+                    .map(|s| truncate_str(s, 150))
+                    .unwrap_or_default();
+                let _ = writeln!(out, "  - [{status}] #{}: {summary}", t.id);
+            }
+        }
+
+        out
+    }
+}
+
+fn truncate_str(s: &str, max: usize) -> String {
+    if s.len() <= max {
+        s.to_string()
+    } else {
+        let boundary = s
+            .char_indices()
+            .take_while(|(i, _)| *i < max)
+            .last()
+            .map(|(i, c)| i + c.len_utf8())
+            .unwrap_or(max);
+        format!("{}…", &s[..boundary])
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -90,11 +184,34 @@ impl Default for TeamTaskList {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TeamProtocolType {
+    IdleNotification,
+    ShutdownRequest,
+    ShutdownApproved,
+    TaskUpdate,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TeamProtocolMessage {
+    pub r#type: TeamProtocolType,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub details: Option<serde_json::Value>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TeamMailboxMessage {
     pub sender: String,
-    pub content: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub content: Option<String>,
     pub timestamp: DateTime<Utc>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub task_id: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub protocol: Option<TeamProtocolMessage>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
+    #[serde(default)]
+    pub read: bool,
 }

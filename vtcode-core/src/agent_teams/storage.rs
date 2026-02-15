@@ -49,6 +49,11 @@ impl TeamStoragePaths {
             .join(format!("{}.jsonl", sanitize_component(recipient)))
     }
 
+    pub fn mailbox_state_path(&self, team_name: &str, recipient: &str) -> PathBuf {
+        self.mailbox_dir(team_name)
+            .join(format!("{}.state.json", sanitize_component(recipient)))
+    }
+
     pub fn tasks_path(&self, team_name: &str) -> PathBuf {
         self.tasks_dir
             .join(sanitize_component(team_name))
@@ -189,6 +194,31 @@ impl TeamStorage {
             .await??;
 
         Ok((messages, new_offset))
+    }
+
+    pub async fn load_mailbox_offset(&self, team_name: &str, recipient: &str) -> Result<u64> {
+        let path = self.paths.mailbox_state_path(team_name, recipient);
+        if !path.exists() {
+            return Ok(0);
+        }
+        let state: Value = read_json_file(&path).await?;
+        Ok(state
+            .get("offset")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0))
+    }
+
+    pub async fn save_mailbox_offset(
+        &self,
+        team_name: &str,
+        recipient: &str,
+        offset: u64,
+    ) -> Result<()> {
+        let path = self.paths.mailbox_state_path(team_name, recipient);
+        if let Some(parent) = path.parent() {
+            ensure_dir_exists(parent).await?;
+        }
+        write_json_file(&path, &serde_json::json!({ "offset": offset })).await
     }
 
     pub async fn with_task_lock<F, T>(&self, team_name: &str, f: F) -> Result<T>
