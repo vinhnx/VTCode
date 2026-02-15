@@ -274,7 +274,7 @@ pub async fn run_turn_loop(
         // Check for steering messages
         if let Some(receiver) = ctx.steering_receiver {
             match receiver.try_recv() {
-                Ok(SteeringMessage::Stop) => {
+                Ok(SteeringMessage::SteerStop) => {
                     crate::agent::runloop::unified::turn::turn_helpers::display_status(
                         ctx.renderer,
                         "Stopped by steering signal.",
@@ -298,7 +298,7 @@ pub async fn run_turn_loop(
                                 )?;
                                 break;
                             }
-                            Ok(SteeringMessage::Stop) => {
+                            Ok(SteeringMessage::SteerStop) => {
                                 result = TurnLoopResult::Cancelled;
                                 break;
                             }
@@ -310,10 +310,10 @@ pub async fn run_turn_loop(
                     }
                 }
                 Ok(SteeringMessage::Resume) => {}
-                Ok(SteeringMessage::InjectInput(input)) => {
+                Ok(SteeringMessage::FollowUpInput(input)) => {
                     crate::agent::runloop::unified::turn::turn_helpers::display_status(
                         ctx.renderer,
-                        &format!("Injected Input: {}", input),
+                        &format!("Follow-up Input: {}", input),
                     )?;
                     working_history.push(uni::Message::user(input));
                 }

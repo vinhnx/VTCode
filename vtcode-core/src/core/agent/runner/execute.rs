@@ -1,7 +1,6 @@
 use super::AgentRunner;
-use super::constants::{IDLE_TURN_LIMIT, ROLE_MODEL};
+use super::constants::IDLE_TURN_LIMIT;
 use super::helpers::detect_textual_run_pty_cmd;
-use crate::config::constants::tools;
 use crate::config::models::{ModelId, Provider as ModelProvider};
 use crate::config::types::{ReasoningEffortLevel, SystemPromptMode, VerbosityLevel};
 use crate::core::agent::completion::{check_completion_indicators, check_for_response_loop};
@@ -13,7 +12,7 @@ use crate::core::agent::session::AgentSessionState;
 use crate::core::agent::session::controller::AgentSessionController;
 use crate::core::agent::steering::SteeringMessage;
 use crate::core::agent::task::{ContextItem, Task, TaskOutcome, TaskResults};
-use crate::gemini::{Content, Part};
+use crate::gemini::Part;
 use crate::llm::provider::{LLMRequest, Message, ToolCall};
 use crate::prompts::system::compose_system_instruction_text;
 use crate::utils::colors::style;
@@ -129,7 +128,7 @@ impl AgentRunner {
                 // Check for steering messages before starting the turn
                 if let Some(msg) = self.check_steering() {
                     match msg {
-                        SteeringMessage::Stop => {
+                        SteeringMessage::SteerStop => {
                             self.runner_println(format_args!(
                                 "{} {}",
                                 agent_prefix,
@@ -156,7 +155,7 @@ impl AgentRunner {
                                         style("Resumed by steering signal.").green().bold()
                                     ));
                                     break;
-                                } else if let Some(SteeringMessage::Stop) = self.check_steering() {
+                                } else if let Some(SteeringMessage::SteerStop) = self.check_steering() {
                                     controller.state.outcome = TaskOutcome::Cancelled;
                                     break;
                                 }
@@ -166,11 +165,11 @@ impl AgentRunner {
                             }
                         }
                         SteeringMessage::Resume => {} // Already running
-                        SteeringMessage::InjectInput(input) => {
+                        SteeringMessage::FollowUpInput(input) => {
                             self.runner_println(format_args!(
                                 "{} {}: {}",
                                 agent_prefix,
-                                style("Injected Input").cyan().bold(),
+                                style("Follow-up Input").cyan().bold(),
                                 input
                             ));
                             controller.state.add_user_message(input);
