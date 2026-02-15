@@ -97,7 +97,7 @@ pub(crate) fn validate_tool_args_security(
         for key in required {
             let is_missing = match args.get(*key) {
                 Some(v) => {
-                    v.is_null() || (v.is_string() && v.as_str().map_or(true, |s| s.is_empty()))
+                    v.is_null() || (v.is_string() && v.as_str().is_none_or(|s| s.is_empty()))
                 }
                 None => true,
             };
@@ -263,7 +263,7 @@ pub(crate) async fn handle_turn_balancer(
         1_usize << ((step_count / 4).ilog2())
     };
 
-    if step_count % check_interval != 0 {
+    if !step_count.is_multiple_of(check_interval) {
         return TurnHandlerOutcome::Continue;
     }
 

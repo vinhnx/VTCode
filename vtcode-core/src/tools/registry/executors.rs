@@ -21,6 +21,58 @@ use std::{
 
 use super::ToolRegistry;
 
+fn summarized_arg_keys(args: &Value) -> String {
+    match args.as_object() {
+        Some(map) => {
+            if map.is_empty() {
+                return "<none>".to_string();
+            }
+            let mut keys: Vec<&str> = map.keys().map(|k| k.as_str()).collect();
+            keys.sort_unstable();
+            let mut preview = keys.into_iter().take(10).collect::<Vec<_>>().join(", ");
+            if map.len() > 10 {
+                preview.push_str(", ...");
+            }
+            preview
+        }
+        None => match args {
+            Value::Null => "<null>".to_string(),
+            Value::Array(_) => "<array>".to_string(),
+            Value::String(_) => "<string>".to_string(),
+            Value::Bool(_) => "<bool>".to_string(),
+            Value::Number(_) => "<number>".to_string(),
+            Value::Object(_) => "<object>".to_string(),
+        },
+    }
+}
+
+fn missing_unified_exec_action_error(args: &Value) -> anyhow::Error {
+    anyhow!(
+        "Missing action in unified_exec. Provide `action` or inferable fields: \
+         `command|cmd|raw_command` (run), `input|chars|text` with `session_id` (write), \
+         `session_id` (poll), or `action:\"list\"`/`action:\"close\"`. \
+         Received keys: {}",
+        summarized_arg_keys(args)
+    )
+}
+
+fn missing_unified_file_action_error(args: &Value) -> anyhow::Error {
+    anyhow!(
+        "Missing action in unified_file. Provide `action` or file-operation fields such as \
+         `path`, `content`, `old_str`, `patch`, or `destination`. Received keys: {}",
+        summarized_arg_keys(args)
+    )
+}
+
+fn missing_unified_search_action_error(args: &Value) -> anyhow::Error {
+    anyhow!(
+        "Missing action in unified_search. Provide `action` or inferable fields: \
+         `pattern|query` (grep), `path` (list), `keyword` (tools), `operation` (intelligence), \
+         `scope` (errors), `url` (web), `sub_action|name` (skill). Received keys: {}",
+        summarized_arg_keys(args)
+    )
+}
+
 impl ToolRegistry {
     pub(super) fn unified_exec_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
         Box::pin(async move { self.execute_unified_exec(args).await })
@@ -54,7 +106,7 @@ impl ToolRegistry {
         }
 
         let action_str = tool_intent::unified_exec_action(&args)
-            .ok_or_else(|| anyhow!("Missing action in unified_exec"))?;
+            .ok_or_else(|| missing_unified_exec_action_error(&args))?;
         let action: UnifiedExecAction = serde_json::from_value(json!(action_str))
             .with_context(|| format!("Invalid action: {}", action_str))?;
 
@@ -70,7 +122,7 @@ impl ToolRegistry {
 
     pub(super) async fn execute_unified_file(&self, args: Value) -> Result<Value> {
         let action_str = tool_intent::unified_file_action(&args)
-            .ok_or_else(|| anyhow!("Missing action in unified_file"))?;
+            .ok_or_else(|| missing_unified_file_action_error(&args))?;
 
         let action: UnifiedFileAction = serde_json::from_value(json!(action_str))
             .with_context(|| format!("Invalid action: {}", action_str))?;
@@ -105,7 +157,7 @@ impl ToolRegistry {
         let mut args = args;
 
         let action_str = tool_intent::unified_search_action(&args)
-            .ok_or_else(|| anyhow!("Missing action in unified_search. Valid actions: grep, list, intelligence, tools, errors, agent, web, skill"))?;
+            .ok_or_else(|| missing_unified_search_action_error(&args))?;
 
         let action: UnifiedSearchAction = serde_json::from_value(json!(action_str))
             .with_context(|| format!("Invalid action: {}", action_str))?;
@@ -1235,5 +1287,42 @@ mod git_diff_tests {
     fn ignores_other_git_commands() {
         let cmd = vec!["git".to_string(), "status".to_string()];
         assert!(!is_git_diff_command(&cmd));
+    }
+}
+
+#[cfg(test)]
+mod unified_action_error_tests {
+    use super::{
+        missing_unified_exec_action_error, missing_unified_search_action_error, summarized_arg_keys,
+    };
+    use serde_json::json;
+
+    #[test]
+    fn summarized_arg_keys_reports_shape_for_non_object_payloads() {
+        assert_eq!(summarized_arg_keys(&json!(null)), "<null>");
+        assert_eq!(summarized_arg_keys(&json!(["a", "b"])), "<array>");
+        assert_eq!(summarized_arg_keys(&json!("x")), "<string>");
+    }
+
+    #[test]
+    fn unified_exec_missing_action_error_includes_received_keys() {
+        let err = missing_unified_exec_action_error(&json!({
+            "foo": "bar",
+            "session_id": "123"
+        }));
+        let text = err.to_string();
+        assert!(text.contains("Missing action in unified_exec"));
+        assert!(text.contains("foo"));
+        assert!(text.contains("session_id"));
+    }
+
+    #[test]
+    fn unified_search_missing_action_error_includes_received_keys() {
+        let err = missing_unified_search_action_error(&json!({
+            "unexpected": true
+        }));
+        let text = err.to_string();
+        assert!(text.contains("Missing action in unified_search"));
+        assert!(text.contains("unexpected"));
     }
 }

@@ -20,8 +20,22 @@ pub(crate) async fn handle_tool_calls<'a, 'b>(
     let mut planner_calls = Vec::with_capacity(tool_calls.len());
     for tc in tool_calls {
         let name = tc.function.as_ref().map(|f| f.name.as_str()).unwrap_or("");
-        let args = Arc::new(tc.parsed_arguments().unwrap_or(serde_json::json!({})));
-        planner_calls.push((name.to_string(), args, tc.id.clone()));
+        let parsed_args = match tc.parsed_arguments() {
+            Ok(args) => args,
+            Err(_) => {
+                // Let the per-call handler emit a structured argument error response.
+                let outcome = handle_tool_call(t_ctx, tc).await?;
+                if let Some(o) = outcome {
+                    return Ok(Some(o));
+                }
+                continue;
+            }
+        };
+        planner_calls.push((name.to_string(), Arc::new(parsed_args), tc.id.clone()));
+    }
+
+    if planner_calls.is_empty() {
+        return Ok(None);
     }
 
     let groups = planner.plan(&planner_calls);

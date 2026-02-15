@@ -233,6 +233,11 @@ pub(crate) async fn validate_tool_call<'a>(
 
         if should_block {
             tracing::warn!(tool = %loop_tool_key, "Loop detector blocked tool");
+            let display_tool = tool_action_label(&canonical_tool_name, args_val);
+            let block_reason = format!(
+                "Loop detector halted repeated '{}' calls for this turn.",
+                display_tool
+            );
             if let Some(mut spooled) = ctx.tool_registry.find_recent_spooled_output(
                 &canonical_tool_name,
                 args_val,
@@ -256,10 +261,13 @@ pub(crate) async fn validate_tool_call<'a>(
                     tool_call_id.to_string(),
                     spooled.to_string(),
                 );
-                return Ok(ValidationResult::Blocked);
+                return Ok(ValidationResult::Outcome(TurnHandlerOutcome::Break(
+                    TurnLoopResult::Blocked {
+                        reason: Some(block_reason),
+                    },
+                )));
             }
 
-            let display_tool = tool_action_label(&canonical_tool_name, args_val);
             let error_msg = format!(
                 "Tool '{}' is blocked due to excessive repetition (Loop Detected).",
                 display_tool
@@ -269,7 +277,11 @@ pub(crate) async fn validate_tool_call<'a>(
                 tool_call_id.to_string(),
                 build_failure_error_content(error_msg, "loop_detection"),
             );
-            return Ok(ValidationResult::Blocked);
+            return Ok(ValidationResult::Outcome(TurnHandlerOutcome::Break(
+                TurnLoopResult::Blocked {
+                    reason: Some(block_reason),
+                },
+            )));
         } else {
             tracing::warn!(tool = %loop_tool_key, warning = %warning, "Loop detector warning");
         }

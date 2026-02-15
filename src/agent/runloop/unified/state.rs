@@ -3,6 +3,7 @@ use std::sync::{Arc, RwLock};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::agent::runloop::unified::tool_call_safety::ToolCallSafetyValidator;
+use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::core::agent::error_recovery::ErrorRecoveryState;
 use vtcode_core::tools::ApprovalRecorder;
 use vtcode_core::ui::tui::EditingMode;
@@ -62,11 +63,26 @@ pub(crate) struct SessionStats {
 
     /// Target configuration for the active model picker
     pub model_picker_target: ModelPickerTarget,
+    /// Count of consecutive minimal follow-up prompts (e.g. "continue", "retry")
+    follow_up_prompt_streak: usize,
+    /// Whether the last turn ended in a stalled state (aborted/blocked)
+    turn_stalled: bool,
+    /// Reason associated with the last stalled turn, when available
+    turn_stall_reason: Option<String>,
 }
 
 impl SessionStats {
     pub(crate) fn record_tool(&mut self, name: &str) {
-        self.tools.insert(name.to_string());
+        let normalized_name = match name {
+            n if n == tool_names::UNIFIED_EXEC
+                || n == tool_names::SHELL
+                || n == tool_names::EXEC_PTY_CMD =>
+            {
+                tool_names::RUN_PTY_CMD
+            }
+            _ => name,
+        };
+        self.tools.insert(normalized_name.to_string());
     }
 
     pub(crate) fn has_tool(&self, name: &str) -> bool {
@@ -190,6 +206,58 @@ impl SessionStats {
     pub(crate) fn switch_to_coder(&mut self) {
         self.set_active_agent(CODER_AGENT);
     }
+
+    pub(crate) fn register_follow_up_prompt(&mut self, input: &str) -> bool {
+        let normalized = input
+            .trim()
+            .trim_matches(|c: char| c.is_ascii_whitespace() || c.is_ascii_punctuation())
+            .to_ascii_lowercase();
+        let words: Vec<&str> = normalized.split_whitespace().collect();
+        let is_follow_up = matches!(
+            words.as_slice(),
+            ["continue"]
+                | ["retry"]
+                | ["proceed"]
+                | ["go", "on"]
+                | ["go", "ahead"]
+                | ["keep", "going"]
+                | ["please", "continue"]
+                | ["continue", "please"]
+                | ["please", "retry"]
+                | ["retry", "please"]
+                | ["continue", "with", "recommendation"]
+                | ["continue", "with", "your", "recommendation"]
+        );
+
+        if is_follow_up {
+            self.follow_up_prompt_streak = self.follow_up_prompt_streak.saturating_add(1);
+        } else {
+            self.follow_up_prompt_streak = 0;
+            self.turn_stalled = false;
+            self.turn_stall_reason = None;
+        }
+
+        let threshold = if self.turn_stalled { 2 } else { 3 };
+        is_follow_up && self.follow_up_prompt_streak >= threshold
+    }
+
+    pub(crate) fn mark_turn_stalled(&mut self, stalled: bool, reason: Option<String>) {
+        self.turn_stalled = stalled;
+        if !stalled {
+            self.follow_up_prompt_streak = 0;
+            self.turn_stall_reason = None;
+        } else {
+            self.turn_stall_reason = reason;
+        }
+    }
+
+    pub(crate) fn turn_stalled(&self) -> bool {
+        self.turn_stalled
+    }
+
+    pub(crate) fn turn_stall_reason(&self) -> Option<&str> {
+        self.turn_stall_reason.as_deref()
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -273,5 +341,54 @@ impl CtrlCState {
     pub(crate) fn disarm_exit(&self) {
         self.exit_armed.store(false, Ordering::SeqCst);
         self.last_signal_time.store(0, Ordering::SeqCst);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SessionStats;
+    use vtcode_core::config::constants::tools;
+
+    #[test]
+    fn record_tool_normalizes_exec_aliases() {
+        let mut stats = SessionStats::default();
+        stats.record_tool(tools::UNIFIED_EXEC);
+        stats.record_tool(tools::SHELL);
+        stats.record_tool(tools::EXEC_PTY_CMD);
+
+        assert_eq!(stats.sorted_tools(), vec![tools::RUN_PTY_CMD.to_string()]);
+    }
+
+    #[test]
+    fn follow_up_prompts_force_conclusion_after_stall() {
+        let mut stats = SessionStats::default();
+        stats.mark_turn_stalled(true, Some("turn blocked".to_string()));
+
+        assert!(!stats.register_follow_up_prompt("continue"));
+        assert!(stats.register_follow_up_prompt("continue"));
+        assert!(stats.turn_stalled());
+        assert_eq!(stats.turn_stall_reason(), Some("turn blocked"));
+    }
+
+    #[test]
+    fn non_follow_up_resets_follow_up_tracking() {
+        let mut stats = SessionStats::default();
+        stats.mark_turn_stalled(true, Some("turn aborted".to_string()));
+        let _ = stats.register_follow_up_prompt("continue");
+        let _ = stats.register_follow_up_prompt("continue");
+        assert!(stats.turn_stalled());
+        assert_eq!(stats.turn_stall_reason(), Some("turn aborted"));
+
+        assert!(!stats.register_follow_up_prompt("run tests and summarize"));
+        assert!(!stats.turn_stalled());
+        assert_eq!(stats.turn_stall_reason(), None);
+    }
+
+    #[test]
+    fn follow_up_prompt_variants_are_detected() {
+        let mut stats = SessionStats::default();
+        assert!(!stats.register_follow_up_prompt("continue."));
+        assert!(!stats.register_follow_up_prompt("continue with your recommendation"));
+        assert!(stats.register_follow_up_prompt("please continue"));
     }
 }

@@ -18,7 +18,7 @@ pub(super) fn extract_flag_value(tokens: &mut Vec<String>, flag: &str) -> Option
             .starts_with(&format!("{}=", needle))
     }) {
         let token = tokens.remove(pos);
-        if let Some(value) = token.splitn(2, '=').nth(1) {
+        if let Some(value) = token.split_once('=').map(|x| x.1) {
             return Some(value.to_string());
         }
     }
@@ -28,7 +28,7 @@ pub(super) fn extract_flag_value(tokens: &mut Vec<String>, flag: &str) -> Option
 
 pub(super) fn parse_depends_on(value: &str) -> Vec<u64> {
     value
-        .split(|ch| ch == ',' || ch == ' ')
+        .split([',', ' '])
         .filter_map(|item| item.trim().parse::<u64>().ok())
         .collect()
 }

@@ -87,18 +87,14 @@ pub struct AgentRunner {
     /// Cached shell policy patterns to avoid recompilation
 
     /// API failure tracking for exponential backoff
-    #[allow(dead_code)]
     failure_tracker: parking_lot::Mutex<ApiFailureTracker>,
     /// Context optimizer for token budget management
     context_optimizer: tokio::sync::Mutex<ContextOptimizer>,
     /// Tracks recent streaming failures to avoid repeated double-requests
-    #[allow(dead_code)]
     streaming_failures: parking_lot::Mutex<u8>,
     /// Records when streaming last failed for cooldown-based re-enablement
-    #[allow(dead_code)]
     streaming_last_failure: parking_lot::Mutex<Option<Instant>>,
     /// Tracks the latest reasoning stage name for the current turn
-    #[allow(dead_code)]
     last_reasoning_stage: parking_lot::Mutex<Option<String>>,
     /// Receiver for steering messages (e.g., stop, pause)
     steering_receiver:
@@ -189,10 +185,7 @@ impl AgentRunner {
     pub fn check_steering(&self) -> Option<SteeringMessage> {
         let mut guard = self.steering_receiver.lock();
         if let Some(rx) = guard.as_mut() {
-            match rx.try_recv() {
-                Ok(msg) => Some(msg),
-                Err(_) => None,
-            }
+            rx.try_recv().ok()
         } else {
             None
         }

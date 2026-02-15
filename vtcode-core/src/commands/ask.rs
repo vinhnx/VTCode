@@ -172,7 +172,7 @@ fn extract_code_fence_blocks(text: &str) -> Vec<CodeFenceBlock> {
     blocks
 }
 
-fn select_best_code_block<'a>(blocks: &'a [CodeFenceBlock]) -> Option<&'a CodeFenceBlock> {
+fn select_best_code_block(blocks: &[CodeFenceBlock]) -> Option<&CodeFenceBlock> {
     let mut best = None;
     let mut best_score = (0usize, 0u8);
     for block in blocks {

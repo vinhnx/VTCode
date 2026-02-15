@@ -288,6 +288,80 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn preflight_normalizes_exec_code_alias_to_unified_exec() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+
+        let outcome = registry.preflight_validate_call(
+            "exec_code",
+            &json!({
+                "command": "echo vtcode"
+            }),
+        )?;
+        assert_eq!(outcome.normalized_tool_name, tools::UNIFIED_EXEC);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn preflight_normalizes_humanized_exec_label_to_unified_exec() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+
+        let outcome = registry.preflight_validate_call(
+            "Exec code",
+            &json!({
+                "command": "echo vtcode"
+            }),
+        )?;
+        assert_eq!(outcome.normalized_tool_name, tools::UNIFIED_EXEC);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn preflight_normalizes_repo_browser_aliases() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+
+        let read_outcome = registry.preflight_validate_call(
+            "repo_browser.read_file",
+            &json!({"path": "vtcode-core/src/lib.rs"}),
+        )?;
+        assert_eq!(read_outcome.normalized_tool_name, tools::UNIFIED_FILE);
+
+        let list_outcome = registry.preflight_validate_call(
+            "repo_browser.list_files",
+            &json!({"path": "vtcode-core/src"}),
+        )?;
+        assert_eq!(list_outcome.normalized_tool_name, tools::UNIFIED_SEARCH);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn suggest_fallback_prefers_unified_exec_for_exec_code_alias() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+
+        let fallback = registry.suggest_fallback_tool("exec_code").await;
+        assert_eq!(fallback.as_deref(), Some(tools::UNIFIED_EXEC));
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn suggest_fallback_prefers_unified_exec_for_humanized_exec_label() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+
+        let fallback = registry.suggest_fallback_tool("Exec code").await;
+        assert_eq!(fallback.as_deref(), Some(tools::UNIFIED_EXEC));
+
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn execution_history_records_harness_context() -> Result<()> {
         let temp_dir = TempDir::new()?;
         let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;

@@ -138,7 +138,7 @@ impl TeamStorage {
             use std::io::Write;
             let mut file = std::fs::OpenOptions::new()
                 .create(true)
-                .append(true)
+                .truncate(true)
                 .open(&path_clone)
                 .with_context(|| format!("Failed to open mailbox file {}", path_clone.display()))?;
             file.write_all(line.as_bytes()).with_context(|| {
@@ -235,6 +235,7 @@ impl TeamStorage {
 
             let lock_file = OpenOptions::new()
                 .create(true)
+                .truncate(true)
                 .read(true)
                 .write(true)
                 .open(&lock_path)
@@ -267,7 +268,7 @@ fn resolve_base_dir(vt_cfg: Option<&VTCodeConfig>) -> Result<PathBuf> {
         && let Some(value) = cfg.agent_teams.storage_dir.as_ref()
         && !value.trim().is_empty()
     {
-        let config_dir = get_config_dir().unwrap_or_else(|| fallback_config_dir());
+        let config_dir = get_config_dir().unwrap_or_else(fallback_config_dir);
         return Ok(resolve_storage_override(value, &config_dir));
     }
 
@@ -282,10 +283,10 @@ fn fallback_config_dir() -> PathBuf {
 
 fn resolve_storage_override(value: &str, config_dir: &Path) -> PathBuf {
     let trimmed = value.trim();
-    if let Some(rest) = trimmed.strip_prefix("~/") {
-        if let Some(home) = dirs::home_dir() {
-            return home.join(rest);
-        }
+    if let Some(rest) = trimmed.strip_prefix("~/")
+        && let Some(home) = dirs::home_dir()
+    {
+        return home.join(rest);
     }
 
     let candidate = PathBuf::from(trimmed);

@@ -237,16 +237,15 @@ pub async fn handle_manage_teams(
 
             if super::resolve_teammate_mode(ctx.vt_cfg)
                 == vtcode_config::agent_teams::TeammateMode::Tmux
-            {
-                if let Err(err) = crate::agent::runloop::unified::team_tmux::spawn_tmux_teammate(
+                && let Err(err) = crate::agent::runloop::unified::team_tmux::spawn_tmux_teammate(
                     &team_name,
                     ctx.config.workspace.as_path(),
                     &name,
                     default_model.as_deref(),
-                ) {
-                    ctx.renderer
-                        .line(MessageStyle::Error, &format!("TMUX spawn failed: {}", err))?;
-                }
+                )
+            {
+                ctx.renderer
+                    .line(MessageStyle::Error, &format!("TMUX spawn failed: {}", err))?;
             }
 
             Ok(SlashCommandControl::Continue)

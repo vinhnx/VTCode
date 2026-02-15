@@ -86,6 +86,15 @@ pub(super) fn builtin_tool_registrations(
             tools::SEARCH_TOOLS,
             tools::SEARCH,
             tools::FIND,
+            "grep",
+            "repo_browser.list_files",
+            "search text",
+            "list files",
+            "code intelligence",
+            "list tools",
+            "list errors",
+            "show agent info",
+            "fetch",
         ]),
         // ============================================================
         // SHELL EXECUTION (1 tool - unified)
@@ -99,6 +108,7 @@ pub(super) fn builtin_tool_registrations(
         .with_aliases([
             tools::RUN_PTY_CMD,
             tools::EXECUTE_CODE,
+            tools::EXEC_CODE,
             tools::CREATE_PTY_SESSION,
             tools::LIST_PTY_SESSIONS,
             tools::CLOSE_PTY_SESSION,
@@ -107,6 +117,16 @@ pub(super) fn builtin_tool_registrations(
             tools::EXEC_PTY_CMD,
             tools::EXEC,
             tools::SHELL,
+            "bash",
+            "container.exec",
+            "exec code",
+            "run code",
+            "run command",
+            "run command (pty)",
+            "send pty input",
+            "read pty session",
+            "list pty sessions",
+            "close pty session",
         ]),
         // ============================================================
         // FILE OPERATIONS (1 tool - unified)
@@ -127,6 +147,16 @@ pub(super) fn builtin_tool_registrations(
             tools::MOVE_FILE,
             tools::COPY_FILE,
             tools::FILE_OP,
+            "repo_browser.read_file",
+            "repo_browser.write_file",
+            "read file",
+            "write file",
+            "edit file",
+            "apply patch",
+            "delete file",
+            "move file",
+            "copy file",
+            "file operation",
         ]),
         // ============================================================
         // INTERNAL TOOLS (Hidden from LLM, used by unified tools)

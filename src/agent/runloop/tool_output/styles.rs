@@ -24,9 +24,9 @@ pub(crate) struct GitStyles {
 
 impl GitStyles {
     pub(crate) fn new() -> Self {
-        let parsed_added = anstyle_git::parse("new").unwrap_or(AnsiStyle::new());
-        let parsed_removed = anstyle_git::parse("old").unwrap_or(AnsiStyle::new());
-        let parsed_header = anstyle_git::parse("meta").unwrap_or(AnsiStyle::new());
+        let parsed_added = anstyle_git::parse("new").unwrap_or_default();
+        let parsed_removed = anstyle_git::parse("old").unwrap_or_default();
+        let parsed_header = anstyle_git::parse("meta").unwrap_or_default();
         Self {
             add: Some(strip_diff_background(standard_diff_style(
                 parsed_added,

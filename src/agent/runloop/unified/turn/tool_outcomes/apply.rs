@@ -9,7 +9,7 @@ pub async fn apply_turn_outcome(
     outcome: &TurnLoopOutcome,
     ctx: TurnOutcomeContext<'_>,
 ) -> Result<()> {
-    match outcome.result {
+    match &outcome.result {
         TurnLoopResult::Cancelled => {
             if ctx.ctrl_c_state.is_exit_requested() {
                 *ctx.session_end_reason = crate::hooks::lifecycle::SessionEndReason::Exit;
@@ -42,8 +42,11 @@ pub async fn apply_turn_outcome(
             ctx.ctrl_c_state.clear_cancel();
             Ok(())
         }
-        TurnLoopResult::Blocked { reason: _ } => {
+        TurnLoopResult::Blocked { reason } => {
             *ctx.conversation_history = outcome.working_history.clone();
+            if let Some(reason) = reason.as_deref() {
+                let _ = ctx.renderer.line(MessageStyle::Info, reason);
+            }
             ctx.handle.clear_input();
             ctx.handle.set_placeholder(ctx.default_placeholder.clone());
             ctx.ctrl_c_state.clear_cancel();

@@ -776,7 +776,7 @@ mod tests {
     fn test_trace_record_for_git() {
         let trace = TraceRecord::for_git_revision("abc123");
         assert!(trace.vcs.is_some());
-        let vcs = trace.vcs.unwrap();
+        let vcs = trace.vcs.as_ref().expect("trace.vcs is None");
         assert_eq!(vcs.vcs_type, VcsType::Git);
         assert_eq!(vcs.revision, "abc123");
     }
