@@ -12,6 +12,7 @@ use tokio::sync::RwLock;
 use super::entity_resolver::{EntityMatch, FileLocation};
 use super::workspace_state::WorkspaceState;
 use crate::tools::grep_file::{GrepSearchInput, GrepSearchManager};
+use crate::utils::file_utils::read_file_with_context;
 
 /// Maximum number of files to gather
 const MAX_CONTEXT_FILES: usize = 3;
@@ -246,7 +247,7 @@ impl ProactiveGatherer {
         let location = locations[0];
 
         // Read file
-        let content = tokio::fs::read_to_string(file)
+        let content = read_file_with_context(file, "context file snippet")
             .await
             .with_context(|| format!("Failed to read file {:?}", file))?;
 

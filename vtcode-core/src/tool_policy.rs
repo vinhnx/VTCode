@@ -17,6 +17,9 @@ use crate::config::core::tools::{ToolPolicy as ConfigToolPolicy, ToolsConfig};
 use crate::config::loader::{ConfigManager, VTCodeConfig};
 use crate::config::mcp::{McpAllowListConfig, McpAllowListRules};
 use crate::tools::names::canonical_tool_name;
+use crate::utils::file_utils::{
+    ensure_dir_exists, read_file_with_context, write_file_with_context,
+};
 
 const AUTO_ALLOW_TOOLS: &[&str] = &[
     tools::GREP_FILE,
@@ -409,7 +412,7 @@ impl ToolPolicyManager {
         if let Some(parent) = config_path.parent()
             && !tokio::fs::try_exists(parent).await.unwrap_or(false)
         {
-            tokio::fs::create_dir_all(parent)
+            ensure_dir_exists(parent)
                 .await
                 .with_context(|| format!("{} at {}", ERR_CREATE_POLICY_DIR, parent.display()))?;
         }
@@ -435,7 +438,7 @@ impl ToolPolicyManager {
 
         let vtcode_dir = home_dir.join(".vtcode");
         if !tokio::fs::try_exists(&vtcode_dir).await.unwrap_or(false) {
-            tokio::fs::create_dir_all(&vtcode_dir)
+            ensure_dir_exists(&vtcode_dir)
                 .await
                 .context("Failed to create ~/.vtcode directory")?;
         }
@@ -451,7 +454,7 @@ impl ToolPolicyManager {
             .await
             .unwrap_or(false)
         {
-            tokio::fs::create_dir_all(&workspace_vtcode_dir)
+            ensure_dir_exists(&workspace_vtcode_dir)
                 .await
                 .with_context(|| {
                     format!(
@@ -467,7 +470,7 @@ impl ToolPolicyManager {
     /// Load existing config or create new one with all tools as "prompt"
     async fn load_or_create_config(config_path: &PathBuf) -> Result<ToolPolicyConfig> {
         if tokio::fs::try_exists(config_path).await.unwrap_or(false) {
-            let content = tokio::fs::read_to_string(config_path)
+            let content = read_file_with_context(config_path, "tool policy config")
                 .await
                 .context("Failed to read tool policy config")?;
 
@@ -546,7 +549,7 @@ impl ToolPolicyManager {
         if let Some(parent) = path.parent()
             && !tokio::fs::try_exists(parent).await.unwrap_or(false)
         {
-            tokio::fs::create_dir_all(parent)
+            ensure_dir_exists(parent)
                 .await
                 .with_context(|| format!("{} at {}", ERR_CREATE_POLICY_DIR, parent.display()))?;
         }
@@ -554,7 +557,7 @@ impl ToolPolicyManager {
         let serialized = serde_json::to_string_pretty(config)
             .context("Failed to serialize tool policy config")?;
 
-        tokio::fs::write(path, serialized)
+        write_file_with_context(path, &serialized, "tool policy config")
             .await
             .with_context(|| format!("Failed to write tool policy config: {}", path.display()))
     }

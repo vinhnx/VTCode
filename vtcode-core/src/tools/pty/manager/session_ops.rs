@@ -3,6 +3,7 @@ use super::super::manager_utils::exit_status_code;
 use super::super::session::{CommandEchoState, PtySessionHandle};
 use super::PtyManager;
 use crate::tools::types::VTCodePtySession;
+use crate::utils::file_utils::{ensure_dir_exists, write_file_with_context};
 use anyhow::{Context, Result, anyhow};
 use portable_pty::PtySize;
 use std::io::Write;
@@ -109,14 +110,12 @@ impl PtyManager {
     /// - Agent can reference terminal output via grep/read_file
     pub async fn sync_sessions_to_files(&self) -> Result<Vec<std::path::PathBuf>> {
         let terminals_dir = self.workspace_root.join(".vtcode").join("terminals");
-        tokio::fs::create_dir_all(&terminals_dir)
-            .await
-            .with_context(|| {
-                format!(
-                    "Failed to create terminals directory: {}",
-                    terminals_dir.display()
-                )
-            })?;
+        ensure_dir_exists(&terminals_dir).await.with_context(|| {
+            format!(
+                "Failed to create terminals directory: {}",
+                terminals_dir.display()
+            )
+        })?;
 
         let sessions = self.list_sessions();
         let mut written_files = Vec::with_capacity(sessions.len());
@@ -131,7 +130,9 @@ impl PtyManager {
             let content = format_terminal_file(session, &output);
             let file_path = terminals_dir.join(format!("{}.txt", sanitize_session_id(&session.id)));
 
-            if let Err(e) = tokio::fs::write(&file_path, &content).await {
+            if let Err(e) =
+                write_file_with_context(&file_path, &content, "terminal session file").await
+            {
                 warn!(
                     session_id = %session.id,
                     error = %e,
@@ -146,7 +147,7 @@ impl PtyManager {
         // Write index file
         let index_content = self.generate_terminals_index(&sessions);
         let index_path = terminals_dir.join("INDEX.md");
-        tokio::fs::write(&index_path, &index_content)
+        write_file_with_context(&index_path, &index_content, "terminals index")
             .await
             .with_context(|| {
                 format!("Failed to write terminals index: {}", index_path.display())

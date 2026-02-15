@@ -1,6 +1,7 @@
 use super::FileOpsTool;
 use crate::tools::builder::ToolResponseBuilder;
 use crate::tools::types::Input;
+use crate::utils::file_utils::read_file_with_context;
 use anyhow::{Context, Result, anyhow};
 use serde_json::{Value, json};
 use std::path::Path;
@@ -97,7 +98,7 @@ impl FileOpsTool {
             ));
         }
 
-        let content = tokio::fs::read_to_string(file_path)
+        let content = read_file_with_context(file_path, "file content")
             .await
             .with_context(|| format!("Failed to read file content: {}", file_path.display()))?;
 

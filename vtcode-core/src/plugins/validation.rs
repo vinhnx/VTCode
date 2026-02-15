@@ -9,6 +9,7 @@ use anyhow::Result;
 
 use crate::command_safety::command_might_be_dangerous;
 use crate::plugins::{PluginError, PluginManifest, PluginResult};
+use crate::utils::file_utils::read_file_with_context;
 
 /// Plugin validator
 pub struct PluginValidator;
@@ -237,7 +238,7 @@ pub async fn handle_plugin_validate(path: &std::path::Path) -> Result<()> {
         anyhow::bail!("Plugin manifest not found at: {}", manifest_path.display());
     }
 
-    let manifest_content = tokio::fs::read_to_string(&manifest_path).await?;
+    let manifest_content = read_file_with_context(&manifest_path, "plugin manifest").await?;
     let manifest: PluginManifest = serde_json::from_str(&manifest_content)?;
 
     // Validate the manifest

@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
+use vtcode_commons::fs::{read_file_with_context, write_file_with_context};
 
 /// Maximum number of entity matches to return
 const MAX_ENTITY_MATCHES: usize = 5;
@@ -179,7 +180,7 @@ impl EntityResolver {
         if let Some(cache_path) = &self.cache_path
             && cache_path.exists()
         {
-            let content = tokio::fs::read_to_string(cache_path)
+            let content = read_file_with_context(cache_path, "entity cache")
                 .await
                 .with_context(|| format!("Failed to read entity cache at {:?}", cache_path))?;
 
@@ -195,7 +196,7 @@ impl EntityResolver {
             let content = serde_json::to_string_pretty(&self.index)
                 .with_context(|| "Failed to serialize entity cache")?;
 
-            tokio::fs::write(cache_path, content)
+            write_file_with_context(cache_path, &content, "entity cache")
                 .await
                 .with_context(|| format!("Failed to write entity cache to {:?}", cache_path))?;
         }

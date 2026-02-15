@@ -1,6 +1,7 @@
 use crate::config::mcp::{
     McpAllowListConfig, McpClientConfig, McpProviderConfig, McpTransportConfig,
 };
+use crate::utils::file_utils::{ensure_dir_exists, write_file_with_context};
 use anyhow::{Context, Result, anyhow, bail};
 use async_trait::async_trait;
 use chrono::Utc;
@@ -373,14 +374,12 @@ impl McpClient {
         let tools_dir = mcp_dir.join("tools");
 
         // Create directories
-        tokio::fs::create_dir_all(&tools_dir)
-            .await
-            .with_context(|| {
-                format!(
-                    "Failed to create MCP tools directory: {}",
-                    tools_dir.display()
-                )
-            })?;
+        ensure_dir_exists(&tools_dir).await.with_context(|| {
+            format!(
+                "Failed to create MCP tools directory: {}",
+                tools_dir.display()
+            )
+        })?;
 
         // Group tools by provider
         let mut by_provider: FxHashMap<String, Vec<&McpToolInfo>> = FxHashMap::default();
@@ -394,19 +393,17 @@ impl McpClient {
         // Write tool files per provider
         for (provider, provider_tools) in &by_provider {
             let provider_dir = tools_dir.join(sanitize_filename(provider));
-            tokio::fs::create_dir_all(&provider_dir)
-                .await
-                .with_context(|| {
-                    format!(
-                        "Failed to create provider directory: {}",
-                        provider_dir.display()
-                    )
-                })?;
+            ensure_dir_exists(&provider_dir).await.with_context(|| {
+                format!(
+                    "Failed to create provider directory: {}",
+                    provider_dir.display()
+                )
+            })?;
 
             for tool in provider_tools {
                 let tool_content = format_tool_markdown(tool);
                 let tool_path = provider_dir.join(format!("{}.md", sanitize_filename(&tool.name)));
-                tokio::fs::write(&tool_path, &tool_content)
+                write_file_with_context(&tool_path, &tool_content, "MCP tool file")
                     .await
                     .with_context(|| {
                         format!("Failed to write tool file: {}", tool_path.display())
@@ -417,7 +414,7 @@ impl McpClient {
         // Write index file
         let index_content = self.generate_tools_index(&tools, &by_provider);
         let index_path = tools_dir.join("INDEX.md");
-        tokio::fs::write(&index_path, &index_content)
+        write_file_with_context(&index_path, &index_content, "MCP tools index")
             .await
             .with_context(|| {
                 format!("Failed to write MCP tools index: {}", index_path.display())
@@ -427,7 +424,7 @@ impl McpClient {
         let status = self.generate_status_json();
         let status_path = mcp_dir.join("status.json");
         let status_json = serde_json::to_string_pretty(&status)?;
-        tokio::fs::write(&status_path, &status_json)
+        write_file_with_context(&status_path, &status_json, "MCP status")
             .await
             .with_context(|| format!("Failed to write MCP status: {}", status_path.display()))?;
 

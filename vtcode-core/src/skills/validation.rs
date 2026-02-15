@@ -9,6 +9,7 @@
 
 use crate::skills::cli_bridge::CliToolConfig;
 use crate::skills::manifest::parse_skill_file;
+use crate::utils::file_utils::read_file_with_context_sync;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -536,7 +537,7 @@ impl SkillValidator {
 
                 // Security check
                 if self.config.enable_security_checks
-                    && let Ok(content) = std::fs::read_to_string(&path)
+                    && let Ok(content) = read_file_with_context_sync(&path, "skill script")
                 {
                     for blocked in &self.config.blocked_commands {
                         if content.contains(blocked) {
@@ -722,7 +723,7 @@ impl SkillValidator {
             };
         }
 
-        match std::fs::read_to_string(readme_path) {
+        match read_file_with_context_sync(readme_path, "skill README") {
             Ok(content) => {
                 if content.len() < 100 {
                     CheckResult {
@@ -783,7 +784,7 @@ impl SkillValidator {
             }
         }
 
-        let result = match std::fs::read_to_string(schema_path) {
+        let result = match read_file_with_context_sync(schema_path, "skill JSON schema") {
             Ok(content) => {
                 match serde_json::from_str::<Value>(&content) {
                     Ok(schema_json) => {

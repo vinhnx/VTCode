@@ -8,6 +8,8 @@ use std::env;
 use std::path::{Path, PathBuf};
 use tracing::{error, warn};
 
+use crate::utils::file_utils::read_file_with_context;
+
 const PROMPTS_SUBDIR: &str = "prompts";
 const BUILTIN_PROMPTS: &[(&str, &str)] = &[
     (
@@ -221,7 +223,7 @@ impl CustomPrompt {
             return Ok(None);
         }
 
-        let contents = tokio::fs::read_to_string(path)
+        let contents = read_file_with_context(path, "custom prompt")
             .await
             .with_context(|| format!("failed to read custom prompt from {}", path.display()))?;
 

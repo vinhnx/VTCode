@@ -2,8 +2,10 @@
 
 use crate::tools::tree_sitter::analyzer::{Position, SyntaxNode, SyntaxTree};
 use crate::tools::tree_sitter::languages::{SymbolInfo, SymbolKind};
+use crate::utils::file_utils::{read_file_with_context, write_file_with_context};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::path::Path;
 
 /// Refactoring operation
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -306,7 +308,9 @@ impl RefactoringEngine {
         }
 
         if let Some(change) = operation.changes.first()
-            && let Ok(content) = tokio::fs::read_to_string(&change.file_path).await
+            && let Ok(content) =
+                read_file_with_context(Path::new(&change.file_path), "refactoring source file")
+                    .await
             && let Ok(re) = regex::Regex::new(&format!(r"\b{}\b", regex::escape(&change.new_text)))
         {
             for mat in re.find_iter(&content) {
@@ -347,9 +351,10 @@ impl RefactoringEngine {
             )));
         }
 
-        let mut content = tokio::fs::read_to_string(&change.file_path)
-            .await
-            .map_err(|e| RefactoringError::FileOperationError(e.to_string()))?;
+        let mut content =
+            read_file_with_context(Path::new(&change.file_path), "refactoring target file")
+                .await
+                .map_err(|e| RefactoringError::FileOperationError(e.to_string()))?;
 
         let start = change.old_range.start.byte_offset;
         let end = change.old_range.end.byte_offset;
@@ -361,9 +366,13 @@ impl RefactoringEngine {
         }
 
         content.replace_range(start..end, &change.new_text);
-        tokio::fs::write(&change.file_path, content)
-            .await
-            .map_err(|e| RefactoringError::FileOperationError(e.to_string()))?;
+        write_file_with_context(
+            Path::new(&change.file_path),
+            &content,
+            "refactoring target file",
+        )
+        .await
+        .map_err(|e| RefactoringError::FileOperationError(e.to_string()))?;
 
         Ok(())
     }

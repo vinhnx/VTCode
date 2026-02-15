@@ -3,12 +3,11 @@ use crate::llm::provider::{Message, MessageContent, MessageRole};
 use crate::telemetry::perf::PerfSpan;
 use crate::utils::dot_config::DotManager;
 use crate::utils::file_utils::{
-    ensure_dir_exists, read_json_file, read_json_file_sync, write_json_file_sync,
+    ensure_dir_exists, read_json_file, read_json_file_sync, write_json_file, write_json_file_sync,
 };
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use serde_json;
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -407,12 +406,7 @@ impl SessionArchive {
     }
 
     async fn write_snapshot_async(&self, snapshot: SessionSnapshot) -> Result<PathBuf> {
-        if let Some(parent) = self.path.parent() {
-            ensure_dir_exists(parent).await?;
-        }
-
-        let json = serde_json::to_string_pretty(&snapshot)?;
-        tokio::fs::write(&self.path, json).await?;
+        write_json_file(&self.path, &snapshot).await?;
         Ok(self.path.clone())
     }
 

@@ -2,6 +2,7 @@ use super::FileOpsTool;
 use crate::tools::error_helpers::{with_file_context, with_path_context};
 use crate::tools::traits::FileTool;
 use crate::tools::types::{CopyInput, CreateInput, DeleteInput, MoveInput};
+use crate::utils::file_utils::ensure_dir_exists;
 use anyhow::{Context, Result, anyhow};
 use serde_json::{Value, json};
 use tracing::info;
@@ -39,7 +40,7 @@ impl FileOpsTool {
         }
 
         if let Some(parent) = file_path.parent() {
-            tokio::fs::create_dir_all(parent).await?;
+            ensure_dir_exists(parent).await?;
         }
 
         let mut payload = json!({
@@ -183,7 +184,7 @@ impl FileOpsTool {
 
         // Ensure destination parent directory exists
         if let Some(parent) = to_path.parent() {
-            tokio::fs::create_dir_all(parent).await?;
+            ensure_dir_exists(parent).await?;
         }
 
         tokio::fs::rename(&from_path, &to_path)
@@ -220,7 +221,7 @@ impl FileOpsTool {
 
         // Ensure destination parent directory exists
         if let Some(parent) = to_path.parent() {
-            tokio::fs::create_dir_all(parent).await?;
+            ensure_dir_exists(parent).await?;
         }
 
         let metadata = tokio::fs::metadata(&from_path).await?;
@@ -239,7 +240,7 @@ impl FileOpsTool {
                 let target = to_path.join(relative);
 
                 if entry.file_type().is_dir() {
-                    tokio::fs::create_dir_all(&target).await?;
+                    ensure_dir_exists(&target).await?;
                 } else {
                     with_file_context(
                         tokio::fs::copy(entry_path, &target).await,

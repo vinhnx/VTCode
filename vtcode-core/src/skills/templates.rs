@@ -9,6 +9,10 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use tracing::{debug, info};
 
+use crate::utils::file_utils::{
+    ensure_dir_exists_sync, read_file_with_context_sync, write_file_with_context_sync,
+};
+
 /// Skill template types
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum TemplateType {
@@ -494,7 +498,7 @@ impl TemplateEngine {
             .ok_or_else(|| anyhow!("No skill name variable found"))?;
 
         let skill_dir = output_dir.join(skill_name);
-        std::fs::create_dir_all(&skill_dir)?;
+        ensure_dir_exists_sync(&skill_dir)?;
 
         info!(
             "Generating skill '{}' from template '{}' in {}",
@@ -506,7 +510,7 @@ impl TemplateEngine {
         // Create directory structure
         for dir in &template.file_structure.directories {
             let dir_path = skill_dir.join(dir);
-            std::fs::create_dir_all(&dir_path)?;
+            ensure_dir_exists_sync(&dir_path)?;
         }
 
         // Generate files
@@ -515,10 +519,10 @@ impl TemplateEngine {
             let full_path = skill_dir.join(file_path);
 
             if let Some(parent) = full_path.parent() {
-                std::fs::create_dir_all(parent)?;
+                ensure_dir_exists_sync(parent)?;
             }
 
-            std::fs::write(&full_path, content)?;
+            write_file_with_context_sync(&full_path, &content, "template output file")?;
             debug!("Generated file: {}", full_path.display());
         }
 
@@ -528,10 +532,10 @@ impl TemplateEngine {
             let full_path = skill_dir.join(file_path);
 
             if let Some(parent) = full_path.parent() {
-                std::fs::create_dir_all(parent)?;
+                ensure_dir_exists_sync(parent)?;
             }
 
-            std::fs::write(&full_path, content)?;
+            write_file_with_context_sync(&full_path, &content, "template executable file")?;
 
             // Make executable on Unix systems
             #[cfg(unix)]
@@ -549,7 +553,7 @@ impl TemplateEngine {
         if !template.file_structure.files.contains_key("SKILL.md") {
             let skill_md = self.generate_skill_md(template, &variables)?;
             let skill_md_path = skill_dir.join("SKILL.md");
-            std::fs::write(&skill_md_path, skill_md)?;
+            write_file_with_context_sync(&skill_md_path, &skill_md, "generated SKILL.md")?;
             debug!("Generated SKILL.md: {}", skill_md_path.display());
         }
 
@@ -697,8 +701,7 @@ impl TemplateEngine {
 
     /// Load template from file
     pub fn load_template_from_file(&mut self, path: &Path) -> Result<()> {
-        let content = std::fs::read_to_string(path)
-            .with_context(|| format!("Failed to read template file: {}", path.display()))?;
+        let content = read_file_with_context_sync(path, "template file")?;
 
         let template: SkillTemplate = serde_json::from_str(&content)
             .with_context(|| format!("Failed to parse template from: {}", path.display()))?;
@@ -715,8 +718,7 @@ impl TemplateEngine {
         let content = serde_json::to_string_pretty(template)
             .with_context(|| format!("Failed to serialize template '{}'", template_name))?;
 
-        std::fs::write(path, content)
-            .with_context(|| format!("Failed to write template to: {}", path.display()))?;
+        write_file_with_context_sync(path, &content, "template file")?;
 
         info!("Saved template '{}' to {}", template_name, path.display());
         Ok(())

@@ -11,6 +11,7 @@ mod tool_execution;
 mod tool_outcomes;
 pub(crate) mod turn_helpers;
 mod turn_loop;
+mod turn_loop_helpers;
 mod turn_processing;
 pub(crate) mod utils;
 pub(crate) mod workspace;

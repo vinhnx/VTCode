@@ -6,6 +6,7 @@ use crate::tools::tree_sitter::analysis::{
 use crate::tools::tree_sitter::cache::AstCache;
 use crate::tools::tree_sitter::highlighting::{HighlightResult, TreeSitterInjectionHighlighter};
 use crate::tools::tree_sitter::languages::*;
+use crate::utils::file_utils::read_file_with_context;
 // use crate::tools::tree_sitter::parse_cache::{CachedTreeSitterAnalyzer, ParseCache};
 // use crate::tools::tree_sitter::unified_extractor::UnifiedSymbolExtractor;
 use anyhow::Result;
@@ -719,7 +720,7 @@ impl TreeSitterAnalyzer {
 
         let language = self.detect_language_from_path(file_path)?;
 
-        let source_code = tokio::fs::read_to_string(file_path)
+        let source_code = read_file_with_context(file_path, "source file")
             .await
             .map_err(|e| TreeSitterError::FileReadError(e.to_string()))?;
 
