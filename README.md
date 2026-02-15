@@ -255,7 +255,9 @@ For installation instructions and download links for other IDEs, visit our [IDE 
 
 ### Contributing
 
-I warmly welcome contributions of all kinds! Whether you're looking to fix bugs, add new features, improve documentation, or enhance the user experience, your help is greatly appreciated. Please feel free to explore the [issues page](https://github.com/vinhnx/vtcode/issues) to see where you can contribute. Thank you for considering contributing to this project!
+I warmly welcome contributions of all kinds! Please read [CONTRIBUTING.md](CONTRIBUTING.md) and [AGENTS.md](AGENTS.md) for my project-specific rules and guidelines (for both humans and agents).
+
+Whether you're looking to fix bugs, add new features, improve documentation, or enhance the user experience, your help is greatly appreciated.
 
 How To Contribute:
 
