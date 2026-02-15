@@ -259,7 +259,7 @@ impl ZedAgent {
                 return Ok(Some(".".into()));
             }
 
-            if let Ok(relative) = normalized.strip_prefix(&workspace_root) {
+            if let Ok(relative) = normalized.strip_prefix(workspace_root) {
                 if relative.as_os_str().is_empty() {
                     return Ok(Some(".".into()));
                 }

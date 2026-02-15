@@ -3,7 +3,7 @@
 //! Detects when the agent is stuck in repetitive patterns and suggests intervention.
 
 use crate::config::constants::{defaults, tools};
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::time::Instant;
 
 // Separate limits for different operation types to reduce false positives
@@ -13,6 +13,8 @@ const MAX_COMMAND_TOOL_CALLS: usize = 5; // shell, run_pty_cmd
 const MAX_OTHER_TOOL_CALLS: usize = 3; // Other tools (default)
 const DETECTION_WINDOW: usize = 10;
 const HARD_LIMIT_MULTIPLIER: usize = 2; // Hard stop at 2x soft limit
+const MAX_SIMILAR_READ_TARGET_CALLS: usize = 8;
+const MAX_SIMILAR_READ_TARGET_VARIANTS: usize = 3;
 
 #[inline]
 fn base_tool_name(tool_name: &str) -> &str {
@@ -58,6 +60,7 @@ fn normalize_args_for_detection(tool_name: &str, args: &serde_json::Value) -> se
 pub struct ToolCallRecord {
     pub tool_name: String,
     pub args_hash: u64,
+    pub read_target: Option<String>,
     pub timestamp: Instant,
 }
 
@@ -155,6 +158,7 @@ impl LoopDetector {
         let record = ToolCallRecord {
             tool_name: tool_name.to_string(),
             args_hash,
+            read_target: read_target_for_tool_call(tool_name, args),
             timestamp: Instant::now(),
         };
 
@@ -167,6 +171,10 @@ impl LoopDetector {
 
         self.recent_calls.push_back(record);
         *self.tool_counts.entry(tool_name.to_string()).or_insert(0) += 1;
+
+        if let Some(read_target_warning) = self.detect_repetitive_read_target(tool_name) {
+            return Some(read_target_warning);
+        }
 
         if let Some(pattern_warning) = self.detect_patterns() {
             return Some(pattern_warning);
@@ -210,6 +218,53 @@ impl LoopDetector {
                     tool_name, count, DETECTION_WINDOW, alternatives, hard_limit
                 ));
             }
+        }
+
+        None
+    }
+
+    fn detect_repetitive_read_target(&mut self, tool_name: &str) -> Option<String> {
+        let base_name = base_tool_name(tool_name);
+        let is_read_tool = base_name == tools::READ_FILE
+            || (base_name == tools::UNIFIED_FILE && tool_name.ends_with("::read"));
+        if !is_read_tool {
+            return None;
+        }
+
+        let current_target = match self
+            .recent_calls
+            .back()
+            .and_then(|record| record.read_target.as_deref())
+        {
+            Some(target) => target,
+            None => return None,
+        };
+
+        let mut same_target_streak = 0usize;
+        let mut variants = HashSet::new();
+        for record in self.recent_calls.iter().rev() {
+            if record.tool_name == tool_name
+                && record.read_target.as_deref() == Some(current_target)
+            {
+                same_target_streak += 1;
+                variants.insert(record.args_hash);
+                continue;
+            }
+            break;
+        }
+
+        if same_target_streak >= MAX_SIMILAR_READ_TARGET_CALLS
+            && variants.len() <= MAX_SIMILAR_READ_TARGET_VARIANTS
+        {
+            let hard_limit = self.get_limit_for_tool(tool_name) * HARD_LIMIT_MULTIPLIER;
+            self.tool_counts.insert(tool_name.to_string(), hard_limit);
+            return Some(format!(
+                "HARD STOP: Repeated '{}' calls for '{}' with minimal argument variation ({}-call streak, {} variants).",
+                tool_name,
+                current_target,
+                same_target_streak,
+                variants.len()
+            ));
         }
 
         None
@@ -426,6 +481,26 @@ impl Default for LoopDetector {
     fn default() -> Self {
         Self::new()
     }
+}
+
+fn read_target_for_tool_call(tool_name: &str, args: &serde_json::Value) -> Option<String> {
+    let base_name = base_tool_name(tool_name);
+    let read_tool = base_name == tools::READ_FILE
+        || (base_name == tools::UNIFIED_FILE && tool_name.ends_with("::read"));
+    if !read_tool {
+        return None;
+    }
+
+    let obj = args.as_object()?;
+    for key in ["path", "file_path", "filepath", "target_path"] {
+        if let Some(path) = obj.get(key).and_then(|v| v.as_str()) {
+            let trimmed = path.trim();
+            if !trimmed.is_empty() {
+                return Some(trimmed.to_string());
+            }
+        }
+    }
+    None
 }
 
 #[cfg(test)]
@@ -679,5 +754,58 @@ mod tests {
         assert!(detector.record_call(&tool_key, &args).is_none());
         assert!(detector.record_call(&tool_key, &args).is_none());
         assert!(detector.record_call(&tool_key, &args).is_none());
+    }
+
+    #[test]
+    fn test_repetitive_read_target_with_small_variations_triggers_hard_stop() {
+        let mut detector = LoopDetector::with_max_repeated_calls(100);
+        let tool_key = format!("{}::read", tools::UNIFIED_FILE);
+        let mut saw_hard_stop = false;
+
+        for offset in [1, 2, 1, 2, 1, 2, 1, 2] {
+            let args = json!({"path": "vtcode-core/src/a2a/server.rs", "offset_lines": offset, "limit": 20});
+            if let Some(warning) = detector.record_call(&tool_key, &args)
+                && warning.contains("HARD STOP")
+            {
+                saw_hard_stop = true;
+            }
+        }
+
+        assert!(saw_hard_stop);
+        assert!(detector.is_hard_limit_exceeded(&tool_key));
+    }
+
+    #[test]
+    fn test_repetitive_read_target_with_many_ranges_is_not_hard_stopped() {
+        let mut detector = LoopDetector::with_max_repeated_calls(100);
+        let tool_key = format!("{}::read", tools::UNIFIED_FILE);
+
+        for offset in 1..=MAX_SIMILAR_READ_TARGET_CALLS {
+            let args = json!({"path": "vtcode-core/src/a2a/server.rs", "offset_lines": offset * 40, "limit": 40});
+            if let Some(warning) = detector.record_call(&tool_key, &args) {
+                assert!(!warning.contains("HARD STOP"));
+            }
+        }
+
+        assert!(!detector.is_hard_limit_exceeded(&tool_key));
+    }
+
+    #[test]
+    fn test_repetitive_read_target_requires_contiguous_streak() {
+        let mut detector = LoopDetector::with_max_repeated_calls(100);
+        let read_tool = format!("{}::read", tools::UNIFIED_FILE);
+
+        for _ in 0..MAX_SIMILAR_READ_TARGET_CALLS {
+            let _ = detector.record_call(
+                &read_tool,
+                &json!({"path": "vtcode-core/src/a2a/server.rs", "offset_lines": 1, "limit": 20}),
+            );
+            let _ = detector.record_call(
+                tools::GREP_FILE,
+                &json!({"pattern": "handle_loop_detection", "path": "vtcode-core/src"}),
+            );
+        }
+
+        assert!(!detector.is_hard_limit_exceeded(&read_tool));
     }
 }

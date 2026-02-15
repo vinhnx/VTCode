@@ -35,6 +35,7 @@ pub(crate) async fn execute_tool_with_timeout(
     .await
 }
 
+#[allow(dead_code)]
 pub(crate) fn process_llm_tool_output(output: Value) -> ToolExecutionStatus {
     execution_helpers::process_llm_tool_output(output)
 }

@@ -48,6 +48,8 @@ pub const SEND_PTY_INPUT: &str = "send_pty_input";
 pub const READ_PTY_SESSION: &str = "read_pty_session";
 pub const RESIZE_PTY_SESSION: &str = "resize_pty_session";
 pub const EXECUTE_CODE: &str = "execute_code";
+/// Legacy provider-emitted alias for execute_code.
+pub const EXEC_CODE: &str = "exec_code";
 pub const EXEC_PTY_CMD: &str = "exec_pty_cmd";
 pub const EXEC: &str = "exec";
 pub const SHELL: &str = "shell";

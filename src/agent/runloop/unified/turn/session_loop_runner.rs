@@ -311,24 +311,58 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                 match result {
                     Ok(inner) => break inner,
                     Err(_) => {
+                        tool_registry.terminate_all_pty_sessions();
+                        handle.set_input_status(None, None);
+                        input_status_state.left = None;
+                        input_status_state.right = None;
+
+                        if ctrl_c_state.is_exit_requested() || ctrl_c_state.is_cancel_requested() {
+                            let interrupted_result = if ctrl_c_state.is_exit_requested() {
+                                RunLoopTurnLoopResult::Exit
+                            } else {
+                                RunLoopTurnLoopResult::Cancelled
+                            };
+                            let recovered_history = history_backup
+                                .clone()
+                                .or_else(|| {
+                                    if working_history.is_empty() {
+                                        None
+                                    } else {
+                                        Some(working_history.clone())
+                                    }
+                                })
+                                .unwrap_or_else(|| conversation_history.clone());
+                            break Ok(TurnLoopOutcome {
+                                result: interrupted_result,
+                                working_history: recovered_history,
+                                turn_modified_files: std::collections::BTreeSet::new(),
+                            });
+                        }
+
                         if history_backup.is_none() {
                             history_backup = Some(conversation_history.clone());
                         }
                         attempts += 1;
-                        tool_registry.terminate_all_pty_sessions();
-                        renderer.line(
-                            MessageStyle::Error,
-                            &format!(
-                                "Turn timed out after {} seconds. PTY session cancelled; retrying.",
-                                timeout_secs
-                            ),
-                        )?;
                         if attempts >= 2 {
+                            renderer.line(
+                                MessageStyle::Error,
+                                &format!(
+                                    "Turn timed out after {} seconds. PTY sessions cancelled; stopping turn.",
+                                    timeout_secs
+                                ),
+                            )?;
                             break Err(anyhow::anyhow!(
                                 "Turn timed out after {} seconds",
                                 timeout_secs
                             ));
                         }
+                        renderer.line(
+                            MessageStyle::Error,
+                            &format!(
+                                "Turn timed out after {} seconds. PTY sessions cancelled; retrying once.",
+                                timeout_secs
+                            ),
+                        )?;
                     }
                 }
             } {
@@ -409,7 +443,25 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                     tracing::warn!("Failed to persist session progress: {}", err);
                 }
             }
-            let _turn_result = outcome.result;
+            match &outcome.result {
+                RunLoopTurnLoopResult::Aborted => {
+                    session_stats.mark_turn_stalled(
+                        true,
+                        Some("Turn aborted due to an execution error.".to_string()),
+                    );
+                }
+                RunLoopTurnLoopResult::Blocked { reason } => {
+                    session_stats.mark_turn_stalled(
+                        true,
+                        reason.clone().or_else(|| {
+                            Some("Turn blocked due to repeated failing tool behavior.".to_string())
+                        }),
+                    );
+                }
+                _ => {
+                    session_stats.mark_turn_stalled(false, None);
+                }
+            }
             if matches!(session_end_reason, SessionEndReason::Exit) {
                 break;
             }

@@ -9,6 +9,7 @@ use futures::StreamExt;
 use tracing::warn;
 
 impl AgentRunner {
+    #[allow(dead_code)]
     pub(super) async fn collect_provider_response(
         &mut self,
         request: &LLMRequest,

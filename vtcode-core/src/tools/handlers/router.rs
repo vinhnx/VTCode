@@ -51,6 +51,56 @@ pub struct ToolRegistry {
     handlers: HashMap<String, Arc<dyn ToolHandler>>,
 }
 
+fn normalize_router_tool_name(tool_name: &str) -> Option<String> {
+    let lowered = tool_name.trim().to_ascii_lowercase();
+    if lowered.is_empty() {
+        return None;
+    }
+
+    let normalized = lowered
+        .replace([' ', '-'], "_")
+        .replace(['(', ')', '\'', '"'], "");
+
+    let mapped = match normalized.as_str() {
+        "exec_code" | "run_code" | "run_command" | "run_command_pty" | "container.exec"
+        | "bash" => "run_pty_cmd",
+        "search_text" => "grep_file",
+        "read_file" => "read_file",
+        "write_file" => "write_file",
+        "edit_file" => "edit_file",
+        "list_files" => "list_files",
+        _ => normalized.as_str(),
+    };
+
+    if mapped == lowered {
+        None
+    } else {
+        Some(mapped.to_string())
+    }
+}
+
+fn suggest_similar_tool_names(
+    requested_tool_name: &str,
+    handlers: &HashMap<String, Arc<dyn ToolHandler>>,
+) -> Vec<String> {
+    let requested_lower = requested_tool_name.to_ascii_lowercase();
+    let normalized = normalize_router_tool_name(requested_tool_name).unwrap_or_default();
+
+    let mut available: Vec<String> = handlers.keys().cloned().collect();
+    available.sort_unstable();
+
+    available
+        .into_iter()
+        .filter(|candidate| {
+            candidate.contains(&requested_lower)
+                || requested_lower.contains(candidate)
+                || (!normalized.is_empty()
+                    && (candidate.contains(&normalized) || normalized.contains(candidate)))
+        })
+        .take(3)
+        .collect()
+}
+
 impl ToolRegistry {
     pub fn new(handlers: HashMap<String, Arc<dyn ToolHandler>>) -> Self {
         Self { handlers }
@@ -64,9 +114,28 @@ impl ToolRegistry {
     pub async fn dispatch(&self, invocation: ToolInvocation) -> Result<ToolOutput, ToolCallError> {
         let tool_name = &invocation.tool_name;
 
-        let handler = self
-            .handler(tool_name)
-            .ok_or_else(|| ToolCallError::respond(format!("Unknown tool: {tool_name}")))?;
+        let normalized_name = normalize_router_tool_name(tool_name);
+        let handler = self.handler(tool_name).or_else(|| {
+            normalized_name
+                .as_deref()
+                .and_then(|candidate| self.handler(candidate))
+        });
+        let handler = handler.ok_or_else(|| {
+            let suggested = suggest_similar_tool_names(tool_name, &self.handlers);
+            let normalized_hint = normalized_name
+                .as_deref()
+                .filter(|candidate| *candidate != tool_name)
+                .map(|candidate| format!(" Normalized as '{candidate}'."))
+                .unwrap_or_default();
+            let suggestion_hint = if suggested.is_empty() {
+                String::new()
+            } else {
+                format!(" Did you mean: {}?", suggested.join(", "))
+            };
+            ToolCallError::respond(format!(
+                "Unknown tool: {tool_name}.{normalized_hint}{suggestion_hint}"
+            ))
+        })?;
 
         if !handler.matches_kind(&invocation.payload) {
             return Err(ToolCallError::respond(format!(
@@ -346,5 +415,29 @@ mod tests {
 
         assert!(router.tool_supports_parallel("parallel_tool"));
         assert!(!router.tool_supports_parallel("nonexistent"));
+    }
+
+    #[test]
+    fn test_normalize_router_tool_name_exec_code_label() {
+        assert_eq!(
+            normalize_router_tool_name("Exec code").as_deref(),
+            Some("run_pty_cmd")
+        );
+        assert_eq!(
+            normalize_router_tool_name("run command (PTY)").as_deref(),
+            Some("run_pty_cmd")
+        );
+    }
+
+    #[test]
+    fn test_suggest_similar_tool_names_uses_normalized_form() {
+        let mut handlers = HashMap::new();
+        handlers.insert(
+            "run_pty_cmd".to_string(),
+            Arc::new(MockHandler) as Arc<dyn ToolHandler>,
+        );
+
+        let suggestions = suggest_similar_tool_names("Exec code", &handlers);
+        assert_eq!(suggestions, vec!["run_pty_cmd".to_string()]);
     }
 }

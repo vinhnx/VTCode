@@ -359,15 +359,12 @@ pub(crate) fn update_team_status(
     };
 
     let label = match team_context.role {
-        vtcode_core::agent_teams::TeamRole::Lead => {
-            let active = session_stats
-                .team_state
-                .as_ref()
-                .and_then(|team| team.active_teammate())
-                .map(|name| format!("team:{} -> {}", team_context.team_name, name))
-                .unwrap_or_else(|| format!("team:{} (lead)", team_context.team_name));
-            active
-        }
+        vtcode_core::agent_teams::TeamRole::Lead => session_stats
+            .team_state
+            .as_ref()
+            .and_then(|team| team.active_teammate())
+            .map(|name| format!("team:{} -> {}", team_context.team_name, name))
+            .unwrap_or_else(|| format!("team:{} (lead)", team_context.team_name)),
         vtcode_core::agent_teams::TeamRole::Teammate => {
             let name = team_context.teammate_name.as_deref().unwrap_or("teammate");
             format!("team:{} as {}", team_context.team_name, name)

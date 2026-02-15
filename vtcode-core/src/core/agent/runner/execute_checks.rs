@@ -5,6 +5,7 @@ use crate::utils::colors::style;
 use std::time::Instant;
 
 impl AgentRunner {
+    #[allow(dead_code)]
     pub(super) fn handle_loop_detection(
         &self,
         response_content: &str,

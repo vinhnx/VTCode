@@ -564,10 +564,30 @@ impl ToolRegistry {
                 return Ok(error.to_json_value());
             }
 
+            let available_tools = self.inventory.available_tools();
+            let mut all_tool_names = available_tools.to_vec();
+            all_tool_names.extend(self.inventory.registered_aliases());
+            all_tool_names.sort_unstable();
+            let similar_tools: Vec<String> = all_tool_names
+                .iter()
+                .filter(|tool| fuzzy_match(name, tool))
+                .take(3)
+                .cloned()
+                .collect();
+            let suggestion = if !similar_tools.is_empty() {
+                format!(" Did you mean: {}?", similar_tools.join(", "))
+            } else {
+                String::new()
+            };
+            let available_tool_list = all_tool_names.join(", ");
+            let message = format!(
+                "Unknown tool: {}. Available tools: {}.{}",
+                display_name, available_tool_list, suggestion
+            );
             let error = ToolExecutionError::new(
                 tool_name_owned.clone(),
                 ToolErrorType::ToolNotFound,
-                format!("Unknown tool: {}", display_name),
+                message.clone(),
             );
 
             record_failure(
@@ -575,7 +595,7 @@ impl ToolRegistry {
                 is_mcp_tool,
                 mcp_provider.clone(),
                 args_for_recording,
-                format!("Unknown tool: {}", display_name),
+                message,
                 timeout_category_label.clone(),
                 base_timeout_ms,
                 adaptive_timeout_ms,

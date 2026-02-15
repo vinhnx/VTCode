@@ -6,8 +6,6 @@
 //! - RPC endpoints at `/a2a` for message sending and task management
 //! - Streaming endpoint at `/a2a/stream` for real-time updates via Server-Sent Events
 
-#![cfg(feature = "a2a-server")]
-
 use crate::a2a::WebhookNotifier;
 use crate::a2a::agent_card::AgentCard;
 use crate::a2a::errors::{A2aError, A2aErrorCode, A2aResult};

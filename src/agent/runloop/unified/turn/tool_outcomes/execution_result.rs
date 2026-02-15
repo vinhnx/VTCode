@@ -209,10 +209,10 @@ async fn handle_failure<'a>(
     push_tool_error_response(t_ctx, tool_call_id, tool_name, error_msg, "execution").await;
 
     // Handle auto-exit from Plan Mode if applicable
-    if should_auto_exit {
-        if let Some(outcome) = handle_plan_mode_auto_exit(t_ctx, tool_start_time).await? {
-            return Ok(Some(outcome));
-        }
+    if should_auto_exit
+        && let Some(outcome) = handle_plan_mode_auto_exit(t_ctx, tool_start_time).await?
+    {
+        return Ok(Some(outcome));
     }
 
     Ok(None)

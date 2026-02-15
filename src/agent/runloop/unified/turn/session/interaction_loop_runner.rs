@@ -22,6 +22,9 @@ use crate::hooks::lifecycle::SessionEndReason;
 use super::interaction_loop::{InteractionLoopContext, InteractionOutcome, InteractionState};
 use super::interaction_loop_team::{direct_message_target, handle_team_switch, poll_team_mailbox};
 
+const REPEATED_FOLLOW_UP_DIRECTIVE: &str = "User has asked to continue repeatedly. Do not keep exploring silently. In your next assistant response, provide a concrete status update: completed work, current blocker, and the exact next action.";
+const REPEATED_FOLLOW_UP_STALLED_DIRECTIVE: &str = "Previous turn stalled or aborted and the user asked to continue repeatedly. Recover autonomously without asking for more user prompts: identify the likely root cause from recent errors, execute one adjusted strategy, and then provide either a completion summary or a final blocker review with specific next action.";
+
 pub(super) async fn run_interaction_loop_impl(
     ctx: &mut InteractionLoopContext<'_>,
     state: &mut InteractionState<'_>,
@@ -358,6 +361,36 @@ pub(super) async fn run_interaction_loop_impl(
             }
         }
 
+        if ctx
+            .session_stats
+            .register_follow_up_prompt(input_owned.as_str())
+        {
+            if ctx.session_stats.turn_stalled() {
+                let stall_reason = ctx
+                    .session_stats
+                    .turn_stall_reason()
+                    .unwrap_or("Previous turn stalled without a detailed reason.");
+                ctx.conversation_history.push(uni::Message::system(
+                    REPEATED_FOLLOW_UP_STALLED_DIRECTIVE.to_string(),
+                ));
+                input_owned = format!(
+                    "Continue autonomously from the last stalled turn. Stall reason: {}. Keep working until you can provide a concrete conclusion and final review.",
+                    stall_reason
+                );
+                ctx.renderer.line(
+                    MessageStyle::Info,
+                    "Repeated follow-up after stalled turn detected; enforcing autonomous recovery and conclusion.",
+                )?;
+            } else {
+                let directive = REPEATED_FOLLOW_UP_DIRECTIVE;
+                ctx.conversation_history
+                    .push(uni::Message::system(directive.to_string()));
+                ctx.renderer.line(
+                    MessageStyle::Info,
+                    "Repeated follow-up detected; forcing a concrete status/conclusion.",
+                )?;
+            }
+        }
         let input = input_owned.as_str();
         {
             let mut direct_tool_ctx = tool_dispatch::DirectToolContext {

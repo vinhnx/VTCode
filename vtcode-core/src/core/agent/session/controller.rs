@@ -8,6 +8,28 @@ use anyhow::Result;
 use std::sync::Arc;
 use std::sync::Mutex;
 
+fn merge_stream_and_completed_text(accumulated: &mut String, completed: Option<&str>) {
+    let Some(completed_text) = completed else {
+        return;
+    };
+    if completed_text.is_empty() {
+        return;
+    }
+    if accumulated.is_empty() {
+        accumulated.push_str(completed_text);
+        return;
+    }
+    if completed_text == accumulated.as_str() {
+        return;
+    }
+    if let Some(suffix) = completed_text.strip_prefix(accumulated.as_str()) {
+        accumulated.push_str(suffix);
+        return;
+    }
+    // If final payload differs from streamed deltas, prefer final provider payload.
+    *accumulated = completed_text.to_string();
+}
+
 /// A sink for unified agent events.
 pub type AgentEventSink = Arc<Mutex<Box<dyn FnMut(AgentEvent) + Send>>>;
 
@@ -104,6 +126,7 @@ impl AgentSessionController {
         self.emit(AgentEvent::TurnStarted {
             id: turn_id.clone(),
         });
+        let request_model = request.model.clone();
 
         let start_time = std::time::Instant::now();
         let mut stream = if let Some(t) = timeout {
@@ -120,6 +143,7 @@ impl AgentSessionController {
         let mut finish_reason = String::from("stop");
         let mut final_usage = Usage::default();
         let mut aggregated_tool_calls: Option<Vec<crate::llm::provider::ToolCall>> = None;
+        let mut completed_response: Option<crate::llm::provider::LLMResponse> = None;
 
         while let Some(event_result) = stream.next().await {
             // Check steering
@@ -174,6 +198,7 @@ impl AgentSessionController {
                     self.emit(AgentEvent::ThinkingStage { stage });
                 }
                 LLMStreamEvent::Completed { response } => {
+                    completed_response = Some((*response).clone());
                     finish_reason = match response.finish_reason.clone() {
                         crate::llm::provider::FinishReason::Stop => "stop".to_string(),
                         crate::llm::provider::FinishReason::ToolCalls => "tool_calls".to_string(),
@@ -205,6 +230,19 @@ impl AgentSessionController {
                 }
             }
         }
+
+        merge_stream_and_completed_text(
+            &mut full_text,
+            completed_response
+                .as_ref()
+                .and_then(|resp| resp.content.as_deref()),
+        );
+        merge_stream_and_completed_text(
+            &mut full_reasoning,
+            completed_response
+                .as_ref()
+                .and_then(|resp| resp.reasoning.as_deref()),
+        );
 
         let mut turn_recorded = false;
         self.state.record_turn(&start_time, &mut turn_recorded);
@@ -249,20 +287,28 @@ impl AgentSessionController {
             },
         });
 
+        let mut response = completed_response.unwrap_or_default();
+        if response.model.is_empty() {
+            response.model = request_model;
+        }
+        response.content = Some(full_text.clone());
+        response.reasoning = if full_reasoning.is_empty() {
+            None
+        } else {
+            Some(full_reasoning.clone())
+        };
+        response.tool_calls = tool_calls.clone();
+        response.usage = Some(final_usage);
+        response.finish_reason = if finish_reason == "tool_calls" {
+            crate::llm::provider::FinishReason::ToolCalls
+        } else if finish_reason == "cancelled" {
+            crate::llm::provider::FinishReason::Error("Cancelled".to_string())
+        } else {
+            crate::llm::provider::FinishReason::Stop
+        };
+
         Ok((
-            crate::llm::provider::LLMResponse {
-                content: Some(full_text.clone()),
-                tool_calls: tool_calls.clone(),
-                finish_reason: if finish_reason == "tool_calls" {
-                    crate::llm::provider::FinishReason::ToolCalls
-                } else if finish_reason == "cancelled" {
-                    crate::llm::provider::FinishReason::Error("Cancelled".to_string())
-                } else {
-                    crate::llm::provider::FinishReason::Stop
-                },
-                usage: Some(final_usage),
-                ..Default::default()
-            },
+            response,
             full_text,
             if full_reasoning.is_empty() {
                 None
@@ -270,5 +316,151 @@ impl AgentSessionController {
                 Some(full_reasoning)
             },
         ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use async_trait::async_trait;
+    use futures::stream;
+
+    use crate::llm::provider::{LLMError, LLMResponse, LLMStream, LLMStreamEvent};
+
+    #[derive(Clone)]
+    struct CompletedOnlyStreamProvider {
+        response: LLMResponse,
+    }
+
+    #[async_trait]
+    impl LLMProvider for CompletedOnlyStreamProvider {
+        fn name(&self) -> &str {
+            "test-provider"
+        }
+
+        fn supports_streaming(&self) -> bool {
+            true
+        }
+
+        async fn generate(&self, _request: LLMRequest) -> Result<LLMResponse, LLMError> {
+            Ok(self.response.clone())
+        }
+
+        async fn stream(&self, _request: LLMRequest) -> Result<LLMStream, LLMError> {
+            Ok(Box::pin(stream::iter(vec![Ok(
+                LLMStreamEvent::Completed {
+                    response: Box::new(self.response.clone()),
+                },
+            )])))
+        }
+
+        fn supported_models(&self) -> Vec<String> {
+            vec!["test-model".to_string()]
+        }
+
+        fn validate_request(&self, _request: &LLMRequest) -> Result<(), LLMError> {
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn run_turn_uses_completed_payload_when_no_deltas_exist() {
+        let response = LLMResponse {
+            content: Some("### Header\n- item".to_string()),
+            model: "test-model".to_string(),
+            finish_reason: crate::llm::provider::FinishReason::Stop,
+            reasoning: Some("**why** this works".to_string()),
+            ..Default::default()
+        };
+        let provider = CompletedOnlyStreamProvider {
+            response: response.clone(),
+        };
+        let state = AgentSessionState::new("session".to_string(), 16, 4, 128_000);
+        let mut controller = AgentSessionController::new(state, None, None);
+        let mut provider_box: Box<dyn LLMProvider> = Box::new(provider);
+        let request = LLMRequest {
+            model: "test-model".to_string(),
+            ..Default::default()
+        };
+        let mut steering = None;
+
+        let (resp, content, reasoning) = controller
+            .run_turn(&mut provider_box, request, &mut steering, None)
+            .await
+            .expect("run_turn should succeed");
+
+        assert_eq!(content, "### Header\n- item");
+        assert_eq!(reasoning.as_deref(), Some("**why** this works"));
+        assert_eq!(resp.content.as_deref(), Some("### Header\n- item"));
+        assert_eq!(resp.reasoning.as_deref(), Some("**why** this works"));
+    }
+
+    #[tokio::test]
+    async fn run_turn_merges_completed_payload_with_streamed_prefix() {
+        #[derive(Clone)]
+        struct PrefixThenCompletedProvider;
+
+        #[async_trait]
+        impl LLMProvider for PrefixThenCompletedProvider {
+            fn name(&self) -> &str {
+                "test-provider"
+            }
+
+            fn supports_streaming(&self) -> bool {
+                true
+            }
+
+            async fn generate(&self, _request: LLMRequest) -> Result<LLMResponse, LLMError> {
+                Ok(LLMResponse::default())
+            }
+
+            async fn stream(&self, _request: LLMRequest) -> Result<LLMStream, LLMError> {
+                let completed = LLMResponse {
+                    content: Some("prefix **suffix**".to_string()),
+                    reasoning: Some("reasoning _suffix_".to_string()),
+                    model: "test-model".to_string(),
+                    finish_reason: crate::llm::provider::FinishReason::Stop,
+                    ..Default::default()
+                };
+                Ok(Box::pin(stream::iter(vec![
+                    Ok(LLMStreamEvent::Token {
+                        delta: "prefix ".to_string(),
+                    }),
+                    Ok(LLMStreamEvent::Reasoning {
+                        delta: "reasoning ".to_string(),
+                    }),
+                    Ok(LLMStreamEvent::Completed {
+                        response: Box::new(completed),
+                    }),
+                ])))
+            }
+
+            fn supported_models(&self) -> Vec<String> {
+                vec!["test-model".to_string()]
+            }
+
+            fn validate_request(&self, _request: &LLMRequest) -> Result<(), LLMError> {
+                Ok(())
+            }
+        }
+
+        let state = AgentSessionState::new("session".to_string(), 16, 4, 128_000);
+        let mut controller = AgentSessionController::new(state, None, None);
+        let mut provider_box: Box<dyn LLMProvider> = Box::new(PrefixThenCompletedProvider);
+        let request = LLMRequest {
+            model: "test-model".to_string(),
+            ..Default::default()
+        };
+        let mut steering = None;
+
+        let (resp, content, reasoning) = controller
+            .run_turn(&mut provider_box, request, &mut steering, None)
+            .await
+            .expect("run_turn should succeed");
+
+        assert_eq!(content, "prefix **suffix**");
+        assert_eq!(reasoning.as_deref(), Some("reasoning _suffix_"));
+        assert_eq!(resp.content.as_deref(), Some("prefix **suffix**"));
+        assert_eq!(resp.reasoning.as_deref(), Some("reasoning _suffix_"));
     }
 }
