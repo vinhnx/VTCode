@@ -25,7 +25,10 @@ mod handlers;
 mod prompt;
 mod session_state;
 mod tool_config;
+#[cfg(test)]
+mod tool_config_tests;
 mod tool_execution;
+mod tool_execution_local;
 mod updates;
 
 pub(crate) struct ZedAgent {

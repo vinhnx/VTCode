@@ -1,4 +1,6 @@
 use anyhow::Result;
+use vtcode_core::utils::ansi::MessageStyle;
+
 use crate::agent::runloop::slash_commands::McpCommandAction;
 use crate::agent::runloop::unified::mcp_support::{
     diagnose_mcp, display_mcp_config_summary, display_mcp_providers, display_mcp_status,
@@ -9,7 +11,7 @@ use crate::agent::runloop::unified::mcp_support::{
 use super::{SlashCommandContext, SlashCommandControl};
 
 pub async fn handle_manage_mcp(
-    ctx: &SlashCommandContext<'_>,
+    ctx: SlashCommandContext<'_>,
     action: McpCommandAction,
 ) -> Result<SlashCommandControl> {
     let manager = ctx.async_mcp_manager.map(|m| m.as_ref());
@@ -43,8 +45,7 @@ pub async fn handle_manage_mcp(
             .await?;
         }
         McpCommandAction::EditConfig => {
-            render_mcp_config_edit_guidance(ctx.renderer, ctx.config.workspace.as_path())
-                .await?;
+            render_mcp_config_edit_guidance(ctx.renderer, ctx.config.workspace.as_path()).await?;
         }
         McpCommandAction::Repair => {
             repair_mcp_runtime(
@@ -58,16 +59,21 @@ pub async fn handle_manage_mcp(
         McpCommandAction::Diagnose => {
             diagnose_mcp(
                 ctx.renderer,
-                manager,
-                ctx.tool_registry,
                 ctx.vt_cfg.as_ref(),
                 ctx.session_bootstrap,
+                manager,
+                ctx.tool_registry,
+                ctx.mcp_panel_state,
             )
             .await?;
         }
-        McpCommandAction::Login => {
-            render_mcp_login_guidance(ctx.renderer).await?;
+        McpCommandAction::Login(name) => {
+            render_mcp_login_guidance(ctx.renderer, name, true)?;
+        }
+        McpCommandAction::Logout(name) => {
+            render_mcp_login_guidance(ctx.renderer, name, false)?;
         }
     }
+    ctx.renderer.line_if_not_empty(MessageStyle::Output)?;
     Ok(SlashCommandControl::Continue)
 }

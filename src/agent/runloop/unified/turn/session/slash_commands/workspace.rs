@@ -1,15 +1,17 @@
-use anyhow::{Result, Context};
+use anyhow::Result;
 use vtcode_core::commands::init::{GenerateAgentsFileStatus, generate_agents_file};
 use vtcode_core::utils::ansi::MessageStyle;
-use crate::agent::runloop::unified::workspace_links::{
-    handle_workspace_directory_command, LinkedDirectoryCommand,
+
+use crate::agent::runloop::slash_commands::WorkspaceDirectoryCommand;
+use crate::agent::runloop::unified::turn::workspace::{
+    bootstrap_config_files, build_workspace_index,
 };
-use super::super::super::workspace::{bootstrap_config_files, build_workspace_index};
+use crate::agent::runloop::unified::workspace_links::handle_workspace_directory_command;
 
 use super::{SlashCommandContext, SlashCommandControl};
 
 pub async fn handle_initialize_workspace(
-    ctx: &SlashCommandContext<'_>,
+    ctx: SlashCommandContext<'_>,
     force: bool,
 ) -> Result<SlashCommandControl> {
     let workspace_path = ctx.config.workspace.clone();
@@ -72,7 +74,7 @@ pub async fn handle_initialize_workspace(
 }
 
 pub async fn handle_generate_agent_file(
-    ctx: &SlashCommandContext<'_>,
+    ctx: SlashCommandContext<'_>,
     overwrite: bool,
 ) -> Result<SlashCommandControl> {
     let workspace_path = ctx.config.workspace.clone();
@@ -80,8 +82,7 @@ pub async fn handle_generate_agent_file(
         MessageStyle::Info,
         "Generating AGENTS.md guidance. This may take a moment...",
     )?;
-    match generate_agents_file(ctx.tool_registry, workspace_path.as_path(), overwrite).await
-    {
+    match generate_agents_file(ctx.tool_registry, workspace_path.as_path(), overwrite).await {
         Ok(report) => match report.status {
             GenerateAgentsFileStatus::Created => {
                 ctx.renderer.line(
@@ -116,8 +117,8 @@ pub async fn handle_generate_agent_file(
 }
 
 pub async fn handle_manage_workspace_directories(
-    ctx: &SlashCommandContext<'_>,
-    command: LinkedDirectoryCommand,
+    ctx: SlashCommandContext<'_>,
+    command: WorkspaceDirectoryCommand,
 ) -> Result<SlashCommandControl> {
     handle_workspace_directory_command(
         ctx.renderer,
@@ -127,36 +128,5 @@ pub async fn handle_manage_workspace_directories(
     )
     .await?;
     ctx.renderer.line_if_not_empty(MessageStyle::Output)?;
-    Ok(SlashCommandControl::Continue)
-}
-
-pub async fn handle_start_file_browser(
-    ctx: &SlashCommandContext<'_>,
-    initial_filter: Option<String>,
-) -> Result<SlashCommandControl> {
-    if ctx.model_picker_state.is_some() {
-        ctx.renderer.line(
-            MessageStyle::Error,
-            "Close the active model picker before opening file browser.",
-        )?;
-        return Ok(SlashCommandControl::Continue);
-    }
-    if ctx.palette_state.is_some() {
-        ctx.renderer.line(
-            MessageStyle::Error,
-            "Another selection modal is already open. Press Esc to dismiss it before starting a new one.",
-        )?;
-        return Ok(SlashCommandControl::Continue);
-    }
-    ctx.handle.force_redraw();
-    if let Some(filter) = initial_filter {
-        ctx.handle.set_input(format!("@{}", filter));
-    } else {
-        ctx.handle.set_input("@".to_string());
-    }
-    ctx.renderer.line(
-        MessageStyle::Info,
-        "File browser activated. Use arrow keys to navigate, Enter to select, Esc to close.",
-    )?;
     Ok(SlashCommandControl::Continue)
 }

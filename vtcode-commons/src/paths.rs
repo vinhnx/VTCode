@@ -1,4 +1,4 @@
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Context, Result, anyhow, bail};
 use std::path::{Component, Path, PathBuf};
 use tracing::warn;
 
@@ -68,6 +68,25 @@ pub fn secure_path(workspace_root: &Path, user_path: &Path) -> Result<PathBuf> {
     resolve_workspace_path(workspace_root, user_path)
 }
 
+/// Ensure a candidate path is inside the workspace root after lexical
+/// normalization.
+///
+/// Returns the normalized candidate path on success.
+pub fn ensure_path_within_workspace(candidate: &Path, workspace_root: &Path) -> Result<PathBuf> {
+    let normalized_candidate = normalize_path(candidate);
+    let normalized_workspace = normalize_path(workspace_root);
+
+    if !normalized_candidate.starts_with(&normalized_workspace) {
+        bail!(
+            "Path '{}' escapes workspace '{}'",
+            candidate.display(),
+            workspace_root.display()
+        );
+    }
+
+    Ok(normalized_candidate)
+}
+
 /// Normalize identifiers to ASCII alphanumerics with lowercase output.
 pub fn normalize_ascii_identifier(value: &str) -> String {
     let mut normalized = String::new();
@@ -97,6 +116,79 @@ pub fn is_safe_relative_path(path: &str) -> bool {
     }
 
     true
+}
+
+/// Validates that a path is safe to use.
+/// Preventing traversal, absolute system paths, and dangerous characters.
+///
+/// Optimization: Uses early returns and byte-level checks for common patterns
+pub fn validate_path_safety(path: &str) -> Result<()> {
+    // Optimization: Fast path for empty or very short paths
+    if path.is_empty() {
+        return Ok(());
+    }
+
+    // Reject path traversal attempts
+    // Optimization: Use contains on bytes for simple patterns
+    if path.contains("..") {
+        bail!("Path traversal attempt detected ('..')");
+    }
+
+    // Additional traversal patterns
+    if path.contains("~/../") || path.contains("/.../") {
+        bail!("Advanced path traversal detected");
+    }
+
+    // Optimization: Only check Unix critical paths if path starts with '/'
+    if path.starts_with('/') {
+        // Reject absolute paths outside workspace
+        // Note: We can't strictly block all absolute paths as the agent might need to access
+        // explicitly allowed directories, but we can block obvious system critical paths.
+        static UNIX_CRITICAL: &[&str] = &[
+            "/etc", "/usr", "/bin", "/sbin", "/var", "/boot", "/root", "/dev",
+        ];
+        for prefix in UNIX_CRITICAL {
+            let is_var_temp_exception = *prefix == "/var"
+                && (path.starts_with("/var/folders/")
+                    || path == "/var/folders"
+                    || path.starts_with("/var/tmp/")
+                    || path == "/var/tmp");
+
+            if !is_var_temp_exception && matches_critical_prefix(path, prefix) {
+                bail!("Access to system directory denied: {}", prefix);
+            }
+        }
+    }
+
+    // Windows critical paths
+    #[cfg(windows)]
+    {
+        let path_lower = path.to_lowercase();
+        static WIN_CRITICAL: &[&str] = &["c:\\windows", "c:\\program files", "c:\\system32"];
+        for prefix in WIN_CRITICAL {
+            if path_lower.starts_with(prefix) {
+                bail!("Access to Windows system directory denied");
+            }
+        }
+    }
+
+    // Reject dangerous shell characters in paths (including null byte)
+    // Optimization: Check bytes directly for faster character detection
+    static DANGEROUS_CHARS: &[u8] = b"$`|;&\n\r><\0";
+    for &c in path.as_bytes() {
+        if DANGEROUS_CHARS.contains(&c) {
+            bail!("Path contains dangerous shell characters");
+        }
+    }
+
+    Ok(())
+}
+
+fn matches_critical_prefix(path: &str, prefix: &str) -> bool {
+    path == prefix
+        || path
+            .strip_prefix(prefix)
+            .is_some_and(|rest| rest.starts_with('/'))
 }
 
 /// Extract the filename from a path, with fallback to the full path.
@@ -266,7 +358,7 @@ impl PathScope {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
 
     struct StaticPaths {
         root: PathBuf,
@@ -303,6 +395,21 @@ mod tests {
             PathBuf::from("/tmp/project/config/settings.toml")
         );
         assert_eq!(paths.cache_dir(), Some(PathBuf::from("/tmp/project/cache")));
+    }
+
+    #[test]
+    fn ensures_path_within_workspace_accepts_nested_path() {
+        let workspace = Path::new("/tmp/project");
+        let candidate = Path::new("/tmp/project/src/../src/lib.rs");
+        let normalized = ensure_path_within_workspace(candidate, workspace).unwrap();
+        assert_eq!(normalized, PathBuf::from("/tmp/project/src/lib.rs"));
+    }
+
+    #[test]
+    fn ensures_path_within_workspace_rejects_escape() {
+        let workspace = Path::new("/tmp/project");
+        let candidate = Path::new("/tmp/project/../../etc/passwd");
+        assert!(ensure_path_within_workspace(candidate, workspace).is_err());
     }
 
     #[tokio::test]

@@ -15,7 +15,7 @@ pub(super) fn register_builtin_tools(inventory: &ToolInventory, plan_mode_state:
     for registration in builtin_tool_registrations(Some(plan_mode_state)) {
         let tool_name = registration.name();
         if let Err(err) = inventory.register_tool(registration) {
-            eprintln!("Warning: Failed to register tool '{}': {}", tool_name, err);
+            tracing::warn!(tool = %tool_name, %err, "Failed to register builtin tool");
         }
     }
 }

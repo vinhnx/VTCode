@@ -1,33 +1,38 @@
-use anyhow::{Result, Context};
-use vtcode_core::utils::ansi::MessageStyle;
+use anyhow::{Context, Result};
+use serde_json;
 use vtcode_core::config::constants::tools as tools_consts;
 use vtcode_core::llm::provider as uni;
-use crate::agent::runloop::unified::ui_interaction::display_session_status;
+use vtcode_core::utils::ansi::MessageStyle;
+
 use crate::agent::runloop::unified::diagnostics::run_doctor_diagnostics;
+use crate::agent::runloop::unified::ui_interaction::display_session_status;
 
-use super::{SlashCommandContext, SlashCommandControl, SlashCommandOutcome};
+use super::{SlashCommandContext, SlashCommandControl};
 
-pub async fn handle_debug_agent(ctx: &SlashCommandContext<'_>) -> Result<SlashCommandControl> {
-    // Prefer tool-driven diagnostics when available
+pub async fn handle_debug_agent(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
     if ctx.tool_registry.has_tool(tools_consts::AGENT_INFO).await {
         ctx.tool_registry
-            .mark_tool_preapproved(tools_consts::AGENT_INFO).await;
+            .mark_tool_preapproved(tools_consts::AGENT_INFO)
+            .await;
         match ctx
             .tool_registry
-            .execute_tool_ref(tools_consts::AGENT_INFO, &serde_json::json!({"mode": "debug"}))
+            .execute_tool_ref(
+                tools_consts::AGENT_INFO,
+                &serde_json::json!({"mode": "debug"}),
+            )
             .await
         {
             Ok(value) => {
                 ctx.renderer
                     .line(MessageStyle::Info, "Debug information (tool):")?;
                 ctx.renderer
-                    .line(MessageStyle::Output, &value.to_string())?;
+                    .line(MessageStyle::Output, &serde_json::to_string_pretty(&value)?)?;
                 return Ok(SlashCommandControl::Continue);
             }
             Err(err) => {
                 ctx.renderer.line(
                     MessageStyle::Error,
-                    &format!("Failed to invoke debug_agent tool: {}", err),
+                    &format!("Failed to invoke agent_info tool: {}", err),
                 )?;
             }
         }
@@ -57,14 +62,12 @@ pub async fn handle_debug_agent(ctx: &SlashCommandContext<'_>) -> Result<SlashCo
             ctx.tools.read().await.len()
         ),
     )?;
-    // Show recent decisions
     let ledger = ctx.decision_ledger.read().await;
     if !ledger.get_decisions().is_empty() {
         ctx.renderer.line(
             MessageStyle::Output,
             &format!("  Recent decisions: {}", ledger.get_decisions().len()),
         )?;
-        // Show last few decisions
         let recent = ledger.get_decisions().iter().rev().take(3);
         for (idx, decision) in recent.enumerate() {
             ctx.renderer.line(
@@ -77,43 +80,14 @@ pub async fn handle_debug_agent(ctx: &SlashCommandContext<'_>) -> Result<SlashCo
     Ok(SlashCommandControl::Continue)
 }
 
-pub async fn handle_analyze_agent(ctx: &SlashCommandContext<'_>) -> Result<SlashCommandControl> {
-    // Prefer tool-driven analysis when available
-    if ctx
-        .tool_registry
-        .has_tool(tools_consts::ANALYZE_AGENT)
-        .await
-    {
-        ctx.tool_registry
-            .mark_tool_preapproved(tools_consts::ANALYZE_AGENT).await;
-        match ctx
-            .tool_registry
-            .execute_tool_ref(tools_consts::ANALYZE_AGENT, &serde_json::json!({}))
-            .await
-        {
-            Ok(value) => {
-                ctx.renderer
-                    .line(MessageStyle::Info, "Agent analysis (tool):")?;
-                ctx.renderer
-                    .line(MessageStyle::Output, &value.to_string())?;
-                return Ok(SlashCommandControl::Continue);
-            }
-            Err(err) => {
-                ctx.renderer.line(
-                    MessageStyle::Error,
-                    &format!("Failed to invoke analyze_agent tool: {}", err),
-                )?;
-            }
-        }
-    }
-
-    ctx.renderer.line(MessageStyle::Info, "Agent analysis:")?;
+pub async fn handle_analyze_agent(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
+    ctx.renderer
+        .line(MessageStyle::Info, "Agent behavior analysis:")?;
     ctx.renderer.line(
         MessageStyle::Output,
         "  Analyzing current AI behavior patterns...",
     )?;
 
-    // Calculate some statistics
     let total_messages = ctx.conversation_history.len();
     let tool_calls: usize = ctx
         .conversation_history
@@ -149,12 +123,39 @@ pub async fn handle_analyze_agent(ctx: &SlashCommandContext<'_>) -> Result<Slash
         )?;
     }
 
-    // Token budget is disabled in VT Code
+    let recent_tool_calls: Vec<String> = ctx
+        .conversation_history
+        .iter()
+        .filter(|msg| msg.role == uni::MessageRole::Assistant)
+        .flat_map(|msg| {
+            msg.tool_calls
+                .as_ref()
+                .map(|calls| {
+                    calls
+                        .iter()
+                        .filter_map(|call| call.function.as_ref())
+                        .map(|f| f.name.clone())
+                })
+                .into_iter()
+                .flatten()
+        })
+        .take(10)
+        .collect();
+
+    if !recent_tool_calls.is_empty() {
+        ctx.renderer
+            .line(MessageStyle::Output, "  Recent tool usage:")?;
+        for tool_name in recent_tool_calls {
+            ctx.renderer
+                .line(MessageStyle::Output, &format!("    • {}", tool_name))?;
+        }
+    }
+
     ctx.renderer.line_if_not_empty(MessageStyle::Output)?;
     Ok(SlashCommandControl::Continue)
 }
 
-pub async fn handle_show_status(ctx: &SlashCommandContext<'_>) -> Result<SlashCommandControl> {
+pub async fn handle_show_status(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
     let tool_count = ctx.tools.read().await.len();
     display_session_status(
         ctx.renderer,
@@ -169,58 +170,7 @@ pub async fn handle_show_status(ctx: &SlashCommandContext<'_>) -> Result<SlashCo
     Ok(SlashCommandControl::Continue)
 }
 
-
-
-pub async fn handle_show_pruning_report(ctx: &SlashCommandContext<'_>) -> Result<SlashCommandControl> {
-    ctx.renderer.line(MessageStyle::Info, "Pruning Report:")?;
-    let ledger = ctx.pruning_ledger.read().await;
-    let report = ledger.generate_report();
-
-    // Display summary statistics
-    ctx.renderer.line(
-        MessageStyle::Output,
-        &format!(
-            "  Total messages evaluated: {}",
-            report.statistics.total_messages_evaluated
-        ),
-    )?;
-    ctx.renderer.line(
-        MessageStyle::Output,
-        &format!("  Messages kept: {}", report.statistics.messages_kept),
-    )?;
-    ctx.renderer.line(
-        MessageStyle::Output,
-        &format!("  Messages removed: {}", report.statistics.messages_removed),
-    )?;
-    ctx.renderer.line(
-        MessageStyle::Output,
-        &format!(
-            "  Retention ratio: {:.1}%",
-            report.message_retention_ratio * 100.0
-        ),
-    )?;
-    ctx.renderer.line(
-        MessageStyle::Output,
-        &format!("  Semantic efficiency: {:.2}", report.semantic_efficiency),
-    )?;
-
-    // Display brief ledger summary
-    let brief = ledger.render_ledger_brief(10);
-    if !brief.is_empty() {
-        ctx.renderer.line(MessageStyle::Output, "")?;
-        ctx.renderer
-            .line(MessageStyle::Output, "Recent pruning decisions:")?;
-        for line in brief.lines().take(10) {
-            ctx.renderer
-                .line(MessageStyle::Output, &format!("  {}", line))?;
-        }
-    }
-
-    ctx.renderer.line_if_not_empty(MessageStyle::Output)?;
-    Ok(SlashCommandControl::Continue)
-}
-
-pub async fn handle_run_doctor(ctx: &SlashCommandContext<'_>) -> Result<SlashCommandControl> {
+pub async fn handle_run_doctor(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
     let provider_runtime = ctx.provider_client.name().to_string();
     run_doctor_diagnostics(
         ctx.renderer,
@@ -232,6 +182,18 @@ pub async fn handle_run_doctor(ctx: &SlashCommandContext<'_>) -> Result<SlashCom
         Some(ctx.loaded_skills),
     )
     .await?;
+    ctx.renderer.line_if_not_empty(MessageStyle::Output)?;
+    Ok(SlashCommandControl::Continue)
+}
+
+pub async fn handle_start_terminal_setup(
+    ctx: SlashCommandContext<'_>,
+) -> Result<SlashCommandControl> {
+    let vt_cfg = ctx
+        .vt_cfg
+        .as_ref()
+        .context("VT Code configuration not available")?;
+    vtcode_core::terminal_setup::run_terminal_setup_wizard(ctx.renderer, vt_cfg).await?;
     ctx.renderer.line_if_not_empty(MessageStyle::Output)?;
     Ok(SlashCommandControl::Continue)
 }

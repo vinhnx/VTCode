@@ -1,6 +1,9 @@
 mod commands;
+mod commands_processing;
 mod files;
 pub(crate) mod large_output;
+#[cfg(test)]
+mod large_output_tests;
 mod mcp;
 mod panels;
 mod streams;

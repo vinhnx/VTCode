@@ -1,6 +1,7 @@
 pub mod permissions;
 pub mod reports;
 pub mod tooling;
+mod tooling_provider;
 pub mod workspace;
 mod zed;
 

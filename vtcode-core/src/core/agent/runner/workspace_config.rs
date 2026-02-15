@@ -33,10 +33,7 @@ impl AgentRunner {
             .apply_config_policies(&vt_cfg.tools)
             .await
         {
-            eprintln!(
-                "Warning: Failed to apply tool policies from config: {}",
-                err
-            );
+            warn!("Failed to apply tool policies from config: {}", err);
         }
 
         self.max_turns = vt_cfg.automation.full_auto.max_turns.max(1);

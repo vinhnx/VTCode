@@ -1,12 +1,12 @@
 #![cfg(feature = "schema")]
 
 use anyhow::{Context, Result};
-use schemars::{schema::RootSchema, schema_for};
+use schemars::{Schema, schema_for};
 
 use crate::loader::VTCodeConfig;
 
 /// Generate the JSON Schema describing the `vtcode.toml` configuration surface.
-pub fn vtcode_config_schema() -> RootSchema {
+pub fn vtcode_config_schema() -> Schema {
     schema_for!(VTCodeConfig)
 }
 

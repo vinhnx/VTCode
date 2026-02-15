@@ -13,7 +13,7 @@ fn schema_helpers_produce_consistent_output() {
 
     let as_string = vtcode_config_schema_pretty().expect("schema to serialize to JSON string");
     assert!(
-        as_string.contains("vtcode_config::loader::VTCodeConfig"),
+        as_string.contains("\"title\": \"VTCodeConfig\""),
         "pretty schema output should mention the root configuration type"
     );
 
@@ -23,10 +23,8 @@ fn schema_helpers_produce_consistent_output() {
         .and_then(|value| value.as_str())
         .expect("schema JSON should include a title");
     let title_from_root = root
-        .schema
-        .metadata
-        .as_ref()
-        .and_then(|meta| meta.title.as_deref())
+        .get("title")
+        .and_then(|value| value.as_str())
         .unwrap_or("");
     assert_eq!(title_from_value, title_from_root);
 }

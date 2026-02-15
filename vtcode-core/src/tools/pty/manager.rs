@@ -54,7 +54,7 @@ use crate::tools::path_env;
 use crate::tools::shell::resolve_fallback_shell;
 use crate::tools::types::VTCodePtySession;
 use crate::utils::gatekeeper;
-use crate::utils::path::normalize_path;
+use crate::utils::path::ensure_path_within_workspace;
 use crate::utils::unicode_monitor::UNICODE_MONITOR;
 
 mod session_ops;
@@ -450,13 +450,13 @@ if output.len() > max_tokens * 4 {
         };
 
         let candidate = self.workspace_root.join(requested);
-        let normalized = normalize_path(&candidate);
-        if !normalized.starts_with(&self.workspace_root) {
-            return Err(anyhow!(
-                "Working directory '{}' escapes the workspace root",
-                candidate.display()
-            ));
-        }
+        let normalized =
+            ensure_path_within_workspace(&candidate, &self.workspace_root).map_err(|_| {
+                anyhow!(
+                    "Working directory '{}' escapes the workspace root",
+                    candidate.display()
+                )
+            })?;
         let metadata = tokio::fs::metadata(&normalized).await.with_context(|| {
             format!(
                 "Working directory '{}' does not exist",
@@ -690,14 +690,6 @@ info!("PTY session '{}' processed {} unicode characters across {} sessions with 
     }
 
     fn ensure_within_workspace(&self, candidate: &Path) -> Result<()> {
-        let normalized = normalize_path(candidate);
-        if !normalized.starts_with(&self.workspace_root) {
-            return Err(anyhow!(
-                "Path '{}' escapes workspace '{}'",
-                candidate.display(),
-                self.workspace_root.display()
-            ));
-        }
-        Ok(())
+        ensure_path_within_workspace(candidate, &self.workspace_root).map(|_| ())
     }
 }

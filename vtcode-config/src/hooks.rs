@@ -2,30 +2,49 @@ use anyhow::{Context, Result, ensure};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 
+/// Top-level configuration for automation hooks and lifecycle events
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct HooksConfig {
+    /// Configuration for lifecycle-based shell command execution
     #[serde(default)]
     pub lifecycle: LifecycleHooksConfig,
 }
 
+/// Configuration for hooks triggered during distinct agent lifecycle events.
+/// Each event supports a list of groups with optional matchers.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct LifecycleHooksConfig {
+    /// Commands to run immediately when an agent session begins
     #[serde(default)]
     pub session_start: Vec<HookGroupConfig>,
+
+    /// Commands to run when an agent session ends
     #[serde(default)]
     pub session_end: Vec<HookGroupConfig>,
+
+    /// Commands to run when the user submits a prompt (pre-processing)
     #[serde(default)]
     pub user_prompt_submit: Vec<HookGroupConfig>,
+
+    /// Commands to run immediately before a tool is executed
     #[serde(default)]
     pub pre_tool_use: Vec<HookGroupConfig>,
+
+    /// Commands to run immediately after a tool returns its output
     #[serde(default)]
     pub post_tool_use: Vec<HookGroupConfig>,
+
+    /// Commands to run when the agent indicates task completion (pre-exit)
     #[serde(default)]
     pub task_completion: Vec<HookGroupConfig>,
+
+    /// Commands to run after a task is finalized and session is closed
     #[serde(default)]
     pub task_completed: Vec<HookGroupConfig>,
+
+    /// Commands to run when a teammate agent remains idle
     #[serde(default)]
     pub teammate_idle: Vec<HookGroupConfig>,
 }
@@ -43,11 +62,16 @@ impl LifecycleHooksConfig {
     }
 }
 
+/// A group of hooks sharing a common execution matcher
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct HookGroupConfig {
+    /// Optional regex matcher to filter when this group runs.
+    /// Matched against context strings (e.g. tool name, project path).
     #[serde(default)]
     pub matcher: Option<String>,
+
+    /// List of hook commands to execute sequentially in this group
     #[serde(default)]
     pub hooks: Vec<HookCommandConfig>,
 }
@@ -61,14 +85,20 @@ pub enum HookCommandKind {
     Command,
 }
 
+/// Configuration for a single shell command hook
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct HookCommandConfig {
+    /// Type of hook command (currently only 'command' is supported)
     #[serde(default)]
     #[serde(rename = "type")]
     pub kind: HookCommandKind,
+
+    /// The shell command string to execute
     #[serde(default)]
     pub command: String,
+
+    /// Optional execution timeout in seconds
     #[serde(default)]
     pub timeout_seconds: Option<u64>,
 }

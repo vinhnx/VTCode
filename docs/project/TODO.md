@@ -15,8 +15,17 @@ improve src/agent/runloop/unified/turn/turn_loop.rs
 
 ---
 
-add kimi k2.5
-
-===
-
 /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/docs/harness/TECH_DEBT_TRACKER.md
+
+---
+
+docs/harness/QUALITY_SCORE.md
+
+--
+
+extract slash_commands.rs
+and note to make sure it is modular and small.
+
+--
+
+remove src/cli/plugin_marketplace.rs

@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
-use serde_json::{Value, json};
+use serde_json::Value;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::process::Command;
 use tokio::sync::Mutex;
@@ -15,8 +15,10 @@ use vtcode_core::config::{HookCommandConfig, HooksConfig};
 use crate::hooks::lifecycle::compiled::CompiledLifecycleHooks;
 use crate::hooks::lifecycle::interpret::{
     HookCommandResult, interpret_post_tool, interpret_pre_tool, interpret_session_end,
-    interpret_session_start, interpret_task_completion, interpret_teammate_idle,
-    interpret_user_prompt,
+    interpret_session_start, interpret_user_prompt,
+};
+use crate::hooks::lifecycle::interpret_events::{
+    interpret_task_completion, interpret_teammate_idle,
 };
 use crate::hooks::lifecycle::types::{
     HookMessage, PostToolHookOutcome, PreToolHookDecision, PreToolHookOutcome, SessionEndReason,
@@ -25,6 +27,8 @@ use crate::hooks::lifecycle::types::{
 use crate::hooks::lifecycle::utils::{generate_session_id, path_to_string};
 
 const DEFAULT_TIMEOUT_SECS: u64 = 60;
+
+mod payloads;
 
 #[derive(Clone)]
 pub struct LifecycleHookEngine {
@@ -321,115 +325,6 @@ impl LifecycleHookEngine {
     pub async fn update_transcript_path(&self, path: Option<PathBuf>) {
         let mut state = self.inner.state.lock().await;
         state.transcript_path = path;
-    }
-
-    async fn build_session_start_payload(&self) -> Result<Value> {
-        let cwd = self.inner.workspace.to_string_lossy().into_owned();
-        let transcript_path = self.current_transcript_path().await;
-        Ok(json!({
-            "session_id": self.inner.session_id,
-            "cwd": cwd,
-            "hook_event_name": "SessionStart",
-            "source": self.inner.trigger.as_str(),
-            "transcript_path": transcript_path,
-        }))
-    }
-
-    async fn build_session_end_payload(&self, reason: SessionEndReason) -> Result<Value> {
-        let cwd = self.inner.workspace.to_string_lossy().into_owned();
-        let transcript_path = self.current_transcript_path().await;
-        Ok(json!({
-            "session_id": self.inner.session_id,
-            "cwd": cwd,
-            "hook_event_name": "SessionEnd",
-            "reason": reason.as_str(),
-            "transcript_path": transcript_path,
-        }))
-    }
-
-    async fn build_user_prompt_payload(&self, prompt: &str) -> Result<Value> {
-        let cwd = self.inner.workspace.to_string_lossy().into_owned();
-        let transcript_path = self.current_transcript_path().await;
-        Ok(json!({
-            "session_id": self.inner.session_id,
-            "cwd": cwd,
-            "hook_event_name": "UserPromptSubmit",
-            "prompt": prompt,
-            "transcript_path": transcript_path,
-        }))
-    }
-
-    async fn build_pre_tool_payload(
-        &self,
-        tool_name: &str,
-        tool_input: Option<&Value>,
-    ) -> Result<Value> {
-        let cwd = self.inner.workspace.to_string_lossy().into_owned();
-        let transcript_path = self.current_transcript_path().await;
-        Ok(json!({
-            "session_id": self.inner.session_id,
-            "cwd": cwd,
-            "hook_event_name": "PreToolUse",
-            "tool_name": tool_name,
-            "tool_input": tool_input.cloned().unwrap_or(Value::Null),
-            "transcript_path": transcript_path,
-        }))
-    }
-
-    async fn build_post_tool_payload(
-        &self,
-        tool_name: &str,
-        tool_input: Option<&Value>,
-        tool_output: &Value,
-    ) -> Result<Value> {
-        let cwd = self.inner.workspace.to_string_lossy().into_owned();
-        let transcript_path = self.current_transcript_path().await;
-        Ok(json!({
-            "session_id": self.inner.session_id,
-            "cwd": cwd,
-            "hook_event_name": "PostToolUse",
-            "tool_name": tool_name,
-            "tool_input": tool_input.cloned().unwrap_or(Value::Null),
-            "tool_response": tool_output.clone(),
-            "transcript_path": transcript_path,
-        }))
-    }
-
-    #[allow(dead_code)]
-    async fn build_task_completion_payload(
-        &self,
-        task_name: &str,
-        status: &str,
-        details: Option<&Value>,
-    ) -> Result<Value> {
-        let cwd = self.inner.workspace.to_string_lossy().into_owned();
-        let transcript_path = self.current_transcript_path().await;
-        Ok(json!({
-            "session_id": self.inner.session_id,
-            "cwd": cwd,
-            "hook_event_name": "TaskCompletion",
-            "task_name": task_name,
-            "status": status,
-            "details": details.cloned().unwrap_or(Value::Null),
-            "transcript_path": transcript_path,
-        }))
-    }
-
-    async fn build_teammate_idle_payload(
-        &self,
-        teammate: &str,
-        details: Option<&Value>,
-    ) -> Result<Value> {
-        let cwd = self.inner.workspace.to_string_lossy().into_owned();
-        let transcript_path = self.current_transcript_path().await;
-        Ok(json!({
-            "session_id": self.inner.session_id,
-            "cwd": cwd,
-            "hook_event_name": "TeammateIdle",
-            "teammate": teammate,
-            "details": details.cloned().unwrap_or(Value::Null),
-            "transcript_path": transcript_path,
-        }))
     }
 
     async fn execute_command(

@@ -21,7 +21,7 @@ use crate::telemetry::perf;
 use crate::tools::command_cache::{
     InFlightState, cache_output, enter_inflight, finish_inflight, get_cached_output,
 };
-use crate::utils::path::{canonicalize_workspace, normalize_path};
+use crate::utils::path::{canonicalize_workspace, ensure_path_within_workspace};
 use crate::utils::validation::validate_path_exists;
 
 use super::shell_snapshot::{ShellSnapshot, global_snapshot_manager};
@@ -257,8 +257,7 @@ impl<E: CommandExecutor> ShellRunner<E> {
             bail!("path `{}` is not a directory", path);
         }
 
-        let normalized = normalize_path(&target);
-        self.ensure_within_workspace(&normalized)?;
+        let normalized = ensure_path_within_workspace(&target, &self.workspace_root)?;
 
         self.working_dir = normalized;
         Ok(())
@@ -272,7 +271,7 @@ impl<E: CommandExecutor> ShellRunner<E> {
         };
 
         validate_path_exists(&target, "path")?;
-        self.ensure_within_workspace(&target)?;
+        ensure_path_within_workspace(&target, &self.workspace_root)?;
 
         let mut entries = Vec::new();
         let mut read_dir = tokio::fs::read_dir(&target).await?;
@@ -332,17 +331,6 @@ impl<E: CommandExecutor> ShellRunner<E> {
         } else {
             self.working_dir.join(path)
         }
-    }
-
-    /// Ensure a path does not escape the workspace root
-    fn ensure_within_workspace(&self, path: &Path) -> Result<()> {
-        if !path.starts_with(&self.workspace_root) {
-            bail!(
-                "Security Error: path `{}` escapes workspace root",
-                path.display()
-            );
-        }
-        Ok(())
     }
 }
 

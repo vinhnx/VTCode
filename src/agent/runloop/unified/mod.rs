@@ -25,6 +25,7 @@ pub mod session_setup;
 mod shell;
 pub mod state;
 mod status_line;
+mod status_line_command;
 pub(crate) mod team_state;
 mod team_tmux;
 pub(crate) mod tool_catalog;

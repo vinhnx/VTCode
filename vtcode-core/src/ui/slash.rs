@@ -120,7 +120,7 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
         },
         SlashCommandInfo {
             name: "share-log",
-            description: "Export current session log as JSON for debugging (aliases: /export-log)",
+            description: "Export current session log as JSON or Markdown (usage: /share-log [json|markdown], alias: /export-log)",
         },
         SlashCommandInfo {
             name: "rewind",

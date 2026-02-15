@@ -63,13 +63,15 @@ concurrency:
 # Make obvious and fast tests to run first, to catch issues as early as possible
 jobs:
   large-files:
-    name: Enforce Large File Budget
+    name: Check Custom Invariants
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
       - name: Check tracked file sizes
         run: python3 scripts/check_large_files.py 400000 --allow "resources/vhs/*.gif"
+      - name: Check markdown documentation location
+        run: python3 scripts/check_markdown_location.py
 
   # Lint the formatting of the codebase.
   formatting:
