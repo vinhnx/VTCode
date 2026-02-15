@@ -3,13 +3,13 @@ use crate::acp::reports::TOOL_FAILURE_PREFIX;
 use crate::acp::tooling::{SupportedTool, TOOL_READ_FILE_PATH_ARG, TOOL_READ_FILE_URI_ARG};
 use agent_client_protocol as acp;
 use anyhow::Result;
-use path_clean::PathClean;
 use serde_json::Value;
 use shell_words::split;
 use std::path::{Path, PathBuf};
 use tracing::warn;
 use vtcode_core::llm::provider::ToolChoice;
 use vtcode_core::llm::provider::ToolDefinition;
+use vtcode_core::utils::path::ensure_path_within_workspace;
 
 use super::super::constants::*;
 use super::super::helpers::text_chunk;
@@ -210,12 +210,10 @@ impl ZedAgent {
             self.config.workspace.join(candidate)
         };
 
-        let cleaned = resolved.clean();
-        if !cleaned.starts_with(&self.config.workspace) {
-            return Err("working_dir must stay within the workspace".to_string());
-        }
+        let normalized = ensure_path_within_workspace(&resolved, &self.config.workspace)
+            .map_err(|_| "working_dir must stay within the workspace".to_string())?;
 
-        Ok(Some(cleaned))
+        Ok(Some(normalized))
     }
 
     pub(super) fn describe_terminal_location(
@@ -325,24 +323,19 @@ impl ZedAgent {
         candidate: PathBuf,
         argument: &str,
     ) -> Result<PathBuf, String> {
-        let workspace_root = self.workspace_root().to_path_buf().clean();
         let resolved_candidate = if candidate.is_absolute() {
             candidate
         } else {
             self.workspace_root().join(candidate)
         };
-        let normalized = resolved_candidate.clean();
+        let normalized = ensure_path_within_workspace(&resolved_candidate, self.workspace_root())
+            .map_err(|_| {
+            Self::argument_message(TOOL_READ_FILE_WORKSPACE_ESCAPE_TEMPLATE, argument)
+        })?;
 
         if !normalized.is_absolute() {
             return Err(Self::argument_message(
                 TOOL_READ_FILE_ABSOLUTE_PATH_TEMPLATE,
-                argument,
-            ));
-        }
-
-        if !normalized.starts_with(&workspace_root) {
-            return Err(Self::argument_message(
-                TOOL_READ_FILE_WORKSPACE_ESCAPE_TEMPLATE,
                 argument,
             ));
         }

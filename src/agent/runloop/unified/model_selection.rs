@@ -12,6 +12,7 @@ use vtcode_core::llm::provider::LLMProvider;
 use vtcode_core::llm::rig_adapter::{reasoning_parameters_for, verify_model_with_rig};
 use vtcode_core::ui::tui::InlineHandle;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
+use vtcode_core::utils::file_utils::{ensure_dir_exists, read_file_with_context};
 
 use crate::agent::runloop::model_picker::{ModelPickerState, ModelSelectionResult};
 use crate::agent::runloop::welcome::SessionBootstrap;
@@ -241,9 +242,8 @@ pub(crate) async fn finalize_team_model_selection(
 async fn persist_env_value(workspace: &Path, key: &str, value: &str) -> Result<()> {
     let env_path = workspace.join(".env");
     let mut lines: Vec<String> = if env_path.exists() {
-        tokio::fs::read_to_string(&env_path)
-            .await
-            .with_context(|| format!("Failed to read {}", env_path.display()))?
+        read_file_with_context(&env_path, ".env file")
+            .await?
             .lines()
             .map(|line| line.to_string())
             .collect()
@@ -271,9 +271,7 @@ async fn persist_env_value(workspace: &Path, key: &str, value: &str) -> Result<(
         .unwrap_or_else(|| workspace.to_path_buf());
 
     if !parent.exists() {
-        tokio::fs::create_dir_all(&parent)
-            .await
-            .with_context(|| format!("Failed to create directory {}", parent.display()))?;
+        ensure_dir_exists(&parent).await?;
     }
 
     let temp = Builder::new()

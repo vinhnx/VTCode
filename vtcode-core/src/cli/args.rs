@@ -505,14 +505,6 @@ pub enum Commands {
     #[command(name = "list-skills")]
     ListSkills {},
 
-    /// Manage plugin marketplaces and plugins
-    #[command(subcommand)]
-    Marketplace(MarketplaceSubcommand),
-
-    /// Manage plugins installed from marketplaces
-    #[command(subcommand)]
-    Plugin(PluginSubcommand),
-
     /// Check for and install binary updates from GitHub Releases
     #[command(name = "self-update")]
     SelfUpdate {
@@ -533,77 +525,6 @@ pub enum Commands {
         /// Host address to bind to
         #[arg(long, default_value = "127.0.0.1")]
         host: String,
-    },
-}
-
-/// Marketplace subcommands
-#[derive(Debug, Subcommand, Clone)]
-pub enum MarketplaceSubcommand {
-    /// Add a new marketplace source
-    #[command(name = "add")]
-    Add {
-        /// Marketplace source (GitHub: owner/repo, Git: URL, Local: path, Remote: URL)
-        source: String,
-        /// Optional ID for the marketplace (auto-generated if not provided)
-        #[arg(long)]
-        id: Option<String>,
-    },
-
-    /// List all configured marketplaces
-    #[command(name = "list")]
-    List,
-
-    /// Remove a marketplace
-    #[command(name = "remove")]
-    Remove {
-        /// Marketplace ID to remove
-        id: String,
-    },
-}
-
-/// Plugin management subcommands
-#[derive(Debug, Subcommand, Clone)]
-pub enum PluginSubcommand {
-    /// Install a plugin from a marketplace
-    #[command(name = "install")]
-    Install {
-        /// Plugin name to install
-        name: String,
-        /// Marketplace name (format: plugin-name @marketplace-name)
-        #[arg(long, short = 'm')]
-        marketplace: Option<String>,
-    },
-
-    /// List installed plugins
-    #[command(name = "list")]
-    List,
-
-    /// Uninstall a plugin
-    #[command(name = "uninstall")]
-    Uninstall {
-        /// Plugin name to uninstall
-        name: String,
-    },
-
-    /// Enable a plugin
-    #[command(name = "enable")]
-    Enable {
-        /// Plugin name to enable
-        name: String,
-    },
-
-    /// Disable a plugin
-    #[command(name = "disable")]
-    Disable {
-        /// Plugin name to disable
-        name: String,
-    },
-
-    /// Validate a plugin manifest
-    #[command(name = "validate")]
-    Validate {
-        /// Path to plugin directory to validate
-        path: std::path::PathBuf,
     },
 }
 
