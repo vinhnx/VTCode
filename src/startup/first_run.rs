@@ -1,4 +1,3 @@
-use std::fs;
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -7,6 +6,7 @@ use vtcode_core::cli::args::{Cli, Commands};
 use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::dot_config::{WorkspaceTrustLevel, WorkspaceTrustRecord, get_dot_manager};
+use vtcode_core::utils::file_utils::ensure_dir_exists_sync;
 use vtcode_core::{initialize_dot_folder, update_model_preference};
 
 use super::first_run_prompts::{
@@ -75,7 +75,7 @@ async fn run_first_run_setup(
     }
 
     let workspace_dot_dir = workspace.join(".vtcode");
-    fs::create_dir_all(&workspace_dot_dir).with_context(|| {
+    ensure_dir_exists_sync(&workspace_dot_dir).with_context(|| {
         format!(
             "Failed to create workspace .vtcode directory at {}",
             workspace_dot_dir.display()

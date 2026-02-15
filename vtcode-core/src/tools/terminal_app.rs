@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Duration;
 
+use crate::utils::file_utils::read_file_with_context_sync;
 use anyhow::{Context, Result, anyhow};
 use editor_command::Editor;
 use ratatui::crossterm::ExecutableCommand;
@@ -92,7 +93,7 @@ impl TerminalAppLauncher {
 
         // Read temp file contents if it was a temp file
         let content = if is_temp {
-            let content = fs::read_to_string(&file_path)
+            let content = read_file_with_context_sync(&file_path, "edited temporary file")
                 .context("failed to read edited content from temporary file")?;
             fs::remove_file(&file_path).context("failed to remove temporary file")?;
             Some(content)

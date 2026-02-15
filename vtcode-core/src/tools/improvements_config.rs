@@ -3,6 +3,7 @@
 //! Defines all tunable parameters for similarity scoring, time decay,
 //! pattern detection, and cache behavior.
 
+use crate::utils::file_utils::{read_file_with_context_sync, write_file_with_context_sync};
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
@@ -214,14 +215,15 @@ impl Default for FallbackConfig {
 impl ImprovementsConfig {
     /// Load configuration from TOML file
     pub fn from_file(path: &str) -> anyhow::Result<Self> {
-        let content = std::fs::read_to_string(path)?;
+        let content =
+            read_file_with_context_sync(std::path::Path::new(path), "improvements config")?;
         toml::from_str(&content).map_err(|e| anyhow::anyhow!("failed to parse config: {}", e))
     }
 
     /// Save configuration to TOML file
     pub fn to_file(&self, path: &str) -> anyhow::Result<()> {
         let content = toml::to_string_pretty(self)?;
-        std::fs::write(path, content)?;
+        write_file_with_context_sync(std::path::Path::new(path), &content, "improvements config")?;
         Ok(())
     }
 

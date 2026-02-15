@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
+use vtcode_core::utils::file_utils::ensure_dir_exists;
 
 use crate::agent::runloop::slash_commands::WorkspaceDirectoryCommand;
 
@@ -127,11 +128,9 @@ pub(crate) async fn handle_workspace_directory_command(
             }
 
             let link_root = workspace_root.join(".vtcode").join("external");
-            tokio::fs::create_dir_all(&link_root)
-                .await
-                .with_context(|| {
-                    format!("failed to prepare link directory {}", link_root.display())
-                })?;
+            ensure_dir_exists(&link_root).await.with_context(|| {
+                format!("failed to prepare link directory {}", link_root.display())
+            })?;
 
             for raw in raw_paths {
                 let trimmed = raw.trim();

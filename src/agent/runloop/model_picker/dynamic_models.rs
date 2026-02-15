@@ -3,7 +3,7 @@ use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use tokio::fs;
 
@@ -12,6 +12,7 @@ use vtcode_core::config::models::Provider;
 use vtcode_core::llm::providers::lmstudio::fetch_lmstudio_models;
 use vtcode_core::llm::providers::ollama::fetch_ollama_models;
 use vtcode_core::utils::dot_config::{DotConfig, get_dot_manager, load_user_config};
+use vtcode_core::utils::file_utils::write_file_with_context;
 
 use super::options::ModelOption;
 use super::selection::{SelectionDetail, selection_from_dynamic};
@@ -296,15 +297,8 @@ impl CachedDynamicModelStore {
         let Some(path) = dynamic_model_cache_path() else {
             return Ok(());
         };
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent)
-                .await
-                .with_context(|| format!("Failed to create {}", parent.display()))?;
-        }
-        let serialized = serde_json::to_vec_pretty(&self.entries)?;
-        fs::write(&path, serialized)
-            .await
-            .with_context(|| format!("Failed to write {}", path.display()))?;
+        let serialized = serde_json::to_string_pretty(&self.entries)?;
+        write_file_with_context(&path, &serialized, "dynamic model cache").await?;
         self.dirty = false;
         Ok(())
     }

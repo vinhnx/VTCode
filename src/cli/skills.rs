@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 use tracing::info;
 use vtcode_core::skills::loader::EnhancedSkillLoader;
 use vtcode_core::skills::manifest::generate_skill_template;
+use vtcode_core::utils::file_utils::{ensure_dir_exists_sync, write_file_with_context_sync};
 
 pub use super::skills_index::handle_skills_regenerate_index;
 use crate::cli::SkillsCommandOptions;
@@ -334,8 +335,6 @@ pub async fn handle_skills_info(options: &SkillsCommandOptions, name: &str) -> R
 
 /// Create skill template
 pub async fn handle_skills_create(skill_path: &PathBuf) -> Result<()> {
-    use std::fs;
-
     if skill_path.exists() {
         anyhow::bail!("Skill path already exists: {}", skill_path.display());
     }
@@ -345,17 +344,17 @@ pub async fn handle_skills_create(skill_path: &PathBuf) -> Result<()> {
         .and_then(|n| n.to_str())
         .unwrap_or("my-skill");
 
-    fs::create_dir_all(skill_path).context("Failed to create skill directory")?;
+    ensure_dir_exists_sync(skill_path).context("Failed to create skill directory")?;
 
     // Generate template
     let template = generate_skill_template(skill_name, "Brief description of what this skill does");
 
     // Write SKILL.md
     let skill_md = skill_path.join("SKILL.md");
-    fs::write(&skill_md, template).context("Failed to write SKILL.md")?;
+    write_file_with_context_sync(&skill_md, &template, "SKILL.md")?;
 
     // Create scripts directory
-    fs::create_dir(skill_path.join("scripts")).ok(); // Optional
+    std::fs::create_dir(skill_path.join("scripts")).ok(); // Optional
 
     println!("Created skill template at: {}", skill_path.display());
     println!("  • SKILL.md - Skill metadata and instructions");
