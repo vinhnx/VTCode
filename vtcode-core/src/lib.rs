@@ -143,7 +143,8 @@ pub mod diagnostics;
 pub mod dotfile_protection; // Comprehensive dotfile protection system
 pub mod exec;
 pub mod exec_policy; // Codex-style execution policy management
-pub mod execpolicy;
+/// Backward-compatible alias: command-level validation now lives in `exec_policy::command_validation`.
+pub use exec_policy::command_validation as execpolicy;
 pub mod gemini;
 pub mod git_info; // Git repository information collection
 pub mod http_client;

@@ -5,7 +5,7 @@ use crate::command_safety::UnifiedCommandEvaluator;
 use crate::command_safety::command_might_be_dangerous;
 use crate::command_safety::unified::EvaluationReason;
 use crate::config::CommandsConfig;
-use crate::execpolicy::{sanitize_working_dir, validate_command};
+use crate::exec_policy::command_validation::{sanitize_working_dir, validate_command};
 use crate::tools::command_policy::CommandPolicyEvaluator;
 use crate::tools::path_env;
 use crate::tools::shell::resolve_fallback_shell;

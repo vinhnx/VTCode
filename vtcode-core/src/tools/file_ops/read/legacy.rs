@@ -1,9 +1,10 @@
 use super::FileOpsTool;
 use super::is_image_path;
 use crate::tools::builder::ToolResponseBuilder;
+use crate::tools::error_helpers::with_file_context;
 use crate::tools::types::Input;
 use crate::utils::image_processing::read_image_file;
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Result, anyhow};
 use base64::Engine;
 use serde_json::{Value, json};
 use std::path::Path;
@@ -14,9 +15,8 @@ impl FileOpsTool {
         file_path: &Path,
         input: &Input,
     ) -> Result<(String, Value, bool)> {
-        let file_metadata = tokio::fs::metadata(file_path).await.with_context(|| {
-            format!("Failed to read metadata for file: {}", file_path.display())
-        })?;
+        let file_metadata =
+            with_file_context(tokio::fs::metadata(file_path).await, "read metadata for", file_path)?;
 
         if !file_metadata.is_file() {
             return Err(anyhow!("Path is not a file: {}", file_path.display()));
@@ -46,9 +46,8 @@ impl FileOpsTool {
 
         if let Some(encoding) = input.encoding.as_deref() {
             if encoding.eq_ignore_ascii_case("base64") {
-                let bytes = tokio::fs::read(file_path)
-                    .await
-                    .with_context(|| format!("Failed to read file: {}", file_path.display()))?;
+                let bytes =
+                    with_file_context(tokio::fs::read(file_path).await, "read file", file_path)?;
                 let encoded = base64::engine::general_purpose::STANDARD.encode(&bytes);
                 let metadata = json!({
                     "size_bytes": bytes.len(),
@@ -69,9 +68,8 @@ impl FileOpsTool {
         }
 
         if let Some(max_bytes) = input.max_bytes {
-            let mut bytes = tokio::fs::read(file_path)
-                .await
-                .with_context(|| format!("Failed to read file: {}", file_path.display()))?;
+            let mut bytes =
+                with_file_context(tokio::fs::read(file_path).await, "read file", file_path)?;
             let truncated = bytes.len() > max_bytes;
             if truncated {
                 bytes.truncate(max_bytes);
@@ -89,9 +87,7 @@ impl FileOpsTool {
             return Ok((content, metadata, truncated));
         }
 
-        let bytes = tokio::fs::read(file_path)
-            .await
-            .with_context(|| format!("Failed to read file: {}", file_path.display()))?;
+        let bytes = with_file_context(tokio::fs::read(file_path).await, "read file", file_path)?;
         let content = String::from_utf8_lossy(&bytes).into_owned();
         let metadata = json!({
             "size_bytes": file_metadata.len(),
@@ -113,9 +109,7 @@ impl FileOpsTool {
     ) -> Result<(String, Value, bool)> {
         const TOKENS_PER_LINE: usize = 15;
 
-        let bytes = tokio::fs::read(file_path)
-            .await
-            .with_context(|| format!("Failed to read file: {}", file_path.display()))?;
+        let bytes = with_file_context(tokio::fs::read(file_path).await, "read file", file_path)?;
         let content = String::from_utf8_lossy(&bytes).into_owned();
         let lines: Vec<&str> = content.lines().collect();
         let total_lines = lines.len();

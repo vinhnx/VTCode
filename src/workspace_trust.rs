@@ -13,7 +13,6 @@ use vtcode_core::utils::style_helpers::{ColorPalette, render_styled};
 const WARNING_RGB: (u8, u8, u8) = (166, 51, 51);
 const INFO_RGB: (u8, u8, u8) = (217, 154, 78);
 
-#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WorkspaceTrustGateResult {
     Trusted(WorkspaceTrustLevel),
@@ -27,7 +26,7 @@ enum TrustSelection {
     Quit,
 }
 
-#[allow(dead_code)]
+#[allow(dead_code)] // Used via lib crate's acp module, not directly from binary
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WorkspaceTrustSyncOutcome {
     AlreadyMatches(WorkspaceTrustLevel),
@@ -38,7 +37,6 @@ pub enum WorkspaceTrustSyncOutcome {
     SkippedDowngrade(WorkspaceTrustLevel),
 }
 
-#[allow(dead_code)]
 pub async fn ensure_workspace_trust(
     workspace: &Path,
     full_auto_requested: bool,
@@ -166,7 +164,6 @@ fn read_user_selection() -> Result<TrustSelection> {
     }
 }
 
-#[allow(dead_code)]
 pub async fn workspace_trust_level(workspace: &Path) -> Result<Option<WorkspaceTrustLevel>> {
     let workspace_key = canonicalize_workspace(workspace)
         .to_string_lossy()
@@ -181,7 +178,7 @@ pub async fn workspace_trust_level(workspace: &Path) -> Result<Option<WorkspaceT
         .map(|record| record.level))
 }
 
-#[allow(dead_code)]
+#[allow(dead_code)] // Used via lib crate's acp module, not directly from binary
 pub async fn ensure_workspace_trust_level_silent(
     workspace: &Path,
     desired_level: WorkspaceTrustLevel,

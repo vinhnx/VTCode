@@ -2,19 +2,8 @@ use anyhow::Error;
 use serde_json::Value;
 use vtcode_core::tools::registry::ToolExecutionError;
 
-/// Status of a tool execution with progress information
-#[derive(Debug)]
-#[allow(dead_code)]
-pub(crate) struct ToolProgress {
-    /// Current progress value (0-100)
-    pub progress: u8,
-    /// Status message
-    pub message: String,
-}
-
 /// Result of a tool execution
 #[derive(Debug)]
-#[allow(dead_code)]
 pub(crate) enum ToolExecutionStatus {
     /// Tool completed
     Success {
@@ -41,18 +30,14 @@ pub(crate) enum ToolExecutionStatus {
     },
     /// Tool execution was cancelled
     Cancelled,
-    /// Tool execution progress update
-    Progress(ToolProgress),
+    // TODO: Progress variant planned for streaming tool progress updates
 }
 
 /// Outcome produced by a tool pipeline run - returns a success/failure wrapper along with stdout and modified files
-#[allow(dead_code)]
 pub(crate) struct ToolPipelineOutcome {
     pub status: ToolExecutionStatus,
-    pub stdout: Option<String>,
     pub modified_files: Vec<String>,
     pub command_success: bool,
-    pub has_more: bool,
 }
 
 impl ToolPipelineOutcome {
@@ -65,9 +50,6 @@ impl ToolPipelineOutcome {
                 command_success,
                 has_more,
             } => {
-                // Clone for top-level fields, move originals into nested status
-                // This avoids double-cloning the same data
-                let stdout_copy = stdout.clone();
                 let modified_files_copy = modified_files.clone();
                 ToolPipelineOutcome {
                     status: ToolExecutionStatus::Success {
@@ -77,18 +59,14 @@ impl ToolPipelineOutcome {
                         command_success,
                         has_more,
                     },
-                    stdout: stdout_copy,
                     modified_files: modified_files_copy,
                     command_success,
-                    has_more,
                 }
             }
             other => ToolPipelineOutcome {
                 status: other,
-                stdout: None,
                 modified_files: vec![],
                 command_success: false,
-                has_more: false,
             },
         }
     }

@@ -136,6 +136,7 @@ pub mod command_policy;
 pub mod command_resolver;
 pub mod editing;
 pub mod error_context;
+pub mod error_helpers;
 pub mod execution_context;
 pub mod execution_tracker;
 pub mod file_ops;
@@ -185,6 +186,7 @@ pub mod improvements_cache; // Deprecated - use crate::cache::UnifiedCache inste
 pub mod improvements_config;
 pub mod improvements_errors;
 pub mod improvements_registry_ext;
+#[allow(deprecated)]
 pub mod middleware; // Deprecated - prefer async_middleware
 pub mod optimized_registry;
 pub mod output_spooler;
@@ -196,9 +198,11 @@ pub mod unified_error;
 pub mod unified_executor;
 
 #[cfg(test)]
+#[allow(deprecated)]
 mod improvements_integration_tests;
 
 #[cfg(test)]
+#[allow(deprecated)]
 mod improvements_real_workflow_tests;
 
 // Re-export main types and traits for backward compatibility
@@ -273,6 +277,11 @@ pub use improvements_errors::{
     ObservabilityContext, ObservabilitySink,
 };
 pub use improvements_registry_ext::{ToolMetrics, ToolRegistryImprovement};
+#[allow(deprecated)]
+#[deprecated(
+    since = "0.1.0",
+    note = "Use async_middleware types instead: AsyncMiddleware, AsyncMiddlewareChain, etc."
+)]
 pub use middleware::{
     CachingMiddleware, ExecutionMetadata, LoggingMiddleware, Middleware, MiddlewareChain,
     MiddlewareError, MiddlewareResult, RequestMetadata, RetryMiddleware, ToolRequest,

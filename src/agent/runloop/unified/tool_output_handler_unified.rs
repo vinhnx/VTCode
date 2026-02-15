@@ -189,11 +189,7 @@ pub async fn handle_tool_outcome_unified<C: ToolOutputContext>(
                 .await?;
             }
         }
-        ToolExecutionStatus::Progress(_) => {
-            // Handle progress case - for now, just record the tool usage
-            ctx.session_stats().record_tool(name);
-            // Progress updates don't need special handling for output rendering
-        }
+
     }
 
     Ok((any_write_effect, turn_modified_files, last_tool_stdout))

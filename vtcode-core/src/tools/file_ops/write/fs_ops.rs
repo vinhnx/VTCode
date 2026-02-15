@@ -1,4 +1,5 @@
 use super::FileOpsTool;
+use crate::tools::error_helpers::{with_file_context, with_path_context};
 use crate::tools::traits::FileTool;
 use crate::tools::types::{CopyInput, CreateInput, DeleteInput, MoveInput};
 use anyhow::{Context, Result, anyhow};
@@ -74,9 +75,11 @@ impl FileOpsTool {
 
         let target_path = self.workspace_root.join(&path);
 
-        let exists = tokio::fs::try_exists(&target_path)
-            .await
-            .with_context(|| format!("Failed to check if '{}' exists", path))?;
+        let exists = with_path_context(
+            tokio::fs::try_exists(&target_path).await,
+            "check if exists",
+            &path,
+        )?;
 
         if !exists {
             if force {
@@ -95,9 +98,11 @@ impl FileOpsTool {
             ));
         }
 
-        let canonical = tokio::fs::canonicalize(&target_path)
-            .await
-            .with_context(|| format!("Failed to resolve canonical path for '{}'", path))?;
+        let canonical = with_path_context(
+            tokio::fs::canonicalize(&target_path).await,
+            "resolve canonical path for",
+            &path,
+        )?;
 
         if !canonical.starts_with(self.canonical_workspace_root()) {
             return Err(anyhow!(
@@ -113,9 +118,11 @@ impl FileOpsTool {
             ));
         }
 
-        let metadata = tokio::fs::metadata(&canonical)
-            .await
-            .with_context(|| format!("Failed to read metadata for '{}'", path))?;
+        let metadata = with_path_context(
+            tokio::fs::metadata(&canonical).await,
+            "read metadata for",
+            &path,
+        )?;
 
         let deleted_kind = if metadata.is_dir() {
             if !recursive {
@@ -125,14 +132,18 @@ impl FileOpsTool {
                 ));
             }
 
-            tokio::fs::remove_dir_all(&canonical)
-                .await
-                .with_context(|| format!("Failed to remove directory '{}'", path))?;
+            with_path_context(
+                tokio::fs::remove_dir_all(&canonical).await,
+                "remove directory",
+                &path,
+            )?;
             "directory"
         } else {
-            tokio::fs::remove_file(&canonical)
-                .await
-                .with_context(|| format!("Failed to remove file '{}'", path))?;
+            with_path_context(
+                tokio::fs::remove_file(&canonical).await,
+                "remove file",
+                &path,
+            )?;
             "file"
         };
 
@@ -175,9 +186,11 @@ impl FileOpsTool {
             tokio::fs::create_dir_all(parent).await?;
         }
 
-        tokio::fs::rename(&from_path, &to_path)
-            .await
-            .with_context(|| format!("Failed to move '{}' to '{}'", path, destination))?;
+        with_path_context(
+            tokio::fs::rename(&from_path, &to_path).await,
+            &format!("move to '{destination}'"),
+            &path,
+        )?;
 
         info!(from = %path, to = %destination, "Moved successfully");
 
@@ -230,15 +243,19 @@ impl FileOpsTool {
                 if entry.file_type().is_dir() {
                     tokio::fs::create_dir_all(&target).await?;
                 } else {
-                    tokio::fs::copy(entry_path, &target)
-                        .await
-                        .with_context(|| format!("Failed to copy '{}'", entry_path.display()))?;
+                    with_file_context(
+                        tokio::fs::copy(entry_path, &target).await,
+                        "copy",
+                        entry_path,
+                    )?;
                 }
             }
         } else {
-            tokio::fs::copy(&from_path, &to_path)
-                .await
-                .with_context(|| format!("Failed to copy '{}' to '{}'", path, destination))?;
+            with_path_context(
+                tokio::fs::copy(&from_path, &to_path).await,
+                &format!("copy to '{destination}'"),
+                &path,
+            )?;
         }
 
         info!(from = %path, to = %destination, "Copied successfully");

@@ -115,9 +115,6 @@ pub(crate) async fn handle_pipeline_output(
             ctx.renderer
                 .line(MessageStyle::Info, "Tool execution cancelled")?;
         }
-        ToolExecutionStatus::Progress(_) => {
-            // progress handled in pipeline
-        }
     }
 
     Ok((any_write_effect, turn_modified_files, last_tool_stdout))
@@ -186,9 +183,6 @@ pub(crate) async fn handle_pipeline_output_renderer(
         }
         ToolExecutionStatus::Cancelled => {
             renderer.line(MessageStyle::Info, "Tool execution cancelled")?;
-        }
-        ToolExecutionStatus::Progress(_) => {
-            // progress handled elsewhere
         }
     }
 

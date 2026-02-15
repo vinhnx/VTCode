@@ -16,6 +16,7 @@ serde_json.workspace = true
 tokio.workspace = true
 tracing = { version = "0.1", features = ["log"] }
 which = "8.0"
+vtcode-commons = { path = "../vtcode-commons" }
 vtcode-config = { path = "../vtcode-config" }
 
 [dev-dependencies]
