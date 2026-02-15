@@ -398,6 +398,9 @@ pub struct PlanItem {
 pub struct ReasoningItem {
     /// Free-form reasoning content captured during planning.
     pub text: String,
+    /// Optional stage of reasoning (e.g., "analysis", "plan", "verification").
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stage: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]

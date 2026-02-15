@@ -165,6 +165,16 @@ impl Session {
             }
             let mut style = self.header_secondary_style();
             style = style.add_modifier(Modifier::ITALIC | Modifier::DIM);
+
+            if let Some(stage) = &self.header_context.reasoning_stage {
+                let mut stage_style = style;
+                stage_style = stage_style
+                    .remove_modifier(Modifier::DIM)
+                    .add_modifier(Modifier::BOLD);
+                spans.push(Span::styled(format!("[{}]", stage), stage_style));
+                spans.push(Span::raw(" "));
+            }
+
             spans.push(Span::styled(reasoning.to_string(), style));
         }
 

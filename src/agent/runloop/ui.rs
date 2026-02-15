@@ -292,6 +292,7 @@ pub(crate) async fn build_inline_header_context(
         highlights, // Use the modified highlights that may include the home directory warning
         editing_mode: vtcode_core::ui::tui::EditingMode::default(),
         autonomous_mode: false,
+        reasoning_stage: None,
     })
 }
 

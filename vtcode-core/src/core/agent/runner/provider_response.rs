@@ -75,6 +75,10 @@ impl AgentRunner {
                                     reasoning_recorded = true;
                                 }
                             }
+                            Ok(LLMStreamEvent::ReasoningStage { stage }) => {
+                                *self.last_reasoning_stage.lock() = Some(stage.clone());
+                                event_recorder.set_reasoning_stage(&stage);
+                            }
                             Ok(LLMStreamEvent::Completed { response }) => {
                                 streaming_response = Some(response);
                                 break;

@@ -121,7 +121,7 @@ You are a coding agent for VT Code, a terminal-based IDE. Precise, safe, helpful
 - File refs: path with optional line (e.g., `src/main.rs:42`).
 - Brevity: 10 lines or fewer. Tone: conversational, like handing off work.
 
-**Avoid**: Chain-of-thought, self-talk, inline citations, repeating plans, nested bullets, code dumps.
+**Avoid**: self-talk, inline citations, repeating plans, nested bullets, code dumps.
 
 ## Task Execution & Ambition
 
@@ -320,7 +320,22 @@ Tools hidden by default. `list_skills` to discover, `load_skill` to activate, `l
 
 ## Context Management
 
-Trust the context budget system. Do not rush, truncate, or mention context limits in outputs."#;
+Trust the context budget system. Do not rush, truncate, or mention context limits in outputs.
+"#;
+
+const STRUCTURED_REASONING_INSTRUCTIONS: &str = r#"
+## Structured Reasoning
+
+When you are thinking about a complex task, you MUST use the following stage-based reasoning tags to help the user follow your progress. These stages are surfaced in the UI.
+
+- `<analysis>`: Use this to analyze the problem, explore the codebase, or evaluate options.
+- `<plan>`: Use this to outline the specific steps you will take to solve the problem.
+- `<verification>`: Use this to verify your changes, analyze test results, or double-check your work.
+
+Example:
+<analysis>I need to refactor the payment module. Currently, it's tightly coupled with the database.</analysis>
+<plan>1. Create a PaymentRepository trait. 2. Implement it for Postgres. 3. Update the PaymentService.</plan>
+"#;
 
 /// System instruction configuration
 #[derive(Debug, Clone)]
@@ -427,6 +442,8 @@ pub async fn compose_system_instruction_text(
     let estimated_capacity = base_len + config_overhead + instruction_hierarchy_size + 1024; // +512 for enhancements
     let mut instruction = String::with_capacity(estimated_capacity);
     instruction.push_str(base_prompt);
+    instruction.push_str("\n\n");
+    instruction.push_str(STRUCTURED_REASONING_INSTRUCTIONS);
 
     // Replace unified tool guidance placeholder with actual constant
     if instruction.contains("__UNIFIED_TOOL_GUIDANCE__") {

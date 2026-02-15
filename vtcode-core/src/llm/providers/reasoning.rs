@@ -69,10 +69,26 @@ struct ParsedTag<'a> {
     category: TagCategory,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReasoningSegment {
+    pub text: String,
+    pub stage: Option<String>,
+}
+
+impl ReasoningSegment {
+    pub fn new(text: impl Into<String>, stage: Option<String>) -> Self {
+        Self {
+            text: text.into(),
+            stage,
+        }
+    }
+}
+
 pub fn extract_reasoning_trace(value: &Value) -> Option<String> {
     let mut segments = Vec::new();
     collect_reasoning_segments(value, &mut segments);
-    let combined = segments.join("\n");
+    let combined: Vec<String> = segments.into_iter().map(|s| s.text).collect();
+    let combined = combined.join("\n");
     let trimmed = combined.trim();
     if trimmed.is_empty() {
         None
@@ -81,7 +97,7 @@ pub fn extract_reasoning_trace(value: &Value) -> Option<String> {
     }
 }
 
-fn collect_reasoning_segments(value: &Value, segments: &mut Vec<String>) {
+fn collect_reasoning_segments(value: &Value, segments: &mut Vec<ReasoningSegment>) {
     match value {
         Value::Null => {}
         Value::Bool(_) | Value::Number(_) => {}
@@ -90,12 +106,12 @@ fn collect_reasoning_segments(value: &Value, segments: &mut Vec<String>) {
 
             if !tagged_segments.is_empty() {
                 for segment in tagged_segments.drain(..) {
-                    push_unique_segment(segments, &segment);
+                    push_unique_segment(segments, segment);
                 }
                 if let Some(cleaned_text) = cleaned {
                     let trimmed = cleaned_text.trim();
                     if !trimmed.is_empty() {
-                        push_unique_segment(segments, trimmed);
+                        push_unique_segment(segments, ReasoningSegment::new(trimmed, None));
                     }
                 }
                 return;
@@ -106,7 +122,7 @@ fn collect_reasoning_segments(value: &Value, segments: &mut Vec<String>) {
                 return;
             }
 
-            push_unique_segment(segments, trimmed);
+            push_unique_segment(segments, ReasoningSegment::new(trimmed, None));
         }
         Value::Array(items) => {
             for item in items {
@@ -142,20 +158,20 @@ fn collect_reasoning_segments(value: &Value, segments: &mut Vec<String>) {
     }
 }
 
-fn push_unique_segment(segments: &mut Vec<String>, segment: &str) {
-    if segment.trim().is_empty() {
+fn push_unique_segment(segments: &mut Vec<ReasoningSegment>, segment: ReasoningSegment) {
+    if segment.text.trim().is_empty() {
         return;
     }
 
     if segments
         .last()
-        .map(|last| last.as_str() == segment)
+        .map(|last| last.text == segment.text && last.stage == segment.stage)
         .unwrap_or(false)
     {
         return;
     }
 
-    segments.push(segment.to_string());
+    segments.push(segment);
 }
 
 fn parse_start_tag<'a>(lower: &'a str, start: usize) -> Option<ParsedTag<'a>> {
@@ -217,13 +233,13 @@ fn parse_start_tag<'a>(lower: &'a str, start: usize) -> Option<ParsedTag<'a>> {
     })
 }
 
-pub fn split_reasoning_from_text(text: &str) -> (Vec<String>, Option<String>) {
+pub fn split_reasoning_from_text(text: &str) -> (Vec<ReasoningSegment>, Option<String>) {
     if text.trim().is_empty() {
         return (Vec::new(), None);
     }
 
     let lower = text.to_ascii_lowercase();
-    let mut segments: Vec<String> = Vec::new();
+    let mut segments: Vec<ReasoningSegment> = Vec::new();
     let mut cleaned = String::new();
     let mut modified = false;
     let mut index = 0usize;
@@ -253,16 +269,17 @@ pub fn split_reasoning_from_text(text: &str) -> (Vec<String>, Option<String>) {
                         if nested_segments.is_empty() {
                             let trimmed = inner.trim();
                             if !trimmed.is_empty() {
-                                push_unique_segment(&mut segments, trimmed);
+                                // Use the tag name as the stage
+                                push_unique_segment(&mut segments, ReasoningSegment::new(trimmed, Some(tag.name.to_owned())));
                             }
                         } else {
                             for segment in nested_segments {
-                                push_unique_segment(&mut segments, &segment);
+                                push_unique_segment(&mut segments, segment);
                             }
                             if let Some(cleaned_inner) = nested_cleaned {
                                 let trimmed = cleaned_inner.trim();
                                 if !trimmed.is_empty() {
-                                    push_unique_segment(&mut segments, trimmed);
+                                    push_unique_segment(&mut segments, ReasoningSegment::new(trimmed, Some(tag.name.to_owned())));
                                 }
                             }
                         }
@@ -271,7 +288,7 @@ pub fn split_reasoning_from_text(text: &str) -> (Vec<String>, Option<String>) {
                         modified = true;
                         let (nested_segments, nested_cleaned) = split_reasoning_from_text(inner);
                         for segment in nested_segments {
-                            push_unique_segment(&mut segments, &segment);
+                            push_unique_segment(&mut segments, segment);
                         }
                         if let Some(cleaned_inner) = nested_cleaned {
                             cleaned.push_str(&cleaned_inner);
@@ -358,7 +375,7 @@ mod tests {
     fn extracts_reasoning_from_think_markup() {
         let source = "<think>first step</think>\n<answer>final output</answer>";
         let (segments, cleaned) = split_reasoning_from_text(source);
-        assert_eq!(segments, vec!["first step".to_string()]);
+        assert_eq!(segments, vec![ReasoningSegment::new("first step", Some("think".to_string()))]);
         assert_eq!(cleaned, Some("\nfinal output".to_string()));
     }
 
@@ -368,7 +385,10 @@ mod tests {
         let (segments, cleaned) = split_reasoning_from_text(source);
         assert_eq!(
             segments,
-            vec!["deep dive".to_string(), "summary".to_string()]
+            vec![
+                ReasoningSegment::new("deep dive", Some("analysis".to_string())),
+                ReasoningSegment::new("summary", Some("think".to_string()))
+            ]
         );
         assert!(cleaned.is_none());
     }

@@ -6,6 +6,7 @@ pub use vtcode_commons::llm::{FinishReason, LLMError, LLMResponse, Usage};
 pub enum LLMStreamEvent {
     Token { delta: String },
     Reasoning { delta: String },
+    ReasoningStage { stage: String },
     Completed { response: Box<LLMResponse> },
 }
 

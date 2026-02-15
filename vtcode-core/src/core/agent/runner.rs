@@ -94,6 +94,8 @@ pub struct AgentRunner {
     streaming_failures: parking_lot::Mutex<u8>,
     /// Records when streaming last failed for cooldown-based re-enablement
     streaming_last_failure: parking_lot::Mutex<Option<Instant>>,
+    /// Tracks the latest reasoning stage name for the current turn
+    last_reasoning_stage: parking_lot::Mutex<Option<String>>,
     /// Receiver for steering messages (e.g., stop, pause)
     steering_receiver: Option<Mutex<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>>,
 }
@@ -173,6 +175,7 @@ impl AgentRunner {
             context_optimizer: tokio::sync::Mutex::new(ContextOptimizer::new()),
             streaming_failures: parking_lot::Mutex::new(0),
             streaming_last_failure: parking_lot::Mutex::new(None),
+            last_reasoning_stage: parking_lot::Mutex::new(None),
             steering_receiver: steering_receiver.map(Mutex::new),
         })
     }

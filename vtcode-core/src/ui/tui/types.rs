@@ -14,6 +14,7 @@ pub struct InlineHeaderContext {
     pub git: String,
     pub mode: String,
     pub reasoning: String,
+    pub reasoning_stage: Option<String>,
     pub workspace_trust: String,
     pub tools: String,
     pub mcp: String,
@@ -68,6 +69,7 @@ impl Default for InlineHeaderContext {
             git,
             mode: ui::HEADER_MODE_INLINE.to_string(),
             reasoning,
+            reasoning_stage: None,
             workspace_trust: trust,
             tools,
             mcp,
@@ -676,6 +678,8 @@ pub enum InlineCommand {
     },
     SetSkipConfirmations(bool),
     Shutdown,
+    /// Update reasoning stage in header context
+    SetReasoningStage(Option<String>),
 }
 
 /// Editing mode for the agent session
@@ -1024,6 +1028,10 @@ impl InlineHandle {
 
     pub fn set_skip_confirmations(&self, skip: bool) {
         self.send_command(InlineCommand::SetSkipConfirmations(skip));
+    }
+
+    pub fn set_reasoning_stage(&self, stage: Option<String>) {
+        self.send_command(InlineCommand::SetReasoningStage(stage));
     }
 }
 
