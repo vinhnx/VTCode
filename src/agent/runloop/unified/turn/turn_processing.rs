@@ -21,7 +21,7 @@ use crate::agent::runloop::unified::ui_interaction::{
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 use vtcode_core::llm::provider::{self as uni, ParallelToolConfig};
-use vtcode_core::llm::providers::{ReasoningSegment, split_reasoning_from_text};
+use vtcode_core::llm::providers::split_reasoning_from_text;
 use vtcode_core::prompts::upsert_harness_limits_section;
 use vtcode_core::turn_metadata;
 
