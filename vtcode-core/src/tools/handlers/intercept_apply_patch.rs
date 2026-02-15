@@ -10,6 +10,7 @@ use anyhow::Result;
 
 use super::tool_handler::{ToolOutput, ToolSession, TurnContext};
 use super::turn_diff_tracker::SharedTurnDiffTracker;
+use crate::utils::file_utils::write_file_with_context;
 
 /// The argument used to indicate apply_patch mode (from Codex)
 pub const CODEX_APPLY_PATCH_ARG: &str = "--codex-run-as-apply-patch";
@@ -204,7 +205,7 @@ async fn execute_patch(req: &ApplyPatchRequest) -> Result<String, ApplyPatchErro
 
     // Write patch to temp file
     let temp_file = std::env::temp_dir().join(format!("vtcode_patch_{}.patch", std::process::id()));
-    tokio::fs::write(&temp_file, &req.patch)
+    write_file_with_context(&temp_file, &req.patch, "temporary patch file")
         .await
         .map_err(|e| ApplyPatchError::IoError(e.to_string()))?;
 

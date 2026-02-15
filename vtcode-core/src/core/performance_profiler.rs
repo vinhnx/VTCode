@@ -1,8 +1,10 @@
 //! Performance benchmarking and profiling tools for VT Code optimizations
 
+use crate::utils::file_utils::write_file_with_context;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
@@ -268,7 +270,7 @@ impl PerformanceProfiler {
     pub async fn export_results(&self, file_path: &str) -> Result<()> {
         let history = self.get_history().await;
         let json = serde_json::to_string_pretty(&history)?;
-        tokio::fs::write(file_path, json).await?;
+        write_file_with_context(Path::new(file_path), &json, "benchmark results").await?;
         Ok(())
     }
 }

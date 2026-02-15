@@ -14,6 +14,8 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tokio::sync::Mutex;
 
+use crate::utils::file_utils::ensure_dir_exists;
+
 /// Outcome of a dotfile access attempt.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -196,7 +198,7 @@ impl AuditLog {
 
         // Create parent directories if needed
         if let Some(parent) = log_path.parent() {
-            tokio::fs::create_dir_all(parent)
+            ensure_dir_exists(parent)
                 .await
                 .with_context(|| format!("Failed to create audit log directory: {:?}", parent))?;
         }

@@ -6,6 +6,9 @@ use crate::config::constants::diff;
 use crate::tools::builder::ToolResponseBuilder;
 use crate::tools::traits::FileTool;
 use crate::tools::types::WriteInput;
+use crate::utils::file_utils::{
+    ensure_dir_exists, read_file_with_context, write_file_with_context,
+};
 use anyhow::{Context, Result, anyhow};
 use serde_json::{Value, json};
 use std::borrow::Cow;
@@ -37,7 +40,7 @@ impl FileOpsTool {
 
         // Create parent directories if needed
         if let Some(parent) = file_path.parent() {
-            tokio::fs::create_dir_all(parent).await?;
+            ensure_dir_exists(parent).await?;
         }
 
         let file_exists = tokio::fs::try_exists(&file_path).await?;
@@ -46,12 +49,12 @@ impl FileOpsTool {
         let mut diff_preview: Option<Value> = None;
 
         if file_exists {
-            match tokio::fs::read_to_string(&file_path).await {
+            match read_file_with_context(&file_path, "existing file content").await {
                 Ok(content) => existing_content = Some(content),
                 Err(error) => {
                     diff_preview = Some(diff_preview_error_skip(
                         "failed_to_read_existing_content",
-                        Some(&format!("{:?}", error.kind())),
+                        Some(&error.to_string()),
                     ));
                 }
             }
@@ -73,7 +76,7 @@ impl FileOpsTool {
 
         match effective_mode {
             "overwrite" => {
-                tokio::fs::write(&file_path, &input.content).await?;
+                write_file_with_context(&file_path, &input.content, "file content").await?;
             }
             "append" => {
                 use tokio::io::AsyncWriteExt;
@@ -94,7 +97,7 @@ impl FileOpsTool {
                         .field("reason", json!("File already exists"))
                         .build_json());
                 }
-                tokio::fs::write(&file_path, &input.content).await?;
+                write_file_with_context(&file_path, &input.content, "file content").await?;
             }
             "fail_if_exists" => {
                 if file_exists {
@@ -103,7 +106,7 @@ impl FileOpsTool {
                         input.path
                     ));
                 }
-                tokio::fs::write(&file_path, &input.content).await?;
+                write_file_with_context(&file_path, &input.content, "file content").await?;
             }
             _ => {
                 return Err(anyhow!(

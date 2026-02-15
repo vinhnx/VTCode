@@ -9,6 +9,7 @@ use base64::engine::general_purpose::STANDARD as BASE64;
 use serde::{Deserialize, Serialize};
 
 use crate::utils::error_messages::ERR_CREATE_CHECKPOINT_DIR;
+use crate::utils::file_utils::{ensure_dir_exists, ensure_dir_exists_sync, write_json_file};
 use crate::utils::path::canonicalize_workspace;
 use crate::utils::session_archive::SessionMessage;
 
@@ -132,7 +133,7 @@ impl SnapshotManager {
         let canonical_workspace = canonicalize_workspace(&config.workspace);
 
         if config.enabled {
-            fs::create_dir_all(&storage_dir).with_context(|| {
+            ensure_dir_exists_sync(&storage_dir).with_context(|| {
                 format!("{}: {}", ERR_CREATE_CHECKPOINT_DIR, storage_dir.display())
             })?;
         }
@@ -307,7 +308,7 @@ impl SnapshotManager {
 
         let path = self.snapshot_path(turn_number);
         if let Some(parent) = path.parent() {
-            tokio::fs::create_dir_all(parent).await.with_context(|| {
+            ensure_dir_exists(parent).await.with_context(|| {
                 format!(
                     "failed to ensure checkpoint directory: {}",
                     parent.display()
@@ -315,8 +316,7 @@ impl SnapshotManager {
             })?;
         }
 
-        let data = serde_json::to_vec_pretty(&stored).context("failed to serialize checkpoint")?;
-        tokio::fs::write(&path, &data)
+        write_json_file(&path, &stored)
             .await
             .with_context(|| format!("failed to write checkpoint: {}", path.display()))?;
 
@@ -389,7 +389,7 @@ impl SnapshotManager {
                 }
 
                 if let Some(parent) = absolute.parent() {
-                    tokio::fs::create_dir_all(parent).await.with_context(|| {
+                    ensure_dir_exists(parent).await.with_context(|| {
                         format!(
                             "failed to create directories for restore: {}",
                             parent.display()

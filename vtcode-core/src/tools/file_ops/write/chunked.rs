@@ -1,6 +1,7 @@
 use super::FileOpsTool;
 use super::diff_preview_size_skip;
 use crate::tools::types::WriteInput;
+use crate::utils::file_utils::ensure_dir_exists;
 use anyhow::{Result, anyhow};
 use serde_json::{Value, json};
 use std::path::Path;
@@ -16,7 +17,7 @@ impl FileOpsTool {
     ) -> Result<Value> {
         // Create parent directories if needed
         if let Some(parent) = file_path.parent() {
-            tokio::fs::create_dir_all(parent).await?;
+            ensure_dir_exists(parent).await?;
         }
 
         let content_bytes = input.content.as_bytes();

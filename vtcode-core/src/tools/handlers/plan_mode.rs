@@ -13,6 +13,9 @@
 //! - User confirmation is required before transitioning to execution (HITL)
 
 use crate::config::constants::tools;
+use crate::utils::file_utils::{
+    ensure_dir_exists, read_file_with_context, write_file_with_context,
+};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -93,7 +96,7 @@ impl PlanModeState {
     /// Ensure plans directory exists
     pub async fn ensure_plans_dir(&self) -> Result<PathBuf> {
         let dir = self.plans_dir();
-        tokio::fs::create_dir_all(&dir)
+        ensure_dir_exists(&dir)
             .await
             .with_context(|| format!("Failed to create plans directory: {}", dir.display()))?;
         Ok(dir)
@@ -236,7 +239,7 @@ Dependencies: (to be identified)
             chrono::Utc::now().format("%Y-%m-%d %H:%M:%S UTC")
         );
 
-        tokio::fs::write(&plan_file, &initial_content)
+        write_file_with_context(&plan_file, &initial_content, "plan file")
             .await
             .with_context(|| format!("Failed to create plan file: {}", plan_file.display()))?;
 
@@ -397,7 +400,7 @@ impl Tool for ExitPlanModeTool {
                 .and_then(|s| s.to_str())
                 .unwrap_or("Implementation Plan")
                 .to_string();
-            match tokio::fs::read_to_string(path).await {
+            match read_file_with_context(path, "plan file").await {
                 Ok(content) => (Some(content), title),
                 Err(_) => (None, title),
             }

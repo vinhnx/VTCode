@@ -11,6 +11,7 @@ use super::orchestrator::{Approvable, Sandboxable, SandboxablePreference};
 use super::tool_handler::{
     ToolCallError, ToolHandler, ToolInvocation, ToolKind, ToolOutput, ToolPayload,
 };
+use crate::utils::file_utils::read_file_with_context;
 
 /// Maximum number of matches to return.
 const MAX_MATCHES: usize = 100;
@@ -116,7 +117,7 @@ impl GrepFilesHandler {
                 break;
             }
 
-            match tokio::fs::read_to_string(&file_path).await {
+            match read_file_with_context(&file_path, "grep search file").await {
                 Ok(content) => {
                     let lines: Vec<&str> = content.lines().collect();
 

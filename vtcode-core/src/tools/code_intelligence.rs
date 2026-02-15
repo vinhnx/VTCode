@@ -17,6 +17,7 @@ use crate::tools::file_search_bridge::{self, FileSearchConfig};
 use crate::tools::tree_sitter::{
     CodeNavigator, LanguageAnalyzer, NavigationUtils, Position, SymbolInfo, TreeSitterAnalyzer,
 };
+use crate::utils::file_utils::read_file_with_context;
 use crate::utils::path::resolve_workspace_path;
 
 /// Code intelligence operations
@@ -415,7 +416,7 @@ impl CodeIntelligenceTool {
         analyzer: &mut TreeSitterAnalyzer,
         file_path: &Path,
     ) -> Result<(Vec<SymbolInfo>, String)> {
-        let source_code = tokio::fs::read_to_string(file_path)
+        let source_code = read_file_with_context(file_path, "code intelligence source file")
             .await
             .with_context(|| format!("Failed to read file: {}", file_path.display()))?;
 

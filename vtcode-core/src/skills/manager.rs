@@ -9,6 +9,8 @@ use std::sync::OnceLock;
 use std::sync::RwLock;
 use std::time::{Duration, SystemTime};
 
+use crate::utils::file_utils::read_file_with_context_sync;
+
 /// Cache entry with TTL tracking for skill outcomes
 #[derive(Clone)]
 struct CachedSkillOutcome {
@@ -189,7 +191,7 @@ impl SkillsManager {
 
         // Parse SKILL.md on-demand
         let skill_md = skill_path.join("SKILL.md");
-        let content = std::fs::read_to_string(&skill_md)
+        let content = read_file_with_context_sync(&skill_md, "skill instructions")
             .map_err(|e| anyhow::anyhow!("Failed to read SKILL.md for '{}': {}", skill_name, e))?;
 
         let (manifest, instructions) = crate::skills::manifest::parse_skill_content(&content)?;

@@ -4,6 +4,7 @@ use crate::skills::types::{Skill, SkillVariety};
 use crate::tool_policy::ToolPolicy;
 use crate::tools::registry::ToolRegistry;
 use crate::tools::traits::Tool;
+use crate::utils::file_utils::read_file_with_context_sync;
 use anyhow::Context;
 use async_trait::async_trait;
 use serde_json::Value;
@@ -130,7 +131,7 @@ impl Tool for LoadSkillTool {
                 // Determine path to SKILL.md
                 let skill_file = skill.path.join("SKILL.md");
                 if skill_file.exists() {
-                    match std::fs::read_to_string(&skill_file) {
+                    match read_file_with_context_sync(&skill_file, "skill file") {
                         Ok(content) => content,
                         Err(e) => format!("Error reading skill file: {}", e),
                     }
@@ -404,10 +405,9 @@ impl Tool for LoadSkillResourceTool {
             }
 
             // Read content (limit size for safety)
-            let content = std::fs::read_to_string(&full_path).context(format!(
-                "Failed to read resource at {}",
-                full_path.display()
-            ))?;
+            let content = read_file_with_context_sync(&full_path, "skill resource").context(
+                format!("Failed to read resource at {}", full_path.display()),
+            )?;
 
             Ok(serde_json::json!({
                 "skill_name": skill_name,

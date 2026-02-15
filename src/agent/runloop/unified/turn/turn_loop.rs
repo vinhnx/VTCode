@@ -14,17 +14,19 @@ use crate::agent::runloop::unified::run_loop_context::HarnessTurnState;
 use crate::agent::runloop::unified::run_loop_context::TurnPhase;
 use crate::agent::runloop::unified::tool_call_safety::ToolCallSafetyValidator;
 use crate::agent::runloop::unified::turn::context::TurnLoopResult;
+use crate::agent::runloop::unified::turn::turn_loop_helpers::{
+    ToolLoopLimitAction, extract_turn_config, handle_pre_request_action, handle_steering_messages,
+    maybe_handle_plan_mode_exit_trigger, maybe_handle_tool_loop_limit,
+};
 use vtcode_core::acp::ToolPermissionCache;
-use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::config::loader::VTCodeConfig;
+use vtcode_core::core::agent::steering::SteeringMessage;
 use vtcode_core::core::decision_tracker::DecisionTracker;
 use vtcode_core::core::trajectory::TrajectoryLogger;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::tools::ToolResultCache;
 use vtcode_core::tools::{ApprovalRecorder, ToolRegistry};
 use vtcode_core::ui::tui::{InlineHandle, InlineSession};
-// use vtcode_core::ui::tui::{InlineHandle, InlineSession};
-use vtcode_core::core::agent::steering::SteeringMessage;
 use vtcode_core::utils::ansi::AnsiRenderer;
 
 // Using `tool_output_handler::handle_pipeline_output_from_turn_ctx` adapter where needed
@@ -182,42 +184,6 @@ impl<'a> TurnLoopContext<'a> {
 
 // For `TurnLoopContext`, we will reuse the generic `handle_pipeline_output` via an adapter below.
 
-/// Optimization: Pre-computed turn configuration to avoid repeated Option unwrapping
-#[derive(Debug, Clone)]
-struct PrecomputedTurnConfig {
-    max_tool_loops: usize,
-    tool_repeat_limit: usize,
-    max_session_turns: usize,
-    ask_questions_enabled: bool,
-}
-
-/// Extract frequently accessed config values once per turn to reduce overhead
-#[inline]
-fn extract_turn_config(vt_cfg: Option<&VTCodeConfig>) -> PrecomputedTurnConfig {
-    vt_cfg
-        .map(|cfg| PrecomputedTurnConfig {
-            max_tool_loops: if cfg.tools.max_tool_loops > 0 {
-                cfg.tools.max_tool_loops
-            } else {
-                vtcode_core::config::constants::defaults::DEFAULT_MAX_TOOL_LOOPS
-            },
-            tool_repeat_limit: if cfg.tools.max_repeated_tool_calls > 0 {
-                cfg.tools.max_repeated_tool_calls
-            } else {
-                vtcode_core::config::constants::defaults::DEFAULT_MAX_REPEATED_TOOL_CALLS
-            },
-            max_session_turns: cfg.agent.max_conversation_turns,
-            ask_questions_enabled: cfg.chat.ask_questions.enabled,
-        })
-        .unwrap_or(PrecomputedTurnConfig {
-            max_tool_loops: vtcode_core::config::constants::defaults::DEFAULT_MAX_TOOL_LOOPS,
-            tool_repeat_limit:
-                vtcode_core::config::constants::defaults::DEFAULT_MAX_REPEATED_TOOL_CALLS,
-            max_session_turns: 150,
-            ask_questions_enabled: true,
-        })
-}
-
 #[allow(clippy::too_many_arguments)]
 pub async fn run_turn_loop(
     _input: &str,
@@ -225,7 +191,6 @@ pub async fn run_turn_loop(
     mut ctx: TurnLoopContext<'_>,
     session_end_reason: &mut crate::hooks::lifecycle::SessionEndReason,
 ) -> Result<TurnLoopOutcome> {
-    use crate::agent::runloop::unified::context_manager::PreRequestAction;
     use crate::agent::runloop::unified::turn::context::{
         TurnHandlerOutcome, TurnProcessingContext, TurnProcessingResult,
     };
@@ -234,7 +199,6 @@ pub async fn run_turn_loop(
         HandleTurnProcessingResultParams, execute_llm_request, handle_turn_processing_result,
         maybe_force_plan_mode_interview, process_llm_response,
     };
-    use vtcode_core::llm::provider as uni;
 
     // Initialize the outcome result
     let mut result = TurnLoopResult::Completed;
@@ -271,280 +235,41 @@ pub async fn run_turn_loop(
     }
 
     loop {
-        // Check for steering messages
-        if let Some(receiver) = ctx.steering_receiver {
-            match receiver.try_recv() {
-                Ok(SteeringMessage::SteerStop) => {
-                    crate::agent::runloop::unified::turn::turn_helpers::display_status(
-                        ctx.renderer,
-                        "Stopped by steering signal.",
-                    )?;
-                    result = TurnLoopResult::Cancelled;
-                    break;
-                }
-                Ok(SteeringMessage::Pause) => {
-                    crate::agent::runloop::unified::turn::turn_helpers::display_status(
-                        ctx.renderer,
-                        "Paused by steering signal. Waiting for Resume...",
-                    )?;
-                    // Wait for resume
-                    loop {
-                        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-                        match receiver.try_recv() {
-                            Ok(SteeringMessage::Resume) => {
-                                crate::agent::runloop::unified::turn::turn_helpers::display_status(
-                                    ctx.renderer,
-                                    "Resumed by steering signal.",
-                                )?;
-                                break;
-                            }
-                            Ok(SteeringMessage::SteerStop) => {
-                                result = TurnLoopResult::Cancelled;
-                                break;
-                            }
-                            _ => {}
-                        }
-                    }
-                    if matches!(result, TurnLoopResult::Cancelled) {
-                        break;
-                    }
-                }
-                Ok(SteeringMessage::Resume) => {}
-                Ok(SteeringMessage::FollowUpInput(input)) => {
-                    crate::agent::runloop::unified::turn::turn_helpers::display_status(
-                        ctx.renderer,
-                        &format!("Follow-up Input: {}", input),
-                    )?;
-                    working_history.push(uni::Message::user(input));
-                }
-                Err(_) => {}
-            }
+        if handle_steering_messages(&mut ctx, &mut working_history, &mut result).await? {
+            break;
         }
 
         step_count += 1;
         ctx.telemetry.record_turn();
 
-        // Check session boundaries
-        let context_window_size = ctx
-            .provider_client
-            .effective_context_size(&ctx.config.model);
-        match ctx
-            .context_manager
-            .pre_request_check(&working_history, context_window_size)
+        if handle_pre_request_action(
+            &mut ctx,
+            &mut working_history,
+            session_end_reason,
+            &mut result,
+        )
+        .await?
         {
-            PreRequestAction::Stop(msg) => {
-                crate::agent::runloop::unified::turn::turn_helpers::display_error(
-                    ctx.renderer,
-                    "Session Limit Reached",
-                    &anyhow::anyhow!("{}", msg),
-                )?;
-                result = TurnLoopResult::Aborted; // Or completed?
-                *session_end_reason = crate::hooks::lifecycle::SessionEndReason::Error;
-                break;
-            }
-            PreRequestAction::Warn(msg) => {
-                crate::agent::runloop::unified::turn::turn_helpers::display_status(
-                    ctx.renderer,
-                    &format!("Warning: {}", msg),
-                )?;
-                let alert = format!("SYSTEM ALERT: {}", msg);
-                let duplicate_alert = working_history.last().is_some_and(|last| {
-                    last.role == uni::MessageRole::System
-                        && last.content.as_text_borrowed() == Some(alert.as_str())
-                });
-                if !duplicate_alert {
-                    working_history.push(uni::Message::system(alert));
-                }
-            }
-            PreRequestAction::Compact(msg) => {
-                crate::agent::runloop::unified::turn::turn_helpers::display_status(
-                    ctx.renderer,
-                    &msg,
-                )?;
-                let compacted = ctx
-                    .context_manager
-                    .compact_history_if_needed(
-                        &working_history,
-                        ctx.provider_client.as_ref(),
-                        &ctx.config.model,
-                    )
-                    .await?;
-                working_history = compacted;
-
-                // Re-inject team state after compaction so the model
-                // doesn't lose awareness of the team (Cozempic fix).
-                // Remove any stale snapshot first to avoid accumulation.
-                if let Some(team) = ctx.session_stats.team_state.as_ref() {
-                    let snapshot = team.prompt_snapshot();
-                    if !snapshot.is_empty() {
-                        working_history.retain(|msg| {
-                            !(msg.role == uni::MessageRole::System
-                                && msg
-                                    .content
-                                    .as_text_borrowed()
-                                    .is_some_and(|t| t.starts_with("[vtcode:team_state]")))
-                        });
-                        working_history.push(uni::Message::system(format!(
-                            "[vtcode:team_state]\n{}",
-                            snapshot
-                        )));
-                    }
-                }
-            }
-            PreRequestAction::Proceed => {}
+            break;
         }
 
-        // Proactive: In Plan mode, if the last user message signals readiness (e.g., "start implement"),
-        // trigger exit_plan_mode immediately to show the confirmation modal, bypassing LLM guesswork.
-        if ctx.session_stats.is_plan_mode()
-            && let Some(last_user_msg) = working_history
-                .iter()
-                .rev()
-                .find(|msg| msg.role == uni::MessageRole::User)
+        if maybe_handle_plan_mode_exit_trigger(
+            &mut ctx,
+            &mut working_history,
+            step_count,
+            &mut result,
+        )
+        .await?
         {
-            // Normalize to lower, strip punctuation so paths or extra symbols don't block detection
-            // Optimization: Limit to first 500 characters as trigger phrases are usually at the start/end
-            let text = last_user_msg.content.as_text();
-            let normalized = text
-                .chars()
-                .take(500)
-                .map(|c| {
-                    if c.is_alphanumeric() {
-                        c.to_ascii_lowercase()
-                    } else {
-                        ' '
-                    }
-                })
-                .collect::<String>();
-
-            let trigger_phrases = [
-                "start implement",
-                "start implementation",
-                "start implementing",
-                "implement now",
-                "begin implement",
-                "begin implementation",
-                "begin coding",
-                "proceed to implement",
-                "proceed with implementation",
-                "proceed to coding",
-                "proceed with coding",
-                "let s implement",
-                "lets implement",
-                "go ahead and implement",
-                "go ahead and code",
-                "ready to implement",
-                "start coding",
-                "start building",
-                "switch to agent mode",
-                "exit plan mode",
-                "exit plan mode and implement",
-            ];
-            let should_exit_plan = trigger_phrases
-                .iter()
-                .any(|phrase| normalized.contains(phrase));
-
-            if should_exit_plan {
-                use crate::agent::runloop::unified::tool_pipeline::run_tool_call;
-                use crate::agent::runloop::unified::turn::tool_outcomes::helpers::{
-                    EXIT_PLAN_MODE_REASON_USER_REQUESTED_IMPLEMENTATION, build_exit_plan_mode_args,
-                    build_step_exit_plan_mode_call_id,
-                };
-                use vtcode_core::llm::provider::ToolCall;
-
-                // Build a synthetic tool call for exit_plan_mode
-                let args =
-                    build_exit_plan_mode_args(EXIT_PLAN_MODE_REASON_USER_REQUESTED_IMPLEMENTATION);
-                let call = ToolCall::function(
-                    build_step_exit_plan_mode_call_id(step_count),
-                    tool_names::EXIT_PLAN_MODE.to_string(),
-                    serde_json::to_string(&args).unwrap_or_else(|_| "{}".to_string()),
-                );
-                let ctrl_c_state = ctx.ctrl_c_state;
-                let ctrl_c_notify = ctx.ctrl_c_notify;
-                let default_placeholder = ctx.default_placeholder.clone();
-                let lifecycle_hooks = ctx.lifecycle_hooks;
-                let vt_cfg = ctx.vt_cfg;
-                let mut run_ctx = ctx.as_run_loop_context();
-
-                let outcome = run_tool_call(
-                    &mut run_ctx,
-                    &call,
-                    ctrl_c_state,
-                    ctrl_c_notify,
-                    default_placeholder,
-                    lifecycle_hooks,
-                    true,
-                    vt_cfg,
-                    step_count,
-                    false,
-                )
-                .await;
-
-                match outcome {
-                    Ok(_pipe_outcome) => {
-                        // The tool pipeline handles showing the confirmation modal and
-                        // toggling plan/edit modes based on user choice. End this turn.
-                        result = TurnLoopResult::Completed;
-                        break;
-                    }
-                    Err(err) => {
-                        crate::agent::runloop::unified::turn::turn_helpers::display_error(
-                            ctx.renderer,
-                            "Failed to exit Plan Mode",
-                            &err,
-                        )?;
-                        // Fall through to normal LLM processing if proactive exit failed
-                    }
-                }
-            }
+            break;
         }
 
-        // Check if we've reached the maximum number of tool loops
-        // Note: step_count starts at 1 (incremented at loop start), so use >= for correct limit enforcement
-        if step_count >= current_max_tool_loops {
-            crate::agent::runloop::unified::turn::turn_helpers::display_status(
-                ctx.renderer,
-                &format!("Reached maximum tool loops ({})", current_max_tool_loops),
-            )?;
-
-            // Prompt user to continue with more tool loops
-            match crate::agent::runloop::unified::tool_routing::prompt_tool_loop_limit_increase(
-                ctx.handle,
-                ctx.session,
-                ctx.ctrl_c_state,
-                ctx.ctrl_c_notify,
-                current_max_tool_loops,
-            )
-            .await
-            {
-                Ok(Some(increment)) => {
-                    let previous_max_tool_loops = current_max_tool_loops;
-                    current_max_tool_loops = current_max_tool_loops.saturating_add(increment);
-                    // Update the safety validator with the new turn limit while preserving the session limit
-                    {
-                        let mut validator = ctx.safety_validator.write().await;
-                        // Get the current session limit to preserve it
-                        let current_session_limit = validator.get_session_limit();
-                        validator.set_limits(current_max_tool_loops, current_session_limit);
-                        tracing::info!(
-                            "Updated safety validator limits: turn={} (was {}), session={}",
-                            current_max_tool_loops,
-                            previous_max_tool_loops,
-                            current_session_limit
-                        );
-                    }
-                    crate::agent::runloop::unified::turn::turn_helpers::display_status(
-                        ctx.renderer,
-                        &format!("Tool loop limit increased to {}", current_max_tool_loops),
-                    )?;
-                    continue; // Continue the loop with the new limit
-                }
-                _ => {
-                    // User denied or cancelled - end the turn normally
-                    break;
-                }
-            }
+        match maybe_handle_tool_loop_limit(&mut ctx, step_count, &mut current_max_tool_loops)
+            .await?
+        {
+            ToolLoopLimitAction::Proceed => {}
+            ToolLoopLimitAction::ContinueLoop => continue,
+            ToolLoopLimitAction::BreakLoop => break,
         }
 
         // Clone validation cache arc to avoid borrow conflict

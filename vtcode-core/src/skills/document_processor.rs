@@ -24,6 +24,8 @@ use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use tracing::{debug, info, warn};
 
+use crate::utils::file_utils::ensure_dir_exists_sync;
+
 /// Document processing configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DocumentProcessorConfig {
@@ -169,7 +171,7 @@ impl DocumentProcessor {
     /// Create new document processor
     pub fn new(config: DocumentProcessorConfig) -> Result<Self> {
         let temp_dir = std::env::temp_dir().join("vtcode-document-processor");
-        std::fs::create_dir_all(&temp_dir)?;
+        ensure_dir_exists_sync(&temp_dir)?;
 
         Ok(Self { config, temp_dir })
     }

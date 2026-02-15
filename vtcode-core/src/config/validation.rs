@@ -9,6 +9,7 @@ use std::sync::OnceLock;
 
 use crate::config::FullAutoConfig;
 use crate::config::loader::VTCodeConfig;
+use crate::utils::file_utils::read_file_with_context_sync;
 use serde_json::Value as JsonValue;
 
 /// Result of a configuration validation check
@@ -82,8 +83,7 @@ fn load_models_json() -> Result<JsonValue> {
 
     for path in &paths {
         if path.exists() {
-            let content = std::fs::read_to_string(path)
-                .with_context(|| format!("Failed to read {}", path.display()))?;
+            let content = read_file_with_context_sync(path, "models database")?;
             let parsed: JsonValue = serde_json::from_str(&content)
                 .context("Failed to parse docs/models.json. Check JSON syntax.")?;
             let _ = MODELS_CACHE.set(parsed.clone());

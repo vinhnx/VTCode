@@ -12,6 +12,8 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
+use crate::utils::file_utils::{ensure_dir_exists, read_json_file, write_json_file};
+
 /// Metadata for a dotfile backup.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DotfileBackup {
@@ -97,7 +99,7 @@ impl BackupManager {
         let backup_dir = backup_dir.as_ref().to_path_buf();
 
         // Create backup directory if it doesn't exist
-        tokio::fs::create_dir_all(&backup_dir)
+        ensure_dir_exists(&backup_dir)
             .await
             .with_context(|| format!("Failed to create backup directory: {:?}", backup_dir))?;
 
@@ -200,10 +202,7 @@ impl BackupManager {
         let mut backups = self.load_backup_index().await.unwrap_or_default();
         backups.push(backup.clone());
 
-        let json = serde_json::to_string_pretty(&backups)
-            .with_context(|| "Failed to serialize backup index")?;
-
-        tokio::fs::write(&index_path, json)
+        write_json_file(&index_path, &backups)
             .await
             .with_context(|| format!("Failed to write backup index: {:?}", index_path))?;
 
@@ -218,12 +217,9 @@ impl BackupManager {
             return Ok(Vec::new());
         }
 
-        let content = tokio::fs::read_to_string(&index_path)
+        let backups: Vec<DotfileBackup> = read_json_file(&index_path)
             .await
-            .with_context(|| format!("Failed to read backup index: {:?}", index_path))?;
-
-        let backups: Vec<DotfileBackup> =
-            serde_json::from_str(&content).with_context(|| "Failed to parse backup index")?;
+            .with_context(|| format!("Failed to parse backup index: {:?}", index_path))?;
 
         Ok(backups)
     }
@@ -266,9 +262,7 @@ impl BackupManager {
             .collect();
 
         let index_path = self.backup_dir.join("backups.json");
-        let json = serde_json::to_string_pretty(&remaining)
-            .with_context(|| "Failed to serialize backup index")?;
-        tokio::fs::write(&index_path, json)
+        write_json_file(&index_path, &remaining)
             .await
             .with_context(|| "Failed to update backup index")?;
 

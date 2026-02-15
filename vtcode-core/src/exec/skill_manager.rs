@@ -12,6 +12,9 @@
 
 use crate::exec::ToolDependency;
 use crate::utils::error_messages::*;
+use crate::utils::file_utils::{
+    ensure_dir_exists, read_file_with_context, write_file_with_context,
+};
 use anyhow::{Context, Result, anyhow};
 use serde::{Deserialize, Serialize};
 use std::fmt::Write;
@@ -95,12 +98,12 @@ impl SkillManager {
     /// * `code` - The skill implementation code
     pub async fn save_skill(&self, skill: Skill) -> Result<()> {
         // Create skills directory
-        tokio::fs::create_dir_all(&self.skills_dir)
+        ensure_dir_exists(&self.skills_dir)
             .await
             .context(ERR_CREATE_SKILLS_DIR)?;
 
         let skill_dir = self.skills_dir.join(&skill.metadata.name);
-        tokio::fs::create_dir_all(&skill_dir)
+        ensure_dir_exists(&skill_dir)
             .await
             .context(ERR_CREATE_SKILL_DIR)?;
 
@@ -112,7 +115,7 @@ impl SkillManager {
         };
 
         let code_path = skill_dir.join(code_filename);
-        tokio::fs::write(&code_path, &skill.code)
+        write_file_with_context(&code_path, &skill.code, "skill code")
             .await
             .context(ERR_WRITE_SKILL_CODE)?;
 
@@ -120,14 +123,14 @@ impl SkillManager {
         let metadata_path = skill_dir.join("skill.json");
         let metadata_json =
             serde_json::to_string_pretty(&skill.metadata).context(ERR_SERIALIZE_METADATA)?;
-        tokio::fs::write(&metadata_path, metadata_json)
+        write_file_with_context(&metadata_path, &metadata_json, "skill metadata")
             .await
             .context(ERR_WRITE_SKILL_METADATA)?;
 
         // Save documentation
         let doc_path = skill_dir.join("SKILL.md");
         let documentation = Self::generate_markdown(&skill);
-        tokio::fs::write(&doc_path, documentation)
+        write_file_with_context(&doc_path, &documentation, "skill documentation")
             .await
             .context(ERR_WRITE_SKILL_DOCS)?;
 
@@ -182,13 +185,13 @@ impl SkillManager {
         };
 
         // Load code
-        let code = tokio::fs::read_to_string(&code_path)
+        let code = read_file_with_context(&code_path, "skill code")
             .await
             .context(ERR_READ_SKILL_CODE)?;
 
         // Load metadata
         let metadata_path = skill_root.join("skill.json");
-        let metadata_json = tokio::fs::read_to_string(&metadata_path)
+        let metadata_json = read_file_with_context(&metadata_path, "skill metadata")
             .await
             .context(ERR_READ_SKILL_METADATA)?;
         let metadata: SkillMetadata =
@@ -334,12 +337,12 @@ impl SkillManager {
         content.push_str("*Generated automatically. Do not edit manually.*\n");
 
         // Ensure directory exists
-        tokio::fs::create_dir_all(&self.skills_dir)
+        ensure_dir_exists(&self.skills_dir)
             .await
             .context(ERR_CREATE_SKILLS_DIR)?;
 
         let index_path = self.skills_dir.join("INDEX.md");
-        tokio::fs::write(&index_path, &content)
+        write_file_with_context(&index_path, &content, "skills index")
             .await
             .with_context(|| format!("Failed to write skills index: {}", index_path.display()))?;
 
@@ -405,7 +408,8 @@ impl SkillManager {
             let path = entry.path();
             if path.is_dir() {
                 let metadata_path = path.join("skill.json");
-                if let Ok(metadata_json) = tokio::fs::read_to_string(&metadata_path).await
+                if let Ok(metadata_json) =
+                    read_file_with_context(&metadata_path, "skill metadata").await
                     && let Ok(metadata) = serde_json::from_str::<SkillMetadata>(&metadata_json)
                 {
                     skills.push(metadata);

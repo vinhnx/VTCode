@@ -6,6 +6,7 @@ use std::sync::mpsc::{Receiver, SyncSender, sync_channel};
 use std::thread;
 
 use crate::config::constants::defaults;
+use crate::utils::file_utils::ensure_dir_exists_sync;
 
 enum LogMessage {
     Line(String),
@@ -21,7 +22,7 @@ pub struct AsyncLineWriter {
 impl AsyncLineWriter {
     pub fn new(path: PathBuf) -> Result<Self> {
         if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)
+            ensure_dir_exists_sync(parent)
                 .with_context(|| format!("Failed to create log directory: {}", parent.display()))?;
         }
 

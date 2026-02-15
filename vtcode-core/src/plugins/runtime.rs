@@ -10,6 +10,7 @@ use tokio::sync::RwLock;
 
 use super::{PluginError, PluginId, PluginManifest, PluginResult};
 use crate::config::PluginRuntimeConfig;
+use crate::utils::file_utils::read_file_with_context;
 
 /// Plugin state tracking
 #[derive(Debug, Clone, PartialEq)]
@@ -96,7 +97,7 @@ impl PluginRuntime {
             )));
         }
 
-        let manifest_content = tokio::fs::read_to_string(&manifest_path)
+        let manifest_content = read_file_with_context(&manifest_path, "plugin manifest")
             .await
             .map_err(|e| PluginError::LoadingError(format!("Failed to read manifest: {}", e)))?;
 
