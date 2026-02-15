@@ -398,7 +398,8 @@ impl GeminiProvider {
             let final_reasoning = if reasoning_segments.is_empty() {
                 None
             } else {
-                let combined_reasoning = reasoning_segments.join("\n");
+                let combined_reasoning: Vec<String> = reasoning_segments.into_iter().map(|s| s.text).collect();
+                let combined_reasoning = combined_reasoning.join("\n");
                 if combined_reasoning.trim().is_empty() {
                     None
                 } else {

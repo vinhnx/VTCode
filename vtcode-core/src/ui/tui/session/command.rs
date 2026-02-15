@@ -185,6 +185,10 @@ pub fn handle_command(session: &mut Session, command: InlineCommand) {
         InlineCommand::Shutdown => {
             request_exit(session);
         }
+        InlineCommand::SetReasoningStage(stage) => {
+            session.header_context.reasoning_stage = stage;
+            session.invalidate_header_cache();
+        }
     }
     session.needs_redraw = true;
 }

@@ -100,6 +100,11 @@ impl TagStreamSanitizer {
 
                 self.in_reasoning = true;
                 self.active_tag_pair = Some(*pair);
+
+                // Emit reasoning stage event
+                let stage = pair.0.trim_matches(|c| c == '<' || c == '>').to_string();
+                events.push(LLMStreamEvent::ReasoningStage { stage });
+
                 current_pos = start_pos + pair.0.len();
             } else {
                 // We are in a reasoning block. Look for the closing tag.
@@ -173,16 +178,20 @@ mod tests {
     fn test_sanitizer_basic() {
         let mut sanitizer = TagStreamSanitizer::new();
         let events = sanitizer.process_chunk("Hello <think>reasoning</think> world");
-        assert_eq!(events.len(), 3);
+        assert_eq!(events.len(), 4);
         match &events[0] {
             LLMStreamEvent::Token { delta } => assert_eq!(delta, "Hello "),
             _ => panic!("Expected Token"),
         }
         match &events[1] {
+            LLMStreamEvent::ReasoningStage { stage } => assert_eq!(stage, "think"),
+            _ => panic!("Expected ReasoningStage"),
+        }
+        match &events[2] {
             LLMStreamEvent::Reasoning { delta } => assert_eq!(delta, "reasoning"),
             _ => panic!("Expected Reasoning"),
         }
-        match &events[2] {
+        match &events[3] {
             LLMStreamEvent::Token { delta } => assert_eq!(delta, " world"),
             _ => panic!("Expected Token"),
         }
@@ -199,8 +208,12 @@ mod tests {
         }
 
         let e2 = sanitizer.process_chunk("nk>reason");
-        assert_eq!(e2.len(), 1);
+        assert_eq!(e2.len(), 2);
         match &e2[0] {
+            LLMStreamEvent::ReasoningStage { stage } => assert_eq!(stage, "think"),
+            _ => panic!("Expected ReasoningStage"),
+        }
+        match &e2[1] {
             LLMStreamEvent::Reasoning { delta } => assert_eq!(delta, "reason"),
             _ => panic!("Expected Reasoning"),
         }

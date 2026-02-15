@@ -15,6 +15,7 @@ use vtcode_core::exec::events::{
     ItemCompletedEvent, ItemStartedEvent, PlanDeltaEvent, PlanItem, ThreadEvent, ThreadItem,
     ThreadItemDetails,
 };
+use vtcode_core::llm::providers::ReasoningSegment;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::core::agent::steering::SteeringMessage;
 use vtcode_core::ui::tui::InlineHandle;
@@ -120,12 +121,12 @@ pub(crate) enum TurnProcessingResult {
     ToolCalls {
         tool_calls: Vec<uni::ToolCall>,
         assistant_text: String,
-        reasoning: Option<String>,
+        reasoning: Vec<ReasoningSegment>,
     },
     /// Turn resulted in a text response
     TextResponse {
         text: String,
-        reasoning: Option<String>,
+        reasoning: Vec<ReasoningSegment>,
         proposed_plan: Option<String>,
     },
     /// Turn resulted in no actionable output
@@ -275,7 +276,7 @@ impl<'a> TurnProcessingContext<'a> {
     pub fn handle_assistant_response(
         &mut self,
         text: String,
-        reasoning: Option<String>,
+        reasoning: Vec<ReasoningSegment>,
         response_streamed: bool,
     ) -> anyhow::Result<()> {
         if !response_streamed {
@@ -283,26 +284,39 @@ impl<'a> TurnProcessingContext<'a> {
             if !text.trim().is_empty() {
                 self.renderer.line(MessageStyle::Response, &text)?;
             }
-            if let Some(reasoning_text) = reasoning.as_ref()
-                && !reasoning_text.trim().is_empty()
-            {
-                let duplicates_content =
-                    !text.trim().is_empty() && reasoning_duplicates_content(reasoning_text, &text);
-                if !reasoning_text.trim().is_empty() && !duplicates_content {
-                    let cleaned_for_display =
-                        vtcode_core::llm::providers::clean_reasoning_text(reasoning_text);
-                    self.renderer
-                        .line(MessageStyle::Reasoning, &cleaned_for_display)?;
+
+            for segment in &reasoning {
+                if let Some(stage) = &segment.stage {
+                    self.handle.set_reasoning_stage(Some(stage.clone()));
+                }
+
+                let reasoning_text = &segment.text;
+                if !reasoning_text.trim().is_empty() {
+                    let duplicates_content = !text.trim().is_empty()
+                        && reasoning_duplicates_content(reasoning_text, &text);
+                    if !duplicates_content {
+                        let cleaned_for_display =
+                            vtcode_core::llm::providers::clean_reasoning_text(reasoning_text);
+                        self.renderer
+                            .line(MessageStyle::Reasoning, &cleaned_for_display)?;
+                    }
                 }
             }
+            // Clear reasoning stage after rendering
+            self.handle.set_reasoning_stage(None);
         }
 
+        let combined_reasoning = reasoning
+            .iter()
+            .map(|s| s.text.clone())
+            .collect::<Vec<_>>()
+            .join("\n");
         let msg = uni::Message::assistant(text.clone());
-        let msg_with_reasoning = if let Some(reasoning_text) = reasoning {
-            if reasoning_duplicates_content(&reasoning_text, &text) {
+        let msg_with_reasoning = if !combined_reasoning.is_empty() {
+            if reasoning_duplicates_content(&combined_reasoning, &text) {
                 msg
             } else {
-                msg.with_reasoning(Some(reasoning_text))
+                msg.with_reasoning(Some(combined_reasoning))
             }
         } else {
             msg
@@ -318,7 +332,7 @@ impl<'a> TurnProcessingContext<'a> {
     pub async fn handle_text_response(
         &mut self,
         text: String,
-        reasoning: Option<String>,
+        reasoning: Vec<ReasoningSegment>,
         proposed_plan: Option<String>,
         response_streamed: bool,
     ) -> anyhow::Result<TurnHandlerOutcome> {

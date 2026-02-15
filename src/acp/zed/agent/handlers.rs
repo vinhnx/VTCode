@@ -232,6 +232,9 @@ impl acp::Agent for ZedAgent {
                             .await?;
                         }
                     }
+                    LLMStreamEvent::ReasoningStage { .. } => {
+                        // ACP protocol doesn't currently support specific reasoning stages
+                    }
                     LLMStreamEvent::Completed { response } => {
                         if assistant_message.is_empty()
                             && let Some(content) = response.content

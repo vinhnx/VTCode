@@ -27,7 +27,9 @@ pub use crate::tools::constants::{
 };
 
 pub use reasoning::clean_reasoning_text;
-pub use reasoning::{ReasoningBuffer, extract_reasoning_trace, split_reasoning_from_text};
+pub use reasoning::{
+    ReasoningBuffer, ReasoningSegment, extract_reasoning_trace, split_reasoning_from_text,
+};
 
 pub use anthropic::AnthropicProvider;
 pub use deepseek::DeepSeekProvider;

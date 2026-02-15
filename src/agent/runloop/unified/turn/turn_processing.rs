@@ -21,6 +21,7 @@ use crate::agent::runloop::unified::ui_interaction::{
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 use vtcode_core::llm::provider::{self as uni, ParallelToolConfig};
+use vtcode_core::llm::providers::{ReasoningSegment, split_reasoning_from_text};
 use vtcode_core::prompts::upsert_harness_limits_section;
 use vtcode_core::turn_metadata;
 
@@ -569,7 +570,7 @@ pub(crate) fn process_llm_response(
             } else {
                 final_text.clone().unwrap_or_default()
             },
-            reasoning: response.reasoning.clone(),
+            reasoning: split_reasoning_from_text(response.reasoning.as_deref().unwrap_or("")).0,
         });
     }
 
@@ -578,7 +579,7 @@ pub(crate) fn process_llm_response(
     {
         return Ok(TurnProcessingResult::TextResponse {
             text,
-            reasoning: response.reasoning.clone(),
+            reasoning: split_reasoning_from_text(response.reasoning.as_deref().unwrap_or("")).0,
             proposed_plan,
         });
     }
@@ -961,7 +962,7 @@ fn inject_plan_mode_interview(
             TurnProcessingResult::ToolCalls {
                 tool_calls: vec![call],
                 assistant_text: String::new(),
-                reasoning: None,
+                reasoning: Vec::new(),
             }
         }
         TurnProcessingResult::Cancelled | TurnProcessingResult::Aborted => processing_result,

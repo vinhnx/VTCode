@@ -28,6 +28,7 @@ impl StreamAssemblyError {
 pub trait StreamTelemetry: Send + Sync {
     fn on_content_delta(&self, _delta: &str) {}
     fn on_reasoning_delta(&self, _delta: &str) {}
+    fn on_reasoning_stage(&self, _stage: &str) {}
     fn on_tool_call_delta(&self) {}
 }
 
@@ -373,7 +374,10 @@ pub fn append_text_with_reasoning(
     }
 
     for segment in segments {
-        if let Some(delta) = reasoning.push(&segment) {
+        if let Some(stage) = &segment.stage {
+            telemetry.on_reasoning_stage(stage);
+        }
+        if let Some(delta) = reasoning.push(&segment.text) {
             telemetry.on_reasoning_delta(&delta);
             deltas.push_reasoning(&delta);
         }

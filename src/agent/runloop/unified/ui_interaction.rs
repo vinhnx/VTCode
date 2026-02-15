@@ -698,6 +698,9 @@ pub(crate) async fn stream_and_render_response_with_options(
                     reasoning_emitted = true;
                 }
             }
+            Ok(LLMStreamEvent::ReasoningStage { stage }) => {
+                spinner.handle.set_reasoning_stage(Some(stage));
+            }
             Ok(LLMStreamEvent::Completed { response }) => {
                 final_response = Some(*response);
             }

@@ -33,6 +33,7 @@ pub struct ExecEventRecorder {
     event_sink: Option<EventSink>,
     active_agent_message: Option<StreamingAgentMessage>,
     active_reasoning: Option<StreamingAgentMessage>,
+    current_reasoning_stage: Option<String>,
 }
 
 impl ExecEventRecorder {
@@ -43,6 +44,7 @@ impl ExecEventRecorder {
             event_sink,
             active_agent_message: None,
             active_reasoning: None,
+            current_reasoning_stage: None,
         };
         recorder.record(ThreadEvent::ThreadStarted(ThreadStartedEvent {
             thread_id: thread_id.into(),
@@ -145,9 +147,29 @@ impl ExecEventRecorder {
             id: self.next_item_id(),
             details: ThreadItemDetails::Reasoning(ReasoningItem {
                 text: text.to_string(),
+                stage: self.current_reasoning_stage.clone(),
             }),
         };
         self.record(ThreadEvent::ItemCompleted(ItemCompletedEvent { item }));
+    }
+
+    pub fn set_reasoning_stage(&mut self, stage: &str) {
+        let stage_owned = Some(stage.to_string());
+        if self.current_reasoning_stage == stage_owned {
+            return;
+        }
+        self.current_reasoning_stage = stage_owned;
+        // If we have an active reasoning stream, update it with the new stage
+        if let Some(active) = &self.active_reasoning {
+            let item = ThreadItem {
+                id: active.id.clone(),
+                details: ThreadItemDetails::Reasoning(ReasoningItem {
+                    text: active.buffer.clone(),
+                    stage: self.current_reasoning_stage.clone(),
+                }),
+            };
+            self.record(ThreadEvent::ItemUpdated(ItemUpdatedEvent { item }));
+        }
     }
 
     pub fn reasoning_stream_update(&mut self, text: &str) -> bool {
@@ -161,6 +183,7 @@ impl ExecEventRecorder {
                 id: active.id.clone(),
                 details: ThreadItemDetails::Reasoning(ReasoningItem {
                     text: active.buffer.clone(),
+                    stage: self.current_reasoning_stage.clone(),
                 }),
             };
             self.record(ThreadEvent::ItemUpdated(ItemUpdatedEvent { item }));
@@ -172,6 +195,7 @@ impl ExecEventRecorder {
                 id: id.clone(),
                 details: ThreadItemDetails::Reasoning(ReasoningItem {
                     text: text_owned.clone(),
+                    stage: self.current_reasoning_stage.clone(),
                 }),
             };
             self.record(ThreadEvent::ItemStarted(ItemStartedEvent { item }));
@@ -189,6 +213,7 @@ impl ExecEventRecorder {
                 id: active.id,
                 details: ThreadItemDetails::Reasoning(ReasoningItem {
                     text: active.buffer,
+                    stage: self.current_reasoning_stage.clone(),
                 }),
             };
             self.record(ThreadEvent::ItemCompleted(ItemCompletedEvent { item }));
@@ -272,6 +297,7 @@ impl ExecEventRecorder {
                 id: active.id,
                 details: ThreadItemDetails::Reasoning(ReasoningItem {
                     text: active.buffer,
+                    stage: self.current_reasoning_stage.clone(),
                 }),
             };
             self.record(ThreadEvent::ItemCompleted(ItemCompletedEvent { item }));

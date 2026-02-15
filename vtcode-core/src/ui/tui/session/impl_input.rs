@@ -182,6 +182,10 @@ impl Session {
             InlineCommand::Shutdown => {
                 self.request_exit();
             }
+            InlineCommand::SetReasoningStage(stage) => {
+                self.header_context.reasoning_stage = stage;
+                self.invalidate_header_cache();
+            }
         }
         self.needs_redraw = true;
     }
