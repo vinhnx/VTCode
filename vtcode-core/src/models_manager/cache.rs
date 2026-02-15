@@ -8,7 +8,9 @@ use serde::{Deserialize, Serialize};
 use std::io::{self, ErrorKind};
 use std::path::Path;
 use std::time::Duration;
-use tokio::fs;
+use vtcode_commons::fs::{
+    read_json_file, read_json_file_sync, write_json_file, write_json_file_sync,
+};
 
 use super::model_presets::ModelInfo;
 
@@ -67,48 +69,36 @@ impl ModelsCache {
 
 /// Read and deserialize the cache file if it exists.
 pub async fn load_cache(path: &Path) -> io::Result<Option<ModelsCache>> {
-    match fs::read(path).await {
-        Ok(contents) => {
-            let cache = serde_json::from_slice(&contents)
-                .map_err(|err| io::Error::new(ErrorKind::InvalidData, err.to_string()))?;
-            Ok(Some(cache))
-        }
-        Err(err) if err.kind() == ErrorKind::NotFound => Ok(None),
-        Err(err) => Err(err),
+    match read_json_file(path).await {
+        Ok(cache) => Ok(Some(cache)),
+        Err(err) => match err.downcast_ref::<io::Error>() {
+            Some(io_err) if io_err.kind() == ErrorKind::NotFound => Ok(None),
+            _ => Err(io::Error::other(err.to_string())),
+        },
     }
 }
 
 /// Persist the cache contents to disk, creating parent directories as needed.
 pub async fn save_cache(path: &Path, cache: &ModelsCache) -> io::Result<()> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).await?;
-    }
-    let json = serde_json::to_vec_pretty(cache)
-        .map_err(|err| io::Error::new(ErrorKind::InvalidData, err.to_string()))?;
-    fs::write(path, json).await
+    write_json_file(path, cache)
+        .await
+        .map_err(|err| io::Error::other(err.to_string()))
 }
 
 /// Load cache synchronously (for initialization)
 pub fn load_cache_sync(path: &Path) -> io::Result<Option<ModelsCache>> {
-    match std::fs::read(path) {
-        Ok(contents) => {
-            let cache = serde_json::from_slice(&contents)
-                .map_err(|err| io::Error::new(ErrorKind::InvalidData, err.to_string()))?;
-            Ok(Some(cache))
-        }
-        Err(err) if err.kind() == ErrorKind::NotFound => Ok(None),
-        Err(err) => Err(err),
+    match read_json_file_sync(path) {
+        Ok(cache) => Ok(Some(cache)),
+        Err(err) => match err.downcast_ref::<io::Error>() {
+            Some(io_err) if io_err.kind() == ErrorKind::NotFound => Ok(None),
+            _ => Err(io::Error::other(err.to_string())),
+        },
     }
 }
 
 /// Save cache synchronously
 pub fn save_cache_sync(path: &Path, cache: &ModelsCache) -> io::Result<()> {
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-    let json = serde_json::to_vec_pretty(cache)
-        .map_err(|err| io::Error::new(ErrorKind::InvalidData, err.to_string()))?;
-    std::fs::write(path, json)
+    write_json_file_sync(path, cache).map_err(|err| io::Error::other(err.to_string()))
 }
 
 #[cfg(test)]

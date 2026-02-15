@@ -3,6 +3,7 @@
 //! Writes to ~/.vtcode/audit/permissions-{date}.log in JSON format
 
 use crate::utils::error_messages::ERR_CREATE_AUDIT_DIR;
+use crate::utils::file_utils::ensure_dir_exists_sync;
 use anyhow::{Context, Result};
 use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
@@ -79,7 +80,7 @@ impl PermissionAuditLog {
     /// Create or open the audit log for today
     pub fn new(audit_dir: PathBuf) -> Result<Self> {
         // Create audit directory if needed
-        std::fs::create_dir_all(&audit_dir).context(ERR_CREATE_AUDIT_DIR)?;
+        ensure_dir_exists_sync(&audit_dir).context(ERR_CREATE_AUDIT_DIR)?;
 
         // Use today's date in filename
         let date = Local::now().format("%Y-%m-%d");
