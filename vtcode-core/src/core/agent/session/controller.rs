@@ -5,7 +5,7 @@ use crate::core::agent::session::AgentSessionState;
 use crate::exec::events::ThreadEvent; // Temporary compatibility
 use crate::llm::provider::{LLMProvider, LLMRequest, LLMStreamEvent, Usage};
 use anyhow::Result;
-use parking_lot::Mutex;
+use std::sync::Mutex;
 use std::sync::Arc;
 
 /// A sink for unified agent events.
@@ -26,6 +26,7 @@ pub struct AgentSessionController {
 use futures::StreamExt;
 
 impl AgentSessionController {
+    /// Create a new controller with the given state
     pub fn new(
         state: AgentSessionState,
         event_sink: Option<AgentEventSink>,
@@ -38,13 +39,23 @@ impl AgentSessionController {
         }
     }
 
+    /// Set an event handler for this controller
+    pub fn set_event_handler(&mut self, sink: AgentEventSink) {
+        self.event_sink = Some(sink);
+    }
+
+    /// Set a legacy thread event handler for this controller
+    pub fn set_thread_event_handler(&mut self, sink: crate::core::agent::events::EventSink) {
+        self.thread_event_sink = Some(sink);
+    }
+
     /// Emit a unified agent event and handle legacy compatibility.
     pub fn emit(&mut self, event: AgentEvent) {
         // Emit legacy events first for compatibility
         self.emit_legacy(&event);
 
         if let Some(sink) = &self.event_sink {
-            let mut callback = sink.lock();
+            let mut callback = sink.lock().expect("mutex poisoned");
             callback(event);
         }
     }
@@ -84,21 +95,64 @@ impl AgentSessionController {
         &mut self,
         provider: &mut Box<dyn LLMProvider>,
         request: LLMRequest,
-    ) -> Result<()> {
+        steering: &mut Option<tokio::sync::mpsc::UnboundedReceiver<crate::core::agent::steering::SteeringMessage>>,
+        timeout: Option<std::time::Duration>,
+    ) -> Result<(crate::llm::provider::LLMResponse, String, Option<String>)> {
         let turn_id = format!("turn_{}", self.state.stats.turns_executed);
         self.emit(AgentEvent::TurnStarted {
             id: turn_id.clone(),
         });
 
-        let start_time = std::time::Instant::now();
-        let mut stream = provider.stream(request).await?;
+        let mut start_time = std::time::Instant::now();
+        let mut stream = if let Some(t) = timeout {
+            match tokio::time::timeout(t, provider.stream(request)).await {
+                Ok(res) => res?,
+                Err(_) => return Err(anyhow::anyhow!("Stream request timed out after {:?}", t)),
+            }
+        } else {
+            provider.stream(request).await?
+        };
 
         let mut full_text = String::new();
         let mut full_reasoning = String::new();
         let mut finish_reason = String::from("stop");
         let mut final_usage = Usage::default();
+        let mut aggregated_tool_calls: Option<Vec<crate::llm::provider::ToolCall>> = None;
 
         while let Some(event_result) = stream.next().await {
+            // Check steering
+            if let Some(rx) = steering {
+                match rx.try_recv() {
+                    Ok(crate::core::agent::steering::SteeringMessage::Stop) => {
+                        finish_reason = "cancelled".to_string();
+                        break;
+                    }
+                    Ok(crate::core::agent::steering::SteeringMessage::Pause) => {
+                        self.emit(AgentEvent::ThinkingStage { stage: "Paused".to_string() });
+                        // Wait for resume
+                        loop {
+                            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+                            match rx.try_recv() {
+                                Ok(crate::core::agent::steering::SteeringMessage::Resume) => break,
+                                Ok(crate::core::agent::steering::SteeringMessage::Stop) => {
+                                    finish_reason = "cancelled".to_string();
+                                    break;
+                                }
+                                _ => {}
+                            }
+                        }
+                        if finish_reason == "cancelled" { break; }
+                        self.emit(AgentEvent::ThinkingStage { stage: "Resumed".to_string() });
+                    }
+                    Ok(crate::core::agent::steering::SteeringMessage::InjectInput(input)) => {
+                        // For now, history injection happens after the turn in most VTCode logic
+                        // but we could support it here if needed.
+                        self.state.add_user_message(input);
+                    }
+                    _ => {}
+                }
+            }
+
             match event_result? {
                 LLMStreamEvent::Token { delta } => {
                     full_text.push_str(&delta);
@@ -121,6 +175,7 @@ impl AgentSessionController {
                         _ => "unknown".to_string(),
                     };
                     final_usage = response.usage.clone().unwrap_or_default();
+                    aggregated_tool_calls = response.tool_calls.clone();
 
                     // Handle tool calls in the response
                     if let Some(tool_calls) = &response.tool_calls {
@@ -148,17 +203,61 @@ impl AgentSessionController {
         self.state.record_turn(&start_time, &mut turn_recorded);
 
         // Update stats with final usage
-        self.state.stats.merge_usage(final_usage.clone());
+        if final_usage.prompt_tokens > 0 || final_usage.completion_tokens > 0 {
+            self.state.stats.merge_usage(final_usage.clone());
+        }
+
+        // Create and push assistant message
+        let mut assistant_msg = crate::llm::provider::Message::assistant(full_text.clone());
+        if !full_reasoning.is_empty() {
+            assistant_msg = assistant_msg.with_reasoning(Some(full_reasoning.clone()));
+        }
+        
+        // Handle tool calls in the response summary
+        let mut tool_calls = None;
+        if let Some(calls) = aggregated_tool_calls.clone() {
+            assistant_msg = assistant_msg.with_tool_calls(calls.clone());
+            tool_calls = Some(calls);
+        }
+        
+        self.state.messages.push(assistant_msg.clone());
+        
+        // Handle Gemini content conversion if needed (legacy)
+        let parts = vec![crate::gemini::Part::Text {
+            text: full_text.clone(),
+            thought_signature: None,
+        }];
+        self.state.conversation.push(crate::gemini::Content {
+            role: "model".to_string(),
+            parts,
+        });
+        self.state.last_processed_message_idx = self.state.conversation.len();
 
         self.emit(AgentEvent::TurnCompleted {
-            finish_reason,
-            usage: vtcode_exec_events::Usage {
+            finish_reason: finish_reason.clone(),
+            usage: crate::exec::events::Usage {
                 input_tokens: final_usage.prompt_tokens as u64,
                 output_tokens: final_usage.completion_tokens as u64,
                 cached_input_tokens: final_usage.cached_prompt_tokens.unwrap_or(0) as u64,
             },
         });
 
-        Ok(())
+        Ok((
+            crate::llm::provider::LLMResponse {
+                content: Some(full_text.clone()),
+                tool_calls: tool_calls.clone(),
+                finish_reason: if finish_reason == "tool_calls" { 
+                    crate::llm::provider::FinishReason::ToolCalls 
+                } else if finish_reason == "cancelled" {
+                    crate::llm::provider::FinishReason::Error("Cancelled".to_string())
+                } else {
+                    crate::llm::provider::FinishReason::Stop
+                },
+                usage: Some(final_usage),
+                ..Default::default()
+            },
+            full_text,
+            if full_reasoning.is_empty() { None } else { Some(full_reasoning) }
+        ))
     }
 }

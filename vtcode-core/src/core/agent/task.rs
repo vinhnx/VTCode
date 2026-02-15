@@ -54,6 +54,9 @@ pub enum TaskOutcome {
     },
     LoopDetected,
     Cancelled,
+    Failed {
+        reason: String,
+    },
     Unknown,
 }
 
@@ -82,6 +85,7 @@ impl TaskOutcome {
             ),
             Self::LoopDetected => "Stopped due to infinite loop detection".into(),
             Self::Cancelled => "Task cancelled by user".into(),
+            Self::Failed { reason } => format!("Task failed: {}", reason),
             Self::Unknown => "Task outcome could not be determined".into(),
         }
     }
@@ -94,6 +98,7 @@ impl TaskOutcome {
             Self::ToolLoopLimitReached { .. } => "tool_loop_limit_reached",
             Self::LoopDetected => "loop_detected",
             Self::Cancelled => "cancelled",
+            Self::Failed { .. } => "failed",
             Self::Unknown => "unknown",
         }
     }

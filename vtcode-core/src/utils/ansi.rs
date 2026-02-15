@@ -399,6 +399,14 @@ impl AnsiRenderer {
         Ok(())
     }
 
+    pub fn render_token_delta(&mut self, delta: &str) -> Result<()> {
+        self.inline_with_style(MessageStyle::Response, delta)
+    }
+
+    pub fn render_reasoning_delta(&mut self, delta: &str) -> Result<()> {
+        self.inline_with_style(MessageStyle::Reasoning, delta)
+    }
+
     pub fn stream_markdown_response(
         &mut self,
         text: &str,

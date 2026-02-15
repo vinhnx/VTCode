@@ -15,9 +15,6 @@ use crate::agent::runloop::unified::turn::guards::{
     handle_turn_balancer, validate_tool_args_security,
 };
 use crate::agent::runloop::unified::turn::tool_outcomes::ToolOutcomeContext;
-use crate::agent::runloop::unified::ui_interaction::{
-    StreamSpinnerOptions, stream_and_render_response_with_options,
-};
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 use vtcode_core::llm::provider::{self as uni, ParallelToolConfig};
@@ -27,6 +24,15 @@ use vtcode_core::turn_metadata;
 
 use vtcode_core::utils::ansi::AnsiRenderer;
 use vtcode_core::utils::ansi::MessageStyle;
+use std::sync::Mutex;
+use std::sync::Arc;
+
+struct UnsafeSendContext {
+    renderer: usize,
+    handle: usize,
+}
+unsafe impl Send for UnsafeSendContext {}
+unsafe impl Sync for UnsafeSendContext {}
 
 fn is_retryable_llm_error(message: &str) -> bool {
     let msg = message.to_ascii_lowercase();
@@ -53,12 +59,12 @@ pub(crate) async fn execute_llm_request(
     _max_tokens_opt: Option<u32>,
     parallel_cfg_opt: Option<Box<ParallelToolConfig>>,
 ) -> Result<(uni::LLMResponse, bool)> {
-    let provider_client = ctx.provider_client.as_ref();
+    let provider_name = ctx.provider_client.name().to_string();
     // Context trim and compaction has been removed - no pruning or enforcement needed
     // HP-1: Eliminate unnecessary clone - work directly on working_history
 
     let plan_mode = ctx.session_stats.is_plan_mode();
-    let context_window_size = provider_client.effective_context_size(active_model);
+    let context_window_size = ctx.provider_client.effective_context_size(active_model);
 
     // Get active agent info for system prompt injection
     let active_agent_name = ctx.session_stats.active_agent();
@@ -89,7 +95,7 @@ pub(crate) async fn execute_llm_request(
     );
 
     // HP-6: Cache provider capabilities to avoid repeated trait method calls (2-3 calls → 1 per turn)
-    let capabilities = uni::get_cached_capabilities(provider_client, active_model);
+    let capabilities = uni::get_cached_capabilities(&**ctx.provider_client, active_model);
 
     let use_streaming = capabilities.streaming;
     let reasoning_effort = ctx.vt_cfg.as_ref().and_then(|cfg| {
@@ -99,9 +105,8 @@ pub(crate) async fn execute_llm_request(
             None
         }
     });
-    let provider_name = provider_client.name();
     let temperature =
-        if reasoning_effort.is_some() && matches!(provider_name, "anthropic" | "minimax") {
+        if reasoning_effort.is_some() && matches!(provider_name.as_str(), "anthropic" | "minimax") {
             None
         } else {
             Some(0.7)
@@ -151,7 +156,7 @@ pub(crate) async fn execute_llm_request(
     let action_suggestion = extract_action_from_messages(ctx.working_history);
 
     // Validate request once before entering loop
-    if let Err(err) = provider_client.validate_request(&request) {
+    if let Err(err) = ctx.provider_client.as_ref().validate_request(&request) {
         return Err(anyhow::Error::new(err));
     }
 
@@ -223,28 +228,59 @@ pub(crate) async fn execute_llm_request(
 
         let step_result = if use_streaming {
             // Defer spinner finish if tools are available - keeps loading indicator active
-            let spinner_options = StreamSpinnerOptions {
-                defer_finish: has_tools,
-                strip_proposed_plan_blocks: ctx.session_stats.is_plan_mode(),
+            
+            let state = ::vtcode_core::core::agent::session::AgentSessionState::new(
+                "chat_session".to_string(),
+                100, // Default max turns
+                20,  // Default max tool loops
+                100000, // Default max tokens
+            );
+            
+            let mut controller = ::vtcode_core::core::agent::session::controller::AgentSessionController::new(state, None, None);
+            
+            // Bridge events to renderer
+            // Use a Send-safe pointer wrapper since we're using unsafe anyway
+            let send_ctx = UnsafeSendContext {
+                renderer: ctx.renderer as *mut ::vtcode_core::utils::ansi::AnsiRenderer as usize,
+                handle: ctx.handle as *const ::vtcode_core::ui::tui::InlineHandle as *mut ::vtcode_core::ui::tui::InlineHandle as usize,
             };
-            let stream_result = stream_and_render_response_with_options(
-                provider_client,
+            
+            let event_sink = Arc::new(Mutex::new(Box::new(move |event: ::vtcode_core::core::agent::events::AgentEvent| {
+                unsafe {
+                    use ::vtcode_core::core::agent::events::AgentEvent;
+                    match event {
+                        AgentEvent::OutputDelta { delta } => {
+                            let r: &mut ::vtcode_core::utils::ansi::AnsiRenderer = &mut *(send_ctx.renderer as *mut ::vtcode_core::utils::ansi::AnsiRenderer);
+                            let _ = r.render_token_delta(&delta);
+                        }
+                        AgentEvent::ThinkingDelta { delta } => {
+                            let r: &mut ::vtcode_core::utils::ansi::AnsiRenderer = &mut *(send_ctx.renderer as *mut ::vtcode_core::utils::ansi::AnsiRenderer);
+                            let _ = r.render_reasoning_delta(&delta);
+                        }
+                        AgentEvent::ThinkingStage { stage } => {
+                            let h: &mut ::vtcode_core::ui::tui::InlineHandle = &mut *(send_ctx.handle as *mut ::vtcode_core::ui::tui::InlineHandle);
+                            h.set_input_status(Some(stage), None);
+                        }
+                        _ => {}
+                    }
+                }
+            }) as Box<dyn FnMut(::vtcode_core::core::agent::events::AgentEvent) + Send>));
+            
+            controller.set_event_handler(event_sink);
+            
+            let mut steering = None;
+            let res: Result<(uni::LLMResponse, String, Option<String>)> = controller.run_turn(
+                ctx.provider_client,
                 request.clone(),
-                &_spinner,
-                ctx.renderer,
-                ctx.ctrl_c_state,
-                ctx.ctrl_c_notify,
-                spinner_options,
-            )
-            .await;
-
-            match stream_result {
-                Ok((response, emitted)) => Ok((response, emitted)),
-                Err(ref err) => Err(anyhow::anyhow!(err.to_string())),
+                &mut steering,
+                Some(std::time::Duration::from_secs(60)),
+            ).await;
+            
+            match res {
+                Ok((response, _content, _reasoning)) => Ok((response, true)),
+                Err(err) => Err(anyhow::anyhow!(err.to_string())),
             }
         } else {
-            let provider_name = provider_client.name().to_string();
-
             if ctx.ctrl_c_state.is_cancel_requested() || ctx.ctrl_c_state.is_exit_requested() {
                 Err(anyhow::Error::new(uni::LLMError::Provider {
                     message: vtcode_core::llm::error_display::format_llm_error(
@@ -254,20 +290,15 @@ pub(crate) async fn execute_llm_request(
                     metadata: None,
                 }))
             } else {
-                let generate_future = provider_client.generate(request.clone());
+                let generate_future = ctx.provider_client.generate(request.clone());
                 tokio::pin!(generate_future);
                 let cancel_notifier = ctx.ctrl_c_notify.notified();
                 tokio::pin!(cancel_notifier);
-
+                
                 let outcome = tokio::select! {
-                    res = &mut generate_future => {
-                        match res {
-                            Ok(resp) => Ok((resp, false)),
-                            Err(err) => Err(anyhow::Error::new(err))
-                        }
-                    }
+                    res = &mut generate_future => res.map_err(anyhow::Error::from),
                     _ = &mut cancel_notifier => {
-                        Err(anyhow::Error::new(uni::LLMError::Provider {
+                        Err(anyhow::Error::from(uni::LLMError::Provider {
                             message: vtcode_core::llm::error_display::format_llm_error(
                                 &provider_name,
                                 "Interrupted by user",
@@ -276,7 +307,11 @@ pub(crate) async fn execute_llm_request(
                         }))
                     }
                 };
-                outcome
+                
+                match outcome {
+                    Ok(response) => Ok((response, false)),
+                    Err(err) => Err(err),
+                }
             }
         };
 

@@ -69,8 +69,9 @@ impl Usage {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum FinishReason {
+    #[default]
     Stop,
     Length,
     ToolCalls,
@@ -187,7 +188,7 @@ impl ToolCall {
 }
 
 /// Universal LLM response structure
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct LLMResponse {
     /// The response content text
     pub content: Option<String>,

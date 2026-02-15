@@ -309,15 +309,21 @@ impl AgentRunner {
                     ..Default::default()
                 };
 
-                let resp_summary = self
-                    .collect_provider_response(
-                        &request,
-                        &mut event_recorder,
-                        &agent_prefix,
-                        &mut controller.state.warnings,
-                        turn,
+                let mut steering_captured = self.steering_receiver.lock().take();
+
+                let (response, _content, _reasoning) = controller
+                    .run_turn(
+                        &mut self.provider_client,
+                        request,
+                        &mut steering_captured,
+                        Some(std::time::Duration::from_secs(60)), // Standard timeout
                     )
                     .await?;
+                
+                // Put steering back for next turn
+                if let Some(rx) = steering_captured {
+                    *self.steering_receiver.lock() = Some(rx);
+                }
 
                 self.runner_println(format_args!(
                     "{} {} {} received response, processing...",
@@ -326,103 +332,51 @@ impl AgentRunner {
                     style("(RECV)").green().bold()
                 ));
 
-                if !resp_summary.reasoning_recorded
-                    && let Some(reasoning) = resp_summary.reasoning.as_ref()
-                {
+                if let Some(reasoning) = response.reasoning.as_ref() {
                     event_recorder.reasoning(reasoning);
                 }
 
                 self.warn_on_empty_response(
                     &agent_prefix,
-                    &resp_summary.content,
-                    resp_summary
-                        .response
-                        .tool_calls
-                        .as_ref()
-                        .is_some_and(|tc| !tc.is_empty()),
+                    response.content.as_deref().unwrap_or(""),
+                    response.tool_calls.as_ref().is_some_and(|tc| !tc.is_empty()),
                 );
 
-                if !resp_summary.content.trim().is_empty() && !resp_summary.agent_message_streamed {
-                    event_recorder.agent_message(&resp_summary.content);
+                if !response.content_text().trim().is_empty() {
+                    event_recorder.agent_message(&response.content_string());
                     Self::print_compact_response(
                         &self.agent_type,
-                        &resp_summary.content,
+                        &response.content_string(),
                         self.quiet,
                     );
                     self.runner_println(format_args!(
                         "{} {} {}",
                         agent_prefix,
                         style("(ASSISTANT)").green().bold(),
-                        resp_summary.content.trim()
+                        response.content_text().trim()
                     ));
                 }
 
-                if self.handle_loop_detection(
-                    &resp_summary.content,
-                    &agent_prefix,
-                    &mut controller.state,
-                    &mut event_recorder,
-                    &turn_started_at,
-                    &mut turn_recorded,
-                ) {
-                    break;
-                }
-
-                let mut effective_tool_calls = resp_summary.response.tool_calls.clone();
-
-                if effective_tool_calls
-                    .as_ref()
-                    .is_none_or(|calls| calls.is_empty())
-                    && let Some(args_value) = detect_textual_run_pty_cmd(&resp_summary.content)
+                let mut effective_tool_calls = response.tool_calls.clone();
+                
+                // HP-4: Detect textual commands in empty/near-empty responses if no structured tool calls
+                if effective_tool_calls.is_none()
+                    && response.content_text().len() < 150
+                    && let Some(args_value) = detect_textual_run_pty_cmd(response.content_text())
                 {
-                    let call_id =
-                        format!("textual_call_{}_{}", turn, controller.state.messages.len());
-                    effective_tool_calls = Some(vec![ToolCall::function(
-                        call_id,
-                        tools::RUN_PTY_CMD.to_owned(),
-                        serde_json::to_string(&args_value)?,
-                    )]);
+                    let tc = ToolCall::function(
+                        format!("call_text_{}", turn), 
+                        "run_pty_command".to_string(), 
+                        args_value.to_string()
+                    );
+                    effective_tool_calls = Some(vec![tc]);
                 }
 
                 let is_gemini = matches!(provider_kind, ModelProvider::Gemini);
 
-                // Build assistant message
-                let assistant_msg = if let Some(ref tc) = effective_tool_calls {
-                    Message::assistant_with_tools(resp_summary.content.clone(), tc.clone())
-                } else {
-                    Message::assistant(resp_summary.content.clone())
-                }
-                .with_reasoning(resp_summary.reasoning.clone());
-
-                controller.state.messages.push(assistant_msg.clone());
-
-                // Legacy conversation sync for Gemini
-                if is_gemini {
-                    controller.state.conversation.push(Content {
-                        role: ROLE_MODEL.into(),
-                        parts: vec![Part::Text {
-                            text: resp_summary.content.clone(),
-                            thought_signature: None,
-                        }],
-                    });
-                    controller.state.last_processed_message_idx =
-                        controller.state.conversation.len();
-                }
-
-                if let Some(tool_calls) = effective_tool_calls.filter(|tc| !tc.is_empty()) {
-                    self.handle_tool_calls(
-                        tool_calls,
-                        &mut controller.state,
-                        &mut event_recorder,
-                        &agent_prefix,
-                        is_gemini,
-                    )
-                    .await?;
-                }
-
-                if !controller.state.is_completed && !resp_summary.content.is_empty() {
-                    if check_for_response_loop(&resp_summary.content, &mut controller.state) {
-                        self.runner_println(format_args!(
+                if !controller.state.is_completed && !response.content_text().is_empty() {
+                    if check_for_response_loop(response.content_text(), &mut controller.state) {
+                         self.runner_println(format_args!(
                             "[{}] {}",
                             self.agent_type,
                             style(
@@ -431,11 +385,15 @@ impl AgentRunner {
                             .red()
                             .bold()
                         ));
+                        controller.state.outcome = TaskOutcome::LoopDetected;
+                        controller
+                            .state
+                            .record_turn(&turn_started_at, &mut turn_recorded);
                         break;
                     }
 
-                    if check_completion_indicators(&resp_summary.content) {
-                        self.runner_println(format_args!(
+                    if check_completion_indicators(response.content_text()) {
+                         self.runner_println(format_args!(
                             "[{}] {}",
                             self.agent_type,
                             style("Completion indicator detected.").green().bold()
@@ -446,10 +404,19 @@ impl AgentRunner {
                     }
                 }
 
-                let had_tool_call = assistant_msg
-                    .tool_calls
-                    .as_ref()
-                    .is_some_and(|tc| !tc.is_empty());
+                if let Some(tool_calls) = effective_tool_calls.as_ref().filter(|tc| !tc.is_empty()).cloned() {
+                    self.handle_tool_calls(
+                        tool_calls,
+                        &mut controller.state,
+                        &mut event_recorder,
+                        &agent_prefix,
+                        is_gemini,
+                    )
+                    .await?;
+                }
+
+                let had_tool_call = response.tool_calls.as_ref().is_some_and(|tc| !tc.is_empty())
+                    || (effective_tool_calls.as_ref().is_some() && effective_tool_calls.as_ref().unwrap().iter().any(|tc| tc.function.as_ref().map(|f| f.name.as_str()) == Some("run_pty_command")));
                 if had_tool_call {
                     let loops = controller.state.register_tool_loop();
                     if loops >= controller.state.constraints.max_tool_loops {

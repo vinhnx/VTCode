@@ -1,6 +1,7 @@
 //! Event recording utilities for the agent runner.
 
 pub mod unified;
+pub use unified::AgentEvent;
 
 use crate::exec::events::{
     AgentMessageItem, CommandExecutionItem, CommandExecutionStatus, ErrorItem, FileChangeItem,

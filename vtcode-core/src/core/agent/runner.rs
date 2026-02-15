@@ -97,7 +97,7 @@ pub struct AgentRunner {
     /// Tracks the latest reasoning stage name for the current turn
     last_reasoning_stage: parking_lot::Mutex<Option<String>>,
     /// Receiver for steering messages (e.g., stop, pause)
-    steering_receiver: Option<Mutex<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>>,
+    steering_receiver: parking_lot::Mutex<Option<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>>,
 }
 
 impl AgentRunner {
@@ -176,14 +176,15 @@ impl AgentRunner {
             streaming_failures: parking_lot::Mutex::new(0),
             streaming_last_failure: parking_lot::Mutex::new(None),
             last_reasoning_stage: parking_lot::Mutex::new(None),
-            steering_receiver: steering_receiver.map(Mutex::new),
+            steering_receiver: parking_lot::Mutex::new(steering_receiver),
         })
     }
 
     /// Check for pending steering messages
     pub fn check_steering(&self) -> Option<SteeringMessage> {
-        if let Some(receiver_mutex) = &self.steering_receiver {
-            match receiver_mutex.lock().try_recv() {
+        let mut guard = self.steering_receiver.lock();
+        if let Some(rx) = guard.as_mut() {
+            match rx.try_recv() {
                 Ok(msg) => Some(msg),
                 Err(_) => None,
             }
