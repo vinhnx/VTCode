@@ -143,6 +143,7 @@ impl ModelId {
             | ModelId::OpenRouterStepfunStep35FlashFree
             | ModelId::OpenRouterMoonshotaiKimiK20905
             | ModelId::OpenRouterMoonshotaiKimiK2Thinking
+            | ModelId::OpenRouterMoonshotaiKimiK25
             | ModelId::OpenRouterZaiGlm5 => {
                 // Fallback to a default value for OpenRouter models without metadata
                 "openrouter-model"
@@ -270,6 +271,7 @@ impl ModelId {
             | ModelId::OpenRouterStepfunStep35FlashFree
             | ModelId::OpenRouterMoonshotaiKimiK20905
             | ModelId::OpenRouterMoonshotaiKimiK2Thinking
+            | ModelId::OpenRouterMoonshotaiKimiK25
             | ModelId::OpenRouterZaiGlm5 => Provider::OpenRouter,
         }
     }

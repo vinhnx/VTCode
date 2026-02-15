@@ -308,6 +308,7 @@ impl ModelId {
             | ModelId::OpenRouterStepfunStep35FlashFree
             | ModelId::OpenRouterMoonshotaiKimiK20905
             | ModelId::OpenRouterMoonshotaiKimiK2Thinking
+            | ModelId::OpenRouterMoonshotaiKimiK25
             | ModelId::OpenRouterZaiGlm5 => unreachable!(),
         }
     }

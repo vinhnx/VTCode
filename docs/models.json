@@ -532,6 +532,26 @@
           "structured_output": true,
           "reasoning_effort": true
         }
+      },
+      "moonshotai/Kimi-K2.5:novita": {
+        "id": "moonshotai/Kimi-K2.5:novita",
+        "name": "Kimi K2.5 (Novita)",
+        "description": "Kimi K2.5 is Moonshot AI's advanced multimodal language model with superior long-context processing up to 256K tokens. It features enhanced reasoning, coding, and agentic capabilities with visual perception.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 256000,
+        "capabilities": {
+          "structured_output": true
+        }
       }
     }
   },
@@ -2663,6 +2683,39 @@
           "generation": "GLM-5",
           "doc_comment": "GLM-5 - Z.AI GLM-5 flagship foundation model via OpenRouter"
         }
+      },
+      "moonshotai/kimi-k2.5": {
+        "id": "moonshotai/kimi-k2.5",
+        "name": "MoonshotAI: Kimi K2.5",
+        "description": "Kimi K2.5 is Moonshot AI's advanced multimodal language model with superior long-context processing up to 256K tokens. It features enhanced reasoning, coding, and agentic capabilities with visual perception.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 256000,
+        "max_output_tokens": 8192,
+        "cost": {
+          "input": 1.5e-06,
+          "output": 6e-06
+        },
+        "vtcode": {
+          "variant": "OpenRouterMoonshotaiKimiK25",
+          "constant": "MOONSHOTAI_KIMI_K2_5",
+          "vendor": "moonshotai",
+          "display": "Kimi K2.5",
+          "description": "MoonshotAI Kimi K2.5 model via OpenRouter",
+          "efficient": false,
+          "top_tier": true,
+          "generation": "K2.5",
+          "doc_comment": "Kimi K2.5 - MoonshotAI Kimi K2.5 multimodal model with long-context and reasoning capabilities via OpenRouter"
+        }
       }
     },
     "default_model": "x-ai/grok-code-fast-1"
@@ -2828,6 +2881,23 @@
           ]
         },
         "context": 1000000
+      },
+      "kimi-k2.5:cloud": {
+        "id": "kimi-k2.5:cloud",
+        "name": "Kimi K2.5 (cloud)",
+        "description": "Kimi K2.5 is Moonshot AI's advanced multimodal language model with superior long-context processing up to 256K tokens. It features enhanced reasoning, coding, and agentic capabilities with visual perception.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 256000
       }
     }
   },

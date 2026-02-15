@@ -260,4 +260,6 @@ pub enum ModelId {
     OpenRouterMoonshotaiKimiK20905,
     /// MoonshotAI: Kimi K2 Thinking - MoonshotAI reasoning-tier Kimi K2 release optimized for long-horizon agents
     OpenRouterMoonshotaiKimiK2Thinking,
+    /// MoonshotAI: Kimi K2.5 - MoonshotAI Kimi K2.5 multimodal model with long-context and reasoning capabilities via OpenRouter
+    OpenRouterMoonshotaiKimiK25,
 }

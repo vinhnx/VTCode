@@ -16,3 +16,7 @@ improve src/agent/runloop/unified/turn/turn_loop.rs
 ---
 
 add kimi k2.5
+
+===
+
+/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/docs/harness/TECH_DEBT_TRACKER.md
