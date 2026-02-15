@@ -21,6 +21,7 @@ impl TurnDriver<ResumeSession> for UnifiedTurnDriver {
             params.plan_mode,
             params.team_context,
             params.resume,
+            params.steering_receiver.take(),
         );
         runner.await
     }

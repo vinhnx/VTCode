@@ -17,8 +17,8 @@ impl AgentRunner {
         args: &Value,
         task_state: &mut TaskRunState,
     ) -> bool {
-        if let Some(warning) = self.loop_detector.borrow_mut().record_call(name, args) {
-            if self.loop_detector.borrow().is_hard_limit_exceeded(name) {
+        if let Some(warning) = self.loop_detector.lock().record_call(name, args) {
+            if self.loop_detector.lock().is_hard_limit_exceeded(name) {
                 if !self.quiet {
                     println!("{}", style(&warning).red().bold());
                 }

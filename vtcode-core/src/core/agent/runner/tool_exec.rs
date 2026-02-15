@@ -5,8 +5,10 @@ use crate::config::constants::tools;
 use crate::core::agent::display::format_tool_result_for_display;
 use crate::core::agent::events::ExecEventRecorder;
 use crate::core::agent::state::TaskRunState;
+use crate::core::agent::steering::SteeringMessage;
 use crate::exec::events::CommandExecutionStatus;
-use crate::llm::provider::ToolCall;
+use crate::gemini::{Content, Part};
+use crate::llm::provider::{LLMRequest, Message, ToolCall};
 use crate::utils::colors::style;
 use anyhow::{Result, anyhow};
 use tokio::time::Duration;
@@ -163,7 +165,7 @@ impl AgentRunner {
 
     /// Execute multiple tool calls sequentially.
     pub(super) async fn execute_sequential_tool_calls(
-        &self,
+        &mut self,
         tool_calls: Vec<ToolCall>,
         task_state: &mut TaskRunState,
         event_recorder: &mut ExecEventRecorder,
@@ -171,6 +173,43 @@ impl AgentRunner {
         is_gemini: bool,
     ) -> Result<()> {
         for call in tool_calls {
+            // Check for steering messages before each tool call
+            if let Some(msg) = self.check_steering() {
+                match msg {
+                    SteeringMessage::Stop => {
+                        if !self.quiet {
+                           println!("{} {}", agent_prefix, style("Stopped by steering signal.").red().bold());
+                        }
+                        return Ok(());
+                    }
+                    SteeringMessage::Pause => {
+                        if !self.quiet {
+                             println!("{} {}", agent_prefix, style("Paused by steering signal. Waiting for Resume...").yellow().bold());
+                        }
+                        // Wait for resume
+                        loop {
+                            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+                            if let Some(SteeringMessage::Resume) = self.check_steering() {
+                                if !self.quiet {
+                                    println!("{} {}", agent_prefix, style("Resumed by steering signal.").green().bold());
+                                }
+                                break;
+                            } else if let Some(SteeringMessage::Stop) = self.check_steering() {
+                                return Ok(());
+                            }
+                        }
+                    }
+                    SteeringMessage::Resume => {}
+                    SteeringMessage::InjectInput(_) => {
+                        // Input injection during tool calls is deferred until the next turn
+                        // effectively, but we log it.
+                         if !self.quiet {
+                             println!("{} {}", agent_prefix, style("Input injection deferred until next turn").yellow());
+                        }
+                    }
+                }
+            }
+
             let name = match call.function.as_ref() {
                 Some(func) => func.name.clone(),
                 None => continue,
@@ -215,7 +254,7 @@ impl AgentRunner {
                 continue;
             }
 
-            let repeat_count = self.loop_detector.borrow().get_call_count(&name);
+            let repeat_count = self.loop_detector.lock().get_call_count(&name);
             if repeat_count > 1 {
                 let delay_ms =
                     (LOOP_THROTTLE_BASE_MS * repeat_count as u64).min(LOOP_THROTTLE_MAX_MS);

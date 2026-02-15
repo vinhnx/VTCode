@@ -14,6 +14,7 @@ pub mod runner;
 pub mod snapshots;
 pub mod state;
 pub mod stats;
+pub mod steering;
 pub mod task;
 pub mod types;
 

@@ -16,6 +16,7 @@ use vtcode_core::exec::events::{
     ThreadItemDetails,
 };
 use vtcode_core::llm::provider as uni;
+use vtcode_core::core::agent::steering::SteeringMessage;
 use vtcode_core::ui::tui::InlineHandle;
 use vtcode_core::ui::tui::PlanContent;
 use vtcode_core::utils::ansi::AnsiRenderer;
@@ -199,6 +200,7 @@ pub(crate) struct TurnProcessingContext<'a> {
     pub harness_state: &'a mut crate::agent::runloop::unified::run_loop_context::HarnessTurnState,
     pub harness_emitter:
         Option<&'a crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter>,
+    pub steering_receiver: &'a mut Option<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>,
 }
 
 impl<'a> TurnProcessingContext<'a> {
@@ -242,6 +244,7 @@ impl<'a> TurnProcessingContext<'a> {
             provider_client: self.provider_client,
             traj: self.traj,
             full_auto: self.full_auto,
+            steering_receiver: self.steering_receiver,
         }
     }
 

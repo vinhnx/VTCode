@@ -53,6 +53,7 @@ pub enum TaskOutcome {
         actual_tool_loops: usize,
     },
     LoopDetected,
+    Cancelled,
     Unknown,
 }
 
@@ -80,6 +81,7 @@ impl TaskOutcome {
                 max_tool_loops, actual_tool_loops
             ),
             Self::LoopDetected => "Stopped due to infinite loop detection".into(),
+            Self::Cancelled => "Task cancelled by user".into(),
             Self::Unknown => "Task outcome could not be determined".into(),
         }
     }
@@ -91,6 +93,7 @@ impl TaskOutcome {
             Self::TurnLimitReached { .. } => "turn_limit_reached",
             Self::ToolLoopLimitReached { .. } => "tool_loop_limit_reached",
             Self::LoopDetected => "loop_detected",
+            Self::Cancelled => "cancelled",
             Self::Unknown => "unknown",
         }
     }

@@ -12,6 +12,7 @@ use crate::core::agent::events::ExecEventRecorder;
 use crate::core::agent::state::TaskRunState;
 use crate::core::agent::task::{ContextItem, Task, TaskOutcome, TaskResults};
 use crate::gemini::{Content, Part};
+use crate::core::agent::steering::SteeringMessage;
 use crate::llm::provider::{LLMRequest, Message, ToolCall};
 use crate::prompts::system::compose_system_instruction_text;
 use crate::utils::colors::style;
@@ -113,6 +114,57 @@ impl AgentRunner {
 
             // Agent execution loop uses max_turns for conversation flow
             for turn in 0..self.max_turns {
+                // Check for steering messages before starting the turn
+                if let Some(msg) = self.check_steering() {
+                    match msg {
+                        SteeringMessage::Stop => {
+                            self.runner_println(format_args!(
+                                "{} {}",
+                                agent_prefix,
+                                style("Stopped by steering signal.").red().bold()
+                            ));
+                            task_state.completion_outcome = TaskOutcome::Cancelled;
+                            break;
+                        }
+                        SteeringMessage::Pause => {
+                            self.runner_println(format_args!(
+                                "{} {}",
+                                agent_prefix,
+                                style("Paused by steering signal. Waiting for Resume...").yellow().bold()
+                            ));
+                            // Wait for resume
+                            loop {
+                                tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+                                if let Some(SteeringMessage::Resume) = self.check_steering() {
+                                    self.runner_println(format_args!(
+                                        "{} {}",
+                                        agent_prefix,
+                                        style("Resumed by steering signal.").green().bold()
+                                    ));
+                                    break;
+                                } else if let Some(SteeringMessage::Stop) = self.check_steering() {
+                                    task_state.completion_outcome = TaskOutcome::Cancelled;
+                                    break;
+                                }
+                            }
+                            if matches!(task_state.completion_outcome, TaskOutcome::Cancelled) {
+                                break;
+                            }
+                        }
+                        SteeringMessage::Resume => {} // Already running
+                        SteeringMessage::InjectInput(input) => {
+                             self.runner_println(format_args!(
+                                "{} {}: {}",
+                                agent_prefix,
+                                style("Injected Input").cyan().bold(),
+                                input
+                            ));
+                            task_state.conversation.push(Content::user_text(input.clone()));
+                            task_state.conversation_messages.push(Message::user(input));
+                        }
+                    }
+                }
+
                 // Check context utilization before each turn
                 let utilization = task_state.utilization();
                 if utilization > 0.90 {

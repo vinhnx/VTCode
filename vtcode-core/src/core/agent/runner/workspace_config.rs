@@ -13,7 +13,7 @@ impl AgentRunner {
     /// Apply workspace configuration to the tool registry, including tool policies and MCP setup.
     pub async fn apply_workspace_configuration(&mut self, vt_cfg: &VTCodeConfig) -> Result<()> {
         self.config = Arc::new(vt_cfg.clone());
-        *self.loop_detector.borrow_mut() =
+        *self.loop_detector.lock() =
             LoopDetector::with_max_repeated_calls(self.config.tools.max_repeated_tool_calls.max(1));
 
         self.system_prompt = compose_system_instruction_text(

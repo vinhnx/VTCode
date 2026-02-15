@@ -6,7 +6,7 @@ use anyhow::Result;
 
 impl AgentRunner {
     pub(super) async fn handle_tool_calls(
-        &self,
+        &mut self,
         tool_calls: Vec<ToolCall>,
         task_state: &mut TaskRunState,
         event_recorder: &mut ExecEventRecorder,

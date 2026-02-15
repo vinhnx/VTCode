@@ -3,6 +3,7 @@ use async_trait::async_trait;
 
 use crate::config::loader::VTCodeConfig;
 use crate::config::types::AgentConfig as CoreAgentConfig;
+use crate::core::agent::steering::SteeringMessage;
 
 /// Parameters passed to a [`TurnDriver`] implementation for executing a single turn.
 #[derive(Debug)]
@@ -14,6 +15,7 @@ pub struct TurnDriverParams<'a, Resume> {
     pub plan_mode: bool,
     pub team_context: Option<crate::agent_teams::TeamContext>,
     pub resume: Option<Resume>,
+    pub steering_receiver: &'a mut Option<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>,
 }
 
 impl<'a, Resume> TurnDriverParams<'a, Resume> {
@@ -26,6 +28,7 @@ impl<'a, Resume> TurnDriverParams<'a, Resume> {
         plan_mode: bool,
         team_context: Option<crate::agent_teams::TeamContext>,
         resume: Option<Resume>,
+        steering_receiver: &'a mut Option<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>,
     ) -> Self {
         Self {
             agent_config,
@@ -35,6 +38,7 @@ impl<'a, Resume> TurnDriverParams<'a, Resume> {
             plan_mode,
             team_context,
             resume,
+            steering_receiver,
         }
     }
 
@@ -50,6 +54,7 @@ impl<'a, Resume> TurnDriverParams<'a, Resume> {
             plan_mode: self.plan_mode,
             team_context: self.team_context,
             resume: map(self.resume),
+            steering_receiver: self.steering_receiver,
         }
     }
 }

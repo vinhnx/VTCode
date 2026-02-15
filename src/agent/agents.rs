@@ -40,6 +40,7 @@ pub async fn run_single_agent_loop(
     apply_runtime_overrides(vt_cfg.as_mut(), config);
 
     let driver = crate::agent::runloop::unified::UnifiedTurnDriver;
+    let mut steering_receiver = None;
     let params = TurnDriverParams::new(
         config,
         vt_cfg,
@@ -48,6 +49,7 @@ pub async fn run_single_agent_loop(
         plan_mode,
         team_context,
         resume,
+        &mut steering_receiver,
     );
     driver.drive_turn(params).await
 }
