@@ -406,6 +406,12 @@ impl Message {
         self
     }
 
+    /// Attach tool calls to this message.
+    pub fn with_tool_calls(mut self, tool_calls: Vec<ToolCall>) -> Self {
+        self.tool_calls = Some(tool_calls);
+        self
+    }
+
     /// Attach reasoning details for providers that support structured reasoning
     pub fn with_reasoning_details(
         mut self,
