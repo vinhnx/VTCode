@@ -306,17 +306,17 @@ fn add_prefill_message(request: &LLMRequest, messages: &mut Vec<AnthropicMessage
                 }],
             });
         }
-    } else if request.character_reinforcement {
-        if let Some(name) = &request.character_name {
-            messages.push(AnthropicMessage {
-                role: "assistant".to_string(),
-                content: vec![AnthropicContentBlock::Text {
-                    text: format!("[{}]", name),
-                    citations: None,
-                    cache_control: None,
-                }],
-            });
-        }
+    } else if request.character_reinforcement
+        && let Some(name) = &request.character_name
+    {
+        messages.push(AnthropicMessage {
+            role: "assistant".to_string(),
+            content: vec![AnthropicContentBlock::Text {
+                text: format!("[{}]", name),
+                citations: None,
+                cache_control: None,
+            }],
+        });
     }
 }
 

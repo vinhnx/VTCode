@@ -390,15 +390,15 @@ impl Message {
 
     /// Attach provider-visible reasoning trace for archival without affecting payloads.
     pub fn with_reasoning(mut self, reasoning: Option<String>) -> Self {
-        if self.role == MessageRole::Assistant {
-            if let Some(reasoning_text) = reasoning.as_ref() {
-                let cleaned_reasoning = clean_reasoning_text(reasoning_text);
-                if !cleaned_reasoning.is_empty() {
-                    let cleaned_content = clean_reasoning_text(self.content.as_text().as_ref());
-                    if !cleaned_content.is_empty() && cleaned_reasoning == cleaned_content {
-                        self.reasoning = None;
-                        return self;
-                    }
+        if self.role == MessageRole::Assistant
+            && let Some(reasoning_text) = reasoning.as_ref()
+        {
+            let cleaned_reasoning = clean_reasoning_text(reasoning_text);
+            if !cleaned_reasoning.is_empty() {
+                let cleaned_content = clean_reasoning_text(self.content.as_text().as_ref());
+                if !cleaned_content.is_empty() && cleaned_reasoning == cleaned_content {
+                    self.reasoning = None;
+                    return self;
                 }
             }
         }

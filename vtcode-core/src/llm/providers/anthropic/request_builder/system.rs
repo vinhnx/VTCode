@@ -46,15 +46,13 @@ pub(crate) fn build_system_prompt(
 
     let should_cache = cache_control.is_some() && breakpoints_remaining > 0;
 
-    if should_cache {
-        if let Some(cc) = cache_control.as_ref() {
-            let block = json!({
-                "type": "text",
-                "text": final_system_prompt.trim(),
-                "cache_control": cc
-            });
-            return (Some(Value::Array(vec![block])), 1);
-        }
+    if should_cache && let Some(cc) = cache_control.as_ref() {
+        let block = json!({
+            "type": "text",
+            "text": final_system_prompt.trim(),
+            "cache_control": cc
+        });
+        return (Some(Value::Array(vec![block])), 1);
     }
 
     (

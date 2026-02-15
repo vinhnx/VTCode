@@ -4,6 +4,7 @@ use crate::config::types::CapabilityLevel;
 const TOOL_UNIFIED_EXEC: &str = "unified_exec";
 const TOOL_UNIFIED_FILE: &str = "unified_file";
 const TOOL_UNIFIED_SEARCH: &str = "unified_search";
+const TOOL_APPLY_PATCH: &str = "apply_patch";
 
 /// Generate dynamic guidelines based on available tools and capability level
 ///
@@ -37,6 +38,7 @@ pub fn generate_tool_guidelines(
     let has_bash = available_tools.iter().any(|t| t == TOOL_UNIFIED_EXEC);
     let has_file = available_tools.iter().any(|t| t == TOOL_UNIFIED_FILE);
     let has_search = available_tools.iter().any(|t| t == TOOL_UNIFIED_SEARCH);
+    let has_apply_patch = available_tools.iter().any(|t| t == TOOL_APPLY_PATCH);
 
     // Read-only mode detection
     if !has_bash && !has_file {
@@ -78,12 +80,21 @@ pub fn generate_tool_guidelines(
                 .to_string(),
         );
 
-        guidelines.push(
-            "**Diff vs Patch**: `git diff` (via `unified_exec`) is READ-ONLY to VIEW changes. \
-             `apply_patch` / `unified_file` (action='patch') is for WRITING changes. \
-             Never use patch tools when user only wants to view a diff."
-                .to_string(),
-        );
+        if has_apply_patch {
+            guidelines.push(
+                "**Diff vs Patch**: `git diff` (via `unified_exec`) is READ-ONLY to VIEW changes. \
+                 `apply_patch` and `unified_file` (action='patch') are for WRITING changes. \
+                 Never use patch tools when user only wants to view a diff."
+                    .to_string(),
+            );
+        } else {
+            guidelines.push(
+                "**Diff vs Patch**: `git diff` (via `unified_exec`) is READ-ONLY to VIEW changes. \
+                 Use `unified_file` with action='patch' for WRITING patch changes. \
+                 Do not send patch text to `read_file`/`unified_file` read mode."
+                    .to_string(),
+            );
+        }
 
         guidelines.push(
             "**Dotfile Protection**: Hidden configuration files (dotfiles like .gitignore, .env, \

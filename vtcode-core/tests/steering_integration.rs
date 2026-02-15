@@ -2,7 +2,7 @@ use anyhow::Result;
 use tokio::sync::mpsc;
 use vtcode_core::config::models::ModelId;
 use vtcode_core::config::types::ReasoningEffortLevel;
-use vtcode_core::core::agent::runner::AgentRunner;
+use vtcode_core::core::agent::runner::{AgentRunner, RunnerSettings};
 use vtcode_core::core::agent::steering::SteeringMessage;
 use vtcode_core::core::agent::task::{Task, TaskOutcome};
 use vtcode_core::core::agent::types::AgentType;
@@ -32,8 +32,10 @@ async fn test_agent_steering_stop() -> Result<()> {
         api_key,
         workspace_path,
         session_id,
-        Some(ReasoningEffortLevel::Medium),
-        None,
+        RunnerSettings {
+            reasoning_effort: Some(ReasoningEffortLevel::Medium),
+            verbosity: None,
+        },
         Some(steering_rx),
     )
     .await?;

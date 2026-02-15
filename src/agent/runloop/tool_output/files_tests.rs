@@ -1,7 +1,7 @@
 use super::*;
 
 #[test]
-fn formats_unified_diff_with_summary_and_hunk_headers() {
+fn formats_unified_diff_with_hunk_headers() {
     let diff = "\
 diff --git a/file1.txt b/file1.txt
 index 0000000..1111111 100644
@@ -13,12 +13,13 @@ index 0000000..1111111 100644
 ";
     let lines = format_diff_content_lines(diff);
     assert_eq!(lines[0], "diff --git a/file1.txt b/file1.txt");
-    assert_eq!(lines[1], "• Diff file1.txt (+1 -1)");
     assert!(lines.iter().any(|line| line == "@@ -1 +1 @@"));
+    // No "• Diff" summary line generated
+    assert!(!lines.iter().any(|l| l.starts_with("• Diff ")));
 }
 
 #[test]
-fn formats_diff_without_git_header_with_summary_after_plus() {
+fn formats_diff_without_git_header() {
     let diff = "\
 --- a/file2.txt
 +++ b/file2.txt
@@ -27,12 +28,10 @@ fn formats_diff_without_git_header_with_summary_after_plus() {
 +after
 ";
     let lines = format_diff_content_lines(diff);
-    let plus_index = lines
-        .iter()
-        .position(|line| line.starts_with("+++ "))
-        .expect("plus header exists");
-    assert_eq!(lines[plus_index + 1], "• Diff file2.txt (+1 -1)");
+    assert!(lines.iter().any(|line| line.starts_with("+++ ")));
     assert!(lines.iter().any(|line| line == "@@ -2 +2 @@"));
+    // No "• Diff" summary line generated
+    assert!(!lines.iter().any(|l| l.starts_with("• Diff ")));
 }
 
 #[test]
@@ -54,4 +53,30 @@ fn shorten_path_truncates_long() {
     let short = shorten_path(long, 30);
     assert!(short.len() <= 45);
     assert!(short.contains("file.rs"));
+}
+
+#[test]
+fn formats_diff_with_function_signature_change() {
+    // Test case for function signature change - no summary line generated
+    let diff = "\
+diff --git a/ask.rs b/ask.rs
+index 0000000..1111111 100644
+--- a/ask.rs
++++ b/ask.rs
+@@ -172,7 +172,7 @@
+         blocks
+     }
+ 
+-    fn select_best_code_block<'a>(blocks: &'a [CodeFenceBlock]) -> Option<&'a CodeFenceBlock> {
++    fn select_best_code_block(blocks: &[CodeFenceBlock]) -> Option<&CodeFenceBlock> {
+         let mut best = None;
+         let mut best_score = (0usize, 0u8);
+         for block in blocks {
+";
+    let lines = format_diff_content_lines(diff);
+
+    // No "• Diff" summary line generated
+    assert!(!lines.iter().any(|l| l.starts_with("• Diff ")));
+    assert!(lines.iter().any(|l| l.contains("diff --git")));
+    assert!(lines.iter().any(|l| l == "@@ -172 +172 @@"));
 }

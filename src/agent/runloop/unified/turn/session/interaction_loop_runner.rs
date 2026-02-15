@@ -370,6 +370,13 @@ pub(super) async fn run_interaction_loop_impl(
                     .session_stats
                     .turn_stall_reason()
                     .unwrap_or("Previous turn stalled without a detailed reason.");
+                if let Ok(mut detector) = ctx.autonomous_executor.loop_detector().write() {
+                    detector.reset();
+                } else {
+                    tracing::warn!(
+                        "Failed to reset loop detector during stalled follow-up recovery"
+                    );
+                }
                 ctx.conversation_history.push(uni::Message::system(
                     REPEATED_FOLLOW_UP_STALLED_DIRECTIVE.to_string(),
                 ));

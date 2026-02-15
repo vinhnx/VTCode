@@ -91,10 +91,11 @@ pub fn convert_to_anthropic_format(
 
     let mut messages_to_process = request.messages.clone();
 
-    if let Some(settings) = &request.coding_agent_settings {
-        if settings.long_context_optimization && messages_to_process.len() > 1 {
-            hoist_largest_user_message(&mut messages_to_process);
-        }
+    if let Some(settings) = &request.coding_agent_settings
+        && settings.long_context_optimization
+        && messages_to_process.len() > 1
+    {
+        hoist_largest_user_message(&mut messages_to_process);
     }
 
     let messages = build_messages(

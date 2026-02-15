@@ -231,14 +231,10 @@ impl LoopDetector {
             return None;
         }
 
-        let current_target = match self
+        let current_target = self
             .recent_calls
             .back()
-            .and_then(|record| record.read_target.as_deref())
-        {
-            Some(target) => target,
-            None => return None,
-        };
+            .and_then(|record| record.read_target.as_deref())?;
 
         let mut same_target_streak = 0usize;
         let mut variants = HashSet::new();

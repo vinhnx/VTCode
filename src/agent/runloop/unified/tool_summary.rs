@@ -1,10 +1,12 @@
 use std::collections::HashSet;
 
+use anstyle::Color;
 use anyhow::Result;
 use serde_json::Value;
 
 use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::tools::registry::labels::tool_action_label;
+use vtcode_core::ui::theme;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::style_helpers::{ColorPalette, render_styled};
 
@@ -143,13 +145,22 @@ pub(crate) fn render_tool_call_summary(
     let action_label = tool_action_label(tool_name, args);
     let summary = build_tool_summary(&action_label, &headline);
 
+    // Get current theme's primary color
+    let theme_styles = theme::active_styles();
+    let main_color = theme_styles
+        .primary
+        .get_fg_color()
+        .unwrap_or(Color::Ansi(anstyle::AnsiColor::Green));
+
     let mut line = String::new();
     line.push_str(&render_styled("•", palette.muted, Some("dim".to_string())));
     line.push(' ');
     line.push_str(&render_summary_with_highlights(
         &summary,
         &summary_highlights,
-        &palette,
+        main_color,
+        palette.accent,
+        palette.muted,
     ));
 
     if let Some(stream) = stream_label {
@@ -170,13 +181,13 @@ pub(crate) fn render_tool_call_summary(
         renderer.line(MessageStyle::Info, &styled)?;
     }
 
-    // Details in dim gray if present - these are the call parameters
+    // Details in gray if present - these are the call parameters
     for detail in details {
         let mut styled = String::new();
         styled.push_str("  ");
         styled.push_str(&render_styled("└", palette.muted, Some("dim".to_string())));
         styled.push(' ');
-        styled.push_str(&render_styled(&detail, palette.success, None));
+        styled.push_str(&render_styled(&detail, palette.muted, None));
         renderer.line(MessageStyle::Info, &styled)?;
     }
 
@@ -186,10 +197,12 @@ pub(crate) fn render_tool_call_summary(
 fn render_summary_with_highlights(
     summary: &str,
     highlights: &[String],
-    palette: &ColorPalette,
+    main_color: Color,
+    accent_color: Color,
+    muted_color: Color,
 ) -> String {
     if highlights.is_empty() {
-        return render_styled(summary, palette.primary, None);
+        return render_styled(summary, main_color, None);
     }
 
     let mut ranges: Vec<(usize, usize)> = highlights
@@ -203,7 +216,7 @@ fn render_summary_with_highlights(
         .collect();
 
     if ranges.is_empty() {
-        return render_styled(summary, palette.primary, None);
+        return render_styled(summary, main_color, None);
     }
 
     ranges.sort_by_key(|(start, _)| *start);
@@ -215,17 +228,13 @@ fn render_summary_with_highlights(
             continue;
         }
         if cursor < start {
-            rendered.push_str(&render_styled(
-                &summary[cursor..start],
-                palette.primary,
-                None,
-            ));
+            rendered.push_str(&render_styled(&summary[cursor..start], muted_color, None));
         }
-        rendered.push_str(&render_styled(&summary[start..end], palette.accent, None));
+        rendered.push_str(&render_styled(&summary[start..end], accent_color, None));
         cursor = end;
     }
     if cursor < summary.len() {
-        rendered.push_str(&render_styled(&summary[cursor..], palette.primary, None));
+        rendered.push_str(&render_styled(&summary[cursor..], muted_color, None));
     }
 
     rendered

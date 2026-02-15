@@ -46,6 +46,12 @@ fn summarized_arg_keys(args: &Value) -> String {
     }
 }
 
+fn patch_source_from_args(args: &Value) -> Option<&str> {
+    args.as_str()
+        .or_else(|| args.get("input").and_then(|v| v.as_str()))
+        .or_else(|| args.get("patch").and_then(|v| v.as_str()))
+}
+
 fn missing_unified_exec_action_error(args: &Value) -> anyhow::Error {
     anyhow!(
         "Missing action in unified_exec. Provide `action` or inferable fields: \
@@ -358,11 +364,8 @@ impl ToolRegistry {
     }
 
     pub(super) async fn execute_apply_patch(&self, args: Value) -> Result<Value> {
-        let patch_source = args
-            .get("input")
-            .or_else(|| args.get("patch"))
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| anyhow!("Missing patch input"))?;
+        let patch_source =
+            patch_source_from_args(&args).ok_or_else(|| anyhow!("Missing patch input"))?;
 
         let patch_content = if patch_source.starts_with("base64:") {
             let b64 = &patch_source[7..];
@@ -912,10 +915,7 @@ impl ToolRegistry {
     }
 
     async fn execute_apply_patch_internal(&self, args: Value) -> Result<Value> {
-        let patch_source = args
-            .get("input")
-            .or_else(|| args.get("patch"))
-            .and_then(|v| v.as_str())
+        let patch_source = patch_source_from_args(&args)
             .ok_or_else(|| anyhow!("Missing patch input (use 'input' or 'patch' parameter)"))?;
 
         let patch = crate::tools::editing::Patch::parse(patch_source)?;
@@ -1293,7 +1293,8 @@ mod git_diff_tests {
 #[cfg(test)]
 mod unified_action_error_tests {
     use super::{
-        missing_unified_exec_action_error, missing_unified_search_action_error, summarized_arg_keys,
+        missing_unified_exec_action_error, missing_unified_search_action_error,
+        patch_source_from_args, summarized_arg_keys,
     };
     use serde_json::json;
 
@@ -1324,5 +1325,15 @@ mod unified_action_error_tests {
         let text = err.to_string();
         assert!(text.contains("Missing action in unified_search"));
         assert!(text.contains("unexpected"));
+    }
+
+    #[test]
+    fn patch_source_accepts_raw_string_and_object_fields() {
+        assert_eq!(
+            patch_source_from_args(&json!("*** Begin Patch\n*** End Patch\n")),
+            Some("*** Begin Patch\n*** End Patch\n")
+        );
+        assert_eq!(patch_source_from_args(&json!({"input": "x"})), Some("x"));
+        assert_eq!(patch_source_from_args(&json!({"patch": "y"})), Some("y"));
     }
 }

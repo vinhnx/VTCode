@@ -193,41 +193,36 @@ async fn handle_stream(
 
     // Create stream from broadcast receiver using async_stream
     let stream = async_stream::stream! {
-        loop {
-            match rx.recv().await {
-                Ok(event) => {
-                    // Filter events for this task/context
-                    let matches = match &event {
-                        StreamingEvent::Message { context_id: ctx, .. } => {
-                            context_id.as_ref() == ctx.as_ref()
-                        }
-                        StreamingEvent::TaskStatus { task_id: tid, .. } => tid == &task_id_clone,
-                        StreamingEvent::TaskArtifact { task_id: tid, .. } => tid == &task_id_clone,
-                    };
-
-                    if matches {
-                        // Fire webhook asynchronously (best-effort)
-                        let notifier = notifier.clone();
-                        let task_manager = task_manager.clone();
-                        let task_id_for_hook = task_id_clone.clone();
-                        let event_for_hook = event.clone();
-                        tokio::spawn(async move {
-                            if let Some(cfg) = task_manager.get_webhook_config(&task_id_for_hook).await {
-                                let _ = notifier.send_event(&cfg, event_for_hook).await;
-                            }
-                        });
-
-                        let is_final = event.is_final();
-                        let json = serde_json::to_string(&SendStreamingMessageResponse { event })
-                            .unwrap_or_default();
-                        yield Ok::<_, Infallible>(Event::default().data(json));
-
-                        if is_final {
-                            break;
-                        }
-                    }
+        while let Ok(event) = rx.recv().await {
+            // Filter events for this task/context
+            let matches = match &event {
+                StreamingEvent::Message { context_id: ctx, .. } => {
+                    context_id.as_ref() == ctx.as_ref()
                 }
-                Err(_) => break,
+                StreamingEvent::TaskStatus { task_id: tid, .. } => tid == &task_id_clone,
+                StreamingEvent::TaskArtifact { task_id: tid, .. } => tid == &task_id_clone,
+            };
+
+            if matches {
+                // Fire webhook asynchronously (best-effort)
+                let notifier = notifier.clone();
+                let task_manager = task_manager.clone();
+                let task_id_for_hook = task_id_clone.clone();
+                let event_for_hook = event.clone();
+                tokio::spawn(async move {
+                    if let Some(cfg) = task_manager.get_webhook_config(&task_id_for_hook).await {
+                        let _ = notifier.send_event(&cfg, event_for_hook).await;
+                    }
+                });
+
+                let is_final = event.is_final();
+                let json = serde_json::to_string(&SendStreamingMessageResponse { event })
+                    .unwrap_or_default();
+                yield Ok::<_, Infallible>(Event::default().data(json));
+
+                if is_final {
+                    break;
+                }
             }
         }
     };

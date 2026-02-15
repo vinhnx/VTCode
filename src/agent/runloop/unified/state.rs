@@ -237,7 +237,7 @@ impl SessionStats {
             self.turn_stall_reason = None;
         }
 
-        let threshold = if self.turn_stalled { 2 } else { 3 };
+        let threshold = if self.turn_stalled { 1 } else { 3 };
         is_follow_up && self.follow_up_prompt_streak >= threshold
     }
 
@@ -364,7 +364,6 @@ mod tests {
         let mut stats = SessionStats::default();
         stats.mark_turn_stalled(true, Some("turn blocked".to_string()));
 
-        assert!(!stats.register_follow_up_prompt("continue"));
         assert!(stats.register_follow_up_prompt("continue"));
         assert!(stats.turn_stalled());
         assert_eq!(stats.turn_stall_reason(), Some("turn blocked"));

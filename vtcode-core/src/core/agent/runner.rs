@@ -9,6 +9,15 @@ use crate::core::agent::events::EventSink;
 use crate::core::agent::state::ApiFailureTracker;
 use crate::core::agent::steering::SteeringMessage;
 
+/// Settings for the agent runner
+#[derive(Clone)]
+pub struct RunnerSettings {
+    /// Reasoning effort level for the agent
+    pub reasoning_effort: Option<ReasoningEffortLevel>,
+    /// Verbosity level for output text
+    pub verbosity: Option<VerbosityLevel>,
+}
+
 use crate::core::agent::types::AgentType;
 use crate::core::context_optimizer::ContextOptimizer;
 use crate::core::loop_detector::LoopDetector;
@@ -120,8 +129,7 @@ impl AgentRunner {
         api_key: String,
         workspace: PathBuf,
         session_id: String,
-        reasoning_effort: Option<ReasoningEffortLevel>,
-        verbosity: Option<VerbosityLevel>,
+        settings: RunnerSettings,
         steering_receiver: Option<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>,
     ) -> Result<Self> {
         // Create client based on model
@@ -166,8 +174,8 @@ impl AgentRunner {
             config,
             model: model.to_string(),
             _api_key: api_key,
-            reasoning_effort,
-            verbosity,
+            reasoning_effort: settings.reasoning_effort,
+            verbosity: settings.verbosity,
             quiet: false,
             event_sink: None,
             max_turns: defaults::DEFAULT_FULL_AUTO_MAX_TURNS,
