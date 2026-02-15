@@ -13,8 +13,8 @@ use serde::{Deserialize, Serialize};
 
 use super::events::{ToolEmitter, ToolEventCtx};
 use super::orchestrator::{
-    Approvable, ExecToolCallOutput, OutputText, SandboxAttempt, Sandboxable, SandboxablePreference,
-    ToolCtx, ToolError, ToolOrchestrator, ToolRuntime,
+    Approvable, ExecToolCallOutput, SandboxAttempt, Sandboxable, SandboxablePreference, ToolCtx,
+    ToolError, ToolOrchestrator, ToolRuntime,
 };
 use super::tool_handler::{
     FileChange, FreeformTool, FreeformToolFormat, JsonSchema, ResponsesApiTool, ToolCallError,
@@ -93,32 +93,21 @@ impl ToolRuntime<ApplyPatchRequest, ExecToolCallOutput> for ApplyPatchRuntime {
             .map_err(|e| ToolError::Rejected(format!("Failed to parse patch: {}", e)))?;
 
         if patch.is_empty() {
-            return Ok(ExecToolCallOutput {
-                stdout: OutputText {
-                    text: "Patch is empty, no changes applied".to_string(),
-                },
-                stderr: OutputText::default(),
-                exit_code: 0,
-            });
+            return Ok(ExecToolCallOutput::success_with_stdout(
+                "Patch is empty, no changes applied",
+            ));
         }
 
         // Apply the patch
         match patch.apply(&req.cwd).await {
             Ok(results) => {
                 let output = results.join("\n");
-                Ok(ExecToolCallOutput {
-                    stdout: OutputText { text: output },
-                    stderr: OutputText::default(),
-                    exit_code: 0,
-                })
+                Ok(ExecToolCallOutput::success_with_stdout(output))
             }
-            Err(e) => Ok(ExecToolCallOutput {
-                stdout: OutputText::default(),
-                stderr: OutputText {
-                    text: format!("Patch application failed: {}", e),
-                },
-                exit_code: 1,
-            }),
+            Err(e) => Ok(ExecToolCallOutput::failure_with_stderr(format!(
+                "Patch application failed: {}",
+                e
+            ))),
         }
     }
 }

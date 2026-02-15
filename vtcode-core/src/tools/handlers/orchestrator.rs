@@ -105,6 +105,48 @@ pub enum SandboxMode {
     Strict,
 }
 
+impl SandboxMode {
+    fn from_turn_mode(mode: &super::sandboxing::SandboxMode) -> Self {
+        match mode {
+            super::sandboxing::SandboxMode::DangerFullAccess => Self::Disabled,
+            super::sandboxing::SandboxMode::ExternalSandbox => Self::Strict,
+            super::sandboxing::SandboxMode::ReadOnly
+            | super::sandboxing::SandboxMode::WorkspaceWrite => Self::Auto,
+        }
+    }
+}
+
+impl SandboxPolicy {
+    fn from_turn_policy(policy: &super::sandboxing::SandboxPolicy) -> Self {
+        Self {
+            mode: SandboxMode::from_turn_mode(&policy.mode),
+            allow_network: !matches!(
+                policy.network_access,
+                super::sandboxing::NetworkAccess::Restricted
+            ),
+            allow_env_inherit: true,
+            writable_paths: Vec::new(),
+            readable_paths: Vec::new(),
+        }
+    }
+
+    fn with_preference(self, preference: SandboxablePreference) -> Self {
+        let mode = match preference {
+            SandboxablePreference::Auto => self.mode,
+            SandboxablePreference::Forbid => SandboxMode::Disabled,
+            SandboxablePreference::Require => {
+                if self.mode == SandboxMode::Disabled {
+                    SandboxMode::Strict
+                } else {
+                    self.mode
+                }
+            }
+        };
+
+        Self { mode, ..self }
+    }
+}
+
 /// Command specification for execution
 #[derive(Clone, Debug)]
 pub struct CommandSpec {
@@ -243,7 +285,7 @@ impl ToolOrchestrator {
         runtime: &mut R,
         req: &Req,
         ctx: &ToolCtx<'_>,
-        _turn: &TurnContext,
+        turn: &TurnContext,
         _approval_policy: ApprovalPolicy,
     ) -> Result<Out, ToolError>
     where
@@ -251,8 +293,8 @@ impl ToolOrchestrator {
         Req: Send + Sync,
         Out: Send + Sync,
     {
-        // Determine sandbox policy based on runtime preference
-        let policy = SandboxPolicy::default();
+        let policy = SandboxPolicy::from_turn_policy(&turn.sandbox_policy)
+            .with_preference(runtime.sandbox_preference());
 
         // First attempt with sandbox (if applicable)
         let attempt = self.sandbox.create_attempt(&policy);
@@ -275,38 +317,13 @@ impl ToolOrchestrator {
 /// Execute command with environment (simplified from Codex)
 pub async fn execute_env(
     env: ExecEnv,
-    _policy: &SandboxPolicy,
+    policy: &SandboxPolicy,
     _stdout_stream: Option<StdoutStream>,
 ) -> Result<ExecToolCallOutput> {
-    use tokio::process::Command;
-
-    let mut cmd = Command::new(&env.program);
-    cmd.args(&env.args)
-        .current_dir(&env.cwd)
-        .envs(&env.env)
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped());
-
-    let timeout = env
-        .timeout
-        .timeout_ms
-        .map(std::time::Duration::from_millis)
-        .unwrap_or(std::time::Duration::from_secs(300));
-
-    let output = tokio::time::timeout(timeout, cmd.output())
-        .await
-        .map_err(|_| anyhow::anyhow!("Command timed out"))?
-        .map_err(|e| anyhow::anyhow!("Command failed: {}", e))?;
-
-    Ok(ExecToolCallOutput {
-        stdout: OutputText {
-            text: String::from_utf8_lossy(&output.stdout).to_string(),
-        },
-        stderr: OutputText {
-            text: String::from_utf8_lossy(&output.stderr).to_string(),
-        },
-        exit_code: output.status.code().unwrap_or(-1),
-    })
+    let canonical_env = to_canonical_exec_env(env);
+    let canonical_policy = to_canonical_sandbox_policy(policy);
+    let canonical_output = super::sandboxing::execute_env(canonical_env, &canonical_policy).await?;
+    Ok(canonical_output.into())
 }
 
 /// Stdout stream for real-time output
@@ -320,7 +337,41 @@ pub struct ExecToolCallOutput {
     pub exit_code: i32,
 }
 
+impl From<super::sandboxing::ExecToolCallOutput> for ExecToolCallOutput {
+    fn from(output: super::sandboxing::ExecToolCallOutput) -> Self {
+        Self {
+            stdout: OutputText {
+                text: output.stdout,
+            },
+            stderr: OutputText {
+                text: output.stderr,
+            },
+            exit_code: output.exit_code,
+        }
+    }
+}
+
 impl ExecToolCallOutput {
+    pub fn success_with_stdout(stdout: impl Into<String>) -> Self {
+        Self {
+            stdout: OutputText {
+                text: stdout.into(),
+            },
+            stderr: OutputText::default(),
+            exit_code: 0,
+        }
+    }
+
+    pub fn failure_with_stderr(stderr: impl Into<String>) -> Self {
+        Self {
+            stdout: OutputText::default(),
+            stderr: OutputText {
+                text: stderr.into(),
+            },
+            exit_code: 1,
+        }
+    }
+
     pub fn success(&self) -> bool {
         self.exit_code == 0
     }
@@ -340,6 +391,57 @@ impl ExecToolCallOutput {
 #[derive(Clone, Debug, Default)]
 pub struct OutputText {
     pub text: String,
+}
+
+#[cfg(target_os = "macos")]
+fn platform_sandbox_type() -> super::sandboxing::SandboxType {
+    super::sandboxing::SandboxType::Seatbelt
+}
+
+#[cfg(target_os = "linux")]
+fn platform_sandbox_type() -> super::sandboxing::SandboxType {
+    super::sandboxing::SandboxType::LinuxSandbox
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+fn platform_sandbox_type() -> super::sandboxing::SandboxType {
+    super::sandboxing::SandboxType::None
+}
+
+fn to_canonical_exec_env(env: ExecEnv) -> super::sandboxing::ExecEnv {
+    let sandbox = if env.sandbox.is_some() {
+        platform_sandbox_type()
+    } else {
+        super::sandboxing::SandboxType::None
+    };
+
+    super::sandboxing::ExecEnv {
+        program: env.program,
+        args: env.args,
+        cwd: env.cwd,
+        env: env.env,
+        timeout_ms: env.timeout.timeout_ms,
+        sandbox,
+    }
+}
+
+fn to_canonical_sandbox_policy(policy: &SandboxPolicy) -> super::sandboxing::SandboxPolicy {
+    let mode = match policy.mode {
+        SandboxMode::Disabled => super::sandboxing::SandboxMode::DangerFullAccess,
+        SandboxMode::Auto => super::sandboxing::SandboxMode::WorkspaceWrite,
+        SandboxMode::Strict => super::sandboxing::SandboxMode::ExternalSandbox,
+    };
+
+    let network_access = if policy.allow_network {
+        super::sandboxing::NetworkAccess::Full
+    } else {
+        super::sandboxing::NetworkAccess::Restricted
+    };
+
+    super::sandboxing::SandboxPolicy {
+        mode,
+        network_access,
+    }
 }
 
 /// Approval caching utilities
@@ -368,17 +470,24 @@ pub mod approval_cache {
 
         /// Check if a key is already approved
         pub fn is_approved(&self, key: &K) -> bool {
-            self.approved.read().unwrap().contains(key)
+            self.approved
+                .read()
+                .map(|approved| approved.contains(key))
+                .unwrap_or(false)
         }
 
         /// Mark a key as approved
         pub fn approve(&self, key: K) {
-            self.approved.write().unwrap().insert(key);
+            if let Ok(mut approved) = self.approved.write() {
+                approved.insert(key);
+            }
         }
 
         /// Clear all approvals
         pub fn clear(&self) {
-            self.approved.write().unwrap().clear();
+            if let Ok(mut approved) = self.approved.write() {
+                approved.clear();
+            }
         }
     }
 }
@@ -480,7 +589,45 @@ mod tests {
         }
     }
 
-    fn test_turn_context(cwd: PathBuf) -> TurnContext {
+    struct FirstAttemptProbeRuntime {
+        first_is_escalated: Option<bool>,
+        preference: SandboxablePreference,
+    }
+
+    impl FirstAttemptProbeRuntime {
+        fn new(preference: SandboxablePreference) -> Self {
+            Self {
+                first_is_escalated: None,
+                preference,
+            }
+        }
+    }
+
+    impl Sandboxable for FirstAttemptProbeRuntime {
+        fn sandbox_preference(&self) -> SandboxablePreference {
+            self.preference
+        }
+    }
+
+    #[async_trait]
+    impl ToolRuntime<(), &'static str> for FirstAttemptProbeRuntime {
+        async fn run(
+            &mut self,
+            _req: &(),
+            attempt: &SandboxAttempt<'_>,
+            _ctx: &ToolCtx<'_>,
+        ) -> Result<&'static str, ToolError> {
+            if self.first_is_escalated.is_none() {
+                self.first_is_escalated = Some(attempt.is_escalated);
+            }
+            Ok("ok")
+        }
+    }
+
+    fn test_turn_context(
+        cwd: PathBuf,
+        sandbox_policy: super::super::sandboxing::SandboxPolicy,
+    ) -> TurnContext {
         TurnContext {
             cwd,
             turn_id: "turn-1".to_string(),
@@ -488,7 +635,7 @@ mod tests {
             shell_environment_policy: ShellEnvironmentPolicy::Inherit,
             approval_policy: ApprovalPolicy::Never,
             codex_linux_sandbox_exe: None,
-            sandbox_policy: super::super::sandboxing::SandboxPolicy::default(),
+            sandbox_policy,
         }
     }
 
@@ -506,7 +653,7 @@ mod tests {
     async fn test_orchestrator_escalates_on_sandbox_denied() {
         let cwd = PathBuf::from(".");
         let session = TestSession::new(cwd.clone());
-        let turn = test_turn_context(cwd);
+        let turn = test_turn_context(cwd, super::super::sandboxing::SandboxPolicy::default());
         let ctx = ToolCtx {
             session: &session,
             turn: &turn,
@@ -536,7 +683,7 @@ mod tests {
     async fn test_orchestrator_does_not_escalate_when_disabled() {
         let cwd = PathBuf::from(".");
         let session = TestSession::new(cwd.clone());
-        let turn = test_turn_context(cwd);
+        let turn = test_turn_context(cwd, super::super::sandboxing::SandboxPolicy::default());
         let ctx = ToolCtx {
             session: &session,
             turn: &turn,
@@ -560,6 +707,165 @@ mod tests {
 
         assert!(matches!(err, ToolError::SandboxDenied(_)));
         assert_eq!(runtime.calls, 1);
+    }
+
+    #[test]
+    fn test_mode_mapping_from_turn_mode() {
+        assert_eq!(
+            SandboxMode::from_turn_mode(&super::super::sandboxing::SandboxMode::DangerFullAccess),
+            SandboxMode::Disabled
+        );
+        assert_eq!(
+            SandboxMode::from_turn_mode(&super::super::sandboxing::SandboxMode::ReadOnly),
+            SandboxMode::Auto
+        );
+        assert_eq!(
+            SandboxMode::from_turn_mode(&super::super::sandboxing::SandboxMode::WorkspaceWrite),
+            SandboxMode::Auto
+        );
+        assert_eq!(
+            SandboxMode::from_turn_mode(&super::super::sandboxing::SandboxMode::ExternalSandbox),
+            SandboxMode::Strict
+        );
+    }
+
+    #[test]
+    fn test_legacy_policy_mapping_to_canonical_policy() {
+        let auto_policy = SandboxPolicy {
+            mode: SandboxMode::Auto,
+            allow_network: false,
+            allow_env_inherit: false,
+            writable_paths: Vec::new(),
+            readable_paths: Vec::new(),
+        };
+        let canonical_auto = to_canonical_sandbox_policy(&auto_policy);
+        assert_eq!(
+            canonical_auto.mode,
+            super::super::sandboxing::SandboxMode::WorkspaceWrite
+        );
+        assert_eq!(
+            canonical_auto.network_access,
+            super::super::sandboxing::NetworkAccess::Restricted
+        );
+
+        let disabled_policy = SandboxPolicy {
+            mode: SandboxMode::Disabled,
+            allow_network: true,
+            allow_env_inherit: true,
+            writable_paths: Vec::new(),
+            readable_paths: Vec::new(),
+        };
+        let canonical_disabled = to_canonical_sandbox_policy(&disabled_policy);
+        assert_eq!(
+            canonical_disabled.mode,
+            super::super::sandboxing::SandboxMode::DangerFullAccess
+        );
+        assert_eq!(
+            canonical_disabled.network_access,
+            super::super::sandboxing::NetworkAccess::Full
+        );
+    }
+
+    #[tokio::test]
+    async fn test_orchestrator_uses_turn_sandbox_policy_for_initial_attempt() {
+        let cwd = PathBuf::from(".");
+        let session = TestSession::new(cwd.clone());
+        let turn = test_turn_context(
+            cwd,
+            super::super::sandboxing::SandboxPolicy {
+                mode: super::super::sandboxing::SandboxMode::DangerFullAccess,
+                network_access: super::super::sandboxing::NetworkAccess::Full,
+            },
+        );
+        let ctx = ToolCtx {
+            session: &session,
+            turn: &turn,
+            call_id: "call-3".to_string(),
+            tool_name: "test".to_string(),
+        };
+
+        let mut runtime = FirstAttemptProbeRuntime::new(SandboxablePreference::Auto);
+        let mut orchestrator = ToolOrchestrator::new();
+
+        let out = orchestrator
+            .run(
+                &mut runtime,
+                &(),
+                &ctx,
+                &turn,
+                crate::tools::handlers::tool_handler::ApprovalPolicy::Never,
+            )
+            .await
+            .expect("expected successful run");
+
+        assert_eq!(out, "ok");
+        assert_eq!(runtime.first_is_escalated, Some(true));
+    }
+
+    #[tokio::test]
+    async fn test_orchestrator_respects_forbid_preference() {
+        let cwd = PathBuf::from(".");
+        let session = TestSession::new(cwd.clone());
+        let turn = test_turn_context(cwd, super::super::sandboxing::SandboxPolicy::default());
+        let ctx = ToolCtx {
+            session: &session,
+            turn: &turn,
+            call_id: "call-4".to_string(),
+            tool_name: "test".to_string(),
+        };
+
+        let mut runtime = FirstAttemptProbeRuntime::new(SandboxablePreference::Forbid);
+        let mut orchestrator = ToolOrchestrator::new();
+
+        let out = orchestrator
+            .run(
+                &mut runtime,
+                &(),
+                &ctx,
+                &turn,
+                crate::tools::handlers::tool_handler::ApprovalPolicy::Never,
+            )
+            .await
+            .expect("expected successful run");
+
+        assert_eq!(out, "ok");
+        assert_eq!(runtime.first_is_escalated, Some(true));
+    }
+
+    #[tokio::test]
+    async fn test_orchestrator_respects_require_preference() {
+        let cwd = PathBuf::from(".");
+        let session = TestSession::new(cwd.clone());
+        let turn = test_turn_context(
+            cwd,
+            super::super::sandboxing::SandboxPolicy {
+                mode: super::super::sandboxing::SandboxMode::DangerFullAccess,
+                network_access: super::super::sandboxing::NetworkAccess::Full,
+            },
+        );
+        let ctx = ToolCtx {
+            session: &session,
+            turn: &turn,
+            call_id: "call-5".to_string(),
+            tool_name: "test".to_string(),
+        };
+
+        let mut runtime = FirstAttemptProbeRuntime::new(SandboxablePreference::Require);
+        let mut orchestrator = ToolOrchestrator::new();
+
+        let out = orchestrator
+            .run(
+                &mut runtime,
+                &(),
+                &ctx,
+                &turn,
+                crate::tools::handlers::tool_handler::ApprovalPolicy::Never,
+            )
+            .await
+            .expect("expected successful run");
+
+        assert_eq!(out, "ok");
+        assert_eq!(runtime.first_is_escalated, Some(false));
     }
 
     #[test]
