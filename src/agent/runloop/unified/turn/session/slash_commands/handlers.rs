@@ -1053,6 +1053,68 @@ pub async fn handle_rewind_to_turn(
     Ok(SlashCommandControl::Continue)
 }
 
+pub async fn handle_share_log(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
+    use chrono::Local;
+
+    let timestamp = Local::now().format("%Y%m%d_%H%M%S");
+    let filename = format!("vtcode-session-log-{}.json", timestamp);
+    let output_path = ctx.config.workspace.join(&filename);
+
+    let log_messages: Vec<serde_json::Value> = ctx
+        .conversation_history
+        .iter()
+        .map(|msg| {
+            let mut entry = serde_json::json!({
+                "role": format!("{:?}", msg.role),
+                "content": msg.content.as_text(),
+            });
+            if let Some(tool_calls) = &msg.tool_calls {
+                let calls: Vec<serde_json::Value> = tool_calls
+                    .iter()
+                    .map(|tc| {
+                        serde_json::json!({
+                            "id": tc.id,
+                            "function": tc.function.as_ref().map(|f| serde_json::json!({
+                                "name": f.name,
+                                "arguments": f.arguments,
+                            })),
+                        })
+                    })
+                    .collect();
+                entry["tool_calls"] = serde_json::Value::Array(calls);
+            }
+            if let Some(tool_call_id) = &msg.tool_call_id {
+                entry["tool_call_id"] = serde_json::Value::String(tool_call_id.clone());
+            }
+            entry
+        })
+        .collect();
+
+    let export = serde_json::json!({
+        "exported_at": Local::now().to_rfc3339(),
+        "model": &ctx.config.model,
+        "workspace": ctx.config.workspace.display().to_string(),
+        "total_messages": log_messages.len(),
+        "messages": log_messages,
+    });
+
+    let json = serde_json::to_string_pretty(&export)
+        .context("Failed to serialize session log")?;
+    std::fs::write(&output_path, &json)
+        .with_context(|| format!("Failed to write session log to {}", output_path.display()))?;
+
+    ctx.renderer.line(
+        MessageStyle::Info,
+        &format!("Session log exported to: {}", output_path.display()),
+    )?;
+    ctx.renderer.line(
+        MessageStyle::Info,
+        "You can share this file for debugging purposes.",
+    )?;
+
+    Ok(SlashCommandControl::Continue)
+}
+
 pub async fn handle_exit(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
     ctx.renderer.line(MessageStyle::Info, "✓")?;
     Ok(SlashCommandControl::BreakWithReason(SessionEndReason::Exit))

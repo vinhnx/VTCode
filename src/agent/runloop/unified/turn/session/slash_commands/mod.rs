@@ -158,6 +158,7 @@ pub async fn handle_outcome(
         SlashCommandOutcome::ShowAuthStatus { provider } => {
             handlers::handle_show_auth_status(ctx, provider).await
         }
+        SlashCommandOutcome::ShareLog => handlers::handle_share_log(ctx).await,
         SlashCommandOutcome::Exit => handlers::handle_exit(ctx).await,
     }
 }

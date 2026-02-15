@@ -140,6 +140,8 @@ pub enum SlashCommandOutcome {
     ShowAuthStatus {
         provider: Option<String>,
     },
+    /// /share-log command - Export current session log as JSON for debugging
+    ShareLog,
 }
 
 #[derive(Clone, Debug)]
@@ -550,6 +552,7 @@ pub async fn handle_slash_command(
                 command: WorkspaceDirectoryCommand::Add(tokens),
             })
         }
+        "share-log" | "sharelog" | "export-log" => Ok(SlashCommandOutcome::ShareLog),
         "sessions" => {
             let limit = args
                 .split_whitespace()
