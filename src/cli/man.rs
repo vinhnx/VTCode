@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use vtcode_core::cli::ManPageGenerator;
+use vtcode_core::utils::file_utils::write_file_with_context_sync;
 
 pub async fn handle_man_command(
     command: Option<String>,
@@ -13,8 +14,7 @@ pub async fn handle_man_command(
     };
 
     if let Some(path) = output {
-        std::fs::write(&path, &content)
-            .with_context(|| format!("Failed to write man page to {}", path.display()))?;
+        write_file_with_context_sync(&path, &content, "man page")?;
         println!("Wrote man page to {}", path.display());
     } else {
         println!("{}", content);

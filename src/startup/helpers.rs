@@ -1,11 +1,14 @@
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 
 use anyhow::{Context, Result, anyhow, bail};
 use vtcode_core::cli::args::Cli;
 use vtcode_core::config::loader::VTCodeConfig;
+use vtcode_core::config::models::Provider;
 use vtcode_core::config::validator::ConfigValidator;
 use vtcode_core::load_user_config;
 use vtcode_core::ui::theme::{self as ui_theme, DEFAULT_THEME_ID};
+use vtcode_core::utils::path::canonicalize_workspace;
 use vtcode_core::utils::validation::{validate_is_directory, validate_non_empty};
 
 use crate::tools::RipgrepStatus;
@@ -85,33 +88,15 @@ pub(super) fn apply_permission_mode_override(config: &mut VTCodeConfig, mode: &s
 }
 
 pub(super) fn provider_label(provider: &str) -> String {
-    match provider.to_lowercase().as_str() {
-        "openai" => "OpenAI".to_string(),
-        "anthropic" => "Anthropic".to_string(),
-        "gemini" => "Gemini".to_string(),
-        "deepseek" => "DeepSeek".to_string(),
-        "openrouter" => "OpenRouter".to_string(),
-        "xai" => "xAI".to_string(),
-        "zai" => "Z.AI".to_string(),
-        "ollama" => "Ollama".to_string(),
-        "lmstudio" => "LM Studio".to_string(),
-        _ => provider.to_string(),
-    }
+    Provider::from_str(provider)
+        .map(|resolved| resolved.label().to_string())
+        .unwrap_or_else(|_| provider.to_string())
 }
 
 pub(super) fn api_key_env_var(provider: &str) -> String {
-    match provider.to_lowercase().as_str() {
-        "openai" => "OPENAI_API_KEY".to_string(),
-        "anthropic" => "ANTHROPIC_API_KEY".to_string(),
-        "gemini" => "GEMINI_API_KEY".to_string(),
-        "deepseek" => "DEEPSEEK_API_KEY".to_string(),
-        "openrouter" => "OPENROUTER_API_KEY".to_string(),
-        "xai" => "XAI_API_KEY".to_string(),
-        "zai" => "ZAI_API_KEY".to_string(),
-        "ollama" => "OLLAMA_API_KEY".to_string(),
-        "lmstudio" => "LMSTUDIO_API_KEY".to_string(),
-        _ => format!("{}_API_KEY", provider.to_uppercase()),
-    }
+    Provider::from_str(provider)
+        .map(|resolved| resolved.default_api_key_env().to_owned())
+        .unwrap_or_else(|_| format!("{}_API_KEY", provider.to_uppercase()))
 }
 
 pub(super) fn parse_cli_config_entries(
@@ -248,22 +233,13 @@ pub(super) fn validate_full_auto_configuration(
 pub(super) fn resolve_workspace_path(workspace_arg: Option<PathBuf>) -> Result<PathBuf> {
     let cwd = std::env::current_dir().context("Failed to determine current working directory")?;
 
-    let mut resolved = match workspace_arg {
+    let resolved = match workspace_arg {
         Some(path) if path.is_absolute() => path,
         Some(path) => cwd.join(path),
         None => cwd,
     };
 
-    if resolved.exists() {
-        resolved = resolved.canonicalize().with_context(|| {
-            format!(
-                "Failed to canonicalize workspace path {}",
-                resolved.display()
-            )
-        })?;
-    }
-
-    Ok(resolved)
+    Ok(canonicalize_workspace(&resolved))
 }
 
 pub(super) fn validate_startup_configuration(

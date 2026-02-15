@@ -9,7 +9,7 @@ use serde_json::{Value, json};
 use std::path::PathBuf;
 use tokio::fs;
 
-use crate::utils::path::canonicalize_workspace;
+use crate::utils::path::resolve_workspace_path;
 
 use crate::config::constants::tools;
 use crate::tools::grep_file::GrepSearchResult;
@@ -123,21 +123,9 @@ impl ToolRegistry {
             ));
         }
 
-        let workspace_root = canonicalize_workspace(self.workspace_root());
         let requested_path = PathBuf::from(&input.path);
-        let resolved_path = if requested_path.is_absolute() {
-            requested_path
-        } else {
-            workspace_root.join(&requested_path)
-        };
-        let canonical_path = std::fs::canonicalize(&resolved_path)
-            .with_context(|| format!("Failed to resolve path: {}", resolved_path.display()))?;
-        if !canonical_path.starts_with(&workspace_root) {
-            return Err(anyhow!(
-                "Path '{}' is outside the workspace root",
-                input.path
-            ));
-        }
+        let canonical_path = resolve_workspace_path(self.workspace_root(), &requested_path)
+            .with_context(|| format!("Failed to resolve path: {}", requested_path.display()))?;
 
         let metadata = fs::metadata(&canonical_path)
             .await

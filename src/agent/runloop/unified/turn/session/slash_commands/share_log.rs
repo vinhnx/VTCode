@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use vtcode_core::llm::provider as uni;
 use vtcode_core::utils::ansi::MessageStyle;
+use vtcode_core::utils::file_utils::write_file_with_context_sync;
 
 use crate::agent::runloop::slash_commands::SessionLogExportFormat;
 
@@ -137,9 +138,7 @@ pub async fn handle_share_log(
 
             let json =
                 serde_json::to_string_pretty(&export).context("Failed to serialize session log")?;
-            std::fs::write(&output_path, &json).with_context(|| {
-                format!("Failed to write session log to {}", output_path.display())
-            })?;
+            write_file_with_context_sync(&output_path, &json, "session log")?;
         }
         SessionLogExportFormat::Markdown => {
             let markdown = render_session_log_markdown(
@@ -148,9 +147,7 @@ pub async fn handle_share_log(
                 &ctx.config.workspace,
                 &log_messages,
             );
-            std::fs::write(&output_path, markdown).with_context(|| {
-                format!("Failed to write session log to {}", output_path.display())
-            })?;
+            write_file_with_context_sync(&output_path, &markdown, "session log")?;
         }
     }
 
