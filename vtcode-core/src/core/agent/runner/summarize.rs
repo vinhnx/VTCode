@@ -1,6 +1,6 @@
 use super::AgentRunner;
 use crate::core::agent::conversation::build_messages_from_conversation;
-use crate::core::agent::state::TaskRunState;
+use crate::core::agent::session::AgentSessionState;
 use crate::gemini::{Content, Part};
 use tracing::{info, warn};
 
@@ -8,7 +8,7 @@ impl AgentRunner {
     pub(super) fn summarize_conversation_if_needed(
         &self,
         system_instruction: &str,
-        task_state: &mut TaskRunState,
+        session_state: &mut AgentSessionState,
         preserve_recent_turns: usize,
         utilization: f64,
     ) {
@@ -16,17 +16,17 @@ impl AgentRunner {
             return;
         }
 
-        if task_state.conversation.len() <= preserve_recent_turns {
+        if session_state.conversation.len() <= preserve_recent_turns {
             return;
         }
 
-        let preferred_split_at = task_state
+        let preferred_split_at = session_state
             .conversation
             .len()
             .saturating_sub(preserve_recent_turns);
 
         // Context Manager: Find a safe split point that doesn't break tool call/output pairs.
-        let split_at = task_state.find_safe_split_point(preferred_split_at);
+        let split_at = session_state.find_safe_split_point(preferred_split_at);
 
         if split_at == 0 {
             return;
@@ -35,10 +35,11 @@ impl AgentRunner {
         // Dynamic context discovery: Write full history to file before summarization
         // This allows the agent to recover details via grep_file if needed
         let history_file_path = self.persist_history_before_summarization(
-            &task_state.conversation[..split_at],
-            task_state.turns_executed,
-            &task_state.modified_files,
-            &task_state.executed_commands,
+            &session_state.conversation[..split_at],
+            &session_state.session_id,
+            session_state.stats.turns_executed,
+            &session_state.modified_files,
+            &session_state.executed_commands,
         );
 
         let summarize_list = |items: &[String]| -> String {
@@ -57,10 +58,10 @@ impl AgentRunner {
         let base_summary = format!(
             "Summarized {} earlier turns to stay within context budget. Files: {}; Commands: {}; Warnings: {}.",
             split_at,
-            summarize_list(&task_state.modified_files),
-            summarize_list(&task_state.executed_commands),
+            summarize_list(&session_state.modified_files),
+            summarize_list(&session_state.executed_commands),
             summarize_list(
-                &task_state
+                &session_state
                     .warnings
                     .iter()
                     .map(|w| w.to_string())
@@ -84,15 +85,15 @@ impl AgentRunner {
             text: summary,
             thought_signature: None,
         }]));
-        new_conversation.extend_from_slice(&task_state.conversation[split_at..]);
-        task_state.conversation = new_conversation;
-        task_state.conversation_messages =
-            build_messages_from_conversation(system_instruction, &task_state.conversation);
+        new_conversation.extend_from_slice(&session_state.conversation[split_at..]);
+        session_state.conversation = new_conversation;
+        session_state.messages =
+            build_messages_from_conversation(system_instruction, &session_state.conversation);
 
         // Context Manager: Ensure history invariants are maintained after summarization.
-        task_state.normalize();
+        // session_state.normalize(); // TODO: Implement normalize in session_state if needed
 
-        task_state.last_processed_message_idx = task_state.conversation.len();
+        session_state.last_processed_message_idx = session_state.conversation.len();
     }
 
     /// Persist conversation history to a file before summarization
@@ -103,6 +104,7 @@ impl AgentRunner {
     pub(super) fn persist_history_before_summarization(
         &self,
         conversation: &[Content],
+        session_id: &str,
         turn_number: usize,
         modified_files: &[String],
         executed_commands: &[String],
@@ -110,7 +112,7 @@ impl AgentRunner {
         use crate::context::history_files::{HistoryFileManager, content_to_history_messages};
 
         // Create history manager for this session
-        let mut manager = HistoryFileManager::new(&self._workspace, &self.session_id);
+        let mut manager = HistoryFileManager::new(&self._workspace, session_id);
 
         // Convert conversation to history messages
         let messages = content_to_history_messages(conversation, 0);

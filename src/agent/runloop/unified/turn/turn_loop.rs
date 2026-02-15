@@ -24,8 +24,8 @@ use vtcode_core::tools::ToolResultCache;
 use vtcode_core::tools::{ApprovalRecorder, ToolRegistry};
 use vtcode_core::ui::tui::{InlineHandle, InlineSession};
 // use vtcode_core::ui::tui::{InlineHandle, InlineSession};
-use vtcode_core::utils::ansi::AnsiRenderer;
 use vtcode_core::core::agent::steering::SteeringMessage;
+use vtcode_core::utils::ansi::AnsiRenderer;
 
 // Using `tool_output_handler::handle_pipeline_output_from_turn_ctx` adapter where needed
 
@@ -273,9 +273,9 @@ pub async fn run_turn_loop(
     loop {
         // Check for steering messages
         if let Some(receiver) = ctx.steering_receiver {
-             match receiver.try_recv() {
+            match receiver.try_recv() {
                 Ok(SteeringMessage::Stop) => {
-                     crate::agent::runloop::unified::turn::turn_helpers::display_status(
+                    crate::agent::runloop::unified::turn::turn_helpers::display_status(
                         ctx.renderer,
                         "Stopped by steering signal.",
                     )?;
@@ -283,42 +283,42 @@ pub async fn run_turn_loop(
                     break;
                 }
                 Ok(SteeringMessage::Pause) => {
-                     crate::agent::runloop::unified::turn::turn_helpers::display_status(
+                    crate::agent::runloop::unified::turn::turn_helpers::display_status(
                         ctx.renderer,
                         "Paused by steering signal. Waiting for Resume...",
                     )?;
                     // Wait for resume
-                     loop {
+                    loop {
                         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
                         match receiver.try_recv() {
                             Ok(SteeringMessage::Resume) => {
-                                 crate::agent::runloop::unified::turn::turn_helpers::display_status(
+                                crate::agent::runloop::unified::turn::turn_helpers::display_status(
                                     ctx.renderer,
                                     "Resumed by steering signal.",
                                 )?;
                                 break;
                             }
-                             Ok(SteeringMessage::Stop) => {
+                            Ok(SteeringMessage::Stop) => {
                                 result = TurnLoopResult::Cancelled;
                                 break;
                             }
                             _ => {}
                         }
                     }
-                     if matches!(result, TurnLoopResult::Cancelled) {
+                    if matches!(result, TurnLoopResult::Cancelled) {
                         break;
                     }
                 }
                 Ok(SteeringMessage::Resume) => {}
                 Ok(SteeringMessage::InjectInput(input)) => {
-                     crate::agent::runloop::unified::turn::turn_helpers::display_status(
+                    crate::agent::runloop::unified::turn::turn_helpers::display_status(
                         ctx.renderer,
                         &format!("Injected Input: {}", input),
                     )?;
-                     working_history.push(uni::Message::user(input));
+                    working_history.push(uni::Message::user(input));
                 }
                 Err(_) => {}
-             }
+            }
         }
 
         step_count += 1;

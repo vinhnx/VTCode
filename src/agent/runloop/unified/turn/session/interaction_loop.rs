@@ -671,10 +671,9 @@ async fn poll_team_mailbox(ctx: &mut InteractionLoopContext<'_>) -> Result<()> {
                 // Restore persisted mailbox offset so we don't re-read old messages
                 let r = match team_context.role {
                     TeamRole::Lead => "lead",
-                    TeamRole::Teammate => team_context
-                        .teammate_name
-                        .as_deref()
-                        .unwrap_or("teammate"),
+                    TeamRole::Teammate => {
+                        team_context.teammate_name.as_deref().unwrap_or("teammate")
+                    }
                 };
                 let _ = team.load_persisted_offset(r).await;
                 ctx.session_stats.team_state = Some(team);
@@ -710,8 +709,7 @@ async fn poll_team_mailbox(ctx: &mut InteractionLoopContext<'_>) -> Result<()> {
         if let Some(proto) = &message.protocol {
             let injected = handle_team_protocol(ctx, &message.sender, proto)?;
             if let Some(text) = injected {
-                ctx.conversation_history
-                    .push(uni::Message::system(text));
+                ctx.conversation_history.push(uni::Message::system(text));
             }
             continue;
         }
@@ -736,8 +734,7 @@ async fn poll_team_mailbox(ctx: &mut InteractionLoopContext<'_>) -> Result<()> {
         } else {
             format!("[Team message from {}]\n{}", message.sender, text)
         };
-        ctx.conversation_history
-            .push(uni::Message::user(injected));
+        ctx.conversation_history.push(uni::Message::user(injected));
     }
 
     Ok(())

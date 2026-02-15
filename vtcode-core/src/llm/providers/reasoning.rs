@@ -270,7 +270,10 @@ pub fn split_reasoning_from_text(text: &str) -> (Vec<ReasoningSegment>, Option<S
                             let trimmed = inner.trim();
                             if !trimmed.is_empty() {
                                 // Use the tag name as the stage
-                                push_unique_segment(&mut segments, ReasoningSegment::new(trimmed, Some(tag.name.to_owned())));
+                                push_unique_segment(
+                                    &mut segments,
+                                    ReasoningSegment::new(trimmed, Some(tag.name.to_owned())),
+                                );
                             }
                         } else {
                             for segment in nested_segments {
@@ -279,7 +282,10 @@ pub fn split_reasoning_from_text(text: &str) -> (Vec<ReasoningSegment>, Option<S
                             if let Some(cleaned_inner) = nested_cleaned {
                                 let trimmed = cleaned_inner.trim();
                                 if !trimmed.is_empty() {
-                                    push_unique_segment(&mut segments, ReasoningSegment::new(trimmed, Some(tag.name.to_owned())));
+                                    push_unique_segment(
+                                        &mut segments,
+                                        ReasoningSegment::new(trimmed, Some(tag.name.to_owned())),
+                                    );
                                 }
                             }
                         }
@@ -375,7 +381,13 @@ mod tests {
     fn extracts_reasoning_from_think_markup() {
         let source = "<think>first step</think>\n<answer>final output</answer>";
         let (segments, cleaned) = split_reasoning_from_text(source);
-        assert_eq!(segments, vec![ReasoningSegment::new("first step", Some("think".to_string()))]);
+        assert_eq!(
+            segments,
+            vec![ReasoningSegment::new(
+                "first step",
+                Some("think".to_string())
+            )]
+        );
         assert_eq!(cleaned, Some("\nfinal output".to_string()));
     }
 

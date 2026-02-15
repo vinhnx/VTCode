@@ -11,13 +11,13 @@ use std::time::Instant;
 use tokio::sync::Notify;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::core::agent::snapshots::SnapshotManager;
+use vtcode_core::core::agent::steering::SteeringMessage;
 use vtcode_core::exec::events::{
     ItemCompletedEvent, ItemStartedEvent, PlanDeltaEvent, PlanItem, ThreadEvent, ThreadItem,
     ThreadItemDetails,
 };
-use vtcode_core::llm::providers::ReasoningSegment;
 use vtcode_core::llm::provider as uni;
-use vtcode_core::core::agent::steering::SteeringMessage;
+use vtcode_core::llm::providers::ReasoningSegment;
 use vtcode_core::ui::tui::InlineHandle;
 use vtcode_core::ui::tui::PlanContent;
 use vtcode_core::utils::ansi::AnsiRenderer;

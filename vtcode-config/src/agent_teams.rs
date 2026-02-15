@@ -5,16 +5,12 @@ use serde::{Deserialize, Serialize};
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum TeammateMode {
+    #[default]
     Auto,
     Tmux,
     InProcess,
-}
-
-impl Default for TeammateMode {
-    fn default() -> Self {
-        Self::Auto
-    }
 }
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]

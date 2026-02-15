@@ -132,18 +132,18 @@ pub fn detect_color_scheme() -> ColorScheme {
 fn detect_color_scheme_uncached() -> ColorScheme {
     if let Ok(colorfgbg) = std::env::var("COLORFGBG") {
         let parts: Vec<&str> = colorfgbg.split(';').collect();
-        if let Some(bg_str) = parts.last() {
-            if let Ok(bg) = bg_str.parse::<u8>() {
-                return if bg == 7 || bg == 15 {
-                    ColorScheme::Light
-                } else if bg == 0 || bg == 8 {
-                    ColorScheme::Dark
-                } else if bg > 230 {
-                    ColorScheme::Light
-                } else {
-                    ColorScheme::Dark
-                };
-            }
+        if let Some(bg_str) = parts.last()
+            && let Ok(bg) = bg_str.parse::<u8>()
+        {
+            return if bg == 7 || bg == 15 {
+                ColorScheme::Light
+            } else if bg == 0 || bg == 8 {
+                ColorScheme::Dark
+            } else if bg > 230 {
+                ColorScheme::Light
+            } else {
+                ColorScheme::Dark
+            };
         }
     }
 
@@ -158,12 +158,11 @@ fn detect_color_scheme_uncached() -> ColorScheme {
         }
     }
 
-    if cfg!(target_os = "macos") {
-        if let Ok(term_program) = std::env::var("TERM_PROGRAM") {
-            if term_program == "Apple_Terminal" {
-                return ColorScheme::Light;
-            }
-        }
+    if cfg!(target_os = "macos")
+        && let Ok(term_program) = std::env::var("TERM_PROGRAM")
+        && term_program == "Apple_Terminal"
+    {
+        return ColorScheme::Light;
     }
 
     ColorScheme::Unknown

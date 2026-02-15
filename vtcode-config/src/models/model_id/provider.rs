@@ -69,8 +69,7 @@ impl ModelId {
             | ModelId::LmStudioGemma22BIt
             | ModelId::LmStudioGemma29BIt
             | ModelId::LmStudioPhi31Mini4kInstruct => Provider::LmStudio,
-            ModelId::MinimaxM25
-            | ModelId::MinimaxM2 => Provider::Minimax,
+            ModelId::MinimaxM25 | ModelId::MinimaxM2 => Provider::Minimax,
             ModelId::OpenRouterMinimaxM25 | ModelId::OpenRouterQwen3CoderNext => {
                 Provider::OpenRouter
             }

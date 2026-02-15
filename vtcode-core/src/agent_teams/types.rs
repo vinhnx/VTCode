@@ -71,7 +71,12 @@ impl TeamConfig {
         let active_tasks: Vec<&TeamTask> = tasks
             .tasks
             .iter()
-            .filter(|t| matches!(t.status, TeamTaskStatus::Pending | TeamTaskStatus::InProgress))
+            .filter(|t| {
+                matches!(
+                    t.status,
+                    TeamTaskStatus::Pending | TeamTaskStatus::InProgress
+                )
+            })
             .collect();
         if active_tasks.is_empty() {
             let _ = writeln!(out, "Tasks: none pending");

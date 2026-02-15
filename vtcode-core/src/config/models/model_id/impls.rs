@@ -215,9 +215,7 @@ impl ModelId {
             | ModelId::LmStudioGemma22BIt
             | ModelId::LmStudioGemma29BIt
             | ModelId::LmStudioPhi31Mini4kInstruct => Provider::LmStudio,
-            ModelId::MinimaxM25 | ModelId::MinimaxM2 => {
-                Provider::Minimax
-            }
+            ModelId::MinimaxM25 | ModelId::MinimaxM2 => Provider::Minimax,
             // OpenRouter models - fallback for any OpenRouter model without metadata
             ModelId::OpenRouterGrokCodeFast1
             | ModelId::OpenRouterGrok4Fast

@@ -131,8 +131,8 @@ impl FromStr for ModelId {
             s if s == models::huggingface::QWEN3_CODER_NEXT_NOVITA => {
                 Ok(ModelId::HuggingFaceQwen3CoderNextNovita)
             }
-            s if s == "minimax/minimax-m2.5" => Ok(ModelId::OpenRouterMinimaxM25),
-            s if s == "qwen/qwen3-coder-next" => Ok(ModelId::OpenRouterQwen3CoderNext),
+            "minimax/minimax-m2.5" => Ok(ModelId::OpenRouterMinimaxM25),
+            "qwen/qwen3-coder-next" => Ok(ModelId::OpenRouterQwen3CoderNext),
             _ => {
                 if let Some(model) = Self::parse_openrouter_model(s) {
                     Ok(model)

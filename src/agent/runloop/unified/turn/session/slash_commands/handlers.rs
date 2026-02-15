@@ -1098,8 +1098,7 @@ pub async fn handle_share_log(ctx: SlashCommandContext<'_>) -> Result<SlashComma
         "messages": log_messages,
     });
 
-    let json = serde_json::to_string_pretty(&export)
-        .context("Failed to serialize session log")?;
+    let json = serde_json::to_string_pretty(&export).context("Failed to serialize session log")?;
     std::fs::write(&output_path, &json)
         .with_context(|| format!("Failed to write session log to {}", output_path.display()))?;
 
@@ -2005,7 +2004,9 @@ pub async fn handle_manage_teams(
                         "teammate": teammate,
                     })),
                 };
-                let _ = team.send_protocol("lead", "system", proto, Some(task_id)).await;
+                let _ = team
+                    .send_protocol("lead", "system", proto, Some(task_id))
+                    .await;
             };
             ctx.renderer.line(
                 MessageStyle::Info,

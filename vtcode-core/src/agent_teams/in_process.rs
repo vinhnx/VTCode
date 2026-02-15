@@ -64,10 +64,8 @@ impl InProcessTeamRunner {
 
         let join = tokio::spawn(teammate_loop(config, shutdown_rx));
 
-        self.handles.insert(
-            name.clone(),
-            TeammateHandle { shutdown_tx, join },
-        );
+        self.handles
+            .insert(name.clone(), TeammateHandle { shutdown_tx, join });
 
         info!(teammate = %name, team = %self.team_name, "Spawned in-process teammate");
         Ok(())
@@ -309,12 +307,9 @@ fn create_teammate_client(config: &TeammateSpawnConfig) -> Result<AnyClient> {
         .unwrap_or("haiku")
         .to_string();
 
-    let provider = crate::llm::factory::create_provider_for_model(
-        &model_string,
-        config.api_key.clone(),
-        None,
-    )
-    .context("Failed to create LLM provider for in-process teammate")?;
+    let provider =
+        crate::llm::factory::create_provider_for_model(&model_string, config.api_key.clone(), None)
+            .context("Failed to create LLM provider for in-process teammate")?;
 
     Ok(Box::new(ProviderClientAdapter::new(provider, model_string)))
 }
@@ -333,11 +328,7 @@ impl TeamMailboxMessage {
         }
     }
 
-    pub fn protocol(
-        sender: &str,
-        protocol: TeamProtocolMessage,
-        task_id: Option<u64>,
-    ) -> Self {
+    pub fn protocol(sender: &str, protocol: TeamProtocolMessage, task_id: Option<u64>) -> Self {
         Self {
             sender: sender.to_string(),
             content: None,

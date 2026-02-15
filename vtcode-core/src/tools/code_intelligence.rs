@@ -225,8 +225,7 @@ impl CodeIntelligenceTool {
         &self,
         input: &CodeIntelligenceInput,
     ) -> Result<CodeIntelligenceOutput> {
-        let file_path =
-            require_field(input.file_path.as_ref(), "file_path", "find_references")?;
+        let file_path = require_field(input.file_path.as_ref(), "file_path", "find_references")?;
         let line = require_field(input.line, "line", "find_references")?;
         let character = require_field(input.character, "character", "find_references")?;
 

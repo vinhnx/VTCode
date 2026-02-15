@@ -11,7 +11,7 @@ pub fn estimate_tokens(text: &str) -> usize {
     }
     // Simple estimation: 1 token ≈ 4 characters.
     // Use ceiling division: (len + 3) / 4
-    (text.len() + 3) / 4
+    text.len().div_ceil(4)
 }
 
 /// Truncate string to approximate token limit

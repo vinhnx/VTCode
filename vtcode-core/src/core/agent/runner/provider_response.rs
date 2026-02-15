@@ -86,7 +86,8 @@ impl AgentRunner {
                             Err(err) => {
                                 let mut failures = self.streaming_failures.lock();
                                 *failures = failures.saturating_add(1);
-                                *self.streaming_last_failure.lock() = Some(std::time::Instant::now());
+                                *self.streaming_last_failure.lock() =
+                                    Some(std::time::Instant::now());
                                 self.failure_tracker.lock().record_failure();
                                 if !self.quiet {
                                     println!(

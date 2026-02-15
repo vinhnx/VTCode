@@ -8,7 +8,7 @@ use crate::config::types::{ReasoningEffortLevel, VerbosityLevel};
 use crate::core::agent::events::EventSink;
 use crate::core::agent::state::ApiFailureTracker;
 use crate::core::agent::steering::SteeringMessage;
-use crate::core::agent::task::{ContextItem, Task, TaskOutcome, TaskResults};
+
 use crate::core::agent::types::AgentType;
 use crate::core::context_optimizer::ContextOptimizer;
 use crate::core::loop_detector::LoopDetector;
@@ -21,10 +21,10 @@ use crate::prompts::system::compose_system_instruction_text;
 use crate::tools::{ToolRegistry, build_function_declarations};
 
 use anyhow::{Result, anyhow};
+use parking_lot::Mutex;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
-use parking_lot::Mutex;
 use tracing::warn;
 
 mod config_helpers;

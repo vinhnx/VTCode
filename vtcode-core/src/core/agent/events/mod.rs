@@ -1,14 +1,15 @@
 //! Event recording utilities for the agent runner.
 
+pub mod unified;
+
 use crate::exec::events::{
     AgentMessageItem, CommandExecutionItem, CommandExecutionStatus, ErrorItem, FileChangeItem,
     FileUpdateChange, ItemCompletedEvent, ItemStartedEvent, ItemUpdatedEvent, PatchApplyStatus,
     PatchChangeKind, ReasoningItem, ThreadEvent, ThreadItem, ThreadItemDetails, ThreadStartedEvent,
     TurnCompletedEvent, TurnFailedEvent, TurnStartedEvent, Usage,
 };
-use std::sync::Arc;
 use parking_lot::Mutex;
-use tracing::warn;
+use std::sync::Arc;
 
 /// Callback type alias for streaming structured events.
 pub type EventSink = Arc<Mutex<Box<dyn FnMut(&ThreadEvent) + Send>>>;

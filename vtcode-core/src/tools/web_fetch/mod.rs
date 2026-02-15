@@ -258,7 +258,11 @@ impl WebFetchTool {
             return Ok((Vec::new(), Vec::new()));
         }
 
-        let content = with_path_context(fs::read_to_string(&expanded_path), "read blocklist from", path)?;
+        let content = with_path_context(
+            fs::read_to_string(&expanded_path),
+            "read blocklist from",
+            path,
+        )?;
 
         #[derive(Deserialize)]
         struct BlocklistFile {
@@ -266,8 +270,11 @@ impl WebFetchTool {
             blocked_patterns: Option<Vec<String>>,
         }
 
-        let blocklist: BlocklistFile =
-            with_path_context(serde_json::from_str(&content), "parse blocklist JSON from", path)?;
+        let blocklist: BlocklistFile = with_path_context(
+            serde_json::from_str(&content),
+            "parse blocklist JSON from",
+            path,
+        )?;
 
         Ok((
             blocklist.blocked_domains.unwrap_or_default(),
@@ -283,15 +290,22 @@ impl WebFetchTool {
             return Ok(Vec::new());
         }
 
-        let content = with_path_context(fs::read_to_string(&expanded_path), "read whitelist from", path)?;
+        let content = with_path_context(
+            fs::read_to_string(&expanded_path),
+            "read whitelist from",
+            path,
+        )?;
 
         #[derive(Deserialize)]
         struct WhitelistFile {
             allowed_domains: Option<Vec<String>>,
         }
 
-        let whitelist: WhitelistFile =
-            with_path_context(serde_json::from_str(&content), "parse whitelist JSON from", path)?;
+        let whitelist: WhitelistFile = with_path_context(
+            serde_json::from_str(&content),
+            "parse whitelist JSON from",
+            path,
+        )?;
 
         Ok(whitelist.allowed_domains.unwrap_or_default())
     }
