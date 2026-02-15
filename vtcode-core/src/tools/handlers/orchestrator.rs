@@ -260,8 +260,10 @@ impl ToolOrchestrator {
         match runtime.run(req, &attempt, ctx).await {
             Ok(out) => Ok(out),
             Err(ToolError::SandboxDenied(_)) if runtime.escalate_on_failure() => {
-                // Retry without sandbox if escalation is allowed
-                tracing::debug!("Sandbox failed, escalating to unsandboxed execution");
+                // SandboxDenied = policy prevented execution; escalate to unsandboxed.
+                // Other errors (Rejected, Codex, Timeout) are not sandbox-related
+                // and would not benefit from retrying without a sandbox.
+                tracing::debug!("Sandbox policy denied execution, escalating to unsandboxed");
                 let escalated = self.sandbox.create_escalated_attempt(&policy);
                 runtime.run(req, &escalated, ctx).await
             }
@@ -406,15 +408,158 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use async_trait::async_trait;
+    use std::path::PathBuf;
+
+    use crate::tools::handlers::tool_handler::{ShellEnvironmentPolicy, ToolEvent};
+
+    struct TestSession {
+        cwd: PathBuf,
+    }
+
+    impl TestSession {
+        fn new(cwd: PathBuf) -> Self {
+            Self { cwd }
+        }
+    }
+
+    #[async_trait]
+    impl ToolSession for TestSession {
+        fn cwd(&self) -> &PathBuf {
+            &self.cwd
+        }
+
+        fn workspace_root(&self) -> &PathBuf {
+            &self.cwd
+        }
+
+        async fn record_warning(&self, _message: String) {}
+
+        fn user_shell(&self) -> &str {
+            "/bin/zsh"
+        }
+
+        async fn send_event(&self, _event: ToolEvent) {}
+    }
+
+    struct TestRuntime {
+        calls: usize,
+        escalate: bool,
+    }
+
+    impl TestRuntime {
+        fn new(escalate: bool) -> Self {
+            Self { calls: 0, escalate }
+        }
+    }
+
+    impl Sandboxable for TestRuntime {
+        fn sandbox_preference(&self) -> SandboxablePreference {
+            SandboxablePreference::Auto
+        }
+
+        fn escalate_on_failure(&self) -> bool {
+            self.escalate
+        }
+    }
+
+    #[async_trait]
+    impl ToolRuntime<(), &'static str> for TestRuntime {
+        async fn run(
+            &mut self,
+            _req: &(),
+            attempt: &SandboxAttempt<'_>,
+            _ctx: &ToolCtx<'_>,
+        ) -> Result<&'static str, ToolError> {
+            self.calls += 1;
+            if attempt.is_escalated {
+                Ok("ok")
+            } else {
+                Err(ToolError::SandboxDenied("denied".to_string()))
+            }
+        }
+    }
+
+    fn test_turn_context(cwd: PathBuf) -> TurnContext {
+        TurnContext {
+            cwd,
+            turn_id: "turn-1".to_string(),
+            sub_id: None,
+            shell_environment_policy: ShellEnvironmentPolicy::Inherit,
+            approval_policy: ApprovalPolicy::Never,
+            codex_linux_sandbox_exe: None,
+            sandbox_policy: super::super::sandboxing::SandboxPolicy::default(),
+        }
+    }
 
     #[test]
     fn test_sandbox_preference_default() {
-        struct TestRuntime;
-        impl Sandboxable for TestRuntime {}
+        struct DefaultRuntime;
+        impl Sandboxable for DefaultRuntime {}
 
-        let runtime = TestRuntime;
+        let runtime = DefaultRuntime;
         assert_eq!(runtime.sandbox_preference(), SandboxablePreference::Auto);
         assert!(!runtime.escalate_on_failure());
+    }
+
+    #[tokio::test]
+    async fn test_orchestrator_escalates_on_sandbox_denied() {
+        let cwd = PathBuf::from(".");
+        let session = TestSession::new(cwd.clone());
+        let turn = test_turn_context(cwd);
+        let ctx = ToolCtx {
+            session: &session,
+            turn: &turn,
+            call_id: "call-1".to_string(),
+            tool_name: "test".to_string(),
+        };
+
+        let mut runtime = TestRuntime::new(true);
+        let mut orchestrator = ToolOrchestrator::new();
+
+        let out = orchestrator
+            .run(
+                &mut runtime,
+                &(),
+                &ctx,
+                &turn,
+                crate::tools::handlers::tool_handler::ApprovalPolicy::Never,
+            )
+            .await
+            .expect("expected successful escalated run");
+
+        assert_eq!(out, "ok");
+        assert_eq!(runtime.calls, 2);
+    }
+
+    #[tokio::test]
+    async fn test_orchestrator_does_not_escalate_when_disabled() {
+        let cwd = PathBuf::from(".");
+        let session = TestSession::new(cwd.clone());
+        let turn = test_turn_context(cwd);
+        let ctx = ToolCtx {
+            session: &session,
+            turn: &turn,
+            call_id: "call-2".to_string(),
+            tool_name: "test".to_string(),
+        };
+
+        let mut runtime = TestRuntime::new(false);
+        let mut orchestrator = ToolOrchestrator::new();
+
+        let err = orchestrator
+            .run(
+                &mut runtime,
+                &(),
+                &ctx,
+                &turn,
+                crate::tools::handlers::tool_handler::ApprovalPolicy::Never,
+            )
+            .await
+            .expect_err("expected sandbox denial without escalation");
+
+        assert!(matches!(err, ToolError::SandboxDenied(_)));
+        assert_eq!(runtime.calls, 1);
     }
 
     #[test]

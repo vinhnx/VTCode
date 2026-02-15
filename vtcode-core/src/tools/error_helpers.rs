@@ -1,11 +1,16 @@
 //! Shared error helpers to reduce repetitive .with_context() patterns
 
 use anyhow::{Context, Result};
+use std::fmt::Display;
 use std::path::Path;
 
 /// Wrap a file operation result with standardized path context.
 /// Works with any `Result<T, E>` where `E` implements `std::error::Error`.
-pub fn with_file_context<T, E>(result: Result<T, E>, operation: &str, path: &Path) -> Result<T>
+pub fn with_file_context<T, E>(
+    result: std::result::Result<T, E>,
+    operation: impl Display,
+    path: &Path,
+) -> Result<T>
 where
     E: std::error::Error + Send + Sync + 'static,
 {
@@ -13,7 +18,11 @@ where
 }
 
 /// Like [`with_file_context`] but accepts a string path instead of `&Path`.
-pub fn with_path_context<T, E>(result: Result<T, E>, operation: &str, path: &str) -> Result<T>
+pub fn with_path_context<T, E>(
+    result: std::result::Result<T, E>,
+    operation: impl Display,
+    path: impl Display,
+) -> Result<T>
 where
     E: std::error::Error + Send + Sync + 'static,
 {

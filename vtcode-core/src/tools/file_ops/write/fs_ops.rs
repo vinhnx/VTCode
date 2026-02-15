@@ -186,11 +186,9 @@ impl FileOpsTool {
             tokio::fs::create_dir_all(parent).await?;
         }
 
-        with_path_context(
-            tokio::fs::rename(&from_path, &to_path).await,
-            &format!("move to '{destination}'"),
-            &path,
-        )?;
+        tokio::fs::rename(&from_path, &to_path)
+            .await
+            .with_context(|| format!("Failed to move '{}' to '{}'", path, destination))?;
 
         info!(from = %path, to = %destination, "Moved successfully");
 
@@ -251,11 +249,9 @@ impl FileOpsTool {
                 }
             }
         } else {
-            with_path_context(
-                tokio::fs::copy(&from_path, &to_path).await,
-                &format!("copy to '{destination}'"),
-                &path,
-            )?;
+            tokio::fs::copy(&from_path, &to_path)
+                .await
+                .with_context(|| format!("Failed to copy '{}' to '{}'", path, destination))?;
         }
 
         info!(from = %path, to = %destination, "Copied successfully");

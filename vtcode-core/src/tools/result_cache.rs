@@ -332,7 +332,7 @@ mod tests {
         assert_eq!(stats.current_size, 2);
         assert_eq!(stats.max_size, 10);
         assert_eq!(stats.hits, 3);
-        assert_eq!(stats.misses, 2); // 2 from initial gets
+        assert_eq!(stats.misses, 0); // all lookups above are hits
     }
 
     #[test]
