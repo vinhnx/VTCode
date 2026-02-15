@@ -88,6 +88,7 @@ fn test_header_context_rendering() {
         git: "main branch".to_string(),
         mode: "interactive".to_string(),
         reasoning: "creative".to_string(),
+        reasoning_stage: None,
         workspace_trust: "trusted".to_string(),
         tools: "enabled".to_string(),
         mcp: "available".to_string(),

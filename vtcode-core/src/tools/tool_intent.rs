@@ -107,11 +107,17 @@ pub fn unified_file_action(args: &Value) -> Option<&str> {
 /// Returns the action string or None if no inference is possible.
 pub fn unified_exec_action(args: &Value) -> Option<&str> {
     args.get("action").and_then(|v| v.as_str()).or_else(|| {
-        if args.get("command").is_some() {
+        if args.get("command").is_some()
+            || args.get("cmd").is_some()
+            || args.get("raw_command").is_some()
+        {
             Some("run")
         } else if args.get("code").is_some() {
             Some("code")
-        } else if args.get("input").is_some() {
+        } else if args.get("input").is_some()
+            || args.get("chars").is_some()
+            || args.get("text").is_some()
+        {
             Some("write")
         } else if args.get("session_id").is_some() {
             Some("poll")
@@ -183,5 +189,35 @@ mod tests {
         assert!(intent.mutating);
         assert!(intent.destructive);
         assert!(!intent.retry_safe);
+    }
+
+    #[test]
+    fn unified_exec_cmd_alias_infers_run() {
+        let intent = classify_tool_intent(tools::UNIFIED_EXEC, &json!({"cmd": "ls -la"}));
+        assert!(intent.mutating);
+        assert!(intent.destructive);
+        assert!(!intent.readonly_unified_action);
+    }
+
+    #[test]
+    fn unified_exec_chars_alias_infers_write() {
+        let intent = classify_tool_intent(
+            tools::UNIFIED_EXEC,
+            &json!({"session_id": "abc123", "chars": "status\n"}),
+        );
+        assert!(intent.mutating);
+        assert!(intent.destructive);
+        assert!(!intent.readonly_unified_action);
+    }
+
+    #[test]
+    fn unified_exec_text_alias_infers_write() {
+        let intent = classify_tool_intent(
+            tools::UNIFIED_EXEC,
+            &json!({"session_id": "abc123", "text": "status\n"}),
+        );
+        assert!(intent.mutating);
+        assert!(intent.destructive);
+        assert!(!intent.readonly_unified_action);
     }
 }

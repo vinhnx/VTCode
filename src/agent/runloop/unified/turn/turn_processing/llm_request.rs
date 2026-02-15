@@ -17,7 +17,6 @@ use crate::agent::runloop::unified::extract_action_from_messages;
 use crate::agent::runloop::unified::turn::context::TurnProcessingContext;
 
 struct UnsafeSendContext {
-    renderer: usize,
     handle: usize,
 }
 unsafe impl Send for UnsafeSendContext {}
@@ -155,7 +154,23 @@ pub(crate) async fn execute_llm_request(
                     MAX_RETRIES
                 ),
             )?;
-            tokio::time::sleep(delay).await;
+            let cancel_notifier = ctx.ctrl_c_notify.notified();
+            tokio::pin!(cancel_notifier);
+            tokio::select! {
+                _ = tokio::time::sleep(delay) => {}
+                _ = &mut cancel_notifier => {
+                    if ctx.ctrl_c_state.is_cancel_requested() || ctx.ctrl_c_state.is_exit_requested() {
+                        llm_result = Err(anyhow::Error::new(uni::LLMError::Provider {
+                            message: vtcode_core::llm::error_display::format_llm_error(
+                                &provider_name,
+                                "Interrupted by user",
+                            ),
+                            metadata: None,
+                        }));
+                        break;
+                    }
+                }
+            }
         }
 
         let spinner_msg = if attempt > 0 {
@@ -211,7 +226,6 @@ pub(crate) async fn execute_llm_request(
                 );
 
             let send_ctx = UnsafeSendContext {
-                renderer: ctx.renderer as *mut ::vtcode_core::utils::ansi::AnsiRenderer as usize,
                 handle: ctx.handle as *const ::vtcode_core::ui::tui::InlineHandle
                     as *mut ::vtcode_core::ui::tui::InlineHandle as usize,
             };
@@ -220,18 +234,8 @@ pub(crate) async fn execute_llm_request(
                 move |event: ::vtcode_core::core::agent::events::AgentEvent| unsafe {
                     use ::vtcode_core::core::agent::events::AgentEvent;
                     match event {
-                        AgentEvent::OutputDelta { delta } => {
-                            let r: &mut ::vtcode_core::utils::ansi::AnsiRenderer = &mut *(send_ctx
-                                .renderer
-                                as *mut ::vtcode_core::utils::ansi::AnsiRenderer);
-                            let _ = r.render_token_delta(&delta);
-                        }
-                        AgentEvent::ThinkingDelta { delta } => {
-                            let r: &mut ::vtcode_core::utils::ansi::AnsiRenderer = &mut *(send_ctx
-                                .renderer
-                                as *mut ::vtcode_core::utils::ansi::AnsiRenderer);
-                            let _ = r.render_reasoning_delta(&delta);
-                        }
+                        AgentEvent::OutputDelta { .. } => {}
+                        AgentEvent::ThinkingDelta { .. } => {}
                         AgentEvent::ThinkingStage { stage } => {
                             let h: &mut ::vtcode_core::ui::tui::InlineHandle = &mut *(send_ctx
                                 .handle
@@ -257,7 +261,7 @@ pub(crate) async fn execute_llm_request(
                 .await;
 
             match res {
-                Ok((response, _content, _reasoning)) => Ok((response, true)),
+                Ok((response, _content, _reasoning)) => Ok((response, false)),
                 Err(err) => Err(anyhow::anyhow!(err.to_string())),
             }
         } else if ctx.ctrl_c_state.is_cancel_requested() || ctx.ctrl_c_state.is_exit_requested() {

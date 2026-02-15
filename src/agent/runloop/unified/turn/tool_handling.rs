@@ -6,6 +6,7 @@ use std::path::PathBuf;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::core::trajectory::TrajectoryLogger;
 use vtcode_core::llm::provider as uni;
+use vtcode_core::tools::registry::labels::tool_action_label;
 use vtcode_core::utils::ansi::MessageStyle;
 
 use crate::agent::runloop::unified::tool_pipeline::{ToolExecutionStatus, ToolPipelineOutcome};
@@ -130,7 +131,8 @@ pub(crate) async fn handle_tool_execution_result(
         }
         ToolExecutionStatus::Cancelled => {
             // Add cancellation result to history
-            let error_msg = format!("Tool '{}' execution cancelled", tool_name);
+            let display_tool = tool_action_label(tool_name, args_val);
+            let error_msg = format!("Tool '{}' execution cancelled", display_tool);
             ctx.renderer.line(MessageStyle::Info, &error_msg)?;
 
             let error_content = serde_json::json!({"error": error_msg});

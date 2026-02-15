@@ -1,4 +1,4 @@
-use crate::config::constants::defaults;
+use crate::config::constants::{defaults, tools as tool_names};
 use crate::llm::provider::{Message, MessageContent, MessageRole};
 use crate::telemetry::perf::PerfSpan;
 use crate::utils::dot_config::DotManager;
@@ -273,6 +273,68 @@ fn generate_unique_archive_path(
     }
 }
 
+fn progress_transcript_from_recent_messages(recent_messages: &[SessionMessage]) -> Vec<String> {
+    let mut transcript = Vec::new();
+
+    for message in recent_messages {
+        if !matches!(message.role, MessageRole::User | MessageRole::Assistant) {
+            continue;
+        }
+
+        let content = message.content.trim();
+        let content: &str = content.as_ref();
+        if !content.is_empty()
+            && transcript
+                .last()
+                .is_none_or(|last: &String| last.as_str() != content)
+        {
+            transcript.push(content.to_string());
+        }
+
+        if matches!(message.role, MessageRole::Assistant)
+            && let Some(reasoning) = message.reasoning.as_deref()
+        {
+            let reasoning = reasoning.trim();
+            if !reasoning.is_empty()
+                && reasoning != content
+                && transcript
+                    .last()
+                    .is_none_or(|last: &String| last.as_str() != reasoning)
+            {
+                transcript.push(reasoning.to_string());
+            }
+        }
+    }
+
+    transcript
+}
+
+fn normalize_session_tool_name(name: &str) -> String {
+    match name {
+        n if n == tool_names::UNIFIED_EXEC
+            || n == tool_names::SHELL
+            || n == tool_names::EXEC_PTY_CMD =>
+        {
+            tool_names::RUN_PTY_CMD.to_string()
+        }
+        _ => name.to_string(),
+    }
+}
+
+fn normalize_distinct_tools_for_summary(distinct_tools: &[String]) -> Vec<String> {
+    let mut normalized = Vec::with_capacity(distinct_tools.len());
+    let mut seen = std::collections::BTreeSet::new();
+
+    for tool in distinct_tools {
+        let mapped = normalize_session_tool_name(tool);
+        if seen.insert(mapped.clone()) {
+            normalized.push(mapped);
+        }
+    }
+
+    normalized
+}
+
 #[derive(Debug, Clone)]
 pub struct SessionArchive {
     path: PathBuf,
@@ -330,6 +392,7 @@ impl SessionArchive {
         distinct_tools: Vec<String>,
         messages: Vec<SessionMessage>,
     ) -> Result<PathBuf> {
+        let distinct_tools = normalize_distinct_tools_for_summary(&distinct_tools);
         let snapshot = SessionSnapshot {
             metadata: self.metadata.clone(),
             started_at: self.started_at,
@@ -348,14 +411,16 @@ impl SessionArchive {
         let mut perf = PerfSpan::new("vtcode.perf.session_progress_write_ms");
         perf.tag("mode", "sync");
 
-        let tool_summaries = args.distinct_tools.clone();
+        let progress_transcript = progress_transcript_from_recent_messages(&args.recent_messages);
+        let distinct_tools = normalize_distinct_tools_for_summary(&args.distinct_tools);
+        let tool_summaries = distinct_tools.clone();
         let snapshot = SessionSnapshot {
             metadata: self.metadata.clone(),
             started_at: self.started_at,
             ended_at: Utc::now(),
             total_messages: args.total_messages,
-            distinct_tools: args.distinct_tools,
-            transcript: Vec::new(),
+            distinct_tools,
+            transcript: progress_transcript,
             messages: args.recent_messages.clone(),
             progress: Some(SessionProgress {
                 turn_number: args.turn_number,
@@ -378,14 +443,16 @@ impl SessionArchive {
             return Ok(self.path.clone());
         }
 
-        let tool_summaries = args.distinct_tools.clone();
+        let progress_transcript = progress_transcript_from_recent_messages(&args.recent_messages);
+        let distinct_tools = normalize_distinct_tools_for_summary(&args.distinct_tools);
+        let tool_summaries = distinct_tools.clone();
         let snapshot = SessionSnapshot {
             metadata: self.metadata.clone(),
             started_at: self.started_at,
             ended_at: Utc::now(),
             total_messages: args.total_messages,
-            distinct_tools: args.distinct_tools,
-            transcript: Vec::new(),
+            distinct_tools,
+            transcript: progress_transcript,
             messages: args.recent_messages.clone(),
             progress: Some(SessionProgress {
                 turn_number: args.turn_number,
@@ -853,6 +920,104 @@ mod tests {
         assert_eq!(progress.token_usage, Some("10 tokens".to_string()));
         assert_eq!(progress.tool_summaries, vec!["tool_a".to_string()]);
         assert_eq!(progress.max_context_tokens, Some(128));
+        assert_eq!(snapshot.transcript, vec!["recent".to_string()]);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn session_progress_transcript_skips_tool_noise_and_duplicates() -> Result<()> {
+        let temp_dir = tempfile::tempdir().context("failed to create temp dir")?;
+        let _guard = EnvGuard::set(SESSION_DIR_ENV, temp_dir.path());
+
+        let metadata = SessionArchiveMetadata::new(
+            "ExampleWorkspace",
+            "/tmp/example",
+            "model-x",
+            "provider-y",
+            "dark",
+            "medium",
+        );
+        let archive = SessionArchive::new(metadata, None).await?;
+        let mut assistant = SessionMessage::new(MessageRole::Assistant, "done");
+        assistant.reasoning = Some("reasoned".to_string());
+        let recent = vec![
+            SessionMessage::new(MessageRole::User, "run cargo check"),
+            SessionMessage::new(MessageRole::Tool, "{\"output\":\"...\"}"),
+            SessionMessage::new(MessageRole::Assistant, "done"),
+            assistant,
+        ];
+
+        let path = archive.persist_progress(SessionProgressArgs {
+            total_messages: recent.len(),
+            distinct_tools: vec!["unified_exec".to_owned()],
+            recent_messages: recent,
+            turn_number: 2,
+            token_usage: Some("10 tokens".to_string()),
+            max_context_tokens: Some(128),
+            loaded_skills: None,
+        })?;
+
+        let stored = fs::read_to_string(&path)
+            .with_context(|| format!("failed to read stored session: {}", path.display()))?;
+        let snapshot: SessionSnapshot =
+            serde_json::from_str(&stored).context("failed to deserialize stored snapshot")?;
+
+        assert_eq!(
+            snapshot.transcript,
+            vec![
+                "run cargo check".to_string(),
+                "done".to_string(),
+                "reasoned".to_string()
+            ]
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn session_progress_normalizes_pty_tool_aliases_in_summaries() -> Result<()> {
+        let temp_dir = tempfile::tempdir().context("failed to create temp dir")?;
+        let _guard = EnvGuard::set(SESSION_DIR_ENV, temp_dir.path());
+
+        let metadata = SessionArchiveMetadata::new(
+            "ExampleWorkspace",
+            "/tmp/example",
+            "model-x",
+            "provider-y",
+            "dark",
+            "medium",
+        );
+        let archive = SessionArchive::new(metadata, None).await?;
+        let recent = vec![SessionMessage::new(MessageRole::Assistant, "done")];
+
+        let path = archive.persist_progress(SessionProgressArgs {
+            total_messages: 1,
+            distinct_tools: vec![
+                tool_names::UNIFIED_EXEC.to_string(),
+                tool_names::RUN_PTY_CMD.to_string(),
+                tool_names::SHELL.to_string(),
+                tool_names::EXEC_PTY_CMD.to_string(),
+            ],
+            recent_messages: recent,
+            turn_number: 2,
+            token_usage: Some("10 tokens".to_string()),
+            max_context_tokens: Some(128),
+            loaded_skills: None,
+        })?;
+
+        let stored = fs::read_to_string(&path)
+            .with_context(|| format!("failed to read stored session: {}", path.display()))?;
+        let snapshot: SessionSnapshot =
+            serde_json::from_str(&stored).context("failed to deserialize stored snapshot")?;
+
+        assert_eq!(
+            snapshot.distinct_tools,
+            vec![tool_names::RUN_PTY_CMD.to_string()]
+        );
+        let progress = snapshot.progress.expect("progress should exist");
+        assert_eq!(
+            progress.tool_summaries,
+            vec![tool_names::RUN_PTY_CMD.to_string()]
+        );
         Ok(())
     }
 

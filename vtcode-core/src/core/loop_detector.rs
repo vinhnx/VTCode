@@ -14,9 +14,18 @@ const MAX_OTHER_TOOL_CALLS: usize = 3; // Other tools (default)
 const DETECTION_WINDOW: usize = 10;
 const HARD_LIMIT_MULTIPLIER: usize = 2; // Hard stop at 2x soft limit
 
+#[inline]
+fn base_tool_name(tool_name: &str) -> &str {
+    tool_name
+        .split_once("::")
+        .map(|(base, _)| base)
+        .unwrap_or(tool_name)
+}
+
 /// Normalize tool arguments for consistent loop detection.
 /// This ensures path variations like ".", "", "./" are treated as the same root path.
 fn normalize_args_for_detection(tool_name: &str, args: &serde_json::Value) -> serde_json::Value {
+    let base_name = base_tool_name(tool_name);
     if let Some(obj) = args.as_object() {
         let mut normalized = obj.clone();
 
@@ -25,7 +34,7 @@ fn normalize_args_for_detection(tool_name: &str, args: &serde_json::Value) -> se
         normalized.remove("per_page");
 
         // For list_files: normalize root path variations
-        if tool_name == tools::LIST_FILES {
+        if base_name == tools::LIST_FILES {
             if let Some(path) = normalized.get("path").and_then(|v| v.as_str()) {
                 let trimmed = path.trim();
                 let only_root_markers = trimmed.trim_matches(|c| c == '.' || c == '/').is_empty();
@@ -284,9 +293,26 @@ impl LoopDetector {
         if let Some(&limit) = self.custom_limits.get(tool_name) {
             return limit;
         }
+        let base_name = base_tool_name(tool_name);
+        if let Some(&limit) = self.custom_limits.get(base_name) {
+            return limit;
+        }
 
-        match tool_name {
-            tools::READ_FILE | tools::GREP_FILE | tools::LIST_FILES => MAX_READONLY_TOOL_CALLS,
+        if base_name == tools::UNIFIED_FILE {
+            if let Some((_, action)) = tool_name.split_once("::") {
+                return if action.eq_ignore_ascii_case("read") {
+                    MAX_READONLY_TOOL_CALLS
+                } else {
+                    MAX_WRITE_TOOL_CALLS
+                };
+            }
+            return MAX_READONLY_TOOL_CALLS;
+        }
+
+        match base_name {
+            tools::READ_FILE | tools::GREP_FILE | tools::LIST_FILES | tools::UNIFIED_SEARCH => {
+                MAX_READONLY_TOOL_CALLS
+            }
             tools::WRITE_FILE | tools::EDIT_FILE | "apply_patch" => MAX_WRITE_TOOL_CALLS,
             tools::RUN_PTY_CMD
             | tools::EXECUTE_CODE
@@ -300,8 +326,9 @@ impl LoopDetector {
 
     #[inline]
     fn should_enforce_identical_limit(tool_name: &str) -> bool {
+        let base_name = base_tool_name(tool_name);
         !matches!(
-            tool_name,
+            base_name,
             tools::RUN_PTY_CMD
                 | tools::EXECUTE_CODE
                 | tools::EXEC_PTY_CMD
@@ -314,7 +341,7 @@ impl LoopDetector {
     /// Suggest alternatives for stuck tools (extracted to static method for efficiency)
     #[inline]
     fn suggest_alternative_for_tool(tool_name: &str) -> String {
-        match tool_name {
+        match base_tool_name(tool_name) {
             tools::LIST_FILES => "Instead of listing repeatedly:\n\
                  • Use grep_file to search for specific patterns\n\
                  • Target specific subdirectories (e.g., 'src/', 'tests/')\n\
@@ -614,5 +641,43 @@ mod tests {
         let warning = detector.record_call(tools::LIST_FILES, &args);
         assert!(warning.is_some());
         assert!(warning.unwrap().contains("Loop detected"));
+    }
+
+    #[test]
+    fn test_unified_file_action_suffix_uses_action_specific_limit() {
+        let mut detector = LoopDetector::with_max_repeated_calls(100);
+        let tool_key = format!("{}::read", tools::UNIFIED_FILE);
+
+        for idx in 0..(MAX_WRITE_TOOL_CALLS * HARD_LIMIT_MULTIPLIER) {
+            let args = json!({"path": "src/main.rs", "offset_lines": idx + 1, "limit": 1});
+            let _ = detector.record_call(&tool_key, &args);
+        }
+
+        // Read action should not use write limits.
+        assert!(!detector.is_hard_limit_exceeded(&tool_key));
+    }
+
+    #[test]
+    fn test_unified_file_write_suffix_uses_write_limit() {
+        let mut detector = LoopDetector::with_max_repeated_calls(100);
+        let tool_key = format!("{}::write", tools::UNIFIED_FILE);
+
+        for idx in 0..(MAX_WRITE_TOOL_CALLS * HARD_LIMIT_MULTIPLIER) {
+            let args = json!({"path": format!("src/file_{idx}.rs"), "content": "x"});
+            let _ = detector.record_call(&tool_key, &args);
+        }
+
+        assert!(detector.is_hard_limit_exceeded(&tool_key));
+    }
+
+    #[test]
+    fn test_unified_exec_action_suffix_skips_identical_limit() {
+        let mut detector = LoopDetector::with_max_repeated_calls(3);
+        let tool_key = format!("{}::run", tools::UNIFIED_EXEC);
+        let args = json!({"command": "cargo check"});
+
+        assert!(detector.record_call(&tool_key, &args).is_none());
+        assert!(detector.record_call(&tool_key, &args).is_none());
+        assert!(detector.record_call(&tool_key, &args).is_none());
     }
 }

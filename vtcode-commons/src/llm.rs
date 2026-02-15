@@ -143,7 +143,7 @@ impl ToolCall {
     /// Parse the arguments as JSON Value (for function-type tools)
     pub fn parsed_arguments(&self) -> Result<serde_json::Value, serde_json::Error> {
         if let Some(ref func) = self.function {
-            serde_json::from_str(&func.arguments)
+            parse_tool_arguments(&func.arguments)
         } else {
             // Return an error by trying to parse invalid JSON
             serde_json::from_str("")
@@ -185,6 +185,67 @@ impl ToolCall {
 
         Ok(())
     }
+}
+
+fn parse_tool_arguments(raw_arguments: &str) -> Result<serde_json::Value, serde_json::Error> {
+    let trimmed = raw_arguments.trim();
+    match serde_json::from_str(trimmed) {
+        Ok(parsed) => Ok(parsed),
+        Err(primary_error) => {
+            if let Some(candidate) = extract_balanced_json(trimmed)
+                && let Ok(parsed) = serde_json::from_str(candidate)
+            {
+                return Ok(parsed);
+            }
+            Err(primary_error)
+        }
+    }
+}
+
+fn extract_balanced_json(input: &str) -> Option<&str> {
+    let start = input.find(['{', '['])?;
+    let opening = input.as_bytes().get(start).copied()?;
+    let closing = match opening {
+        b'{' => b'}',
+        b'[' => b']',
+        _ => return None,
+    };
+
+    let mut depth = 0usize;
+    let mut in_string = false;
+    let mut escaped = false;
+
+    for (offset, ch) in input[start..].char_indices() {
+        if in_string {
+            if escaped {
+                escaped = false;
+                continue;
+            }
+            if ch == '\\' {
+                escaped = true;
+                continue;
+            }
+            if ch == '"' {
+                in_string = false;
+            }
+            continue;
+        }
+
+        match ch {
+            '"' => in_string = true,
+            _ if ch as u32 == opening as u32 => depth += 1,
+            _ if ch as u32 == closing as u32 => {
+                depth = depth.saturating_sub(1);
+                if depth == 0 {
+                    let end = start + offset + ch.len_utf8();
+                    return input.get(start..end);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    None
 }
 
 /// Universal LLM response structure
@@ -310,4 +371,49 @@ pub enum LLMError {
         message: String,
         metadata: Option<Box<LLMErrorMetadata>>,
     },
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ToolCall;
+    use serde_json::json;
+
+    #[test]
+    fn parsed_arguments_accepts_trailing_characters() {
+        let call = ToolCall::function(
+            "call_read".to_string(),
+            "read_file".to_string(),
+            r#"{"path":"src/main.rs"} trailing text"#.to_string(),
+        );
+
+        let parsed = call
+            .parsed_arguments()
+            .expect("arguments with trailing text should recover");
+        assert_eq!(parsed, json!({"path":"src/main.rs"}));
+    }
+
+    #[test]
+    fn parsed_arguments_accepts_code_fenced_json() {
+        let call = ToolCall::function(
+            "call_read".to_string(),
+            "read_file".to_string(),
+            "```json\n{\"path\":\"src/lib.rs\",\"limit\":25}\n```".to_string(),
+        );
+
+        let parsed = call
+            .parsed_arguments()
+            .expect("code-fenced arguments should recover");
+        assert_eq!(parsed, json!({"path":"src/lib.rs","limit":25}));
+    }
+
+    #[test]
+    fn parsed_arguments_rejects_incomplete_json() {
+        let call = ToolCall::function(
+            "call_read".to_string(),
+            "read_file".to_string(),
+            r#"{"path":"src/main.rs""#.to_string(),
+        );
+
+        assert!(call.parsed_arguments().is_err());
+    }
 }

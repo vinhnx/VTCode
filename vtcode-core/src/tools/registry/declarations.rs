@@ -338,7 +338,7 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
 
         FunctionDeclaration {
             name: tools::UNIFIED_EXEC.to_string(),
-            description: "Unified execution tool. Run shell commands via PTY. IMPORTANT: 'command' is the raw command string WITHOUT shell redirections (2>&1, >, |). The tool captures stdout/stderr automatically. For 'run' action, provide 'command' parameter.".to_string(),
+            description: "Unified execution tool (canonical PTY/shell runner). Aliases include run_pty_cmd, shell, exec, execute_code, and PTY session actions (create/list/read/send/close). IMPORTANT: 'command' is the raw command string WITHOUT shell redirections (2>&1, >, |). The tool captures stdout/stderr automatically. For 'run' action, provide 'command' parameter.".to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
@@ -607,7 +607,7 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
         },
 
         // NOTE: search_replace removed - use edit_file instead
-        // NOTE: PTY session tools (create/list/close/send/read/resize) hidden from LLM - use run_pty_cmd
+        // NOTE: PTY session tools (create/list/close/send/read/resize) are routed through unified_exec (run_pty_cmd alias)
         // NOTE: skill, execute_code, web_fetch merged into unified tools
 
         // ============================================================

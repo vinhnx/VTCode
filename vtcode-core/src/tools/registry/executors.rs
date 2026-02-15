@@ -35,6 +35,24 @@ impl ToolRegistry {
     }
 
     pub(super) async fn execute_unified_exec(&self, args: Value) -> Result<Value> {
+        let mut args = args;
+        if let Some(payload) = args.as_object_mut() {
+            if payload.get("command").is_none() {
+                if let Some(cmd) = payload.get("cmd").cloned() {
+                    payload.insert("command".to_string(), cmd);
+                } else if let Some(raw) = payload.get("raw_command").cloned() {
+                    payload.insert("command".to_string(), raw);
+                }
+            }
+            if payload.get("input").is_none() {
+                if let Some(chars) = payload.get("chars").cloned() {
+                    payload.insert("input".to_string(), chars);
+                } else if let Some(text) = payload.get("text").cloned() {
+                    payload.insert("input".to_string(), text);
+                }
+            }
+        }
+
         let action_str = tool_intent::unified_exec_action(&args)
             .ok_or_else(|| anyhow!("Missing action in unified_exec"))?;
         let action: UnifiedExecAction = serde_json::from_value(json!(action_str))

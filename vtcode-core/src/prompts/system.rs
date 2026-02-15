@@ -58,7 +58,7 @@ const UNIFIED_TOOL_GUIDANCE: &str = r#"**Search & exploration**:
 - **Never**: `git commit`, `git push`, or branch creation unless explicitly requested
 
 **Command execution**:
-- `unified_exec` for all shell commands (one-off, interactive, long-running)
+- `unified_exec` for all shell commands (PTY/interactive/long-running). `run_pty_cmd` is an alias.
 - Prefer `rg` over `grep` for pattern matching
 - Stay in WORKSPACE_DIR; confirm destructive ops (rm, force-push)
 - **After command output**: Always acknowledge the result briefly and suggest next steps"#;
@@ -238,9 +238,12 @@ const DEFAULT_LIGHTWEIGHT_PROMPT: &str = r#"VT Code - efficient coding agent.
 
 - Act and verify. Direct tone.
 - Scoped: unified_search (≤5), unified_file (max_tokens).
+- Use `unified_exec` for shell/PTY commands (`run_pty_cmd` alias).
 - Tools hidden by default. `list_skills --search <term>` to find them.
 - Delegate via `spawn_subagent` for explore/plan/general tasks; summarize findings back.
-- WORKSPACE_DIR only. Confirm destructive ops."#;
+- WORKSPACE_DIR only. Confirm destructive ops.
+
+__UNIFIED_TOOL_GUIDANCE__"#;
 
 /// SPECIALIZED PROMPT (v6.0 - Harness-engineered, methodical complex refactoring)
 /// For multi-file changes and sophisticated code analysis
