@@ -167,7 +167,7 @@ impl AgentRunner {
             // Check for steering messages before each tool call
             if let Some(msg) = self.check_steering() {
                 match msg {
-                    SteeringMessage::Stop => {
+                    SteeringMessage::SteerStop => {
                         if !self.quiet {
                             println!(
                                 "{} {}",
@@ -199,20 +199,19 @@ impl AgentRunner {
                                     );
                                 }
                                 break;
-                            } else if let Some(SteeringMessage::Stop) = self.check_steering() {
+                            } else if let Some(SteeringMessage::SteerStop) = self.check_steering() {
                                 return Ok(());
                             }
                         }
                     }
                     SteeringMessage::Resume => {}
-                    SteeringMessage::InjectInput(_) => {
-                        // Input injection during tool calls is deferred until the next turn
-                        // effectively, but we log it.
+                    SteeringMessage::FollowUpInput(_) => {
+                        // Follow-up input during tool calls is queued and handled after turn completion.
                         if !self.quiet {
                             println!(
                                 "{} {}",
                                 agent_prefix,
-                                style("Input injection deferred until next turn").yellow()
+                                style("Follow-up input queued for next turn").yellow()
                             );
                         }
                     }

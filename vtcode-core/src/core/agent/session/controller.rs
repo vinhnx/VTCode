@@ -105,7 +105,7 @@ impl AgentSessionController {
             id: turn_id.clone(),
         });
 
-        let mut start_time = std::time::Instant::now();
+        let start_time = std::time::Instant::now();
         let mut stream = if let Some(t) = timeout {
             match tokio::time::timeout(t, provider.stream(request)).await {
                 Ok(res) => res?,
@@ -125,7 +125,7 @@ impl AgentSessionController {
             // Check steering
             if let Some(rx) = steering {
                 match rx.try_recv() {
-                    Ok(crate::core::agent::steering::SteeringMessage::Stop) => {
+                    Ok(crate::core::agent::steering::SteeringMessage::SteerStop) => {
                         finish_reason = "cancelled".to_string();
                         break;
                     }
@@ -138,7 +138,7 @@ impl AgentSessionController {
                             tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
                             match rx.try_recv() {
                                 Ok(crate::core::agent::steering::SteeringMessage::Resume) => break,
-                                Ok(crate::core::agent::steering::SteeringMessage::Stop) => {
+                                Ok(crate::core::agent::steering::SteeringMessage::SteerStop) => {
                                     finish_reason = "cancelled".to_string();
                                     break;
                                 }
@@ -152,9 +152,8 @@ impl AgentSessionController {
                             stage: "Resumed".to_string(),
                         });
                     }
-                    Ok(crate::core::agent::steering::SteeringMessage::InjectInput(input)) => {
-                        // For now, history injection happens after the turn in most VTCode logic
-                        // but we could support it here if needed.
+                    Ok(crate::core::agent::steering::SteeringMessage::FollowUpInput(input)) => {
+                        // Follow-up input is added to state, ensuring next turn handles it.
                         self.state.add_user_message(input);
                     }
                     _ => {}

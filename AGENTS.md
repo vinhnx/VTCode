@@ -42,6 +42,31 @@ cargo bench                  # Benchmarks
 cargo clippy && cargo fmt --check && cargo check && cargo nextest run
 ```
 
+## Rulebook (CRITICAL)
+
+### Code Quality
+- **No `any` types** unless absolutely necessary.
+- **NEVER use inline imports** (e.g., `let x = await import(...)`). Always use standard top-level imports.
+- **Upgrade dependencies** instead of downgrading code to fix type errors.
+- **Always ask** before removing functionality or code that appears intentional.
+- **Never hardcode model IDs** (use `docs/models.json`) or keybindings.
+
+### Critical Git Rules for Parallel Agents
+Multiple agents work in this tree. **NEVER** use destructive commands:
+- **NO** `git reset --hard`, `git checkout .`, `git clean -fd`, or `git stash`.
+- **NO** `git add .` or `git add -A`. These sweep up other agents' work.
+- **ALWAYS** use `git add <specific-file-paths>` for only YOUR changes.
+- **ALWAYS** `git pull --rebase` before pushing. If conflicts occur in files you didn't touch, **ABORT** and ask the user.
+
+### Tool Usage
+- **Read every file in full** before editing.
+- **NEVER use `sed` or `cat`** for reading; use the provided `read` tools.
+
+### Communication & Style
+- **Technical prose only**: No fluff, emojis, or cheerful filler.
+- **Direct attribution**: Cite issues/PRs as `Fixed #123`.
+- **Changelog**: Append to `## [Unreleased]` sections; never modify released versions.
+
 ## Key Files — Never Hardcode
 
 - **Model IDs** → `docs/models.json`
@@ -70,6 +95,8 @@ cargo clippy && cargo fmt --check && cargo check && cargo nextest run
 
 ### Agent Behavior & Harness Engineering
 - Core beliefs & execution philosophy → [`docs/harness/CORE_BELIEFS.md`](docs/harness/CORE_BELIEFS.md)
+- Humans Steer, Agents Execute → [`vtcode-core/src/prompts/system.rs`](vtcode-core/src/prompts/system.rs)
+- Agent legibility standards → [`docs/harness/AGENT_LEGIBILITY_GUIDE.md`](docs/harness/AGENT_LEGIBILITY_GUIDE.md)
 - Quality scoring rubric → [`docs/harness/QUALITY_SCORE.md`](docs/harness/QUALITY_SCORE.md)
 - Execution plans & workflow → [`docs/harness/EXEC_PLANS.md`](docs/harness/EXEC_PLANS.md)
 - Architectural invariants → [`docs/harness/ARCHITECTURAL_INVARIANTS.md`](docs/harness/ARCHITECTURAL_INVARIANTS.md)

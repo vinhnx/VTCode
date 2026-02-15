@@ -188,6 +188,13 @@ error: File too long.
 
 ---
 
+## 11. Agent Legibility
+
+Operational data and status reports must be presented in structured formats (tables, YAML, or consistent headers) to ensure high parseability by agents and clarity for humans.
+
+**Violation**: multi-file or multi-component status reported in long prose blocks without structure.
+**Remediation**: convert the status report into a markdown table or structured list. Follow the examples in `docs/harness/AGENT_LEGIBILITY_GUIDE.md`.
+
 ## Enforcement
 
 These invariants should be enforced by:

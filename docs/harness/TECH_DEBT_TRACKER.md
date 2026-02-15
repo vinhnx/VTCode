@@ -32,6 +32,8 @@ Known technical debt items with priority and ownership. Review this document on 
 | TD-008 | Testing        | MCP OAuth flow and provider lifecycle lack integration tests. | P2 | open | 2026-02-13 | Add mock MCP server for integration testing. See `QUALITY_SCORE.md` MCP domain. |
 | TD-009 | Documentation  | Tree-sitter language support matrix not documented. Users and agents cannot easily determine which languages are supported. | P3 | open | 2026-02-13 | Create `docs/LANGUAGE_SUPPORT.md` with supported languages and feature matrix. |
 | TD-010 | Configuration  | Individual config field documentation is partial. Not all `vtcode.toml` fields have descriptions. | P3 | open | 2026-02-13 | Generate config field docs from `schemars` schema or add inline documentation. |
+| TD-011 | Harness        | Harness documentation (Quality Score, Core Beliefs) last reviewed date is stale (2026-02-13). | P2 | open | 2026-02-15 | Update "Last reviewed" dates and verify accuracy against v6.0 system prompt. |
+| TD-012 | Codebase       | Legacy output patterns in tools may violate the new Agent Legibility invariant. | P2 | open | 2026-02-15 | Audit tool output blocks and convert to tables where appropriate. |
 
 ---
 
