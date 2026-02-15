@@ -1,7 +1,6 @@
 use anyhow::{Context, Result, anyhow, bail};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::fs;
 use std::io::{self, IsTerminal, Read};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -12,6 +11,8 @@ use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::core::agent::runner::AgentRunner;
 use vtcode_core::core::agent::task::{ContextItem, Task};
 use vtcode_core::core::agent::types::AgentType;
+use vtcode_core::utils::file_utils::{read_file_with_context_sync, write_file_with_context_sync};
+use vtcode_core::utils::path::resolve_workspace_path;
 use vtcode_core::{RunnerTaskOutcome, RunnerTaskResults};
 
 use crate::workspace_trust::{WorkspaceTrustGateResult, ensure_workspace_trust};
@@ -250,19 +251,7 @@ pub async fn handle_benchmark_command(
         .context("Failed to serialize benchmark report to JSON")?;
 
     if let Some(path) = &options.output {
-        if let Some(parent) = path.parent()
-            && !parent.as_os_str().is_empty()
-        {
-            fs::create_dir_all(parent).with_context(|| {
-                format!(
-                    "Failed to create benchmark report directory {}",
-                    parent.display()
-                )
-            })?;
-        }
-
-        fs::write(path, serialized.as_bytes())
-            .with_context(|| format!("Failed to write benchmark report to {}", path.display()))?;
+        write_file_with_context_sync(path, &serialized, "benchmark report")?;
     }
 
     println!("{}", serialized);
@@ -279,12 +268,7 @@ fn load_spec_source(options: &BenchmarkCommandOptions) -> Result<String> {
     }
 
     if let Some(path) = &options.task_file {
-        let contents = fs::read_to_string(path).with_context(|| {
-            format!(
-                "Failed to read benchmark specification from {}",
-                path.display()
-            )
-        })?;
+        let contents = read_file_with_context_sync(path, "benchmark specification")?;
         return Ok(contents);
     }
 
@@ -458,26 +442,15 @@ fn convert_context_entry(
             if content.is_empty()
                 && let Some(path) = detail.path
             {
-                let resolved = workspace.join(&path);
-                let canonical = resolved.canonicalize().with_context(|| {
+                let canonical = resolve_workspace_path(workspace, Path::new(&path)).with_context(|| {
                     format!(
-                        "Failed to resolve context path '{}' relative to workspace {}",
+                        "Failed to resolve benchmark context path '{}' relative to workspace {}",
                         path,
                         workspace.display()
                     )
                 })?;
 
-                if !canonical.starts_with(workspace) {
-                    bail!(
-                        "Context path '{}' escapes the workspace boundary {}",
-                        canonical.display(),
-                        workspace.display()
-                    );
-                }
-
-                content = fs::read_to_string(&canonical).with_context(|| {
-                    format!("Failed to read context file {}", canonical.display())
-                })?;
+                content = read_file_with_context_sync(&canonical, "benchmark context file")?;
             }
 
             if content.trim().is_empty() {

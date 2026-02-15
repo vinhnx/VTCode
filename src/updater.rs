@@ -3,6 +3,7 @@ use semver::Version;
 use std::env;
 use std::path::PathBuf;
 use tracing::{debug, info};
+use vtcode_core::utils::file_utils::{ensure_dir_exists_sync, write_file_with_context_sync};
 
 /// Auto-updater for VT Code binary from GitHub Releases
 pub struct Updater {
@@ -142,8 +143,12 @@ impl Updater {
     /// Record that we checked for updates
     pub fn record_update_check() -> Result<()> {
         let cache_dir = Self::get_cache_dir()?;
-        std::fs::write(cache_dir.join("last_update_check"), "")
-            .context("Failed to record update check timestamp")?;
+        write_file_with_context_sync(
+            &cache_dir.join("last_update_check"),
+            "",
+            "update check timestamp",
+        )
+        .context("Failed to record update check timestamp")?;
         Ok(())
     }
 
@@ -156,7 +161,7 @@ impl Updater {
             home.join(".cache/vtcode")
         };
 
-        std::fs::create_dir_all(&dir).context("Failed to create cache directory")?;
+        ensure_dir_exists_sync(&dir).context("Failed to create cache directory")?;
         Ok(dir)
     }
 }

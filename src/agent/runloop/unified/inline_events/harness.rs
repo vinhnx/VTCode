@@ -14,6 +14,7 @@ use vtcode_core::exec::events::{
     TurnStartedEvent, Usage, VersionedThreadEvent,
 };
 use vtcode_core::open_responses::{OpenResponsesIntegration, SequencedEvent};
+use vtcode_core::utils::file_utils::ensure_dir_exists_sync;
 
 use crate::agent::runloop::unified::run_loop_context::TurnRunId;
 
@@ -34,7 +35,7 @@ struct OpenResponsesState {
 impl HarnessEventEmitter {
     pub fn new(path: PathBuf) -> Result<Self> {
         if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent).with_context(|| {
+            ensure_dir_exists_sync(parent).with_context(|| {
                 format!("Failed to create harness log dir {}", parent.display())
             })?;
         }
@@ -65,7 +66,7 @@ impl HarnessEventEmitter {
 
         let writer = if let Some(path) = output_path {
             if let Some(parent) = path.parent() {
-                std::fs::create_dir_all(parent)?;
+                ensure_dir_exists_sync(parent)?;
             }
             let file = OpenOptions::new().create(true).append(true).open(&path)?;
             Some(BufWriter::new(file))

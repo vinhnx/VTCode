@@ -7,6 +7,9 @@
 
 use anyhow::Result;
 use std::env;
+use std::str::FromStr;
+
+use crate::models::Provider;
 
 /// API key sources for different providers
 #[derive(Debug, Clone)]
@@ -76,78 +79,15 @@ impl Default for ApiKeySources {
 
 impl ApiKeySources {
     /// Create API key sources for a specific provider with automatic environment variable inference
-    pub fn for_provider(provider: &str) -> Self {
-        let (primary_env, _fallback_envs) = match provider.to_lowercase().as_str() {
-            "gemini" => ("GEMINI_API_KEY", vec!["GOOGLE_API_KEY"]),
-            "anthropic" => ("ANTHROPIC_API_KEY", vec![]),
-            "openai" => ("OPENAI_API_KEY", vec![]),
-            "deepseek" => ("DEEPSEEK_API_KEY", vec![]),
-            "openrouter" => ("OPENROUTER_API_KEY", vec![]),
-            "xai" => ("XAI_API_KEY", vec![]),
-            "zai" => ("ZAI_API_KEY", vec![]),
-            "ollama" => ("OLLAMA_API_KEY", vec![]),
-            "lmstudio" => ("LMSTUDIO_API_KEY", vec![]),
-            _ => ("GEMINI_API_KEY", vec!["GOOGLE_API_KEY"]),
-        };
-
-        // For backward compatibility, we still set all env vars but prioritize the primary one
-        Self {
-            gemini_env: if provider == "gemini" {
-                primary_env.to_string()
-            } else {
-                "GEMINI_API_KEY".to_string()
-            },
-            anthropic_env: if provider == "anthropic" {
-                primary_env.to_string()
-            } else {
-                "ANTHROPIC_API_KEY".to_string()
-            },
-            openai_env: if provider == "openai" {
-                primary_env.to_string()
-            } else {
-                "OPENAI_API_KEY".to_string()
-            },
-            openrouter_env: if provider == "openrouter" {
-                primary_env.to_string()
-            } else {
-                "OPENROUTER_API_KEY".to_string()
-            },
-            xai_env: if provider == "xai" {
-                primary_env.to_string()
-            } else {
-                "XAI_API_KEY".to_string()
-            },
-            deepseek_env: if provider == "deepseek" {
-                primary_env.to_string()
-            } else {
-                "DEEPSEEK_API_KEY".to_string()
-            },
-            zai_env: if provider == "zai" {
-                primary_env.to_string()
-            } else {
-                "ZAI_API_KEY".to_string()
-            },
-            ollama_env: if provider == "ollama" {
-                primary_env.to_string()
-            } else {
-                "OLLAMA_API_KEY".to_string()
-            },
-            lmstudio_env: if provider == "lmstudio" {
-                primary_env.to_string()
-            } else {
-                "LMSTUDIO_API_KEY".to_string()
-            },
-            gemini_config: None,
-            anthropic_config: None,
-            openai_config: None,
-            openrouter_config: None,
-            xai_config: None,
-            deepseek_config: None,
-            zai_config: None,
-            ollama_config: None,
-            lmstudio_config: None,
-        }
+    pub fn for_provider(_provider: &str) -> Self {
+        Self::default()
     }
+}
+
+fn inferred_api_key_env(provider: &str) -> &'static str {
+    Provider::from_str(provider)
+        .map(|resolved| resolved.default_api_key_env())
+        .unwrap_or("GEMINI_API_KEY")
 }
 
 /// Load environment variables from .env file
@@ -194,20 +134,9 @@ pub fn load_dotenv() -> Result<()> {
 /// * `Ok(String)` - The API key if found
 /// * `Err` - If no API key could be found for the provider
 pub fn get_api_key(provider: &str, sources: &ApiKeySources) -> Result<String> {
+    let normalized_provider = provider.to_lowercase();
     // Automatically infer the correct environment variable based on provider
-    let inferred_env = match provider.to_lowercase().as_str() {
-        "gemini" => "GEMINI_API_KEY",
-        "anthropic" => "ANTHROPIC_API_KEY",
-        "openai" => "OPENAI_API_KEY",
-        "deepseek" => "DEEPSEEK_API_KEY",
-        "openrouter" => "OPENROUTER_API_KEY",
-        "xai" => "XAI_API_KEY",
-        "zai" => "ZAI_API_KEY",
-        "ollama" => "OLLAMA_API_KEY",
-        "lmstudio" => "LMSTUDIO_API_KEY",
-        "huggingface" => "HF_TOKEN",
-        _ => "GEMINI_API_KEY",
-    };
+    let inferred_env = inferred_api_key_env(&normalized_provider);
 
     // Try the inferred environment variable first
     if let Ok(key) = env::var(inferred_env)
@@ -217,7 +146,7 @@ pub fn get_api_key(provider: &str, sources: &ApiKeySources) -> Result<String> {
     }
 
     // Fall back to the provider-specific sources
-    match provider.to_lowercase().as_str() {
+    match normalized_provider.as_str() {
         "gemini" => get_gemini_api_key(sources),
         "anthropic" => get_anthropic_api_key(sources),
         "openai" => get_openai_api_key(sources),
@@ -258,6 +187,22 @@ fn get_api_key_with_fallback(
         provider_name,
         env_var
     ))
+}
+
+fn get_optional_api_key_with_fallback(env_var: &str, config_value: Option<&String>) -> String {
+    if let Ok(key) = env::var(env_var)
+        && !key.is_empty()
+    {
+        return key;
+    }
+
+    if let Some(key) = config_value
+        && !key.is_empty()
+    {
+        return key.clone();
+    }
+
+    String::new()
 }
 
 /// Get Gemini API key with secure fallback
@@ -350,39 +295,20 @@ fn get_zai_api_key(sources: &ApiKeySources) -> Result<String> {
 
 /// Get Ollama API key with secure fallback
 fn get_ollama_api_key(sources: &ApiKeySources) -> Result<String> {
-    // For Ollama we allow running without credentials when connecting to a local
-    // deployment. Cloud variants still rely on the standard environment or
-    // configuration values when present.
-    if let Ok(key) = env::var(&sources.ollama_env)
-        && !key.is_empty()
-    {
-        return Ok(key);
-    }
-
-    if let Some(key) = sources.ollama_config.as_ref()
-        && !key.is_empty()
-    {
-        return Ok(key.clone());
-    }
-
-    Ok(String::new())
+    // For Ollama we allow running without credentials when connecting to a local deployment.
+    // Cloud variants still rely on environment/config values when present.
+    Ok(get_optional_api_key_with_fallback(
+        &sources.ollama_env,
+        sources.ollama_config.as_ref(),
+    ))
 }
 
 /// Get LM Studio API key with secure fallback
 fn get_lmstudio_api_key(sources: &ApiKeySources) -> Result<String> {
-    if let Ok(key) = env::var(&sources.lmstudio_env)
-        && !key.is_empty()
-    {
-        return Ok(key);
-    }
-
-    if let Some(key) = sources.lmstudio_config.as_ref()
-        && !key.is_empty()
-    {
-        return Ok(key.clone());
-    }
-
-    Ok(String::new())
+    Ok(get_optional_api_key_with_fallback(
+        &sources.lmstudio_env,
+        sources.lmstudio_config.as_ref(),
+    ))
 }
 
 #[cfg(test)]
