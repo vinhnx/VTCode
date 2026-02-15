@@ -3,10 +3,12 @@
 /// Captures agent reasoning before high-risk tool execution to improve approval UX
 /// and enable learning of approval patterns.
 use crate::tools::registry::risk_scorer::RiskLevel;
+use crate::utils::file_utils::{
+    ensure_dir_exists_sync, read_file_with_context_sync, write_file_with_context_sync,
+};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::fs;
 use std::path::PathBuf;
 
 /// Justification provided by the agent for executing a high-risk tool
@@ -142,7 +144,7 @@ impl JustificationManager {
             return Ok(());
         }
 
-        let content = fs::read_to_string(&patterns_file)?;
+        let content = read_file_with_context_sync(&patterns_file, "approval patterns cache")?;
         let loaded_patterns: HashMap<String, ApprovalPattern> = serde_json::from_str(&content)?;
 
         let mut patterns = self
@@ -192,14 +194,14 @@ impl JustificationManager {
 
     /// Persist patterns to disk
     fn persist_patterns(&self) -> Result<()> {
-        fs::create_dir_all(&self.cache_dir)?;
+        ensure_dir_exists_sync(&self.cache_dir)?;
         let patterns_file = self.cache_dir.join("approval_patterns.json");
         let patterns = self
             .patterns
             .lock()
             .map_err(|e| anyhow::anyhow!("Failed to lock patterns: {}", e))?;
         let content = serde_json::to_string_pretty(&*patterns)?;
-        fs::write(&patterns_file, content)?;
+        write_file_with_context_sync(&patterns_file, &content, "approval patterns cache")?;
         Ok(())
     }
 
@@ -286,6 +288,6 @@ mod tests {
         assert_eq!(pattern.approval_rate(), 2.0 / 3.0);
 
         // Cleanup
-        let _ = fs::remove_dir_all(&temp_dir);
+        let _ = std::fs::remove_dir_all(&temp_dir);
     }
 }

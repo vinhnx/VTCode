@@ -154,14 +154,18 @@ pub async fn generate_comprehensive_skills_index(workspace: &Path) -> Result<std
     content.push_str("*Generated automatically. Do not edit manually.*\n");
 
     let index_path = skill_manager.index_path();
-    tokio::fs::write(&index_path, &content)
-        .await
-        .with_context(|| {
-            format!(
-                "Failed to write comprehensive skills index: {}",
-                index_path.display()
-            )
-        })?;
+    vtcode_core::utils::file_utils::write_file_with_context(
+        &index_path,
+        &content,
+        "comprehensive skills index",
+    )
+    .await
+    .with_context(|| {
+        format!(
+            "Failed to write comprehensive skills index: {}",
+            index_path.display()
+        )
+    })?;
 
     Ok(index_path)
 }
