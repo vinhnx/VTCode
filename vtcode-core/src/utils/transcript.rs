@@ -94,6 +94,9 @@ pub fn append(line: &str) {
         let drop_count = MAX_LINES / 5;
         log.drain(0..drop_count);
     }
+    if log.last().is_some_and(|last| last == line) {
+        return;
+    }
     log.push(line.to_string());
 }
 
@@ -264,6 +267,25 @@ mod tests {
         assert_eq!(len(), 2);
         let snap = snapshot();
         assert_eq!(snap, vec!["first".to_owned(), "second".to_owned()]);
+        clear();
+    }
+
+    #[test]
+    fn append_skips_adjacent_duplicate_lines() {
+        clear();
+        append("duplicate");
+        append("duplicate");
+        append("different");
+        append("duplicate");
+        let snap = snapshot();
+        assert_eq!(
+            snap,
+            vec![
+                "duplicate".to_owned(),
+                "different".to_owned(),
+                "duplicate".to_owned()
+            ]
+        );
         clear();
     }
 

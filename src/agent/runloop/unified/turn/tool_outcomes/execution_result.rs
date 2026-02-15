@@ -4,6 +4,7 @@ use anyhow::Result;
 use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::tools::error_messages::agent_execution;
+use vtcode_core::tools::registry::labels::tool_action_label;
 use vtcode_core::utils::ansi::MessageStyle;
 
 use crate::agent::runloop::mcp_events;
@@ -16,7 +17,9 @@ use super::helpers::{
     build_exit_plan_mode_call_id, check_is_argument_error, push_tool_response, serialize_output,
 };
 
-use crate::agent::runloop::unified::turn::context::TurnProcessingContext;
+use crate::agent::runloop::unified::turn::context::{
+    TurnHandlerOutcome, TurnLoopResult, TurnProcessingContext,
+};
 
 fn record_tool_execution(
     ctx: &mut TurnProcessingContext<'_>,
@@ -75,7 +78,7 @@ pub(crate) async fn handle_tool_execution_result<'a>(
     args_val: &serde_json::Value,
     pipeline_outcome: &ToolPipelineOutcome,
     tool_start_time: std::time::Instant,
-) -> Result<()> {
+) -> Result<Option<TurnHandlerOutcome>> {
     // 1. Record metrics and outcome
     let is_success = matches!(pipeline_outcome.status, ToolExecutionStatus::Success { .. });
     let is_argument_error = if let ToolExecutionStatus::Failure { error } = &pipeline_outcome.status
@@ -106,7 +109,7 @@ pub(crate) async fn handle_tool_execution_result<'a>(
             .await?;
         }
         ToolExecutionStatus::Failure { error } => {
-            handle_failure(
+            if let Some(outcome) = handle_failure(
                 t_ctx,
                 tool_call_id,
                 tool_name,
@@ -114,13 +117,20 @@ pub(crate) async fn handle_tool_execution_result<'a>(
                 error,
                 tool_start_time,
             )
-            .await?;
+            .await?
+            {
+                return Ok(Some(outcome));
+            }
         }
         ToolExecutionStatus::Timeout { error } => {
             handle_timeout(t_ctx, tool_call_id, tool_name, error).await?;
         }
         ToolExecutionStatus::Cancelled => {
-            handle_cancelled(t_ctx, tool_call_id, tool_name).await?;
+            handle_cancelled(t_ctx, tool_call_id, tool_name, args_val).await?;
+            if t_ctx.ctx.ctrl_c_state.is_exit_requested() {
+                return Ok(Some(TurnHandlerOutcome::Break(TurnLoopResult::Exit)));
+            }
+            return Ok(Some(TurnHandlerOutcome::Break(TurnLoopResult::Cancelled)));
         }
     }
 
@@ -129,7 +139,7 @@ pub(crate) async fn handle_tool_execution_result<'a>(
         record_mcp_tool_event(t_ctx, tool_name, &pipeline_outcome.status);
     }
 
-    Ok(())
+    Ok(None)
 }
 
 fn maybe_inline_spooled(_tool_name: &str, output: &serde_json::Value) -> String {
@@ -183,7 +193,7 @@ async fn handle_failure<'a>(
     args_val: &serde_json::Value,
     error: &anyhow::Error,
     tool_start_time: std::time::Instant,
-) -> Result<()> {
+) -> Result<Option<TurnHandlerOutcome>> {
     let error_str = error.to_string();
     let is_plan_mode_denial = agent_execution::is_plan_mode_denial(&error_str);
     let should_auto_exit = is_plan_mode_denial
@@ -200,10 +210,12 @@ async fn handle_failure<'a>(
 
     // Handle auto-exit from Plan Mode if applicable
     if should_auto_exit {
-        handle_plan_mode_auto_exit(t_ctx, tool_start_time).await?;
+        if let Some(outcome) = handle_plan_mode_auto_exit(t_ctx, tool_start_time).await? {
+            return Ok(Some(outcome));
+        }
     }
 
-    Ok(())
+    Ok(None)
 }
 
 async fn handle_timeout(
@@ -244,8 +256,10 @@ async fn handle_cancelled(
     t_ctx: &mut super::handlers::ToolOutcomeContext<'_, '_>,
     tool_call_id: String,
     tool_name: &str,
+    args_val: &serde_json::Value,
 ) -> Result<()> {
-    let error_msg = format!("Tool '{}' execution cancelled", tool_name);
+    let display_tool = tool_action_label(tool_name, args_val);
+    let error_msg = format!("Tool '{}' execution cancelled", display_tool);
     t_ctx.ctx.renderer.line(MessageStyle::Info, &error_msg)?;
 
     let error_content = serde_json::json!({"error": error_msg});
@@ -294,13 +308,13 @@ async fn run_post_tool_hooks<'a>(
 async fn handle_plan_mode_auto_exit<'a, 'b>(
     t_ctx: &mut super::handlers::ToolOutcomeContext<'a, 'b>,
     trigger_start_time: std::time::Instant,
-) -> Result<()> {
+) -> Result<Option<TurnHandlerOutcome>> {
     if *t_ctx.ctx.auto_exit_plan_mode_attempted {
         display_status(
             t_ctx.ctx.renderer,
             "Plan Mode still active. Call `exit_plan_mode` to review the plan or refine the plan before retrying.",
         )?;
-        return Ok(());
+        return Ok(None);
     }
     *t_ctx.ctx.auto_exit_plan_mode_attempted = true;
 
@@ -313,7 +327,7 @@ async fn handle_plan_mode_auto_exit<'a, 'b>(
     );
 
     // HP-6: Use the unified execute_and_handle_tool_call so that recording and side-effects happen correctly
-    super::handlers::execute_and_handle_tool_call(
+    let outcome = super::handlers::execute_and_handle_tool_call(
         t_ctx.ctx,
         t_ctx.repeated_tool_attempts,
         t_ctx.turn_modified_files,
@@ -324,7 +338,7 @@ async fn handle_plan_mode_auto_exit<'a, 'b>(
     )
     .await?;
 
-    Ok(())
+    Ok(outcome)
 }
 
 /// Record MCP tool execution event for the UI panel.

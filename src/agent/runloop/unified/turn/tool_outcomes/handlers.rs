@@ -3,7 +3,10 @@
 use anyhow::Result;
 use std::time::Duration;
 
+use vtcode_core::config::constants::tools as tool_names;
+use vtcode_core::tools::registry::labels::tool_action_label;
 use vtcode_core::tools::registry::{ToolErrorType, ToolExecutionError};
+use vtcode_core::tools::tool_intent;
 use vtcode_core::utils::ansi::MessageStyle;
 
 use crate::agent::runloop::unified::tool_call_safety::SafetyError;
@@ -67,6 +70,20 @@ fn build_rate_limit_error_content(tool_name: &str, retry_after_ms: u64) -> Strin
     .to_string()
 }
 
+fn loop_detection_tool_key(canonical_tool_name: &str, args: &serde_json::Value) -> String {
+    match canonical_tool_name {
+        tool_names::UNIFIED_FILE => {
+            let action = tool_intent::unified_file_action(args).unwrap_or("read");
+            format!("{canonical_tool_name}::{}", action.to_ascii_lowercase())
+        }
+        tool_names::UNIFIED_EXEC => {
+            let action = tool_intent::unified_exec_action(args).unwrap_or("run");
+            format!("{canonical_tool_name}::{}", action.to_ascii_lowercase())
+        }
+        _ => canonical_tool_name.to_string(),
+    }
+}
+
 /// Consolidated state for tool outcomes to reduce signature bloat and ensure DRY across handlers.
 pub struct ToolOutcomeContext<'a, 'b> {
     pub ctx: &'b mut TurnProcessingContext<'a>,
@@ -102,7 +119,7 @@ pub(crate) async fn handle_single_tool_call<'a, 'b, 'tool>(
     };
 
     // 3. Execute and Handle Result
-    execute_and_handle_tool_call(
+    if let Some(outcome) = execute_and_handle_tool_call(
         t_ctx.ctx,
         t_ctx.repeated_tool_attempts,
         t_ctx.turn_modified_files,
@@ -111,7 +128,10 @@ pub(crate) async fn handle_single_tool_call<'a, 'b, 'tool>(
         args_val,
         None,
     )
-    .await?;
+    .await?
+    {
+        return Ok(Some(outcome));
+    }
 
     Ok(None)
 }
@@ -198,20 +218,21 @@ pub(crate) async fn validate_tool_call<'a>(
     }
 
     // Phase 4 Check: Adaptive Loop Detection
+    let loop_tool_key = loop_detection_tool_key(&canonical_tool_name, args_val);
     if let Some(warning) = ctx
         .autonomous_executor
-        .record_tool_call(&canonical_tool_name, args_val)
+        .record_tool_call(&loop_tool_key, args_val)
     {
         let should_block = {
             if let Ok(detector) = ctx.autonomous_executor.loop_detector().read() {
-                detector.is_hard_limit_exceeded(&canonical_tool_name)
+                detector.is_hard_limit_exceeded(&loop_tool_key)
             } else {
                 false
             }
         };
 
         if should_block {
-            tracing::warn!(tool = %canonical_tool_name, "Loop detector blocked tool");
+            tracing::warn!(tool = %loop_tool_key, "Loop detector blocked tool");
             if let Some(mut spooled) = ctx.tool_registry.find_recent_spooled_output(
                 &canonical_tool_name,
                 args_val,
@@ -238,9 +259,10 @@ pub(crate) async fn validate_tool_call<'a>(
                 return Ok(ValidationResult::Blocked);
             }
 
+            let display_tool = tool_action_label(&canonical_tool_name, args_val);
             let error_msg = format!(
                 "Tool '{}' is blocked due to excessive repetition (Loop Detected).",
-                canonical_tool_name
+                display_tool
             );
             push_tool_response(
                 ctx.working_history,
@@ -249,7 +271,7 @@ pub(crate) async fn validate_tool_call<'a>(
             );
             return Ok(ValidationResult::Blocked);
         } else {
-            tracing::warn!(tool = %canonical_tool_name, warning = %warning, "Loop detector warning");
+            tracing::warn!(tool = %loop_tool_key, warning = %warning, "Loop detector warning");
         }
     }
 

@@ -68,7 +68,20 @@ pub(super) async fn handle_steering_messages(
                     "Paused by steering signal. Waiting for Resume...",
                 )?;
                 loop {
-                    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+                    tokio::select! {
+                        _ = tokio::time::sleep(tokio::time::Duration::from_millis(100)) => {}
+                        _ = ctx.ctrl_c_notify.notified() => {
+                            if ctx.ctrl_c_state.is_exit_requested() {
+                                *result = TurnLoopResult::Exit;
+                                break;
+                            }
+                            if ctx.ctrl_c_state.is_cancel_requested() {
+                                *result = TurnLoopResult::Cancelled;
+                                break;
+                            }
+                            continue;
+                        }
+                    }
                     match receiver.try_recv() {
                         Ok(vtcode_core::core::agent::steering::SteeringMessage::Resume) => {
                             crate::agent::runloop::unified::turn::turn_helpers::display_status(
@@ -84,7 +97,7 @@ pub(super) async fn handle_steering_messages(
                         _ => {}
                     }
                 }
-                if matches!(*result, TurnLoopResult::Cancelled) {
+                if matches!(*result, TurnLoopResult::Cancelled | TurnLoopResult::Exit) {
                     return Ok(true);
                 }
             }

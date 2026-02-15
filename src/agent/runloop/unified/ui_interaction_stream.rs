@@ -261,7 +261,14 @@ pub(crate) async fn stream_and_render_response_with_options_impl(
                 if !reasoning_accumulated.trim().is_empty() && !emitted_tokens {
                     pending_content.push_str(&visible_delta);
                     if pending_content.len() >= MAX_PENDING_CONTENT_BYTES {
-                        content_suppressed = true;
+                        aggregated.push_str(&pending_content);
+                        pending_content.clear();
+                        if supports_streaming_markdown {
+                            rendered_line_count = renderer
+                                .stream_markdown_response(&aggregated, rendered_line_count)
+                                .map_err(|err| map_render_error(provider_name, err))?;
+                            emitted_tokens = true;
+                        }
                     }
                     continue;
                 }
@@ -319,7 +326,14 @@ pub(crate) async fn stream_and_render_response_with_options_impl(
             if !reasoning_accumulated.trim().is_empty() && !emitted_tokens {
                 pending_content.push_str(&trailing_plan_parse.stripped_text);
                 if pending_content.len() >= MAX_PENDING_CONTENT_BYTES {
-                    content_suppressed = true;
+                    aggregated.push_str(&pending_content);
+                    pending_content.clear();
+                    if supports_streaming_markdown {
+                        rendered_line_count = renderer
+                            .stream_markdown_response(&aggregated, rendered_line_count)
+                            .map_err(|err| map_render_error(provider_name, err))?;
+                        emitted_tokens = true;
+                    }
                 }
             } else {
                 aggregated.push_str(&trailing_plan_parse.stripped_text);
@@ -425,20 +439,21 @@ pub(crate) async fn stream_and_render_response_with_options_impl(
                 suppress_reasoning_due_to_duplication = true;
             }
 
-            let already_rendered = emitted_tokens
+            let already_rendered = supports_streaming_markdown
+                && emitted_tokens
                 && !aggregated.trim().is_empty()
                 && aggregated.trim() == content_trimmed;
 
-            if !already_rendered {
-                reasoning_state
-                    .finalize(
-                        renderer,
-                        response.reasoning.as_deref(),
-                        reasoning_emitted,
-                        suppress_reasoning_due_to_duplication,
-                    )
-                    .map_err(|err| map_render_error(provider_name, err))?;
+            reasoning_state
+                .finalize(
+                    renderer,
+                    response.reasoning.as_deref(),
+                    reasoning_emitted,
+                    suppress_reasoning_due_to_duplication,
+                )
+                .map_err(|err| map_render_error(provider_name, err))?;
 
+            if !already_rendered {
                 if supports_streaming_markdown {
                     let prev_count = if aggregated.trim().is_empty() {
                         0

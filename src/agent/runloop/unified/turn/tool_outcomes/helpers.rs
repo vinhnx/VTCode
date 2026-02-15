@@ -123,18 +123,20 @@ pub(crate) fn resolve_max_tool_retries(
 
 /// Updates the tool repetition tracker based on the execution outcome.
 ///
-/// Only successful tool calls are counted towards repetition limits.
-/// Failed, timed out, or cancelled calls are ignored for this purpose.
+/// Count every completed attempt except user-triggered cancellations so the turn
+/// balancer can stop low-signal retry loops even when tools keep failing.
 pub(crate) fn update_repetition_tracker(
     loop_tracker: &mut LoopTracker,
     outcome: &ToolPipelineOutcome,
     name: &str,
     args: &serde_json::Value,
 ) {
-    if matches!(&outcome.status, ToolExecutionStatus::Success { .. }) {
-        let signature_key = signature_key_for(name, args);
-        loop_tracker.record(&signature_key);
+    if matches!(&outcome.status, ToolExecutionStatus::Cancelled) {
+        return;
     }
+
+    let signature_key = signature_key_for(name, args);
+    loop_tracker.record(&signature_key);
 }
 pub(crate) fn serialize_output(output: &serde_json::Value) -> String {
     if let Some(s) = output.as_str() {
@@ -150,4 +152,42 @@ pub(crate) fn check_is_argument_error(error_str: &str) -> bool {
         || error_str.contains("required path parameter")
         || error_str.contains("expected ")
         || error_str.contains("Expected:")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn repetition_tracker_counts_failures() {
+        let mut tracker = LoopTracker::new();
+        let outcome = ToolPipelineOutcome::from_status(ToolExecutionStatus::Failure {
+            error: anyhow::anyhow!("boom"),
+        });
+
+        update_repetition_tracker(
+            &mut tracker,
+            &outcome,
+            "edit_file",
+            &json!({"path":"src/main.rs"}),
+        );
+
+        assert_eq!(tracker.max_count_filtered(|_| false), 1);
+    }
+
+    #[test]
+    fn repetition_tracker_ignores_cancellations() {
+        let mut tracker = LoopTracker::new();
+        let outcome = ToolPipelineOutcome::from_status(ToolExecutionStatus::Cancelled);
+
+        update_repetition_tracker(
+            &mut tracker,
+            &outcome,
+            "edit_file",
+            &json!({"path":"src/main.rs"}),
+        );
+
+        assert_eq!(tracker.max_count_filtered(|_| false), 0);
+    }
 }

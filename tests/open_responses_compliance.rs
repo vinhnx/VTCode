@@ -198,6 +198,7 @@ fn test_reasoning_item_compliance() {
         id: "r1".to_string(),
         details: ThreadItemDetails::Reasoning(ExecReasoningItem {
             text: "Thinking...".to_string(),
+            stage: None,
         }),
     };
 

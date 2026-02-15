@@ -40,6 +40,7 @@ fn test_header_context_snapshot() {
         provider: "openai".to_string(),
         model: "gpt-5".to_string(),
         reasoning: "creative".to_string(),
+        reasoning_stage: None,
         mode: "inline".to_string(),
         workspace_trust: "trusted".to_string(),
         tools: "enabled".to_string(),
@@ -81,6 +82,7 @@ fn test_ui_component_combinations() {
         provider: "anthropic".to_string(),
         model: "claude-3".to_string(),
         mode: "alternate".to_string(),
+        reasoning_stage: None,
         ..Default::default()
     };
 

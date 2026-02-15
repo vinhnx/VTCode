@@ -7,7 +7,6 @@ use crate::core::agent::session::AgentSessionState;
 use crate::core::agent::steering::SteeringMessage;
 use crate::exec::events::CommandExecutionStatus;
 use crate::llm::provider::ToolCall;
-use crate::utils::colors::style;
 use anyhow::{Result, anyhow};
 use tokio::time::Duration;
 use tracing::{error, info, warn};

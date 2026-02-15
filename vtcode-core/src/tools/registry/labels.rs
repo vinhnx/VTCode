@@ -7,7 +7,7 @@ pub fn tool_action_label(tool_name: &str, args: &Value) -> String {
     let actual_tool_name = normalize_tool_name(tool_name);
 
     match actual_tool_name {
-        name if name == tool_names::RUN_PTY_CMD => "Run".to_string(),
+        name if name == tool_names::RUN_PTY_CMD => "Run command (PTY)".to_string(),
         name if name == tool_names::EXECUTE_CODE => "Run code".to_string(),
         name if name == tool_names::LIST_FILES => "List files".to_string(),
         name if name == tool_names::GREP_FILE => "Search text".to_string(),
@@ -25,19 +25,19 @@ pub fn tool_action_label(tool_name: &str, args: &Value) -> String {
         name if name == tool_names::DELETE_FILE => "Delete file".to_string(),
         name if name == tool_names::APPLY_PATCH => "Apply patch".to_string(),
         name if name == tool_names::SEARCH_REPLACE => "Search/replace".to_string(),
-        name if name == tool_names::CREATE_PTY_SESSION => "Create session".to_string(),
-        name if name == tool_names::READ_PTY_SESSION => "Read session".to_string(),
-        name if name == tool_names::LIST_PTY_SESSIONS => "List sessions".to_string(),
-        name if name == tool_names::SEND_PTY_INPUT => "Send input".to_string(),
-        name if name == tool_names::CLOSE_PTY_SESSION => "Close session".to_string(),
-        name if name == tool_names::RESIZE_PTY_SESSION => "Resize session".to_string(),
+        name if name == tool_names::CREATE_PTY_SESSION => "Create PTY session".to_string(),
+        name if name == tool_names::READ_PTY_SESSION => "Read PTY session".to_string(),
+        name if name == tool_names::LIST_PTY_SESSIONS => "List PTY sessions".to_string(),
+        name if name == tool_names::SEND_PTY_INPUT => "Send PTY input".to_string(),
+        name if name == tool_names::CLOSE_PTY_SESSION => "Close PTY session".to_string(),
+        name if name == tool_names::RESIZE_PTY_SESSION => "Resize PTY session".to_string(),
         name if name == tool_names::UNIFIED_EXEC => {
             match tool_intent::unified_exec_action(args).unwrap_or("run") {
-                "run" => "Run command".to_string(),
-                "write" => "Send input".to_string(),
-                "poll" => "Read session".to_string(),
-                "list" => "List sessions".to_string(),
-                "close" => "Close session".to_string(),
+                "run" => "Run command (PTY)".to_string(),
+                "write" => "Send PTY input".to_string(),
+                "poll" => "Read PTY session".to_string(),
+                "list" => "List PTY sessions".to_string(),
+                "close" => "Close PTY session".to_string(),
                 "code" => "Run code".to_string(),
                 _ => "Exec action".to_string(),
             }

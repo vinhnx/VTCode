@@ -1,4 +1,5 @@
 use anyhow::Result;
+use futures::stream::{FuturesUnordered, StreamExt};
 use vtcode_core::config::constants::tools;
 use vtcode_core::llm::provider as uni;
 
@@ -46,7 +47,7 @@ pub(crate) async fn handle_tool_call_batch<'a, 'b>(
             None => continue, // Skip non-function calls
         };
         let tool_name = func.name.as_str();
-        let args_val: serde_json::Value = match serde_json::from_str(&func.arguments) {
+        let args_val: serde_json::Value = match tool_call.parsed_arguments() {
             Ok(args) => args,
             Err(err) => {
                 push_tool_response(
@@ -83,7 +84,7 @@ pub(crate) async fn handle_tool_call_batch<'a, 'b>(
         .all(|(_, prepared, _)| can_parallelize_batch_tool_call(prepared));
     if !can_parallelize {
         for (tool_call, prepared, args_val) in validated_calls {
-            execute_and_handle_tool_call(
+            if let Some(outcome) = execute_and_handle_tool_call(
                 t_ctx.ctx,
                 t_ctx.repeated_tool_attempts,
                 t_ctx.turn_modified_files,
@@ -92,7 +93,10 @@ pub(crate) async fn handle_tool_call_batch<'a, 'b>(
                 args_val,
                 None,
             )
-            .await?;
+            .await?
+            {
+                return Ok(Some(outcome));
+            }
         }
         return Ok(None);
     }
@@ -114,7 +118,7 @@ pub(crate) async fn handle_tool_call_batch<'a, 'b>(
     let ctrl_c_notify = std::sync::Arc::clone(t_ctx.ctx.ctrl_c_notify);
     let vt_cfg = t_ctx.ctx.vt_cfg;
 
-    let mut execution_futures = Vec::with_capacity(validated_call_count);
+    let mut execution_futures = FuturesUnordered::new();
     for (tool_call, prepared, args) in validated_calls {
         let registry = registry.clone();
         let ctrl_c_state = std::sync::Arc::clone(&ctrl_c_state);
@@ -142,10 +146,24 @@ pub(crate) async fn handle_tool_call_batch<'a, 'b>(
         execution_futures.push(fut);
     }
 
-    let results = futures::future::join_all(execution_futures).await;
+    // 3. Sequential Result Handling as each parallel call finishes.
+    while !execution_futures.is_empty() {
+        let next_result = tokio::select! {
+            _ = t_ctx.ctx.ctrl_c_notify.notified() => {
+                if t_ctx.ctx.ctrl_c_state.is_exit_requested() {
+                    return Ok(Some(TurnHandlerOutcome::Break(crate::agent::runloop::unified::turn::context::TurnLoopResult::Exit)));
+                }
+                if t_ctx.ctx.ctrl_c_state.is_cancel_requested() {
+                    return Ok(Some(TurnHandlerOutcome::Break(crate::agent::runloop::unified::turn::context::TurnLoopResult::Cancelled)));
+                }
+                continue;
+            }
+            result = execution_futures.next() => result,
+        };
 
-    // 3. Sequential Result Handling
-    for (call_id, name, args, status, start_time) in results {
+        let Some((call_id, name, args, status, start_time)) = next_result else {
+            break;
+        };
         let outcome =
             crate::agent::runloop::unified::tool_pipeline::ToolPipelineOutcome::from_status(status);
 
@@ -153,14 +171,17 @@ pub(crate) async fn handle_tool_call_batch<'a, 'b>(
         update_repetition_tracker(t_ctx.repeated_tool_attempts, &outcome, &name, &args);
 
         // Handle result
-        crate::agent::runloop::unified::turn::tool_outcomes::execution_result::handle_tool_execution_result(
+        if let Some(outcome) = crate::agent::runloop::unified::turn::tool_outcomes::execution_result::handle_tool_execution_result(
             t_ctx,
             call_id,
             &name,
             &args,
             &outcome,
             start_time,
-        ).await?;
+        ).await?
+        {
+            return Ok(Some(outcome));
+        }
     }
 
     Ok(None)
@@ -175,7 +196,7 @@ pub(crate) fn execute_and_handle_tool_call<'a, 'b>(
     tool_name: &str,
     args_val: serde_json::Value,
     batch_progress_reporter: Option<&'b ProgressReporter>,
-) -> futures::future::BoxFuture<'b, Result<()>> {
+) -> futures::future::BoxFuture<'b, Result<Option<TurnHandlerOutcome>>> {
     let tool_name_owned = tool_name.to_string();
 
     Box::pin(async move {
@@ -200,7 +221,7 @@ async fn execute_and_handle_tool_call_inner<'a>(
     tool_name: &str,
     args_val: serde_json::Value,
     _batch_progress_reporter: Option<&ProgressReporter>,
-) -> Result<()> {
+) -> Result<Option<TurnHandlerOutcome>> {
     // Show pre-execution indicator for file modification operations
     if crate::agent::runloop::unified::tool_summary::is_file_modification_tool(tool_name, &args_val)
     {
@@ -249,7 +270,7 @@ async fn execute_and_handle_tool_call_inner<'a>(
         turn_modified_files,
     };
 
-    let handle_result = handle_tool_execution_result(
+    let outcome = handle_tool_execution_result(
         &mut t_ctx,
         tool_call_id,
         tool_name,
@@ -257,9 +278,7 @@ async fn execute_and_handle_tool_call_inner<'a>(
         &pipeline_outcome,
         tool_execution_start,
     )
-    .await;
+    .await?;
 
-    handle_result?;
-
-    Ok(())
+    Ok(outcome)
 }

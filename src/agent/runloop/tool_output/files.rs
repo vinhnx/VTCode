@@ -383,7 +383,7 @@ fn render_content_preview(renderer: &mut AnsiRenderer, content: &str) -> Result<
         return Ok(());
     }
 
-    renderer.line(MessageStyle::ToolDetail, "▼ preview")?;
+    renderer.line(MessageStyle::ToolDetail, "")?;
     for line in &meaningful {
         let display = truncate_text_safe(line, MAX_PREVIEW_LINE_LEN);
         renderer.line(MessageStyle::ToolDetail, &format!("  {}", display))?;

@@ -3,13 +3,21 @@
 
 [agent]
 # Primary LLM provider to use (e.g., "openai", "gemini", "anthropic", "openrouter")
-provider = "ollama"
+provider = "anthropic"
 
 # Environment variable containing the API key for the provider
-api_key_env = "OLLAMA_API_KEY"
+api_key_env = "ANTHROPIC_API_KEY"
 
 # Default model to use when no specific model is specified
-default_model = "glm-5:cloud"
+default_model = "claude-sonnet-4-5"
+
+# Personal/local overrides should live in user config, not workspace config:
+#   ~/.vtcode/vtcode.toml
+# Example:
+#   [agent]
+#   provider = "huggingface"
+#   api_key_env = "HF_TOKEN"
+#   default_model = "zai-org/GLM-5:novita"
 
 # Visual theme for the terminal interface
 theme = "mono"
@@ -892,7 +900,8 @@ active_style = "default"
 
 [subagents]
 enabled = true
-default_model = "minimax-m2.5:cloud"
+# Personal subagent model override should live in ~/.vtcode/vtcode.toml
+# default_model = "minimax-m2.5:cloud"
 max_concurrent = 3
 default_timeout_seconds = 300
 additional_agent_dirs = []

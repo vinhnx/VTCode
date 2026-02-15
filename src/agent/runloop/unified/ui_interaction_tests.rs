@@ -15,6 +15,12 @@ struct CompletedOnlyProvider {
     reasoning: Option<String>,
 }
 
+#[derive(Clone)]
+struct ReasoningThenContentProvider {
+    content: String,
+    reasoning: String,
+}
+
 #[async_trait::async_trait]
 impl uni::LLMProvider for CompletedOnlyProvider {
     fn name(&self) -> &str {
@@ -47,6 +53,55 @@ impl uni::LLMProvider for CompletedOnlyProvider {
                 response: Box::new(response),
             })
         })))
+    }
+
+    fn supported_models(&self) -> Vec<String> {
+        vec!["test-model".to_string()]
+    }
+
+    fn validate_request(&self, _request: &uni::LLMRequest) -> Result<(), uni::LLMError> {
+        Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl uni::LLMProvider for ReasoningThenContentProvider {
+    fn name(&self) -> &str {
+        "test-provider"
+    }
+
+    fn supports_streaming(&self) -> bool {
+        true
+    }
+
+    async fn generate(&self, _request: uni::LLMRequest) -> Result<uni::LLMResponse, uni::LLMError> {
+        Ok(uni::LLMResponse {
+            content: Some(self.content.clone()),
+            model: "mock-model".to_string(),
+            tool_calls: None,
+            usage: None,
+            finish_reason: uni::FinishReason::Stop,
+            reasoning: Some(self.reasoning.clone()),
+            reasoning_details: None,
+            organization_id: None,
+            request_id: None,
+            tool_references: vec![],
+        })
+    }
+
+    async fn stream(&self, request: uni::LLMRequest) -> Result<uni::LLMStream, uni::LLMError> {
+        let response = self.generate(request).await?;
+        Ok(Box::pin(stream::iter(vec![
+            Ok(uni::LLMStreamEvent::Reasoning {
+                delta: self.reasoning.clone(),
+            }),
+            Ok(uni::LLMStreamEvent::Token {
+                delta: self.content.clone(),
+            }),
+            Ok(uni::LLMStreamEvent::Completed {
+                response: Box::new(response),
+            }),
+        ])))
     }
 
     fn supported_models(&self) -> Vec<String> {
@@ -215,5 +270,34 @@ async fn strips_proposed_plan_tags_when_option_enabled() {
     assert!(
         !emitted,
         "when stripping is enabled, pure proposed_plan content should be hidden"
+    );
+}
+
+#[tokio::test]
+async fn does_not_suppress_large_content_after_reasoning_stream() {
+    let provider = ReasoningThenContentProvider {
+        content: "x".repeat(5_000),
+        reasoning: "thinking".to_string(),
+    };
+    let request = build_request();
+    let spinner = build_spinner();
+    let mut renderer = AnsiRenderer::stdout();
+    let ctrl_c_state = super::state::CtrlCState::new();
+    let ctrl_c_notify = Arc::new(Notify::new());
+
+    let (_resp, emitted) = stream_and_render_response(
+        &provider,
+        request,
+        &spinner,
+        &mut renderer,
+        &Arc::new(ctrl_c_state),
+        &ctrl_c_notify,
+    )
+    .await
+    .expect("stream should succeed");
+
+    assert!(
+        emitted,
+        "large token content should still be rendered after reasoning events"
     );
 }
