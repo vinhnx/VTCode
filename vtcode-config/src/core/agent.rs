@@ -53,6 +53,7 @@ pub struct AgentConfig {
     #[serde(default = "default_enable_split_tool_results")]
     pub enable_split_tool_results: bool,
 
+    /// Enable TODO planning helper mode for structured task management
     #[serde(default = "default_todo_planning_mode")]
     pub todo_planning_mode: bool,
 
@@ -148,7 +149,7 @@ pub struct AgentConfig {
     #[serde(default)]
     pub checkpointing: AgentCheckpointingConfig,
 
-    /// Vibe coding configuration for lazy/vague request support
+    /// Vibe coding configuration for lazy or vague request support
     #[serde(default)]
     pub vibe_coding: AgentVibeCodingConfig,
 
@@ -158,7 +159,7 @@ pub struct AgentConfig {
     #[serde(default = "default_max_task_retries")]
     pub max_task_retries: u32,
 
-    /// Harness configuration for turn-level budgets and telemetry
+    /// Harness configuration for turn-level budgets, telemetry, and execution limits
     #[serde(default)]
     pub harness: AgentHarnessConfig,
 
@@ -167,7 +168,7 @@ pub struct AgentConfig {
     #[serde(default = "default_include_temporal_context")]
     pub include_temporal_context: bool,
 
-    /// Use UTC instead of local time for temporal context (default: false)
+    /// Use UTC instead of local time for temporal context in system prompts
     #[serde(default)]
     pub temporal_context_use_utc: bool,
 
@@ -175,29 +176,23 @@ pub struct AgentConfig {
     #[serde(default = "default_include_working_directory")]
     pub include_working_directory: bool,
 
-    /// Custom instructions provided by the user via configuration
+    /// Custom instructions provided by the user via configuration to guide agent behavior
     #[serde(default)]
     pub user_instructions: Option<String>,
 
-    /// Default editing mode: "edit" (default) or "plan"
-    /// In "plan" mode, the agent is read-only and produces implementation plans.
-    /// In "edit" mode, the agent can modify files and execute commands.
-    /// Toggle with Shift+Tab or /plan command during a session.
+    /// Default editing mode on startup: "edit" (default) or "plan"
     /// Codex-inspired: Encourages structured planning before execution.
     #[serde(default)]
     pub default_editing_mode: EditingMode,
 
-    /// Require user confirmation before executing a plan (HITL pattern)
+    /// Require user confirmation before executing a plan generated in plan mode
     /// When true, exiting plan mode shows the implementation blueprint and
     /// requires explicit user approval before enabling edit tools.
-    /// Options in confirmation dialog: Execute, Edit Plan, Cancel
     #[serde(default = "default_require_plan_confirmation")]
     pub require_plan_confirmation: bool,
 
     /// Enable autonomous mode - auto-approve safe tools with reduced HITL prompts
-    /// When true, the agent operates with fewer confirmation prompts for safe tools
-    /// (read operations, grep_file, list_files, etc.) while still blocking dangerous operations.
-    /// Toggle with /agent command during a session.
+    /// When true, the agent operates with fewer confirmation prompts for safe tools.
     #[serde(default = "default_autonomous_mode")]
     pub autonomous_mode: bool,
 

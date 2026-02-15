@@ -184,7 +184,13 @@ def main() -> int:
         joined = "\n".join(oversized)
         print(
             "The following tracked files exceed the allowed size threshold "
-            f"of {threshold} bytes:\n{joined}",
+            f"of {threshold} bytes:\n{joined}\n\n"
+            "Remediation:\n"
+            "1. Keep tracked source/docs/assets small by splitting files or trimming content.\n"
+            "2. If a large file is intentional, add a scoped allowlist entry in "
+            "scripts/large_file_allowlist.txt using:\n"
+            "   path/or/glob=MAX_BYTES\n"
+            "3. Re-run: python3 scripts/check_large_files.py",
             file=sys.stderr,
         )
         return 1

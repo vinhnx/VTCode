@@ -1,15 +1,16 @@
-use anstyle::{AnsiColor, Color, Reset, Style as AnsiStyle};
 use anyhow::Result;
 use serde_json::Value;
 use vtcode_core::config::constants::tools;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use super::styles::{GitStyles, LsStyles, select_line_style};
+#[path = "files_diff.rs"]
+mod files_diff;
+pub(super) use files_diff::{colorize_diff_summary_line, format_diff_content_lines};
 
 /// Constants for line and content limits (compact display)
 const MAX_DIFF_LINE_LENGTH: usize = 100; // Reduced for compact view
 const MAX_DISPLAYED_FILES: usize = 100; // Limit displayed files to reduce clutter
-const DIFF_SUMMARY_PREFIX: &str = "• Diff ";
 
 /// Safely truncate text to a maximum character length, respecting UTF-8 boundaries
 pub(super) fn truncate_text_safe(text: &str, max_chars: usize) -> &str {
@@ -20,39 +21,6 @@ pub(super) fn truncate_text_safe(text: &str, max_chars: usize) -> &str {
         .nth(max_chars)
         .map(|(i, _)| &text[..i])
         .unwrap_or(text)
-}
-
-fn format_diff_summary_line(path: &str, additions: usize, deletions: usize) -> String {
-    format!(
-        "{DIFF_SUMMARY_PREFIX}{} (+{} -{})",
-        path, additions, deletions
-    )
-}
-
-fn parse_diff_summary_line(line: &str) -> Option<(&str, usize, usize)> {
-    let summary = line.strip_prefix(DIFF_SUMMARY_PREFIX)?;
-    let (path, counts) = summary.rsplit_once(" (")?;
-    let counts = counts.strip_suffix(')')?;
-    let mut parts = counts.split_whitespace();
-    let additions = parts.next()?.strip_prefix('+')?.parse().ok()?;
-    let deletions = parts.next()?.strip_prefix('-')?.parse().ok()?;
-    Some((path, additions, deletions))
-}
-
-pub(super) fn colorize_diff_summary_line(line: &str, use_color: bool) -> Option<String> {
-    let (path, additions, deletions) = parse_diff_summary_line(line)?;
-    if !use_color {
-        return Some(line.to_string());
-    }
-    let green = AnsiStyle::new().fg_color(Some(Color::Ansi(AnsiColor::Green)));
-    let red = AnsiStyle::new().fg_color(Some(Color::Ansi(AnsiColor::Red)));
-    let reset = format!("{}", Reset.render());
-    Some(format!(
-        "{DIFF_SUMMARY_PREFIX}{path} ({}{:+}{reset} {}-{deletions}{reset})",
-        green.render(),
-        additions,
-        red.render(),
-    ))
 }
 
 /// Helper to extract optional string from JSON value
@@ -68,185 +36,6 @@ fn get_bool(val: &Value, key: &str) -> bool {
 /// Helper to extract optional u64 from JSON value
 fn get_u64(val: &Value, key: &str) -> Option<u64> {
     val.get(key).and_then(|v| v.as_u64())
-}
-
-fn format_start_only_hunk_header(line: &str) -> Option<String> {
-    let trimmed = line.trim_end();
-    if !trimmed.starts_with("@@ -") {
-        return None;
-    }
-
-    let rest = trimmed.strip_prefix("@@ -")?;
-    let mut parts = rest.split_whitespace();
-    let old_part = parts.next()?;
-    let new_part = parts.next()?;
-
-    if !new_part.starts_with('+') {
-        return None;
-    }
-
-    let old_start = old_part.split(',').next()?.parse::<usize>().ok()?;
-    let new_start = new_part
-        .trim_start_matches('+')
-        .split(',')
-        .next()?
-        .parse::<usize>()
-        .ok()?;
-
-    Some(format!("@@ -{} +{} @@", old_start, new_start))
-}
-
-fn is_addition_line(line: &str) -> bool {
-    let trimmed = line.trim_start();
-    trimmed.starts_with('+') && !trimmed.starts_with("+++")
-}
-
-fn is_deletion_line(line: &str) -> bool {
-    let trimmed = line.trim_start();
-    trimmed.starts_with('-') && !trimmed.starts_with("---")
-}
-
-fn parse_diff_git_path(line: &str) -> Option<String> {
-    let mut parts = line.split_whitespace();
-    if parts.next()? != "diff" {
-        return None;
-    }
-    if parts.next()? != "--git" {
-        return None;
-    }
-    let _old = parts.next()?;
-    let new_path = parts.next()?;
-    Some(new_path.trim_start_matches("b/").to_string())
-}
-
-fn parse_apply_patch_path(line: &str) -> Option<String> {
-    let trimmed = line.trim_start();
-    let rest = trimmed.strip_prefix("*** ")?;
-    let (kind, path) = rest.split_once(':')?;
-    let kind = kind.trim();
-    if !matches!(kind, "Update File" | "Add File" | "Delete File") {
-        return None;
-    }
-    let path = path.trim();
-    if path.is_empty() {
-        return None;
-    }
-    Some(path.to_string())
-}
-
-fn parse_diff_marker_path(line: &str) -> Option<String> {
-    let trimmed = line.trim_start();
-    if !(trimmed.starts_with("--- ") || trimmed.starts_with("+++ ")) {
-        return None;
-    }
-    let path = trimmed.split_whitespace().nth(1)?;
-    if path == "/dev/null" {
-        return None;
-    }
-    Some(
-        path.trim_start_matches("a/")
-            .trim_start_matches("b/")
-            .to_string(),
-    )
-}
-
-pub(super) fn format_diff_content_lines(diff_content: &str) -> Vec<String> {
-    #[derive(Default)]
-    struct DiffBlock {
-        header: String,
-        path: String,
-        lines: Vec<String>,
-        additions: usize,
-        deletions: usize,
-    }
-
-    let mut preface: Vec<String> = Vec::new();
-    let mut blocks: Vec<DiffBlock> = Vec::new();
-    let mut current: Option<DiffBlock> = None;
-
-    for line in diff_content.lines() {
-        if let Some(path) = parse_diff_git_path(line).or_else(|| parse_apply_patch_path(line)) {
-            if let Some(block) = current.take() {
-                blocks.push(block);
-            }
-            current = Some(DiffBlock {
-                header: line.to_string(),
-                path,
-                lines: Vec::new(),
-                additions: 0,
-                deletions: 0,
-            });
-            continue;
-        }
-
-        let rewritten = format_start_only_hunk_header(line).unwrap_or_else(|| line.to_string());
-        if let Some(block) = current.as_mut() {
-            if is_addition_line(line) {
-                block.additions += 1;
-            } else if is_deletion_line(line) {
-                block.deletions += 1;
-            }
-            block.lines.push(rewritten);
-        } else {
-            preface.push(rewritten);
-        }
-    }
-
-    if let Some(block) = current {
-        blocks.push(block);
-    }
-
-    if blocks.is_empty() {
-        let mut additions = 0usize;
-        let mut deletions = 0usize;
-        let mut fallback_path: Option<String> = None;
-        let mut summary_insert_index: Option<usize> = None;
-        let mut lines: Vec<String> = Vec::new();
-
-        for line in diff_content.lines() {
-            if fallback_path.is_none() {
-                fallback_path =
-                    parse_diff_marker_path(line).or_else(|| parse_apply_patch_path(line));
-            }
-            if summary_insert_index.is_none() && line.trim_start().starts_with("+++ ") {
-                summary_insert_index = Some(lines.len());
-            }
-            if is_addition_line(line) {
-                additions += 1;
-            } else if is_deletion_line(line) {
-                deletions += 1;
-            }
-            let rewritten = format_start_only_hunk_header(line).unwrap_or_else(|| line.to_string());
-            lines.push(rewritten);
-        }
-
-        let path = fallback_path.unwrap_or_else(|| "file".to_string());
-        let summary = format_diff_summary_line(&path, additions, deletions);
-
-        let mut output = Vec::with_capacity(lines.len() + 1);
-        if let Some(idx) = summary_insert_index {
-            output.extend(lines[..=idx].iter().cloned());
-            output.push(summary);
-            output.extend(lines[idx + 1..].iter().cloned());
-        } else {
-            output.push(summary);
-            output.extend(lines);
-        }
-        return output;
-    }
-
-    let mut output = Vec::new();
-    output.extend(preface);
-    for block in blocks {
-        output.push(block.header);
-        output.push(format_diff_summary_line(
-            &block.path,
-            block.additions,
-            block.deletions,
-        ));
-        output.extend(block.lines);
-    }
-    output
 }
 
 pub(crate) fn render_write_file_preview(
@@ -651,62 +440,5 @@ fn looks_like_diff_content(content: &str) -> bool {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn formats_unified_diff_with_summary_and_hunk_headers() {
-        let diff = "\
-diff --git a/file1.txt b/file1.txt
-index 0000000..1111111 100644
---- a/file1.txt
-+++ b/file1.txt
-@@ -1,2 +1,2 @@
--old
-+new
-";
-        let lines = format_diff_content_lines(diff);
-        assert_eq!(lines[0], "diff --git a/file1.txt b/file1.txt");
-        assert_eq!(lines[1], "• Diff file1.txt (+1 -1)");
-        assert!(lines.iter().any(|line| line == "@@ -1 +1 @@"));
-    }
-
-    #[test]
-    fn formats_diff_without_git_header_with_summary_after_plus() {
-        let diff = "\
---- a/file2.txt
-+++ b/file2.txt
-@@ -2,3 +2,3 @@
--before
-+after
-";
-        let lines = format_diff_content_lines(diff);
-        let plus_index = lines
-            .iter()
-            .position(|line| line.starts_with("+++ "))
-            .expect("plus header exists");
-        assert_eq!(lines[plus_index + 1], "• Diff file2.txt (+1 -1)");
-        assert!(lines.iter().any(|line| line == "@@ -2 +2 @@"));
-    }
-
-    #[test]
-    fn strip_line_number_removes_prefix() {
-        assert_eq!(strip_line_number("  42: fn main() {"), "fn main() {");
-        assert_eq!(strip_line_number("1:hello"), "hello");
-        assert_eq!(strip_line_number("no_number_here"), "no_number_here");
-        assert_eq!(strip_line_number("abc: not a number"), "abc: not a number");
-    }
-
-    #[test]
-    fn shorten_path_preserves_short() {
-        assert_eq!(shorten_path("/src/main.rs", 60), "/src/main.rs");
-    }
-
-    #[test]
-    fn shorten_path_truncates_long() {
-        let long = "/very/long/deeply/nested/path/to/some/file.rs";
-        let short = shorten_path(long, 30);
-        assert!(short.len() <= 45);
-        assert!(short.contains("file.rs"));
-    }
-}
+#[path = "files_tests.rs"]
+mod tests;

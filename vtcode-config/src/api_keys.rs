@@ -160,7 +160,7 @@ pub fn load_dotenv() -> Result<()> {
         Ok(path) => {
             // Only print in verbose mode to avoid polluting stdout/stderr in scripts
             if std::env::var("VTCODE_VERBOSE").is_ok() || std::env::var("RUST_LOG").is_ok() {
-                eprintln!("Loaded environment variables from: {}", path.display());
+                tracing::info!("Loaded environment variables from: {}", path.display());
             }
             Ok(())
         }
@@ -169,7 +169,7 @@ pub fn load_dotenv() -> Result<()> {
             Ok(())
         }
         Err(e) => {
-            eprintln!("Warning: Failed to load .env file: {}", e);
+            tracing::warn!("Failed to load .env file: {}", e);
             Ok(())
         }
     }

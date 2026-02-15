@@ -2,14 +2,18 @@
 
 use serde::{Deserialize, Serialize};
 
+/// Execution mode for agent teammates
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 #[derive(Default)]
 pub enum TeammateMode {
+    /// Auto-detect based on environment
     #[default]
     Auto,
+    /// Run teammates in separate tmux panes
     Tmux,
+    /// Run teammates within the same process
     InProcess,
 }
 

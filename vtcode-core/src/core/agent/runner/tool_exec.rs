@@ -10,6 +10,7 @@ use crate::llm::provider::ToolCall;
 use crate::utils::colors::style;
 use anyhow::{Result, anyhow};
 use tokio::time::Duration;
+use tracing::{error, info, warn};
 
 impl AgentRunner {
     /// Execute multiple tool calls in parallel. Only safe for read-only operations.
@@ -33,9 +34,7 @@ impl AgentRunner {
                 Ok(args) => args,
                 Err(err) => {
                     let error_msg = format!("Invalid arguments for tool '{}': {}", name, err);
-                    if !self.quiet {
-                        println!("{} {} {}", agent_prefix, style("(ERR)").red(), error_msg);
-                    }
+                    error!(agent = %agent_prefix, tool = %name, error = %err, "Invalid tool arguments");
                     session_state.push_tool_error(call.id.clone(), &name, error_msg, is_gemini);
                     continue;
                 }
@@ -48,14 +47,11 @@ impl AgentRunner {
         }
 
         let total_calls = prepared_calls.len();
-        if !self.quiet {
-            println!(
-                "{} [{}] Executing {} tools in parallel",
-                style("[PARALLEL]").cyan().bold(),
-                self.agent_type,
-                total_calls
-            );
-        }
+        info!(
+            agent = %self.agent_type,
+            count = total_calls,
+            "Executing parallel tool calls"
+        );
 
         let mut futures = Vec::with_capacity(prepared_calls.len());
         for (call, name, args) in prepared_calls {
@@ -93,12 +89,7 @@ impl AgentRunner {
             match result {
                 Ok(result) => {
                     if !self.quiet {
-                        println!(
-                            "{} {} {} tool executed successfully",
-                            agent_prefix,
-                            style("(OK)").green(),
-                            name
-                        );
+                        info!(agent = %agent_prefix, tool = %name, "Tool executed successfully");
                     }
 
                     let optimized_result = self.optimize_tool_result(&name, result).await;
@@ -116,9 +107,7 @@ impl AgentRunner {
                 }
                 Err(e) => {
                     let error_msg = format!("Error executing {}: {}", name, e);
-                    if !self.quiet {
-                        println!("{} {} {}", agent_prefix, style("(ERR)").red(), error_msg);
-                    }
+                    error!(agent = %agent_prefix, tool = %name, error = %e, "Tool execution failed");
                     let err_lower = error_msg.to_lowercase();
                     if err_lower.contains("rate limit") {
                         session_state.warnings.push(
@@ -168,35 +157,17 @@ impl AgentRunner {
             if let Some(msg) = self.check_steering() {
                 match msg {
                     SteeringMessage::SteerStop => {
-                        if !self.quiet {
-                            println!(
-                                "{} {}",
-                                agent_prefix,
-                                style("Stopped by steering signal.").red().bold()
-                            );
-                        }
+                        warn!(agent = %agent_prefix, "Stopped by steering signal");
                         return Ok(());
                     }
                     SteeringMessage::Pause => {
-                        if !self.quiet {
-                            println!(
-                                "{} {}",
-                                agent_prefix,
-                                style("Paused by steering signal. Waiting for Resume...")
-                                    .yellow()
-                                    .bold()
-                            );
-                        }
+                        warn!(agent = %agent_prefix, "Paused by steering signal. Waiting for Resume...");
                         // Wait for resume
                         loop {
                             tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
                             if let Some(SteeringMessage::Resume) = self.check_steering() {
                                 if !self.quiet {
-                                    println!(
-                                        "{} {}",
-                                        agent_prefix,
-                                        style("Resumed by steering signal.").green().bold()
-                                    );
+                                    info!(agent = %agent_prefix, "Resumed by steering signal");
                                 }
                                 break;
                             } else if let Some(SteeringMessage::SteerStop) = self.check_steering() {
@@ -207,13 +178,7 @@ impl AgentRunner {
                     SteeringMessage::Resume => {}
                     SteeringMessage::FollowUpInput(_) => {
                         // Follow-up input during tool calls is queued and handled after turn completion.
-                        if !self.quiet {
-                            println!(
-                                "{} {}",
-                                agent_prefix,
-                                style("Follow-up input queued for next turn").yellow()
-                            );
-                        }
+                        info!(agent = %agent_prefix, "Follow-up input queued for next turn");
                     }
                 }
             }
@@ -226,9 +191,7 @@ impl AgentRunner {
                 Ok(args) => args,
                 Err(err) => {
                     let error_msg = format!("Invalid arguments for tool '{}': {}", name, err);
-                    if !self.quiet {
-                        println!("{} {} {}", agent_prefix, style("(ERR)").red(), error_msg);
-                    }
+                    error!(agent = %agent_prefix, tool = %name, error = %err, "Invalid tool arguments");
                     session_state.push_tool_error(call.id.clone(), &name, error_msg, is_gemini);
                     continue;
                 }
@@ -240,11 +203,10 @@ impl AgentRunner {
             }
 
             if !self.quiet {
-                println!(
-                    "{} [{}] Calling tool: {}",
-                    style("[TOOL_CALL]").cyan().bold(),
-                    self.agent_type,
-                    name
+                info!(
+                    agent = %self.agent_type,
+                    tool = %name,
+                    "Calling tool"
                 );
             }
 
@@ -273,12 +235,7 @@ impl AgentRunner {
             match self.execute_tool_internal(&name, &args).await {
                 Ok(result) => {
                     if !self.quiet {
-                        println!(
-                            "{} {} {} tool executed successfully",
-                            agent_prefix,
-                            style("(OK)").green(),
-                            name
-                        );
+                        info!(agent = %agent_prefix, tool = %name, "Tool executed successfully");
                     }
 
                     let optimized_result = self.optimize_tool_result(&name, result).await;

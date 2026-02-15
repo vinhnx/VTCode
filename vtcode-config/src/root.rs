@@ -56,24 +56,43 @@ pub enum UiDisplayMode {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct UiConfig {
+    /// Tool output display mode ("compact" or "full")
     #[serde(default = "default_tool_output_mode")]
     pub tool_output_mode: ToolOutputMode,
+
+    /// Maximum number of lines to display in tool output (prevents transcript flooding)
     #[serde(default = "default_tool_output_max_lines")]
     pub tool_output_max_lines: usize,
+
+    /// Maximum bytes of output to display before auto-spooling to disk
     #[serde(default = "default_tool_output_spool_bytes")]
     pub tool_output_spool_bytes: usize,
+
+    /// Optional custom directory for spooled tool output logs
     #[serde(default)]
     pub tool_output_spool_dir: Option<String>,
+
+    /// Allow ANSI escape sequences in tool output (enables colors but may cause layout issues)
     #[serde(default = "default_allow_tool_ansi")]
     pub allow_tool_ansi: bool,
+
+    /// Number of rows to allocate for inline UI viewport
     #[serde(default = "default_inline_viewport_rows")]
     pub inline_viewport_rows: u16,
+
+    /// Reasoning display mode for chat UI ("always", "toggle", or "hidden")
     #[serde(default = "default_reasoning_display_mode")]
     pub reasoning_display_mode: ReasoningDisplayMode,
+
+    /// Default visibility for reasoning when display mode is "toggle"
     #[serde(default = "default_reasoning_visible_default")]
     pub reasoning_visible_default: bool,
+
+    /// Status line configuration settings
     #[serde(default)]
     pub status_line: StatusLineConfig,
+
+    /// Keyboard protocol enhancements for modern terminals (e.g. Kitty protocol)
     #[serde(default)]
     pub keyboard_protocol: KeyboardProtocolConfig,
 
@@ -233,15 +252,15 @@ impl Default for AskQuestionsConfig {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct PtyConfig {
-    /// Enable PTY functionality
+    /// Enable PTY support for interactive commands
     #[serde(default = "default_pty_enabled")]
     pub enabled: bool,
 
-    /// Default terminal rows
+    /// Default terminal rows for PTY sessions
     #[serde(default = "default_pty_rows")]
     pub default_rows: u16,
 
-    /// Default terminal columns
+    /// Default terminal columns for PTY sessions
     #[serde(default = "default_pty_cols")]
     pub default_cols: u16,
 
@@ -249,15 +268,15 @@ pub struct PtyConfig {
     #[serde(default = "default_max_pty_sessions")]
     pub max_sessions: usize,
 
-    /// Command timeout in seconds
+    /// Command timeout in seconds (prevents hanging commands)
     #[serde(default = "default_pty_timeout")]
     pub command_timeout_seconds: u64,
 
-    /// Number of PTY stdout lines to display in chat output
+    /// Number of recent PTY output lines to display in the chat transcript
     #[serde(default = "default_stdout_tail_lines")]
     pub stdout_tail_lines: usize,
 
-    /// Maximum number of scrollback lines retained per PTY session
+    /// Total scrollback buffer size (lines) retained per PTY session
     #[serde(default = "default_scrollback_lines")]
     pub scrollback_lines: usize,
 
@@ -265,11 +284,11 @@ pub struct PtyConfig {
     #[serde(default = "default_max_scrollback_bytes")]
     pub max_scrollback_bytes: usize,
 
-    /// Threshold (KB) at which to auto-spool large outputs to disk
+    /// Threshold (KB) at which to auto-spool large outputs to disk instead of memory
     #[serde(default = "default_large_output_threshold_kb")]
     pub large_output_threshold_kb: usize,
 
-    /// Preferred shell program for PTY sessions (falls back to environment when unset)
+    /// Preferred shell program for PTY sessions (e.g. "zsh", "bash"); falls back to $SHELL
     #[serde(default)]
     pub preferred_shell: Option<String>,
 }
@@ -366,24 +385,23 @@ pub struct KeyboardProtocolConfig {
     #[serde(default = "default_keyboard_protocol_enabled")]
     pub enabled: bool,
 
-    /// Preset mode: "default", "full", "minimal", "custom"
+    /// Preset mode: "default", "full", "minimal", or "custom"
     #[serde(default = "default_keyboard_protocol_mode")]
     pub mode: String,
 
-    /// Individual flag controls (used when mode = "custom")
-    /// Resolve Esc key ambiguity (recommended)
+    /// Resolve Esc key ambiguity (recommended for performance)
     #[serde(default = "default_disambiguate_escape_codes")]
     pub disambiguate_escape_codes: bool,
 
-    /// Report press/release/repeat events
+    /// Report press, release, and repeat events
     #[serde(default = "default_report_event_types")]
     pub report_event_types: bool,
 
-    /// Report alternate key layouts
+    /// Report alternate key layouts (e.g. for non-US keyboards)
     #[serde(default = "default_report_alternate_keys")]
     pub report_alternate_keys: bool,
 
-    /// Report modifier-only keys (Shift, Ctrl, Alt alone)
+    /// Report all keys, including modifier-only keys (Shift, Ctrl)
     #[serde(default = "default_report_all_keys")]
     pub report_all_keys: bool,
 }

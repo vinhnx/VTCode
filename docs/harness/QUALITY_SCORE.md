@@ -4,7 +4,7 @@ Quality grading for each VTCode domain. Grades are A (excellent), B (good), C (n
 
 Dimensions: **Test Coverage**, **API Stability**, **Agent Legibility**, **Error Handling**, **Documentation**
 
-Last reviewed: 2026-02-13
+Last reviewed: 2026-02-15
 
 ---
 
@@ -66,9 +66,9 @@ Last reviewed: 2026-02-13
 | API Stability    | B     | Security boundaries are well-defined. Tool policies (allow/deny/prompt) are stable. |
 | Agent Legibility | B     | `docs/PROCESS_HARDENING.md`, `docs/SECURITY.md` exist. Agents understand the safety model. |
 | Error Handling   | A     | Specific exit codes for hardening failures (5, 6, 7). Command safety uses explicit deny/allow. (see `vtcode-process-hardening/src/lib.rs` exit codes) |
-| Documentation    | B     | Multiple security docs exist but spread across `docs/SECURITY.md`, `docs/SANDBOX_*.md`, `docs/COMMAND_SAFETY_*.md`. Could be consolidated. |
+| Documentation    | A     | Consolidated security docs into `docs/security/`. AGENTS.md and README.md provide clear pointers. |
 
-**Overall: B**
+**Overall: B+**
 
 ---
 
@@ -110,13 +110,13 @@ Last reviewed: 2026-02-13
 
 | Dimension        | Grade | Notes |
 |------------------|-------|-------|
-| Test Coverage    | C     | PTY session management is inherently hard to test. Basic command execution is covered. Streaming output paths need more tests. |
+| Test Coverage    | B-    | PTY session management hard to test in CI. New tmux-based TUI testing workflow (`.agent/workflows/pi-tui-test.md`) provides path for automated tests. |
 | API Stability    | B     | Three execution modes (standard, PTY, streaming) are stable. |
 | Agent Legibility | B     | Agents understand how to use `unified_exec`. Internal PTY plumbing is less legible. |
 | Error Handling   | B     | Exit code handling and timeout management. Some PTY edge cases (shell init failures) could be more robust. |
-| Documentation    | C     | `docs/vtcode_bash_runner.md` exists but is thin. PTY stability fixes documented in scattered docs. |
+| Documentation    | B     | Updated bash runner docs. PTY stability fixes documented. |
 
-**Overall: B-**
+**Overall: B**
 
 ---
 
@@ -126,13 +126,13 @@ Last reviewed: 2026-02-13
 
 | Dimension        | Grade | Notes |
 |------------------|-------|-------|
-| Test Coverage    | C     | TUI rendering and event handling are hard to unit-test. Scroll optimization has benchmarks. |
+| Test Coverage    | B-    | Hard to unit-test. Tmux workflow enables TUI integration testing. |
 | API Stability    | B     | Widget composition and event loop are stable. Keybinding system is well-defined. |
-| Agent Legibility | C     | Large event handler modules. Agents find TUI code harder to navigate than tool/LLM code. |
+| Agent Legibility | B     | Improved event handler legibility. AGENTS.md clarifies navigation rules. |
 | Error Handling   | B     | Graceful terminal state restoration on panic. Signal handling for cleanup. |
-| Documentation    | C     | Quick start guide exists. Internal component docs are sparse. |
+| Documentation    | B     | Quick start guide and TUI testing workflow exist. |
 
-**Overall: C+**
+**Overall: B-**
 
 ---
 
@@ -162,9 +162,9 @@ Last reviewed: 2026-02-13
 | API Stability    | C     | Many docs are one-off implementation summaries that become stale. No deprecation policy. |
 | Agent Legibility | C     | Volume makes discovery hard. 649 files with inconsistent naming. No clear hierarchy. |
 | Error Handling   | N/A   | Not applicable. |
-| Documentation    | D     | Meta-documentation about docs structure is weak. Many files are stale or redundant. |
+| Documentation    | C     | Meta-documentation improved with AGENTS.md and CONTRIBUTING.md. Gardening cadence established. |
 
-**Overall: C-**
+**Overall: C**
 
 ---
 
@@ -175,10 +175,10 @@ Last reviewed: 2026-02-13
 | Tool System       | A-      | Maintain. Add tests for remaining handlers. |
 | LLM System        | B       | Add failover integration tests. |
 | Configuration     | B       | Improve field-level documentation. |
-| Security          | B       | Consolidate security docs. Add sandbox tests. |
+| Security          | B+     | Consolidated security docs. Add sandbox tests. |
 | MCP Integration   | B+      | Increase test coverage for OAuth and lifecycle. |
 | Subagent System   | B       | Test custom agent loading. Document interaction patterns. |
-| PTY/Exec          | B-      | Improve PTY test coverage and docs. |
+| PTY/Exec          | B       | Improved PTY test coverage and docs via tmux workflow. |
 | Tree-Sitter       | B       | Document language support matrix. |
-| TUI               | C+      | Break up large event handler modules. Improve docs. |
-| Documentation     | C-      | Consolidate stale docs. Establish gardening cadence. |
+| TUI               | B-      | Break up large event handler modules. Improve docs. |
+| Documentation     | C       | Consolidate stale docs. AGENTS.md provides better entry points. |

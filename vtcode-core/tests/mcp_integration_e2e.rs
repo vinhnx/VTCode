@@ -4,11 +4,13 @@
 //! They test the complete flow from configuration loading to tool execution.
 
 use std::collections::HashMap;
+use std::path::PathBuf;
 use tempfile::TempDir;
 use tokio::process::Command;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::mcp::{
-    McpClientConfig, McpProviderConfig, McpStdioServerConfig, McpTransportConfig,
+    McpClientConfig, McpHttpServerConfig, McpProviderConfig, McpStdioServerConfig,
+    McpTransportConfig,
 };
 use vtcode_core::mcp::McpClient;
 use vtcode_core::tools::registry::ToolRegistry;
@@ -265,6 +267,177 @@ max_concurrent_requests = 1
         assert_eq!(provider_config.env.get("DEBUG"), Some(&"true".to_string()));
     }
 
+    #[tokio::test]
+    async fn test_mock_mcp_provider_lifecycle() {
+        if !is_python_available().await {
+            eprintln!("python3 not available, skipping mock MCP lifecycle test");
+            return;
+        }
+
+        let script_path = mock_mcp_server_path();
+        assert!(script_path.exists(), "mock MCP server script should exist");
+
+        let mut mcp_config = McpClientConfig {
+            enabled: true,
+            startup_timeout_seconds: Some(5),
+            tool_timeout_seconds: Some(5),
+            ..Default::default()
+        };
+
+        mcp_config.providers = vec![McpProviderConfig {
+            name: "mock".to_string(),
+            transport: McpTransportConfig::Stdio(McpStdioServerConfig {
+                command: "python3".to_string(),
+                args: vec![script_path.to_string_lossy().to_string()],
+                working_directory: None,
+            }),
+            env: HashMap::new(),
+            enabled: true,
+            max_concurrent_requests: 1,
+            startup_timeout_ms: Some(5_000),
+        }];
+
+        let mut mcp_client = McpClient::new(mcp_config);
+        assert!(mcp_client.initialize().await.is_ok());
+
+        let status = mcp_client.get_status();
+        assert!(status.enabled);
+        assert_eq!(status.provider_count, 1);
+        assert_eq!(status.active_connections, 1);
+        assert_eq!(status.configured_providers.len(), 1);
+        assert_eq!(status.configured_providers[0], "mock");
+
+        let tools = mcp_client.list_tools().await.unwrap();
+        assert_eq!(tools.len(), 1);
+        assert_eq!(tools[0].name, "echo");
+        assert_eq!(
+            mcp_client.provider_for_tool("echo").as_deref(),
+            Some("mock")
+        );
+
+        let result = mcp_client
+            .execute_tool("echo", serde_json::json!({ "message": "hello" }))
+            .await
+            .unwrap();
+
+        assert_eq!(
+            result.get("provider").and_then(|v| v.as_str()),
+            Some("mock")
+        );
+        assert_eq!(result.get("tool").and_then(|v| v.as_str()), Some("echo"));
+        let content = result
+            .get("content")
+            .and_then(|v| v.as_array())
+            .expect("tool result should contain content");
+        let first_text = content
+            .first()
+            .and_then(|v| v.get("text"))
+            .and_then(|v| v.as_str());
+        assert_eq!(first_text, Some("echo:hello"));
+
+        assert!(mcp_client.shutdown().await.is_ok());
+
+        let shutdown_status = mcp_client.get_status();
+        assert_eq!(shutdown_status.provider_count, 0);
+        assert_eq!(shutdown_status.active_connections, 0);
+        assert!(shutdown_status.configured_providers.is_empty());
+        assert!(mcp_client.provider_for_tool("echo").is_none());
+    }
+
+    #[tokio::test]
+    async fn test_http_provider_missing_api_key_env_is_not_initialized() {
+        // SAFETY: This test sets and clears a process env var for its own scope.
+        unsafe {
+            std::env::remove_var("MCP_TEST_MISSING_API_KEY");
+        }
+
+        let mut mcp_config = McpClientConfig {
+            enabled: true,
+            experimental_use_rmcp_client: true,
+            ..Default::default()
+        };
+
+        mcp_config.providers = vec![McpProviderConfig {
+            name: "http-auth".to_string(),
+            transport: McpTransportConfig::Http(McpHttpServerConfig {
+                endpoint: "https://example.invalid/mcp".to_string(),
+                api_key_env: Some("MCP_TEST_MISSING_API_KEY".to_string()),
+                protocol_version: "2024-11-05".to_string(),
+                http_headers: HashMap::new(),
+                env_http_headers: HashMap::new(),
+            }),
+            env: HashMap::new(),
+            enabled: true,
+            max_concurrent_requests: 1,
+            startup_timeout_ms: Some(1_000),
+        }];
+
+        let mut mcp_client = McpClient::new(mcp_config);
+        assert!(mcp_client.initialize().await.is_ok());
+
+        let status = mcp_client.get_status();
+        assert_eq!(status.provider_count, 0);
+        assert_eq!(status.active_connections, 0);
+        assert!(status.configured_providers.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_mock_mcp_provider_reinitialize_after_shutdown() {
+        if !is_python_available().await {
+            eprintln!("python3 not available, skipping mock MCP reinitialize test");
+            return;
+        }
+
+        let script_path = mock_mcp_server_path();
+        assert!(script_path.exists(), "mock MCP server script should exist");
+
+        let mut mcp_client = McpClient::new(build_mock_mcp_config(&script_path));
+        assert!(mcp_client.initialize().await.is_ok());
+        assert_eq!(mcp_client.list_tools().await.unwrap().len(), 1);
+        assert!(mcp_client.shutdown().await.is_ok());
+
+        // A fresh initialize after shutdown should reconnect and rebuild indices.
+        assert!(mcp_client.initialize().await.is_ok());
+        let tools = mcp_client.list_tools().await.unwrap();
+        assert_eq!(tools.len(), 1);
+        assert_eq!(tools[0].name, "echo");
+
+        let result = mcp_client
+            .execute_tool("echo", serde_json::json!({ "message": "again" }))
+            .await
+            .unwrap();
+        let content = result
+            .get("content")
+            .and_then(|v| v.as_array())
+            .expect("tool result should contain content");
+        let first_text = content
+            .first()
+            .and_then(|v| v.get("text"))
+            .and_then(|v| v.as_str());
+        assert_eq!(first_text, Some("echo:again"));
+    }
+
+    #[tokio::test]
+    async fn test_mock_mcp_shutdown_is_idempotent() {
+        if !is_python_available().await {
+            eprintln!("python3 not available, skipping mock MCP shutdown idempotency test");
+            return;
+        }
+
+        let script_path = mock_mcp_server_path();
+        assert!(script_path.exists(), "mock MCP server script should exist");
+
+        let mut mcp_client = McpClient::new(build_mock_mcp_config(&script_path));
+        assert!(mcp_client.initialize().await.is_ok());
+        assert!(mcp_client.shutdown().await.is_ok());
+        assert!(mcp_client.shutdown().await.is_ok());
+
+        let status = mcp_client.get_status();
+        assert_eq!(status.provider_count, 0);
+        assert_eq!(status.active_connections, 0);
+        assert!(status.configured_providers.is_empty());
+    }
+
     #[test]
     fn test_mcp_ui_modes() {
         use vtcode_core::config::mcp::McpUiMode;
@@ -309,4 +482,42 @@ async fn is_time_server_available() -> bool {
         }
         Err(_) => false,
     }
+}
+
+async fn is_python_available() -> bool {
+    match Command::new("python3").arg("--version").output().await {
+        Ok(output) => output.status.success(),
+        Err(_) => false,
+    }
+}
+
+fn mock_mcp_server_path() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("fixtures")
+        .join("mock_mcp_server.py")
+}
+
+fn build_mock_mcp_config(script_path: &std::path::Path) -> McpClientConfig {
+    let mut mcp_config = McpClientConfig {
+        enabled: true,
+        startup_timeout_seconds: Some(5),
+        tool_timeout_seconds: Some(5),
+        ..Default::default()
+    };
+
+    mcp_config.providers = vec![McpProviderConfig {
+        name: "mock".to_string(),
+        transport: McpTransportConfig::Stdio(McpStdioServerConfig {
+            command: "python3".to_string(),
+            args: vec![script_path.to_string_lossy().to_string()],
+            working_directory: None,
+        }),
+        env: HashMap::new(),
+        enabled: true,
+        max_concurrent_requests: 1,
+        startup_timeout_ms: Some(5_000),
+    }];
+
+    mcp_config
 }

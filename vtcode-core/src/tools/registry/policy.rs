@@ -40,7 +40,7 @@ impl ToolPolicyGateway {
         let tool_policy = match ToolPolicyManager::new_with_workspace(workspace_root).await {
             Ok(manager) => Some(manager),
             Err(err) => {
-                eprintln!("Warning: Failed to initialize tool policy manager: {}", err);
+                tracing::warn!(%err, "Failed to initialize tool policy manager");
                 None
             }
         };
@@ -86,7 +86,7 @@ impl ToolPolicyGateway {
         if let Some(ref mut policy) = self.tool_policy
             && let Err(err) = policy.update_available_tools(available).await
         {
-            eprintln!("Warning: Failed to update tool policies: {}", err);
+            tracing::warn!(%err, "Failed to update tool policies");
         }
     }
 
@@ -230,7 +230,7 @@ impl ToolPolicyGateway {
         if let Some(tp) = self.tool_policy.as_ref() {
             tp.print_status();
         } else {
-            eprintln!("Tool policy manager not available");
+            tracing::warn!("Tool policy manager not available");
         }
     }
 

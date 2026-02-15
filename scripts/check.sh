@@ -126,6 +126,18 @@ run_docs() {
     fi
 }
 
+# Run structured logging lint
+run_structured_logging_lint() {
+    print_status "Running structured logging lint..."
+    if ./scripts/lint_structured_logging.sh; then
+        print_success "Structured logging is correct!"
+        return 0
+    else
+        print_error "Structured logging violations found. See ARCHITECTURAL_INVARIANTS.md #4."
+        return 1
+    fi
+}
+
 # Main function
 main() {
     local failed_checks=0
@@ -149,6 +161,7 @@ main() {
 
     # Run all checks
     run_rustfmt || ((failed_checks++))
+    run_structured_logging_lint || ((failed_checks++))
     run_clippy || ((failed_checks++))
     run_build || ((failed_checks++))
     run_tests || ((failed_checks++))

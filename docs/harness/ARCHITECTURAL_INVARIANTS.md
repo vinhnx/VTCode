@@ -217,7 +217,7 @@ Not all invariants are fully enforced yet. Known violations are tracked in `docs
 | Invariant | Debt Item | Status |
 |-----------|-----------|--------|
 | #2 File Size Limits | TD-005 | TUI event handler modules likely exceed 500 lines |
-| #4 Structured Logging | — | Not yet audited; some legacy `println!` may exist |
-| #10 Lint Error Messages | — | Custom lints with remediation not yet implemented |
+| #4 Structured Logging | TD-013 | Not yet audited; some legacy `println!` may exist |
+| #10 Lint Error Messages | TD-014 | Custom lints with remediation not yet implemented |
 
 Adding CI enforcement for invariants is itself tracked as future work. Until enforcement exists, these invariants are enforced by code review and agent discipline.
