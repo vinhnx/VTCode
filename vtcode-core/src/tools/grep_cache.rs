@@ -6,7 +6,7 @@
 //! Uses `UnifiedCache` from `crate::cache` for LRU eviction, TTL, and stats.
 
 use super::grep_file::{GrepSearchInput, GrepSearchResult};
-use crate::cache::{CacheKey, EvictionPolicy, UnifiedCache, DEFAULT_CACHE_TTL};
+use crate::cache::{CacheKey, DEFAULT_CACHE_TTL, EvictionPolicy, UnifiedCache, estimate_json_size};
 use std::sync::Arc;
 
 /// Cache key for search results - includes all parameters that affect search results
@@ -76,7 +76,7 @@ impl GrepSearchCache {
         let key = SearchCacheKey::from(input);
         let size_bytes = std::mem::size_of::<GrepSearchResult>() as u64
             + result.query.len() as u64
-            + result.matches.iter().map(|m| m.to_string().len() as u64).sum::<u64>();
+            + result.matches.iter().map(estimate_json_size).sum::<u64>();
         self.cache.insert(key, result, size_bytes);
     }
 

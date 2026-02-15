@@ -126,32 +126,59 @@ where
         }
     }
 
-    /// Get value from cache with zero-copy access by default
+    /// Get value from cache with zero-copy access by default.
+    ///
+    /// Uses a read-first fast path and only attempts a non-blocking write lock
+    /// for best-effort metadata/stat updates.
     pub fn get(&self, key: &K) -> Option<Arc<V>> {
-        let mut inner = self.inner.write().ok()?;
-        let ttl = inner.ttl;
-
-        // Check if key exists and handle expiration
-        let is_expired = inner
-            .entries
-            .get(key)
-            .map(|entry| entry.is_expired(ttl))
-            .unwrap_or(false);
-
-        if is_expired {
-            Self::remove_inner(&mut inner, key);
-            inner.stats.misses += 1;
-            return None;
+        enum LookupState<T> {
+            Hit(Arc<T>),
+            Expired,
+            Miss,
         }
 
-        if let Some(entry) = inner.entries.get_mut(key) {
-            entry.mark_accessed();
-            let value = Arc::clone(&entry.value);
-            inner.stats.hits += 1;
-            Some(value)
-        } else {
-            inner.stats.misses += 1;
-            None
+        let state = {
+            let inner = self.inner.read().ok()?;
+            let ttl = inner.ttl;
+
+            match inner.entries.get(key) {
+                Some(entry) if !entry.is_expired(ttl) => LookupState::Hit(Arc::clone(&entry.value)),
+                Some(_) => LookupState::Expired,
+                None => LookupState::Miss,
+            }
+        };
+
+        match state {
+            LookupState::Hit(value) => {
+                if let Ok(mut inner) = self.inner.try_write() {
+                    if let Some(entry) = inner.entries.get_mut(key) {
+                        entry.mark_accessed();
+                    }
+                    inner.stats.hits += 1;
+                }
+                Some(value)
+            }
+            LookupState::Expired => {
+                if let Ok(mut inner) = self.inner.try_write() {
+                    let ttl = inner.ttl;
+                    let should_remove = inner
+                        .entries
+                        .get(key)
+                        .map(|entry| entry.is_expired(ttl))
+                        .unwrap_or(false);
+                    if should_remove {
+                        Self::remove_inner(&mut inner, key);
+                    }
+                    inner.stats.misses += 1;
+                }
+                None
+            }
+            LookupState::Miss => {
+                if let Ok(mut inner) = self.inner.try_write() {
+                    inner.stats.misses += 1;
+                }
+                None
+            }
         }
     }
 
@@ -169,9 +196,11 @@ where
         // Remove expired entries first
         Self::remove_expired_entries_inner(&mut inner);
 
-        // Evict if necessary
-        while inner.entries.len() >= inner.max_size {
-            Self::evict_one_inner(&mut inner);
+        // Batch evict if over capacity: remove 10% of entries at once
+        // to avoid repeated O(n) scans on consecutive inserts
+        if inner.entries.len() >= inner.max_size {
+            let to_remove = (inner.max_size / 10).max(1);
+            Self::evict_batch_inner(&mut inner, to_remove);
         }
 
         let entry = CacheEntry::new(value, size_bytes);
@@ -216,6 +245,49 @@ where
             Self::remove_inner(inner, &key);
             inner.stats.evictions += 1;
         }
+    }
+
+    /// Batch-evict `count` entries based on the eviction policy.
+    /// Performs a single O(n log n) sort instead of `count` × O(n) linear scans.
+    fn evict_batch_inner(inner: &mut UnifiedCacheInner<K, V>, count: usize) {
+        if inner.entries.is_empty() {
+            return;
+        }
+
+        let keys_to_remove: Vec<K> = match inner.eviction_policy {
+            EvictionPolicy::Lru => {
+                let mut entries: Vec<_> = inner
+                    .entries
+                    .iter()
+                    .map(|(k, e)| (k.clone(), e.last_accessed))
+                    .collect();
+                entries.sort_by_key(|(_, ts)| *ts);
+                entries.into_iter().take(count).map(|(k, _)| k).collect()
+            }
+            EvictionPolicy::Lfu => {
+                let mut entries: Vec<_> = inner
+                    .entries
+                    .iter()
+                    .map(|(k, e)| (k.clone(), e.access_count))
+                    .collect();
+                entries.sort_by_key(|(_, c)| *c);
+                entries.into_iter().take(count).map(|(k, _)| k).collect()
+            }
+            EvictionPolicy::Fifo | EvictionPolicy::TtlOnly => {
+                let mut entries: Vec<_> = inner
+                    .entries
+                    .iter()
+                    .map(|(k, e)| (k.clone(), e.created_at))
+                    .collect();
+                entries.sort_by_key(|(_, ts)| *ts);
+                entries.into_iter().take(count).map(|(k, _)| k).collect()
+            }
+        };
+
+        for key in &keys_to_remove {
+            Self::remove_inner(inner, key);
+        }
+        inner.stats.evictions += keys_to_remove.len() as u64;
     }
 
     fn find_lru_entry_inner(inner: &UnifiedCacheInner<K, V>) -> Option<K> {
