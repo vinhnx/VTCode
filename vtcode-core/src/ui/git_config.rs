@@ -1,3 +1,4 @@
+use crate::utils::file_utils::read_file_with_context_sync;
 use anstyle::Style;
 /// Git configuration color parsing
 ///
@@ -12,7 +13,7 @@ use anstyle::Style;
 /// let config = GitColorConfig::from_git_config(Path::new(".git/config"))?;
 /// let diff_style = config.diff_new;
 /// ```
-use anyhow::{Context, Result};
+use anyhow::Result;
 use once_cell::sync::Lazy;
 use std::path::Path;
 
@@ -89,8 +90,7 @@ impl GitColorConfig {
     /// Returns an error if the file cannot be read, but parsing errors are logged
     /// and defaults are used for invalid color values.
     pub fn from_git_config(config_path: &Path) -> Result<Self> {
-        let content = std::fs::read_to_string(config_path)
-            .with_context(|| format!("Failed to read Git config: {}", config_path.display()))?;
+        let content = read_file_with_context_sync(config_path, "Git config")?;
 
         let mut config = Self::with_defaults();
 

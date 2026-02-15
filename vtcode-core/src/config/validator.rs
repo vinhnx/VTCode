@@ -10,6 +10,7 @@ use std::path::Path;
 use crate::config::api_keys::ApiKeySources;
 use crate::config::api_keys::get_api_key;
 use crate::config::loader::VTCodeConfig;
+use crate::utils::file_utils::read_file_with_context_sync;
 
 /// Loaded models database from docs/models.json
 #[derive(Debug, Clone)]
@@ -33,8 +34,7 @@ struct ModelInfo {
 impl ModelsDatabase {
     /// Load models database from docs/models.json
     pub fn from_file(path: &Path) -> Result<Self> {
-        let content = std::fs::read_to_string(path)
-            .with_context(|| format!("Failed to read models database from {}", path.display()))?;
+        let content = read_file_with_context_sync(path, "models database")?;
 
         let json: JsonValue =
             serde_json::from_str(&content).context("Failed to parse models database JSON")?;

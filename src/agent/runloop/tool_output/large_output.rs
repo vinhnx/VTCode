@@ -32,6 +32,7 @@ use std::fs;
 use std::io::Write;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
+use vtcode_core::utils::file_utils::{ensure_dir_exists_sync, read_file_with_context_sync};
 
 /// Configuration for large output spooling
 #[derive(Debug, Clone)]
@@ -116,12 +117,7 @@ impl SpoolResult {
     ///
     /// Use this when the agent needs the complete output for analysis.
     pub fn read_full_content(&self) -> Result<String> {
-        let content = fs::read_to_string(&self.file_path).with_context(|| {
-            format!(
-                "Failed to read spooled output: {}",
-                self.file_path.display()
-            )
-        })?;
+        let content = read_file_with_context_sync(&self.file_path, "spooled output")?;
 
         // Skip the metadata header (lines before "---\n\n")
         if let Some(idx) = content.find("---\n\n") {
@@ -314,7 +310,7 @@ pub fn spool_large_output(
     let session_dir = config.base_dir.join(&session_hash);
 
     // Create session directory
-    fs::create_dir_all(&session_dir).with_context(|| {
+    ensure_dir_exists_sync(&session_dir).with_context(|| {
         format!(
             "Failed to create output spool directory: {}",
             session_dir.display()

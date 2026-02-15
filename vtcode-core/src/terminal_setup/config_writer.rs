@@ -2,8 +2,8 @@
 //!
 //! Provides atomic writes and marker-based config merging to preserve user customizations.
 
+use crate::utils::file_utils::ensure_dir_exists_sync;
 use anyhow::{Context, Result};
-use std::fs;
 use std::io::Write;
 use std::path::Path;
 use tempfile::NamedTempFile;
@@ -37,7 +37,7 @@ impl ConfigWriter {
     pub fn write_atomic(path: &Path, content: &str) -> Result<()> {
         // Create parent directory if it doesn't exist
         if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent)
+            ensure_dir_exists_sync(parent)
                 .with_context(|| format!("Failed to create directory: {}", parent.display()))?;
         }
 
@@ -169,7 +169,7 @@ mod tests {
         ConfigWriter::write_atomic(&path, content).unwrap();
 
         assert!(path.exists());
-        assert_eq!(fs::read_to_string(&path).unwrap(), content);
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), content);
     }
 
     #[test]

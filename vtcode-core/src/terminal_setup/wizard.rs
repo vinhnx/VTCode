@@ -4,7 +4,8 @@
 
 use crate::VTCodeConfig;
 use crate::utils::ansi::{AnsiRenderer, MessageStyle};
-use anyhow::{Context, Result};
+use crate::utils::file_utils::read_file_with_context_sync;
+use anyhow::Result;
 
 use super::backup::ConfigBackupManager;
 use super::detector::{TerminalFeature, TerminalType};
@@ -202,8 +203,7 @@ pub async fn run_terminal_setup_wizard(
 
     // Read existing config if it exists
     let existing_content = if config_path.exists() {
-        std::fs::read_to_string(&config_path)
-            .with_context(|| format!("Failed to read config file: {}", config_path.display()))?
+        read_file_with_context_sync(&config_path, "terminal config file")?
     } else {
         String::new()
     };

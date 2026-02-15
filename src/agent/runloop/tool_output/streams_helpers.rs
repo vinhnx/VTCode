@@ -8,6 +8,7 @@ use vtcode_core::config::ToolOutputMode;
 use vtcode_core::config::constants::defaults;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
+use vtcode_core::utils::file_utils::ensure_dir_exists_sync;
 
 use super::super::files::truncate_text_safe;
 use super::super::large_output::{LargeOutputConfig, spool_large_output};
@@ -151,7 +152,7 @@ pub(super) async fn spool_output_if_needed(
 
     // Run blocking write in the tokio blocking pool since callers are usually async.
     let join_result = tokio::task::spawn_blocking(move || -> Result<PathBuf> {
-        std::fs::create_dir_all(&spool_dir_clone).with_context(|| {
+        ensure_dir_exists_sync(&spool_dir_clone).with_context(|| {
             format!(
                 "Failed to create spool directory: {}",
                 spool_dir_clone.display()

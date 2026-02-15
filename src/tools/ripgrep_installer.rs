@@ -13,10 +13,12 @@
 
 use anyhow::{Context, Result, anyhow};
 use serde::{Deserialize, Serialize};
-use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
+use vtcode_core::utils::file_utils::{
+    ensure_dir_exists_sync, read_file_with_context_sync, write_file_with_context_sync,
+};
 
 /// Result of ripgrep availability check
 #[derive(Debug, Clone, PartialEq)]
@@ -68,7 +70,7 @@ impl InstallationCache {
     fn acquire_lock() -> Result<std::fs::File> {
         let lock_path = Self::lock_path();
         if let Some(parent) = lock_path.parent() {
-            fs::create_dir_all(parent).ok();
+            ensure_dir_exists_sync(parent).ok();
         }
         std::fs::OpenOptions::new()
             .create(true)
@@ -110,17 +112,17 @@ impl InstallationCache {
 
     fn load() -> Result<Self> {
         let path = Self::cache_path();
-        let content = fs::read_to_string(&path).context("Failed to read installation cache")?;
+        let content = read_file_with_context_sync(&path, "installation cache")?;
         serde_json::from_str(&content).context("Failed to parse installation cache")
     }
 
     fn save(&self) -> Result<()> {
         let path = Self::cache_path();
         if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent).ok();
+            ensure_dir_exists_sync(parent).ok();
         }
         let json = serde_json::to_string(self).context("Failed to serialize cache")?;
-        fs::write(&path, json).context("Failed to write installation cache")?;
+        write_file_with_context_sync(&path, &json, "installation cache")?;
         Ok(())
     }
 

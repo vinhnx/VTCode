@@ -5,13 +5,13 @@ use std::time::SystemTime;
 use anyhow::{Context, Result, bail, ensure};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use tokio::fs;
 use tokio::sync::RwLock;
 
 use crate::config::{PluginRuntimeConfig, PluginTrustLevel};
 use crate::tools::ToolRegistry;
 use crate::tools::registry::ToolRegistration;
 use crate::utils::error_messages::{ERR_DESERIALIZE, ERR_READ_FILE};
+use crate::utils::file_utils::read_file_with_context;
 
 pub type PluginId = String;
 
@@ -101,7 +101,7 @@ impl PluginRuntime {
 
     pub async fn load_manifest(&self, manifest_path: impl AsRef<Path>) -> Result<PluginManifest> {
         let path = manifest_path.as_ref();
-        let data = fs::read_to_string(path)
+        let data = read_file_with_context(path, "plugin manifest")
             .await
             .with_context(|| format!("{ERR_READ_FILE}: {}", path.display()))?;
 
@@ -224,7 +224,7 @@ entrypoint = "bin/plugin"
     async fn deny_list_blocks_manifest() {
         let tmp_dir = std::env::temp_dir();
         let manifest_path = tmp_dir.join("vtcode_plugin_deny.toml");
-        fs::write(&manifest_path, manifest_toml("blocked"))
+        tokio::fs::write(&manifest_path, manifest_toml("blocked"))
             .await
             .expect("write manifest");
 
@@ -247,7 +247,7 @@ entrypoint = "bin/plugin"
     async fn allow_list_enforced() {
         let tmp_dir = std::env::temp_dir();
         let manifest_path = tmp_dir.join("vtcode_plugin_allow.toml");
-        fs::write(&manifest_path, manifest_toml("allowed"))
+        tokio::fs::write(&manifest_path, manifest_toml("allowed"))
             .await
             .expect("write manifest");
 
