@@ -1,11 +1,14 @@
 #![allow(clippy::too_many_arguments)]
+mod hook_messages;
+mod limit_prompts;
+mod permission_prompt;
+
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Result;
 use tokio::sync::{Notify, RwLock};
-use tokio::task;
 
 use serde_json::Value;
 use vtcode_core::acp::{PermissionGrant, ToolPermissionCache};
@@ -15,14 +18,15 @@ use vtcode_core::tools::registry::{ToolPermissionDecision, ToolRegistry};
 use vtcode_core::tools::{
     JustificationExtractor, ToolRiskContext, ToolRiskScorer, ToolSource, WorkspaceTrust,
 };
-use vtcode_core::ui::tui::{InlineEvent, InlineHandle};
+use vtcode_core::ui::tui::InlineHandle;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
-use super::state::{CtrlCSignal, CtrlCState};
+use super::state::CtrlCState;
 use super::tool_summary::{describe_tool_action, humanize_tool_name};
-use super::ui_interaction::PlaceholderGuard;
-use crate::hooks::lifecycle::{
-    HookMessage, HookMessageLevel, LifecycleHookEngine, PreToolHookDecision,
+use crate::hooks::lifecycle::{LifecycleHookEngine, PreToolHookDecision};
+use hook_messages::render_hook_messages;
+use permission_prompt::{
+    extract_shell_command_text, prompt_tool_permission, shell_command_requires_prompt,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -64,335 +68,6 @@ pub(crate) struct ToolPermissionsContext<'a, S: UiSession + ?Sized> {
     pub human_in_the_loop: bool,
     pub delegate_mode: bool,
     pub skip_confirmations: bool,
-}
-
-fn extract_shell_command_text(tool_name: &str, tool_args: Option<&Value>) -> Option<String> {
-    let args = tool_args?;
-    let command_value = match tool_name {
-        "run_pty_cmd" | "shell" => args.get("command").or_else(|| args.get("raw_command")),
-        "unified_exec" | "exec_pty_cmd" | "exec" => {
-            let action = args
-                .get("action")
-                .and_then(|v| v.as_str())
-                .or_else(|| args.get("command").map(|_| "run"));
-            if action == Some("run") {
-                args.get("command").or_else(|| args.get("raw_command"))
-            } else {
-                None
-            }
-        }
-        _ => None,
-    }?;
-
-    if let Some(arr) = command_value.as_array() {
-        let parts = arr
-            .iter()
-            .filter_map(|value| value.as_str())
-            .collect::<Vec<_>>();
-        if parts.is_empty() {
-            None
-        } else {
-            Some(parts.join(" "))
-        }
-    } else {
-        command_value.as_str().map(|value| value.to_owned())
-    }
-}
-
-fn shell_command_requires_prompt(command: &str) -> bool {
-    let trimmed = command.trim();
-    if trimmed.is_empty() {
-        return false;
-    }
-
-    let tokens = shell_words::split(trimmed).unwrap_or_else(|_| {
-        trimmed
-            .split_whitespace()
-            .map(|value| value.to_string())
-            .collect::<Vec<_>>()
-    });
-    if tokens.is_empty() {
-        return false;
-    }
-
-    vtcode_core::command_safety::command_might_be_dangerous(&tokens)
-}
-
-pub(crate) async fn prompt_tool_permission<S: UiSession + ?Sized>(
-    display_name: &str,
-    tool_name: &str,
-    tool_args: Option<&Value>,
-    _renderer: &mut AnsiRenderer,
-    handle: &InlineHandle,
-    session: &mut S,
-    ctrl_c_state: &Arc<CtrlCState>,
-    ctrl_c_notify: &Arc<Notify>,
-    default_placeholder: Option<String>,
-    justification: Option<&vtcode_core::tools::ToolJustification>,
-    approval_recorder: Option<&vtcode_core::tools::ApprovalRecorder>,
-    hitl_notification_bell: bool,
-) -> Result<HitlDecision> {
-    use vtcode_core::ui::tui::{InlineListItem, InlineListSelection};
-
-    // Build detailed description lines
-    let mut description_lines = vec![
-        format!("Tool: {}", tool_name),
-        format!("Action: {}", display_name),
-    ];
-
-    // Add key arguments if available
-    if let Some(args) = tool_args
-        && let Some(obj) = args.as_object()
-    {
-        for (key, value) in obj.iter().take(3) {
-            if let Some(str_val) = value.as_str() {
-                let truncated = if str_val.len() > 60 {
-                    format!("{}...", &str_val[..57])
-                } else {
-                    str_val.to_string()
-                };
-                description_lines.push(format!("  {}: {}", key, truncated));
-            } else if let Some(bool_val) = value.as_bool() {
-                description_lines.push(format!("  {}: {}", key, bool_val));
-            } else if let Some(num_val) = value.as_number() {
-                description_lines.push(format!("  {}: {}", key, num_val));
-            }
-        }
-        if obj.len() > 3 {
-            description_lines.push(format!("  ... and {} more arguments", obj.len() - 3));
-        }
-    }
-
-    // Add agent justification if available
-    if let Some(just) = justification {
-        let just_lines = just.format_for_dialog();
-        description_lines.extend(just_lines);
-    }
-
-    // Add approval suggestion if available
-    if let Some(recorder) = approval_recorder
-        && let Some(suggestion) = recorder.get_auto_approval_suggestion(tool_name).await
-    {
-        description_lines.push(String::new());
-        description_lines.push(format!("Suggestion: {}", suggestion));
-    }
-
-    description_lines.push(String::new());
-    description_lines.push("Choose how to handle this tool execution:".to_string());
-    description_lines.push("Use ↑↓ or Tab to navigate • Enter to select • Esc to deny".to_string());
-
-    let options = vec![
-        InlineListItem {
-            title: "Approve Once".to_string(),
-            subtitle: Some("Allow this tool to execute this time only".to_string()),
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::ToolApproval(true)),
-            search_value: Some("approve yes allow once y 1".to_string()),
-        },
-        InlineListItem {
-            title: "Allow for Session".to_string(),
-            subtitle: Some("Allow this tool for the current session".to_string()),
-            badge: Some("Session".to_string()),
-            indent: 0,
-            selection: Some(InlineListSelection::ToolApprovalSession),
-            search_value: Some("session temporary temp 2".to_string()),
-        },
-        InlineListItem {
-            title: "Always Allow".to_string(),
-            subtitle: Some("Permanently allow this tool (saved to policy)".to_string()),
-            badge: Some("Permanent".to_string()),
-            indent: 0,
-            selection: Some(InlineListSelection::ToolApprovalPermanent),
-            search_value: Some("always permanent forever save 3".to_string()),
-        },
-        InlineListItem {
-            title: "".to_string(),
-            subtitle: None,
-            badge: None,
-            indent: 0,
-            selection: None,
-            search_value: None,
-        },
-        InlineListItem {
-            title: "Deny Once".to_string(),
-            subtitle: Some("Reject this tool for now (ask again next time)".to_string()),
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::ToolApprovalDenyOnce),
-            search_value: Some("deny no reject once temporary 4".to_string()),
-        },
-        InlineListItem {
-            title: "Always Deny".to_string(),
-            subtitle: Some("Block this tool until policy is changed".to_string()),
-            badge: Some("Persistent".to_string()),
-            indent: 0,
-            selection: Some(InlineListSelection::ToolApproval(false)),
-            search_value: Some("deny no reject cancel never always 5".to_string()),
-        },
-    ];
-
-    let default_selection = InlineListSelection::ToolApproval(true);
-
-    // Play terminal notification (rich OSC when available, fallback to bell)
-    vtcode_core::utils::ansi_codes::notify_attention(
-        hitl_notification_bell,
-        Some("Tool approval required"),
-    );
-
-    // Show modal list with full context - arrow keys will work here and history navigation is disabled
-    handle.show_list_modal(
-        "Tool Permission Required".to_string(),
-        description_lines,
-        options,
-        Some(default_selection),
-        None,
-    );
-
-    let _placeholder_guard = PlaceholderGuard::new(handle, default_placeholder);
-    task::yield_now().await;
-
-    loop {
-        if ctrl_c_state.is_cancel_requested() {
-            handle.close_modal();
-            handle.force_redraw();
-            task::yield_now().await;
-            tokio::time::sleep(Duration::from_millis(100)).await;
-            return Ok(HitlDecision::Interrupt);
-        }
-
-        let notify = ctrl_c_notify.clone();
-        let maybe_event = tokio::select! {
-            _ = notify.notified() => None,
-            event = session.next_event() => event,
-        };
-
-        let Some(event) = maybe_event else {
-            handle.close_modal();
-            handle.force_redraw();
-            task::yield_now().await;
-            tokio::time::sleep(Duration::from_millis(100)).await;
-            if ctrl_c_state.is_cancel_requested() {
-                return Ok(HitlDecision::Interrupt);
-            }
-            return Ok(HitlDecision::Exit);
-        };
-
-        match event {
-            InlineEvent::Interrupt => {
-                let signal = if ctrl_c_state.is_exit_requested() {
-                    CtrlCSignal::Exit
-                } else if ctrl_c_state.is_cancel_requested() {
-                    CtrlCSignal::Cancel
-                } else {
-                    ctrl_c_state.register_signal()
-                };
-                ctrl_c_notify.notify_waiters();
-                handle.close_modal();
-                handle.force_redraw();
-                task::yield_now().await;
-                tokio::time::sleep(Duration::from_millis(100)).await;
-                return if matches!(signal, CtrlCSignal::Exit) {
-                    Ok(HitlDecision::Exit)
-                } else {
-                    Ok(HitlDecision::Interrupt)
-                };
-            }
-            InlineEvent::ListModalSubmit(selection) => {
-                ctrl_c_state.disarm_exit();
-                handle.close_modal();
-                // Force redraw and wait to ensure modal is fully cleared
-                handle.force_redraw();
-                task::yield_now().await;
-                tokio::time::sleep(Duration::from_millis(100)).await;
-
-                match selection {
-                    InlineListSelection::ToolApproval(true) => {
-                        return Ok(HitlDecision::Approved);
-                    }
-                    InlineListSelection::ToolApprovalSession => {
-                        return Ok(HitlDecision::ApprovedSession);
-                    }
-                    InlineListSelection::ToolApprovalPermanent => {
-                        return Ok(HitlDecision::ApprovedPermanent);
-                    }
-                    InlineListSelection::ToolApprovalDenyOnce => {
-                        return Ok(HitlDecision::DeniedOnce);
-                    }
-                    InlineListSelection::ToolApproval(false) => {
-                        return Ok(HitlDecision::Denied);
-                    }
-                    _ => {
-                        return Ok(HitlDecision::Denied);
-                    }
-                }
-            }
-            InlineEvent::ListModalCancel => {
-                ctrl_c_state.disarm_exit();
-                handle.close_modal();
-                handle.force_redraw();
-                task::yield_now().await;
-                tokio::time::sleep(Duration::from_millis(100)).await;
-                return Ok(HitlDecision::Denied);
-            }
-            InlineEvent::WizardModalSubmit(_)
-            | InlineEvent::WizardModalStepComplete { .. }
-            | InlineEvent::WizardModalBack { .. }
-            | InlineEvent::WizardModalCancel => {
-                ctrl_c_state.disarm_exit();
-                // Wizard modal events: treat as denial
-                return Ok(HitlDecision::Denied);
-            }
-            InlineEvent::Cancel => {
-                ctrl_c_state.disarm_exit();
-                handle.close_modal();
-                handle.force_redraw();
-                task::yield_now().await;
-                tokio::time::sleep(Duration::from_millis(100)).await;
-                return Ok(HitlDecision::Denied);
-            }
-            InlineEvent::ForceCancelPtySession => {
-                ctrl_c_state.disarm_exit();
-                handle.close_modal();
-                handle.force_redraw();
-                task::yield_now().await;
-                tokio::time::sleep(Duration::from_millis(100)).await;
-                return Ok(HitlDecision::Denied);
-            }
-            InlineEvent::Exit => {
-                ctrl_c_state.disarm_exit();
-                handle.close_modal();
-                handle.force_redraw();
-                task::yield_now().await;
-                tokio::time::sleep(Duration::from_millis(100)).await;
-                return Ok(HitlDecision::Exit);
-            }
-            InlineEvent::Submit(_) | InlineEvent::QueueSubmit(_) => {
-                ctrl_c_state.disarm_exit();
-                // Ignore text input when modal is shown
-                continue;
-            }
-            InlineEvent::ScrollLineUp
-            | InlineEvent::ScrollLineDown
-            | InlineEvent::ScrollPageUp
-            | InlineEvent::ScrollPageDown
-            | InlineEvent::FileSelected(_)
-            | InlineEvent::BackgroundOperation
-            | InlineEvent::LaunchEditor
-            | InlineEvent::ToggleMode
-            | InlineEvent::TeamPrev
-            | InlineEvent::TeamNext
-            | InlineEvent::PlanConfirmation(_)
-            | InlineEvent::DiffPreviewApply
-            | InlineEvent::DiffPreviewReject
-            | InlineEvent::DiffPreviewTrustChanged { .. }
-            | InlineEvent::EditQueue
-            | InlineEvent::HistoryPrevious
-            | InlineEvent::HistoryNext => {
-                ctrl_c_state.disarm_exit();
-            }
-        }
-    }
 }
 
 pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
@@ -749,25 +424,6 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
     }
 }
 
-fn render_hook_messages(renderer: &mut AnsiRenderer, messages: &[HookMessage]) -> Result<()> {
-    for message in messages {
-        let text = message.text.trim();
-        if text.is_empty() {
-            continue;
-        }
-
-        let style = match message.level {
-            HookMessageLevel::Info => MessageStyle::Info,
-            HookMessageLevel::Warning => MessageStyle::Info,
-            HookMessageLevel::Error => MessageStyle::Error,
-        };
-
-        renderer.line(style, text)?;
-    }
-
-    Ok(())
-}
-
 pub(crate) async fn prompt_session_limit_increase<S: UiSession + ?Sized>(
     handle: &InlineHandle,
     session: &mut S,
@@ -775,58 +431,12 @@ pub(crate) async fn prompt_session_limit_increase<S: UiSession + ?Sized>(
     ctrl_c_notify: &Arc<Notify>,
     max_limit: usize,
 ) -> Result<Option<usize>> {
-    use vtcode_core::ui::tui::{InlineListItem, InlineListSelection};
-
-    let description_lines = vec![
-        format!("Session tool limit reached: {}", max_limit),
-        "Would you like to increase the limit to continue?".to_string(),
-        "".to_string(),
-        "Use ↑↓ or Tab to navigate • Enter to select • Esc to deny".to_string(),
-    ];
-
-    let options = vec![
-        InlineListItem {
-            title: "+100 tool calls".to_string(),
-            subtitle: Some("Increase the session limit by 100".to_string()),
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::SessionLimitIncrease(100)),
-            search_value: Some("increase 100 hundred plus more".to_string()),
-        },
-        InlineListItem {
-            title: "+50 tool calls".to_string(),
-            subtitle: Some("Increase the session limit by 50".to_string()),
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::SessionLimitIncrease(50)),
-            search_value: Some("increase 50 fifty plus more".to_string()),
-        },
-        InlineListItem {
-            title: "".to_string(),
-            subtitle: None,
-            badge: None,
-            indent: 0,
-            selection: None,
-            search_value: None,
-        },
-        InlineListItem {
-            title: "Deny".to_string(),
-            subtitle: Some("Do not increase limit (stops tool execution)".to_string()),
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::ToolApproval(false)),
-            search_value: Some("deny no exit stop cancel".to_string()),
-        },
-    ];
-
-    prompt_limit_increase_modal(
+    limit_prompts::prompt_session_limit_increase(
         handle,
         session,
         ctrl_c_state,
         ctrl_c_notify,
-        "Session Limit Reached".to_string(),
-        description_lines,
-        options,
+        max_limit,
     )
     .await
 }
@@ -838,130 +448,12 @@ pub(crate) async fn prompt_tool_loop_limit_increase<S: UiSession + ?Sized>(
     ctrl_c_notify: &Arc<Notify>,
     max_limit: usize,
 ) -> Result<Option<usize>> {
-    use vtcode_core::ui::tui::{InlineListItem, InlineListSelection};
-
-    let description_lines = vec![
-        format!("Maximum tool loops reached: {}", max_limit),
-        "Would you like to continue with more tool loops?".to_string(),
-        "".to_string(),
-        "Use ↑↓ or Tab to navigate • Enter to select • Esc to stop".to_string(),
-    ];
-
-    let options = vec![
-        InlineListItem {
-            title: "+200 tool loops".to_string(),
-            subtitle: Some("Continue with 200 more tool loops".to_string()),
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::SessionLimitIncrease(200)),
-            search_value: Some("increase 200 two hundred plus more continue".to_string()),
-        },
-        InlineListItem {
-            title: "+100 tool loops".to_string(),
-            subtitle: Some("Continue with 100 more tool loops".to_string()),
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::SessionLimitIncrease(100)),
-            search_value: Some("increase 100 hundred plus more continue".to_string()),
-        },
-        InlineListItem {
-            title: "+50 tool loops".to_string(),
-            subtitle: Some("Continue with 50 more tool loops".to_string()),
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::SessionLimitIncrease(50)),
-            search_value: Some("increase 50 fifty plus more continue".to_string()),
-        },
-        InlineListItem {
-            title: "".to_string(),
-            subtitle: None,
-            badge: None,
-            indent: 0,
-            selection: None,
-            search_value: None,
-        },
-        InlineListItem {
-            title: "Stop".to_string(),
-            subtitle: Some("Stop the current turn and wait for input".to_string()),
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::ToolApproval(false)),
-            search_value: Some("stop no exit cancel done".to_string()),
-        },
-    ];
-
-    prompt_limit_increase_modal(
+    limit_prompts::prompt_tool_loop_limit_increase(
         handle,
         session,
         ctrl_c_state,
         ctrl_c_notify,
-        "Tool Loop Limit Reached".to_string(),
-        description_lines,
-        options,
+        max_limit,
     )
     .await
-}
-
-async fn prompt_limit_increase_modal<S: UiSession + ?Sized>(
-    handle: &InlineHandle,
-    session: &mut S,
-    ctrl_c_state: &Arc<CtrlCState>,
-    ctrl_c_notify: &Arc<Notify>,
-    title: String,
-    description_lines: Vec<String>,
-    options: Vec<vtcode_core::ui::tui::InlineListItem>,
-) -> Result<Option<usize>> {
-    use vtcode_core::ui::tui::InlineListSelection;
-
-    handle.show_list_modal(
-        title,
-        description_lines,
-        options.clone(),
-        Some(InlineListSelection::SessionLimitIncrease(100)),
-        None,
-    );
-
-    loop {
-        if ctrl_c_state.is_cancel_requested() {
-            handle.close_modal();
-            handle.force_redraw();
-            return Ok(None);
-        }
-
-        let notify = ctrl_c_notify.clone();
-        let maybe_event = tokio::select! {
-            _ = notify.notified() => None,
-            event = session.next_event() => event,
-        };
-
-        let Some(event) = maybe_event else {
-            handle.close_modal();
-            handle.force_redraw();
-            return Ok(None);
-        };
-
-        match event {
-            InlineEvent::ListModalSubmit(selection) => {
-                handle.close_modal();
-                handle.force_redraw();
-                match selection {
-                    InlineListSelection::SessionLimitIncrease(inc) => return Ok(Some(inc)),
-                    _ => return Ok(None),
-                }
-            }
-            InlineEvent::ListModalCancel | InlineEvent::Cancel | InlineEvent::Exit => {
-                handle.close_modal();
-                handle.force_redraw();
-                return Ok(None);
-            }
-            InlineEvent::Interrupt => {
-                let _signal = ctrl_c_state.register_signal();
-                ctrl_c_notify.notify_waiters();
-                handle.close_modal();
-                handle.force_redraw();
-                return Ok(None);
-            }
-            _ => continue,
-        }
-    }
 }

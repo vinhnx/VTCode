@@ -1,0 +1,392 @@
+use super::mcp_tools::build_mcp_tool_definitions;
+use super::skill_setup::{discover_skills, register_skill_and_subagent_tools};
+use super::types::{SessionState, build_conversation_history_from_resume};
+use crate::agent::runloop::ResumeSession;
+use crate::agent::runloop::mcp_events;
+use crate::agent::runloop::telemetry::build_trajectory_logger;
+use crate::agent::runloop::unified::async_mcp_manager::{AsyncMcpManager, McpInitStatus};
+use crate::agent::runloop::unified::prompts::read_system_prompt;
+use crate::agent::runloop::unified::tool_call_safety::ToolCallSafetyValidator;
+use crate::agent::runloop::unified::tool_catalog::ToolCatalogState;
+use crate::agent::runloop::welcome::prepare_session_bootstrap;
+use crate::workspace_trust;
+use anyhow::{Context, Result};
+use std::collections::HashMap;
+use std::path::PathBuf;
+use std::str::FromStr;
+use std::sync::Arc;
+use std::sync::RwLock as StdRwLock;
+use tokio::sync::RwLock;
+use tokio::time::{Duration, sleep};
+use tracing::{debug, error, info, warn};
+use vtcode_core::acp::ToolPermissionCache;
+use vtcode_core::config::WorkspaceTrustLevel;
+use vtcode_core::config::loader::VTCodeConfig;
+use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
+use vtcode_core::core::agent::state::recover_history_from_crash;
+use vtcode_core::core::decision_tracker::DecisionTracker;
+use vtcode_core::llm::{factory::create_provider_with_config, provider as uni};
+use vtcode_core::mcp::McpClient;
+use vtcode_core::models::ModelId;
+use vtcode_core::prompts::CustomPromptRegistry;
+use vtcode_core::tools::build_function_declarations_cached;
+use vtcode_core::tools::{ApprovalRecorder, SearchMetrics, ToolRegistry, ToolResultCache};
+
+#[allow(clippy::unnecessary_cast)]
+fn vtcode_config_circuit_breaker_to_core(
+    vt_cfg: Option<&VTCodeConfig>,
+    _agent_config: &CoreAgentConfig,
+) -> vtcode_core::tools::circuit_breaker::CircuitBreakerConfig {
+    let default_cfg = vtcode_config::core::agent::CircuitBreakerConfig::default();
+    let cfg = vt_cfg
+        .map(|c| &c.agent.circuit_breaker)
+        .unwrap_or(&default_cfg);
+
+    if !cfg.enabled {
+        return vtcode_core::tools::circuit_breaker::CircuitBreakerConfig {
+            failure_threshold: u32::MAX,
+            reset_timeout: Duration::from_secs(1),
+            min_backoff: Duration::from_millis(100),
+            max_backoff: Duration::from_secs(1),
+            backoff_factor: 1.0,
+        };
+    }
+
+    vtcode_core::tools::circuit_breaker::CircuitBreakerConfig {
+        failure_threshold: cfg.failure_threshold,
+        reset_timeout: Duration::from_secs(cfg.recovery_cooldown.max(1) as u64),
+        min_backoff: Duration::from_secs(10),
+        max_backoff: Duration::from_secs(300),
+        backoff_factor: 2.0,
+    }
+}
+
+pub(crate) async fn initialize_session(
+    config: &CoreAgentConfig,
+    vt_cfg: Option<&VTCodeConfig>,
+    full_auto: bool,
+    resume: Option<&ResumeSession>,
+) -> Result<SessionState> {
+    let tool_documentation_mode = vt_cfg
+        .map(|cfg| cfg.agent.tool_documentation_mode)
+        .unwrap_or_default();
+    let async_mcp_manager = create_async_mcp_manager(vt_cfg);
+    let mcp_error = determine_mcp_bootstrap_error(async_mcp_manager.as_ref()).await;
+
+    let session_bootstrap = prepare_session_bootstrap(config, vt_cfg, mcp_error).await;
+    let provider_client = create_provider_client(config, vt_cfg)?;
+    let mut full_auto_allowlist = None;
+
+    let tool_definitions =
+        build_tool_definitions(config, tool_documentation_mode, async_mcp_manager.as_ref()).await;
+    let tools = Arc::new(RwLock::new(tool_definitions));
+
+    let skill_setup = discover_skills(config, resume, &tools).await;
+    let decision_ledger = Arc::new(RwLock::new(DecisionTracker::new()));
+    let mut conversation_history = build_conversation_history_from_resume(resume).await;
+    recover_history_from_crash(&mut conversation_history);
+
+    let trajectory = build_trajectory_logger(&config.workspace, vt_cfg);
+    let available_tools = {
+        let tool_defs = tools.read().await;
+        tool_defs
+            .iter()
+            .map(|def| def.function_name().to_string())
+            .collect::<Vec<_>>()
+    };
+    let base_system_prompt = read_system_prompt(
+        &config.workspace,
+        session_bootstrap.prompt_addendum.as_deref(),
+        &available_tools,
+    )
+    .await;
+    let mcp_panel_state = if let Some(cfg) = vt_cfg {
+        mcp_events::McpPanelState::new(cfg.mcp.ui.max_events, cfg.mcp.enabled)
+    } else {
+        mcp_events::McpPanelState::default()
+    };
+
+    let mut tool_registry = ToolRegistry::new(config.workspace.clone()).await;
+    tool_registry.initialize_async().await?;
+    if let Some(cfg) = vt_cfg {
+        tool_registry.apply_commands_config(&cfg.commands);
+        tool_registry.apply_timeout_policy(&cfg.timeouts);
+        if let Err(err) = tool_registry.apply_config_policies(&cfg.tools).await {
+            warn!("Failed to apply tool policies from config: {}", err);
+        }
+        maybe_attach_mcp_client(&mut tool_registry, cfg, async_mcp_manager.as_ref()).await;
+        if full_auto {
+            let automation_cfg = cfg.automation.full_auto.clone();
+            tool_registry
+                .enable_full_auto_mode(&automation_cfg.allowed_tools)
+                .await;
+            full_auto_allowlist = Some(
+                tool_registry
+                    .current_full_auto_allowlist()
+                    .await
+                    .unwrap_or_default(),
+            );
+        }
+    }
+
+    let workspace_trust_level = match session_bootstrap.acp_workspace_trust {
+        Some(level) => Some(level.to_workspace_trust_level()),
+        None => workspace_trust::workspace_trust_level(&config.workspace)
+            .await
+            .context("Failed to determine workspace trust level for tool policy")?,
+    };
+    apply_workspace_trust_prompt_policy(&mut tool_registry, full_auto, workspace_trust_level).await;
+    register_skill_and_subagent_tools(&mut tool_registry, &tools, &skill_setup, config, vt_cfg)
+        .await?;
+
+    let custom_prompts = CustomPromptRegistry::load(
+        vt_cfg.map(|cfg| &cfg.agent.custom_prompts),
+        &config.workspace,
+    )
+    .await
+    .unwrap_or_else(|err| {
+        warn!("failed to load custom prompts: {err:#}");
+        CustomPromptRegistry::default()
+    });
+    let custom_slash_commands =
+        vtcode_core::prompts::CustomSlashCommandRegistry::load(None, &config.workspace)
+            .await
+            .unwrap_or_else(|err| {
+                warn!("failed to load custom slash commands: {err:#}");
+                vtcode_core::prompts::CustomSlashCommandRegistry::default()
+            });
+
+    let tool_result_cache = Arc::new(RwLock::new(ToolResultCache::new(128)));
+    let tool_permission_cache = Arc::new(RwLock::new(ToolPermissionCache::new()));
+    let search_metrics = Arc::new(RwLock::new(SearchMetrics::new()));
+    let cache_dir = std::env::var("HOME")
+        .ok()
+        .map(|home| PathBuf::from(home).join(".vtcode").join("cache"))
+        .unwrap_or_else(|| PathBuf::from(".vtcode/cache"));
+    let approval_recorder = Arc::new(ApprovalRecorder::new(cache_dir));
+    let tool_catalog = Arc::new(ToolCatalogState::new());
+    tool_catalog.bump_version();
+
+    if let Some(cfg) = vt_cfg
+        && cfg.context.dynamic.enabled
+        && let Err(err) = vtcode_core::context::initialize_dynamic_context(
+            &config.workspace,
+            &cfg.context.dynamic,
+        )
+        .await
+    {
+        warn!("Failed to initialize dynamic context directories: {}", err);
+    }
+
+    let circuit_breaker = Arc::new(vtcode_core::tools::circuit_breaker::CircuitBreaker::new(
+        vtcode_config_circuit_breaker_to_core(vt_cfg, config),
+    ));
+    tool_registry.set_shared_circuit_breaker(circuit_breaker.clone());
+
+    Ok(SessionState {
+        session_bootstrap,
+        provider_client,
+        tool_registry,
+        tools,
+        tool_catalog,
+        conversation_history,
+        decision_ledger,
+        trajectory,
+        base_system_prompt,
+        full_auto_allowlist,
+        async_mcp_manager,
+        mcp_panel_state,
+        tool_result_cache,
+        tool_permission_cache,
+        search_metrics,
+        custom_prompts,
+        custom_slash_commands,
+        loaded_skills: skill_setup.active_skills_map,
+        approval_recorder,
+        safety_validator: Arc::new(RwLock::new(ToolCallSafetyValidator::new())),
+        circuit_breaker,
+        tool_health_tracker: Arc::new(vtcode_core::tools::health::ToolHealthTracker::new(50)),
+        rate_limiter: Arc::new(
+            vtcode_core::tools::adaptive_rate_limiter::AdaptiveRateLimiter::default(),
+        ),
+        validation_cache: Arc::new(
+            vtcode_core::tools::validation_cache::ValidationCache::default(),
+        ),
+        telemetry: Arc::new(vtcode_core::core::telemetry::TelemetryManager::new()),
+        autonomous_executor: {
+            let executor = vtcode_core::tools::autonomous_executor::AutonomousExecutor::new();
+            if let Some(cfg) = vt_cfg {
+                let loop_limits: HashMap<_, _> = cfg
+                    .tools
+                    .loop_thresholds
+                    .iter()
+                    .map(|(k, v)| (k.clone(), *v))
+                    .collect();
+                executor.configure_loop_limits(&loop_limits).await;
+            }
+            Arc::new(executor)
+        },
+        error_recovery: Arc::new(StdRwLock::new(
+            vtcode_core::core::agent::error_recovery::ErrorRecoveryState::new(),
+        )),
+    })
+}
+
+fn create_async_mcp_manager(vt_cfg: Option<&VTCodeConfig>) -> Option<Arc<AsyncMcpManager>> {
+    let cfg = vt_cfg?;
+    if !cfg.mcp.enabled {
+        debug!("MCP is disabled in configuration");
+        return None;
+    }
+
+    info!(
+        "Setting up async MCP client with {} providers",
+        cfg.mcp.providers.len()
+    );
+    let manager = AsyncMcpManager::new(
+        cfg.mcp.clone(),
+        cfg.security.hitl_notification_bell,
+        Arc::new(|_event: mcp_events::McpEvent| {}),
+    );
+    let manager_arc = Arc::new(manager);
+    if let Err(e) = manager_arc.start_initialization() {
+        error!("Failed to start async MCP initialization: {}", e);
+    }
+    Some(manager_arc)
+}
+
+async fn determine_mcp_bootstrap_error(manager: Option<&Arc<AsyncMcpManager>>) -> Option<String> {
+    let manager = manager?;
+    match manager.get_status().await {
+        McpInitStatus::Error { message } => Some(message.clone()),
+        McpInitStatus::Initializing { .. } => None,
+        McpInitStatus::Disabled => None,
+        McpInitStatus::Ready { .. } => None,
+    }
+}
+
+fn create_provider_client(
+    config: &CoreAgentConfig,
+    vt_cfg: Option<&VTCodeConfig>,
+) -> Result<Box<dyn uni::LLMProvider>> {
+    let provider_name = if config.provider.trim().is_empty() {
+        config
+            .model
+            .parse::<ModelId>()
+            .ok()
+            .map(|model| model.provider().to_string())
+            .unwrap_or_else(|| "gemini".to_string())
+    } else {
+        config.provider.to_lowercase()
+    };
+    create_provider_with_config(
+        &provider_name,
+        Some(config.api_key.clone()),
+        None,
+        Some(config.model.clone()),
+        Some(config.prompt_cache.clone()),
+        None,
+        vt_cfg.map(|cfg| cfg.provider.anthropic.clone()),
+    )
+    .context("Failed to initialize provider client")
+}
+
+async fn build_tool_definitions(
+    config: &CoreAgentConfig,
+    tool_documentation_mode: vtcode_core::config::ToolDocumentationMode,
+    async_mcp_manager: Option<&Arc<AsyncMcpManager>>,
+) -> Vec<uni::ToolDefinition> {
+    let base_declarations = build_function_declarations_cached(tool_documentation_mode);
+    let mut tool_definitions: Vec<uni::ToolDefinition> = base_declarations
+        .iter()
+        .map(|decl| {
+            uni::ToolDefinition::function(
+                decl.name.clone(),
+                decl.description.clone(),
+                vtcode_core::llm::providers::gemini::sanitize_function_parameters(
+                    decl.parameters.clone(),
+                ),
+            )
+        })
+        .collect();
+
+    if let Ok(model_id) = ModelId::from_str(&config.model)
+        && model_id.is_gpt51_variant()
+    {
+        tool_definitions.push(uni::ToolDefinition::apply_patch(
+            "Apply VT Code patches to modify files. IMPORTANT: Use VT Code format (*** Begin Patch, *** Update File: path, @@ context, -/+ lines, *** End Patch), NOT unified diff (---/+++) format. The tool creates, updates, or deletes file content.".to_string(),
+        ));
+    }
+
+    if let Some(manager) = async_mcp_manager {
+        debug!("Checking for MCP tools from async manager...");
+        let mut mcp_client_ready: Option<Arc<McpClient>> = None;
+        for _ in 0..15 {
+            let status = manager.get_status().await;
+            if let McpInitStatus::Ready { client } = &status {
+                mcp_client_ready = Some(Arc::clone(client));
+                break;
+            }
+            if status.is_error() {
+                debug!("MCP manager reported error during startup: {:?}", status);
+                break;
+            }
+            sleep(Duration::from_millis(200)).await;
+        }
+
+        if let Some(client) = mcp_client_ready {
+            match client.list_tools().await {
+                Ok(mcp_tools) => {
+                    info!("Found {} MCP tools", mcp_tools.len());
+                    tool_definitions.extend(build_mcp_tool_definitions(&mcp_tools));
+                }
+                Err(err) => warn!("Failed to discover MCP tools from async manager: {err}"),
+            }
+        } else {
+            debug!("MCP client not ready yet, tools will be available later");
+        }
+    }
+
+    tool_definitions
+}
+
+async fn maybe_attach_mcp_client(
+    tool_registry: &mut ToolRegistry,
+    cfg: &VTCodeConfig,
+    async_mcp_manager: Option<&Arc<AsyncMcpManager>>,
+) {
+    if !cfg.mcp.enabled {
+        return;
+    }
+    let Some(manager) = async_mcp_manager else {
+        return;
+    };
+    let status = manager.get_status().await;
+    if let McpInitStatus::Ready { client } = &status {
+        *tool_registry = tool_registry
+            .clone()
+            .with_mcp_client(Arc::clone(client))
+            .await;
+        if let Err(err) = tool_registry.refresh_mcp_tools().await {
+            warn!("Failed to refresh MCP tools: {}", err);
+        }
+    }
+}
+
+async fn apply_workspace_trust_prompt_policy(
+    tool_registry: &mut ToolRegistry,
+    full_auto: bool,
+    workspace_trust_level: Option<WorkspaceTrustLevel>,
+) {
+    let enforce_safe_mode_prompts = if full_auto {
+        false
+    } else {
+        match workspace_trust_level {
+            Some(WorkspaceTrustLevel::FullAuto) => false,
+            Some(WorkspaceTrustLevel::ToolsPolicy) | None => true,
+        }
+    };
+    tool_registry
+        .set_enforce_safe_mode_prompts(enforce_safe_mode_prompts)
+        .await;
+}

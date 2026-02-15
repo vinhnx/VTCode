@@ -36,8 +36,15 @@ mod tool_output_helpers;
 mod tool_pipeline;
 mod tool_routing;
 mod tool_summary;
+mod tool_summary_helpers;
+#[cfg(test)]
+mod tool_summary_tests;
 pub mod turn;
 mod ui_interaction;
+mod ui_interaction_stream;
+mod ui_interaction_stream_helpers;
+#[cfg(test)]
+mod ui_interaction_tests;
 mod wizard_modal;
 mod workspace_links;
 

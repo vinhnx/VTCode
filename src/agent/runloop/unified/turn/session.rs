@@ -1,4 +1,6 @@
 pub mod interaction_loop;
+mod interaction_loop_runner;
+mod interaction_loop_team;
 pub mod mcp_lifecycle;
 pub mod slash_command_handler;
 pub mod slash_commands;
