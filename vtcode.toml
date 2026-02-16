@@ -181,9 +181,6 @@ flow_timeout_secs = 300
 #refresh_interval_ms = 1000
 #command_timeout_ms = 200
 
-[agent.custom_api_keys]
-openrouter = "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"
-
 # PTY (Pseudo Terminal) configuration
 [pty]
 enabled = true
@@ -279,10 +276,7 @@ exec_code = "allow"
 [security.gatekeeper]
 warn_on_quarantine = true
 auto_clear_quarantine = false
-auto_clear_paths = [
-    ".vtcode/bin",
-    "~/.vtcode/bin",
-]
+auto_clear_paths = [".vtcode/bin", "~/.vtcode/bin"]
 
 [sandbox]
 enabled = true
@@ -686,11 +680,7 @@ cache_size = 100
 [automation.full_auto]
 enabled = true
 max_turns = 30
-allowed_tools = [
-    "read_file",
-    "list_files",
-    "grep_file",
-]
+allowed_tools = ["read_file", "list_files", "grep_file"]
 require_profile_ack = true
 
 [optimization.llm_client]
@@ -714,12 +704,7 @@ max_entries = 128
 enabled = true
 ttl_ms = 2000
 max_entries = 128
-allowlist = [
-    "rg",
-    "ls",
-    "git status",
-    "git diff --stat",
-]
+allowlist = ["rg", "ls", "git status", "git diff --stat"]
 
 [prompt_cache]
 enabled = false

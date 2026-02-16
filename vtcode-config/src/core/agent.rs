@@ -134,7 +134,11 @@ pub struct AgentConfig {
     pub instruction_files: Vec<String>,
 
     /// Provider-specific API keys captured from interactive configuration flows
-    #[serde(default)]
+    /// 
+    /// Note: Actual API keys are stored securely in the OS keyring.
+    /// This field only tracks which providers have keys stored (for UI/migration purposes).
+    /// The keys themselves are NOT serialized to the config file for security.
+    #[serde(default, skip_serializing)]
     pub custom_api_keys: BTreeMap<String, String>,
 
     /// Preferred storage backend for credentials (OAuth tokens, API keys, etc.)
