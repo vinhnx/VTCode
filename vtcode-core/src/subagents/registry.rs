@@ -13,7 +13,9 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
 
-use vtcode_config::subagent::{SubagentConfig, SubagentSource, SubagentsConfig};
+use vtcode_config::subagent::{
+    SubagentConfig, SubagentSource, SubagentsConfig, discover_subagents_in_dir,
+};
 
 /// Built-in subagent definitions
 pub mod builtins {
@@ -396,6 +398,21 @@ impl SubagentRegistry {
         // 1. Load built-in agents (lowest priority)
         self.load_builtin_agents();
 
+        // 2. Load user-level agents (~/.vtcode/agents)
+        if let Some(home_dir) = dirs::home_dir() {
+            let user_agents_dir = home_dir.join(".vtcode").join("agents");
+            self.load_agents_from_dir(user_agents_dir, SubagentSource::User);
+        }
+
+        // 3. Load additional configured directories
+        for dir in self.config.additional_agent_dirs.clone() {
+            self.load_agents_from_dir(dir, SubagentSource::Project);
+        }
+
+        // 4. Load project-level agents (.vtcode/agents) - highest priority
+        let project_agents_dir = self.workspace_root.join(".vtcode").join("agents");
+        self.load_agents_from_dir(project_agents_dir, SubagentSource::Project);
+
         info!(
             "Loaded {} subagents: {:?}",
             self.agents.len(),
@@ -425,6 +442,28 @@ impl SubagentRegistry {
                 }
                 Err(e) => {
                     warn!("Failed to parse builtin agent: {}", e);
+                }
+            }
+        }
+    }
+
+    /// Load agent definitions from a directory.
+    ///
+    /// Invalid agent files are skipped, and valid entries continue loading.
+    fn load_agents_from_dir(&mut self, dir: PathBuf, source: SubagentSource) {
+        if !dir.exists() {
+            return;
+        }
+
+        let discovered = discover_subagents_in_dir(&dir, source.clone());
+        for result in discovered {
+            match result {
+                Ok(config) => {
+                    debug!(name = %config.name, source = %source, "Loaded subagent from disk");
+                    self.register_agent(config);
+                }
+                Err(error) => {
+                    warn!(path = %dir.display(), source = %source, %error, "Failed to parse subagent file");
                 }
             }
         }
@@ -795,6 +834,8 @@ fn has_proactive_hint(description_lower: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
+    use tempfile::TempDir;
 
     #[tokio::test]
     async fn test_registry_loads_builtins() {
@@ -880,5 +921,78 @@ mod tests {
         let id1 = registry.generate_agent_id();
         let id2 = registry.generate_agent_id();
         assert_ne!(id1, id2);
+    }
+
+    #[tokio::test]
+    async fn test_registry_loads_project_agents_and_overrides_builtins() {
+        let workspace = TempDir::new().expect("temp workspace");
+        let project_agents_dir = workspace.path().join(".vtcode").join("agents");
+        fs::create_dir_all(&project_agents_dir).expect("project agents dir should be created");
+
+        let custom_explore = r#"---
+name: explore
+description: Project-specific explorer
+tools: read_file
+model: sonnet
+permissionMode: plan
+---
+Project override for explore.
+"#;
+
+        fs::write(project_agents_dir.join("explore.md"), custom_explore)
+            .expect("custom project agent should be written");
+
+        let registry = SubagentRegistry::new(
+            workspace.path().to_path_buf(),
+            SubagentsConfig::default(),
+        )
+        .await
+        .expect("registry should initialize");
+
+        let explore = registry
+            .get("explore")
+            .expect("project override should replace builtin explore");
+        assert_eq!(explore.source, SubagentSource::Project);
+        assert_eq!(explore.description, "Project-specific explorer");
+        assert_eq!(explore.tools, Some(vec!["read_file".to_string()]));
+    }
+
+    #[tokio::test]
+    async fn test_registry_loads_additional_agent_dirs_and_skips_invalid_files() {
+        let workspace = TempDir::new().expect("temp workspace");
+        let additional_dir = workspace.path().join("extra-agents");
+        fs::create_dir_all(&additional_dir).expect("additional agents dir should be created");
+
+        let valid = r#"---
+name: docs-specialist
+description: Works on documentation tasks
+tools: read_file, edit_file
+model: sonnet
+---
+Documentation specialist prompt.
+"#;
+        fs::write(additional_dir.join("docs-specialist.md"), valid)
+            .expect("valid additional agent should be written");
+        fs::write(additional_dir.join("broken.md"), "missing frontmatter")
+            .expect("invalid additional agent should be written");
+
+        let config = SubagentsConfig {
+            additional_agent_dirs: vec![additional_dir],
+            ..SubagentsConfig::default()
+        };
+
+        let registry = SubagentRegistry::new(workspace.path().to_path_buf(), config)
+            .await
+            .expect("registry should initialize even with invalid files");
+
+        let docs_agent = registry
+            .get("docs-specialist")
+            .expect("valid additional agent should load");
+        assert_eq!(docs_agent.source, SubagentSource::Project);
+        assert_eq!(docs_agent.name, "docs-specialist");
+        assert_eq!(
+            docs_agent.tools,
+            Some(vec!["read_file".to_string(), "edit_file".to_string()])
+        );
     }
 }

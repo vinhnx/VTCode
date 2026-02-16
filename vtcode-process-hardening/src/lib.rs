@@ -186,4 +186,51 @@ mod tests {
         assert_eq!(keys.len(), 1);
         assert_eq!(keys[0].as_os_str(), ld_test_var);
     }
+
+    #[test]
+    fn env_keys_with_prefix_returns_empty_when_no_matches_exist() {
+        let vars = vec![
+            (OsString::from("PATH"), OsString::from("/usr/bin")),
+            (OsString::from("HOME"), OsString::from("/tmp/home")),
+        ];
+
+        let keys = env_keys_with_prefix(vars, b"LD_");
+        assert!(keys.is_empty());
+    }
+
+    #[test]
+    fn env_keys_with_prefix_matches_exact_prefix_and_is_case_sensitive() {
+        let vars = vec![
+            (OsString::from("LD_"), OsString::from("exact-prefix")),
+            (OsString::from("Ld_TEST"), OsString::from("mixed-case")),
+            (OsString::from("LD_PRELOAD"), OsString::from("/tmp/lib.so")),
+        ];
+
+        let keys = env_keys_with_prefix(vars, b"LD_");
+        assert_eq!(
+            keys,
+            vec![OsString::from("LD_"), OsString::from("LD_PRELOAD")]
+        );
+    }
+
+    #[test]
+    fn env_keys_with_prefix_supports_dyld_prefix_filtering() {
+        let vars = vec![
+            (
+                OsString::from("DYLD_INSERT_LIBRARIES"),
+                OsString::from("/tmp/inject.dylib"),
+            ),
+            (OsString::from("DYLD_FOO"), OsString::from("bar")),
+            (OsString::from("LD_PRELOAD"), OsString::from("/tmp/other.so")),
+        ];
+
+        let keys = env_keys_with_prefix(vars, b"DYLD_");
+        assert_eq!(
+            keys,
+            vec![
+                OsString::from("DYLD_INSERT_LIBRARIES"),
+                OsString::from("DYLD_FOO")
+            ]
+        );
+    }
 }

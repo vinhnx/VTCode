@@ -4,181 +4,228 @@ Quality grading for each VTCode domain. Grades are A (excellent), B (good), C (n
 
 Dimensions: **Test Coverage**, **API Stability**, **Agent Legibility**, **Error Handling**, **Documentation**
 
-Last reviewed: 2026-02-15
+Last reviewed: 2026-02-16
+
+---
+
+## Scoring Method
+
+| Grade | Criteria |
+|-------|----------|
+| A     | Strong automated coverage, stable interfaces, low ambiguity for agents, actionable errors, and current docs. |
+| B     | Solid baseline with manageable gaps; no critical weaknesses but clear improvement areas remain. |
+| C     | Material quality gaps or staleness that slow delivery and increase risk. |
+| D     | Critical weaknesses that threaten reliability, safety, or maintainability. |
+
+### Evidence Policy
+
+- Score updates require current repository evidence (tests, docs, tracker status, or code references).
+- Priority actions must be verifiable by command or explicit artifact check.
+- If a prior priority action is resolved, replace it with the next highest-impact gap.
 
 ---
 
 ## LLM System
 
 **Scope**: `vtcode-llm/`, `vtcode-core/src/llm/`
+**Related debt**: none open
 
-| Dimension        | Grade | Notes |
-|------------------|-------|-------|
-| Test Coverage    | B     | Provider factory and request shaping have unit tests. Failover paths need more integration tests. |
-| API Stability    | B     | Multi-provider factory pattern is stable. Model metadata in `docs/models.json` is maintained. |
-| Agent Legibility | B     | Clear provider abstraction. Agents can add providers by following existing patterns. |
-| Error Handling   | A     | Uses `anyhow::Result` with context throughout. Automatic failover on provider errors. (see `vtcode-llm/src/lib.rs`) |
-| Documentation    | B     | Provider guides exist (`docs/PROVIDER_GUIDES.md`). Internal architecture could use more inline docs. |
+| Dimension        | Grade | Evidence / Notes |
+|------------------|-------|------------------|
+| Test Coverage    | B     | Provider factory and request shaping have unit tests. Failover paths still need broader integration coverage. |
+| API Stability    | B     | Multi-provider factory pattern is stable. Model metadata remains centralized in `docs/models.json`. |
+| Agent Legibility | B     | Clear provider abstraction and extension pattern. |
+| Error Handling   | A     | Uses `anyhow::Result` with context; provider error handling includes failover pathways. |
+| Documentation    | B     | `docs/PROVIDER_GUIDES.md` exists and is maintained. |
 
 **Overall: B**
+**Priority action**: add integration tests that exercise multi-provider failover behavior under provider failure.
+**Verify**: `cargo nextest run --test integration_tests`
 
 ---
 
 ## Tool System
 
 **Scope**: `vtcode-tools/`, `vtcode-core/src/tools/`
+**Related debt**: none open
 
-| Dimension        | Grade | Notes |
-|------------------|-------|-------|
-| Test Coverage    | B     | Core traits tested. Unified tools (`unified_exec`, `unified_file`, `unified_search`) have coverage. Some of the 54+ handlers lack dedicated tests. |
-| API Stability    | A     | `Tool`, `ModeTool`, `CacheableTool` traits are stable and well-composed. (see `vtcode-tools/src/lib.rs`, `vtcode-core/src/tools/unified_error.rs`) |
-| Agent Legibility | A     | Trait-driven composition makes it clear how to add new tools. Registry pattern is predictable. |
-| Error Handling   | A     | `UnifiedToolError` with `ErrorSeverity` and `is_retryable()`. Circuit breaker per tool. |
-| Documentation    | B     | Architecture doc covers tool system. Individual tool docs vary in quality. |
+| Dimension        | Grade | Evidence / Notes |
+|------------------|-------|------------------|
+| Test Coverage    | B     | Core tool traits and unified tools are covered; some handlers still lack dedicated tests. |
+| API Stability    | A     | `Tool`, `ModeTool`, and `CacheableTool` traits are stable and composable. |
+| Agent Legibility | A     | Registry and trait patterns are predictable for extension. |
+| Error Handling   | A     | Unified error model with severity and retryability is in place. |
+| Documentation    | B     | System-level docs exist; per-tool docs are uneven. |
 
 **Overall: A-**
+**Priority action**: add tests for high-use handlers without dedicated coverage.
+**Verify**: `cargo nextest run`
 
 ---
 
 ## Configuration
 
 **Scope**: `vtcode-config/`
+**Related debt**: TD-010 (resolved)
 
-| Dimension        | Grade | Notes |
-|------------------|-------|-------|
-| Test Coverage    | B     | Config loading and schema validation tested. Edge cases around precedence could use more coverage. |
-| API Stability    | B     | Precedence chain (env → toml → constants) is well-defined. Schema uses `schemars`. |
-| Agent Legibility | B     | `docs/config/CONFIGURATION_PRECEDENCE.md` exists. Agents can find where to add new config fields. |
-| Error Handling   | B     | Validation at load time. Some config errors could provide more actionable messages. |
-| Documentation    | B     | Precedence documented. Individual field documentation is partial. |
+| Dimension        | Grade | Evidence / Notes |
+|------------------|-------|------------------|
+| Test Coverage    | B     | Config loading and schema validation are covered; precedence edge cases can be expanded. |
+| API Stability    | B     | Precedence chain (env -> toml -> constants) is well-defined with schema-backed config. |
+| Agent Legibility | B     | Precedence and schema docs make extension paths discoverable. |
+| Error Handling   | B     | Load-time validation is present; some messages can still be more task-oriented. |
+| Documentation    | A-    | `docs/config/CONFIG_FIELD_REFERENCE.md` now provides generated field-level reference. |
 
-**Overall: B**
+**Overall: B+**
+**Priority action**: extend tests for precedence edge cases and malformed overrides.
+**Verify**: `cargo nextest run -p vtcode-config`
 
 ---
 
 ## Security
 
 **Scope**: `vtcode-process-hardening/`, sandbox system, command safety
+**Related debt**: none open
 
-| Dimension        | Grade | Notes |
-|------------------|-------|-------|
-| Test Coverage    | C     | Process hardening is OS-specific, hard to test in CI. Command safety has tests but sandbox coverage is thin. |
-| API Stability    | B     | Security boundaries are well-defined. Tool policies (allow/deny/prompt) are stable. |
-| Agent Legibility | B     | `docs/PROCESS_HARDENING.md`, `docs/SECURITY.md` exist. Agents understand the safety model. |
-| Error Handling   | A     | Specific exit codes for hardening failures (5, 6, 7). Command safety uses explicit deny/allow. (see `vtcode-process-hardening/src/lib.rs` exit codes) |
-| Documentation    | A     | Consolidated security docs into `docs/security/`. AGENTS.md and README.md provide clear pointers. |
+| Dimension        | Grade | Evidence / Notes |
+|------------------|-------|------------------|
+| Test Coverage    | C     | Command safety is tested; sandbox and OS-specific hardening paths remain thin in CI. |
+| API Stability    | B     | Security boundary model and tool policy behavior are stable. |
+| Agent Legibility | B     | Security docs are organized (`docs/PROCESS_HARDENING.md`, `docs/security/`). |
+| Error Handling   | A     | Hardening paths expose explicit failure codes and policy outcomes. |
+| Documentation    | A     | Security docs are consolidated with index and quick reference. |
 
 **Overall: B+**
+**Priority action**: add integration tests for sandbox boundary enforcement and policy outcomes.
+**Verify**: `cargo nextest run -p vtcode-process-hardening`
 
 ---
 
 ## MCP Integration
 
-**Scope**: `vtcode-core/src/mcp/` (9 modules)
+**Scope**: `vtcode-core/src/mcp/`
+**Related debt**: TD-008 (in-progress)
 
-| Dimension        | Grade | Notes |
-|------------------|-------|-------|
-| Test Coverage    | C     | Transport layer and tool discovery have basic tests. OAuth flow and provider lifecycle need more coverage. |
-| API Stability    | B     | `McpClient`, `McpProvider`, `McpToolExecutor` interfaces are stable. HTTP transport marked experimental. |
-| Agent Legibility | A     | `docs/MCP_INTEGRATION_GUIDE.md` is thorough. Module structure is clear (client, provider, transport, executor). |
-| Error Handling   | B     | Timeout management and per-provider concurrency control. Some error paths could surface better diagnostics. |
-| Documentation    | A     | Integration guide, improvement designs, and roadmap all exist and are maintained. |
+| Dimension        | Grade | Evidence / Notes |
+|------------------|-------|------------------|
+| Test Coverage    | C     | Basic transport/discovery coverage exists; OAuth callback and lifecycle edge cases are incomplete. |
+| API Stability    | B     | `McpClient`, `McpProvider`, and `McpToolExecutor` interfaces are stable; HTTP transport remains experimental. |
+| Agent Legibility | A     | `docs/mcp/MCP_INTEGRATION_GUIDE.md` and module layout are clear and comprehensive. |
+| Error Handling   | B     | Timeout and concurrency controls are present; diagnostics can be tightened on some error paths. |
+| Documentation    | A     | Dedicated guide plus `docs/mcp/00_START_HERE.md` provide strong integration guidance. |
 
 **Overall: B+**
+**Priority action**: complete OAuth callback-flow and lifecycle negative-path integration coverage.
+**Verify**: `cargo nextest run --test integration_tests`
 
 ---
 
 ## Subagent System
 
 **Scope**: `vtcode-core/src/subagents/`, `vtcode-config/src/subagent.rs`
+**Related debt**: none open
 
-| Dimension        | Grade | Notes |
-|------------------|-------|-------|
-| Test Coverage    | C     | Built-in agent types tested. Custom agent loading and isolation boundaries need more tests. |
-| API Stability    | B     | `spawn_subagent` API is stable. Agent definition format (Markdown + YAML frontmatter) is documented. |
-| Agent Legibility | B     | `docs/subagents/SUBAGENTS.md` exists. Agents can define custom subagents by following examples. |
-| Error Handling   | B     | Context isolation prevents cascading failures. Error reporting could be more structured. |
-| Documentation    | B     | Subagent guide exists. Interaction patterns between lead and subagents could be better documented. |
+| Dimension        | Grade | Evidence / Notes |
+|------------------|-------|------------------|
+| Test Coverage    | B     | Built-in types plus custom loading paths are now tested in `vtcode-core` and `vtcode-config`; isolation/failure propagation coverage is still limited. |
+| API Stability    | B     | `spawn_subagent` contract and definition format are stable. |
+| Agent Legibility | B     | `docs/subagents/SUBAGENTS.md` documents creation and usage paths. |
+| Error Handling   | B     | Isolation reduces blast radius; error reporting format can be more structured. |
+| Documentation    | B     | Core guide exists; complex interaction patterns are only partially documented. |
 
 **Overall: B**
+**Priority action**: add isolation and failure-propagation tests for subagent runner execution paths.
+**Verify**: `cargo nextest run -p vtcode-core`
 
 ---
 
 ## PTY/Exec
 
 **Scope**: `vtcode-bash-runner/`, `vtcode-core/src/exec/`
+**Related debt**: TD-007 (in-progress)
 
-| Dimension        | Grade | Notes |
-|------------------|-------|-------|
-| Test Coverage    | B-    | PTY session management hard to test in CI. New tmux-based TUI testing workflow (`.agent/workflows/pi-tui-test.md`) provides path for automated tests. |
-| API Stability    | B     | Three execution modes (standard, PTY, streaming) are stable. |
-| Agent Legibility | B     | Agents understand how to use `unified_exec`. Internal PTY plumbing is less legible. |
-| Error Handling   | B     | Exit code handling and timeout management. Some PTY edge cases (shell init failures) could be more robust. |
-| Documentation    | B     | Updated bash runner docs. PTY stability fixes documented. |
+| Dimension        | Grade | Evidence / Notes |
+|------------------|-------|------------------|
+| Test Coverage    | B-    | PTY behavior is inherently hard to test; tmux workflow provides a path but not full automation yet. |
+| API Stability    | B     | Standard/PTY/streaming execution modes are stable. |
+| Agent Legibility | B     | `unified_exec` usage is clear; lower-level PTY plumbing is harder to navigate. |
+| Error Handling   | B     | Exit code and timeout handling are in place; shell-init edge paths can improve. |
+| Documentation    | B     | Runner docs and workflow docs exist and are current. |
 
 **Overall: B**
+**Priority action**: promote tmux-based PTY checks into repeatable automated integration coverage.
+**Verify**: `cargo nextest run`
 
 ---
 
 ## TUI
 
 **Scope**: `src/` (Ratatui interface)
+**Related debt**: TD-005 (resolved)
 
-| Dimension        | Grade | Notes |
-|------------------|-------|-------|
-| Test Coverage    | B-    | Hard to unit-test. Tmux workflow enables TUI integration testing. |
-| API Stability    | B     | Widget composition and event loop are stable. Keybinding system is well-defined. |
-| Agent Legibility | B     | Improved event handler legibility. AGENTS.md clarifies navigation rules. |
-| Error Handling   | B     | Graceful terminal state restoration on panic. Signal handling for cleanup. |
-| Documentation    | B     | Quick start guide and TUI testing workflow exist. |
+| Dimension        | Grade | Evidence / Notes |
+|------------------|-------|------------------|
+| Test Coverage    | B-    | Unit testing remains hard; tmux workflow improves integration-test feasibility. |
+| API Stability    | B     | Event loop and keybinding behavior are stable. |
+| Agent Legibility | B     | Large-handler debt was addressed; navigation and structure are more legible than prior review. |
+| Error Handling   | B     | Terminal restoration and cleanup behavior are robust. |
+| Documentation    | B     | TUI startup and testing guidance are available. |
 
-**Overall: B-**
+**Overall: B**
+**Priority action**: add focused regression tests around event-loop behavior and keybinding handling.
+**Verify**: `cargo nextest run --test integration_tests`
 
 ---
 
 ## Tree-Sitter / Code Intelligence
 
 **Scope**: `vtcode-indexer/`, `vtcode-core/src/tree_sitter/`
+**Related debt**: TD-009 (resolved)
 
-| Dimension        | Grade | Notes |
-|------------------|-------|-------|
-| Test Coverage    | B     | Language-specific parsing tests exist. Code intelligence operations (goto_definition, find_references) tested. |
-| API Stability    | B     | Operations API is stable. Incremental AST building with caching is mature. |
-| Agent Legibility | B     | `code_intelligence.rs` has clear operation dispatch. Adding new languages follows a pattern. |
-| Error Handling   | B     | Graceful fallback when tree-sitter parsers are unavailable. |
-| Documentation    | C     | `docs/vtcode_indexer.md` exists but is minimal. Language support matrix not documented. |
+| Dimension        | Grade | Evidence / Notes |
+|------------------|-------|------------------|
+| Test Coverage    | B     | Language parsing and code-intelligence operations have test coverage. |
+| API Stability    | B     | Operation APIs and caching approach are stable. |
+| Agent Legibility | B     | Operation dispatch and language extension patterns are understandable. |
+| Error Handling   | B     | Parser unavailability fallbacks are handled gracefully. |
+| Documentation    | B     | `docs/LANGUAGE_SUPPORT.md` now documents the language support matrix; `docs/vtcode_indexer.md` remains concise. |
 
 **Overall: B**
+**Priority action**: expand indexer docs with additional operational examples and troubleshooting paths.
+**Verify**: `rg --line-number \"^#|^##\" docs/vtcode_indexer.md docs/LANGUAGE_SUPPORT.md`
 
 ---
 
 ## Documentation
 
-**Scope**: `docs/` (649 files as of last count)
+**Scope**: `docs/` (666 files at review time on 2026-02-16)
+**Related debt**: TD-001 (in-progress)
 
-| Dimension        | Grade | Notes |
-|------------------|-------|-------|
-| Test Coverage    | N/A   | Documentation itself is not tested. |
-| API Stability    | C     | Many docs are one-off implementation summaries that become stale. No deprecation policy. |
-| Agent Legibility | C     | Volume makes discovery hard. 649 files with inconsistent naming. No clear hierarchy. |
+| Dimension        | Grade | Evidence / Notes |
+|------------------|-------|------------------|
+| Test Coverage    | N/A   | Documentation is not tested via automated correctness checks. |
+| API Stability    | C     | Many one-off implementation docs still risk staleness drift. |
+| Agent Legibility | C     | Discoverability remains hard at current volume despite better entry points. |
 | Error Handling   | N/A   | Not applicable. |
-| Documentation    | C     | Meta-documentation improved with AGENTS.md and CONTRIBUTING.md. Gardening cadence established. |
+| Documentation    | C     | Core maps improved (`AGENTS.md`, harness index), but consolidation is incomplete. |
 
 **Overall: C**
+**Priority action**: continue consolidation and archival for stale one-off docs, prioritized by high-traffic domains.
+**Verify**: `find docs -type f | wc -l`
 
 ---
 
 ## Summary Table
 
-| Domain            | Overall | Priority Action |
-|-------------------|---------|-----------------|
-| Tool System       | A-      | Maintain. Add tests for remaining handlers. |
-| LLM System        | B       | Add failover integration tests. |
-| Configuration     | B       | Improve field-level documentation. |
-| Security          | B+     | Consolidated security docs. Add sandbox tests. |
-| MCP Integration   | B+      | Increase test coverage for OAuth and lifecycle. |
-| Subagent System   | B       | Test custom agent loading. Document interaction patterns. |
-| PTY/Exec          | B       | Improved PTY test coverage and docs via tmux workflow. |
-| Tree-Sitter       | B       | Document language support matrix. |
-| TUI               | B-      | Break up large event handler modules. Improve docs. |
-| Documentation     | C       | Consolidate stale docs. AGENTS.md provides better entry points. |
+| Domain            | Overall | Priority Action | Status |
+|-------------------|---------|-----------------|--------|
+| Tool System       | A-      | Add handler-level tests for remaining gaps. | maintenance |
+| LLM System        | B       | Add failover integration coverage. | active improvement |
+| Configuration     | B+      | Expand precedence/override edge-case tests. | active improvement |
+| Security          | B+      | Add sandbox boundary integration tests. | active improvement |
+| MCP Integration   | B+      | Complete OAuth and lifecycle negative-path tests. | active improvement |
+| Subagent System   | B       | Add custom-loading and isolation tests. | active improvement |
+| PTY/Exec          | B       | Convert tmux workflow into repeatable automation. | active improvement |
+| Tree-Sitter       | B       | Deepen operational docs beyond support matrix. | maintenance |
+| TUI               | B       | Add regression tests for event loop/keybindings. | active improvement |
+| Documentation     | C       | Continue consolidation/archival to reduce sprawl. | active improvement |
