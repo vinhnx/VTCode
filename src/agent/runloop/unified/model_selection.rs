@@ -14,6 +14,8 @@ use vtcode_core::ui::tui::InlineHandle;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::file_utils::{ensure_dir_exists, read_file_with_context};
 
+use vtcode_config::auth::CustomApiKeyStorage;
+
 use crate::agent::runloop::model_picker::{ModelPickerState, ModelSelectionResult};
 use crate::agent::runloop::welcome::SessionBootstrap;
 
@@ -105,13 +107,36 @@ pub(crate) async fn finalize_model_selection(
     config.api_key = api_key;
     config.reasoning_effort = selection.reasoning;
     config.api_key_env = selection.env_key.clone();
+    
+    // Store API key in secure storage (keyring) instead of config file
+    // Get storage mode from VTCodeConfig if available, otherwise use default
+    let storage_mode = vt_cfg
+        .as_ref()
+        .map(|cfg| cfg.agent.credential_storage_mode)
+        .unwrap_or_default();
+    
     if let Some(ref key) = selection.api_key {
-        let key_value: String = key.clone();
+        let key_storage = CustomApiKeyStorage::new(&selection.provider);
+        if let Err(e) = key_storage.store(key, storage_mode) {
+            renderer.line(
+                MessageStyle::Warning,
+                &format!("Failed to store API key securely: {}", e),
+            )?;
+        } else {
+            tracing::debug!(
+                "Stored API key for provider '{}' in secure storage",
+                selection.provider
+            );
+        }
+        // Still track which providers have keys (for UI purposes, not serialized)
         config
             .custom_api_keys
-            .insert(selection.provider.clone(), key_value);
+            .insert(selection.provider.clone(), String::new());
     } else {
         config.custom_api_keys.remove(&selection.provider);
+        // Clear any previously stored key
+        let key_storage = CustomApiKeyStorage::new(&selection.provider);
+        let _ = key_storage.clear(storage_mode);
     }
 
     if let Some(provider_enum) = selection.provider_enum
@@ -171,7 +196,7 @@ pub(crate) async fn finalize_model_selection(
         renderer.line(
             MessageStyle::Info,
             &format!(
-                "Stored credential under {} and updated the active environment.",
+                "API key saved to secure storage (keyring) and environment variable {}. The key will NOT appear in vtcode.toml.",
                 selection.env_key
             ),
         )?;

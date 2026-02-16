@@ -24,6 +24,7 @@
 
 use anyhow::{Context, Result, anyhow};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 /// Preferred storage backend for credentials.
 ///
@@ -294,4 +295,135 @@ mod tests {
         // The actual result depends on the OS environment
         let _functional = is_keyring_functional();
     }
+}
+
+/// Custom API Key storage for provider-specific keys.
+///
+/// Provides secure storage and retrieval of API keys for custom providers
+/// using the OS keyring or encrypted file storage.
+pub struct CustomApiKeyStorage {
+    storage: CredentialStorage,
+}
+
+impl CustomApiKeyStorage {
+    /// Create a new custom API key storage for a specific provider.
+    ///
+    /// # Arguments
+    /// * `provider` - The provider identifier (e.g., "openrouter", "anthropic", "custom_provider")
+    pub fn new(provider: &str) -> Self {
+        Self {
+            storage: CredentialStorage::new("vtcode", format!("api_key_{}", provider.to_lowercase())),
+        }
+    }
+
+    /// Store an API key securely.
+    ///
+    /// # Arguments
+    /// * `api_key` - The API key value to store
+    /// * `mode` - The storage mode to use (defaults to keyring)
+    pub fn store(&self, api_key: &str, mode: AuthCredentialsStoreMode) -> Result<()> {
+        self.storage.store_with_mode(api_key, mode)
+    }
+
+    /// Retrieve a stored API key.
+    ///
+    /// Returns `None` if no key is stored.
+    pub fn load(&self, mode: AuthCredentialsStoreMode) -> Result<Option<String>> {
+        self.storage.load_with_mode(mode)
+    }
+
+    /// Clear (delete) a stored API key.
+    pub fn clear(&self, mode: AuthCredentialsStoreMode) -> Result<()> {
+        self.storage.clear_with_mode(mode)
+    }
+}
+
+/// Migrate plain-text API keys from config to secure storage.
+///
+/// This function reads API keys from the provided BTreeMap and stores them
+/// securely using the specified storage mode. After migration, the keys
+/// should be removed from the config file.
+///
+/// # Arguments
+/// * `custom_api_keys` - Map of provider names to API keys (from config)
+/// * `mode` - The storage mode to use
+///
+/// # Returns
+/// A map of providers that were successfully migrated (for tracking purposes)
+pub fn migrate_custom_api_keys_to_keyring(
+    custom_api_keys: &BTreeMap<String, String>,
+    mode: AuthCredentialsStoreMode,
+) -> Result<BTreeMap<String, bool>> {
+    let mut migration_results = BTreeMap::new();
+
+    for (provider, api_key) in custom_api_keys {
+        let storage = CustomApiKeyStorage::new(provider);
+        match storage.store(api_key, mode) {
+            Ok(()) => {
+                tracing::info!(
+                    "Migrated API key for provider '{}' to secure storage",
+                    provider
+                );
+                migration_results.insert(provider.clone(), true);
+            }
+            Err(e) => {
+                tracing::warn!(
+                    "Failed to migrate API key for provider '{}': {}",
+                    provider,
+                    e
+                );
+                migration_results.insert(provider.clone(), false);
+            }
+        }
+    }
+
+    Ok(migration_results)
+}
+
+/// Load all custom API keys from secure storage.
+///
+/// This function retrieves API keys for all providers that have keys stored.
+///
+/// # Arguments
+/// * `providers` - List of provider names to check for stored keys
+/// * `mode` - The storage mode to use
+///
+/// # Returns
+/// A BTreeMap of provider names to their API keys (only includes providers with stored keys)
+pub fn load_custom_api_keys(
+    providers: &[String],
+    mode: AuthCredentialsStoreMode,
+) -> Result<BTreeMap<String, String>> {
+    let mut api_keys = BTreeMap::new();
+
+    for provider in providers {
+        let storage = CustomApiKeyStorage::new(provider);
+        if let Some(key) = storage.load(mode)? {
+            api_keys.insert(provider.clone(), key);
+        }
+    }
+
+    Ok(api_keys)
+}
+
+/// Clear all custom API keys from secure storage.
+///
+/// # Arguments
+/// * `providers` - List of provider names to clear
+/// * `mode` - The storage mode to use
+pub fn clear_custom_api_keys(
+    providers: &[String],
+    mode: AuthCredentialsStoreMode,
+) -> Result<()> {
+    for provider in providers {
+        let storage = CustomApiKeyStorage::new(provider);
+        if let Err(e) = storage.clear(mode) {
+            tracing::warn!(
+                "Failed to clear API key for provider '{}': {}",
+                provider,
+                e
+            );
+        }
+    }
+    Ok(())
 }
