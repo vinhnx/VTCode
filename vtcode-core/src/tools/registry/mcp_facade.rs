@@ -19,7 +19,7 @@ impl ToolRegistry {
     pub async fn with_mcp_client(self, mcp_client: Arc<McpClient>) -> Self {
         *self.mcp_client.write().unwrap() = Some(mcp_client);
         self.mcp_tool_index.write().await.clear();
-        self.mcp_tool_presence.write().await.clear();
+        self.mcp_reverse_index.write().await.clear();
         if let Ok(mut cache) = self.cached_available_tools.write() {
             *cache = None;
         }
@@ -32,7 +32,7 @@ impl ToolRegistry {
     pub async fn set_mcp_client(&self, mcp_client: Arc<McpClient>) {
         *self.mcp_client.write().unwrap() = Some(mcp_client);
         self.mcp_tool_index.write().await.clear();
-        self.mcp_tool_presence.write().await.clear();
+        self.mcp_reverse_index.write().await.clear();
         if let Ok(mut cache) = self.cached_available_tools.write() {
             *cache = None;
         }
@@ -47,64 +47,32 @@ impl ToolRegistry {
 
     /// List all MCP tools.
     pub async fn list_mcp_tools(&self) -> Result<Vec<McpToolInfo>> {
-        let client_opt = self.mcp_client.read().unwrap().clone();
-        if let Some(mcp_client) = client_opt {
-            mcp_client.list_mcp_tools().await
-        } else {
-            Ok(Vec::new())
+        let index = self.mcp_tool_index.read().await;
+        if index.is_empty() {
+            return Ok(Vec::new());
         }
+
+        let mut mcp_tools = Vec::new();
+        for (provider, tools) in index.iter() {
+            for tool_name in tools {
+                let canonical_name = format!("mcp::{}::{}", provider, tool_name);
+                if let Some(registration) = self.inventory.get_registration(&canonical_name) {
+                    mcp_tools.push(McpToolInfo {
+                        name: tool_name.clone(),
+                        description: registration.metadata().description().unwrap_or("").to_string(),
+                        provider: provider.clone(),
+                        input_schema: registration.parameter_schema().unwrap_or(Value::Null),
+                    });
+                }
+            }
+        }
+
+        Ok(mcp_tools)
     }
 
     /// Check if an MCP tool exists.
     pub async fn has_mcp_tool(&self, tool_name: &str) -> bool {
-        {
-            let index = self.mcp_tool_index.read().await;
-            if index
-                .values()
-                .any(|tools| tools.iter().any(|candidate| candidate == tool_name))
-            {
-                self.mcp_tool_presence
-                    .write()
-                    .await
-                    .insert(tool_name.to_string(), true);
-                return true;
-            }
-        }
-
-        if let Some(cached) = self.mcp_tool_presence.read().await.get(tool_name) {
-            return *cached;
-        }
-
-        let mcp_client_opt = { self.mcp_client.read().unwrap().clone() };
-        let Some(mcp_client) = mcp_client_opt else {
-            self.mcp_tool_presence
-                .write()
-                .await
-                .insert(tool_name.to_string(), false);
-            return false;
-        };
-
-        match mcp_client.has_mcp_tool(tool_name).await {
-            Ok(result) => {
-                self.mcp_tool_presence
-                    .write()
-                    .await
-                    .insert(tool_name.to_string(), result);
-                result
-            }
-            Err(err) => {
-                warn!(
-                    tool = tool_name,
-                    error = %err,
-                    "failed to query MCP tool presence"
-                );
-                self.mcp_tool_presence
-                    .write()
-                    .await
-                    .insert(tool_name.to_string(), false);
-                false
-            }
-        }
+        self.mcp_reverse_index.read().await.contains_key(tool_name)
     }
 
     /// Execute an MCP tool.
@@ -118,30 +86,17 @@ impl ToolRegistry {
     }
 
     pub(super) async fn resolve_mcp_tool_alias(&self, tool_name: &str) -> Option<String> {
-        let client_opt = { self.mcp_client.read().unwrap().clone() };
-        let Some(mcp_client) = client_opt else {
-            return None;
-        };
-
         let normalized = normalize_mcp_tool_identifier(tool_name);
         if normalized.is_empty() {
             return None;
         }
 
-        let tools = match mcp_client.list_mcp_tools().await {
-            Ok(list) => list,
-            Err(err) => {
-                warn!(
-                    "Failed to list MCP tools while resolving alias '{}': {}",
-                    tool_name, err
-                );
-                return None;
-            }
-        };
-
-        for tool in tools {
-            if normalize_mcp_tool_identifier(&tool.name) == normalized {
-                return Some(tool.name);
+        let index = self.mcp_tool_index.read().await;
+        for tools in index.values() {
+            for tool in tools {
+                if normalize_mcp_tool_identifier(tool) == normalized {
+                    return Some(tool.clone());
+                }
             }
         }
 
@@ -196,18 +151,19 @@ impl ToolRegistry {
             let mut provider_map: FxHashMap<String, Vec<String>> = FxHashMap::default();
 
             for tool in &tools {
-                let registration =
-                    build_mcp_registration(Arc::clone(&mcp_client), &tool.provider, tool, None);
+                let canonical_name = format!("mcp::{}::{}", tool.provider, tool.name);
+                if !self.inventory.has_tool(&canonical_name) {
+                    let registration =
+                        build_mcp_registration(Arc::clone(&mcp_client), &tool.provider, tool, None);
 
-                if !self.inventory.has_tool(registration.name())
-                    && let Err(err) = self.inventory.register_tool(registration)
-                {
-                    warn!(
-                        tool = %tool.name,
-                        provider = %tool.provider,
-                        error = %err,
-                        "failed to register MCP proxy tool"
-                    );
+                    if let Err(err) = self.inventory.register_tool(registration) {
+                        warn!(
+                            tool = %tool.name,
+                            provider = %tool.provider,
+                            error = %err,
+                            "failed to register MCP proxy tool"
+                        );
+                    }
                 }
             }
 
@@ -225,12 +181,12 @@ impl ToolRegistry {
 
             *self.mcp_tool_index.write().await = provider_map;
             {
-                let mut presence = self.mcp_tool_presence.write().await;
-                presence.clear();
+                let mut reverse_index = self.mcp_reverse_index.write().await;
+                reverse_index.clear();
                 let index = self.mcp_tool_index.read().await;
-                for tools in index.values() {
+                for (provider, tools) in index.iter() {
                     for tool in tools {
-                        presence.insert(tool.clone(), true);
+                        reverse_index.insert(tool.clone(), provider.clone());
                     }
                 }
             }

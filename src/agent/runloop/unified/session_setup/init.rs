@@ -299,22 +299,8 @@ async fn build_tool_definitions(
     }
 
     if let Some(manager) = async_mcp_manager {
-        debug!("Checking for MCP tools from async manager...");
-        let mut mcp_client_ready: Option<Arc<McpClient>> = None;
-        for _ in 0..15 {
-            let status = manager.get_status().await;
-            if let McpInitStatus::Ready { client } = &status {
-                mcp_client_ready = Some(Arc::clone(client));
-                break;
-            }
-            if status.is_error() {
-                debug!("MCP manager reported error during startup: {:?}", status);
-                break;
-            }
-            sleep(Duration::from_millis(200)).await;
-        }
-
-        if let Some(client) = mcp_client_ready {
+        let status = manager.get_status().await;
+        if let McpInitStatus::Ready { client } = &status {
             match client.list_tools().await {
                 Ok(mcp_tools) => {
                     info!("Found {} MCP tools", mcp_tools.len());
@@ -323,7 +309,7 @@ async fn build_tool_definitions(
                 Err(err) => warn!("Failed to discover MCP tools from async manager: {err}"),
             }
         } else {
-            debug!("MCP client not ready yet, tools will be available later");
+            debug!("MCP client not ready yet, tools will be available later via dynamic update");
         }
     }
 

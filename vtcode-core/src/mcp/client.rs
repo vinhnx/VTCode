@@ -974,12 +974,7 @@ impl McpToolExecutor for McpClient {
         }
 
         let tools = self.collect_tools(false).await?;
-        if tools.iter().any(|tool| tool.name == tool_name) {
-            return Ok(true);
-        }
-
-        let refreshed = self.collect_tools(true).await?;
-        Ok(refreshed.iter().any(|tool| tool.name == tool_name))
+        Ok(tools.iter().any(|tool| tool.name == tool_name))
     }
 
     fn get_status(&self) -> McpClientStatus {
