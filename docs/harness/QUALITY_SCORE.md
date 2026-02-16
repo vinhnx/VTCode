@@ -89,14 +89,14 @@ Last reviewed: 2026-02-16
 
 | Dimension        | Grade | Evidence / Notes |
 |------------------|-------|------------------|
-| Test Coverage    | C     | Command safety is tested; sandbox and OS-specific hardening paths remain thin in CI. |
+| Test Coverage    | B     | Command safety and file-ops boundary regressions are covered; process-hardening env filtering tests now include additional edge cases. OS-specific hardening still has CI depth limits. |
 | API Stability    | B     | Security boundary model and tool policy behavior are stable. |
 | Agent Legibility | B     | Security docs are organized (`docs/PROCESS_HARDENING.md`, `docs/security/`). |
 | Error Handling   | A     | Hardening paths expose explicit failure codes and policy outcomes. |
 | Documentation    | A     | Security docs are consolidated with index and quick reference. |
 
 **Overall: B+**
-**Priority action**: add integration tests for sandbox boundary enforcement and policy outcomes.
+**Priority action**: expand sandbox/policy integration tests across more allow/deny edge matrices and OS-specific hardening scenarios.
 **Verify**: `cargo nextest run -p vtcode-process-hardening`
 
 ---
@@ -108,14 +108,14 @@ Last reviewed: 2026-02-16
 
 | Dimension        | Grade | Evidence / Notes |
 |------------------|-------|------------------|
-| Test Coverage    | C     | Basic transport/discovery coverage exists; OAuth callback and lifecycle edge cases are incomplete. |
+| Test Coverage    | B     | Transport/discovery coverage is in place, with lifecycle reinit/idempotent shutdown plus startup-failure and partial-provider-failure paths now covered. Full OAuth callback flow remains pending implementation. |
 | API Stability    | B     | `McpClient`, `McpProvider`, and `McpToolExecutor` interfaces are stable; HTTP transport remains experimental. |
 | Agent Legibility | A     | `docs/mcp/MCP_INTEGRATION_GUIDE.md` and module layout are clear and comprehensive. |
 | Error Handling   | B     | Timeout and concurrency controls are present; diagnostics can be tightened on some error paths. |
 | Documentation    | A     | Dedicated guide plus `docs/mcp/00_START_HERE.md` provide strong integration guidance. |
 
 **Overall: B+**
-**Priority action**: complete OAuth callback-flow and lifecycle negative-path integration coverage.
+**Priority action**: add full OAuth callback-flow integration tests once callback implementation lands.
 **Verify**: `cargo nextest run --test integration_tests`
 
 ---
@@ -146,15 +146,15 @@ Last reviewed: 2026-02-16
 
 | Dimension        | Grade | Evidence / Notes |
 |------------------|-------|------------------|
-| Test Coverage    | B-    | PTY behavior is inherently hard to test; tmux workflow provides a path but not full automation yet. |
+| Test Coverage    | B+    | PTY command/session paths now include timeout and output-truncation regressions in `vtcode-core/tests/pty_tests.rs`, alongside existing session lifecycle and runner tests. |
 | API Stability    | B     | Standard/PTY/streaming execution modes are stable. |
 | Agent Legibility | B     | `unified_exec` usage is clear; lower-level PTY plumbing is harder to navigate. |
 | Error Handling   | B     | Exit code and timeout handling are in place; shell-init edge paths can improve. |
 | Documentation    | B     | Runner docs and workflow docs exist and are current. |
 
 **Overall: B**
-**Priority action**: promote tmux-based PTY checks into repeatable automated integration coverage.
-**Verify**: `cargo nextest run`
+**Priority action**: expand PTY regression coverage for additional shell-init and cross-platform behavior paths.
+**Verify**: `cargo test -p vtcode-core --test pty_tests && cargo test -p vtcode-bash-runner --test pipe_tests`
 
 ---
 
@@ -165,15 +165,15 @@ Last reviewed: 2026-02-16
 
 | Dimension        | Grade | Evidence / Notes |
 |------------------|-------|------------------|
-| Test Coverage    | B-    | Unit testing remains hard; tmux workflow improves integration-test feasibility. |
+| Test Coverage    | B+    | Inline event-loop mapping now has focused regressions for key actions (`LaunchEditor`, `ToggleMode`, team switch, plan confirmation, interrupt exit) in `src/agent/runloop/unified/inline_events/tests.rs`. |
 | API Stability    | B     | Event loop and keybinding behavior are stable. |
 | Agent Legibility | B     | Large-handler debt was addressed; navigation and structure are more legible than prior review. |
 | Error Handling   | B     | Terminal restoration and cleanup behavior are robust. |
 | Documentation    | B     | TUI startup and testing guidance are available. |
 
 **Overall: B**
-**Priority action**: add focused regression tests around event-loop behavior and keybinding handling.
-**Verify**: `cargo nextest run --test integration_tests`
+**Priority action**: add higher-level integration tests that exercise full inline loop interactions with modal flows and queue editing.
+**Verify**: `cargo test -p vtcode --bin vtcode inline_events::tests`
 
 ---
 
@@ -198,20 +198,20 @@ Last reviewed: 2026-02-16
 
 ## Documentation
 
-**Scope**: `docs/` (666 files at review time on 2026-02-16)
+**Scope**: `docs/` (654 files at review time on 2026-02-16)
 **Related debt**: TD-001 (in-progress)
 
 | Dimension        | Grade | Evidence / Notes |
 |------------------|-------|------------------|
-| Test Coverage    | N/A   | Documentation is not tested via automated correctness checks. |
-| API Stability    | C     | Many one-off implementation docs still risk staleness drift. |
-| Agent Legibility | C     | Discoverability remains hard at current volume despite better entry points. |
-| Error Handling   | N/A   | Not applicable. |
-| Documentation    | C     | Core maps improved (`AGENTS.md`, harness index), but consolidation is incomplete. |
+| Test Coverage    | B     | Entry-point docs now have automated link-integrity checks via `scripts/check_docs_links.py` in CI. |
+| API Stability    | B     | Top-level docs boundary is now CI-enforced via `scripts/check_markdown_location.py` and `scripts/docs_top_level_allowlist.txt`, reducing uncontrolled sprawl drift. |
+| Agent Legibility | B     | `docs/INDEX.md` now routes by active domains and explicit archive paths instead of a single historical initiative focus. |
+| Error Handling   | B     | Docs governance checks now emit remediation-oriented failures for broken links and placement violations (`check_docs_links.py`, `check_markdown_location.py`). |
+| Documentation    | B     | Core entrypoint docs (`AGENTS.md`, `docs/INDEX.md`, harness index) are aligned; consolidation remains active but now bounded by CI guardrails. |
 
-**Overall: C**
-**Priority action**: continue consolidation and archival for stale one-off docs, prioritized by high-traffic domains.
-**Verify**: `find docs -type f | wc -l`
+**Overall: B**
+**Priority action**: reduce existing top-level allowlist by moving high-churn historical docs from `docs/*.md` into domain folders or archive paths.
+**Verify**: `python3 scripts/check_markdown_location.py && python3 scripts/check_docs_links.py && find docs -maxdepth 1 -type f -name "*.md" | wc -l`
 
 ---
 
@@ -225,7 +225,7 @@ Last reviewed: 2026-02-16
 | Security          | B+      | Add sandbox boundary integration tests. | active improvement |
 | MCP Integration   | B+      | Complete OAuth and lifecycle negative-path tests. | active improvement |
 | Subagent System   | B       | Add custom-loading and isolation tests. | active improvement |
-| PTY/Exec          | B       | Convert tmux workflow into repeatable automation. | active improvement |
+| PTY/Exec          | B       | Expand PTY regression coverage for shell-init and cross-platform behavior. | active improvement |
 | Tree-Sitter       | B       | Deepen operational docs beyond support matrix. | maintenance |
-| TUI               | B       | Add regression tests for event loop/keybindings. | active improvement |
-| Documentation     | C       | Continue consolidation/archival to reduce sprawl. | active improvement |
+| TUI               | B       | Add higher-level integration tests for modal flows and queue editing. | active improvement |
+| Documentation     | B       | Burn down top-level docs allowlist through ongoing consolidation/archival. | active improvement |

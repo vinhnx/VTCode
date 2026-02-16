@@ -7,7 +7,3 @@ Conduct a comprehensive, line-by-line review of the entire codebase to systemati
 ---
 
 improve src/agent/runloop/unified/turn/turn_loop.rs
-
----
-
-docs/harness/QUALITY_SCORE.md

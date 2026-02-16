@@ -67,7 +67,7 @@ New to VT Code? Start with installation and basic usage:
 -   **[Getting Started](./user-guide/getting-started.md)** - Installation, configuration, and first steps
 -   **[Interactive Mode Reference](./user-guide/interactive-mode.md)** - Keyboard shortcuts and terminal workflows
 -   [Decision Ledger](./context/DECISION_LEDGER.md) - How decisions are tracked and injected
--   **[Configuration Guide](./CONFIGURATION.md)** - Comprehensive configuration options
+-   **[Configuration Guide](./config.md)** - Comprehensive configuration options
 -   **[Status Line Configuration](./guides/status-line.md)** - Customize the inline prompt footer
 -   **[Responses API & Reasoning Models](./guides/responses-api-reasoning.md)** - Align reasoning-centric prompts with the OpenAI Responses API
 -   **[External Editor Configuration](./tools/EDITOR_CONFIG.md)** - Setup and usage of the `/edit` command with your preferred editor
@@ -78,8 +78,8 @@ Contributing to VT Code? Understand the architecture and development processes:
 
 -   **[Architecture Overview](./ARCHITECTURE.md)** - System design and core components
 -   **[Development Guide](./development/README.md)** - Development environment setup
--   **[API Documentation](./api/README.md)** - Technical API references
--   **[Code Standards](./development/code-style.md)** - Coding guidelines and best practices
+-   **[Tool Reference](./AVAILABLE_TOOLS.md)** - Technical reference for built-in tools
+-   **[Code Standards](../.github/copilot-instructions.md)** - Coding guidelines and best practices
 -   **[Codex Cloud Setup](./guides/codex-cloud-setup.md)** - Configure Codex Cloud environments for VT Code
 -   **[Memory Management](./guides/memory-management.md)** - Tune VT Code's AGENTS.md hierarchy for reliable prompts
 
@@ -87,10 +87,10 @@ Contributing to VT Code? Understand the architecture and development processes:
 
 Deploying VT Code in production? Focus on enterprise features:
 
--   **[Security Model](./SECURITY_MODEL.md)** - Multi-layered security architecture
--   **[Security Audit](./SECURITY_AUDIT.md)** - Vulnerability analysis and recommendations
--   **[Security Implementation](./SAFETY_IMPLEMENTATION.md)** - Security controls and compliance
--   **[Performance Analysis](./PERFORMANCE_ANALYSIS.md)** - Optimization and benchmarking
+-   **[Security Model](./security/SECURITY_MODEL.md)** - Multi-layered security architecture
+-   **[Security Audit](./security/SECURITY_AUDIT.md)** - Vulnerability analysis and recommendations
+-   **[Process Hardening](./PROCESS_HARDENING.md)** - Security controls and runtime hardening
+-   **[Performance Analysis](./benchmarks/README.md)** - Optimization and benchmarking
 -   **[Provider Guides](./PROVIDER_GUIDES.md)** - LLM provider integration guides
     -   [OpenRouter Integration](./providers/openrouter.md)
 
@@ -137,9 +137,9 @@ VT Code implements a **multi-layered security model** to protect against prompt 
 -   **File Size Limits** - Configurable resource constraints
 -   **API Key Security** - Secure credential management
 
-**[Security Quick Reference](./SECURITY_QUICK_REFERENCE.md)** - Security at a glance
-**[Security Model](./SECURITY_MODEL.md)** - Complete security architecture
-**[Security Audit](./SECURITY_AUDIT.md)** - Vulnerability analysis and testing
+**[Security Quick Reference](./security/SECURITY_QUICK_REFERENCE.md)** - Security at a glance
+**[Security Model](./security/SECURITY_MODEL.md)** - Complete security architecture
+**[Security Audit](./security/SECURITY_AUDIT.md)** - Vulnerability analysis and testing
 **[Security Guide](./guides/security.md)** - Best practices and configuration
 **[Tool Policies](./vtcode_tools_policy.md)** - Command execution policies
 
@@ -148,7 +148,7 @@ VT Code implements a **multi-layered security model** to protect against prompt 
 ### For New Users
 
 1. **[Installation](../README.md#installation)** - Get VT Code running in minutes
-2. **[Basic Configuration](./CONFIGURATION.md)** - Set up your environment
+2. **[Basic Configuration](./config.md)** - Set up your environment
 3. **[First Chat Session](../README.md#basic-usage)** - Try interactive coding assistance
 
 ### For Developers
@@ -159,9 +159,9 @@ VT Code implements a **multi-layered security model** to protect against prompt 
 
 ### For Organizations
 
-1. **[Security Implementation](./SAFETY_IMPLEMENTATION.md)** - Enterprise security features
+1. **[Security Implementation](./PROCESS_HARDENING.md)** - Enterprise security features
 2. **[Provider Integration](./PROVIDER_GUIDES.md)** - LLM provider setup (Gemini, OpenAI, Anthropic, OpenRouter)
-3. **[Performance Tuning](./PERFORMANCE_ANALYSIS.md)** - Optimization strategies
+3. **[Performance Tuning](./benchmarks/README.md)** - Optimization strategies
 
 ## Usage Patterns
 
@@ -276,14 +276,14 @@ cargo clippy && cargo fmt
 
 ### Current Status & Roadmap
 
--   **[Roadmap](../ROADMAP.md)** - Future development plans and milestones
+-   **[Roadmap](./project/ROADMAP.md)** - Future development plans and milestones
 -   **[Changelog](../CHANGELOG.md)** - Version history and release notes
 -   **[TODO](./project/TODO.md)** - Current development tasks
 
 ### Development Resources
 
--   **[Contributing Guide](../CONTRIBUTING.md)** - How to contribute
--   **[Code Standards](./development/code-style.md)** - Coding guidelines
+-   **[Contributing Guide](./CONTRIBUTING.md)** - How to contribute
+-   **[Code Standards](../.github/copilot-instructions.md)** - Coding guidelines
 -   **[Architecture Decisions](./ARCHITECTURE.md)** - Design rationale
 
 ## Support & Community
