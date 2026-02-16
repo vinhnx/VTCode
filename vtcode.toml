@@ -893,6 +893,7 @@ enabled = true
 # default_model = "minimax-m2.5:cloud"
 max_concurrent = 3
 default_timeout_seconds = 300
+additional_agent_dirs = []
 
 [agent_teams]
 enabled = true
