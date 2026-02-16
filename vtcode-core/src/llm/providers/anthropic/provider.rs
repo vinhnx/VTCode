@@ -13,7 +13,9 @@
 
 use crate::config::TimeoutsConfig;
 use crate::config::constants::{env_vars, models, urls};
-use crate::config::core::{AnthropicConfig, AnthropicPromptCacheSettings, PromptCachingConfig};
+use crate::config::core::{
+    AnthropicConfig, AnthropicPromptCacheSettings, ModelConfig, PromptCachingConfig,
+};
 use crate::llm::client::LLMClient;
 use crate::llm::provider::{LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream, Message};
 use crate::llm::types as llm_types;
@@ -45,6 +47,7 @@ pub struct AnthropicProvider {
     prompt_cache_enabled: bool,
     prompt_cache_settings: AnthropicPromptCacheSettings,
     anthropic_config: AnthropicConfig,
+    model_behavior: Option<ModelConfig>,
 }
 
 impl AnthropicProvider {
@@ -56,6 +59,7 @@ impl AnthropicProvider {
             None,
             AnthropicConfig::default(),
             TimeoutsConfig::default(),
+            None,
         )
     }
 
@@ -67,6 +71,7 @@ impl AnthropicProvider {
             None,
             AnthropicConfig::default(),
             TimeoutsConfig::default(),
+            None,
         )
     }
 
@@ -85,6 +90,7 @@ impl AnthropicProvider {
             prompt_cache_enabled: false,
             prompt_cache_settings: AnthropicPromptCacheSettings::default(),
             anthropic_config: AnthropicConfig::default(),
+            model_behavior: None,
         }
     }
 
@@ -95,6 +101,7 @@ impl AnthropicProvider {
         prompt_cache: Option<PromptCachingConfig>,
         timeouts: Option<TimeoutsConfig>,
         anthropic_config: Option<AnthropicConfig>,
+        model_behavior: Option<ModelConfig>,
     ) -> Self {
         let api_key_value = api_key.unwrap_or_default();
         let model_value = resolve_model(model, models::anthropic::DEFAULT_MODEL);
@@ -107,6 +114,7 @@ impl AnthropicProvider {
             base_url,
             anthropic_cfg,
             timeouts.unwrap_or_default(),
+            model_behavior,
         )
     }
 
@@ -117,6 +125,7 @@ impl AnthropicProvider {
         base_url: Option<String>,
         anthropic_config: AnthropicConfig,
         timeouts: TimeoutsConfig,
+        model_behavior: Option<ModelConfig>,
     ) -> Self {
         use crate::llm::http_client::HttpClientFactory;
 
@@ -144,6 +153,7 @@ impl AnthropicProvider {
             prompt_cache_enabled,
             prompt_cache_settings,
             anthropic_config,
+            model_behavior,
         }
     }
 
@@ -305,11 +315,24 @@ impl LLMProvider for AnthropicProvider {
     }
 
     fn supports_reasoning(&self, model: &str) -> bool {
+        // Codex-inspired robustness: Setting model_supports_reasoning to false
+        // does NOT disable it for known reasoning models.
         capabilities::supports_reasoning(model, &self.model)
+            || self
+                .model_behavior
+                .as_ref()
+                .and_then(|b| b.model_supports_reasoning)
+                .unwrap_or(false)
     }
 
     fn supports_reasoning_effort(&self, model: &str) -> bool {
+        // Same robustness logic for reasoning effort
         capabilities::supports_reasoning_effort(model, &self.model)
+            || self
+                .model_behavior
+                .as_ref()
+                .and_then(|b| b.model_supports_reasoning_effort)
+                .unwrap_or(false)
     }
 
     fn supports_parallel_tool_config(&self, model: &str) -> bool {

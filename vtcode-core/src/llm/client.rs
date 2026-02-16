@@ -20,7 +20,7 @@ pub type AnyClient = Box<dyn LLMClient>;
 pub fn make_client(api_key: String, model: ModelId) -> Result<AnyClient, LLMError> {
     let model_id = model.to_string();
     // Use factory to create provider
-    let provider = super::factory::create_provider_for_model(&model_id, api_key, None)?;
+    let provider = super::factory::create_provider_for_model(&model_id, api_key, None, None)?;
 
     // Wrap in a simple client adapter
     Ok(Box::new(ProviderClientAdapter { provider, model_id }))

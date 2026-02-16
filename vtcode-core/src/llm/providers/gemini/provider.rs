@@ -1,4 +1,5 @@
 use super::*;
+use crate::config::core::ModelConfig;
 
 pub struct GeminiProvider {
     pub(super) api_key: Arc<str>,
@@ -8,6 +9,7 @@ pub struct GeminiProvider {
     pub(super) prompt_cache_enabled: bool,
     pub(super) prompt_cache_settings: GeminiPromptCacheSettings,
     pub(super) timeouts: TimeoutsConfig,
+    pub(super) model_behavior: Option<ModelConfig>,
 }
 
 impl GeminiProvider {
@@ -18,11 +20,19 @@ impl GeminiProvider {
             None,
             None,
             TimeoutsConfig::default(),
+            None,
         )
     }
 
     pub fn with_model(api_key: String, model: String) -> Self {
-        Self::with_model_internal(api_key, model, None, None, TimeoutsConfig::default())
+        Self::with_model_internal(
+            api_key,
+            model,
+            None,
+            None,
+            TimeoutsConfig::default(),
+            None,
+        )
     }
 
     pub fn new_with_client(
@@ -42,6 +52,7 @@ impl GeminiProvider {
             prompt_cache_enabled,
             prompt_cache_settings,
             timeouts,
+            model_behavior: None,
         }
     }
 
@@ -52,6 +63,7 @@ impl GeminiProvider {
         prompt_cache: Option<PromptCachingConfig>,
         timeouts: Option<TimeoutsConfig>,
         _anthropic: Option<AnthropicConfig>,
+        model_behavior: Option<ModelConfig>,
     ) -> Self {
         let api_key_value = api_key.unwrap_or_default();
         let model_value = resolve_model(model, models::google::GEMINI_3_FLASH_PREVIEW);
@@ -62,6 +74,7 @@ impl GeminiProvider {
             prompt_cache,
             base_url,
             timeouts.unwrap_or_default(),
+            model_behavior,
         )
     }
 
@@ -71,6 +84,7 @@ impl GeminiProvider {
         prompt_cache: Option<PromptCachingConfig>,
         base_url: Option<String>,
         timeouts: TimeoutsConfig,
+        model_behavior: Option<ModelConfig>,
     ) -> Self {
         use crate::llm::http_client::HttpClientFactory;
 
@@ -99,6 +113,7 @@ impl GeminiProvider {
             prompt_cache_enabled,
             prompt_cache_settings,
             timeouts,
+            model_behavior,
         }
     }
 

@@ -1342,3 +1342,11 @@ loop_detection_threshold = 3
 # When false, automatically halts on detected loop without prompting
 # Default: true
 loop_detection_interactive = true
+
+# Manually enable reasoning support for models that are not natively recognized.
+# Note: Setting this to false will NOT disable reasoning for known reasoning models (e.g. GPT-5).
+# model_supports_reasoning = true
+
+# Manually enable reasoning effort support for models that are not natively recognized.
+# Note: Setting this to false will NOT disable reasoning effort for known models.
+# model_supports_reasoning_effort = true

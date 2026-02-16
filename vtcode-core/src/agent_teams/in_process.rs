@@ -308,7 +308,7 @@ fn create_teammate_client(config: &TeammateSpawnConfig) -> Result<AnyClient> {
         .to_string();
 
     let provider =
-        crate::llm::factory::create_provider_for_model(&model_string, config.api_key.clone(), None)
+        crate::llm::factory::create_provider_for_model(&model_string, config.api_key.clone(), None, None)
             .context("Failed to create LLM provider for in-process teammate")?;
 
     Ok(Box::new(ProviderClientAdapter::new(provider, model_string)))

@@ -310,7 +310,7 @@ impl SubagentRunner {
         let api_key = self.parent_config.api_key.clone();
 
         // Use factory directly with raw model string (bypasses ModelId parsing)
-        let provider = crate::llm::factory::create_provider_for_model(&model_string, api_key, None)
+        let provider = crate::llm::factory::create_provider_for_model(&model_string, api_key, None, None)
             .context("Failed to create LLM provider for subagent")?;
 
         // Wrap provider in client adapter

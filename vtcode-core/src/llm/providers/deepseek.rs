@@ -2,7 +2,9 @@
 
 use crate::config::TimeoutsConfig;
 use crate::config::constants::{env_vars, models, urls};
-use crate::config::core::{AnthropicConfig, DeepSeekPromptCacheSettings, PromptCachingConfig};
+use crate::config::core::{
+    AnthropicConfig, DeepSeekPromptCacheSettings, ModelConfig, PromptCachingConfig,
+};
 use crate::llm::client::LLMClient;
 use crate::llm::error_display;
 use crate::llm::provider::{
@@ -34,6 +36,7 @@ pub struct DeepSeekProvider {
     model: String,
     prompt_cache_enabled: bool,
     prompt_cache_settings: DeepSeekPromptCacheSettings,
+    model_behavior: Option<ModelConfig>,
 }
 
 impl DeepSeekProvider {
@@ -44,11 +47,19 @@ impl DeepSeekProvider {
             None,
             None,
             TimeoutsConfig::default(),
+            None,
         )
     }
 
     pub fn with_model(api_key: String, model: String) -> Self {
-        Self::with_model_internal(api_key, model, None, None, TimeoutsConfig::default())
+        Self::with_model_internal(
+            api_key,
+            model,
+            None,
+            None,
+            TimeoutsConfig::default(),
+            None,
+        )
     }
 
     pub fn new_with_client(
@@ -65,6 +76,7 @@ impl DeepSeekProvider {
             model,
             prompt_cache_enabled: false,
             prompt_cache_settings: DeepSeekPromptCacheSettings::default(),
+            model_behavior: None,
         }
     }
 
@@ -75,6 +87,7 @@ impl DeepSeekProvider {
         prompt_cache: Option<PromptCachingConfig>,
         timeouts: Option<TimeoutsConfig>,
         _anthropic: Option<AnthropicConfig>,
+        model_behavior: Option<ModelConfig>,
     ) -> Self {
         let api_key_value = api_key.unwrap_or_default();
         let model_value = resolve_model(model, models::deepseek::DEFAULT_MODEL);
@@ -85,6 +98,7 @@ impl DeepSeekProvider {
             prompt_cache,
             base_url,
             timeouts.unwrap_or_default(),
+            model_behavior,
         )
     }
 
@@ -94,6 +108,7 @@ impl DeepSeekProvider {
         prompt_cache: Option<PromptCachingConfig>,
         base_url: Option<String>,
         timeouts: TimeoutsConfig,
+        model_behavior: Option<ModelConfig>,
     ) -> Self {
         use crate::llm::http_client::HttpClientFactory;
 
@@ -114,6 +129,7 @@ impl DeepSeekProvider {
             model,
             prompt_cache_enabled,
             prompt_cache_settings,
+            model_behavior,
         }
     }
 
@@ -216,16 +232,28 @@ impl LLMProvider for DeepSeekProvider {
     }
 
     fn supports_reasoning(&self, model: &str) -> bool {
-        let target = if model.trim().is_empty() {
+        let requested = if model.trim().is_empty() {
             &self.model
         } else {
             model
         };
-        target == models::deepseek::DEEPSEEK_REASONER
+
+        // Codex-inspired robustness: Setting model_supports_reasoning to false
+        // does NOT disable it for known reasoning models.
+        requested == models::deepseek::DEEPSEEK_REASONER
+            || self
+                .model_behavior
+                .as_ref()
+                .and_then(|b| b.model_supports_reasoning)
+                .unwrap_or(false)
     }
 
     fn supports_reasoning_effort(&self, _model: &str) -> bool {
-        false
+        // Same robustness logic for reasoning effort
+        self.model_behavior
+            .as_ref()
+            .and_then(|b| b.model_supports_reasoning_effort)
+            .unwrap_or(false)
     }
 
     async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {

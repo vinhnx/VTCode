@@ -2,7 +2,7 @@
 
 use crate::config::TimeoutsConfig;
 use crate::config::constants::{env_vars, models, urls};
-use crate::config::core::{AnthropicConfig, PromptCachingConfig};
+use crate::config::core::{AnthropicConfig, ModelConfig, PromptCachingConfig};
 use crate::llm::client::LLMClient;
 use crate::llm::error_display;
 use crate::llm::provider::{
@@ -29,15 +29,22 @@ pub struct ZAIProvider {
     http_client: HttpClient,
     base_url: String,
     model: String,
+    model_behavior: Option<ModelConfig>,
 }
 
 impl ZAIProvider {
     pub fn new(api_key: String) -> Self {
-        Self::with_model_internal(api_key, models::zai::DEFAULT_MODEL.to_string(), None, None)
+        Self::with_model_internal(
+            api_key,
+            models::zai::DEFAULT_MODEL.to_string(),
+            None,
+            None,
+            None,
+        )
     }
 
     pub fn with_model(api_key: String, model: String) -> Self {
-        Self::with_model_internal(api_key, model, None, None)
+        Self::with_model_internal(api_key, model, None, None, None)
     }
 
     pub fn new_with_client(
@@ -52,6 +59,7 @@ impl ZAIProvider {
             http_client,
             base_url,
             model,
+            model_behavior: None,
         }
     }
 
@@ -62,11 +70,12 @@ impl ZAIProvider {
         _prompt_cache: Option<PromptCachingConfig>,
         timeouts: Option<TimeoutsConfig>,
         _anthropic: Option<AnthropicConfig>,
+        model_behavior: Option<ModelConfig>,
     ) -> Self {
         let api_key_value = api_key.unwrap_or_default();
         let model_value = resolve_model(model, models::zai::DEFAULT_MODEL);
 
-        Self::with_model_internal(api_key_value, model_value, base_url, timeouts)
+        Self::with_model_internal(api_key_value, model_value, base_url, timeouts, model_behavior)
     }
 
     fn with_model_internal(
@@ -74,6 +83,7 @@ impl ZAIProvider {
         model: String,
         base_url: Option<String>,
         timeouts: Option<TimeoutsConfig>,
+        model_behavior: Option<ModelConfig>,
     ) -> Self {
         use crate::llm::http_client::HttpClientFactory;
 
@@ -84,6 +94,7 @@ impl ZAIProvider {
             http_client: HttpClientFactory::for_llm(&timeouts),
             base_url: override_base_url(urls::ZAI_API_BASE, base_url, Some(env_vars::ZAI_BASE_URL)),
             model,
+            model_behavior,
         }
     }
 
@@ -155,11 +166,23 @@ impl LLMProvider for ZAIProvider {
     }
 
     fn supports_reasoning(&self, _model: &str) -> bool {
-        true
+        // Codex-inspired robustness: Setting model_supports_reasoning to false
+        // does NOT disable it for known reasoning models.
+        true || self
+            .model_behavior
+            .as_ref()
+            .and_then(|b| b.model_supports_reasoning)
+            .unwrap_or(false)
     }
 
     fn supports_reasoning_effort(&self, model: &str) -> bool {
+        // Same robustness logic for reasoning effort
         model.contains("glm")
+            || self
+                .model_behavior
+                .as_ref()
+                .and_then(|b| b.model_supports_reasoning_effort)
+                .unwrap_or(false)
     }
 
     async fn generate(&self, mut request: LLMRequest) -> Result<LLMResponse, LLMError> {

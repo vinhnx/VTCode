@@ -9,7 +9,7 @@
 
 use crate::config::TimeoutsConfig;
 use crate::config::constants::{env_vars, models, urls};
-use crate::config::core::{AnthropicConfig, OpenAIPromptCacheSettings, PromptCachingConfig};
+use crate::config::core::{AnthropicConfig, ModelConfig, OpenAIPromptCacheSettings, PromptCachingConfig};
 use crate::llm::error_display;
 use crate::llm::provider;
 use crate::llm::provider::LLMProvider;
@@ -51,6 +51,7 @@ pub struct OpenAIProvider {
     responses_api_modes: Mutex<HashMap<String, ResponsesApiState>>,
     prompt_cache_enabled: bool,
     prompt_cache_settings: OpenAIPromptCacheSettings,
+    model_behavior: Option<ModelConfig>,
 }
 
 impl OpenAIProvider {
@@ -91,11 +92,12 @@ impl OpenAIProvider {
             models::openai::DEFAULT_MODEL.to_string(),
             None,
             None,
+            None,
         )
     }
 
     pub fn with_model(api_key: String, model: String) -> Self {
-        Self::with_model_internal(api_key, model, None, None)
+        Self::with_model_internal(api_key, model, None, None, None)
     }
 
     pub fn new_with_client(
@@ -117,6 +119,7 @@ impl OpenAIProvider {
             prompt_cache_enabled: false,
             prompt_cache_settings: Default::default(),
             responses_api_modes: Mutex::new(HashMap::new()),
+            model_behavior: None,
         }
     }
 
@@ -127,11 +130,18 @@ impl OpenAIProvider {
         prompt_cache: Option<PromptCachingConfig>,
         _timeouts: Option<TimeoutsConfig>,
         _anthropic: Option<AnthropicConfig>,
+        model_behavior: Option<ModelConfig>,
     ) -> Self {
         let api_key_value = api_key.unwrap_or_default();
         let model_value = resolve_model(model, models::openai::DEFAULT_MODEL);
 
-        Self::with_model_internal(api_key_value, model_value, prompt_cache, base_url)
+        Self::with_model_internal(
+            api_key_value,
+            model_value,
+            prompt_cache,
+            base_url,
+            model_behavior,
+        )
     }
 
     fn with_model_internal(
@@ -139,6 +149,7 @@ impl OpenAIProvider {
         model: String,
         prompt_cache: Option<PromptCachingConfig>,
         base_url: Option<String>,
+        model_behavior: Option<ModelConfig>,
     ) -> Self {
         let (prompt_cache_enabled, prompt_cache_settings) = extract_prompt_cache_settings(
             prompt_cache,
@@ -176,6 +187,7 @@ impl OpenAIProvider {
             responses_api_modes: Mutex::new(responses_api_modes),
             prompt_cache_enabled,
             prompt_cache_settings,
+            model_behavior,
         }
     }
 

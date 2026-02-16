@@ -61,7 +61,7 @@ impl ToolRegistry {
                         name: tool_name.clone(),
                         description: registration.metadata().description().unwrap_or("").to_string(),
                         provider: provider.clone(),
-                        input_schema: registration.parameter_schema().unwrap_or(Value::Null),
+                        input_schema: registration.parameter_schema().cloned().unwrap_or(Value::Null),
                     });
                 }
             }

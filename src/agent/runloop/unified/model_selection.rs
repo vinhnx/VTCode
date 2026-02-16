@@ -88,6 +88,7 @@ pub(crate) async fn finalize_model_selection(
             Some(config.prompt_cache.clone()),
             None,
             None,
+            config.model_behavior.clone(),
         )
         .context("Failed to initialize provider for the selected model")?;
         *provider_client = new_client;

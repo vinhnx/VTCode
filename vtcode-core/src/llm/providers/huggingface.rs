@@ -6,7 +6,7 @@
 
 use crate::config::TimeoutsConfig;
 use crate::config::constants::{env_vars, models, urls};
-use crate::config::core::{AnthropicConfig, PromptCachingConfig};
+use crate::config::core::{AnthropicConfig, ModelConfig, PromptCachingConfig};
 use crate::llm::client::LLMClient;
 use crate::llm::error_display::format_llm_error;
 use crate::llm::provider::{
@@ -36,6 +36,7 @@ pub struct HuggingFaceProvider {
     base_url: String,
     model: String,
     _timeouts: TimeoutsConfig,
+    model_behavior: Option<ModelConfig>,
 }
 
 impl HuggingFaceProvider {
@@ -45,11 +46,12 @@ impl HuggingFaceProvider {
             models::huggingface::DEFAULT_MODEL.to_string(),
             None,
             None,
+            None,
         )
     }
 
     pub fn with_model(api_key: String, model: String) -> Self {
-        Self::with_model_internal(api_key, model, None, None)
+        Self::with_model_internal(api_key, model, None, None, None)
     }
 
     pub fn with_timeouts(api_key: String, timeouts: TimeoutsConfig) -> Self {
@@ -58,6 +60,7 @@ impl HuggingFaceProvider {
             models::huggingface::DEFAULT_MODEL.to_string(),
             None,
             Some(timeouts),
+            None,
         )
     }
 
@@ -66,6 +69,7 @@ impl HuggingFaceProvider {
         model: String,
         base_url: Option<String>,
         timeouts: Option<TimeoutsConfig>,
+        model_behavior: Option<ModelConfig>,
     ) -> Self {
         use crate::llm::http_client::HttpClientFactory;
 
@@ -81,6 +85,7 @@ impl HuggingFaceProvider {
             ),
             model,
             _timeouts: timeouts,
+            model_behavior,
         }
     }
 
@@ -91,10 +96,17 @@ impl HuggingFaceProvider {
         _prompt_cache: Option<PromptCachingConfig>,
         timeouts: Option<TimeoutsConfig>,
         _anthropic: Option<AnthropicConfig>,
+        model_behavior: Option<ModelConfig>,
     ) -> Self {
         let api_key_value = api_key.unwrap_or_default();
         let model_value = resolve_model(model, models::huggingface::DEFAULT_MODEL);
-        Self::with_model_internal(api_key_value, model_value, base_url, timeouts)
+        Self::with_model_internal(
+            api_key_value,
+            model_value,
+            base_url,
+            timeouts,
+            model_behavior,
+        )
     }
 
     fn normalize_model_id(&self, model: &str) -> Result<String, LLMError> {
@@ -758,11 +770,25 @@ impl LLMProvider for HuggingFaceProvider {
     }
 
     fn supports_reasoning(&self, model: &str) -> bool {
+        // Codex-inspired robustness: Setting model_supports_reasoning to false
+        // does NOT disable it for known reasoning models.
         models::huggingface::REASONING_MODELS.contains(&model)
+            || self
+                .model_behavior
+                .as_ref()
+                .and_then(|b| b.model_supports_reasoning)
+                .unwrap_or(false)
     }
 
     fn supports_reasoning_effort(&self, model: &str) -> bool {
-        self.is_glm_model(model) || self.is_deepseek_model(model)
+        // Same robustness logic for reasoning effort
+        self.is_glm_model(model)
+            || self.is_deepseek_model(model)
+            || self
+                .model_behavior
+                .as_ref()
+                .and_then(|b| b.model_supports_reasoning_effort)
+                .unwrap_or(false)
     }
 
     fn supports_tools(&self, _model: &str) -> bool {

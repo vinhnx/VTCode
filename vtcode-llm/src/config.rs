@@ -10,7 +10,7 @@ use std::path::PathBuf;
 
 use anyhow::Error;
 use vtcode_commons::{ErrorFormatter, ErrorReporter, PathScope, TelemetrySink, WorkspacePaths};
-use vtcode_core::config::core::PromptCachingConfig;
+use vtcode_core::config::core::{ModelConfig, PromptCachingConfig};
 
 /// Trait describing the configuration required to instantiate an LLM provider.
 ///
@@ -38,6 +38,11 @@ pub trait ProviderConfig {
     fn prompt_cache(&self) -> Option<Cow<'_, PromptCachingConfig>> {
         None
     }
+
+    /// Optional model behavior configuration (loop detection, capability overrides).
+    fn model_behavior(&self) -> Option<Cow<'_, ModelConfig>> {
+        None
+    }
 }
 
 /// Convert an implementor of [`ProviderConfig`] into the configuration used by
@@ -50,6 +55,7 @@ pub fn as_factory_config(source: &dyn ProviderConfig) -> vtcode_core::llm::facto
         prompt_cache: source.prompt_cache().map(|cfg| cfg.into_owned()),
         timeouts: None,
         anthropic: None,
+        model_behavior: source.model_behavior().map(|cfg| cfg.into_owned()),
     }
 }
 
@@ -379,6 +385,12 @@ impl ProviderConfig for vtcode_core::llm::factory::ProviderConfig {
             .as_ref()
             .map(|cfg| Cow::Owned(cfg.clone()))
     }
+
+    fn model_behavior(&self) -> Option<Cow<'_, ModelConfig>> {
+        self.model_behavior
+            .as_ref()
+            .map(|cfg| Cow::Owned(cfg.clone()))
+    }
 }
 
 /// Simple builder-friendly provider configuration backed by owned values.
@@ -388,6 +400,7 @@ pub struct OwnedProviderConfig {
     base_url: Option<String>,
     model: Option<String>,
     prompt_cache: Option<PromptCachingConfig>,
+    model_behavior: Option<ModelConfig>,
 }
 
 impl OwnedProviderConfig {
@@ -414,6 +427,11 @@ impl OwnedProviderConfig {
         self.prompt_cache = Some(value);
         self
     }
+
+    pub fn with_model_behavior(mut self, value: ModelConfig) -> Self {
+        self.model_behavior = Some(value);
+        self
+    }
 }
 
 impl ProviderConfig for OwnedProviderConfig {
@@ -431,6 +449,12 @@ impl ProviderConfig for OwnedProviderConfig {
 
     fn prompt_cache(&self) -> Option<Cow<'_, PromptCachingConfig>> {
         self.prompt_cache
+            .as_ref()
+            .map(|cfg| Cow::Owned(cfg.clone()))
+    }
+
+    fn model_behavior(&self) -> Option<Cow<'_, ModelConfig>> {
+        self.model_behavior
             .as_ref()
             .map(|cfg| Cow::Owned(cfg.clone()))
     }

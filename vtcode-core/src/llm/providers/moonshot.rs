@@ -2,7 +2,7 @@
 
 use crate::config::TimeoutsConfig;
 use crate::config::constants::{env_vars, models, urls};
-use crate::config::core::{AnthropicConfig, PromptCachingConfig};
+use crate::config::core::{AnthropicConfig, ModelConfig, PromptCachingConfig};
 use crate::llm::client::LLMClient;
 use crate::llm::error_display;
 use crate::llm::provider::{
@@ -28,15 +28,16 @@ pub struct MoonshotProvider {
     http_client: HttpClient,
     base_url: String,
     model: String,
+    model_behavior: Option<ModelConfig>,
 }
 
 impl MoonshotProvider {
     pub fn new(api_key: String) -> Self {
-        Self::with_model_internal(api_key, "kimi-latest".to_string(), None, None)
+        Self::with_model_internal(api_key, "kimi-latest".to_string(), None, None, None)
     }
 
     pub fn with_model(api_key: String, model: String) -> Self {
-        Self::with_model_internal(api_key, model, None, None)
+        Self::with_model_internal(api_key, model, None, None, None)
     }
 
     pub fn new_with_client(
@@ -51,6 +52,7 @@ impl MoonshotProvider {
             http_client,
             base_url,
             model,
+            model_behavior: None,
         }
     }
 
@@ -61,11 +63,12 @@ impl MoonshotProvider {
         _prompt_cache: Option<PromptCachingConfig>,
         timeouts: Option<TimeoutsConfig>,
         _anthropic: Option<AnthropicConfig>,
+        model_behavior: Option<ModelConfig>,
     ) -> Self {
         let api_key_value = api_key.unwrap_or_default();
         let model_value = resolve_model(model, "kimi-latest");
 
-        Self::with_model_internal(api_key_value, model_value, base_url, timeouts)
+        Self::with_model_internal(api_key_value, model_value, base_url, timeouts, model_behavior)
     }
 
     fn with_model_internal(
@@ -73,6 +76,7 @@ impl MoonshotProvider {
         model: String,
         base_url: Option<String>,
         timeouts: Option<TimeoutsConfig>,
+        model_behavior: Option<ModelConfig>,
     ) -> Self {
         use crate::llm::http_client::HttpClientFactory;
 
@@ -87,6 +91,7 @@ impl MoonshotProvider {
                 Some(env_vars::MOONSHOT_BASE_URL),
             ),
             model,
+            model_behavior,
         }
     }
 
@@ -129,7 +134,21 @@ impl MoonshotProvider {
 #[async_trait]
 impl LLMProvider for MoonshotProvider {
     fn name(&self) -> &str {
-        PROVIDER_KEY
+        "moonshot"
+    }
+
+    fn supports_reasoning(&self, _model: &str) -> bool {
+        self.model_behavior
+            .as_ref()
+            .and_then(|b| b.model_supports_reasoning)
+            .unwrap_or(false)
+    }
+
+    fn supports_reasoning_effort(&self, _model: &str) -> bool {
+        self.model_behavior
+            .as_ref()
+            .and_then(|b| b.model_supports_reasoning_effort)
+            .unwrap_or(false)
     }
 
     async fn generate(&self, mut request: LLMRequest) -> Result<LLMResponse, LLMError> {

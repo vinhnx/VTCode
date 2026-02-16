@@ -4,7 +4,7 @@ use super::providers::{
     OpenRouterProvider, XAIProvider, ZAIProvider,
 };
 use crate::config::TimeoutsConfig;
-use crate::config::core::{AnthropicConfig, PromptCachingConfig};
+use crate::config::core::{AnthropicConfig, ModelConfig, PromptCachingConfig};
 use crate::config::models::{ModelId, Provider};
 use crate::ctx_err;
 use crate::llm::provider::{LLMError, LLMProvider};
@@ -26,6 +26,7 @@ pub struct ProviderConfig {
     pub prompt_cache: Option<PromptCachingConfig>,
     pub timeouts: Option<TimeoutsConfig>,
     pub anthropic: Option<AnthropicConfig>,
+    pub model_behavior: Option<ModelConfig>,
 }
 
 trait BuiltinProvider: LLMProvider {
@@ -237,6 +238,7 @@ pub fn create_provider_for_model(
     model: &str,
     api_key: String,
     prompt_cache: Option<PromptCachingConfig>,
+    model_behavior: Option<ModelConfig>,
 ) -> Result<Box<dyn LLMProvider>, LLMError> {
     // Validate model exists in ModelsManager (non-blocking check using local presets)
     if !get_models_manager().model_exists_sync(model) {
@@ -267,6 +269,7 @@ pub fn create_provider_for_model(
             prompt_cache,
             timeouts: None,
             anthropic: None,
+            model_behavior,
         },
     )
 }
@@ -281,6 +284,7 @@ pub fn create_provider_with_config(
     prompt_cache: Option<PromptCachingConfig>,
     timeouts: Option<TimeoutsConfig>,
     anthropic: Option<AnthropicConfig>,
+    model_behavior: Option<ModelConfig>,
 ) -> Result<Box<dyn LLMProvider>, LLMError> {
     let factory = get_factory().lock().map_err(|_| LLMError::Provider {
         message: ctx_err!("llm factory", "lock poisoned"),
@@ -295,6 +299,7 @@ pub fn create_provider_with_config(
             prompt_cache,
             timeouts,
             anthropic,
+            model_behavior,
         },
     )
 }
@@ -312,6 +317,7 @@ macro_rules! impl_builtin_provider {
                         prompt_cache,
                         timeouts,
                         anthropic,
+                        model_behavior,
                     } = config;
 
                     Box::new(<$provider>::from_config(
@@ -321,6 +327,7 @@ macro_rules! impl_builtin_provider {
                         prompt_cache,
                         timeouts,
                         anthropic,
+                        model_behavior,
                     ))
                 }
             }
@@ -338,6 +345,7 @@ impl BuiltinProvider for AnthropicProvider {
             prompt_cache,
             timeouts,
             anthropic,
+            model_behavior,
         } = config;
 
         Box::new(AnthropicProvider::from_config(
@@ -347,6 +355,7 @@ impl BuiltinProvider for AnthropicProvider {
             prompt_cache,
             timeouts,
             anthropic,
+            model_behavior,
         ))
     }
 }

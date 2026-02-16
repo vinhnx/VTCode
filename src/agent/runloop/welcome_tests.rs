@@ -61,6 +61,7 @@ async fn test_prepare_session_bootstrap_builds_sections() {
         checkpointing_max_age_days: Some(DEFAULT_MAX_AGE_DAYS),
         quiet: false,
         max_conversation_turns: 1000,
+        model_behavior: None,
     };
 
     let bootstrap = prepare_session_bootstrap(&runtime_cfg, Some(&vt_cfg), None).await;
@@ -143,6 +144,7 @@ async fn test_welcome_hides_optional_sections_by_default() {
         checkpointing_max_age_days: Some(DEFAULT_MAX_AGE_DAYS),
         quiet: false,
         max_conversation_turns: 1000,
+        model_behavior: None,
     };
 
     let vt_cfg = VTCodeConfig::default();
@@ -205,6 +207,7 @@ async fn test_prepare_session_bootstrap_hides_placeholder_when_planning_disabled
         checkpointing_max_age_days: Some(DEFAULT_MAX_AGE_DAYS),
         quiet: false,
         max_conversation_turns: 1000,
+        model_behavior: None,
     };
 
     let bootstrap = prepare_session_bootstrap(&runtime_cfg, Some(&vt_cfg), None).await;
