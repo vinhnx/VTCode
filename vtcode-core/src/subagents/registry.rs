@@ -942,12 +942,10 @@ Project override for explore.
         fs::write(project_agents_dir.join("explore.md"), custom_explore)
             .expect("custom project agent should be written");
 
-        let registry = SubagentRegistry::new(
-            workspace.path().to_path_buf(),
-            SubagentsConfig::default(),
-        )
-        .await
-        .expect("registry should initialize");
+        let registry =
+            SubagentRegistry::new(workspace.path().to_path_buf(), SubagentsConfig::default())
+                .await
+                .expect("registry should initialize");
 
         let explore = registry
             .get("explore")

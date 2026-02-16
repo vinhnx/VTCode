@@ -24,6 +24,7 @@ pub mod llm;
 pub mod paths;
 pub mod project;
 pub mod reference;
+pub mod sanitizer;
 pub mod serde_helpers;
 pub mod slug;
 pub mod styling;

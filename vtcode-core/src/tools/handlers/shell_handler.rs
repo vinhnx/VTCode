@@ -150,23 +150,26 @@ impl ToolHandler for ShellHandler {
             .execute_command(&params, &invocation.turn.cwd, None)
             .await?;
 
+        // Sanitize output to remove any secrets before display/storage
+        let sanitized = output.sanitize_secrets();
+
         // Format output
         let mut content_text = String::new();
-        if !output.stdout.is_empty() {
-            content_text.push_str(&output.stdout);
+        if !sanitized.stdout.is_empty() {
+            content_text.push_str(&sanitized.stdout);
         }
-        if !output.stderr.is_empty() {
+        if !sanitized.stderr.is_empty() {
             if !content_text.is_empty() {
                 content_text.push('\n');
             }
             content_text.push_str("[stderr]\n");
-            content_text.push_str(&output.stderr);
+            content_text.push_str(&sanitized.stderr);
         }
-        if output.exit_code != 0 {
+        if sanitized.exit_code != 0 {
             if !content_text.is_empty() {
                 content_text.push('\n');
             }
-            content_text.push_str(&format!("[exit code: {}]", output.exit_code));
+            content_text.push_str(&format!("[exit code: {}]", sanitized.exit_code));
         }
 
         if content_text.is_empty() {
@@ -175,7 +178,7 @@ impl ToolHandler for ShellHandler {
 
         Ok(ToolOutput::with_success(
             content_text,
-            output.exit_code == 0,
+            sanitized.exit_code == 0,
         ))
     }
 }

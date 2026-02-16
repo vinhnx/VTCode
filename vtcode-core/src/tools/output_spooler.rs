@@ -313,9 +313,11 @@ impl ToolOutputSpooler {
             serde_json::to_string_pretty(value).unwrap_or_else(|_| value.to_string())
         };
 
-        let original_bytes = content.len();
+        // Sanitize content to redact any secrets before writing to disk
+        let sanitized_content = vtcode_commons::sanitizer::redact_secrets(content);
+        let original_bytes = sanitized_content.len();
 
-        fs::write(&file_path, &content)
+        fs::write(&file_path, &sanitized_content)
             .await
             .with_context(|| format!("Failed to write tool output to: {}", file_path.display()))?;
 
@@ -345,7 +347,7 @@ impl ToolOutputSpooler {
         Ok(SpoolResult {
             file_path: relative_path,
             original_bytes,
-            content,
+            content: sanitized_content,
         })
     }
 
