@@ -55,7 +55,8 @@ pub async fn handle_manage_agents(
             ctx.renderer
                 .line(MessageStyle::Info, "Subagent Management")?;
             ctx.renderer.line(MessageStyle::Output, "")?;
-            ctx.renderer.line(MessageStyle::Output, "Usage: /agents [list]")?;
+            ctx.renderer
+                .line(MessageStyle::Output, "Usage: /agents [list]")?;
             ctx.renderer.line(MessageStyle::Output, "")?;
             ctx.renderer.line(
                 MessageStyle::Output,

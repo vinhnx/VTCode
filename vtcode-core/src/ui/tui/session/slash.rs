@@ -10,7 +10,8 @@ use crate::ui::search::fuzzy_score;
 
 use super::super::types::InlineTextStyle;
 use super::{
-    Session, measure_text_width, modal::{ModalListLayout, compute_modal_area},
+    Session, measure_text_width,
+    modal::{ModalListLayout, compute_modal_area},
     ratatui_color_from_ansi, ratatui_style_from_inline,
     slash_palette::{self, SlashPaletteUpdate, command_prefix, command_range},
 };

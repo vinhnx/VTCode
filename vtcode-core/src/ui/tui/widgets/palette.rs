@@ -8,8 +8,7 @@ use ratatui::{
 
 use crate::config::constants::ui;
 use crate::ui::tui::session::{
-    Session, file_palette::FilePalette, modal::compute_modal_area,
-    terminal_capabilities,
+    Session, file_palette::FilePalette, modal::compute_modal_area, terminal_capabilities,
 };
 use crate::ui::tui::style::measure_text_width;
 
