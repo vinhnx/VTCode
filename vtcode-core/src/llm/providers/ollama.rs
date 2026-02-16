@@ -1,7 +1,7 @@
 #![allow(clippy::result_large_err)]
 use crate::config::TimeoutsConfig;
 use crate::config::constants::{env_vars, models, urls};
-use crate::config::core::{AnthropicConfig, PromptCachingConfig};
+use crate::config::core::{AnthropicConfig, ModelConfig, PromptCachingConfig};
 use crate::llm::client::LLMClient;
 use crate::llm::provider::{
     ContentPart, FinishReason, LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream,
@@ -234,6 +234,7 @@ pub struct OllamaProvider {
     base_url: String,
     model: String,
     api_key: Option<String>,
+    model_behavior: Option<ModelConfig>,
 }
 
 impl OllamaProvider {
@@ -242,7 +243,7 @@ impl OllamaProvider {
     }
 
     pub fn with_model(api_key: String, model: String) -> Self {
-        Self::with_model_internal(model, None, Some(api_key))
+        Self::with_model_internal(model, None, Some(api_key), None)
     }
 
     pub fn new_with_client(
@@ -257,6 +258,7 @@ impl OllamaProvider {
             base_url,
             model,
             api_key: Some(api_key),
+            model_behavior: None,
         }
     }
 
@@ -267,9 +269,10 @@ impl OllamaProvider {
         _prompt_cache: Option<PromptCachingConfig>,
         _timeouts: Option<TimeoutsConfig>,
         _anthropic: Option<AnthropicConfig>,
+        model_behavior: Option<ModelConfig>,
     ) -> Self {
         let resolved_model = resolve_model(model, models::ollama::DEFAULT_MODEL);
-        Self::with_model_internal(resolved_model, base_url, api_key)
+        Self::with_model_internal(resolved_model, base_url, api_key, model_behavior)
     }
 
     fn normalize_api_key(api_key: Option<String>) -> Option<String> {
@@ -305,6 +308,7 @@ impl OllamaProvider {
         model: String,
         base_url: Option<String>,
         api_key: Option<String>,
+        model_behavior: Option<ModelConfig>,
     ) -> Self {
         let normalized_api_key = Self::normalize_api_key(api_key);
         let is_cloud_model = model.contains(":cloud") || model.contains("-cloud");
@@ -331,6 +335,7 @@ impl OllamaProvider {
             base_url: resolved_base,
             model,
             api_key: effective_api_key,
+            model_behavior,
         }
     }
 
@@ -828,11 +833,24 @@ impl LLMProvider for OllamaProvider {
     }
 
     fn supports_reasoning(&self, model: &str) -> bool {
+        // Codex-inspired robustness: Setting model_supports_reasoning to false
+        // does NOT disable it for known reasoning models.
         models::ollama::REASONING_MODELS.contains(&model)
+            || self
+                .model_behavior
+                .as_ref()
+                .and_then(|b| b.model_supports_reasoning)
+                .unwrap_or(false)
     }
 
     fn supports_reasoning_effort(&self, model: &str) -> bool {
+        // Same robustness logic for reasoning effort
         models::ollama::REASONING_LEVEL_MODELS.contains(&model)
+            || self
+                .model_behavior
+                .as_ref()
+                .and_then(|b| b.model_supports_reasoning_effort)
+                .unwrap_or(false)
     }
 
     async fn generate(&self, mut request: LLMRequest) -> Result<LLMResponse, LLMError> {

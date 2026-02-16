@@ -300,6 +300,7 @@ impl StartupContext {
             checkpointing_max_snapshots: config.agent.checkpointing.max_snapshots,
             checkpointing_max_age_days: config.agent.checkpointing.max_age_days,
             max_conversation_turns: config.agent.max_conversation_turns,
+            model_behavior: Some(config.model.clone()),
         };
 
         let skip_confirmations = args.skip_confirmations || full_auto_requested;

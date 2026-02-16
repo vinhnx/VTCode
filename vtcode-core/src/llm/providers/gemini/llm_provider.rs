@@ -11,11 +11,24 @@ impl LLMProvider for GeminiProvider {
     }
 
     fn supports_reasoning(&self, model: &str) -> bool {
+        // Codex-inspired robustness: Setting model_supports_reasoning to false
+        // does NOT disable it for known reasoning models.
         models::google::REASONING_MODELS.contains(&model)
+            || self
+                .model_behavior
+                .as_ref()
+                .and_then(|b| b.model_supports_reasoning)
+                .unwrap_or(false)
     }
 
     fn supports_reasoning_effort(&self, model: &str) -> bool {
+        // Same robustness logic for reasoning effort
         models::google::REASONING_MODELS.contains(&model)
+            || self
+                .model_behavior
+                .as_ref()
+                .and_then(|b| b.model_supports_reasoning_effort)
+                .unwrap_or(false)
     }
 
     fn supports_context_caching(&self, model: &str) -> bool {

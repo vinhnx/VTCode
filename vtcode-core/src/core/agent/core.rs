@@ -439,6 +439,7 @@ impl AgentBuilder {
                 checkpointing_max_age_days: Some(DEFAULT_MAX_AGE_DAYS),
                 max_conversation_turns:
                     crate::config::constants::defaults::DEFAULT_MAX_CONVERSATION_TURNS,
+                model_behavior: None,
             },
         }
     }

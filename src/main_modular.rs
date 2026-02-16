@@ -149,7 +149,9 @@ async fn main() -> Result<()> {
         checkpointing_storage_dir: None,
         checkpointing_max_snapshots: DEFAULT_MAX_SNAPSHOTS,
         checkpointing_max_age_days: Some(DEFAULT_MAX_AGE_DAYS),
+        max_conversation_turns: 50,
         quiet: false,
+        model_behavior: Some(vtcode_config.model.clone()),
     };
 
     // Apply safety validations for model usage

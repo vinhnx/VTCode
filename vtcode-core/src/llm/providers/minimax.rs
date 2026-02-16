@@ -2,7 +2,7 @@
 
 use crate::config::TimeoutsConfig;
 use crate::config::constants::{env_vars, models, urls};
-use crate::config::core::{AnthropicConfig, PromptCachingConfig};
+use crate::config::core::{AnthropicConfig, ModelConfig, PromptCachingConfig};
 use crate::llm::client::LLMClient;
 use crate::llm::error_display;
 use crate::llm::provider::{
@@ -23,6 +23,7 @@ pub struct MinimaxProvider {
     base_url: String,
     model: String,
     api_key: String,
+    model_behavior: Option<ModelConfig>,
 }
 
 impl MinimaxProvider {
@@ -31,7 +32,7 @@ impl MinimaxProvider {
     }
 
     pub fn with_model(api_key: String, model: String) -> Self {
-        Self::with_model_internal(model, None, api_key)
+        Self::with_model_internal(model, None, api_key, None)
     }
 
     pub fn new_with_client(
@@ -46,6 +47,7 @@ impl MinimaxProvider {
             base_url,
             model,
             api_key,
+            model_behavior: None,
         }
     }
 
@@ -56,13 +58,19 @@ impl MinimaxProvider {
         _prompt_cache: Option<PromptCachingConfig>,
         _timeouts: Option<TimeoutsConfig>,
         _anthropic: Option<AnthropicConfig>,
+        model_behavior: Option<ModelConfig>,
     ) -> Self {
         let api_key_value = api_key.unwrap_or_default();
         let resolved_model = resolve_model(model, models::minimax::DEFAULT_MODEL);
-        Self::with_model_internal(resolved_model, base_url, api_key_value)
+        Self::with_model_internal(resolved_model, base_url, api_key_value, model_behavior)
     }
 
-    fn with_model_internal(model: String, base_url: Option<String>, api_key: String) -> Self {
+    fn with_model_internal(
+        model: String,
+        base_url: Option<String>,
+        api_key: String,
+        model_behavior: Option<ModelConfig>,
+    ) -> Self {
         Self {
             http_client: HttpClient::new(),
             base_url: override_base_url(
@@ -72,6 +80,7 @@ impl MinimaxProvider {
             ),
             model,
             api_key,
+            model_behavior,
         }
     }
 
@@ -108,6 +117,20 @@ impl MinimaxProvider {
 impl LLMProvider for MinimaxProvider {
     fn name(&self) -> &str {
         "minimax"
+    }
+
+    fn supports_reasoning(&self, _model: &str) -> bool {
+        self.model_behavior
+            .as_ref()
+            .and_then(|b| b.model_supports_reasoning)
+            .unwrap_or(false)
+    }
+
+    fn supports_reasoning_effort(&self, _model: &str) -> bool {
+        self.model_behavior
+            .as_ref()
+            .and_then(|b| b.model_supports_reasoning_effort)
+            .unwrap_or(false)
     }
 
     async fn generate(&self, mut request: LLMRequest) -> Result<LLMResponse, LLMError> {

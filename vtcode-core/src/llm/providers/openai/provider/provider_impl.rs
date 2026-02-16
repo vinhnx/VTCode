@@ -35,7 +35,14 @@ impl provider::LLMProvider for OpenAIProvider {
             model
         };
 
+        // Codex-inspired robustness: Setting model_supports_reasoning to false
+        // does NOT disable it for known reasoning models.
         models::openai::REASONING_MODELS.contains(&requested)
+            || self
+                .model_behavior
+                .as_ref()
+                .and_then(|b| b.model_supports_reasoning)
+                .unwrap_or(false)
     }
 
     fn supports_reasoning_effort(&self, model: &str) -> bool {
@@ -44,9 +51,16 @@ impl provider::LLMProvider for OpenAIProvider {
         } else {
             model
         };
+
+        // Same robustness logic for reasoning effort
         models::openai::REASONING_MODELS
             .iter()
             .any(|candidate| *candidate == requested)
+            || self
+                .model_behavior
+                .as_ref()
+                .and_then(|b| b.model_supports_reasoning_effort)
+                .unwrap_or(false)
     }
 
     fn supports_tools(&self, model: &str) -> bool {

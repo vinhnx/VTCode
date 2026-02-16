@@ -32,6 +32,7 @@ async fn test_prompt_refinement_applies_to_gemini_when_flag_disabled() {
         checkpointing_max_age_days: Some(DEFAULT_MAX_AGE_DAYS),
         quiet: false,
         max_conversation_turns: 1000,
+        model_behavior: None,
     };
 
     let mut vt = VTCodeConfig::default();
@@ -272,6 +273,7 @@ async fn test_refine_and_enrich_prompt_disabled() {
         checkpointing_max_age_days: Some(DEFAULT_MAX_AGE_DAYS),
         quiet: false,
         max_conversation_turns: 1000,
+        model_behavior: None,
     };
 
     let vt_cfg = VTCodeConfig::default(); // vibe_coding disabled by default
@@ -305,6 +307,7 @@ async fn test_refine_and_enrich_prompt_enabled() {
         checkpointing_max_age_days: Some(DEFAULT_MAX_AGE_DAYS),
         quiet: false,
         max_conversation_turns: 1000,
+        model_behavior: None,
     };
 
     let mut vt_cfg = VTCodeConfig::default();
@@ -340,6 +343,7 @@ async fn test_refine_and_enrich_prompt_no_vague_refs() {
         checkpointing_max_age_days: Some(DEFAULT_MAX_AGE_DAYS),
         quiet: false,
         max_conversation_turns: 1000,
+        model_behavior: None,
     };
 
     let mut vt_cfg = VTCodeConfig::default();
@@ -378,6 +382,7 @@ async fn test_value_inference_decrease_by_half_milestone() {
         checkpointing_max_age_days: Some(DEFAULT_MAX_AGE_DAYS),
         quiet: false,
         max_conversation_turns: 1000,
+        model_behavior: None,
     };
 
     let mut vt_cfg = VTCodeConfig::default();
@@ -436,6 +441,7 @@ async fn test_value_inference_multiple_patterns() {
         checkpointing_max_age_days: Some(DEFAULT_MAX_AGE_DAYS),
         quiet: false,
         max_conversation_turns: 1000,
+        model_behavior: None,
     };
 
     let mut vt_cfg = VTCodeConfig::default();

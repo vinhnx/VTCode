@@ -2,7 +2,7 @@
 
 use crate::config::TimeoutsConfig;
 use crate::config::constants::{env_vars, models, urls};
-use crate::config::core::{AnthropicConfig, PromptCachingConfig};
+use crate::config::core::{AnthropicConfig, ModelConfig, PromptCachingConfig};
 use crate::config::models::ModelId;
 use crate::llm::error_display;
 use crate::llm::provider::{LLMError, LLMRequest, Message, MessageRole, ToolChoice};
@@ -23,6 +23,7 @@ pub struct OpenRouterProvider {
     http_client: HttpClient,
     base_url: String,
     model: String,
+    model_behavior: Option<ModelConfig>,
 }
 
 #[allow(dead_code)]
@@ -34,11 +35,12 @@ impl OpenRouterProvider {
             None,
             None,
             TimeoutsConfig::default(),
+            None,
         )
     }
 
     pub fn with_model(api_key: String, model: String) -> Self {
-        Self::with_model_internal(api_key, model, None, None, TimeoutsConfig::default())
+        Self::with_model_internal(api_key, model, None, None, TimeoutsConfig::default(), None)
     }
 
     pub fn new_with_client(
@@ -53,6 +55,7 @@ impl OpenRouterProvider {
             http_client,
             base_url,
             model,
+            model_behavior: None,
         }
     }
 
@@ -63,6 +66,7 @@ impl OpenRouterProvider {
         prompt_cache: Option<PromptCachingConfig>,
         timeouts: Option<TimeoutsConfig>,
         _anthropic: Option<AnthropicConfig>,
+        model_behavior: Option<ModelConfig>,
     ) -> Self {
         let api_key_value = api_key.unwrap_or_default();
         let model_value = resolve_model(model, models::openrouter::DEFAULT_MODEL);
@@ -73,6 +77,7 @@ impl OpenRouterProvider {
             prompt_cache,
             base_url,
             timeouts.unwrap_or_default(),
+            model_behavior,
         )
     }
 
@@ -82,6 +87,7 @@ impl OpenRouterProvider {
         _prompt_cache: Option<PromptCachingConfig>,
         base_url: Option<String>,
         timeouts: TimeoutsConfig,
+        model_behavior: Option<ModelConfig>,
     ) -> Self {
         use crate::llm::http_client::HttpClientFactory;
 
@@ -94,6 +100,7 @@ impl OpenRouterProvider {
                 Some(env_vars::OPENROUTER_BASE_URL),
             ),
             model,
+            model_behavior,
         }
     }
 

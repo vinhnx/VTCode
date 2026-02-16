@@ -267,6 +267,7 @@ fn create_provider_client(
         Some(config.prompt_cache.clone()),
         None,
         vt_cfg.map(|cfg| cfg.provider.anthropic.clone()),
+        vt_cfg.map(|cfg| cfg.model.clone()),
     )
     .context("Failed to initialize provider client")
 }

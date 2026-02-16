@@ -51,6 +51,8 @@ pub async fn handle_init_command(workspace: &Path, force: bool, run: bool) -> Re
             checkpointing_storage_dir: None,
             checkpointing_max_snapshots: DEFAULT_MAX_SNAPSHOTS,
             checkpointing_max_age_days: Some(DEFAULT_MAX_AGE_DAYS),
+            max_conversation_turns: 50,
+            model_behavior: None,
         };
         handle_chat_command(&config, false, false, false, None)
             .await

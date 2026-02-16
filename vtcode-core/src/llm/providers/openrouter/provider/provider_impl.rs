@@ -22,6 +22,20 @@ impl LLMProvider for OpenRouterProvider {
         true
     }
 
+    fn supports_reasoning(&self, _model: &str) -> bool {
+        self.model_behavior
+            .as_ref()
+            .and_then(|b| b.model_supports_reasoning)
+            .unwrap_or(false)
+    }
+
+    fn supports_reasoning_effort(&self, _model: &str) -> bool {
+        self.model_behavior
+            .as_ref()
+            .and_then(|b| b.model_supports_reasoning_effort)
+            .unwrap_or(false)
+    }
+
     fn supports_tools(&self, model: &str) -> bool {
         use crate::config::constants::models;
         !models::openrouter::TOOL_UNAVAILABLE_MODELS.contains(&model)

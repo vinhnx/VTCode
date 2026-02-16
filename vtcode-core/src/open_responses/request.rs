@@ -39,6 +39,10 @@ pub struct Request {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub top_p: Option<f64>,
 
+    /// Truncation configuration.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub truncation: Option<TruncationConfig>,
+
     /// Maximum output tokens allowed.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max_output_tokens: Option<u64>,
@@ -79,6 +83,10 @@ pub struct Request {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub service_tier: Option<String>,
 
+    /// Reasoning configuration.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reasoning: Option<ReasoningConfig>,
+
     /// Whether to store the request/response.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub store: Option<bool>,
@@ -86,6 +94,24 @@ pub struct Request {
     /// Metadata for the request.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub metadata: Option<Value>,
+}
+
+/// Reasoning configuration for the request.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ReasoningConfig {
+    /// Reasoning effort level (low, medium, high).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub effort: Option<String>,
+}
+
+/// Truncation configuration for the request.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TruncationConfig {
+    /// The truncation strategy to use.
+    pub strategy: String,
+    /// The number of tokens to keep.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_prompt_tokens: Option<u64>,
 }
 
 impl Request {
@@ -99,6 +125,7 @@ impl Request {
             stream: false,
             temperature: None,
             top_p: None,
+            truncation: None,
             max_output_tokens: None,
             max_tool_calls: None,
             stop: None,
@@ -109,6 +136,7 @@ impl Request {
             top_logprobs: None,
             user: None,
             service_tier: None,
+            reasoning: None,
             store: None,
             metadata: None,
         }

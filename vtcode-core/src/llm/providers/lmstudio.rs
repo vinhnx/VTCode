@@ -16,7 +16,7 @@ use super::common::resolve_model;
 use super::openai::OpenAIProvider;
 use crate::config::TimeoutsConfig;
 use crate::config::constants::{env_vars, models, urls};
-use crate::config::core::{AnthropicConfig, PromptCachingConfig};
+use crate::config::core::{AnthropicConfig, ModelConfig, PromptCachingConfig};
 use crate::llm::client::LLMClient;
 use crate::llm::error_display;
 use crate::llm::provider::{LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream};
@@ -135,6 +135,7 @@ impl LmStudioProvider {
         prompt_cache: Option<PromptCachingConfig>,
         _timeouts: Option<TimeoutsConfig>,
         _anthropic: Option<AnthropicConfig>,
+        model_behavior: Option<ModelConfig>,
     ) -> OpenAIProvider {
         let resolved_model = resolve_model(model, models::lmstudio::DEFAULT_MODEL);
         let resolved_base = Self::resolve_base_url(base_url);
@@ -145,6 +146,7 @@ impl LmStudioProvider {
             prompt_cache,
             _timeouts,
             _anthropic,
+            model_behavior,
         )
     }
 
@@ -153,7 +155,7 @@ impl LmStudioProvider {
     }
 
     pub fn with_model(api_key: String, model: String) -> Self {
-        Self::with_model_internal(Some(api_key), Some(model), None, None)
+        Self::with_model_internal(Some(api_key), Some(model), None, None, None)
     }
 
     pub fn new_with_client(
@@ -179,8 +181,9 @@ impl LmStudioProvider {
         prompt_cache: Option<PromptCachingConfig>,
         _timeouts: Option<TimeoutsConfig>,
         _anthropic: Option<AnthropicConfig>,
+        model_behavior: Option<ModelConfig>,
     ) -> Self {
-        Self::with_model_internal(api_key, model, base_url, prompt_cache)
+        Self::with_model_internal(api_key, model, base_url, prompt_cache, model_behavior)
     }
 
     fn with_model_internal(
@@ -188,8 +191,10 @@ impl LmStudioProvider {
         model: Option<String>,
         base_url: Option<String>,
         prompt_cache: Option<PromptCachingConfig>,
+        model_behavior: Option<ModelConfig>,
     ) -> Self {
-        let inner = Self::build_inner(api_key, model, base_url, prompt_cache, None, None);
+        let inner =
+            Self::build_inner(api_key, model, base_url, prompt_cache, None, None, model_behavior);
         Self { inner }
     }
 }

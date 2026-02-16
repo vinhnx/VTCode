@@ -477,6 +477,7 @@ pub struct AgentConfig {
     pub checkpointing_max_snapshots: usize,
     pub checkpointing_max_age_days: Option<u64>,
     pub max_conversation_turns: usize,
+    pub model_behavior: Option<crate::core::ModelConfig>,
 }
 
 /// Workshop agent capability levels

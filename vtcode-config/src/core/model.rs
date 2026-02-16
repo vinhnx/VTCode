@@ -15,6 +15,16 @@ pub struct ModelConfig {
     /// Enable interactive prompt for loop detection instead of silently halting
     #[serde(default = "default_loop_detection_interactive")]
     pub loop_detection_interactive: bool,
+
+    /// Manually enable reasoning support for models that are not natively recognized.
+    /// Note: Setting this to false will NOT disable reasoning for known reasoning models (e.g. GPT-5).
+    #[serde(default)]
+    pub model_supports_reasoning: Option<bool>,
+
+    /// Manually enable reasoning effort support for models that are not natively recognized.
+    /// Note: Setting this to false will NOT disable reasoning effort for known models.
+    #[serde(default)]
+    pub model_supports_reasoning_effort: Option<bool>,
 }
 
 impl Default for ModelConfig {
@@ -23,6 +33,8 @@ impl Default for ModelConfig {
             skip_loop_detection: default_loop_detection_enabled(),
             loop_detection_threshold: default_loop_detection_threshold(),
             loop_detection_interactive: default_loop_detection_interactive(),
+            model_supports_reasoning: None,
+            model_supports_reasoning_effort: None,
         }
     }
 }

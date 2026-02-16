@@ -112,6 +112,7 @@ impl acp::Agent for ZedAgent {
             &self.config.model,
             self.config.api_key.clone(),
             Some(self.config.prompt_cache.clone()),
+            self.config.model_behavior.clone(),
         ) {
             Ok(provider) => provider,
             Err(_) => create_provider_with_config(
@@ -122,6 +123,7 @@ impl acp::Agent for ZedAgent {
                 Some(self.config.prompt_cache.clone()),
                 None,
                 None,
+                self.config.model_behavior.clone(),
             )
             .map_err(acp::Error::into_internal_error)?,
         };

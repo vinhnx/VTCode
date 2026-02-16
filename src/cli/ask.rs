@@ -129,6 +129,7 @@ async fn run_ask_without_tools(
         &config.model,
         config.api_key.clone(),
         Some(config.prompt_cache.clone()),
+        Some(config.model_behavior.clone()),
     ) {
         Ok(provider) => provider,
         Err(_) => create_provider_with_config(
@@ -139,6 +140,7 @@ async fn run_ask_without_tools(
             Some(config.prompt_cache.clone()),
             None,
             None,
+            Some(config.model_behavior.clone()),
         )
         .context("Failed to initialize provider for ask command")?,
     };
