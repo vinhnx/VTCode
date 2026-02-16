@@ -8,7 +8,7 @@ use ratatui::{
 
 use crate::config::constants::ui;
 use crate::ui::tui::session::{
-    PROMPT_COMMAND_NAME, Session,
+    Session,
     modal::compute_modal_area,
     slash_palette::{SlashPalette, SlashPaletteSuggestion},
     terminal_capabilities,
@@ -74,16 +74,6 @@ impl<'a> Widget for SlashWidget<'a> {
                         format!("/{} {}", cmd.name, cmd.description)
                     } else {
                         format!("/ {}", cmd.name)
-                    }
-                }
-                SlashPaletteSuggestion::Custom(prompt) => {
-                    // For custom prompts, format as /prompt:name
-                    let prompt_cmd = format!("{}:{}", PROMPT_COMMAND_NAME, prompt.name);
-                    let description = prompt.description.as_deref().unwrap_or("");
-                    if !description.is_empty() {
-                        format!("/{} {}", prompt_cmd, description)
-                    } else {
-                        format!("/{}", prompt_cmd)
                     }
                 }
             };
@@ -165,15 +155,6 @@ impl<'a> SlashWidget<'a> {
                         self.slash_description_style(),
                     ),
                 ])),
-                SlashPaletteSuggestion::Custom(prompt) => {
-                    let display_name = format!("{}:{}", PROMPT_COMMAND_NAME, prompt.name);
-                    let description = prompt.description.clone().unwrap_or_default();
-                    ListItem::new(Line::from(vec![
-                        Span::styled(format!("/{}", display_name), self.slash_name_style()),
-                        Span::raw(" "),
-                        Span::styled(description, self.slash_description_style()),
-                    ]))
-                }
             })
             .collect()
     }

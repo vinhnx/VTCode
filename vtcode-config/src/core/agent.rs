@@ -1,4 +1,4 @@
-use crate::constants::{defaults, instructions, llm_generation, project_doc, prompts};
+use crate::constants::{defaults, instructions, llm_generation, project_doc};
 use crate::types::{
     EditingMode, ReasoningEffortLevel, SystemPromptMode, ToolDocumentationMode,
     UiSurfacePreference, VerbosityLevel,

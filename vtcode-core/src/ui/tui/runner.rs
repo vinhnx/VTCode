@@ -88,7 +88,6 @@ impl ScrollAccumulator {
 fn has_active_navigation_ui(session: &Session) -> bool {
     session.modal.is_some()
         || session.file_palette_active
-        || session.prompt_palette_active
         || session.config_palette_active
         || crate::ui::tui::session::slash::slash_navigation_available(session)
 }

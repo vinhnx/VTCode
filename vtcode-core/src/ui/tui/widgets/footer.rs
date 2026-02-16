@@ -200,7 +200,7 @@ impl Widget for FooterWidget<'_> {
 
 /// Default keybind hints for different contexts
 pub mod hints {
-    pub const IDLE: &str = "? help • / command • @ file • # prompt";
+    pub const IDLE: &str = "? help • / command • @ file";
     pub const PROCESSING: &str = "Ctrl+C cancel";
     pub const MODAL: &str = "↑↓ navigate • Enter select • Esc close";
     pub const EDITING: &str = "Enter send • Ctrl+C cancel • ↑ history";

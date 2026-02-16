@@ -73,7 +73,6 @@ impl Session {
         slash::render_slash_palette(self, frame, viewport);
         render::render_config_palette(self, frame, viewport);
         render::render_file_palette(self, frame, viewport);
-        render::render_prompt_palette(self, frame, viewport);
 
         // Render diff preview modal if active
         if self.diff_preview.is_some() {

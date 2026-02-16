@@ -7,15 +7,14 @@
 //! 4. Built-in: shipped with binary (lowest)
 
 use anyhow::Result;
-use serde_json::Value;
 use std::collections::{HashMap, HashSet};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
 
 use vtcode_config::subagent::{
-    SubagentConfig, SubagentSource, SubagentsConfig, discover_subagents_in_dir,
+    SubagentConfig, SubagentSource, SubagentsConfig,
 };
 
 /// Built-in subagent definitions
