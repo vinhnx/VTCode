@@ -32,7 +32,35 @@ use vtcode_core::utils::ansi::AnsiRenderer;
 // Using `tool_output_handler::handle_pipeline_output_from_turn_ctx` adapter where needed
 
 use crate::agent::runloop::mcp_events;
+use crate::agent::runloop::unified::turn::tool_outcomes::helpers::LoopTracker;
+use crate::agent::runloop::unified::turn::turn_helpers::display_error;
 use vtcode_core::config::types::AgentConfig;
+use vtcode_core::core::agent::error_recovery::ErrorType;
+
+/// Maximum number of consecutive transient LLM failures before aborting.
+const MAX_TRANSIENT_LLM_RETRIES: usize = 2;
+/// Base backoff delay between transient LLM failure retries.
+const TRANSIENT_RETRY_BASE_DELAY: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// Check whether an LLM request error looks transient (rate limit, timeout,
+/// server overload) and is worth retrying.
+fn is_transient_llm_error(err: &anyhow::Error) -> bool {
+    let msg = err.to_string().to_ascii_lowercase();
+    // Common transient indicators across LLM providers
+    msg.contains("rate limit")
+        || msg.contains("rate_limit")
+        || msg.contains("too many requests")
+        || msg.contains("429")
+        || msg.contains("timeout")
+        || msg.contains("timed out")
+        || msg.contains("overloaded")
+        || msg.contains("502")
+        || msg.contains("503")
+        || msg.contains("529")
+        || msg.contains("server error")
+        || msg.contains("connection reset")
+        || msg.contains("connection refused")
+}
 
 pub struct TurnLoopOutcome {
     pub result: TurnLoopResult,
@@ -184,9 +212,7 @@ impl<'a> TurnLoopContext<'a> {
 
 // For `TurnLoopContext`, we will reuse the generic `handle_pipeline_output` via an adapter below.
 
-#[allow(clippy::too_many_arguments)]
 pub async fn run_turn_loop(
-    _input: &str,
     mut working_history: Vec<uni::Message>,
     mut ctx: TurnLoopContext<'_>,
     session_end_reason: &mut crate::hooks::lifecycle::SessionEndReason,
@@ -206,21 +232,18 @@ pub async fn run_turn_loop(
     *ctx.auto_exit_plan_mode_attempted = false;
 
     ctx.harness_state.set_phase(TurnPhase::Preparing);
-    if let Some(emitter) = ctx.harness_emitter {
-        let _ = emitter.emit(turn_started_event());
+    if let Some(Err(e)) = ctx.harness_emitter.map(|e| e.emit(turn_started_event())) {
+        tracing::debug!(error = %e, "harness turn_started event emission failed");
     }
-
-    // NOTE: The user input is already in working_history from the caller (session_loop or run_loop)
-    // Do NOT add it again here, as it will cause duplicate messages in the conversation
 
     // Optimization: Extract all frequently accessed config values once
     let turn_config = extract_turn_config(ctx.vt_cfg);
 
     let mut step_count = 0;
     let mut current_max_tool_loops = turn_config.max_tool_loops;
+    let mut consecutive_llm_failures: usize = 0;
     // Optimization: Interned signatures with exponential backoff for loop detection
-    let mut repeated_tool_attempts =
-        crate::agent::runloop::unified::turn::tool_outcomes::helpers::LoopTracker::new();
+    let mut repeated_tool_attempts = LoopTracker::new();
 
     // Reset safety validator for a new turn
     {
@@ -339,16 +362,46 @@ pub async fn run_turn_loop(
         {
             Ok(val) => val,
             Err(err) => {
+                // Record the error in the recovery state for diagnostics
+                if let Ok(mut recovery) = ctx.error_recovery.write() {
+                    recovery.record_error("llm_request", format!("{:#}", err), ErrorType::Other);
+                }
+
+                // Retry transient errors (rate limits, timeouts, server overload)
+                if is_transient_llm_error(&err)
+                    && consecutive_llm_failures < MAX_TRANSIENT_LLM_RETRIES
+                {
+                    consecutive_llm_failures += 1;
+                    let backoff = TRANSIENT_RETRY_BASE_DELAY * consecutive_llm_failures as u32;
+                    tracing::warn!(
+                        error = %err,
+                        attempt = consecutive_llm_failures,
+                        max_retries = MAX_TRANSIENT_LLM_RETRIES,
+                        backoff_ms = backoff.as_millis() as u64,
+                        "Transient LLM error, retrying after backoff"
+                    );
+                    crate::agent::runloop::unified::turn::turn_helpers::display_status(
+                        ctx.renderer,
+                        &format!(
+                            "Transient error (attempt {}/{}), retrying in {}s...",
+                            consecutive_llm_failures,
+                            MAX_TRANSIENT_LLM_RETRIES,
+                            backoff.as_secs()
+                        ),
+                    )?;
+                    tokio::time::sleep(backoff).await;
+                    // Decrement step_count so the retry doesn't count against loop limits
+                    step_count = step_count.saturating_sub(1);
+                    continue;
+                }
+
+                // Non-transient or exhausted retries — abort
                 // Restore input status on request failure to clear loading/shimmer state.
                 ctx.handle
                     .set_input_status(restore_status_left.clone(), restore_status_right.clone());
-                ctx.input_status_state.left = restore_status_left.clone();
-                ctx.input_status_state.right = restore_status_right.clone();
-                crate::agent::runloop::unified::turn::turn_helpers::display_error(
-                    ctx.renderer,
-                    "LLM request failed",
-                    &err,
-                )?;
+                ctx.input_status_state.left = restore_status_left;
+                ctx.input_status_state.right = restore_status_right;
+                display_error(ctx.renderer, "LLM request failed", &err)?;
                 // Log error via tracing instead of polluting conversation history
                 // Adding error messages as assistant content can poison future turns
                 tracing::error!(error = %err, step = step_count, "LLM request failed");
@@ -361,6 +414,9 @@ pub async fn run_turn_loop(
 
         // Track token usage for context awareness before any borrows occur
         let response_usage = response.usage.clone();
+
+        // Reset transient failure counter on successful request
+        consecutive_llm_failures = 0;
 
         if turn_processing_ctx.session_stats.is_plan_mode() {
             turn_processing_ctx
@@ -399,7 +455,7 @@ pub async fn run_turn_loop(
         if !has_tool_calls {
             // Restore the input status bar to its original state
             ctx.handle
-                .set_input_status(restore_status_left.clone(), restore_status_right.clone());
+                .set_input_status(restore_status_left, restore_status_right);
         }
 
         if has_tool_calls {
@@ -446,15 +502,15 @@ pub async fn run_turn_loop(
 
     ctx.harness_state.set_phase(TurnPhase::Finalizing);
     if let Some(emitter) = ctx.harness_emitter {
+        // Exit is a graceful user-initiated action, not a failure
         let event = match result {
-            TurnLoopResult::Completed => Some(turn_completed_event()),
-            TurnLoopResult::Aborted => Some(turn_failed_event("turn aborted")),
-            TurnLoopResult::Cancelled => Some(turn_failed_event("turn cancelled")),
-            TurnLoopResult::Exit => Some(turn_failed_event("turn exit")),
-            TurnLoopResult::Blocked { .. } => Some(turn_failed_event("turn blocked")),
+            TurnLoopResult::Completed | TurnLoopResult::Exit => turn_completed_event(),
+            TurnLoopResult::Aborted => turn_failed_event("turn aborted"),
+            TurnLoopResult::Cancelled => turn_failed_event("turn cancelled"),
+            TurnLoopResult::Blocked { .. } => turn_failed_event("turn blocked"),
         };
-        if let Some(event) = event {
-            let _ = emitter.emit(event);
+        if let Err(e) = emitter.emit(event) {
+            tracing::debug!(error = %e, "harness turn outcome event emission failed");
         }
     }
 

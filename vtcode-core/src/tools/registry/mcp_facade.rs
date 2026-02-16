@@ -59,9 +59,16 @@ impl ToolRegistry {
                 if let Some(registration) = self.inventory.get_registration(&canonical_name) {
                     mcp_tools.push(McpToolInfo {
                         name: tool_name.clone(),
-                        description: registration.metadata().description().unwrap_or("").to_string(),
+                        description: registration
+                            .metadata()
+                            .description()
+                            .unwrap_or("")
+                            .to_string(),
                         provider: provider.clone(),
-                        input_schema: registration.parameter_schema().cloned().unwrap_or(Value::Null),
+                        input_schema: registration
+                            .parameter_schema()
+                            .cloned()
+                            .unwrap_or(Value::Null),
                     });
                 }
             }

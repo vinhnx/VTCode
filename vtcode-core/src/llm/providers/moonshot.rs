@@ -68,7 +68,13 @@ impl MoonshotProvider {
         let api_key_value = api_key.unwrap_or_default();
         let model_value = resolve_model(model, "kimi-latest");
 
-        Self::with_model_internal(api_key_value, model_value, base_url, timeouts, model_behavior)
+        Self::with_model_internal(
+            api_key_value,
+            model_value,
+            base_url,
+            timeouts,
+            model_behavior,
+        )
     }
 
     fn with_model_internal(

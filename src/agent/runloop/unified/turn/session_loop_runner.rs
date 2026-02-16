@@ -208,7 +208,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                 ).await?
             };
             use crate::agent::runloop::unified::turn::session::interaction_loop::InteractionOutcome;
-            let input = match interaction_outcome {
+            let _input = match interaction_outcome {
                 InteractionOutcome::Exit { reason } => {
                     session_end_reason = reason;
                     break;
@@ -296,7 +296,6 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                 let result = timeout(
                     Duration::from_secs(timeout_secs),
                     crate::agent::runloop::unified::turn::run_turn_loop(
-                        &input,
                         history_for_turn,
                         turn_loop_ctx,
                         &mut session_end_reason,

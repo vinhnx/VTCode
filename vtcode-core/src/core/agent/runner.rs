@@ -136,8 +136,9 @@ impl AgentRunner {
         let client: AnyClient = make_client(api_key.clone(), model)?;
 
         // Create unified provider client for tool calling
-        let provider_client = create_provider_for_model(model.as_str(), api_key.clone(), None, None)
-            .map_err(|e| anyhow!("Failed to create provider client: {}", e))?;
+        let provider_client =
+            create_provider_for_model(model.as_str(), api_key.clone(), None, None)
+                .map_err(|e| anyhow!("Failed to create provider client: {}", e))?;
 
         // Load configuration once to seed system prompt and runtime policies
         let (config_value, system_prompt) = match ConfigManager::load_from_workspace(&workspace) {
