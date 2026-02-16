@@ -59,6 +59,7 @@ include_working_directory = true
 default_editing_mode = "edit"
 require_plan_confirmation = true
 autonomous_mode = false
+credential_storage_mode = "keyring"
 
 [agent.small_model]
 enabled = false
