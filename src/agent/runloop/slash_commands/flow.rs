@@ -169,43 +169,6 @@ pub(super) fn handle_rewind_command(
     }
 }
 
-pub(super) fn handle_analyze_command(
-    args: &str,
-    renderer: &mut AnsiRenderer,
-) -> Result<SlashCommandOutcome> {
-    // Parse and validate analysis type argument
-    let analysis_type = if args.trim().is_empty() {
-        "full"
-    } else {
-        let tokens: Vec<&str> = args.split_whitespace().collect();
-        if tokens.len() > 1 {
-            renderer.line(
-                MessageStyle::Error,
-                "Usage: /analyze [full|security|performance|dependencies|complexity|structure]",
-            )?;
-            return Ok(SlashCommandOutcome::Handled);
-        }
-        tokens[0]
-    };
-
-    // Validate analysis type
-    match analysis_type {
-        "full" | "security" | "performance" | "dependencies" | "complexity" | "structure" => {
-            // Use the AnalyzeAgent outcome to trigger the proper handler
-            Ok(SlashCommandOutcome::AnalyzeAgent)
-        }
-        _ => {
-            renderer.line(
-                MessageStyle::Error,
-                &format!(
-                    "Unknown analysis type '{}'. Valid types: full, security, performance, dependencies, complexity, structure",
-                    analysis_type
-                ),
-            )?;
-            Ok(SlashCommandOutcome::Handled)
-        }
-    }
-}
 
 pub(super) fn handle_plan_command(
     args: &str,

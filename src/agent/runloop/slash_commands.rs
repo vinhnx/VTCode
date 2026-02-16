@@ -14,7 +14,7 @@ mod rendering;
 #[path = "slash_commands/team_agent.rs"]
 mod team_agent;
 use flow::{
-    handle_agent_command, handle_analyze_command, handle_auth_command, handle_login_command,
+    handle_agent_command, handle_auth_command, handle_login_command,
     handle_logout_command, handle_mode_command, handle_plan_command, handle_rewind_command,
     handle_sessions_command,
 };
@@ -70,8 +70,6 @@ pub enum SlashCommandOutcome {
         action: McpCommandAction,
     },
     RunDoctor,
-    DebugAgent,
-    AnalyzeAgent,
 
     ManageWorkspaceDirectories {
         command: WorkspaceDirectoryCommand,
@@ -374,18 +372,6 @@ pub async fn handle_slash_command(
             }
             Ok(SlashCommandOutcome::OpenDocs)
         }
-        "debug" => {
-            // Accept optional arguments for debugging specific targets
-            if args.split_whitespace().count() > 1 {
-                renderer.line(
-                    MessageStyle::Error,
-                    "Usage: /debug [file|directory|problem] - accepts at most one argument",
-                )?;
-                return Ok(SlashCommandOutcome::Handled);
-            }
-            Ok(SlashCommandOutcome::DebugAgent)
-        }
-        "analyze" => handle_analyze_command(args, renderer),
         "edit" => {
             let file = if args.trim().is_empty() {
                 None
