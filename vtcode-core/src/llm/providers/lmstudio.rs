@@ -193,8 +193,15 @@ impl LmStudioProvider {
         prompt_cache: Option<PromptCachingConfig>,
         model_behavior: Option<ModelConfig>,
     ) -> Self {
-        let inner =
-            Self::build_inner(api_key, model, base_url, prompt_cache, None, None, model_behavior);
+        let inner = Self::build_inner(
+            api_key,
+            model,
+            base_url,
+            prompt_cache,
+            None,
+            None,
+            model_behavior,
+        );
         Self { inner }
     }
 }

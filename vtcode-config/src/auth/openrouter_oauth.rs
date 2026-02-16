@@ -320,8 +320,8 @@ pub fn save_oauth_token_with_mode(
 
 /// Save token to OS keyring.
 fn save_oauth_token_keyring(token: &OpenRouterToken) -> Result<()> {
-    let entry = keyring::Entry::new("vtcode", "openrouter_oauth")
-        .context("Failed to access OS keyring")?;
+    let entry =
+        keyring::Entry::new("vtcode", "openrouter_oauth").context("Failed to access OS keyring")?;
 
     // Serialize the entire token to JSON for storage
     let token_json =
@@ -367,7 +367,9 @@ pub fn save_oauth_token(token: &OpenRouterToken) -> Result<()> {
 /// Load an OAuth token from storage with specified mode.
 ///
 /// Returns `None` if no token exists or the token has expired.
-pub fn load_oauth_token_with_mode(mode: AuthCredentialsStoreMode) -> Result<Option<OpenRouterToken>> {
+pub fn load_oauth_token_with_mode(
+    mode: AuthCredentialsStoreMode,
+) -> Result<Option<OpenRouterToken>> {
     let effective_mode = mode.effective_mode();
 
     match effective_mode {

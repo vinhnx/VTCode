@@ -26,88 +26,6 @@ use crate::agent::runloop::unified::state::CtrlCState;
 
 const AUTONOMOUS_CONTINUE_DIRECTIVE: &str = "Do not stop with intent-only updates (for example: 'let me check...'). Execute the next concrete action now, then provide a completion summary or explicit blocker with next action.";
 
-#[macro_export]
-macro_rules! populate_turn_processing_context {
-    ($dest:ident, $src:expr, $working_history:expr) => {
-        $dest.renderer = $src.renderer;
-        $dest.handle = $src.handle;
-        $dest.session_stats = $src.session_stats;
-        $dest.auto_exit_plan_mode_attempted = $src.auto_exit_plan_mode_attempted;
-        $dest.mcp_panel_state = $src.mcp_panel_state;
-        $dest.tool_result_cache = $src.tool_result_cache;
-        $dest.approval_recorder = $src.approval_recorder;
-        $dest.decision_ledger = $src.decision_ledger;
-        $dest.working_history = $working_history;
-        $dest.tool_registry = $src.tool_registry;
-        $dest.tools = $src.tools;
-        $dest.tool_catalog = $src.tool_catalog;
-        $dest.ctrl_c_state = $src.ctrl_c_state;
-        $dest.ctrl_c_notify = $src.ctrl_c_notify;
-        $dest.vt_cfg = $src.vt_cfg;
-        $dest.context_manager = $src.context_manager;
-        $dest.last_forced_redraw = $src.last_forced_redraw;
-        $dest.input_status_state = $src.input_status_state;
-        $dest.session = $src.session;
-        $dest.lifecycle_hooks = $src.lifecycle_hooks;
-        $dest.default_placeholder = $src.default_placeholder;
-        $dest.tool_permission_cache = $src.tool_permission_cache;
-        $dest.safety_validator = $src.safety_validator;
-        $dest.provider_client = $src.provider_client;
-        $dest.config = $src.config;
-        $dest.traj = $src.traj;
-        $dest.full_auto = $src.full_auto;
-        $dest.circuit_breaker = $src.circuit_breaker;
-        $dest.tool_health_tracker = $src.tool_health_tracker;
-        $dest.rate_limiter = $src.rate_limiter;
-        $dest.telemetry = $src.telemetry;
-        $dest.autonomous_executor = $src.autonomous_executor;
-        $dest.error_recovery = $src.error_recovery;
-        $dest.harness_state = $src.harness_state;
-        $dest.harness_emitter = $src.harness_emitter;
-    };
-}
-
-#[macro_export]
-macro_rules! populate_turn_loop_context {
-    ($dest:ident, $src:expr, $harness_state:expr, $auto_exit_plan_mode_attempted:expr, $input_status_state:expr) => {
-        $dest.renderer = $src.renderer;
-        $dest.handle = $src.handle;
-        $dest.session = $src.session;
-        $dest.session_stats = $src.session_stats;
-        $dest.auto_exit_plan_mode_attempted = $auto_exit_plan_mode_attempted;
-        $dest.mcp_panel_state = $src.mcp_panel_state;
-        $dest.tool_result_cache = $src.tool_result_cache;
-        $dest.approval_recorder = $src.approval_recorder;
-        $dest.decision_ledger = $src.decision_ledger;
-        $dest.tool_registry = $src.tool_registry;
-        $dest.tools = $src.tools;
-        $dest.tool_catalog = $src.tool_catalog;
-        $dest.ctrl_c_state = $src.ctrl_c_state;
-        $dest.ctrl_c_notify = $src.ctrl_c_notify;
-        $dest.context_manager = $src.context_manager;
-        $dest.last_forced_redraw = $src.last_forced_redraw;
-        $dest.input_status_state = $input_status_state;
-        $dest.lifecycle_hooks = $src.lifecycle_hooks;
-        $dest.default_placeholder = $src.default_placeholder;
-        $dest.tool_permission_cache = $src.tool_permission_cache;
-        $dest.safety_validator = $src.safety_validator;
-        $dest.circuit_breaker = $src.circuit_breaker;
-        $dest.tool_health_tracker = $src.tool_health_tracker;
-        $dest.rate_limiter = $src.rate_limiter;
-        $dest.telemetry = $src.telemetry;
-        $dest.autonomous_executor = $src.autonomous_executor;
-        $dest.error_recovery = $src.error_recovery;
-        $dest.harness_state = $harness_state;
-        $dest.harness_emitter = $src.harness_emitter;
-        $dest.config = $src.config;
-        $dest.vt_cfg = $src.vt_cfg.as_ref();
-        $dest.provider_client = $src.provider_client;
-        $dest.traj = $src.traj;
-        $dest.full_auto = $src.full_auto;
-    };
-}
-
-#[allow(dead_code)]
 pub enum TurnLoopResult {
     Completed,
     Aborted,
@@ -117,7 +35,6 @@ pub enum TurnLoopResult {
 }
 
 /// Result of processing a single turn
-#[allow(dead_code)]
 pub(crate) enum TurnProcessingResult {
     /// Turn resulted in tool calls that need to be executed
     ToolCalls {
@@ -133,11 +50,14 @@ pub(crate) enum TurnProcessingResult {
     },
     /// Turn resulted in no actionable output
     Empty,
-    /// Turn was completed successfully
+    /// Turn was completed successfully (used in match exhaustiveness)
+    #[allow(dead_code)]
     Completed,
-    /// Turn was cancelled by user
+    /// Turn was cancelled by user (used in match exhaustiveness)
+    #[allow(dead_code)]
     Cancelled,
-    /// Turn was aborted due to error
+    /// Turn was aborted due to error (used in match exhaustiveness)
+    #[allow(dead_code)]
     Aborted,
 }
 
@@ -158,7 +78,6 @@ pub struct TurnOutcomeContext<'a> {
 }
 
 /// Context for turn processing operations
-#[allow(dead_code)]
 pub(crate) struct TurnProcessingContext<'a> {
     pub renderer: &'a mut AnsiRenderer,
     pub handle: &'a InlineHandle,

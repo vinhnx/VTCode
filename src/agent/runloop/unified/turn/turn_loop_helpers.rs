@@ -1,10 +1,15 @@
 use anyhow::Result;
 
 use crate::agent::runloop::unified::turn::context::TurnLoopResult;
+use crate::agent::runloop::unified::turn::turn_helpers::{display_error, display_status};
 use crate::agent::runloop::unified::turn::turn_loop::TurnLoopContext;
 use crate::hooks::lifecycle::SessionEndReason;
+use vtcode_core::config::constants::defaults::{
+    DEFAULT_MAX_CONVERSATION_TURNS, DEFAULT_MAX_REPEATED_TOOL_CALLS, DEFAULT_MAX_TOOL_LOOPS,
+};
 use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::config::loader::VTCodeConfig;
+use vtcode_core::core::agent::steering::SteeringMessage;
 use vtcode_core::llm::provider as uni;
 
 #[derive(Debug, Clone)]
@@ -22,21 +27,20 @@ pub(super) fn extract_turn_config(vt_cfg: Option<&VTCodeConfig>) -> PrecomputedT
             max_tool_loops: if cfg.tools.max_tool_loops > 0 {
                 cfg.tools.max_tool_loops
             } else {
-                vtcode_core::config::constants::defaults::DEFAULT_MAX_TOOL_LOOPS
+                DEFAULT_MAX_TOOL_LOOPS
             },
             tool_repeat_limit: if cfg.tools.max_repeated_tool_calls > 0 {
                 cfg.tools.max_repeated_tool_calls
             } else {
-                vtcode_core::config::constants::defaults::DEFAULT_MAX_REPEATED_TOOL_CALLS
+                DEFAULT_MAX_REPEATED_TOOL_CALLS
             },
             max_session_turns: cfg.agent.max_conversation_turns,
             ask_questions_enabled: cfg.chat.ask_questions.enabled,
         })
         .unwrap_or(PrecomputedTurnConfig {
-            max_tool_loops: vtcode_core::config::constants::defaults::DEFAULT_MAX_TOOL_LOOPS,
-            tool_repeat_limit:
-                vtcode_core::config::constants::defaults::DEFAULT_MAX_REPEATED_TOOL_CALLS,
-            max_session_turns: 150,
+            max_tool_loops: DEFAULT_MAX_TOOL_LOOPS,
+            tool_repeat_limit: DEFAULT_MAX_REPEATED_TOOL_CALLS,
+            max_session_turns: DEFAULT_MAX_CONVERSATION_TURNS,
             ask_questions_enabled: true,
         })
 }
@@ -54,16 +58,13 @@ pub(super) async fn handle_steering_messages(
 ) -> Result<bool> {
     if let Some(receiver) = ctx.steering_receiver {
         match receiver.try_recv() {
-            Ok(vtcode_core::core::agent::steering::SteeringMessage::SteerStop) => {
-                crate::agent::runloop::unified::turn::turn_helpers::display_status(
-                    ctx.renderer,
-                    "Stopped by steering signal.",
-                )?;
+            Ok(SteeringMessage::SteerStop) => {
+                display_status(ctx.renderer, "Stopped by steering signal.")?;
                 *result = TurnLoopResult::Cancelled;
                 return Ok(true);
             }
-            Ok(vtcode_core::core::agent::steering::SteeringMessage::Pause) => {
-                crate::agent::runloop::unified::turn::turn_helpers::display_status(
+            Ok(SteeringMessage::Pause) => {
+                display_status(
                     ctx.renderer,
                     "Paused by steering signal. Waiting for Resume...",
                 )?;
@@ -83,14 +84,11 @@ pub(super) async fn handle_steering_messages(
                         }
                     }
                     match receiver.try_recv() {
-                        Ok(vtcode_core::core::agent::steering::SteeringMessage::Resume) => {
-                            crate::agent::runloop::unified::turn::turn_helpers::display_status(
-                                ctx.renderer,
-                                "Resumed by steering signal.",
-                            )?;
+                        Ok(SteeringMessage::Resume) => {
+                            display_status(ctx.renderer, "Resumed by steering signal.")?;
                             break;
                         }
-                        Ok(vtcode_core::core::agent::steering::SteeringMessage::SteerStop) => {
+                        Ok(SteeringMessage::SteerStop) => {
                             *result = TurnLoopResult::Cancelled;
                             break;
                         }
@@ -101,12 +99,9 @@ pub(super) async fn handle_steering_messages(
                     return Ok(true);
                 }
             }
-            Ok(vtcode_core::core::agent::steering::SteeringMessage::Resume) => {}
-            Ok(vtcode_core::core::agent::steering::SteeringMessage::FollowUpInput(input)) => {
-                crate::agent::runloop::unified::turn::turn_helpers::display_status(
-                    ctx.renderer,
-                    &format!("Follow-up Input: {}", input),
-                )?;
+            Ok(SteeringMessage::Resume) => {}
+            Ok(SteeringMessage::FollowUpInput(input)) => {
+                display_status(ctx.renderer, &format!("Follow-up Input: {}", input))?;
                 working_history.push(uni::Message::user(input));
             }
             Err(_) => {}
@@ -132,7 +127,7 @@ pub(super) async fn handle_pre_request_action(
         .pre_request_check(working_history, context_window_size)
     {
         PreRequestAction::Stop(msg) => {
-            crate::agent::runloop::unified::turn::turn_helpers::display_error(
+            display_error(
                 ctx.renderer,
                 "Session Limit Reached",
                 &anyhow::anyhow!("{}", msg),
@@ -142,10 +137,7 @@ pub(super) async fn handle_pre_request_action(
             Ok(true)
         }
         PreRequestAction::Warn(msg) => {
-            crate::agent::runloop::unified::turn::turn_helpers::display_status(
-                ctx.renderer,
-                &format!("Warning: {}", msg),
-            )?;
+            display_status(ctx.renderer, &format!("Warning: {}", msg))?;
             let alert = format!("SYSTEM ALERT: {}", msg);
             let duplicate_alert = working_history.last().is_some_and(|last| {
                 last.role == uni::MessageRole::System
@@ -157,7 +149,7 @@ pub(super) async fn handle_pre_request_action(
             Ok(false)
         }
         PreRequestAction::Compact(msg) => {
-            crate::agent::runloop::unified::turn::turn_helpers::display_status(ctx.renderer, &msg)?;
+            display_status(ctx.renderer, &msg)?;
             let compacted = ctx
                 .context_manager
                 .compact_history_if_needed(
@@ -292,11 +284,7 @@ pub(super) async fn maybe_handle_plan_mode_exit_trigger(
             Ok(true)
         }
         Err(err) => {
-            crate::agent::runloop::unified::turn::turn_helpers::display_error(
-                ctx.renderer,
-                "Failed to exit Plan Mode",
-                &err,
-            )?;
+            display_error(ctx.renderer, "Failed to exit Plan Mode", &err)?;
             Ok(false)
         }
     }
@@ -311,7 +299,7 @@ pub(super) async fn maybe_handle_tool_loop_limit(
         return Ok(ToolLoopLimitAction::Proceed);
     }
 
-    crate::agent::runloop::unified::turn::turn_helpers::display_status(
+    display_status(
         ctx.renderer,
         &format!("Reached maximum tool loops ({})", *current_max_tool_loops),
     )?;
@@ -339,7 +327,7 @@ pub(super) async fn maybe_handle_tool_loop_limit(
                     current_session_limit
                 );
             }
-            crate::agent::runloop::unified::turn::turn_helpers::display_status(
+            display_status(
                 ctx.renderer,
                 &format!("Tool loop limit increased to {}", *current_max_tool_loops),
             )?;

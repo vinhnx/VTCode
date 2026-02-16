@@ -259,8 +259,16 @@ async fn handle_test_provider(_cli: &Cli, provider: &str) -> Result<()> {
     let config = load_user_config().await?;
     let (api_key, base_url, model) = get_provider_credentials(&config, provider)?;
 
-    let provider_instance =
-        create_provider_with_config(provider, api_key, base_url, model.clone(), None, None, None, None)?;
+    let provider_instance = create_provider_with_config(
+        provider,
+        api_key,
+        base_url,
+        model.clone(),
+        None,
+        None,
+        None,
+        None,
+    )?;
 
     let test_request = crate::llm::provider::LLMRequest {
         messages: vec![crate::llm::provider::Message::user("test".to_owned())],

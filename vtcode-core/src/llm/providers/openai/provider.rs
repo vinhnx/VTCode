@@ -9,7 +9,9 @@
 
 use crate::config::TimeoutsConfig;
 use crate::config::constants::{env_vars, models, urls};
-use crate::config::core::{AnthropicConfig, ModelConfig, OpenAIPromptCacheSettings, PromptCachingConfig};
+use crate::config::core::{
+    AnthropicConfig, ModelConfig, OpenAIPromptCacheSettings, PromptCachingConfig,
+};
 use crate::llm::error_display;
 use crate::llm::provider;
 use crate::llm::provider::LLMProvider;
