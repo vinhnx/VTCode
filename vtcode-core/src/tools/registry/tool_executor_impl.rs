@@ -21,21 +21,6 @@ impl ToolExecutor for ToolRegistry {
     }
 
     async fn has_tool(&self, name: &str) -> bool {
-        // Optimized check: check inventory first, then cached MCP presence
-        if self.inventory.has_tool(name) {
-            return true;
-        }
-
-        let presence = self.mcp_tool_presence.read().await;
-        if let Some(&present) = presence.get(name) {
-            return present;
-        }
-
-        // Fallback to provider check if not in quick cache
-        if self.find_mcp_provider(name).await.is_some() {
-            return true;
-        }
-
-        false
+        self.has_tool(name).await
     }
 }

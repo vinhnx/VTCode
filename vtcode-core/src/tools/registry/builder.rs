@@ -78,7 +78,7 @@ impl ToolRegistry {
             pty_sessions,
             mcp_client: Arc::new(std::sync::RwLock::new(None)),
             mcp_tool_index: Arc::new(tokio::sync::RwLock::new(rustc_hash::FxHashMap::default())),
-            mcp_tool_presence: Arc::new(tokio::sync::RwLock::new(rustc_hash::FxHashMap::default())),
+            mcp_reverse_index: Arc::new(tokio::sync::RwLock::new(rustc_hash::FxHashMap::default())),
             timeout_policy: Arc::new(std::sync::RwLock::new(ToolTimeoutPolicy::default())),
             execution_history: ToolExecutionHistory::new(100),
             harness_context: HarnessContext::default(),

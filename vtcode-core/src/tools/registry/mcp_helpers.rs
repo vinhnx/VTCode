@@ -17,13 +17,7 @@ impl ToolRegistry {
     }
 
     pub(super) async fn find_mcp_provider(&self, tool_name: &str) -> Option<String> {
-        let index = self.mcp_tool_index.read().await;
-        for (provider, tools) in index.iter() {
-            if tools.iter().any(|candidate| candidate == tool_name) {
-                return Some(provider.clone());
-            }
-        }
-        None
+        self.mcp_reverse_index.read().await.get(tool_name).cloned()
     }
 }
 

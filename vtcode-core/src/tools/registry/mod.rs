@@ -114,7 +114,7 @@ pub struct ToolRegistry {
     pty_sessions: PtySessionManager,
     mcp_client: Arc<std::sync::RwLock<Option<Arc<McpClient>>>>,
     mcp_tool_index: Arc<tokio::sync::RwLock<FxHashMap<String, Vec<String>>>>,
-    mcp_tool_presence: Arc<tokio::sync::RwLock<FxHashMap<String, bool>>>,
+    mcp_reverse_index: Arc<tokio::sync::RwLock<FxHashMap<String, String>>>,
     timeout_policy: Arc<std::sync::RwLock<ToolTimeoutPolicy>>,
     execution_history: ToolExecutionHistory,
     harness_context: HarnessContext,
