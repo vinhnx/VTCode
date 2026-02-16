@@ -40,7 +40,7 @@ pub use history_picker::HistoryPickerWidget;
 pub use input::InputWidget;
 pub use layout_mode::LayoutMode;
 pub use modal::{ModalType, ModalWidget};
-pub use palette::{FilePaletteWidget, PromptPaletteWidget};
+pub use palette::FilePaletteWidget;
 pub use panel::{Panel, PanelStyles};
 pub use session::SessionWidget;
 pub use sidebar::{SidebarSection, SidebarWidget};

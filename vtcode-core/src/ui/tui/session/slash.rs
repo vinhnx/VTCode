@@ -237,35 +237,6 @@ fn preview_selected_slash_suggestion(session: &mut Session) {
 }
 
 pub(super) fn apply_selected_slash_suggestion(session: &mut Session) -> bool {
-    if let Some(custom_prompt) = session.slash_palette.selected_custom_prompt() {
-        let input_content = session.input_manager.content();
-        let cursor_pos = session.input_manager.cursor();
-        let Some(range) = command_range(input_content, cursor_pos) else {
-            return false;
-        };
-
-        let mut new_input = String::from(PROMPT_COMMAND_PREFIX);
-        new_input.push_str(&custom_prompt.name);
-
-        let suffix = &input_content[range.end..];
-        if !suffix.is_empty() {
-            if !suffix.chars().next().is_some_and(char::is_whitespace) {
-                new_input.push(' ');
-            }
-            new_input.push_str(suffix);
-        } else {
-            new_input.push(' ');
-        }
-
-        let cursor_position = new_input.len();
-
-        session.input_manager.set_content(new_input);
-        session.input_manager.set_cursor(cursor_position);
-        clear_slash_suggestions(session);
-        session.mark_dirty();
-        return true;
-    }
-
     let Some(command) = session.slash_palette.selected_command() else {
         return false;
     };
@@ -300,10 +271,6 @@ pub(super) fn apply_selected_slash_suggestion(session: &mut Session) -> bool {
         clear_slash_suggestions(session);
         session.mark_dirty();
         session.deferred_file_browser_trigger = true;
-    } else if command_name == PROMPT_COMMAND_NAME || command_name == LEGACY_PROMPT_COMMAND_NAME {
-        clear_slash_suggestions(session);
-        session.mark_dirty();
-        session.deferred_prompt_browser_trigger = true;
     } else {
         clear_slash_suggestions(session);
         session.mark_dirty();
@@ -337,9 +304,6 @@ pub(super) fn autocomplete_slash_suggestion(session: &mut Session) -> bool {
     for (idx, suggestion) in suggestions.iter().enumerate() {
         let command_name = match suggestion {
             slash_palette::SlashPaletteSuggestion::Static(cmd) => cmd.name.to_string(),
-            slash_palette::SlashPaletteSuggestion::Custom(prompt) => {
-                format!("{}:{}", PROMPT_COMMAND_NAME, prompt.name)
-            }
         };
 
         if let Some(score) = fuzzy_score(&prefix_text, &command_name) {
@@ -356,32 +320,6 @@ pub(super) fn autocomplete_slash_suggestion(session: &mut Session) -> bool {
     let Some((_, _, best_command)) = best_match else {
         return false;
     };
-
-    // Check if it's a custom prompt (contains ':')
-    if best_command.contains(':') {
-        let prompt_name = best_command.split(':').nth(1).unwrap_or("").to_string();
-        let suffix = &input_content[range.end..];
-
-        let mut new_input = String::from(PROMPT_COMMAND_PREFIX);
-        new_input.push_str(&prompt_name);
-
-        if !suffix.is_empty() {
-            if !suffix.chars().next().is_some_and(char::is_whitespace) {
-                new_input.push(' ');
-            }
-            new_input.push_str(suffix);
-        } else {
-            new_input.push(' ');
-        }
-
-        let cursor_position = new_input.len();
-
-        session.input_manager.set_content(new_input);
-        session.input_manager.set_cursor(cursor_position);
-        clear_slash_suggestions(session);
-        session.mark_dirty();
-        return true;
-    }
 
     // Handle static command
     let suffix = &input_content[range.end..];
@@ -403,15 +341,11 @@ pub(super) fn autocomplete_slash_suggestion(session: &mut Session) -> bool {
     session.input_manager.set_cursor(cursor_position);
 
     let deferred_files = best_command == "files";
-    let deferred_prompts =
-        best_command == PROMPT_COMMAND_NAME || best_command == LEGACY_PROMPT_COMMAND_NAME;
 
     clear_slash_suggestions(session);
 
     if deferred_files {
         session.deferred_file_browser_trigger = true;
-    } else if deferred_prompts {
-        session.deferred_prompt_browser_trigger = true;
     }
 
     session.mark_dirty();
@@ -489,15 +423,6 @@ fn slash_list_items(session: &Session) -> Vec<ListItem<'static>> {
                         command.description.to_owned(),
                         slash_description_style(session),
                     ),
-                ]))
-            }
-            slash_palette::SlashPaletteSuggestion::Custom(prompt) => {
-                let display_name = format!("/{}:{}", PROMPT_COMMAND_NAME, prompt.name);
-                let description = prompt.description.clone().unwrap_or_default();
-                ListItem::new(Line::from(vec![
-                    Span::styled(display_name, slash_name_style(session)),
-                    Span::raw(" "),
-                    Span::styled(description, slash_description_style(session)),
                 ]))
             }
         })

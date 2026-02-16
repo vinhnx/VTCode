@@ -13,7 +13,7 @@ use crate::config::constants::ui;
 
 use super::super::types::{InlineHeaderContext, InlineHeaderHighlight};
 use super::terminal_capabilities;
-use super::{PROMPT_COMMAND_NAME, Session, ratatui_color_from_ansi};
+use super::{Session, ratatui_color_from_ansi};
 use crate::llm::providers::clean_reasoning_text;
 
 fn capitalize_first_letter(s: &str) -> String {
@@ -589,14 +589,6 @@ impl Session {
 
         spans.push(Span::styled(
             "/help",
-            self.header_primary_style().add_modifier(Modifier::BOLD),
-        ));
-        spans.push(Span::styled(
-            " · ",
-            self.header_secondary_style().add_modifier(Modifier::DIM),
-        ));
-        spans.push(Span::styled(
-            format!("/{}", PROMPT_COMMAND_NAME),
             self.header_primary_style().add_modifier(Modifier::BOLD),
         ));
         spans.push(Span::styled(

@@ -273,6 +273,63 @@ impl SubagentConfig {
         Ok(config)
     }
 
+    /// Parse subagent from JSON (for CLI --agents flag)
+    pub fn from_json(name: &str, value: &serde_json::Value) -> Result<Self, SubagentParseError> {
+        let description = value
+            .get("description")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| SubagentParseError::MissingField("description".to_string()))?
+            .to_string();
+
+        let system_prompt = value
+            .get("prompt")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+
+        let tools = value.get("tools").and_then(|v| {
+            v.as_array().map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect()
+            })
+        });
+
+        let model = value
+            .get("model")
+            .and_then(|v| v.as_str())
+            .map(|m| SubagentModel::from_str(m).unwrap())
+            .unwrap_or_default();
+
+        let permission_mode = value
+            .get("permissionMode")
+            .and_then(|v| v.as_str())
+            .map(|p| SubagentPermissionMode::from_str(p).unwrap_or_default())
+            .unwrap_or_default();
+
+        let skills = value
+            .get("skills")
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        Ok(Self {
+            name: name.to_string(),
+            description,
+            tools,
+            model,
+            permission_mode,
+            skills,
+            system_prompt,
+            source: SubagentSource::User, // Default to User source for JSON-parsed agents
+            file_path: None,
+        })
+    }
+
     /// Check if this subagent has access to a specific tool
     pub fn has_tool_access(&self, tool_name: &str) -> bool {
         match &self.tools {
@@ -343,10 +400,14 @@ pub struct SubagentsConfig {
     /// Default model for subagents (if not specified in subagent config)
     #[serde(default)]
     pub default_model: Option<String>,
+
+    /// Additional directories to search for subagent definitions
+    #[serde(default)]
+    pub additional_agent_dirs: Vec<PathBuf>,
 }
 
 fn default_enabled() -> bool {
-    false
+    true
 }
 
 fn default_max_concurrent() -> usize {
@@ -364,13 +425,47 @@ impl Default for SubagentsConfig {
             max_concurrent: default_max_concurrent(),
             default_timeout_seconds: default_timeout_seconds(),
             default_model: None,
+            additional_agent_dirs: Vec::new(),
         }
     }
+}
+
+/// Load subagent from a markdown file
+pub fn load_subagent_from_file(
+    path: &Path,
+    source: SubagentSource,
+) -> Result<SubagentConfig, SubagentParseError> {
+    let content = std::fs::read_to_string(path)?;
+    SubagentConfig::from_markdown(&content, source, Some(path.to_path_buf()))
+}
+
+/// Discover all subagent files in a directory
+pub fn discover_subagents_in_dir(
+    dir: &Path,
+    source: SubagentSource,
+) -> Vec<Result<SubagentConfig, SubagentParseError>> {
+    let mut results = Vec::new();
+
+    if !dir.exists() || !dir.is_dir() {
+        return results;
+    }
+
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().map(|e| e == "md").unwrap_or(false) {
+                results.push(load_subagent_from_file(&path, source.clone()));
+            }
+        }
+    }
+
+    results
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::Path;
 
     #[test]
     fn test_parse_subagent_markdown() {

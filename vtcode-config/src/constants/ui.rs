@@ -100,7 +100,7 @@ pub const INLINE_USER_PREFIX: &str = " ";
 pub const CHAT_INPUT_PLACEHOLDER_BOOTSTRAP: &str = "Type your message (@files, /commands, ctrl+r: search, Shift+Tab: mode, escape: cancel, tab: queue)";
 pub const CHAT_INPUT_PLACEHOLDER_FOLLOW_UP: &str =
     "Continue (@files, /commands, ctrl+r: search, Shift+Tab mode, escape: cancel, tab: queue)";
-pub const HEADER_SHORTCUT_HINT: &str = "Shortcuts: Enter send • Shift+Enter newline • Esc cancel • Ctrl+C interrupt • @ files • # prompts • / commands";
+pub const HEADER_SHORTCUT_HINT: &str = "Shortcuts: Enter send • Shift+Enter newline • Esc cancel • Ctrl+C interrupt • @ files • / commands";
 pub const HEADER_META_SEPARATOR: &str = "   ";
 pub const WELCOME_TEXT_WIDTH: usize = 80;
 pub const WELCOME_SHORTCUT_SECTION_TITLE: &str = "Keyboard Shortcuts";

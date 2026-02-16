@@ -37,12 +37,17 @@ pub async fn handle_manage_agents(
             ctx.renderer.line(MessageStyle::Output, "")?;
             Ok(SlashCommandControl::Continue)
         }
-        AgentCommandAction::Create
-        | AgentCommandAction::Edit(_)
-        | AgentCommandAction::Delete(_) => {
+        AgentCommandAction::Create => {
             ctx.renderer.line(
                 MessageStyle::Error,
                 "Custom subagents are not supported in this version. Use built-in agents instead.",
+            )?;
+            Ok(SlashCommandControl::Continue)
+        }
+        AgentCommandAction::Edit(name) | AgentCommandAction::Delete(name) => {
+            ctx.renderer.line(
+                MessageStyle::Error,
+                &format!("Action for agent '{}' failed: custom subagents are not supported in this version.", name),
             )?;
             Ok(SlashCommandControl::Continue)
         }

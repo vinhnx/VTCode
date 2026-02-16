@@ -140,7 +140,6 @@ pub async fn run_modern_tui(
                             Event::Paste(content) => {
                                 session.insert_paste_text(&content);
                                 session.check_file_reference_trigger();
-                                session.check_prompt_reference_trigger();
                                 session.mark_dirty();
                             }
                             Event::FocusGained => {

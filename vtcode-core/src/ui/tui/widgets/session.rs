@@ -5,7 +5,7 @@ use ratatui::{
 };
 
 use super::{
-    FilePaletteWidget, FooterWidget, HeaderWidget, LayoutMode, Panel, PromptPaletteWidget,
+    FilePaletteWidget, FooterWidget, HeaderWidget, LayoutMode, Panel,
     SidebarWidget, TranscriptWidget, footer_hints,
 };
 use crate::ui::tui::session::{Session, render::apply_view_rows};
@@ -204,13 +204,6 @@ impl Widget for &mut SessionWidget<'_> {
             self.session.mark_dirty();
         }
 
-        if self.session.deferred_prompt_browser_trigger {
-            self.session.deferred_prompt_browser_trigger = false;
-            self.session.input_manager.insert_char('#');
-            self.session.check_prompt_reference_trigger();
-            self.session.mark_dirty();
-        }
-
         // Pull log entries
         self.session.poll_log_entries();
 
@@ -227,8 +220,7 @@ impl Widget for &mut SessionWidget<'_> {
         apply_view_rows(self.session, layout.main.height);
 
         // Check if overlays are active (dim background panels when true)
-        let _overlays_active =
-            self.session.file_palette_active || self.session.prompt_palette_active;
+        let _overlays_active = self.session.file_palette_active;
 
         // Render header
         let header_lines = if let Some(lines) = self.header_lines.as_ref() {
@@ -329,7 +321,6 @@ impl<'a> SessionWidget<'a> {
         let hint = if self.session.thinking_spinner.is_active {
             footer_hints::PROCESSING
         } else if self.session.file_palette_active
-            || self.session.prompt_palette_active
             || self.session.history_picker_state.active
         {
             footer_hints::MODAL
@@ -374,13 +365,6 @@ impl<'a> SessionWidget<'a> {
             && let Some(palette) = self.session.file_palette.as_ref()
         {
             FilePaletteWidget::new(self.session, palette, viewport).render(viewport, buf);
-        }
-
-        // Render prompt palette using builder pattern
-        if self.session.prompt_palette_active
-            && let Some(palette) = self.session.prompt_palette.as_ref()
-        {
-            PromptPaletteWidget::new(self.session, palette, viewport).render(viewport, buf);
         }
 
         // Render history picker using builder pattern

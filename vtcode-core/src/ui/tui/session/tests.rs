@@ -1,4 +1,3 @@
-use super::prompt_palette;
 use super::*;
 use crate::config::constants::ui;
 use crate::ui::tui::style::ratatui_style_from_inline;
@@ -323,31 +322,6 @@ fn input_compact_preview_for_image_path_with_text() {
     assert!(rendered.contains("[Image:"));
     assert!(rendered.contains("Screenshot 2026-02-06"));
     assert!(rendered.contains("can you see"));
-}
-
-#[test]
-fn selecting_prompt_via_palette_updates_input_with_slash_command() {
-    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
-
-    let mut palette = PromptPalette::new();
-    palette.append_entries(vec![prompt_palette::PromptEntry {
-        name: "vtcode".to_string(),
-        description: String::new(),
-    }]);
-    session.prompt_palette = Some(palette);
-    session.prompt_palette_active = true;
-    session.set_input("#vt".to_string());
-
-    let handled =
-        session.handle_prompt_palette_key(&KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    assert!(handled);
-
-    assert_eq!(session.input_manager.content(), "/prompt:vtcode ");
-    assert_eq!(
-        session.input_manager.cursor(),
-        session.input_manager.content().len()
-    );
-    assert!(!session.prompt_palette_active);
 }
 
 #[test]
