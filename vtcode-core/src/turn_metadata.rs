@@ -5,11 +5,12 @@
 //! includes workspace information like git remote URLs and commit hash.
 
 use crate::git_info::{self};
-use anyhow::Result;
+use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::path::Path;
+use std::time::Duration;
 
 /// Workspace information included in turn metadata
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -98,6 +99,35 @@ pub fn build_turn_metadata_value(cwd: &Path) -> Result<Value> {
 
     let value = serde_json::to_value(metadata)?;
     Ok(value)
+}
+
+/// Build turn metadata with a timeout to avoid blocking turn execution.
+///
+/// Returns `Ok(None)` when metadata is unavailable or times out.
+pub async fn build_turn_metadata_value_with_timeout(
+    cwd: &Path,
+    timeout: Duration,
+) -> Result<Option<Value>> {
+    if !git_info::is_git_repo(cwd) {
+        return Ok(None);
+    }
+
+    let cwd = cwd.to_path_buf();
+    let handle = tokio::task::spawn_blocking(move || build_turn_metadata_value(&cwd));
+    match tokio::time::timeout(timeout, handle).await {
+        Ok(join_result) => {
+            let value = join_result.context("Turn metadata task failed")??;
+            if value.is_null() {
+                Ok(None)
+            } else {
+                Ok(Some(value))
+            }
+        }
+        Err(_) => {
+            tracing::debug!("Turn metadata collection timed out");
+            Ok(None)
+        }
+    }
 }
 
 /// Get the header name for turn metadata.

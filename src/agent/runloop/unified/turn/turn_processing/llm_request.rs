@@ -113,7 +113,18 @@ pub(crate) async fn execute_llm_request(
     } else {
         None
     };
-    let metadata = turn_metadata::build_turn_metadata_value(&ctx.config.workspace).ok();
+    let metadata = match turn_metadata::build_turn_metadata_value_with_timeout(
+        &ctx.config.workspace,
+        std::time::Duration::from_millis(250),
+    )
+    .await
+    {
+        Ok(value) => value,
+        Err(err) => {
+            tracing::warn!(error = %err, "Turn metadata collection failed");
+            None
+        }
+    };
 
     let request = uni::LLMRequest {
         messages: ctx.working_history.to_vec(),
