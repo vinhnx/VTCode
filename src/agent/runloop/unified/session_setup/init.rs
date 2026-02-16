@@ -17,7 +17,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::RwLock as StdRwLock;
 use tokio::sync::RwLock;
-use tokio::time::{Duration, sleep};
+use tokio::time::Duration;
 use tracing::{debug, error, info, warn};
 use vtcode_core::acp::ToolPermissionCache;
 use vtcode_core::config::WorkspaceTrustLevel;
@@ -26,7 +26,7 @@ use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::core::agent::state::recover_history_from_crash;
 use vtcode_core::core::decision_tracker::DecisionTracker;
 use vtcode_core::llm::{factory::create_provider_with_config, provider as uni};
-use vtcode_core::mcp::McpClient;
+
 use vtcode_core::models::ModelId;
 use vtcode_core::tools::build_function_declarations_cached;
 use vtcode_core::tools::{ApprovalRecorder, SearchMetrics, ToolRegistry, ToolResultCache};

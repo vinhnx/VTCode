@@ -2,7 +2,6 @@
 
 use serde_json::Value;
 
-use crate::mcp::McpToolExecutor;
 use crate::tools::names::canonical_tool_name;
 
 use super::ToolRegistry;
