@@ -6,6 +6,7 @@ use vtcode::interactive_list::SelectionInterrupted;
 use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
 use vtcode_core::config::models::Provider;
 use vtcode_core::config::types::ReasoningEffortLevel;
+use vtcode_config::auth::CustomApiKeyStorage;
 use vtcode_core::ui::InlineListSelection;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::dot_config::update_model_preference;
@@ -244,26 +245,59 @@ impl ModelPickerState {
             if is_cloud_model {
                 config.agent.api_key_env = selection.env_key.clone();
                 if let Some(ref api_key) = selection.api_key {
+                    // Store API key in secure storage (keyring)
+                    let storage_mode = config.agent.credential_storage_mode;
+                    let key_storage = CustomApiKeyStorage::new(&selection.provider);
+                    if let Err(e) = key_storage.store(api_key, storage_mode) {
+                        tracing::warn!(
+                            "Failed to store API key for provider '{}' securely: {}",
+                            selection.provider,
+                            e
+                        );
+                    }
+                    // Track provider (key not serialized, just for UI/migration)
                     config
                         .agent
                         .custom_api_keys
-                        .insert(selection.provider.clone(), api_key.clone());
+                        .insert(selection.provider.clone(), String::new());
                 } else {
                     config.agent.custom_api_keys.remove(&selection.provider);
+                    // Clear any previously stored key
+                    let storage_mode = config.agent.credential_storage_mode;
+                    let key_storage = CustomApiKeyStorage::new(&selection.provider);
+                    let _ = key_storage.clear(storage_mode);
                 }
             } else {
                 config.agent.api_key_env = String::new();
                 config.agent.custom_api_keys.remove(&selection.provider);
+                let storage_mode = config.agent.credential_storage_mode;
+                let key_storage = CustomApiKeyStorage::new(&selection.provider);
+                let _ = key_storage.clear(storage_mode);
             }
         } else {
             config.agent.api_key_env = selection.env_key.clone();
             if let Some(ref api_key) = selection.api_key {
+                // Store API key in secure storage (keyring)
+                let storage_mode = config.agent.credential_storage_mode;
+                let key_storage = CustomApiKeyStorage::new(&selection.provider);
+                if let Err(e) = key_storage.store(api_key, storage_mode) {
+                    tracing::warn!(
+                        "Failed to store API key for provider '{}' securely: {}",
+                        selection.provider,
+                        e
+                    );
+                }
+                // Track provider (key not serialized, just for UI/migration)
                 config
                     .agent
                     .custom_api_keys
-                    .insert(selection.provider.clone(), api_key.clone());
+                    .insert(selection.provider.clone(), String::new());
             } else {
                 config.agent.custom_api_keys.remove(&selection.provider);
+                // Clear any previously stored key
+                let storage_mode = config.agent.credential_storage_mode;
+                let key_storage = CustomApiKeyStorage::new(&selection.provider);
+                let _ = key_storage.clear(storage_mode);
             }
         }
 

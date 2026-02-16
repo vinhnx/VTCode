@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 
+use crate::auth::migrate_custom_api_keys_to_keyring;
 use crate::defaults::{self};
 use crate::loader::config::VTCodeConfig;
 use crate::loader::layers::{ConfigLayerEntry, ConfigLayerSource, ConfigLayerStack};
@@ -145,13 +146,16 @@ impl ConfigManager {
         }
 
         let effective_toml = layer_stack.effective_config();
-        let config: VTCodeConfig = effective_toml
+        let mut config: VTCodeConfig = effective_toml
             .try_into()
             .context("Failed to deserialize effective configuration")?;
 
         config
             .validate()
             .context("Configuration failed validation")?;
+
+        // Migrate any plain-text API keys from config to secure storage
+        migrate_custom_api_keys_if_needed(&mut config)?;
 
         let config_path = layer_stack.layers().last().and_then(|l| match &l.source {
             ConfigLayerSource::User { file } => Some(file.clone()),
@@ -398,4 +402,58 @@ impl ConfigManager {
         self.config = config.clone();
         Ok(())
     }
+}
+
+/// Migrate plain-text API keys from config to secure storage.
+///
+/// This function checks if there are any API keys stored in plain-text in the config
+/// and migrates them to secure storage (keyring). After successful migration, the
+/// keys are cleared from the config (kept as empty strings for tracking).
+///
+/// # Arguments
+/// * `config` - The configuration to migrate
+fn migrate_custom_api_keys_if_needed(config: &mut VTCodeConfig) -> Result<()> {
+    let storage_mode = config.agent.credential_storage_mode;
+    
+    // Check if there are any non-empty API keys in the config
+    let has_plain_text_keys = config
+        .agent
+        .custom_api_keys
+        .values()
+        .any(|key| !key.is_empty());
+    
+    if has_plain_text_keys {
+        tracing::info!(
+            "Detected plain-text API keys in config, migrating to secure storage..."
+        );
+        
+        // Migrate keys to secure storage
+        let migration_results = migrate_custom_api_keys_to_keyring(
+            &config.agent.custom_api_keys,
+            storage_mode,
+        )?;
+        
+        // Clear keys from config (keep provider names for tracking)
+        let mut migrated_count = 0;
+        for (provider, success) in migration_results {
+            if success {
+                // Replace with empty string to track that this provider has a stored key
+                config.agent.custom_api_keys.insert(provider, String::new());
+                migrated_count += 1;
+            }
+        }
+        
+        if migrated_count > 0 {
+            tracing::info!(
+                "Successfully migrated {} API key(s) to secure storage",
+                migrated_count
+            );
+            tracing::warn!(
+                "Plain-text API keys have been cleared from config file. \
+                 Please commit the updated config to remove sensitive data from version control."
+            );
+        }
+    }
+    
+    Ok(())
 }

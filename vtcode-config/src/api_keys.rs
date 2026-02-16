@@ -9,6 +9,7 @@ use anyhow::Result;
 use std::env;
 use std::str::FromStr;
 
+use crate::auth::CustomApiKeyStorage;
 use crate::models::Provider;
 
 /// API key sources for different providers
@@ -145,6 +146,11 @@ pub fn get_api_key(provider: &str, sources: &ApiKeySources) -> Result<String> {
         return Ok(key);
     }
 
+    // Try secure storage (keyring) for custom API keys
+    if let Ok(Some(key)) = get_custom_api_key_from_keyring(&normalized_provider) {
+        return Ok(key);
+    }
+
     // Fall back to the provider-specific sources
     match normalized_provider.as_str() {
         "gemini" => get_gemini_api_key(sources),
@@ -159,6 +165,25 @@ pub fn get_api_key(provider: &str, sources: &ApiKeySources) -> Result<String> {
         "huggingface" => env::var("HF_TOKEN").map_err(|_| anyhow::anyhow!("HF_TOKEN not set")),
         _ => Err(anyhow::anyhow!("Unsupported provider: {}", provider)),
     }
+}
+
+/// Get custom API key from secure storage (keyring).
+///
+/// This function retrieves API keys that were stored securely via the model picker
+/// or interactive configuration flows.
+///
+/// # Arguments
+/// * `provider` - The provider name
+///
+/// # Returns
+/// * `Ok(Some(String))` - The API key if found in keyring
+/// * `Ok(None)` - If no key is stored for this provider
+/// * `Err` - If there was an error accessing the keyring
+fn get_custom_api_key_from_keyring(provider: &str) -> Result<Option<String>> {
+    let storage = CustomApiKeyStorage::new(provider);
+    // Use default storage mode (keyring)
+    let mode = crate::auth::AuthCredentialsStoreMode::default();
+    storage.load(mode)
 }
 
 /// Get API key for a specific environment variable with fallback

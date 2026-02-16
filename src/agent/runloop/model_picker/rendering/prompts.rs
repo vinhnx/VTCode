@@ -178,7 +178,7 @@ pub(crate) fn prompt_reasoning_plain(
 pub(crate) fn prompt_api_key_plain(
     renderer: &mut AnsiRenderer,
     selection: &SelectionDetail,
-    workspace: Option<&Path>,
+    _workspace: Option<&Path>,
 ) -> Result<()> {
     renderer.line(
         MessageStyle::Info,
@@ -187,18 +187,14 @@ pub(crate) fn prompt_api_key_plain(
             selection.provider_label, selection.env_key
         ),
     )?;
-    if let Some(root) = workspace {
-        let env_path = root.join(".env");
-        renderer.line(
-            MessageStyle::Info,
-            &format!("The key will be stored in {}.", env_path.display()),
-        )?;
-    } else {
-        renderer.line(
-            MessageStyle::Info,
-            "The key will be stored in your workspace .env file.",
-        )?;
-    }
+    renderer.line(
+        MessageStyle::Info,
+        "The key will be saved to secure storage (OS keyring) and your workspace .env file.",
+    )?;
+    renderer.line(
+        MessageStyle::Info,
+        "The key will NOT be stored in vtcode.toml for security.",
+    )?;
 
     if matches!(selection.provider_enum, Some(Provider::HuggingFace)) {
         renderer.line(
@@ -221,9 +217,9 @@ pub(crate) fn show_secure_api_modal(
     let storage_line = workspace
         .map(|root| {
             let env_path = root.join(".env");
-            format!("Stored in {}.", env_path.display())
+            format!("Saved to keyring and {}.", env_path.display())
         })
-        .unwrap_or_else(|| "Stored in workspace .env file.".to_string());
+        .unwrap_or_else(|| "Saved to keyring and workspace .env file.".to_string());
     let mask_preview = "●●●●●●";
     let lines = vec![
         format!(
@@ -232,6 +228,7 @@ pub(crate) fn show_secure_api_modal(
         ),
         format!("Secure display hint: {}", mask_preview),
         storage_line,
+        "Key will NOT be stored in vtcode.toml.".to_string(),
         "Paste the key and press Enter when ready.".to_string(),
     ];
     let prompt_label = format!("{} API key", selection.provider_label);
