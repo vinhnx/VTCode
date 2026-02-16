@@ -342,6 +342,19 @@ pub struct ShellOutput {
     pub exit_code: i32,
 }
 
+impl ShellOutput {
+    /// Sanitize output to redact any secrets that may have been printed
+    ///
+    /// This should be called before displaying output in UI or writing to logs
+    pub fn sanitize_secrets(&self) -> Self {
+        Self {
+            stdout: vtcode_commons::sanitizer::redact_secrets(self.stdout.clone()),
+            stderr: vtcode_commons::sanitizer::redact_secrets(self.stderr.clone()),
+            exit_code: self.exit_code,
+        }
+    }
+}
+
 /// Resolve the fallback shell for command execution when program is not found.
 pub fn resolve_fallback_shell() -> String {
     if let Ok(shell) = std::env::var("SHELL") {

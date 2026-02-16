@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 use tokio::process::Command;
-use vtcode_core::mcp::{McpClient, McpToolExecutor};
 use vtcode_config::mcp::{McpProviderConfig, McpStdioServerConfig, McpTransportConfig};
+use vtcode_core::mcp::{McpClient, McpToolExecutor};
 
 #[test]
 fn test_provider_with_custom_startup_timeout() {

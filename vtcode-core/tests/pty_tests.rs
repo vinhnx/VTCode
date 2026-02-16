@@ -262,7 +262,10 @@ async fn run_pty_command_returns_timeout_error() -> Result<()> {
         Err(error) => error,
     };
     let message = error.to_string();
-    assert!(message.contains("timed out"), "unexpected timeout error: {message}");
+    assert!(
+        message.contains("timed out"),
+        "unexpected timeout error: {message}"
+    );
 
     Ok(())
 }
