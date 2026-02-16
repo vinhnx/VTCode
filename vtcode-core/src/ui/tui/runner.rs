@@ -7,8 +7,8 @@ use futures::{FutureExt, StreamExt};
 use ratatui::crossterm::{
     cursor::SetCursorStyle,
     event::{
-        DisableBracketedPaste, DisableFocusChange, EnableBracketedPaste, EnableFocusChange,
-        Event as CrosstermEvent,
+        DisableBracketedPaste, DisableFocusChange, DisableMouseCapture, EnableBracketedPaste,
+        EnableFocusChange, EnableMouseCapture, Event as CrosstermEvent, MouseEventKind,
     },
     execute,
     terminal::{
@@ -42,32 +42,37 @@ struct ScrollAccumulator {
 
 impl ScrollAccumulator {
     /// Try to accumulate a scroll event. Returns true if the event was a scroll event.
-    /// IMPORTANT: Only call this when no modal/palette is active, otherwise navigation breaks.
+    /// Handles mouse scroll wheel events and PageUp/PageDown keyboard events.
     fn try_accumulate(&mut self, event: &CrosstermEvent) -> bool {
-        if let CrosstermEvent::Key(key) = event
-            && matches!(key.kind, ratatui::crossterm::event::KeyEventKind::Press)
-        {
-            match key.code {
-                ratatui::crossterm::event::KeyCode::Up => {
-                    self.line_delta -= 1;
-                    return true;
-                }
-                ratatui::crossterm::event::KeyCode::Down => {
+        match event {
+            CrosstermEvent::Mouse(mouse) => match mouse.kind {
+                MouseEventKind::ScrollDown => {
                     self.line_delta += 1;
-                    return true;
+                    true
                 }
-                ratatui::crossterm::event::KeyCode::PageUp => {
-                    self.page_delta -= 1;
-                    return true;
+                MouseEventKind::ScrollUp => {
+                    self.line_delta -= 1;
+                    true
                 }
-                ratatui::crossterm::event::KeyCode::PageDown => {
-                    self.page_delta += 1;
-                    return true;
+                _ => false,
+            },
+            CrosstermEvent::Key(key)
+                if matches!(key.kind, ratatui::crossterm::event::KeyEventKind::Press) =>
+            {
+                match key.code {
+                    ratatui::crossterm::event::KeyCode::PageUp => {
+                        self.page_delta -= 1;
+                        true
+                    }
+                    ratatui::crossterm::event::KeyCode::PageDown => {
+                        self.page_delta += 1;
+                        true
+                    }
+                    _ => false,
                 }
-                _ => {}
             }
+            _ => false,
         }
-        false
     }
 
     /// Check if there are any accumulated scroll events
@@ -84,7 +89,7 @@ impl ScrollAccumulator {
     }
 }
 
-/// Check if session has any modal or palette active that uses arrow key navigation
+/// Check if session has any modal or palette active that uses keyboard navigation
 fn has_active_navigation_ui(session: &Session) -> bool {
     session.modal.is_some()
         || session.file_palette_active
@@ -450,6 +455,7 @@ fn enable_terminal_modes(
 
     execute!(stderr, EnableBracketedPaste).context(ENABLE_BRACKETED_PASTE_ERROR)?;
     enable_raw_mode().context(RAW_MODE_ENABLE_ERROR)?;
+    execute!(stderr, EnableMouseCapture).context("failed to enable mouse capture for inline terminal")?;
 
     let focus_change_enabled = match execute!(stderr, EnableFocusChange) {
         Ok(_) => true,
@@ -496,6 +502,13 @@ fn restore_terminal_modes(state: &TerminalModeState) -> Result<()> {
         tracing::debug!(
             %error,
             "failed to disable focus change events for inline terminal"
+        );
+    }
+
+    if let Err(error) = execute!(stderr, DisableMouseCapture) {
+        tracing::debug!(
+            %error,
+            "failed to disable mouse capture for inline terminal"
         );
     }
 
