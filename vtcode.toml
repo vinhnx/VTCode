@@ -3,13 +3,13 @@
 
 [agent]
 # Primary LLM provider to use (e.g., "openai", "gemini", "anthropic", "openrouter")
-provider = "ollama"
+provider = "openrouter"
 
 # Environment variable containing the API key for the provider
-api_key_env = "OLLAMA_API_KEY"
+api_key_env = "OPENROUTER_API_KEY"
 
 # Default model to use when no specific model is specified
-default_model = "minimax-m2:cloud"
+default_model = "qwen/qwen3.5-plus-02-15"
 
 # Personal/local overrides should live in user config, not workspace config:
 #   ~/.vtcode/vtcode.toml
@@ -182,6 +182,7 @@ flow_timeout_secs = 300
 #command_timeout_ms = 200
 
 [agent.custom_api_keys]
+openrouter = "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"
 
 # PTY (Pseudo Terminal) configuration
 [pty]

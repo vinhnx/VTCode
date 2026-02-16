@@ -261,6 +261,7 @@ impl ModelId {
             | ModelId::OpenRouterQwen38b
             | ModelId::OpenRouterQwen3Next80bA3bInstruct
             | ModelId::OpenRouterQwen3Next80bA3bThinking
+            | ModelId::OpenRouterQwen35Plus0215
             | ModelId::OpenRouterQwen3Coder
             | ModelId::OpenRouterQwen3CoderPlus
             | ModelId::OpenRouterQwen3CoderFlash

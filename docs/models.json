@@ -2113,6 +2113,39 @@
           "doc_comment": "Qwen3 Next 80B A3B Thinking - Next-generation Qwen3 reasoning release"
         }
       },
+      "qwen/qwen3.5-plus-02-15": {
+        "id": "qwen/qwen3.5-plus-02-15",
+        "name": "Qwen: Qwen3.5-397B-A17B",
+        "description": "The Qwen3.5 native vision-language series Plus models are built on a hybrid architecture that integrates linear attention mechanisms with sparse mixture-of-experts models, achieving higher inference efficiency. In a variety of task evaluations, the 3.5 series consistently demonstrates performance on par with state-of-the-art leading models. Compared to the 3 series, these models show a leap forward in both pure-text and multimodal capabilities.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 1000000,
+        "max_output_tokens": 256000,
+        "cost": {
+          "input": 5e-07,
+          "output": 2.5e-06
+        },
+        "vtcode": {
+          "variant": "OpenRouterQwen35Plus0215",
+          "constant": "QWEN3_5_PLUS_02_15",
+          "vendor": "qwen",
+          "display": "Qwen3.5-397B-A17B",
+          "description": "Qwen3.5 Plus with hybrid linear attention and sparse MoE architecture, 1M context",
+          "efficient": false,
+          "top_tier": true,
+          "generation": "Qwen3.5-Plus",
+          "doc_comment": "Qwen3.5-397B-A17B - Native vision-language model with linear attention and sparse MoE, 1M context window"
+        }
+      },
       "x-ai/grok-4": {
         "id": "x-ai/grok-4",
         "name": "xAI: Grok 4",

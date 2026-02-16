@@ -199,6 +199,8 @@ pub enum ModelId {
     OpenRouterQwen3Next80bA3bInstruct,
     /// Qwen3 Next 80B A3B Thinking - Next-generation Qwen3 reasoning release
     OpenRouterQwen3Next80bA3bThinking,
+    /// Qwen3.5-397B-A17B - Native vision-language model with linear attention and sparse MoE, 1M context window
+    OpenRouterQwen35Plus0215,
     /// Qwen3 Coder - Qwen3-based coding model tuned for IDE workflows
     OpenRouterQwen3Coder,
     /// Qwen3 Coder Plus - Premium Qwen3 coding model with long context
