@@ -5,8 +5,8 @@ use ratatui::{
 };
 
 use super::{
-    FilePaletteWidget, FooterWidget, HeaderWidget, LayoutMode, Panel,
-    SidebarWidget, TranscriptWidget, footer_hints,
+    FilePaletteWidget, FooterWidget, HeaderWidget, LayoutMode, Panel, SidebarWidget,
+    TranscriptWidget, footer_hints,
 };
 use crate::ui::tui::session::{Session, render::apply_view_rows};
 
@@ -320,9 +320,7 @@ impl<'a> SessionWidget<'a> {
 
         let hint = if self.session.thinking_spinner.is_active {
             footer_hints::PROCESSING
-        } else if self.session.file_palette_active
-            || self.session.history_picker_state.active
-        {
+        } else if self.session.file_palette_active || self.session.history_picker_state.active {
             footer_hints::MODAL
         } else if self.session.input_manager.content().is_empty() {
             footer_hints::IDLE

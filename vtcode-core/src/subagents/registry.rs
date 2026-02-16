@@ -13,9 +13,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
 
-use vtcode_config::subagent::{
-    SubagentConfig, SubagentSource, SubagentsConfig,
-};
+use vtcode_config::subagent::{SubagentConfig, SubagentSource, SubagentsConfig};
 
 /// Built-in subagent definitions
 pub mod builtins {
