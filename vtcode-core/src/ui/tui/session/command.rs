@@ -10,16 +10,11 @@ use super::{
     config_palette::ConfigPalette,
     file_palette::{FilePalette, extract_file_reference},
     modal::{ModalListState, ModalSearchState, ModalState},
-    prompt_palette::{PromptPalette, extract_prompt_reference},
 };
-use crate::config::constants::prompts;
 use crate::config::loader::ConfigManager;
-use crate::prompts::CustomPromptRegistry;
 
 #[allow(dead_code)]
 const USER_PREFIX: &str = "";
-#[allow(dead_code)]
-const PROMPT_COMMAND_PREFIX: &str = "/prompt:";
 
 #[allow(dead_code)]
 pub fn handle_command(session: &mut Session, command: InlineCommand) {
@@ -138,9 +133,6 @@ pub fn handle_command(session: &mut Session, command: InlineCommand) {
         }
         InlineCommand::CloseModal => {
             close_modal(session);
-        }
-        InlineCommand::SetCustomPrompts { registry } => {
-            set_custom_prompts(session, registry);
         }
         InlineCommand::LoadFilePalette { files, workspace } => {
             load_file_palette(session, files, workspace);
@@ -373,22 +365,6 @@ fn close_modal(session: &mut Session) {
 }
 
 #[allow(dead_code)]
-pub fn set_custom_prompts(session: &mut Session, custom_prompts: CustomPromptRegistry) {
-    // Initialize prompt palette when custom prompts are loaded
-    if custom_prompts.enabled() && !custom_prompts.is_empty() {
-        let mut palette = PromptPalette::new();
-        palette.load_prompts(custom_prompts.iter());
-        session.prompt_palette = Some(palette);
-    }
-
-    session.custom_prompts = Some(custom_prompts);
-    // Update slash palette if we're currently viewing slash commands
-    if session.input_manager.content().starts_with('/') {
-        super::slash::update_slash_suggestions(session);
-    }
-}
-
-#[allow(dead_code)]
 fn load_file_palette(session: &mut Session, files: Vec<String>, workspace: std::path::PathBuf) {
     let mut palette = FilePalette::new(workspace);
     palette.load_files(files);
@@ -440,82 +416,6 @@ pub fn insert_file_reference(session: &mut Session, file_path: &str) {
         session.input_manager.set_cursor(start + replacement.len());
         session.input_manager.insert_char(' ');
     }
-}
-
-#[allow(dead_code)]
-pub(super) fn check_prompt_reference_trigger(session: &mut Session) {
-    // Initialize prompt palette on-demand if it doesn't exist
-    if session.prompt_palette.is_none() {
-        let mut palette = PromptPalette::new();
-
-        // Try loading from custom_prompts first
-        let loaded = if let Some(ref custom_prompts) = session.custom_prompts {
-            if custom_prompts.enabled() && !custom_prompts.is_empty() {
-                palette.load_prompts(custom_prompts.iter());
-                true
-            } else {
-                false
-            }
-        } else {
-            false
-        };
-
-        // Fallback: load directly from filesystem if custom_prompts not available
-        if !loaded {
-            // Try default .vtcode/prompts directory
-            if let Ok(current_dir) = std::env::current_dir() {
-                let prompts_dir = current_dir.join(".vtcode").join("prompts");
-                palette.load_from_directory(&prompts_dir);
-            }
-        }
-
-        if let Ok(current_dir) = std::env::current_dir() {
-            let core_dir = current_dir.join(prompts::CORE_BUILTIN_PROMPTS_DIR);
-            palette.load_from_directory(&core_dir);
-        }
-
-        let builtin_prompts = CustomPromptRegistry::builtin_prompts();
-        if !builtin_prompts.is_empty() {
-            palette.append_custom_prompts(builtin_prompts.iter());
-        }
-
-        session.prompt_palette = Some(palette);
-    }
-
-    if let Some(palette) = session.prompt_palette.as_mut() {
-        if let Some((_, _, query)) = extract_prompt_reference(
-            session.input_manager.content(),
-            session.input_manager.cursor(),
-        ) {
-            // Reset selection and clear previous state when opening
-            palette.reset();
-            palette.set_filter(query);
-            session.prompt_palette_active = true;
-        } else {
-            session.prompt_palette_active = false;
-        }
-    }
-}
-
-#[allow(dead_code)]
-pub fn close_prompt_palette(session: &mut Session) {
-    session.prompt_palette_active = false;
-
-    // Clean up resources when closing to free memory
-    if let Some(palette) = session.prompt_palette.as_mut() {
-        palette.cleanup();
-    }
-}
-
-#[allow(dead_code)]
-pub fn insert_prompt_reference(session: &mut Session, prompt_name: &str) {
-    let mut command = String::from(PROMPT_COMMAND_PREFIX);
-    command.push_str(prompt_name);
-    command.push(' ');
-
-    session.input_manager.set_content(command);
-    session.input_manager.move_cursor_to_end();
-    super::slash::update_slash_suggestions(session);
 }
 
 #[allow(dead_code)]

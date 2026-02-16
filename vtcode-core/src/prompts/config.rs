@@ -9,8 +9,6 @@ pub struct SystemPromptConfig {
     pub include_tools: bool,
     /// Include workspace context
     pub include_workspace: bool,
-    /// Custom system instruction
-    pub custom_instruction: Option<String>,
     /// Agent personality
     pub personality: AgentPersonality,
     /// Response style
@@ -23,7 +21,6 @@ impl Default for SystemPromptConfig {
             verbose: false,
             include_tools: true,
             include_workspace: true,
-            custom_instruction: None,
             personality: AgentPersonality::Professional,
             response_style: ResponseStyle::Concise,
         }

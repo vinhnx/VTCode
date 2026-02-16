@@ -1,25 +1,14 @@
 //! Subagent configuration schema and parsing
 //!
 //! Subagents are specialized AI agents that can be invoked for specific tasks.
-//! They are defined as Markdown files with YAML frontmatter and loaded from:
-//! - Project level: `.vtcode/agents/` (highest priority)
-//! - User level: `~/.vtcode/agents/` (lower priority)
-//! - Built-in: shipped with the binary (lowest priority)
+//! Built-in subagents are shipped with the binary.
 //!
-//! # Example subagent file
-//! ```markdown
-//! ---
-//! name: code-reviewer
-//! description: Expert code review specialist. Use after writing or modifying code.
-//! tools: read_file, grep_file, list_files
-//! model: inherit
-//! permission_mode: default
-//! skills: rust-patterns, security-review
-//! ---
-//!
-//! You are a senior code reviewer ensuring high standards of code quality.
-//! Focus on readability, security, and best practices.
-//! ```
+//! # Built-in subagents include:
+//! - explore: Fast read-only codebase search
+//! - plan: Research for planning mode
+//! - general: Multi-step tasks with full capabilities
+//! - code-reviewer: Code quality and security review
+//! - debugger: Error investigation and fixes
 
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -124,8 +113,6 @@ pub enum SubagentSource {
     User,
     /// Project-level subagent from .vtcode/agents/
     Project,
-    /// CLI-defined subagent via --agents flag
-    Cli,
     /// Plugin-provided subagent
     Plugin(String),
 }
@@ -136,7 +123,6 @@ impl fmt::Display for SubagentSource {
             Self::Builtin => write!(f, "builtin"),
             Self::User => write!(f, "user"),
             Self::Project => write!(f, "project"),
-            Self::Cli => write!(f, "cli"),
             Self::Plugin(name) => write!(f, "plugin:{}", name),
         }
     }
@@ -287,64 +273,6 @@ impl SubagentConfig {
         Ok(config)
     }
 
-    /// Parse subagent from JSON (for CLI --agents flag)
-    pub fn from_json(name: &str, value: &serde_json::Value) -> Result<Self, SubagentParseError> {
-        debug!(name, "Parsing subagent from JSON");
-        let description = value
-            .get("description")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| SubagentParseError::MissingField("description".to_string()))?
-            .to_string();
-
-        let system_prompt = value
-            .get("prompt")
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .to_string();
-
-        let tools = value.get("tools").and_then(|v| {
-            v.as_array().map(|arr| {
-                arr.iter()
-                    .filter_map(|v| v.as_str().map(String::from))
-                    .collect()
-            })
-        });
-
-        let model = value
-            .get("model")
-            .and_then(|v| v.as_str())
-            .map(|m| SubagentModel::from_str(m).unwrap())
-            .unwrap_or_default();
-
-        let permission_mode = value
-            .get("permissionMode")
-            .and_then(|v| v.as_str())
-            .map(|p| SubagentPermissionMode::from_str(p).unwrap_or_default())
-            .unwrap_or_default();
-
-        let skills = value
-            .get("skills")
-            .and_then(|v| v.as_array())
-            .map(|arr| {
-                arr.iter()
-                    .filter_map(|v| v.as_str().map(String::from))
-                    .collect()
-            })
-            .unwrap_or_default();
-
-        Ok(Self {
-            name: name.to_string(),
-            description,
-            tools,
-            model,
-            permission_mode,
-            skills,
-            system_prompt,
-            source: SubagentSource::Cli,
-            file_path: None,
-        })
-    }
-
     /// Check if this subagent has access to a specific tool
     pub fn has_tool_access(&self, tool_name: &str) -> bool {
         match &self.tools {
@@ -415,10 +343,6 @@ pub struct SubagentsConfig {
     /// Default model for subagents (if not specified in subagent config)
     #[serde(default)]
     pub default_model: Option<String>,
-
-    /// Additional directories to search for subagent definitions
-    #[serde(default)]
-    pub additional_agent_dirs: Vec<PathBuf>,
 }
 
 fn default_enabled() -> bool {
@@ -440,45 +364,8 @@ impl Default for SubagentsConfig {
             max_concurrent: default_max_concurrent(),
             default_timeout_seconds: default_timeout_seconds(),
             default_model: None,
-            additional_agent_dirs: Vec::new(),
         }
     }
-}
-
-/// Load subagent from a markdown file
-pub fn load_subagent_from_file(
-    path: &Path,
-    source: SubagentSource,
-) -> Result<SubagentConfig, SubagentParseError> {
-    debug!(?path, ?source, "Loading subagent from file");
-    let content = std::fs::read_to_string(path)?;
-    SubagentConfig::from_markdown(&content, source, Some(path.to_path_buf()))
-}
-
-/// Discover all subagent files in a directory
-pub fn discover_subagents_in_dir(
-    dir: &Path,
-    source: SubagentSource,
-) -> Vec<Result<SubagentConfig, SubagentParseError>> {
-    debug!(?dir, ?source, "Discovering subagents in directory");
-    let mut results = Vec::new();
-
-    if !dir.exists() || !dir.is_dir() {
-        debug!(?dir, "Directory does not exist or is not a directory");
-        return results;
-    }
-
-    if let Ok(entries) = std::fs::read_dir(dir) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.extension().map(|e| e == "md").unwrap_or(false) {
-                results.push(load_subagent_from_file(&path, source.clone()));
-            }
-        }
-    }
-    debug!(count = results.len(), "Found subagent files");
-
-    results
 }
 
 #[cfg(test)]

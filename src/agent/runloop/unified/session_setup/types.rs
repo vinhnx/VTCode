@@ -15,7 +15,6 @@ use vtcode_core::acp::ToolPermissionCache;
 use vtcode_core::core::decision_tracker::DecisionTracker;
 use vtcode_core::core::trajectory::TrajectoryLogger;
 use vtcode_core::llm::provider as uni;
-use vtcode_core::prompts::CustomPromptRegistry;
 use vtcode_core::tools::ApprovalRecorder;
 use vtcode_core::tools::{SearchMetrics, ToolRegistry, ToolResultCache};
 use vtcode_core::ui::tui::{InlineHandle, InlineSession};
@@ -39,8 +38,6 @@ pub(crate) struct SessionState {
     pub tool_permission_cache: Arc<RwLock<ToolPermissionCache>>,
     #[allow(dead_code)]
     pub search_metrics: Arc<RwLock<SearchMetrics>>,
-    pub custom_prompts: CustomPromptRegistry,
-    pub custom_slash_commands: vtcode_core::prompts::CustomSlashCommandRegistry,
     pub loaded_skills: Arc<RwLock<HashMap<String, vtcode_core::skills::types::Skill>>>,
     pub approval_recorder: Arc<ApprovalRecorder>,
     pub safety_validator: Arc<RwLock<ToolCallSafetyValidator>>,

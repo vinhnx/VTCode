@@ -399,21 +399,6 @@ impl SubagentRegistry {
         // 1. Load built-in agents (lowest priority)
         self.load_builtin_agents();
 
-        // 2. Load user-level agents (~/.vtcode/agents/)
-        if let Some(home) = dirs::home_dir() {
-            let user_agents_dir = home.join(".vtcode").join("agents");
-            self.load_agents_from_dir(&user_agents_dir, SubagentSource::User);
-        }
-
-        // 3. Load from additional configured directories
-        for dir in &self.config.additional_agent_dirs.clone() {
-            self.load_agents_from_dir(dir, SubagentSource::User);
-        }
-
-        // 4. Load project-level agents (highest priority)
-        let project_agents_dir = self.workspace_root.join(".vtcode").join("agents");
-        self.load_agents_from_dir(&project_agents_dir, SubagentSource::Project);
-
         info!(
             "Loaded {} subagents: {:?}",
             self.agents.len(),
@@ -448,26 +433,6 @@ impl SubagentRegistry {
         }
     }
 
-    /// Load agents from a directory
-    fn load_agents_from_dir(&mut self, dir: &Path, source: SubagentSource) {
-        if !dir.exists() {
-            debug!("Subagent directory does not exist: {}", dir.display());
-            return;
-        }
-
-        for result in discover_subagents_in_dir(dir, source) {
-            match result {
-                Ok(config) => {
-                    debug!("Loaded agent from {}: {}", dir.display(), config.name);
-                    self.register_agent(config);
-                }
-                Err(e) => {
-                    warn!("Failed to load agent from {}: {}", dir.display(), e);
-                }
-            }
-        }
-    }
-
     /// Register a subagent (overwrites if same name with higher priority)
     fn register_agent(&mut self, config: SubagentConfig) {
         let name = config.name.clone();
@@ -489,24 +454,6 @@ impl SubagentRegistry {
         self.priority_order.retain(|n| n != &name);
         self.priority_order.push(name.clone());
         self.agents.insert(name, config);
-    }
-
-    /// Add agents from CLI --agents JSON flag
-    pub fn add_cli_agents(&mut self, json: &Value) -> Result<()> {
-        if let Some(obj) = json.as_object() {
-            for (name, config_value) in obj {
-                match SubagentConfig::from_json(name, config_value) {
-                    Ok(config) => {
-                        debug!("Loaded CLI agent: {}", config.name);
-                        self.register_agent(config);
-                    }
-                    Err(e) => {
-                        warn!("Failed to parse CLI agent {}: {}", name, e);
-                    }
-                }
-            }
-        }
-        Ok(())
     }
 
     /// Get a subagent by name
@@ -695,7 +642,6 @@ fn source_priority(source: &SubagentSource) -> u8 {
         SubagentSource::Builtin => 0,
         SubagentSource::User => 1,
         SubagentSource::Plugin(_) => 2,
-        SubagentSource::Cli => 3,
         SubagentSource::Project => 4,
     }
 }
@@ -898,27 +844,6 @@ mod tests {
         assert!(coder.has_tool_access("edit_file"));
         assert!(coder.has_tool_access("any_tool"));
         assert!(coder.system_prompt.contains("CODE MODE"));
-    }
-
-    #[tokio::test]
-    async fn test_cli_agents_override_user() {
-        let mut registry =
-            SubagentRegistry::new(PathBuf::from("/tmp/test"), SubagentsConfig::default())
-                .await
-                .unwrap();
-
-        let cli_json = serde_json::json!({
-            "explore": {
-                "description": "Custom explore agent",
-                "prompt": "Custom prompt"
-            }
-        });
-
-        registry.add_cli_agents(&cli_json).unwrap();
-
-        let explore = registry.get("explore").unwrap();
-        assert_eq!(explore.source, SubagentSource::Cli);
-        assert_eq!(explore.description, "Custom explore agent");
     }
 
     #[tokio::test]

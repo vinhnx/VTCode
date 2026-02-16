@@ -32,16 +32,6 @@ python3 scripts/generate_config_field_reference.py
 | `agent.circuit_breaker.recovery_cooldown` | `integer` | no | `60` | Cooldown period between recovery prompts (seconds) |
 | `agent.custom_api_keys` | `object` | no | `{}` | Provider-specific API keys captured from interactive configuration flows |
 | `agent.custom_api_keys.*` | `string` | no | `-` | - |
-| `agent.custom_prompts.directory` | `string` | no | `"~/.vtcode/prompts"` | Primary directory for prompt markdown files |
-| `agent.custom_prompts.enabled` | `boolean` | no | `true` | Master switch for custom prompt support |
-| `agent.custom_prompts.extra_directories` | `array` | no | `[]` | Additional directories to search for prompts |
-| `agent.custom_prompts.extra_directories[]` | `string` | no | `-` | - |
-| `agent.custom_prompts.max_file_size_kb` | `integer` | no | `64` | Maximum file size (KB) to load for a single prompt |
-| `agent.custom_slash_commands.directory` | `string` | no | `"~/.vtcode/commands"` | Primary directory for slash command markdown files |
-| `agent.custom_slash_commands.enabled` | `boolean` | no | `true` | Master switch for custom slash command support |
-| `agent.custom_slash_commands.extra_directories` | `array` | no | `[]` | Additional directories to search for slash commands |
-| `agent.custom_slash_commands.extra_directories[]` | `string` | no | `-` | - |
-| `agent.custom_slash_commands.max_file_size_kb` | `integer` | no | `64` | Maximum file size (KB) to load for a single slash command |
 | `agent.default_editing_mode` | `string` | no | `"edit"` | Default editing mode on startup: "edit" (default) or "plan" Codex-inspired: Encourages structured planning before execution. |
 | `agent.default_model` | `string` | no | `"claude-sonnet-4-5"` | Default model to use |
 | `agent.enable_self_review` | `boolean` | no | `false` | Enable an extra self-review pass to refine final responses |

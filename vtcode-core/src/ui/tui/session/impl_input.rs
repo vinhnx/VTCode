@@ -136,9 +136,6 @@ impl Session {
             InlineCommand::CloseModal => {
                 self.close_modal();
             }
-            InlineCommand::SetCustomPrompts { registry } => {
-                self.set_custom_prompts(registry);
-            }
             InlineCommand::LoadFilePalette { files, workspace } => {
                 self.load_file_palette(files, workspace);
             }

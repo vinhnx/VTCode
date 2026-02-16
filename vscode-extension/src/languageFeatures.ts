@@ -20,11 +20,6 @@ const SECTION_METADATA: Record<string, SectionMetadata> = {
         label: "Onboarding",
         description: "Customize the guidance presented when VT Code starts.",
     },
-    "agent.custom_prompts": {
-        label: "Custom Prompts",
-        description:
-            "Configure reusable prompts that extend VT Code with bespoke commands.",
-    },
     prompt_cache: {
         label: "Prompt Cache",
         description: "Caching behavior that reduces repeated API calls.",
@@ -128,32 +123,6 @@ const SECTION_KEYS: Record<string, Record<string, KeyMetadata>> = {
             documentation:
                 "Highlights AGENTS.md guidance during onboarding when enabled.",
             insertText: "include_guideline_highlights = ${1|true,false|}",
-        },
-    },
-    "agent.custom_prompts": {
-        enabled: {
-            detail: "Enable custom prompts",
-            documentation:
-                "Activates the /prompts:<name> feature inside VT Code.",
-            insertText: "enabled = ${1|true,false|}",
-        },
-        directory: {
-            detail: "Primary prompt directory",
-            documentation:
-                "Directory path where VT Code looks for reusable prompt files.",
-            insertText: 'directory = "${1:~/.vtcode/prompts}"',
-        },
-        extra_directories: {
-            detail: "Additional prompt directories",
-            documentation:
-                "Optional list of extra folders that contain prompt definitions.",
-            insertText: "extra_directories = [${1}]",
-        },
-        max_file_size_kb: {
-            detail: "Prompt file size limit",
-            documentation:
-                "Prevents large prompt files from being loaded into VT Code.",
-            insertText: "max_file_size_kb = ${1:64}",
         },
     },
     prompt_cache: {
@@ -423,13 +392,6 @@ function createSectionCompletions(): vscode.CompletionItem[] {
             {
                 ...SECTION_METADATA["agent.onboarding"],
                 snippet: "[agent.onboarding]\n$0",
-            },
-        ],
-        [
-            "agent.custom_prompts",
-            {
-                ...SECTION_METADATA["agent.custom_prompts"],
-                snippet: "[agent.custom_prompts]\n$0",
             },
         ],
         [

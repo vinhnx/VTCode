@@ -66,15 +66,6 @@ Ask: Search for TODO|FIXME across the repo with 2 lines of context in .rs files
 -   `write_file(path, content, mode?)` — mode: `overwrite`, `append`, or `skip_if_exists`
 -   `edit_file(path, old_str, new_str)` — tolerant to whitespace differences and detects rename conflicts
 
-## Custom prompts
-
-Slash commands expose any Markdown prompt registered in the custom prompt directories:
-
--   `/prompts` — List every prompt name, description, and argument hint.
--   `/prompts:<name>` — Expand a specific prompt and open it in the input composer.
-
-Prompts support positional (`$1`) and named (`$FILE`) placeholders. Configure directories and size limits in `[agent.custom_prompts]` inside `vtcode.toml`, then consult [custom-prompts.md](custom-prompts.md) for format guidance.
-
 ## Agent teams
 
 Agent teams are an experimental feature for coordinating multiple subagents in a single session.
@@ -90,8 +81,7 @@ Agent teams are an experimental feature for coordinating multiple subagents in a
 VT Code provides several quick actions directly in the chat input for faster workflow:
 
 -   **File Picker (`@`)** — Type `@` anywhere in your input to open the file picker and select files to reference in your message. This allows you to quickly mention files without typing full paths.
--   **Custom Prompt Shortcut (`#`)** — Type `#` at the start of input to quickly access and run custom prompts. This is a shorthand for accessing your saved prompts directly from the input bar.
--   **Slash Commands (`/`)** — Type `/` at the start of input to access all available slash commands including `/prompts`, `/files`, `/stats`, and many more.
+-   **Slash Commands (`/`)** — Type `/` at the start of input to access all available slash commands including `/files`, `/stats`, and many more.
 
 ### `/code-ide` (VS Code integration)
 

@@ -404,7 +404,7 @@ VT Code - efficient coding agent.
 ```
 Config (vtcode.toml)
     ├─ system_prompt_mode: Default/Minimal/Lightweight/Specialized
-    ├─ custom_instruction: User-provided text
+    ├─ user_instructions: User-provided text
     ├─ personality: style preference
     └─ response_style: output format
 
@@ -418,7 +418,7 @@ PromptContext (Runtime)
 SystemPromptGenerator
     └─ generate() → complete prompt string
         ├─ base_system_prompt()
-        ├─ custom_instruction (if any)
+        ├─ user_instructions (if any)
         ├─ personality_prompt()
         ├─ response_style_prompt()
         ├─ tool_usage_prompt() (if tools)

@@ -11,20 +11,6 @@ ROOT = Path(__file__).resolve().parents[1]
 CORE_EMBEDDED = ROOT / "vtcode-core" / "embedded_assets_source"
 
 ASSET_MAPPINGS = {
-    ROOT
-    / "prompts"
-    / "custom"
-    / "vtcode.md": CORE_EMBEDDED
-    / "prompts"
-    / "custom"
-    / "vtcode.md",
-    ROOT
-    / "prompts"
-    / "custom"
-    / "generate-agent-file.md": CORE_EMBEDDED
-    / "prompts"
-    / "custom"
-    / "generate-agent-file.md",
     ROOT / "docs" / "vtcode_docs_map.md": CORE_EMBEDDED / "docs" / "vtcode_docs_map.md",
 }
 

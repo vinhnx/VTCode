@@ -7,11 +7,6 @@ use std::path::{Path, PathBuf};
 use vtcode_config::models::openrouter_generated::{ENTRIES, VENDOR_MODELS};
 
 const EMBEDDED_ASSETS: &[(&str, &str)] = &[
-    ("prompts/custom/vtcode.md", "prompts/custom/vtcode.md"),
-    (
-        "prompts/custom/generate-agent-file.md",
-        "prompts/custom/generate-agent-file.md",
-    ),
     ("docs/vtcode_docs_map.md", "docs/vtcode_docs_map.md"),
 ];
 

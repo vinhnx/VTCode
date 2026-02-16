@@ -11,7 +11,6 @@ pub enum TaskType {
     System,
     Lightweight,
     Specialized,
-    Custom,
 }
 
 /// Providers can expose a cache key describing the prompt variant.

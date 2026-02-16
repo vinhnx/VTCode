@@ -19,7 +19,6 @@ use super::{
         ModalBodyContext, ModalListLayout, ModalRenderStyles, compute_modal_area,
         modal_content_width, render_modal_body, render_wizard_modal_body,
     },
-    prompt_palette::PromptPalette,
     text_utils,
 };
 use crate::config::constants::ui;
@@ -46,17 +45,6 @@ pub fn render(session: &mut Session, frame: &mut Frame<'_>) {
             // Insert @ to trigger file browser now that slash modal is gone
             session.input_manager.insert_char('@');
             session.check_file_reference_trigger();
-            session.mark_dirty(); // Ensure UI updates
-        }
-    }
-
-    // Handle deferred prompt browser trigger (after slash modal dismisses)
-    if session.deferred_prompt_browser_trigger {
-        session.deferred_prompt_browser_trigger = false;
-        if session.input_enabled && session.modal.is_none() {
-            // Insert # to trigger prompt browser now that slash modal is gone
-            session.input_manager.insert_char('#');
-            session.check_prompt_reference_trigger();
             session.mark_dirty(); // Ensure UI updates
         }
     }
@@ -110,7 +98,6 @@ pub fn render(session: &mut Session, frame: &mut Frame<'_>) {
     render_modal(session, frame, size);
     super::slash::render_slash_palette(session, frame, size);
     render_file_palette(session, frame, size);
-    render_prompt_palette(session, frame, size);
     render_config_palette(session, frame, size);
 }
 
@@ -556,142 +543,6 @@ fn file_palette_instructions(session: &Session, palette: &FilePalette) -> Vec<Li
 
         lines.push(Line::from(vec![Span::styled(
             format!("{} · Esc Close", nav_text),
-            default_style(session),
-        )]));
-
-        lines.push(Line::from(vec![
-            Span::styled(
-                format!("Showing {}", count_text),
-                default_style(session).add_modifier(Modifier::DIM),
-            ),
-            Span::styled(
-                if !palette.filter_query().is_empty() {
-                    format!(" matching '{}'", palette.filter_query())
-                } else {
-                    String::new()
-                },
-                accent_style(session),
-            ),
-        ]));
-    }
-
-    lines
-}
-
-pub fn render_prompt_palette(session: &mut Session, frame: &mut Frame<'_>, viewport: Rect) {
-    if !session.prompt_palette_active {
-        return;
-    }
-
-    let Some(palette) = session.prompt_palette.as_ref() else {
-        return;
-    };
-
-    if viewport.height == 0 || viewport.width == 0 || session.modal.is_some() {
-        return;
-    }
-
-    // Show loading state if no prompts loaded yet
-    if !palette.has_prompts() {
-        render_prompt_palette_loading(session, frame, viewport);
-        return;
-    }
-
-    let items = palette.current_page_items();
-    if items.is_empty() && palette.filter_query().is_empty() {
-        return;
-    }
-
-    // Convert items to generic format
-    let generic_items: Vec<(usize, String, bool)> = items
-        .iter()
-        .map(|(idx, entry, selected)| (*idx, entry.name.clone(), *selected))
-        .collect();
-
-    let title = format!(
-        "Custom Prompts (Page {}/{})",
-        palette.current_page_number(),
-        palette.total_pages()
-    );
-
-    let instructions = prompt_palette_instructions(session, palette);
-    let has_more = palette.has_more_items();
-    let more_text = format!(
-        "  ... ({} more items)",
-        palette
-            .total_items()
-            .saturating_sub(palette.current_page_number() * 20)
-    );
-
-    // Render using generic helper
-    render_palette_generic(
-        session,
-        frame,
-        viewport,
-        PaletteRenderParams {
-            is_active: true, // is_active already checked above
-            title,
-            items: generic_items,
-            instructions,
-            has_more,
-            more_text,
-            render_item: |session, display_text: &str, is_selected| {
-                let base_style = if is_selected {
-                    modal_list_highlight_style(session)
-                } else {
-                    default_style(session)
-                };
-
-                // Format: "  · prompt-name"
-                let display = format!("  · {}", display_text);
-                ListItem::new(Line::from(display).style(base_style))
-            },
-        },
-    );
-}
-
-fn render_prompt_palette_loading(session: &Session, frame: &mut Frame<'_>, viewport: Rect) {
-    let width_hint = 40u16;
-    let modal_height = 3;
-    let area = compute_modal_area(viewport, width_hint, modal_height, 0, 0, true);
-
-    frame.render_widget(Clear, area);
-    let block = Block::bordered()
-        .title("Custom Prompts")
-        .border_type(terminal_capabilities::get_border_type())
-        .style(default_style(session))
-        .border_style(border_style(session));
-    let inner = block.inner(area);
-    frame.render_widget(block, area);
-
-    if inner.height > 0 && inner.width > 0 {
-        let loading_text = vec![Line::from(Span::styled(
-            "Loading custom prompts...".to_owned(),
-            default_style(session).add_modifier(Modifier::DIM),
-        ))];
-        let paragraph = Paragraph::new(loading_text).wrap(Wrap { trim: true });
-        frame.render_widget(paragraph, inner);
-    }
-}
-
-fn prompt_palette_instructions(session: &Session, palette: &PromptPalette) -> Vec<Line<'static>> {
-    let mut lines = vec![];
-
-    if palette.is_empty() {
-        lines.push(Line::from(Span::styled(
-            "No prompts found matching filter".to_owned(),
-            default_style(session).add_modifier(Modifier::DIM),
-        )));
-    } else {
-        let total = palette.total_items();
-        let count_text = if total == 1 {
-            "1 prompt".to_owned()
-        } else {
-            format!("{} prompts", total)
-        };
-
-        lines.push(Line::from(vec![Span::styled(
-            "↑↓ Navigate · Enter/Tab Select · Esc Close",
             default_style(session),
         )]));
 

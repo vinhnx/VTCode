@@ -176,7 +176,6 @@
 **When to Read**:
 - Optimizing agent behavior
 - Understanding prompt variants
-- Customizing prompts
 - Improving agent autonomy
 - Adding tool guidelines
 - Understanding context adaptation
@@ -236,7 +235,6 @@
 **When to Read**:
 - Looking for exact prompt text
 - Understanding what prompt says
-- Customizing prompt
 - Testing prompt changes
 - Configuring prompt variants
 - Monitoring prompt effectiveness

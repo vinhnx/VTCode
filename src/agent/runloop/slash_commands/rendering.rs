@@ -1,6 +1,5 @@
 use anyhow::Result;
 
-use vtcode_core::prompts::CustomSlashCommandRegistry;
 use vtcode_core::ui::slash::SLASH_COMMANDS;
 use vtcode_core::ui::theme;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
@@ -109,7 +108,6 @@ pub(super) fn render_theme_list(renderer: &mut AnsiRenderer) -> Result<()> {
 pub(super) fn render_help(
     renderer: &mut AnsiRenderer,
     specific_command: Option<&str>,
-    custom_slash_commands: Option<&CustomSlashCommandRegistry>,
 ) -> Result<()> {
     if let Some(cmd_name) = specific_command {
         // Look for a specific command
@@ -120,33 +118,6 @@ pub(super) fn render_help(
                 &format!("  Description: {}", cmd.description),
             )?;
             // Additional usage examples could be added here in the future
-        } else if let Some(custom_slash_commands) = custom_slash_commands {
-            // Check if it's a custom slash command
-            if let Some(cmd) = custom_slash_commands.get(cmd_name) {
-                renderer.line(MessageStyle::Info, &format!("Help for /{}:", cmd.name))?;
-                if let Some(description) = &cmd.description {
-                    renderer.line(
-                        MessageStyle::Info,
-                        &format!("  Description: {}", description),
-                    )?;
-                } else {
-                    renderer.line(
-                        MessageStyle::Info,
-                        &format!(
-                            "  Description: Custom slash command from {}",
-                            cmd.path.display()
-                        ),
-                    )?;
-                }
-            } else {
-                renderer.line(
-                    MessageStyle::Error,
-                    &format!(
-                        "Unknown command '{}'. Use /help without arguments to see all commands.",
-                        cmd_name
-                    ),
-                )?;
-            }
         } else {
             renderer.line(
                 MessageStyle::Error,
@@ -163,35 +134,6 @@ pub(super) fn render_help(
             renderer.line(
                 MessageStyle::Info,
                 &format!("  /{} – {}", cmd.name, cmd.description),
-            )?;
-        }
-
-        // Add custom slash commands if available
-        if let Some(custom_slash_commands) = custom_slash_commands
-            && !custom_slash_commands.is_empty()
-        {
-            renderer.line(MessageStyle::Info, "")?;
-            renderer.line(MessageStyle::Info, "Custom slash commands:")?;
-            for cmd in custom_slash_commands.iter() {
-                let description = cmd.description.as_deref().unwrap_or("Custom slash command");
-                renderer.line(
-                    MessageStyle::Info,
-                    &format!("  /{} – {}", cmd.name, description),
-                )?;
-            }
-        }
-
-        // Show information about where custom slash commands can be defined if no custom commands are loaded or if there are none
-        if custom_slash_commands.is_none_or(|cmds| cmds.is_empty()) {
-            renderer.line(MessageStyle::Info, "")?;
-            renderer.line(
-                MessageStyle::Info,
-                "Custom slash commands (project-specific or personal):",
-            )?;
-            renderer.line(MessageStyle::Info, "  Custom slash commands can be defined in .vtcode/commands/ (project) or ~/.vtcode/commands/ (personal)")?;
-            renderer.line(
-                MessageStyle::Info,
-                "  Example: Create .vtcode/commands/review.md to use /review command",
             )?;
         }
 

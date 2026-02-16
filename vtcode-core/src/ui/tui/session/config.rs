@@ -233,9 +233,6 @@ impl Default for PerformanceConfig {
 /// Customization configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CustomizationConfig {
-    /// Custom prompt commands
-    pub custom_prompts: HashMap<String, String>,
-
     /// User-defined UI labels
     pub ui_labels: HashMap<String, String>,
 
@@ -249,13 +246,11 @@ pub struct CustomizationConfig {
 impl Default for CustomizationConfig {
     fn default() -> Self {
         Self {
-            custom_prompts: HashMap::new(),
             ui_labels: HashMap::new(),
             custom_styles: HashMap::new(),
             enabled_features: vec![
                 "slash_commands".to_owned(),
                 "file_palette".to_owned(),
-                "prompt_palette".to_owned(),
                 "modal_dialogs".to_owned(),
             ],
         }

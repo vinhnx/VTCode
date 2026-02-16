@@ -28,7 +28,6 @@ use vtcode_core::core::decision_tracker::DecisionTracker;
 use vtcode_core::llm::{factory::create_provider_with_config, provider as uni};
 use vtcode_core::mcp::McpClient;
 use vtcode_core::models::ModelId;
-use vtcode_core::prompts::CustomPromptRegistry;
 use vtcode_core::tools::build_function_declarations_cached;
 use vtcode_core::tools::{ApprovalRecorder, SearchMetrics, ToolRegistry, ToolResultCache};
 
@@ -139,23 +138,6 @@ pub(crate) async fn initialize_session(
     register_skill_and_subagent_tools(&mut tool_registry, &tools, &skill_setup, config, vt_cfg)
         .await?;
 
-    let custom_prompts = CustomPromptRegistry::load(
-        vt_cfg.map(|cfg| &cfg.agent.custom_prompts),
-        &config.workspace,
-    )
-    .await
-    .unwrap_or_else(|err| {
-        warn!("failed to load custom prompts: {err:#}");
-        CustomPromptRegistry::default()
-    });
-    let custom_slash_commands =
-        vtcode_core::prompts::CustomSlashCommandRegistry::load(None, &config.workspace)
-            .await
-            .unwrap_or_else(|err| {
-                warn!("failed to load custom slash commands: {err:#}");
-                vtcode_core::prompts::CustomSlashCommandRegistry::default()
-            });
-
     let tool_result_cache = Arc::new(RwLock::new(ToolResultCache::new(128)));
     let tool_permission_cache = Arc::new(RwLock::new(ToolPermissionCache::new()));
     let search_metrics = Arc::new(RwLock::new(SearchMetrics::new()));
@@ -199,8 +181,6 @@ pub(crate) async fn initialize_session(
         tool_result_cache,
         tool_permission_cache,
         search_metrics,
-        custom_prompts,
-        custom_slash_commands,
         loaded_skills: skill_setup.active_skills_map,
         approval_recorder,
         safety_validator: Arc::new(RwLock::new(ToolCallSafetyValidator::new())),

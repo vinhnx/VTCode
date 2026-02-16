@@ -10,9 +10,7 @@ use crate::ui::search::fuzzy_score;
 
 use super::super::types::InlineTextStyle;
 use super::{
-    LEGACY_PROMPT_COMMAND_NAME, PROMPT_COMMAND_NAME, PROMPT_COMMAND_PREFIX, Session,
-    measure_text_width,
-    modal::{ModalListLayout, compute_modal_area},
+    Session, measure_text_width, modal::{ModalListLayout, compute_modal_area},
     ratatui_color_from_ansi, ratatui_style_from_inline,
     slash_palette::{self, SlashPaletteUpdate, command_prefix, command_range},
 };
@@ -37,16 +35,6 @@ pub fn render_slash_palette(session: &mut Session, frame: &mut Frame<'_>, viewpo
                     format!("/{} {}", cmd.name, cmd.description)
                 } else {
                     format!("/{}", cmd.name)
-                }
-            }
-            slash_palette::SlashPaletteSuggestion::Custom(prompt) => {
-                // For custom prompts, format as /prompt:name (legacy alias /prompts:name)
-                let prompt_cmd = format!("{}:{}", PROMPT_COMMAND_NAME, prompt.name);
-                let description = prompt.description.as_deref().unwrap_or("");
-                if !description.is_empty() {
-                    format!("/{} {}", prompt_cmd, description)
-                } else {
-                    format!("/{}", prompt_cmd)
                 }
             }
         };
@@ -147,13 +135,6 @@ pub(super) fn update_slash_suggestions(session: &mut Session) {
         return;
     };
 
-    // Update slash palette with custom prompts if available
-    if let Some(ref custom_prompts) = session.custom_prompts {
-        session
-            .slash_palette
-            .set_custom_prompts(custom_prompts.clone());
-    }
-
     match session
         .slash_palette
         .update(Some(&prefix), ui::SLASH_SUGGESTION_LIMIT)
@@ -176,7 +157,6 @@ pub(crate) fn slash_navigation_available(session: &Session) -> bool {
         && has_prefix
         && session.modal.is_none()
         && !session.file_palette_active
-        && !session.prompt_palette_active
 }
 
 pub(super) fn move_slash_selection_up(session: &mut Session) -> bool {

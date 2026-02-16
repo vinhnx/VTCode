@@ -44,7 +44,6 @@ pub fn spawn_session(
         surface_preference,
         inline_rows,
         event_callback,
-        None,
         active_pty_sessions,
         crate::config::KeyboardProtocolConfig::default(),
     )
@@ -58,7 +57,6 @@ pub fn spawn_session_with_prompts(
     surface_preference: UiSurfacePreference,
     inline_rows: u16,
     event_callback: Option<InlineEventCallback>,
-    custom_prompts: Option<crate::prompts::CustomPromptRegistry>,
     active_pty_sessions: Option<Arc<std::sync::atomic::AtomicUsize>>,
     keyboard_protocol: crate::config::KeyboardProtocolConfig,
 ) -> Result<InlineSession> {
@@ -86,7 +84,6 @@ pub fn spawn_session_with_prompts(
                 show_logs: crate::ui::tui::panic_hook::is_debug_mode(),
                 log_theme: None,
                 event_callback,
-                custom_prompts,
                 active_pty_sessions,
                 keyboard_protocol,
             },

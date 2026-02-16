@@ -17,7 +17,7 @@ VT Code runs subagents in the foreground today; background mode is not currently
 
 ### Auto-Selection Behavior
 
-If you do not specify a subagent, VT Code auto-selects one by scoring:
+VT Code auto-selects a built-in subagent by scoring:
 - explicit subagent name mentions
 - keyword and phrase matches (built-in agents include curated keywords)
 - overlap with the agent’s description
@@ -46,41 +46,6 @@ Use subagents directly when you need full control over prompts, tools, or concur
 Use `/subagent model` to open the interactive model picker and save a default
 model for subagents in `vtcode.toml` (`[subagents] default_model`).
 
-## Quick Start
-
-### 1. Create a Subagent
-
-Create a markdown file in `.vtcode/agents/` (project-level) or `~/.vtcode/agents/` (user-level):
-
-```markdown
----
-name: my-agent
-description: Description of when to use this agent
-tools: read_file, grep_file, list_files
-model: inherit
----
-
-Your system prompt here...
-```
-
-### 2. Use the Subagent
-
-VT Code automatically delegates tasks to appropriate subagents, or you can invoke explicitly:
-
-```
-> Use the code-reviewer subagent to check my recent changes
-> Have the debugger subagent investigate this error
-```
-
-### 3. Enable Subagents
-
-Subagents are disabled by default. Enable them in `vtcode.toml`:
-
-```toml
-[subagents]
-enabled = true
-```
-
 ## Built-in Subagents
 
 | Name            | Purpose                                 | Model   | Tools                                                    |
@@ -90,82 +55,6 @@ enabled = true
 | `general`       | Multi-step tasks with full capabilities | sonnet  | all                                                      |
 | `code-reviewer` | Code quality and security review        | inherit | read_file, grep_file, list_files, run_pty_cmd            |
 | `debugger`      | Error investigation and fixes           | inherit | read_file, edit_file, run_pty_cmd, grep_file, list_files |
-
-## Configuration
-
-### Enablement
-
-```toml
-[subagents]
-enabled = true
-# max_concurrent = 3
-# default_timeout_seconds = 300
-# default_model = ""
-# additional_agent_dirs = []
-```
-
-### File Format
-
-```markdown
----
-name: agent-name # Required: unique identifier (lowercase, hyphens)
-description: When to use # Required: natural language description
-tools: tool1, tool2 # Optional: comma-separated tools (inherits all if omitted)
-model: sonnet # Optional: sonnet, opus, haiku, inherit, or model ID
-permissionMode: default # Optional: default, acceptEdits, bypassPermissions, plan, ignore
-skills: skill1, skill2 # Optional: skills to auto-load
----
-
-System prompt goes here (markdown body)
-```
-
-### Model Selection
-
-| Value      | Behavior                                      |
-| ---------- | --------------------------------------------- |
-| `inherit`  | Use the same model as the main conversation   |
-| `sonnet`   | Use Sonnet-equivalent (default for subagents) |
-| `opus`     | Use Opus-equivalent                           |
-| `haiku`    | Use Haiku-equivalent (fast, for exploration)  |
-| `model-id` | Use a specific model ID                       |
-
-### Permission Modes
-
-| Mode                | Behavior                       |
-| ------------------- | ------------------------------ |
-| `default`           | Normal permission prompts      |
-| `acceptEdits`       | Auto-accept file edits         |
-| `bypassPermissions` | Bypass all prompts (dangerous) |
-| `plan`              | Read-only, research mode       |
-| `ignore`            | Continue on permission errors  |
-
-## File Locations
-
-| Type     | Location             | Priority |
-| -------- | -------------------- | -------- |
-| Project  | `.vtcode/agents/`    | Highest  |
-| CLI      | `--agents` JSON flag | High     |
-| User     | `~/.vtcode/agents/`  | Low      |
-| Built-in | Compiled into binary | Lowest   |
-
-Project-level subagents take precedence over user-level when names conflict.
-
-`additional_agent_dirs` are loaded after user-level agents and before project-level agents.
-
-## CLI Configuration
-
-Define subagents dynamically with `--agents`:
-
-```bash
-vtcode --agents '{
-  "my-agent": {
-    "description": "Custom agent",
-    "prompt": "You are a specialized agent.",
-    "tools": ["read_file", "write_file"],
-    "model": "sonnet"
-  }
-}'
-```
 
 ## Resumable Subagents
 
@@ -188,11 +77,10 @@ Subagents can be resumed to continue previous conversations:
 
 ## Best Practices
 
-1. **Focused Purpose**: Create subagents with single, clear responsibilities
-2. **Detailed Prompts**: Include specific instructions, examples, and constraints
-3. **Limited Tools**: Only grant tools necessary for the subagent's purpose
-4. **Version Control**: Check project subagents into source control for team sharing
-5. **Start with VT Code**: Generate initial subagent with `/agents create`, then customize
+1. **Focused Purpose**: Built-in subagents have single, clear responsibilities
+2. **Detailed Prompts**: Use specific instructions when delegating to subagents
+3. **Limited Tools**: Subagents operate with a subset of tools appropriate for their task
+4. **Iterative Refinement**: Provide feedback to subagents if results are not as expected
 
 ## API Usage
 
@@ -237,8 +125,8 @@ See `docs/examples/agents/` for complete examples:
 │  ┌─────────────────────────────────────────────────────────┐│
 │  │                 SubagentRegistry                        ││
 │  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐   ││
-│  │  │ explore  │ │  plan    │ │ general  │ │ custom   │   ││
-│  │  │ (haiku)  │ │ (sonnet) │ │ (sonnet) │ │ (config) │   ││
+│  │  │ explore  │ │  plan    │ │ general  │ │ reviewer │   ││
+│  │  │ (haiku)  │ │ (sonnet) │ │ (sonnet) │ │ (sonnet) │   ││
 │  │  └──────────┘ └──────────┘ └──────────┘ └──────────┘   ││
 │  └─────────────────────────────────────────────────────────┘│
 │                           │                                  │

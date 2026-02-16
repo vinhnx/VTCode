@@ -225,8 +225,6 @@ export class EnhancedChatViewProvider implements vscode.WebviewViewProvider {
             await this.handleSystemCommand(text);
         } else if (text.startsWith("@")) {
             await this.handleAgentCommand(text);
-        } else if (text.startsWith("#")) {
-            await this.handleToolCommand(text);
         } else {
             await this.processAgentResponse(text);
         }
@@ -341,46 +339,6 @@ export class EnhancedChatViewProvider implements vscode.WebviewViewProvider {
         } catch (error) {
             this.sendSystemMessage(
                 `Agent command failed: ${
-                    error instanceof Error ? error.message : String(error)
-                }`,
-                "error"
-            );
-        }
-    }
-
-    /**
-     * Handle custom prompt commands (invoked with # prefix)
-     */
-    protected async handleToolCommand(command: string): Promise<void> {
-        const cmd = command.slice(1).trim();
-
-        if (!cmd) {
-            this.sendSystemMessage(
-                "No custom prompt specified. Use #<prompt-name> to invoke a custom prompt",
-                "warning"
-            );
-            return;
-        }
-
-        // Parse prompt name and arguments
-        const parts = cmd.split(/\s+/);
-        const promptName = parts[0];
-        const args = parts.slice(1).join(" ");
-
-        this.sendSystemMessage(
-            `Loading custom prompt: ${promptName}${
-                args ? ` with arguments: ${args}` : ""
-            }`
-        );
-
-        try {
-            // For now, forward to the agent to handle the custom prompt resolution
-            await this.processAgentResponse(
-                `/prompt:${promptName}${args ? ` ${args}` : ""}`
-            );
-        } catch (error) {
-            this.sendSystemMessage(
-                `Failed to load custom prompt: ${
                     error instanceof Error ? error.message : String(error)
                 }`,
                 "error"
