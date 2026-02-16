@@ -90,7 +90,7 @@ VT Code implements the [Agent2Agent (A2A) Protocol](https://a2a-protocol.org), e
 - **Push Notifications**: Webhook-based async updates
 - **JSON-RPC 2.0**: Over HTTP(S) for interoperability
 
-For more information about A2A protocol support, see [A2A Protocol Documentation](./docs/a2a-protocol.md).
+For more information about A2A protocol support, see [A2A Protocol Documentation](./docs/a2a/a2a-protocol.md).
 
 #### Anthropic API Compatibility
 
@@ -169,7 +169,7 @@ VT Code implements a **defense-in-depth security model** to protect against prom
 - **Human-in-the-Loop**: Configurable approval system for sensitive operations
 - **Audit Trail**: Comprehensive logging of all command executions
 
-See [Security Model](./docs/SECURITY_MODEL.md) and [Sandbox Deep Dive](./docs/SANDBOX_DEEP_DIVE.md) for details.
+See [Security Model](./docs/security/SECURITY_MODEL.md) and [Sandbox Deep Dive](./docs/SANDBOX_DEEP_DIVE.md) for details.
 
 ---
 
@@ -188,9 +188,9 @@ See [Security Model](./docs/SECURITY_MODEL.md) and [Sandbox Deep Dive](./docs/SA
     - [OpenRouter](./docs/providers/openrouter.md)
     - [Ollama](./docs/providers/ollama.md)
     - [LM Studio](./docs/providers/lmstudio.md)
-- [**Context Engineering**](./docs/context_engineering.md)
-    - [Token budget management](./docs/context_engineering_implementation.md#token-budget-tracking--attention-management)
-    - [Dynamic context curation](./docs/context_engineering_implementation.md#phase-2-dynamic-context-curation)
+- [**Context Engineering**](./docs/context/context_engineering.md)
+    - [Token budget management](./docs/context/context_engineering_implementation.md#token-budget-tracking--attention-management)
+    - [Dynamic context curation](./docs/context/context_engineering_implementation.md#phase-2-dynamic-context-curation)
 - [**Agent Skills**](./docs/SKILLS_GUIDE.md) - Comprehensive skills location system with multi-location support, precedence handling, and the [open Agent Skills standard](http://agentskills.io/).
     - [**Standard Compliance**](./docs/AGENT_SKILLS_STANDARD.md) - How VT Code implements the Agent Skills standard
 - [**Code Intelligence**](./docs/user-guide/tree-sitter-integration.md)
@@ -214,9 +214,9 @@ See [Security Model](./docs/SECURITY_MODEL.md) and [Sandbox Deep Dive](./docs/SA
     - [FAQ Integration](./docs/RATATUI_FAQ_INTEGRATION.md) - Mapping of FAQ topics to code
     - [Async Improvements](./docs/ASYNC_IMPROVEMENTS.md) - Tokio best practices applied
 - [**Architecture**](./docs/ARCHITECTURE.md)
-- [**Security**](./docs/SECURITY_MODEL.md)
-    - [Security Model](./docs/SECURITY_MODEL.md)
-    - [Security Audit](./docs/SECURITY_AUDIT.md)
+- [**Security**](./docs/security/SECURITY_MODEL.md)
+    - [Security Model](./docs/security/SECURITY_MODEL.md)
+    - [Security Audit](./docs/security/SECURITY_AUDIT.md)
     - [Tool Policies](./docs/vtcode_tools_policy.md)
 - [**Anthropic API Compatibility**](./docs/anthropic-api.md) - Documentation for Anthropic Messages API compatibility server
 
@@ -253,7 +253,7 @@ For installation instructions and download links for other IDEs, visit our [IDE 
 
 ### Contributing
 
-I warmly welcome contributions of all kinds! Please read [CONTRIBUTING.md](CONTRIBUTING.md) and [AGENTS.md](AGENTS.md) for my project-specific rules and guidelines (for both humans and agents).
+I warmly welcome contributions of all kinds! Please read [CONTRIBUTING.md](./docs/CONTRIBUTING.md) and [AGENTS.md](AGENTS.md) for my project-specific rules and guidelines (for both humans and agents).
 
 Whether you're looking to fix bugs, add new features, improve documentation, or enhance the user experience, your help is greatly appreciated.
 

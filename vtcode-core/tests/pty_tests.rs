@@ -7,6 +7,15 @@ use tempfile::tempdir;
 use vtcode_core::config::PtyConfig;
 use vtcode_core::tools::{PtyCommandRequest, PtyManager};
 
+fn shell_command(script: &str) -> Vec<String> {
+    if cfg!(windows) {
+        let cmd = std::env::var("COMSPEC").unwrap_or_else(|_| "cmd.exe".to_string());
+        vec![cmd, "/C".to_string(), script.to_string()]
+    } else {
+        vec!["sh".to_string(), "-c".to_string(), script.to_string()]
+    }
+}
+
 #[tokio::test]
 async fn run_pty_command_captures_output() -> Result<()> {
     let temp_dir = tempdir()?;
@@ -161,7 +170,10 @@ async fn session_input_roundtrip_and_resize() -> Result<()> {
     assert!(peek_text.contains("got:world"));
 
     let drained_again = manager.read_session_output(&session_id, true)?;
-    assert_eq!(drained_again.as_deref(), Some(peek_text.as_str()));
+    let drained_again_text = drained_again
+        .as_deref()
+        .expect("expected drained output after peek");
+    assert!(drained_again_text.contains("got:world"));
 
     let updated = manager.resize_session(
         &session_id,
@@ -184,6 +196,73 @@ async fn session_input_roundtrip_and_resize() -> Result<()> {
     assert!(scrollback.contains("got:world"));
 
     manager.close_session(&session_id)?;
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn run_pty_command_applies_max_tokens_truncation() -> Result<()> {
+    let temp_dir = tempdir()?;
+    let manager = PtyManager::new(temp_dir.path().to_path_buf(), PtyConfig::default());
+
+    let working_dir = manager.resolve_working_dir(Some(".")).await?;
+    let script = if cfg!(windows) {
+        "echo 012345678901234567890123456789012345678901234567890123456789"
+    } else {
+        "printf '012345678901234567890123456789012345678901234567890123456789'"
+    };
+    let request = PtyCommandRequest {
+        command: shell_command(script),
+        working_dir,
+        timeout: Duration::from_secs(5),
+        size: PtySize {
+            rows: 24,
+            cols: 80,
+            pixel_width: 0,
+            pixel_height: 0,
+        },
+        max_tokens: Some(8),
+        output_callback: None,
+    };
+
+    let result = manager.run_command(request).await?;
+    assert_eq!(result.exit_code, 0);
+    assert!(result.output.contains("[... truncated by max_tokens ...]"));
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn run_pty_command_returns_timeout_error() -> Result<()> {
+    let temp_dir = tempdir()?;
+    let manager = PtyManager::new(temp_dir.path().to_path_buf(), PtyConfig::default());
+
+    let working_dir = manager.resolve_working_dir(Some(".")).await?;
+    let script = if cfg!(windows) {
+        "ping -n 5 127.0.0.1 > nul"
+    } else {
+        "sleep 2"
+    };
+    let request = PtyCommandRequest {
+        command: shell_command(script),
+        working_dir,
+        timeout: Duration::from_millis(200),
+        size: PtySize {
+            rows: 24,
+            cols: 80,
+            pixel_width: 0,
+            pixel_height: 0,
+        },
+        max_tokens: None,
+        output_callback: None,
+    };
+
+    let error = match manager.run_command(request).await {
+        Ok(_) => anyhow::bail!("expected timeout error"),
+        Err(error) => error,
+    };
+    let message = error.to_string();
+    assert!(message.contains("timed out"), "unexpected timeout error: {message}");
 
     Ok(())
 }

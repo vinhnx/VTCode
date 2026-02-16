@@ -124,10 +124,18 @@ let model = "gpt-4o-mini";
 
 ## 7. Documentation Location
 
-All `.md` documentation files go in `docs/`. The only exception is `README.md` in the repository root.
+All `.md` documentation files go in `docs/`. The only exceptions in repository root are approved governance files (`README.md`, `AGENTS.md`, `CLAUDE.md`, `CONTRIBUTING.md`, `CHANGELOG.md`).
 
-**Violation**: a `.md` file in the repository root that is not `README.md`, `AGENTS.md`, `CLAUDE.md`, `CONTRIBUTING.md`, `CHANGELOG.md`, or `LICENSE`.
-**Remediation**: move the file to the appropriate `docs/` subdirectory.
+Within `docs/`, top-level `docs/*.md` is reserved for stable entrypoint docs. New one-off implementation notes, phase reports, and fix summaries must go to a domain folder (for example `docs/features/`) or archive path (for example `docs/archive/`).
+
+**Violation**:
+- a `.md` file in repository root outside the approved list.
+- a `docs/*.md` file that is not listed in `scripts/docs_top_level_allowlist.txt`.
+
+**Remediation**:
+1. Move the file to the appropriate `docs/<domain>/` path or `docs/archive/`.
+2. Update links that referenced the old path.
+3. Add to `scripts/docs_top_level_allowlist.txt` only when the file is intentionally a long-lived top-level entrypoint.
 
 ---
 
@@ -195,6 +203,18 @@ Operational data and status reports must be presented in structured formats (tab
 **Violation**: multi-file or multi-component status reported in long prose blocks without structure.
 **Remediation**: convert the status report into a markdown table or structured list. Follow the examples in `docs/harness/AGENT_LEGIBILITY_GUIDE.md`.
 
+---
+
+## 12. Documentation Link Integrity
+
+Core documentation entrypoints must not contain broken local markdown links.
+
+**Violation**: a local markdown link target in `AGENTS.md`, `README.md`, `docs/README.md`, `docs/INDEX.md`, or harness docs does not exist.
+**Remediation**:
+1. Fix or remove broken references.
+2. Keep links relative to the source markdown file when possible.
+3. Re-run `python3 scripts/check_docs_links.py`.
+
 ## Enforcement
 
 These invariants should be enforced by:
@@ -219,5 +239,6 @@ Not all invariants are fully enforced yet. Known violations are tracked in `docs
 | #2 File Size Limits | TD-005 | TUI event handler modules likely exceed 500 lines |
 | #4 Structured Logging | TD-013 | Not yet audited; some legacy `println!` may exist |
 | #10 Lint Error Messages | TD-014 | Custom lints with remediation not yet implemented |
+| #7 Documentation Location | TD-001 | Top-level docs sprawl now gated by allowlist; consolidation still in-progress |
 
 Adding CI enforcement for invariants is itself tracked as future work. Until enforcement exists, these invariants are enforced by code review and agent discipline.

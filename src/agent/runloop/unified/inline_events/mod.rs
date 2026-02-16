@@ -8,6 +8,8 @@ mod interrupts;
 mod modal;
 mod queue;
 mod state;
+#[cfg(test)]
+mod tests;
 
 pub(crate) use action::{InlineLoopAction, TeamSwitchDirection};
 pub(crate) use context::InlineEventContext;
