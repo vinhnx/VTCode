@@ -1,0 +1,1 @@
+CRITICAL, scroll viewport by mouse/trackpad doesn't work (oonly able to scroll by press up/down arrow keys) -> fix and remove up/down arrow keys scroll logic and make sure scrolling by mouse/trackpad works properly. This is a critical issue that needs to be addressed immediately to ensure a smooth user experience. 

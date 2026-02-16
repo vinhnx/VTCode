@@ -103,35 +103,6 @@ impl Drop for PlaceholderGuard {
 
 const SPINNER_UPDATE_INTERVAL_MS: u64 = 150;
 
-fn create_mini_progress_bar(percentage: u8, width: usize) -> String {
-    if width == 0 {
-        return String::new();
-    }
-
-    let filled = (percentage as usize * width) / 100;
-    let mut bar = String::with_capacity(width + 4);
-
-    bar.push('▐');
-    for i in 0..width {
-        if i < filled {
-            bar.push('█');
-        } else if i == filled && !percentage.is_multiple_of(100 / width as u8) {
-            let partial = match (percentage % (100 / width as u8)) * 8 / (100 / width as u8) {
-                0..=1 => '▏',
-                2..=3 => '▎',
-                4..=5 => '▍',
-                6..=7 => '▌',
-                _ => '▋',
-            };
-            bar.push(partial);
-        } else {
-            bar.push('░');
-        }
-    }
-    bar.push('▌');
-
-    bar
-}
 
 #[allow(dead_code)]
 pub(crate) struct PlaceholderSpinner {
@@ -192,8 +163,8 @@ impl PlaceholderSpinner {
                     let mut parts = vec![progress.message.clone()];
 
                     if progress.total > 0 && progress.percentage > 0 {
-                        let progress_bar = create_mini_progress_bar(progress.percentage, 8);
-                        parts.push(format!("{} {:.0}%", progress_bar, progress.percentage));
+                        // Removed progress bar visualization from status bar
+                        parts.push(format!("{:.0}%", progress.percentage));
                     }
 
                     let eta = progress.eta_formatted();

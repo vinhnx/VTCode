@@ -79,8 +79,6 @@ pub async fn handle_outcome(
             Ok(SlashCommandControl::SubmitPrompt(prompt))
         }
         SlashCommandOutcome::Handled => Ok(SlashCommandControl::Continue),
-        SlashCommandOutcome::DebugAgent => handlers::handle_debug_agent(ctx).await,
-        SlashCommandOutcome::AnalyzeAgent => handlers::handle_analyze_agent(ctx).await,
         SlashCommandOutcome::ThemeChanged(theme_id) => {
             handlers::handle_theme_changed(ctx, theme_id).await
         }

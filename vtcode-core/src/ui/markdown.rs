@@ -340,8 +340,7 @@ fn handle_start_tag(tag: &Tag<'_>, ctx: &mut MarkdownContext<'_>) {
             let style = heading_style(*level, ctx.theme_styles, ctx.base_style);
             ctx.style_stack.push(style);
             ctx.ensure_prefix();
-            let prefix = format!("{} ", "#".repeat(*level as usize));
-            ctx.current_line.push_segment(style, &prefix);
+            // Don't add the heading marker symbols to the output - just apply the style
         }
         Tag::BlockQuote(_) => *ctx.blockquote_depth += 1,
         Tag::List(start) => {
