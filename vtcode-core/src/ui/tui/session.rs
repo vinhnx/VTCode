@@ -45,7 +45,6 @@ mod message;
 pub mod modal;
 mod navigation;
 mod palette_renderer;
-pub mod prompt_palette;
 mod queue;
 pub mod render;
 mod scroll;
@@ -86,7 +85,6 @@ use self::modal::{ModalState, WizardModalState};
 
 use self::config::AppearanceConfig;
 pub(crate) use self::input::status_requires_shimmer;
-use self::prompt_palette::PromptPalette;
 use self::queue::QueueOverlay;
 use self::scroll::ScrollManager;
 use self::slash_palette::SlashPalette;
@@ -95,17 +93,11 @@ use self::styling::SessionStyles;
 use self::transcript::TranscriptReflowCache;
 #[cfg(test)]
 use super::types::InlineHeaderHighlight;
-use crate::prompts::CustomPromptRegistry;
 // use crate::tools::TaskPlan; // Commented out - plan functionality removed
 use crate::ui::tui::log::{LogEntry, highlight_log_entry};
 
 const USER_PREFIX: &str = "";
 const PLACEHOLDER_COLOR: RgbColor = RgbColor(0x88, 0x88, 0x88);
-pub const PROMPT_COMMAND_NAME: &str = "prompt";
-pub const LEGACY_PROMPT_COMMAND_NAME: &str = "prompts";
-pub const PROMPT_INVOKE_PREFIX: &str = "prompt:";
-pub const LEGACY_PROMPT_INVOKE_PREFIX: &str = "prompts:";
-pub const PROMPT_COMMAND_PREFIX: &str = "/prompt:";
 const MAX_LOG_LINES: usize = 256;
 const MAX_LOG_DRAIN_PER_TICK: usize = 256;
 
@@ -186,15 +178,11 @@ pub struct Session {
     in_tool_code_fence: bool,
 
     // --- Palette Management ---
-    custom_prompts: Option<CustomPromptRegistry>,
     pub(crate) config_palette: Option<ConfigPalette>,
     pub(crate) config_palette_active: bool,
     pub(crate) file_palette: Option<FilePalette>,
     pub(crate) file_palette_active: bool,
     pub(crate) deferred_file_browser_trigger: bool,
-    pub(crate) prompt_palette: Option<PromptPalette>,
-    pub(crate) prompt_palette_active: bool,
-    pub(crate) deferred_prompt_browser_trigger: bool,
 
     // --- Thinking Indicator ---
     pub(crate) thinking_spinner: ThinkingSpinner,

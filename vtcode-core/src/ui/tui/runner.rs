@@ -302,7 +302,6 @@ pub struct TuiOptions {
     pub show_logs: bool,
     pub log_theme: Option<String>,
     pub event_callback: Option<InlineEventCallback>,
-    pub custom_prompts: Option<crate::prompts::CustomPromptRegistry>,
     pub active_pty_sessions: Option<std::sync::Arc<std::sync::atomic::AtomicUsize>>,
     pub keyboard_protocol: crate::config::KeyboardProtocolConfig,
 }
@@ -326,11 +325,6 @@ pub async fn run_tui(
     session.set_log_receiver(log_rx);
     session.active_pty_sessions = options.active_pty_sessions;
     register_tui_log_sender(log_tx);
-
-    // Pre-load custom prompts if provided
-    if let Some(prompts) = options.custom_prompts {
-        session.set_custom_prompts(prompts);
-    }
 
     let keyboard_flags = crate::config::keyboard_protocol_to_flags(&options.keyboard_protocol);
     let mut stderr = io::stderr();

@@ -95,7 +95,6 @@ pub(crate) async fn initialize_session_ui(
         config.ui_surface,
         inline_rows,
         Some(interrupt_callback),
-        Some(session_state.custom_prompts.clone()),
         Some(pty_counter.clone()),
         vt_cfg
             .map(|cfg| cfg.ui.keyboard_protocol.clone())

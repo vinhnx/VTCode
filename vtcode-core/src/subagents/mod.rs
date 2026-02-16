@@ -14,8 +14,8 @@
 //! │  ┌─────────────────────────────────────────────────────────┐│
 //! │  │                 SubagentRegistry                        ││
 //! │  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐   ││
-//! │  │  │ explore  │ │  plan    │ │ general  │ │ custom   │   ││
-//! │  │  │ (haiku)  │ │ (sonnet) │ │ (sonnet) │ │ (config) │   ││
+//! │  │  │ explore  │ │  plan    │ │ general  │ │ reviewer │   ││
+//! │  │  │ (haiku)  │ │ (sonnet) │ │ (sonnet) │ │ (sonnet) │   ││
 //! │  │  └──────────┘ └──────────┘ └──────────┘ └──────────┘   ││
 //! │  └─────────────────────────────────────────────────────────┘│
 //! │                           │                                  │
@@ -46,21 +46,6 @@
 //! - **general**: Multi-step tasks with full capabilities (sonnet)
 //! - **code-reviewer**: Code quality and security review
 //! - **debugger**: Error investigation and fixes
-//!
-//! # Custom Subagents
-//!
-//! Create `.vtcode/agents/my-agent.md` with YAML frontmatter:
-//!
-//! ```markdown
-//! ---
-//! name: my-agent
-//! description: Custom agent for specific tasks
-//! tools: read_file, grep_file
-//! model: inherit
-//! ---
-//!
-//! Your system prompt here...
-//! ```
 //!
 //! # Skill Library Evolution Pattern
 //!
@@ -109,9 +94,6 @@
 
 pub mod registry;
 pub mod runner;
-
-#[cfg(test)]
-mod test_cleanup;
 
 pub use registry::{RunningSubagent, SubagentRegistry};
 pub use runner::{SpawnParams, SubagentResult, SubagentRunner, Thoroughness, TokenUsage};

@@ -133,14 +133,6 @@ pub struct AgentConfig {
     #[serde(default, alias = "instruction_paths", alias = "instructions")]
     pub instruction_files: Vec<String>,
 
-    /// Custom prompt configuration for slash command shortcuts
-    #[serde(default)]
-    pub custom_prompts: AgentCustomPromptsConfig,
-
-    /// Configuration for custom slash commands
-    #[serde(default)]
-    pub custom_slash_commands: AgentCustomSlashCommandsConfig,
-
     /// Provider-specific API keys captured from interactive configuration flows
     #[serde(default)]
     pub custom_api_keys: BTreeMap<String, String>,
@@ -366,8 +358,6 @@ impl Default for AgentConfig {
             project_doc_max_bytes: default_project_doc_max_bytes(),
             instruction_max_bytes: default_instruction_max_bytes(),
             instruction_files: Vec::new(),
-            custom_prompts: AgentCustomPromptsConfig::default(),
-            custom_slash_commands: AgentCustomSlashCommandsConfig::default(),
             custom_api_keys: BTreeMap::new(),
             checkpointing: AgentCheckpointingConfig::default(),
             vibe_coding: AgentVibeCodingConfig::default(),
@@ -557,86 +547,6 @@ const fn default_max_open_circuits() -> usize {
 #[inline]
 const fn default_recovery_cooldown() -> u64 {
     60 // Cooldown between recovery prompts (seconds)
-}
-
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct AgentCustomPromptsConfig {
-    /// Master switch for custom prompt support
-    #[serde(default = "default_custom_prompts_enabled")]
-    pub enabled: bool,
-
-    /// Primary directory for prompt markdown files
-    #[serde(default = "default_custom_prompts_directory")]
-    pub directory: String,
-
-    /// Additional directories to search for prompts
-    #[serde(default)]
-    pub extra_directories: Vec<String>,
-
-    /// Maximum file size (KB) to load for a single prompt
-    #[serde(default = "default_custom_prompts_max_file_size_kb")]
-    pub max_file_size_kb: usize,
-}
-
-impl Default for AgentCustomPromptsConfig {
-    fn default() -> Self {
-        Self {
-            enabled: default_custom_prompts_enabled(),
-            directory: default_custom_prompts_directory(),
-            extra_directories: Vec::new(),
-            max_file_size_kb: default_custom_prompts_max_file_size_kb(),
-        }
-    }
-}
-
-/// Configuration for custom slash commands
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Deserialize, Serialize, Default)]
-pub struct AgentCustomSlashCommandsConfig {
-    /// Master switch for custom slash command support
-    #[serde(default = "default_custom_slash_commands_enabled")]
-    pub enabled: bool,
-
-    /// Primary directory for slash command markdown files
-    #[serde(default = "default_custom_slash_commands_directory")]
-    pub directory: String,
-
-    /// Additional directories to search for slash commands
-    #[serde(default)]
-    pub extra_directories: Vec<String>,
-
-    /// Maximum file size (KB) to load for a single slash command
-    #[serde(default = "default_custom_slash_commands_max_file_size_kb")]
-    pub max_file_size_kb: usize,
-}
-
-#[inline]
-const fn default_custom_slash_commands_enabled() -> bool {
-    true
-}
-
-fn default_custom_slash_commands_directory() -> String {
-    crate::constants::prompts::DEFAULT_CUSTOM_SLASH_COMMANDS_DIR.into()
-}
-
-const fn default_custom_slash_commands_max_file_size_kb() -> usize {
-    64 // 64KB default, same as prompts
-}
-
-#[inline]
-const fn default_custom_prompts_enabled() -> bool {
-    true
-}
-
-#[inline]
-fn default_custom_prompts_directory() -> String {
-    prompts::DEFAULT_CUSTOM_PROMPTS_DIR.into()
-}
-
-#[inline]
-const fn default_custom_prompts_max_file_size_kb() -> usize {
-    prompts::DEFAULT_CUSTOM_PROMPT_MAX_FILE_SIZE_KB
 }
 
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]

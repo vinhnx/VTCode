@@ -19,8 +19,7 @@ Stores configuration files and user preferences:
 ```
 Config Directory/
 ├── vtcode.toml          # Main configuration file
-├── skills/              # User-defined skills
-└── prompts/             # Custom prompts
+└── skills/              # User-defined skills
 ```
 
 **Default Locations:**

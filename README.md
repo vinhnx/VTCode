@@ -181,7 +181,6 @@ See [Security Model](./docs/SECURITY_MODEL.md) and [Sandbox Deep Dive](./docs/SA
 - [**Getting started**](./docs/user-guide/getting-started.md)
     - [Interactive mode](./docs/user-guide/interactive-mode.md)
     - [Command line interface](./docs/user-guide/commands.md)
-    - [Custom prompts](./docs/user-guide/custom-prompts.md)
 - [Subagents](./docs/subagents/SUBAGENTS.md)
 - [Configuration](./docs/config/CONFIGURATION_PRECEDENCE.md)
 - [**AI Provider Setup**](./docs/PROVIDER_GUIDES.md) - Complete guides for configuring different LLM providers:
@@ -200,7 +199,6 @@ See [Security Model](./docs/SECURITY_MODEL.md) and [Sandbox Deep Dive](./docs/SA
 - [**Lifecycle Hooks**](./docs/guides/lifecycle-hooks.md) - Execute shell commands in response to agent events, enabling context enrichment, policy enforcement, and automation
 - [**Keyboard Shortcuts**](./docs/guides/tui-event-handling.md)
 - [**macOS Alt Shortcut Troubleshooting**](./docs/guides/macos-alt-shortcut-troubleshooting.md) - Solutions for when Alt/Option shortcuts don't work on macOS
-- [**Custom Prompts**](./docs/user-guide/custom-prompts.md)
 - [**Exec Mode**](./docs/user-guide/exec-mode.md)
 - [**Development**](./docs/development/README.md)
     - [Testing](./docs/development/testing.md)

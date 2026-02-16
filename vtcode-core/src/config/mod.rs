@@ -28,8 +28,8 @@ pub use acp::{
 pub use api_keys::ApiKeySources;
 pub use context::{ContextFeaturesConfig, LedgerConfig};
 pub use core::{
-    AgentConfig, AgentCustomPromptsConfig, AgentOnboardingConfig, AutomationConfig, CommandsConfig,
-    FullAutoConfig, GatekeeperConfig, ModelConfig, PermissionsConfig, PromptCachingConfig,
+    AgentConfig, AgentOnboardingConfig, AutomationConfig, CommandsConfig, FullAutoConfig,
+    GatekeeperConfig, ModelConfig, PermissionsConfig, PromptCachingConfig,
     ProviderPromptCachingConfig, SecurityConfig, ToolPolicy, ToolsConfig,
 };
 pub use core::{PluginRuntimeConfig, PluginTrustLevel};

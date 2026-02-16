@@ -140,15 +140,11 @@ impl Session {
             in_tool_code_fence: false,
 
             // --- Palette Management ---
-            custom_prompts: None,
             config_palette: None,
             config_palette_active: false,
             file_palette: None,
             file_palette_active: false,
             deferred_file_browser_trigger: false,
-            prompt_palette: None,
-            prompt_palette_active: false,
-            deferred_prompt_browser_trigger: false,
 
             // --- Thinking Indicator ---
             thinking_spinner: ThinkingSpinner::new(),

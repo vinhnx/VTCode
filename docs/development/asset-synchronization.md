@@ -21,8 +21,6 @@ The following assets are currently synchronized:
 
 | Source (Workspace) | Destination (Crate) | Purpose |
 |-------------------|-------------------|---------|
-| `prompts/custom/vtcode.md` | `vtcode-core/embedded_assets_source/prompts/custom/vtcode.md` | Main system prompt |
-| `prompts/custom/generate-agent-file.md` | `vtcode-core/embedded_assets_source/prompts/custom/generate-agent-file.md` | Agent file generation prompt |
 | `docs/vtcode_docs_map.md` | `vtcode-core/embedded_assets_source/docs/vtcode_docs_map.md` | Documentation map for self-documentation |
 
 ## **Using the Sync Script**
@@ -53,8 +51,6 @@ python3 scripts/sync_embedded_assets.py --dry-run
 
 **Always run the sync script after making changes to synchronized assets:**
 
--   After editing `prompts/custom/vtcode.md`
--   After editing `prompts/custom/generate-agent-file.md`
 -   After editing `docs/vtcode_docs_map.md`
 -   After adding or removing synchronized assets
 
@@ -83,14 +79,10 @@ git diff vtcode-core/embedded_assets_source/
 When updating system prompts:
 
 ```bash
-# 1. Edit the prompt files
-vim prompts/custom/vtcode.md
-vim prompts/custom/generate-file.md
+# 1. Edit the prompt files (built-in templates)
+# (VT Code uses compiled-in templates for most prompts today)
 
-# 2. Sync to update the crate assets
-python3 scripts/sync_embedded_assets.py
-
-# 3. Test your changes
+# 2. Test your changes
 cargo test --package vtcode-core
 ```
 
@@ -177,8 +169,8 @@ Example addition to `ASSET_MAPPINGS`:
 ```python
 ASSET_MAPPINGS = {
     # ... existing mappings ...
-    ROOT / "prompts" / "custom" / "new-prompt.md": CORE_EMBEDDED
-    / "prompts" / "custom" / "new-prompt.md",
+    ROOT / "docs" / "new-guideline.md": CORE_EMBEDDED
+    / "docs" / "new-guideline.md",
 }
 ```
 

@@ -15,20 +15,8 @@ improve src/agent/runloop/unified/turn/turn_loop.rs
 
 ---
 
-docs/harness/TECH_DEBT_TRACKER.md
-
----
-
 docs/harness/QUALITY_SCORE.md
 
 ---
 
 remove .agents/skills from git history
-
----
-
-remove prompts/custom
-
----
-
-check typos.toml and remove if not used

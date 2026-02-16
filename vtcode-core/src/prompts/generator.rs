@@ -43,12 +43,6 @@ impl<'a> SystemPromptGenerator<'a> {
         append!(PromptTemplates::base_system_prompt());
         first = false;
 
-        // Custom instruction if provided (borrowed, avoid clone)
-        if let Some(custom) = self.config.custom_instruction.as_deref() {
-            append!(custom);
-            first = false;
-        }
-
         // Personality and response style (static &'static str from templates)
         append!(PromptTemplates::personality_prompt(
             &self.config.personality
@@ -185,9 +179,6 @@ fn cache_key(config: &SystemPromptConfig, context: &PromptContext) -> String {
     config.include_workspace.hash(&mut hasher);
     config.personality.hash(&mut hasher);
     config.response_style.hash(&mut hasher);
-    if let Some(custom) = &config.custom_instruction {
-        custom.hash(&mut hasher);
-    }
 
     if let Some(workspace) = &context.workspace {
         workspace.hash(&mut hasher);

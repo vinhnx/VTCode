@@ -1,11 +1,8 @@
 use anyhow::Result;
 use serde_json::Value;
-use vtcode_core::prompts::{CustomPromptRegistry, CustomSlashCommandRegistry};
 use vtcode_core::ui::theme;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
-#[path = "slash_commands/custom.rs"]
-mod custom;
 #[path = "slash_commands/flow.rs"]
 mod flow;
 #[path = "slash_commands/management.rs"]
@@ -16,7 +13,6 @@ mod parsing;
 mod rendering;
 #[path = "slash_commands/team_agent.rs"]
 mod team_agent;
-use custom::{handle_custom_prompt, handle_custom_slash_command, render_custom_prompt_list};
 use flow::{
     handle_agent_command, handle_analyze_command, handle_auth_command, handle_login_command,
     handle_logout_command, handle_mode_command, handle_plan_command, handle_rewind_command,
@@ -217,8 +213,6 @@ pub enum WorkspaceDirectoryCommand {
 pub async fn handle_slash_command(
     input: &str,
     renderer: &mut AnsiRenderer,
-    custom_prompts: &CustomPromptRegistry,
-    custom_slash_commands: Option<&CustomSlashCommandRegistry>,
 ) -> Result<SlashCommandOutcome> {
     let trimmed = input.trim();
     if trimmed.is_empty() {
@@ -228,21 +222,6 @@ pub async fn handle_slash_command(
     let (command, rest) = split_command_and_args(trimmed);
     let command_key = command.to_ascii_lowercase();
     let args = rest.trim();
-
-    if let Some(prompt_name) = command_key.strip_prefix("prompt:") {
-        return handle_custom_prompt(prompt_name, args, renderer, custom_prompts);
-    }
-    if let Some(prompt_name) = command_key.strip_prefix("prompts:") {
-        return handle_custom_prompt(prompt_name, args, renderer, custom_prompts);
-    }
-
-    // Check for custom slash commands
-    if let Some(custom_slash_commands) = custom_slash_commands
-        && custom_slash_commands.enabled()
-        && custom_slash_commands.get(&command_key).is_some()
-    {
-        return handle_custom_slash_command(&command_key, args, renderer, custom_slash_commands);
-    }
 
     match command_key.as_str() {
         "donate" => {
@@ -254,10 +233,6 @@ pub async fn handle_slash_command(
                 MessageStyle::Info,
                 "You can donate at: https://buymeacoffee.com/vinhnx",
             )?;
-            Ok(SlashCommandOutcome::Handled)
-        }
-        "prompt" | "prompts" => {
-            render_custom_prompt_list(renderer, custom_prompts)?;
             Ok(SlashCommandOutcome::Handled)
         }
 
@@ -462,7 +437,7 @@ pub async fn handle_slash_command(
             } else {
                 Some(args.trim())
             };
-            render_help(renderer, specific_cmd, custom_slash_commands)?;
+            render_help(renderer, specific_cmd)?;
             Ok(SlashCommandOutcome::Handled)
         }
         "terminal-setup" => {

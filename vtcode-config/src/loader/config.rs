@@ -353,20 +353,6 @@ recommended_actions = [
     "Ask for a workspace tour if you need more context.",
 ]
 
-# Custom prompts configuration - Define personal assistant commands
-[agent.custom_prompts]
-# Enable the custom prompts feature with /prompt:<name> syntax
-enabled = true
-
-# Directory where custom prompt files are stored
-directory = "~/.vtcode/prompts"
-
-# Additional directories to search for custom prompts
-extra_directories = []
-
-# Maximum file size for custom prompts (in kilobytes)
-max_file_size_kb = 64
-
 # Custom API keys for specific providers
 [agent.custom_api_keys]
 # Moonshot AI API key (for specific provider access)
@@ -396,9 +382,6 @@ enabled = false
 
 # Default model for subagents (override per-agent model if set)
 # default_model = ""
-
-# Additional directories to search for subagent definitions
-# additional_agent_dirs = []
 
 # Agent teams (experimental)
 [agent_teams]

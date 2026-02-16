@@ -418,7 +418,7 @@ temporal_context_use_utc = false
 include_working_directory = true
 
 # Custom instruction to prepend
-custom_instruction = "Focus on error handling"
+user_instructions = "Focus on error handling"
 ```
 
 ### Environment Variables
@@ -427,7 +427,7 @@ custom_instruction = "Focus on error handling"
 # Set specific model hints
 export VTCODE_PROMPT_MODE=minimal
 export VTCODE_INCLUDE_TEMPORAL=true
-export VTCODE_CUSTOM_INSTRUCTIONS="file://path/to/custom.md"
+export VTCODE_USER_INSTRUCTIONS="file://path/to/custom.md"
 ```
 
 ---
@@ -463,7 +463,7 @@ export VTCODE_CUSTOM_INSTRUCTIONS="file://path/to/custom.md"
 ```rust
 // Add custom instruction
 let mut config = VTCodeConfig::default();
-config.agent.custom_instruction = Some("Always prioritize security".to_string());
+config.agent.user_instructions = Some("Always prioritize security".to_string());
 
 // Add temporal context
 config.agent.include_temporal_context = true;

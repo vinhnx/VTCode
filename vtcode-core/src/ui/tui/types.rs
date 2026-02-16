@@ -648,9 +648,6 @@ pub enum InlineCommand {
         mode: WizardModalMode,
     },
     CloseModal,
-    SetCustomPrompts {
-        registry: crate::prompts::CustomPromptRegistry,
-    },
     LoadFilePalette {
         files: Vec<String>,
         workspace: std::path::PathBuf,
@@ -980,10 +977,6 @@ impl InlineHandle {
 
     pub fn clear_screen(&self) {
         self.send_command(InlineCommand::ClearScreen);
-    }
-
-    pub fn set_custom_prompts(&self, registry: crate::prompts::CustomPromptRegistry) {
-        self.send_command(InlineCommand::SetCustomPrompts { registry });
     }
 
     pub fn load_file_palette(&self, files: Vec<String>, workspace: std::path::PathBuf) {

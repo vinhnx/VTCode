@@ -7,13 +7,9 @@ The vtcode project uses embedded assets that are compiled into the binary. These
 ## File Locations
 
 ### Source of Truth (Workspace Level)
-- `prompts/custom/vtcode.md`
-- `prompts/custom/generate-agent-file.md`
 - `docs/vtcode_docs_map.md`
 
 ### Fallback Copies (Embedded Assets Source)
-- `vtcode-core/embedded_assets_source/prompts/custom/vtcode.md`
-- `vtcode-core/embedded_assets_source/prompts/custom/generate-agent-file.md`
 - `vtcode-core/embedded_assets_source/docs/vtcode_docs_map.md`
 
 ## Build System Behavior
@@ -26,9 +22,9 @@ The build script (`vtcode-core/build.rs`) enforces strict synchronization:
 
 **Example error message:**
 ```
-embedded asset `prompts/custom/generate-agent-file.md` is out of sync. 
-Update `vtcode-core/embedded_assets_source/prompts/custom/generate-agent-file.md` 
-to match `prompts/custom/generate-agent-file.md`
+embedded asset `docs/vtcode_docs_map.md` is out of sync. 
+Update `vtcode-core/embedded_assets_source/docs/vtcode_docs_map.md` 
+to match `docs/vtcode_docs_map.md`
 ```
 
 ## Workflow
@@ -37,26 +33,26 @@ to match `prompts/custom/generate-agent-file.md`
 
 When you modify a source-of-truth file:
 
-1. Edit the workspace-level file (e.g., `prompts/custom/generate-agent-file.md`)
+1. Edit the workspace-level file (e.g., `docs/vtcode_docs_map.md`)
 2. Copy the updated file to the fallback location:
    ```bash
-   cp prompts/custom/generate-agent-file.md \
-      vtcode-core/embedded_assets_source/prompts/custom/generate-agent-file.md
+   cp docs/vtcode_docs_map.md \
+      vtcode-core/embedded_assets_source/docs/vtcode_docs_map.md
    ```
 3. Commit both changes together
 4. Build to verify: `cargo build --release` or `cargo check`
 
 ### Adding New Embedded Assets
 
-1. Create the asset in the workspace root (e.g., `prompts/custom/my-file.md`)
+1. Create the asset in the workspace root (e.g., `docs/new-asset.md`)
 2. Register it in `vtcode-core/build.rs` EMBEDDED_ASSETS array:
    ```rust
    const EMBEDDED_ASSETS: &[(&str, &str)] = &[
-       ("prompts/custom/my-file.md", "prompts/custom/my-file.md"),
+       ("docs/new-asset.md", "docs/new-asset.md"),
        // ... existing entries
    ];
    ```
-3. Create the fallback copy in `vtcode-core/embedded_assets_source/prompts/custom/my-file.md`
+3. Create the fallback copy in `vtcode-core/embedded_assets_source/docs/new-asset.md`
 4. Build to verify the asset is correctly embedded
 
 ## Pre-Commit Check (Recommended)
@@ -84,8 +80,6 @@ sync_check() {
 }
 
 # Check all embedded assets
-sync_check "$WORKSPACE_DIR/prompts/custom/vtcode.md" "$EMBEDDED_DIR/prompts/custom/vtcode.md"
-sync_check "$WORKSPACE_DIR/prompts/custom/generate-agent-file.md" "$EMBEDDED_DIR/prompts/custom/generate-agent-file.md"
 sync_check "$WORKSPACE_DIR/docs/vtcode_docs_map.md" "$EMBEDDED_DIR/docs/vtcode_docs_map.md"
 
 exit 0

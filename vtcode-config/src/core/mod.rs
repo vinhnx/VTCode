@@ -14,7 +14,7 @@ pub mod skills;
 pub mod tools;
 
 pub use agent::{
-    AgentConfig, AgentCustomPromptsConfig, AgentOnboardingConfig, OpenResponsesConfig,
+    AgentConfig, AgentOnboardingConfig, OpenResponsesConfig,
 };
 pub use auth::{AuthConfig, OpenRouterAuthConfig};
 pub use automation::{AutomationConfig, FullAutoConfig};

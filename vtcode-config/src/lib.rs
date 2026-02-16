@@ -55,7 +55,7 @@ pub use agent_teams::{AgentTeamsConfig, TeammateMode};
 pub use api_keys::ApiKeySources;
 pub use context::{ContextFeaturesConfig, DynamicContextConfig, LedgerConfig};
 pub use core::{
-    AgentConfig, AgentCustomPromptsConfig, AgentOnboardingConfig, AuthConfig, AutomationConfig,
+    AgentConfig, AgentOnboardingConfig, AuthConfig, AutomationConfig,
     CommandsConfig, DockerSandboxConfig, ExternalSandboxConfig, ExternalSandboxType,
     FullAutoConfig, GatekeeperConfig, MicroVMSandboxConfig, ModelConfig,
     NetworkAllowlistEntryConfig, NetworkConfig, OpenResponsesConfig, OpenRouterAuthConfig,
