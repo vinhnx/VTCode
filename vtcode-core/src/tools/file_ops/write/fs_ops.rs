@@ -168,8 +168,21 @@ impl FileOpsTool {
             force,
         } = input;
 
-        let from_path = self.workspace_root.join(&path);
-        let to_path = self.workspace_root.join(&destination);
+        let from_path = self.normalize_and_validate_user_path(&path).await?;
+        let to_path = self.normalize_and_validate_user_path(&destination).await?;
+
+        if self.should_exclude(&from_path).await {
+            return Err(anyhow!(
+                "Error: Path '{}' is excluded by .vtcodegitignore and cannot be moved.",
+                path
+            ));
+        }
+        if self.should_exclude(&to_path).await {
+            return Err(anyhow!(
+                "Error: Destination '{}' is excluded by .vtcodegitignore.",
+                destination
+            ));
+        }
 
         if !tokio::fs::try_exists(&from_path).await? {
             return Err(anyhow!("Source path '{}' does not exist", path));
@@ -195,8 +208,8 @@ impl FileOpsTool {
 
         Ok(json!({
             "success": true,
-            "from": path,
-            "to": destination,
+            "from": self.workspace_relative_display(&from_path),
+            "to": self.workspace_relative_display(&to_path),
         }))
     }
 
@@ -212,8 +225,21 @@ impl FileOpsTool {
             recursive,
         } = input;
 
-        let from_path = self.workspace_root.join(&path);
-        let to_path = self.workspace_root.join(&destination);
+        let from_path = self.normalize_and_validate_user_path(&path).await?;
+        let to_path = self.normalize_and_validate_user_path(&destination).await?;
+
+        if self.should_exclude(&from_path).await {
+            return Err(anyhow!(
+                "Error: Path '{}' is excluded by .vtcodegitignore and cannot be copied.",
+                path
+            ));
+        }
+        if self.should_exclude(&to_path).await {
+            return Err(anyhow!(
+                "Error: Destination '{}' is excluded by .vtcodegitignore.",
+                destination
+            ));
+        }
 
         if !tokio::fs::try_exists(&from_path).await? {
             return Err(anyhow!("Source path '{}' does not exist", path));
@@ -259,8 +285,8 @@ impl FileOpsTool {
 
         Ok(json!({
             "success": true,
-            "from": path,
-            "to": destination,
+            "from": self.workspace_relative_display(&from_path),
+            "to": self.workspace_relative_display(&to_path),
         }))
     }
 }
