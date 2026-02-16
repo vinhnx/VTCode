@@ -100,6 +100,18 @@ recommended_actions = [
     "Ask for a workspace tour if you need more context.",
 ]
 
+[agent.custom_prompts]
+enabled = true
+directory = "~/.vtcode/prompts"
+extra_directories = []
+max_file_size_kb = 64
+
+[agent.custom_slash_commands]
+enabled = false
+directory = ""
+extra_directories = []
+max_file_size_kb = 0
+
 # Security configuration
 [security]
 # Require human confirmation for potentially dangerous actions
