@@ -48,6 +48,7 @@ semver = "1.0"
 fs2 = "0.4"
 mimalloc = { version = "0.1", default-features = false }
 rustc-hash = "2.1"
+keyring = "3"
 
 [workspace.package]
 version = "0.80.0"

@@ -82,7 +82,8 @@ description: Valid entry
 Body.
 "#;
     fs::write(dir.join("valid.md"), valid).expect("valid markdown should be written");
-    fs::write(dir.join("invalid.md"), "missing frontmatter").expect("invalid markdown should exist");
+    fs::write(dir.join("invalid.md"), "missing frontmatter")
+        .expect("invalid markdown should exist");
 
     let discovered = discover_subagents_in_dir(dir, SubagentSource::Project);
     assert_eq!(discovered.len(), 2);

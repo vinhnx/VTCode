@@ -137,6 +137,15 @@ pub struct AgentConfig {
     #[serde(default)]
     pub custom_api_keys: BTreeMap<String, String>,
 
+    /// Preferred storage backend for credentials (OAuth tokens, API keys, etc.)
+    ///
+    /// - `keyring`: Use OS-specific secure storage (macOS Keychain, Windows Credential
+    ///   Manager, Linux Secret Service). This is the default as it's the most secure.
+    /// - `file`: Use AES-256-GCM encrypted file with machine-derived key
+    /// - `auto`: Try keyring first, fall back to file if unavailable
+    #[serde(default)]
+    pub credential_storage_mode: crate::auth::AuthCredentialsStoreMode,
+
     /// Checkpointing configuration for automatic turn snapshots
     #[serde(default)]
     pub checkpointing: AgentCheckpointingConfig,
@@ -359,6 +368,7 @@ impl Default for AgentConfig {
             instruction_max_bytes: default_instruction_max_bytes(),
             instruction_files: Vec::new(),
             custom_api_keys: BTreeMap::new(),
+            credential_storage_mode: crate::auth::AuthCredentialsStoreMode::default(),
             checkpointing: AgentCheckpointingConfig::default(),
             vibe_coding: AgentVibeCodingConfig::default(),
             max_task_retries: default_max_task_retries(),
