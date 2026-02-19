@@ -29,12 +29,12 @@ jobs:
           # Linux - x86_64 (most common)
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            build_cmd: cross build --release --target ${{ matrix.target }}
+            use_cross: true
 
           # Windows - x86_64 (most common)
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            build_cmd: cargo build --release --target ${{ matrix.target }}
+            use_cross: false
 
     steps:
       - uses: actions/checkout@v4
@@ -53,7 +53,7 @@ jobs:
           cache-on-failure: true
 
       - name: Install Cross (for Linux builds)
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.use_cross
         run: cargo install cross --git https://github.com/cross-rs/cross.git --locked
 
       - name: Setup OpenSSL (Windows)
@@ -64,7 +64,12 @@ jobs:
         shell: bash
 
       - name: Build (${{ matrix.target }})
-        run: ${{ matrix.build_cmd }}
+        run: |
+          if [[ "${{ matrix.use_cross }}" == "true" ]]; then
+            cross build --release --target ${{ matrix.target }}
+          else
+            cargo build --release --target ${{ matrix.target }}
+          fi
         shell: bash
         env:
           OPENSSL_STATIC: ${{ contains(matrix.target, 'linux') && '1' || '' }}

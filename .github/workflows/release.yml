@@ -27,32 +27,32 @@ jobs:
           # macOS - Apple Silicon (M1/M2/M3/M4)
           - os: macos-latest
             target: aarch64-apple-darwin
-            build_cmd: cargo build --release --target ${{ matrix.target }}
+            use_cross: false
 
           # macOS - Intel (older Macs)
           - os: macos-latest
             target: x86_64-apple-darwin
-            build_cmd: cargo build --release --target ${{ matrix.target }}
+            use_cross: false
 
           # Linux - x86_64 (most common)
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            build_cmd: cross build --release --target ${{ matrix.target }}
+            use_cross: true
 
           # Linux - ARM64 (Raspberry Pi, ARM servers)
           - os: ubuntu-latest
             target: aarch64-unknown-linux-gnu
-            build_cmd: cross build --release --target ${{ matrix.target }}
+            use_cross: true
 
           # Windows - x86_64 (most common)
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            build_cmd: cargo build --release --target ${{ matrix.target }}
+            use_cross: false
 
           # Windows - ARM64 (Surface Pro X, newer devices)
           - os: windows-latest
             target: aarch64-pc-windows-msvc
-            build_cmd: cargo build --release --target ${{ matrix.target }}
+            use_cross: false
 
     steps:
       - uses: actions/checkout@v4
@@ -72,23 +72,25 @@ jobs:
           cache-on-failure: true
 
       - name: Install Cross (for Linux builds)
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.use_cross
         run: cargo install cross --git https://github.com/cross-rs/cross.git --locked
 
       - name: Setup OpenSSL (Windows)
         if: matrix.os == 'windows-latest'
         run: |
-          # Windows builds use native OpenSSL, no special setup needed
-          # The build should use bundled OpenSSL or Windows Crypto API
           echo "OPENSSL_DIR=" >> $GITHUB_ENV
           echo "OPENSSL_STATIC=1" >> $GITHUB_ENV
         shell: bash
 
       - name: Build (${{ matrix.target }})
-        run: ${{ matrix.build_cmd }}
+        run: |
+          if [[ "${{ matrix.use_cross }}" == "true" ]]; then
+            cross build --release --target ${{ matrix.target }}
+          else
+            cargo build --release --target ${{ matrix.target }}
+          fi
         shell: bash
         env:
-          # Enable static linking for OpenSSL on Linux
           OPENSSL_STATIC: ${{ contains(matrix.target, 'linux') && '1' || '' }}
 
       - name: Check Binary
