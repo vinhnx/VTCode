@@ -6,6 +6,8 @@ This document describes the cost-optimized release workflow for VT Code, which b
 
 ## Architecture
 
+### Hybrid Approach (Default)
+
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                    Local Release Script                          │
@@ -34,23 +36,56 @@ This document describes the cost-optimized release workflow for VT Code, which b
                    └─────────────────┘
 ```
 
+### Full CI Approach (--full-ci flag)
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Local Release Script                          │
+│              ./scripts/release.sh --full-ci                      │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+                   ┌─────────────────────────┐
+                   │  Trigger Full CI        │
+                   │  release.yml            │
+                   │                         │
+                   │  • macOS (both archs)   │
+                   │  • Linux (both archs)   │
+                   │  • Windows (both archs) │
+                   └─────────────────────────┘
+                              │
+                              ▼
+                   ┌─────────────────────────┐
+                   │  CI Builds All Platforms│
+                   │  & Creates Release      │
+                   └─────────────────────────┘
+```
+
 ## Workflows
 
 ### 1. `release.yml` - Full CI Build (All Platforms)
 - **Purpose**: Manual releases building ALL platforms on GitHub Actions
 - **Platforms**: macOS (x86_64 + aarch64), Linux (x86_64 + aarch64), Windows (x86_64 + aarch64)
-- **Cost**: ~$0 for public repos (GitHub-hosted runners are free)
-- **Use case**: When you want GitHub to build everything
+- **Cost**: $0 for public repos (GitHub-hosted runners are free)
+- **Use case**: 
+  - When you want GitHub to build everything
+  - Local Mac is slow or unavailable
+  - Re-running failed builds
+- **Trigger**: `gh workflow run release.yml --field tag=0.81.2` or `./scripts/release.sh --full-ci`
 
 ### 2. `build-linux-windows.yml` - CI for Linux + Windows Only
 - **Purpose**: Triggered by local release script to build non-macOS platforms
 - **Platforms**: Linux x86_64, Windows x86_64
 - **Cost**: $0 for public repos
-- **Use case**: Cost-optimized releases (macOS built locally)
+- **Use case**: Hybrid releases (macOS built locally)
+- **Trigger**: Automatically by `./scripts/release.sh` (without `--full-ci`)
 
-### 3. `release.sh` - Local Release Script (Recommended)
+### 3. `release.sh` - Local Release Script
 - **Purpose**: Orchestrates the entire release process
-- **Flow**:
+- **Modes**:
+  - **Hybrid (default)**: Build macOS locally + trigger CI for Linux/Windows
+  - **Full CI (`--full-ci`)**: Trigger CI for ALL platforms
+- **Flow (Hybrid)**:
   1. Build macOS binaries locally (both architectures)
   2. Update changelog from commits
   3. Run `cargo release` (publish to crates.io, create git tag)
@@ -59,13 +94,19 @@ This document describes the cost-optimized release workflow for VT Code, which b
   6. Download CI artifacts
   7. Create GitHub Release with ALL binaries
   8. Update Homebrew formula
+- **Flow (Full CI)**:
+  1. Update changelog from commits
+  2. Run `cargo release` (publish to crates.io, create git tag)
+  3. Trigger `release.yml` workflow for all platforms
+  4. CI builds all platforms and creates release
 
 ## Usage
 
-### Recommended: Local Release Script
+### Recommended: Local Release Script (Hybrid Approach)
 
 ```bash
 # Release with patch version bump (default)
+# Builds macOS locally, triggers CI for Linux/Windows
 ./scripts/release.sh
 
 # Release with specific version
@@ -84,34 +125,43 @@ This document describes the cost-optimized release workflow for VT Code, which b
 ./scripts/release.sh --skip-binaries
 ```
 
-### Alternative: Manual GitHub Workflow
+### Alternative: Full CI Build (All Platforms on GitHub Actions)
 
 ```bash
-# Trigger full CI build (all platforms)
+# Option 1: Use release.sh with --full-ci flag
+./scripts/release.sh --full-ci 0.81.2
+
+# Option 2: Trigger workflow directly
 gh workflow run release.yml --field tag=0.81.2
 
 # Or use GitHub Actions UI: https://github.com/vinhnx/vtcode/actions/workflows/release.yml
 ```
 
+### When to Use Each Approach
+
+| Approach | Command | Best For |
+|----------|---------|----------|
+| **Hybrid (default)** | `./scripts/release.sh` | Regular releases, faster macOS builds |
+| **Full CI** | `./scripts/release.sh --full-ci` | When local Mac is slow/unavailable |
+| **Manual Workflow** | `gh workflow run release.yml` | Re-running failed builds, testing |
+
 ## Cost Analysis
 
-### Before Optimization
-- **All platforms on CI**: 6 builds × ~10 min = ~60 minutes/release
-- **Multiple releases/week (4/month)**: ~240 minutes/month
-- **Cost**: $0 (public repo - free!)
-
-### After Optimization (Local macOS Build)
+### Hybrid Approach (Default: macOS Local + Linux/Windows CI)
 - **Local macOS build**: 2 builds × ~10 min = ~20 min (your machine)
 - **CI Linux + Windows**: 2 builds × ~10 min = ~20 minutes/release
 - **Multiple releases/week (4/month)**: ~80 minutes/month on CI
-- **Cost**: $0 (public repo - free!)
+- **Cost**: **$0** (public repo - free!)
 
-### Savings
-- **CI time reduction**: ~67% (240 → 80 min/month)
-- **Faster release cycle**: Local macOS builds are typically faster
-- **Better resource utilization**: Use your Mac for Mac builds
+### Full CI Approach (--full-ci: All Platforms on GitHub Actions)
+- **CI macOS + Linux + Windows**: 6 builds × ~10 min = ~60 minutes/release
+- **Multiple releases/week (4/month)**: ~240 minutes/month on CI
+- **Cost**: **$0** (public repo - free!)
 
-> **Note**: Since your repo is **public**, GitHub Actions is **completely free** for standard runners. The optimization mainly reduces CI queue time and your local machine handles macOS builds faster.
+> **Note**: Since your repo is **public**, GitHub Actions is **completely free** for standard runners on both approaches! The hybrid approach mainly:
+> - Reduces CI queue time
+> - Uses your local Mac for faster iteration
+> - Keeps CI minutes available for other workflows
 
 ## Platform Coverage
 

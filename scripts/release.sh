@@ -134,6 +134,8 @@ Options:
   --skip-crates       Skip publishing crates to crates.io
   --skip-binaries     Skip building and uploading binaries (and Homebrew update)
   --skip-docs         Skip docs.rs rebuild trigger
+  --full-ci           Use GitHub Actions for ALL platforms (including macOS)
+                      Default: builds macOS locally, CI for Linux/Windows
   -h, --help          Show this help message
 USAGE
 }
@@ -435,6 +437,7 @@ main() {
     local skip_crates=false
     local skip_binaries=false
     local skip_docs=false
+    local full_ci=false
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -446,6 +449,7 @@ main() {
             --skip-crates) skip_crates=true; shift ;;
             --skip-binaries) skip_binaries=true; shift ;;
             --skip-docs) skip_docs=true; shift ;;
+            --full-ci) full_ci=true; shift ;;
             *)
                 if [[ -n "$release_argument" ]]; then
                     print_error 'Multiple versions specified'
@@ -519,6 +523,35 @@ main() {
         print_warning "Running in dry-run mode for $next_version"
     else
         print_warning "Releasing version: $next_version"
+    fi
+
+    # Check if using full CI mode
+    if [[ "$full_ci" == 'true' ]]; then
+        print_info "Full CI mode: Using GitHub Actions for ALL platforms (including macOS)"
+        
+        if [[ "$dry_run" == 'true' ]]; then
+            print_info "Dry run - would trigger full CI workflow for $next_version"
+            print_info "Command: gh workflow run release.yml --field tag=$next_version"
+        else
+            # Trigger full CI release workflow
+            if gh workflow run release.yml --field tag="$next_version"; then
+                print_success "Full CI workflow triggered for $next_version"
+                print_info "Monitor progress: https://github.com/vinhnx/vtcode/actions/workflows/release.yml"
+                print_info ""
+                print_info "The CI will:"
+                print_info "  1. Build all platforms (macOS, Linux, Windows)"
+                print_info "  2. Create GitHub Release"
+                print_info "  3. Upload all binaries"
+                print_info ""
+                print_info "Note: cargo-release and changelog updates still run locally"
+            else
+                print_error "Failed to trigger full CI workflow"
+                exit 1
+            fi
+        fi
+        
+        # In full CI mode, skip local binary builds but still do cargo-release
+        skip_binaries=true
     fi
 
     # 1. Local Build (both macOS architectures for Homebrew, or current platform on Linux)
@@ -744,6 +777,8 @@ main() {
      print_info "Cost optimization:"
      print_info "  • macOS binaries: built locally (no CI cost)"
      print_info "  • Linux/Windows binaries: built on GitHub Actions (free for public repo)"
+     print_info ""
+     print_info "Tip: Use --full-ci to build ALL platforms on GitHub Actions"
 }
 
 main "$@"
