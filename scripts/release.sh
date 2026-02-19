@@ -561,69 +561,159 @@ main() {
         print_warning "Released version $released_version differs from expected $next_version"
     fi
 
-    # 3.5 GitHub Release Creation and Binary Upload via gh
-     print_info "Step 3.5: Creating GitHub Release with binaries..."
-
-     # Ensure GITHUB_TOKEN is available
-     if [[ -z "${GITHUB_TOKEN:-}" ]] && command -v gh >/dev/null 2>&1; then
-         export GITHUB_TOKEN=$(gh auth token)
-     fi
-
-     # Check if release already exists
-     if gh release view "$released_version" &>/dev/null; then
-         print_warning "Release $released_version already exists"
-     else
-         # Read release notes from file
-         local release_body=""
-         if [[ -f "$RELEASE_NOTES_FILE" ]]; then
-             release_body=$(cat "$RELEASE_NOTES_FILE")
-         fi
-
-         # Create GitHub release with release notes
-         if gh release create "$released_version" \
-             --title "$released_version" \
-             --notes "$release_body" \
-             --draft=false \
-             --prerelease=false; then
-             print_success "GitHub Release $released_version created successfully"
-         else
-             print_error "Failed to create GitHub Release"
-             exit 1
-         fi
-     fi
-
-    # 4. Upload Binaries to GitHub Release
+    # 3.5 Trigger CI for Linux and Windows builds
     if [[ "$skip_binaries" == 'false' ]]; then
-        print_info "Step 4: Packaging and uploading binaries to GitHub Release $released_version..."
+        print_info "Step 3.5: Triggering CI for Linux and Windows builds..."
+        
+        if [[ "$dry_run" == 'true' ]]; then
+            print_info "Dry run - would trigger CI workflow for $released_version"
+        else
+            # Trigger the build-linux-windows workflow
+            if gh workflow run build-linux-windows.yml --field tag="$released_version"; then
+                print_success "CI workflow triggered for $released_version"
+                
+                # Wait for CI to complete (with timeout)
+                print_info "Waiting for CI builds to complete (timeout: 60 minutes)..."
+                local wait_start=$(date +%s)
+                local timeout=3600  # 60 minutes
+                local run_id=""
+                
+                # Get the workflow run ID
+                while [[ -z "$run_id" ]]; do
+                    run_id=$(gh run list --workflow build-linux-windows.yml --limit 1 --json databaseId --jq '.[0].databaseId' 2>/dev/null || true)
+                    if [[ -z "$run_id" ]]; then
+                        sleep 5
+                    fi
+                done
+                
+                # Wait for the run to complete
+                local status="in_progress"
+                while [[ "$status" == "in_progress" || "$status" == "queued" ]]; do
+                    sleep 30
+                    status=$(gh run view "$run_id" --json status --jq '.status' 2>/dev/null || echo "failed")
+                    
+                    # Check timeout
+                    local now=$(date +%s)
+                    local elapsed=$((now - wait_start))
+                    if [[ $elapsed -gt $timeout ]]; then
+                        print_error "CI build timeout after $timeout seconds"
+                        exit 1
+                    fi
+                    
+                    print_info "CI status: $status (${elapsed}s elapsed)"
+                done
+                
+                if [[ "$status" != "completed" && "$status" != "success" ]]; then
+                    print_error "CI build failed with status: $status"
+                    gh run view "$run_id" --log || true
+                    exit 1
+                fi
+                
+                print_success "CI builds completed successfully"
+            else
+                print_warning "Failed to trigger CI workflow - binaries will only include macOS"
+            fi
+        fi
+    fi
+
+    # GitHub Release Creation and Binary Upload via gh
+    print_info "Step 4: Creating GitHub Release with binaries..."
+
+    # Ensure GITHUB_TOKEN is available
+    if [[ -z "${GITHUB_TOKEN:-}" ]] && command -v gh >/dev/null 2>&1; then
+        export GITHUB_TOKEN=$(gh auth token)
+    fi
+
+    # Check if release already exists
+    if gh release view "$released_version" &>/dev/null; then
+        print_warning "Release $released_version already exists"
+    else
+        # Read release notes from file
+        local release_body=""
+        if [[ -f "$RELEASE_NOTES_FILE" ]]; then
+            release_body=$(cat "$RELEASE_NOTES_FILE")
+        fi
+
+        # Create GitHub release with release notes
+        if gh release create "$released_version" \
+            --title "$released_version" \
+            --notes "$release_body" \
+            --draft=false \
+            --prerelease=false; then
+            print_success "GitHub Release $released_version created successfully"
+        else
+            print_error "Failed to create GitHub Release"
+            exit 1
+        fi
+    fi
+
+    # 4. Collect and Upload All Binaries
+    if [[ "$skip_binaries" == 'false' ]]; then
+        print_info "Step 4: Collecting binaries for all platforms..."
 
         local binaries_dir="/tmp/vtcode-release-$released_version"
         mkdir -p "$binaries_dir"
 
-        # Build and package binaries
-        print_info "Building binaries for macOS architectures..."
+        # Build macOS binaries locally
+        print_info "Building macOS binaries locally..."
 
         # x86_64-apple-darwin
         if cargo build --release --target x86_64-apple-darwin &>/dev/null; then
             tar -C target/x86_64-apple-darwin/release -czf "$binaries_dir/vtcode-$released_version-x86_64-apple-darwin.tar.gz" vtcode
             shasum -a 256 "$binaries_dir/vtcode-$released_version-x86_64-apple-darwin.tar.gz" > "$binaries_dir/vtcode-$released_version-x86_64-apple-darwin.sha256"
-            print_success "Built x86_64-apple-darwin"
+            print_success "Built macOS x86_64"
         else
-            print_warning "Failed to build x86_64-apple-darwin"
+            print_warning "Failed to build macOS x86_64"
         fi
 
         # aarch64-apple-darwin
         if cargo build --release --target aarch64-apple-darwin &>/dev/null; then
             tar -C target/aarch64-apple-darwin/release -czf "$binaries_dir/vtcode-$released_version-aarch64-apple-darwin.tar.gz" vtcode
             shasum -a 256 "$binaries_dir/vtcode-$released_version-aarch64-apple-darwin.tar.gz" > "$binaries_dir/vtcode-$released_version-aarch64-apple-darwin.sha256"
-            print_success "Built aarch64-apple-darwin"
+            print_success "Built macOS aarch64 (Apple Silicon)"
         else
-            print_warning "Failed to build aarch64-apple-darwin"
+            print_warning "Failed to build macOS aarch64"
         fi
 
-        # Upload binaries to GitHub Release
-        print_info "Uploading binaries to GitHub Release..."
+        # Download Linux and Windows binaries from CI artifacts
+        print_info "Downloading Linux and Windows binaries from CI..."
+        
+        # Find the workflow run for this tag
+        local run_id
+        run_id=$(gh run list --workflow build-linux-windows.yml --json databaseId,headBranch --jq ".[] | select(.headBranch == \"$released_version\") | .databaseId" | head -1)
+        
+        if [[ -n "$run_id" ]]; then
+            # Download all artifacts from the CI run
+            local ci_artifacts_dir="/tmp/vtcode-ci-artifacts-$released_version"
+            mkdir -p "$ci_artifacts_dir"
+            
+            # Download Linux x86_64 artifact
+            if gh run download "$run_id" --name "vtcode-${released_version}-x86_64-unknown-linux-gnu" --dir "$ci_artifacts_dir" 2>/dev/null; then
+                mv "$ci_artifacts_dir"/*.tar.gz "$binaries_dir/" 2>/dev/null || true
+                mv "$ci_artifacts_dir"/*.sha256 "$binaries_dir/" 2>/dev/null || true
+                print_success "Downloaded: Linux x86_64"
+            else
+                print_warning "Could not download: Linux x86_64"
+            fi
+            
+            # Download Windows x86_64 artifact
+            if gh run download "$run_id" --name "vtcode-${released_version}-x86_64-pc-windows-msvc" --dir "$ci_artifacts_dir" 2>/dev/null; then
+                mv "$ci_artifacts_dir"/*.tar.gz "$binaries_dir/" 2>/dev/null || true
+                mv "$ci_artifacts_dir"/*.sha256 "$binaries_dir/" 2>/dev/null || true
+                print_success "Downloaded: Windows x86_64"
+            else
+                print_warning "Could not download: Windows x86_64"
+            fi
+            
+            rm -rf "$ci_artifacts_dir"
+        else
+            print_warning "Could not find CI run for $released_version"
+        fi
+
+        # Upload all binaries to GitHub Release
+        print_info "Uploading all binaries to GitHub Release..."
         if gh release upload "$released_version" "$binaries_dir"/*.tar.gz "$binaries_dir"/*.sha256 --clobber; then
-            print_success "Binaries uploaded successfully"
+            print_success "All binaries uploaded successfully"
         else
             print_error "Failed to upload binaries to GitHub Release"
             exit 1
@@ -648,8 +738,12 @@ main() {
      print_success "Release process finished for $released_version"
      print_info "Distribution:"
      print_info "  ✓ Cargo (crates.io)"
-     print_info "  ✓ GitHub Releases (macOS built locally)"
+     print_info "  ✓ GitHub Releases (all platforms: macOS local + Linux/Windows CI)"
      print_info "  ✓ Homebrew (vinhnx/tap/vtcode)"
+     print_info ""
+     print_info "Cost optimization:"
+     print_info "  • macOS binaries: built locally (no CI cost)"
+     print_info "  • Linux/Windows binaries: built on GitHub Actions (free for public repo)"
 }
 
 main "$@"
