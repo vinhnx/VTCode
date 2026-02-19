@@ -1,16 +1,20 @@
-name: Release
+name: Release (All Platforms)
 
 on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Tag to release (e.g., 0.73.0)'
+        description: 'Tag to release (e.g., 0.81.2)'
         required: true
         type: string
 
 permissions:
   contents: write
   packages: write
+
+# This workflow builds ALL platforms (macOS + Linux + Windows)
+# Use this for manual releases when you want GitHub Actions to build everything
+# For cost-optimized releases, use: ./scripts/release.sh (builds macOS locally, triggers CI for Linux/Windows)
 
 jobs:
   build:
@@ -20,16 +24,35 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: macos-latest
-            target: x86_64-apple-darwin
+          # macOS - Apple Silicon (M1/M2/M3/M4)
           - os: macos-latest
             target: aarch64-apple-darwin
+            build_cmd: cargo build --release --target ${{ matrix.target }}
+
+          # macOS - Intel (older Macs)
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            build_cmd: cargo build --release --target ${{ matrix.target }}
+
+          # Linux - x86_64 (most common)
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
+            build_cmd: cross build --release --target ${{ matrix.target }}
+
+          # Linux - ARM64 (Raspberry Pi, ARM servers)
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            build_cmd: cross build --release --target ${{ matrix.target }}
+
+          # Windows - x86_64 (most common)
           - os: windows-latest
             target: x86_64-pc-windows-msvc
+            build_cmd: cargo build --release --target ${{ matrix.target }}
+
+          # Windows - ARM64 (Surface Pro X, newer devices)
           - os: windows-latest
             target: aarch64-pc-windows-msvc
+            build_cmd: cargo build --release --target ${{ matrix.target }}
 
     steps:
       - uses: actions/checkout@v4
@@ -43,21 +66,30 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
-      - name: Install Cross
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+
+      - name: Install Cross (for Linux builds)
         if: matrix.os == 'ubuntu-latest'
-        run: cargo install cross --git https://github.com/cross-rs/cross.git
+        run: cargo install cross --git https://github.com/cross-rs/cross.git --locked
 
-      - name: Build (MacOS)
-        if: matrix.os == 'macos-latest'
-        run: cargo build --release --target ${{ matrix.target }}
-
-      - name: Build (Linux)
-        if: matrix.os == 'ubuntu-latest'
-        run: cross build --release --target ${{ matrix.target }}
-
-      - name: Build (Windows)
+      - name: Setup OpenSSL (Windows)
         if: matrix.os == 'windows-latest'
-        run: cargo build --release --target ${{ matrix.target }}
+        run: |
+          # Windows builds use native OpenSSL, no special setup needed
+          # The build should use bundled OpenSSL or Windows Crypto API
+          echo "OPENSSL_DIR=" >> $GITHUB_ENV
+          echo "OPENSSL_STATIC=1" >> $GITHUB_ENV
+        shell: bash
+
+      - name: Build (${{ matrix.target }})
+        run: ${{ matrix.build_cmd }}
+        shell: bash
+        env:
+          # Enable static linking for OpenSSL on Linux
+          OPENSSL_STATIC: ${{ contains(matrix.target, 'linux') && '1' || '' }}
 
       - name: Check Binary
         shell: bash
@@ -86,7 +118,12 @@ jobs:
           tar -czf ../../../vtcode-${{ github.event.inputs.tag }}-${{ matrix.target }}.tar.gz "$BINARY"
           cd ../../../
           echo "Computing SHA256..."
-          shasum -a 256 vtcode-${{ github.event.inputs.tag }}-${{ matrix.target }}.tar.gz > vtcode-${{ github.event.inputs.tag }}-${{ matrix.target }}.sha256
+          # Use sha256sum on Linux/Windows, shasum on macOS
+          if command -v sha256sum &> /dev/null; then
+            sha256sum vtcode-${{ github.event.inputs.tag }}-${{ matrix.target }}.tar.gz > vtcode-${{ github.event.inputs.tag }}-${{ matrix.target }}.sha256
+          elif command -v shasum &> /dev/null; then
+            shasum -a 256 vtcode-${{ github.event.inputs.tag }}-${{ matrix.target }}.tar.gz > vtcode-${{ github.event.inputs.tag }}-${{ matrix.target }}.sha256
+          fi
           echo "✓ Package complete:"
           ls -lh vtcode-${{ github.event.inputs.tag }}-${{ matrix.target }}.*
 
