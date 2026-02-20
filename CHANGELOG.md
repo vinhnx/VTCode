@@ -2,6 +2,103 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.82.0 - 2026-02-20
+
+### Features
+
+- Implement Gemini prompt caching with TTL using a new `CacheControl` part and add support for Gemini 3.1 Pro preview models. (8b5b42a1) (@vinhnx)
+- Implement Gemini 3.1 Pro Preview models with updated token limits and system prompt handling. (dc0742c0) (@vinhnx)
+- add Claude Sonnet 4.6 model support and integrate it across model definitions, parsing, catalog, and documentation. (d460c56d) (@vinhnx)
+- Implement mouse text selection in the TUI and add a new `vtcode.toml` configuration file. (83567152) (@vinhnx)
+- Render GFM tables inside markdown code blocks as tables and prevent word-wrapping for table lines in the TUI. (c90f06e3) (@vinhnx)
+- Implement mouse scroll support for TUI session and history picker, and update default agent configuration to Ollama. (db99f4db) (@vinhnx)
+- refactor build process to use conditional cross compilation for Linux and Windows (d15bb558) (@vinhnx)
+- add full CI mode to release script for all platforms (326a2c8c) (@vinhnx)
+- add CI workflows for building Linux and Windows binaries; optimize release process (090bebb4) (@vinhnx)
+- implement secure storage for custom API keys using OS keyring (3da5a60a) (@vinhnx)
+- add Qwen3.5-397B-A17B model with hybrid architecture and update configuration (26a9a7ee) (@vinhnx)
+- implement mouse scroll handling for improved navigation (24a2d640) (@vinhnx)
+- add timeout handling for turn metadata collection (1b1f91d4) (@vinhnx)
+- implement credential storage using OS keyring and file fallback (1e94c71a) (@vinhnx)
+- add sanitizer module for secret redaction and integrate into output handling (4263808d) (@vinhnx)
+- add Kimi K2.5 model support across OpenRouter, Ollama, and HuggingFace. (fddc4887) (@vinhnx)
+- introduce agent legibility guidelines and refine steering message variants for clarity and structured output. (52b13dd1) (@vinhnx)
+- Use configurable constants for agent session limits and expose the default max context tokens function. (21d1183f) (@vinhnx)
+- Enhance reasoning display by introducing structured `ReasoningSegment` with stages and improved rendering in the TUI. (68d07c91) (@vinhnx)
+- Implement agent steering mechanism to control runloop execution, including stop, pause, resume, and input injection capabilities. (ac806e0e) (@vinhnx)
+- add /share-log command to export session log as JSON for debugging (64305820) (@vinhnx)
+- implement in-process teammate runner and enhance team protocol messaging (4aff9318) (@vinhnx)
+- implement plan mode toggle and strip proposed plan blocks in rendering (79f0327d) (@vinhnx)
+- add skill bundle import/export functionality with zip support (dea5b5b7) (@vinhnx)
+- add Qwen3 Coder Next model support and update related constants (5a4303e0) (@vinhnx)
+- add MiniMax M2.5 model support across various providers and update related constants (968963f1) (@vinhnx)
+
+### Bug Fixes
+
+- correct exec_code policy and update TODO for markdown rendering issue (9b87f88b) (@vinhnx)
+- resolve critical scrolling issue and remove unused slash command handlers (bcb81434) (@vinhnx)
+
+### Refactors
+
+- remove unused imports and enhance configuration for credential storage (b79f2bd2) (@vinhnx)
+- clean up code formatting and improve readability across multiple files (b1ae3ad9) (@vinhnx)
+- remove Rust cache step from release workflow (e36c5f55) (@vinhnx)
+- streamline MCP tool management and indexing in ToolRegistry (a5c3677b) (@vinhnx)
+- consolidate duplicated logic across workspace crates into shared utility functions (a9df41fd) (@vinhnx)
+- replace manual file operations with shared utility functions for consistency (15c45f9a) (@vinhnx)
+- replace manual file operations with shared utility functions for consistency (7fcbe5f2) (@vinhnx)
+- replace manual file operations with shared utility functions for consistency (54c447af) (@vinhnx)
+- streamline file operations and enhance workspace path handling (f7ebb78d) (@vinhnx)
+- extract large event handler modules into smaller files for improved navigation (9eda39e4) (@vinhnx)
+- reimplement LLM streaming and event handling using AgentSessionController and its event sink mechanism. (95bcd08f) (@vinhnx)
+- remove unused ReasoningSegment import from turn_processing.rs (9f4672d7) (@vinhnx)
+
+### Documentation
+
+- Add a guide for adding new models to AGENTS.md. (8648b584) (@vinhnx)
+- update documentation for TECH_DEBT_TRACKER and QUALITY_SCORE; add tests for subagent loading and file operations (fb7c0944) (@vinhnx)
+- update contributing guidelines to reference CONTRIBUTING.md and AGENTS.md. (b4a1ef7a) (@vinhnx)
+- update documentation and improve clarity on execution plans, architectural invariants, and quality scores feat: enhance system instruction generation to replace placeholders with unified tool guidance (27c61ef7) (@vinhnx)
+
+### Chores
+
+- Release (77422bee) (@vinhnx)
+- Release (14027810) (@vinhnx)
+- Release (6c982a35) (@vinhnx)
+- clean up configuration file by removing unused custom API keys and simplifying array formatting (ad594e41) (@vinhnx)
+- Release (4bd94bdb) (@vinhnx)
+- Release (800c7069) (@vinhnx)
+- Release (a08f765d) (@vinhnx)
+- Release (accdcc25) (@vinhnx)
+- Release (69df0e20) (@vinhnx)
+- Release (10e4f284) (@vinhnx)
+
+### Other
+
+- Update commit (9d05e9de) (@vinhnx)
+- Enhance model behavior configuration for LLM providers (0fa12334) (@vinhnx)
+- Add scripts for documentation link validation and markdown location checks (7290fc5b) (@vinhnx)
+- Update default model in vtcode.toml to minimax-m2:cloud; format code for consistency (e024a48d) (@vinhnx)
+- Add additional_agent_dirs configuration option to vtcode.toml (0f6d1747) (@vinhnx)
+- Remove custom prompts feature and related code; update error handling for agent actions; refine UI shortcuts and command handling (cfcc9765) (@vinhnx)
+- Remove custom prompts feature and related code (dfc3ec5d) (@vinhnx)
+- Update LLM provider configuration to use Ollama and remove unused typos.toml file (ca83bdcd) (@vinhnx)
+- Enhance agent runner settings and improve loop detection; update CLI commands for reasoning effort and verbosity; refine patch handling in file operations; adjust markdown diff summary; modify configuration for LLM provider. (ff221d1d) (@vinhnx)
+- Refactor agent runner and tool registry for improved error handling and normalization; enhance loop detection and add tests for new functionality. (101a2b07) (@vinhnx)
+- Refactor LLM request handling, improve reasoning processing, and enhance tool command parsing (896f6c69) (@vinhnx)
+- Implement streaming response rendering with reasoning support and helper functions (b3ba347b) (@vinhnx)
+- Refactor file operations to use utility functions for directory creation and file reading/writing (7f800b3d) (@vinhnx)
+- Implement unified session loop for agent execution and remove plugin marketplace commands (17d9597f) (@vinhnx)
+- Add tests for model picker and prompt refinement functionality (0305390e) (@vinhnx)
+- Enhance configuration and logging for agent and hooks; add mock MCP server for integration tests (59a48db6) (@vinhnx)
+- Refactor agent runner to use AgentSessionState for session management and update related components (083fcac6) (@vinhnx)
+- Refactor apply_patch handler for improved output handling; streamline sandbox policy mapping (67c0e05b) (@vinhnx)
+- Refactor caching logic for improved performance; enhance error context handling; update tests for accurate cache statistics (5a10f0d7) (@vinhnx)
+- Refactor exec_policy and command validation; consolidate HTTP client utilities; enhance error handling; improve file operations; update middleware to async; clean up validation cache; and adjust rate limiting implementation. (e6245af6) (@vinhnx)
+- Adjust provider configurations and logging. (a649d023) (@vinhnx)
+- Add support for inline skill bundles and network policies in skills (ddb9d280) (@vinhnx)
+- Add architectural invariants, core beliefs, execution plans, quality score, and tech debt tracker documentation (80cf6d68) (@vinhnx)
+
 ## 0.81.3 - 2026-02-20
 
 ### Features
