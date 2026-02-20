@@ -16,6 +16,7 @@ mod generated_constants {
     pub const QWEN3_CODER_NEXT: &str = "qwen/qwen3-coder-next";
     pub const ANTHROPIC_CLAUDE_SONNET_4_5: &str = "anthropic/claude-sonnet-4.5";
     pub const MINIMAX_M2_5: &str = "minimax/minimax-m2.5";
+    pub const GOOGLE_GEMINI_3_1_PRO_PREVIEW: &str = "google/gemini-3.1-pro-preview";
 
     pub mod vendor {
         pub mod openrouter {
