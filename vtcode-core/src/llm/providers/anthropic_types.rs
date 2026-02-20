@@ -7,6 +7,8 @@ pub struct AnthropicRequest {
     pub messages: Vec<AnthropicMessage>,
     pub max_tokens: u32,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub cache_control: Option<CacheControl>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub system: Option<Value>, // Can be string or array of blocks
     #[serde(skip_serializing_if = "Option::is_none")]
     pub temperature: Option<f32>,
