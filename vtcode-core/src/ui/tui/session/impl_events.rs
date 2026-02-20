@@ -39,9 +39,23 @@ impl Session {
                     }
                 }
                 MouseEventKind::Down(ratatui::crossterm::event::MouseButton::Left) => {
+                    // Start mouse text selection
+                    self.mouse_selection
+                        .start_selection(mouse_event.column, mouse_event.row);
+                    self.mark_dirty();
                     if !self.handle_input_click(mouse_event) {
                         self.handle_transcript_click(mouse_event);
                     }
+                }
+                MouseEventKind::Drag(ratatui::crossterm::event::MouseButton::Left) => {
+                    self.mouse_selection
+                        .update_selection(mouse_event.column, mouse_event.row);
+                    self.mark_dirty();
+                }
+                MouseEventKind::Up(ratatui::crossterm::event::MouseButton::Left) => {
+                    self.mouse_selection
+                        .finish_selection(mouse_event.column, mouse_event.row);
+                    self.mark_dirty();
                 }
                 _ => {}
             },

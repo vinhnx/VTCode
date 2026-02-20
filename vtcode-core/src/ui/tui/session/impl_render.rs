@@ -78,6 +78,21 @@ impl Session {
         if self.diff_preview.is_some() {
             diff_preview::render_diff_preview(self, frame, viewport);
         }
+
+        // Apply mouse text selection highlight
+        if self.mouse_selection.has_selection || self.mouse_selection.is_selecting {
+            self.mouse_selection
+                .apply_highlight(frame.buffer_mut(), viewport);
+
+            // Copy to clipboard via OSC 52 once when selection is finalized
+            if self.mouse_selection.needs_copy() {
+                let text = self.mouse_selection.extract_text(frame.buffer_mut(), viewport);
+                if !text.is_empty() {
+                    super::mouse_selection::MouseSelectionState::copy_to_clipboard_osc52(&text);
+                }
+                self.mouse_selection.mark_copied();
+            }
+        }
     }
 
     #[allow(dead_code)]

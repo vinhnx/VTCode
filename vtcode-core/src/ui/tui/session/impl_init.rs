@@ -164,6 +164,9 @@ impl Session {
             // --- Clipboard for yank/paste operations ---
             clipboard: String::new(),
 
+            // --- Mouse Text Selection ---
+            mouse_selection: crate::ui::tui::session::mouse_selection::MouseSelectionState::new(),
+
             // --- Diff Preview Modal ---
             diff_preview: None,
 

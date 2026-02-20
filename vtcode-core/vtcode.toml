@@ -1,0 +1,862 @@
+[agent]
+provider = "anthropic"
+api_key_env = "ANTHROPIC_API_KEY"
+default_model = "claude-sonnet-4-5"
+theme = "ciapre-dark"
+system_prompt_mode = "default"
+tool_documentation_mode = "full"
+enable_split_tool_results = true
+todo_planning_mode = true
+ui_surface = "auto"
+max_conversation_turns = 150
+reasoning_effort = "medium"
+verbosity = "medium"
+temperature = 0.7
+refine_temperature = 0.3
+enable_self_review = false
+max_review_passes = 1
+refine_prompts_enabled = false
+refine_prompts_max_passes = 1
+refine_prompts_model = ""
+project_doc_max_bytes = 16384
+instruction_max_bytes = 16384
+instruction_files = []
+credential_storage_mode = "keyring"
+max_task_retries = 2
+include_temporal_context = true
+temporal_context_use_utc = false
+include_working_directory = true
+default_editing_mode = "edit"
+require_plan_confirmation = true
+autonomous_mode = false
+
+[agent.small_model]
+enabled = true
+model = ""
+temperature = 0.3
+use_for_large_reads = true
+use_for_web_summary = true
+use_for_git_history = true
+
+[agent.onboarding]
+enabled = true
+intro_text = "Let's get oriented. I preloaded workspace context so we can move fast."
+include_project_overview = true
+include_language_summary = false
+include_guideline_highlights = true
+include_usage_tips_in_welcome = false
+include_recommended_actions_in_welcome = false
+guideline_highlight_limit = 3
+usage_tips = [
+    "Describe your current coding goal or ask for a quick status overview.",
+    "Reference AGENTS.md guidelines when proposing changes.",
+    "Prefer asking for targeted file reads or diffs before editing.",
+]
+recommended_actions = [
+    "Review the highlighted guidelines and share the task you want to tackle.",
+    "Ask for a workspace tour if you need more context.",
+]
+
+[agent.checkpointing]
+enabled = true
+max_snapshots = 50
+max_age_days = 30
+
+[agent.vibe_coding]
+enabled = false
+min_prompt_length = 5
+min_prompt_words = 2
+enable_entity_resolution = true
+entity_index_cache = ".vtcode/entity_index.json"
+max_entity_matches = 5
+track_workspace_state = true
+max_recent_files = 20
+track_value_history = true
+enable_conversation_memory = true
+max_memory_turns = 50
+enable_pronoun_resolution = true
+enable_proactive_context = true
+max_context_files = 3
+max_context_snippets_per_file = 20
+max_search_results = 5
+enable_relative_value_inference = true
+
+[agent.harness]
+max_tool_calls_per_turn = 32
+max_tool_wall_clock_secs = 600
+max_tool_retries = 2
+
+[agent.circuit_breaker]
+enabled = true
+failure_threshold = 5
+pause_on_open = true
+max_open_circuits = 3
+recovery_cooldown = 60
+
+[agent.open_responses]
+enabled = false
+emit_events = true
+include_extensions = true
+map_tool_calls = true
+include_reasoning = true
+
+[auth.openrouter]
+use_oauth = false
+callback_port = 8484
+auto_refresh = true
+flow_timeout_secs = 300
+
+[tools]
+default_policy = "prompt"
+max_tool_loops = 200
+max_repeated_tool_calls = 3
+
+[tools.policies]
+list_files = "allow"
+grep_file = "allow"
+read_file = "allow"
+write_file = "allow"
+edit_file = "allow"
+create_file = "allow"
+delete_file = "prompt"
+apply_patch = "prompt"
+search_replace = "prompt"
+run_pty_cmd = "prompt"
+create_pty_session = "allow"
+read_pty_session = "allow"
+list_pty_sessions = "allow"
+resize_pty_session = "allow"
+send_pty_input = "prompt"
+close_pty_session = "allow"
+execute_code = "prompt"
+search_tools = "allow"
+skill = "allow"
+web_fetch = "prompt"
+exit_plan_mode = "prompt"
+exit_plan = "prompt"
+plan_exit = "prompt"
+start_implementation = "prompt"
+implement_plan = "prompt"
+enter_plan_mode = "prompt"
+plan_mode = "prompt"
+enter_plan = "prompt"
+start_planning = "prompt"
+ask_user_question = "allow"
+request_user_input = "allow"
+ask_questions = "allow"
+askQuestions = "allow"
+
+[tools.web_fetch]
+mode = "restricted"
+dynamic_blocklist_enabled = false
+dynamic_blocklist_path = "~/.vtcode/web_fetch_blocklist.json"
+dynamic_whitelist_enabled = false
+dynamic_whitelist_path = "~/.vtcode/web_fetch_whitelist.json"
+blocked_domains = []
+allowed_domains = []
+blocked_patterns = []
+enable_audit_logging = false
+audit_log_path = "~/.vtcode/web_fetch_audit.log"
+strict_https_only = true
+
+[tools.plugins]
+enabled = true
+manifests = []
+default_trust = "sandbox"
+allow = []
+deny = []
+auto_reload = true
+
+[tools.loop_thresholds]
+
+[commands]
+allow_list = [
+    "ls",
+    "pwd",
+    "cat",
+    "grep",
+    "find",
+    "head",
+    "tail",
+    "wc",
+    "tree",
+    "stat",
+    "file",
+    "sort",
+    "uniq",
+    "cut",
+    "awk",
+    "sed",
+    "tar",
+    "zip",
+    "unzip",
+    "gzip",
+    "gunzip",
+    "make",
+    "cmake",
+    "ninja",
+    "which",
+    "echo",
+    "printf",
+    "date",
+    "git status",
+    "git diff",
+    "git log",
+    "git show",
+    "git branch",
+    "git remote",
+    "cargo check",
+    "cargo build",
+    "cargo build --release",
+    "cargo build --profile release",
+    "cargo test",
+    "cargo run",
+    "cargo clippy",
+    "cargo fmt",
+    "cargo tree",
+    "cargo metadata",
+    "cargo doc",
+    "rustc",
+    "python3",
+    "python3 -m pip install",
+    "python3 -m pytest",
+    "python3 -m build",
+    "python",
+    "pip3",
+    "pip",
+    "virtualenv",
+    "node",
+    "npm",
+    "npm run build",
+    "npm run test",
+    "npm install",
+    "yarn",
+    "yarn build",
+    "yarn test",
+    "pnpm",
+    "pnpm build",
+    "pnpm test",
+    "bun",
+    "bun install",
+    "bun run",
+    "bun test",
+    "npx",
+    "go",
+    "go build",
+    "go test",
+    "gcc",
+    "g++",
+    "clang",
+    "clang++",
+    "javac",
+    "java",
+    "mvn",
+    "gradle",
+    "docker",
+    "docker-compose",
+]
+extra_path_entries = [
+    "$HOME/.cargo/bin",
+    "$HOME/.local/bin",
+    "/opt/homebrew/bin",
+    "/usr/local/bin",
+    "$HOME/.asdf/bin",
+    "$HOME/.asdf/shims",
+    "$HOME/go/bin",
+]
+deny_list = [
+    "rm",
+    "rm -rf /",
+    "rm -rf ~",
+    "rm -rf /*",
+    "rm -rf /home",
+    "rm -rf /usr",
+    "rm -rf /etc",
+    "rm -rf /var",
+    "rm -rf /opt",
+    "rmdir /",
+    "rmdir /home",
+    "rmdir /usr",
+    "shutdown",
+    "reboot",
+    "halt",
+    "poweroff",
+    "init 0",
+    "init 6",
+    "systemctl poweroff",
+    "systemctl reboot",
+    "systemctl halt",
+    "sudo rm",
+    "sudo chmod 777",
+    "sudo chown",
+    "sudo passwd",
+    "sudo su",
+    "sudo -i",
+    "sudo bash",
+    "su root",
+    "su -",
+    "format",
+    "fdisk",
+    "mkfs",
+    "mkfs.ext4",
+    "mkfs.xfs",
+    "mkfs.vfat",
+    "dd if=/dev/zero",
+    "dd if=/dev/random",
+    "dd if=/dev/urandom",
+    "wget --no-check-certificate",
+    ":(){ :|:& };:",
+    "nohup bash -i",
+    "exec bash -i",
+    "eval",
+    "source /etc/bashrc",
+    "source ~/.bashrc",
+    "chmod 777",
+    "chmod -R 777",
+    "chown -R",
+    "chgrp -R",
+    "rm ~/.ssh/*",
+    "rm -r ~/.ssh",
+    "cat /etc/passwd",
+    "cat /etc/shadow",
+    "cat ~/.ssh/id_*",
+    "tail -f /var/log",
+    "head -n 1 /var/log",
+]
+allow_glob = [
+    "git *",
+    "cargo *",
+    "rustc *",
+    "python *",
+    "python3 *",
+    "pip *",
+    "pip3 *",
+    "virtualenv *",
+    "node *",
+    "npm *",
+    "npm run *",
+    "yarn *",
+    "yarn run *",
+    "pnpm *",
+    "pnpm run *",
+    "bun *",
+    "bun run *",
+    "npx *",
+    "go *",
+    "gcc *",
+    "g++ *",
+    "clang *",
+    "clang++ *",
+    "javac *",
+    "java *",
+    "mvn *",
+    "gradle *",
+    "make *",
+    "cmake *",
+    "ninja *",
+    "docker *",
+    "docker-compose *",
+    "tar *",
+    "zip *",
+    "unzip *",
+    "gzip *",
+    "gunzip *",
+]
+deny_glob = [
+    "rm *",
+    "sudo *",
+    "chmod *",
+    "chown *",
+    "kill *",
+    "pkill *",
+    "systemctl *",
+    "service *",
+    "mount *",
+    "umount *",
+    "docker run *",
+    "kubectl *",
+]
+allow_regex = [
+    '^(ls|pwd|cat|grep|find|head|tail|wc|echo|printf|date|tree|stat|file|sort|uniq|cut|awk|sed|tar|zip|unzip|gzip|gunzip)\b',
+    '^git (status|diff|log|show|branch|remote)\b',
+    '^cargo (check|build|test|run|doc|clippy|fmt|tree|metadata)\b',
+    '^rustc\b',
+    '^(python|python3) (-m | )?\w*',
+    '^(pip|pip3)\b',
+    '^virtualenv\b',
+    '^(node|npm|yarn|pnpm|bun|npx)\b',
+    '^go\b',
+    '^(gcc|g\+\+|clang|clang\++)\b',
+    '^(javac|java)\b',
+    '^(mvn|gradle)\b',
+    '^(make|cmake)\b',
+    '^(docker|docker-compose)\b',
+]
+deny_regex = [
+    'rm\s+(-rf|--force)',
+    'sudo\s+.*',
+    'chmod\s+.*',
+    'chown\s+.*',
+    'docker\s+run\s+.*--privileged',
+    'kubectl\s+(delete|drain|uncordon)',
+]
+
+[permissions]
+enabled = true
+resolve_commands = true
+audit_enabled = true
+audit_directory = "~/.vtcode/audit"
+log_allowed_commands = true
+log_denied_commands = true
+log_permission_prompts = true
+cache_enabled = true
+cache_ttl_seconds = 300
+
+[security]
+human_in_the_loop = true
+require_write_tool_for_claims = true
+auto_apply_detected_patches = false
+zero_trust_mode = true
+encrypt_payloads = true
+integrity_checks = true
+hitl_notification_bell = true
+
+[security.gatekeeper]
+warn_on_quarantine = true
+auto_clear_quarantine = false
+auto_clear_paths = [
+    ".vtcode/bin",
+    "~/.vtcode/bin",
+]
+
+[sandbox]
+enabled = true
+default_mode = "read_only"
+
+[sandbox.network]
+allow_all = false
+allowlist = []
+block_all = false
+
+[sandbox.sensitive_paths]
+use_defaults = true
+additional = []
+exceptions = []
+
+[sandbox.resource_limits]
+preset = "moderate"
+max_memory_mb = 0
+max_pids = 0
+max_disk_mb = 0
+cpu_time_secs = 0
+timeout_secs = 0
+
+[sandbox.seccomp]
+enabled = true
+profile = "strict"
+additional_blocked = []
+log_only = false
+
+[sandbox.external]
+sandbox_type = "none"
+
+[sandbox.external.docker]
+image = "ubuntu:22.04"
+memory_limit = ""
+cpu_limit = ""
+network_mode = "none"
+
+[sandbox.external.microvm]
+vmm = ""
+kernel_path = ""
+rootfs_path = ""
+memory_mb = 512
+vcpus = 1
+
+[ui]
+tool_output_mode = "compact"
+tool_output_max_lines = 600
+tool_output_spool_bytes = 200000
+allow_tool_ansi = false
+inline_viewport_rows = 16
+reasoning_display_mode = "toggle"
+reasoning_visible_default = false
+layout_mode = "auto"
+display_mode = "minimal"
+show_sidebar = true
+dim_completed_todos = true
+message_block_spacing = true
+minimum_contrast = 4.5
+bold_is_bright = false
+safe_colors_only = false
+color_scheme_mode = "auto"
+
+[ui.status_line]
+mode = "Auto"
+refresh_interval_ms = 1000
+command_timeout_ms = 200
+
+[ui.keyboard_protocol]
+enabled = true
+mode = "default"
+disambiguate_escape_codes = true
+report_event_types = true
+report_alternate_keys = true
+report_all_keys = false
+
+[chat.askQuestions]
+enabled = true
+
+[pty]
+enabled = true
+default_rows = 24
+default_cols = 80
+max_sessions = 10
+command_timeout_seconds = 300
+stdout_tail_lines = 20
+scrollback_lines = 400
+max_scrollback_bytes = 25000000
+large_output_threshold_kb = 5000
+
+[debug]
+enable_tracing = false
+trace_level = "info"
+trace_targets = []
+max_debug_log_size_mb = 50
+max_debug_log_age_days = 7
+
+[context]
+max_context_tokens = 90000
+trim_to_percent = 60
+preserve_recent_turns = 10
+
+[context.ledger]
+enabled = true
+max_entries = 12
+include_in_prompt = true
+preserve_in_compression = true
+
+[context.dynamic]
+enabled = true
+tool_output_threshold = 8192
+sync_terminals = true
+persist_history = true
+sync_mcp_tools = true
+sync_skills = true
+spool_max_age_secs = 3600
+max_spooled_files = 100
+
+[telemetry]
+trajectory_enabled = true
+dashboards_enabled = true
+sample_interval_ms = 1000
+retention_days = 14
+bottleneck_tracing = true
+perf_events = true
+
+[optimization.memory_pool]
+enabled = true
+max_string_pool_size = 64
+max_value_pool_size = 32
+max_vec_pool_size = 16
+
+[optimization.tool_registry]
+use_optimized_registry = true
+max_concurrent_tools = 4
+hot_cache_size = 16
+default_timeout_secs = 180
+
+[optimization.async_pipeline]
+enable_batching = false
+enable_caching = true
+max_batch_size = 5
+batch_timeout_ms = 100
+cache_size = 100
+
+[optimization.llm_client]
+enable_connection_pooling = false
+enable_response_caching = true
+enable_request_batching = false
+connection_pool_size = 4
+response_cache_size = 50
+cache_ttl_secs = 300
+rate_limit_rps = 10.0
+rate_limit_burst = 20
+
+[optimization.agent_execution]
+use_optimized_loop = true
+enable_performance_prediction = false
+state_history_size = 1000
+resource_monitor_interval_ms = 100
+max_memory_mb = 1024
+max_execution_time_secs = 300
+idle_timeout_ms = 5000
+idle_backoff_ms = 100
+max_idle_cycles = 10
+
+[optimization.profiling]
+enabled = false
+monitor_interval_ms = 100
+max_history_size = 1000
+auto_export_results = false
+export_file_path = "benchmark_results.json"
+enable_regression_testing = false
+max_regression_percent = 10.0
+
+[optimization.file_read_cache]
+enabled = true
+min_size_bytes = 262144
+max_size_bytes = 10485760
+ttl_secs = 300
+max_entries = 128
+
+[optimization.command_cache]
+enabled = true
+ttl_ms = 2000
+max_entries = 128
+allowlist = [
+    "rg",
+    "ls",
+    "git status",
+    "git diff --stat",
+]
+
+[syntax_highlighting]
+enabled = true
+theme = "base16-ocean.dark"
+cache_themes = true
+max_file_size_mb = 10
+enabled_languages = [
+    "rust",
+    "python",
+    "javascript",
+    "typescript",
+    "go",
+    "java",
+    "cpp",
+    "c",
+    "php",
+    "html",
+    "css",
+    "sql",
+    "csharp",
+    "bash",
+    "swift",
+    "diff",
+    "patch",
+    "udiff",
+    "git",
+    "json",
+    "yaml",
+    "toml",
+    "markdown",
+]
+highlight_timeout_ms = 5000
+
+[timeouts]
+default_ceiling_seconds = 180
+pty_ceiling_seconds = 300
+mcp_ceiling_seconds = 120
+streaming_ceiling_seconds = 600
+warning_threshold_percent = 80
+adaptive_decay_ratio = 0.875
+adaptive_success_streak = 5
+adaptive_min_floor_ms = 1000
+
+[automation.full_auto]
+enabled = false
+max_turns = 30
+allowed_tools = [
+    "read_file",
+    "list_files",
+    "grep_file",
+]
+require_profile_ack = true
+
+[prompt_cache]
+enabled = true
+cache_dir = "~/.vtcode/cache/prompts"
+max_entries = 1000
+max_age_days = 30
+enable_auto_cleanup = true
+min_quality_threshold = 0.7
+
+[prompt_cache.providers.openai]
+enabled = true
+min_prefix_tokens = 1024
+idle_expiration_seconds = 3600
+surface_metrics = true
+
+[prompt_cache.providers.anthropic]
+enabled = true
+tools_ttl_seconds = 3600
+messages_ttl_seconds = 300
+max_breakpoints = 4
+cache_system_messages = true
+cache_user_messages = true
+cache_tool_definitions = true
+min_message_length_for_cache = 256
+extended_ttl_seconds = 3600
+
+[prompt_cache.providers.gemini]
+enabled = true
+mode = "implicit"
+min_prefix_tokens = 1024
+explicit_ttl_seconds = 3600
+
+[prompt_cache.providers.openrouter]
+enabled = true
+propagate_provider_capabilities = true
+report_savings = true
+
+[prompt_cache.providers.moonshot]
+enabled = true
+
+[prompt_cache.providers.xai]
+enabled = true
+
+[prompt_cache.providers.deepseek]
+enabled = true
+surface_metrics = true
+
+[prompt_cache.providers.zai]
+enabled = false
+
+[mcp]
+enabled = false
+providers = []
+max_concurrent_connections = 5
+request_timeout_seconds = 30
+retry_attempts = 3
+experimental_use_rmcp_client = true
+connection_pooling_enabled = true
+tool_cache_capacity = 100
+connection_timeout_seconds = 30
+
+[mcp.ui]
+mode = "compact"
+max_events = 50
+show_provider_names = true
+
+[mcp.ui.renderers]
+
+[mcp.server]
+enabled = false
+bind_address = "127.0.0.1"
+port = 3000
+transport = "sse"
+name = "vtcode-mcp-server"
+version = "0.81.3"
+exposed_tools = []
+
+[mcp.allowlist]
+enforce = false
+
+[mcp.allowlist.default]
+
+[mcp.allowlist.providers]
+
+[mcp.security]
+auth_enabled = false
+
+[mcp.security.rate_limit]
+requests_per_minute = 100
+concurrent_requests = 10
+
+[mcp.security.validation]
+schema_validation_enabled = true
+path_traversal_protection = true
+max_argument_size = 1048576
+
+[acp]
+enabled = false
+
+[acp.zed]
+enabled = false
+transport = "stdio"
+workspace_trust = "full_auto"
+
+[acp.zed.tools]
+read_file = true
+list_files = true
+
+[acp.zed.auth]
+default_method = "agent"
+
+[hooks.lifecycle]
+session_start = []
+session_end = []
+user_prompt_submit = []
+pre_tool_use = []
+post_tool_use = []
+task_completion = []
+task_completed = []
+teammate_idle = []
+
+[model]
+skip_loop_detection = false
+loop_detection_threshold = 2
+loop_detection_interactive = true
+
+[provider.anthropic]
+skip_model_validation = false
+extended_thinking_enabled = true
+interleaved_thinking_beta = "interleaved-thinking-2025-05-14"
+interleaved_thinking_budget_tokens = 31999
+interleaved_thinking_type_enabled = "enabled"
+effort = "low"
+count_tokens_enabled = false
+
+[provider.anthropic.tool_search]
+enabled = false
+algorithm = "regex"
+defer_by_default = true
+max_results = 5
+always_available_tools = []
+
+[skills]
+render-mode = "lean"
+prompt-format = "xml"
+max-skills-in-prompt = 10
+enable-auto-trigger = true
+enable-description-matching = true
+min-keyword-matches = 2
+
+[subagents]
+enabled = true
+max_concurrent = 3
+default_timeout_seconds = 300
+additional_agent_dirs = []
+
+[agent_teams]
+enabled = false
+max_teammates = 4
+teammate_mode = "auto"
+
+[output_style]
+active_style = "default"
+
+[dotfile_protection]
+enabled = true
+require_explicit_confirmation = true
+audit_logging_enabled = true
+audit_log_path = "~/.vtcode/dotfile_audit.log"
+prevent_cascading_modifications = true
+create_backups = true
+backup_directory = "~/.vtcode/dotfile_backups"
+max_backups_per_file = 10
+preserve_permissions = true
+whitelist = []
+additional_protected_patterns = []
+block_during_automation = true
+blocked_operations = [
+    "dependency_installation",
+    "code_formatting",
+    "git_operations",
+    "project_initialization",
+    "build_operations",
+    "test_execution",
+    "linting",
+    "auto_fix",
+]
+require_secondary_auth_for_whitelist = true
