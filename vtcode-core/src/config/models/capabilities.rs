@@ -53,6 +53,9 @@ impl ModelId {
         }
 
         let direct = match self {
+            ModelId::Gemini31ProPreview | ModelId::Gemini31ProPreviewCustomTools => {
+                Some(ModelId::Gemini3FlashPreview)
+            }
             ModelId::Gemini3ProPreview => Some(ModelId::Gemini3FlashPreview),
             ModelId::GPT52 => Some(ModelId::GPT5Mini),
             ModelId::GPT52Codex => Some(ModelId::CodexMiniLatest),
@@ -98,7 +101,10 @@ impl ModelId {
     pub fn is_pro_variant(&self) -> bool {
         matches!(
             self,
-            ModelId::GPT5
+            ModelId::Gemini31ProPreview
+                | ModelId::Gemini31ProPreviewCustomTools
+                | ModelId::OpenRouterGoogleGemini31ProPreview
+                | ModelId::GPT5
                 | ModelId::GPT52
                 | ModelId::GPT5Codex
                 | ModelId::ClaudeOpus46
@@ -139,7 +145,10 @@ impl ModelId {
         }
         matches!(
             self,
-            ModelId::Gemini3FlashPreview
+            ModelId::Gemini31ProPreview
+                | ModelId::Gemini31ProPreviewCustomTools
+                | ModelId::OpenRouterGoogleGemini31ProPreview
+                | ModelId::Gemini3FlashPreview
                 | ModelId::GPT52
                 | ModelId::GPT5
                 | ModelId::GPT5Codex
@@ -183,6 +192,7 @@ impl ModelId {
         }
         match self {
             // Gemini generations
+            ModelId::Gemini31ProPreview | ModelId::Gemini31ProPreviewCustomTools => "3.1",
             ModelId::Gemini3ProPreview | ModelId::Gemini3FlashPreview => "3",
             // OpenAI generations
             ModelId::GPT52 | ModelId::GPT52Codex => "5.2",
@@ -279,6 +289,7 @@ impl ModelId {
             | ModelId::OpenRouterOpenAIGpt5
             | ModelId::OpenRouterOpenAIGpt5Codex
             | ModelId::OpenRouterOpenAIGpt5Chat
+            | ModelId::OpenRouterGoogleGemini31ProPreview
             | ModelId::OpenRouterAnthropicClaudeSonnet45
             | ModelId::OpenRouterAnthropicClaudeSonnet46
             | ModelId::OpenRouterAnthropicClaudeHaiku45

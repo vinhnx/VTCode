@@ -8,6 +8,8 @@ impl ModelId {
         }
         match self {
             // Gemini models
+            ModelId::Gemini31ProPreview => "Gemini 3.1 Pro Preview",
+            ModelId::Gemini31ProPreviewCustomTools => "Gemini 3.1 Pro Preview (Custom Tools)",
             ModelId::Gemini3ProPreview => "Gemini 3 Pro Preview",
             ModelId::Gemini3FlashPreview => "Gemini 3 Flash",
             // OpenAI models

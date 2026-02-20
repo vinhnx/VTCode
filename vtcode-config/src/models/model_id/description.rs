@@ -8,6 +8,12 @@ impl ModelId {
         }
         match self {
             // Gemini models
+            ModelId::Gemini31ProPreview => {
+                "Latest Gemini 3.1 Pro flagship model with improved thinking, efficiency, and factual consistency"
+            }
+            ModelId::Gemini31ProPreviewCustomTools => {
+                "Gemini 3.1 Pro variant optimized for agentic workflows using custom tools and bash"
+            }
             ModelId::Gemini3ProPreview => {
                 "Preview of next-generation Gemini 3 Pro model with advanced reasoning and capabilities"
             }

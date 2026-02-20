@@ -12,6 +12,8 @@ impl ModelId {
     pub fn all_models() -> Vec<ModelId> {
         let mut models = vec![
             // Gemini models
+            ModelId::Gemini31ProPreview,
+            ModelId::Gemini31ProPreviewCustomTools,
             ModelId::Gemini3ProPreview,
             ModelId::Gemini3FlashPreview,
             // OpenAI models

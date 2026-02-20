@@ -11,6 +11,8 @@ impl ModelId {
         }
         match self {
             // Gemini models
+            ModelId::Gemini31ProPreview => models::GEMINI_3_1_PRO_PREVIEW,
+            ModelId::Gemini31ProPreviewCustomTools => models::GEMINI_3_1_PRO_PREVIEW_CUSTOMTOOLS,
             ModelId::Gemini3ProPreview => models::GEMINI_3_PRO_PREVIEW,
             ModelId::Gemini3FlashPreview => models::GEMINI_3_FLASH_PREVIEW,
             // OpenAI models
@@ -122,6 +124,7 @@ impl ModelId {
             | ModelId::OpenRouterOpenAIGpt5
             | ModelId::OpenRouterOpenAIGpt5Codex
             | ModelId::OpenRouterOpenAIGpt5Chat
+            | ModelId::OpenRouterGoogleGemini31ProPreview
             | ModelId::OpenRouterAnthropicClaudeSonnet45
             | ModelId::OpenRouterAnthropicClaudeSonnet46
             | ModelId::OpenRouterAnthropicClaudeHaiku45
@@ -160,7 +163,10 @@ impl ModelId {
             return Provider::OpenRouter;
         }
         match self {
-            ModelId::Gemini3ProPreview | ModelId::Gemini3FlashPreview => Provider::Gemini,
+            ModelId::Gemini31ProPreview
+            | ModelId::Gemini31ProPreviewCustomTools
+            | ModelId::Gemini3ProPreview
+            | ModelId::Gemini3FlashPreview => Provider::Gemini,
             ModelId::GPT5
             | ModelId::GPT52
             | ModelId::GPT52Codex
@@ -253,6 +259,7 @@ impl ModelId {
             | ModelId::OpenRouterOpenAIGpt5
             | ModelId::OpenRouterOpenAIGpt5Codex
             | ModelId::OpenRouterOpenAIGpt5Chat
+            | ModelId::OpenRouterGoogleGemini31ProPreview
             | ModelId::OpenRouterAnthropicClaudeSonnet45
             | ModelId::OpenRouterAnthropicClaudeSonnet46
             | ModelId::OpenRouterAnthropicClaudeHaiku45

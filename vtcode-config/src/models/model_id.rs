@@ -16,6 +16,10 @@ mod provider;
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ModelId {
     // Gemini models
+    /// Gemini 3.1 Pro Preview - Latest Gemini 3.1 Pro flagship
+    Gemini31ProPreview,
+    /// Gemini 3.1 Pro Preview Custom Tools - Optimized for custom tools & bash
+    Gemini31ProPreviewCustomTools,
     /// Gemini 3 Pro Preview - Preview of next-generation Gemini model
     Gemini3ProPreview,
     /// Gemini 3 Flash Preview - Our most intelligent model built for speed, combining frontier intelligence with superior search and grounding
@@ -239,6 +243,9 @@ pub enum ModelId {
     OpenRouterOpenAIGpt5Codex,
     /// OpenAI GPT-5 Chat - Chat optimised GPT-5 endpoint without tool use
     OpenRouterOpenAIGpt5Chat,
+
+    /// Gemini 3.1 Pro Preview - Google's latest Gemini 3.1 Pro model via OpenRouter
+    OpenRouterGoogleGemini31ProPreview,
 
     /// Claude Sonnet 4.5 - Anthropic Claude Sonnet 4.5 listing
     OpenRouterAnthropicClaudeSonnet45,

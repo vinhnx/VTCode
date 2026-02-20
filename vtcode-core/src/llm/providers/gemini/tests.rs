@@ -335,6 +335,35 @@ fn convert_to_gemini_request_includes_reasoning_config() {
 }
 
 #[test]
+fn gemini31_pro_reasoning_mapping() {
+    use crate::config::constants::models;
+    use crate::config::types::ReasoningEffortLevel;
+
+    let provider = GeminiProvider::new("test-key".to_string());
+
+    // Test High effort level for Gemini 3.1 Pro
+    let request = LLMRequest {
+        messages: vec![Message::user("test".to_string())],
+        model: models::google::GEMINI_3_1_PRO_PREVIEW.to_string(),
+        reasoning_effort: Some(ReasoningEffortLevel::High),
+        ..Default::default()
+    };
+
+    let gemini_request = provider
+        .convert_to_gemini_request(&request)
+        .expect("conversion should succeed");
+
+    let generation_config = gemini_request
+        .generation_config
+        .expect("generation_config should be present");
+    let thinking_config = generation_config
+        .thinking_config
+        .as_ref()
+        .expect("thinking_config should be present");
+    assert_eq!(thinking_config.thinking_level.as_deref().unwrap(), "high");
+}
+
+#[test]
 fn thought_signature_preserved_in_function_call_response() {
     use crate::gemini::function_calling::FunctionCall as GeminiFunctionCall;
     use crate::gemini::models::{Candidate, Content, GenerateContentResponse, Part};
@@ -487,10 +516,14 @@ fn gemini_provider_supports_reasoning_effort_for_gemini3() {
     use crate::config::models::Provider;
 
     // Test that the provider correctly identifies Gemini 3 Pro as supporting reasoning effort
+    assert!(Provider::Gemini.supports_reasoning_effort(models::google::GEMINI_3_1_PRO_PREVIEW));
+    assert!(Provider::Gemini.supports_reasoning_effort(models::google::GEMINI_3_1_PRO_PREVIEW_CUSTOMTOOLS));
     assert!(Provider::Gemini.supports_reasoning_effort(models::google::GEMINI_3_PRO_PREVIEW));
     assert!(Provider::Gemini.supports_reasoning_effort(models::google::GEMINI_3_FLASH_PREVIEW));
 
     // Test model IDs as well
+    assert!(ModelId::Gemini31ProPreview.supports_reasoning_effort());
+    assert!(ModelId::Gemini31ProPreviewCustomTools.supports_reasoning_effort());
     assert!(ModelId::Gemini3ProPreview.supports_reasoning_effort());
     assert!(ModelId::Gemini3FlashPreview.supports_reasoning_effort());
 }
@@ -506,6 +539,9 @@ fn gemini3_flash_extended_thinking_levels() {
 
     // But Gemini 3 Pro does not
     assert!(!GeminiProvider::supports_extended_thinking(
+        models::google::GEMINI_3_1_PRO_PREVIEW
+    ));
+    assert!(!GeminiProvider::supports_extended_thinking(
         models::google::GEMINI_3_PRO_PREVIEW
     ));
 
@@ -513,6 +549,10 @@ fn gemini3_flash_extended_thinking_levels() {
     let flash_levels =
         GeminiProvider::supported_thinking_levels(models::google::GEMINI_3_FLASH_PREVIEW);
     assert_eq!(flash_levels, vec!["minimal", "low", "medium", "high"]);
+
+    let pro31_levels =
+        GeminiProvider::supported_thinking_levels(models::google::GEMINI_3_1_PRO_PREVIEW);
+    assert_eq!(pro31_levels, vec!["low", "high"]);
 
     let pro_levels =
         GeminiProvider::supported_thinking_levels(models::google::GEMINI_3_PRO_PREVIEW);

@@ -69,6 +69,34 @@
         "doc_comment": "Mistral Large 3 2512 - Mistral Large 3 2512 model via OpenRouter"
       }
     },
+    "google/gemini-3.1-pro-preview": {
+      "id": "google/gemini-3.1-pro-preview",
+      "name": "Google: Gemini 3.1 Pro Preview",
+      "reasoning": true,
+      "tool_call": true,
+      "modalities": {
+        "input": [
+          "text",
+          "image",
+          "file"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "context": 1048576,
+      "vtcode": {
+        "variant": "OpenRouterGoogleGemini31ProPreview",
+        "constant": "GOOGLE_GEMINI_3_1_PRO_PREVIEW",
+        "vendor": "google",
+        "display": "Gemini 3.1 Pro Preview",
+        "description": "Google Gemini 3.1 Pro model via OpenRouter",
+        "efficient": false,
+        "top_tier": true,
+        "generation": "3.1",
+        "doc_comment": "Gemini 3.1 Pro Preview - Google Gemini 3.1 Pro model via OpenRouter"
+      }
+    },
     "stepfun/step-3.5-flash:free": {
       "id": "stepfun/step-3.5-flash:free",
       "name": "Step 3.5 Flash (free)",
