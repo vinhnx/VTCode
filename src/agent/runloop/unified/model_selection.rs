@@ -107,14 +107,14 @@ pub(crate) async fn finalize_model_selection(
     config.api_key = api_key;
     config.reasoning_effort = selection.reasoning;
     config.api_key_env = selection.env_key.clone();
-    
+
     // Store API key in secure storage (keyring) instead of config file
     // Get storage mode from VTCodeConfig if available, otherwise use default
     let storage_mode = vt_cfg
         .as_ref()
         .map(|cfg| cfg.agent.credential_storage_mode)
         .unwrap_or_default();
-    
+
     if let Some(ref key) = selection.api_key {
         let key_storage = CustomApiKeyStorage::new(&selection.provider);
         if let Err(e) = key_storage.store(key, storage_mode) {

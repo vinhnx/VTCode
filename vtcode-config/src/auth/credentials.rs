@@ -312,7 +312,10 @@ impl CustomApiKeyStorage {
     /// * `provider` - The provider identifier (e.g., "openrouter", "anthropic", "custom_provider")
     pub fn new(provider: &str) -> Self {
         Self {
-            storage: CredentialStorage::new("vtcode", format!("api_key_{}", provider.to_lowercase())),
+            storage: CredentialStorage::new(
+                "vtcode",
+                format!("api_key_{}", provider.to_lowercase()),
+            ),
         }
     }
 
@@ -411,18 +414,11 @@ pub fn load_custom_api_keys(
 /// # Arguments
 /// * `providers` - List of provider names to clear
 /// * `mode` - The storage mode to use
-pub fn clear_custom_api_keys(
-    providers: &[String],
-    mode: AuthCredentialsStoreMode,
-) -> Result<()> {
+pub fn clear_custom_api_keys(providers: &[String], mode: AuthCredentialsStoreMode) -> Result<()> {
     for provider in providers {
         let storage = CustomApiKeyStorage::new(provider);
         if let Err(e) = storage.clear(mode) {
-            tracing::warn!(
-                "Failed to clear API key for provider '{}': {}",
-                provider,
-                e
-            );
+            tracing::warn!("Failed to clear API key for provider '{}': {}", provider, e);
         }
     }
     Ok(())

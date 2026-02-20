@@ -3,10 +3,10 @@ use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
 use vtcode::interactive_list::SelectionInterrupted;
+use vtcode_config::auth::CustomApiKeyStorage;
 use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
 use vtcode_core::config::models::Provider;
 use vtcode_core::config::types::ReasoningEffortLevel;
-use vtcode_config::auth::CustomApiKeyStorage;
 use vtcode_core::ui::InlineListSelection;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::dot_config::update_model_preference;

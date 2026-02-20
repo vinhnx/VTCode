@@ -22,12 +22,24 @@ pub(super) fn handle_event(
         }
         CrosstermEvent::Mouse(MouseEvent { kind, .. }) => match kind {
             MouseEventKind::ScrollDown => {
-                session.scroll_line_down();
-                session.mark_dirty();
+                // Check if history picker is active - delegate scrolling to picker
+                if session.history_picker_state.active {
+                    session.history_picker_state.move_down();
+                    session.mark_dirty();
+                } else {
+                    session.scroll_line_down();
+                    session.mark_dirty();
+                }
             }
             MouseEventKind::ScrollUp => {
-                session.scroll_line_up();
-                session.mark_dirty();
+                // Check if history picker is active - delegate scrolling to picker
+                if session.history_picker_state.active {
+                    session.history_picker_state.move_up();
+                    session.mark_dirty();
+                } else {
+                    session.scroll_line_up();
+                    session.mark_dirty();
+                }
             }
             _ => {}
         },

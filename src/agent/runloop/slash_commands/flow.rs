@@ -169,7 +169,6 @@ pub(super) fn handle_rewind_command(
     }
 }
 
-
 pub(super) fn handle_plan_command(
     args: &str,
     renderer: &mut AnsiRenderer,

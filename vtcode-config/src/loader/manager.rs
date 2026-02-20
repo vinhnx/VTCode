@@ -414,25 +414,21 @@ impl ConfigManager {
 /// * `config` - The configuration to migrate
 fn migrate_custom_api_keys_if_needed(config: &mut VTCodeConfig) -> Result<()> {
     let storage_mode = config.agent.credential_storage_mode;
-    
+
     // Check if there are any non-empty API keys in the config
     let has_plain_text_keys = config
         .agent
         .custom_api_keys
         .values()
         .any(|key| !key.is_empty());
-    
+
     if has_plain_text_keys {
-        tracing::info!(
-            "Detected plain-text API keys in config, migrating to secure storage..."
-        );
-        
+        tracing::info!("Detected plain-text API keys in config, migrating to secure storage...");
+
         // Migrate keys to secure storage
-        let migration_results = migrate_custom_api_keys_to_keyring(
-            &config.agent.custom_api_keys,
-            storage_mode,
-        )?;
-        
+        let migration_results =
+            migrate_custom_api_keys_to_keyring(&config.agent.custom_api_keys, storage_mode)?;
+
         // Clear keys from config (keep provider names for tracking)
         let mut migrated_count = 0;
         for (provider, success) in migration_results {
@@ -442,7 +438,7 @@ fn migrate_custom_api_keys_if_needed(config: &mut VTCodeConfig) -> Result<()> {
                 migrated_count += 1;
             }
         }
-        
+
         if migrated_count > 0 {
             tracing::info!(
                 "Successfully migrated {} API key(s) to secure storage",
@@ -454,6 +450,6 @@ fn migrate_custom_api_keys_if_needed(config: &mut VTCodeConfig) -> Result<()> {
             );
         }
     }
-    
+
     Ok(())
 }
