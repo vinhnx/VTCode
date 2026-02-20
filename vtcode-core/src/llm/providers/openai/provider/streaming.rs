@@ -14,6 +14,11 @@ use async_stream::try_stream;
 use serde_json::{Value, json};
 use tracing::debug;
 
+#[inline]
+fn should_prefer_responses_stream(state: ResponsesApiState) -> bool {
+    !matches!(state, ResponsesApiState::Disabled)
+}
+
 impl OpenAIProvider {
     pub(crate) async fn stream_request(
         &self,
@@ -30,9 +35,7 @@ impl OpenAIProvider {
 
         let responses_state = self.responses_api_state(&request.model);
 
-        let prefer_responses_stream = matches!(responses_state, ResponsesApiState::Required)
-            || (matches!(responses_state, ResponsesApiState::Allowed)
-                && request.tools.as_ref().is_none_or(|t| t.is_empty()));
+        let prefer_responses_stream = should_prefer_responses_stream(responses_state);
 
         if !prefer_responses_stream {
             return self.stream_chat_completions(&request).await;
@@ -225,5 +228,17 @@ impl OpenAIProvider {
         }
 
         Ok(stream_decoder::create_chat_stream(response, model))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ResponsesApiState, should_prefer_responses_stream};
+
+    #[test]
+    fn streaming_prefers_responses_for_allowed_and_required() {
+        assert!(should_prefer_responses_stream(ResponsesApiState::Allowed));
+        assert!(should_prefer_responses_stream(ResponsesApiState::Required));
+        assert!(!should_prefer_responses_stream(ResponsesApiState::Disabled));
     }
 }

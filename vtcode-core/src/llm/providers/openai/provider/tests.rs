@@ -227,6 +227,68 @@ fn responses_payload_includes_prompt_cache_retention() {
 }
 
 #[test]
+fn responses_payload_includes_prompt_cache_key_for_native_openai() {
+    let provider = OpenAIProvider::from_config(
+        Some("key".to_owned()),
+        Some(models::openai::GPT_5_1.to_string()),
+        None,
+        None,
+        None,
+        None,
+        None,
+    );
+
+    let mut request = sample_request(models::openai::GPT_5_1);
+    request.prompt_cache_key = Some("vtcode:openai:session-123".to_string());
+    let payload = provider
+        .convert_to_openai_responses_format(&request)
+        .expect("conversion should succeed");
+
+    assert_eq!(
+        payload.get("prompt_cache_key").and_then(Value::as_str),
+        Some("vtcode:openai:session-123")
+    );
+}
+
+#[test]
+fn chat_payload_includes_prompt_cache_key_for_native_openai() {
+    let provider =
+        OpenAIProvider::with_model(String::new(), models::openai::DEFAULT_MODEL.to_string());
+
+    let mut request = sample_request(models::openai::DEFAULT_MODEL);
+    request.prompt_cache_key = Some("vtcode:openai:session-abc".to_string());
+    let payload = provider
+        .convert_to_openai_format(&request)
+        .expect("conversion should succeed");
+
+    assert_eq!(
+        payload.get("prompt_cache_key").and_then(Value::as_str),
+        Some("vtcode:openai:session-abc")
+    );
+}
+
+#[test]
+fn responses_payload_omits_prompt_cache_key_for_non_native_openai_base_url() {
+    let provider = OpenAIProvider::from_config(
+        Some("key".to_owned()),
+        Some(models::openai::GPT_5_1.to_string()),
+        Some("https://example.local/v1".to_string()),
+        None,
+        None,
+        None,
+        None,
+    );
+
+    let mut request = sample_request(models::openai::GPT_5_1);
+    request.prompt_cache_key = Some("vtcode:openai:session-xyz".to_string());
+    let payload = provider
+        .convert_to_openai_responses_format(&request)
+        .expect("conversion should succeed");
+
+    assert!(payload.get("prompt_cache_key").is_none());
+}
+
+#[test]
 fn responses_payload_excludes_prompt_cache_retention_when_not_set() {
     let pc = PromptCachingConfig::default(); // default is Some("24h"); ram: to simulate none, set to None
     let mut pc = pc;
@@ -472,8 +534,15 @@ mod caching_tests {
         config.providers.openai.prompt_cache_retention = Some("24h".to_string());
 
         // Initialize provider
-        let provider =
-            OpenAIProvider::from_config(Some("key".into()), None, None, Some(config), None, None, None);
+        let provider = OpenAIProvider::from_config(
+            Some("key".into()),
+            None,
+            None,
+            Some(config),
+            None,
+            None,
+            None,
+        );
 
         // Create a dummy request for a Responses API model
         // Must use an exact model name from RESPONSES_API_MODELS
@@ -510,8 +579,15 @@ mod caching_tests {
         config.providers.openai.enabled = true;
         config.providers.openai.prompt_cache_retention = Some("24h".to_string());
 
-        let provider =
-            OpenAIProvider::from_config(Some("key".into()), None, None, Some(config), None, None, None);
+        let provider = OpenAIProvider::from_config(
+            Some("key".into()),
+            None,
+            None,
+            Some(config),
+            None,
+            None,
+            None,
+        );
 
         // Standard GPT-4o model (Chat Completions API)
         let request = provider::LLMRequest {

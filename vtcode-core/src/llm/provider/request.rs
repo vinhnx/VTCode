@@ -77,6 +77,10 @@ pub struct LLMRequest {
     /// Optional turn metadata for git context (remote URLs, commit hash, etc.)
     /// This is sent as X-Turn-Metadata header to providers that support it
     pub metadata: Option<serde_json::Value>,
+
+    /// Optional provider routing hint for prompt cache stickiness.
+    /// OpenAI uses this value to improve routing locality for repeated prefixes.
+    pub prompt_cache_key: Option<String>,
 }
 
 /// Settings to refine model behavior for coding agent tasks

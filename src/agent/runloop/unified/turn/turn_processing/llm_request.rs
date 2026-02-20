@@ -9,6 +9,7 @@ use tokio::task;
 use tracing::debug;
 use vtcode_config::constants::defaults::{DEFAULT_MAX_CONVERSATION_TURNS, DEFAULT_MAX_TOOL_LOOPS};
 use vtcode_config::context::default_max_context_tokens;
+use vtcode_core::config::OpenAIPromptCacheKeyMode;
 use vtcode_core::llm::provider::{self as uni, ParallelToolConfig};
 use vtcode_core::prompts::upsert_harness_limits_section;
 use vtcode_core::turn_metadata;
@@ -94,8 +95,13 @@ pub(crate) async fn execute_llm_request(
     };
 
     let current_tools = ctx.tool_catalog.sorted_snapshot(ctx.tools).await;
+    let openai_prompt_cache_enabled = provider_name.eq_ignore_ascii_case("openai")
+        && ctx.config.prompt_cache.enabled
+        && ctx.config.prompt_cache.providers.openai.enabled;
     let has_tools = current_tools.is_some();
-    if let Some(defs) = current_tools.as_ref() {
+    if let Some(defs) = current_tools.as_ref()
+        && !openai_prompt_cache_enabled
+    {
         let _ = writeln!(
             system_prompt,
             "\n[Runtime Tool Catalog]\n- version: {}\n- available_tools: {}",
@@ -125,6 +131,22 @@ pub(crate) async fn execute_llm_request(
             None
         }
     };
+    let prompt_cache_key = if openai_prompt_cache_enabled {
+        match ctx
+            .config
+            .prompt_cache
+            .providers
+            .openai
+            .prompt_cache_key_mode
+        {
+            OpenAIPromptCacheKeyMode::Session => {
+                Some(format!("vtcode:openai:{}", ctx.harness_state.run_id.0))
+            }
+            OpenAIPromptCacheKeyMode::Off => None,
+        }
+    } else {
+        None
+    };
 
     let request = uni::LLMRequest {
         messages: ctx.working_history.to_vec(),
@@ -137,6 +159,7 @@ pub(crate) async fn execute_llm_request(
         parallel_tool_config: parallel_config,
         reasoning_effort,
         metadata,
+        prompt_cache_key,
         ..Default::default()
     };
     let action_suggestion = extract_action_from_messages(ctx.working_history);
@@ -371,6 +394,39 @@ pub(crate) async fn execute_llm_request(
             return Err(error);
         }
     };
+    if let Some(usage) = response.usage.as_ref() {
+        #[derive(serde::Serialize)]
+        struct PromptCacheMetricsRecord<'a> {
+            kind: &'static str,
+            turn: usize,
+            model: &'a str,
+            prompt_tokens: u32,
+            completion_tokens: u32,
+            total_tokens: u32,
+            cached_prompt_tokens: u32,
+            cache_hit_ratio: f64,
+            ts: i64,
+        }
+
+        let cached_prompt_tokens = usage.cached_prompt_tokens.unwrap_or(0);
+        let cache_hit_ratio = if usage.prompt_tokens == 0 {
+            0.0
+        } else {
+            cached_prompt_tokens as f64 / usage.prompt_tokens as f64
+        };
+        let record = PromptCacheMetricsRecord {
+            kind: "prompt_cache_metrics",
+            turn: step_count,
+            model: active_model,
+            prompt_tokens: usage.prompt_tokens,
+            completion_tokens: usage.completion_tokens,
+            total_tokens: usage.total_tokens,
+            cached_prompt_tokens,
+            cache_hit_ratio,
+            ts: chrono::Utc::now().timestamp(),
+        };
+        ctx.traj.log(&record);
+    }
     Ok((response, response_streamed))
 }
 

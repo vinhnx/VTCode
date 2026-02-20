@@ -242,12 +242,15 @@ impl OpenAIProvider {
         &self,
         request: &provider::LLMRequest,
     ) -> Result<Value, provider::LLMError> {
+        let is_native_openai = self.base_url.contains("api.openai.com");
         let ctx = request_builder::ChatRequestContext {
             model: &self.model,
             base_url: &self.base_url,
             supports_tools: self.supports_tools(&request.model),
             supports_parallel_tool_config: self.supports_parallel_tool_config(&request.model),
             supports_temperature: Self::supports_temperature_parameter(&request.model),
+            supports_prompt_cache_key: is_native_openai,
+            prompt_cache_key: request.prompt_cache_key.as_deref(),
         };
 
         request_builder::build_chat_request(request, &ctx)
@@ -257,6 +260,7 @@ impl OpenAIProvider {
         &self,
         request: &provider::LLMRequest,
     ) -> Result<Value, provider::LLMError> {
+        let is_native_openai = self.base_url.contains("api.openai.com");
         let ctx = request_builder::ResponsesRequestContext {
             supports_tools: self.supports_tools(&request.model),
             supports_parallel_tool_config: self.supports_parallel_tool_config(&request.model),
@@ -265,6 +269,8 @@ impl OpenAIProvider {
             supports_reasoning: self.supports_reasoning(&request.model),
             is_gpt5_codex_model: Self::is_gpt5_codex_model(&request.model),
             is_responses_api_model: Self::is_responses_api_model(&request.model),
+            supports_prompt_cache_key: is_native_openai,
+            prompt_cache_key: request.prompt_cache_key.as_deref(),
             prompt_cache_retention: self.prompt_cache_settings.prompt_cache_retention.as_deref(),
         };
 
