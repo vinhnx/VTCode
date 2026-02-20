@@ -29,8 +29,8 @@ pub use api_keys::ApiKeySources;
 pub use context::{ContextFeaturesConfig, LedgerConfig};
 pub use core::{
     AgentConfig, AgentOnboardingConfig, AutomationConfig, CommandsConfig, FullAutoConfig,
-    GatekeeperConfig, ModelConfig, PermissionsConfig, PromptCachingConfig,
-    ProviderPromptCachingConfig, SecurityConfig, ToolPolicy, ToolsConfig,
+    GatekeeperConfig, ModelConfig, OpenAIPromptCacheKeyMode, PermissionsConfig,
+    PromptCachingConfig, ProviderPromptCachingConfig, SecurityConfig, ToolPolicy, ToolsConfig,
 };
 pub use core::{PluginRuntimeConfig, PluginTrustLevel};
 pub use defaults::{

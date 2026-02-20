@@ -202,6 +202,7 @@ fn loader_loads_prompt_cache_retention_from_toml() {
 enabled = true
 [prompt_cache.providers.openai]
 prompt_cache_retention = "24h"
+prompt_cache_key_mode = "off"
 "#;
     file.write_all(contents.as_bytes()).unwrap();
 
@@ -210,6 +211,10 @@ prompt_cache_retention = "24h"
     assert_eq!(
         config.prompt_cache.providers.openai.prompt_cache_retention,
         Some("24h".to_string())
+    );
+    assert_eq!(
+        config.prompt_cache.providers.openai.prompt_cache_key_mode,
+        crate::core::OpenAIPromptCacheKeyMode::Off
     );
 }
 

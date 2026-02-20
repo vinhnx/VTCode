@@ -1054,6 +1054,11 @@ enabled = true
 min_prefix_tokens = 1024
 idle_expiration_seconds = 3600
 surface_metrics = true
+# Routing key strategy for OpenAI prompt cache stickiness.
+# "session" uses one stable key per VT Code conversation.
+prompt_cache_key_mode = "session"
+# Optional: extended server-side retention for Responses API models.
+# prompt_cache_retention = "24h"
 
 # Prompt cache configuration for Anthropic
 [prompt_cache.providers.anthropic]

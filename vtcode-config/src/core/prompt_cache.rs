@@ -108,6 +108,11 @@ pub struct OpenAIPromptCacheSettings {
     #[serde(default = "default_true")]
     pub surface_metrics: bool,
 
+    /// Strategy for generating OpenAI `prompt_cache_key`.
+    /// Session mode derives one stable key per VT Code conversation.
+    #[serde(default = "default_openai_prompt_cache_key_mode")]
+    pub prompt_cache_key_mode: OpenAIPromptCacheKeyMode,
+
     /// Optional prompt cache retention string to pass directly into OpenAI Responses API
     /// Example: "24h" or "1d". If set, VT Code will include `prompt_cache_retention`
     /// in the request body to extend the model-side prompt caching window.
@@ -122,6 +127,7 @@ impl Default for OpenAIPromptCacheSettings {
             min_prefix_tokens: default_openai_min_prefix_tokens(),
             idle_expiration_seconds: default_openai_idle_expiration(),
             surface_metrics: default_true(),
+            prompt_cache_key_mode: default_openai_prompt_cache_key_mode(),
             prompt_cache_retention: None,
         }
     }
@@ -136,6 +142,18 @@ impl OpenAIPromptCacheSettings {
         }
         Ok(())
     }
+}
+
+/// OpenAI prompt cache key derivation mode.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum OpenAIPromptCacheKeyMode {
+    /// Do not send `prompt_cache_key` in OpenAI requests.
+    Off,
+    /// Send one stable `prompt_cache_key` per VT Code session.
+    #[default]
+    Session,
 }
 
 /// Anthropic Claude cache control settings
@@ -376,6 +394,10 @@ fn default_openai_idle_expiration() -> u64 {
     prompt_cache::OPENAI_IDLE_EXPIRATION_SECONDS
 }
 
+fn default_openai_prompt_cache_key_mode() -> OpenAIPromptCacheKeyMode {
+    OpenAIPromptCacheKeyMode::Session
+}
+
 #[allow(dead_code)]
 fn default_anthropic_default_ttl() -> u64 {
     prompt_cache::ANTHROPIC_DEFAULT_TTL_SECONDS
@@ -533,6 +555,10 @@ mod tests {
             prompt_cache::OPENAI_MIN_PREFIX_TOKENS
         );
         assert_eq!(
+            cfg.providers.openai.prompt_cache_key_mode,
+            OpenAIPromptCacheKeyMode::Session
+        );
+        assert_eq!(
             cfg.providers.anthropic.extended_ttl_seconds,
             Some(prompt_cache::ANTHROPIC_EXTENDED_TTL_SECONDS)
         );
@@ -593,5 +619,21 @@ mod tests {
         let mut cfg = PromptCachingConfig::default();
         cfg.providers.openai.prompt_cache_retention = Some("invalid".to_string());
         assert!(cfg.validate().is_err());
+    }
+
+    #[test]
+    fn prompt_cache_key_mode_parses_from_toml() {
+        let parsed: PromptCachingConfig = toml::from_str(
+            r#"
+[providers.openai]
+prompt_cache_key_mode = "off"
+"#,
+        )
+        .expect("prompt cache config should parse");
+
+        assert_eq!(
+            parsed.providers.openai.prompt_cache_key_mode,
+            OpenAIPromptCacheKeyMode::Off
+        );
     }
 }

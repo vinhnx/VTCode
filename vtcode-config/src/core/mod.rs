@@ -23,9 +23,9 @@ pub use permissions::PermissionsConfig;
 pub use plugins::{PluginRuntimeConfig, PluginTrustLevel};
 pub use prompt_cache::{
     AnthropicPromptCacheSettings, DeepSeekPromptCacheSettings, GeminiPromptCacheMode,
-    GeminiPromptCacheSettings, MoonshotPromptCacheSettings, OpenAIPromptCacheSettings,
-    OpenRouterPromptCacheSettings, PromptCachingConfig, ProviderPromptCachingConfig,
-    XAIPromptCacheSettings, ZaiPromptCacheSettings,
+    GeminiPromptCacheSettings, MoonshotPromptCacheSettings, OpenAIPromptCacheKeyMode,
+    OpenAIPromptCacheSettings, OpenRouterPromptCacheSettings, PromptCachingConfig,
+    ProviderPromptCachingConfig, XAIPromptCacheSettings, ZaiPromptCacheSettings,
 };
 pub use provider::{AnthropicConfig, ToolSearchConfig};
 pub use sandbox::{

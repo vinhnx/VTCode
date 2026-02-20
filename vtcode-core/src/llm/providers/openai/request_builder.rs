@@ -21,6 +21,8 @@ pub(crate) struct ChatRequestContext<'a> {
     pub supports_tools: bool,
     pub supports_parallel_tool_config: bool,
     pub supports_temperature: bool,
+    pub supports_prompt_cache_key: bool,
+    pub prompt_cache_key: Option<&'a str>,
 }
 
 pub(crate) struct ResponsesRequestContext<'a> {
@@ -31,6 +33,8 @@ pub(crate) struct ResponsesRequestContext<'a> {
     pub supports_reasoning: bool,
     pub is_gpt5_codex_model: bool,
     pub is_responses_api_model: bool,
+    pub supports_prompt_cache_key: bool,
+    pub prompt_cache_key: Option<&'a str>,
     pub prompt_cache_retention: Option<&'a str>,
 }
 
@@ -126,6 +130,15 @@ pub(crate) fn build_chat_request(
         && ctx.supports_temperature
     {
         openai_request["temperature"] = json!(temperature);
+    }
+
+    if ctx.supports_prompt_cache_key
+        && let Some(prompt_cache_key) = ctx.prompt_cache_key
+    {
+        let trimmed = prompt_cache_key.trim();
+        if !trimmed.is_empty() {
+            openai_request["prompt_cache_key"] = json!(trimmed);
+        }
     }
 
     if ctx.supports_tools {
@@ -333,6 +346,15 @@ pub(crate) fn build_responses_request(
 
     if has_format_options {
         openai_request["text"] = text_format;
+    }
+
+    if ctx.supports_prompt_cache_key
+        && let Some(prompt_cache_key) = ctx.prompt_cache_key
+    {
+        let trimmed = prompt_cache_key.trim();
+        if !trimmed.is_empty() {
+            openai_request["prompt_cache_key"] = json!(trimmed);
+        }
     }
 
     // If configured, include the `prompt_cache_retention` value in the Responses API

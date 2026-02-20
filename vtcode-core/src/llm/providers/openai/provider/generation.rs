@@ -15,6 +15,11 @@ use tracing::debug;
 #[cfg(debug_assertions)]
 use std::time::Instant;
 
+#[inline]
+fn should_attempt_responses_api(state: ResponsesApiState) -> bool {
+    !matches!(state, ResponsesApiState::Disabled)
+}
+
 impl OpenAIProvider {
     pub(crate) async fn generate_request(
         &self,
@@ -37,9 +42,7 @@ impl OpenAIProvider {
         }
 
         let responses_state = self.responses_api_state(&request.model);
-        let attempt_responses = !matches!(responses_state, ResponsesApiState::Disabled)
-            && (matches!(responses_state, ResponsesApiState::Required)
-                || request.tools.as_ref().is_none_or(|t| t.is_empty()));
+        let attempt_responses = should_attempt_responses_api(responses_state);
         #[cfg(debug_assertions)]
         let request_timer = Instant::now();
         #[cfg(debug_assertions)]
@@ -275,5 +278,17 @@ impl OpenAIProvider {
             );
         }
         Ok(response)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ResponsesApiState, should_attempt_responses_api};
+
+    #[test]
+    fn responses_attempt_logic_prefers_responses_for_allowed_and_required() {
+        assert!(should_attempt_responses_api(ResponsesApiState::Allowed));
+        assert!(should_attempt_responses_api(ResponsesApiState::Required));
+        assert!(!should_attempt_responses_api(ResponsesApiState::Disabled));
     }
 }

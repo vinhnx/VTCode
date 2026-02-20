@@ -659,6 +659,9 @@ min_quality_threshold = 0.7
     min_prefix_tokens = 1024
     idle_expiration_seconds = 3600
     surface_metrics = true
+    # Routing key strategy for OpenAI prompt cache locality.
+    # "session" creates one stable key per VT Code conversation.
+    prompt_cache_key_mode = "session"
     # Optional: server-side prompt cache retention for OpenAI Responses API
     # Example: "24h" (leave commented out for default behavior)
     # prompt_cache_retention = "24h"
