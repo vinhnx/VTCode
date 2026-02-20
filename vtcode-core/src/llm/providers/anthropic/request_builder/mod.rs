@@ -67,13 +67,16 @@ pub fn convert_to_anthropic_format(
             None
         };
 
-    let mut breakpoints_remaining = if ctx.prompt_cache_enabled {
+    let max_breakpoints = if ctx.prompt_cache_enabled {
         ctx.prompt_cache_settings.max_breakpoints as usize
     } else {
         0
     };
+    let mut breakpoints_remaining = max_breakpoints;
 
+    let tools_breakpoints_before = breakpoints_remaining;
     let tools = build_tools(request, &tools_cache_control, &mut breakpoints_remaining);
+    let tools_breakpoints_used = tools_breakpoints_before.saturating_sub(breakpoints_remaining);
 
     let (system_value, breakpoints_used) =
         build_system_prompt(request, &system_cache_control, breakpoints_remaining);
@@ -98,6 +101,7 @@ pub fn convert_to_anthropic_format(
         hoist_largest_user_message(&mut messages_to_process);
     }
 
+    let messages_breakpoints_before = breakpoints_remaining;
     let messages = build_messages(
         request,
         &messages_to_process,
@@ -105,6 +109,9 @@ pub fn convert_to_anthropic_format(
         ctx.prompt_cache_settings,
         &mut breakpoints_remaining,
     )?;
+    let messages_breakpoints_used =
+        messages_breakpoints_before.saturating_sub(breakpoints_remaining);
+    let explicit_breakpoints_used = max_breakpoints.saturating_sub(breakpoints_remaining);
 
     let (thinking_val, reasoning_val) =
         build_thinking_config(request, ctx.anthropic_config, ctx.model);
@@ -155,11 +162,30 @@ pub fn convert_to_anthropic_format(
         request.temperature
     };
 
+    let top_level_cache_control =
+        if ctx.prompt_cache_enabled && explicit_breakpoints_used < max_breakpoints {
+            let ttl = if messages_breakpoints_used > 0 {
+                messages_ttl
+            } else if breakpoints_used > 0 || tools_breakpoints_used > 0 {
+                tools_ttl
+            } else {
+                messages_ttl
+            };
+
+            Some(CacheControl {
+                control_type: "ephemeral".to_string(),
+                ttl: Some(ttl.to_string()),
+            })
+        } else {
+            None
+        };
+
     let anthropic_request = AnthropicRequest {
         model: request.model.clone(),
         max_tokens: request
             .max_tokens
             .unwrap_or(if thinking_val.is_some() { 16000 } else { 4096 }),
+        cache_control: top_level_cache_control,
         messages,
         system: system_value,
         temperature: effective_temperature,
