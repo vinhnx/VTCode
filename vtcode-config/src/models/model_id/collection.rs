@@ -28,6 +28,7 @@ impl ModelId {
             ModelId::CodexMiniLatest,
             // Anthropic models
             ModelId::ClaudeOpus46,
+            ModelId::ClaudeSonnet46,
             ModelId::ClaudeOpus45,
             ModelId::ClaudeOpus41,
             ModelId::ClaudeSonnet45,

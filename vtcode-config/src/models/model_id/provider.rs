@@ -24,6 +24,7 @@ impl ModelId {
             | ModelId::OpenAIGptOss20b
             | ModelId::OpenAIGptOss120b => Provider::OpenAI,
             ModelId::ClaudeOpus46
+            | ModelId::ClaudeSonnet46
             | ModelId::ClaudeOpus45
             | ModelId::ClaudeOpus41
             | ModelId::ClaudeSonnet45

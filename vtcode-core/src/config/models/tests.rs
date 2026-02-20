@@ -20,6 +20,7 @@ fn test_model_string_conversion() {
     assert_eq!(ModelId::CodexMiniLatest.as_str(), models::CODEX_MINI_LATEST);
     // Anthropic models
     assert_eq!(ModelId::ClaudeOpus46.as_str(), models::CLAUDE_OPUS_4_6);
+    assert_eq!(ModelId::ClaudeSonnet46.as_str(), models::CLAUDE_SONNET_4_6);
     assert_eq!(ModelId::ClaudeSonnet45.as_str(), models::CLAUDE_SONNET_4_5);
     assert_eq!(ModelId::ClaudeHaiku45.as_str(), models::CLAUDE_HAIKU_4_5);
     assert_eq!(ModelId::ClaudeOpus41.as_str(), models::CLAUDE_OPUS_4_1);
@@ -109,6 +110,10 @@ fn test_model_from_string() {
         models::CLAUDE_OPUS_4_6.parse::<ModelId>().unwrap(),
         ModelId::ClaudeOpus46
     );
+    assert_eq!(
+        models::CLAUDE_SONNET_4_6.parse::<ModelId>().unwrap(),
+        ModelId::ClaudeSonnet46
+    );
     // DeepSeek models
     assert_eq!(
         models::DEEPSEEK_CHAT.parse::<ModelId>().unwrap(),
@@ -187,6 +192,7 @@ fn test_model_providers() {
     assert_eq!(ModelId::GPT5.provider(), Provider::OpenAI);
     assert_eq!(ModelId::GPT5Codex.provider(), Provider::OpenAI);
     assert_eq!(ModelId::ClaudeOpus46.provider(), Provider::Anthropic);
+    assert_eq!(ModelId::ClaudeSonnet46.provider(), Provider::Anthropic);
     assert_eq!(ModelId::ClaudeSonnet45.provider(), Provider::Anthropic);
     assert_eq!(ModelId::ClaudeHaiku45.provider(), Provider::Anthropic);
     assert_eq!(ModelId::DeepSeekChat.provider(), Provider::DeepSeek);
@@ -288,6 +294,7 @@ fn test_model_variants() {
     assert!(ModelId::GPT5.is_pro_variant());
     assert!(ModelId::GPT5Codex.is_pro_variant());
     assert!(ModelId::ClaudeOpus46.is_pro_variant());
+    assert!(ModelId::ClaudeSonnet46.is_pro_variant());
     assert!(ModelId::DeepSeekReasoner.is_pro_variant());
     assert!(ModelId::ZaiGlm5.is_pro_variant());
     assert!(!ModelId::Gemini3FlashPreview.is_pro_variant());
@@ -327,6 +334,7 @@ fn test_model_generation() {
 
     // Anthropic generations
     assert_eq!(ModelId::ClaudeOpus46.generation(), "4.6");
+    assert_eq!(ModelId::ClaudeSonnet46.generation(), "4.6");
     assert_eq!(ModelId::ClaudeSonnet45.generation(), "4.5");
     assert_eq!(ModelId::ClaudeHaiku45.generation(), "4.5");
     assert_eq!(ModelId::ClaudeOpus41.generation(), "4.1");
@@ -358,6 +366,7 @@ fn test_models_for_provider() {
 
     let anthropic_models = ModelId::models_for_provider(Provider::Anthropic);
     assert!(anthropic_models.contains(&ModelId::ClaudeOpus46));
+    assert!(anthropic_models.contains(&ModelId::ClaudeSonnet46));
     assert!(anthropic_models.contains(&ModelId::ClaudeSonnet45));
     assert!(anthropic_models.contains(&ModelId::ClaudeHaiku45));
     assert!(!anthropic_models.contains(&ModelId::GPT5));
@@ -391,6 +400,7 @@ fn test_fallback_models() {
     assert!(fallbacks.contains(&ModelId::Gemini3FlashPreview));
     assert!(fallbacks.contains(&ModelId::GPT5));
     assert!(fallbacks.contains(&ModelId::ClaudeOpus41));
+    assert!(fallbacks.contains(&ModelId::ClaudeSonnet46));
     assert!(fallbacks.contains(&ModelId::ClaudeSonnet45));
     assert!(fallbacks.contains(&ModelId::DeepSeekReasoner));
     assert!(fallbacks.contains(&ModelId::XaiGrok4));

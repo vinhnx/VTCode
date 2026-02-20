@@ -17,6 +17,7 @@ impl ModelId {
                 | ModelId::GPT52
                 | ModelId::GPT5Codex
                 | ModelId::ClaudeOpus46
+                | ModelId::ClaudeSonnet46
                 | ModelId::ClaudeOpus41
                 | ModelId::DeepSeekReasoner
                 | ModelId::XaiGrok4
@@ -56,6 +57,7 @@ impl ModelId {
                 | ModelId::GPT52
                 | ModelId::GPT5Codex
                 | ModelId::ClaudeOpus46
+                | ModelId::ClaudeSonnet46
                 | ModelId::ClaudeOpus45
                 | ModelId::ClaudeOpus41
                 | ModelId::ClaudeOpus4
@@ -107,7 +109,7 @@ impl ModelId {
             | ModelId::OpenAIGptOss20b
             | ModelId::OpenAIGptOss120b => "5",
             // Anthropic generations
-            ModelId::ClaudeOpus46 => "4.6",
+            ModelId::ClaudeOpus46 | ModelId::ClaudeSonnet46 => "4.6",
             ModelId::ClaudeOpus45 | ModelId::ClaudeSonnet45 | ModelId::ClaudeHaiku45 => "4.5",
             ModelId::ClaudeOpus41 => "4.1",
             ModelId::ClaudeOpus4 | ModelId::ClaudeSonnet4 => "4",

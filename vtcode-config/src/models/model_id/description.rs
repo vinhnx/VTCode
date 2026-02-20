@@ -48,6 +48,9 @@ impl ModelId {
             ModelId::ClaudeOpus46 => {
                 "Next-gen Anthropic flagship with extended and adaptive thinking support"
             }
+            ModelId::ClaudeSonnet46 => {
+                "Balanced flagship model for coding with extended and adaptive thinking support"
+            }
             ModelId::ClaudeOpus45 => {
                 "Latest flagship Anthropic model with exceptional reasoning capabilities"
             }

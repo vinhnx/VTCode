@@ -642,6 +642,26 @@
         "output_tokens": 128000,
         "status": "current"
       },
+      "claude-sonnet-4-6": {
+        "id": "claude-sonnet-4-6",
+        "name": "Claude Sonnet 4.6",
+        "description": "Balanced flagship model for coding with extended and adaptive thinking. 200K context with 1M beta.",
+        "reasoning": true,
+        "effort": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 200000,
+        "output_tokens": 128000,
+        "status": "current"
+      },
       "claude-sonnet-4-5": {
         "id": "claude-sonnet-4-5",
         "name": "Claude Sonnet 4.5 (alias)",
@@ -1192,6 +1212,39 @@
           "top_tier": true,
           "generation": "2025-10-15",
           "doc_comment": "Claude Sonnet 4.5 - Anthropic Claude Sonnet 4.5 listing"
+        }
+      },
+      "anthropic/claude-sonnet-4.6": {
+        "id": "anthropic/claude-sonnet-4.6",
+        "name": "Anthropic: Claude Sonnet 4.6",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "file"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 1000000,
+        "max_output_tokens": 128000,
+        "cost": {
+          "input": 3e-06,
+          "output": 1.5e-05
+        },
+        "vtcode": {
+          "variant": "OpenRouterAnthropicClaudeSonnet46",
+          "constant": "ANTHROPIC_CLAUDE_SONNET_4_6",
+          "vendor": "anthropic",
+          "display": "Claude Sonnet 4.6",
+          "description": "Anthropic Claude Sonnet 4.6 listing",
+          "efficient": false,
+          "top_tier": true,
+          "generation": "2026-02-20",
+          "doc_comment": "Claude Sonnet 4.6 - Anthropic Claude Sonnet 4.6 listing"
         }
       },
       "deepseek/deepseek-chat": {

@@ -24,6 +24,7 @@ impl ModelId {
             ModelId::CodexMiniLatest => "Codex Mini Latest",
             // Anthropic models
             ModelId::ClaudeOpus46 => "Claude Opus 4.6",
+            ModelId::ClaudeSonnet46 => "Claude Sonnet 4.6",
             ModelId::ClaudeOpus45 => "Claude Opus 4.5",
             ModelId::ClaudeOpus41 => "Claude Opus 4.1",
             ModelId::ClaudeSonnet45 => "Claude Sonnet 4.5",

@@ -29,6 +29,7 @@ impl ModelId {
             ModelId::OpenAIGptOss120b => models::openai::GPT_OSS_120B,
             // Anthropic models
             ModelId::ClaudeOpus46 => models::CLAUDE_OPUS_4_6,
+            ModelId::ClaudeSonnet46 => models::CLAUDE_SONNET_4_6,
             ModelId::ClaudeOpus41 => models::CLAUDE_OPUS_4_1,
             ModelId::ClaudeOpus45 => models::CLAUDE_OPUS_4_5,
             ModelId::ClaudeSonnet45 => models::CLAUDE_SONNET_4_5,
@@ -122,6 +123,7 @@ impl ModelId {
             | ModelId::OpenRouterOpenAIGpt5Codex
             | ModelId::OpenRouterOpenAIGpt5Chat
             | ModelId::OpenRouterAnthropicClaudeSonnet45
+            | ModelId::OpenRouterAnthropicClaudeSonnet46
             | ModelId::OpenRouterAnthropicClaudeHaiku45
             | ModelId::OpenRouterAnthropicClaudeOpus41
             | ModelId::OpenRouterDeepseekChat
@@ -173,6 +175,7 @@ impl ModelId {
             | ModelId::OpenAIGptOss20b
             | ModelId::OpenAIGptOss120b => Provider::OpenAI,
             ModelId::ClaudeOpus46
+            | ModelId::ClaudeSonnet46
             | ModelId::ClaudeOpus41
             | ModelId::ClaudeOpus45
             | ModelId::ClaudeSonnet45
@@ -251,6 +254,7 @@ impl ModelId {
             | ModelId::OpenRouterOpenAIGpt5Codex
             | ModelId::OpenRouterOpenAIGpt5Chat
             | ModelId::OpenRouterAnthropicClaudeSonnet45
+            | ModelId::OpenRouterAnthropicClaudeSonnet46
             | ModelId::OpenRouterAnthropicClaudeHaiku45
             | ModelId::OpenRouterAnthropicClaudeOpus41
             | ModelId::OpenRouterDeepseekChat
