@@ -117,5 +117,5 @@ jobs:
             vtcode-${{ inputs.tag }}-${{ matrix.target }}.tar.gz
             vtcode-${{ inputs.tag }}-${{ matrix.target }}.sha256
           if-no-files-found: error
-          retention-days: 1
-          compression-level: 0
+          retention-days: 7
+          compression-level: 6
