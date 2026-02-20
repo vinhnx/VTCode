@@ -2,12 +2,12 @@
 
 VT Code supports MiniMax models through the Anthropic-compatible API. You can use it in two ways:
 
--   Use provider `anthropic` with model `MiniMax-M2` (works today)
+-   Use provider `anthropic` with model `MiniMax-M2.5` (recommended) or `MiniMax-M2`
 -   Or use the new provider `minimax` (convenience alias that defaults to the correct base URL and model)
 
 ## Overview
 
-MiniMax provides an Anthropic API-compatible endpoint that allows seamless integration with tools built for Anthropic's API. VT Code automatically detects when you're using the MiniMax-M2 model and routes requests to the appropriate endpoint.
+MiniMax provides an Anthropic API-compatible endpoint that allows seamless integration with tools built for Anthropic's API. VT Code automatically detects when you're using MiniMax models and routes requests to the appropriate endpoint.
 
 ## Quick Start
 
@@ -31,7 +31,7 @@ Update your `vtcode.toml` to use the MiniMax model:
 [agent]
 provider = "anthropic"
 api_key_env = "ANTHROPIC_API_KEY"
-default_model = "MiniMax-M2"
+default_model = "MiniMax-M2.5"
 ```
 
 or using the `minimax` provider alias:
@@ -39,14 +39,14 @@ or using the `minimax` provider alias:
 ```toml
 [agent]
 provider = "minimax"
-# default_model is optional; defaults to MiniMax-M2
-default_model = "MiniMax-M2"
+# default_model is optional; defaults to MiniMax-M2.5
+default_model = "MiniMax-M2.5"
 api_key_env = "ANTHROPIC_API_KEY"
 ```
 
 ### 4. Start Using MiniMax
 
-Run VT Code and it will automatically use the MiniMax-M2 model through the Anthropic-compatible API:
+Run VT Code and it will automatically use the MiniMax-M2.5 model (the latest MiniMax model) through the Anthropic-compatible API:
 
 ```bash
 vtcode
@@ -60,7 +60,7 @@ vtcode
 [agent]
 provider = "anthropic"
 api_key_env = "ANTHROPIC_API_KEY"
-default_model = "MiniMax-M2"
+default_model = "MiniMax-M2.5"
 ```
 
 ### Custom Base URL Override
@@ -75,7 +75,7 @@ Or set it directly in your configuration if your setup supports it.
 
 ## Supported Features
 
-The MiniMax-M2 model through the Anthropic-compatible API supports:
+The MiniMax-M2.5 model through the Anthropic-compatible API supports:
 
 -   Text generation
 -   Streaming responses
@@ -103,7 +103,7 @@ vtcode ask "Explain machine learning in simple terms"
 
 ### With Tool Calling
 
-The MiniMax-M2 model supports function calling just like Claude models. VT Code's built-in tools (file operations, terminal commands, etc.) work seamlessly.
+The MiniMax-M2.5 model supports function calling just like Claude models. VT Code's built-in tools (file operations, terminal commands, etc.) work seamlessly.
 
 ### Streaming Mode
 
@@ -115,7 +115,7 @@ Note that MiniMax requires temperature values in the range (0.0, 1.0]. Values ou
 
 ## API Endpoint
 
-VT Code automatically routes MiniMax-M2 requests to:
+VT Code automatically routes MiniMax-M2.5 requests to:
 
 ```
 https://api.minimax.io/anthropic/v1/messages
@@ -134,7 +134,7 @@ You can mirror Droid's custom model config using VT Code's dot-config (`~/.vtcod
   [providers.minimax]
   api_key = "${ANTHROPIC_API_KEY}"
   base_url = "https://api.minimax.io/anthropic/v1"
-  model = "MiniMax-M2"
+  model = "MiniMax-M2.5"
   enabled = true
 ```
 
@@ -157,8 +157,9 @@ If you see authentication errors, verify:
 
 If you see "model not found" errors:
 
-1. Ensure you're using the exact model name: `MiniMax-M2` (case-sensitive)
-2. Check that your API key has access to the MiniMax-M2 model
+1. Ensure you're using the exact model name: `MiniMax-M2.5` (case-sensitive)
+2. Check that your API key has access to the MiniMax-M2.5 model
+3. For the older M2 model, use `MiniMax-M2`
 
 ### Temperature Errors
 
@@ -169,16 +170,16 @@ If you see temperature-related errors:
 
 ## Comparison with Claude Models
 
-| Feature          | Claude Models | MiniMax-M2 |
-| ---------------- | ------------- | ---------- |
-| Text Generation  |               |            |
-| Streaming        |               |            |
-| Tool Calling     |               |            |
-| System Prompts   |               |            |
-| Image Input      |               |            |
-| Document Input   |               |            |
-| Reasoning Effort |               |            |
-| Prompt Caching   |               | ?          |
+| Feature          | Claude Models | MiniMax-M2.5 |
+| ---------------- | ------------- | ------------ |
+| Text Generation  | ✓             | ✓            |
+| Streaming        | ✓             | ✓            |
+| Tool Calling     | ✓             | ✓            |
+| System Prompts   | ✓             | ✓            |
+| Image Input      | ✓             | ✗            |
+| Document Input   | ✓             | ✗            |
+| Reasoning Effort | ✓             | ✓            |
+| Prompt Caching   | ✓             | ?            |
 
 ## Related Documentation
 
@@ -190,4 +191,4 @@ If you see temperature-related errors:
 
 -   [MiniMax Official Documentation](https://www.minimax.chat/docs)
 -   [MiniMax Anthropic API Compatibility Guide](https://www.minimax.chat/docs/guides/anthropic-api)
--   [MiniMax-M2 Function Calling Guide](https://www.minimax.chat/docs/guides/function-call)
+-   [MiniMax-M2.5 Function Calling Guide](https://www.minimax.chat/docs/guides/function-call)
