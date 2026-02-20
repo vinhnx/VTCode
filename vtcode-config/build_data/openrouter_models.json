@@ -252,6 +252,39 @@
         "doc_comment": "Claude Sonnet 4.5 - Anthropic Claude Sonnet 4.5 listing"
       }
     },
+    "anthropic/claude-sonnet-4.6": {
+      "id": "anthropic/claude-sonnet-4.6",
+      "name": "Anthropic: Claude Sonnet 4.6",
+      "reasoning": true,
+      "tool_call": true,
+      "modalities": {
+        "input": [
+          "text",
+          "image",
+          "file"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "context": 1000000,
+      "max_output_tokens": 128000,
+      "cost": {
+        "input": 3e-06,
+        "output": 1.5e-05
+      },
+      "vtcode": {
+        "variant": "OpenRouterAnthropicClaudeSonnet46",
+        "constant": "ANTHROPIC_CLAUDE_SONNET_4_6",
+        "vendor": "anthropic",
+        "display": "Claude Sonnet 4.6",
+        "description": "Anthropic Claude Sonnet 4.6 listing",
+        "efficient": false,
+        "top_tier": true,
+        "generation": "2026-02-20",
+        "doc_comment": "Claude Sonnet 4.6 - Anthropic Claude Sonnet 4.6 listing"
+      }
+    },
     "openai/gpt-5.1-codex": {
       "id": "openai/gpt-5.1-codex",
       "name": "OpenAI: GPT-5.1-Codex",

@@ -21,6 +21,7 @@ impl ModelId {
             ModelId::GPT51,
             ModelId::OpenAIGptOss20b,
             ModelId::ClaudeOpus45,
+            ModelId::ClaudeSonnet46,
             ModelId::ClaudeOpus41,
             ModelId::ClaudeSonnet45,
             ModelId::DeepSeekReasoner,

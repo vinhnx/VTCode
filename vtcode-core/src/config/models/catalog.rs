@@ -28,6 +28,7 @@ impl ModelId {
             ModelId::OpenAIGptOss120b => "GPT-OSS 120B",
             // Anthropic models
             ModelId::ClaudeOpus46 => "Claude Opus 4.6",
+            ModelId::ClaudeSonnet46 => "Claude Sonnet 4.6",
             ModelId::ClaudeOpus41 => "Claude Opus 4.1",
             ModelId::ClaudeOpus45 => "Claude Opus 4.5",
             ModelId::ClaudeSonnet45 => "Claude Sonnet 4.5",
@@ -130,6 +131,9 @@ impl ModelId {
             // Anthropic models
             ModelId::ClaudeOpus46 => {
                 "Next-gen Anthropic flagship with extended and adaptive thinking support"
+            }
+            ModelId::ClaudeSonnet46 => {
+                "Balanced flagship model for coding with extended and adaptive thinking support"
             }
             ModelId::ClaudeOpus41 => "Specialized reasoning model for complex tasks",
             ModelId::ClaudeOpus45 => "Premium flagship model with exceptional intelligence",
@@ -287,6 +291,7 @@ impl ModelId {
             | ModelId::OpenRouterOpenAIGpt5Codex
             | ModelId::OpenRouterOpenAIGpt5Chat
             | ModelId::OpenRouterAnthropicClaudeSonnet45
+            | ModelId::OpenRouterAnthropicClaudeSonnet46
             | ModelId::OpenRouterAnthropicClaudeHaiku45
             | ModelId::OpenRouterAnthropicClaudeOpus41
             | ModelId::OpenRouterDeepseekChat
@@ -337,6 +342,7 @@ impl ModelId {
             ModelId::CodexMiniLatest,
             // Anthropic models
             ModelId::ClaudeOpus46,
+            ModelId::ClaudeSonnet46,
             ModelId::ClaudeOpus45,
             ModelId::ClaudeOpus41,
             ModelId::ClaudeSonnet45,

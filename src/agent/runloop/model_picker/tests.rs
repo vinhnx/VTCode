@@ -16,9 +16,14 @@ fn has_model(options: &[ModelOption], model: ModelId) -> bool {
 fn model_picker_lists_new_anthropic_models() {
     let options = MODEL_OPTIONS.as_slice();
     assert!(has_model(options, ModelId::ClaudeOpus41));
+    assert!(has_model(options, ModelId::ClaudeSonnet46));
     assert!(has_model(options, ModelId::ClaudeSonnet45));
     assert!(has_model(options, ModelId::ClaudeHaiku45));
     assert!(has_model(options, ModelId::ClaudeSonnet4));
+
+    // OpenRouter variants
+    assert!(has_model(options, ModelId::OpenRouterAnthropicClaudeSonnet46));
+    assert!(has_model(options, ModelId::OpenRouterAnthropicClaudeSonnet45));
 }
 
 #[test]

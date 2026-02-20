@@ -53,6 +53,8 @@ pub enum ModelId {
     // Anthropic models
     /// Claude Opus 4.6 - Next-gen flagship Anthropic model with extended thinking
     ClaudeOpus46,
+    /// Claude Sonnet 4.6 - Balanced flagship Anthropic model with extended thinking
+    ClaudeSonnet46,
     /// Claude Opus 4.5 - Latest flagship Anthropic model with exceptional reasoning (2025-11-01)
     ClaudeOpus45,
     /// Claude Opus 4.1 - Previous most capable Anthropic model (2025-08-05)
@@ -240,6 +242,8 @@ pub enum ModelId {
 
     /// Claude Sonnet 4.5 - Anthropic Claude Sonnet 4.5 listing
     OpenRouterAnthropicClaudeSonnet45,
+    /// Claude Sonnet 4.6 - Anthropic Claude Sonnet 4.6 listing
+    OpenRouterAnthropicClaudeSonnet46,
     /// Claude Haiku 4.5 - Anthropic Claude Haiku 4.5 listing
     OpenRouterAnthropicClaudeHaiku45,
     /// Claude Opus 4.1 - Anthropic Claude Opus 4.1 listing
