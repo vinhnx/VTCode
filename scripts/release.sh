@@ -136,7 +136,25 @@ Options:
   --skip-docs         Skip docs.rs rebuild trigger
   --full-ci           Use GitHub Actions for ALL platforms (including macOS)
                       Default: builds macOS locally, CI for Linux/Windows
+  --ci-only           Trigger CI for Linux/Windows only (skip local macOS build)
+                      Useful when macOS binaries already built locally
   -h, --help          Show this help message
+
+Cost Optimization:
+  Default mode (recommended):
+    • macOS binaries: built locally (no CI cost, faster)
+    • Linux/Windows: built on GitHub Actions (free for public repos)
+  
+  --full-ci mode (all CI, higher cost):
+    • All platforms built on GitHub Actions
+    • Uses 4 runners: 2x macOS, 1x Ubuntu, 1x Windows
+    • Estimated cost: ~20-30 minutes of runner time
+  
+  --ci-only mode (hybrid):
+    • Skip local macOS build
+    • Only trigger CI for Linux/Windows
+    • Use when you already have macOS binaries
+
 USAGE
 }
 
@@ -438,6 +456,7 @@ main() {
     local skip_binaries=false
     local skip_docs=false
     local full_ci=false
+    local ci_only=false
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -450,6 +469,7 @@ main() {
             --skip-binaries) skip_binaries=true; shift ;;
             --skip-docs) skip_docs=true; shift ;;
             --full-ci) full_ci=true; shift ;;
+            --ci-only) ci_only=true; shift ;;
             *)
                 if [[ -n "$release_argument" ]]; then
                     print_error 'Multiple versions specified'
@@ -528,7 +548,7 @@ main() {
     # Check if using full CI mode
     if [[ "$full_ci" == 'true' ]]; then
         print_info "Full CI mode: Using GitHub Actions for ALL platforms (including macOS)"
-        
+
         if [[ "$dry_run" == 'true' ]]; then
             print_info "Dry run - would trigger full CI workflow for $next_version"
             print_info "Command: gh workflow run release.yml --field tag=$next_version"
@@ -549,8 +569,29 @@ main() {
                 exit 1
             fi
         fi
-        
+
         # In full CI mode, skip local binary builds but still do cargo-release
+        skip_binaries=true
+    fi
+
+    # Check if using CI-only mode (Linux/Windows only, skip macOS)
+    if [[ "$ci_only" == 'true' ]]; then
+        print_info "CI-only mode: Triggering CI for Linux/Windows only (skip macOS build)"
+
+        if [[ "$dry_run" == 'true' ]]; then
+            print_info "Dry run - would trigger CI workflow for $next_version"
+            print_info "Command: gh workflow run build-linux-windows.yml --field tag=$next_version"
+        else
+            # Trigger CI for Linux/Windows only
+            if gh workflow run build-linux-windows.yml --field tag="$next_version"; then
+                print_success "CI workflow triggered for $next_version"
+                print_info "Monitor progress: https://github.com/vinhnx/vtcode/actions/workflows/build-linux-windows.yml"
+            else
+                print_warning "Failed to trigger CI workflow"
+            fi
+        fi
+
+        # Skip local binary builds
         skip_binaries=true
     fi
 
