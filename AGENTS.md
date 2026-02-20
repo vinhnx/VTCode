@@ -72,6 +72,21 @@ Multiple agents work in this tree. **NEVER** use destructive commands:
 - **Direct attribution**: Cite issues/PRs as `Fixed #123`.
 - **Changelog**: Append to `## [Unreleased]` sections; never modify released versions.
 
+### Adding a New Model
+
+1.  **Source of Truth**: Add the model entry to `docs/models.json`. This is used by build scripts and documentation.
+2.  **Constants**: Define new constants in `vtcode-config/src/constants/models/<provider>.rs` and expose them in `mod.rs`.
+3.  **Enum Variants**: Add the new variant to the `ModelId` enum in BOTH:
+    - `vtcode-core/src/config/models/model_id/definition.rs`
+    - `vtcode-config/src/models/model_id.rs`
+4.  **Implementations**: Update methods (`as_str`, `provider`, `display_name`, `description`, `generation`, etc.) in:
+    - `vtcode-core/src/config/models/` (impls.rs, catalog.rs, capabilities.rs)
+    - `vtcode-config/src/models/model_id/` (as_str.rs, display.rs, description.rs, capabilities.rs, provider.rs)
+5.  **Parsing**: Update `FromStr` logic in both `vtcode-core/src/config/models/model_id_parse.rs` and `vtcode-config/src/models/model_id/parse.rs`.
+6.  **Collections & Defaults**: Update `all_models()` and `fallback_models()` in both crates.
+7.  **OpenRouter**: For OpenRouter listings, update `vtcode-config/build_data/openrouter_models.json` and follow `docs/contributing-models.md`.
+8.  **Verification**: Run `cargo test -p vtcode-core` and `cargo test -p vtcode-config` to verify parsing and metadata.
+
 ## Key Files — Never Hardcode
 
 - **Model IDs** → `docs/models.json`
