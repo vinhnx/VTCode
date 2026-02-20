@@ -19,7 +19,9 @@ impl GeminiProvider {
 
     /// Get maximum input token limit for a model
     pub fn max_input_tokens(model: &str) -> usize {
-        if model.contains("3") || model.contains("1.5-pro") {
+        if model.contains("gemini-3.1") {
+            1_048_576 // 1M tokens for Gemini 3.1 models
+        } else if model.contains("3") || model.contains("1.5-pro") {
             2_097_152 // 2M tokens for Gemini 1.5 Pro and 3.x models
         } else {
             1_048_576 // 1M tokens for other current models
@@ -355,7 +357,7 @@ impl GeminiProvider {
                 Part::InlineData { .. } => {}
                 Part::FunctionCall {
                     function_call,
-                    thought_signature: _,
+                    thought_signature,
                 } => {
                     let call_id = function_call.id.clone().unwrap_or_else(|| {
                         format!(
@@ -376,7 +378,7 @@ impl GeminiProvider {
                                 .unwrap_or_else(|_| "{}".to_string()),
                         }),
                         text: None,
-                        thought_signature: None,
+                        thought_signature,
                     });
                 }
                 Part::FunctionResponse { .. } => {}

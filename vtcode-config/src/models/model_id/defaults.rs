@@ -6,6 +6,8 @@ impl ModelId {
     /// Get recommended fallback models in order of preference
     pub fn fallback_models() -> Vec<ModelId> {
         vec![
+            ModelId::Gemini31ProPreview,
+            ModelId::Gemini31ProPreviewCustomTools,
             ModelId::Gemini3FlashPreview,
             ModelId::Gemini3ProPreview,
             ModelId::GPT5,
@@ -23,7 +25,7 @@ impl ModelId {
 
     /// Get the default orchestrator model (more capable)
     pub fn default_orchestrator() -> Self {
-        ModelId::Gemini3ProPreview
+        ModelId::Gemini31ProPreview
     }
 
     /// Get the default subagent model (fast and efficient)
@@ -34,7 +36,7 @@ impl ModelId {
     /// Get provider-specific defaults for orchestrator
     pub fn default_orchestrator_for_provider(provider: Provider) -> Self {
         match provider {
-            Provider::Gemini => ModelId::Gemini3ProPreview,
+            Provider::Gemini => ModelId::Gemini31ProPreview,
             Provider::OpenAI => ModelId::GPT5,
             Provider::Anthropic => ModelId::ClaudeOpus45,
             Provider::DeepSeek => ModelId::DeepSeekReasoner,
@@ -43,7 +45,7 @@ impl ModelId {
             Provider::Ollama => ModelId::OllamaGptOss20b,
             Provider::LmStudio => ModelId::LmStudioMetaLlama318BInstruct,
             Provider::ZAI => ModelId::ZaiGlm5,
-            Provider::Moonshot => ModelId::Gemini3ProPreview, // Fallback to Gemini if no Moonshot models
+            Provider::Moonshot => ModelId::Gemini31ProPreview, // Fallback to Gemini if no Moonshot models
             Provider::Minimax => ModelId::MinimaxM25,
             Provider::HuggingFace => ModelId::HuggingFaceOpenAIGptOss120b,
         }
@@ -70,7 +72,7 @@ impl ModelId {
     /// Get provider-specific defaults for single agent
     pub fn default_single_for_provider(provider: Provider) -> Self {
         match provider {
-            Provider::Gemini => ModelId::Gemini3FlashPreview,
+            Provider::Gemini => ModelId::Gemini31ProPreview,
             Provider::OpenAI => ModelId::GPT5,
             Provider::Anthropic => ModelId::ClaudeOpus45,
             Provider::DeepSeek => ModelId::DeepSeekReasoner,
@@ -79,7 +81,7 @@ impl ModelId {
             Provider::Ollama => ModelId::OllamaGptOss20b,
             Provider::LmStudio => ModelId::LmStudioMetaLlama318BInstruct,
             Provider::ZAI => ModelId::ZaiGlm5,
-            Provider::Moonshot => ModelId::Gemini3FlashPreview, // Fallback to Gemini if no Moonshot models
+            Provider::Moonshot => ModelId::Gemini31ProPreview, // Fallback to Gemini if no Moonshot models
             Provider::Minimax => ModelId::MinimaxM25,
             Provider::HuggingFace => ModelId::HuggingFaceOpenAIGptOss120b,
         }

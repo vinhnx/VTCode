@@ -36,7 +36,9 @@ impl LLMProvider for GeminiProvider {
     }
 
     fn effective_context_size(&self, model: &str) -> usize {
-        if model.contains("3") || model.contains("1.5-pro") {
+        if model.contains("gemini-3.1") {
+            1_048_576
+        } else if model.contains("3") || model.contains("1.5-pro") {
             2_097_152
         } else {
             1_048_576

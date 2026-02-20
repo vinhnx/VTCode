@@ -13,7 +13,9 @@ impl ModelId {
     pub fn is_pro_variant(&self) -> bool {
         matches!(
             self,
-            ModelId::GPT5
+            ModelId::Gemini31ProPreview
+                | ModelId::Gemini31ProPreviewCustomTools
+                | ModelId::GPT5
                 | ModelId::GPT52
                 | ModelId::GPT5Codex
                 | ModelId::ClaudeOpus46
@@ -52,7 +54,9 @@ impl ModelId {
         }
         matches!(
             self,
-            ModelId::Gemini3FlashPreview
+            ModelId::Gemini31ProPreview
+                | ModelId::Gemini31ProPreviewCustomTools
+                | ModelId::Gemini3FlashPreview
                 | ModelId::GPT5
                 | ModelId::GPT52
                 | ModelId::GPT5Codex
@@ -94,6 +98,7 @@ impl ModelId {
         }
         match self {
             // Gemini generations
+            ModelId::Gemini31ProPreview | ModelId::Gemini31ProPreviewCustomTools => "3.1",
             ModelId::Gemini3ProPreview | ModelId::Gemini3FlashPreview => "3",
             // OpenAI generations
             ModelId::GPT52 | ModelId::GPT52Codex => "5.2",

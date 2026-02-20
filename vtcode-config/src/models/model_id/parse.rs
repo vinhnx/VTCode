@@ -21,6 +21,10 @@ impl FromStr for ModelId {
 
         match s {
             // Gemini models
+            s if s == models::GEMINI_3_1_PRO_PREVIEW => Ok(ModelId::Gemini31ProPreview),
+            s if s == models::GEMINI_3_1_PRO_PREVIEW_CUSTOMTOOLS => {
+                Ok(ModelId::Gemini31ProPreviewCustomTools)
+            }
             s if s == models::GEMINI_3_PRO_PREVIEW => Ok(ModelId::Gemini3ProPreview),
             s if s == models::GEMINI_3_FLASH_PREVIEW => Ok(ModelId::Gemini3FlashPreview),
             // OpenAI models
