@@ -344,8 +344,20 @@ impl Session {
             content_spans.push(Span::styled(segment.text.clone(), style));
         }
 
+        let is_table_line = message.segments.iter().any(|seg| {
+            let t = &seg.text;
+            t.contains('│') || t.contains('├') || t.contains('┤') || t.contains('┼')
+        });
+
         let mut wrapped = if content_width == 0 {
             vec![Line::default()]
+        } else if is_table_line {
+            // Table lines must not be word-wrapped — wrapping breaks box-drawing
+            // alignment.  Truncate to the available width instead.
+            vec![truncate_line_to_width(
+                Line::from(content_spans),
+                content_width,
+            )]
         } else {
             self.wrap_line(Line::from(content_spans), content_width)
         };
@@ -1113,4 +1125,44 @@ fn collapse_excess_newlines(text: &str) -> std::borrow::Cow<'_, str> {
     }
 
     std::borrow::Cow::Owned(result)
+}
+
+/// Truncate a `Line` to fit within `max_width` display columns.
+///
+/// Used for table lines where word-wrapping would break the box-drawing
+/// alignment.  Spans are trimmed at the character boundary that exceeds the
+/// width; any remaining spans are dropped.
+fn truncate_line_to_width(line: Line<'static>, max_width: usize) -> Line<'static> {
+    let total: usize = line.spans.iter().map(|s| s.width()).sum();
+    if total <= max_width {
+        return line;
+    }
+
+    let mut remaining = max_width;
+    let mut truncated_spans: Vec<Span<'static>> = Vec::with_capacity(line.spans.len());
+    for span in line.spans {
+        let span_width = span.width();
+        if span_width <= remaining {
+            remaining -= span_width;
+            truncated_spans.push(span);
+        } else {
+            // Truncate within this span at a char boundary
+            let mut chars_width = 0usize;
+            let mut byte_end = 0usize;
+            for ch in span.content.chars() {
+                let cw = UnicodeWidthStr::width(ch.encode_utf8(&mut [0u8; 4]) as &str);
+                if chars_width + cw > remaining {
+                    break;
+                }
+                chars_width += cw;
+                byte_end += ch.len_utf8();
+            }
+            if byte_end > 0 {
+                let fragment: String = span.content[..byte_end].to_string();
+                truncated_spans.push(Span::styled(fragment, span.style));
+            }
+            break;
+        }
+    }
+    Line::from(truncated_spans)
 }

@@ -695,7 +695,7 @@ mod caching_tests {
         // Let's check from_config
         let config = PromptCachingConfig::default();
         let provider =
-            GeminiProvider::from_config(Some("key".into()), None, None, Some(config), None, None);
+            GeminiProvider::from_config(Some("key".into()), None, None, Some(config), None, None, None);
 
         // Verification: we can't easily inspect private fields without a helper or reflection.
         // We can check if `convert_to_gemini_request` works.
@@ -721,6 +721,7 @@ mod caching_tests {
             None,
             None,
             Some(config.clone()),
+            None,
             None,
             None,
         );

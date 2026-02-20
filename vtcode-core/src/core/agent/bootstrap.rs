@@ -270,6 +270,7 @@ mod tests {
             checkpointing_max_age_days: Some(DEFAULT_MAX_AGE_DAYS),
             quiet: false,
             max_conversation_turns: 1000,
+            model_behavior: None,
         };
 
         let components = AgentComponentBuilder::new(&agent_config)
@@ -304,6 +305,7 @@ mod tests {
             checkpointing_max_age_days: Some(DEFAULT_MAX_AGE_DAYS),
             quiet: false,
             max_conversation_turns: 1000,
+            model_behavior: None,
         };
 
         let custom_session = SessionInfo {
@@ -380,6 +382,7 @@ mod tests {
             checkpointing_max_age_days: Some(DEFAULT_MAX_AGE_DAYS),
             quiet: false,
             max_conversation_turns: 1000,
+            model_behavior: None,
         }
     }
 }

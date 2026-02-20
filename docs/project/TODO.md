@@ -14,3 +14,7 @@ https://blog.google/innovation-and-ai/models-and-research/gemini-models/gemini-3
 ---
 
 claude sonnet 4.6
+
+---
+
+check mouse selection crossterm doesn't work

@@ -171,22 +171,39 @@ pub fn render_markdown_to_lines_with_options(
                         base_style,
                     );
                     if let Some(state) = code_block.take() {
-                        let prefix = build_prefix_segments(
-                            blockquote_depth,
-                            &list_stack,
-                            theme_styles,
-                            base_style,
-                        );
-                        let highlighted = highlight_code_block(
+                        // If the code block contains a GFM table (common when
+                        // LLMs wrap tables in ```markdown fences), render the
+                        // content as markdown so the table gets box-drawing
+                        // treatment instead of plain code-block line numbers.
+                        if code_block_contains_table(
                             &state.buffer,
                             state.language.as_deref(),
-                            highlight_config,
-                            theme_styles,
-                            base_style,
-                            &prefix,
-                            render_options.preserve_code_indentation,
-                        );
-                        lines.extend(highlighted);
+                        ) {
+                            let table_lines = render_markdown_to_lines(
+                                &state.buffer,
+                                base_style,
+                                theme_styles,
+                                highlight_config,
+                            );
+                            lines.extend(table_lines);
+                        } else {
+                            let prefix = build_prefix_segments(
+                                blockquote_depth,
+                                &list_stack,
+                                theme_styles,
+                                base_style,
+                            );
+                            let highlighted = highlight_code_block(
+                                &state.buffer,
+                                state.language.as_deref(),
+                                highlight_config,
+                                theme_styles,
+                                base_style,
+                                &prefix,
+                                render_options.preserve_code_indentation,
+                            );
+                            lines.extend(highlighted);
+                        }
                         push_blank_line(&mut lines);
                     }
                     continue;
@@ -1172,6 +1189,62 @@ fn line_number_width(line_count: usize) -> usize {
     digits.max(CODE_LINE_NUMBER_MIN_WIDTH)
 }
 
+/// Check if a code block's content is primarily a GFM table.
+///
+/// LLMs frequently wrap markdown tables in fenced code blocks (e.g.
+/// ````markdown` or ` ```text`), which causes them to render as plain code
+/// with line numbers instead of formatted tables. This function detects that
+/// pattern so the caller can render the content as markdown instead.
+fn code_block_contains_table(content: &str, language: Option<&str>) -> bool {
+    // Only consider code blocks with no language or markup-like languages.
+    // Code blocks tagged with programming languages (rust, python, etc.)
+    // should never be reinterpreted.
+    if let Some(lang) = language {
+        let lang_lower = lang.to_ascii_lowercase();
+        if !matches!(
+            lang_lower.as_str(),
+            "markdown" | "md" | "text" | "txt" | "plaintext" | "plain"
+        ) {
+            return false;
+        }
+    }
+
+    let trimmed = content.trim();
+    if trimmed.is_empty() {
+        return false;
+    }
+
+    // Quick heuristic: a GFM table must have at least a header row and a
+    // separator row. The separator row contains only `|`, `-`, `:`, and
+    // whitespace.
+    let mut has_pipe_line = false;
+    let mut has_separator = false;
+    for line in trimmed.lines().take(4) {
+        let line = line.trim();
+        if line.contains('|') {
+            has_pipe_line = true;
+        }
+        if line.starts_with('|') && line.chars().all(|c| matches!(c, '|' | '-' | ':' | ' ')) {
+            has_separator = true;
+        }
+    }
+    if !has_pipe_line || !has_separator {
+        return false;
+    }
+
+    // Verify with pulldown-cmark: parse the content and check for a Table event.
+    let options = Options::ENABLE_TABLES;
+    let parser = Parser::new_ext(trimmed, options);
+    for event in parser {
+        match event {
+            Event::Start(Tag::Table(_)) => return true,
+            Event::Start(Tag::Paragraph) | Event::Text(_) | Event::SoftBreak => continue,
+            _ => return false,
+        }
+    }
+    false
+}
+
 fn is_diff_language(language: Option<&str>) -> bool {
     language.is_some_and(|lang| {
         matches!(
@@ -1561,6 +1634,72 @@ mod tests {
         assert!(
             output.contains("│"),
             "Should use box-drawing character (│) for table cells instead of pipe"
+        );
+    }
+
+    #[test]
+    fn test_table_inside_markdown_code_block_renders_as_table() {
+        let markdown = "```markdown\n\
+            | Module | Purpose |\n\
+            |--------|----------|\n\
+            | core   | Library  |\n\
+            ```\n";
+
+        let lines = render_markdown(markdown);
+        let output: String = lines
+            .iter()
+            .map(|line| {
+                line.segments
+                    .iter()
+                    .map(|seg| seg.text.as_str())
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        assert!(
+            output.contains("│"),
+            "Table inside ```markdown code block should render with box-drawing characters, got: {output}"
+        );
+        // Should NOT contain code-block line numbers
+        assert!(
+            !output.contains("  1  "),
+            "Table inside markdown code block should not have line numbers"
+        );
+    }
+
+    #[test]
+    fn test_table_inside_md_code_block_renders_as_table() {
+        let markdown = "```md\n\
+            | A | B |\n\
+            |---|---|\n\
+            | 1 | 2 |\n\
+            ```\n";
+
+        let lines = render_markdown(markdown);
+        let output = lines_to_text(&lines).join("\n");
+
+        assert!(
+            output.contains("│"),
+            "Table inside ```md code block should render as table: {output}"
+        );
+    }
+
+    #[test]
+    fn test_rust_code_block_with_pipes_not_treated_as_table() {
+        let markdown = "```rust\n\
+            | Header | Col |\n\
+            |--------|-----|\n\
+            | a      | b   |\n\
+            ```\n";
+
+        let lines = render_markdown(markdown);
+        let output = lines_to_text(&lines).join("\n");
+
+        // Rust code blocks should NOT be reinterpreted as tables
+        assert!(
+            output.contains("| Header |"),
+            "Rust code block should keep raw pipe characters: {output}"
         );
     }
 
