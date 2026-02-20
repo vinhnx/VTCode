@@ -47,6 +47,7 @@ mod navigation;
 mod palette_renderer;
 mod queue;
 pub mod render;
+pub mod mouse_selection;
 mod scroll;
 pub mod slash;
 pub mod slash_palette;
@@ -85,6 +86,7 @@ use self::modal::{ModalState, WizardModalState};
 
 use self::config::AppearanceConfig;
 pub(crate) use self::input::status_requires_shimmer;
+use self::mouse_selection::MouseSelectionState;
 use self::queue::QueueOverlay;
 use self::scroll::ScrollManager;
 use self::slash_palette::SlashPalette;
@@ -200,6 +202,9 @@ pub struct Session {
     // --- Clipboard for yank/paste operations ---
     #[allow(dead_code)]
     pub(crate) clipboard: String,
+
+    // --- Mouse Text Selection ---
+    pub(crate) mouse_selection: MouseSelectionState,
 
     // --- Diff Preview Modal ---
     pub(crate) diff_preview: Option<crate::ui::tui::types::DiffPreviewState>,

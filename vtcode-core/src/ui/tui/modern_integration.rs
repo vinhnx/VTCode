@@ -121,7 +121,6 @@ pub async fn run_modern_tui(
                                 }
                             }
                             Event::Mouse(mouse_event) => {
-                                // Handle mouse events if needed
                                 match mouse_event.kind {
                                     MouseEventKind::ScrollDown => {
                                         session.scroll_line_down();
@@ -130,12 +129,29 @@ pub async fn run_modern_tui(
                                         session.scroll_line_up();
                                     }
                                     MouseEventKind::Down(MouseButton::Left) => {
+                                        session.mouse_selection.start_selection(
+                                            mouse_event.column,
+                                            mouse_event.row,
+                                        );
                                         session.handle_transcript_click(mouse_event);
+                                        session.mark_dirty();
+                                    }
+                                    MouseEventKind::Drag(MouseButton::Left) => {
+                                        session.mouse_selection.update_selection(
+                                            mouse_event.column,
+                                            mouse_event.row,
+                                        );
+                                        session.mark_dirty();
+                                    }
+                                    MouseEventKind::Up(MouseButton::Left) => {
+                                        session.mouse_selection.finish_selection(
+                                            mouse_event.column,
+                                            mouse_event.row,
+                                        );
+                                        session.mark_dirty();
                                     }
                                     _ => {}
                                 }
-                                // Note: Let the main render loop handle drawing to avoid double-render
-                                // which causes latency. The session.mark_dirty() is called by scroll methods.
                             }
                             Event::Paste(content) => {
                                 session.insert_paste_text(&content);

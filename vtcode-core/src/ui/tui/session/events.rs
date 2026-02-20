@@ -20,7 +20,12 @@ pub(super) fn handle_event(
                 session.emit_inline_event(&outbound, events, callback);
             }
         }
-        CrosstermEvent::Mouse(MouseEvent { kind, .. }) => match kind {
+        CrosstermEvent::Mouse(MouseEvent {
+            kind,
+            column,
+            row,
+            ..
+        }) => match kind {
             MouseEventKind::ScrollDown => {
                 // Check if history picker is active - delegate scrolling to picker
                 if session.history_picker_state.active {
@@ -40,6 +45,18 @@ pub(super) fn handle_event(
                     session.scroll_line_up();
                     session.mark_dirty();
                 }
+            }
+            MouseEventKind::Down(ratatui::crossterm::event::MouseButton::Left) => {
+                session.mouse_selection.start_selection(column, row);
+                session.mark_dirty();
+            }
+            MouseEventKind::Drag(ratatui::crossterm::event::MouseButton::Left) => {
+                session.mouse_selection.update_selection(column, row);
+                session.mark_dirty();
+            }
+            MouseEventKind::Up(ratatui::crossterm::event::MouseButton::Left) => {
+                session.mouse_selection.finish_selection(column, row);
+                session.mark_dirty();
             }
             _ => {}
         },
