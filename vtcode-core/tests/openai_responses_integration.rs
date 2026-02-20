@@ -35,6 +35,7 @@ async fn mock_responses_api_receives_prompt_cache_retention() {
         Some(pc),
         None,
         None,
+        None,
     );
 
     // Build a simple request that will be sent via Responses API
@@ -84,6 +85,7 @@ async fn mock_responses_api_sampling_parameters_structure() {
         Some("testkey".to_string()),
         Some("gpt-5.1".to_string()),
         Some(base_url.to_string()),
+        None,
         None,
         None,
         None,
@@ -151,6 +153,7 @@ async fn mock_responses_api_top_level_tool_calls() {
         None,
         None,
         None,
+        None,
     );
 
     let request = LLMRequest {
@@ -201,6 +204,7 @@ async fn mock_responses_api_minimal_reasoning_effort() {
         Some("testkey".to_string()),
         Some("gpt-5".to_string()),
         Some(base_url.to_string()),
+        None,
         None,
         None,
         None,

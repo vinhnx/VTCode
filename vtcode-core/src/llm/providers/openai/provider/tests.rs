@@ -210,6 +210,7 @@ fn responses_payload_includes_prompt_cache_retention() {
         Some(pc),
         None,
         None,
+        None,
     );
 
     let request = sample_request(models::openai::GPT_5_1);
@@ -237,6 +238,7 @@ fn responses_payload_excludes_prompt_cache_retention_when_not_set() {
         Some(pc),
         None,
         None,
+        None,
     );
 
     let mut request = sample_request(models::openai::GPT_5_1);
@@ -258,6 +260,7 @@ fn responses_payload_includes_prompt_cache_retention_streaming() {
         Some(models::openai::GPT_5_1.to_string()),
         None,
         Some(pc),
+        None,
         None,
         None,
     );
@@ -288,6 +291,7 @@ fn responses_payload_excludes_retention_for_non_responses_model() {
         Some(pc),
         None,
         None,
+        None,
     );
 
     let request = sample_request(models::openai::CODEX_MINI_LATEST);
@@ -307,6 +311,7 @@ fn provider_from_config_respects_prompt_cache_retention() {
         Some(models::openai::GPT_5_1.to_string()),
         None,
         Some(pc.clone()),
+        None,
         None,
         None,
     );
@@ -468,7 +473,7 @@ mod caching_tests {
 
         // Initialize provider
         let provider =
-            OpenAIProvider::from_config(Some("key".into()), None, None, Some(config), None, None);
+            OpenAIProvider::from_config(Some("key".into()), None, None, Some(config), None, None, None);
 
         // Create a dummy request for a Responses API model
         // Must use an exact model name from RESPONSES_API_MODELS
@@ -506,7 +511,7 @@ mod caching_tests {
         config.providers.openai.prompt_cache_retention = Some("24h".to_string());
 
         let provider =
-            OpenAIProvider::from_config(Some("key".into()), None, None, Some(config), None, None);
+            OpenAIProvider::from_config(Some("key".into()), None, None, Some(config), None, None, None);
 
         // Standard GPT-4o model (Chat Completions API)
         let request = provider::LLMRequest {
