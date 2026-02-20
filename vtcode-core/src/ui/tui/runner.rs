@@ -19,7 +19,9 @@ use ratatui::{
     Terminal,
     backend::{Backend, CrosstermBackend},
 };
+#[cfg(unix)]
 use signal_hook::consts::signal::{SIGINT, SIGTERM};
+#[cfg(unix)]
 use signal_hook::iterator::Signals;
 use terminal_size::{Height, Width, terminal_size};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, error::TryRecvError};
@@ -415,11 +417,14 @@ pub async fn run_tui(
 }
 
 struct SignalCleanupGuard {
+    #[cfg(unix)]
     handle: signal_hook::iterator::Handle,
+    #[cfg(unix)]
     thread: Option<std::thread::JoinHandle<()>>,
 }
 
 impl SignalCleanupGuard {
+    #[cfg(unix)]
     fn new() -> Result<Self> {
         let mut signals =
             Signals::new([SIGINT, SIGTERM]).context("failed to register signal handlers")?;
@@ -436,15 +441,24 @@ impl SignalCleanupGuard {
             thread: Some(thread),
         })
     }
+
+    #[cfg(not(unix))]
+    fn new() -> Result<Self> {
+        Ok(Self {})
+    }
 }
 
 impl Drop for SignalCleanupGuard {
+    #[cfg(unix)]
     fn drop(&mut self) {
         self.handle.close();
         if let Some(thread) = self.thread.take() {
             let _ = thread.join();
         }
     }
+
+    #[cfg(not(unix))]
+    fn drop(&mut self) {}
 }
 
 fn enable_terminal_modes(

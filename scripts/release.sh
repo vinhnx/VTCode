@@ -597,54 +597,65 @@ main() {
     # 3.5 Trigger CI for Linux and Windows builds
     if [[ "$skip_binaries" == 'false' ]]; then
         print_info "Step 3.5: Triggering CI for Linux and Windows builds..."
-        
+
         if [[ "$dry_run" == 'true' ]]; then
             print_info "Dry run - would trigger CI workflow for $released_version"
         else
+            # Push tags to ensure CI can checkout the correct ref
+            print_info "Pushing tags to GitHub..."
+            git push origin --tags --no-verify
+
             # Trigger the build-linux-windows workflow
             if gh workflow run build-linux-windows.yml --field tag="$released_version"; then
                 print_success "CI workflow triggered for $released_version"
-                
+
                 # Wait for CI to complete (with timeout)
                 print_info "Waiting for CI builds to complete (timeout: 60 minutes)..."
                 local wait_start=$(date +%s)
                 local timeout=3600  # 60 minutes
                 local run_id=""
-                
-                # Get the workflow run ID
-                while [[ -z "$run_id" ]]; do
+
+                # Get the workflow run ID - wait for it to appear
+                local find_run_attempts=0
+                local max_find_attempts=24  # Wait up to 2 minutes for run to appear
+                while [[ -z "$run_id" && $find_run_attempts -lt $max_find_attempts ]]; do
+                    sleep 5
+                    # Look for the most recent run of this workflow
                     run_id=$(gh run list --workflow build-linux-windows.yml --limit 1 --json databaseId --jq '.[0].databaseId' 2>/dev/null || true)
-                    if [[ -z "$run_id" ]]; then
-                        sleep 5
-                    fi
+                    find_run_attempts=$((find_run_attempts + 1))
                 done
-                
-                # Wait for the run to complete
-                local status="in_progress"
-                while [[ "$status" == "in_progress" || "$status" == "queued" ]]; do
-                    sleep 30
-                    status=$(gh run view "$run_id" --json status --jq '.status' 2>/dev/null || echo "failed")
-                    
-                    # Check timeout
-                    local now=$(date +%s)
-                    local elapsed=$((now - wait_start))
-                    if [[ $elapsed -gt $timeout ]]; then
-                        print_error "CI build timeout after $timeout seconds"
-                        exit 1
+
+                if [[ -z "$run_id" ]]; then
+                    print_warning "Could not find CI workflow run - will use macOS binaries only"
+                else
+                    # Wait for the run to complete
+                    local status="in_progress"
+                    while [[ "$status" == "in_progress" || "$status" == "queued" ]]; do
+                        sleep 30
+                        status=$(gh run view "$run_id" --json status --jq '.status' 2>/dev/null || echo "failed")
+
+                        # Check timeout
+                        local now=$(date +%s)
+                        local elapsed=$((now - wait_start))
+                        if [[ $elapsed -gt $timeout ]]; then
+                            print_warning "CI build timeout after $timeout seconds - will use macOS binaries only"
+                            break
+                        fi
+
+                        print_info "CI status: $status (${elapsed}s elapsed)"
+                    done
+
+                    if [[ "$status" != "completed" && "$status" != "success" ]]; then
+                        print_warning "CI build failed with status: $status - will use macOS binaries only"
+                        gh run view "$run_id" --log || true
+                    else
+                        print_success "CI builds completed successfully"
+                        # Store run_id for later download
+                        CI_RUN_ID="$run_id"
                     fi
-                    
-                    print_info "CI status: $status (${elapsed}s elapsed)"
-                done
-                
-                if [[ "$status" != "completed" && "$status" != "success" ]]; then
-                    print_error "CI build failed with status: $status"
-                    gh run view "$run_id" --log || true
-                    exit 1
                 fi
-                
-                print_success "CI builds completed successfully"
             else
-                print_warning "Failed to trigger CI workflow - binaries will only include macOS"
+                print_warning "Failed to trigger CI workflow - will use macOS binaries only"
             fi
         fi
     fi
@@ -710,37 +721,57 @@ main() {
 
         # Download Linux and Windows binaries from CI artifacts
         print_info "Downloading Linux and Windows binaries from CI..."
+
+        # Use the run_id from step 3.5 if CI was successful, otherwise try to find one
+        local run_id="${CI_RUN_ID:-}"
         
-        # Find the workflow run for this tag
-        local run_id
-        run_id=$(gh run list --workflow build-linux-windows.yml --json databaseId,headBranch --jq ".[] | select(.headBranch == \"$released_version\") | .databaseId" | head -1)
-        
+        if [[ -z "$run_id" ]]; then
+            # Try to find a successful run if CI_RUN_ID wasn't set
+            run_id=$(gh run list --workflow build-linux-windows.yml --branch main --event workflow_dispatch --limit 1 --json databaseId,conclusion --jq '.[] | select(.conclusion == "success") | .databaseId' | head -1)
+        fi
+
+        local linux_downloaded=false
+        local windows_downloaded=false
+
         if [[ -n "$run_id" ]]; then
             # Download all artifacts from the CI run
             local ci_artifacts_dir="/tmp/vtcode-ci-artifacts-$released_version"
             mkdir -p "$ci_artifacts_dir"
-            
+
             # Download Linux x86_64 artifact
+            print_info "Downloading Linux x86_64 artifact..."
             if gh run download "$run_id" --name "vtcode-${released_version}-x86_64-unknown-linux-gnu" --dir "$ci_artifacts_dir" 2>/dev/null; then
                 mv "$ci_artifacts_dir"/*.tar.gz "$binaries_dir/" 2>/dev/null || true
                 mv "$ci_artifacts_dir"/*.sha256 "$binaries_dir/" 2>/dev/null || true
                 print_success "Downloaded: Linux x86_64"
+                linux_downloaded=true
             else
-                print_warning "Could not download: Linux x86_64"
+                print_warning "Could not download: Linux x86_64 (will use macOS binaries only)"
             fi
-            
+
             # Download Windows x86_64 artifact
+            print_info "Downloading Windows x86_64 artifact..."
             if gh run download "$run_id" --name "vtcode-${released_version}-x86_64-pc-windows-msvc" --dir "$ci_artifacts_dir" 2>/dev/null; then
                 mv "$ci_artifacts_dir"/*.tar.gz "$binaries_dir/" 2>/dev/null || true
                 mv "$ci_artifacts_dir"/*.sha256 "$binaries_dir/" 2>/dev/null || true
                 print_success "Downloaded: Windows x86_64"
+                windows_downloaded=true
             else
-                print_warning "Could not download: Windows x86_64"
+                print_warning "Could not download: Windows x86_64 (will use macOS binaries only)"
             fi
-            
+
             rm -rf "$ci_artifacts_dir"
         else
-            print_warning "Could not find CI run for $released_version"
+            print_warning "No CI workflow run found - will use macOS binaries only"
+        fi
+
+        # Summary of what we have
+        if [[ "$linux_downloaded" == false || "$windows_downloaded" == false ]]; then
+            print_warning "Some platform binaries are missing - release will include:"
+            [[ "$linux_downloaded" == true ]] && print_info "  ✓ Linux x86_64" || print_warning "  ✗ Linux x86_64"
+            [[ "$windows_downloaded" == true ]] && print_info "  ✓ Windows x86_64" || print_warning "  ✗ Windows x86_64"
+            print_info "  ✓ macOS x86_64"
+            print_info "  ✓ macOS aarch64"
         fi
 
         # Upload all binaries to GitHub Release

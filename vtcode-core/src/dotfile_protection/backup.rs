@@ -3,7 +3,9 @@
 //! Creates versioned backups before any permitted modification,
 //! preserving original permissions and ownership.
 
+#[cfg(unix)]
 use std::fs::Permissions;
+#[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
@@ -159,8 +161,6 @@ impl BackupManager {
 
         #[cfg(unix)]
         let permissions = metadata.permissions().mode();
-        #[cfg(not(unix))]
-        let permissions = 0o644;
 
         let backup = DotfileBackup {
             original_path: file_path.to_string_lossy().into_owned(),
@@ -168,6 +168,7 @@ impl BackupManager {
             created_at: timestamp,
             content_hash,
             size_bytes: metadata.len(),
+            #[cfg(unix)]
             permissions,
             reason: reason.into(),
             session_id: session_id.into(),
