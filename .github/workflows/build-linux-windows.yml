@@ -18,6 +18,12 @@ permissions:
   contents: write
   actions: read
 
+# Cost optimization:
+# - Uses ubuntu-latest (cheaper than windows-latest) for Linux builds
+# - Uses Cross for Linux builds (no need for expensive Windows runners)
+# - Minimal artifact retention (7 days)
+# - Efficient caching
+
 jobs:
   build:
     name: Build (${{ matrix.target }})
@@ -26,12 +32,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Linux - x86_64 (most common)
+          # Linux - x86_64 (most common) - Use Docker-based cross-compilation
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             use_cross: true
 
-          # Windows - x86_64 (most common)
+          # Windows - x86_64 (most common) - Must use windows-latest
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             use_cross: false
@@ -40,21 +46,24 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.tag }}
-          fetch-depth: 0
+          fetch-depth: 1  # Shallow clone for faster checkout
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
+          components: rustfmt  # Only essential components
 
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
+          key: ${{ matrix.target }}
 
       - name: Install Cross (for Linux builds)
         if: matrix.use_cross
         run: cargo install cross --git https://github.com/cross-rs/cross.git --locked
+        # Cross allows building Linux binaries on Ubuntu runner (cheaper than ARM runners)
 
       - name: Setup OpenSSL (Windows)
         if: matrix.os == 'windows-latest'
@@ -77,7 +86,6 @@ jobs:
       - name: Check Binary
         shell: bash
         run: |
-          echo "Looking for binary in target/${{ matrix.target }}/release/"
           if [ -f "target/${{ matrix.target }}/release/vtcode" ]; then
             echo "✓ Found Unix binary: vtcode"
           elif [ -f "target/${{ matrix.target }}/release/vtcode.exe" ]; then
@@ -95,19 +103,13 @@ jobs:
           else
             BINARY="vtcode"
           fi
-          echo "Packaging: $BINARY"
           tar -czf ../../../vtcode-${{ inputs.tag }}-${{ matrix.target }}.tar.gz "$BINARY"
           cd ../../../
-          
-          echo "Computing SHA256..."
           if command -v sha256sum &> /dev/null; then
             sha256sum vtcode-${{ inputs.tag }}-${{ matrix.target }}.tar.gz > vtcode-${{ inputs.tag }}-${{ matrix.target }}.sha256
           elif command -v shasum &> /dev/null; then
             shasum -a 256 vtcode-${{ inputs.tag }}-${{ matrix.target }}.tar.gz > vtcode-${{ inputs.tag }}-${{ matrix.target }}.sha256
           fi
-          
-          echo "✓ Package complete:"
-          ls -lh vtcode-${{ inputs.tag }}-${{ matrix.target }}.*
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
