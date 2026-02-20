@@ -551,6 +551,7 @@ impl StreamingProcessor {
                 Part::FunctionResponse { .. } => {
                     _has_valid_content = true;
                 }
+                Part::CacheControl { .. } => {}
             }
         }
 

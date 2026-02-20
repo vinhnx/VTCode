@@ -115,6 +115,7 @@ pub fn build_messages_from_conversation(
                     let response_str = function_response.response.to_string();
                     tool_responses.push(Message::tool_response(id, response_str));
                 }
+                Part::CacheControl { .. } => {}
             }
         }
 

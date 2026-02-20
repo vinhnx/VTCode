@@ -299,17 +299,30 @@ impl GeminiProvider {
             contents,
             tools,
             tool_config,
-            system_instruction: request
-                .system_prompt
-                .as_ref()
-                .map(|text| SystemInstruction::new((**text).clone()))
-                .or_else(|| {
-                    if self.prompt_cache_enabled {
-                        Some(SystemInstruction::new(default_system_prompt()))
+            system_instruction: {
+                let text = request
+                    .system_prompt
+                    .as_ref()
+                    .map(|text| (**text).clone())
+                    .unwrap_or_else(|| default_system_prompt().to_string());
+
+                if self.prompt_cache_enabled
+                    && matches!(
+                        self.prompt_cache_settings.mode,
+                        GeminiPromptCacheMode::Explicit
+                    )
+                {
+                    if let Some(ttl) = self.prompt_cache_settings.explicit_ttl_seconds {
+                        Some(SystemInstruction::with_ttl(text, ttl))
                     } else {
-                        None
+                        Some(SystemInstruction::new(text))
                     }
-                }),
+                } else if request.system_prompt.is_some() || self.prompt_cache_enabled {
+                    Some(SystemInstruction::new(text))
+                } else {
+                    None
+                }
+            },
             generation_config: Some(generation_config),
         })
     }
@@ -382,6 +395,7 @@ impl GeminiProvider {
                     });
                 }
                 Part::FunctionResponse { .. } => {}
+                Part::CacheControl { .. } => {}
             }
         }
 

@@ -468,6 +468,7 @@ pub fn content_to_history_messages(
                         function_response.name, function_response.response
                     ));
                 }
+                crate::gemini::Part::CacheControl { .. } => {}
             }
         }
 

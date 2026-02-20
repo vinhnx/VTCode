@@ -58,6 +58,20 @@ impl SystemInstruction {
             }],
         }
     }
+
+    pub fn with_ttl(text: impl Into<String>, ttl_seconds: u64) -> Self {
+        SystemInstruction {
+            parts: vec![
+                Part::Text {
+                    text: text.into(),
+                    thought_signature: None,
+                },
+                Part::CacheControl {
+                    ttl_seconds: Some(ttl_seconds),
+                },
+            ],
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -75,6 +89,11 @@ pub enum Part {
     InlineData {
         #[serde(rename = "inline_data")]
         inline_data: InlineData,
+    },
+    #[serde(rename_all = "camelCase")]
+    CacheControl {
+        #[serde(rename = "ttlSeconds")]
+        ttl_seconds: Option<u64>,
     },
     #[serde(rename_all = "camelCase")]
     FunctionCall {
