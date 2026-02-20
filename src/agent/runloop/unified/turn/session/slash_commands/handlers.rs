@@ -41,9 +41,7 @@ mod ui;
 mod workspace;
 pub use agents::handle_manage_agents;
 pub use apps::{handle_launch_editor, handle_launch_git, handle_new_session, handle_open_docs};
-pub use diagnostics::{
-    handle_run_doctor, handle_show_status, handle_start_terminal_setup,
-};
+pub use diagnostics::{handle_run_doctor, handle_show_status, handle_start_terminal_setup};
 pub use mcp::handle_manage_mcp;
 pub use modes::{handle_cycle_mode, handle_toggle_autonomous_mode, handle_toggle_plan_mode};
 pub use oauth::{handle_oauth_login, handle_oauth_logout, handle_show_auth_status};

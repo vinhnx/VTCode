@@ -272,17 +272,12 @@ impl Session {
     }
 
     /// Scroll operations
+    ///
+    /// Note: The scroll offset model is inverted for chat-style display:
+    /// offset=0 shows the bottom (newest content), offset=max shows the top.
+    /// Therefore "scroll up" (show older content) increases the offset, and
+    /// "scroll down" (show newer content) decreases it.
     pub fn scroll_line_up(&mut self) {
-        self.mark_scrolling();
-        let previous_offset = self.scroll_manager.offset();
-        self.scroll_manager.scroll_up(1);
-        if self.scroll_manager.offset() != previous_offset {
-            self.user_scrolled = self.scroll_manager.offset() != 0;
-            self.visible_lines_cache = None;
-        }
-    }
-
-    pub fn scroll_line_down(&mut self) {
         self.mark_scrolling();
         let previous_offset = self.scroll_manager.offset();
         self.scroll_manager.scroll_down(1);
@@ -292,10 +287,20 @@ impl Session {
         }
     }
 
+    pub fn scroll_line_down(&mut self) {
+        self.mark_scrolling();
+        let previous_offset = self.scroll_manager.offset();
+        self.scroll_manager.scroll_up(1);
+        if self.scroll_manager.offset() != previous_offset {
+            self.user_scrolled = self.scroll_manager.offset() != 0;
+            self.visible_lines_cache = None;
+        }
+    }
+
     pub(super) fn scroll_page_up(&mut self) {
         self.mark_scrolling();
         let previous_offset = self.scroll_manager.offset();
-        self.scroll_manager.scroll_up(self.viewport_height().max(1));
+        self.scroll_manager.scroll_down(self.viewport_height().max(1));
         if self.scroll_manager.offset() != previous_offset {
             self.user_scrolled = self.scroll_manager.offset() != 0;
             self.visible_lines_cache = None;
@@ -306,7 +311,7 @@ impl Session {
         self.mark_scrolling();
         let page = self.viewport_height().max(1);
         let previous_offset = self.scroll_manager.offset();
-        self.scroll_manager.scroll_down(page);
+        self.scroll_manager.scroll_up(page);
         if self.scroll_manager.offset() != previous_offset {
             self.user_scrolled = self.scroll_manager.offset() != 0;
             self.visible_lines_cache = None;
@@ -324,14 +329,15 @@ impl Session {
         let previous_offset = self.scroll_manager.offset();
 
         // Apply page scroll first (larger movements)
+        // Inverted offset model: positive delta = scroll down visually = decrease offset
         if page_delta != 0 {
             let page_size = self.viewport_height().max(1);
             if page_delta > 0 {
                 self.scroll_manager
-                    .scroll_down(page_size * page_delta.unsigned_abs() as usize);
+                    .scroll_up(page_size * page_delta.unsigned_abs() as usize);
             } else {
                 self.scroll_manager
-                    .scroll_up(page_size * page_delta.unsigned_abs() as usize);
+                    .scroll_down(page_size * page_delta.unsigned_abs() as usize);
             }
         }
 
@@ -339,10 +345,10 @@ impl Session {
         if line_delta != 0 {
             if line_delta > 0 {
                 self.scroll_manager
-                    .scroll_down(line_delta.unsigned_abs() as usize);
+                    .scroll_up(line_delta.unsigned_abs() as usize);
             } else {
                 self.scroll_manager
-                    .scroll_up(line_delta.unsigned_abs() as usize);
+                    .scroll_down(line_delta.unsigned_abs() as usize);
             }
         }
 

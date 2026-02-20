@@ -14,9 +14,8 @@ mod rendering;
 #[path = "slash_commands/team_agent.rs"]
 mod team_agent;
 use flow::{
-    handle_agent_command, handle_auth_command, handle_login_command,
-    handle_logout_command, handle_mode_command, handle_plan_command, handle_rewind_command,
-    handle_sessions_command,
+    handle_agent_command, handle_auth_command, handle_login_command, handle_logout_command,
+    handle_mode_command, handle_plan_command, handle_rewind_command, handle_sessions_command,
 };
 use management::{handle_add_dir_command, handle_mcp_command};
 use parsing::{parse_session_log_export_format, split_command_and_args};

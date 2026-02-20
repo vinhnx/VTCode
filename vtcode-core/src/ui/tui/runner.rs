@@ -7,8 +7,8 @@ use futures::{FutureExt, StreamExt};
 use ratatui::crossterm::{
     cursor::SetCursorStyle,
     event::{
-        DisableBracketedPaste, DisableFocusChange, EnableBracketedPaste,
-        EnableFocusChange, Event as CrosstermEvent, MouseEventKind,
+        DisableBracketedPaste, DisableFocusChange, DisableMouseCapture, EnableBracketedPaste,
+        EnableFocusChange, EnableMouseCapture, Event as CrosstermEvent, MouseEventKind,
     },
     execute,
     terminal::{
@@ -455,6 +455,8 @@ fn enable_terminal_modes(
 
     execute!(stderr, EnableBracketedPaste).context(ENABLE_BRACKETED_PASTE_ERROR)?;
     enable_raw_mode().context(RAW_MODE_ENABLE_ERROR)?;
+    execute!(stderr, EnableMouseCapture)
+        .context("failed to enable mouse capture for inline terminal")?;
 
     let focus_change_enabled = match execute!(stderr, EnableFocusChange) {
         Ok(_) => true,
@@ -505,6 +507,7 @@ fn restore_terminal_modes(state: &TerminalModeState) -> Result<()> {
     }
 
     execute!(stderr, DisableBracketedPaste).context(DISABLE_BRACKETED_PASTE_ERROR)?;
+    let _ = execute!(stderr, DisableMouseCapture);
 
     Ok(())
 }

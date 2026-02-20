@@ -19,12 +19,24 @@ impl Session {
             }
             CrosstermEvent::Mouse(mouse_event) => match mouse_event.kind {
                 MouseEventKind::ScrollDown => {
-                    self.scroll_line_down();
-                    self.mark_dirty();
+                    // Check if history picker is active - delegate scrolling to picker
+                    if self.history_picker_state.active {
+                        self.history_picker_state.move_down();
+                        self.mark_dirty();
+                    } else {
+                        self.scroll_line_down();
+                        self.mark_dirty();
+                    }
                 }
                 MouseEventKind::ScrollUp => {
-                    self.scroll_line_up();
-                    self.mark_dirty();
+                    // Check if history picker is active - delegate scrolling to picker
+                    if self.history_picker_state.active {
+                        self.history_picker_state.move_up();
+                        self.mark_dirty();
+                    } else {
+                        self.scroll_line_up();
+                        self.mark_dirty();
+                    }
                 }
                 MouseEventKind::Down(ratatui::crossterm::event::MouseButton::Left) => {
                     if !self.handle_input_click(mouse_event) {

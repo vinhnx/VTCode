@@ -103,7 +103,6 @@ impl Drop for PlaceholderGuard {
 
 const SPINNER_UPDATE_INTERVAL_MS: u64 = 150;
 
-
 #[allow(dead_code)]
 pub(crate) struct PlaceholderSpinner {
     handle: InlineHandle,
