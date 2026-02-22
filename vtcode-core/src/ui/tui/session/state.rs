@@ -300,7 +300,8 @@ impl Session {
     pub(super) fn scroll_page_up(&mut self) {
         self.mark_scrolling();
         let previous_offset = self.scroll_manager.offset();
-        self.scroll_manager.scroll_down(self.viewport_height().max(1));
+        self.scroll_manager
+            .scroll_down(self.viewport_height().max(1));
         if self.scroll_manager.offset() != previous_offset {
             self.user_scrolled = self.scroll_manager.offset() != 0;
             self.visible_lines_cache = None;

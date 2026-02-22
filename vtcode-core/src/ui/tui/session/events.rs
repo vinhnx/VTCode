@@ -21,10 +21,7 @@ pub(super) fn handle_event(
             }
         }
         CrosstermEvent::Mouse(MouseEvent {
-            kind,
-            column,
-            row,
-            ..
+            kind, column, row, ..
         }) => match kind {
             MouseEventKind::ScrollDown => {
                 // Check if history picker is active - delegate scrolling to picker

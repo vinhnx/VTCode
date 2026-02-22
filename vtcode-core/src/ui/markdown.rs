@@ -108,6 +108,7 @@ enum ListKind {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct RenderMarkdownOptions {
     pub preserve_code_indentation: bool,
+    pub disable_code_block_table_reparse: bool,
 }
 
 /// Render markdown text to styled lines that can be written to the terminal renderer.
@@ -175,15 +176,15 @@ pub fn render_markdown_to_lines_with_options(
                         // LLMs wrap tables in ```markdown fences), render the
                         // content as markdown so the table gets box-drawing
                         // treatment instead of plain code-block line numbers.
-                        if code_block_contains_table(
-                            &state.buffer,
-                            state.language.as_deref(),
-                        ) {
-                            let table_lines = render_markdown_to_lines(
+                        if !render_options.disable_code_block_table_reparse
+                            && code_block_contains_table(&state.buffer, state.language.as_deref())
+                        {
+                            let table_lines = render_markdown_code_block_table(
                                 &state.buffer,
                                 base_style,
                                 theme_styles,
                                 highlight_config,
+                                render_options,
                             );
                             lines.extend(table_lines);
                         } else {
@@ -286,6 +287,24 @@ pub fn render_markdown_to_lines_with_options(
 
     trim_trailing_blank_lines(&mut lines);
     lines
+}
+
+fn render_markdown_code_block_table(
+    source: &str,
+    base_style: Style,
+    theme_styles: &ThemeStyles,
+    highlight_config: Option<&SyntaxHighlightingConfig>,
+    render_options: RenderMarkdownOptions,
+) -> Vec<MarkdownLine> {
+    let mut nested_options = render_options;
+    nested_options.disable_code_block_table_reparse = true;
+    render_markdown_to_lines_with_options(
+        source,
+        base_style,
+        theme_styles,
+        highlight_config,
+        nested_options,
+    )
 }
 
 /// Convenience helper that renders markdown using the active theme without emitting output.
@@ -1682,6 +1701,36 @@ mod tests {
         assert!(
             output.contains("│"),
             "Table inside ```md code block should render as table: {output}"
+        );
+    }
+
+    #[test]
+    fn test_table_code_block_reparse_guard_can_disable_table_reparse() {
+        let markdown = "```markdown\n\
+            | Module | Purpose |\n\
+            |--------|----------|\n\
+            | core   | Library  |\n\
+            ```\n";
+        let options = RenderMarkdownOptions {
+            preserve_code_indentation: false,
+            disable_code_block_table_reparse: true,
+        };
+        let lines = render_markdown_to_lines_with_options(
+            markdown,
+            Style::default(),
+            &theme::active_styles(),
+            None,
+            options,
+        );
+        let output = lines_to_text(&lines).join("\n");
+
+        assert!(
+            output.contains("| Module | Purpose |"),
+            "Guarded render should keep code-block content literal: {output}"
+        );
+        assert!(
+            output.contains("  1  "),
+            "Guarded render should keep code-block line numbers: {output}"
         );
     }
 

@@ -57,6 +57,82 @@ fn test_detect_textual_tool_call_handles_boolean_and_numbers() {
 }
 
 #[test]
+fn test_detect_textual_tool_call_rejects_excessive_bracketed_nesting() {
+    let mut nested = String::new();
+    for _ in 0..260 {
+        nested.push_str("{\"a\":");
+    }
+    nested.push_str("\"x\"");
+    for _ in 0..260 {
+        nested.push('}');
+    }
+
+    let message = format!("[tool: read_file] {nested}");
+    assert!(
+        detect_textual_tool_call(&message).is_none(),
+        "Overly deep bracketed payload should be rejected"
+    );
+}
+
+#[test]
+fn test_detect_textual_tool_call_rejects_excessive_function_nesting() {
+    let mut nested = String::new();
+    for _ in 0..260 {
+        nested.push('(');
+    }
+    nested.push_str("'x'");
+    for _ in 0..260 {
+        nested.push(')');
+    }
+
+    let message = format!("default_api.read_file(path={nested})");
+    assert!(
+        detect_textual_tool_call(&message).is_none(),
+        "Overly deep function payload should be rejected"
+    );
+}
+
+#[test]
+fn test_detect_textual_tool_call_rejects_excessive_mixed_function_nesting() {
+    let mut nested = String::new();
+    for _ in 0..90 {
+        nested.push_str("({[");
+    }
+    nested.push_str("'x'");
+    for _ in 0..90 {
+        nested.push_str("]})");
+    }
+
+    let message = format!("default_api.read_file(path={nested})");
+    assert!(
+        detect_textual_tool_call(&message).is_none(),
+        "Overly deep mixed-delimiter payload should be rejected"
+    );
+}
+
+#[test]
+fn test_detect_textual_tool_call_handles_closing_delimiters_inside_strings() {
+    let message = "default_api.read_file(path='docs/notes})].md')";
+    let (name, args) = detect_textual_tool_call(message).expect("should parse");
+    assert_eq!(name, "read_file");
+    assert_eq!(args["path"], serde_json::json!("docs/notes})].md"));
+}
+
+#[test]
+fn test_detect_textual_tool_call_skips_malformed_deep_candidate() {
+    let mut malformed = String::new();
+    for _ in 0..260 {
+        malformed.push('(');
+    }
+
+    let message =
+        format!("default_api.read_file(path={malformed} ignored default_api.list_files(path='.')");
+    let (name, args) = detect_textual_tool_call(&message).expect("should parse second call");
+    assert_eq!(name, "list_files");
+    assert_eq!(args["path"], serde_json::json!("."));
+}
+
+#[test]
 fn test_detect_tagged_tool_call_parses_basic_command() {
     let message = "<tool_call>run_pty_cmd\n<arg_key>command\n<arg_value>ls -a\n</tool_call>";
     let (name, args) = detect_textual_tool_call(message).expect("should parse");

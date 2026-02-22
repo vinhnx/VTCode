@@ -382,6 +382,7 @@ impl AnsiRenderer {
             highlight_cfg,
             RenderMarkdownOptions {
                 preserve_code_indentation,
+                disable_code_block_table_reparse: false,
             },
         );
         if lines.is_empty() {
@@ -692,6 +693,7 @@ impl InlineSink {
             highlight_cfg,
             RenderMarkdownOptions {
                 preserve_code_indentation,
+                disable_code_block_table_reparse: false,
             },
         );
         if preserve_blank_lines {
