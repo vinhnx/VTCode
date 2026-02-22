@@ -96,6 +96,44 @@ fn is_history_jsonl(path: &Path) -> bool {
     false
 }
 
+fn is_tool_output_spool_path(path: &Path) -> bool {
+    let mut saw_vtcode = false;
+    let mut saw_context = false;
+
+    for component in path.components() {
+        let segment = component.as_os_str().to_string_lossy();
+        if segment == ".vtcode" {
+            saw_vtcode = true;
+            saw_context = false;
+            continue;
+        }
+        if saw_vtcode && segment == "context" {
+            saw_context = true;
+            continue;
+        }
+        if saw_vtcode && saw_context && segment == "tool_outputs" {
+            return true;
+        }
+    }
+
+    false
+}
+
+fn pty_session_id_from_tool_output_path(path: &Path) -> Option<String> {
+    let file_name = path.file_name()?.to_str()?;
+    let session_id = file_name.strip_suffix(".txt")?;
+    if session_id.starts_with("run-")
+        && session_id.len() > "run-".len()
+        && session_id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+    {
+        Some(session_id.to_string())
+    } else {
+        None
+    }
+}
+
 fn build_history_cache_key(
     path: &Path,
     metadata: &std::fs::Metadata,
@@ -162,6 +200,10 @@ impl FileOpsTool {
 
         // Try to resolve the file path
         let potential_paths = self.resolve_file_path(path_str)?;
+        let missing_spool_candidate = potential_paths
+            .iter()
+            .find(|candidate| is_tool_output_spool_path(candidate.as_path()))
+            .cloned();
 
         for candidate_path in &potential_paths {
             if !tokio::fs::try_exists(candidate_path).await? {
@@ -330,6 +372,20 @@ impl FileOpsTool {
             return Ok(response);
         }
 
+        if let Some(spool_path) = missing_spool_candidate {
+            if let Some(session_id) = pty_session_id_from_tool_output_path(&spool_path) {
+                return Err(anyhow!(
+                    "Error: Session output file not found: {}. This looks like a PTY session id. Use read_pty_session with session_id=\"{}\" instead of read_file.",
+                    self.workspace_relative_display(&spool_path),
+                    session_id,
+                ));
+            }
+            return Err(anyhow!(
+                "Error: Spool file not found (possibly expired): {}. Re-run the original tool command to regenerate this output.",
+                self.workspace_relative_display(&spool_path),
+            ));
+        }
+
         Err(anyhow!(
             "Error: File not found: {}. Tried paths: {}.",
             path_str,
@@ -359,6 +415,35 @@ mod read_tests {
             "/tmp/.vtcode/history/test.txt"
         )));
         assert!(!is_history_jsonl(Path::new("/tmp/history/test.jsonl")));
+    }
+
+    #[test]
+    fn tool_output_spool_path_detection() {
+        assert!(is_tool_output_spool_path(Path::new(
+            ".vtcode/context/tool_outputs/run-123.txt"
+        )));
+        assert!(is_tool_output_spool_path(Path::new(
+            "/tmp/work/.vtcode/context/tool_outputs/run-123.txt"
+        )));
+        assert!(!is_tool_output_spool_path(Path::new(
+            ".vtcode/history/session.jsonl"
+        )));
+    }
+
+    #[test]
+    fn pty_session_id_detection_from_tool_output_path() {
+        assert_eq!(
+            pty_session_id_from_tool_output_path(Path::new(
+                ".vtcode/context/tool_outputs/run-658ceef2.txt"
+            )),
+            Some("run-658ceef2".to_string())
+        );
+        assert_eq!(
+            pty_session_id_from_tool_output_path(Path::new(
+                ".vtcode/context/tool_outputs/unified_exec_123.txt"
+            )),
+            None
+        );
     }
 
     #[test]
@@ -544,7 +629,9 @@ mod read_tests {
         assert!(result["is_truncated"].as_bool().unwrap());
         // Should report applied token budget
         assert_eq!(
-            result["metadata"]["applied_max_tokens"].as_u64().unwrap(),
+            result["metadata"]["data"]["applied_max_tokens"]
+                .as_u64()
+                .unwrap(),
             max_tokens as u64
         );
     }
@@ -563,5 +650,38 @@ mod read_tests {
 
         assert!(err.contains("Patch content was sent to read_file"));
         assert!(err.contains("\"action\":\"patch\""));
+    }
+
+    #[tokio::test]
+    async fn test_missing_spool_file_returns_actionable_error() {
+        let temp_dir = TempDir::new().unwrap();
+        let workspace_root = temp_dir.path().to_path_buf();
+        let grep_manager = std::sync::Arc::new(GrepSearchManager::new(workspace_root.clone()));
+        let file_ops = FileOpsTool::new(workspace_root, grep_manager);
+
+        let args = json!({
+            "path": ".vtcode/context/tool_outputs/unified_exec_123.txt"
+        });
+        let err = file_ops.read_file(args).await.unwrap_err().to_string();
+
+        assert!(err.contains("Spool file not found"));
+        assert!(err.contains("Re-run the original tool command"));
+    }
+
+    #[tokio::test]
+    async fn test_missing_run_session_file_suggests_read_pty_session() {
+        let temp_dir = TempDir::new().unwrap();
+        let workspace_root = temp_dir.path().to_path_buf();
+        let grep_manager = std::sync::Arc::new(GrepSearchManager::new(workspace_root.clone()));
+        let file_ops = FileOpsTool::new(workspace_root, grep_manager);
+
+        let args = json!({
+            "path": ".vtcode/context/tool_outputs/run-123abc.txt"
+        });
+        let err = file_ops.read_file(args).await.unwrap_err().to_string();
+
+        assert!(err.contains("Session output file not found"));
+        assert!(err.contains("read_pty_session"));
+        assert!(err.contains("run-123abc"));
     }
 }
