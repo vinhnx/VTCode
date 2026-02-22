@@ -72,33 +72,41 @@ fn test_provider_auto_detection() {
 #[test]
 fn test_unified_client_creation() {
     // Test creating providers directly using the factory
-    let gemini = create_provider_for_model("gemini-3-flash-preview", "test_key".to_string(), None);
+    let gemini =
+        create_provider_for_model("gemini-3-flash-preview", "test_key".to_string(), None, None);
     assert!(gemini.is_ok());
 
-    let openai = create_provider_for_model(models::GPT_5, "test_key".to_string(), None);
+    let openai = create_provider_for_model(models::GPT_5, "test_key".to_string(), None, None);
     assert!(openai.is_ok());
 
-    let anthropic =
-        create_provider_for_model(models::CLAUDE_SONNET_4_5, "test_key".to_string(), None);
+    let anthropic = create_provider_for_model(
+        models::CLAUDE_SONNET_4_5,
+        "test_key".to_string(),
+        None,
+        None,
+    );
     assert!(anthropic.is_ok());
 
     let openrouter = create_provider_for_model(
         models::OPENROUTER_X_AI_GROK_CODE_FAST_1,
         "test_key".to_string(),
         None,
+        None,
     );
     assert!(openrouter.is_ok());
 
-    let xai = create_provider_for_model(models::xai::GROK_4, "test_key".to_string(), None);
+    let xai = create_provider_for_model(models::xai::GROK_4, "test_key".to_string(), None, None);
     assert!(xai.is_ok());
 
-    let moonshot = create_provider_for_model("kimi-k2.5", "test_key".to_string(), None);
+    let moonshot = create_provider_for_model("kimi-k2.5", "test_key".to_string(), None, None);
     assert!(moonshot.is_ok());
 
-    let ollama = create_provider_for_model(models::ollama::DEFAULT_MODEL, String::new(), None);
+    let ollama =
+        create_provider_for_model(models::ollama::DEFAULT_MODEL, String::new(), None, None);
     assert!(ollama.is_ok());
 
-    let lmstudio = create_provider_for_model(models::lmstudio::DEFAULT_MODEL, String::new(), None);
+    let lmstudio =
+        create_provider_for_model(models::lmstudio::DEFAULT_MODEL, String::new(), None, None);
     assert!(lmstudio.is_ok());
 }
 
@@ -175,6 +183,7 @@ fn test_anthropic_tool_message_handling() {
         character_name: None,
         coding_agent_settings: None,
         metadata: None,
+        prompt_cache_key: None,
     };
 
     // Validate request shape instead of internal conversion

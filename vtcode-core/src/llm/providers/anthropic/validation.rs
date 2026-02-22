@@ -44,10 +44,10 @@ pub fn validate_request(
         });
     }
 
-    if let Some(ref schema) = request.output_format {
-        if supports_structured_output(&request.model, default_model) {
-            validate_anthropic_schema(schema)?;
-        }
+    if let Some(ref schema) = request.output_format
+        && supports_structured_output(&request.model, default_model)
+    {
+        validate_anthropic_schema(schema)?;
     }
 
     if let Some(ref effort) = request.effort {

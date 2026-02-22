@@ -52,6 +52,12 @@ fn patch_source_from_args(args: &Value) -> Option<&str> {
         .or_else(|| args.get("patch").and_then(|v| v.as_str()))
 }
 
+fn serialized_payload_size_bytes(args: &Value) -> usize {
+    serde_json::to_vec(args)
+        .map(|bytes| bytes.len())
+        .unwrap_or_else(|_| args.to_string().len())
+}
+
 fn missing_unified_exec_action_error(args: &Value) -> anyhow::Error {
     anyhow!(
         "Missing action in unified_exec. Provide `action` or inferable fields: \
@@ -132,6 +138,7 @@ impl ToolRegistry {
 
         let action: UnifiedFileAction = serde_json::from_value(json!(action_str))
             .with_context(|| format!("Invalid action: {}", action_str))?;
+        self.log_unified_file_payload_diagnostics(action_str, &args);
 
         match action {
             UnifiedFileAction::Read => {
@@ -366,8 +373,10 @@ impl ToolRegistry {
     pub(super) async fn execute_apply_patch(&self, args: Value) -> Result<Value> {
         let patch_source =
             patch_source_from_args(&args).ok_or_else(|| anyhow!("Missing patch input"))?;
+        let patch_input_bytes = patch_source.len();
+        let patch_base64 = patch_source.starts_with("base64:");
 
-        let patch_content = if patch_source.starts_with("base64:") {
+        let patch_content = if patch_base64 {
             let b64 = &patch_source[7..];
             let decoded = BASE64
                 .decode(b64)
@@ -379,8 +388,42 @@ impl ToolRegistry {
 
         let mut patch_args = args.clone();
         patch_args["input"] = json!(patch_content);
+        let context = self.harness_context_snapshot();
+        tracing::debug!(
+            tool = "unified_file",
+            action = "patch",
+            payload_bytes = serialized_payload_size_bytes(&patch_args),
+            patch_input_bytes,
+            patch_base64,
+            patch_decoded_bytes = patch_args
+                .get("input")
+                .and_then(|v| v.as_str())
+                .map(|s| s.len())
+                .unwrap_or(0),
+            session_id = %context.session_id,
+            task_id = %context.task_id.as_deref().unwrap_or(""),
+            "Prepared patch payload for apply_patch"
+        );
 
         self.execute_tool_ref("apply_patch", &patch_args).await
+    }
+
+    fn log_unified_file_payload_diagnostics(&self, action: &str, args: &Value) {
+        let context = self.harness_context_snapshot();
+        let (patch_source_bytes, patch_base64) = patch_source_from_args(args)
+            .map(|source| (source.len(), source.starts_with("base64:")))
+            .unwrap_or((0, false));
+
+        tracing::debug!(
+            tool = "unified_file",
+            action,
+            payload_bytes = serialized_payload_size_bytes(args),
+            patch_source_bytes,
+            patch_base64,
+            session_id = %context.session_id,
+            task_id = %context.task_id.as_deref().unwrap_or(""),
+            "Captured unified_file payload diagnostics"
+        );
     }
 
     // ============================================================

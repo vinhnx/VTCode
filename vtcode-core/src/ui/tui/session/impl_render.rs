@@ -86,7 +86,9 @@ impl Session {
 
             // Copy to clipboard via OSC 52 once when selection is finalized
             if self.mouse_selection.needs_copy() {
-                let text = self.mouse_selection.extract_text(frame.buffer_mut(), viewport);
+                let text = self
+                    .mouse_selection
+                    .extract_text(frame.buffer_mut(), viewport);
                 if !text.is_empty() {
                     super::mouse_selection::MouseSelectionState::copy_to_clipboard_osc52(&text);
                 }

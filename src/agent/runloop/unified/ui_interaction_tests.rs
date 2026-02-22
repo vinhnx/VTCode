@@ -142,6 +142,7 @@ fn build_request() -> uni::LLMRequest {
         character_name: None,
         coding_agent_settings: None,
         metadata: None,
+        prompt_cache_key: None,
     }
 }
 

@@ -75,6 +75,33 @@ pub(crate) fn validate_tool_args_security(
 
     use vtcode_core::config::constants::tools as tool_names;
 
+    fn is_missing_arg_value(args: &Value, key: &str) -> bool {
+        match args.get(key) {
+            Some(v) => {
+                v.is_null() || (v.is_string() && v.as_str().is_none_or(|s| s.trim().is_empty()))
+            }
+            None => true,
+        }
+    }
+
+    fn is_missing_required_arg(tool_name: &str, args: &Value, key: &str) -> bool {
+        if tool_name == tool_names::EDIT_FILE {
+            return match key {
+                "old_str" => {
+                    is_missing_arg_value(args, "old_str")
+                        && is_missing_arg_value(args, "old_string")
+                }
+                "new_str" => {
+                    is_missing_arg_value(args, "new_str")
+                        && is_missing_arg_value(args, "new_string")
+                }
+                _ => is_missing_arg_value(args, key),
+            };
+        }
+
+        is_missing_arg_value(args, key)
+    }
+
     // Optimization: Early return for tools with no requirements
     static EMPTY_REQUIRED: &[&str] = &[];
 
@@ -82,7 +109,7 @@ pub(crate) fn validate_tool_args_security(
     let required: &[&str] = match name {
         n if n == tool_names::READ_FILE => &["path"],
         n if n == tool_names::WRITE_FILE => &["path", "content"],
-        n if n == tool_names::EDIT_FILE => &["path", "old_string", "new_string"],
+        n if n == tool_names::EDIT_FILE => &["path", "old_str", "new_str"],
         n if n == tool_names::LIST_FILES => &["path"],
         n if n == tool_names::GREP_FILE => &["pattern", "path"],
         n if n == tool_names::CODE_INTELLIGENCE => &["operation"],
@@ -96,14 +123,7 @@ pub(crate) fn validate_tool_args_security(
 
     if !required.is_empty() {
         for key in required {
-            let is_missing = match args.get(*key) {
-                Some(v) => {
-                    v.is_null() || (v.is_string() && v.as_str().is_none_or(|s| s.is_empty()))
-                }
-                None => true,
-            };
-
-            if is_missing {
+            if is_missing_required_arg(name, args, key) {
                 failures
                     .get_or_insert_with(|| Vec::with_capacity(required.len()))
                     .push(format!("Missing required argument: {}", key));
@@ -314,7 +334,9 @@ pub(crate) async fn handle_turn_balancer(
 
 #[cfg(test)]
 mod tests {
-    use super::is_readonly_signature;
+    use super::{is_readonly_signature, validate_tool_args_security};
+    use serde_json::json;
+    use vtcode_core::config::constants::tools as tool_names;
 
     #[test]
     fn readonly_signature_handles_alias_and_search_signatures() {
@@ -332,5 +354,28 @@ mod tests {
         assert!(!is_readonly_signature(
             r#"unified_exec:{"action":"run","command":"cargo check"}"#
         ));
+    }
+
+    #[test]
+    fn validate_edit_file_args_accepts_legacy_old_new_string_keys() {
+        let args = json!({
+            "path": "src/lib.rs",
+            "old_string": "before",
+            "new_string": "after"
+        });
+
+        assert!(validate_tool_args_security(tool_names::EDIT_FILE, &args, None, None).is_none());
+    }
+
+    #[test]
+    fn validate_edit_file_args_still_rejects_when_replacements_missing() {
+        let args = json!({
+            "path": "src/lib.rs"
+        });
+
+        let failures =
+            validate_tool_args_security(tool_names::EDIT_FILE, &args, None, None).unwrap();
+        assert!(failures.iter().any(|msg| msg.contains("old_str")));
+        assert!(failures.iter().any(|msg| msg.contains("new_str")));
     }
 }

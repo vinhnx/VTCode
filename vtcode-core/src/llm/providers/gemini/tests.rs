@@ -517,7 +517,10 @@ fn gemini_provider_supports_reasoning_effort_for_gemini3() {
 
     // Test that the provider correctly identifies Gemini 3 Pro as supporting reasoning effort
     assert!(Provider::Gemini.supports_reasoning_effort(models::google::GEMINI_3_1_PRO_PREVIEW));
-    assert!(Provider::Gemini.supports_reasoning_effort(models::google::GEMINI_3_1_PRO_PREVIEW_CUSTOMTOOLS));
+    assert!(
+        Provider::Gemini
+            .supports_reasoning_effort(models::google::GEMINI_3_1_PRO_PREVIEW_CUSTOMTOOLS)
+    );
     assert!(Provider::Gemini.supports_reasoning_effort(models::google::GEMINI_3_PRO_PREVIEW));
     assert!(Provider::Gemini.supports_reasoning_effort(models::google::GEMINI_3_FLASH_PREVIEW));
 
@@ -734,8 +737,15 @@ mod caching_tests {
         // Default is explicit caching disabled, implicit is enabled by default in provider logic if config is default?
         // Let's check from_config
         let config = PromptCachingConfig::default();
-        let provider =
-            GeminiProvider::from_config(Some("key".into()), None, None, Some(config), None, None, None);
+        let provider = GeminiProvider::from_config(
+            Some("key".into()),
+            None,
+            None,
+            Some(config),
+            None,
+            None,
+            None,
+        );
 
         // Verification: we can't easily inspect private fields without a helper or reflection.
         // We can check if `convert_to_gemini_request` works.

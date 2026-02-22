@@ -37,6 +37,7 @@ async fn test_handle_stats_command_returns_agent_metrics() -> Result<()> {
         checkpointing_max_age_days: Some(DEFAULT_MAX_AGE_DAYS),
         quiet: false,
         max_conversation_turns: 1000,
+        model_behavior: None,
     };
     let mut agent = Agent::new(config).await?;
     agent.update_session_stats(5, 3, 1);

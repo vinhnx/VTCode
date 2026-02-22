@@ -126,34 +126,41 @@ fn infer_provider_respects_override_and_model() {
 #[test]
 fn test_provider_creation() {
     // Test creating providers directly
-    let gemini = create_provider_for_model("gemini-3-flash-preview", "test_key".to_string(), None);
+    let gemini =
+        create_provider_for_model("gemini-3-flash-preview", "test_key".to_string(), None, None);
     assert!(gemini.is_ok());
 
-    let openai = create_provider_for_model(models::GPT_5, "test_key".to_string(), None);
+    let openai = create_provider_for_model(models::GPT_5, "test_key".to_string(), None, None);
     assert!(openai.is_ok());
 
-    let anthropic =
-        create_provider_for_model(models::CLAUDE_SONNET_4_5, "test_key".to_string(), None);
+    let anthropic = create_provider_for_model(
+        models::CLAUDE_SONNET_4_5,
+        "test_key".to_string(),
+        None,
+        None,
+    );
     assert!(anthropic.is_ok());
 
     let openrouter = create_provider_for_model(
         models::OPENROUTER_X_AI_GROK_CODE_FAST_1,
         "test_key".to_string(),
         None,
+        None,
     );
     assert!(openrouter.is_ok());
 
-    let xai = create_provider_for_model(models::xai::GROK_4, "test_key".to_string(), None);
+    let xai = create_provider_for_model(models::xai::GROK_4, "test_key".to_string(), None, None);
     assert!(xai.is_ok());
 
-    let moonshot = create_provider_for_model("kimi-k2.5", "test_key".to_string(), None);
+    let moonshot = create_provider_for_model("kimi-k2.5", "test_key".to_string(), None, None);
     assert!(moonshot.is_ok());
 
-    let ollama = create_provider_for_model(models::ollama::DEFAULT_MODEL, String::new(), None);
+    let ollama =
+        create_provider_for_model(models::ollama::DEFAULT_MODEL, String::new(), None, None);
     assert!(ollama.is_ok());
 
     // Test invalid model
-    let invalid = create_provider_for_model("invalid-model", "test_key".to_string(), None);
+    let invalid = create_provider_for_model("invalid-model", "test_key".to_string(), None, None);
     assert!(invalid.is_err());
 }
 
@@ -161,20 +168,24 @@ fn test_provider_creation() {
 fn test_unified_client_creation() {
     // Test creating unified clients for different providers
     let gemini_client =
-        create_provider_for_model("gemini-3-flash-preview", "test_key".to_string(), None);
+        create_provider_for_model("gemini-3-flash-preview", "test_key".to_string(), None, None);
     assert!(gemini_client.is_ok());
     if let Ok(client) = gemini_client {
         assert_eq!(client.name(), "gemini");
     }
 
-    let openai_client = create_provider_for_model("gpt-5", "test_key".to_string(), None);
+    let openai_client = create_provider_for_model("gpt-5", "test_key".to_string(), None, None);
     assert!(openai_client.is_ok());
     if let Ok(client) = openai_client {
         assert_eq!(client.name(), "openai");
     }
 
-    let anthropic_client =
-        create_provider_for_model(models::CLAUDE_SONNET_4_5, "test_key".to_string(), None);
+    let anthropic_client = create_provider_for_model(
+        models::CLAUDE_SONNET_4_5,
+        "test_key".to_string(),
+        None,
+        None,
+    );
     assert!(anthropic_client.is_ok());
     if let Ok(client) = anthropic_client {
         assert_eq!(client.name(), "anthropic");
@@ -184,33 +195,36 @@ fn test_unified_client_creation() {
         models::OPENROUTER_X_AI_GROK_CODE_FAST_1,
         "test_key".to_string(),
         None,
+        None,
     );
     assert!(openrouter_client.is_ok());
     if let Ok(client) = openrouter_client {
         assert_eq!(client.name(), "openrouter");
     }
 
-    let xai_client = create_provider_for_model(models::xai::GROK_4, "test_key".to_string(), None);
+    let xai_client =
+        create_provider_for_model(models::xai::GROK_4, "test_key".to_string(), None, None);
     assert!(xai_client.is_ok());
     if let Ok(client) = xai_client {
         assert_eq!(client.name(), "xai");
     }
 
-    let moonshot_client = create_provider_for_model("kimi-k2.5", "test_key".to_string(), None);
+    let moonshot_client =
+        create_provider_for_model("kimi-k2.5", "test_key".to_string(), None, None);
     assert!(moonshot_client.is_ok());
     if let Ok(client) = moonshot_client {
         assert_eq!(client.name(), "moonshot");
     }
 
     let ollama_client =
-        create_provider_for_model(models::ollama::DEFAULT_MODEL, String::new(), None);
+        create_provider_for_model(models::ollama::DEFAULT_MODEL, String::new(), None, None);
     assert!(ollama_client.is_ok());
     if let Ok(client) = ollama_client {
         assert_eq!(client.name(), "ollama");
     }
 
     let lmstudio_client =
-        create_provider_for_model(models::lmstudio::DEFAULT_MODEL, String::new(), None);
+        create_provider_for_model(models::lmstudio::DEFAULT_MODEL, String::new(), None, None);
     assert!(lmstudio_client.is_ok());
     if let Ok(client) = lmstudio_client {
         assert_eq!(client.name(), "lmstudio");
@@ -344,6 +358,7 @@ fn test_request_validation() {
         character_name: None,
         coding_agent_settings: None,
         metadata: None,
+        prompt_cache_key: None,
     };
     assert!(gemini.validate_request(&valid_gemini_request).is_ok());
 
@@ -375,6 +390,7 @@ fn test_request_validation() {
         character_name: None,
         coding_agent_settings: None,
         metadata: None,
+        prompt_cache_key: None,
     };
     assert!(openai.validate_request(&valid_openai_request).is_ok());
 
@@ -406,6 +422,7 @@ fn test_request_validation() {
         character_name: None,
         coding_agent_settings: None,
         metadata: None,
+        prompt_cache_key: None,
     };
     assert!(anthropic.validate_request(&valid_anthropic_request).is_ok());
 
@@ -437,6 +454,7 @@ fn test_request_validation() {
         character_name: None,
         coding_agent_settings: None,
         metadata: None,
+        prompt_cache_key: None,
     };
     assert!(
         anthropic
@@ -472,6 +490,7 @@ fn test_request_validation() {
         character_name: None,
         coding_agent_settings: None,
         metadata: None,
+        prompt_cache_key: None,
     };
     assert!(
         openrouter
@@ -507,6 +526,7 @@ fn test_request_validation() {
         character_name: None,
         coding_agent_settings: None,
         metadata: None,
+        prompt_cache_key: None,
     };
     assert!(xai.validate_request(&valid_xai_request).is_ok());
 
@@ -539,6 +559,7 @@ fn test_request_validation() {
         character_name: None,
         coding_agent_settings: None,
         metadata: None,
+        prompt_cache_key: None,
     };
     assert!(gemini.validate_request(&invalid_request).is_err());
     assert!(openai.validate_request(&invalid_request).is_err());
@@ -582,6 +603,7 @@ fn test_anthropic_tool_message_handling() {
         character_name: None,
         coding_agent_settings: None,
         metadata: None,
+        prompt_cache_key: None,
     };
 
     // Use the public validator as a proxy for ensuring request shape is acceptable

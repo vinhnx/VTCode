@@ -74,6 +74,7 @@ fn test_openai_tool_call_format() {
         character_name: None,
         coding_agent_settings: None,
         metadata: None,
+        prompt_cache_key: None,
     };
 
     // Only validate shape via provider API; internal conversion details are private
@@ -142,6 +143,7 @@ fn test_anthropic_tool_call_format() {
         character_name: None,
         coding_agent_settings: None,
         metadata: None,
+        prompt_cache_key: None,
     };
 
     // Only validate shape via provider API; internal conversion details are private
@@ -210,6 +212,7 @@ fn test_gemini_tool_call_format() {
         character_name: None,
         coding_agent_settings: None,
         metadata: None,
+        prompt_cache_key: None,
     };
 
     assert!(provider.validate_request(&request).is_ok());
@@ -221,8 +224,8 @@ fn test_all_providers_tool_validation() {
     let openai = OpenAIProvider::new("test_key".to_string());
     let anthropic = AnthropicProvider::new("test_key".to_string());
     let openrouter = OpenRouterProvider::new("test_key".to_string());
-    let ollama = OllamaProvider::from_config(None, None, None, None, None, None);
-    let lmstudio = LmStudioProvider::from_config(None, None, None, None, None, None);
+    let ollama = OllamaProvider::from_config(None, None, None, None, None, None, None);
+    let lmstudio = LmStudioProvider::from_config(None, None, None, None, None, None, None);
 
     // Test valid requests with tools
     let tool = ToolDefinition::function(
@@ -259,6 +262,7 @@ fn test_all_providers_tool_validation() {
         character_name: None,
         coding_agent_settings: None,
         metadata: None,
+        prompt_cache_key: None,
     };
 
     let openai_request = LLMRequest {
@@ -289,6 +293,7 @@ fn test_all_providers_tool_validation() {
         character_name: None,
         coding_agent_settings: None,
         metadata: None,
+        prompt_cache_key: None,
     };
 
     let anthropic_request = LLMRequest {
@@ -319,6 +324,7 @@ fn test_all_providers_tool_validation() {
         character_name: None,
         coding_agent_settings: None,
         metadata: None,
+        prompt_cache_key: None,
     };
 
     let openrouter_request = LLMRequest {
@@ -349,6 +355,7 @@ fn test_all_providers_tool_validation() {
         character_name: None,
         coding_agent_settings: None,
         metadata: None,
+        prompt_cache_key: None,
     };
 
     assert!(gemini.validate_request(&gemini_request).is_ok());
@@ -384,6 +391,7 @@ fn test_all_providers_tool_validation() {
         character_name: None,
         coding_agent_settings: None,
         metadata: None,
+        prompt_cache_key: None,
     };
 
     assert!(lmstudio.validate_request(&lmstudio_request).is_ok());
@@ -416,6 +424,7 @@ fn test_all_providers_tool_validation() {
         character_name: None,
         coding_agent_settings: None,
         metadata: None,
+        prompt_cache_key: None,
     };
 
     assert!(
@@ -483,6 +492,7 @@ fn test_openrouter_tool_call_format() {
         character_name: None,
         coding_agent_settings: None,
         metadata: None,
+        prompt_cache_key: None,
     };
 
     assert!(provider.validate_request(&request).is_ok());
@@ -494,7 +504,7 @@ fn test_provider_tool_support_matrix() {
     let openai = OpenAIProvider::new("test_key".to_string());
     let anthropic = AnthropicProvider::new("test_key".to_string());
     let openrouter = OpenRouterProvider::new("test_key".to_string());
-    let ollama = OllamaProvider::from_config(None, None, None, None, None, None);
+    let ollama = OllamaProvider::from_config(None, None, None, None, None, None, None);
 
     for &model in models::google::SUPPORTED_MODELS {
         assert!(

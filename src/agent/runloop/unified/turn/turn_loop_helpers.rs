@@ -184,7 +184,7 @@ pub(super) async fn handle_pre_request_action(
 
 pub(super) async fn maybe_handle_plan_mode_exit_trigger(
     ctx: &mut TurnLoopContext<'_>,
-    working_history: &mut Vec<uni::Message>,
+    working_history: &mut [uni::Message],
     step_count: usize,
     result: &mut TurnLoopResult,
 ) -> Result<bool> {

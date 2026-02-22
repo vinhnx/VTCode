@@ -12,6 +12,98 @@ use crate::agent::runloop::text_tools::parse_structured::parse_rust_struct_tool_
 use crate::agent::runloop::text_tools::parse_tagged::parse_tagged_tool_call;
 use crate::agent::runloop::text_tools::parse_yaml::parse_yaml_tool_call;
 
+const MAX_TEXTUAL_NESTING_DEPTH: usize = 256;
+
+fn matching_open_delimiter(close: char) -> Option<char> {
+    match close {
+        ')' => Some('('),
+        '}' => Some('{'),
+        ']' => Some('['),
+        _ => None,
+    }
+}
+
+fn find_matching_paren_end_with_depth_limit(text: &str, args_start: usize) -> Option<usize> {
+    let mut stack = Vec::with_capacity(8);
+    stack.push('(');
+
+    let mut in_string: Option<char> = None;
+    let mut escaped = false;
+
+    for (relative, ch) in text[args_start..].char_indices() {
+        if let Some(delimiter) = in_string {
+            if escaped {
+                escaped = false;
+                continue;
+            }
+            if ch == '\\' {
+                escaped = true;
+                continue;
+            }
+            if ch == delimiter {
+                in_string = None;
+            }
+            continue;
+        }
+
+        if ch == '"' || ch == '\'' {
+            in_string = Some(ch);
+            continue;
+        }
+
+        match ch {
+            '(' | '{' | '[' => {
+                stack.push(ch);
+                if stack.len() > MAX_TEXTUAL_NESTING_DEPTH {
+                    tracing::warn!(
+                        nesting_depth = stack.len(),
+                        max_nesting_depth = MAX_TEXTUAL_NESTING_DEPTH,
+                        "Rejected textual tool call due to excessive delimiter nesting"
+                    );
+                    return None;
+                }
+            }
+            ')' | '}' | ']' => {
+                let expected = match matching_open_delimiter(ch) {
+                    Some(value) => value,
+                    None => {
+                        tracing::debug!(
+                            delimiter = %ch,
+                            "Rejected textual tool call due to unsupported closing delimiter"
+                        );
+                        return None;
+                    }
+                };
+                let current = match stack.pop() {
+                    Some(value) => value,
+                    None => {
+                        tracing::debug!(
+                            delimiter = %ch,
+                            "Rejected textual tool call due to unmatched closing delimiter"
+                        );
+                        return None;
+                    }
+                };
+                if current != expected {
+                    tracing::debug!(
+                        current_open = %current,
+                        expected_open = %expected,
+                        close = %ch,
+                        "Rejected textual tool call due to mismatched delimiters"
+                    );
+                    return None;
+                }
+                if stack.is_empty() {
+                    return Some(args_start + relative);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    None
+}
+
 pub(crate) fn detect_textual_tool_call(text: &str) -> Option<(String, Value)> {
     // Try gpt-oss channel format first
     if let Some((name, args)) = parse_channel_tool_call(text)
@@ -83,23 +175,11 @@ pub(crate) fn detect_textual_tool_call(text: &str) -> Option<(String, Value)> {
                 };
 
                 let args_start = start + name_len + paren_offset + 1;
-                let mut depth = 1i32;
-                let mut end: Option<usize> = None;
-                for (rel_idx, ch) in text[args_start..].char_indices() {
-                    match ch {
-                        '(' => depth += 1,
-                        ')' => {
-                            depth -= 1;
-                            if depth == 0 {
-                                end = Some(args_start + rel_idx);
-                                break;
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-
-                let args_end = end?;
+                let Some(args_end) = find_matching_paren_end_with_depth_limit(text, args_start)
+                else {
+                    search_start = start;
+                    continue;
+                };
                 let raw_args = &text[args_start..args_end];
                 if let Some(args) = parse_textual_arguments(raw_args)
                     && let Some(canonical) = canonicalize_tool_name(&name)
@@ -160,23 +240,8 @@ fn detect_direct_function_alias(text: &str) -> Option<(String, Value)> {
                 };
 
                 let args_start = paren_pos + 1;
-                let mut depth = 1i32;
-                let mut args_end: Option<usize> = None;
-                for (relative, ch) in text[args_start..].char_indices() {
-                    match ch {
-                        '(' => depth += 1,
-                        ')' => {
-                            depth -= 1;
-                            if depth == 0 {
-                                args_end = Some(args_start + relative);
-                                break;
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-
-                let Some(end_pos) = args_end else {
+                let Some(end_pos) = find_matching_paren_end_with_depth_limit(text, args_start)
+                else {
                     search_start = end;
                     continue;
                 };

@@ -334,7 +334,7 @@ pub async fn handle_skills_info(options: &SkillsCommandOptions, name: &str) -> R
 }
 
 /// Create skill template
-pub async fn handle_skills_create(skill_path: &PathBuf) -> Result<()> {
+pub async fn handle_skills_create(skill_path: &Path) -> Result<()> {
     if skill_path.exists() {
         anyhow::bail!("Skill path already exists: {}", skill_path.display());
     }
