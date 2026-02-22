@@ -69,14 +69,16 @@ pub fn supports_structured_output(model: &str, default_model: &str) -> bool {
         model
     };
 
-    requested == models::anthropic::CLAUDE_SONNET_4_5
-        || requested == models::anthropic::CLAUDE_SONNET_4_5_20250929
-        || requested == models::anthropic::CLAUDE_OPUS_4_6
-        || requested == models::anthropic::CLAUDE_OPUS_4_5
-        || requested == models::anthropic::CLAUDE_OPUS_4_5_20251101
-        || requested == models::anthropic::CLAUDE_OPUS_4_6
-        || requested == models::anthropic::CLAUDE_OPUS_4_1
-        || requested == models::anthropic::CLAUDE_OPUS_4_1_20250805
+    [
+        models::anthropic::CLAUDE_SONNET_4_5,
+        models::anthropic::CLAUDE_SONNET_4_5_20250929,
+        models::anthropic::CLAUDE_OPUS_4_6,
+        models::anthropic::CLAUDE_OPUS_4_5,
+        models::anthropic::CLAUDE_OPUS_4_5_20251101,
+        models::anthropic::CLAUDE_OPUS_4_1,
+        models::anthropic::CLAUDE_OPUS_4_1_20250805,
+    ]
+    .contains(&requested)
         || requested == models::anthropic::CLAUDE_HAIKU_4_5
         || requested == models::anthropic::CLAUDE_HAIKU_4_5_20251001
         || requested == models::anthropic::CLAUDE_SONNET_4_0

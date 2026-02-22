@@ -369,7 +369,8 @@ pub(super) async fn run_interaction_loop_impl(
                 let stall_reason = ctx
                     .session_stats
                     .turn_stall_reason()
-                    .unwrap_or("Previous turn stalled without a detailed reason.");
+                    .unwrap_or("Previous turn stalled without a detailed reason.")
+                    .to_string();
                 if let Ok(mut detector) = ctx.autonomous_executor.loop_detector().write() {
                     detector.reset();
                 } else {
@@ -380,6 +381,7 @@ pub(super) async fn run_interaction_loop_impl(
                 ctx.conversation_history.push(uni::Message::system(
                     REPEATED_FOLLOW_UP_STALLED_DIRECTIVE.to_string(),
                 ));
+                ctx.session_stats.suppress_next_follow_up_prompt();
                 input_owned = format!(
                     "Continue autonomously from the last stalled turn. Stall reason: {}. Keep working until you can provide a concrete conclusion and final review.",
                     stall_reason

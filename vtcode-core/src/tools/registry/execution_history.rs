@@ -5,6 +5,7 @@
 
 use std::collections::VecDeque;
 use std::env;
+use std::path::Path;
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, SystemTime};
 
@@ -140,6 +141,22 @@ fn tool_rate_limit_from_env() -> Option<usize> {
         .filter(|value| *value > 0)
 }
 
+fn spool_path_exists(result: &Value) -> bool {
+    let Some(spool_path) = result.get("spool_path").and_then(|v| v.as_str()) else {
+        return true;
+    };
+
+    let path = Path::new(spool_path);
+    if path.is_absolute() {
+        return path.exists();
+    }
+
+    path.exists()
+        || env::current_dir()
+            .ok()
+            .is_some_and(|cwd| cwd.join(path).exists())
+}
+
 /// Thread-safe execution history for recording tool executions.
 #[derive(Clone)]
 pub struct ToolExecutionHistory {
@@ -243,6 +260,7 @@ impl ToolExecutionHistory {
                     .get("spooled_to_file")
                     .and_then(|v| v.as_bool())
                     .unwrap_or(false)
+                    && spool_path_exists(result)
                 {
                     return Some(result.clone());
                 }
@@ -347,6 +365,7 @@ impl Default for ToolExecutionHistory {
 mod tests {
     use super::*;
     use serde_json::json;
+    use tempfile::tempdir;
 
     fn make_snapshot() -> HarnessContextSnapshot {
         HarnessContextSnapshot::new("session_test".to_string(), None)
@@ -356,9 +375,12 @@ mod tests {
     fn finds_recent_spooled_result() {
         let history = ToolExecutionHistory::new(10);
         let args = json!({"command": "git diff"});
+        let temp = tempdir().unwrap();
+        let spool_path = temp.path().join("spooled-output.txt");
+        std::fs::write(&spool_path, "diff output").unwrap();
         let result = json!({
             "spooled_to_file": true,
-            "spool_path": ".vtcode/context/tool_outputs/unified_exec_123.txt",
+            "spool_path": spool_path,
             "success": true
         });
 
@@ -405,6 +427,37 @@ mod tests {
         history.add_record(record);
 
         let found = history.find_recent_spooled_result("read_file", &args, Duration::from_secs(60));
+        assert!(found.is_none());
+    }
+
+    #[test]
+    fn ignores_spooled_result_when_spool_file_is_missing() {
+        let history = ToolExecutionHistory::new(10);
+        let args = json!({"command": "cargo clippy"});
+        let missing_spool_path = tempdir().unwrap().path().join("missing_spool.txt");
+        let result = json!({
+            "spooled_to_file": true,
+            "spool_path": missing_spool_path,
+            "success": true
+        });
+
+        history.add_record(ToolExecutionRecord::success(
+            "run_pty_cmd".to_string(),
+            "run_pty_cmd".to_string(),
+            false,
+            None,
+            args.clone(),
+            result,
+            make_snapshot(),
+            None,
+            None,
+            None,
+            None,
+            false,
+        ));
+
+        let found =
+            history.find_recent_spooled_result("run_pty_cmd", &args, Duration::from_secs(60));
         assert!(found.is_none());
     }
 }

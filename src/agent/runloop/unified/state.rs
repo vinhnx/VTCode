@@ -65,6 +65,8 @@ pub(crate) struct SessionStats {
     pub model_picker_target: ModelPickerTarget,
     /// Count of consecutive minimal follow-up prompts (e.g. "continue", "retry")
     follow_up_prompt_streak: usize,
+    /// One-shot guard to avoid classifying injected recovery prompts as user follow-ups
+    suppress_next_follow_up_prompt: bool,
     /// Whether the last turn ended in a stalled state (aborted/blocked)
     turn_stalled: bool,
     /// Reason associated with the last stalled turn, when available
@@ -208,6 +210,8 @@ impl SessionStats {
     }
 
     pub(crate) fn register_follow_up_prompt(&mut self, input: &str) -> bool {
+        let suppression_active = self.consume_follow_up_prompt_suppression();
+
         let normalized = input
             .trim()
             .trim_matches(|c: char| c.is_ascii_whitespace() || c.is_ascii_punctuation())
@@ -230,6 +234,9 @@ impl SessionStats {
         );
 
         if is_follow_up {
+            if suppression_active {
+                return false;
+            }
             self.follow_up_prompt_streak = self.follow_up_prompt_streak.saturating_add(1);
         } else {
             self.follow_up_prompt_streak = 0;
@@ -245,6 +252,7 @@ impl SessionStats {
         self.turn_stalled = stalled;
         if !stalled {
             self.follow_up_prompt_streak = 0;
+            self.suppress_next_follow_up_prompt = false;
             self.turn_stall_reason = None;
         } else {
             self.turn_stall_reason = reason;
@@ -257,6 +265,14 @@ impl SessionStats {
 
     pub(crate) fn turn_stall_reason(&self) -> Option<&str> {
         self.turn_stall_reason.as_deref()
+    }
+
+    pub(crate) fn suppress_next_follow_up_prompt(&mut self) {
+        self.suppress_next_follow_up_prompt = true;
+    }
+
+    fn consume_follow_up_prompt_suppression(&mut self) -> bool {
+        std::mem::take(&mut self.suppress_next_follow_up_prompt)
     }
 }
 
@@ -389,5 +405,29 @@ mod tests {
         assert!(!stats.register_follow_up_prompt("continue."));
         assert!(!stats.register_follow_up_prompt("continue with your recommendation"));
         assert!(stats.register_follow_up_prompt("please continue"));
+    }
+
+    #[test]
+    fn suppressed_follow_up_prompt_is_ignored_once() {
+        let mut stats = SessionStats::default();
+        stats.mark_turn_stalled(true, Some("turn blocked".to_string()));
+        stats.suppress_next_follow_up_prompt();
+
+        assert!(!stats.register_follow_up_prompt("continue"));
+        assert!(stats.turn_stalled());
+        assert_eq!(stats.turn_stall_reason(), Some("turn blocked"));
+
+        assert!(stats.register_follow_up_prompt("continue"));
+    }
+
+    #[test]
+    fn suppressed_non_follow_up_still_clears_stall_state() {
+        let mut stats = SessionStats::default();
+        stats.mark_turn_stalled(true, Some("turn blocked".to_string()));
+        stats.suppress_next_follow_up_prompt();
+
+        assert!(!stats.register_follow_up_prompt("run tests and summarize"));
+        assert!(!stats.turn_stalled());
+        assert_eq!(stats.turn_stall_reason(), None);
     }
 }
