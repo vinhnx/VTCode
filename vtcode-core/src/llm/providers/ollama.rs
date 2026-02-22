@@ -697,6 +697,85 @@ impl OllamaProvider {
         }
     }
 
+    fn response_from_chat_payload(
+        model: String,
+        parsed: OllamaChatResponse,
+    ) -> Result<LLMResponse, LLMError> {
+        if let Some(error) = parsed.error {
+            return Err(LLMError::Provider {
+                message: error,
+                metadata: None,
+            });
+        }
+
+        let (content, reasoning, tool_calls) = if let Some(message) = parsed.message {
+            let content = message
+                .content
+                .and_then(|value| (!value.is_empty()).then_some(value));
+            let reasoning = message
+                .thinking
+                .and_then(|value| (!value.is_empty()).then_some(value));
+            let tool_calls = Self::convert_tool_calls(message.tool_calls)?;
+            (content, reasoning, tool_calls)
+        } else {
+            (None, None, None)
+        };
+
+        Ok(Self::build_response(
+            content,
+            tool_calls,
+            reasoning,
+            model,
+            parsed.done_reason.as_deref(),
+            parsed.prompt_eval_count,
+            parsed.eval_count,
+        ))
+    }
+
+    fn authorized_post_with_key(
+        http_client: &HttpClient,
+        url: &str,
+        api_key: Option<&str>,
+    ) -> reqwest::RequestBuilder {
+        let builder = http_client.post(url.to_string());
+        if let Some(value) = api_key {
+            builder.bearer_auth(value)
+        } else {
+            builder
+        }
+    }
+
+    async fn request_non_stream_response(
+        http_client: &HttpClient,
+        url: &str,
+        api_key: Option<&str>,
+        payload: &OllamaChatRequest,
+        model: String,
+    ) -> Result<LLMResponse, LLMError> {
+        let response = Self::authorized_post_with_key(http_client, url, api_key)
+            .json(payload)
+            .send()
+            .await
+            .map_err(|e| format_network_error("Ollama", &e))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            let error_message = Self::extract_error(&body)
+                .unwrap_or_else(|| format!("Ollama request failed ({status}): {body}"));
+            return Err(LLMError::Provider {
+                message: error_message,
+                metadata: None,
+            });
+        }
+
+        let parsed = response
+            .json::<OllamaChatResponse>()
+            .await
+            .map_err(|e| format_parse_error("Ollama", &e))?;
+        Self::response_from_chat_payload(model, parsed)
+    }
+
     fn extract_error(body: &str) -> Option<String> {
         serde_json::from_str::<OllamaErrorResponse>(body)
             .ok()
@@ -861,59 +940,14 @@ impl LLMProvider for OllamaProvider {
         let model = request.model.clone();
         let payload = self.build_payload(&request, false)?;
         let url = self.chat_url();
-
-        let response = self
-            .authorized_post(url)
-            .json(&payload)
-            .send()
-            .await
-            .map_err(|e| format_network_error("Ollama", &e))?;
-
-        if !response.status().is_success() {
-            let status = response.status();
-            let body = response.text().await.unwrap_or_default();
-            let error_message = Self::extract_error(&body)
-                .unwrap_or_else(|| format!("Ollama request failed ({status}): {body}"));
-            return Err(LLMError::Provider {
-                message: error_message,
-                metadata: None,
-            });
-        }
-
-        let parsed = response
-            .json::<OllamaChatResponse>()
-            .await
-            .map_err(|e| format_parse_error("Ollama", &e))?;
-
-        if let Some(error) = parsed.error {
-            return Err(LLMError::Provider {
-                message: error,
-                metadata: None,
-            });
-        }
-
-        let (content, reasoning, tool_calls) = if let Some(message) = parsed.message {
-            let content = message
-                .content
-                .and_then(|value| (!value.is_empty()).then_some(value));
-            let reasoning = message
-                .thinking
-                .and_then(|value| (!value.is_empty()).then_some(value));
-            let tool_calls = Self::convert_tool_calls(message.tool_calls)?;
-            (content, reasoning, tool_calls)
-        } else {
-            (None, None, None)
-        };
-
-        Ok(Self::build_response(
-            content,
-            tool_calls,
-            reasoning,
+        Self::request_non_stream_response(
+            &self.http_client,
+            &url,
+            self.api_key.as_deref(),
+            &payload,
             model,
-            parsed.done_reason.as_deref(),
-            parsed.prompt_eval_count,
-            parsed.eval_count,
-        ))
+        )
+        .await
     }
 
     async fn stream(&self, mut request: LLMRequest) -> Result<LLMStream, LLMError> {
@@ -923,10 +957,12 @@ impl LLMProvider for OllamaProvider {
         }
         let model = request.model.clone();
         let payload = self.build_payload(&request, true)?;
+        let fallback_payload = self.build_payload(&request, false)?;
         let url = self.chat_url();
 
         let response = self
-            .authorized_post(url)
+            .authorized_post(url.clone())
+            .header(reqwest::header::ACCEPT_ENCODING, "identity")
             .json(&payload)
             .send()
             .await
@@ -946,15 +982,43 @@ impl LLMProvider for OllamaProvider {
         let byte_stream = response.bytes_stream();
         let mut buffer: Vec<u8> = Vec::new();
         let mut aggregator = crate::llm::providers::shared::StreamAggregator::new(model.clone());
+        let fallback_http_client = self.http_client.clone();
+        let fallback_api_key = self.api_key.clone();
+        let fallback_model = model.clone();
+        let fallback_url = url.clone();
         let stream = try_stream! {
             let mut prompt_tokens: Option<u32> = None;
             let mut completion_tokens: Option<u32> = None;
             let mut finish_reason: Option<String> = None;
             let mut completed = false;
+            let mut saw_stream_chunk = false;
 
             futures::pin_mut!(byte_stream);
-            while let Some(chunk) = byte_stream.next().await {
-                let chunk = chunk.map_err(|e| format_network_error("Ollama", &e))?;
+            while let Some(chunk_result) = byte_stream.next().await {
+                let chunk = match chunk_result {
+                    Ok(chunk) => {
+                        saw_stream_chunk = true;
+                        chunk
+                    }
+                    Err(err) if !saw_stream_chunk => {
+                        tracing::warn!(
+                            model = %fallback_model,
+                            url = %fallback_url,
+                            error = %err,
+                            "Ollama stream failed before first chunk; retrying once as non-stream response"
+                        );
+                        let fallback_response = Self::request_non_stream_response(
+                            &fallback_http_client,
+                            &fallback_url,
+                            fallback_api_key.as_deref(),
+                            &fallback_payload,
+                            fallback_model.clone(),
+                        ).await?;
+                        yield LLMStreamEvent::Completed { response: Box::new(fallback_response) };
+                        return;
+                    }
+                    Err(err) => Err(format_network_error("Ollama", &err))?,
+                };
                 buffer.extend_from_slice(&chunk);
 
                 while let Some(pos) = buffer.iter().position(|b| *b == b'\n') {
