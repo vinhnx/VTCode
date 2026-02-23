@@ -54,17 +54,16 @@ pub fn validate_request(
         validate_effort_setting(effort, &request.model, default_model)?;
     }
 
-    if let Some(budget) = request.thinking_budget {
-        if budget < 1024 {
-            let formatted_error = error_display::format_llm_error(
-                "Anthropic",
-                &format!("thinking_budget ({}) must be at least 1024 tokens.", budget),
-            );
-            return Err(LLMError::InvalidRequest {
-                message: formatted_error,
-                metadata: None,
-            });
-        }
+    if let Some(budget) = request.thinking_budget
+        && budget < 1024 {
+        let formatted_error = error_display::format_llm_error(
+            "Anthropic",
+            &format!("thinking_budget ({}) must be at least 1024 tokens.", budget),
+        );
+        return Err(LLMError::InvalidRequest {
+            message: formatted_error,
+            metadata: None,
+        });
     }
 
     let has_reasoning = request.reasoning_effort.is_some() || request.thinking_budget.is_some();
@@ -191,20 +190,15 @@ fn validate_reasoning_constraints(
         });
     }
 
-    if let Some(ref tool_choice) = request.tool_choice {
-        match tool_choice {
-            ToolChoice::Any | ToolChoice::Specific(_) => {
-                let formatted_error = error_display::format_llm_error(
-                    "Anthropic",
-                    "Forced tool use (any/specific) is incompatible with extended thinking. Use 'auto' or 'none'.",
-                );
-                return Err(LLMError::InvalidRequest {
-                    message: formatted_error,
-                    metadata: None,
-                });
-            }
-            _ => {}
-        }
+    if let Some(ToolChoice::Any | ToolChoice::Specific(_)) = request.tool_choice {
+        let formatted_error = error_display::format_llm_error(
+            "Anthropic",
+            "Forced tool use (any/specific) is incompatible with extended thinking. Use 'auto' or 'none'.",
+        );
+        return Err(LLMError::InvalidRequest {
+            message: formatted_error,
+            metadata: None,
+        });
     }
 
     if request.temperature.is_some() || request.top_k.is_some() {
