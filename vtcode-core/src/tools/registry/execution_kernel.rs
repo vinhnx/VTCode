@@ -124,15 +124,93 @@ fn enforce_unified_file_payload_limit(
     ));
 }
 
+fn strip_wrapping_quotes(value: &str) -> &str {
+    value
+        .trim()
+        .trim_matches('"')
+        .trim_matches('\'')
+        .trim_matches('`')
+}
+
+fn strip_tool_namespace_prefix(value: &str) -> &str {
+    for prefix in [
+        "functions.",
+        "function.",
+        "tools.",
+        "tool.",
+        "assistant.",
+        "recipient_name.",
+    ] {
+        if let Some(stripped) = value.strip_prefix(prefix) {
+            return stripped;
+        }
+    }
+    value
+}
+
+fn push_candidate(candidates: &mut Vec<String>, value: &str) {
+    let trimmed = strip_wrapping_quotes(value);
+    if trimmed.is_empty() {
+        return;
+    }
+    if !candidates.iter().any(|existing| existing == trimmed) {
+        candidates.push(trimmed.to_string());
+    }
+
+    let stripped = strip_tool_namespace_prefix(trimmed);
+    if stripped != trimmed && !candidates.iter().any(|existing| existing == stripped) {
+        candidates.push(stripped.to_string());
+    }
+
+    let underscored = stripped
+        .trim()
+        .to_ascii_lowercase()
+        .replace([' ', '-'], "_");
+    if !underscored.is_empty() && !candidates.iter().any(|existing| existing == &underscored) {
+        candidates.push(underscored);
+    }
+}
+
+fn tool_name_candidates(name: &str) -> Vec<String> {
+    let mut candidates = Vec::new();
+    let raw = strip_wrapping_quotes(name);
+    if raw.is_empty() {
+        return candidates;
+    }
+
+    push_candidate(&mut candidates, raw);
+
+    if let Some((lhs, rhs)) = raw.split_once("<|channel|>") {
+        push_candidate(&mut candidates, rhs);
+        push_candidate(&mut candidates, lhs);
+    }
+
+    if let Some((_, suffix)) = raw.rsplit_once(':') {
+        push_candidate(&mut candidates, suffix);
+    }
+
+    candidates
+}
+
 pub(super) fn preflight_validate_call(
     registry: &ToolRegistry,
     name: &str,
     args: &Value,
 ) -> Result<ToolPreflightOutcome> {
-    let normalized_tool_name = registry
-        .inventory
-        .registration_for(name)
-        .map(|registration| registration.name().to_string())
+    let candidates = tool_name_candidates(name);
+    let normalized_tool_name = candidates
+        .iter()
+        .find_map(|candidate| {
+            registry
+                .inventory
+                .registration_for(candidate)
+                .map(|registration| registration.name().to_string())
+        })
+        .or_else(|| {
+            candidates
+                .first()
+                .map(|candidate| canonical_tool_name(candidate).to_string())
+        })
         .unwrap_or_else(|| canonical_tool_name(name).to_string());
 
     let required = required_args_for_tool(&normalized_tool_name);
@@ -201,7 +279,7 @@ pub(super) fn preflight_validate_call(
 mod tests {
     use super::{
         configured_unified_file_max_payload_bytes, enforce_unified_file_payload_limit,
-        is_missing_required_arg, parse_unified_file_max_payload_bytes,
+        is_missing_required_arg, parse_unified_file_max_payload_bytes, tool_name_candidates,
     };
     use crate::config::constants::tools as tool_names;
     use serde_json::json;
@@ -305,5 +383,17 @@ mod tests {
     fn configured_payload_limit_is_always_safe() {
         let configured = configured_unified_file_max_payload_bytes();
         assert!(configured >= 1024);
+    }
+
+    #[test]
+    fn tool_name_candidates_extract_channel_suffix_alias() {
+        let candidates = tool_name_candidates("assistant<|channel|>apply_patch");
+        assert!(candidates.iter().any(|c| c == "apply_patch"));
+    }
+
+    #[test]
+    fn tool_name_candidates_normalize_humanized_name() {
+        let candidates = tool_name_candidates("Read file");
+        assert!(candidates.iter().any(|c| c == "read_file"));
     }
 }

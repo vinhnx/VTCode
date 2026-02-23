@@ -5,7 +5,7 @@
 
 use std::collections::VecDeque;
 use std::env;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, SystemTime};
 
@@ -171,6 +171,58 @@ fn read_file_path_from_args(args: &Value) -> Option<&str> {
     None
 }
 
+fn normalize_tool_name_for_match(name: &str) -> String {
+    name.trim().to_ascii_lowercase().replace(' ', "_")
+}
+
+fn is_read_file_tool_name(name: &str) -> bool {
+    let normalized = normalize_tool_name_for_match(name);
+    normalized == tools::READ_FILE || normalized.ends_with(".read_file")
+}
+
+fn is_unified_file_tool_name(name: &str) -> bool {
+    let normalized = normalize_tool_name_for_match(name);
+    normalized == tools::UNIFIED_FILE || normalized.ends_with(".unified_file")
+}
+
+fn normalize_path_for_match(path: &str) -> String {
+    path.trim()
+        .replace('\\', "/")
+        .trim_start_matches("./")
+        .to_string()
+}
+
+fn to_absolute_path(path: &str) -> Option<PathBuf> {
+    let trimmed = path.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    let raw = Path::new(trimmed);
+    if raw.is_absolute() {
+        return Some(raw.to_path_buf());
+    }
+    env::current_dir().ok().map(|cwd| cwd.join(raw))
+}
+
+fn paths_match(record_path: &str, expected_path: &str) -> bool {
+    let lhs = normalize_path_for_match(record_path);
+    let rhs = normalize_path_for_match(expected_path);
+    if lhs == rhs {
+        return true;
+    }
+    if lhs.ends_with(&format!("/{rhs}")) || rhs.ends_with(&format!("/{lhs}")) {
+        return true;
+    }
+
+    match (
+        to_absolute_path(record_path),
+        to_absolute_path(expected_path),
+    ) {
+        (Some(abs_lhs), Some(abs_rhs)) => abs_lhs == abs_rhs,
+        _ => false,
+    }
+}
+
 fn value_to_usize(value: &Value) -> Option<usize> {
     value
         .as_u64()
@@ -179,11 +231,11 @@ fn value_to_usize(value: &Value) -> Option<usize> {
 }
 
 fn is_read_file_style_record(record: &ToolExecutionRecord) -> bool {
-    if record.tool_name == tools::READ_FILE {
+    if is_read_file_tool_name(&record.tool_name) {
         return true;
     }
 
-    if record.tool_name != tools::UNIFIED_FILE {
+    if !is_unified_file_tool_name(&record.tool_name) {
         return false;
     }
 
@@ -327,7 +379,7 @@ impl ToolExecutionHistory {
             let Some(record_path) = read_file_path_from_args(&record.args) else {
                 continue;
             };
-            if record_path != expected_path {
+            if !paths_match(record_path, expected_path) {
                 continue;
             }
 
@@ -667,5 +719,74 @@ mod tests {
             Duration::from_secs(60),
         );
         assert_eq!(found, Some((81, 40)));
+    }
+
+    #[test]
+    fn matches_read_file_alias_name_and_abs_relative_spool_path() {
+        let history = ToolExecutionHistory::new(10);
+        let rel_path = ".vtcode/context/tool_outputs/unified_exec_789.txt";
+        let abs_path = std::env::current_dir().unwrap().join(rel_path);
+        let args = json!({
+            "path": abs_path,
+            "offset": 1,
+            "limit": 40
+        });
+        let result = json!({
+            "success": true,
+            "spool_chunked": true,
+            "has_more": true,
+            "next_offset": 41,
+            "chunk_limit": 40
+        });
+
+        history.add_record(ToolExecutionRecord::success(
+            "Read file".to_string(),
+            "Read file".to_string(),
+            false,
+            None,
+            args,
+            result,
+            make_snapshot(),
+            None,
+            None,
+            None,
+            None,
+            false,
+        ));
+
+        let found = history.find_recent_read_file_spool_progress(rel_path, Duration::from_secs(60));
+        assert_eq!(found, Some((41, 40)));
+    }
+
+    #[test]
+    fn matches_prefixed_read_file_tool_name() {
+        let history = ToolExecutionHistory::new(10);
+        let path = ".vtcode/context/tool_outputs/unified_exec_prefixed.txt";
+        let args = json!({ "path": path });
+        let result = json!({
+            "success": true,
+            "spool_chunked": true,
+            "has_more": true,
+            "next_offset": 121,
+            "chunk_limit": 40
+        });
+
+        history.add_record(ToolExecutionRecord::success(
+            "repo_browser.read_file".to_string(),
+            "repo_browser.read_file".to_string(),
+            false,
+            None,
+            args,
+            result,
+            make_snapshot(),
+            None,
+            None,
+            None,
+            None,
+            false,
+        ));
+
+        let found = history.find_recent_read_file_spool_progress(path, Duration::from_secs(60));
+        assert_eq!(found, Some((121, 40)));
     }
 }

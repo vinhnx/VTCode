@@ -2,6 +2,7 @@ use anyhow::Result;
 use std::fmt::Write as _;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::time::Duration;
 #[cfg(debug_assertions)]
 use std::time::Instant;
 use tokio::task;
@@ -40,6 +41,15 @@ fn is_retryable_llm_error(message: &str) -> bool {
     .any(|needle| msg.contains(needle))
 }
 
+fn llm_attempt_timeout_secs(ctx: &TurnProcessingContext<'_>) -> u64 {
+    let turn_timeout_secs = ctx
+        .vt_cfg
+        .as_ref()
+        .map(|cfg| cfg.optimization.agent_execution.max_execution_time_secs)
+        .unwrap_or(300);
+    (turn_timeout_secs / 5).clamp(30, 120)
+}
+
 /// Execute an LLM request and return the response.
 pub(crate) async fn execute_llm_request(
     ctx: &mut TurnProcessingContext<'_>,
@@ -51,6 +61,7 @@ pub(crate) async fn execute_llm_request(
     let provider_name = ctx.provider_client.name().to_string();
     let plan_mode = ctx.session_stats.is_plan_mode();
     let context_window_size = ctx.provider_client.effective_context_size(active_model);
+    let request_timeout_secs = llm_attempt_timeout_secs(ctx);
 
     let active_agent_name = ctx.session_stats.active_agent();
     let active_agent_prompt_body = vtcode_core::subagents::get_agent_prompt_body(active_agent_name);
@@ -285,18 +296,24 @@ pub(crate) async fn execute_llm_request(
             controller.set_event_handler(event_sink);
 
             let mut steering = None;
-            let res: Result<(uni::LLMResponse, String, Option<String>)> = controller
-                .run_turn(
+            let res = tokio::time::timeout(
+                Duration::from_secs(request_timeout_secs),
+                controller.run_turn(
                     ctx.provider_client,
                     request.clone(),
                     &mut steering,
-                    Some(std::time::Duration::from_secs(60)),
-                )
-                .await;
+                    Some(Duration::from_secs(60)),
+                ),
+            )
+            .await;
 
             match res {
-                Ok((response, _content, _reasoning)) => Ok((response, false)),
-                Err(err) => Err(anyhow::anyhow!(err.to_string())),
+                Ok(Ok((response, _content, _reasoning))) => Ok((response, false)),
+                Ok(Err(err)) => Err(anyhow::anyhow!(err.to_string())),
+                Err(_) => Err(anyhow::anyhow!(
+                    "LLM request timed out after {} seconds",
+                    request_timeout_secs
+                )),
             }
         } else if ctx.ctrl_c_state.is_cancel_requested() || ctx.ctrl_c_state.is_exit_requested() {
             Err(anyhow::Error::new(uni::LLMError::Provider {
@@ -307,13 +324,22 @@ pub(crate) async fn execute_llm_request(
                 metadata: None,
             }))
         } else {
-            let generate_future = ctx.provider_client.generate(request.clone());
+            let generate_future = tokio::time::timeout(
+                Duration::from_secs(request_timeout_secs),
+                ctx.provider_client.generate(request.clone()),
+            );
             tokio::pin!(generate_future);
             let cancel_notifier = ctx.ctrl_c_notify.notified();
             tokio::pin!(cancel_notifier);
 
             let outcome = tokio::select! {
-                res = &mut generate_future => res.map_err(anyhow::Error::from),
+                res = &mut generate_future => match res {
+                    Ok(inner) => inner.map_err(anyhow::Error::from),
+                    Err(_) => Err(anyhow::anyhow!(
+                        "LLM request timed out after {} seconds",
+                        request_timeout_secs
+                    )),
+                },
                 _ = &mut cancel_notifier => {
                     Err(anyhow::Error::from(uni::LLMError::Provider {
                         message: vtcode_core::llm::error_display::format_llm_error(

@@ -49,6 +49,16 @@ Ordered list of steps with status markers:
 - `[x]` — completed
 - `[!]` — blocked (include reason)
 
+Each step should be **composable**:
+- Scoped to one module/risk boundary.
+- Actionable in one execution pass.
+- Paired with a concrete expected outcome.
+- Paired with one verification check (command, test, or observable condition).
+
+Preferred step pattern:
+
+`Step N: <action>. Outcome: <observable result>. Verify: <command/check>.`
+
 ### 4. Decision Log
 Timestamped entries for non-obvious choices made during execution:
 
