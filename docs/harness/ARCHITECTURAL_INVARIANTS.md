@@ -215,6 +215,15 @@ Core documentation entrypoints must not contain broken local markdown links.
 2. Keep links relative to the source markdown file when possible.
 3. Re-run `python3 scripts/check_docs_links.py`.
 
+## 13. Pre-flight Environment Checks
+
+Before modifying code in any workspace, the agent must identify the project's build system, test runner, and module structure. Structural errors (missing `__init__.py`, broken `mod.rs` declarations, wrong test runner) cause more failures than incorrect logic.
+
+**Violation**: Agent modifies code without first checking `Cargo.toml`, `package.json`, `pyproject.toml`, or equivalent project manifests.
+**Remediation**: Before any code changes, run at least one of: `ls *.toml *.json Makefile`, read `AGENTS.md`, or use `list_files` on the project root. Identify the build/test commands and module convention before editing.
+
+---
+
 ## Enforcement
 
 These invariants should be enforced by:

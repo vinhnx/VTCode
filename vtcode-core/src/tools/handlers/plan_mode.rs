@@ -66,6 +66,15 @@ impl PlanModeState {
         self.is_active.store(false, Ordering::Relaxed);
     }
 
+    /// Get the workspace root path
+    pub fn workspace_root(&self) -> Option<PathBuf> {
+        if self.workspace_root.as_os_str().is_empty() {
+            None
+        } else {
+            Some(self.workspace_root.clone())
+        }
+    }
+
     /// Get the plans directory path
     pub fn plans_dir(&self) -> PathBuf {
         self.workspace_root.join(".vtcode").join("plans")

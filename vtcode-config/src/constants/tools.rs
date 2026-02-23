@@ -90,6 +90,8 @@ pub const REQUEST_USER_INPUT: &str = "request_user_input";
 pub const ENTER_PLAN_MODE: &str = "enter_plan_mode";
 /// Exit plan mode - triggers confirmation modal before execution.
 pub const EXIT_PLAN_MODE: &str = "exit_plan_mode";
+/// Task tracker / plan manager - tracks checklist progress during complex tasks.
+pub const TASK_TRACKER: &str = "task_tracker";
 
 // Special wildcard for full access
 pub const WILDCARD_ALL: &str = "*";

@@ -14,11 +14,23 @@ pub(crate) const EXIT_PLAN_MODE_REASON_USER_REQUESTED_IMPLEMENTATION: &str =
 static SIGNATURE_POOL: Lazy<RwLock<FxHashMap<String, Arc<str>>>> =
     Lazy::new(|| RwLock::new(FxHashMap::default()));
 
+/// Threshold: number of consecutive file mutations before the Anti-Blind-Editing
+/// warning fires. NL2Repo-Bench recommends verifying after every few edits.
+pub(crate) const BLIND_EDITING_THRESHOLD: usize = 4;
+
+/// Threshold: number of consecutive read/search operations before the Navigation
+/// Loop warning fires.
+pub(crate) const NAVIGATION_LOOP_THRESHOLD: usize = 15;
+
 /// Optimized loop detection with interned signatures and exponential backoff
 pub(crate) struct LoopTracker {
     attempts: FxHashMap<Arc<str>, (usize, Instant)>,
     #[allow(dead_code)]
     backoff_base: Duration,
+    /// Counter for consecutive mutating file operations without execution/verification
+    pub consecutive_mutations: usize,
+    /// Counter for consecutive read/search operations without action or synthesis
+    pub consecutive_navigations: usize,
 }
 
 impl LoopTracker {
@@ -26,6 +38,8 @@ impl LoopTracker {
         Self {
             attempts: FxHashMap::with_capacity_and_hasher(16, Default::default()),
             backoff_base: Duration::from_secs(5),
+            consecutive_mutations: 0,
+            consecutive_navigations: 0,
         }
     }
 
@@ -150,6 +164,38 @@ pub(crate) fn update_repetition_tracker(
 
     let signature_key = signature_key_for(name, args);
     loop_tracker.record(&signature_key);
+
+    // Update NL2Repo-Bench metrics based on tool intent.
+    //
+    // IMPORTANT: Check execution tools FIRST. `classify_tool_intent` marks
+    // `unified_exec(action=run)` as `mutating: true` because shell commands *can*
+    // mutate state, but for the Edit-Test heuristic, any execution/verification
+    // step (cargo check, cargo test, etc.) should RESET the mutation counter,
+    // not increment it.
+    use vtcode_core::config::constants::tools as tool_names;
+    
+    let is_execution_tool = matches!(
+        name,
+        n if n == tool_names::UNIFIED_EXEC
+            || n == tool_names::RUN_PTY_CMD
+            || n == tool_names::EXECUTE_CODE
+            || n == tool_names::SHELL
+    );
+    
+    if is_execution_tool {
+        // Execution/verification step resets both counters
+        loop_tracker.consecutive_mutations = 0;
+        loop_tracker.consecutive_navigations = 0;
+    } else {
+        let intent = vtcode_core::tools::tool_intent::classify_tool_intent(name, args);
+        if intent.mutating {
+            loop_tracker.consecutive_mutations += 1;
+            loop_tracker.consecutive_navigations = 0;
+        } else {
+            // Read-only / navigation tool
+            loop_tracker.consecutive_navigations += 1;
+        }
+    }
 }
 pub(crate) fn serialize_output(output: &serde_json::Value) -> String {
     if let Some(s) = output.as_str() {
@@ -203,4 +249,124 @@ mod tests {
 
         assert_eq!(tracker.max_count_filtered(|_| false), 0);
     }
+
+    #[test]
+    fn consecutive_mutations_increments_on_edit() {
+        let mut tracker = LoopTracker::new();
+        let success = ToolPipelineOutcome::from_status(ToolExecutionStatus::Success {
+            output: serde_json::json!({}),
+            stdout: None,
+            modified_files: vec![],
+            command_success: true,
+            has_more: false,
+        });
+
+        // edit_file is classified as mutating
+        update_repetition_tracker(
+            &mut tracker,
+            &success,
+            "edit_file",
+            &json!({"path":"src/lib.rs","old_str":"a","new_str":"b"}),
+        );
+        assert_eq!(tracker.consecutive_mutations, 1);
+        assert_eq!(tracker.consecutive_navigations, 0);
+
+        update_repetition_tracker(
+            &mut tracker,
+            &success,
+            "write_to_file",
+            &json!({"path":"src/lib.rs","content":"x"}),
+        );
+        assert_eq!(tracker.consecutive_mutations, 2);
+    }
+
+    #[test]
+    fn execution_tool_resets_mutation_counter() {
+        let mut tracker = LoopTracker::new();
+        let success = ToolPipelineOutcome::from_status(ToolExecutionStatus::Success {
+            output: serde_json::json!({}),
+            stdout: None,
+            modified_files: vec![],
+            command_success: true,
+            has_more: false,
+        });
+
+        // Two mutations
+        update_repetition_tracker(&mut tracker, &success, "edit_file", &json!({"path":"a","old_str":"x","new_str":"y"}));
+        update_repetition_tracker(&mut tracker, &success, "edit_file", &json!({"path":"b","old_str":"x","new_str":"y"}));
+        assert_eq!(tracker.consecutive_mutations, 2);
+
+        // Execution tool resets
+        update_repetition_tracker(
+            &mut tracker,
+            &success,
+            vtcode_core::config::constants::tools::UNIFIED_EXEC,
+            &json!({"action":"run","command":"cargo check"}),
+        );
+        assert_eq!(tracker.consecutive_mutations, 0);
+        assert_eq!(tracker.consecutive_navigations, 0);
+    }
+
+    #[test]
+    fn reads_increment_navigation_counter() {
+        let mut tracker = LoopTracker::new();
+        let success = ToolPipelineOutcome::from_status(ToolExecutionStatus::Success {
+            output: serde_json::json!({}),
+            stdout: None,
+            modified_files: vec![],
+            command_success: true,
+            has_more: false,
+        });
+
+        update_repetition_tracker(
+            &mut tracker,
+            &success,
+            vtcode_core::config::constants::tools::READ_FILE,
+            &json!({"path":"src/main.rs"}),
+        );
+        assert_eq!(tracker.consecutive_navigations, 1);
+        assert_eq!(tracker.consecutive_mutations, 0);
+
+        update_repetition_tracker(
+            &mut tracker,
+            &success,
+            vtcode_core::config::constants::tools::GREP_FILE,
+            &json!({"pattern":"foo","path":"src/"}),
+        );
+        assert_eq!(tracker.consecutive_navigations, 2);
+    }
+
+    #[test]
+    fn mutation_resets_navigation_counter() {
+        let mut tracker = LoopTracker::new();
+        let success = ToolPipelineOutcome::from_status(ToolExecutionStatus::Success {
+            output: serde_json::json!({}),
+            stdout: None,
+            modified_files: vec![],
+            command_success: true,
+            has_more: false,
+        });
+
+        // Several reads
+        for _ in 0..5 {
+            update_repetition_tracker(
+                &mut tracker,
+                &success,
+                vtcode_core::config::constants::tools::READ_FILE,
+                &json!({"path":"src/main.rs"}),
+            );
+        }
+        assert_eq!(tracker.consecutive_navigations, 5);
+
+        // A mutation resets navigation counter
+        update_repetition_tracker(
+            &mut tracker,
+            &success,
+            "edit_file",
+            &json!({"path":"src/lib.rs","old_str":"a","new_str":"b"}),
+        );
+        assert_eq!(tracker.consecutive_navigations, 0);
+        assert_eq!(tracker.consecutive_mutations, 1);
+    }
 }
+
