@@ -1034,3 +1034,29 @@ tests
 ```
 
 where > is in-progress, ✔ is completed, and tasks are indented to show hierarchy/ breakdown.
+
+---
+
+more PTY truncate display in TUI, reference:
+
+```
+
+• Ran cargo test spool_chunk_read_path_detects_spooled_read_calls -- --nocapture
+  └     Blocking waiting for file lock on package cache
+        Blocking waiting for file lock on package cache
+    … +346 lines
+    finished in 0.00s
+
+
+
+• Ran cargo check
+  └    Compiling vtcode-config v0.82.1 (/Users/vinhnguyenxuan/Developer/
+        Finished `dev` profile [unoptimized] target(s) in 57.13s
+
+• Ran cargo test -p vtcode-config --no-run
+  └     Blocking waiting for file lock on package cache
+        Blocking waiting for file lock on package cache
+    … +21 lines
+      Executable tests/subagent_loading.rs (target/debug/deps/
+    subagent_loading-19ca9abe89c74e0a)
+```
