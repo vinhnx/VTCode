@@ -489,7 +489,7 @@ impl ToolRegistry {
         }
 
         // LOOP DETECTION: Check if we're calling the same tool repeatedly with identical params
-        let loop_limit = self.execution_history.loop_limit_for(&tool_name);
+        let loop_limit = self.execution_history.loop_limit_for(&tool_name, args);
         let (is_loop, repeat_count, _) = self.execution_history.detect_loop(&tool_name, args);
         if is_loop && repeat_count > 1 {
             let delay_ms = (25 * repeat_count as u64).min(LOOP_THROTTLE_MAX_MS);
@@ -505,6 +505,40 @@ impl ToolRegistry {
                 repeat_count
             );
             if repeat_count >= loop_limit {
+                if readonly_classification {
+                    let reuse_max_age = Duration::from_secs(120);
+                    let reused = self
+                        .execution_history
+                        .find_recent_spooled_result(&tool_name, args, reuse_max_age)
+                        .or_else(|| {
+                            self.execution_history.find_recent_successful_result(
+                                &tool_name,
+                                args,
+                                reuse_max_age,
+                            )
+                        });
+                    if let Some(mut reused_value) = reused {
+                        if let Some(obj) = reused_value.as_object_mut() {
+                            obj.insert("reused_recent_result".into(), json!(true));
+                            obj.insert("loop_detected".into(), json!(true));
+                            obj.insert("repeat_count".into(), json!(repeat_count));
+                            obj.insert("limit".into(), json!(loop_limit));
+                            obj.insert("tool".into(), json!(display_name));
+                            let reused_spooled = obj
+                                .get("spooled_to_file")
+                                .and_then(|v| v.as_bool())
+                                .unwrap_or(false);
+                            let note = if reused_spooled {
+                                "Loop detected; reusing a recent spooled output for this identical read-only call. Continue from the spool file instead of re-running the tool."
+                            } else {
+                                "Loop detected; reusing a recent successful output for this identical read-only call. Change approach before calling the same tool again."
+                            };
+                            obj.insert("loop_detected_note".into(), json!(note));
+                        }
+                        return Ok(reused_value);
+                    }
+                }
+
                 let delay_ms = (75 * repeat_count as u64).min(500);
                 if delay_ms > 0 {
                     tokio::time::sleep(Duration::from_millis(delay_ms)).await;

@@ -37,7 +37,7 @@ python3 scripts/generate_config_field_reference.py
 | `agent.enable_self_review` | `boolean` | no | `false` | Enable an extra self-review pass to refine final responses |
 | `agent.enable_split_tool_results` | `boolean` | no | `true` | Enable split tool results for massive token savings (Phase 4) When enabled, tools return dual-channel output: - llm_content: Concise summary sent to LLM (token-optimized, 53-95% reduction) - ui_content: Rich output displayed to user (full details preserved) Applies to: grep_file, list_files, read_file, run_pty_cmd, write_file, edit_file Default: true (opt-out for compatibility), recommended for production use |
 | `agent.harness.event_log_path` | `null \| string` | no | `null` | Optional JSONL event log path for harness events |
-| `agent.harness.max_tool_calls_per_turn` | `integer` | no | `32` | Maximum number of tool calls allowed per turn |
+| `agent.harness.max_tool_calls_per_turn` | `integer` | no | `48` | Maximum number of tool calls allowed per turn |
 | `agent.harness.max_tool_retries` | `integer` | no | `2` | Maximum retries for retryable tool errors |
 | `agent.harness.max_tool_wall_clock_secs` | `integer` | no | `600` | Maximum wall clock time (seconds) for tool execution in a turn |
 | `agent.include_temporal_context` | `boolean` | no | `true` | Include current date/time in system prompt for temporal awareness Helps LLM understand context for time-sensitive tasks (default: true) |

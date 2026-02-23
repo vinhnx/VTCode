@@ -78,21 +78,18 @@ pub fn parse_response(response_json: Value, model: String) -> Result<LLMResponse
             }
             Some("server_tool_use") => {} // No-op
             Some("tool_search_tool_result") => {
-                if let Some(content_block) = block.get("content") {
-                    if content_block.get("type").and_then(|t| t.as_str())
+                if let Some(content_block) = block.get("content")
+                    && content_block.get("type").and_then(|t| t.as_str())
                         == Some("tool_search_tool_search_result")
-                    {
-                        if let Some(refs) = content_block
-                            .get("tool_references")
-                            .and_then(|r| r.as_array())
+                    && let Some(refs) = content_block
+                        .get("tool_references")
+                        .and_then(|r| r.as_array())
+                {
+                    for tool_ref in refs {
+                        if let Some(tool_name) =
+                            tool_ref.get("tool_name").and_then(|n| n.as_str())
                         {
-                            for tool_ref in refs {
-                                if let Some(tool_name) =
-                                    tool_ref.get("tool_name").and_then(|n| n.as_str())
-                                {
-                                    tool_references.push(tool_name.to_string());
-                                }
-                            }
+                            tool_references.push(tool_name.to_string());
                         }
                     }
                 }

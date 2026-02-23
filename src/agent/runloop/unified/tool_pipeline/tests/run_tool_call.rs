@@ -140,7 +140,8 @@ async fn test_run_tool_call_respects_max_tool_calls_budget() {
 
     match outcome.status {
         ToolExecutionStatus::Failure { error } => {
-            assert!(error.to_string().contains("Tool permission denied"));
+            assert!(error.to_string().contains("Policy violation"));
+            assert!(error.to_string().contains("exceeded max tool calls per turn"));
         }
         other => panic!("Expected permission denial, got: {:?}", other),
     }
@@ -227,4 +228,88 @@ async fn test_run_tool_call_prevalidated_blocks_mutation_in_plan_mode() {
     assert!(session_stats.is_plan_mode());
     assert!(registry.is_plan_mode());
     assert!(registry.plan_mode_state().is_active());
+}
+
+#[tokio::test]
+async fn test_run_tool_call_invalid_preflight_does_not_consume_budget() {
+    let mut test_ctx = TestContext::new().await;
+    let mut registry = test_ctx.registry;
+
+    let permission_cache_arc = Arc::new(tokio::sync::RwLock::new(ToolPermissionCache::new()));
+    let result_cache = Arc::new(tokio::sync::RwLock::new(ToolResultCache::new(10)));
+    let decision_ledger = Arc::new(tokio::sync::RwLock::new(DecisionTracker::new()));
+    let mut session_stats = crate::agent::runloop::unified::state::SessionStats::default();
+    let mut mcp_panel = crate::agent::runloop::mcp_events::McpPanelState::new(10, true);
+    let approval_recorder = test_ctx.approval_recorder;
+    let traj = TrajectoryLogger::new(&test_ctx.workspace);
+    let tools = Arc::new(tokio::sync::RwLock::new(Vec::new()));
+
+    let mut harness_state = build_harness_state_with(1);
+    let mut ctx = crate::agent::runloop::unified::run_loop_context::RunLoopContext {
+        renderer: &mut test_ctx.renderer,
+        handle: &test_ctx.handle,
+        tool_registry: &mut registry,
+        tools: &tools,
+        tool_result_cache: &result_cache,
+        tool_permission_cache: &permission_cache_arc,
+        decision_ledger: &decision_ledger,
+        session_stats: &mut session_stats,
+        mcp_panel_state: &mut mcp_panel,
+        approval_recorder: &approval_recorder,
+        session: &mut test_ctx.session,
+        safety_validator: None,
+        traj: &traj,
+        harness_state: &mut harness_state,
+        harness_emitter: None,
+    };
+
+    let call = vtcode_core::llm::provider::ToolCall::function(
+        "call_invalid_preflight".to_string(),
+        tools::READ_FILE.to_string(),
+        r#"{"path":"/var/db/shadow"}"#.to_string(),
+    );
+    let ctrl_c_state = Arc::new(CtrlCState::new());
+    let ctrl_c_notify = Arc::new(Notify::new());
+
+    let first_outcome = run_tool_call(
+        &mut ctx,
+        &call,
+        &ctrl_c_state,
+        &ctrl_c_notify,
+        None,
+        None,
+        false,
+        None,
+        0,
+        false,
+    )
+    .await
+    .expect("first run_tool_call must run");
+
+    assert!(matches!(
+        first_outcome.status,
+        ToolExecutionStatus::Failure { .. }
+    ));
+    assert_eq!(ctx.harness_state.tool_calls, 0);
+
+    let second_outcome = run_tool_call(
+        &mut ctx,
+        &call,
+        &ctrl_c_state,
+        &ctrl_c_notify,
+        None,
+        None,
+        false,
+        None,
+        0,
+        false,
+    )
+    .await
+    .expect("second run_tool_call must run");
+
+    assert!(matches!(
+        second_outcome.status,
+        ToolExecutionStatus::Failure { .. }
+    ));
+    assert_eq!(ctx.harness_state.tool_calls, 0);
 }

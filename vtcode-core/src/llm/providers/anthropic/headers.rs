@@ -10,6 +10,16 @@ use crate::config::core::{AnthropicConfig, AnthropicPromptCacheSettings};
 
 use super::prompt_cache::requires_extended_ttl_beta;
 
+/// Configuration for beta header generation
+pub struct BetaHeaderConfig<'a> {
+    pub config: &'a AnthropicConfig,
+    pub model: &'a str,
+    pub include_structured: bool,
+    pub include_tool_search: bool,
+    pub request_betas: Option<&'a Vec<String>>,
+    pub include_effort: bool,
+}
+
 pub fn prompt_cache_beta_header_value(
     cache_enabled: bool,
     settings: &AnthropicPromptCacheSettings,
@@ -30,12 +40,7 @@ pub fn prompt_cache_beta_header_value(
 pub fn combined_beta_header_value(
     cache_enabled: bool,
     settings: &AnthropicPromptCacheSettings,
-    config: &AnthropicConfig,
-    model: &str,
-    include_structured: bool,
-    include_tool_search: bool,
-    request_betas: Option<&Vec<String>>,
-    include_effort: bool,
+    config: &BetaHeaderConfig,
 ) -> Option<String> {
     let mut pieces: Vec<String> = Vec::new();
 
@@ -49,32 +54,32 @@ pub fn combined_beta_header_value(
         }
     }
 
-    if config.extended_thinking_enabled && model != models::anthropic::CLAUDE_OPUS_4_6 {
-        pieces.push(config.interleaved_thinking_beta.clone());
+    if config.config.extended_thinking_enabled && config.model != models::anthropic::CLAUDE_OPUS_4_6 {
+        pieces.push(config.config.interleaved_thinking_beta.clone());
     }
 
-    if include_structured {
+    if config.include_structured {
         pieces.push("structured-outputs-2025-11-13".to_owned());
     }
 
-    if include_tool_search {
+    if config.include_tool_search {
         pieces.push("advanced-tool-use-2025-11-20".to_owned());
     }
 
-    if include_effort && model != models::anthropic::CLAUDE_OPUS_4_6 {
+    if config.include_effort && config.model != models::anthropic::CLAUDE_OPUS_4_6 {
         pieces.push("effort-2025-11-24".to_owned());
     }
 
     pieces.push("output-64k-2025-02-19".to_owned());
 
-    if model == models::anthropic::CLAUDE_SONNET_4_5
-        || model == models::anthropic::CLAUDE_SONNET_4_5_20250929
-        || model == models::anthropic::CLAUDE_OPUS_4_6
+    if config.model == models::anthropic::CLAUDE_SONNET_4_5
+        || config.model == models::anthropic::CLAUDE_SONNET_4_5_20250929
+        || config.model == models::anthropic::CLAUDE_OPUS_4_6
     {
         pieces.push("context-1m-2025-08-07".to_owned());
     }
 
-    if let Some(betas) = request_betas {
+    if let Some(betas) = config.request_betas {
         for b in betas {
             if !pieces.contains(b) {
                 pieces.push(b.clone());

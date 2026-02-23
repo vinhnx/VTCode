@@ -45,6 +45,7 @@ pub(crate) struct PreparedToolCall {
 
 const MAX_RATE_LIMIT_ACQUIRE_ATTEMPTS: usize = 4;
 const MAX_RATE_LIMIT_WAIT: Duration = Duration::from_secs(5);
+const TOOL_BUDGET_WARNING_THRESHOLD: f64 = 0.75;
 
 fn build_failure_error_content(error: String, failure_kind: &'static str) -> String {
     super::execution_result::build_error_content(error, None, None, failure_kind).to_string()
@@ -72,6 +73,18 @@ fn build_rate_limit_error_content(tool_name: &str, retry_after_ms: u64) -> Strin
         "retry_after_ms": retry_after_ms,
     })
     .to_string()
+}
+
+fn build_tool_budget_warning_message(used: usize, max: usize, remaining: usize) -> String {
+    format!(
+        "Tool-call budget warning: {used}/{max} used; {remaining} remaining for this turn. Use targeted extraction/batching before additional tool calls."
+    )
+}
+
+fn build_tool_budget_exhausted_reason(used: usize, max: usize) -> String {
+    format!(
+        "Tool-call budget exhausted for this turn ({used}/{max}). Start a new turn with \"continue\" to proceed."
+    )
 }
 
 fn compact_loop_key_part(value: &str, max_chars: usize) -> String {
@@ -476,7 +489,20 @@ pub(crate) async fn validate_tool_call<'a>(
             tool_call_id.to_string(),
             build_failure_error_content(error_msg, "policy"),
         );
-        return Ok(ValidationResult::Blocked);
+        let block_reason = build_tool_budget_exhausted_reason(
+            ctx.harness_state.tool_calls,
+            ctx.harness_state.max_tool_calls,
+        );
+        if !ctx.harness_state.tool_budget_exhausted_emitted {
+            ctx.working_history
+                .push(uni::Message::system(block_reason.clone()));
+            ctx.harness_state.mark_tool_budget_exhausted_emitted();
+        }
+        return Ok(ValidationResult::Outcome(TurnHandlerOutcome::Break(
+            TurnLoopResult::Blocked {
+                reason: Some(block_reason),
+            },
+        )));
     }
 
     if ctx.harness_state.wall_clock_exhausted() {
@@ -491,8 +517,6 @@ pub(crate) async fn validate_tool_call<'a>(
         );
         return Ok(ValidationResult::Blocked);
     }
-
-    ctx.harness_state.record_tool_call();
 
     let preflight = match ctx
         .tool_registry
@@ -514,6 +538,22 @@ pub(crate) async fn validate_tool_call<'a>(
     let canonical_tool_name = preflight.normalized_tool_name.clone();
     let effective_args =
         maybe_apply_spool_read_offset_hint(ctx.tool_registry, &canonical_tool_name, args_val);
+
+    // Charge tool-call budget only after preflight succeeds.
+    ctx.harness_state.record_tool_call();
+    if ctx
+        .harness_state
+        .should_emit_tool_budget_warning(TOOL_BUDGET_WARNING_THRESHOLD)
+    {
+        let used = ctx.harness_state.tool_calls;
+        let max = ctx.harness_state.max_tool_calls;
+        let remaining = ctx.harness_state.remaining_tool_calls();
+        ctx.working_history.push(uni::Message::system(
+            build_tool_budget_warning_message(used, max, remaining),
+        ));
+        ctx.harness_state.mark_tool_budget_warning_emitted();
+    }
+
     if let Some(outcome) =
         enforce_spool_chunk_read_guard(ctx, tool_call_id, &canonical_tool_name, &effective_args)
     {
@@ -594,11 +634,36 @@ pub(crate) async fn validate_tool_call<'a>(
                     tool_call_id.to_string(),
                     spooled.to_string(),
                 );
-                return Ok(ValidationResult::Outcome(TurnHandlerOutcome::Break(
-                    TurnLoopResult::Blocked {
-                        reason: Some(block_reason),
-                    },
-                )));
+                return Ok(ValidationResult::Blocked);
+            }
+
+            if preflight.readonly_classification
+                && let Some(mut reused) = ctx.tool_registry.find_recent_successful_output(
+                    &canonical_tool_name,
+                    &effective_args,
+                    Duration::from_secs(120),
+                )
+            {
+                if let Some(obj) = reused.as_object_mut() {
+                    obj.insert(
+                        "reused_recent_result".to_string(),
+                        serde_json::Value::Bool(true),
+                    );
+                    obj.insert("loop_detected".to_string(), serde_json::Value::Bool(true));
+                    obj.insert(
+                        "loop_detected_note".to_string(),
+                        serde_json::Value::String(
+                            "Loop detected on repeated identical read-only call; reusing recent successful output. Pivot to targeted extraction (`grep_file`) or summarize before another read."
+                                .to_string(),
+                        ),
+                    );
+                }
+                push_tool_response(
+                    ctx.working_history,
+                    tool_call_id.to_string(),
+                    reused.to_string(),
+                );
+                return Ok(ValidationResult::Blocked);
             }
 
             let error_msg = format!(
@@ -610,6 +675,15 @@ pub(crate) async fn validate_tool_call<'a>(
                 tool_call_id.to_string(),
                 build_failure_error_content(error_msg, "loop_detection"),
             );
+
+            if preflight.readonly_classification {
+                ctx.working_history.push(uni::Message::system(
+                    "Loop detector blocked repeated read-only calls. Use targeted extraction (`grep_file`) or adjust `offset`/`limit` before retrying."
+                        .to_string(),
+                ));
+                return Ok(ValidationResult::Blocked);
+            }
+
             return Ok(ValidationResult::Outcome(TurnHandlerOutcome::Break(
                 TurnLoopResult::Blocked {
                     reason: Some(block_reason),

@@ -1021,7 +1021,8 @@ to avoid merge conflicts.\n\nIf you’d like me to proceed with the first module
 
 ---
 
-design internal plan/task tracker mode
+design internal plan/task tracker mode with all above discussion to improve
+vtcode agent harness.
 
 reference:
 
@@ -1033,7 +1034,9 @@ reference:
 tests
 ```
 
-where > is in-progress, ✔ is completed, and tasks are indented to show hierarchy/ breakdown.
+where > is in-progress, ✔ is completed, and tasks are indented to show
+hierarchy/ breakdown. implement as lightweight tmp makrdown task tracker or
+on .vtcode/. design and
 
 ---
 
