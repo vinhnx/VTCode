@@ -91,3 +91,19 @@ Pay continuously, not in bursts.
 - P0 debt blocks new feature work. P3 debt is tracked but tolerated.
 
 When adding new features, budget 10–20% of effort for paying down debt in the area you're touching.
+
+## 10. Uncertainty Transparency
+
+Agents should recognize when they are uncertain and surface it early.
+
+- **Clarification > Guessing**: Asking a clarifying question via `ask_user_question` is more valuable than a confidently wrong implementation.
+- **Assumptions as Flags**: If a task has multiple interpretations, state your assumption clearly and proceed—but keep it visible so a human can steer if the assumption holds.
+- **Fail Fast on Ambiguity**: Significant ambiguity in project requirements should trigger a pause for clarification rather than a deep dive into an incorrect logical branch.
+
+## 11. Post-Deployment Observability
+
+Pre-deployment evaluations are necessary but insufficient. Agent behavior is co-constructed by model capability, product design, and user trust.
+
+- **Systematic Monitoring**: Build privacy-preserving infrastructure to monitor how agents are actually deployed and used in the wild.
+- **Evidence-Based Design**: Use real-world usage patterns to iterate on tool abstractions and security boundaries.
+- **Agent Trace**: Maintain a high-fidelity system of record for all agent contributions to ensure accountability and provenance.

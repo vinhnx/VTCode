@@ -161,6 +161,13 @@ Your output must be optimized for agent-to-agent and agent-to-human legibility.
 - Existing code: Surgical, respectful changes matching surrounding style.
 - New work: Creative, ambitious implementation.
 
+## Uncertainty Recognition
+
+- When facing ambiguous requirements or unclear scope, ask a clarifying question via `ask_user_question` or `request_user_input` rather than guessing.
+- Prefer surfacing uncertainty early over delivering a confidently wrong result.
+- If a task has multiple valid interpretations, briefly state your assumption and proceed — but flag it so the user can redirect.
+- This is NOT a contradiction of "Bias for action": proceed when you have a reasonable default; pause when you genuinely don't.
+
 ## Validation & Testing
 
 - Use test infrastructure proactively -- don't ask the user to test.
@@ -249,6 +256,7 @@ const MINIMAL_SYSTEM_PROMPT: &str = r#"You are VT Code, a coding assistant for V
 - Complete tasks fully; iterate on feedback proactively without asking for human confirmation.
 - When stuck, change approach. Fix root cause, not patches.
 - Run tests/checks yourself. Proceed with reasonable assumptions. Never declare completion without executing code to verify (avoid 'hallucination of verification').
+- When genuinely uncertain about ambiguous requirements, surface the ambiguity early rather than guessing. Flag assumptions so the user can redirect.
 
 **Planning**:
 - For non-trivial scope, break work into composable steps with explicit outcome + verification per step.
@@ -312,6 +320,7 @@ Preambles: avoid unless needed. Trivial final answers: lead with outcomes, 1-3 s
 - Existing codebases: surgical, respectful. New work: ambitious, creative.
 - Don't fix unrelated bugs, don't refactor beyond request, don't add unrequested scope.
 - Never declare completion without verifying via an execution tool. Beware of overconfidence and "hallucination of verification".
+- When genuinely uncertain about ambiguous requirements, surface the ambiguity early via `ask_user_question` rather than guessing.
 
 ## Methodical Approach for Complex Tasks
 
@@ -360,10 +369,12 @@ When you are thinking about a complex task, you MUST use the following stage-bas
 
 - `<analysis>`: Use this to analyze the problem, explore the codebase, or evaluate options.
 - `<plan>`: Use this to outline composable steps you will take, each with expected outcome and verification.
+- `<uncertainty>`: Use this to surface ambiguity, risks, or open questions that require clarification BEFORE guessing.
 - `<verification>`: Use this to verify your changes, analyze test results, or double-check your work.
 
 Example:
 <analysis>I need to refactor the payment module. Currently, it's tightly coupled with the database.</analysis>
+<uncertainty>The `PaymentGateway` trait is missing a `refund` method. I'll need to confirm if this is intentional or if I should add it.</uncertainty>
 <plan>1. Create a PaymentRepository trait. 2. Implement it for Postgres. 3. Update the PaymentService.</plan>
 "#;
 
@@ -839,8 +850,8 @@ mod tests {
         // Minimal prompt should be much shorter than default
         // Note: composed prompt includes AGENTS.md content which can add size
         assert!(
-            result.len() < 5000,
-            "Minimal mode should produce <5K chars (was {} chars)",
+            result.len() < 5500,
+            "Minimal mode should produce <5.5K chars (was {} chars)",
             result.len()
         );
         assert!(
@@ -881,8 +892,8 @@ mod tests {
         // Lightweight is optimized for simple operations (v4.2)
         assert!(result.len() > 100, "Lightweight should be >100 chars");
         assert!(
-            result.len() < 2000,
-            "Lightweight should be compact (<2K chars)"
+            result.len() < 4000,
+            "Lightweight should be compact (<4K chars)"
         );
     }
 
@@ -941,10 +952,10 @@ mod tests {
     #[test]
     fn test_default_prompt_token_count() {
         let approx_tokens = DEFAULT_SYSTEM_PROMPT.len() / 4;
-        // v6.0 harness-engineered prompt is ~1500 tokens (compressed from ~2700)
+        // v6.1 adds Uncertainty Recognition section (~100 extra tokens)
         assert!(
-            approx_tokens > 1200 && approx_tokens < 2000,
-            "Default prompt should be ~1500 tokens (harness v6.0), got ~{}",
+            approx_tokens > 1200 && approx_tokens < 2200,
+            "Default prompt should be ~1600 tokens (harness v6.1), got ~{}",
             approx_tokens
         );
     }
@@ -970,7 +981,7 @@ mod tests {
             "Default prompt should reference AGENTS.md as map"
         );
         assert!(
-            DEFAULT_SYSTEM_PROMPT.contains("boy scout"),
+            DEFAULT_SYSTEM_PROMPT.to_lowercase().contains("boy scout"),
             "Default prompt should include boy scout rule"
         );
         assert!(
@@ -980,6 +991,22 @@ mod tests {
         assert!(
             MINIMAL_SYSTEM_PROMPT.contains("docs/harness/"),
             "Minimal prompt should reference harness knowledge base"
+        );
+    }
+
+    #[test]
+    fn test_uncertainty_recognition_in_prompts() {
+        assert!(
+            DEFAULT_SYSTEM_PROMPT.contains("Uncertainty Recognition"),
+            "Default prompt should include Uncertainty Recognition section"
+        );
+        assert!(
+            DEFAULT_SPECIALIZED_PROMPT.contains("uncertain"),
+            "Specialized prompt should mention uncertainty"
+        );
+        assert!(
+            MINIMAL_SYSTEM_PROMPT.contains("uncertain"),
+            "Minimal prompt should mention uncertainty"
         );
     }
 

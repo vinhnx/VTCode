@@ -224,6 +224,24 @@ Before modifying code in any workspace, the agent must identify the project's bu
 
 ---
 
+## 14. Verification-First Autonomy
+
+Agent output must be verifiable before deployment. Every agent action that produces or modifies code must be followed by at least one verification step (test, type-check, or lint).
+
+**Violation**: Agent declares a task complete or moves to a next major phase without executing a verification tool (e.g., `cargo check`, `cargo test`, `npx tsc`).
+**Remediation**: Run the appropriate verification command. Analyze the output. If it fails, fix and re-verify. Never rely on internal reasoning as proof of correctness ("hallucination of verification").
+
+---
+
+## 15. Error Mode Diagnosis
+
+Before modifying code in response to a shell/command failure, the agent must verify if the failure is environmental or logical.
+
+**Violation**: Agent modifies code to "fix" an error that is actually caused by a missing dependency, port conflict, incorrect file path, or permission issue.
+**Remediation**: Use `ls`, `cat /etc/*release`, `which <cmd>`, or `ps` to diagnose the environment state first. Proactively mention environment findings in `<analysis>`. If the environment is broken, fix the environment (if possible) or report it to the user rather than editing code.
+
+---
+
 ## Enforcement
 
 These invariants should be enforced by:

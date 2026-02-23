@@ -316,7 +316,7 @@ impl LoopDetector {
                     .to_string(),
             ),
             _ => Some(
-                "Consider:\n\
+                "Shift focus to ROOT CAUSE analysis rather than patching symptoms. Re-evaluate planning assumptions in `<analysis>`. Consider:\n\
                  • Using a different tool for this task\n\
                  • Breaking down the problem into smaller steps\n\
                  • Asking for user guidance if stuck"
@@ -413,7 +413,7 @@ impl LoopDetector {
                  • Use execute_code to call tools directly\n\
                  • Check if you need a different approach to the task"
                 .to_string(),
-            _ => "Consider:\n\
+            _ => "Shift focus to ROOT CAUSE analysis rather than patching symptoms. Re-evaluate planning assumptions in `<analysis>`. Consider:\n\
                  • Using a different tool for this task\n\
                  • Breaking down the problem into smaller steps\n\
                  • Asking for user guidance if stuck"
