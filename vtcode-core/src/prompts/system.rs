@@ -169,6 +169,11 @@ Your output must be optimized for agent-to-agent and agent-to-human legibility.
 - If a task has multiple valid interpretations, briefly state your assumption and proceed — but flag it so the user can redirect.
 - This is NOT a contradiction of "Bias for action": proceed when you have a reasonable default; pause when you genuinely don't.
 
+**Proactive Collaboration (HITL)**:
+- When using `ask_user_question`, always propose a recommended path by setting `default_tab_id` and `default_choice_id` based on your analysis.
+- Use `allow_freeform=true` when you believe the user might need to qualify their selection with additional context.
+- Provide descriptive `freeform_placeholder` values to guide the user's input.
+
 ## Validation & Testing
 
 - Use test infrastructure proactively -- don't ask the user to test.

@@ -93,16 +93,9 @@ pub fn render_wizard_modal_body(
     }
 
     let is_multistep = wizard.mode == crate::ui::tui::types::WizardModalMode::MultiStep;
-    let notes_line = if is_multistep {
-        wizard.notes_line()
-    } else {
-        None
-    };
-    let instruction_lines = if is_multistep {
-        wizard.instruction_lines()
-    } else {
-        Vec::new()
-    };
+    let current_step_state = wizard.steps.get(wizard.current_step);
+    let has_notes = current_step_state.is_some_and(|s| s.notes_active || !s.notes.is_empty());
+    let instruction_lines = wizard.instruction_lines();
 
     // Layout: [Header (1)] [Search (optional)] [Question (2)] [List] [Notes?] [Instructions?]
     let mut constraints = Vec::new();
@@ -112,7 +105,7 @@ pub fn render_wizard_modal_body(
     }
     constraints.push(Constraint::Length(2));
     constraints.push(Constraint::Min(3));
-    if notes_line.is_some() {
+    if has_notes {
         constraints.push(Constraint::Length(1));
     }
     if !instruction_lines.is_empty() {
@@ -162,10 +155,27 @@ pub fn render_wizard_modal_body(
     }
     idx += 1;
 
-    if let Some(notes_text) = notes_line {
-        let notes = Paragraph::new(Line::from(Span::styled(notes_text, styles.selectable)));
-        frame.render_widget(notes, chunks[idx]);
-        idx += 1;
+    if let Some(step) = wizard.steps.get(wizard.current_step) {
+        if step.notes_active || !step.notes.is_empty() {
+            let label_text = step.freeform_label.as_deref().unwrap_or("›");
+            let mut spans = vec![Span::styled(format!("{} ", label_text), styles.header)];
+
+            if step.notes.is_empty() {
+                if let Some(placeholder) = step.freeform_placeholder.as_ref() {
+                    spans.push(Span::styled(placeholder.clone(), styles.detail));
+                }
+            } else {
+                spans.push(Span::styled(step.notes.clone(), styles.selectable));
+            }
+
+            if step.notes_active {
+                spans.push(Span::styled("▌", styles.highlight));
+            }
+
+            let notes = Paragraph::new(Line::from(spans));
+            frame.render_widget(notes, chunks[idx]);
+            idx += 1;
+        }
     }
 
     if !instruction_lines.is_empty() && idx < chunks.len() {

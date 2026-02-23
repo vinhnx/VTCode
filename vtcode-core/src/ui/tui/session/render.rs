@@ -1233,20 +1233,16 @@ pub fn render_modal(session: &mut Session, frame: &mut Frame<'_>, viewport: Rect
 
     let styles = modal_render_styles(session);
     if let Some(wizard) = session.wizard_modal.as_mut() {
-        let is_multistep = wizard.mode == crate::ui::tui::types::WizardModalMode::MultiStep;
+        let _is_multistep = wizard.mode == crate::ui::tui::types::WizardModalMode::MultiStep;
         let mut width_lines = Vec::new();
-        if is_multistep {
-            width_lines.push(wizard.question_header());
-        }
+        width_lines.push(wizard.question_header());
         if let Some(step) = wizard.steps.get(wizard.current_step) {
             width_lines.push(step.question.clone());
         }
-        if is_multistep {
-            if let Some(notes) = wizard.notes_line() {
-                width_lines.push(notes);
-            }
-            width_lines.extend(wizard.instruction_lines());
+        if let Some(notes) = wizard.notes_line() {
+            width_lines.push(notes);
         }
+        width_lines.extend(wizard.instruction_lines());
 
         let list_state = wizard.steps.get(wizard.current_step).map(|step| &step.list);
         let width_hint =

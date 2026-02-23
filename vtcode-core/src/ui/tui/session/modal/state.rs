@@ -854,18 +854,8 @@ impl WizardModalState {
                             ModalListKeyResult::Redraw
                         }
                         KeyCode::Tab => {
-                            if self.search.is_none()
-                                && (step.list.current_selection().is_some_and(|selection| {
-                                    matches!(
-                                        selection,
-                                        InlineListSelection::RequestUserInputAnswer { .. }
-                                    )
-                                }) || (self.mode == WizardModalMode::TabbedList
-                                    && step.list.current_selection().is_some_and(|selection| {
-                                        matches!(selection, InlineListSelection::AskUserChoice { .. })
-                                    })))
-                            {
-                                step.notes_active = true;
+                            if self.search.is_none() && step.allow_freeform {
+                                step.notes_active = !step.notes_active;
                                 ModalListKeyResult::Redraw
                             } else {
                                 step.list.select_next();
@@ -901,13 +891,13 @@ impl WizardModalState {
                     selected,
                     other,
                 } => {
-                    let notes = step.notes.clone();
+                    let notes = step.notes.trim();
                     let next_other = if other.is_some() {
-                        Some(notes)
+                        Some(notes.to_string())
                     } else if notes.is_empty() {
                         None
                     } else {
-                        Some(notes)
+                        Some(notes.to_string())
                     };
                     InlineListSelection::RequestUserInputAnswer {
                         question_id,
