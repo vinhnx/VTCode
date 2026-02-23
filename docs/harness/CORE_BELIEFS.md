@@ -9,6 +9,8 @@ Humans define goals, set constraints, and review outcomes. Agents handle impleme
 - **Humans** choose which provider to add, which tool abstraction to expose, which security boundary to enforce.
 - **Agents** write the provider adapter, implement the trait, add tests, update docs, and open the PR.
 
+Synergistic Collaboration: Instead of chasing "full autonomy" at the cost of safety, prioritize systems where humans provide strategic guidance and agents handle execution. High-fidelity feedback loops enable human intervention before context drift leads to regressions.
+
 Corollary: if an agent cannot complete a task autonomously from the information in this repository, the repository is missing context — fix the repo, not the agent prompt.
 
 ## 2. Repository as System of Record
