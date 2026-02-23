@@ -93,6 +93,33 @@ fn extract_pty_session_id_from_error(error_msg: &str) -> Option<String> {
     }
 }
 
+fn extract_patch_target_path_from_error(error_msg: &str) -> Option<String> {
+    let markers = [
+        "failed to locate expected lines in ",
+        "failed to locate expected text in ",
+    ];
+    for marker in markers {
+        let Some(start) = error_msg.find(marker) else {
+            continue;
+        };
+        let rest = &error_msg[start + marker.len()..];
+        for quote in ['\'', '"'] {
+            let quote_s = quote.to_string();
+            let Some(stripped) = rest.strip_prefix(&quote_s) else {
+                continue;
+            };
+            let Some(end_idx) = stripped.find(quote) else {
+                continue;
+            };
+            let path = stripped[..end_idx].trim();
+            if !path.is_empty() {
+                return Some(path.to_string());
+            }
+        }
+    }
+    None
+}
+
 fn fallback_from_error(tool_name: &str, error_msg: &str) -> Option<(String, serde_json::Value)> {
     if matches!(
         tool_name,
@@ -102,6 +129,21 @@ fn fallback_from_error(tool_name: &str, error_msg: &str) -> Option<(String, serd
         return Some((
             tool_names::READ_PTY_SESSION.to_string(),
             serde_json::json!({ "session_id": session_id }),
+        ));
+    }
+
+    if matches!(
+        tool_name,
+        tool_names::APPLY_PATCH | tool_names::UNIFIED_FILE | "apply patch"
+    ) && let Some(path) = extract_patch_target_path_from_error(error_msg)
+    {
+        return Some((
+            tool_names::READ_FILE.to_string(),
+            serde_json::json!({
+                "path": path,
+                "offset": 1,
+                "limit": 120
+            }),
         ));
     }
 
@@ -483,6 +525,23 @@ mod tests {
             Some((
                 tool_names::READ_PTY_SESSION.to_string(),
                 serde_json::json!({"session_id":"run-ab12"}),
+            ))
+        );
+    }
+
+    #[test]
+    fn fallback_from_error_extracts_read_file_for_patch_context_mismatch() {
+        let error = "Tool 'apply_patch' execution failed: failed to locate expected lines in 'vtcode-exec-events/src/trace.rs': context mismatch";
+        let fallback = fallback_from_error(tool_names::APPLY_PATCH, error);
+        assert_eq!(
+            fallback,
+            Some((
+                tool_names::READ_FILE.to_string(),
+                serde_json::json!({
+                    "path": "vtcode-exec-events/src/trace.rs",
+                    "offset": 1,
+                    "limit": 120
+                }),
             ))
         );
     }

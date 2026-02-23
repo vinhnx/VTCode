@@ -39,6 +39,11 @@ pub struct ToolsConfig {
     #[serde(default = "default_max_tool_rate_per_second")]
     pub max_tool_rate_per_second: Option<usize>,
 
+    /// Maximum sequential spool-chunk `read_file` calls allowed per turn before
+    /// nudging the agent to switch to targeted extraction/summarization.
+    #[serde(default = "default_max_sequential_spool_chunk_reads")]
+    pub max_sequential_spool_chunk_reads: usize,
+
     /// Web Fetch tool security configuration
     #[serde(default)]
     pub web_fetch: WebFetchConfig,
@@ -115,6 +120,7 @@ impl Default for ToolsConfig {
             max_tool_loops: default_max_tool_loops(),
             max_repeated_tool_calls: default_max_repeated_tool_calls(),
             max_tool_rate_per_second: default_max_tool_rate_per_second(),
+            max_sequential_spool_chunk_reads: default_max_sequential_spool_chunk_reads(),
             web_fetch: WebFetchConfig::default(),
             plugins: PluginRuntimeConfig::default(),
             loop_thresholds: IndexMap::new(),
@@ -175,6 +181,11 @@ const fn default_max_repeated_tool_calls() -> usize {
 #[inline]
 const fn default_max_tool_rate_per_second() -> Option<usize> {
     None
+}
+
+#[inline]
+const fn default_max_sequential_spool_chunk_reads() -> usize {
+    defaults::DEFAULT_MAX_SEQUENTIAL_SPOOL_CHUNK_READS_PER_TURN
 }
 
 #[inline]

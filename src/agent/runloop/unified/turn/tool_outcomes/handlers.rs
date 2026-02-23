@@ -4,7 +4,9 @@ use anyhow::Result;
 use serde_json::{Value, json};
 use std::time::Duration;
 
+use vtcode_core::config::constants::defaults::DEFAULT_MAX_SEQUENTIAL_SPOOL_CHUNK_READS_PER_TURN;
 use vtcode_core::config::constants::tools as tool_names;
+use vtcode_core::llm::provider as uni;
 use vtcode_core::tools::registry::labels::tool_action_label;
 use vtcode_core::tools::registry::{ToolErrorType, ToolExecutionError};
 use vtcode_core::tools::tool_intent;
@@ -76,6 +78,39 @@ fn compact_loop_key_part(value: &str, max_chars: usize) -> String {
     value.trim().chars().take(max_chars).collect()
 }
 
+fn patch_source_arg(args: &Value) -> Option<&str> {
+    args.as_str()
+        .or_else(|| args.get("input").and_then(|v| v.as_str()))
+        .or_else(|| args.get("patch").and_then(|v| v.as_str()))
+}
+
+fn extract_patch_target_path(patch_source: &str) -> Option<&str> {
+    const PATCH_FILE_PREFIXES: [&str; 4] = [
+        "*** Update File: ",
+        "*** Add File: ",
+        "*** Delete File: ",
+        "*** Move to: ",
+    ];
+
+    patch_source.lines().find_map(|line| {
+        PATCH_FILE_PREFIXES
+            .iter()
+            .find_map(|prefix| line.strip_prefix(prefix))
+            .map(str::trim)
+            .filter(|path| !path.is_empty())
+    })
+}
+
+fn patch_signature(patch_source: &str) -> String {
+    // Deterministic, cheap fingerprint for loop keys; bounded to first 2KB.
+    let mut hash: u64 = 0xcbf29ce484222325;
+    for byte in patch_source.as_bytes().iter().take(2048) {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    format!("len{}-fnv{:016x}", patch_source.len(), hash)
+}
+
 fn read_file_path_arg(args: &Value) -> Option<&str> {
     let obj = args.as_object()?;
     for key in ["path", "file_path", "filepath", "target_path"] {
@@ -93,6 +128,18 @@ fn read_file_has_offset_arg(args: &Value) -> bool {
     ["offset", "offset_lines", "offset_bytes"]
         .iter()
         .any(|key| args.get(*key).is_some())
+}
+
+fn read_file_offset_value(args: &Value) -> Option<usize> {
+    ["offset", "offset_lines", "offset_bytes"]
+        .iter()
+        .filter_map(|key| args.get(*key))
+        .find_map(|value| {
+            value
+                .as_u64()
+                .and_then(|n| usize::try_from(n).ok())
+                .or_else(|| value.as_str().and_then(|s| s.parse::<usize>().ok()))
+        })
 }
 
 fn read_file_has_limit_arg(args: &Value) -> bool {
@@ -133,7 +180,7 @@ fn maybe_apply_spool_read_offset_hint(
     canonical_tool_name: &str,
     args: &Value,
 ) -> Value {
-    if !is_read_file_style_call(canonical_tool_name, args) || read_file_has_offset_arg(args) {
+    if !is_read_file_style_call(canonical_tool_name, args) {
         return args.clone();
     }
 
@@ -150,22 +197,109 @@ fn maybe_apply_spool_read_offset_hint(
         return args.clone();
     };
 
+    let requested_offset = read_file_offset_value(args);
+    let should_advance_offset = match requested_offset {
+        Some(existing) => existing < next_offset,
+        None => true,
+    };
+    let should_fill_offset = !read_file_has_offset_arg(args);
+
     let mut adjusted = args.clone();
     let keep_existing_limit = read_file_has_limit_arg(&adjusted);
     if let Some(obj) = adjusted.as_object_mut() {
-        obj.insert("offset".to_string(), json!(next_offset));
+        if should_fill_offset || should_advance_offset {
+            obj.insert("offset".to_string(), json!(next_offset));
+        }
         if !keep_existing_limit {
             obj.insert("limit".to_string(), json!(chunk_limit));
         }
-        tracing::debug!(
-            tool = canonical_tool_name,
-            path = path,
-            next_offset,
-            chunk_limit,
-            "Applied spool read continuation hint to avoid repeated identical chunk reads"
-        );
+        if should_fill_offset || should_advance_offset || !keep_existing_limit {
+            tracing::debug!(
+                tool = canonical_tool_name,
+                path = path,
+                requested_offset = requested_offset.unwrap_or(0),
+                next_offset,
+                chunk_limit,
+                "Applied spool read continuation hint to avoid repeated identical chunk reads"
+            );
+        }
     }
     adjusted
+}
+
+fn spool_chunk_read_path<'a>(canonical_tool_name: &str, args: &'a Value) -> Option<&'a str> {
+    if !is_read_file_style_call(canonical_tool_name, args) {
+        return None;
+    }
+    let path = read_file_path_arg(args)?;
+    if looks_like_tool_output_spool_path(path) {
+        Some(path)
+    } else {
+        None
+    }
+}
+
+fn max_sequential_spool_chunk_reads_per_turn(ctx: &TurnProcessingContext<'_>) -> usize {
+    ctx.vt_cfg
+        .map(|cfg| cfg.tools.max_sequential_spool_chunk_reads)
+        .filter(|value| *value > 0)
+        .unwrap_or(DEFAULT_MAX_SEQUENTIAL_SPOOL_CHUNK_READS_PER_TURN)
+}
+
+fn build_spool_chunk_guard_error_content(path: &str, max_reads_per_turn: usize) -> String {
+    super::execution_result::build_error_content(
+        format!(
+            "Sequential spool chunk reads exceeded per-turn cap ({}). Switch to targeted extraction or summarize current findings before reading more chunks from '{}'.",
+            max_reads_per_turn, path
+        ),
+        Some(tool_names::GREP_FILE.to_string()),
+        Some(json!({
+            "path": path,
+            "pattern": "warning|error|TODO"
+        })),
+        "spool_chunk_guard",
+    )
+    .to_string()
+}
+
+fn enforce_spool_chunk_read_guard(
+    ctx: &mut TurnProcessingContext<'_>,
+    tool_call_id: &str,
+    canonical_tool_name: &str,
+    args: &Value,
+) -> Option<ValidationResult> {
+    let Some(spool_path) = spool_chunk_read_path(canonical_tool_name, args) else {
+        ctx.harness_state.reset_spool_chunk_read_streak();
+        return None;
+    };
+
+    let max_reads_per_turn = max_sequential_spool_chunk_reads_per_turn(ctx);
+    let streak = ctx.harness_state.record_spool_chunk_read();
+    if streak <= max_reads_per_turn {
+        return None;
+    }
+
+    let display_tool = tool_action_label(canonical_tool_name, args);
+    let block_reason = format!(
+        "Spool chunk read guard halted repeated '{}' calls for this turn.\nUse targeted extraction (`grep_file`) or summarize current findings before reading more chunks.",
+        display_tool
+    );
+
+    push_tool_response(
+        ctx.working_history,
+        tool_call_id.to_string(),
+        build_spool_chunk_guard_error_content(spool_path, max_reads_per_turn),
+    );
+    ctx.working_history.push(uni::Message::system(format!(
+        "Spool chunk cap reached for '{}'. Recommended next step: run `grep_file` with a targeted pattern, then summarize findings before continuing chunk reads.",
+        spool_path
+    )));
+
+    Some(ValidationResult::Outcome(TurnHandlerOutcome::Break(
+        TurnLoopResult::Blocked {
+            reason: Some(block_reason),
+        },
+    )))
 }
 
 fn loop_detection_tool_key(canonical_tool_name: &str, args: &serde_json::Value) -> String {
@@ -217,7 +351,30 @@ fn loop_detection_tool_key(canonical_tool_name: &str, args: &serde_json::Value) 
                     compact_loop_key_part(path, 120),
                 );
             }
+            if action == "patch"
+                && let Some(patch_source) = patch_source_arg(args)
+            {
+                let target = extract_patch_target_path(patch_source)
+                    .map(|path| compact_loop_key_part(path, 120))
+                    .unwrap_or_else(|| "<unknown>".to_string());
+                return format!(
+                    "{canonical_tool_name}::{action}::{target}::{}",
+                    patch_signature(patch_source)
+                );
+            }
             format!("{canonical_tool_name}::{action}")
+        }
+        tool_names::APPLY_PATCH => {
+            if let Some(patch_source) = patch_source_arg(args) {
+                let target = extract_patch_target_path(patch_source)
+                    .map(|path| compact_loop_key_part(path, 120))
+                    .unwrap_or_else(|| "<unknown>".to_string());
+                return format!(
+                    "{canonical_tool_name}::{target}::{}",
+                    patch_signature(patch_source)
+                );
+            }
+            canonical_tool_name.to_string()
         }
         tool_names::UNIFIED_EXEC => {
             let action = tool_intent::unified_exec_action(args).unwrap_or("run");
@@ -357,6 +514,11 @@ pub(crate) async fn validate_tool_call<'a>(
     let canonical_tool_name = preflight.normalized_tool_name.clone();
     let effective_args =
         maybe_apply_spool_read_offset_hint(ctx.tool_registry, &canonical_tool_name, args_val);
+    if let Some(outcome) =
+        enforce_spool_chunk_read_guard(ctx, tool_call_id, &canonical_tool_name, &effective_args)
+    {
+        return Ok(outcome);
+    }
 
     // Phase 4 Check: Per-tool Circuit Breaker
     if !ctx
@@ -656,7 +818,7 @@ async fn acquire_adaptive_rate_limit_slot<'a>(
 
 #[cfg(test)]
 mod tests {
-    use super::loop_detection_tool_key;
+    use super::{loop_detection_tool_key, spool_chunk_read_path};
     use serde_json::json;
     use vtcode_core::config::constants::tools as tool_names;
 
@@ -694,5 +856,44 @@ mod tests {
         assert!(key.contains(".vtcode/context/tool_outputs/unified_exec_123.txt"));
         assert!(key.contains("offset=41"));
         assert!(key.contains("limit=40"));
+    }
+
+    #[test]
+    fn loop_key_for_apply_patch_includes_target_and_signature() {
+        let key = loop_detection_tool_key(
+            tool_names::APPLY_PATCH,
+            &json!({
+                "patch": "*** Begin Patch\n*** Update File: src/lib.rs\n@@\n-old\n+new\n*** End Patch\n"
+            }),
+        );
+        assert!(key.contains("apply_patch::"));
+        assert!(key.contains("src/lib.rs"));
+        assert!(key.contains("len"));
+        assert!(key.contains("fnv"));
+    }
+
+    #[test]
+    fn spool_chunk_read_path_detects_spooled_read_calls() {
+        let args = json!({
+            "path": ".vtcode/context/tool_outputs/unified_exec_123.txt",
+            "offset": 41,
+            "limit": 40
+        });
+        let path = spool_chunk_read_path(tool_names::READ_FILE, &args);
+        assert_eq!(
+            path,
+            Some(".vtcode/context/tool_outputs/unified_exec_123.txt")
+        );
+    }
+
+    #[test]
+    fn spool_chunk_read_path_ignores_regular_reads() {
+        let args = json!({
+            "path": "src/main.rs",
+            "offset": 1,
+            "limit": 100
+        });
+        let path = spool_chunk_read_path(tool_names::READ_FILE, &args);
+        assert_eq!(path, None);
     }
 }

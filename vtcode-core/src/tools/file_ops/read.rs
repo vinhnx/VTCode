@@ -351,8 +351,8 @@ impl FileOpsTool {
                             let next_offset = plan.offset.saturating_add(lines_returned);
                             let follow_up_prompt = if has_more {
                                 format!(
-                                    "Spool output is chunked to avoid context bloat. Continue with read_file {{\"path\":\"{}\",\"offset\":{},\"limit\":{}}}.",
-                                    requested_path, next_offset, plan.limit
+                                    "Spool output is chunked to avoid context bloat. Prefer targeted extraction first (for example: grep_file {{\"pattern\":\"warning:\",\"path\":\"{}\"}}). If you still need more raw lines, continue with read_file {{\"path\":\"{}\",\"offset\":{},\"limit\":{}}}.",
+                                    requested_path, requested_path, next_offset, plan.limit
                                 )
                             } else {
                                 format!(

@@ -39,6 +39,7 @@ pub struct HarnessTurnState {
     pub phase: TurnPhase,
     pub turn_started_at: Instant,
     pub tool_calls: usize,
+    pub consecutive_spool_chunk_reads: usize,
     pub max_tool_calls: usize,
     pub max_tool_wall_clock: Duration,
     pub max_tool_retries: u32,
@@ -58,6 +59,7 @@ impl HarnessTurnState {
             phase: TurnPhase::Preparing,
             turn_started_at: Instant::now(),
             tool_calls: 0,
+            consecutive_spool_chunk_reads: 0,
             max_tool_calls,
             max_tool_wall_clock: Duration::from_secs(max_tool_wall_clock_secs),
             max_tool_retries,
@@ -74,6 +76,15 @@ impl HarnessTurnState {
 
     pub fn record_tool_call(&mut self) {
         self.tool_calls = self.tool_calls.saturating_add(1);
+    }
+
+    pub fn record_spool_chunk_read(&mut self) -> usize {
+        self.consecutive_spool_chunk_reads = self.consecutive_spool_chunk_reads.saturating_add(1);
+        self.consecutive_spool_chunk_reads
+    }
+
+    pub fn reset_spool_chunk_read_streak(&mut self) {
+        self.consecutive_spool_chunk_reads = 0;
     }
 
     pub fn set_phase(&mut self, phase: TurnPhase) {
@@ -135,5 +146,21 @@ mod tests {
         assert_eq!(state.phase, TurnPhase::ExecutingTools);
         state.set_phase(TurnPhase::Finalizing);
         assert_eq!(state.phase, TurnPhase::Finalizing);
+    }
+
+    #[test]
+    fn harness_state_tracks_spool_chunk_read_streak() {
+        let mut state = HarnessTurnState::new(
+            TurnRunId("run-1".to_string()),
+            TurnId("turn-1".to_string()),
+            2,
+            10,
+            1,
+        );
+
+        assert_eq!(state.record_spool_chunk_read(), 1);
+        assert_eq!(state.record_spool_chunk_read(), 2);
+        state.reset_spool_chunk_read_streak();
+        assert_eq!(state.record_spool_chunk_read(), 1);
     }
 }

@@ -1,4 +1,15 @@
 use super::*;
+use crate::agent::runloop::unified::run_loop_context::TurnPhase;
+
+fn resolve_effective_turn_timeout_secs(
+    configured_turn_timeout_secs: u64,
+    max_tool_wall_clock_secs: u64,
+) -> u64 {
+    // Keep turn timeout aligned with harness wall-clock budget to avoid aborting
+    // valid long-running tool+request cycles mid-turn.
+    let min_for_harness = max_tool_wall_clock_secs.saturating_add(60);
+    configured_turn_timeout_secs.max(min_for_harness)
+}
 
 pub(super) async fn run_single_agent_loop_unified_impl(
     config: &CoreAgentConfig,
@@ -231,10 +242,13 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                 }
             };
             let mut working_history = conversation_history.clone();
-            let timeout_secs = resolve_timeout(
-                vt_cfg
-                    .as_ref()
-                    .map(|cfg| cfg.optimization.agent_execution.max_execution_time_secs),
+            let timeout_secs = resolve_effective_turn_timeout_secs(
+                resolve_timeout(
+                    vt_cfg
+                        .as_ref()
+                        .map(|cfg| cfg.optimization.agent_execution.max_execution_time_secs),
+                ),
+                harness_config.max_tool_wall_clock_secs,
             );
             let mut attempts = 0;
             let mut history_backup: Option<Vec<vtcode_core::llm::provider::Message>> = None;
@@ -346,15 +360,26 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                             > execution_history_len_before_attempt
                             || active_pty_sessions_before_cancel > 0
                             || attempted_tool_calls > 0;
+                        let timed_out_during_request =
+                            matches!(timed_out_phase, TurnPhase::Requesting);
                         attempts += 1;
                         if had_tool_activity {
+                            let timeout_note = if timed_out_during_request {
+                                "Tool activity exists and timeout occurred during LLM requesting; retry is skipped to avoid re-running tools."
+                            } else {
+                                "Tool activity was detected in this attempt; retry is skipped to avoid duplicate execution."
+                            };
                             renderer.line(
-                                      MessageStyle::Error,
-                                  &format!(
-                                      "Turn timed out after {} seconds in phase {:?}. PTY sessions cancelled; tool activity was detected in this attempt (calls={}, active_pty_before_cancel={}), so retry is skipped to avoid duplicate execution.",
-                                      timeout_secs, timed_out_phase, attempted_tool_calls, active_pty_sessions_before_cancel
-                                  ),
-                              )?;
+                                MessageStyle::Error,
+                                &format!(
+                                    "Turn timed out after {} seconds in phase {:?}. PTY sessions cancelled; {} (calls={}, active_pty_before_cancel={})",
+                                    timeout_secs,
+                                    timed_out_phase,
+                                    timeout_note,
+                                    attempted_tool_calls,
+                                    active_pty_sessions_before_cancel
+                                ),
+                            )?;
                             break Err(anyhow::anyhow!(
                                 "Turn timed out after {} seconds in phase {:?} after partial tool execution (calls={}, active_pty_before_cancel={})",
                                 timeout_secs,
@@ -555,4 +580,20 @@ pub(super) async fn run_single_agent_loop_unified_impl(
         break;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::resolve_effective_turn_timeout_secs;
+
+    #[test]
+    fn turn_timeout_respects_tool_wall_clock_budget() {
+        // Default turn timeout (300s) should be lifted above default tool wall clock (600s).
+        assert_eq!(resolve_effective_turn_timeout_secs(300, 600), 660);
+    }
+
+    #[test]
+    fn turn_timeout_keeps_higher_configured_value() {
+        assert_eq!(resolve_effective_turn_timeout_secs(900, 600), 900);
+    }
 }

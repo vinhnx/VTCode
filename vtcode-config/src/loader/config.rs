@@ -416,6 +416,9 @@ max_tool_loops = 20
 # Maximum number of repeated identical tool calls (prevents stuck loops)
 max_repeated_tool_calls = 2
 
+# Maximum sequential spool-chunk reads per turn before nudging targeted extraction/summarization
+max_sequential_spool_chunk_reads = 6
+
 # Specific tool policies - Override default policy for individual tools
 [tools.policies]
 apply_patch = "prompt"            # Apply code patches (requires confirmation)

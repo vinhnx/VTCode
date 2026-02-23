@@ -761,6 +761,7 @@ impl TraceContext {
 }
 
 #[cfg(test)]
+#[allow(clippy::expect_used, clippy::unwrap_used)]
 mod tests {
     use super::*;
 
@@ -864,11 +865,12 @@ mod tests {
     #[test]
     fn test_trace_serialization() {
         let trace = TraceRecord::for_git_revision("abc123");
-        let json = serde_json::to_string_pretty(&trace).unwrap();
+        let json = serde_json::to_string_pretty(&trace).expect("Failed to serialize trace to JSON");
         assert!(json.contains("\"version\": \"0.1.0\""));
         assert!(json.contains("abc123"));
 
-        let restored: TraceRecord = serde_json::from_str(&json).unwrap();
+        let restored: TraceRecord =
+            serde_json::from_str(&json).expect("Failed to deserialize trace from JSON");
         assert_eq!(restored.version, trace.version);
     }
 

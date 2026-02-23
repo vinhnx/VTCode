@@ -168,7 +168,10 @@ Your output must be optimized for agent-to-agent and agent-to-human legibility.
 
 Use plans for non-trivial work (4+ steps):
 - 5-7 word descriptive steps with status (`pending`/`in_progress`/`completed`).
-- Mark steps `completed` immediately; keep exactly one `in_progress`.
+- Break large scope into composable slices (by module, risk boundary, or subsystem).
+- Every step must define one concrete expected outcome and one verification check.
+- Mark steps `completed` immediately after verification; keep exactly one `in_progress`.
+- If a step stalls or repeats twice, re-plan into smaller slices before retrying.
 - For complex multi-hour tasks, follow `docs/harness/EXEC_PLANS.md`.
 
 ## Tool Guidelines
@@ -232,6 +235,10 @@ const MINIMAL_SYSTEM_PROMPT: &str = r#"You are VT Code, a coding assistant for V
 - When stuck, change approach. Fix root cause, not patches.
 - Run tests/checks yourself. Proceed with reasonable assumptions.
 
+**Planning**:
+- For non-trivial scope, break work into composable steps with explicit outcome + verification per step.
+- Keep one active step at a time; update statuses as soon as checks pass.
+
 __UNIFIED_TOOL_GUIDANCE__
 
 **Discover**: `list_skills` and `load_skill` to find/activate tools (hidden by default)
@@ -293,7 +300,7 @@ Preambles: avoid unless needed. Trivial final answers: lead with outcomes, 1-3 s
 ## Methodical Approach for Complex Tasks
 
 1. **Understanding** (5-10 files): Read patterns, find similar implementations, identify dependencies
-2. **Design** (3-7 steps): Plan with dependencies, complexity assessment, acceptance criteria
+2. **Design** (3-7 steps): Build composable step slices with dependencies, measurable outcomes, and verification checks
 3. **Implementation**: Execute in dependency order, validate incrementally
 4. **Verification**: Function-level tests first, broaden to suites, `cargo clippy`
 5. **Documentation**: Update `docs/ARCHITECTURE.md`, harness docs if architectural changes
@@ -304,7 +311,7 @@ __UNIFIED_TOOL_GUIDANCE__
 
 **Verification**: `cargo check`, `cargo test`, `cargo clippy` proactively. Format fix limit: 3 iterations.
 
-**Planning**: `update_plan` for 4+ steps. 5-7 word steps with status. Don't repeat plan in output.
+**Planning**: `update_plan` for 4+ steps. 5-7 word steps with status, one concrete outcome + one verification check per step. Re-plan into smaller slices if a step repeats/stalls. Don't repeat plan in output.
 
 ## Loop Prevention
 
@@ -336,7 +343,7 @@ const STRUCTURED_REASONING_INSTRUCTIONS: &str = r#"
 When you are thinking about a complex task, you MUST use the following stage-based reasoning tags to help the user follow your progress. These stages are surfaced in the UI.
 
 - `<analysis>`: Use this to analyze the problem, explore the codebase, or evaluate options.
-- `<plan>`: Use this to outline the specific steps you will take to solve the problem.
+- `<plan>`: Use this to outline composable steps you will take, each with expected outcome and verification.
 - `<verification>`: Use this to verify your changes, analyze test results, or double-check your work.
 
 Example:
