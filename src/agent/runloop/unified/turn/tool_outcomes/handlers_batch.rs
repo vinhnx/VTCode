@@ -70,7 +70,7 @@ pub(crate) async fn handle_tool_call_batch<'a, 'b>(
             ValidationResult::Outcome(outcome) => return Ok(Some(outcome)),
             ValidationResult::Blocked => continue,
             ValidationResult::Proceed(prepared) => {
-                validated_calls.push((tool_call, prepared, args_val));
+                validated_calls.push((tool_call, prepared));
             }
         }
     }
@@ -81,16 +81,16 @@ pub(crate) async fn handle_tool_call_batch<'a, 'b>(
 
     let can_parallelize = validated_calls
         .iter()
-        .all(|(_, prepared, _)| can_parallelize_batch_tool_call(prepared));
+        .all(|(_, prepared)| can_parallelize_batch_tool_call(prepared));
     if !can_parallelize {
-        for (tool_call, prepared, args_val) in validated_calls {
+        for (tool_call, prepared) in validated_calls {
             if let Some(outcome) = execute_and_handle_tool_call(
                 t_ctx.ctx,
                 t_ctx.repeated_tool_attempts,
                 t_ctx.turn_modified_files,
                 tool_call.id.clone(),
                 &prepared.canonical_name,
-                args_val,
+                prepared.effective_args,
                 None,
             )
             .await?
@@ -119,13 +119,14 @@ pub(crate) async fn handle_tool_call_batch<'a, 'b>(
     let vt_cfg = t_ctx.ctx.vt_cfg;
 
     let mut execution_futures = FuturesUnordered::new();
-    for (tool_call, prepared, args) in validated_calls {
+    for (tool_call, prepared) in validated_calls {
         let registry = registry.clone();
         let ctrl_c_state = std::sync::Arc::clone(&ctrl_c_state);
         let ctrl_c_notify = std::sync::Arc::clone(&ctrl_c_notify);
         let reporter = progress_reporter.clone();
         let name = prepared.canonical_name;
         let call_id = tool_call.id.clone();
+        let args = prepared.effective_args;
 
         let fut = async move {
             let start_time = std::time::Instant::now();

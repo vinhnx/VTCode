@@ -1,6 +1,7 @@
 //! Tool outcome handling helpers for turn execution.
 
 use anyhow::Result;
+use serde_json::{Value, json};
 use std::time::Duration;
 
 use vtcode_core::config::constants::tools as tool_names;
@@ -37,6 +38,7 @@ pub(crate) enum ValidationResult {
 pub(crate) struct PreparedToolCall {
     pub canonical_name: String,
     pub readonly_classification: bool,
+    pub effective_args: serde_json::Value,
 }
 
 const MAX_RATE_LIMIT_ACQUIRE_ATTEMPTS: usize = 4;
@@ -74,8 +76,120 @@ fn compact_loop_key_part(value: &str, max_chars: usize) -> String {
     value.trim().chars().take(max_chars).collect()
 }
 
+fn read_file_path_arg(args: &Value) -> Option<&str> {
+    let obj = args.as_object()?;
+    for key in ["path", "file_path", "filepath", "target_path"] {
+        if let Some(path) = obj.get(key).and_then(|v| v.as_str()) {
+            let trimmed = path.trim();
+            if !trimmed.is_empty() {
+                return Some(trimmed);
+            }
+        }
+    }
+    None
+}
+
+fn read_file_has_offset_arg(args: &Value) -> bool {
+    ["offset", "offset_lines", "offset_bytes"]
+        .iter()
+        .any(|key| args.get(*key).is_some())
+}
+
+fn read_file_has_limit_arg(args: &Value) -> bool {
+    ["limit", "page_size_lines", "max_lines", "chunk_lines"]
+        .iter()
+        .any(|key| args.get(*key).is_some())
+}
+
+fn read_file_limit_value(args: &Value) -> Option<usize> {
+    ["limit", "page_size_lines", "max_lines", "chunk_lines"]
+        .iter()
+        .filter_map(|key| args.get(*key))
+        .find_map(|value| {
+            value
+                .as_u64()
+                .and_then(|n| usize::try_from(n).ok())
+                .or_else(|| value.as_str().and_then(|s| s.parse::<usize>().ok()))
+        })
+}
+
+fn looks_like_tool_output_spool_path(path: &str) -> bool {
+    let normalized = path.replace('\\', "/");
+    normalized.contains(".vtcode/context/tool_outputs/")
+}
+
+fn is_read_file_style_call(canonical_tool_name: &str, args: &Value) -> bool {
+    match canonical_tool_name {
+        tool_names::READ_FILE => true,
+        tool_names::UNIFIED_FILE => tool_intent::unified_file_action(args)
+            .unwrap_or("read")
+            .eq_ignore_ascii_case("read"),
+        _ => false,
+    }
+}
+
+fn maybe_apply_spool_read_offset_hint(
+    tool_registry: &mut vtcode_core::tools::registry::ToolRegistry,
+    canonical_tool_name: &str,
+    args: &Value,
+) -> Value {
+    if !is_read_file_style_call(canonical_tool_name, args) || read_file_has_offset_arg(args) {
+        return args.clone();
+    }
+
+    let Some(path) = read_file_path_arg(args) else {
+        return args.clone();
+    };
+    if !looks_like_tool_output_spool_path(path) {
+        return args.clone();
+    }
+
+    let Some((next_offset, chunk_limit)) =
+        tool_registry.find_recent_read_file_spool_progress(path, Duration::from_secs(180))
+    else {
+        return args.clone();
+    };
+
+    let mut adjusted = args.clone();
+    let keep_existing_limit = read_file_has_limit_arg(&adjusted);
+    if let Some(obj) = adjusted.as_object_mut() {
+        obj.insert("offset".to_string(), json!(next_offset));
+        if !keep_existing_limit {
+            obj.insert("limit".to_string(), json!(chunk_limit));
+        }
+        tracing::debug!(
+            tool = canonical_tool_name,
+            path = path,
+            next_offset,
+            chunk_limit,
+            "Applied spool read continuation hint to avoid repeated identical chunk reads"
+        );
+    }
+    adjusted
+}
+
 fn loop_detection_tool_key(canonical_tool_name: &str, args: &serde_json::Value) -> String {
     match canonical_tool_name {
+        tool_names::READ_FILE => {
+            let offset = args
+                .get("offset")
+                .or_else(|| args.get("offset_lines"))
+                .or_else(|| args.get("offset_bytes"))
+                .and_then(|v| {
+                    v.as_u64()
+                        .and_then(|n| usize::try_from(n).ok())
+                        .or_else(|| v.as_str().and_then(|s| s.parse::<usize>().ok()))
+                })
+                .unwrap_or(1);
+            let limit = read_file_limit_value(args).unwrap_or(0);
+            if let Some(path) = read_file_path_arg(args) {
+                return format!(
+                    "{canonical_tool_name}::{}::offset={offset}::limit={limit}",
+                    compact_loop_key_part(path, 120)
+                );
+            }
+            format!("{canonical_tool_name}::offset={offset}::limit={limit}")
+        }
         tool_names::UNIFIED_FILE => {
             let action = tool_intent::unified_file_action(args).unwrap_or("read");
             let action = action.to_ascii_lowercase();
@@ -87,9 +201,20 @@ fn loop_detection_tool_key(canonical_tool_name: &str, args: &serde_json::Value) 
                     .or_else(|| args.get("target_path"))
                     .and_then(|v| v.as_str())
             {
+                let offset = args
+                    .get("offset")
+                    .or_else(|| args.get("offset_lines"))
+                    .or_else(|| args.get("offset_bytes"))
+                    .and_then(|v| {
+                        v.as_u64()
+                            .and_then(|n| usize::try_from(n).ok())
+                            .or_else(|| v.as_str().and_then(|s| s.parse::<usize>().ok()))
+                    })
+                    .unwrap_or(1);
+                let limit = read_file_limit_value(args).unwrap_or(0);
                 return format!(
-                    "{canonical_tool_name}::{action}::{}",
-                    compact_loop_key_part(path, 120)
+                    "{canonical_tool_name}::{action}::{}::offset={offset}::limit={limit}",
+                    compact_loop_key_part(path, 120),
                 );
             }
             format!("{canonical_tool_name}::{action}")
@@ -164,7 +289,7 @@ pub(crate) async fn handle_single_tool_call<'a, 'b, 'tool>(
         t_ctx.turn_modified_files,
         tool_call_id,
         &prepared.canonical_name,
-        args_val,
+        prepared.effective_args,
         None,
     )
     .await?
@@ -230,6 +355,8 @@ pub(crate) async fn validate_tool_call<'a>(
         }
     };
     let canonical_tool_name = preflight.normalized_tool_name.clone();
+    let effective_args =
+        maybe_apply_spool_read_offset_hint(ctx.tool_registry, &canonical_tool_name, args_val);
 
     // Phase 4 Check: Per-tool Circuit Breaker
     if !ctx
@@ -257,10 +384,10 @@ pub(crate) async fn validate_tool_call<'a>(
     }
 
     // Phase 4 Check: Adaptive Loop Detection
-    let loop_tool_key = loop_detection_tool_key(&canonical_tool_name, args_val);
+    let loop_tool_key = loop_detection_tool_key(&canonical_tool_name, &effective_args);
     if let Some(warning) = ctx
         .autonomous_executor
-        .record_tool_call(&loop_tool_key, args_val)
+        .record_tool_call(&loop_tool_key, &effective_args)
     {
         let should_block = {
             if let Ok(detector) = ctx.autonomous_executor.loop_detector().read() {
@@ -284,7 +411,7 @@ pub(crate) async fn validate_tool_call<'a>(
             ctx.input_status_state.right = None;
             if let Some(mut spooled) = ctx.tool_registry.find_recent_spooled_output(
                 &canonical_tool_name,
-                args_val,
+                &effective_args,
                 Duration::from_secs(120),
             ) {
                 if let Some(obj) = spooled.as_object_mut() {
@@ -336,7 +463,7 @@ pub(crate) async fn validate_tool_call<'a>(
         let validation_result = {
             let mut validator = ctx.safety_validator.write().await;
             validator
-                .validate_call(&canonical_tool_name, args_val)
+                .validate_call(&canonical_tool_name, &effective_args)
                 .await
         };
 
@@ -416,13 +543,14 @@ pub(crate) async fn validate_tool_call<'a>(
             skip_confirmations: false, // Normal tool calls should prompt if configured
         },
         &canonical_tool_name,
-        Some(args_val),
+        Some(&effective_args),
     )
     .await
     {
         Ok(ToolPermissionFlow::Approved) => Ok(ValidationResult::Proceed(PreparedToolCall {
             canonical_name: canonical_tool_name,
             readonly_classification: preflight.readonly_classification,
+            effective_args,
         })),
         Ok(ToolPermissionFlow::Denied) => {
             let denial = ToolExecutionError::new(
@@ -550,5 +678,21 @@ mod tests {
         );
         assert!(key.contains("unified_exec::poll::"));
         assert!(key.contains("run-abc123"));
+    }
+
+    #[test]
+    fn loop_key_for_read_file_includes_path_and_offset() {
+        let key = loop_detection_tool_key(
+            tool_names::READ_FILE,
+            &json!({
+                "path": ".vtcode/context/tool_outputs/unified_exec_123.txt",
+                "offset": 41,
+                "limit": 40
+            }),
+        );
+        assert!(key.contains("read_file::"));
+        assert!(key.contains(".vtcode/context/tool_outputs/unified_exec_123.txt"));
+        assert!(key.contains("offset=41"));
+        assert!(key.contains("limit=40"));
     }
 }

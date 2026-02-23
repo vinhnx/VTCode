@@ -234,7 +234,7 @@ fn test_token_budget_status_and_guidance_together() {
 }
 
 #[test]
-fn test_update_token_usage_with_completion_tokens() {
+fn test_update_token_usage_prefers_prompt_pressure() {
     let mut manager = ContextManager::new(
         "sys".into(),
         (),
@@ -245,7 +245,7 @@ fn test_update_token_usage_with_completion_tokens() {
     // Initial state
     assert_eq!(manager.current_token_usage(), 0);
 
-    // Update with first response (500 completion tokens)
+    // Update with first response: prompt-side pressure becomes authoritative.
     manager.update_token_usage(&Some(uni::Usage {
         prompt_tokens: 1000,
         completion_tokens: 500,
@@ -254,9 +254,9 @@ fn test_update_token_usage_with_completion_tokens() {
         cache_creation_tokens: None,
         cache_read_tokens: None,
     }));
-    assert_eq!(manager.current_token_usage(), 500);
+    assert_eq!(manager.current_token_usage(), 1000);
 
-    // Update with second response (800 completion tokens)
+    // Update with second response: usage tracks latest prompt pressure, not cumulative output.
     manager.update_token_usage(&Some(uni::Usage {
         prompt_tokens: 2500,
         completion_tokens: 800,
@@ -265,5 +265,27 @@ fn test_update_token_usage_with_completion_tokens() {
         cache_creation_tokens: None,
         cache_read_tokens: None,
     }));
-    assert_eq!(manager.current_token_usage(), 1300);
+    assert_eq!(manager.current_token_usage(), 2500);
+}
+
+#[test]
+fn test_update_token_usage_falls_back_when_prompt_missing() {
+    let mut manager = ContextManager::new(
+        "sys".into(),
+        (),
+        Arc::new(RwLock::new(HashMap::new())),
+        None,
+    );
+
+    manager.update_token_usage(&Some(uni::Usage {
+        prompt_tokens: 0,
+        completion_tokens: 800,
+        total_tokens: 3300,
+        cached_prompt_tokens: None,
+        cache_creation_tokens: None,
+        cache_read_tokens: None,
+    }));
+
+    // Fallback estimate = total - completion.
+    assert_eq!(manager.current_token_usage(), 2500);
 }

@@ -29,7 +29,14 @@ struct ContextStats {
     tool_usage_count: usize,
     error_count: usize,
     last_history_len: usize,
+    /// Current prompt-side token pressure used for compaction checks.
     total_token_usage: usize,
+    /// Most recent provider-reported prompt token count.
+    last_prompt_tokens: usize,
+    /// Most recent provider-reported total token count.
+    last_total_tokens: usize,
+    /// Cumulative completion tokens, retained for diagnostics only.
+    completion_tokens_cumulative: usize,
 }
 
 /// Token budget status for proactive context management
@@ -119,12 +126,36 @@ impl ContextManager {
         self.cached_stats.last_history_len = new_len;
     }
 
-    /// Update token usage from LLM response
-    /// Uses completion_tokens (new output) to track growth rate
-    /// since prompt_tokens includes all history and would double-count
+    /// Update token usage from the latest LLM response.
+    ///
+    /// We prioritize prompt-side pressure as the compaction signal:
+    /// - `prompt_tokens` when available
+    /// - fallback to `total_tokens - completion_tokens`
+    /// - final fallback to cumulative completion growth
     pub(crate) fn update_token_usage(&mut self, usage: &Option<uni::Usage>) {
         if let Some(usage) = usage {
-            self.cached_stats.total_token_usage += usage.completion_tokens as usize;
+            let prompt_tokens = usage.prompt_tokens as usize;
+            let completion_tokens = usage.completion_tokens as usize;
+            let total_tokens = usage.total_tokens as usize;
+
+            self.cached_stats.completion_tokens_cumulative = self
+                .cached_stats
+                .completion_tokens_cumulative
+                .saturating_add(completion_tokens);
+            self.cached_stats.last_total_tokens = total_tokens;
+
+            let estimated_prompt_pressure = if prompt_tokens > 0 {
+                prompt_tokens
+            } else if total_tokens > completion_tokens {
+                total_tokens.saturating_sub(completion_tokens)
+            } else {
+                self.cached_stats
+                    .total_token_usage
+                    .saturating_add(completion_tokens)
+            };
+
+            self.cached_stats.last_prompt_tokens = estimated_prompt_pressure;
+            self.cached_stats.total_token_usage = estimated_prompt_pressure;
         }
     }
 
@@ -133,22 +164,26 @@ impl ContextManager {
     #[cfg(debug_assertions)]
     pub(crate) fn validate_token_tracking(&self, provider_usage: &Option<uni::Usage>) {
         if let Some(usage) = provider_usage {
-            let provider_total = usage.total_tokens as usize;
+            let provider_prompt = if usage.prompt_tokens > 0 {
+                usage.prompt_tokens as usize
+            } else {
+                (usage.total_tokens as usize).saturating_sub(usage.completion_tokens as usize)
+            };
             let manager_total = self.cached_stats.total_token_usage;
 
-            if provider_total > 0 {
-                let delta = if provider_total > manager_total {
-                    (provider_total - manager_total) as f64 / provider_total as f64
+            if provider_prompt > 0 {
+                let delta = if provider_prompt > manager_total {
+                    (provider_prompt - manager_total) as f64 / provider_prompt as f64
                 } else {
-                    (manager_total - provider_total) as f64 / provider_total as f64
+                    (manager_total - provider_prompt) as f64 / provider_prompt as f64
                 };
 
                 if delta > 0.05 {
                     tracing::warn!(
-                        provider_tokens = provider_total,
+                        provider_prompt_tokens = provider_prompt,
                         manager_tokens = manager_total,
                         delta_percent = delta * 100.0,
-                        "Token tracking divergence detected between ContextManager and Provider"
+                        "Prompt-token tracking divergence detected between ContextManager and provider usage"
                     );
                 }
             }

@@ -12,6 +12,7 @@ use std::time::{Duration, SystemTime};
 use serde_json::{Value, json};
 
 use crate::config::constants::{defaults, tools};
+use crate::tools::tool_intent;
 
 /// Snapshot of harness context for execution records.
 #[derive(Debug, Clone)]
@@ -157,6 +158,40 @@ fn spool_path_exists(result: &Value) -> bool {
             .is_some_and(|cwd| cwd.join(path).exists())
 }
 
+fn read_file_path_from_args(args: &Value) -> Option<&str> {
+    let obj = args.as_object()?;
+    for key in ["path", "file_path", "filepath", "target_path"] {
+        if let Some(path) = obj.get(key).and_then(|v| v.as_str()) {
+            let trimmed = path.trim();
+            if !trimmed.is_empty() {
+                return Some(trimmed);
+            }
+        }
+    }
+    None
+}
+
+fn value_to_usize(value: &Value) -> Option<usize> {
+    value
+        .as_u64()
+        .and_then(|n| usize::try_from(n).ok())
+        .or_else(|| value.as_str().and_then(|s| s.parse::<usize>().ok()))
+}
+
+fn is_read_file_style_record(record: &ToolExecutionRecord) -> bool {
+    if record.tool_name == tools::READ_FILE {
+        return true;
+    }
+
+    if record.tool_name != tools::UNIFIED_FILE {
+        return false;
+    }
+
+    tool_intent::unified_file_action(&record.args)
+        .unwrap_or("read")
+        .eq_ignore_ascii_case("read")
+}
+
 /// Thread-safe execution history for recording tool executions.
 #[derive(Clone)]
 pub struct ToolExecutionHistory {
@@ -269,10 +304,83 @@ impl ToolExecutionHistory {
         None
     }
 
+    /// Find continuation info from a recent chunked file-read call for the same path.
+    ///
+    /// Supports both `read_file` and `unified_file` read action records.
+    ///
+    /// Returns `(next_offset, chunk_limit)` when the recent call indicates more chunks are
+    /// available (`spool_chunked=true`, `has_more=true`).
+    pub fn find_recent_read_file_spool_progress(
+        &self,
+        path: &str,
+        max_age: Duration,
+    ) -> Option<(usize, usize)> {
+        let records = self.records.read().unwrap();
+        let now = SystemTime::now();
+        let expected_path = path.trim();
+
+        for record in records.iter().rev() {
+            if !record.success || !is_read_file_style_record(record) {
+                continue;
+            }
+
+            let Some(record_path) = read_file_path_from_args(&record.args) else {
+                continue;
+            };
+            if record_path != expected_path {
+                continue;
+            }
+
+            let age_ok = match now.duration_since(record.timestamp) {
+                Ok(age) => age <= max_age,
+                Err(_) => false,
+            };
+            if !age_ok {
+                continue;
+            }
+
+            let Ok(result) = &record.result else {
+                continue;
+            };
+            let chunked = result
+                .get("spool_chunked")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+            let has_more = result
+                .get("has_more")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+            if !(chunked && has_more) {
+                continue;
+            }
+
+            let Some(next_offset) = result.get("next_offset").and_then(value_to_usize) else {
+                continue;
+            };
+            let chunk_limit = result
+                .get("chunk_limit")
+                .and_then(value_to_usize)
+                .unwrap_or(40)
+                .max(1);
+            return Some((next_offset.max(1), chunk_limit));
+        }
+        None
+    }
+
     /// Clear all records.
     pub fn clear(&self) {
         let mut records = self.records.write().unwrap();
         records.clear();
+    }
+
+    /// Total number of execution records currently stored.
+    pub fn len(&self) -> usize {
+        self.records.read().unwrap().len()
+    }
+
+    /// Whether no execution records are currently stored.
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
     }
 
     /// Get the current loop limit.
@@ -459,5 +567,105 @@ mod tests {
         let found =
             history.find_recent_spooled_result("run_pty_cmd", &args, Duration::from_secs(60));
         assert!(found.is_none());
+    }
+
+    #[test]
+    fn len_tracks_records_and_clear() {
+        let history = ToolExecutionHistory::new(10);
+        assert_eq!(history.len(), 0);
+        assert!(history.is_empty());
+
+        history.add_record(ToolExecutionRecord::success(
+            "read_file".to_string(),
+            "read_file".to_string(),
+            false,
+            None,
+            json!({"path": "README.md"}),
+            json!({"success": true}),
+            make_snapshot(),
+            None,
+            None,
+            None,
+            None,
+            false,
+        ));
+
+        assert_eq!(history.len(), 1);
+        assert!(!history.is_empty());
+
+        history.clear();
+        assert_eq!(history.len(), 0);
+        assert!(history.is_empty());
+    }
+
+    #[test]
+    fn finds_recent_read_file_spool_progress() {
+        let history = ToolExecutionHistory::new(10);
+        let args = json!({"path": ".vtcode/context/tool_outputs/unified_exec_123.txt"});
+        let result = json!({
+            "success": true,
+            "spool_chunked": true,
+            "has_more": true,
+            "next_offset": 41,
+            "chunk_limit": 40
+        });
+
+        history.add_record(ToolExecutionRecord::success(
+            "read_file".to_string(),
+            "read_file".to_string(),
+            false,
+            None,
+            args,
+            result,
+            make_snapshot(),
+            None,
+            None,
+            None,
+            None,
+            false,
+        ));
+
+        let found = history.find_recent_read_file_spool_progress(
+            ".vtcode/context/tool_outputs/unified_exec_123.txt",
+            Duration::from_secs(60),
+        );
+        assert_eq!(found, Some((41, 40)));
+    }
+
+    #[test]
+    fn finds_recent_unified_file_read_spool_progress() {
+        let history = ToolExecutionHistory::new(10);
+        let args = json!({
+            "action": "read",
+            "path": ".vtcode/context/tool_outputs/unified_exec_456.txt"
+        });
+        let result = json!({
+            "success": true,
+            "spool_chunked": true,
+            "has_more": true,
+            "next_offset": 81,
+            "chunk_limit": 40
+        });
+
+        history.add_record(ToolExecutionRecord::success(
+            "unified_file".to_string(),
+            "unified_file".to_string(),
+            false,
+            None,
+            args,
+            result,
+            make_snapshot(),
+            None,
+            None,
+            None,
+            None,
+            false,
+        ));
+
+        let found = history.find_recent_read_file_spool_progress(
+            ".vtcode/context/tool_outputs/unified_exec_456.txt",
+            Duration::from_secs(60),
+        );
+        assert_eq!(found, Some((81, 40)));
     }
 }

@@ -247,6 +247,14 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                     harness_config.max_tool_wall_clock_secs,
                     harness_config.max_tool_retries,
                 );
+                let history_for_turn = if attempts == 0 {
+                    std::mem::take(&mut working_history)
+                } else {
+                    history_backup
+                        .take()
+                        .expect("history_backup must be set after first attempt")
+                };
+                let execution_history_len_before_attempt = tool_registry.execution_history_len();
                 let turn_loop_ctx = crate::agent::runloop::unified::turn::TurnLoopContext::new(
                     &mut renderer,
                     &handle,
@@ -285,14 +293,6 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                     steering_receiver,
                 );
 
-                let history_for_turn = if attempts == 0 {
-                    std::mem::take(&mut working_history)
-                } else {
-                    history_backup
-                        .take()
-                        .expect("history_backup must be set after first attempt")
-                };
-
                 let result = timeout(
                     Duration::from_secs(timeout_secs),
                     crate::agent::runloop::unified::turn::run_turn_loop(
@@ -306,7 +306,12 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                 match result {
                     Ok(inner) => break inner,
                     Err(_) => {
+                        let active_pty_sessions_before_cancel = tool_registry.active_pty_sessions();
+                        let attempted_tool_calls = harness_state.tool_calls;
+                        let timed_out_phase = harness_state.phase;
                         tool_registry.terminate_all_pty_sessions();
+                        let execution_history_len_after_attempt =
+                            tool_registry.execution_history_len();
                         handle.set_input_status(None, None);
                         input_status_state.left = None;
                         input_status_state.right = None;
@@ -337,12 +342,32 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                         if history_backup.is_none() {
                             history_backup = Some(conversation_history.clone());
                         }
+                        let had_tool_activity = execution_history_len_after_attempt
+                            > execution_history_len_before_attempt
+                            || active_pty_sessions_before_cancel > 0
+                            || attempted_tool_calls > 0;
                         attempts += 1;
+                        if had_tool_activity {
+                            renderer.line(
+                                      MessageStyle::Error,
+                                  &format!(
+                                      "Turn timed out after {} seconds in phase {:?}. PTY sessions cancelled; tool activity was detected in this attempt (calls={}, active_pty_before_cancel={}), so retry is skipped to avoid duplicate execution.",
+                                      timeout_secs, timed_out_phase, attempted_tool_calls, active_pty_sessions_before_cancel
+                                  ),
+                              )?;
+                            break Err(anyhow::anyhow!(
+                                "Turn timed out after {} seconds in phase {:?} after partial tool execution (calls={}, active_pty_before_cancel={})",
+                                timeout_secs,
+                                timed_out_phase,
+                                attempted_tool_calls,
+                                active_pty_sessions_before_cancel
+                            ));
+                        }
                         if attempts >= 2 {
                             renderer.line(
-                                MessageStyle::Error,
-                                &format!(
-                                    "Turn timed out after {} seconds. PTY sessions cancelled; stopping turn.",
+                                  MessageStyle::Error,
+                                  &format!(
+                                      "Turn timed out after {} seconds. PTY sessions cancelled; stopping turn.",
                                     timeout_secs
                                 ),
                             )?;
