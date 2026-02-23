@@ -32,6 +32,21 @@ const MAX_SPOOL_AGE_SECS: u64 = 3600;
 
 const CONDENSE_HEAD_BYTES: usize = 8_000;
 const CONDENSE_TAIL_BYTES: usize = 4_000;
+const PTY_PREVIEW_TAIL_BYTES: usize = 2_500;
+const PTY_PREVIEW_MAX_LINES: usize = 40;
+
+fn is_pty_tool_name(tool_name: &str) -> bool {
+    matches!(
+        tool_name,
+        "run_pty_cmd"
+            | "send_pty_input"
+            | "read_pty_session"
+            | "unified_exec"
+            | "bash"
+            | "shell"
+            | "execute_code"
+    )
+}
 
 fn floor_char_boundary(s: &str, index: usize) -> usize {
     if index >= s.len() {
@@ -55,15 +70,15 @@ fn ceil_char_boundary(s: &str, index: usize) -> usize {
     i
 }
 
-fn condense_content(content: &str) -> String {
+fn condense_content_with_limits(content: &str, head_bytes: usize, tail_bytes: usize) -> String {
     let byte_len = content.len();
-    let max_inline = CONDENSE_HEAD_BYTES + CONDENSE_TAIL_BYTES;
+    let max_inline = head_bytes + tail_bytes;
     if byte_len <= max_inline {
         return content.to_string();
     }
 
-    let head_end = floor_char_boundary(content, CONDENSE_HEAD_BYTES);
-    let tail_start_raw = byte_len.saturating_sub(CONDENSE_TAIL_BYTES);
+    let head_end = floor_char_boundary(content, head_bytes);
+    let tail_start_raw = byte_len.saturating_sub(tail_bytes);
     let tail_start = ceil_char_boundary(content, tail_start_raw);
 
     let omitted = byte_len
@@ -76,6 +91,58 @@ fn condense_content(content: &str) -> String {
         omitted,
         &content[tail_start..]
     )
+}
+
+fn condense_content(content: &str) -> String {
+    condense_content_with_limits(content, CONDENSE_HEAD_BYTES, CONDENSE_TAIL_BYTES)
+}
+
+fn tail_preview_content(content: &str, tail_bytes: usize, max_lines: usize) -> String {
+    if content.is_empty() {
+        return String::new();
+    }
+
+    let tail_start = ceil_char_boundary(content, content.len().saturating_sub(tail_bytes));
+    let tail_slice = &content[tail_start..];
+
+    let mut line_start = 0usize;
+    if max_lines > 0 {
+        let mut seen = 0usize;
+        for (idx, b) in tail_slice.as_bytes().iter().enumerate().rev() {
+            if *b == b'\n' {
+                seen += 1;
+                if seen >= max_lines {
+                    line_start = idx.saturating_add(1);
+                    break;
+                }
+            }
+        }
+    }
+
+    let preview = &tail_slice[line_start..];
+    let omitted = tail_start.saturating_add(line_start);
+    if omitted == 0 {
+        return preview.to_string();
+    }
+
+    format!(
+        "… [{} bytes omitted — showing tail preview] …\n{}",
+        omitted, preview
+    )
+}
+
+fn build_spool_hint(tool_name: &str, spool_path: &str) -> String {
+    if is_pty_tool_name(tool_name) {
+        format!(
+            "Large command output was spooled to \"{}\". Read full output with read_file path=\"{}\" (or keep polling with read_pty_session while the process is running).",
+            spool_path, spool_path
+        )
+    } else {
+        format!(
+            "Large output was spooled to \"{}\". Use read_file/grep_file to inspect details.",
+            spool_path
+        )
+    }
 }
 
 /// Configuration for the output spooler
@@ -361,16 +428,64 @@ impl ToolOutputSpooler {
         value: Value,
         is_mcp: bool,
     ) -> Result<Value> {
-        if !self.should_spool(&value) {
+        self.process_output_with_force(tool_name, value, is_mcp, false)
+            .await
+    }
+
+    /// Process a tool output, optionally forcing spool behavior.
+    ///
+    /// `force_spool=true` bypasses the size threshold but still respects explicit
+    /// `no_spool=true` in the payload.
+    pub async fn process_output_with_force(
+        &self,
+        tool_name: &str,
+        value: Value,
+        is_mcp: bool,
+        force_spool: bool,
+    ) -> Result<Value> {
+        let no_spool = value
+            .get("no_spool")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        if no_spool {
+            return Ok(value);
+        }
+        if !force_spool && !self.should_spool(&value) {
             return Ok(value);
         }
 
         let spool_result = self.spool_output(tool_name, &value, is_mcp).await?;
+        let condensed = if is_pty_tool_name(tool_name) {
+            tail_preview_content(
+                &spool_result.content,
+                PTY_PREVIEW_TAIL_BYTES,
+                PTY_PREVIEW_MAX_LINES,
+            )
+        } else {
+            condense_content(&spool_result.content)
+        };
+        let spool_path = spool_result.file_path.to_string_lossy().to_string();
+        let spool_hint = build_spool_hint(tool_name, &spool_path);
 
-        let exit_code = value.get("exit_code").cloned();
-        let success = value.get("success").cloned();
-        let error = value.get("error").cloned();
-        let stderr = value.get("stderr").and_then(|v| v.as_str()).map(|s| {
+        let mut response = match value {
+            Value::Object(map) => Value::Object(map),
+            _ => json!({}),
+        };
+        let is_pty_tool = is_pty_tool_name(tool_name);
+        let use_output_field = is_pty_tool
+            || response
+                .get("output")
+                .and_then(|v| v.as_str())
+                .is_some_and(|s| !s.is_empty());
+        let source_path = if tool_name == "read_file" || tool_name == "unified_file" {
+            response
+                .get("path")
+                .and_then(|v| v.as_str())
+                .map(String::from)
+        } else {
+            None
+        };
+        let stderr_preview = response.get("stderr").and_then(|v| v.as_str()).map(|s| {
             if s.len() > 500 {
                 format!("{}... (truncated)", &s[..500])
             } else {
@@ -378,36 +493,31 @@ impl ToolOutputSpooler {
             }
         });
 
-        let source_path = if tool_name == "read_file" || tool_name == "unified_file" {
-            value.get("path").and_then(|v| v.as_str()).map(String::from)
-        } else {
-            None
-        };
-
-        let condensed = condense_content(&spool_result.content);
-        let spool_path_str = spool_result.file_path.to_string_lossy();
-
-        let mut response = json!({
-            "content": condensed,
-            "spooled_to_file": true,
-            "spool_path": spool_path_str,
-        });
-
         if let Some(obj) = response.as_object_mut() {
-            if let Some(src) = source_path {
+            obj.remove("stdout");
+
+            // Replace only the heavy stream field with condensed preview.
+            if use_output_field {
+                obj.insert("output".to_string(), json!(condensed));
+            } else {
+                obj.insert("content".to_string(), json!(condensed));
+            }
+
+            obj.insert("spooled_to_file".to_string(), json!(true));
+            obj.insert("spool_path".to_string(), json!(spool_path));
+            obj.insert(
+                "spooled_bytes".to_string(),
+                json!(spool_result.original_bytes),
+            );
+            obj.insert("spool_hint".to_string(), json!(spool_hint));
+
+            if let Some(src) = source_path
+                && !obj.contains_key("source_path")
+            {
                 obj.insert("source_path".to_string(), json!(src));
             }
-            if let Some(code) = exit_code {
-                obj.insert("exit_code".to_string(), code);
-            }
-            if let Some(succ) = success {
-                obj.insert("success".to_string(), succ);
-            }
-            if let Some(err) = error {
-                obj.insert("error".to_string(), err);
-            }
-            if let Some(err_output) = stderr {
-                obj.insert("stderr_preview".to_string(), json!(err_output));
+            if let Some(stderr) = stderr_preview {
+                obj.insert("stderr_preview".to_string(), json!(stderr));
             }
         }
 
@@ -727,6 +837,58 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_forced_pty_spool_preserves_follow_up_metadata() {
+        let temp = tempdir().unwrap();
+        let mut config = SpoolerConfig::default();
+        config.threshold_bytes = 999_999; // ensure only force triggers
+        let spooler = ToolOutputSpooler::with_config(temp.path(), config);
+
+        let output = "x".repeat(10_000);
+        let value = json!({
+            "output": output,
+            "process_id": "run-abc123",
+            "follow_up_prompt": "Read more with read_pty_session session_id=\"run-abc123\".",
+            "truncated": true
+        });
+
+        let result = spooler
+            .process_output_with_force("run_pty_cmd", value, false, true)
+            .await
+            .unwrap();
+
+        assert_eq!(
+            result.get("process_id").and_then(|v| v.as_str()),
+            Some("run-abc123")
+        );
+        assert!(
+            result
+                .get("follow_up_prompt")
+                .and_then(|v| v.as_str())
+                .is_some()
+        );
+        assert_eq!(
+            result.get("truncated").and_then(|v| v.as_bool()),
+            Some(true)
+        );
+        assert_eq!(
+            result.get("spooled_to_file").and_then(|v| v.as_bool()),
+            Some(true)
+        );
+        assert!(
+            result
+                .get("output")
+                .and_then(|v| v.as_str())
+                .is_some_and(|s| s.contains("tail preview"))
+        );
+        assert!(
+            result
+                .get("spool_hint")
+                .and_then(|v| v.as_str())
+                .is_some_and(|s| s.contains("read_file"))
+        );
+    }
+
+    #[tokio::test]
     async fn test_unified_exec_spools_raw_output() {
         let temp = tempdir().unwrap();
         let mut config = SpoolerConfig::default();
@@ -856,6 +1018,18 @@ mod tests {
         let result = condense_content(&content);
         assert!(result.contains("bytes omitted"));
         assert!(result.is_char_boundary(0));
+    }
+
+    #[test]
+    fn test_tail_preview_content_shows_only_tail() {
+        let input = (0..200)
+            .map(|i| format!("line-{i}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let preview = tail_preview_content(&input, 500, 10);
+        assert!(preview.contains("tail preview"));
+        assert!(preview.contains("line-199"));
+        assert!(!preview.contains("line-1\n"));
     }
 
     #[tokio::test]

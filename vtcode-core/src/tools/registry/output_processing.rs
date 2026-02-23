@@ -4,6 +4,51 @@ use serde_json::{Value, json};
 
 use super::ToolRegistry;
 
+const PTY_FORCE_SPOOL_MIN_BYTES: usize = 12_000;
+
+fn is_pty_output_tool(tool_name: &str) -> bool {
+    matches!(
+        tool_name,
+        "run_pty_cmd"
+            | "read_pty_session"
+            | "send_pty_input"
+            | "unified_exec"
+            | "shell"
+            | "bash"
+            | "execute_code"
+    )
+}
+
+fn output_field_bytes(value: &Value) -> usize {
+    value
+        .get("output")
+        .and_then(|v| v.as_str())
+        .map(str::len)
+        .or_else(|| value.get("stdout").and_then(|v| v.as_str()).map(str::len))
+        .unwrap_or(0)
+}
+
+fn should_force_spool(tool_name: &str, value: &Value, is_mcp: bool) -> bool {
+    if is_mcp || !is_pty_output_tool(tool_name) {
+        return false;
+    }
+    if value
+        .get("no_spool")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false)
+    {
+        return false;
+    }
+    if value
+        .get("truncated")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false)
+    {
+        return true;
+    }
+    output_field_bytes(value) >= PTY_FORCE_SPOOL_MIN_BYTES
+}
+
 impl ToolRegistry {
     fn sanitize_tool_output(value: Value, is_mcp: bool) -> Value {
         let (entry_fuse, depth_fuse, token_fuse, byte_fuse) = Self::fuse_limits();
@@ -133,11 +178,13 @@ impl ToolRegistry {
         value: Value,
         is_mcp: bool,
     ) -> Value {
+        let force_spool = should_force_spool(tool_name, &value, is_mcp);
+
         // Check if output should be spooled to file
-        if self.output_spooler.should_spool(&value) {
+        if force_spool || self.output_spooler.should_spool(&value) {
             match self
                 .output_spooler
-                .process_output(tool_name, value.clone(), is_mcp)
+                .process_output_with_force(tool_name, value.clone(), is_mcp, force_spool)
                 .await
             {
                 Ok(spooled) => return spooled,
@@ -153,5 +200,41 @@ impl ToolRegistry {
         }
 
         Self::sanitize_tool_output(value, is_mcp)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn force_spool_for_truncated_pty_output() {
+        let value = json!({
+            "output": "x",
+            "truncated": true
+        });
+        assert!(should_force_spool("run_pty_cmd", &value, false));
+    }
+
+    #[test]
+    fn force_spool_for_large_pty_output() {
+        let value = json!({
+            "output": "x".repeat(PTY_FORCE_SPOOL_MIN_BYTES + 1)
+        });
+        assert!(should_force_spool("run_pty_cmd", &value, false));
+    }
+
+    #[test]
+    fn skip_force_spool_when_disabled_or_non_pty() {
+        let no_spool_value = json!({
+            "output": "x".repeat(PTY_FORCE_SPOOL_MIN_BYTES + 1),
+            "no_spool": true
+        });
+        assert!(!should_force_spool("run_pty_cmd", &no_spool_value, false));
+
+        let non_pty_value = json!({
+            "output": "x".repeat(PTY_FORCE_SPOOL_MIN_BYTES + 1)
+        });
+        assert!(!should_force_spool("grep_file", &non_pty_value, false));
     }
 }

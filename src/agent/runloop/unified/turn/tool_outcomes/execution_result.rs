@@ -193,6 +193,18 @@ fn maybe_inline_spooled(_tool_name: &str, output: &serde_json::Value) -> String 
     serialize_output(output)
 }
 
+fn is_pty_like_tool(tool_name: &str) -> bool {
+    matches!(
+        tool_name,
+        tool_names::RUN_PTY_CMD
+            | tool_names::READ_PTY_SESSION
+            | tool_names::SEND_PTY_INPUT
+            | tool_names::UNIFIED_EXEC
+            | tool_names::SHELL
+            | tool_names::EXECUTE_CODE
+    )
+}
+
 async fn handle_success<'a>(
     t_ctx: &mut super::handlers::ToolOutcomeContext<'a, '_>,
     tool_call_id: String,
@@ -205,10 +217,17 @@ async fn handle_success<'a>(
     push_tool_response(t_ctx.ctx.working_history, tool_call_id, content_for_model);
 
     if let Some(spool_path) = output.get("spool_path").and_then(|v| v.as_str()) {
-        let nudge = format!(
-            "Output was large and condensed. Full content saved to \"{}\". Use read_file or grep_file if you need more.",
-            spool_path
-        );
+        let nudge = if is_pty_like_tool(tool_name) {
+            format!(
+                "Output was large; only a tail preview is kept inline. Full command output is in \"{}\". Use read_file path=\"{}\" (or read_pty_session for live session polling).",
+                spool_path, spool_path
+            )
+        } else {
+            format!(
+                "Output was large and condensed. Full content saved to \"{}\". Use read_file or grep_file if you need more.",
+                spool_path
+            )
+        };
         t_ctx.ctx.working_history.push(uni::Message::system(nudge));
     }
 

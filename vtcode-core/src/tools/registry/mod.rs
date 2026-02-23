@@ -184,6 +184,8 @@ mod tests {
 
     const CUSTOM_TOOL_NAME: &str = "custom_test_tool";
     const REENTRANT_TOOL_NAME: &str = "reentrant_guard_test_tool";
+    const MUTUAL_REENTRANT_TOOL_A: &str = "mutual_reentrant_tool_a";
+    const MUTUAL_REENTRANT_TOOL_B: &str = "mutual_reentrant_tool_b";
 
     struct CustomEchoTool;
 
@@ -210,6 +212,28 @@ mod tests {
         args: Value,
     ) -> futures::future::BoxFuture<'a, Result<Value>> {
         Box::pin(async move { registry.execute_tool_ref(REENTRANT_TOOL_NAME, &args).await })
+    }
+
+    fn mutual_reentrant_tool_a_executor<'a>(
+        registry: &'a ToolRegistry,
+        args: Value,
+    ) -> futures::future::BoxFuture<'a, Result<Value>> {
+        Box::pin(async move {
+            registry
+                .execute_tool_ref(MUTUAL_REENTRANT_TOOL_B, &args)
+                .await
+        })
+    }
+
+    fn mutual_reentrant_tool_b_executor<'a>(
+        registry: &'a ToolRegistry,
+        args: Value,
+    ) -> futures::future::BoxFuture<'a, Result<Value>> {
+        Box::pin(async move {
+            registry
+                .execute_tool_ref(MUTUAL_REENTRANT_TOOL_A, &args)
+                .await
+        })
     }
 
     #[tokio::test]
@@ -461,6 +485,56 @@ mod tests {
                 .unwrap_or_default()
                 .contains("REENTRANCY GUARD")
         );
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn reentrancy_guard_blocks_cross_tool_cycles() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+
+        registry
+            .register_tool(ToolRegistration::new(
+                MUTUAL_REENTRANT_TOOL_A,
+                CapabilityLevel::CodeSearch,
+                false,
+                mutual_reentrant_tool_a_executor,
+            ))
+            .await?;
+        registry
+            .register_tool(ToolRegistration::new(
+                MUTUAL_REENTRANT_TOOL_B,
+                CapabilityLevel::CodeSearch,
+                false,
+                mutual_reentrant_tool_b_executor,
+            ))
+            .await?;
+        registry.allow_all_tools().await?;
+
+        let response = registry
+            .execute_tool(MUTUAL_REENTRANT_TOOL_A, json!({"input": "cycle"}))
+            .await?;
+
+        assert_eq!(
+            response
+                .get("reentrant_call_blocked")
+                .and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            response
+                .pointer("/error/error_type")
+                .and_then(Value::as_str),
+            Some("PolicyViolation")
+        );
+
+        let stack_trace = response
+            .get("stack_trace")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        assert!(stack_trace.contains(MUTUAL_REENTRANT_TOOL_A));
+        assert!(stack_trace.contains(MUTUAL_REENTRANT_TOOL_B));
 
         Ok(())
     }

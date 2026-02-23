@@ -14,6 +14,16 @@ use serde_json::{Value, json};
 use std::path::Path;
 use std::time::UNIX_EPOCH;
 
+const SPOOL_CHUNK_DEFAULT_LIMIT_LINES: usize = 40;
+const SPOOL_CHUNK_MAX_LIMIT_LINES: usize = 50;
+const SPOOL_CHUNK_SENTINEL_MAX_TOKENS: usize = 4096;
+
+#[derive(Clone, Copy, Debug)]
+struct SpoolChunkPlan {
+    offset: usize,
+    limit: usize,
+}
+
 fn is_legacy_read_request(args: &Value, is_image: bool) -> bool {
     if is_image {
         return true;
@@ -75,6 +85,59 @@ fn build_read_handler_args(args: &Value, canonical_path: &std::path::Path) -> Va
     }
 
     handler_args_json
+}
+
+fn parse_usize_value(value: &Value) -> Option<usize> {
+    value
+        .as_u64()
+        .and_then(|n| usize::try_from(n).ok())
+        .or_else(|| value.as_str().and_then(|s| s.parse::<usize>().ok()))
+}
+
+fn has_explicit_limit(args: &Value) -> bool {
+    ["limit", "page_size_lines", "max_lines", "chunk_lines"]
+        .iter()
+        .any(|key| args.get(*key).is_some())
+}
+
+fn apply_spool_chunk_defaults(handler_args_json: &mut Value, raw_args: &Value) -> SpoolChunkPlan {
+    let mut offset = 1usize;
+    let mut limit = SPOOL_CHUNK_DEFAULT_LIMIT_LINES;
+
+    if let Some(obj) = handler_args_json.as_object_mut() {
+        offset = obj
+            .get("offset")
+            .and_then(parse_usize_value)
+            .unwrap_or(1)
+            .max(1);
+
+        let requested_limit = if has_explicit_limit(raw_args) {
+            raw_args
+                .get("limit")
+                .or_else(|| raw_args.get("page_size_lines"))
+                .or_else(|| raw_args.get("max_lines"))
+                .or_else(|| raw_args.get("chunk_lines"))
+                .and_then(parse_usize_value)
+                .unwrap_or(SPOOL_CHUNK_DEFAULT_LIMIT_LINES)
+        } else {
+            SPOOL_CHUNK_DEFAULT_LIMIT_LINES
+        };
+
+        limit = requested_limit.clamp(1, SPOOL_CHUNK_MAX_LIMIT_LINES);
+
+        obj.insert("offset".to_string(), json!(offset));
+        obj.insert("limit".to_string(), json!(limit));
+        if !obj.contains_key("max_tokens") {
+            // Preserve narrow chunking behavior by bypassing MIN_BATCH_LIMIT expansion
+            // in ReadFileHandler::handle (which only applies when max_tokens is absent).
+            obj.insert(
+                "max_tokens".to_string(),
+                json!(SPOOL_CHUNK_SENTINEL_MAX_TOKENS),
+            );
+        }
+    }
+
+    SpoolChunkPlan { offset, limit }
 }
 
 fn is_history_jsonl(path: &Path) -> bool {
@@ -234,6 +297,7 @@ impl FileOpsTool {
                 },
             );
             let is_image = is_image_path(&canonical);
+            let is_spool_output = is_tool_output_spool_path(&canonical);
             let is_legacy_request = is_legacy_read_request(&args, is_image);
             let is_new_request = is_new_read_request(&args);
 
@@ -257,23 +321,56 @@ impl FileOpsTool {
             perf.tag("cache", if cache_key.is_some() { "miss" } else { "skip" });
 
             if !is_image && (is_new_request || !is_legacy_request) {
-                let handler_args_json = build_read_handler_args(&args, &canonical);
+                let mut handler_args_json = build_read_handler_args(&args, &canonical);
+                let spool_plan = if is_spool_output {
+                    Some(apply_spool_chunk_defaults(&mut handler_args_json, &args))
+                } else {
+                    None
+                };
                 match serde_json::from_value::<ReadFileArgs>(handler_args_json) {
                     Ok(read_args) => {
+                        let requested_path = self.workspace_relative_display(&canonical);
                         let handler = ReadFileHandler;
                         let content = handler.handle(read_args).await?;
+                        let lines_returned = if content.is_empty() {
+                            0usize
+                        } else {
+                            content.lines().count()
+                        };
 
-                        let response = ToolResponseBuilder::new("read_file")
+                        let mut builder = ToolResponseBuilder::new("read_file")
                             .success()
-                            .message(format!(
-                                "Successfully read file {}",
-                                self.workspace_relative_display(&canonical)
-                            ))
+                            .message(format!("Successfully read file {}", requested_path))
                             .content(content)
-                            .field("path", json!(self.workspace_relative_display(&canonical)))
+                            .field("path", json!(requested_path.clone()))
                             .field("no_spool", json!(true))
-                            .data("size_bytes", json!(size_bytes))
-                            .build_json();
+                            .data("size_bytes", json!(size_bytes));
+
+                        if let Some(plan) = spool_plan {
+                            let has_more = lines_returned >= plan.limit;
+                            let next_offset = plan.offset.saturating_add(lines_returned);
+                            let follow_up_prompt = if has_more {
+                                format!(
+                                    "Spool output is chunked to avoid context bloat. Continue with read_file {{\"path\":\"{}\",\"offset\":{},\"limit\":{}}}.",
+                                    requested_path, next_offset, plan.limit
+                                )
+                            } else {
+                                format!(
+                                    "Reached end of spooled output at line {}.",
+                                    next_offset.saturating_sub(1)
+                                )
+                            };
+
+                            builder = builder
+                                .field("spool_chunked", json!(true))
+                                .field("chunk_limit", json!(plan.limit))
+                                .field("lines_returned", json!(lines_returned))
+                                .field("has_more", json!(has_more))
+                                .field("next_offset", json!(next_offset))
+                                .field("follow_up_prompt", json!(follow_up_prompt));
+                        }
+
+                        let response = builder.build_json();
 
                         if let Some(key) = cache_key.as_ref() {
                             FILE_CACHE.put_file(key.clone(), response.clone()).await;
@@ -683,5 +780,40 @@ mod read_tests {
         assert!(err.contains("Session output file not found"));
         assert!(err.contains("read_pty_session"));
         assert!(err.contains("run-123abc"));
+    }
+
+    #[tokio::test]
+    async fn test_spool_file_reads_are_chunked_with_next_offset() {
+        let temp_dir = TempDir::new().unwrap();
+        let workspace_root = temp_dir.path().to_path_buf();
+        let spool_dir = workspace_root.join(".vtcode/context/tool_outputs");
+        std::fs::create_dir_all(&spool_dir).unwrap();
+        let spool_file = spool_dir.join("unified_exec_123.txt");
+        let spool_content = (1..=120)
+            .map(|i| format!("line{i}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        std::fs::write(&spool_file, spool_content).unwrap();
+
+        let grep_manager = std::sync::Arc::new(GrepSearchManager::new(workspace_root.clone()));
+        let file_ops = FileOpsTool::new(workspace_root, grep_manager);
+
+        let args = json!({
+            "path": ".vtcode/context/tool_outputs/unified_exec_123.txt"
+        });
+
+        let result = file_ops.read_file(args).await.unwrap();
+        assert_eq!(result["success"], true);
+        assert_eq!(result["spool_chunked"], true);
+        assert_eq!(result["chunk_limit"], SPOOL_CHUNK_DEFAULT_LIMIT_LINES);
+        assert_eq!(result["lines_returned"], SPOOL_CHUNK_DEFAULT_LIMIT_LINES);
+        assert_eq!(result["has_more"], true);
+        assert_eq!(result["next_offset"], SPOOL_CHUNK_DEFAULT_LIMIT_LINES + 1);
+        assert!(
+            result["follow_up_prompt"]
+                .as_str()
+                .unwrap_or_default()
+                .contains("read_file")
+        );
     }
 }
