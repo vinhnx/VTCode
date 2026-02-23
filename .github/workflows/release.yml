@@ -150,9 +150,9 @@ jobs:
           # Fetch all tags if not available
           git fetch --tags --force
           
-          # Find the most recent tag that follows SemVer (vX.Y.Z or X.Y.Z)
+          # Find the most recent tag that follows SemVer (vX.Y.Z or X.Y.Z) in commit history
           # We exclude the tag currently being released
-          PREV_TAG=$(git tag --sort=-v:refname | grep -E '^v?[0-9]+\.[0-9]+\.[0-9]+$' | grep -vE "^(v)?${{ github.event.inputs.tag }}$" | head -n 1)
+          PREV_TAG=$(git log --tags --simplify-by-decoration --pretty="format:%D" | grep -oE "tag: v?[0-9]+\.[0-9]+\.[0-9]+" | sed 's/tag: //;s/,.*//' | grep -vE "^(v)?${{ github.event.inputs.tag }}$" | head -n 1)
 
           echo "## What's Changed" > release_notes.md
           echo "" >> release_notes.md
