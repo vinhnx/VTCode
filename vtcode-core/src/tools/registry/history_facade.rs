@@ -27,8 +27,25 @@ impl ToolRegistry {
             .find_recent_spooled_result(tool_name, args, max_age)
     }
 
+    /// Find continuation metadata from a recent chunked file-read result for the same path.
+    ///
+    /// Supports both `read_file` and `unified_file` (read action) history records.
+    pub fn find_recent_read_file_spool_progress(
+        &self,
+        path: &str,
+        max_age: Duration,
+    ) -> Option<(usize, usize)> {
+        self.execution_history
+            .find_recent_read_file_spool_progress(path, max_age)
+    }
+
     /// Clear the execution history.
     pub fn clear_execution_history(&self) {
         self.execution_history.clear();
+    }
+
+    /// Get the current number of stored execution records.
+    pub fn execution_history_len(&self) -> usize {
+        self.execution_history.len()
     }
 }
