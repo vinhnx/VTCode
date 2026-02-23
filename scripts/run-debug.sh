@@ -3,7 +3,17 @@
 # VTCODE - Debug Mode Launch Script
 # This script provides fast development builds
 
-set -e
+set -eo pipefail
+
+restore_terminal_state() {
+  if [[ -t 1 ]]; then
+    # Best-effort restore for raw/alternate-screen/mouse modes in case vtcode aborts.
+    printf '\r\033[K\033[?1049l\033[?2004l\033[?1004l\033[?1006l\033[?1015l\033[?1003l\033[?1002l\033[?1000l\033[<1u\033[?25h' > /dev/tty 2>/dev/null || true
+    stty sane < /dev/tty > /dev/tty 2>/dev/null || true
+  fi
+}
+
+trap restore_terminal_state EXIT INT TERM
 
 # Suppress macOS malloc warnings by REMOVING the env vars (not setting to 0)
 # Setting to 0 triggers "can't turn off malloc stack logging" warnings
@@ -102,6 +112,8 @@ fi
 
 # Run with advanced features enabled by default
 # Note: Interactive chat is launched via the TUI without a subcommand
+# Increase stack floor for spawned threads in debug runs to reduce overflow risk
+export RUST_MIN_STACK="${RUST_MIN_STACK:-16777216}"
 if [[ "${RUSTC_WRAPPER:-}" == "" ]]; then
     # If RUSTC_WRAPPER was set to empty string, run with it still empty
     RUSTC_WRAPPER="" cargo run -- "${EXTRA_ARGS[@]}" --show-file-diffs --debug

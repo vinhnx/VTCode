@@ -85,6 +85,57 @@ fn missing_unified_search_action_error(args: &Value) -> anyhow::Error {
     )
 }
 
+fn is_valid_pty_session_id(session_id: &str) -> bool {
+    !session_id.trim().is_empty()
+        && session_id.len() <= 128
+        && session_id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+}
+
+fn extract_run_session_id_from_tool_output_path(path: &str) -> Option<String> {
+    let file_name = Path::new(path).file_name()?.to_str()?;
+    let session_id = file_name.strip_suffix(".txt")?;
+    if session_id.starts_with("run-") && is_valid_pty_session_id(session_id) {
+        Some(session_id.to_string())
+    } else {
+        None
+    }
+}
+
+fn extract_run_session_id_from_read_file_error(error_message: &str) -> Option<String> {
+    let marker = "session_id=\"";
+    let start = error_message.find(marker)? + marker.len();
+    let rest = &error_message[start..];
+    let end = rest.find('"')?;
+    let session_id = &rest[..end];
+    if session_id.starts_with("run-") && is_valid_pty_session_id(session_id) {
+        Some(session_id.to_string())
+    } else {
+        None
+    }
+}
+
+fn build_read_pty_fallback_args(args: &Value, error_message: &str) -> Option<Value> {
+    let session_id = args
+        .get("path")
+        .or_else(|| args.get("file_path"))
+        .or_else(|| args.get("filepath"))
+        .or_else(|| args.get("target_path"))
+        .and_then(Value::as_str)
+        .and_then(extract_run_session_id_from_tool_output_path)
+        .or_else(|| extract_run_session_id_from_read_file_error(error_message))?;
+
+    let mut payload = serde_json::Map::new();
+    payload.insert("session_id".to_string(), json!(session_id));
+
+    if let Some(yield_time_ms) = args.get("yield_time_ms").cloned() {
+        payload.insert("yield_time_ms".to_string(), yield_time_ms);
+    }
+
+    Some(Value::Object(payload))
+}
+
 impl ToolRegistry {
     pub(super) fn unified_exec_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
         Box::pin(async move { self.execute_unified_exec(args).await })
@@ -143,7 +194,49 @@ impl ToolRegistry {
         match action {
             UnifiedFileAction::Read => {
                 let tool = self.inventory.file_ops_tool().clone();
-                tool.read_file(args).await
+                match tool.read_file(args.clone()).await {
+                    Ok(response) => Ok(response),
+                    Err(read_err) => {
+                        let read_err_text = read_err.to_string();
+                        if let Some(fallback_args) =
+                            build_read_pty_fallback_args(&args, &read_err_text)
+                        {
+                            let session_id = fallback_args
+                                .get("session_id")
+                                .and_then(Value::as_str)
+                                .unwrap_or_default()
+                                .to_string();
+                            tracing::info!(
+                                session_id = %session_id,
+                                "Auto-recovering unified_file read via read_pty_session"
+                            );
+                            match self.execute_read_pty_session(fallback_args).await {
+                                Ok(mut recovered) => {
+                                    if let Some(obj) = recovered.as_object_mut() {
+                                        obj.insert("auto_recovered".to_string(), json!(true));
+                                        obj.insert(
+                                            "recovery_tool".to_string(),
+                                            json!("read_pty_session"),
+                                        );
+                                        obj.insert(
+                                            "recovery_reason".to_string(),
+                                            json!("missing_pty_spool_file"),
+                                        );
+                                    }
+                                    return Ok(recovered);
+                                }
+                                Err(recovery_err) => {
+                                    tracing::warn!(
+                                        session_id = %session_id,
+                                        error = %recovery_err,
+                                        "Failed auto-recovery via read_pty_session"
+                                    );
+                                }
+                            }
+                        }
+                        Err(read_err)
+                    }
+                }
             }
             UnifiedFileAction::Write => {
                 let tool = self.inventory.file_ops_tool().clone();
@@ -765,10 +858,18 @@ impl ToolRegistry {
             .as_object()
             .ok_or_else(|| anyhow!("read_pty_session requires a JSON object"))?;
 
-        let sid = payload
+        let raw_sid = payload
             .get("session_id")
             .and_then(|v| v.as_str())
             .ok_or_else(|| anyhow!("session_id is required for 'read_pty_session'"))?;
+        let sid = raw_sid.trim();
+
+        if !is_valid_pty_session_id(sid) {
+            return Err(anyhow!(
+                "Invalid session_id for 'read_pty_session': '{}'. Expected an ASCII token (letters, digits, '-', '_').",
+                raw_sid
+            ));
+        }
 
         let yield_time_ms = payload
             .get("yield_time_ms")
@@ -1336,6 +1437,7 @@ mod git_diff_tests {
 #[cfg(test)]
 mod unified_action_error_tests {
     use super::{
+        extract_run_session_id_from_read_file_error, extract_run_session_id_from_tool_output_path,
         missing_unified_exec_action_error, missing_unified_search_action_error,
         patch_source_from_args, summarized_arg_keys,
     };
@@ -1378,5 +1480,34 @@ mod unified_action_error_tests {
         );
         assert_eq!(patch_source_from_args(&json!({"input": "x"})), Some("x"));
         assert_eq!(patch_source_from_args(&json!({"patch": "y"})), Some("y"));
+    }
+
+    #[test]
+    fn extracts_run_session_id_from_tool_output_path() {
+        assert_eq!(
+            extract_run_session_id_from_tool_output_path(
+                ".vtcode/context/tool_outputs/run-abc123.txt"
+            ),
+            Some("run-abc123".to_string())
+        );
+        assert_eq!(
+            extract_run_session_id_from_tool_output_path(
+                ".vtcode/context/tool_outputs/not-a-session.txt"
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn extracts_run_session_id_from_read_file_error() {
+        let error = "Use read_pty_session with session_id=\"run-zz9\" instead of read_file.";
+        assert_eq!(
+            extract_run_session_id_from_read_file_error(error),
+            Some("run-zz9".to_string())
+        );
+        assert_eq!(
+            extract_run_session_id_from_read_file_error("no session"),
+            None
+        );
     }
 }

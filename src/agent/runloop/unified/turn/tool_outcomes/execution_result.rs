@@ -43,22 +43,69 @@ fn record_tool_execution(
 pub(crate) fn build_error_content(
     error_msg: String,
     fallback_tool: Option<String>,
+    fallback_tool_args: Option<serde_json::Value>,
     failure_kind: &'static str,
 ) -> serde_json::Value {
     if let Some(tool) = fallback_tool {
-        let suggestion = format!("Try '{}' as a fallback approach.", tool);
-        serde_json::json!({
+        let suggestion = if let Some(args) = fallback_tool_args.as_ref() {
+            format!("Try '{}' with args {} as a fallback approach.", tool, args)
+        } else {
+            format!("Try '{}' as a fallback approach.", tool)
+        };
+        let mut payload = serde_json::json!({
             "error": error_msg,
             "failure_kind": failure_kind,
             "fallback_tool": tool,
             "fallback_suggestion": suggestion,
-        })
+        });
+        if let Some(args) = fallback_tool_args
+            && let Some(obj) = payload.as_object_mut()
+        {
+            obj.insert("fallback_tool_args".to_string(), args);
+        }
+        payload
     } else {
         serde_json::json!({
             "error": error_msg,
             "failure_kind": failure_kind,
         })
     }
+}
+
+fn is_valid_pty_session_id(session_id: &str) -> bool {
+    !session_id.is_empty()
+        && session_id.len() <= 128
+        && session_id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+}
+
+fn extract_pty_session_id_from_error(error_msg: &str) -> Option<String> {
+    let marker = "session_id=\"";
+    let start = error_msg.find(marker)? + marker.len();
+    let rest = &error_msg[start..];
+    let end = rest.find('"')?;
+    let session_id = &rest[..end];
+    if is_valid_pty_session_id(session_id) {
+        Some(session_id.to_string())
+    } else {
+        None
+    }
+}
+
+fn fallback_from_error(tool_name: &str, error_msg: &str) -> Option<(String, serde_json::Value)> {
+    if matches!(
+        tool_name,
+        tool_names::UNIFIED_FILE | tool_names::READ_FILE | "read file" | "repo_browser.read_file"
+    ) && let Some(session_id) = extract_pty_session_id_from_error(error_msg)
+    {
+        return Some((
+            tool_names::READ_PTY_SESSION.to_string(),
+            serde_json::json!({ "session_id": session_id }),
+        ));
+    }
+
+    None
 }
 
 /// Main handler for tool execution results.
@@ -239,12 +286,21 @@ async fn push_tool_error_response(
     error_msg: String,
     failure_kind: &'static str,
 ) {
-    let fallback_tool = t_ctx
-        .ctx
-        .tool_registry
-        .suggest_fallback_tool(tool_name)
-        .await;
-    let error_content = build_error_content(error_msg, fallback_tool, failure_kind);
+    let (fallback_tool, fallback_tool_args) =
+        if let Some((tool, args)) = fallback_from_error(tool_name, &error_msg) {
+            (Some(tool), Some(args))
+        } else {
+            (
+                t_ctx
+                    .ctx
+                    .tool_registry
+                    .suggest_fallback_tool(tool_name)
+                    .await,
+                None,
+            )
+        };
+    let error_content =
+        build_error_content(error_msg, fallback_tool, fallback_tool_args, failure_kind);
     push_tool_response(
         t_ctx.ctx.working_history,
         tool_call_id,
@@ -392,4 +448,42 @@ pub(super) fn record_mcp_event_to_panel(
     }
 
     mcp_panel_state.add_event(mcp_event);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fallback_from_error_extracts_read_pty_session() {
+        let error =
+            "Tool failed. Use read_pty_session with session_id=\"run-ab12\" instead of read_file.";
+        let fallback = fallback_from_error(tool_names::UNIFIED_FILE, error);
+        assert_eq!(
+            fallback,
+            Some((
+                tool_names::READ_PTY_SESSION.to_string(),
+                serde_json::json!({"session_id":"run-ab12"}),
+            ))
+        );
+    }
+
+    #[test]
+    fn build_error_content_includes_fallback_args() {
+        let payload = build_error_content(
+            "boom".to_string(),
+            Some(tool_names::READ_PTY_SESSION.to_string()),
+            Some(serde_json::json!({"session_id":"run-1"})),
+            "execution",
+        );
+
+        assert_eq!(
+            payload.get("fallback_tool").and_then(|v| v.as_str()),
+            Some(tool_names::READ_PTY_SESSION)
+        );
+        assert_eq!(
+            payload.get("fallback_tool_args"),
+            Some(&serde_json::json!({"session_id":"run-1"}))
+        );
+    }
 }

@@ -26,12 +26,34 @@ use main_helpers::{
     build_print_prompt, detect_available_ide, initialize_tracing, initialize_tracing_from_config,
 };
 
-#[tokio::main]
-async fn main() -> std::process::ExitCode {
-    match run().await {
-        Ok(_) => std::process::ExitCode::SUCCESS,
-        Err(e) => {
-            eprintln!("Error: {:?}", e);
+fn main() -> std::process::ExitCode {
+    const MAIN_THREAD_STACK_BYTES: usize = 16 * 1024 * 1024;
+
+    let handle = match std::thread::Builder::new()
+        .name("vtcode-main".to_string())
+        .stack_size(MAIN_THREAD_STACK_BYTES)
+        .spawn(|| -> Result<()> {
+            let runtime = tokio::runtime::Builder::new_multi_thread()
+                .enable_all()
+                .build()
+                .context("failed to build Tokio runtime")?;
+            runtime.block_on(run())
+        }) {
+        Ok(handle) => handle,
+        Err(err) => {
+            eprintln!("Error: failed to spawn vtcode main thread: {err}");
+            return std::process::ExitCode::FAILURE;
+        }
+    };
+
+    match handle.join() {
+        Ok(Ok(_)) => std::process::ExitCode::SUCCESS,
+        Ok(Err(err)) => {
+            eprintln!("Error: {err:?}");
+            std::process::ExitCode::FAILURE
+        }
+        Err(_) => {
+            eprintln!("Error: vtcode main thread panicked");
             std::process::ExitCode::FAILURE
         }
     }

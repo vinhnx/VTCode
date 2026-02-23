@@ -22,8 +22,8 @@ use crate::hooks::lifecycle::SessionEndReason;
 use super::interaction_loop::{InteractionLoopContext, InteractionOutcome, InteractionState};
 use super::interaction_loop_team::{direct_message_target, handle_team_switch, poll_team_mailbox};
 
-const REPEATED_FOLLOW_UP_DIRECTIVE: &str = "User has asked to continue repeatedly. Do not keep exploring silently. In your next assistant response, provide a concrete status update: completed work, current blocker, and the exact next action.";
-const REPEATED_FOLLOW_UP_STALLED_DIRECTIVE: &str = "Previous turn stalled or aborted and the user asked to continue repeatedly. Recover autonomously without asking for more user prompts: identify the likely root cause from recent errors, execute one adjusted strategy, and then provide either a completion summary or a final blocker review with specific next action.";
+const REPEATED_FOLLOW_UP_DIRECTIVE: &str = "User has asked to continue repeatedly. Do not keep exploring silently. In your next assistant response, provide a concrete status update: completed work, current blocker, and the exact next action. If a recent tool error provides a replacement tool (for example read_pty_session), use it directly instead of retrying the same failing call.";
+const REPEATED_FOLLOW_UP_STALLED_DIRECTIVE: &str = "Previous turn stalled or aborted and the user asked to continue repeatedly. Recover autonomously without asking for more user prompts: identify the likely root cause from recent errors, execute one adjusted strategy, and then provide either a completion summary or a final blocker review with specific next action. Do not repeat a failing tool call when the error already provides the next tool to use.";
 
 pub(super) async fn run_interaction_loop_impl(
     ctx: &mut InteractionLoopContext<'_>,
@@ -301,7 +301,12 @@ pub(super) async fn run_interaction_loop_impl(
                     continue;
                 }
                 ModelPickerProgress::Completed(selection) => {
-                    let picker_state = state.model_picker_state.take().unwrap();
+                    let Some(picker_state) = state.model_picker_state.take() else {
+                        tracing::warn!(
+                            "Model picker completed but state was missing; skipping completion flow"
+                        );
+                        continue;
+                    };
                     let target = ctx.session_stats.model_picker_target;
                     ctx.session_stats.model_picker_target = ModelPickerTarget::Main;
                     match target {
