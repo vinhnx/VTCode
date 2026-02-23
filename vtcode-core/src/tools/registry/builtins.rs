@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use crate::config::constants::tools;
 use crate::config::types::CapabilityLevel;
 use crate::tools::ask_user_question::AskUserQuestionTool;
-use crate::tools::handlers::{EnterPlanModeTool, ExitPlanModeTool, PlanModeState};
+use crate::tools::handlers::{EnterPlanModeTool, ExitPlanModeTool, PlanModeState, TaskTrackerTool};
 use crate::tools::request_user_input::RequestUserInputTool;
 
 use super::progressive_docs::{build_minimal_declarations, minimal_tool_signatures};
@@ -67,6 +67,17 @@ pub(super) fn builtin_tool_registrations(
             "start_implementation",
             "implement_plan",
         ]),
+        // ============================================================
+        // TASK TRACKER (NL2Repo-Bench: Explicit Task Planning)
+        // ============================================================
+        ToolRegistration::from_tool_instance(
+            tools::TASK_TRACKER,
+            CapabilityLevel::Basic,
+            TaskTrackerTool::new(
+                plan_state.workspace_root().unwrap_or_else(|| PathBuf::new()),
+            ),
+        )
+        .with_aliases(["plan_manager", "track_tasks", "checklist"]),
         // ============================================================
         // SEARCH & DISCOVERY (1 tool - unified)
         // ============================================================

@@ -61,6 +61,7 @@ pub mod plan_mode;
 pub mod read_file;
 pub mod shell_handler;
 pub mod spawn_subagent;
+pub mod task_tracker;
 
 // Re-export main types for convenience
 
@@ -137,6 +138,9 @@ pub use spawn_subagent::SpawnSubagentTool;
 
 // Plan mode tools
 pub use plan_mode::{EnterPlanModeTool, ExitPlanModeTool, PlanModeState};
+
+// Task tracker (NL2Repo-Bench)
+pub use task_tracker::TaskTrackerTool;
 
 // Core tool handler types
 pub use tool_handler::{

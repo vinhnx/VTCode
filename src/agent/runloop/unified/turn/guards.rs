@@ -280,13 +280,50 @@ pub(crate) async fn handle_turn_balancer(
     tool_repeat_limit: usize,
 ) -> TurnHandlerOutcome {
     use vtcode_core::llm::provider as uni;
+    use crate::agent::runloop::unified::turn::tool_outcomes::helpers::{
+        BLIND_EDITING_THRESHOLD, NAVIGATION_LOOP_THRESHOLD,
+    };
 
-    // Optimization: Skip check with exponential backoff to reduce iteration frequency
-    // Check intervals: 1, 2, 4, 8, 16, 32... steps
+    // NL2Repo-Bench checks run on every step (no backoff) since they
+    // are safety guardrails, not performance optimizations.
+
+    // NL2Repo-Bench: Edit-Test Validation Loop (Anti-Blind-Editing)
+    if repeated_tool_attempts.consecutive_mutations >= BLIND_EDITING_THRESHOLD {
+        ctx.renderer
+            .line(
+                MessageStyle::Warning,
+                "[!] Anti-Blind-Editing: Pause to run verification/tests.",
+            )
+            .unwrap_or(());
+        ctx.working_history.push(uni::Message::system(
+            "CRITICAL: You have made multiple consecutive file modifications without running any tests or execution commands. Stop editing and use 'unified_exec' or 'run_pty_cmd' to verify your changes compile and tests pass before proceeding. Avoid 'Blind Editing'."
+                .to_string(),
+        ));
+        repeated_tool_attempts.consecutive_mutations = 0;
+        return TurnHandlerOutcome::Continue;
+    }
+
+    // NL2Repo-Bench: Navigation Loop Detection
+    if repeated_tool_attempts.consecutive_navigations >= NAVIGATION_LOOP_THRESHOLD {
+        ctx.renderer
+            .line(
+                MessageStyle::Warning,
+                "[!] Navigation Loop: Pause to synthesize or act.",
+            )
+            .unwrap_or(());
+        ctx.working_history.push(uni::Message::system(
+            "WARNING: You have performed many consecutive read/search operations without modifying any files or executing commands. Synthesize your findings and propose a concrete edit/action or explain why you are blocked."
+                .to_string(),
+        ));
+        repeated_tool_attempts.consecutive_navigations = 0;
+        return TurnHandlerOutcome::Continue;
+    }
+
+    // --- Turn balancer: cap low-signal churn ---
+    // Optimization: Skip with exponential backoff to reduce iteration frequency
     let check_interval = if step_count <= 4 {
-        1 // Check every step in early turns
+        1
     } else {
-        // Exponential backoff: 2^(floor(log2(step_count/4)))
         1_usize << ((step_count / 4).ilog2())
     };
 
@@ -294,7 +331,6 @@ pub(crate) async fn handle_turn_balancer(
         return TurnHandlerOutcome::Continue;
     }
 
-    // --- Turn balancer: cap low-signal churn ---
     // Exclude read-only tools from repeated count (they're legitimate exploration)
     let max_repeated = repeated_tool_attempts.max_count_filtered(is_readonly_signature);
 
