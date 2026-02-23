@@ -48,6 +48,12 @@ pub(crate) async fn render_terminal_command_panel(
         .get("no_spool")
         .and_then(Value::as_bool)
         .unwrap_or(false);
+    let spooled_to_file = unwrapped_payload
+        .get("spooled_to_file")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let spool_path = unwrapped_payload.get("spool_path").and_then(Value::as_str);
+    let spool_hint = unwrapped_payload.get("spool_hint").and_then(Value::as_str);
 
     // Check for session completion status (is_exited indicates if process is still running)
     let is_completed = unwrapped_payload
@@ -242,6 +248,21 @@ pub(crate) async fn render_terminal_command_panel(
             "done".to_string()
         };
         renderer.line(MessageStyle::ToolDetail, &format!("✓ {}", exit_badge))?;
+    }
+
+    if spooled_to_file {
+        renderer.line(MessageStyle::ToolDetail, "")?;
+        if let Some(hint) = spool_hint {
+            renderer.line(MessageStyle::ToolDetail, hint)?;
+        } else if let Some(path) = spool_path {
+            renderer.line(
+                MessageStyle::ToolDetail,
+                &format!(
+                    "Large output was spooled to \"{}\". Use read_file/grep_file to inspect details.",
+                    path
+                ),
+            )?;
+        }
     }
 
     // Render follow-up prompt if present (with double-rendering protection)

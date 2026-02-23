@@ -22,7 +22,10 @@ use super::normalize_tool_output;
 use super::{ToolErrorType, ToolExecutionError, ToolExecutionRecord, ToolHandler, ToolRegistry};
 
 const REENTRANCY_STACK_DEPTH_LIMIT: usize = 64;
-const REENTRANCY_PER_TOOL_LIMIT: usize = 2;
+// Tools should never recursively re-enter themselves in a single task.
+// Keeping this at 1 blocks the first re-entry (A -> ... -> A) to fail fast
+// on alias/self-recursion bugs with minimal extra work.
+const REENTRANCY_PER_TOOL_LIMIT: usize = 1;
 
 static TOOL_REENTRANCY_STACKS: Lazy<Mutex<HashMap<TokioTaskId, Vec<String>>>> =
     Lazy::new(|| Mutex::new(HashMap::new()));
