@@ -1,4 +1,4 @@
-fix changlog generator should generate from last changed version instead of since 0.71.0
+- [x] fix changlog generator should generate from last changed version instead of since 0.71.0. currently it generates from 0.71.0 to current version, which is wrong if we have multiple versions after 0.71.0. We should generate from last changed version to current version. (Fixed in release.sh and release.yml)
 
 --
 

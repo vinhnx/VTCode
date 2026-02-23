@@ -136,9 +136,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 1
-          sparse-checkout: |
-            !docs/
+          fetch-depth: 0 # Full fetch to get all tags for changelog generation
 
       - name: Download Artifacts
         uses: actions/download-artifact@v4
@@ -149,12 +147,18 @@ jobs:
       - name: Generate Changelog
         id: changelog
         run: |
-          PREV_TAG=$(git tag --sort=-v:refname | grep -E '^v?[0-9]+\.[0-9]+\.[0-9]+$' | grep -v "${{ github.event.inputs.tag }}" | head -n 1)
+          # Fetch all tags if not available
+          git fetch --tags --force
+          
+          # Find the most recent tag that follows SemVer (vX.Y.Z or X.Y.Z)
+          # We exclude the tag currently being released
+          PREV_TAG=$(git tag --sort=-v:refname | grep -E '^v?[0-9]+\.[0-9]+\.[0-9]+$' | grep -vE "^(v)?${{ github.event.inputs.tag }}$" | head -n 1)
 
           echo "## What's Changed" > release_notes.md
           echo "" >> release_notes.md
 
           if [ -n "$PREV_TAG" ]; then
+            echo "Generating changelog from $PREV_TAG to HEAD"
             while IFS= read -r commit_line; do
               if [ -n "$commit_line" ]; then
                 COMMIT_HASH=$(echo "$commit_line" | cut -d'|' -f1)

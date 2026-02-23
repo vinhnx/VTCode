@@ -325,8 +325,10 @@ update_changelog_from_commits() {
 
     print_info "Generating changelog for version $version from commits..."
 
+    # Find the most recent tag that follows SemVer (vX.Y.Z or X.Y.Z)
+    # We exclude the version we're about to release if it already exists as a tag
     local previous_tag
-    previous_tag=$(git tag --sort=-v:refname | grep -E '^v?[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1)
+    previous_tag=$(git tag --sort=-v:refname | grep -E '^v?[0-9]+\.[0-9]+\.[0-9]+$' | grep -vE "^(v)?${version}$" | head -n 1)
 
     local commits_range="HEAD"
     if [[ -n "$previous_tag" ]]; then
