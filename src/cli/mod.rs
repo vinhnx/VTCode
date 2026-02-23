@@ -208,7 +208,7 @@ pub async fn handle_skills_info(skills_options: &SkillsCommandOptions, name: &st
     actual_handler(skills_options, name).await
 }
 
-pub async fn handle_skills_create(path: &PathBuf) -> Result<()> {
+pub async fn handle_skills_create(path: &Path) -> Result<()> {
     // Import and delegate to the actual implementation in the skills module
     use crate::cli::skills::handle_skills_create as actual_handler;
     actual_handler(path).await
