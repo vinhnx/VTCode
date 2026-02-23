@@ -187,8 +187,12 @@ impl Widget for FooterWidget<'_> {
         let status_line = self.build_status_line(inner.width);
         let hint_line = self.build_hint_line();
 
-        let lines: Vec<Line<'static>> = if inner.height >= 2 && hint_line.is_some() {
-            vec![status_line, hint_line.unwrap()]
+        let lines: Vec<Line<'static>> = if inner.height >= 2 {
+            if let Some(hint) = hint_line {
+                vec![status_line, hint]
+            } else {
+                vec![status_line]
+            }
         } else {
             vec![status_line]
         };
