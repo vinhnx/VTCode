@@ -1,33 +1,43 @@
 #!/usr/bin/env bash
 
-# Quick status checker for VT Code 0.58.6 release
+# Quick status checker for VT Code release assets
+
+# Source common utilities
+source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
 REPO="vinhnx/vtcode"
-RELEASE_TAG="0.58.6"
-GITHUB_API="https://api.github.com/repos/$REPO/releases/tags/$RELEASE_TAG"
 
-# Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-MAGENTA='\033[0;35m'
-NC='\033[0m'
+RELEASE_TAG=$(get_current_version)
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -t|--tag)
+            RELEASE_TAG=$2
+            shift 2
+            ;;
+        *)
+            shift
+            ;;
+    esac
+done
+
+GITHUB_API="https://api.github.com/repos/$REPO/releases/tags/$RELEASE_TAG"
 
 # Get platform
 get_platform() {
     case "$(uname -s)-$(uname -m)" in
         Darwin-arm64)
-            echo "aarch64-apple-darwin|macOS Apple Silicon|vtcode-0.58.6-aarch64-apple-darwin.tar.gz"
+            echo "aarch64-apple-darwin|macOS Apple Silicon|vtcode-$RELEASE_TAG-aarch64-apple-darwin.tar.gz"
             ;;
         Darwin-x86_64)
-            echo "x86_64-apple-darwin|macOS Intel|vtcode-0.58.6-x86_64-apple-darwin.tar.gz"
+            echo "x86_64-apple-darwin|macOS Intel|vtcode-$RELEASE_TAG-x86_64-apple-darwin.tar.gz"
             ;;
         Linux-x86_64)
-            echo "x86_64-unknown-linux-gnu|Linux|vtcode-0.58.6-x86_64-unknown-linux-gnu.tar.gz"
+            echo "x86_64-unknown-linux-gnu|Linux|vtcode-$RELEASE_TAG-x86_64-unknown-linux-gnu.tar.gz"
             ;;
         MINGW*-x86_64|MSYS*-x86_64)
-            echo "x86_64-pc-windows-msvc|Windows|vtcode-0.58.6-x86_64-pc-windows-msvc.zip"
+            echo "x86_64-pc-windows-msvc|Windows|vtcode-$RELEASE_TAG-x86_64-pc-windows-msvc.zip"
             ;;
         *)
             echo "unknown|Unknown|unknown"
@@ -37,7 +47,7 @@ get_platform() {
 }
 
 printf '%b\n' "${MAGENTA}════════════════════════════════════════════════════${NC}"
-printf '%b\n' "${MAGENTA}  VT Code 0.58.6 Release Status${NC}"
+printf '%b\n' "${MAGENTA}  VT Code $RELEASE_TAG Release Status${NC}"
 printf '%b\n' "${MAGENTA}════════════════════════════════════════════════════${NC}"
 echo ""
 
@@ -57,7 +67,7 @@ RESPONSE=$(curl -fsSL "$GITHUB_API" 2>/dev/null || echo "")
 if [[ -z "$RESPONSE" ]]; then
     printf '%b\n' "${RED}Failed to connect${NC}"
     echo ""
-    echo "Cannot reach GitHub API. Check your internet connection."
+    echo "Cannot reach GitHub API or release $RELEASE_TAG not found."
     exit 1
 fi
 
@@ -112,26 +122,13 @@ if [[ "$HAS_YOUR_BINARY" == "yes" && "$HAS_CHECKSUMS" == "yes" ]]; then
     echo "Install VT Code with:"
     echo "  curl -fsSL https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.sh | bash"
     echo ""
-    echo "Or auto-wait and install:"
-    echo "  ./scripts/wait-for-release.sh -a"
     exit 0
-elif [[ "$HAS_YOUR_BINARY" == "yes" ]]; then
-    printf '%b\n' "${YELLOW}⏳ ALMOST READY${NC}"
-    echo ""
-    echo "Binary is built, waiting for checksums.txt to be generated..."
-    echo ""
-    echo "Monitor progress:"
-    echo "  ./scripts/wait-for-release.sh -a"
-    exit 1
 else
     printf '%b\n' "${YELLOW}⏳ BUILDING${NC}"
     echo ""
     echo "Binaries are still being built. Check back in 5-10 minutes."
     echo ""
     echo "Monitor progress:"
-    echo "  ./scripts/wait-for-release.sh -a"
-    echo ""
-    echo "Or view workflows:"
-    echo "  https://github.com/vinhnx/vtcode/actions"
+    echo "  ./scripts/wait-for-release.sh -t $RELEASE_TAG"
     exit 1
 fi

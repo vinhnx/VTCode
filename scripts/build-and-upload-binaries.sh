@@ -5,33 +5,12 @@
 
 set -e
 
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+# Source common utilities
+source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
 BUILD_TOOL="cargo"
 TARGET_ENV_ASSIGNMENTS=()
 DRY_RUN=false
-
-# Function to print colored output
-print_info() {
-    echo -e "${BLUE}INFO: $1${NC}"
-}
-
-print_success() {
-    echo -e "${GREEN}SUCCESS: $1${NC}"
-}
-
-print_warning() {
-    echo -e "${YELLOW}WARNING: $1${NC}"
-}
-
-print_error() {
-    echo -e "${RED}ERROR: $1${NC}"
-}
 
 # Function to check if required tools are available
 check_dependencies() {
@@ -74,11 +53,6 @@ check_dependencies() {
     print_warning "Skipping GitHub CLI scopes refresh (may need manual refresh if issues occur)"
 
     print_success "All required tools are available"
-}
-
-# Function to get version from Cargo.toml
-get_version() {
-    grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/'
 }
 
 install_rust_targets() {
@@ -551,7 +525,7 @@ main() {
     done
 
     if [ -z "$version" ]; then
-        version=$(get_version)
+        version=$(get_current_version)
     fi
 
     check_dependencies

@@ -5,6 +5,9 @@
 
 set -eo pipefail
 
+# Source common utilities
+source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
+
 restore_terminal_state() {
   if [[ -t 1 ]]; then
     # Best-effort restore for raw/alternate-screen/mouse modes in case vtcode aborts.

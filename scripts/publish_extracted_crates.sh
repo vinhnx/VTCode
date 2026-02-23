@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Source common utilities
+source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
+
 # publish_extracted_crates.sh orchestrates the sequential publishes for the
 # extracted VT Code crates. It mirrors the workflow defined in
 # docs/component_release_plan.md and provides optional dry-run coverage so the
