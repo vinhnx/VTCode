@@ -1,8 +1,13 @@
 //! Tool execution entrypoints for ToolRegistry.
 
 use anyhow::{Result, anyhow};
+use once_cell::sync::Lazy;
 use serde_json::{Value, json};
+use std::cell::RefCell;
+use std::collections::HashMap;
+use std::sync::Mutex;
 use std::time::{Duration, Instant, SystemTime};
+use tokio::task::Id as TokioTaskId;
 use tracing::{debug, trace, warn};
 
 use crate::core::memory_pool::SizeRecommendation;
@@ -15,6 +20,134 @@ use super::LOOP_THROTTLE_MAX_MS;
 use super::execution_kernel;
 use super::normalize_tool_output;
 use super::{ToolErrorType, ToolExecutionError, ToolExecutionRecord, ToolHandler, ToolRegistry};
+
+const REENTRANCY_STACK_DEPTH_LIMIT: usize = 64;
+const REENTRANCY_PER_TOOL_LIMIT: usize = 2;
+
+static TOOL_REENTRANCY_STACKS: Lazy<Mutex<HashMap<TokioTaskId, Vec<String>>>> =
+    Lazy::new(|| Mutex::new(HashMap::new()));
+thread_local! {
+    static THREAD_REENTRANCY_STACK: RefCell<Vec<String>> = RefCell::new(Vec::new());
+}
+
+fn lock_reentrancy_stacks() -> std::sync::MutexGuard<'static, HashMap<TokioTaskId, Vec<String>>> {
+    TOOL_REENTRANCY_STACKS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+#[derive(Debug)]
+struct ReentrancyViolation {
+    stack_depth: usize,
+    tool_reentry_count: usize,
+    stack_trace: String,
+}
+
+enum ReentrancyContext {
+    Task(TokioTaskId),
+    Thread,
+}
+
+struct ToolReentrancyGuard {
+    context: Option<ReentrancyContext>,
+}
+
+impl ToolReentrancyGuard {
+    fn enter(tool_name: &str) -> std::result::Result<Self, ReentrancyViolation> {
+        if let Some(task_id) = tokio::task::try_id() {
+            let mut stacks = lock_reentrancy_stacks();
+            let stack = stacks.entry(task_id).or_default();
+            let stack_depth = stack.len();
+            let tool_reentry_count = stack
+                .iter()
+                .filter(|active_tool| active_tool.as_str() == tool_name)
+                .count();
+
+            if stack_depth >= REENTRANCY_STACK_DEPTH_LIMIT
+                || tool_reentry_count >= REENTRANCY_PER_TOOL_LIMIT
+            {
+                let stack_trace = if stack.is_empty() {
+                    "<empty>".to_string()
+                } else {
+                    stack.join(" -> ")
+                };
+                return Err(ReentrancyViolation {
+                    stack_depth,
+                    tool_reentry_count,
+                    stack_trace,
+                });
+            }
+
+            stack.push(tool_name.to_string());
+            return Ok(Self {
+                context: Some(ReentrancyContext::Task(task_id)),
+            });
+        }
+
+        let violation = THREAD_REENTRANCY_STACK.with(|stack_cell| {
+            let mut stack = stack_cell.borrow_mut();
+            let stack_depth = stack.len();
+            let tool_reentry_count = stack
+                .iter()
+                .filter(|active_tool| active_tool.as_str() == tool_name)
+                .count();
+
+            if stack_depth >= REENTRANCY_STACK_DEPTH_LIMIT
+                || tool_reentry_count >= REENTRANCY_PER_TOOL_LIMIT
+            {
+                let stack_trace = if stack.is_empty() {
+                    "<empty>".to_string()
+                } else {
+                    stack.join(" -> ")
+                };
+                Some(ReentrancyViolation {
+                    stack_depth,
+                    tool_reentry_count,
+                    stack_trace,
+                })
+            } else {
+                stack.push(tool_name.to_string());
+                None
+            }
+        });
+
+        if let Some(violation) = violation {
+            return Err(violation);
+        }
+
+        Ok(Self {
+            context: Some(ReentrancyContext::Thread),
+        })
+    }
+}
+
+impl Drop for ToolReentrancyGuard {
+    fn drop(&mut self) {
+        let Some(context) = self.context.take() else {
+            return;
+        };
+
+        match context {
+            ReentrancyContext::Task(task_id) => {
+                let mut stacks = lock_reentrancy_stacks();
+                let should_remove = if let Some(stack) = stacks.get_mut(&task_id) {
+                    let _ = stack.pop();
+                    stack.is_empty()
+                } else {
+                    false
+                };
+                if should_remove {
+                    stacks.remove(&task_id);
+                }
+            }
+            ReentrancyContext::Thread => {
+                THREAD_REENTRANCY_STACK.with(|stack_cell| {
+                    let _ = stack_cell.borrow_mut().pop();
+                });
+            }
+        }
+    }
+}
 
 impl ToolRegistry {
     pub fn preflight_validate_call(
@@ -162,6 +295,46 @@ impl ToolRegistry {
                     effective_timeout_ms,
                     circuit_breaker,
                 ));
+        };
+
+        let _reentrancy_guard = match ToolReentrancyGuard::enter(&tool_name) {
+            Ok(guard) => guard,
+            Err(violation) => {
+                let reentry_count = violation.tool_reentry_count + 1;
+                let error_message = format!(
+                    "REENTRANCY GUARD: Tool '{}' was blocked to prevent recursive execution.\n\n\
+                     ACTION REQUIRED: DO NOT retry this same tool call without changing control flow.\n\
+                     Current stack depth: {}. Re-entry count for this tool in the current task: {}.\n\
+                     Stack trace: {}",
+                    display_name, violation.stack_depth, reentry_count, violation.stack_trace
+                );
+                let error = ToolExecutionError::new(
+                    tool_name_owned.clone(),
+                    ToolErrorType::PolicyViolation,
+                    error_message.clone(),
+                );
+                let mut payload = error.to_json_value();
+                if let Some(obj) = payload.as_object_mut() {
+                    obj.insert("reentrant_call_blocked".into(), json!(true));
+                    obj.insert("stack_depth".into(), json!(violation.stack_depth));
+                    obj.insert("reentry_count".into(), json!(reentry_count));
+                    obj.insert("tool".into(), json!(display_name));
+                    obj.insert("stack_trace".into(), json!(violation.stack_trace));
+                }
+                record_failure(
+                    tool_name_owned.clone(),
+                    false,
+                    None,
+                    args_for_recording.clone(),
+                    error_message,
+                    None,
+                    None,
+                    None,
+                    None,
+                    false,
+                );
+                return Ok(payload);
+            }
         };
 
         let readonly_classification = if prevalidated {
