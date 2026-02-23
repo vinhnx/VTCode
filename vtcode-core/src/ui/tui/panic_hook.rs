@@ -4,8 +4,10 @@
 
 use std::io::{self, Write};
 use std::panic;
+use std::sync::Once;
 use std::sync::atomic::{AtomicBool, Ordering};
 
+use better_panic::{Settings as BetterPanicSettings, Verbosity as BetterPanicVerbosity};
 use ratatui::crossterm::{
     cursor::Show,
     event::{
@@ -16,7 +18,8 @@ use ratatui::crossterm::{
 };
 
 static TUI_INITIALIZED: AtomicBool = AtomicBool::new(false);
-static DEBUG_MODE: AtomicBool = AtomicBool::new(false);
+static DEBUG_MODE: AtomicBool = AtomicBool::new(cfg!(debug_assertions));
+static PANIC_HOOK_ONCE: Once = Once::new();
 
 /// Set whether the application is in debug mode
 ///
@@ -37,47 +40,40 @@ pub fn is_debug_mode() -> bool {
 ///
 /// Follows Ratatui recipe: https://ratatui.rs/recipes/apps/panic-hooks/
 pub fn init_panic_hook() {
-    // Store the original panic hook to chain to it later
-    let original_hook = panic::take_hook();
+    PANIC_HOOK_ONCE.call_once(|| {
+        // Keep original hook for concise non-debug panic output.
+        let original_hook = panic::take_hook();
 
-    panic::set_hook(Box::new(move |panic_info| {
-        let is_tui = TUI_INITIALIZED.load(Ordering::SeqCst);
-        let is_debug = DEBUG_MODE.load(Ordering::SeqCst);
+        // Better panic formatting for debug-mode crashes.
+        let better_panic_hook = BetterPanicSettings::new()
+            .verbosity(BetterPanicVerbosity::Full)
+            .most_recent_first(false)
+            .lineno_suffix(true)
+            .create_panic_handler();
 
-        // First, attempt to restore terminal state if TUI was active
-        if is_tui {
-            // Try to restore the terminal - ignore errors since we're in a panic state
-            let _ = restore_tui();
-        }
+        panic::set_hook(Box::new(move |panic_info| {
+            let is_tui = TUI_INITIALIZED.load(Ordering::SeqCst);
+            let is_debug = DEBUG_MODE.load(Ordering::SeqCst);
 
-        if is_debug {
-            // Show detailed panic information with backtrace
-            eprintln!("\n=== VTCode Debug Panic Information ===");
-            eprintln!("Panic details: {}", panic_info);
-            eprintln!("Backtrace:");
-            // Capture and display backtrace if available
-            let backtrace = std::backtrace::Backtrace::capture();
-            if backtrace.status() == std::backtrace::BacktraceStatus::Captured {
-                eprintln!("{}", backtrace);
-            } else {
-                eprintln!(
-                    "(Backtrace not available - set RUST_BACKTRACE=1 environment variable for full backtrace)"
-                );
+            // Ratatui recipe: always restore terminal before panic reporting.
+            if is_tui {
+                // Intentionally ignore restoration failures during panic unwind.
+                let _ = restore_tui();
             }
-            eprintln!("=== End Debug Information ===");
-        } else {
-            eprintln!("\nVTCode encountered a critical error and needs to shut down.");
-            eprintln!("Error details: {}", panic_info);
-            eprintln!("If you encounter this issue, please report it to the VT Code team.");
-            eprintln!("Run with --debug for more information.\n");
 
-            // Call the original hook to ensure standard panic reporting (like backtraces)
-            original_hook(panic_info);
-        }
+            if is_debug {
+                better_panic_hook(panic_info);
+            } else {
+                eprintln!("\nVTCode encountered a critical error and needs to shut down.");
+                eprintln!("If this keeps happening, please report it with a backtrace.");
+                eprintln!("Hint: run with --debug and set RUST_BACKTRACE=1.\n");
+                original_hook(panic_info);
+            }
 
-        // Exit with failure code to ensure the entire process terminates
-        std::process::exit(1);
-    }));
+            // Keep current behavior: terminate process after unrecoverable panic.
+            std::process::exit(1);
+        }));
+    });
 }
 
 /// Mark that TUI has been initialized so panic hook knows to restore terminal

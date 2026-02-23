@@ -498,7 +498,7 @@ impl ToolRegistry {
             "Prepared patch payload for apply_patch"
         );
 
-        self.execute_tool_ref("apply_patch", &patch_args).await
+        self.execute_apply_patch_internal(patch_args).await
     }
 
     fn log_unified_file_payload_diagnostics(&self, action: &str, args: &Value) {
