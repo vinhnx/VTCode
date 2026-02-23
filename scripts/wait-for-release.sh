@@ -5,35 +5,32 @@
 
 set -euo pipefail
 
+# Source common utilities
+source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
+
 # Configuration
 REPO="vinhnx/vtcode"
-RELEASE_TAG="0.58.6"
-GITHUB_API="https://api.github.com/repos/$REPO/releases/tags/$RELEASE_TAG"
+
+RELEASE_TAG=$(get_current_version)
 POLL_INTERVAL=5  # seconds
 MAX_WAIT=1800    # 30 minutes max
 ELAPSED=0
-
-# Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m'
+AUTO_INSTALL=false
 
 # Required assets for your platform
 get_required_assets() {
     case "$(uname -s)-$(uname -m)" in
         Darwin-arm64)
-            echo "vtcode-0.58.6-aarch64-apple-darwin.tar.gz"
+            echo "vtcode-$RELEASE_TAG-aarch64-apple-darwin.tar.gz"
             ;;
         Darwin-x86_64)
-            echo "vtcode-0.58.6-x86_64-apple-darwin.tar.gz"
+            echo "vtcode-$RELEASE_TAG-x86_64-apple-darwin.tar.gz"
             ;;
         Linux-x86_64)
-            echo "vtcode-0.58.6-x86_64-unknown-linux-gnu.tar.gz"
+            echo "vtcode-$RELEASE_TAG-x86_64-unknown-linux-gnu.tar.gz"
             ;;
         MINGW*-x86_64|MSYS*-x86_64)
-            echo "vtcode-0.58.6-x86_64-pc-windows-msvc.zip"
+            echo "vtcode-$RELEASE_TAG-x86_64-pc-windows-msvc.zip"
             ;;
         *)
             echo "ERROR: Unsupported platform" >&2
@@ -42,25 +39,9 @@ get_required_assets() {
     esac
 }
 
-# Logging
-log_info() {
-    printf '%b\n' "${BLUE}ℹ${NC} $1" >&2
-}
-
-log_success() {
-    printf '%b\n' "${GREEN}✓${NC} $1" >&2
-}
-
-log_warning() {
-    printf '%b\n' "${YELLOW}⚠${NC} $1" >&2
-}
-
-log_error() {
-    printf '%b\n' "${RED}✗${NC} $1" >&2
-}
-
 # Check if release has all required assets
 check_release() {
+    local GITHUB_API="https://api.github.com/repos/$REPO/releases/tags/$RELEASE_TAG"
     local response
     local release_state
     local has_binary=false
@@ -107,6 +88,7 @@ check_release() {
 
 # Show current status
 show_status() {
+    local GITHUB_API="https://api.github.com/repos/$REPO/releases/tags/$RELEASE_TAG"
     local response
     local has_assets
     local asset_count
@@ -136,31 +118,34 @@ show_status() {
 
 # Show help
 show_help() {
-    cat <<'HELP'
-VT Code Release Monitor - Wait for 0.58.6 binaries
+    cat <<HELP
+VT Code Release Monitor - Wait for binaries
 
 Usage: ./scripts/wait-for-release.sh [options]
 
 Options:
+  -t, --tag VERSION   Version tag to wait for (default: from Cargo.toml)
   -i, --interval N    Poll interval in seconds (default: 5)
   -m, --max-wait N    Maximum wait time in seconds (default: 1800)
   -a, --auto-install  Automatically run installer when ready
   -h, --help          Show this help message
 
 Examples:
-  ./scripts/wait-for-release.sh                    # Poll every 5 seconds
-  ./scripts/wait-for-release.sh -i 10              # Poll every 10 seconds
+  ./scripts/wait-for-release.sh                    # Wait for current version
+  ./scripts/wait-for-release.sh -t 0.82.1          # Wait for specific version
   ./scripts/wait-for-release.sh -a                 # Auto-install when ready
-  ./scripts/wait-for-release.sh -i 30 -m 3600     # Poll every 30s, max 1 hour
 
 The script will exit successfully (0) when all binaries are ready.
 HELP
 }
 
 # Parse arguments
-AUTO_INSTALL=false
 while [[ $# -gt 0 ]]; do
     case $1 in
+        -t|--tag)
+            RELEASE_TAG=$2
+            shift 2
+            ;;
         -i|--interval)
             POLL_INTERVAL=$2
             shift 2
@@ -186,7 +171,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Main polling loop
-log_info "Waiting for VT Code 0.58.6 binaries to be available..."
+log_info "Waiting for VT Code $RELEASE_TAG binaries to be available..."
 log_info "Release: https://github.com/$REPO/releases/tag/$RELEASE_TAG"
 log_info "Polling every $POLL_INTERVAL seconds (max wait: $MAX_WAIT seconds)"
 echo ""

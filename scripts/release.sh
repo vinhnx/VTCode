@@ -12,32 +12,12 @@
 
 set -euo pipefail
 
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-PURPLE='\033[0;35m'
-NC='\033[0m'
+# Source common utilities
+source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
 # Temporary file to store release notes
 RELEASE_NOTES_FILE=$(mktemp)
 trap 'rm -f "$RELEASE_NOTES_FILE"' EXIT
-
-print_info() {
-    printf '%b\n' "${BLUE}INFO:${NC} $1"
-}
-
-print_success() {
-    printf '%b\n' "${GREEN}SUCCESS:${NC} $1"
-}
-
-print_warning() {
-    printf '%b\n' "${YELLOW}WARNING:${NC} $1"
-}
-
-print_error() {
-    printf '%b\n' "${RED}ERROR:${NC} $1"
-}
 
 print_distribution() {
     printf '%b\n' "${PURPLE}DISTRIBUTION:${NC} $1"
@@ -406,12 +386,6 @@ update_changelog_from_commits() {
     fi
 }
 
-get_current_version() {
-    local line
-    line=$(grep '^version = ' Cargo.toml | head -1)
-    echo "${line#*\"}" | sed 's/\".*//'
-}
-
 check_branch() {
     local current_branch
     current_branch=$(git branch --show-current)
@@ -603,6 +577,7 @@ main() {
             print_info "Step 1 (dry-run): Would build binaries for x86_64-apple-darwin and aarch64-apple-darwin"
         else
             print_info "Step 1: Local binary build (macOS: both architectures, Linux: current platform)..."
+            
             local build_args=(-v "$next_version" --only-build-local)
             ./scripts/build-and-upload-binaries.sh "${build_args[@]}"
         fi
@@ -614,6 +589,7 @@ main() {
 
     # 3. Cargo Release (Publish to crates.io, tag and push)
     print_info "Step 3: Running cargo release (publish to crates.io, tag and push)..."
+    
     local command=(cargo release "$release_argument" --workspace --config release.toml --execute --no-confirm)
     if [[ "$skip_crates" == 'true' ]]; then
         command+=(--no-publish)
@@ -743,7 +719,7 @@ main() {
 
         # Build macOS binaries locally
         print_info "Building macOS binaries locally..."
-
+        
         # x86_64-apple-darwin
         if cargo build --release --target x86_64-apple-darwin &>/dev/null; then
             tar -C target/x86_64-apple-darwin/release -czf "$binaries_dir/vtcode-$released_version-x86_64-apple-darwin.tar.gz" vtcode
@@ -819,8 +795,33 @@ main() {
 
         # Upload all binaries to GitHub Release
         print_info "Uploading all binaries to GitHub Release..."
-        if gh release upload "$released_version" "$binaries_dir"/*.tar.gz "$binaries_dir"/*.sha256 --clobber; then
-            print_success "All binaries uploaded successfully"
+        
+        # Generate consolidated checksums.txt
+        (
+            cd "$binaries_dir"
+            local shacmd=""
+            if command -v sha256sum &> /dev/null; then
+                shacmd="sha256sum"
+            elif command -v shasum &> /dev/null; then
+                shacmd="shasum -a 256"
+            else
+                print_error "Neither sha256sum nor shasum found"
+                exit 1
+            fi
+            
+            # Clear/create checksums.txt
+            rm -f checksums.txt
+            touch checksums.txt
+            
+            for f in *.tar.gz *.zip; do
+                if [ -f "$f" ]; then
+                    $shacmd "$f" >> checksums.txt
+                fi
+            done
+        )
+        
+        if gh release upload "$released_version" "$binaries_dir"/*.tar.gz "$binaries_dir"/*.sha256 "$binaries_dir"/checksums.txt --clobber; then
+            print_success "All binaries and checksums.txt uploaded successfully"
         else
             print_error "Failed to upload binaries to GitHub Release"
             exit 1
