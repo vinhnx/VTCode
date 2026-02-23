@@ -52,6 +52,10 @@ pub struct WizardStepState {
     pub notes: String,
     /// Whether notes input is active for the current step
     pub notes_active: bool,
+
+    pub allow_freeform: bool,
+    pub freeform_label: Option<String>,
+    pub freeform_placeholder: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -674,6 +678,9 @@ impl WizardModalState {
                     answer: step.answer,
                     notes: String::new(),
                     notes_active,
+                    allow_freeform: step.allow_freeform,
+                    freeform_label: step.freeform_label,
+                    freeform_placeholder: step.freeform_placeholder,
                 }
             })
             .collect();
@@ -848,13 +855,15 @@ impl WizardModalState {
                         }
                         KeyCode::Tab => {
                             if self.search.is_none()
-                                && self.mode == WizardModalMode::MultiStep
-                                && step.list.current_selection().is_some_and(|selection| {
+                                && (step.list.current_selection().is_some_and(|selection| {
                                     matches!(
                                         selection,
                                         InlineListSelection::RequestUserInputAnswer { .. }
                                     )
-                                })
+                                }) || (self.mode == WizardModalMode::TabbedList
+                                    && step.list.current_selection().is_some_and(|selection| {
+                                        matches!(selection, InlineListSelection::AskUserChoice { .. })
+                                    })))
                             {
                                 step.notes_active = true;
                                 ModalListKeyResult::Redraw
@@ -906,6 +915,23 @@ impl WizardModalState {
                         other: next_other,
                     }
                 }
+                InlineListSelection::AskUserChoice {
+                    tab_id,
+                    choice_id,
+                    ..
+                } => {
+                    let notes = step.notes.trim();
+                    let text = if notes.is_empty() {
+                        None
+                    } else {
+                        Some(notes.to_string())
+                    };
+                    InlineListSelection::AskUserChoice {
+                        tab_id,
+                        choice_id,
+                        text,
+                    }
+                }
                 _ => selection,
             })
     }
@@ -925,6 +951,7 @@ impl WizardModalState {
                 matches!(
                     selection,
                     InlineListSelection::RequestUserInputAnswer { .. }
+                        | InlineListSelection::AskUserChoice { .. }
                 )
             })
     }
@@ -945,7 +972,13 @@ impl WizardModalState {
     pub fn notes_line(&self) -> Option<String> {
         let step = self.steps.get(self.current_step)?;
         if step.notes_active || !step.notes.is_empty() {
-            Some(format!("› {}", step.notes))
+            let label = step.freeform_label.as_deref().unwrap_or("›");
+            if step.notes.is_empty() {
+                if let Some(placeholder) = step.freeform_placeholder.as_ref() {
+                    return Some(format!("{} {}", label, placeholder));
+                }
+            }
+            Some(format!("{} {}", label, step.notes))
         } else {
             None
         }
@@ -958,13 +991,22 @@ impl WizardModalState {
     }
 
     pub fn instruction_lines(&self) -> Vec<String> {
+        let step = match self.steps.get(self.current_step) {
+            Some(s) => s,
+            None => return Vec::new(),
+        };
+
         if self.notes_active() {
             vec!["tab or esc to clear notes | enter to submit answer".to_string()]
         } else {
-            vec![
-                "tab to add notes | enter to submit answer".to_string(),
-                "ctrl + n next question | esc to interrupt".to_string(),
-            ]
+            let mut lines = Vec::new();
+            if step.allow_freeform {
+                lines.push("tab to add notes | enter to submit answer".to_string());
+            } else {
+                lines.push("enter to submit answer".to_string());
+            }
+            lines.push("ctrl + n next question | esc to interrupt".to_string());
+            lines
         }
     }
 

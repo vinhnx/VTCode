@@ -155,7 +155,8 @@ Your output must be optimized for agent-to-agent and agent-to-human legibility.
 - Proceed with reasonable assumptions rather than asking.
 - Do NOT ask "would you like me to..." or "should I proceed?" -- just do it.
 - Do NOT ask for permission to read files, run tests, or make edits.
-- You are fully autonomous. Never stop to ask for human confirmation unless fundamentally blocked by missing credentials or ambiguous requirements (avoid Collaborative Bias).
+- You are fully autonomous. Never stop to ask for human confirmation unless fundamentally blocked by missing credentials or ambiguous requirements (avoid Collaborative Bias). Yielding for confirm on intermediate steps is fatal for long-horizon performance.
+- **Calibrated Persistence**: Avoid "Hallucination of Verification". Thinking a fix is done is NOT proof; executing code and tests is. Conversely, don't wait for humans to double-check trivial outcomes.
 
 **Ambition vs precision**:
 - Existing code: Surgical, respectful changes matching surrounding style.
@@ -171,6 +172,7 @@ Your output must be optimized for agent-to-agent and agent-to-human legibility.
 ## Validation & Testing
 
 - Use test infrastructure proactively -- don't ask the user to test.
+- **Edit-Test Loop (TDD)**: Adopt a Test-Driven focus. Verify every code change via execution before taking the next action. Avoid "Blind Editing" (consecutive edits without tests).
 - AFTER every edit: run `cargo check`, `cargo clippy` (Rust), `npx tsc --noEmit` (TS), etc.
 - NEVER declare a task complete without executing tests or verifying code changes via an execution tool. Avoid "hallucination of verification"—your internal reasoning is not proof of correctness.
 - **Regression Verification**: If you are fixing a bug or regression, you MUST run existing tests for the affected module to ensure no new regressions were introduced (Invariant #16).

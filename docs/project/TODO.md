@@ -10,17 +10,6 @@ scan to improve panic and exception handling like force unwrap and expect.
 
 ---
 
-clear actionable strategy for vtcode:
-Based on the findings from the NL2Repo-Bench study, developers building coding agents should focus on the following core takeaways to improve autonomous, long-horizon software generation:
-• Explicit Task Planning is Crucial: The ability to systematically track and plan tasks (e.g., using a task_tracker tool) has a high correlation with an agent's overall success. Agents that leverage explicit planning tools achieve significantly better scores, whereas those that neglect planning often suffer from incomplete implementations and premature termination.
-• Implement "Edit-Test" Self-Correction Loops: High-performing agents naturally adopt a Test-Driven Development (TDD) approach, characterized by rapid "Edit-Test" loops where they immediately verify their code changes via execution. Developers must engineer agents to avoid "Blind Editing" (making consecutive code changes without intermediate testing) and "Navigation Loops" (repeatedly reading files without taking productive action).
-• Calibrate Persistence to Avoid Premature Halting: Developers must solve two distinct failure modes related to how agents finish tasks:
-◦ Collaborative Bias (Non-Finish): Some models, like GPT-5, are overly conservative and frequently pause to wait for human confirmation. This dependency is fatal for fully autonomous tasks.
-◦ Overconfidence (Early Termination): "Thinking" models often suffer from a "hallucination of verification," where their internal reasoning convinces them the task is done without actually executing or testing the code, causing them to stop early and fail.
-• Large Context Windows are Necessary, But Not Sufficient: Ultra-long context windows (e.g., 1M+ tokens) provide a massive advantage for maintaining cross-file consistency and global architectural coherence over hundreds of steps. However, simply having a large context window does not guarantee success; it must be paired with strong foundational reasoning and effective planning behaviors to be useful.
-• Prioritize Environment and Dependency Management: Agents frequently fail at the repository level not because of incorrect logic, but due to structural errors like missing **init**.py files, broken module imports, or a failure to align with the subtle constraints of pre-existing test suites.
-Ultimately, the researchers conclude that achieving reliable repository-level synthesis will require architectural innovations in agentic planning, self-correction loops, and reliable environment management, rather than just relying on larger context windows or an unlimited number of interaction steps.
-
 ---
 
 "• I was unable to apply the required changes within the current turn due to
@@ -1066,4 +1055,4 @@ more PTY truncate display in TUI, reference:
 
 ---
 
-ask_user_question
+review and revise ask_user_question
