@@ -43,7 +43,7 @@ const MAX_RATE_LIMIT_ACQUIRE_ATTEMPTS: usize = 4;
 const MAX_RATE_LIMIT_WAIT: Duration = Duration::from_secs(5);
 
 fn build_failure_error_content(error: String, failure_kind: &'static str) -> String {
-    super::execution_result::build_error_content(error, None, failure_kind).to_string()
+    super::execution_result::build_error_content(error, None, None, failure_kind).to_string()
 }
 
 fn build_validation_error_content(error: String, validation_stage: &'static str) -> String {
@@ -70,15 +70,54 @@ fn build_rate_limit_error_content(tool_name: &str, retry_after_ms: u64) -> Strin
     .to_string()
 }
 
+fn compact_loop_key_part(value: &str, max_chars: usize) -> String {
+    value.trim().chars().take(max_chars).collect()
+}
+
 fn loop_detection_tool_key(canonical_tool_name: &str, args: &serde_json::Value) -> String {
     match canonical_tool_name {
         tool_names::UNIFIED_FILE => {
             let action = tool_intent::unified_file_action(args).unwrap_or("read");
-            format!("{canonical_tool_name}::{}", action.to_ascii_lowercase())
+            let action = action.to_ascii_lowercase();
+            if action == "read"
+                && let Some(path) = args
+                    .get("path")
+                    .or_else(|| args.get("file_path"))
+                    .or_else(|| args.get("filepath"))
+                    .or_else(|| args.get("target_path"))
+                    .and_then(|v| v.as_str())
+            {
+                return format!(
+                    "{canonical_tool_name}::{action}::{}",
+                    compact_loop_key_part(path, 120)
+                );
+            }
+            format!("{canonical_tool_name}::{action}")
         }
         tool_names::UNIFIED_EXEC => {
             let action = tool_intent::unified_exec_action(args).unwrap_or("run");
-            format!("{canonical_tool_name}::{}", action.to_ascii_lowercase())
+            let action = action.to_ascii_lowercase();
+            if matches!(action.as_str(), "poll" | "close")
+                && let Some(session_id) = args.get("session_id").and_then(|v| v.as_str())
+            {
+                return format!(
+                    "{canonical_tool_name}::{action}::{}",
+                    compact_loop_key_part(session_id, 80)
+                );
+            }
+            if action == "run"
+                && let Some(command) = args
+                    .get("command")
+                    .or_else(|| args.get("cmd"))
+                    .or_else(|| args.get("raw_command"))
+                    .and_then(|v| v.as_str())
+            {
+                return format!(
+                    "{canonical_tool_name}::{action}::{}",
+                    compact_loop_key_part(command, 120)
+                );
+            }
+            format!("{canonical_tool_name}::{action}")
         }
         _ => canonical_tool_name.to_string(),
     }
@@ -235,9 +274,14 @@ pub(crate) async fn validate_tool_call<'a>(
             tracing::warn!(tool = %loop_tool_key, "Loop detector blocked tool");
             let display_tool = tool_action_label(&canonical_tool_name, args_val);
             let block_reason = format!(
-                "Loop detector halted repeated '{}' calls for this turn.",
+                "Loop detector halted repeated '{}' calls for this turn.\nType \"continue\" to retry from this point with a different strategy.",
                 display_tool
             );
+            // Ensure no orphan PTY processes keep running after a hard loop-detection stop.
+            ctx.tool_registry.terminate_all_pty_sessions();
+            ctx.handle.set_input_status(None, None);
+            ctx.input_status_state.left = None;
+            ctx.input_status_state.right = None;
             if let Some(mut spooled) = ctx.tool_registry.find_recent_spooled_output(
                 &canonical_tool_name,
                 args_val,
@@ -480,4 +524,31 @@ async fn acquire_adaptive_rate_limit_slot<'a>(
     }
 
     Ok(Some(ValidationResult::Blocked))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::loop_detection_tool_key;
+    use serde_json::json;
+    use vtcode_core::config::constants::tools as tool_names;
+
+    #[test]
+    fn loop_key_for_unified_file_read_includes_path() {
+        let key = loop_detection_tool_key(
+            tool_names::UNIFIED_FILE,
+            &json!({"action":"read","path":"src/main.rs"}),
+        );
+        assert!(key.contains("unified_file::read::"));
+        assert!(key.contains("src/main.rs"));
+    }
+
+    #[test]
+    fn loop_key_for_unified_exec_poll_includes_session_id() {
+        let key = loop_detection_tool_key(
+            tool_names::UNIFIED_EXEC,
+            &json!({"action":"poll","session_id":"run-abc123"}),
+        );
+        assert!(key.contains("unified_exec::poll::"));
+        assert!(key.contains("run-abc123"));
+    }
 }

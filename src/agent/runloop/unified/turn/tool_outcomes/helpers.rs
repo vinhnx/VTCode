@@ -3,6 +3,7 @@ use once_cell::sync::Lazy;
 use rustc_hash::FxHashMap;
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
+use tracing::warn;
 use vtcode_core::llm::provider as uni;
 
 pub(crate) const EXIT_PLAN_MODE_REASON_AUTO_TRIGGER_ON_DENIAL: &str = "auto_trigger_on_plan_denial";
@@ -98,14 +99,26 @@ pub(crate) fn signature_key_for(name: &str, args: &serde_json::Value) -> String 
 
     // Try to get from pool first (fast read path)
     {
-        let pool = SIGNATURE_POOL.read().unwrap();
+        let pool = match SIGNATURE_POOL.read() {
+            Ok(pool) => pool,
+            Err(poisoned) => {
+                warn!("SIGNATURE_POOL read lock poisoned; recovering with inner state");
+                poisoned.into_inner()
+            }
+        };
         if let Some(interned) = pool.get(&key) {
             return interned.to_string();
         }
     }
 
     // Not in pool, intern it (slow write path)
-    let mut pool = SIGNATURE_POOL.write().unwrap();
+    let mut pool = match SIGNATURE_POOL.write() {
+        Ok(pool) => pool,
+        Err(poisoned) => {
+            warn!("SIGNATURE_POOL write lock poisoned; recovering with inner state");
+            poisoned.into_inner()
+        }
+    };
     // Double-check after acquiring write lock (another thread might have inserted)
     pool.entry(key.clone())
         .or_insert_with(|| Arc::from(key.as_str()))

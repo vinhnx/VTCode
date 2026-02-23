@@ -197,7 +197,10 @@ impl<'a> ModelPickerCoordinator<'a> {
                 renderer.line(MessageStyle::Info, "Model picker cancelled.")?;
             }
             ModelPickerProgress::Completed(selection) => {
-                let picker_state = self.state.take().unwrap();
+                let Some(picker_state) = self.state.take() else {
+                    warn!("Model picker completed but no state was available");
+                    return Ok(ModelPickerOutcome::Continue);
+                };
                 if let Err(err) = finalize_model_selection(
                     renderer,
                     &picker_state,
