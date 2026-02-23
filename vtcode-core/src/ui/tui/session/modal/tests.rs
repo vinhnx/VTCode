@@ -83,11 +83,15 @@ fn wizard_tabbed_list_allows_tab_switching_without_completion() {
                 selection: Some(InlineListSelection::AskUserChoice {
                     tab_id: "a".to_owned(),
                     choice_id: "a1".to_owned(),
+                    text: None,
                 }),
                 ..base_item("A1")
             }],
             completed: false,
             answer: None,
+            allow_freeform: false,
+            freeform_label: None,
+            freeform_placeholder: None,
         },
         WizardStep {
             title: "Tab B".to_owned(),
@@ -97,11 +101,15 @@ fn wizard_tabbed_list_allows_tab_switching_without_completion() {
                 selection: Some(InlineListSelection::AskUserChoice {
                     tab_id: "b".to_owned(),
                     choice_id: "b1".to_owned(),
+                    text: None,
                 }),
                 ..base_item("B1")
             }],
             completed: false,
             answer: None,
+            allow_freeform: false,
+            freeform_label: None,
+            freeform_placeholder: None,
         },
     ];
 
@@ -134,11 +142,15 @@ fn wizard_tabbed_list_enter_submits_single_selection() {
             selection: Some(InlineListSelection::AskUserChoice {
                 tab_id: "tab".to_owned(),
                 choice_id: "choice".to_owned(),
+                text: None,
             }),
             ..base_item("Choice")
         }],
         completed: false,
         answer: None,
+        allow_freeform: false,
+        freeform_label: None,
+        freeform_placeholder: None,
     }];
 
     let mut wizard = WizardModalState::new(
@@ -180,6 +192,9 @@ fn wizard_multistep_ctrl_n_advances_without_completion() {
             }],
             completed: false,
             answer: None,
+            allow_freeform: false,
+            freeform_label: None,
+            freeform_placeholder: None,
         },
         WizardStep {
             title: "Q2".to_owned(),
@@ -195,6 +210,9 @@ fn wizard_multistep_ctrl_n_advances_without_completion() {
             }],
             completed: false,
             answer: None,
+            allow_freeform: false,
+            freeform_label: None,
+            freeform_placeholder: None,
         },
     ];
 
@@ -235,6 +253,9 @@ fn wizard_notes_input_sets_other_answer() {
         }],
         completed: false,
         answer: None,
+        allow_freeform: false,
+        freeform_label: None,
+        freeform_placeholder: None,
     }];
 
     let mut wizard = WizardModalState::new(
@@ -297,6 +318,9 @@ fn wizard_multistep_numeric_select_submits() {
         ],
         completed: false,
         answer: None,
+        allow_freeform: false,
+        freeform_label: None,
+        freeform_placeholder: None,
     }];
 
     let mut wizard = WizardModalState::new(

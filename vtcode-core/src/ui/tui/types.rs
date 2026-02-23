@@ -209,6 +209,7 @@ pub enum InlineListSelection {
     AskUserChoice {
         tab_id: String,
         choice_id: String,
+        text: Option<String>,
     },
 
     /// Selection returned from the `request_user_input` HITL tool.
@@ -565,6 +566,10 @@ pub struct WizardStep {
     pub completed: bool,
     /// The selected answer for this step (if completed)
     pub answer: Option<InlineListSelection>,
+
+    pub allow_freeform: bool,
+    pub freeform_label: Option<String>,
+    pub freeform_placeholder: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

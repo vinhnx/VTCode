@@ -172,6 +172,7 @@ pub async fn execute_recovery_prompt(
                     selection: Some(InlineListSelection::AskUserChoice {
                         tab_id: tab.id.clone(),
                         choice_id: item.id.clone(),
+                        text: None,
                     }),
                     search_value: Some(format!(
                         "{} {} {}",
@@ -188,6 +189,9 @@ pub async fn execute_recovery_prompt(
                 items,
                 completed: false,
                 answer: None,
+                allow_freeform: true, // Recovery prompts often allow custom guidance
+                freeform_label: Some("Provide custom guidance".to_string()),
+                freeform_placeholder: Some("Describe what you'd like me to do next...".to_string()),
             }
         })
         .collect();
@@ -260,8 +264,11 @@ pub async fn execute_recovery_prompt(
                 task::yield_now().await;
                 tokio::time::sleep(Duration::from_millis(100)).await;
 
-                if let Some(InlineListSelection::AskUserChoice { tab_id, choice_id }) =
-                    selections.pop()
+                if let Some(InlineListSelection::AskUserChoice {
+                    tab_id,
+                    choice_id,
+                    ..
+                }) = selections.pop()
                 {
                     return Ok(json!({
                         "tab_id": tab_id,

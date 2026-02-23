@@ -74,6 +74,9 @@ pub struct LoopDetector {
     /// Cache mapping (tool_name, raw_args) composite hash → normalized_args_hash.
     /// Avoids re-running normalization + re-serialization on repeated identical calls.
     norm_cache: HashMap<u64, u64>,
+    /// Tracks consecutive read-only calls without any write/execution progress.
+    /// Resets on any mutating tool call.
+    readonly_streak: usize,
 }
 
 impl LoopDetector {
@@ -90,6 +93,7 @@ impl LoopDetector {
             max_identical_call_limit: normalized_limit,
             custom_limits: HashMap::new(),
             norm_cache: HashMap::with_capacity(16),
+            readonly_streak: 0,
         }
     }
 
@@ -174,6 +178,47 @@ impl LoopDetector {
 
         if let Some(read_target_warning) = self.detect_repetitive_read_target(tool_name) {
             return Some(read_target_warning);
+        }
+
+        // --- Navigation Loop Detection (NL2Repo-Bench integration) ---
+        let base_name = base_tool_name(tool_name);
+        let is_readonly = matches!(
+            base_name,
+            tools::READ_FILE | tools::GREP_FILE | tools::LIST_FILES | tools::UNIFIED_SEARCH
+        ) || (base_name == tools::UNIFIED_FILE && tool_name.ends_with("::read"));
+
+        let is_mutating = matches!(
+            base_name,
+            tools::WRITE_FILE
+                | tools::CREATE_FILE
+                | tools::EDIT_FILE
+                | tools::UNIFIED_EXEC
+                | tools::APPLY_PATCH
+        );
+
+        if is_readonly {
+            self.readonly_streak += 1;
+        } else if is_mutating {
+            self.readonly_streak = 0;
+        }
+
+        const MAX_NAVIGATION_ONLY_STREAK: usize = 6;
+        if self.readonly_streak >= MAX_NAVIGATION_ONLY_STREAK {
+            let msg = format!(
+                "Navigation Loop Detected: {} consecutive exploration calls without taking action (edit/exec).\n\n\
+                 **Action Bias Required**: Stop reading and start implementing. If you are stuck, perform a ROOT CAUSE analysis or ask for human steering.",
+                self.readonly_streak
+            );
+            let now = Instant::now();
+            let should_warn = self
+                .last_warning
+                .map(|last| now.duration_since(last).as_secs() > 30)
+                .unwrap_or(true);
+
+            if should_warn {
+                self.last_warning = Some(now);
+                return Some(msg);
+            }
         }
 
         if let Some(pattern_warning) = self.detect_patterns() {
@@ -805,5 +850,40 @@ mod tests {
         }
 
         assert!(!detector.is_hard_limit_exceeded(&read_tool));
+    }
+
+    #[test]
+    fn test_navigation_loop_detection() {
+        let mut detector = LoopDetector::with_max_repeated_calls(100);
+        let list_args = serde_json::json!({"path": "src"});
+        let grep_args = serde_json::json!({"pattern": "fn", "path": "src/main.rs"});
+        let read_args = serde_json::json!({"path": "src/main.rs"});
+
+        // Sequence: A, B, C, B, A (where A=LIST, B=GREP, C=READ)
+        // This avoids identical patterns (k=2: [B, A] vs [B, C], k=3: [C, B, A] vs ???)
+        let sequence = [
+            (tools::LIST_FILES, &list_args),
+            (tools::GREP_FILE, &grep_args),
+            (tools::READ_FILE, &read_args),
+            (tools::GREP_FILE, &grep_args),
+            (tools::LIST_FILES, &list_args),
+        ];
+
+        for (i, (tool, args)) in sequence.iter().enumerate() {
+            let res = detector.record_call(tool, args);
+            assert!(res.is_none(), "Call {} ({}) should not have triggered a warning", i + 1, tool);
+        }
+
+        // 6th call (any read-only) should trigger navigation loop warning (streak hits 6)
+        let warning = detector.record_call(tools::READ_FILE, &read_args);
+        assert!(warning.is_some(), "6th call should have triggered a navigation loop warning");
+        assert!(warning.unwrap().contains("Navigation Loop Detected"));
+
+        // A mutating call should reset the streak
+        let write_args = serde_json::json!({"path": "src/new.rs", "content": "test"});
+        assert!(detector.record_call(tools::WRITE_FILE, &write_args).is_none());
+        
+        // Subsequent read calls should start from 0; single call should be fine
+        assert!(detector.record_call(tools::LIST_FILES, &list_args).is_none());
     }
 }

@@ -114,6 +114,9 @@ pub(crate) async fn execute_request_user_input_tool(
                 items,
                 completed: false,
                 answer: None,
+                allow_freeform: true,
+                freeform_label: None,
+                freeform_placeholder: None,
             }
         })
         .collect();

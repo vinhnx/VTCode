@@ -21,7 +21,16 @@ struct AskUserQuestionArgs {
     tabs: Vec<AskUserTab>,
 
     #[serde(default)]
+    allow_freeform: bool,
+    #[serde(default)]
+    freeform_label: Option<String>,
+    #[serde(default)]
+    freeform_placeholder: Option<String>,
+
+    #[serde(default)]
     default_tab_id: Option<String>,
+    #[serde(default)]
+    default_choice_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -69,7 +78,7 @@ pub(crate) async fn execute_ask_user_question_tool(
         .tabs
         .iter()
         .map(|tab| {
-            let items = tab
+            let items: Vec<InlineListItem> = tab
                 .items
                 .iter()
                 .map(|item| InlineListItem {
@@ -80,6 +89,7 @@ pub(crate) async fn execute_ask_user_question_tool(
                     selection: Some(InlineListSelection::AskUserChoice {
                         tab_id: tab.id.clone(),
                         choice_id: item.id.clone(),
+                        text: None,
                     }),
                     search_value: Some(format!(
                         "{} {} {}",
@@ -90,12 +100,32 @@ pub(crate) async fn execute_ask_user_question_tool(
                 })
                 .collect();
 
+            // Find default choice for this tab if provided
+            let answer = if let Some(choice_id) = parsed.default_choice_id.as_deref() {
+                items.iter().find_map(|item| {
+                    if let Some(InlineListSelection::AskUserChoice {
+                        choice_id: cid, ..
+                    }) = &item.selection
+                    {
+                        if cid == choice_id {
+                            return item.selection.clone();
+                        }
+                    }
+                    None
+                })
+            } else {
+                None
+            };
+
             WizardStep {
                 title: tab.title.clone(),
                 question: parsed.question.clone(),
                 items,
-                completed: false,
-                answer: None,
+                completed: answer.is_some(),
+                answer,
+                allow_freeform: parsed.allow_freeform,
+                freeform_label: parsed.freeform_label.clone(),
+                freeform_placeholder: parsed.freeform_placeholder.clone(),
             }
         })
         .collect();
@@ -116,11 +146,16 @@ pub(crate) async fn execute_ask_user_question_tool(
     handle.force_redraw();
     match wait_for_wizard_modal(handle, session, ctrl_c_state, ctrl_c_notify).await? {
         WizardModalOutcome::Submitted(mut selections) => {
-            if let Some(InlineListSelection::AskUserChoice { tab_id, choice_id }) = selections.pop()
+            if let Some(InlineListSelection::AskUserChoice {
+                tab_id,
+                choice_id,
+                text,
+            }) = selections.pop()
             {
                 return Ok(json!({
                     "tab_id": tab_id,
-                    "choice_id": choice_id
+                    "choice_id": choice_id,
+                    "text": text
                 }));
             }
 
