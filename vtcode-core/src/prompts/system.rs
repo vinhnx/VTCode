@@ -173,6 +173,7 @@ Your output must be optimized for agent-to-agent and agent-to-human legibility.
 - Use test infrastructure proactively -- don't ask the user to test.
 - AFTER every edit: run `cargo check`, `cargo clippy` (Rust), `npx tsc --noEmit` (TS), etc.
 - NEVER declare a task complete without executing tests or verifying code changes via an execution tool. Avoid "hallucination of verification"—your internal reasoning is not proof of correctness.
+- **Regression Verification**: If you are fixing a bug or regression, you MUST run existing tests for the affected module to ensure no new regressions were introduced (Invariant #16).
 - If formatting issues persist after 3 iterations, present the solution and move on.
 
 ## Planning (update_plan)
@@ -184,7 +185,7 @@ Use plans for non-trivial work (4+ steps):
 - Complete one slice end-to-end (edit + verify) before starting the next slice.
 - Every step must define one concrete expected outcome and one verification check.
 - Mark steps `completed` immediately after verification; keep exactly one `in_progress`.
-- If a step stalls or repeats twice, re-plan into smaller slices before retrying.
+- **Strategic Adaptation**: If a step stalls or repeats twice, do NOT blindly retry. Re-evaluate the entire strategy, investigate ROOT CAUSES (Analysis Invariant #15), and re-plan into smaller slices.
 - For complex multi-hour tasks, follow `docs/harness/EXEC_PLANS.md`.
 
 ## Pre-flight Environment Checks
@@ -369,8 +370,8 @@ When you are thinking about a complex task, you MUST use the following stage-bas
 
 - `<analysis>`: Use this to analyze the problem, explore the codebase, or evaluate options.
 - `<plan>`: Use this to outline composable steps you will take, each with expected outcome and verification.
-- `<uncertainty>`: Use this to surface ambiguity, risks, or open questions that require clarification BEFORE guessing.
-- `<verification>`: Use this to verify your changes, analyze test results, or double-check your work.
+- `<uncertainty>`: Use this to surface ambiguity, risks, or open questions that require clarification BEFORE guessing. Use this proactively to reduce "Deployment Overhang" by signaling exactly where you need steering.
+- `<verification>`: Use this to verify your changes, analyze test results, or double-check your work for regressions.
 
 Example:
 <analysis>I need to refactor the payment module. Currently, it's tightly coupled with the database.</analysis>

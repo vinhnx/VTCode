@@ -1064,7 +1064,6 @@ more PTY truncate display in TUI, reference:
     subagent_loading-19ca9abe89c74e0a)
 ```
 
+---
 
---
-
-review and refine ask_user_question tool
+ask_user_question

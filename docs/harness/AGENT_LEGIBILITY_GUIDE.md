@@ -50,3 +50,24 @@ Design outputs for human oversight, not just approval. Users should be able to m
 • [>] Run migrations (verification: checking pg_dump)
   └ Still waiting for DB lock... (30s)
 ```
+
+## Grounding & Uncertainty
+
+### 1. Environment Grounding
+Before "fixing" code, report the environment state to prevent misdiagnosing infrastructure issues as logic flaws.
+- **Grounding Step**: `which node`, `env | grep PORT`, `ls -la vendor/`
+- **Report**: "Environment check: `sqlite3` is present, but `DB_PATH` env var points to a read-only mount."
+
+### 2. Uncertainty Pulse
+Proactively surface doubts to reduce "Deployment Overhang".
+- **Pulse**: "I have 80% confidence in the regex, but 20% uncertainty if it handles nested quotes correctly. Proceeding with a test-first approach."
+
+## Strategic Adaptation & Planning
+
+### 1. Explicit Planning
+Use `task_boundary` and `task.md` religiously. High success is correlated with systematic planning.
+- **Rule**: If a task involves more than 3 files or complex logic, create/update an `implementation_plan.md` first.
+
+### 2. Navigation Loops & Action Bias
+Avoid repeatedly reading files without taking action. If you have read 5 files without a command or write call, pause and re-evaluate your strategy.
+- **Rule**: Prefer "Edit-Test" loops over "Read-Read" loops.

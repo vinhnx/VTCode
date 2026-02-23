@@ -316,10 +316,11 @@ impl LoopDetector {
                     .to_string(),
             ),
             _ => Some(
-                "Shift focus to ROOT CAUSE analysis rather than patching symptoms. Re-evaluate planning assumptions in `<analysis>`. Consider:\n\
-                 • Using a different tool for this task\n\
-                 • Breaking down the problem into smaller steps\n\
-                 • Asking for user guidance if stuck"
+                "Shift focus to ROOT CAUSE analysis rather than patching symptoms. Re-evaluate planning assumptions specifically regarding environmental constraints. Consider:\n\
+                 • Verifying environment state (`env`, `ls -la`, `which <cmd>`) before more code edits\n\
+                 • Breaking down the problem into smaller, verifiable sub-tasks\n\
+                 • Checking if a recent change introduced a regression (run existing tests)\n\
+                 • Asking for user guidance if strategic direction is ambiguous"
                     .to_string(),
             ),
         }
@@ -413,10 +414,11 @@ impl LoopDetector {
                  • Use execute_code to call tools directly\n\
                  • Check if you need a different approach to the task"
                 .to_string(),
-            _ => "Shift focus to ROOT CAUSE analysis rather than patching symptoms. Re-evaluate planning assumptions in `<analysis>`. Consider:\n\
-                 • Using a different tool for this task\n\
-                 • Breaking down the problem into smaller steps\n\
-                 • Asking for user guidance if stuck"
+            _ => "Shift focus to ROOT CAUSE analysis rather than patching symptoms. Re-evaluate planning assumptions specifically regarding environmental constraints. Consider:\n\
+                 • Verifying environment state (`env`, `ls -la`, `which <cmd>`) before more code edits\n\
+                 • Breaking down the problem into smaller, verifiable sub-tasks\n\
+                 • Checking if a recent change introduced a regression (run existing tests)\n\
+                 • Asking for user guidance if strategic direction is ambiguous"
                 .to_string(),
         }
     }
