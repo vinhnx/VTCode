@@ -20,7 +20,7 @@ pub const DEFAULT_PTY_OUTPUT_MAX_TOKENS: usize = 8_000;
 /// Protects against edge cases where token estimation underestimates size.
 pub const DEFAULT_PTY_OUTPUT_BYTE_FUSE: usize = 40 * 1024; // 40 KiB
 
-pub const DEFAULT_MAX_TOOL_CALLS_PER_TURN: usize = 32;
+pub const DEFAULT_MAX_TOOL_CALLS_PER_TURN: usize = 48;
 pub const DEFAULT_MAX_TOOL_WALL_CLOCK_SECS: u64 = 600;
 pub const DEFAULT_MAX_TOOL_RETRIES: u32 = 2;
 

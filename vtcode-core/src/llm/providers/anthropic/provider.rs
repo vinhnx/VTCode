@@ -366,15 +366,19 @@ impl LLMProvider for AnthropicProvider {
         let include_structured = anthropic_request.get("output_format").is_some();
         let include_effort = anthropic_request.get("output_config").is_some();
 
+        let beta_config = headers::BetaHeaderConfig {
+            config: &self.anthropic_config,
+            model: &self.model,
+            include_structured,
+            include_tool_search,
+            request_betas: betas.as_ref(),
+            include_effort,
+        };
+
         if let Some(beta_header) = headers::combined_beta_header_value(
             self.prompt_cache_enabled,
             &self.prompt_cache_settings,
-            &self.anthropic_config,
-            &self.model,
-            include_structured,
-            include_tool_search,
-            betas.as_ref(),
-            include_effort,
+            &beta_config,
         ) {
             request_builder = request_builder.header("anthropic-beta", beta_header);
         }
@@ -436,15 +440,19 @@ impl LLMProvider for AnthropicProvider {
         let include_structured = anthropic_request.get("output_format").is_some();
         let include_effort = anthropic_request.get("output_config").is_some();
 
+        let beta_config = headers::BetaHeaderConfig {
+            config: &self.anthropic_config,
+            model: &self.model,
+            include_structured,
+            include_tool_search,
+            request_betas: betas.as_ref(),
+            include_effort,
+        };
+
         if let Some(beta_header) = headers::combined_beta_header_value(
             self.prompt_cache_enabled,
             &self.prompt_cache_settings,
-            &self.anthropic_config,
-            &self.model,
-            include_structured,
-            include_tool_search,
-            betas.as_ref(),
-            include_effort,
+            &beta_config,
         ) {
             request_builder = request_builder.header("anthropic-beta", beta_header);
         }

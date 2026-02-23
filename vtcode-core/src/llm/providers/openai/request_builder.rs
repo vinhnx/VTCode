@@ -240,42 +240,38 @@ pub(crate) fn build_responses_request(
         openai_request["sampling_parameters"] = sampling_parameters;
     }
 
-    if ctx.supports_tools {
-        if let Some(tools) = &request.tools {
-            if let Some(serialized) = tool_serialization::serialize_tools_for_responses(tools) {
-                openai_request["tools"] = serialized;
+    if ctx.supports_tools
+        && let Some(tools) = &request.tools
+        && let Some(serialized) = tool_serialization::serialize_tools_for_responses(tools)
+    {
+        openai_request["tools"] = serialized;
 
-                // Check if any tools are custom types - if so, disable parallel tool calls
-                // as per GPT-5 specification: "custom tool type does NOT support parallel tool calling"
-                let has_custom_tool = tools.iter().any(|tool| tool.tool_type == "custom");
-                if has_custom_tool {
-                    // Override parallel tool calls to false if custom tools are present
-                    openai_request["parallel_tool_calls"] = Value::Bool(false);
-                }
+        // Check if any tools are custom types - if so, disable parallel tool calls
+        // as per GPT-5 specification: "custom tool type does NOT support parallel tool calling"
+        let has_custom_tool = tools.iter().any(|tool| tool.tool_type == "custom");
+        if has_custom_tool {
+            // Override parallel tool calls to false if custom tools are present
+            openai_request["parallel_tool_calls"] = Value::Bool(false);
+        }
 
-                // Only add tool_choice when tools are present
-                if let Some(tool_choice) = &request.tool_choice {
-                    openai_request["tool_choice"] = tool_choice.to_provider_format("openai");
-                }
+        // Only add tool_choice when tools are present
+        if let Some(tool_choice) = &request.tool_choice {
+            openai_request["tool_choice"] = tool_choice.to_provider_format("openai");
+        }
 
-                // Only set parallel tool calls if not overridden due to custom tools
-                if request.parallel_tool_calls.is_some()
-                    && !openai_request.get("parallel_tool_calls").is_some()
-                {
-                    if let Some(parallel) = request.parallel_tool_calls {
-                        openai_request["parallel_tool_calls"] = Value::Bool(parallel);
-                    }
-                }
+        // Only set parallel tool calls if not overridden due to custom tools
+        if let Some(parallel) = request.parallel_tool_calls
+            && !openai_request.get("parallel_tool_calls").is_some()
+        {
+            openai_request["parallel_tool_calls"] = Value::Bool(parallel);
+        }
 
-                // Only add parallel_tool_config when tools are present
-                if ctx.supports_parallel_tool_config {
-                    if let Some(config) = &request.parallel_tool_config {
-                        if let Ok(config_value) = serde_json::to_value(config) {
-                            openai_request["parallel_tool_config"] = config_value;
-                        }
-                    }
-                }
-            }
+        // Only add parallel_tool_config when tools are present
+        if ctx.supports_parallel_tool_config
+            && let Some(config) = &request.parallel_tool_config
+            && let Ok(config_value) = serde_json::to_value(config)
+        {
+            openai_request["parallel_tool_config"] = config_value;
         }
     }
 
@@ -294,14 +290,14 @@ pub(crate) fn build_responses_request(
     }
 
     // Enable reasoning summaries if supported (OpenAI GPT-5 only)
-    if ctx.supports_reasoning {
-        if let Some(map) = openai_request.as_object_mut() {
-            let reasoning_value = map.entry("reasoning").or_insert(json!({}));
-            if let Some(reasoning_obj) = reasoning_value.as_object_mut() {
-                if !reasoning_obj.contains_key("summary") {
-                    reasoning_obj.insert("summary".to_string(), json!("auto"));
-                }
-            }
+    if ctx.supports_reasoning
+        && let Some(map) = openai_request.as_object_mut()
+    {
+        let reasoning_value = map.entry("reasoning").or_insert(json!({}));
+        if let Some(reasoning_obj) = reasoning_value.as_object_mut()
+            && !reasoning_obj.contains_key("summary")
+        {
+            reasoning_obj.insert("summary".to_string(), json!("auto"));
         }
     }
 
@@ -362,12 +358,11 @@ pub(crate) fn build_responses_request(
     // (e.g., "24h") to increase cache reuse and reduce cost/latency on GPT-5.1.
     // Only include prompt_cache_retention when both configured and when the selected
     // model uses the OpenAI Responses API.
-    if ctx.is_responses_api_model {
-        if let Some(retention) = ctx.prompt_cache_retention {
-            if !retention.trim().is_empty() {
-                openai_request["prompt_cache_retention"] = json!(retention);
-            }
-        }
+    if ctx.is_responses_api_model
+        && let Some(retention) = ctx.prompt_cache_retention
+        && !retention.trim().is_empty()
+    {
+        openai_request["prompt_cache_retention"] = json!(retention);
     }
 
     Ok(openai_request)

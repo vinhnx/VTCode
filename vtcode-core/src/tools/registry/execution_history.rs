@@ -185,6 +185,23 @@ fn is_unified_file_tool_name(name: &str) -> bool {
     normalized == tools::UNIFIED_FILE || normalized.ends_with(".unified_file")
 }
 
+fn tool_name_matches(name: &str, expected: &str) -> bool {
+    let normalized = normalize_tool_name_for_match(name);
+    normalized == expected || normalized.ends_with(&format!(".{expected}"))
+}
+
+fn is_read_style_tool_call(tool_name: &str, args: &Value) -> bool {
+    if tool_name_matches(tool_name, tools::READ_FILE) {
+        return true;
+    }
+    if is_unified_file_tool_name(tool_name) {
+        return tool_intent::unified_file_action(args)
+            .unwrap_or("read")
+            .eq_ignore_ascii_case("read");
+    }
+    false
+}
+
 fn normalize_path_for_match(path: &str) -> String {
     path.trim()
         .replace('\\', "/")
@@ -356,6 +373,49 @@ impl ToolExecutionHistory {
         None
     }
 
+    /// Find the most recent successful output for a tool call with identical args.
+    pub fn find_recent_successful_result(
+        &self,
+        tool_name: &str,
+        args: &Value,
+        max_age: Duration,
+    ) -> Option<Value> {
+        let records = self.records.read().unwrap();
+        let now = SystemTime::now();
+
+        for record in records.iter().rev() {
+            if record.tool_name != tool_name || !record.success || record.args != *args {
+                continue;
+            }
+
+            let age_ok = match now.duration_since(record.timestamp) {
+                Ok(age) => age <= max_age,
+                Err(_) => false,
+            };
+            if !age_ok {
+                continue;
+            }
+
+            if let Ok(result) = &record.result {
+                if result
+                    .get("spooled_to_file")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false)
+                {
+                    let Some(spool_path) = result.get("spool_path").and_then(|v| v.as_str()) else {
+                        continue;
+                    };
+                    if !Path::new(spool_path).exists() {
+                        continue;
+                    }
+                }
+                return Some(result.clone());
+            }
+        }
+
+        None
+    }
+
     /// Find continuation info from a recent chunked file-read call for the same path.
     ///
     /// Supports both `read_file` and `unified_file` read action records.
@@ -442,8 +502,8 @@ impl ToolExecutionHistory {
     }
 
     /// Get the effective loop limit for a specific tool.
-    pub fn loop_limit_for(&self, tool_name: &str) -> usize {
-        self.effective_identical_limit_for_tool(tool_name)
+    pub fn loop_limit_for(&self, tool_name: &str, args: &Value) -> usize {
+        self.effective_identical_limit_for_call(tool_name, args)
     }
 
     /// Get the rate limit per minute if configured.
@@ -454,15 +514,18 @@ impl ToolExecutionHistory {
         if val == 0 { None } else { Some(val) }
     }
 
-    fn effective_identical_limit_for_tool(&self, tool_name: &str) -> usize {
+    fn effective_identical_limit_for_call(&self, tool_name: &str, args: &Value) -> usize {
         let base_limit = self
             .identical_limit
             .load(std::sync::atomic::Ordering::Relaxed);
-        match tool_name {
-            tools::READ_FILE | tools::GREP_FILE | tools::LIST_FILES => {
-                base_limit.max(MIN_READONLY_IDENTICAL_LIMIT)
-            }
-            _ => base_limit,
+        if is_read_style_tool_call(tool_name, args)
+            || tool_name_matches(tool_name, tools::GREP_FILE)
+            || tool_name_matches(tool_name, tools::LIST_FILES)
+            || tool_name_matches(tool_name, tools::UNIFIED_SEARCH)
+        {
+            base_limit.max(MIN_READONLY_IDENTICAL_LIMIT)
+        } else {
+            base_limit
         }
     }
 
@@ -484,7 +547,7 @@ impl ToolExecutionHistory {
     ///
     /// Returns (is_loop, repeat_count, tool_name) if a loop is detected.
     pub fn detect_loop(&self, tool_name: &str, args: &Value) -> (bool, usize, String) {
-        let limit = self.effective_identical_limit_for_tool(tool_name);
+        let limit = self.effective_identical_limit_for_call(tool_name, args);
         if limit == 0 {
             return (false, 0, String::new());
         }
@@ -618,6 +681,37 @@ mod tests {
 
         let found =
             history.find_recent_spooled_result("run_pty_cmd", &args, Duration::from_secs(60));
+        assert!(found.is_none());
+    }
+
+    #[test]
+    fn find_recent_successful_result_skips_missing_spool_file() {
+        let history = ToolExecutionHistory::new(10);
+        let args = json!({"command": "cargo clippy"});
+        let missing_spool_path = tempdir().unwrap().path().join("missing_spool.txt");
+        let result = json!({
+            "spooled_to_file": true,
+            "spool_path": missing_spool_path,
+            "success": true
+        });
+
+        history.add_record(ToolExecutionRecord::success(
+            "run_pty_cmd".to_string(),
+            "run_pty_cmd".to_string(),
+            false,
+            None,
+            args.clone(),
+            result,
+            make_snapshot(),
+            None,
+            None,
+            None,
+            None,
+            false,
+        ));
+
+        let found =
+            history.find_recent_successful_result("run_pty_cmd", &args, Duration::from_secs(60));
         assert!(found.is_none());
     }
 

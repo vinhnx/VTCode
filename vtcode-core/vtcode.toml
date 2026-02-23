@@ -82,7 +82,7 @@ max_search_results = 5
 enable_relative_value_inference = true
 
 [agent.harness]
-max_tool_calls_per_turn = 32
+max_tool_calls_per_turn = 48
 max_tool_wall_clock_secs = 600
 max_tool_retries = 2
 

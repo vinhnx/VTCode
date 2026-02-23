@@ -49,6 +49,8 @@ const UNIFIED_TOOL_GUIDANCE: &str = r#"**Search & exploration**:
 - Prefer `unified_search` (action='grep') for fast searches over repeated `read` calls
 - Use `unified_search` (action='intelligence') for semantic queries
 - Read complete files once; don't re-invoke `read` on same file
+- For spooled outputs, advance `read_file`/`unified_file` offsets; never repeat identical chunk args
+- If 2+ chunk reads stall progress, switch to `grep_file`/`unified_search` and summarize before more reads
 - Use `unified_exec` with `rg` (ripgrep) for patterns—much faster than `grep`
 
 **Code modification**:
@@ -169,6 +171,8 @@ Your output must be optimized for agent-to-agent and agent-to-human legibility.
 Use plans for non-trivial work (4+ steps):
 - 5-7 word descriptive steps with status (`pending`/`in_progress`/`completed`).
 - Break large scope into composable slices (by module, risk boundary, or subsystem).
+- Each slice must name touched file(s), concrete outcome, and one verification command.
+- Complete one slice end-to-end (edit + verify) before starting the next slice.
 - Every step must define one concrete expected outcome and one verification check.
 - Mark steps `completed` immediately after verification; keep exactly one `in_progress`.
 - If a step stalls or repeats twice, re-plan into smaller slices before retrying.

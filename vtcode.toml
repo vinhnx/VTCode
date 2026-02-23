@@ -9,7 +9,7 @@ provider = "ollama"
 api_key_env = "OLLAMA_API_KEY"
 
 # Default model to use when no specific model is specified
-default_model = "gpt-oss:20b-cloud"
+default_model = "minimax-m2:cloud"
 
 # Personal/local overrides should live in user config, not workspace config:
 #   ~/.vtcode/vtcode.toml
@@ -155,7 +155,7 @@ max_open_circuits = 3
 recovery_cooldown = 60
 
 [agent.harness]
-max_tool_calls_per_turn = 32
+max_tool_calls_per_turn = 48
 max_tool_wall_clock_secs = 600
 max_tool_retries = 2
 

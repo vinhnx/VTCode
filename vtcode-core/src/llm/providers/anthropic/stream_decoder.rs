@@ -63,18 +63,16 @@ pub fn create_stream(
                                 cache_read_tokens: message.usage.cache_read_input_tokens,
                             });
                         }
-                        AnthropicStreamEvent::ContentBlockStart { index, content_block } => {
-                            if let AnthropicContentBlock::ToolUse(tool_use) = content_block {
-                                if aggregator.tool_builders.len() <= index {
-                                    aggregator.tool_builders.resize_with(index + 1, shared::ToolCallBuilder::default);
-                                }
-                                let mut delta = Map::new();
-                                delta.insert("id".to_string(), Value::String(tool_use.id));
-                                let mut func = Map::new();
-                                func.insert("name".to_string(), Value::String(tool_use.name));
-                                delta.insert("function".to_string(), Value::Object(func));
-                                aggregator.tool_builders[index].apply_delta(&Value::Object(delta));
+                        AnthropicStreamEvent::ContentBlockStart { index, content_block: AnthropicContentBlock::ToolUse(tool_use) } => {
+                            if aggregator.tool_builders.len() <= index {
+                                aggregator.tool_builders.resize_with(index + 1, shared::ToolCallBuilder::default);
                             }
+                            let mut delta = Map::new();
+                            delta.insert("id".to_string(), Value::String(tool_use.id));
+                            let mut func = Map::new();
+                            func.insert("name".to_string(), Value::String(tool_use.name));
+                            delta.insert("function".to_string(), Value::Object(func));
+                            aggregator.tool_builders[index].apply_delta(&Value::Object(delta));
                         }
                         AnthropicStreamEvent::ContentBlockDelta { index, delta } => {
                             match delta {
@@ -103,12 +101,12 @@ pub fn create_stream(
                             }
                         }
                         AnthropicStreamEvent::MessageDelta { delta, usage } => {
-                            if let Some(u) = usage {
-                                if let Some(mut current_usage) = aggregator.usage {
-                                    current_usage.completion_tokens = u.output_tokens;
-                                    current_usage.total_tokens = u.input_tokens + u.output_tokens;
-                                    aggregator.usage = Some(current_usage);
-                                }
+                            if let Some(u) = usage
+                                && let Some(mut current_usage) = aggregator.usage
+                            {
+                                current_usage.completion_tokens = u.output_tokens;
+                                current_usage.total_tokens = u.input_tokens + u.output_tokens;
+                                aggregator.usage = Some(current_usage);
                             }
                             if let Some(reason) = delta.stop_reason {
                                 aggregator.set_finish_reason(parse_finish_reason(&reason));

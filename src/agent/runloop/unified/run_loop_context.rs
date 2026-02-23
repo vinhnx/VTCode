@@ -40,6 +40,8 @@ pub struct HarnessTurnState {
     pub turn_started_at: Instant,
     pub tool_calls: usize,
     pub consecutive_spool_chunk_reads: usize,
+    pub tool_budget_warning_emitted: bool,
+    pub tool_budget_exhausted_emitted: bool,
     pub max_tool_calls: usize,
     pub max_tool_wall_clock: Duration,
     pub max_tool_retries: u32,
@@ -60,6 +62,8 @@ impl HarnessTurnState {
             turn_started_at: Instant::now(),
             tool_calls: 0,
             consecutive_spool_chunk_reads: 0,
+            tool_budget_warning_emitted: false,
+            tool_budget_exhausted_emitted: false,
             max_tool_calls,
             max_tool_wall_clock: Duration::from_secs(max_tool_wall_clock_secs),
             max_tool_retries,
@@ -76,6 +80,30 @@ impl HarnessTurnState {
 
     pub fn record_tool_call(&mut self) {
         self.tool_calls = self.tool_calls.saturating_add(1);
+    }
+
+    pub fn tool_budget_usage_ratio(&self) -> f64 {
+        if self.max_tool_calls == 0 {
+            1.0
+        } else {
+            self.tool_calls as f64 / self.max_tool_calls as f64
+        }
+    }
+
+    pub fn remaining_tool_calls(&self) -> usize {
+        self.max_tool_calls.saturating_sub(self.tool_calls)
+    }
+
+    pub fn should_emit_tool_budget_warning(&self, threshold: f64) -> bool {
+        !self.tool_budget_warning_emitted && self.tool_budget_usage_ratio() >= threshold
+    }
+
+    pub fn mark_tool_budget_warning_emitted(&mut self) {
+        self.tool_budget_warning_emitted = true;
+    }
+
+    pub fn mark_tool_budget_exhausted_emitted(&mut self) {
+        self.tool_budget_exhausted_emitted = true;
     }
 
     pub fn record_spool_chunk_read(&mut self) -> usize {
@@ -162,5 +190,45 @@ mod tests {
         assert_eq!(state.record_spool_chunk_read(), 2);
         state.reset_spool_chunk_read_streak();
         assert_eq!(state.record_spool_chunk_read(), 1);
+    }
+
+    #[test]
+    fn harness_state_tracks_budget_warning_threshold_once() {
+        let mut state = HarnessTurnState::new(
+            TurnRunId("run-1".to_string()),
+            TurnId("turn-1".to_string()),
+            4,
+            10,
+            1,
+        );
+
+        assert!(!state.should_emit_tool_budget_warning(0.75));
+        state.record_tool_call(); // 1/4
+        assert!(!state.should_emit_tool_budget_warning(0.75));
+        state.record_tool_call(); // 2/4
+        assert!(!state.should_emit_tool_budget_warning(0.75));
+        state.record_tool_call(); // 3/4 => 75%
+        assert!(state.should_emit_tool_budget_warning(0.75));
+        state.mark_tool_budget_warning_emitted();
+        assert!(!state.should_emit_tool_budget_warning(0.75));
+        assert_eq!(state.remaining_tool_calls(), 1);
+    }
+
+    #[test]
+    fn harness_state_tracks_budget_exhaustion_notice_flag() {
+        let mut state = HarnessTurnState::new(
+            TurnRunId("run-1".to_string()),
+            TurnId("turn-1".to_string()),
+            1,
+            10,
+            1,
+        );
+
+        assert!(!state.tool_budget_exhausted());
+        assert!(!state.tool_budget_exhausted_emitted);
+        state.record_tool_call();
+        assert!(state.tool_budget_exhausted());
+        state.mark_tool_budget_exhausted_emitted();
+        assert!(state.tool_budget_exhausted_emitted);
     }
 }

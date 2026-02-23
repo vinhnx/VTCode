@@ -95,7 +95,7 @@ pub(crate) async fn run_tool_call_with_args(
             return Ok(ToolPipelineOutcome::from_status(
                 ToolExecutionStatus::Failure {
                     error: anyhow::anyhow!(
-                        "Tool permission denied: exceeded max tool calls per turn ({})",
+                        "Policy violation: exceeded max tool calls per turn ({})",
                         ctx.harness_state.max_tool_calls
                     ),
                 },
@@ -161,6 +161,18 @@ pub(crate) async fn run_tool_call_with_args(
 
     if !prevalidated {
         ctx.harness_state.record_tool_call();
+        if ctx.harness_state.should_emit_tool_budget_warning(0.75) {
+            let used = ctx.harness_state.tool_calls;
+            let max = ctx.harness_state.max_tool_calls;
+            let remaining = ctx.harness_state.remaining_tool_calls();
+            tracing::info!(
+                used,
+                max,
+                remaining,
+                "Tool-call budget warning threshold reached in tool pipeline path"
+            );
+            ctx.harness_state.mark_tool_budget_warning_emitted();
+        }
         if let Some(permission_failure) = check_tool_permission(
             ctx,
             name,
