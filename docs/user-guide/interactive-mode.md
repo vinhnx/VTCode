@@ -53,7 +53,7 @@ Use `/team model` or `/subagent model` to set default models interactively.
 
 - Plan Mode is strict read-only (except optional writes under `.vtcode/plans/` for plan artifacts).
 - The agent emits planning output in `<proposed_plan>...</proposed_plan>` blocks.
-- `update_plan` is unavailable while Plan Mode is active.
+- `task_tracker` is unavailable while Plan Mode is active.
 - After a plan is emitted, VT Code shows an implementation choice: switch to Edit mode and execute, or continue planning.
 
 ## Vim Editor Mode

@@ -33,7 +33,7 @@ Mario Zechner's pi-coding-agent demonstrates that **minimalism works** in coding
 1. grep_file
 2. list_files
 3. run_pty_cmd
-4. update_plan
+4. task_tracker
 5. create_pty_session
 6. list_pty_sessions
 7. close_pty_session
@@ -66,7 +66,7 @@ Mario Zechner's pi-coding-agent demonstrates that **minimalism works** in coding
 | **Core Tools**      | 4 (read, write, edit, bash) | 22 built-in + MCP                | 5.5x+ tools                         |
 | **MCP Support**     | No (use CLI tools)          | Yes                              | Context overhead                    |
 | **Security**        | YOLO by default             | Workspace boundaries, allowlists | Friction vs theater?                |
-| **Todos**           | External files (TODO.md)    | Built-in `update_plan` tool      | Internal state tracking             |
+| **Todos**           | External files (TODO.md)    | Built-in `task_tracker` tool      | Internal state tracking             |
 | **Plan Mode**       | Files (PLAN.md)             | Read-only mode via flags         | Similar approach                    |
 | **Background Bash** | Use tmux                    | PTY session management           | Better integration vs observability |
 | **Sub-agents**      | Spawn via bash              | Task tool with agents            | Observability concern               |

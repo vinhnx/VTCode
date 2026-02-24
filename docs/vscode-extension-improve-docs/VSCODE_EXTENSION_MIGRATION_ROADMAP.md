@@ -133,7 +133,7 @@ This document provides a detailed, phase-based roadmap for implementing the arch
     - `askCommand.ts`
     - `askSelectionCommand.ts`
     - `analyzeCommand.ts`
-    - `updatePlanCommand.ts`
+    - `taskTrackerCommand.ts`
     - `configCommand.ts`
   - Create CommandRegistry
   - Update extension.ts to use registry
@@ -144,7 +144,7 @@ This document provides a detailed, phase-based roadmap for implementing the arch
   - `src/commands/askCommand.ts`
   - `src/commands/askSelectionCommand.ts`
   - `src/commands/analyzeCommand.ts`
-  - `src/commands/updatePlanCommand.ts`
+  - `src/commands/taskTrackerCommand.ts`
   - `src/commands/configCommand.ts`
   - `src/commands/trustCommand.ts`
   - `src/commands/index.ts` (barrel export)

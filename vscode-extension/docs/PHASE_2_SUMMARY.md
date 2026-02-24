@@ -33,7 +33,7 @@ Command System (7 commands)      Participant System (4 participants)
  Ask Agent                     @workspace context
  Ask Selection                 @code context
  Analyze Workspace             @terminal context
- Update Plan                   @git context
+ Task Tracker                  @git context
  Open Config
  Trust Workspace              State Management
  Refresh CLI                   Enhanced message types
@@ -162,7 +162,7 @@ src/commands/
  askCommand.ts
  askSelectionCommand.ts
  analyzeCommand.ts
- updatePlanCommand.ts
+ taskTrackerCommand.ts
  configCommand.ts
  trustCommand.ts
  refreshCommand.ts

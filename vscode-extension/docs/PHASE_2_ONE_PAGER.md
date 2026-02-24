@@ -18,7 +18,7 @@ WEEK 3: Commands        WEEK 4: Participants     WEEK 5: State Mgmt
  ask                   @workspace             Message types
  askSelection          @code                  Message store
  analyze               @terminal              Conversation mgr
- updatePlan            @git
+ taskTracker           @git
  config               
  trust                WEEK 6: Tests + Docs
  refresh               Unit tests (>90%)

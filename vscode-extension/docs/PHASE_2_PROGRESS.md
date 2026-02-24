@@ -130,7 +130,7 @@ class ParticipantRegistry {
   - [ ] askCommand.ts
   - [ ] askSelectionCommand.ts
   - [ ] analyzeCommand.ts
-  - [ ] updatePlanCommand.ts
+  - [ ] taskTrackerCommand.ts
   - [ ] configCommand.ts
   - [ ] trustCommand.ts
   - [ ] refreshCommand.ts
@@ -173,7 +173,7 @@ Phase 2 Architecture
     askCommand.ts
     askSelectionCommand.ts
     analyzeCommand.ts
-    updatePlanCommand.ts
+    taskTrackerCommand.ts
     configCommand.ts
     trustCommand.ts
     refreshCommand.ts

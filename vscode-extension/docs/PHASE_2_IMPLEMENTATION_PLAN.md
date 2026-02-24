@@ -59,7 +59,7 @@ src/commands/
  askCommand.ts            (ask agent a question)
  askSelectionCommand.ts   (ask about selected code)
  analyzeCommand.ts        (analyze workspace)
- updatePlanCommand.ts     (update execution plan)
+ taskTrackerCommand.ts     (update execution plan)
  configCommand.ts         (open configuration)
  trustCommand.ts          (trust workspace)
  refreshCommand.ts        (refresh CLI availability)
@@ -286,7 +286,7 @@ vscode-extension/
        askCommand.ts
        askSelectionCommand.ts
        analyzeCommand.ts
-       updatePlanCommand.ts
+       taskTrackerCommand.ts
        configCommand.ts
        trustCommand.ts
        refreshCommand.ts

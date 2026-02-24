@@ -43,7 +43,7 @@ analysis or outcomes.
 
 **Explicitly avoid**:
 - Inline citations (broken in CLI rendering)
-- Repeating the plan after `update_plan` calls (already shown)
+- Repeating the plan after `task_tracker` calls (already shown)
 - Nested bullets or deep hierarchies
 - Unnecessary elaboration or code dumps
 - Cramming unrelated keywords into single bullets
@@ -81,15 +81,15 @@ analysis or outcomes.
 
 **When no test patterns exist**: Don't add tests.
 
-## Planning (update_plan)
+## Planning (task_tracker)
 
 Use plans for non-trivial, multi-step work (4+ steps, dependencies, ambiguity):
 - Structure as 5–7 word descriptive steps with status (`pending`/`in_progress`/`completed`)
 - Avoid filler; don't state the obvious
 - Mark steps `completed` as you finish; keep exactly one `in_progress`
-- If scope changes mid-task, call `update_plan` with rationale
+- If scope changes mid-task, call `task_tracker` with rationale
 - After completion, mark all steps `completed`; do NOT repeat the plan in output
-- In Plan Mode, `update_plan` is blocked; use `<proposed_plan>...</proposed_plan>` instead
+- In Plan Mode, `task_tracker` is blocked; use `<proposed_plan>...</proposed_plan>` instead
 
 High-quality plan example:
 1. Read existing tool trait definitions
@@ -234,7 +234,7 @@ Stop when done.
 1. Personality & Responsiveness
 2. Task Execution & Ambition
 3. Validation & Testing
-4. Planning (update_plan)
+4. Planning (task_tracker)
 5. Tool Guidelines
 6. AGENTS.md Precedence
 7. Subagents

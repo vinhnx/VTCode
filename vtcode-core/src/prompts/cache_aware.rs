@@ -6,7 +6,7 @@ const PRIORITY_TOOLS: &[&str] = &[
     "unified_file",
     "unified_exec",
     "ask_user_question",
-    "update_plan",
+    "task_tracker",
     "exit_plan_mode",
 ];
 
@@ -52,7 +52,10 @@ pub fn sort_tool_definitions(mut tools: Vec<ToolDefinition>) -> Vec<ToolDefiniti
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
+
     use super::sort_tool_definitions;
+    use super::PRIORITY_TOOLS;
     use crate::llm::provider::ToolDefinition;
 
     #[test]
@@ -118,5 +121,11 @@ mod tests {
                 "zebra_tool"
             ]
         );
+    }
+
+    #[test]
+    fn priority_tools_are_unique() {
+        let unique: HashSet<&str> = PRIORITY_TOOLS.iter().copied().collect();
+        assert_eq!(unique.len(), PRIORITY_TOOLS.len());
     }
 }

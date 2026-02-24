@@ -14,7 +14,7 @@ In Plan Mode, the agent **cannot**:
 - Run shell commands or tests
 - Execute any mutating operations
 
-`update_plan` is also unavailable in Plan Mode. Plan output should use `<proposed_plan>...</proposed_plan>`.
+`task_tracker` is also unavailable in Plan Mode. Plan output should use `<proposed_plan>...</proposed_plan>`.
 
 ## Benefits
 

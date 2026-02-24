@@ -231,6 +231,146 @@ async fn test_run_tool_call_prevalidated_blocks_mutation_in_plan_mode() {
 }
 
 #[tokio::test]
+async fn test_run_tool_call_prevalidated_blocks_task_tracker_in_plan_mode() {
+    let mut test_ctx = TestContext::new().await;
+    let mut registry = test_ctx.registry;
+
+    let permission_cache_arc = Arc::new(tokio::sync::RwLock::new(ToolPermissionCache::new()));
+    let result_cache = Arc::new(tokio::sync::RwLock::new(ToolResultCache::new(10)));
+    let decision_ledger = Arc::new(tokio::sync::RwLock::new(DecisionTracker::new()));
+    let mut session_stats = crate::agent::runloop::unified::state::SessionStats::default();
+    let mut mcp_panel = crate::agent::runloop::mcp_events::McpPanelState::new(10, true);
+    let approval_recorder = test_ctx.approval_recorder;
+    let traj = TrajectoryLogger::new(&test_ctx.workspace);
+    let tools = Arc::new(tokio::sync::RwLock::new(Vec::new()));
+
+    registry.enable_plan_mode();
+    registry.plan_mode_state().enable();
+    session_stats.switch_to_planner();
+
+    let mut harness_state = build_harness_state();
+    let mut ctx = crate::agent::runloop::unified::run_loop_context::RunLoopContext {
+        renderer: &mut test_ctx.renderer,
+        handle: &test_ctx.handle,
+        tool_registry: &mut registry,
+        tools: &tools,
+        tool_result_cache: &result_cache,
+        tool_permission_cache: &permission_cache_arc,
+        decision_ledger: &decision_ledger,
+        session_stats: &mut session_stats,
+        mcp_panel_state: &mut mcp_panel,
+        approval_recorder: &approval_recorder,
+        session: &mut test_ctx.session,
+        safety_validator: None,
+        traj: &traj,
+        harness_state: &mut harness_state,
+        harness_emitter: None,
+    };
+
+    let call = vtcode_core::llm::provider::ToolCall::function(
+        "call_plan_task_tracker".to_string(),
+        tools::TASK_TRACKER.to_string(),
+        r#"{"action":"list"}"#.to_string(),
+    );
+    let ctrl_c_state = Arc::new(CtrlCState::new());
+    let ctrl_c_notify = Arc::new(Notify::new());
+
+    let outcome = run_tool_call(
+        &mut ctx,
+        &call,
+        &ctrl_c_state,
+        &ctrl_c_notify,
+        None,
+        None,
+        true,
+        None,
+        0,
+        true,
+    )
+    .await
+    .expect("run_tool_call must run");
+
+    match outcome.status {
+        ToolExecutionStatus::Failure { error } => {
+            assert!(error.to_string().contains("task_tracker"));
+            assert!(error.to_string().contains("not allowed in Plan mode"));
+        }
+        other => panic!("Expected plan mode failure, got: {:?}", other),
+    }
+}
+
+#[tokio::test]
+async fn test_run_tool_call_non_prevalidated_blocks_task_tracker_in_plan_mode_without_budget_use() {
+    let mut test_ctx = TestContext::new().await;
+    let mut registry = test_ctx.registry;
+
+    let permission_cache_arc = Arc::new(tokio::sync::RwLock::new(ToolPermissionCache::new()));
+    let result_cache = Arc::new(tokio::sync::RwLock::new(ToolResultCache::new(10)));
+    let decision_ledger = Arc::new(tokio::sync::RwLock::new(DecisionTracker::new()));
+    let mut session_stats = crate::agent::runloop::unified::state::SessionStats::default();
+    let mut mcp_panel = crate::agent::runloop::mcp_events::McpPanelState::new(10, true);
+    let approval_recorder = test_ctx.approval_recorder;
+    let traj = TrajectoryLogger::new(&test_ctx.workspace);
+    let tools = Arc::new(tokio::sync::RwLock::new(Vec::new()));
+
+    registry.enable_plan_mode();
+    registry.plan_mode_state().enable();
+    session_stats.switch_to_planner();
+
+    let mut harness_state = build_harness_state_with(2);
+    let mut ctx = crate::agent::runloop::unified::run_loop_context::RunLoopContext {
+        renderer: &mut test_ctx.renderer,
+        handle: &test_ctx.handle,
+        tool_registry: &mut registry,
+        tools: &tools,
+        tool_result_cache: &result_cache,
+        tool_permission_cache: &permission_cache_arc,
+        decision_ledger: &decision_ledger,
+        session_stats: &mut session_stats,
+        mcp_panel_state: &mut mcp_panel,
+        approval_recorder: &approval_recorder,
+        session: &mut test_ctx.session,
+        safety_validator: None,
+        traj: &traj,
+        harness_state: &mut harness_state,
+        harness_emitter: None,
+    };
+
+    let call = vtcode_core::llm::provider::ToolCall::function(
+        "call_plan_task_tracker_non_prevalidated".to_string(),
+        tools::TASK_TRACKER.to_string(),
+        r#"{"action":"list"}"#.to_string(),
+    );
+    let ctrl_c_state = Arc::new(CtrlCState::new());
+    let ctrl_c_notify = Arc::new(Notify::new());
+
+    let outcome = run_tool_call(
+        &mut ctx,
+        &call,
+        &ctrl_c_state,
+        &ctrl_c_notify,
+        None,
+        None,
+        true,
+        None,
+        0,
+        false,
+    )
+    .await
+    .expect("run_tool_call must run");
+
+    match outcome.status {
+        ToolExecutionStatus::Failure { error } => {
+            assert!(error.to_string().contains("task_tracker"));
+            assert!(error.to_string().contains("not allowed in Plan mode"));
+        }
+        other => panic!("Expected plan mode failure, got: {:?}", other),
+    }
+
+    assert_eq!(ctx.harness_state.tool_calls, 0);
+}
+
+#[tokio::test]
 async fn test_run_tool_call_invalid_preflight_does_not_consume_budget() {
     let mut test_ctx = TestContext::new().await;
     let mut registry = test_ctx.registry;

@@ -153,9 +153,9 @@ pub(crate) async fn run_tool_call_with_args(
         outcome
     };
 
-    if ctx.session_stats.is_plan_mode() && name == "update_plan" {
+    if ctx.session_stats.is_plan_mode() && name == "task_tracker" {
         return Ok(finish_with_status(ToolExecutionStatus::Failure {
-            error: anyhow!("update_plan is a TODO/checklist tool and is not allowed in Plan mode"),
+            error: anyhow!("task_tracker is a TODO/checklist tool and is not allowed in Plan mode"),
         }));
     }
 

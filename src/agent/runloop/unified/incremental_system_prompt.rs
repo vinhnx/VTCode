@@ -175,14 +175,18 @@ impl IncrementalSystemPrompt {
         if retry_attempts > 0 {
             let _ = writeln!(
                 prompt,
-                "\n# Retry #{}: Try different approaches, not same steps.",
+                "\n# Retry #{}: Try a different strategy, not the same steps.",
                 retry_attempts
+            );
+            let _ = writeln!(
+                prompt,
+                "# Re-plan now: use `task_tracker` to define composable slices (files + outcome + verify) before more mutating edits."
             );
         }
         if context.error_count > 0 {
             let _ = writeln!(
                 prompt,
-                "\n# {} errors: Check file paths, permissions, tool args.",
+                "\n# {} errors: Check file paths, permissions, and tool args, then continue with smaller verified slices.",
                 context.error_count
             );
         }

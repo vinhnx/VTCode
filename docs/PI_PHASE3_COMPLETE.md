@@ -74,7 +74,7 @@ pub struct ToolSignature {
 - grep_file, list_files, run_pty_cmd
 - read_file, create_file, write_file, edit_file, delete_file
 - apply_patch, search_replace
-- search_tools, skill, update_plan, debug_agent, analyze_agent
+- search_tools, skill, task_tracker, debug_agent, analyze_agent
 - execute_code
 - create_pty_session, list_pty_sessions, close_pty_session
 - send_pty_input, read_pty_session, resize_pty_session
