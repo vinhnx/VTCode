@@ -250,227 +250,30 @@ fn generate_suggested_options(
         return None;
     }
 
-    let mut context = format!("{} {} {}", question.id, question.header, question.question);
+    let local_context = format!("{} {} {}", question.id, question.header, question.question);
+    let local_context = local_context.to_lowercase();
+    let mut global_context = String::new();
     if let Some(focus_area) = question.focus_area.as_ref() {
-        context.push(' ');
-        context.push_str(focus_area);
+        global_context.push(' ');
+        global_context.push_str(focus_area);
     }
     if !question.analysis_hints.is_empty() {
-        context.push(' ');
-        context.push_str(&question.analysis_hints.join(" "));
+        global_context.push(' ');
+        global_context.push_str(&question.analysis_hints.join(" "));
     }
-    let context = context.to_lowercase();
+    let global_context = global_context.to_lowercase();
 
-    let mut options = Vec::new();
-
-    if contains_any(
-        &context,
-        &[
-            "system prompt",
-            "prompt",
-            "harness",
-            "plan mode",
-            "agent",
-            "planning",
-        ],
-    ) {
-        if contains_any(
-            &context,
-            &[
-                "timeout", "stream", "fallback", "provider", "retry", "latency",
-            ],
-        ) {
-            push_unique_option(
-                &mut options,
-                "Provider fallback hardening",
-                "Prioritize timeout recovery and stream-to-non-stream fallback behavior first.",
-            );
+    let intent = classify_question_intent(&local_context);
+    let mut options = match intent {
+        QuestionIntent::OutcomeAndConstraints => outcome_and_constraint_options(),
+        QuestionIntent::StepDecomposition => step_decomposition_options(),
+        QuestionIntent::VerificationEvidence => verification_evidence_options(),
+        QuestionIntent::PrioritySelection => {
+            priority_selection_options(&local_context, &global_context)
         }
-
-        if contains_any(
-            &context,
-            &["loop", "stuck", "navigation", "repeat", "stall", "retry"],
-        ) {
-            push_unique_option(
-                &mut options,
-                "Loop prevention and recovery",
-                "Improve loop detection and force synthesis-or-act transitions before repeated calls.",
-            );
-        }
-
-        if contains_any(
-            &context,
-            &[
-                "question",
-                "modal",
-                "guided",
-                "choice",
-                "free text",
-                "freeform",
-                "input",
-            ],
-        ) {
-            push_unique_option(
-                &mut options,
-                "Guided question UX",
-                "Show suggested options in Questions modal while preserving custom free-text input.",
-            );
-        }
-
-        if contains_any(
-            &context,
-            &[
-                "token",
-                "context",
-                "verbose",
-                "length",
-                "compact",
-                "efficiency",
-            ],
-        ) {
-            push_unique_option(
-                &mut options,
-                "Prompt token efficiency",
-                "Reduce duplicated instructions and tighten wording to improve reliability per token.",
-            );
-        }
-
-        if contains_any(
-            &context,
-            &["redundan", "overlap", "duplicate", "repetitive", "verbose"],
-        ) {
-            push_unique_option(
-                &mut options,
-                "Prompt redundancy reduction",
-                "Remove duplicated guidance across variants to increase instruction signal quality.",
-            );
-        }
-
-        if contains_any(
-            &context,
-            &[
-                "missing",
-                "failure",
-                "patch",
-                "circular",
-                "dependency",
-                "recovery",
-                "error pattern",
-            ],
-        ) {
-            push_unique_option(
-                &mut options,
-                "Failure pattern coverage",
-                "Add concrete recovery guidance for known failure modes and repeated error patterns.",
-            );
-        }
-
-        if contains_any(
-            &context,
-            &[
-                "harness",
-                "docs",
-                "doc refs",
-                "invariant",
-                "tech debt",
-                "tracker",
-            ],
-        ) {
-            push_unique_option(
-                &mut options,
-                "Harness integration strengthening",
-                "Add explicit references to harness docs, invariants, and debt tracking touchpoints.",
-            );
-        }
-
-        if contains_any(
-            &context,
-            &[
-                "minimal",
-                "lightweight",
-                "resource-constrained",
-                "compact mode",
-            ],
-        ) {
-            push_unique_option(
-                &mut options,
-                "Minimal/Lightweight optimization",
-                "Tighten minimal/lightweight modes for clarity while preserving required safeguards.",
-            );
-        }
-
-        if options.is_empty() {
-            push_unique_option(
-                &mut options,
-                "Loop prevention and recovery",
-                "Tighten anti-loop prompts and transition rules to avoid repeated navigation cycles.",
-            );
-            push_unique_option(
-                &mut options,
-                "Prompt token efficiency",
-                "Trim redundant guidance and prioritize high-signal instructions.",
-            );
-            push_unique_option(
-                &mut options,
-                "Guided question UX",
-                "Provide suggested plan options with a clear custom-response fallback.",
-            );
-        }
-    } else if contains_any(
-        &context,
-        &[
-            "improve",
-            "improvement",
-            "optimize",
-            "fix",
-            "priority",
-            "focus",
-        ],
-    ) {
-        push_unique_option(
-            &mut options,
-            "Fix highest-risk issue",
-            "Address the riskiest blocker first so follow-up work has lower failure risk.",
-        );
-        push_unique_option(
-            &mut options,
-            "Balance impact and effort",
-            "Choose a medium-scope improvement that ships quickly with clear validation.",
-        );
-        push_unique_option(
-            &mut options,
-            "Deep quality pass",
-            "Prioritize thoroughness, including stronger tests and operational guardrails.",
-        );
-    } else if contains_any(
-        &context,
-        &[
-            "goal",
-            "outcome",
-            "constraints",
-            "non-goals",
-            "step",
-            "composable",
-            "verification",
-            "manual check",
-        ],
-    ) {
-        push_unique_option(
-            &mut options,
-            "Minimal implementation slice",
-            "Choose the smallest end-to-end slice with clear user-visible impact first.",
-        );
-        push_unique_option(
-            &mut options,
-            "Balanced phased plan",
-            "Split work into medium-size phases balancing delivery speed and risk control.",
-        );
-        push_unique_option(
-            &mut options,
-            "Thorough validation-first plan",
-            "Emphasize stronger verification gates before and after each implementation step.",
-        );
-    }
+        QuestionIntent::GenericImprovement => generic_improvement_options(),
+        QuestionIntent::GenericPlanning => Vec::new(),
+    };
 
     if options.is_empty() {
         return None;
@@ -485,6 +288,343 @@ fn generate_suggested_options(
     }
 
     Some(options)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum QuestionIntent {
+    OutcomeAndConstraints,
+    StepDecomposition,
+    VerificationEvidence,
+    PrioritySelection,
+    GenericImprovement,
+    GenericPlanning,
+}
+
+fn classify_question_intent(local_context: &str) -> QuestionIntent {
+    if contains_any(
+        local_context,
+        &[
+            "user-visible outcome",
+            "user visible outcome",
+            "success criteria",
+            "constraints",
+            "non-goals",
+            "non goals",
+        ],
+    ) {
+        return QuestionIntent::OutcomeAndConstraints;
+    }
+
+    if contains_any(
+        local_context,
+        &[
+            "break the work",
+            "composable steps",
+            "composable step",
+            "3-7",
+            "target file",
+            "expected outcome",
+            "decompose",
+            "implementation steps",
+        ],
+    ) {
+        return QuestionIntent::StepDecomposition;
+    }
+
+    if contains_any(
+        local_context,
+        &[
+            "exact command",
+            "manual check",
+            "prove it is complete",
+            "proves it is complete",
+            "verification",
+            "acceptance check",
+            "completion check",
+        ],
+    ) {
+        return QuestionIntent::VerificationEvidence;
+    }
+
+    if contains_any(
+        local_context,
+        &[
+            "prioritize first",
+            "should we prioritize",
+            "which area should",
+            "which improvement",
+            "focus area",
+            "pick direction",
+        ],
+    ) {
+        return QuestionIntent::PrioritySelection;
+    }
+
+    if contains_any(
+        local_context,
+        &[
+            "improve",
+            "improvement",
+            "optimize",
+            "fix",
+            "priority",
+            "focus",
+        ],
+    ) {
+        return QuestionIntent::GenericImprovement;
+    }
+
+    QuestionIntent::GenericPlanning
+}
+
+fn outcome_and_constraint_options() -> Vec<RequestUserInputOption> {
+    vec![
+        RequestUserInputOption {
+            label: "Define outcome metric".to_string(),
+            description: "Set one clear user-visible success metric and keep scope aligned to that outcome.".to_string(),
+        },
+        RequestUserInputOption {
+            label: "Lock constraints/non-goals".to_string(),
+            description: "Explicitly capture boundaries to avoid accidental scope expansion during implementation.".to_string(),
+        },
+        RequestUserInputOption {
+            label: "Scope MVP boundary".to_string(),
+            description: "Choose the smallest deliverable that demonstrates the intended user impact.".to_string(),
+        },
+    ]
+}
+
+fn step_decomposition_options() -> Vec<RequestUserInputOption> {
+    vec![
+        RequestUserInputOption {
+            label: "Dependency-first slices".to_string(),
+            description: "Break work by dependencies so each slice can be implemented and verified independently.".to_string(),
+        },
+        RequestUserInputOption {
+            label: "User-flow slices".to_string(),
+            description: "Split steps along the user journey so each slice improves one visible interaction path.".to_string(),
+        },
+        RequestUserInputOption {
+            label: "Risk-isolated slices".to_string(),
+            description: "Isolate high-risk changes into separate steps to simplify rollback and debugging.".to_string(),
+        },
+    ]
+}
+
+fn verification_evidence_options() -> Vec<RequestUserInputOption> {
+    vec![
+        RequestUserInputOption {
+            label: "Command-based proof".to_string(),
+            description: "Require explicit check/test commands for each step to prove completion objectively.".to_string(),
+        },
+        RequestUserInputOption {
+            label: "Behavioral/manual proof".to_string(),
+            description: "Use concrete manual checks tied to user-visible behavior when automation is limited.".to_string(),
+        },
+        RequestUserInputOption {
+            label: "Hybrid proof strategy".to_string(),
+            description: "Combine automated checks with targeted manual verification for stronger confidence.".to_string(),
+        },
+    ]
+}
+
+fn generic_improvement_options() -> Vec<RequestUserInputOption> {
+    vec![
+        RequestUserInputOption {
+            label: "Fix highest-risk issue".to_string(),
+            description:
+                "Address the riskiest blocker first so follow-up work has lower failure risk."
+                    .to_string(),
+        },
+        RequestUserInputOption {
+            label: "Balance impact and effort".to_string(),
+            description:
+                "Choose a medium-scope improvement that ships quickly with clear validation."
+                    .to_string(),
+        },
+        RequestUserInputOption {
+            label: "Deep quality pass".to_string(),
+            description:
+                "Prioritize thoroughness, including stronger tests and operational guardrails."
+                    .to_string(),
+        },
+    ]
+}
+
+fn priority_selection_options(
+    local_context: &str,
+    global_context: &str,
+) -> Vec<RequestUserInputOption> {
+    // Local question intent ranks first; global hints act as tie-breakers.
+    let mut options = Vec::new();
+    append_domain_priority_options(&mut options, local_context);
+    append_domain_priority_options(&mut options, global_context);
+
+    if options.is_empty() {
+        options.extend(generic_improvement_options());
+    }
+    options
+}
+
+fn append_domain_priority_options(options: &mut Vec<RequestUserInputOption>, context: &str) {
+    if context.trim().is_empty() {
+        return;
+    }
+
+    if contains_any(
+        context,
+        &[
+            "system prompt",
+            "prompt",
+            "harness",
+            "plan mode",
+            "agent",
+            "planning",
+        ],
+    ) {
+        if contains_any(
+            context,
+            &[
+                "timeout", "stream", "fallback", "provider", "retry", "latency",
+            ],
+        ) {
+            push_unique_option(
+                options,
+                "Provider fallback hardening",
+                "Prioritize timeout recovery and stream-to-non-stream fallback behavior first.",
+            );
+        }
+
+        if contains_any(
+            context,
+            &["loop", "stuck", "navigation", "repeat", "stall", "retry"],
+        ) {
+            push_unique_option(
+                options,
+                "Loop prevention and recovery",
+                "Improve loop detection and force synthesis-or-act transitions before repeated calls.",
+            );
+        }
+
+        if contains_any(
+            context,
+            &[
+                "question",
+                "modal",
+                "guided",
+                "choice",
+                "free text",
+                "freeform",
+                "input",
+            ],
+        ) {
+            push_unique_option(
+                options,
+                "Guided question UX",
+                "Show suggested options in Questions modal while preserving custom free-text input.",
+            );
+        }
+
+        if contains_any(
+            context,
+            &[
+                "token",
+                "context",
+                "verbose",
+                "length",
+                "compact",
+                "efficiency",
+            ],
+        ) {
+            push_unique_option(
+                options,
+                "Prompt token efficiency",
+                "Reduce duplicated instructions and tighten wording to improve reliability per token.",
+            );
+        }
+
+        if contains_any(
+            context,
+            &["redundan", "overlap", "duplicate", "repetitive", "verbose"],
+        ) {
+            push_unique_option(
+                options,
+                "Prompt redundancy reduction",
+                "Remove duplicated guidance across variants to increase instruction signal quality.",
+            );
+        }
+
+        if contains_any(
+            context,
+            &[
+                "missing",
+                "failure",
+                "patch",
+                "circular",
+                "dependency",
+                "recovery",
+                "error pattern",
+            ],
+        ) {
+            push_unique_option(
+                options,
+                "Failure pattern coverage",
+                "Add concrete recovery guidance for known failure modes and repeated error patterns.",
+            );
+        }
+
+        if contains_any(
+            context,
+            &[
+                "harness",
+                "docs",
+                "doc refs",
+                "invariant",
+                "tech debt",
+                "tracker",
+            ],
+        ) {
+            push_unique_option(
+                options,
+                "Harness integration strengthening",
+                "Add explicit references to harness docs, invariants, and debt tracking touchpoints.",
+            );
+        }
+
+        if contains_any(
+            context,
+            &[
+                "minimal",
+                "lightweight",
+                "resource-constrained",
+                "compact mode",
+            ],
+        ) {
+            push_unique_option(
+                options,
+                "Minimal/Lightweight optimization",
+                "Tighten minimal/lightweight modes for clarity while preserving required safeguards.",
+            );
+        }
+
+        if options.is_empty() {
+            push_unique_option(
+                options,
+                "Loop prevention and recovery",
+                "Tighten anti-loop prompts and transition rules to avoid repeated navigation cycles.",
+            );
+            push_unique_option(
+                options,
+                "Prompt token efficiency",
+                "Trim redundant guidance and prioritize high-signal instructions.",
+            );
+            push_unique_option(
+                options,
+                "Guided question UX",
+                "Provide suggested plan options with a clear custom-response fallback.",
+            );
+        }
+    }
 }
 
 fn contains_any(text: &str, needles: &[&str]) -> bool {
@@ -568,6 +708,79 @@ mod tests {
         let options = generate_suggested_options(&question).expect("expected planning options");
         assert!((1..=3).contains(&options.len()));
         assert!(options[0].label.contains("(Recommended)"));
+    }
+
+    #[test]
+    fn generates_distinct_options_for_outcome_steps_and_verification_questions() {
+        let outcome_question = RequestUserInputQuestion {
+            id: "q1".to_string(),
+            header: "Q1".to_string(),
+            question: "What user-visible outcome should this change deliver, and what constraints or non-goals must be respected?".to_string(),
+            options: None,
+            focus_area: Some("system_prompt".to_string()),
+            analysis_hints: vec![
+                "Redundancy exists between prompt variants".to_string(),
+                "Missing explicit guidance for failure patterns".to_string(),
+            ],
+        };
+        let steps_question = RequestUserInputQuestion {
+            id: "q2".to_string(),
+            header: "Q2".to_string(),
+            question: "Break the work into 3-7 composable steps. For each step include target file(s) and a concrete expected outcome.".to_string(),
+            options: None,
+            focus_area: Some("system_prompt".to_string()),
+            analysis_hints: vec![
+                "Redundancy exists between prompt variants".to_string(),
+                "Missing explicit guidance for failure patterns".to_string(),
+            ],
+        };
+        let verification_question = RequestUserInputQuestion {
+            id: "q3".to_string(),
+            header: "Q3".to_string(),
+            question: "For each step, what exact command or manual check proves it is complete?"
+                .to_string(),
+            options: None,
+            focus_area: Some("system_prompt".to_string()),
+            analysis_hints: vec![
+                "Redundancy exists between prompt variants".to_string(),
+                "Missing explicit guidance for failure patterns".to_string(),
+            ],
+        };
+
+        let outcome = generate_suggested_options(&outcome_question).expect("outcome options");
+        let steps = generate_suggested_options(&steps_question).expect("step options");
+        let verification =
+            generate_suggested_options(&verification_question).expect("verification options");
+
+        let outcome_labels = outcome
+            .iter()
+            .map(|opt| opt.label.clone())
+            .collect::<Vec<_>>();
+        let step_labels = steps
+            .iter()
+            .map(|opt| opt.label.clone())
+            .collect::<Vec<_>>();
+        let verification_labels = verification
+            .iter()
+            .map(|opt| opt.label.clone())
+            .collect::<Vec<_>>();
+
+        assert_ne!(
+            outcome_labels, step_labels,
+            "outcome and decomposition questions should not reuse identical options"
+        );
+        assert_ne!(
+            step_labels, verification_labels,
+            "decomposition and verification questions should not reuse identical options"
+        );
+        assert_ne!(
+            outcome_labels, verification_labels,
+            "outcome and verification questions should not reuse identical options"
+        );
+
+        assert!(outcome[0].label.contains("Recommended"));
+        assert!(steps[0].label.contains("Recommended"));
+        assert!(verification[0].label.contains("Recommended"));
     }
 
     #[test]

@@ -165,8 +165,9 @@
     "plan_manager": "prompt",
     "plan_task_tracker": "allow",
     "plan_tasks": "prompt",
-    "task_tracker": "prompt",
-    "track_tasks": "prompt"
+    "task_tracker": "allow",
+    "track_tasks": "prompt",
+    "spawn_subagent": "allow"
   },
   "constraints": {},
   "mcp": {

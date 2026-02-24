@@ -143,7 +143,20 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
             ModalListKeyResult::HandledNoRedraw => {
                 return None;
             }
-            ModalListKeyResult::Submit(event) | ModalListKeyResult::Cancel(event) => {
+            ModalListKeyResult::Submit(event) => {
+                let keep_open = matches!(
+                    &event,
+                    InlineEvent::WizardModalStepComplete { .. }
+                        | InlineEvent::WizardModalBack { .. }
+                );
+                if keep_open {
+                    session.mark_dirty();
+                } else {
+                    session.close_modal();
+                }
+                return Some(event);
+            }
+            ModalListKeyResult::Cancel(event) => {
                 session.close_modal();
                 return Some(event);
             }
