@@ -332,14 +332,20 @@ update_changelog_from_commits() {
 
             # Extract content between first and second version headers (portable across macOS/Linux)
             # Use awk instead of head -n -1 for BSD/macOS compatibility
+            # Suppress SIGPIPE warning when awk exits early
             local version_section
-            version_section=$(echo "$changelog_content" | awk '/^## /{if(++n==2)exit} n==1' )
+            version_section=$(echo "$changelog_content" | awk '/^## /{if(++n==2)exit} n==1' 2>/dev/null || true)
 
             # Save to global variable for release notes use (GitHub Release body)
             {
                 echo "## What's Changed"
                 echo ""
-                echo "$version_section"
+                if [[ -n "$version_section" ]]; then
+                    echo "$version_section"
+                else
+                    # Fallback: use full changelog if extraction failed
+                    echo "$changelog_content"
+                fi
                 echo ""
                 echo "**Full Changelog**: https://github.com/vinhnx/vtcode/compare/${version}"
             } > "$RELEASE_NOTES_FILE"
@@ -356,7 +362,11 @@ update_changelog_from_commits() {
                     remainder=$(tail -n +5 CHANGELOG.md)
                     {
                         printf '%s\n' "$header"
-                        printf '%s\n' "$version_section"
+                        if [[ -n "$version_section" ]]; then
+                            printf '%s\n' "$version_section"
+                        else
+                            printf '%s\n' "$changelog_content"
+                        fi
                         printf '%s\n' "$remainder"
                     } > CHANGELOG.md
                 fi
