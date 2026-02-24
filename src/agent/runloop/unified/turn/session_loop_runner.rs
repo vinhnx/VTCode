@@ -1,5 +1,6 @@
 use super::*;
 use crate::agent::runloop::unified::run_loop_context::TurnPhase;
+use crate::agent::runloop::unified::plan_mode_state::render_plan_mode_next_step_hint;
 
 fn resolve_effective_turn_timeout_secs(
     configured_turn_timeout_secs: u64,
@@ -151,6 +152,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
         session_stats.validation_cache = validation_cache.clone();
         if plan_mode {
             transition_to_plan_mode(&tool_registry, &mut session_stats, &handle, true, true).await;
+            render_plan_mode_next_step_hint(&mut renderer)?;
         }
         let mut linked_directories: Vec<LinkedDirectory> = Vec::with_capacity(4);
         let mut model_picker_state: Option<ModelPickerState> = None;

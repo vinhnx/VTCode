@@ -201,9 +201,16 @@ pub(super) async fn maybe_handle_plan_mode_exit_trigger(
     };
 
     let text = last_user_msg.content.as_text();
-    let should_exit_plan = should_exit_plan_mode_from_user_text(&text);
+    let should_exit_plan = should_exit_plan_mode_from_user_text(&text)
+        || should_exit_plan_mode_from_confirmation(&text, working_history);
 
     if !should_exit_plan {
+        if is_short_confirmation_intent(&text) {
+            display_status(
+                ctx.renderer,
+                "Plan Mode: type `implement` (or `yes`/`continue`/`go`/`start`) to execute, or say `stay in plan mode` to revise.",
+            )?;
+        }
         return Ok(false);
     }
 
@@ -255,6 +262,7 @@ pub(super) async fn maybe_handle_plan_mode_exit_trigger(
 
 fn should_exit_plan_mode_from_user_text(text: &str) -> bool {
     let normalized = normalize_user_intent_text(text);
+    let normalized_trimmed = normalized.trim();
 
     // Prefer explicit "stay in plan mode" / "don't implement" instructions over
     // generic implementation words that might appear in the same sentence.
@@ -274,6 +282,26 @@ fn should_exit_plan_mode_from_user_text(text: &str) -> bool {
         .any(|phrase| normalized.contains(phrase))
     {
         return false;
+    }
+
+    // Handle short imperative commands like "implement" (with punctuation/slash variants).
+    // These are common in TUI flows and should reliably trigger Plan Mode exit.
+    let direct_commands = [
+        "implement",
+        "implement now",
+        "start implementing",
+        "start implementation",
+        "execute plan",
+        "execute the plan",
+        "execute this plan",
+        "switch to edit mode",
+        "go to edit mode",
+        "switch to agent mode",
+        "exit plan mode",
+        "exit plan mode and implement",
+    ];
+    if direct_commands.contains(&normalized_trimmed) {
+        return true;
     }
 
     let trigger_phrases = [
@@ -310,9 +338,68 @@ fn should_exit_plan_mode_from_user_text(text: &str) -> bool {
         .any(|phrase| normalized.contains(phrase))
 }
 
+fn should_exit_plan_mode_from_confirmation(text: &str, working_history: &[uni::Message]) -> bool {
+    is_short_confirmation_intent(text)
+        && assistant_recently_prompted_implementation(working_history)
+}
+
+fn is_short_confirmation_intent(text: &str) -> bool {
+    let normalized = normalize_user_intent_text(text);
+    let normalized_trimmed = normalized.trim();
+    let confirmation_tokens = [
+        "yes",
+        "y",
+        "ok",
+        "okay",
+        "continue",
+        "go",
+        "go ahead",
+        "proceed",
+        "start",
+        "start now",
+        "begin",
+        "begin now",
+        "let s start",
+        "lets start",
+        "sounds good",
+        "do it",
+    ];
+    confirmation_tokens.contains(&normalized_trimmed)
+}
+
+fn assistant_recently_prompted_implementation(working_history: &[uni::Message]) -> bool {
+    let Some(last_user_index) = working_history
+        .iter()
+        .rposition(|msg| msg.role == uni::MessageRole::User)
+    else {
+        return false;
+    };
+
+    let Some(last_assistant_msg) = working_history[..last_user_index]
+        .iter()
+        .rev()
+        .find(|msg| msg.role == uni::MessageRole::Assistant)
+    else {
+        return false;
+    };
+
+    let assistant_text = normalize_user_intent_text(&last_assistant_msg.content.as_text());
+    let cues = [
+        "implement this plan",
+        "implement the plan",
+        "ready to implement",
+        "exit plan mode",
+        "execute the plan",
+        "switch out of plan mode",
+        "start implementation",
+        "start implementing",
+        "start coding",
+    ];
+    cues.iter().any(|cue| assistant_text.contains(cue))
+}
+
 fn normalize_user_intent_text(text: &str) -> String {
     text.chars()
-        .take(500)
         .map(|c| {
             if c.is_alphanumeric() {
                 c.to_ascii_lowercase()
@@ -372,7 +459,10 @@ pub(super) async fn maybe_handle_tool_loop_limit(
 
 #[cfg(test)]
 mod tests {
-    use super::should_exit_plan_mode_from_user_text;
+    use super::{
+        should_exit_plan_mode_from_confirmation, should_exit_plan_mode_from_user_text,
+    };
+    use vtcode_core::llm::provider as uni;
 
     #[test]
     fn detects_implement_the_plan_trigger() {
@@ -400,5 +490,70 @@ mod tests {
         assert!(!should_exit_plan_mode_from_user_text(
             "Continue planning for now."
         ));
+    }
+
+    #[test]
+    fn detects_bare_implement_trigger() {
+        assert!(should_exit_plan_mode_from_user_text("implement"));
+        assert!(should_exit_plan_mode_from_user_text("/implement"));
+        assert!(should_exit_plan_mode_from_user_text("implement."));
+    }
+
+    #[test]
+    fn detects_short_implement_variants() {
+        assert!(should_exit_plan_mode_from_user_text("Implement now"));
+        assert!(should_exit_plan_mode_from_user_text("Start implementing"));
+    }
+
+    #[test]
+    fn stay_mode_has_priority_over_implement_keyword() {
+        assert!(!should_exit_plan_mode_from_user_text(
+            "Do not implement yet; keep planning."
+        ));
+        assert!(!should_exit_plan_mode_from_user_text(
+            "Stay in plan mode and don't implement."
+        ));
+    }
+
+    #[test]
+    fn does_not_false_trigger_on_non_intent_implementation_text() {
+        assert!(!should_exit_plan_mode_from_user_text(
+            "The implementation details are unclear."
+        ));
+    }
+
+    #[test]
+    fn confirmation_words_trigger_with_implementation_prompt_context() {
+        let history = vec![
+            uni::Message::assistant("Implement this plan?".to_string()),
+            uni::Message::user("yes".to_string()),
+        ];
+        assert!(should_exit_plan_mode_from_confirmation("yes", &history));
+        assert!(should_exit_plan_mode_from_confirmation("continue", &history));
+        assert!(should_exit_plan_mode_from_confirmation("go", &history));
+        assert!(should_exit_plan_mode_from_confirmation("start", &history));
+        assert!(should_exit_plan_mode_from_confirmation("begin", &history));
+    }
+
+    #[test]
+    fn confirmation_words_do_not_trigger_without_implementation_prompt_context() {
+        let history = vec![
+            uni::Message::assistant("Continue planning and expand the risks section.".to_string()),
+            uni::Message::user("yes".to_string()),
+        ];
+        assert!(!should_exit_plan_mode_from_confirmation("yes", &history));
+        assert!(!should_exit_plan_mode_from_confirmation("continue", &history));
+    }
+
+    #[test]
+    fn confirmation_words_do_not_trigger_when_stay_in_plan_mode_is_prompted() {
+        let history = vec![
+            uni::Message::assistant(
+                "Do you want to stay in plan mode and revise the plan?".to_string(),
+            ),
+            uni::Message::user("yes".to_string()),
+        ];
+        assert!(!should_exit_plan_mode_from_confirmation("yes", &history));
+        assert!(!should_exit_plan_mode_from_confirmation("start", &history));
     }
 }

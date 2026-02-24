@@ -10,7 +10,7 @@ use crate::agent::runloop::unified::plan_confirmation::{
     PlanConfirmationOutcome, execute_plan_confirmation, plan_confirmation_outcome_to_json,
 };
 use crate::agent::runloop::unified::plan_mode_state::{
-    transition_to_edit_mode, transition_to_plan_mode,
+    render_plan_mode_next_step_hint, transition_to_edit_mode, transition_to_plan_mode,
 };
 use crate::agent::runloop::unified::run_loop_context::RunLoopContext;
 use crate::agent::runloop::unified::state::CtrlCState;
@@ -53,6 +53,9 @@ pub(super) async fn handle_enter_plan_mode(
                 false,
             )
             .await;
+            if let Err(err) = render_plan_mode_next_step_hint(ctx.renderer) {
+                tracing::warn!("failed to render plan mode next-step hint: {}", err);
+            }
             tracing::info!(
                 target: "vtcode.plan_mode",
                 "Agent entered Plan Mode with planner profile (read-only, mutating tools blocked)"

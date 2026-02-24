@@ -1,6 +1,20 @@
+use anyhow::Result;
 use crate::agent::runloop::unified::state::SessionStats;
 use vtcode_core::tools::registry::ToolRegistry;
 use vtcode_core::ui::tui::{EditingMode, InlineHandle};
+use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
+
+pub(crate) fn render_plan_mode_next_step_hint(renderer: &mut AnsiRenderer) -> Result<()> {
+    renderer.line(
+        MessageStyle::Info,
+        "Plan Mode: review the plan, then type `implement` (or `yes`/`continue`/`go`/`start`) to execute.",
+    )?;
+    renderer.line(
+        MessageStyle::Info,
+        "To keep planning, say `stay in plan mode` and describe what to revise.",
+    )?;
+    Ok(())
+}
 
 pub(crate) async fn transition_to_plan_mode(
     tool_registry: &ToolRegistry,

@@ -53,6 +53,9 @@ pub async fn handle_toggle_plan_mode(
             MessageStyle::Info,
             "Allowed tools: read_file, list_files, grep_file, code_intelligence, unified_search, ask_questions, request_user_input, spawn_subagent",
         )?;
+        crate::agent::runloop::unified::plan_mode_state::render_plan_mode_next_step_hint(
+            ctx.renderer,
+        )?;
     } else {
         crate::agent::runloop::unified::plan_mode_state::transition_to_edit_mode(
             ctx.tool_registry,
@@ -187,6 +190,9 @@ pub async fn handle_cycle_mode(ctx: SlashCommandContext<'_>) -> Result<SlashComm
             ctx.renderer.line(
                 MessageStyle::Output,
                 "  Read-only mode for analysis and planning. Mutating tools disabled.",
+            )?;
+            crate::agent::runloop::unified::plan_mode_state::render_plan_mode_next_step_hint(
+                ctx.renderer,
             )?;
         }
     }

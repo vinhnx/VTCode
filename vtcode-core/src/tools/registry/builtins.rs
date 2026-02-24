@@ -57,7 +57,18 @@ pub(super) fn builtin_tool_registrations(
             CapabilityLevel::Basic,
             EnterPlanModeTool::new(plan_state.clone()),
         )
-        .with_aliases(["plan_mode", "enter_plan", "start_planning"]),
+        .with_aliases([
+            "plan_mode",
+            "enter_plan",
+            "start_planning",
+            "plan_on",
+            "plan_start",
+            "switch_to_plan_mode",
+            "switch_plan_mode",
+            "mode_plan",
+            "planner_mode",
+            "/plan",
+        ]),
         ToolRegistration::from_tool_instance(
             tools::EXIT_PLAN_MODE,
             CapabilityLevel::Basic,
@@ -68,6 +79,14 @@ pub(super) fn builtin_tool_registrations(
             "plan_exit",
             "start_implementation",
             "implement_plan",
+            "plan_off",
+            "switch_to_edit_mode",
+            "switch_edit_mode",
+            "mode_edit",
+            "resume_edit_mode",
+            "coder_mode",
+            "/plan_off",
+            "/edit",
         ]),
         // ============================================================
         // TASK TRACKER (NL2Repo-Bench: Explicit Task Planning)
