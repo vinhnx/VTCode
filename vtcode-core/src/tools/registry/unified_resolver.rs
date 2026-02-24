@@ -246,13 +246,15 @@ impl UnifiedToolResolver {
 
     /// Get cached resolution result
     async fn get_cached_resolution(&self, tool_name: &str) -> Option<Result<ToolResolution, ()>> {
-        let cache = self.resolution_cache.read().unwrap();
+        let cache = self.resolution_cache.read().ok()?;
         cache.get(tool_name).cloned()
     }
 
     /// Cache resolution result
     async fn cache_resolution(&self, tool_name: &str, resolution: Option<&ToolResolution>) {
-        let mut cache = self.resolution_cache.write().unwrap();
+        let Ok(mut cache) = self.resolution_cache.write() else {
+            return;
+        };
 
         if let Some(res) = resolution {
             cache.insert(tool_name.to_string(), Ok(res.clone()));
@@ -263,30 +265,32 @@ impl UnifiedToolResolver {
 
     /// Get cached MCP presence result
     async fn get_cached_mcp_presence(&self, tool_name: &str) -> Option<bool> {
-        let cache = self.mcp_presence_cache.read().unwrap();
+        let cache = self.mcp_presence_cache.read().ok()?;
         cache.get(tool_name).copied()
     }
 
     /// Cache MCP presence result
     async fn cache_mcp_presence(&self, tool_name: &str, has_tool: bool) {
-        let mut cache = self.mcp_presence_cache.write().unwrap();
-        cache.insert(tool_name.to_string(), has_tool);
+        if let Ok(mut cache) = self.mcp_presence_cache.write() {
+            cache.insert(tool_name.to_string(), has_tool);
+        }
     }
 
     /// Clear all caches
     pub async fn clear_caches(&self) {
-        self.resolution_cache.write().unwrap().clear();
-        self.mcp_presence_cache.write().unwrap().clear();
+        if let Ok(mut cache) = self.resolution_cache.write() {
+            cache.clear();
+        }
+        if let Ok(mut cache) = self.mcp_presence_cache.write() {
+            cache.clear();
+        }
     }
 
     /// Get cache statistics
     pub async fn cache_stats(&self) -> CacheStats {
-        let resolution_cache = self.resolution_cache.read().unwrap();
-        let mcp_presence_cache = self.mcp_presence_cache.read().unwrap();
-
         CacheStats {
-            resolution_cache_entries: resolution_cache.len(),
-            mcp_presence_cache_entries: mcp_presence_cache.len(),
+            resolution_cache_entries: self.resolution_cache.read().ok().map(|c| c.len()).unwrap_or(0),
+            mcp_presence_cache_entries: self.mcp_presence_cache.read().ok().map(|c| c.len()).unwrap_or(0),
         }
     }
 }

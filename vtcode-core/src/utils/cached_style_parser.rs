@@ -27,8 +27,7 @@ impl CachedStyleParser {
     /// Parse and cache a Git-style color string (e.g., "bold red blue")
     pub fn parse_git_style(&self, input: &str) -> Result<AnsiStyle> {
         // Check cache first
-        {
-            let cache = self.git_cache.read().unwrap();
+        if let Ok(cache) = self.git_cache.read() {
             if let Some(cached) = cache.get(input) {
                 return Ok(*cached);
             }
@@ -38,8 +37,7 @@ impl CachedStyleParser {
         let result = anstyle_git::parse(input)
             .map_err(|e| anyhow::anyhow!("Failed to parse Git style '{}': {:?}", input, e))?;
 
-        {
-            let mut cache = self.git_cache.write().unwrap();
+        if let Ok(mut cache) = self.git_cache.write() {
             cache.insert(input.to_string(), result);
         }
 
@@ -49,8 +47,7 @@ impl CachedStyleParser {
     /// Parse and cache an LS_COLORS-style string (e.g., "01;34")
     pub fn parse_ls_colors(&self, input: &str) -> Result<AnsiStyle> {
         // Check cache first
-        {
-            let cache = self.ls_colors_cache.read().unwrap();
+        if let Ok(cache) = self.ls_colors_cache.read() {
             if let Some(cached) = cache.get(input) {
                 return Ok(*cached);
             }
@@ -60,8 +57,7 @@ impl CachedStyleParser {
         let result = anstyle_ls::parse(input)
             .ok_or_else(|| anyhow::anyhow!("Failed to parse LS_COLORS '{}'", input))?;
 
-        {
-            let mut cache = self.ls_colors_cache.write().unwrap();
+        if let Ok(mut cache) = self.ls_colors_cache.write() {
             cache.insert(input.to_string(), result);
         }
 
@@ -83,20 +79,23 @@ impl CachedStyleParser {
 
     /// Clear all cached styles
     pub fn clear_cache(&self) {
-        {
-            let mut git_cache = self.git_cache.write().unwrap();
+        if let Ok(mut git_cache) = self.git_cache.write() {
             git_cache.clear();
         }
-        {
-            let mut ls_colors_cache = self.ls_colors_cache.write().unwrap();
+        if let Ok(mut ls_colors_cache) = self.ls_colors_cache.write() {
             ls_colors_cache.clear();
         }
     }
 
     /// Get cache statistics
     pub fn cache_stats(&self) -> (usize, usize) {
-        let git_count = self.git_cache.read().unwrap().len();
-        let ls_colors_count = self.ls_colors_cache.read().unwrap().len();
+        let git_count = self.git_cache.read().ok().map(|c| c.len()).unwrap_or(0);
+        let ls_colors_count = self
+            .ls_colors_cache
+            .read()
+            .ok()
+            .map(|c| c.len())
+            .unwrap_or(0);
         (git_count, ls_colors_count)
     }
 }

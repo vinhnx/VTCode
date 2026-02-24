@@ -41,29 +41,44 @@ impl ToolRegistry {
 
     /// Set the active PTY sessions counter for tracking
     pub fn set_active_pty_sessions(&self, counter: Arc<std::sync::atomic::AtomicUsize>) {
-        *self.active_pty_sessions.write().unwrap() = Some(counter);
+        if let Ok(mut guard) = self.active_pty_sessions.write() {
+            *guard = Some(counter);
+        }
     }
 
     /// Increment active PTY sessions count
     pub fn increment_active_pty_sessions(&self) {
-        if let Some(counter) = self.active_pty_sessions.read().unwrap().as_ref() {
+        if let Some(counter) = self
+            .active_pty_sessions
+            .read()
+            .ok()
+            .and_then(|g| g.as_ref().map(Arc::clone))
+        {
             counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         }
     }
 
     /// Decrement active PTY sessions count
     pub fn decrement_active_pty_sessions(&self) {
-        if let Some(counter) = self.active_pty_sessions.read().unwrap().as_ref() {
+        if let Some(counter) = self
+            .active_pty_sessions
+            .read()
+            .ok()
+            .and_then(|g| g.as_ref().map(Arc::clone))
+        {
             counter.fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
         }
     }
 
     /// Get the current active PTY sessions count
     pub fn active_pty_sessions_count(&self) -> usize {
-        if let Some(counter) = self.active_pty_sessions.read().unwrap().as_ref() {
-            counter.load(std::sync::atomic::Ordering::Relaxed)
-        } else {
-            0
-        }
+        self.active_pty_sessions
+            .read()
+            .ok()
+            .and_then(|g| {
+                g.as_ref()
+                    .map(|c| c.load(std::sync::atomic::Ordering::Relaxed))
+            })
+            .unwrap_or(0)
     }
 }

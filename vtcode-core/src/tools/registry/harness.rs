@@ -42,29 +42,34 @@ impl HarnessContext {
 
     /// Set the session ID.
     pub fn set_session_id(&self, session_id: impl Into<String>) {
-        *self.session_id.write().unwrap() = session_id.into();
+        if let Ok(mut guard) = self.session_id.write() {
+            *guard = session_id.into();
+        }
     }
 
     /// Set the task ID.
     pub fn set_task_id(&self, task_id: Option<String>) {
-        *self.task_id.write().unwrap() = task_id;
+        if let Ok(mut guard) = self.task_id.write() {
+            *guard = task_id;
+        }
     }
 
     /// Get the current session ID.
     pub fn session_id(&self) -> String {
-        self.session_id.read().unwrap().clone()
+        self.session_id
+            .read()
+            .ok()
+            .map(|g| g.clone())
+            .unwrap_or_else(|| "session-unknown".to_string())
     }
 
     /// Get the current task ID.
     pub fn task_id(&self) -> Option<String> {
-        self.task_id.read().unwrap().clone()
+        self.task_id.read().ok().and_then(|g| g.clone())
     }
 
     /// Create a snapshot of the current context.
     pub fn snapshot(&self) -> HarnessContextSnapshot {
-        HarnessContextSnapshot::new(
-            self.session_id.read().unwrap().clone(),
-            self.task_id.read().unwrap().clone(),
-        )
+        HarnessContextSnapshot::new(self.session_id(), self.task_id())
     }
 }

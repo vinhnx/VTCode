@@ -47,14 +47,19 @@ async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     // If no pattern provided, show available options
-    if cli.pattern.is_none() {
-        std::process::exit(1);
-    }
-
-    let pattern = cli.pattern.unwrap();
-    let threads = cli
-        .threads
-        .unwrap_or_else(|| NonZero::new(num_cpus::get()).unwrap());
+    let pattern = match cli.pattern {
+        Some(pattern) => pattern,
+        None => {
+            eprintln!("Missing required search pattern");
+            std::process::exit(1);
+        }
+    };
+    let threads = match cli.threads {
+        Some(threads) => threads,
+        None => NonZero::new(num_cpus::get()).ok_or_else(|| {
+            anyhow::anyhow!("num_cpus::get() returned 0 while resolving worker thread count")
+        })?,
+    };
 
     // Set up cancellation flag
     let cancel_flag = Arc::new(AtomicBool::new(false));

@@ -29,8 +29,7 @@ pub fn get_cached_capabilities(provider: &dyn LLMProvider, model: &str) -> Provi
     let cache_key = format!("{}::{}", provider.name(), model);
 
     // Check if already cached
-    {
-        let cache = CAPABILITY_CACHE.read().unwrap();
+    if let Ok(cache) = CAPABILITY_CACHE.read() {
         if let Some(caps) = cache.get(&cache_key) {
             return caps.clone();
         }
@@ -49,8 +48,9 @@ pub fn get_cached_capabilities(provider: &dyn LLMProvider, model: &str) -> Provi
     };
 
     // Cache for future use
-    let mut cache = CAPABILITY_CACHE.write().unwrap();
-    cache.insert(cache_key, caps.clone());
+    if let Ok(mut cache) = CAPABILITY_CACHE.write() {
+        cache.insert(cache_key, caps.clone());
+    }
 
     caps
 }

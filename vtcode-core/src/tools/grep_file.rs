@@ -28,6 +28,7 @@ use std::sync::atomic::Ordering;
 use std::thread;
 use std::time::Duration;
 use tokio::task::spawn_blocking;
+use tracing::warn;
 
 #[cfg(not(docsrs))]
 use perg::{SearchConfig, search_paths};
@@ -230,8 +231,13 @@ impl GrepSearchManager {
     /// Call whenever the user edits the search query.
     pub fn on_user_query(&self, query: String) {
         {
-            #[expect(clippy::unwrap_used)]
-            let mut st = self.state.lock().unwrap();
+            let mut st = match self.state.lock() {
+                Ok(state) => state,
+                Err(err) => {
+                    warn!("grep search state lock poisoned while handling query update: {err}");
+                    return;
+                }
+            };
             if query == st.latest_query {
                 // No change, nothing to do.
                 return;
@@ -273,8 +279,16 @@ impl GrepSearchManager {
             // `active_search` is cleared.
             thread::sleep(SEARCH_DEBOUNCE);
             loop {
-                #[expect(clippy::unwrap_used)]
-                if state.lock().unwrap().active_search.is_none() {
+                let active_is_none = match state.lock() {
+                    Ok(st) => st.active_search.is_none(),
+                    Err(err) => {
+                        warn!(
+                            "grep search state lock poisoned while waiting for active search: {err}"
+                        );
+                        return;
+                    }
+                };
+                if active_is_none {
                     break;
                 }
                 thread::sleep(ACTIVE_SEARCH_COMPLETE_POLL_INTERVAL);
@@ -285,8 +299,15 @@ impl GrepSearchManager {
             let cancellation_token = Arc::new(AtomicBool::new(false));
             let token = cancellation_token.clone();
             let query = {
-                #[expect(clippy::unwrap_used)]
-                let mut st = state.lock().unwrap();
+                let mut st = match state.lock() {
+                    Ok(state) => state,
+                    Err(err) => {
+                        warn!(
+                            "grep search state lock poisoned while preparing debounced search: {err}"
+                        );
+                        return;
+                    }
+                };
                 let query = st.latest_query.clone();
                 st.is_search_scheduled = false;
                 st.active_search = Some(ActiveSearch {
@@ -308,9 +329,13 @@ impl GrepSearchManager {
 
     /// Retrieve the last successful search result
     pub fn last_result(&self) -> Option<GrepSearchResult> {
-        #[expect(clippy::unwrap_used)]
-        let st = self.state.lock().unwrap();
-        st.last_result.clone()
+        match self.state.lock() {
+            Ok(st) => st.last_result.clone(),
+            Err(err) => {
+                warn!("grep search state lock poisoned while reading last result: {err}");
+                None
+            }
+        }
     }
 
     fn execute_with_backends(input: &GrepSearchInput) -> Result<(Vec<Value>, bool)> {
@@ -655,8 +680,13 @@ impl GrepSearchManager {
             if cancellation_token.load(Ordering::Relaxed) {
                 // Reset the active search state
                 {
-                    #[expect(clippy::unwrap_used)]
-                    let mut st = search_state.lock().unwrap();
+                    let mut st = match search_state.lock() {
+                        Ok(state) => state,
+                        Err(err) => {
+                            warn!("grep search state lock poisoned while cancelling search: {err}");
+                            return;
+                        }
+                    };
                     if let Some(active_search) = &st.active_search
                         && Arc::ptr_eq(&active_search.cancellation_token, &cancellation_token)
                     {
@@ -675,8 +705,13 @@ impl GrepSearchManager {
             if let Some(ref cache) = cache
                 && let Some(cached_result) = Self::cached_result(cache, &input)
             {
-                #[expect(clippy::unwrap_used)]
-                let mut st = search_state.lock().unwrap();
+                let mut st = match search_state.lock() {
+                    Ok(state) => state,
+                    Err(err) => {
+                        warn!("grep search state lock poisoned while loading cached result: {err}");
+                        return;
+                    }
+                };
                 st.last_result = Some(cached_result);
                 return;
             }
@@ -701,15 +736,27 @@ impl GrepSearchManager {
                     cache.put(&input, result.clone());
                 }
 
-                #[expect(clippy::unwrap_used)]
-                let mut st = search_state.lock().unwrap();
+                let mut st = match search_state.lock() {
+                    Ok(state) => state,
+                    Err(err) => {
+                        warn!("grep search state lock poisoned while storing search result: {err}");
+                        return;
+                    }
+                };
                 st.last_result = Some(result);
             }
 
             // Reset the active search state
             {
-                #[expect(clippy::unwrap_used)]
-                let mut st = search_state.lock().unwrap();
+                let mut st = match search_state.lock() {
+                    Ok(state) => state,
+                    Err(err) => {
+                        warn!(
+                            "grep search state lock poisoned while clearing active search: {err}"
+                        );
+                        return;
+                    }
+                };
                 if let Some(active_search) = &st.active_search
                     && Arc::ptr_eq(&active_search.cancellation_token, &cancellation_token)
                 {

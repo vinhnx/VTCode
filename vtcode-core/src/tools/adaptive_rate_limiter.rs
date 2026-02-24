@@ -2,6 +2,7 @@ use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
+use tracing::warn;
 
 /// A token bucket implementation for rate limiting.
 struct TokenBucket {
@@ -132,19 +133,37 @@ impl Default for AdaptiveRateLimiter {
 impl AdaptiveRateLimiter {
     /// Set a priority level for a specific tool.
     pub fn set_priority(&self, tool_name: &str, priority: Priority) {
-        let mut priorities = self.tool_priorities.lock().unwrap();
-        priorities.insert(tool_name.to_string(), priority);
+        if let Ok(mut priorities) = self.tool_priorities.lock() {
+            priorities.insert(tool_name.to_string(), priority);
+        } else {
+            warn!(
+                "adaptive rate limiter priority lock poisoned while setting priority for '{}'",
+                tool_name
+            );
+        }
     }
 
     /// Try to acquire permission to execute a tool.
     /// Returns Ok(()) if allowed, or Err(Duration) indicating suggested wait time.
     pub fn try_acquire(&self, tool_name: &str) -> Result<(), Duration> {
-        let mut buckets = self.buckets.lock().unwrap();
+        let Ok(mut buckets) = self.buckets.lock() else {
+            warn!(
+                "adaptive rate limiter bucket lock poisoned while acquiring '{}'",
+                tool_name
+            );
+            return Err(Duration::from_millis(100));
+        };
         let bucket = buckets
             .entry(tool_name.to_string())
             .or_insert_with(|| TokenBucket::new(self.default_capacity, self.default_refill_rate));
 
-        let priorities = self.tool_priorities.lock().unwrap();
+        let Ok(priorities) = self.tool_priorities.lock() else {
+            warn!(
+                "adaptive rate limiter priority lock poisoned while acquiring '{}'",
+                tool_name
+            );
+            return Err(Duration::from_millis(100));
+        };
         let priority = priorities
             .get(tool_name)
             .copied()

@@ -17,7 +17,9 @@ use super::mcp_helpers::normalize_mcp_tool_identifier;
 impl ToolRegistry {
     /// Set the MCP client for this registry.
     pub async fn with_mcp_client(self, mcp_client: Arc<McpClient>) -> Self {
-        *self.mcp_client.write().unwrap() = Some(mcp_client);
+        if let Ok(mut guard) = self.mcp_client.write() {
+            *guard = Some(mcp_client);
+        }
         self.mcp_tool_index.write().await.clear();
         self.mcp_reverse_index.write().await.clear();
         if let Ok(mut cache) = self.cached_available_tools.write() {
@@ -30,7 +32,9 @@ impl ToolRegistry {
 
     /// Attach an MCP client without consuming the registry.
     pub async fn set_mcp_client(&self, mcp_client: Arc<McpClient>) {
-        *self.mcp_client.write().unwrap() = Some(mcp_client);
+        if let Ok(mut guard) = self.mcp_client.write() {
+            *guard = Some(mcp_client);
+        }
         self.mcp_tool_index.write().await.clear();
         self.mcp_reverse_index.write().await.clear();
         if let Ok(mut cache) = self.cached_available_tools.write() {
@@ -42,7 +46,7 @@ impl ToolRegistry {
 
     /// Get the MCP client if available.
     pub fn mcp_client(&self) -> Option<Arc<McpClient>> {
-        self.mcp_client.read().unwrap().clone()
+        self.mcp_client.read().ok().and_then(|g| g.clone())
     }
 
     /// List all MCP tools.
@@ -84,7 +88,7 @@ impl ToolRegistry {
 
     /// Execute an MCP tool.
     pub async fn execute_mcp_tool(&self, tool_name: &str, args: Value) -> Result<Value> {
-        let client_opt = { self.mcp_client.read().unwrap().clone() };
+        let client_opt = { self.mcp_client.read().ok().and_then(|g| g.clone()) };
         if let Some(mcp_client) = client_opt {
             mcp_client.execute_mcp_tool(tool_name, &args).await
         } else {
@@ -112,7 +116,7 @@ impl ToolRegistry {
 
     /// Refresh MCP tools (reconnect to providers and update tool lists).
     pub async fn refresh_mcp_tools(&self) -> Result<()> {
-        let mcp_client_opt = { self.mcp_client.read().unwrap().clone() };
+        let mcp_client_opt = { self.mcp_client.read().ok().and_then(|g| g.clone()) };
         if let Some(mcp_client) = mcp_client_opt {
             debug!(
                 "Refreshing MCP tools for {} providers",

@@ -37,16 +37,37 @@ struct LogForwarder {
 
 impl LogForwarder {
     fn set_sender(&self, sender: UnboundedSender<LogEntry>) {
-        *self.sender.lock().unwrap() = Some(sender);
+        match self.sender.lock() {
+            Ok(mut guard) => {
+                *guard = Some(sender);
+            }
+            Err(err) => {
+                tracing::warn!("failed to set TUI log sender; lock poisoned: {err}");
+            }
+        }
     }
 
     fn clear_sender(&self) {
-        *self.sender.lock().unwrap() = None;
+        match self.sender.lock() {
+            Ok(mut guard) => {
+                *guard = None;
+            }
+            Err(err) => {
+                tracing::warn!("failed to clear TUI log sender; lock poisoned: {err}");
+            }
+        }
     }
 
     fn send(&self, entry: LogEntry) {
-        if let Some(sender) = self.sender.lock().unwrap().as_ref() {
-            let _ = sender.send(entry);
+        match self.sender.lock() {
+            Ok(guard) => {
+                if let Some(sender) = guard.as_ref() {
+                    let _ = sender.send(entry);
+                }
+            }
+            Err(err) => {
+                tracing::warn!("failed to forward TUI log entry; lock poisoned: {err}");
+            }
         }
     }
 }
@@ -207,32 +228,44 @@ pub fn clear_tui_log_sender() {
 }
 
 pub fn set_log_theme_name(theme: Option<String>) {
-    let mut slot = LOG_THEME_NAME.write().unwrap();
+    let Ok(mut slot) = LOG_THEME_NAME.write() else {
+        tracing::warn!("failed to set TUI log theme name; theme lock poisoned");
+        return;
+    };
     *slot = theme
         .map(|t| t.trim().to_string())
         .filter(|t| !t.is_empty());
-    let mut cache = LOG_THEME_CACHE.write().unwrap();
-    *cache = None;
+    drop(slot);
+    if let Ok(mut cache) = LOG_THEME_CACHE.write() {
+        *cache = None;
+    } else {
+        tracing::warn!("failed to clear TUI log theme cache; cache lock poisoned");
+    }
 }
 
 fn theme_for_current_config() -> Theme {
     let theme_name = {
-        let slot = LOG_THEME_NAME.read().unwrap();
+        let Ok(slot) = LOG_THEME_NAME.read() else {
+            tracing::warn!("failed to read TUI log theme name; falling back to default theme");
+            return load_theme(&default_theme_name(), true);
+        };
         slot.clone()
     };
     let resolved_name = theme_name.clone().unwrap_or_else(default_theme_name);
     {
-        let cache = LOG_THEME_CACHE.read().unwrap();
-        if let Some((cached_name, cached)) = &*cache
-            && *cached_name == resolved_name
-        {
-            return cached.clone();
+        if let Ok(cache) = LOG_THEME_CACHE.read() {
+            if let Some((cached_name, cached)) = &*cache {
+                if *cached_name == resolved_name {
+                    return cached.clone();
+                }
+            }
         }
     }
 
     let theme = load_theme(&resolved_name, true);
-    let mut cache = LOG_THEME_CACHE.write().unwrap();
-    *cache = Some((resolved_name, theme.clone()));
+    if let Ok(mut cache) = LOG_THEME_CACHE.write() {
+        *cache = Some((resolved_name, theme.clone()));
+    }
     theme
 }
 

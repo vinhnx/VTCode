@@ -10,7 +10,7 @@
 //! can be executed with the cached environment, significantly improving
 //! startup time.
 
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail};
 use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
@@ -94,7 +94,11 @@ impl Default for DryRunExecutor {
 #[async_trait::async_trait]
 impl CommandExecutor for DryRunExecutor {
     async fn execute(&self, command: &str, _cwd: &Path) -> Result<ShellOutput> {
-        let mut log = self.log.lock().unwrap();
+        let mut log = self
+            .log
+            .lock()
+            .map_err(|e| anyhow::anyhow!("DryRunExecutor log lock poisoned: {e}"))
+            .context("Failed to record dry-run command")?;
         log.push(command.to_string());
         Ok(ShellOutput {
             stdout: format!("(dry-run) {}", command),

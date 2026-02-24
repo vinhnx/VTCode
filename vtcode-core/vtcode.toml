@@ -111,6 +111,7 @@ default_policy = "prompt"
 max_tool_loops = 20
 max_repeated_tool_calls = 2
 max_consecutive_blocked_tool_calls_per_turn = 8
+max_sequential_spool_chunk_reads = 6
 
 [tools.policies]
 list_files = "allow"
@@ -146,6 +147,13 @@ ask_user_question = "allow"
 request_user_input = "allow"
 ask_questions = "allow"
 askQuestions = "allow"
+plan_task_tracker = "prompt"
+plan_checklist = "prompt"
+plan_tasks = "prompt"
+task_tracker = "prompt"
+plan_manager = "prompt"
+track_tasks = "prompt"
+checklist = "prompt"
 
 [tools.web_fetch]
 mode = "restricted"
@@ -687,6 +695,7 @@ enabled = true
 min_prefix_tokens = 1024
 idle_expiration_seconds = 3600
 surface_metrics = true
+prompt_cache_key_mode = "session"
 
 [prompt_cache.providers.anthropic]
 enabled = true

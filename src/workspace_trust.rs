@@ -218,10 +218,14 @@ pub async fn ensure_workspace_trust_level_silent(
 async fn persist_trust_decision(workspace_key: &str, level: WorkspaceTrustLevel) -> Result<()> {
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
+        .context("System clock is before UNIX_EPOCH while persisting trust decision")?
         .as_secs();
 
-    let manager = get_dot_manager().lock().unwrap().clone();
+    let manager = get_dot_manager()
+        .context("Failed to initialize dot manager while persisting trust decision")?
+        .lock()
+        .map_err(|err| anyhow::anyhow!("Dot manager lock poisoned while persisting trust: {err}"))?
+        .clone();
 
     manager
         .update_config(|cfg| {

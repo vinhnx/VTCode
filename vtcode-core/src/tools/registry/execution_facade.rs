@@ -708,7 +708,7 @@ impl ToolRegistry {
             tool_exists = true;
         }
         // If not a standard tool, check if it's an MCP tool
-        let mcp_client_opt = { self.mcp_client.read().unwrap().clone() };
+        let mcp_client_opt = { self.mcp_client.read().ok().and_then(|g| g.clone()) };
         if let Some(mcp_client) = mcp_client_opt {
             let mut resolved_mcp_name = if let Some(stripped) = name.strip_prefix("mcp_") {
                 stripped.to_string()

@@ -78,7 +78,9 @@ impl ParseCache {
             language,
         };
 
-        let mut cache = self.cache.write().unwrap();
+        let Ok(mut cache) = self.cache.write() else {
+            return None;
+        };
 
         if let Some(cached) = cache.get(&key) {
             // Check if the cached entry is still fresh
@@ -126,20 +128,26 @@ impl ParseCache {
             source_size: source_code.len(),
         };
 
-        let mut cache = self.cache.write().unwrap();
-        cache.put(key, cached);
+        if let Ok(mut cache) = self.cache.write() {
+            cache.put(key, cached);
+        }
     }
 
     /// Clear the cache
     pub fn clear(&self) {
-        let mut cache = self.cache.write().unwrap();
-        cache.clear();
+        if let Ok(mut cache) = self.cache.write() {
+            cache.clear();
+        }
     }
 
     /// Get cache statistics
     pub fn stats(&self) -> CacheStatistics {
-        let cache = self.cache.read().unwrap();
-        let stats = self.stats.read().unwrap();
+        let Ok(cache) = self.cache.read() else {
+            return CacheStatistics::default();
+        };
+        let Ok(stats) = self.stats.read() else {
+            return CacheStatistics::default();
+        };
 
         CacheStatistics {
             hits: stats.hits,
@@ -168,7 +176,7 @@ impl ParseCache {
 }
 
 /// Cache statistics for monitoring
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct CacheStatistics {
     pub hits: u64,
     pub misses: u64,

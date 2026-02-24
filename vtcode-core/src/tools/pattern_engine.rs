@@ -60,7 +60,9 @@ impl PatternEngine {
 
     /// Record execution event
     pub fn record(&self, event: ExecutionEvent) {
-        let mut events = self.events.write().unwrap();
+        let Ok(mut events) = self.events.write() else {
+            return;
+        };
 
         // Maintain max history
         if events.len() >= self.max_history {
@@ -70,12 +72,16 @@ impl PatternEngine {
         events.push_back(event);
 
         // Invalidate cache
-        self.pattern_cache.write().unwrap().clear();
+        if let Ok(mut cache) = self.pattern_cache.write() {
+            cache.clear();
+        }
     }
 
     /// Detect overall pattern in execution history
     pub fn detect_pattern(&self) -> DetectedPattern {
-        let events = self.events.read().unwrap();
+        let Ok(events) = self.events.read() else {
+            return DetectedPattern::Single;
+        };
 
         if events.is_empty() {
             return DetectedPattern::Single;
@@ -93,7 +99,7 @@ impl PatternEngine {
 
     /// Predict user's next likely action
     pub fn predict_next_tool(&self) -> Option<String> {
-        let events = self.events.read().unwrap();
+        let events = self.events.read().ok()?;
 
         if events.len() < 2 {
             return None;
@@ -122,7 +128,9 @@ impl PatternEngine {
 
     /// Get execution summary
     pub fn summary(&self) -> ExecutionSummary {
-        let events = self.events.read().unwrap();
+        let Ok(events) = self.events.read() else {
+            return ExecutionSummary::default();
+        };
 
         if events.is_empty() {
             return ExecutionSummary::default();

@@ -5,6 +5,7 @@ use crate::config::constants::defaults;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::{Mutex, OnceLock};
 use tokio::fs;
 
 /// VT Code configuration stored in ~/.vtcode/
@@ -88,10 +89,7 @@ impl Default for DotConfig {
     fn default() -> Self {
         Self {
             version: env!("CARGO_PKG_VERSION").into(),
-            last_updated: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs(),
+            last_updated: unix_timestamp_secs().unwrap_or(0),
             preferences: UserPreferences::default(),
             providers: ProviderConfigs::default(),
             cache: CacheConfig::default(),
@@ -228,10 +226,7 @@ impl DotManager {
     {
         let mut config = self.load_config().await?;
         updater(&mut config);
-        config.last_updated = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
+        config.last_updated = unix_timestamp_secs()?;
         self.save_config(&config).await
     }
 
@@ -372,10 +367,7 @@ impl DotManager {
 
     /// Backup current configuration
     pub async fn backup_config(&self) -> Result<PathBuf, DotError> {
-        let timestamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
+        let timestamp = unix_timestamp_secs()?;
 
         let backup_name = format!("config_backup_{}.toml", timestamp);
         let backup_path = self.backups_dir().join(backup_name);
@@ -457,6 +449,9 @@ pub enum DotError {
     #[error("Home directory not found")]
     HomeDirNotFound,
 
+    #[error("System time error: {0}")]
+    SystemTime(#[from] std::time::SystemTimeError),
+
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
 
@@ -468,52 +463,59 @@ pub enum DotError {
 
     #[error("Backup not found: {0}")]
     BackupNotFound(PathBuf),
+
+    #[error("Dot manager lock poisoned: {0}")]
+    LockPoisoned(String),
 }
 
-use std::sync::{LazyLock, Mutex};
+fn unix_timestamp_secs() -> Result<u64, DotError> {
+    Ok(std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)?
+        .as_secs())
+}
 
 /// Global dot manager instance
-static DOT_MANAGER: LazyLock<Mutex<DotManager>> =
-    LazyLock::new(|| Mutex::new(DotManager::new().unwrap()));
+static DOT_MANAGER: OnceLock<Mutex<DotManager>> = OnceLock::new();
 
 /// Get global dot manager instance
-pub fn get_dot_manager() -> &'static Mutex<DotManager> {
-    &DOT_MANAGER
+pub fn get_dot_manager() -> Result<&'static Mutex<DotManager>, DotError> {
+    if let Some(manager) = DOT_MANAGER.get() {
+        return Ok(manager);
+    }
+
+    let manager = DotManager::new()?;
+    Ok(DOT_MANAGER.get_or_init(|| Mutex::new(manager)))
+}
+
+fn clone_manager() -> Result<DotManager, DotError> {
+    let manager = get_dot_manager()?;
+    let guard = manager
+        .lock()
+        .map_err(|err| DotError::LockPoisoned(err.to_string()))?;
+    Ok(guard.clone())
 }
 
 /// Initialize dot folder (should be called at startup)
 pub async fn initialize_dot_folder() -> Result<(), DotError> {
-    let manager = {
-        let guard = get_dot_manager().lock().unwrap();
-        guard.clone()
-    }; // Lock is released here when guard goes out of scope
+    let manager = clone_manager()?;
     manager.initialize().await
 }
 
 /// Load user configuration
 pub async fn load_user_config() -> Result<DotConfig, DotError> {
-    let manager = {
-        let guard = get_dot_manager().lock().unwrap();
-        guard.clone()
-    }; // Lock is released here when guard goes out of scope
+    let manager = clone_manager()?;
     manager.load_config().await
 }
 
 /// Save user configuration
 pub async fn save_user_config(config: &DotConfig) -> Result<(), DotError> {
-    let manager = {
-        let guard = get_dot_manager().lock().unwrap();
-        guard.clone()
-    }; // Lock is released here when guard goes out of scope
+    let manager = clone_manager()?;
     manager.save_config(config).await
 }
 
 /// Persist the preferred UI theme in the user's dot configuration.
 pub async fn update_theme_preference(theme: &str) -> Result<(), DotError> {
-    let manager = {
-        let guard = get_dot_manager().lock().unwrap();
-        guard.clone()
-    }; // Lock is released here when guard goes out of scope
+    let manager = clone_manager()?;
     manager
         .update_config(|cfg| cfg.preferences.theme = theme.to_string())
         .await
@@ -521,10 +523,7 @@ pub async fn update_theme_preference(theme: &str) -> Result<(), DotError> {
 
 /// Persist the preferred provider and model combination.
 pub async fn update_model_preference(provider: &str, model: &str) -> Result<(), DotError> {
-    let manager = {
-        let guard = get_dot_manager().lock().unwrap();
-        guard.clone()
-    }; // Lock is released here when guard goes out of scope
+    let manager = clone_manager()?;
     manager
         .update_config(|cfg| {
             cfg.preferences.default_provider = provider.to_string();
