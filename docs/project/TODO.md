@@ -12,6 +12,20 @@ implement self update logic for vtcode.
 
 more PTY truncate display in TUI, reference:
 
+example
+
+```
+Ran git diff --stat
+  └  docs/project/TODO.md                               |   6 +
+diff --git a/src/agent/runloop/unified/turn/tool_outcomes/execution_result.rs b/src/agent/runloop/
+    unified/turn/tool_outcomes/execution_result.rs
+"… +9 lines"
+                  .push(uni::Message::system(block_reason.clone()));
+                 return Ok(Some(TurnHandlerOutcome::Break(TurnLoopResult::Blocked {
+```
+
+the key is truncated lines summarize "+9 lines" and the full content is not shown in TUI, but the agent can still access the full content when needed.
+
 ```
 
 • Ran cargo test spool_chunk_read_path_detects_spooled_read_calls -- --nocapture
