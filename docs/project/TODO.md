@@ -1248,7 +1248,7 @@ improve and fix syntax highlighting in raw markdown code
 ---
 
 check error
-https://github.com/vinhnx/VT Code/issues/605#issuecomment-3942895952
+https://github.com/vinhnx/VTCode/issues/605#issuecomment-3942895952
 
 ---
 

@@ -185,17 +185,59 @@ fn default_plan_mode_interview_args() -> serde_json::Value {
             {
                 "id": "goal",
                 "header": "Goal",
-                "question": "What user-visible outcome should this change deliver, and what constraints or non-goals must be respected?"
+                "question": "What user-visible outcome should this change deliver, and what constraints or non-goals must be respected?",
+                "options": [
+                    {
+                        "label": "Single outcome metric (Recommended)",
+                        "description": "Pick one user-visible result and optimize scope to ship that outcome quickly."
+                    },
+                    {
+                        "label": "Outcome plus hard constraints",
+                        "description": "Define the target result and explicitly lock constraints/non-goals up front."
+                    },
+                    {
+                        "label": "MVP scope boundary",
+                        "description": "Choose the smallest useful deliverable that still demonstrates user impact."
+                    }
+                ]
             },
             {
                 "id": "constraints",
                 "header": "Plan",
-                "question": "Break the work into 3-7 composable steps. For each step include target file(s) and a concrete expected outcome."
+                "question": "Break the work into 3-7 composable steps. For each step include target file(s) and a concrete expected outcome.",
+                "options": [
+                    {
+                        "label": "Dependency-first slices (Recommended)",
+                        "description": "Order steps by dependency so each slice can be built and validated independently."
+                    },
+                    {
+                        "label": "User-flow slices",
+                        "description": "Split by user journey milestones so each step improves one visible workflow."
+                    },
+                    {
+                        "label": "Risk-isolated slices",
+                        "description": "Separate high-risk changes into dedicated steps to simplify debugging and rollback."
+                    }
+                ]
             },
             {
                 "id": "verification",
                 "header": "Verification",
-                "question": "For each step, what exact command or manual check proves it is complete?"
+                "question": "For each step, what exact command or manual check proves it is complete?",
+                "options": [
+                    {
+                        "label": "Command proof per step (Recommended)",
+                        "description": "Attach an explicit command/check for each step to make completion objective."
+                    },
+                    {
+                        "label": "Manual behavior proof",
+                        "description": "Use concrete user-visible manual checks when automated coverage is not available."
+                    },
+                    {
+                        "label": "Hybrid proof strategy",
+                        "description": "Combine automated commands with targeted manual checks for stronger confidence."
+                    }
+                ]
             }
         ]
     })

@@ -41,6 +41,64 @@ fn maybe_force_plan_mode_interview_inserts_tool_call() {
 }
 
 #[test]
+fn maybe_force_plan_mode_interview_includes_distinct_question_options() {
+    let mut stats = SessionStats::default();
+    let processing_result = TurnProcessingResult::TextResponse {
+        text: "Proceeding without explicit questions.".to_string(),
+        reasoning: Vec::new(),
+        proposed_plan: None,
+    };
+
+    stats.record_tool(tools::READ_FILE);
+    stats.increment_plan_mode_turns();
+
+    let result = maybe_force_plan_mode_interview(
+        processing_result,
+        Some("Proceeding without explicit questions."),
+        &mut stats,
+        1,
+    );
+
+    let tool_calls = match result {
+        TurnProcessingResult::ToolCalls { tool_calls, .. } => tool_calls,
+        _ => panic!("Expected tool calls with forced interview"),
+    };
+
+    let args = tool_calls
+        .last()
+        .and_then(|call| call.function.as_ref())
+        .map(|func| func.arguments.as_str())
+        .expect("expected interview tool arguments");
+    let payload: serde_json::Value =
+        serde_json::from_str(args).expect("interview args should be valid JSON");
+    let questions = payload["questions"]
+        .as_array()
+        .expect("questions array should exist");
+    assert_eq!(questions.len(), 3);
+
+    let first_labels = questions
+        .iter()
+        .map(|question| {
+            question["options"]
+                .as_array()
+                .expect("options array should exist")[0]["label"]
+                .as_str()
+                .expect("first option label should exist")
+                .to_string()
+        })
+        .collect::<Vec<_>>();
+
+    assert!(
+        first_labels
+            .iter()
+            .all(|label| label.contains("(Recommended)"))
+    );
+    assert_ne!(first_labels[0], first_labels[1]);
+    assert_ne!(first_labels[1], first_labels[2]);
+    assert_ne!(first_labels[0], first_labels[2]);
+}
+
+#[test]
 fn maybe_force_plan_mode_interview_skips_when_questions_present() {
     let mut stats = SessionStats::default();
     let processing_result = TurnProcessingResult::TextResponse {
