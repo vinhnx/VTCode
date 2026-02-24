@@ -91,9 +91,12 @@ impl ConfigDefaultsProvider for DefaultConfigDefaults {
 pub fn install_config_defaults_provider(
     provider: Arc<dyn ConfigDefaultsProvider>,
 ) -> Arc<dyn ConfigDefaultsProvider> {
-    let mut guard = CONFIG_DEFAULTS
-        .write()
-        .expect("config defaults provider lock poisoned");
+    let mut guard = CONFIG_DEFAULTS.write().unwrap_or_else(|poisoned| {
+        tracing::warn!(
+            "config defaults provider lock poisoned while installing provider; recovering"
+        );
+        poisoned.into_inner()
+    });
     std::mem::replace(&mut *guard, provider)
 }
 
@@ -107,17 +110,19 @@ pub fn with_config_defaults<F, R>(operation: F) -> R
 where
     F: FnOnce(&dyn ConfigDefaultsProvider) -> R,
 {
-    let guard = CONFIG_DEFAULTS
-        .read()
-        .expect("config defaults provider lock poisoned");
+    let guard = CONFIG_DEFAULTS.read().unwrap_or_else(|poisoned| {
+        tracing::warn!("config defaults provider lock poisoned while reading provider; recovering");
+        poisoned.into_inner()
+    });
     operation(guard.as_ref())
 }
 
 /// Returns the currently installed provider as an [`Arc`].
 pub fn current_config_defaults() -> Arc<dyn ConfigDefaultsProvider> {
-    let guard = CONFIG_DEFAULTS
-        .read()
-        .expect("config defaults provider lock poisoned");
+    let guard = CONFIG_DEFAULTS.read().unwrap_or_else(|poisoned| {
+        tracing::warn!("config defaults provider lock poisoned while cloning provider; recovering");
+        poisoned.into_inner()
+    });
     Arc::clone(&*guard)
 }
 

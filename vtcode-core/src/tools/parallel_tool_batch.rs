@@ -10,7 +10,7 @@ use serde_json::Value;
 use std::sync::Arc;
 use tokio::sync::Semaphore;
 
-use crate::tools::unified_error::UnifiedToolError;
+use crate::tools::unified_error::{UnifiedErrorKind, UnifiedToolError};
 use crate::tools::unified_executor::{
     ToolExecutionContext, UnifiedExecutionResult, UnifiedToolExecutor,
 };
@@ -43,7 +43,7 @@ impl ParallelToolBatch {
     pub fn with_concurrency(max_concurrency: usize) -> Self {
         Self {
             calls: Vec::new(),
-            max_concurrency,
+            max_concurrency: max_concurrency.max(1),
         }
     }
 
@@ -127,7 +127,17 @@ impl ParallelToolBatch {
             let ctx = call.ctx.clone();
 
             let handle = async move {
-                let _permit = sem.acquire().await.expect("semaphore closed unexpectedly");
+                let _permit = sem.acquire().await.map_err(|err| {
+                    UnifiedToolError::new(
+                        UnifiedErrorKind::ExecutionFailed,
+                        "Failed to schedule parallel tool execution",
+                    )
+                    .with_tool_name(&name)
+                    .with_source(anyhow::Error::new(err).context(format!(
+                        "Failed to acquire semaphore permit for tool '{}'",
+                        name
+                    )))
+                })?;
                 executor.execute(ctx, &name, args).await
             };
 

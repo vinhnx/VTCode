@@ -1,6 +1,6 @@
 //! Tool execution entrypoints for ToolRegistry.
 
-use anyhow::{Result, anyhow};
+use anyhow::{Context, Result, anyhow};
 use once_cell::sync::Lazy;
 use serde_json::{Value, json};
 use std::cell::RefCell;
@@ -461,7 +461,10 @@ impl ToolRegistry {
         let base_timeout_ms = self
             .timeout_policy
             .read()
-            .unwrap()
+            .unwrap_or_else(|poisoned| {
+                warn!("timeout policy lock poisoned while reading execution timeout; recovering");
+                poisoned.into_inner()
+            })
             .ceiling_for(timeout_category)
             .map(|d| d.as_millis() as u64);
         let adaptive_timeout_ms = self
@@ -732,10 +735,8 @@ impl ToolRegistry {
                     needs_pty = true;
                     tool_exists = true;
                     is_mcp_tool = true;
+                    mcp_provider = self.find_mcp_provider(&resolved_mcp_name).await;
                     mcp_tool_name = Some(resolved_mcp_name);
-                    mcp_provider = self
-                        .find_mcp_provider(mcp_tool_name.as_deref().unwrap())
-                        .await;
                 }
                 Ok(false) => {
                     // Don't modify tool_exists here - keep the result from standard tool check.
@@ -912,8 +913,9 @@ impl ToolRegistry {
         let effective_timeout_ms = effective_timeout.map(|d| d.as_millis() as u64);
         let exec_future = async {
             if is_mcp_tool {
-                let mcp_name =
-                    mcp_tool_name.expect("mcp_tool_name should be set when is_mcp_tool is true");
+                let mcp_name = mcp_tool_name
+                    .as_deref()
+                    .context("MCP tool routing inconsistency: resolved MCP tool name missing")?;
                 self.execute_mcp_tool(&mcp_name, args).await
             } else if let Some(registration) = self.inventory.registration_for(&tool_name) {
                 // Log deprecation warning if tool is deprecated

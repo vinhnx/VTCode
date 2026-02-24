@@ -96,15 +96,17 @@ pub async fn handle_trajectory_command(
     // Show time range if we have timestamps
     if !recent_timestamps.is_empty() {
         recent_timestamps.sort();
-        let oldest = recent_timestamps.first().unwrap();
-        let newest = recent_timestamps.last().unwrap();
-        let oldest_time = format_timestamp(*oldest);
-        let newest_time = format_timestamp(*newest);
-        println!(
-            "Time range: {} to {}",
-            style(oldest_time).dim(),
-            style(newest_time).dim()
-        );
+        if let (Some(oldest), Some(newest)) =
+            (recent_timestamps.first(), recent_timestamps.last())
+        {
+            let oldest_time = format_timestamp(*oldest);
+            let newest_time = format_timestamp(*newest);
+            println!(
+                "Time range: {} to {}",
+                style(oldest_time).dim(),
+                style(newest_time).dim()
+            );
+        }
     }
 
     // Classes

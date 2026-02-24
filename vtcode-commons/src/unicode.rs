@@ -64,11 +64,13 @@ impl UnicodeMonitor {
     pub fn record_error(&self, error_type: &str, details: &str) {
         self.total_errors.fetch_add(1, Ordering::Relaxed);
 
-        let mut errors = self.error_types.lock().unwrap();
-        *errors.entry(error_type.to_string()).or_insert(0) += 1;
+        if let Ok(mut errors) = self.error_types.lock() {
+            *errors.entry(error_type.to_string()).or_insert(0) += 1;
+        }
 
-        let mut last = self.last_error.lock().unwrap();
-        *last = Some(format!("{}: {}", error_type, details));
+        if let Ok(mut last) = self.last_error.lock() {
+            *last = Some(format!("{}: {}", error_type, details));
+        }
     }
 
     /// Record processing time in nanoseconds

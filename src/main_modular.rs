@@ -89,7 +89,7 @@ async fn main() -> Result<()> {
     // Determine workspace
     let workspace = args
         .workspace
-        .unwrap_or_else(|| std::env::current_dir().unwrap());
+        .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
 
     // Load configuration
     let config_manager =
