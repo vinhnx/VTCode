@@ -13,7 +13,7 @@ export interface RunVtcodeCommandOptions {
 
 export interface VtcodeTaskDefinition extends vscode.TaskDefinition {
     type: "vtcode";
-    command: "update-plan";
+    command: "task-tracker";
     summary?: string;
     steps?: string[];
     label?: string;

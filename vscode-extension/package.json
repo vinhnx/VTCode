@@ -62,7 +62,7 @@
     "onCommand:vtcode.configureMcpProviders",
     "onCommand:vtcode.launchAgentTerminal",
     "onCommand:vtcode.runAnalyze",
-    "onCommand:vtcode.runUpdatePlanTask",
+    "onCommand:vtcode.runTaskTrackerTask",
     "onCommand:vtcode.refreshQuickActions",
     "onCommand:vtcode.openChat",
     "onView:vtcodeChatView"
@@ -108,17 +108,17 @@
           "command": {
             "type": "string",
             "enum": [
-              "update-plan"
+              "task-tracker"
             ],
             "description": "VT Code CLI command to execute."
           },
           "summary": {
             "type": "string",
-            "description": "Optional summary passed to the update_plan tool."
+            "description": "Optional summary passed to the task_tracker tool."
           },
           "steps": {
             "type": "array",
-            "description": "Optional list of plan steps provided to update_plan.",
+            "description": "Optional list of plan steps provided to task_tracker.",
             "items": {
               "type": "string"
             }
@@ -132,9 +132,9 @@
     ],
     "languageModelTools": [
       {
-        "name": "vtcode-updatePlan",
-        "displayName": "VT Code Update Plan",
-        "modelDescription": "Synchronize the workspace TODO plan using the VT Code CLI update_plan workflow.",
+        "name": "vtcode-taskTracker",
+        "displayName": "VT Code Task Tracker",
+        "modelDescription": "Synchronize the workspace TODO plan using the VT Code CLI task_tracker workflow.",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -247,8 +247,8 @@
         "icon": "$(pulse)"
       },
       {
-        "command": "vtcode.runUpdatePlanTask",
-        "title": "Update Plan with VT Code Task",
+        "command": "vtcode.runTaskTrackerTask",
+        "title": "Run Task Tracker with VT Code Task",
         "category": "VT Code",
         "icon": "$(checklist)"
       },
@@ -328,7 +328,7 @@
           "when": "vtcode.configAvailable"
         },
         {
-          "command": "vtcode.runUpdatePlanTask",
+          "command": "vtcode.runTaskTrackerTask",
           "when": "vtcode.cliAvailable && vtcode.workspaceTrusted"
         },
         {
@@ -375,7 +375,7 @@
           "group": "navigation@22"
         },
         {
-          "command": "vtcode.runUpdatePlanTask",
+          "command": "vtcode.runTaskTrackerTask",
           "when": "view == vtcodeQuickActionsView && vtcode.cliAvailable && vtcode.workspaceTrusted",
           "group": "navigation@18"
         },

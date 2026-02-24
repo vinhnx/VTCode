@@ -204,14 +204,14 @@ High
 
 Extract the following commands:
 
--   updatePlanCommand
+-   taskTrackerCommand
 -   configCommand
 -   trustCommand
 -   refreshCommand
 
 ## Tasks
 
--   [ ] Create `src/commands/updatePlanCommand.ts`
+-   [ ] Create `src/commands/taskTrackerCommand.ts`
 -   [ ] Create `src/commands/configCommand.ts`
 -   [ ] Create `src/commands/trustCommand.ts`
 -   [ ] Create `src/commands/refreshCommand.ts`
@@ -220,7 +220,7 @@ Extract the following commands:
 
 ## Files
 
--   `src/commands/updatePlanCommand.ts` (NEW)
+-   `src/commands/taskTrackerCommand.ts` (NEW)
 -   `src/commands/configCommand.ts` (NEW)
 -   `src/commands/trustCommand.ts` (NEW)
 -   `src/commands/refreshCommand.ts` (NEW)

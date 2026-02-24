@@ -58,7 +58,7 @@ src/commands/
  askCommand.ts         (ask the agent)
  askSelectionCommand.ts (ask about selection)
  analyzeCommand.ts      (analyze workspace)
- updatePlanCommand.ts   (update plan)
+ taskTrackerCommand.ts   (task tracker)
  trustCommand.ts        (trust workspace)
  commandRegistry.ts     (register all commands)
 

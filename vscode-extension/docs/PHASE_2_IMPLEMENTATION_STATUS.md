@@ -41,7 +41,7 @@ Phase 2 transforms the VSCode extension from monolithic to modular architecture.
 | AskCommand |   Started | `src/commands/askCommand.ts` | 5 | Today |
 | AskSelectionCommand | ⏳ Pending | TBD | - | Tomorrow |
 | AnalyzeCommand | ⏳ Pending | TBD | - | Thursday |
-| UpdatePlanCommand | ⏳ Pending | TBD | - | Friday |
+| TaskTrackerCommand | ⏳ Pending | TBD | - | Friday |
 | ConfigCommand | ⏳ Pending | TBD | - | Friday |
 | TrustCommand | ⏳ Pending | TBD | - | Next week |
 | RefreshCommand | ⏳ Pending | TBD | - | Next week |
@@ -68,7 +68,7 @@ Phase 2 transforms the VSCode extension from monolithic to modular architecture.
 - [ ] Complete AskCommand
 - [ ] Extract AskSelectionCommand
 - [ ] Extract AnalyzeCommand
-- [ ] Extract UpdatePlanCommand
+- [ ] Extract TaskTrackerCommand
 - [ ] Extract ConfigCommand
 - [ ] Extract TrustCommand
 - [ ] Extract RefreshCommand
@@ -193,7 +193,7 @@ Phase 2 transforms the VSCode extension from monolithic to modular architecture.
     askCommand.ts
     askSelectionCommand.ts
     analyzeCommand.ts
-    updatePlanCommand.ts
+    taskTrackerCommand.ts
     configCommand.ts
     trustCommand.ts
     refreshCommand.ts

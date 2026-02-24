@@ -251,11 +251,11 @@ guideline_highlight_limit = 4
 usage_tips = [
     "Share the outcome you need or ask for a quick /status summary.",
     "Reference AGENTS.md expectations before changing files.",
-    "Draft or refresh your TODOs with update_plan before editing.",
+    "Draft or refresh your TODOs with task_tracker before editing.",
     "Prefer targeted reads (read_file, grep_file) before editing.",
 ]
 recommended_actions = [
-    "Outline a 3-6 step TODO plan via update_plan before coding.",
+    "Outline a 3-6 step TODO plan via task_tracker before coding.",
     "Request a workspace orientation or describe the task you want to tackle.",
     "Confirm priorities or blockers so I can suggest next steps.",
 ]

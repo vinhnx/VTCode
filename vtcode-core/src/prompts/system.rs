@@ -55,7 +55,8 @@ const UNIFIED_TOOL_GUIDANCE: &str = r#"**Search & exploration**:
 
 **Code modification**:
 - `unified_file` (action='edit') for surgical changes; action='write' for new or full replacements
-- Never re-read after applying patch (tool fails if unsuccessful)
+- After a successful patch/edit, continue without redundant re-reads
+- If patch/edit fails repeatedly, stop retrying and re-plan into smaller slices (files + outcome + verification) before trying again
 - Use `git log` and `git blame` for code history context
 - **Never**: `git commit`, `git push`, or branch creation unless explicitly requested
 
@@ -183,9 +184,11 @@ Your output must be optimized for agent-to-agent and agent-to-human legibility.
 - **Regression Verification**: If you are fixing a bug or regression, you MUST run existing tests for the affected module to ensure no new regressions were introduced (Invariant #16).
 - If formatting issues persist after 3 iterations, present the solution and move on.
 
-## Planning (update_plan)
+## Planning (task_tracker)
 
 Use plans for non-trivial work (4+ steps):
+- Use `task_tracker` (`create` / `update` / `list`) to keep an explicit checklist.
+- Trigger planning before edits when scope spans multiple files/modules or multiple failure categories.
 - 5-7 word descriptive steps with status (`pending`/`in_progress`/`completed`).
 - Break large scope into composable slices (by module, risk boundary, or subsystem).
 - Each slice must name touched file(s), concrete outcome, and one verification command.
@@ -193,6 +196,7 @@ Use plans for non-trivial work (4+ steps):
 - Every step must define one concrete expected outcome and one verification check.
 - Mark steps `completed` immediately after verification; keep exactly one `in_progress`.
 - **Strategic Adaptation**: If a step stalls or repeats twice, do NOT blindly retry. Re-evaluate the entire strategy, investigate ROOT CAUSES (Analysis Invariant #15), and re-plan into smaller slices.
+- Never conclude a task is "too large for one turn" without first decomposing and executing the next highest-impact slice.
 - For complex multi-hour tasks, follow `docs/harness/EXEC_PLANS.md`.
 
 ## Pre-flight Environment Checks
@@ -267,7 +271,7 @@ const MINIMAL_SYSTEM_PROMPT: &str = r#"You are VT Code, a coding assistant for V
 - When genuinely uncertain about ambiguous requirements, surface the ambiguity early rather than guessing. Flag assumptions so the user can redirect.
 
 **Planning**:
-- For non-trivial scope, break work into composable steps with explicit outcome + verification per step.
+- For non-trivial scope, use `task_tracker` to break work into composable steps with explicit outcome + verification per step.
 - Keep one active step at a time; update statuses as soon as checks pass.
 
 __UNIFIED_TOOL_GUIDANCE__
@@ -344,7 +348,7 @@ __UNIFIED_TOOL_GUIDANCE__
 
 **Verification**: `cargo check`, `cargo test`, `cargo clippy` proactively. Format fix limit: 3 iterations.
 
-**Planning**: `update_plan` for 4+ steps. 5-7 word steps with status, one concrete outcome + one verification check per step. Re-plan into smaller slices if a step repeats/stalls. Don't repeat plan in output.
+**Planning**: `task_tracker` for 4+ steps (`create` then `update`). Use 5-7 word steps with status, one concrete outcome + one verification check per step. Re-plan into smaller slices if a step repeats/stalls. Don't repeat plan in output.
 
 ## Loop Prevention
 
@@ -851,15 +855,15 @@ mod tests {
         // Disable enhancements for base prompt size testing
         config.agent.include_temporal_context = false;
         config.agent.include_working_directory = false;
+        config.agent.instruction_max_bytes = 0;
 
         let result =
             compose_system_instruction_text(&PathBuf::from("."), Some(&config), None).await;
 
-        // Minimal prompt should be much shorter than default
-        // Note: composed prompt includes AGENTS.md content which can add size
+        // Minimal prompt should remain compact and deterministic without AGENTS.md injection
         assert!(
-            result.len() < 5500,
-            "Minimal mode should produce <5.5K chars (was {} chars)",
+            result.len() < 6000,
+            "Minimal mode should produce <6.0K chars (was {} chars)",
             result.len()
         );
         assert!(
@@ -875,6 +879,7 @@ mod tests {
         // Disable enhancements for base prompt size testing
         config.agent.include_temporal_context = false;
         config.agent.include_working_directory = false;
+        config.agent.instruction_max_bytes = 0;
 
         let result =
             compose_system_instruction_text(&PathBuf::from("."), Some(&config), None).await;
@@ -893,6 +898,7 @@ mod tests {
         // Disable enhancements for base prompt size testing
         config.agent.include_temporal_context = false;
         config.agent.include_working_directory = false;
+        config.agent.instruction_max_bytes = 0;
 
         let result =
             compose_system_instruction_text(&PathBuf::from("."), Some(&config), None).await;
@@ -900,8 +906,9 @@ mod tests {
         // Lightweight is optimized for simple operations (v4.2)
         assert!(result.len() > 100, "Lightweight should be >100 chars");
         assert!(
-            result.len() < 4000,
-            "Lightweight should be compact (<4K chars)"
+            result.len() < 4400,
+            "Lightweight should be compact (<4.4K chars, was {} chars)",
+            result.len()
         );
     }
 
@@ -912,6 +919,7 @@ mod tests {
         // Disable enhancements for base prompt size testing
         config.agent.include_temporal_context = false;
         config.agent.include_working_directory = false;
+        config.agent.instruction_max_bytes = 0;
 
         let result =
             compose_system_instruction_text(&PathBuf::from("."), Some(&config), None).await;
@@ -960,12 +968,41 @@ mod tests {
     #[test]
     fn test_default_prompt_token_count() {
         let approx_tokens = DEFAULT_SYSTEM_PROMPT.len() / 4;
-        // v6.1 adds Uncertainty Recognition section (~100 extra tokens)
+        // v6.2 expands planning guidance and retry strategy details
         assert!(
-            approx_tokens > 1200 && approx_tokens < 2200,
-            "Default prompt should be ~1600 tokens (harness v6.1), got ~{}",
+            approx_tokens > 1200 && approx_tokens < 2450,
+            "Default prompt should be ~2K tokens (harness v6.2), got ~{}",
             approx_tokens
         );
+    }
+
+    #[tokio::test]
+    async fn test_generated_prompts_use_task_tracker_not_update_plan() {
+        let project_root = PathBuf::from(".");
+
+        for (mode_name, mode) in [
+            ("default", SystemPromptMode::Default),
+            ("minimal", SystemPromptMode::Minimal),
+            ("specialized", SystemPromptMode::Specialized),
+        ] {
+            let mut config = VTCodeConfig::default();
+            config.agent.system_prompt_mode = mode;
+            config.agent.include_temporal_context = false;
+            config.agent.include_working_directory = false;
+            config.agent.instruction_max_bytes = 0;
+
+            let result =
+                compose_system_instruction_text(&project_root, Some(&config), None).await;
+
+            assert!(
+                result.contains("task_tracker"),
+                "{mode_name} prompt should reference task_tracker"
+            );
+            assert!(
+                !result.contains("update_plan"),
+                "{mode_name} prompt should not reference deprecated update_plan"
+            );
+        }
     }
 
     #[test]

@@ -107,8 +107,9 @@ pub fn generate_tool_guidelines(
 
         guidelines.push(
             "**Loop Detection**: If you see 'Loop Detected' or similar errors, STOP retrying the \
-             same operation. Instead: (1) Acknowledge the issue to the user, (2) Explain what you \
-             were trying to do, (3) Ask the user for guidance or try a completely different approach. \
+             same operation. Instead: (1) Acknowledge the issue to the user, (2) Diagnose the root \
+             cause, (3) Re-plan into smaller composable slices with expected outcome + verification \
+             (use `task_tracker` when available), (4) Execute one slice and verify before the next. \
              Never retry the same tool call more than 2-3 times with identical or similar arguments."
                 .to_string(),
         );

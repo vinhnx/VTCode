@@ -19,7 +19,7 @@ Continuing Phase 2 command system refactoring. After AskCommand foundation, we'v
 | --------------------- | -------------------------- | ------ | ------- | --------------------------------------- |
 | AskSelectionCommand   | `askSelectionCommand.ts`   | Done   | Created | Ask about highlighted text with context |
 | AnalyzeCommand        | `analyzeCommand.ts`        | Done   | Ready   | Workspace analysis automation           |
-| UpdatePlanCommand     | `updatePlanCommand.ts`     | Done   | Ready   | Execute plan update tasks               |
+| TaskTrackerCommand     | `taskTrackerCommand.ts`     | Done   | Ready   | Execute plan update tasks               |
 | OpenConfigCommand     | `openConfigCommand.ts`     | Done   | Ready   | Open vtcode.toml in editor              |
 | TrustWorkspaceCommand | `trustWorkspaceCommand.ts` | Done   | Ready   | Request workspace trust                 |
 
@@ -49,7 +49,7 @@ src/
     askSelectionCommand.ts          (NEW)
     askSelectionCommand.test.ts     (NEW)
     analyzeCommand.ts               (NEW)
-    updatePlanCommand.ts            (NEW)
+    taskTrackerCommand.ts            (NEW)
     openConfigCommand.ts            (NEW)
     trustWorkspaceCommand.ts        (NEW)
     index.ts                        (Updated)
@@ -68,7 +68,7 @@ src/
 -   askCommand.ts - Ask VT Code agent
 -   askSelectionCommand.ts - Ask about selection
 -   analyzeCommand.ts - Analyze workspace
--   updatePlanCommand.ts - Update plan task
+-   taskTrackerCommand.ts - Update plan task
 -   trustWorkspaceCommand.ts - Request workspace trust
 
 **Still in extension.ts** (Need extraction):
@@ -254,7 +254,7 @@ src/commands/
  askSelectionCommand.ts              (61 lines)
  askSelectionCommand.test.ts         (56 lines)
  analyzeCommand.ts                   (28 lines)
- updatePlanCommand.ts                (60 lines)
+ taskTrackerCommand.ts                (60 lines)
  openConfigCommand.ts                (39 lines)
  trustWorkspaceCommand.ts            (52 lines)
 ```

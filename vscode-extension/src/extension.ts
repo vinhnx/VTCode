@@ -12,7 +12,7 @@ import {
     RefreshCommand,
     SearchFilesCommand,
     TrustWorkspaceCommand,
-    UpdatePlanCommand,
+    TaskTrackerCommand,
 } from "./commands";
 import { registerVtcodeLanguageFeatures } from "./languageFeatures";
 import { ParticipantRegistry } from "./participantRegistry";
@@ -153,7 +153,8 @@ let lastProviderModelWarningKey: string | undefined;
 
 const CLI_DETECTION_TIMEOUT_MS = 4000;
 const VT_CODE_CHAT_PARTICIPANT_ID = "vtcode.agent";
-const VT_CODE_UPDATE_PLAN_TOOL = "vtcode-updatePlan";
+const VT_CODE_TASK_TRACKER_TOOL = "vtcode-taskTracker";
+const TASK_TRACKER_TASK_COMMAND = "task-tracker";
 const VT_CODE_MCP_PROVIDER_ID = "vtcode.workspaceMcp";
 const TRUST_PROMPT_STATE_KEY = "vtcode.trustPromptShown";
 const FULL_AUTO_WARNING_STATE_KEY = "vtcode.fullAutoWarningShown";
@@ -184,7 +185,7 @@ export function activate(context: vscode.ExtensionContext) {
         new AskCommand(),
         new AskSelectionCommand(),
         new AnalyzeCommand(),
-        new UpdatePlanCommand(),
+        new TaskTrackerCommand(),
         new OpenConfigCommand(),
         new TrustWorkspaceCommand(),
         new RefreshCommand(),
@@ -843,7 +844,7 @@ export function activate(context: vscode.ExtensionContext) {
     );
 
     // Note: runAnalyze is registered via CommandRegistry (AnalyzeCommand)
-    // Note: runUpdatePlanTask is registered via CommandRegistry (UpdatePlanCommand)
+    // Note: runTaskTrackerTask is registered via CommandRegistry (TaskTrackerCommand)
     // Note: refreshQuickActions is registered via CommandRegistry (RefreshCommand)
 
     const taskProvider = vscode.tasks.registerTaskProvider("vtcode", {
@@ -1050,10 +1051,10 @@ function createQuickActions(
                 icon: "comment",
             },
             {
-                label: "Update VT Code task plan",
+                label: "Run VT Code task tracker",
                 description:
-                    "Run the predefined VS Code task that drives the update_plan tool.",
-                command: "vtcode.runUpdatePlanTask",
+                    "Run the predefined VS Code task that drives the task_tracker tool.",
+                command: "vtcode.runTaskTrackerTask",
                 icon: "checklist",
             },
             {
@@ -2009,7 +2010,7 @@ interface RunVtcodeCommandOptions {
     readonly cancellationToken?: vscode.CancellationToken;
 }
 
-interface UpdatePlanToolInput {
+interface TaskTrackerToolInput {
     readonly summary?: string;
     readonly steps?: string[];
 }
@@ -2139,7 +2140,7 @@ function getConfigArguments(): string[] {
 
 interface VtcodeTaskDefinition extends vscode.TaskDefinition {
     type: "vtcode";
-    command: "update-plan";
+    command: "task-tracker";
     summary?: string;
     steps?: string[];
     label?: string;
@@ -2165,16 +2166,16 @@ async function provideVtcodeTasks(): Promise<vscode.Task[]> {
 
     const definition: VtcodeTaskDefinition = {
         type: "vtcode",
-        command: "update-plan",
-        label: "Update plan with VT Code",
+        command: TASK_TRACKER_TASK_COMMAND,
+        label: "Run task tracker with VT Code",
     };
 
-    return [createUpdatePlanTask(folder, definition)];
+    return [createTaskTrackerTask(folder, definition)];
 }
 
 function resolveVtcodeTask(task: vscode.Task): vscode.Task | undefined {
     const definition = task.definition as VtcodeTaskDefinition;
-    if (definition.command !== "update-plan") {
+    if (definition.command !== TASK_TRACKER_TASK_COMMAND) {
         return undefined;
     }
 
@@ -2192,23 +2193,23 @@ function resolveVtcodeTask(task: vscode.Task): vscode.Task | undefined {
 
     ideContextBridge?.scheduleRefresh();
 
-    return createUpdatePlanTask(folder, definition);
+    return createTaskTrackerTask(folder, definition);
 }
 
-function createUpdatePlanTask(
+function createTaskTrackerTask(
     folder: vscode.WorkspaceFolder,
     definition: VtcodeTaskDefinition
 ): vscode.Task {
     const resolvedDefinition: VtcodeTaskDefinition = {
         type: "vtcode",
-        command: "update-plan",
+        command: TASK_TRACKER_TASK_COMMAND,
         summary: definition.summary,
         steps: definition.steps,
         label: definition.label,
     };
 
-    const label = definition.label ?? "Update plan with VT Code";
-    const prompt = buildUpdatePlanPrompt(resolvedDefinition);
+    const label = definition.label ?? "Run task tracker with VT Code";
+    const prompt = buildTaskTrackerPrompt(resolvedDefinition);
     const args = [...getConfigArguments(), "exec", prompt];
 
     const execution = new vscode.ProcessExecution(
@@ -2228,7 +2229,7 @@ function createUpdatePlanTask(
         execution
     );
     task.detail =
-        "Runs `vtcode exec` to synchronize the workspace TODO plan via the update_plan tool.";
+        "Runs `vtcode exec` to synchronize the workspace TODO plan via the task_tracker tool.";
     task.presentationOptions = {
         reveal: vscode.TaskRevealKind.Always,
         echo: true,
@@ -2239,17 +2240,17 @@ function createUpdatePlanTask(
     return task;
 }
 
-function buildUpdatePlanPrompt(definition: VtcodeTaskDefinition): string {
+function buildTaskTrackerPrompt(definition: VtcodeTaskDefinition): string {
     const summary =
         definition.summary?.trim() ??
-        "Refresh the current TODO plan using the VT Code update_plan tool.";
+        "Refresh the current TODO plan using the VT Code task_tracker tool.";
     const steps = (definition.steps ?? [])
         .map((step) => step.trim())
         .filter((step) => step.length > 0);
 
     const lines = [
         summary,
-        "Use the update_plan tool to synchronize tasks and mark step status accurately.",
+        "Use the task_tracker tool to synchronize tasks and mark step status accurately.",
     ];
 
     if (steps.length > 0) {
@@ -2266,14 +2267,14 @@ function registerVtcodeAiIntegrations(context: vscode.ExtensionContext): void {
     context.subscriptions.push(mcpDefinitionsChanged);
 
     if ("lm" in vscode && typeof vscode.lm?.registerTool === "function") {
-        const toolDisposable = vscode.lm.registerTool<UpdatePlanToolInput>(
-            VT_CODE_UPDATE_PLAN_TOOL,
+        const toolDisposable = vscode.lm.registerTool<TaskTrackerToolInput>(
+            VT_CODE_TASK_TRACKER_TOOL,
             {
                 prepareInvocation: async (options) => {
                     const summary = options.input.summary?.trim();
                     const invocationMessage = summary
-                        ? `Updating VT Code plan: ${summary}`
-                        : "Updating VT Code plan with vtcode exec.";
+                        ? `Running VT Code task tracker: ${summary}`
+                        : "Running VT Code task tracker with vtcode exec.";
                     return { invocationMessage };
                 },
                 invoke: async (options, token) => {
@@ -2285,7 +2286,7 @@ function registerVtcodeAiIntegrations(context: vscode.ExtensionContext): void {
 
                     if (!workspaceTrusted) {
                         throw new Error(
-                            "Trust this workspace to allow VT Code to update the TODO plan."
+                            "Trust this workspace to allow VT Code task tracker updates."
                         );
                     }
 
@@ -2310,16 +2311,16 @@ function registerVtcodeAiIntegrations(context: vscode.ExtensionContext): void {
 
                     const definition: VtcodeTaskDefinition = {
                         type: "vtcode",
-                        command: "update-plan",
+                        command: TASK_TRACKER_TASK_COMMAND,
                         summary,
                         steps,
                     };
-                    const prompt = buildUpdatePlanPrompt(definition);
+                    const prompt = buildTaskTrackerPrompt(definition);
                     const outputChunks: string[] = [];
 
                     try {
                         await runVtcodeCommand(["exec", prompt], {
-                            title: "Updating VT Code plan…",
+                            title: "Running VT Code task tracker…",
                             revealOutput: false,
                             showProgress: false,
                             cancellationToken: token,
@@ -2339,7 +2340,7 @@ function registerVtcodeAiIntegrations(context: vscode.ExtensionContext): void {
                     const content =
                         normalized.length > 0
                             ? `\`\`\`\n${normalized}\n\`\`\``
-                            : "VT Code completed the update_plan request but did not emit any output.";
+                            : "VT Code completed the task_tracker request but did not emit any output.";
 
                     return {
                         content: [new vscode.LanguageModelTextPart(content)],

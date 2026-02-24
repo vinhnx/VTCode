@@ -98,7 +98,7 @@ fn audit_tool_system_completeness() {
         "read_pty_session",
         "resize_pty_session",
         "web_fetch",
-        "update_plan",
+        "task_tracker",
     ]);
 
     // Tools exposed via ACP (Zed integration)
@@ -218,7 +218,7 @@ fn audit_tool_categories() {
             ],
         ),
         ("Code Execution", vec!["execute_code"]),
-        ("Planning & Meta", vec!["update_plan", "search_tools"]),
+        ("Planning & Meta", vec!["task_tracker", "search_tools"]),
         ("Diagnostic & Introspection", vec!["agent_info"]),
         ("Network", vec!["web_fetch"]),
     ]);
@@ -261,7 +261,7 @@ fn audit_tool_policy_distribution() {
                 "list_pty_sessions",
                 "resize_pty_session",
                 "close_pty_session",
-                "update_plan",
+                "task_tracker",
                 "search_tools",
             ],
         ),

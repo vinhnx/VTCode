@@ -185,17 +185,17 @@ fn default_plan_mode_interview_args() -> serde_json::Value {
             {
                 "id": "goal",
                 "header": "Goal",
-                "question": "What outcome should this change deliver?"
+                "question": "What user-visible outcome should this change deliver, and what constraints or non-goals must be respected?"
             },
             {
                 "id": "constraints",
-                "header": "Constraints",
-                "question": "Any constraints, preferences, or non-goals I should follow?"
+                "header": "Plan",
+                "question": "Break the work into 3-7 composable steps. For each step include target file(s) and a concrete expected outcome."
             },
             {
                 "id": "verification",
                 "header": "Verification",
-                "question": "How should we verify the result (tests or manual checks)?"
+                "question": "For each step, what exact command or manual check proves it is complete?"
             }
         ]
     })

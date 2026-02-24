@@ -138,7 +138,7 @@ fn test_no_tools_in_constants_without_declarations() {
         "send_pty_input",
         "close_pty_session",
         "execute_code",
-        "update_plan",
+        "task_tracker",
         "search_tools",
         "web_fetch",
     ];
@@ -164,7 +164,7 @@ fn test_no_tools_in_constants_without_declarations() {
             "read_pty_session",
             "resize_pty_session",
             "web_fetch",
-            "update_plan",
+            "task_tracker",
         ]
         .iter()
         .copied(),
@@ -211,7 +211,7 @@ fn test_acp_tool_subset_is_documented() {
             "send_pty_input",
             "close_pty_session",
             "execute_code",
-            "update_plan",
+            "task_tracker",
             "search_tools",
             "debug_agent",
             "analyze_agent",
@@ -278,5 +278,20 @@ fn test_tool_policy_consistency() {
         expected_policies.len(),
         18,
         "Policy mapping completeness check"
+    );
+}
+
+#[tokio::test]
+async fn test_deprecated_update_plan_tool_not_registered() {
+    let tmp = tempfile::TempDir::new().expect("create temp dir");
+    let registry = vtcode_core::tools::registry::ToolRegistry::new(tmp.path().to_path_buf()).await;
+
+    assert!(
+        registry.get_tool("task_tracker").is_some(),
+        "task_tracker should be registered"
+    );
+    assert!(
+        registry.get_tool("update_plan").is_none(),
+        "deprecated update_plan alias should not be registered"
     );
 }

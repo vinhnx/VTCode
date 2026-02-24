@@ -62,8 +62,8 @@
   - [x] Steering patterns ("IMPORTANT" markers)
   - [x] Good/bad behavior examples
 - [x] Added TODO List usage rules:
-  - [x] When to use `update_plan`
-  - [x] When to skip `update_plan`
+  - [x] When to use `task_tracker`
+  - [x] When to skip `task_tracker`
   - [x] Examples of appropriate/inappropriate usage
 
 ### 4. Documentation  

@@ -46,7 +46,7 @@ VT Code's system prompt is **production-grade**, following OpenAI Codex and pi-c
 1. **Personality & Responsiveness** - Tone, preambles, progress updates
 2. **Task Execution & Ambition** - Autonomy, judgment, scope management
 3. **Validation & Testing** - Test strategy, formatting, linting
-4. **Planning (update_plan)** - When and how to plan complex work
+4. **Planning (task_tracker)** - When and how to plan complex work
 5. **Tool Guidelines** - Unified tool patterns and best practices
 6. **AGENTS.md Precedence** - Configuration hierarchy
 7. **Subagents** - Delegation pattern
@@ -176,7 +176,7 @@ VT Code - efficient coding agent.
 
 **Assessment**: Pragmatic, avoiding test-bloat while maintaining quality. The rule "don't add tests if patterns don't exist" prevents over-engineering.
 
-### D. Planning (update_plan)
+### D. Planning (task_tracker)
 
 **When to Use**:
 - Multi-step work (4+ steps)

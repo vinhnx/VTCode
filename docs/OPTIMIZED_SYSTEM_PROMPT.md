@@ -138,7 +138,7 @@ Processing data?
 
 Task tracking?
  Simple task (<5 steps)? → Keep in context, no TODO needed
- Complex task (5+ steps + dependencies)? → update_plan (TODO list)
+ Complex task (5+ steps + dependencies)? → task_tracker (TODO list)
  Long task (100+ tokens)? → Create .progress.md with state
 
 ```
@@ -392,7 +392,7 @@ Next: Write validation tests in tests/models_test.rs
 | Run command          | Bash            | One-off tasks      | Medium     |
 | Interactive tool     | PTY session     | Debugger/REPL      | High       |
 | Process data         | execute_code    | Filter 100+ items  | Medium     |
-| Track progress       | update_plan     | Complex multi-step | Low        |
+| Track progress       | task_tracker     | Complex multi-step | Low        |
 
 ---
 

@@ -101,6 +101,7 @@ async fn test_incremental_prompt_rebuild() {
         .await;
 
     assert!(prompt.contains("Retry #1"));
+    assert!(prompt.contains("task_tracker"));
 }
 
 #[tokio::test]
