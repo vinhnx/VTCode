@@ -6,8 +6,6 @@ use crate::config::types::UiSurfacePreference;
 
 pub mod alternate_screen;
 pub mod log;
-pub mod modern_integration;
-pub mod modern_tui;
 pub mod oauth_status;
 pub mod panic_hook;
 mod runner;

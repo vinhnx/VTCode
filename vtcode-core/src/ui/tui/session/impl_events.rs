@@ -76,7 +76,12 @@ impl Session {
                 self.apply_view_rows(rows);
                 self.mark_dirty();
             }
-            _ => {}
+            CrosstermEvent::FocusGained => {
+                crate::notifications::set_global_terminal_focused(true);
+            }
+            CrosstermEvent::FocusLost => {
+                crate::notifications::set_global_terminal_focused(false);
+            }
         }
     }
 

@@ -5,7 +5,6 @@
 
 pub mod diff_renderer;
 pub mod file_colorizer;
-pub mod full_tui;
 pub mod git_config;
 pub mod markdown;
 pub mod search;
