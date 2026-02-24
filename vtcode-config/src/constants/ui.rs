@@ -43,7 +43,7 @@ pub const INLINE_USER_MESSAGE_DIVIDER_SYMBOL: &str = "─";
 /// Scroll percentage format in status bar
 pub const SCROLL_INDICATOR_FORMAT: &str = "↕";
 /// Show scroll percentage in status bar
-pub const SCROLL_INDICATOR_ENABLED: bool = true;
+pub const SCROLL_INDICATOR_ENABLED: bool = false;
 
 pub const INLINE_BLOCK_TOP_LEFT: &str = "╭";
 pub const INLINE_BLOCK_TOP_RIGHT: &str = "╮";
