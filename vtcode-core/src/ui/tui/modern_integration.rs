@@ -7,9 +7,14 @@ use crate::ui::tui::session::Session;
 use crate::ui::tui::types::{InlineCommand, InlineEvent, InlineEventCallback, InlineTheme};
 use anyhow::Result;
 use ratatui::crossterm::event::{MouseButton, MouseEventKind};
+use ratatui::crossterm::execute;
+use ratatui::crossterm::terminal::SetTitle;
 use tokio::sync::mpsc;
 
 use super::modern_tui::{Event, ModernTui};
+
+/// Terminal title displayed when VT Code TUI is active
+const TERMINAL_TITLE: &str = "> VT Code";
 
 pub struct ModernTuiConfig {
     pub theme: InlineTheme,
@@ -50,6 +55,10 @@ pub async fn run_modern_tui(
 
     // Enter the TUI
     tui.enter().await?;
+
+    // Set custom terminal title
+    execute!(std::io::stderr(), SetTitle(TERMINAL_TITLE))
+        .unwrap_or_else(|_| tracing::debug!("failed to set terminal title"));
 
     // Main event loop
     'main: loop {
@@ -198,6 +207,9 @@ pub async fn run_modern_tui(
 
     // Exit the TUI
     tui.exit().await?;
+
+    // Clear terminal title on exit
+    let _ = execute!(std::io::stderr(), SetTitle(""));
 
     clear_tui_log_sender();
 

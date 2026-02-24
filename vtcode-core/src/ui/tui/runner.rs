@@ -12,7 +12,7 @@ use ratatui::crossterm::{
     },
     execute,
     terminal::{
-        self, EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
+        self, EnterAlternateScreen, LeaveAlternateScreen, SetTitle, disable_raw_mode, enable_raw_mode,
     },
 };
 use ratatui::{
@@ -34,6 +34,9 @@ use super::{
     session::Session,
     types::{InlineCommand, InlineEvent, InlineEventCallback, InlineTheme},
 };
+
+/// Terminal title displayed when VT Code TUI is active
+const TERMINAL_TITLE: &str = "> VT Code";
 
 /// Represents accumulated scroll events for coalescing
 #[derive(Default)]
@@ -339,6 +342,10 @@ pub async fn run_tui(
         execute!(stderr, EnterAlternateScreen).context(ALTERNATE_SCREEN_ERROR)?;
     }
 
+    // Set custom terminal title
+    execute!(stderr, SetTitle(TERMINAL_TITLE))
+        .unwrap_or_else(|_| tracing::debug!("failed to set terminal title"));
+
     let backend = CrosstermBackend::new(stderr);
     let mut terminal = Terminal::new(backend).context("failed to initialize inline terminal")?;
     prepare_terminal(&mut terminal)?;
@@ -407,6 +414,9 @@ pub async fn run_tui(
 
     restore_modes_result?;
     raw_mode_result.context(RAW_MODE_DISABLE_ERROR)?;
+
+    // Clear terminal title on exit
+    let _ = execute!(io::stderr(), SetTitle(""));
 
     drive_result?;
     finalize_result?;
