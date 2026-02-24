@@ -72,10 +72,12 @@ fn supports_streaming_timeout_fallback(provider_name: &str) -> bool {
 
 fn is_stream_timeout_error(message: &str) -> bool {
     let msg = message.to_ascii_lowercase();
-    msg.contains("stream request timed out") || msg.contains("streaming request timed out")
+    msg.contains("stream request timed out")
+        || msg.contains("streaming request timed out")
+        || msg.contains("llm request timed out after")
 }
 
-fn llm_attempt_timeout_secs(turn_timeout_secs: u64, plan_mode: bool) -> u64 {
+fn llm_attempt_timeout_secs(turn_timeout_secs: u64, plan_mode: bool, provider_name: &str) -> u64 {
     let baseline = (turn_timeout_secs / 5).clamp(30, 120);
     if !plan_mode {
         return baseline;
@@ -83,7 +85,12 @@ fn llm_attempt_timeout_secs(turn_timeout_secs: u64, plan_mode: bool) -> u64 {
 
     // Plan Mode requests usually include heavier context and can need
     // extra first-token latency budget before retries are useful.
-    let plan_mode_budget = (turn_timeout_secs / 2).clamp(60, 120);
+    let plan_mode_floor = if supports_streaming_timeout_fallback(provider_name) {
+        90
+    } else {
+        60
+    };
+    let plan_mode_budget = (turn_timeout_secs / 2).clamp(plan_mode_floor, 120);
     baseline.max(plan_mode_budget)
 }
 
@@ -103,7 +110,8 @@ pub(crate) async fn execute_llm_request(
         .as_ref()
         .map(|cfg| cfg.optimization.agent_execution.max_execution_time_secs)
         .unwrap_or(300);
-    let request_timeout_secs = llm_attempt_timeout_secs(turn_timeout_secs, plan_mode);
+    let request_timeout_secs =
+        llm_attempt_timeout_secs(turn_timeout_secs, plan_mode, &provider_name);
 
     let active_agent_name = ctx.session_stats.active_agent();
     let active_agent_prompt_body = vtcode_core::subagents::get_agent_prompt_body(active_agent_name);
@@ -555,29 +563,34 @@ mod tests {
         assert!(is_stream_timeout_error(
             "Streaming request timed out after configured timeout"
         ));
-        assert!(!is_stream_timeout_error(
+        assert!(is_stream_timeout_error(
             "LLM request timed out after 120 seconds"
         ));
     }
 
     #[test]
     fn llm_attempt_timeout_defaults_to_fifth_of_turn_budget() {
-        assert_eq!(llm_attempt_timeout_secs(300, false), 60);
+        assert_eq!(llm_attempt_timeout_secs(300, false, "openai"), 60);
     }
 
     #[test]
     fn llm_attempt_timeout_expands_for_plan_mode() {
-        assert_eq!(llm_attempt_timeout_secs(300, true), 120);
+        assert_eq!(llm_attempt_timeout_secs(300, true, "openai"), 120);
     }
 
     #[test]
     fn llm_attempt_timeout_plan_mode_respects_smaller_turn_budget() {
-        assert_eq!(llm_attempt_timeout_secs(180, true), 90);
+        assert_eq!(llm_attempt_timeout_secs(180, true, "openai"), 90);
+    }
+
+    #[test]
+    fn llm_attempt_timeout_plan_mode_huggingface_uses_higher_floor() {
+        assert_eq!(llm_attempt_timeout_secs(150, true, "huggingface"), 90);
     }
 
     #[test]
     fn llm_attempt_timeout_respects_plan_mode_cap() {
-        assert_eq!(llm_attempt_timeout_secs(1_200, true), 120);
+        assert_eq!(llm_attempt_timeout_secs(1_200, true, "huggingface"), 120);
     }
 
     #[test]

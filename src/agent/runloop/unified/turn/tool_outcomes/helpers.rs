@@ -120,6 +120,53 @@ pub(crate) fn resolve_max_tool_retries(
         .unwrap_or(vtcode_config::constants::defaults::DEFAULT_MAX_TOOL_RETRIES as usize)
 }
 
+fn path_targets_plan_artifact(path: &str) -> bool {
+    let normalized = path.trim().replace('\\', "/");
+    normalized == ".vtcode/plans"
+        || normalized.starts_with(".vtcode/plans/")
+        || normalized.contains("/.vtcode/plans/")
+}
+
+fn is_plan_artifact_write(name: &str, args: &serde_json::Value) -> bool {
+    use vtcode_core::config::constants::tools as tool_names;
+    use vtcode_core::tools::names::canonical_tool_name;
+    use vtcode_core::tools::tool_intent::unified_file_action;
+
+    let canonical = canonical_tool_name(name);
+    match canonical.as_ref() {
+        tool_names::PLAN_TASK_TRACKER => true,
+        tool_names::UNIFIED_FILE => {
+            if !unified_file_action(args)
+                .map(|action| action.eq_ignore_ascii_case("read"))
+                .unwrap_or(false)
+            {
+                [
+                    "path",
+                    "file_path",
+                    "filepath",
+                    "filePath",
+                    "target_path",
+                    "destination",
+                    "destination_path",
+                ]
+                .iter()
+                .filter_map(|key| args.get(*key).and_then(|value| value.as_str()))
+                .any(path_targets_plan_artifact)
+            } else {
+                false
+            }
+        }
+        tool_names::WRITE_FILE
+        | tool_names::EDIT_FILE
+        | tool_names::CREATE_FILE
+        | tool_names::SEARCH_REPLACE => ["path", "file_path", "filepath", "filePath"]
+            .iter()
+            .filter_map(|key| args.get(*key).and_then(|value| value.as_str()))
+            .any(path_targets_plan_artifact),
+        _ => false,
+    }
+}
+
 /// Updates the tool repetition tracker based on the execution outcome.
 ///
 /// Count every completed attempt except user-triggered cancellations so the turn
@@ -157,6 +204,10 @@ pub(crate) fn update_repetition_tracker(
     if is_execution_tool {
         // Execution/verification step resets both counters
         loop_tracker.consecutive_mutations = 0;
+        loop_tracker.consecutive_navigations = 0;
+    } else if is_plan_artifact_write(name, args) {
+        // Plan artifact writes in .vtcode/plans are allowed in Plan Mode and
+        // should not trigger anti-blind-editing verification pressure.
         loop_tracker.consecutive_navigations = 0;
     } else {
         let intent = vtcode_core::tools::tool_intent::classify_tool_intent(name, args);
@@ -349,5 +400,68 @@ mod tests {
         );
         assert_eq!(tracker.consecutive_navigations, 0);
         assert_eq!(tracker.consecutive_mutations, 1);
+    }
+
+    #[test]
+    fn plan_task_tracker_does_not_increment_mutations() {
+        let mut tracker = LoopTracker::new();
+        let success = ToolPipelineOutcome::from_status(ToolExecutionStatus::Success {
+            output: serde_json::json!({}),
+            stdout: None,
+            modified_files: vec![],
+            command_success: true,
+            has_more: false,
+        });
+
+        update_repetition_tracker(
+            &mut tracker,
+            &success,
+            vtcode_core::config::constants::tools::PLAN_TASK_TRACKER,
+            &json!({"action":"create","items":["step"]}),
+        );
+        assert_eq!(tracker.consecutive_mutations, 0);
+        assert_eq!(tracker.consecutive_navigations, 0);
+    }
+
+    #[test]
+    fn plan_file_write_does_not_increment_mutations() {
+        let mut tracker = LoopTracker::new();
+        let success = ToolPipelineOutcome::from_status(ToolExecutionStatus::Success {
+            output: serde_json::json!({}),
+            stdout: None,
+            modified_files: vec![],
+            command_success: true,
+            has_more: false,
+        });
+
+        update_repetition_tracker(
+            &mut tracker,
+            &success,
+            vtcode_core::config::constants::tools::UNIFIED_FILE,
+            &json!({"action":"write","path":".vtcode/plans/my-plan.md","content":"text"}),
+        );
+        assert_eq!(tracker.consecutive_mutations, 0);
+        assert_eq!(tracker.consecutive_navigations, 0);
+    }
+
+    #[test]
+    fn non_plan_file_write_still_increments_mutations() {
+        let mut tracker = LoopTracker::new();
+        let success = ToolPipelineOutcome::from_status(ToolExecutionStatus::Success {
+            output: serde_json::json!({}),
+            stdout: None,
+            modified_files: vec![],
+            command_success: true,
+            has_more: false,
+        });
+
+        update_repetition_tracker(
+            &mut tracker,
+            &success,
+            vtcode_core::config::constants::tools::UNIFIED_FILE,
+            &json!({"action":"write","path":"src/lib.rs","content":"text"}),
+        );
+        assert_eq!(tracker.consecutive_mutations, 1);
+        assert_eq!(tracker.consecutive_navigations, 0);
     }
 }
