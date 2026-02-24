@@ -3,16 +3,163 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
+use anstyle::{AnsiColor, Color as AnsiColorEnum, Effects, Style as AnsiStyle};
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use vtcode_core::tools::registry::ToolProgressCallback;
-use vtcode_core::ui::tui::{InlineHandle, InlineMessageKind, InlineSegment, InlineTextStyle};
+use vtcode_core::ui::theme;
+use vtcode_core::ui::tui::{InlineHandle, InlineMessageKind, InlineSegment, InlineTextStyle, convert_style};
 
 use crate::agent::runloop::unified::progress::ProgressReporter;
 
+const LIVE_PREVIEW_HEAD_LINES: usize = 3;
+const LIVE_PREVIEW_TAIL_LINES: usize = 3;
+
+struct PtyLineStyles {
+    output: Arc<InlineTextStyle>,
+    glyph: Arc<InlineTextStyle>,
+    verb: Arc<InlineTextStyle>,
+    command: Arc<InlineTextStyle>,
+    args: Arc<InlineTextStyle>,
+    truncation: Arc<InlineTextStyle>,
+}
+
+impl PtyLineStyles {
+    fn new() -> Self {
+        let theme_styles = theme::active_styles();
+        let output = Arc::new(InlineTextStyle::default());
+        let glyph = Arc::new(convert_style(theme_styles.tool_detail.dimmed()));
+        let verb = Arc::new(convert_style(
+            AnsiStyle::new()
+                .fg_color(Some(AnsiColorEnum::Ansi(AnsiColor::Magenta)))
+                .effects(Effects::BOLD),
+        ));
+        let command = Arc::new(convert_style(theme_styles.primary));
+        let args = Arc::new(convert_style(theme_styles.tool_detail));
+        let truncation = Arc::new(convert_style(theme_styles.tool_detail.dimmed()));
+
+        Self {
+            output,
+            glyph,
+            verb,
+            command,
+            args,
+            truncation,
+        }
+    }
+}
+
+fn split_command_and_args(text: &str) -> (&str, &str) {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return ("", "");
+    }
+    for (idx, ch) in trimmed.char_indices() {
+        if ch.is_whitespace() {
+            let command = &trimmed[..idx];
+            let args = trimmed[idx..].trim_start();
+            return (command, args);
+        }
+    }
+    (trimmed, "")
+}
+
+fn line_to_segments(line: &str, styles: &PtyLineStyles) -> Vec<InlineSegment> {
+    if let Some(command_text) = line.strip_prefix("• Ran ") {
+        let (command, args) = split_command_and_args(command_text);
+        let mut segments = vec![
+            InlineSegment {
+                text: "• ".to_string(),
+                style: Arc::clone(&styles.glyph),
+            },
+            InlineSegment {
+                text: "Ran".to_string(),
+                style: Arc::clone(&styles.verb),
+            },
+            InlineSegment {
+                text: " ".to_string(),
+                style: Arc::clone(&styles.output),
+            },
+        ];
+        if !command.is_empty() {
+            segments.push(InlineSegment {
+                text: command.to_string(),
+                style: Arc::clone(&styles.command),
+            });
+        }
+        if !args.is_empty() {
+            segments.push(InlineSegment {
+                text: format!(" {}", args),
+                style: Arc::clone(&styles.args),
+            });
+        }
+        return segments;
+    }
+
+    if let Some(text) = line.strip_prefix("  │ ") {
+        return vec![
+            InlineSegment {
+                text: "  ".to_string(),
+                style: Arc::clone(&styles.output),
+            },
+            InlineSegment {
+                text: "│".to_string(),
+                style: Arc::clone(&styles.glyph),
+            },
+            InlineSegment {
+                text: format!(" {}", text),
+                style: Arc::clone(&styles.args),
+            },
+        ];
+    }
+
+    if let Some(text) = line.strip_prefix("  └ ") {
+        return vec![
+            InlineSegment {
+                text: "  ".to_string(),
+                style: Arc::clone(&styles.output),
+            },
+            InlineSegment {
+                text: "└".to_string(),
+                style: Arc::clone(&styles.glyph),
+            },
+            InlineSegment {
+                text: format!(" {}", text),
+                style: Arc::clone(&styles.output),
+            },
+        ];
+    }
+
+    if line.trim_start().starts_with('…') {
+        return vec![InlineSegment {
+            text: line.to_string(),
+            style: Arc::clone(&styles.truncation),
+        }];
+    }
+
+    if let Some(text) = line.strip_prefix("    ") {
+        return vec![
+            InlineSegment {
+                text: "    ".to_string(),
+                style: Arc::clone(&styles.output),
+            },
+            InlineSegment {
+                text: text.to_string(),
+                style: Arc::clone(&styles.output),
+            },
+        ];
+    }
+
+    vec![InlineSegment {
+        text: line.to_string(),
+        style: Arc::clone(&styles.output),
+    }]
+}
+
 pub(super) struct PtyStreamState {
-    command_prompt: Option<String>,
-    lines: VecDeque<String>,
+    command_header: Vec<String>,
+    head_lines: Vec<String>,
+    tail_lines: VecDeque<String>,
     current_line: String,
     displayed_count: usize,
     total_lines: usize,
@@ -22,9 +169,11 @@ pub(super) struct PtyStreamState {
 impl PtyStreamState {
     pub(super) fn new(command_prompt: Option<String>) -> Self {
         Self {
-            command_prompt: normalize_command_prompt(command_prompt)
-                .map(|command| format_command_prompt(&command)),
-            lines: VecDeque::new(),
+            command_header: normalize_command_prompt(command_prompt)
+                .map(|command| format_command_header_lines(&command))
+                .unwrap_or_default(),
+            head_lines: Vec::new(),
+            tail_lines: VecDeque::new(),
             current_line: String::new(),
             displayed_count: 0,
             total_lines: 0,
@@ -34,7 +183,8 @@ impl PtyStreamState {
 
     pub(super) fn apply_chunk(&mut self, chunk: &str, limit: usize) {
         if limit == 0 {
-            self.lines.clear();
+            self.head_lines.clear();
+            self.tail_lines.clear();
             self.current_line.clear();
             self.displayed_count = 0;
             self.total_lines = 0;
@@ -48,18 +198,18 @@ impl PtyStreamState {
                 '\r' => {
                     if matches!(chars.peek(), Some('\n')) {
                         let _ = chars.next();
-                        self.push_line(limit);
+                        self.push_line();
                     } else {
                         self.current_line.clear();
                     }
                 }
-                '\n' => self.push_line(limit),
+                '\n' => self.push_line(),
                 _ => self.current_line.push(ch),
             }
         }
     }
 
-    fn push_line(&mut self, limit: usize) {
+    fn push_line(&mut self) {
         let trimmed = self.current_line.trim_end();
         if trimmed.trim().is_empty() {
             self.current_line.clear();
@@ -77,19 +227,20 @@ impl PtyStreamState {
 
         let line = trimmed.to_string();
         self.last_pushed_line = Some(line.clone());
-        self.lines.push_back(line);
+        if self.head_lines.len() < LIVE_PREVIEW_HEAD_LINES {
+            self.head_lines.push(line);
+        } else {
+            self.tail_lines.push_back(line);
+            while self.tail_lines.len() > LIVE_PREVIEW_TAIL_LINES {
+                let _ = self.tail_lines.pop_front();
+            }
+        }
         self.total_lines += 1;
         self.current_line.clear();
-        while self.lines.len() > limit {
-            let _ = self.lines.pop_front();
-        }
     }
 
     fn render_lines(&self, limit: usize) -> Vec<String> {
-        let mut rendered = Vec::new();
-        if let Some(prompt) = self.command_prompt.as_ref() {
-            rendered.push(prompt.clone());
-        }
+        let mut rendered = self.command_header.clone();
         if limit == 0 {
             return rendered;
         }
@@ -100,31 +251,46 @@ impl PtyStreamState {
             return rendered;
         }
 
-        let mut truncated = false;
-        let mut tail_limit = limit;
-        let mut hidden_lines = 0usize;
-        if total > limit {
-            truncated = true;
-            tail_limit = tail_limit.saturating_sub(1);
-            hidden_lines = total.saturating_sub(tail_limit);
+        let mut first_output_line = true;
+
+        if total <= LIVE_PREVIEW_HEAD_LINES + LIVE_PREVIEW_TAIL_LINES {
+            for line in &self.head_lines {
+                rendered.push(prefix_stream_line(line, first_output_line));
+                first_output_line = false;
+            }
+            for line in &self.tail_lines {
+                rendered.push(prefix_stream_line(line, first_output_line));
+                first_output_line = false;
+            }
+            if has_current {
+                rendered.push(prefix_stream_line(
+                    self.current_line.trim_end(),
+                    first_output_line,
+                ));
+            }
+            return rendered;
         }
 
-        let start = total.saturating_sub(tail_limit);
-        let base_index = self.total_lines.saturating_sub(self.lines.len());
-        if truncated {
+        for line in &self.head_lines {
+            rendered.push(prefix_stream_line(line, first_output_line));
+            first_output_line = false;
+        }
+
+        let hidden_lines = total.saturating_sub(LIVE_PREVIEW_HEAD_LINES + LIVE_PREVIEW_TAIL_LINES);
+        if hidden_lines > 0 {
             rendered.push(format_hidden_lines_summary(hidden_lines));
         }
 
-        for (idx, line) in self.lines.iter().enumerate() {
-            let absolute = base_index + idx;
-            if absolute >= start {
-                rendered.push(line.clone());
+        let mut tail_preview: Vec<String> = self.tail_lines.iter().cloned().collect();
+        if has_current {
+            tail_preview.push(self.current_line.trim_end().to_string());
+            if tail_preview.len() > LIVE_PREVIEW_TAIL_LINES {
+                let drop = tail_preview.len() - LIVE_PREVIEW_TAIL_LINES;
+                tail_preview.drain(..drop);
             }
         }
-
-        let current_index = base_index + self.lines.len();
-        if has_current && current_index >= start {
-            rendered.push(self.current_line.trim_end().to_string());
+        for line in tail_preview {
+            rendered.push(prefix_stream_line(&line, false));
         }
 
         rendered
@@ -134,7 +300,10 @@ impl PtyStreamState {
         if !self.current_line.trim().is_empty() {
             return Some(self.current_line.trim_end().to_string());
         }
-        self.lines.back().cloned()
+        self.tail_lines
+            .back()
+            .cloned()
+            .or_else(|| self.head_lines.last().cloned())
     }
 
     pub(super) fn render_segments(
@@ -144,15 +313,10 @@ impl PtyStreamState {
     ) -> (usize, Vec<Vec<InlineSegment>>, Option<String>) {
         self.apply_chunk(chunk, tail_limit);
         let rendered = self.render_lines(tail_limit);
-        let style = Arc::new(InlineTextStyle::default());
+        let styles = PtyLineStyles::new();
         let segments = rendered
             .into_iter()
-            .map(|line| {
-                vec![InlineSegment {
-                    text: line,
-                    style: Arc::clone(&style),
-                }]
-            })
+            .map(|line| line_to_segments(&line, &styles))
             .collect::<Vec<_>>();
         let replace_count = self.displayed_count;
         self.displayed_count = segments.len();
@@ -163,9 +327,9 @@ impl PtyStreamState {
 
 fn format_hidden_lines_summary(hidden: usize) -> String {
     if hidden == 1 {
-        "… +1 line".to_string()
+        "    … +1 line".to_string()
     } else {
-        format!("… +{} lines", hidden)
+        format!("    … +{} lines", hidden)
     }
 }
 
@@ -180,13 +344,88 @@ fn normalize_command_prompt(command_prompt: Option<String>) -> Option<String> {
     })
 }
 
-fn format_command_prompt(command: &str) -> String {
-    let trimmed = command.trim_start();
-    if trimmed.starts_with('$') {
-        trimmed.to_string()
-    } else {
-        format!("$ {}", command)
+fn format_command_header_lines(command: &str) -> Vec<String> {
+    const FIRST_LINE_WIDTH: usize = 62;
+    const CONTINUATION_WIDTH: usize = 58;
+
+    let wrapped = wrap_text_words(command, FIRST_LINE_WIDTH, CONTINUATION_WIDTH);
+    if wrapped.is_empty() {
+        return vec!["• Ran command".to_string()];
     }
+
+    let mut lines = Vec::with_capacity(wrapped.len());
+    lines.push(format!("• Ran {}", wrapped[0]));
+    for segment in wrapped.iter().skip(1) {
+        lines.push(format!("  │ {}", segment));
+    }
+    lines
+}
+
+fn prefix_stream_line(line: &str, is_first_output_line: bool) -> String {
+    if is_first_output_line {
+        format!("  └ {}", line)
+    } else {
+        format!("    {}", line)
+    }
+}
+
+fn wrap_text_words(text: &str, first_width: usize, continuation_width: usize) -> Vec<String> {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return Vec::new();
+    }
+
+    let mut result = Vec::new();
+    let mut remaining = trimmed;
+    let mut width = first_width.max(1);
+
+    while char_count(remaining) > width {
+        let split = split_at_word_boundary(remaining, width);
+        let (head, tail) = remaining.split_at(split);
+        let head = head.trim();
+        if head.is_empty() {
+            break;
+        }
+        result.push(head.to_string());
+        remaining = tail.trim_start();
+        if remaining.is_empty() {
+            break;
+        }
+        width = continuation_width.max(1);
+    }
+
+    if !remaining.is_empty() {
+        result.push(remaining.to_string());
+    }
+    result
+}
+
+fn split_at_word_boundary(input: &str, width: usize) -> usize {
+    let capped = byte_index_for_char_count(input, width);
+    let candidate = &input[..capped];
+    if let Some(boundary) = candidate.rfind(char::is_whitespace) {
+        boundary
+    } else {
+        capped
+    }
+}
+
+fn byte_index_for_char_count(input: &str, chars: usize) -> usize {
+    if chars == 0 {
+        return 0;
+    }
+    let mut seen = 0usize;
+    for (idx, ch) in input.char_indices() {
+        seen += 1;
+        if seen == chars {
+            return idx + ch.len_utf8();
+        }
+    }
+    input.len()
+}
+
+fn char_count(input: &str) -> usize {
+    input.chars().count()
 }
 
 pub(super) struct PtyStreamRuntime {
@@ -278,7 +517,10 @@ mod tests {
         let mut state = PtyStreamState::new(None);
         state.apply_chunk("line1\nline2", 5);
         let rendered = state.render_lines(5);
-        assert_eq!(rendered, vec!["line1".to_string(), "line2".to_string()]);
+        assert_eq!(
+            rendered,
+            vec!["  └ line1".to_string(), "    line2".to_string()]
+        );
         assert_eq!(
             state.last_display_line(),
             Some("line2".to_string()),
@@ -291,7 +533,7 @@ mod tests {
         let mut state = PtyStreamState::new(None);
         state.apply_chunk("start\rreplace\n", 5);
         let rendered = state.render_lines(5);
-        assert_eq!(rendered, vec!["replace".to_string()]);
+        assert_eq!(rendered, vec!["  └ replace".to_string()]);
         assert_eq!(
             state.last_display_line(),
             Some("replace".to_string()),
@@ -302,20 +544,28 @@ mod tests {
     #[test]
     fn pty_stream_state_applies_tail_truncation() {
         let mut state = PtyStreamState::new(None);
-        state.apply_chunk("a\nb\nc\nd\n", 3);
-        let rendered = state.render_lines(3);
+        state.apply_chunk("a\nb\nc\nd\ne\nf\ng\n", 5);
+        let rendered = state.render_lines(5);
         assert_eq!(
             rendered,
-            vec!["… +2 lines".to_string(), "c".to_string(), "d".to_string()]
+            vec![
+                "  └ a".to_string(),
+                "    b".to_string(),
+                "    c".to_string(),
+                "    … +1 line".to_string(),
+                "    e".to_string(),
+                "    f".to_string(),
+                "    g".to_string(),
+            ]
         );
     }
 
     #[test]
     fn pty_stream_state_formats_hidden_line_summary() {
         let mut state = PtyStreamState::new(None);
-        state.apply_chunk("a\nb\nc\n", 2);
-        let rendered = state.render_lines(2);
-        assert_eq!(rendered, vec!["… +2 lines".to_string(), "c".to_string()]);
+        state.apply_chunk("a\nb\nc\nd\ne\nf\ng\nh\n", 5);
+        let rendered = state.render_lines(5);
+        assert!(rendered.contains(&"    … +2 lines".to_string()));
     }
 
     #[test]
@@ -323,27 +573,35 @@ mod tests {
         let mut state = PtyStreamState::new(None);
         state.apply_chunk("same\nsame\nnext\n", 5);
         let rendered = state.render_lines(5);
-        assert_eq!(rendered, vec!["same".to_string(), "next".to_string()]);
+        assert_eq!(
+            rendered,
+            vec!["  └ same".to_string(), "    next".to_string()]
+        );
     }
 
     #[test]
     fn pty_stream_state_renders_command_prompt_without_output() {
         let state = PtyStreamState::new(Some("cargo check".to_string()));
         let rendered = state.render_lines(5);
-        assert_eq!(rendered, vec!["$ cargo check".to_string()]);
+        assert_eq!(rendered, vec!["• Ran cargo check".to_string()]);
     }
 
     #[test]
     fn pty_stream_state_keeps_command_prompt_with_truncated_tail() {
         let mut state = PtyStreamState::new(Some("cargo check".to_string()));
-        state.apply_chunk("a\nb\nc\n", 2);
-        let rendered = state.render_lines(2);
+        state.apply_chunk("a\nb\nc\nd\ne\nf\ng\n", 5);
+        let rendered = state.render_lines(5);
         assert_eq!(
             rendered,
             vec![
-                "$ cargo check".to_string(),
-                "… +2 lines".to_string(),
-                "c".to_string()
+                "• Ran cargo check".to_string(),
+                "  └ a".to_string(),
+                "    b".to_string(),
+                "    c".to_string(),
+                "    … +1 line".to_string(),
+                "    e".to_string(),
+                "    f".to_string(),
+                "    g".to_string(),
             ]
         );
     }
@@ -352,6 +610,16 @@ mod tests {
     fn normalizes_command_prompt_whitespace() {
         let state = PtyStreamState::new(Some("  cargo   check \n -p  vtcode  ".to_string()));
         let rendered = state.render_lines(5);
-        assert_eq!(rendered, vec!["$ cargo check -p vtcode".to_string()]);
+        assert_eq!(rendered, vec!["• Ran cargo check -p vtcode".to_string()]);
+    }
+
+    #[test]
+    fn wraps_long_command_header() {
+        let command = "cargo test -p vtcode run_command_preview_ build_tool_summary_formats_run_command_as_ran";
+        let state = PtyStreamState::new(Some(command.to_string()));
+        let rendered = state.render_lines(5);
+        assert_eq!(rendered.len(), 2);
+        assert!(rendered[0].starts_with("• Ran cargo test -p vtcode run_command_preview_"));
+        assert!(rendered[1].starts_with("  │ build_tool_summary_formats_run_command_as_ran"));
     }
 }

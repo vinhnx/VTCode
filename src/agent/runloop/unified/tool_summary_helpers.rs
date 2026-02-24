@@ -30,6 +30,36 @@ pub(super) fn describe_shell_command(args: &Value) -> Option<(String, HashSet<St
     }
 
     if let Some(cmd) = args
+        .get("command")
+        .and_then(|value| value.as_str())
+        .filter(|s| !s.trim().is_empty())
+    {
+        used.insert("command".to_string());
+        let summary = truncate_middle(cmd.trim(), 70);
+        return Some((summary, used));
+    }
+
+    if let Some(cmd) = args
+        .get("raw_command")
+        .and_then(|value| value.as_str())
+        .filter(|s| !s.is_empty())
+    {
+        used.insert("raw_command".to_string());
+        let summary = truncate_middle(cmd, 70);
+        return Some((summary, used));
+    }
+
+    if let Some(cmd) = args
+        .get("cmd")
+        .and_then(|value| value.as_str())
+        .filter(|s| !s.is_empty())
+    {
+        used.insert("cmd".to_string());
+        let summary = truncate_middle(cmd, 70);
+        return Some((summary, used));
+    }
+
+    if let Some(cmd) = args
         .get("bash_command")
         .and_then(|value| value.as_str())
         .filter(|s| !s.is_empty())
@@ -181,7 +211,7 @@ pub(super) fn collect_param_details(args: &Value, keys: &HashSet<String>) -> Vec
         // Skip command-related keys and edit_file content keys (too verbose)
         if matches!(
             key.as_str(),
-            "command" | "bash_command" | "cmd" | "old_str" | "new_str"
+            "command" | "raw_command" | "bash_command" | "cmd" | "old_str" | "new_str"
         ) {
             continue;
         }
@@ -220,6 +250,7 @@ pub(super) fn collect_param_details(args: &Value, keys: &HashSet<String>) -> Vec
 pub(super) fn should_render_command_line(highlights: &HashSet<String>) -> bool {
     highlights.is_empty()
         || (!highlights.contains("command")
+            && !highlights.contains("raw_command")
             && !highlights.contains("bash_command")
             && !highlights.contains("cmd"))
 }
@@ -241,6 +272,11 @@ pub(super) fn command_line_for_args(args: &Value) -> Option<String> {
         args.get("command")
             .and_then(Value::as_str)
             .map(str::to_string)
+            .or_else(|| {
+                args.get("raw_command")
+                    .and_then(Value::as_str)
+                    .map(str::to_string)
+            })
             .or_else(|| {
                 args.get("bash_command")
                     .and_then(Value::as_str)
@@ -265,7 +301,7 @@ pub(super) fn highlight_texts_for_summary(
         if let Some(value) = lookup_string(args, key) {
             let limit = match key.as_str() {
                 "pattern" | "name_pattern" | "content_pattern" => 40,
-                "command" | "bash_command" => 70,
+                "command" | "raw_command" | "bash_command" => 70,
                 _ => 60,
             };
             values.push(truncate_middle(&value, limit));
@@ -333,5 +369,31 @@ mod tests {
 
         let (description, _used) = result.unwrap();
         assert!(description.contains("…"));
+    }
+
+    #[test]
+    fn test_describe_shell_command_string_format() {
+        let args = json!({
+            "command": "cargo check -p vtcode"
+        });
+
+        let result = describe_shell_command(&args);
+        assert!(result.is_some());
+
+        let (description, _used) = result.unwrap();
+        assert_eq!(description, "cargo check -p vtcode");
+    }
+
+    #[test]
+    fn test_describe_shell_command_raw_command_fallback() {
+        let args = json!({
+            "raw_command": "cargo test -- --nocapture"
+        });
+
+        let result = describe_shell_command(&args);
+        assert!(result.is_some());
+
+        let (description, _used) = result.unwrap();
+        assert_eq!(description, "cargo test -- --nocapture");
     }
 }
