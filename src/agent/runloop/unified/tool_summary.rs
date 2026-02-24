@@ -6,6 +6,7 @@ use serde_json::Value;
 
 use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::tools::registry::labels::tool_action_label;
+use vtcode_core::tools::tool_intent;
 use vtcode_core::ui::theme;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::style_helpers::{ColorPalette, render_styled};
@@ -15,6 +16,9 @@ use crate::agent::runloop::unified::tool_summary_helpers::{
     describe_list_files, describe_path_action, describe_shell_command, highlight_texts_for_summary,
     should_render_command_line, truncate_middle,
 };
+
+const RUN_SUMMARY_FIRST_WIDTH: usize = 62;
+const RUN_SUMMARY_CONTINUATION_WIDTH: usize = 58;
 
 /// Pre-execution indicators for file modification operations
 /// These provide visual feedback before the actual edit/write/patch is applied
@@ -137,13 +141,31 @@ pub(crate) fn render_tool_call_summary(
     stream_label: Option<&str>,
 ) -> Result<()> {
     let (headline, highlights) = describe_tool_action(tool_name, args);
-    let command_line =
-        command_line_for_args(args).filter(|_| should_render_command_line(&highlights));
-    let details = collect_param_details(args, &highlights);
+    let command_line_candidate = command_line_for_args(args);
     let summary_highlights = highlight_texts_for_summary(args, &highlights);
     let palette = ColorPalette::default();
     let action_label = tool_action_label(tool_name, args);
-    let summary = build_tool_summary(&action_label, &headline);
+    let is_run_command = action_label == "Run command (PTY)";
+    let details = if is_run_command {
+        Vec::new()
+    } else {
+        collect_param_details(args, &highlights)
+    };
+    let mut summary = build_tool_summary(&action_label, &headline);
+    if is_run_command {
+        summary = command_line_candidate
+            .as_ref()
+            .map(|command| format!("Run {}", command))
+            .unwrap_or(summary);
+    }
+    if is_run_command && run_summary_is_placeholder(&summary) {
+        summary = "Run command".to_string();
+    }
+    let command_line = if is_run_command {
+        None
+    } else {
+        command_line_candidate.filter(|_| should_render_command_line(&highlights))
+    };
 
     // Get current theme's primary color
     let theme_styles = theme::active_styles();
@@ -155,13 +177,42 @@ pub(crate) fn render_tool_call_summary(
     let mut line = String::new();
     line.push_str(&render_styled("•", palette.muted, Some("dim".to_string())));
     line.push(' ');
-    line.push_str(&render_summary_with_highlights(
-        &summary,
-        &summary_highlights,
-        main_color,
-        palette.accent,
-        palette.muted,
-    ));
+    let mut wrapped_run_segments: Option<Vec<String>> = None;
+    if let Some(command) = summary.strip_prefix("Run ") {
+        let wrapped = wrap_text_words(
+            command,
+            RUN_SUMMARY_FIRST_WIDTH,
+            RUN_SUMMARY_CONTINUATION_WIDTH,
+        );
+        let first_segment = wrapped
+            .first()
+            .cloned()
+            .unwrap_or_else(|| "command".to_string());
+        wrapped_run_segments = Some(wrapped);
+        line.push_str(&render_styled("Run", palette.accent, None));
+        line.push(' ');
+        line.push_str(&render_summary_with_highlights(
+            &first_segment,
+            &summary_highlights,
+            main_color,
+            palette.accent,
+            palette.muted,
+        ));
+    } else {
+        line.push_str(&render_summary_with_highlights(
+            &summary,
+            &summary_highlights,
+            main_color,
+            palette.accent,
+            palette.muted,
+        ));
+    }
+
+    let stream_label = if summary.starts_with("Run ") {
+        None
+    } else {
+        stream_label
+    };
 
     if let Some(stream) = stream_label {
         line.push(' ');
@@ -169,6 +220,16 @@ pub(crate) fn render_tool_call_summary(
     }
 
     renderer.line(MessageStyle::Info, &line)?;
+    if let Some(wrapped) = wrapped_run_segments {
+        for segment in wrapped.into_iter().skip(1) {
+            let mut continuation = String::new();
+            continuation.push_str("  ");
+            continuation.push_str(&render_styled("│", palette.muted, Some("dim".to_string())));
+            continuation.push(' ');
+            continuation.push_str(&render_styled(&segment, palette.muted, None));
+            renderer.line(MessageStyle::Info, &continuation)?;
+        }
+    }
 
     if let Some(command_line) = command_line {
         let mut styled = String::new();
@@ -242,6 +303,12 @@ fn render_summary_with_highlights(
 
 fn build_tool_summary(action_label: &str, headline: &str) -> String {
     let normalized = headline.trim().trim_start_matches("MCP ").trim();
+    if action_label == "Run command (PTY)" {
+        if normalized.is_empty() {
+            return "Run command".to_string();
+        }
+        return format!("Run {}", normalized);
+    }
     if normalized.is_empty() {
         return action_label.to_string();
     }
@@ -257,6 +324,80 @@ fn build_tool_summary(action_label: &str, headline: &str) -> String {
         return action_label.to_string();
     }
     format!("{} {}", action_label, normalized)
+}
+
+fn run_summary_is_placeholder(summary: &str) -> bool {
+    let Some(command) = summary.strip_prefix("Run ") else {
+        return false;
+    };
+    let normalized = command.trim().to_ascii_lowercase();
+    matches!(
+        normalized.as_str(),
+        "command"
+            | "bash"
+            | "run pty cmd"
+            | "unified exec"
+            | "use unified exec"
+            | "use run pty cmd"
+            | "use bash"
+    )
+}
+
+fn wrap_text_words(text: &str, first_width: usize, continuation_width: usize) -> Vec<String> {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return Vec::new();
+    }
+
+    let mut result = Vec::new();
+    let mut remaining = trimmed;
+    let mut width = first_width.max(1);
+    while char_count(remaining) > width {
+        let split = split_at_word_boundary(remaining, width);
+        let (head, tail) = remaining.split_at(split);
+        let head = head.trim();
+        if head.is_empty() {
+            break;
+        }
+        result.push(head.to_string());
+        remaining = tail.trim_start();
+        if remaining.is_empty() {
+            break;
+        }
+        width = continuation_width.max(1);
+    }
+    if !remaining.is_empty() {
+        result.push(remaining.to_string());
+    }
+    result
+}
+
+fn split_at_word_boundary(input: &str, width: usize) -> usize {
+    let capped = byte_index_for_char_count(input, width);
+    let candidate = &input[..capped];
+    if let Some(boundary) = candidate.rfind(char::is_whitespace) {
+        boundary
+    } else {
+        capped
+    }
+}
+
+fn byte_index_for_char_count(input: &str, chars: usize) -> usize {
+    if chars == 0 {
+        return 0;
+    }
+    let mut seen = 0usize;
+    for (idx, ch) in input.char_indices() {
+        seen += 1;
+        if seen == chars {
+            return idx + ch.len_utf8();
+        }
+    }
+    input.len()
+}
+
+fn char_count(input: &str) -> usize {
+    input.chars().count()
 }
 
 pub(crate) fn stream_label_from_output(
@@ -323,6 +464,47 @@ pub(crate) fn describe_tool_action(tool_name: &str, args: &Value) -> (String, Ha
                     HashSet::new(),
                 )
             }),
+        actual_name if actual_name == tool_names::UNIFIED_EXEC => {
+            match tool_intent::unified_exec_action(args).unwrap_or("run") {
+                "run" => describe_shell_command(args)
+                    .map(|(desc, used)| {
+                        (
+                            format!("{}{}", if is_mcp_tool { "MCP " } else { "" }, desc),
+                            used,
+                        )
+                    })
+                    .unwrap_or_else(|| {
+                        (
+                            format!("{}bash", if is_mcp_tool { "MCP " } else { "" }),
+                            HashSet::new(),
+                        )
+                    }),
+                "write" => (
+                    format!("{}Send PTY input", if is_mcp_tool { "MCP " } else { "" }),
+                    HashSet::new(),
+                ),
+                "poll" => (
+                    format!("{}Read PTY session", if is_mcp_tool { "MCP " } else { "" }),
+                    HashSet::new(),
+                ),
+                "list" => (
+                    format!("{}List PTY sessions", if is_mcp_tool { "MCP " } else { "" }),
+                    HashSet::new(),
+                ),
+                "close" => (
+                    format!("{}Close PTY session", if is_mcp_tool { "MCP " } else { "" }),
+                    HashSet::new(),
+                ),
+                "code" => (
+                    format!("{}Run code", if is_mcp_tool { "MCP " } else { "" }),
+                    HashSet::new(),
+                ),
+                _ => (
+                    format!("{}Use Unified exec", if is_mcp_tool { "MCP " } else { "" }),
+                    HashSet::new(),
+                ),
+            }
+        }
         actual_name if actual_name == tool_names::LIST_FILES => describe_list_files(args)
             .map(|(desc, used)| {
                 (
@@ -495,4 +677,52 @@ pub(crate) fn describe_tool_action(tool_name: &str, args: &Value) -> (String, Ha
 
 pub(crate) fn humanize_tool_name(name: &str) -> String {
     crate::agent::runloop::unified::tool_summary_helpers::humanize_tool_name(name)
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+    use vtcode_core::config::constants::tools as tool_names;
+
+    use super::{
+        build_tool_summary, describe_tool_action, run_summary_is_placeholder, wrap_text_words,
+    };
+
+    #[test]
+    fn build_tool_summary_formats_run_command_as_ran() {
+        assert_eq!(
+            build_tool_summary("Run command (PTY)", "cargo check -p vtcode"),
+            "Run cargo check -p vtcode"
+        );
+    }
+
+    #[test]
+    fn describe_tool_action_handles_unified_exec_run_command() {
+        let (description, used_keys) = describe_tool_action(
+            tool_names::UNIFIED_EXEC,
+            &json!({
+                "action": "run",
+                "command": "cargo check -p vtcode"
+            }),
+        );
+
+        assert_eq!(description, "cargo check -p vtcode");
+        assert!(used_keys.contains("command"));
+    }
+
+    #[test]
+    fn run_summary_placeholder_detection_catches_generic_labels() {
+        assert!(run_summary_is_placeholder("Run Use Unified exec"));
+        assert!(run_summary_is_placeholder("Run bash"));
+        assert!(!run_summary_is_placeholder("Run cargo check -p vtcode"));
+    }
+
+    #[test]
+    fn wrap_text_words_wraps_long_command_summary() {
+        let text = "cargo test -p vtcode run_command_preview_ build_tool_summary_formats_run_command_as_ran";
+        let wrapped = wrap_text_words(text, 62, 58);
+        assert_eq!(wrapped.len(), 2);
+        assert_eq!(wrapped[0], "cargo test -p vtcode run_command_preview_");
+        assert_eq!(wrapped[1], "build_tool_summary_formats_run_command_as_ran");
+    }
 }

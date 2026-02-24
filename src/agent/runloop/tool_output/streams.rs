@@ -62,8 +62,10 @@ pub(crate) use streams_helpers::{
 
 /// Maximum number of lines to display in inline mode before truncating
 const INLINE_STREAM_MAX_LINES: usize = 30;
-/// Maximum number of lines for run-command output in TUI
-const RUN_COMMAND_MAX_LINES: usize = 12;
+/// Number of head lines to show for run-command output previews
+const RUN_COMMAND_HEAD_PREVIEW_LINES: usize = 3;
+/// Number of tail lines to show for run-command output previews
+const RUN_COMMAND_TAIL_PREVIEW_LINES: usize = 3;
 /// Maximum line length before truncation to prevent TUI hang
 const MAX_LINE_LENGTH: usize = 150;
 /// Size threshold (bytes) below which output is displayed inline vs. spooled
@@ -102,8 +104,91 @@ fn format_hidden_lines_summary(hidden: usize) -> String {
     }
 }
 
-fn resolve_run_command_tail_limit(tail_limit: usize) -> usize {
-    tail_limit.clamp(1, RUN_COMMAND_MAX_LINES)
+fn collect_run_command_preview<'a>(content: &'a str) -> (SmallVec<[&'a str; 32]>, usize, usize) {
+    let lines: SmallVec<[&str; 32]> = content.lines().collect();
+    let total = lines.len();
+    let preview_size = RUN_COMMAND_HEAD_PREVIEW_LINES + RUN_COMMAND_TAIL_PREVIEW_LINES;
+
+    if total <= preview_size {
+        return (lines, total, 0);
+    }
+
+    let mut preview: SmallVec<[&str; 32]> = SmallVec::with_capacity(preview_size);
+    preview.extend_from_slice(&lines[..RUN_COMMAND_HEAD_PREVIEW_LINES]);
+    preview.extend_from_slice(&lines[total - RUN_COMMAND_TAIL_PREVIEW_LINES..]);
+    let hidden = total.saturating_sub(preview.len());
+
+    (preview, total, hidden)
+}
+
+async fn render_run_command_preview(
+    renderer: &mut AnsiRenderer,
+    content: &str,
+    tool_name: Option<&str>,
+    fallback_style: MessageStyle,
+    disable_spool: bool,
+    config: Option<&VTCodeConfig>,
+) -> Result<()> {
+    let run_tool_name = tool_name.unwrap_or(vtcode_core::config::constants::tools::RUN_PTY_CMD);
+    if !disable_spool
+        && let Ok(Some(log_path)) = spool_output_if_needed(content, run_tool_name, config).await
+    {
+        let total = content.lines().count();
+        renderer.line(
+            MessageStyle::ToolDetail,
+            &format!(
+                "Command output too large ({} bytes, {} lines), spooled to: {}",
+                content.len(),
+                total,
+                log_path.display()
+            ),
+        )?;
+    }
+
+    let (preview_lines, _total, hidden) = collect_run_command_preview(content);
+    if preview_lines.is_empty() {
+        return Ok(());
+    }
+
+    let mut display_buffer = String::with_capacity(192);
+    let mut prefixed_line = String::with_capacity(200);
+    for (idx, line) in preview_lines.iter().enumerate() {
+        if hidden > 0 && idx == RUN_COMMAND_HEAD_PREVIEW_LINES {
+            prefixed_line.clear();
+            prefixed_line.push_str("    ");
+            prefixed_line.push_str(&format_hidden_lines_summary(hidden));
+            renderer.line(MessageStyle::ToolDetail, &prefixed_line)?;
+        }
+
+        if line.is_empty() {
+            continue;
+        }
+
+        display_buffer.clear();
+        if line.len() > MAX_LINE_LENGTH {
+            let truncated = truncate_text_safe(line, MAX_LINE_LENGTH);
+            display_buffer.push_str(truncated);
+            display_buffer.push_str("...");
+        } else {
+            display_buffer.push_str(line);
+        }
+
+        prefixed_line.clear();
+        if idx == 0 {
+            prefixed_line.push_str("└ ");
+        } else {
+            prefixed_line.push_str("  ");
+        }
+        prefixed_line.push_str(&display_buffer);
+
+        renderer.line_with_override_style(
+            fallback_style,
+            fallback_style.style(),
+            &prefixed_line,
+        )?;
+    }
+
+    Ok(())
 }
 
 #[cfg_attr(
@@ -134,10 +219,8 @@ pub(crate) async fn render_stream_section(
         Some(vtcode_core::config::constants::tools::RUN_PTY_CMD)
             | Some(vtcode_core::config::constants::tools::UNIFIED_EXEC)
     );
-    let run_command_tail_limit = resolve_run_command_tail_limit(tail_limit);
     let allow_ansi_for_tool = allow_ansi && !is_run_command;
     let apply_line_styles = !is_run_command;
-    let force_tail_mode = is_run_command;
     let stripped_for_diff = strip_ansi_codes(content);
     let is_diff_content = apply_line_styles && looks_like_diff_content(stripped_for_diff.as_ref());
     let normalized_content = if allow_ansi_for_tool {
@@ -145,6 +228,18 @@ pub(crate) async fn render_stream_section(
     } else {
         strip_ansi_codes(content)
     };
+
+    if is_run_command {
+        return render_run_command_preview(
+            renderer,
+            normalized_content.as_ref(),
+            tool_name,
+            fallback_style,
+            disable_spool,
+            config,
+        )
+        .await;
+    }
 
     // Token budget logic removed - use normalized content as-is
     let effective_normalized_content = normalized_content.clone();
@@ -268,14 +363,13 @@ pub(crate) async fn render_stream_section(
     if is_diff_content {
         let diff_lines = format_diff_content_lines(stripped_for_diff.as_ref());
         let total = diff_lines.len();
-        let effective_limit = if force_tail_mode {
-            run_command_tail_limit
-        } else if renderer.prefers_untruncated_output() || matches!(mode, ToolOutputMode::Full) {
-            tail_limit.max(1000)
-        } else {
-            tail_limit
-        };
-        let (lines_slice, truncated) = if force_tail_mode || total > effective_limit {
+        let effective_limit =
+            if renderer.prefers_untruncated_output() || matches!(mode, ToolOutputMode::Full) {
+                tail_limit.max(1000)
+            } else {
+                tail_limit
+            };
+        let (lines_slice, truncated) = if total > effective_limit {
             let start = total.saturating_sub(effective_limit);
             (&diff_lines[start..], total > effective_limit)
         } else {
@@ -348,11 +442,6 @@ pub(crate) async fn render_stream_section(
         let lines: SmallVec<[&str; 32]> = effective_normalized_content.lines().collect();
         let total_lines = effective_normalized_content.lines().count();
         (lines, total_lines, true) // Always mark as truncated if token-based truncation was applied
-    } else if force_tail_mode {
-        let (tail, total) =
-            tail_lines_streaming(normalized_content.as_ref(), run_command_tail_limit);
-        let truncated = total > tail.len();
-        (tail, total, truncated)
     } else {
         let prefer_full = renderer.prefers_untruncated_output();
         let (mut lines, total, mut truncated) = select_stream_lines_streaming(
@@ -430,4 +519,27 @@ pub(crate) async fn render_stream_section(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::collect_run_command_preview;
+
+    #[test]
+    fn run_command_preview_uses_head_tail_three_lines() {
+        let content = "l1\nl2\nl3\nl4\nl5\nl6\nl7\n";
+        let (preview, total, hidden) = collect_run_command_preview(content);
+        assert_eq!(total, 7);
+        assert_eq!(hidden, 1);
+        assert_eq!(preview.as_slice(), ["l1", "l2", "l3", "l5", "l6", "l7"]);
+    }
+
+    #[test]
+    fn run_command_preview_keeps_short_output_unmodified() {
+        let content = "l1\nl2\nl3\n";
+        let (preview, total, hidden) = collect_run_command_preview(content);
+        assert_eq!(total, 3);
+        assert_eq!(hidden, 0);
+        assert_eq!(preview.as_slice(), ["l1", "l2", "l3"]);
+    }
 }

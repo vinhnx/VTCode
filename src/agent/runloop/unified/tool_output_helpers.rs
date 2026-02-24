@@ -7,9 +7,11 @@ use anyhow::Result;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::tools::result_cache::ToolResultCache;
-use vtcode_core::utils::ansi::AnsiRenderer;
+use vtcode_core::tools::tool_intent;
+use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 /// Common logic for recording tool usage across all handlers
 pub fn record_tool_usage_common(session_stats: &mut SessionStats, name: &str) {
@@ -111,6 +113,37 @@ pub fn check_write_effect_common(name: &str) -> bool {
     )
 }
 
+fn is_run_pty_tool(name: &str, args_val: &serde_json::Value) -> bool {
+    if matches!(name, tool_names::RUN_PTY_CMD | tool_names::SHELL) {
+        return true;
+    }
+    if name == tool_names::UNIFIED_EXEC {
+        return tool_intent::unified_exec_action(args_val).unwrap_or("run") == "run";
+    }
+    false
+}
+
+fn compact_run_completion_line(
+    output: &serde_json::Value,
+    command_success: bool,
+) -> Option<String> {
+    if let Some(exit_code) = output.get("exit_code").and_then(serde_json::Value::as_i64) {
+        if exit_code == 0 {
+            return Some("✓ exit 0".to_string());
+        }
+        return Some(format!("✗ exit {}", exit_code));
+    }
+
+    if output.get("is_exited").and_then(serde_json::Value::as_bool) == Some(true) {
+        if command_success {
+            return Some("✓ done".to_string());
+        }
+        return Some("✗ failed".to_string());
+    }
+
+    None
+}
+
 /// Common logic for rendering tool output with error handling
 pub async fn render_tool_output_common(
     renderer: &mut AnsiRenderer,
@@ -120,6 +153,13 @@ pub async fn render_tool_output_common(
     command_success: bool,
     vt_config: Option<&VTCodeConfig>,
 ) -> Result<()> {
+    if renderer.supports_inline_ui() && is_run_pty_tool(name, args_val) {
+        if let Some(completion) = compact_run_completion_line(output, command_success) {
+            renderer.line(MessageStyle::ToolDetail, &completion)?;
+        }
+        return Ok(());
+    }
+
     let stream_label = crate::agent::runloop::unified::tool_summary::stream_label_from_output(
         output,
         command_success,
