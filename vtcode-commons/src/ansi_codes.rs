@@ -1,7 +1,8 @@
 //! ANSI escape sequence constants and utilities
 
 use once_cell::sync::Lazy;
-use std::io::{IsTerminal, Write};
+use ratatui::crossterm::tty::IsTty;
+use std::io::Write;
 
 /// Escape character (ESC = 0x1B = 27)
 pub const ESC: &str = "\x1b";
@@ -72,7 +73,7 @@ pub fn notify_attention(default_enabled: bool, message: Option<&str>) {
         return;
     }
 
-    if !std::io::stdout().is_terminal() {
+    if !std::io::stdout().is_tty() {
         return;
     }
 

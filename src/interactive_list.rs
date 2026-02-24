@@ -1,5 +1,5 @@
 use std::fmt;
-use std::io::{self, IsTerminal, Write};
+use std::io::{self, Write};
 
 use anyhow::{Context, Result, anyhow};
 use ratatui::Terminal;
@@ -16,6 +16,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{
     Block, BorderType, List, ListDirection, ListItem, ListState, Paragraph, Wrap,
 };
+use vtcode_core::utils::tty::TtyExt;
 
 const CONTROLS_HINT: &str =
     "↑/↓ j/k to move  •  Home/End to jump  •  Enter/Tab confirm  •  Esc cancel";
@@ -76,7 +77,7 @@ pub fn run_interactive_selection(
         return Err(anyhow!("No options available for selection"));
     }
 
-    if !io::stderr().is_terminal() {
+    if !io::stderr().is_tty_ext() {
         return Err(anyhow!("Terminal UI is unavailable"));
     }
 

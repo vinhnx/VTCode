@@ -1,6 +1,6 @@
 //! Terminal utilities and helpers
 
-use std::io::IsTerminal;
+use crossterm::tty::IsTty;
 use std::io::Write;
 
 /// Get the terminal width, fallback to 80 if unable to determine
@@ -24,10 +24,10 @@ pub fn read_line() -> std::io::Result<String> {
 
 /// Check if output is being piped (not a terminal)
 pub fn is_piped_output() -> bool {
-    !std::io::stdout().is_terminal()
+    !std::io::stdout().is_tty()
 }
 
 /// Check if input is being piped (not a terminal)
 pub fn is_piped_input() -> bool {
-    !std::io::stdin().is_terminal()
+    !std::io::stdin().is_tty()
 }

@@ -7,7 +7,7 @@ use crate::gemini::{Content, GenerateContentRequest};
 use crate::llm::make_client;
 use crate::prompts::{generate_lightweight_instruction, generate_system_instruction};
 use anyhow::Result;
-use std::io::IsTerminal;
+use crossterm::tty::IsTty;
 
 /// Handle the ask command - single prompt without tools
 pub async fn handle_ask_command(
@@ -112,7 +112,7 @@ pub async fn handle_ask_command(
 }
 
 fn is_pipe_output() -> bool {
-    !std::io::stdout().is_terminal()
+    !std::io::stdout().is_tty()
 }
 
 fn extract_code_only(text: &str) -> Option<String> {

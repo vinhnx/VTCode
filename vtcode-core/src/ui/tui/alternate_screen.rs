@@ -1,5 +1,6 @@
 use std::io::{self, Write};
 
+use crate::utils::tty::TtyExt;
 use anyhow::{Context, Result};
 use ratatui::crossterm::{
     event::{DisableBracketedPaste, DisableFocusChange, EnableBracketedPaste, EnableFocusChange},
@@ -58,6 +59,12 @@ impl AlternateScreenSession {
     pub fn enter() -> Result<Self> {
         let mut stdout = io::stdout();
 
+        // Check if stdout is a TTY before proceeding
+        let is_tty = stdout.is_tty_ext();
+        if !is_tty {
+            tracing::warn!("stdout is not a TTY, alternate screen features may not work");
+        }
+
         // Save current state
         let original_state = TerminalState {
             raw_mode_enabled: false, // We'll enable it fresh
@@ -78,13 +85,13 @@ impl AlternateScreenSession {
         enable_raw_mode().context("failed to enable raw mode for terminal app")?;
         session.original_state.raw_mode_enabled = true;
 
-        // Enable bracketed paste
-        if execute!(stdout, EnableBracketedPaste).is_ok() {
+        // Enable bracketed paste (only if TTY)
+        if is_tty && execute!(stdout, EnableBracketedPaste).is_ok() {
             session.original_state.bracketed_paste_enabled = true;
         }
 
-        // Enable focus change events
-        if execute!(stdout, EnableFocusChange).is_ok() {
+        // Enable focus change events (only if TTY)
+        if is_tty && execute!(stdout, EnableFocusChange).is_ok() {
             session.original_state.focus_change_enabled = true;
         }
 
@@ -152,42 +159,49 @@ impl AlternateScreenSession {
 
         // 1. Leave alternate screen FIRST
         if let Err(e) = execute!(stdout, LeaveAlternateScreen) {
-            errors.push(format!("failed to leave alternate screen: {}", e));
+            tracing::warn!(%e, "failed to leave alternate screen");
+            errors.push(format!("leave alternate screen: {}", e));
         }
 
-        // 2. Disable focus change
+        // 2. Disable focus change (if enabled and TTY)
         if self.original_state.focus_change_enabled
             && let Err(e) = execute!(stdout, DisableFocusChange)
         {
-            errors.push(format!("failed to disable focus change: {}", e));
+            tracing::warn!(%e, "failed to disable focus change");
+            errors.push(format!("disable focus change: {}", e));
         }
 
-        // 3. Disable bracketed paste
+        // 3. Disable bracketed paste (if enabled and TTY)
         if self.original_state.bracketed_paste_enabled
             && let Err(e) = execute!(stdout, DisableBracketedPaste)
         {
-            errors.push(format!("failed to disable bracketed paste: {}", e));
+            tracing::warn!(%e, "failed to disable bracketed paste");
+            errors.push(format!("disable bracketed paste: {}", e));
         }
 
         // 4. Disable raw mode LAST
         if self.original_state.raw_mode_enabled
             && let Err(e) = disable_raw_mode()
         {
-            errors.push(format!("failed to disable raw mode: {}", e));
+            tracing::warn!(%e, "failed to disable raw mode");
+            errors.push(format!("disable raw mode: {}", e));
         }
 
         // Flush to ensure all changes are applied
         if let Err(e) = stdout.flush() {
-            errors.push(format!("failed to flush stdout: {}", e));
+            tracing::warn!(%e, "failed to flush stdout");
+            errors.push(format!("flush stdout: {}", e));
         }
 
         if errors.is_empty() {
             Ok(())
         } else {
-            Err(anyhow::anyhow!(
-                "errors while restoring terminal state: {}",
-                errors.join("; ")
-            ))
+            tracing::warn!(
+                errors = ?errors,
+                "some terminal operations failed during restore"
+            );
+            // Don't fail the operation, just warn - terminal is likely already in a bad state
+            Ok(())
         }
     }
 }

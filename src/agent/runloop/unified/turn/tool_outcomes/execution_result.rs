@@ -398,7 +398,8 @@ async fn handle_failure<'a>(
             let block_reason = format!(
                 "Consecutive blocked/denied tool calls reached per-turn cap ({max_streak}). Last blocked call: '{display_tool}'. Stopping turn to prevent retry churn."
             );
-            t_ctx.ctx
+            t_ctx
+                .ctx
                 .working_history
                 .push(uni::Message::system(block_reason.clone()));
             return Ok(Some(TurnHandlerOutcome::Break(TurnLoopResult::Blocked {

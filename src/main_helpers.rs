@@ -1,9 +1,10 @@
 use anyhow::{Context, Result};
-use std::io::{self, IsTerminal, Read};
+use std::io::{self, Read};
 
 use vtcode_core::cli::args::AgentClientProtocolTarget;
 use vtcode_core::cli::args::Cli;
 use vtcode_core::ui::tui::log::make_tui_log_layer;
+use vtcode_core::utils::tty::TtyExt;
 
 /// Detect available IDE for automatic connection when --ide flag is used.
 pub(crate) fn detect_available_ide() -> Result<Option<AgentClientProtocolTarget>> {
@@ -62,7 +63,8 @@ pub(crate) fn build_print_prompt(print_value: String) -> Result<String> {
 
 fn collect_piped_stdin() -> Result<Option<String>> {
     let mut stdin = io::stdin();
-    if stdin.is_terminal() {
+    // Use crossterm's IsTty trait for consistent TTY detection
+    if stdin.is_tty_ext() {
         return Ok(None);
     }
 
@@ -86,8 +88,8 @@ pub(crate) async fn initialize_tracing(args: &Cli) -> Result<bool> {
         let env_filter = tracing_subscriber::EnvFilter::from_default_env();
 
         // When running in interactive TUI mode, redirect logs to a file to avoid corrupting the display
-        // Only write to stderr for non-interactive commands (print, ask with piped input, etc.)
-        let is_interactive_tui = args.command.is_none() && std::io::stdin().is_terminal();
+        // Use crossterm's IsTty trait for consistent TTY detection
+        let is_interactive_tui = args.command.is_none() && io::stdin().is_tty_ext();
 
         if is_interactive_tui {
             // Redirect logs to a file instead of stderr to avoid TUI corruption

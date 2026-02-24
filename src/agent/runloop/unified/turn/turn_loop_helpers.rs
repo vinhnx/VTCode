@@ -114,9 +114,7 @@ fn clamp_tool_loop_increment(
     } else {
         MAX_TOOL_LOOP_INCREMENT_PER_PROMPT
     };
-    requested_increment
-        .min(per_prompt_limit)
-        .min(remaining)
+    requested_increment.min(per_prompt_limit).min(remaining)
 }
 
 fn emit_loop_hard_cap_break_metric(
@@ -547,13 +545,12 @@ pub(super) async fn maybe_handle_tool_loop_limit(
     .await
     {
         Ok(Some(requested_increment)) => {
-            let increment =
-                clamp_tool_loop_increment(
-                    requested_increment,
-                    *current_max_tool_loops,
-                    hard_cap,
-                    plan_mode_active,
-                );
+            let increment = clamp_tool_loop_increment(
+                requested_increment,
+                *current_max_tool_loops,
+                hard_cap,
+                plan_mode_active,
+            );
             if increment == 0 {
                 emit_loop_hard_cap_break_metric(
                     ctx,
@@ -598,8 +595,9 @@ pub(super) async fn maybe_handle_tool_loop_limit(
 #[cfg(test)]
 mod tests {
     use super::{
-        clamp_tool_loop_increment, extract_turn_config, should_exit_plan_mode_from_confirmation,
-        should_exit_plan_mode_from_user_text, tool_loop_hard_cap, PLAN_MODE_MIN_TOOL_LOOPS,
+        PLAN_MODE_MIN_TOOL_LOOPS, clamp_tool_loop_increment, extract_turn_config,
+        should_exit_plan_mode_from_confirmation, should_exit_plan_mode_from_user_text,
+        tool_loop_hard_cap,
     };
     use vtcode_core::config::loader::VTCodeConfig;
     use vtcode_core::llm::provider as uni;

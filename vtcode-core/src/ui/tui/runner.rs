@@ -1,4 +1,4 @@
-use std::io::{self, IsTerminal};
+use std::io;
 use std::sync::atomic::AtomicU64;
 use std::time::{Duration, Instant};
 
@@ -12,7 +12,8 @@ use ratatui::crossterm::{
     },
     execute,
     terminal::{
-        self, EnterAlternateScreen, LeaveAlternateScreen, SetTitle, disable_raw_mode, enable_raw_mode,
+        self, EnterAlternateScreen, LeaveAlternateScreen, SetTitle, disable_raw_mode,
+        enable_raw_mode,
     },
 };
 use ratatui::{
@@ -37,6 +38,43 @@ use super::{
 
 /// Terminal title displayed when VT Code TUI is active
 const TERMINAL_TITLE: &str = "> VT Code";
+
+/// Represents the state of terminal modes before TUI initialization.
+///
+/// This struct tracks which terminal features were enabled before we
+/// modified them, allowing proper restoration on exit.
+#[derive(Debug, Clone)]
+struct TerminalModeState {
+    /// Whether bracketed paste was enabled (we enable it)
+    bracketed_paste_enabled: bool,
+    /// Whether raw mode was enabled (we enable it)
+    raw_mode_enabled: bool,
+    /// Whether mouse capture was enabled (we enable it)
+    mouse_capture_enabled: bool,
+    /// Whether focus change events were enabled (we enable them)
+    focus_change_enabled: bool,
+    /// Whether keyboard enhancement flags were pushed (we push them)
+    keyboard_enhancements_pushed: bool,
+}
+
+impl TerminalModeState {
+    /// Create a new TerminalModeState with all modes disabled (clean state)
+    fn new() -> Self {
+        Self {
+            bracketed_paste_enabled: false,
+            raw_mode_enabled: false,
+            mouse_capture_enabled: false,
+            focus_change_enabled: false,
+            keyboard_enhancements_pushed: false,
+        }
+    }
+}
+
+impl Default for TerminalModeState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 /// Represents accumulated scroll events for coalescing
 #[derive(Default)]
@@ -104,15 +142,6 @@ fn has_active_navigation_ui(session: &Session) -> bool {
 
 const INLINE_FALLBACK_ROWS: u16 = ui::DEFAULT_INLINE_VIEWPORT_ROWS;
 const ALTERNATE_SCREEN_ERROR: &str = "failed to enter alternate inline screen";
-const RAW_MODE_ENABLE_ERROR: &str = "failed to enable raw mode for inline terminal";
-const RAW_MODE_DISABLE_ERROR: &str = "failed to disable raw mode after inline session";
-const ENABLE_BRACKETED_PASTE_ERROR: &str = "failed to enable bracketed paste for inline terminal";
-const DISABLE_BRACKETED_PASTE_ERROR: &str = "failed to disable bracketed paste for inline terminal";
-
-struct TerminalModeState {
-    focus_change_enabled: bool,
-    keyboard_enhancements_pushed: bool,
-}
 
 #[derive(Debug, Clone)]
 enum TerminalEvent {
@@ -259,8 +288,18 @@ struct TerminalSurface {
 
 impl TerminalSurface {
     fn detect(preference: UiSurfacePreference, inline_rows: u16) -> Result<Self> {
+        use crate::utils::tty::TtyExt;
+
         let fallback_rows = inline_rows.max(1);
-        let stderr_is_terminal = io::stderr().is_terminal();
+        let stderr_is_terminal = io::stderr().is_tty_ext();
+
+        // Detect terminal capabilities before proceeding
+        let capabilities = if stderr_is_terminal {
+            crate::utils::tty::TtyCapabilities::detect()
+        } else {
+            None
+        };
+
         let resolved_rows = if stderr_is_terminal {
             match measure_terminal_dimensions() {
                 Some((_, rows)) if rows > 0 => rows,
@@ -278,6 +317,18 @@ impl TerminalSurface {
         };
 
         let resolved_rows = resolved_rows.max(1);
+
+        // Check if terminal supports the features we need
+        if stderr_is_terminal {
+            if let Some(caps) = capabilities {
+                if !caps.is_basic_tui() {
+                    tracing::warn!(
+                        "Terminal has limited capabilities, some features may be disabled"
+                    );
+                }
+            }
+        }
+
         let use_alternate = match preference {
             UiSurfacePreference::Alternate => stderr_is_terminal,
             UiSurfacePreference::Inline => false,
@@ -406,14 +457,16 @@ pub async fn run_tui(
     };
 
     if let Some(result) = leave_alternate_result {
-        result.context("failed to leave alternate inline screen")?;
+        if let Err(error) = result {
+            tracing::warn!(%error, "failed to leave alternate screen");
+        }
     }
 
+    // Restore terminal modes (handles all modes including raw mode)
     let restore_modes_result = restore_terminal_modes(&mode_state);
-    let raw_mode_result = disable_raw_mode();
-
-    restore_modes_result?;
-    raw_mode_result.context(RAW_MODE_DISABLE_ERROR)?;
+    if let Err(error) = restore_modes_result {
+        tracing::warn!(%error, "failed to restore terminal modes");
+    }
 
     // Clear terminal title on exit
     let _ = execute!(io::stderr(), SetTitle(""));
@@ -477,63 +530,110 @@ fn enable_terminal_modes(
 ) -> Result<TerminalModeState> {
     use ratatui::crossterm::event::PushKeyboardEnhancementFlags;
 
-    execute!(stderr, EnableBracketedPaste).context(ENABLE_BRACKETED_PASTE_ERROR)?;
-    enable_raw_mode().context(RAW_MODE_ENABLE_ERROR)?;
-    execute!(stderr, EnableMouseCapture)
-        .context("failed to enable mouse capture for inline terminal")?;
+    let mut state = TerminalModeState::new();
 
-    let focus_change_enabled = match execute!(stderr, EnableFocusChange) {
-        Ok(_) => true,
+    // Enable bracketed paste
+    match execute!(stderr, EnableBracketedPaste) {
+        Ok(_) => state.bracketed_paste_enabled = true,
         Err(error) => {
-            tracing::debug!(%error, "failed to enable focus change events for inline terminal");
-            false
+            tracing::warn!(%error, "failed to enable bracketed paste");
         }
-    };
+    }
 
-    let keyboard_enhancements_pushed = if !keyboard_flags.is_empty() {
+    // Enable raw mode
+    match enable_raw_mode() {
+        Ok(_) => state.raw_mode_enabled = true,
+        Err(error) => {
+            return Err(anyhow::anyhow!("failed to enable raw mode: {}", error));
+        }
+    }
+
+    // Enable mouse capture
+    match execute!(stderr, EnableMouseCapture) {
+        Ok(_) => state.mouse_capture_enabled = true,
+        Err(error) => {
+            tracing::warn!(%error, "failed to enable mouse capture");
+        }
+    }
+
+    // Enable focus change events
+    match execute!(stderr, EnableFocusChange) {
+        Ok(_) => state.focus_change_enabled = true,
+        Err(error) => {
+            tracing::debug!(%error, "failed to enable focus change events");
+        }
+    }
+
+    // Push keyboard enhancement flags
+    if !keyboard_flags.is_empty() {
         match execute!(stderr, PushKeyboardEnhancementFlags(keyboard_flags)) {
-            Ok(_) => true,
+            Ok(_) => state.keyboard_enhancements_pushed = true,
             Err(error) => {
-                tracing::debug!(%error, "failed to push keyboard enhancement flags for inline terminal");
-                false
+                tracing::debug!(%error, "failed to push keyboard enhancement flags");
             }
         }
-    } else {
-        false
-    };
+    }
 
-    Ok(TerminalModeState {
-        focus_change_enabled,
-        keyboard_enhancements_pushed,
-    })
+    Ok(state)
 }
 
 fn restore_terminal_modes(state: &TerminalModeState) -> Result<()> {
     use ratatui::crossterm::event::PopKeyboardEnhancementFlags;
     let mut stderr = io::stderr();
 
+    let mut errors = Vec::new();
+
+    // Restore in reverse order of enabling
+
+    // 1. Pop keyboard enhancement flags (if they were pushed)
     if state.keyboard_enhancements_pushed
         && let Err(error) = execute!(stderr, PopKeyboardEnhancementFlags)
     {
-        tracing::debug!(
-            %error,
-            "failed to pop keyboard enhancement flags for inline terminal"
-        );
+        tracing::debug!(%error, "failed to pop keyboard enhancement flags");
+        errors.push(format!("keyboard enhancements: {}", error));
     }
 
+    // 2. Disable focus change events (if they were enabled)
     if state.focus_change_enabled
         && let Err(error) = execute!(stderr, DisableFocusChange)
     {
-        tracing::debug!(
-            %error,
-            "failed to disable focus change events for inline terminal"
-        );
+        tracing::debug!(%error, "failed to disable focus change events");
+        errors.push(format!("focus change: {}", error));
     }
 
-    execute!(stderr, DisableBracketedPaste).context(DISABLE_BRACKETED_PASTE_ERROR)?;
-    let _ = execute!(stderr, DisableMouseCapture);
+    // 3. Disable mouse capture (if it was enabled)
+    if state.mouse_capture_enabled
+        && let Err(error) = execute!(stderr, DisableMouseCapture)
+    {
+        tracing::debug!(%error, "failed to disable mouse capture");
+        errors.push(format!("mouse capture: {}", error));
+    }
 
-    Ok(())
+    // 4. Disable bracketed paste (if it was enabled)
+    if state.bracketed_paste_enabled
+        && let Err(error) = execute!(stderr, DisableBracketedPaste)
+    {
+        tracing::debug!(%error, "failed to disable bracketed paste");
+        errors.push(format!("bracketed paste: {}", error));
+    }
+
+    // 5. Disable raw mode LAST (if it was enabled)
+    if state.raw_mode_enabled
+        && let Err(error) = disable_raw_mode()
+    {
+        tracing::debug!(%error, "failed to disable raw mode");
+        errors.push(format!("raw mode: {}", error));
+    }
+
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        tracing::warn!(
+            errors = ?errors,
+            "some terminal modes failed to restore"
+        );
+        Ok(()) // Don't fail the operation, just warn
+    }
 }
 
 async fn drive_terminal<B: Backend>(

@@ -408,9 +408,10 @@ fn resolve_prompt(prompt_arg: Option<String>, quiet: bool) -> Result<String> {
     match prompt_arg {
         Some(p) if p != "-" => Ok(p),
         maybe_dash => {
-            use std::io::{self, IsTerminal, Read};
+            use vtcode_core::utils::tty::TtyExt;
+
             let force_stdin = matches!(maybe_dash.as_deref(), Some("-"));
-            if io::stdin().is_terminal() && !force_stdin {
+            if io::stdin().is_tty_ext() && !force_stdin {
                 anyhow::bail!(
                     "No prompt provided. Pass a prompt argument, pipe input, or use '-' to read from stdin."
                 );

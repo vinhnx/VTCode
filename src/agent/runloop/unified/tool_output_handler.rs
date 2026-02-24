@@ -204,7 +204,6 @@ pub(crate) async fn handle_pipeline_output_from_turn_ctx(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::{IsTerminal, stdin};
     use std::sync::Arc;
     use tempfile::TempDir;
     use tokio::sync::RwLock;
