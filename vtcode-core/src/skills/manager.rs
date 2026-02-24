@@ -88,11 +88,14 @@ impl SkillsManager {
         self.ensure_system_skills_installed();
 
         if !force_reload {
-            let cache = self.cache_by_cwd.read().unwrap();
-            if let Some(cached) = cache.get(cwd) {
-                if !cached.is_expired(self.cache_ttl) {
-                    return cached.outcome.clone();
+            if let Ok(cache) = self.cache_by_cwd.read() {
+                if let Some(cached) = cache.get(cwd) {
+                    if !cached.is_expired(self.cache_ttl) {
+                        return cached.outcome.clone();
+                    }
                 }
+            } else {
+                tracing::warn!("skills metadata cache lock poisoned while reading cache");
             }
         }
 
@@ -106,53 +109,63 @@ impl SkillsManager {
 
         let outcome = load_skills(&config);
 
-        let mut cache = self.cache_by_cwd.write().unwrap();
-
-        // Enforce max cache size: remove oldest expired entries first, then LRU
-        if cache.len() >= self.max_cache_size && !cache.contains_key(cwd) {
-            // Remove oldest expired entries
-            let expired: Vec<_> = cache
-                .iter()
-                .filter(|(_, v)| v.timestamp.elapsed().unwrap_or_default() > self.cache_ttl)
-                .map(|(k, _)| k.clone())
-                .collect();
-
-            for key in expired {
-                cache.remove(&key);
-            }
-
-            // If still at capacity, remove oldest entry by timestamp (simple LRU)
-            if cache.len() >= self.max_cache_size {
-                let oldest_key = cache
+        if let Ok(mut cache) = self.cache_by_cwd.write() {
+            // Enforce max cache size: remove oldest expired entries first, then LRU
+            if cache.len() >= self.max_cache_size && !cache.contains_key(cwd) {
+                // Remove oldest expired entries
+                let expired: Vec<_> = cache
                     .iter()
-                    .min_by_key(|(_, v)| v.timestamp)
-                    .map(|(k, _)| k.clone());
-                if let Some(key) = oldest_key {
+                    .filter(|(_, v)| v.timestamp.elapsed().unwrap_or_default() > self.cache_ttl)
+                    .map(|(k, _)| k.clone())
+                    .collect();
+
+                for key in expired {
                     cache.remove(&key);
                 }
-            }
-        }
 
-        cache.insert(
-            cwd.to_path_buf(),
-            CachedSkillOutcome {
-                outcome: outcome.clone(),
-                timestamp: SystemTime::now(),
-            },
-        );
+                // If still at capacity, remove oldest entry by timestamp (simple LRU)
+                if cache.len() >= self.max_cache_size {
+                    let oldest_key = cache
+                        .iter()
+                        .min_by_key(|(_, v)| v.timestamp)
+                        .map(|(k, _)| k.clone());
+                    if let Some(key) = oldest_key {
+                        cache.remove(&key);
+                    }
+                }
+            }
+
+            cache.insert(
+                cwd.to_path_buf(),
+                CachedSkillOutcome {
+                    outcome: outcome.clone(),
+                    timestamp: SystemTime::now(),
+                },
+            );
+        } else {
+            tracing::warn!("skills metadata cache lock poisoned while writing cache");
+        }
 
         outcome
     }
 
     /// Clear the entire cache
     pub fn clear_cache(&self) {
-        let mut cache = self.cache_by_cwd.write().unwrap();
-        cache.clear();
+        if let Ok(mut cache) = self.cache_by_cwd.write() {
+            cache.clear();
+        } else {
+            tracing::warn!("skills metadata cache lock poisoned while clearing cache");
+        }
     }
 
     /// Get current cache size (for testing/diagnostics)
     pub fn cache_size(&self) -> usize {
-        self.cache_by_cwd.read().unwrap().len()
+        if let Ok(cache) = self.cache_by_cwd.read() {
+            cache.len()
+        } else {
+            tracing::warn!("skills metadata cache lock poisoned while reading cache size");
+            0
+        }
     }
 
     /// Quick metadata discovery without parsing SKILL.md files (Phase 2)
@@ -181,11 +194,14 @@ impl SkillsManager {
     pub fn load_skill_instructions(&self, skill_name: &str, skill_path: &Path) -> Result<Skill> {
         // Check cache first
         {
-            let cache = self.instruction_cache.read().unwrap();
-            if let Some(cached) = cache.get(skill_name) {
-                if !cached.is_expired(self.instruction_cache_ttl) {
-                    return Ok(cached.skill.clone());
+            if let Ok(cache) = self.instruction_cache.read() {
+                if let Some(cached) = cache.get(skill_name) {
+                    if !cached.is_expired(self.instruction_cache_ttl) {
+                        return Ok(cached.skill.clone());
+                    }
                 }
+            } else {
+                tracing::warn!("skill instruction cache lock poisoned while reading cache");
             }
         }
 
@@ -198,53 +214,63 @@ impl SkillsManager {
         let skill = Skill::new(manifest, skill_path.to_path_buf(), instructions)?;
 
         // Cache the parsed skill
-        let mut cache = self.instruction_cache.write().unwrap();
-
-        // Enforce max cache size: remove expired entries first, then LRU
-        if cache.len() >= self.max_instruction_cache_size && !cache.contains_key(skill_name) {
-            // Remove expired entries
-            let expired: Vec<_> = cache
-                .iter()
-                .filter(|(_, v)| v.is_expired(self.instruction_cache_ttl))
-                .map(|(k, _)| k.clone())
-                .collect();
-
-            for key in expired {
-                cache.remove(&key);
-            }
-
-            // If still at capacity, remove oldest by timestamp (LRU)
-            if cache.len() >= self.max_instruction_cache_size {
-                let oldest_key = cache
+        if let Ok(mut cache) = self.instruction_cache.write() {
+            // Enforce max cache size: remove expired entries first, then LRU
+            if cache.len() >= self.max_instruction_cache_size && !cache.contains_key(skill_name) {
+                // Remove expired entries
+                let expired: Vec<_> = cache
                     .iter()
-                    .min_by_key(|(_, v)| v.timestamp)
-                    .map(|(k, _)| k.clone());
-                if let Some(key) = oldest_key {
+                    .filter(|(_, v)| v.is_expired(self.instruction_cache_ttl))
+                    .map(|(k, _)| k.clone())
+                    .collect();
+
+                for key in expired {
                     cache.remove(&key);
                 }
-            }
-        }
 
-        cache.insert(
-            skill_name.to_string(),
-            CachedSkillInstruction {
-                skill: skill.clone(),
-                timestamp: SystemTime::now(),
-            },
-        );
+                // If still at capacity, remove oldest by timestamp (LRU)
+                if cache.len() >= self.max_instruction_cache_size {
+                    let oldest_key = cache
+                        .iter()
+                        .min_by_key(|(_, v)| v.timestamp)
+                        .map(|(k, _)| k.clone());
+                    if let Some(key) = oldest_key {
+                        cache.remove(&key);
+                    }
+                }
+            }
+
+            cache.insert(
+                skill_name.to_string(),
+                CachedSkillInstruction {
+                    skill: skill.clone(),
+                    timestamp: SystemTime::now(),
+                },
+            );
+        } else {
+            tracing::warn!("skill instruction cache lock poisoned while writing cache");
+        }
 
         Ok(skill)
     }
 
     /// Clear instruction cache
     pub fn clear_instruction_cache(&self) {
-        let mut cache = self.instruction_cache.write().unwrap();
-        cache.clear();
+        if let Ok(mut cache) = self.instruction_cache.write() {
+            cache.clear();
+        } else {
+            tracing::warn!("skill instruction cache lock poisoned while clearing cache");
+        }
     }
 
     /// Get instruction cache size (for testing/diagnostics)
     pub fn instruction_cache_size(&self) -> usize {
-        self.instruction_cache.read().unwrap().len()
+        if let Ok(cache) = self.instruction_cache.read() {
+            cache.len()
+        } else {
+            tracing::warn!("skill instruction cache lock poisoned while reading cache size");
+            0
+        }
     }
 }
 

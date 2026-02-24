@@ -93,7 +93,9 @@ impl ShellPolicyChecker {
                 deny_globs: compiled_globs,
             };
             self.cache = Some(new_entry);
-            self.cache.as_ref().expect("cache just set")
+            self.cache
+                .as_ref()
+                .ok_or_else(|| anyhow!("Failed to initialize shell policy cache entry"))?
         };
 
         for (pattern, compiled) in &entry.deny_regexes {

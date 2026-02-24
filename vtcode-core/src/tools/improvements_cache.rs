@@ -26,6 +26,7 @@ use crate::tools::improvements_errors::{EventType, ObservabilityContext};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
+use tracing::warn;
 
 /// Cache entry with TTL and LRU metadata
 #[derive(Clone)]
@@ -91,10 +92,10 @@ impl<K: Clone + Eq + std::hash::Hash + std::fmt::Debug, V: Clone + std::fmt::Deb
         K: std::borrow::Borrow<Q>,
         Q: std::hash::Hash + Eq + ?Sized,
     {
-        let mut entries = self
-            .entries
-            .write()
-            .expect("Cache RwLock poisoned - this indicates a panic in another thread");
+        let mut entries = self.entries.write().unwrap_or_else(|poisoned| {
+            warn!("improvements cache write lock poisoned during get_arc; recovering");
+            poisoned.into_inner()
+        });
 
         // Use get directly instead of contains_key + get
         if let Some(entry) = entries.get(key) {
@@ -130,10 +131,10 @@ impl<K: Clone + Eq + std::hash::Hash + std::fmt::Debug, V: Clone + std::fmt::Deb
 
     /// Put value in cache
     pub fn put(&self, key: K, value: V) -> Result<(), String> {
-        let mut entries = self
-            .entries
-            .write()
-            .expect("Cache RwLock poisoned - this indicates a panic in another thread");
+        let mut entries = self.entries.write().unwrap_or_else(|poisoned| {
+            warn!("improvements cache write lock poisoned during put; recovering");
+            poisoned.into_inner()
+        });
 
         // Check if key already exists - if so, just update (no eviction needed)
         if let std::collections::hash_map::Entry::Occupied(mut e) = entries.entry(key.clone()) {
@@ -161,10 +162,10 @@ impl<K: Clone + Eq + std::hash::Hash + std::fmt::Debug, V: Clone + std::fmt::Deb
 
     /// Insert an Arc<V> directly into the cache without cloning the value.
     pub fn put_arc(&self, key: K, value: Arc<V>) -> Result<(), String> {
-        let mut entries = self
-            .entries
-            .write()
-            .expect("Cache RwLock poisoned - this indicates a panic in another thread");
+        let mut entries = self.entries.write().unwrap_or_else(|poisoned| {
+            warn!("improvements cache write lock poisoned during put_arc; recovering");
+            poisoned.into_inner()
+        });
 
         let now = Instant::now();
         let new_entry = CacheEntry {
@@ -217,19 +218,19 @@ impl<K: Clone + Eq + std::hash::Hash + std::fmt::Debug, V: Clone + std::fmt::Deb
 
     /// Get cache size
     pub fn size(&self) -> usize {
-        let entries = self
-            .entries
-            .read()
-            .expect("Cache RwLock poisoned - this indicates a panic in another thread");
+        let entries = self.entries.read().unwrap_or_else(|poisoned| {
+            warn!("improvements cache read lock poisoned during size; recovering");
+            poisoned.into_inner()
+        });
         entries.len()
     }
 
     /// Clear expired entries
     pub fn evict_expired(&self) -> usize {
-        let mut entries = self
-            .entries
-            .write()
-            .expect("Cache RwLock poisoned - this indicates a panic in another thread");
+        let mut entries = self.entries.write().unwrap_or_else(|poisoned| {
+            warn!("improvements cache write lock poisoned during evict_expired; recovering");
+            poisoned.into_inner()
+        });
         let before = entries.len();
 
         entries.retain(|_, entry| !entry.is_expired());
@@ -250,16 +251,19 @@ impl<K: Clone + Eq + std::hash::Hash + std::fmt::Debug, V: Clone + std::fmt::Deb
     pub fn clear(&self) {
         self.entries
             .write()
-            .expect("Cache RwLock poisoned - this indicates a panic in another thread")
+            .unwrap_or_else(|poisoned| {
+                warn!("improvements cache write lock poisoned during clear; recovering");
+                poisoned.into_inner()
+            })
             .clear();
     }
 
     /// Get cache stats
     pub fn stats(&self) -> CacheStats {
-        let entries = self
-            .entries
-            .read()
-            .expect("Cache RwLock poisoned - this indicates a panic in another thread");
+        let entries = self.entries.read().unwrap_or_else(|poisoned| {
+            warn!("improvements cache read lock poisoned during stats; recovering");
+            poisoned.into_inner()
+        });
         let expired_count = entries.values().filter(|e| e.is_expired()).count();
 
         CacheStats {
