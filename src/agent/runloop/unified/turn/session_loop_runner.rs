@@ -28,6 +28,47 @@ fn effective_max_tool_calls_for_turn(configured_limit: usize, plan_mode_active: 
     }
 }
 
+fn build_partial_timeout_messages(
+    timeout_secs: u64,
+    timed_out_phase: TurnPhase,
+    attempted_tool_calls: usize,
+    active_pty_sessions_before_cancel: usize,
+    plan_mode_active: bool,
+    had_tool_activity: bool,
+) -> (String, String) {
+    let timed_out_during_request = matches!(timed_out_phase, TurnPhase::Requesting);
+    let mut timeout_note = if timed_out_during_request {
+        "Tool activity exists and timeout occurred during LLM requesting; retry is skipped to avoid re-running tools.".to_string()
+    } else {
+        "Tool activity was detected in this attempt; retry is skipped to avoid duplicate execution."
+            .to_string()
+    };
+
+    let include_continue_nudge = plan_mode_active && had_tool_activity && timed_out_during_request;
+    if include_continue_nudge {
+        timeout_note.push_str(" Nudge with \"continue\" to resume from the stalled turn.");
+    }
+
+    let renderer_message = format!(
+        "Turn timed out after {} seconds in phase {:?}. PTY sessions cancelled; {} (calls={}, active_pty_before_cancel={})",
+        timeout_secs,
+        timed_out_phase,
+        timeout_note,
+        attempted_tool_calls,
+        active_pty_sessions_before_cancel
+    );
+
+    let mut error_message = format!(
+        "Turn timed out after {} seconds in phase {:?} after partial tool execution (calls={}, active_pty_before_cancel={})",
+        timeout_secs, timed_out_phase, attempted_tool_calls, active_pty_sessions_before_cancel
+    );
+    if include_continue_nudge {
+        error_message.push_str(" Nudge with \"continue\" to resume from the stalled turn.");
+    }
+
+    (renderer_message, error_message)
+}
+
 pub(super) async fn run_single_agent_loop_unified_impl(
     config: &CoreAgentConfig,
     _vt_cfg: Option<VTCodeConfig>,
@@ -383,33 +424,19 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                             > execution_history_len_before_attempt
                             || active_pty_sessions_before_cancel > 0
                             || attempted_tool_calls > 0;
-                        let timed_out_during_request =
-                            matches!(timed_out_phase, TurnPhase::Requesting);
                         attempts += 1;
                         if had_tool_activity {
-                            let timeout_note = if timed_out_during_request {
-                                "Tool activity exists and timeout occurred during LLM requesting; retry is skipped to avoid re-running tools."
-                            } else {
-                                "Tool activity was detected in this attempt; retry is skipped to avoid duplicate execution."
-                            };
-                            renderer.line(
-                                MessageStyle::Error,
-                                &format!(
-                                    "Turn timed out after {} seconds in phase {:?}. PTY sessions cancelled; {} (calls={}, active_pty_before_cancel={})",
+                            let (timeout_message, timeout_error_message) =
+                                build_partial_timeout_messages(
                                     timeout_secs,
                                     timed_out_phase,
-                                    timeout_note,
                                     attempted_tool_calls,
-                                    active_pty_sessions_before_cancel
-                                ),
-                            )?;
-                            break Err(anyhow::anyhow!(
-                                "Turn timed out after {} seconds in phase {:?} after partial tool execution (calls={}, active_pty_before_cancel={})",
-                                timeout_secs,
-                                timed_out_phase,
-                                attempted_tool_calls,
-                                active_pty_sessions_before_cancel
-                            ));
+                                    active_pty_sessions_before_cancel,
+                                    plan_mode,
+                                    had_tool_activity,
+                                );
+                            renderer.line(MessageStyle::Error, &timeout_message)?;
+                            break Err(anyhow::Error::msg(timeout_error_message));
                         }
                         if attempts >= 2 {
                             renderer.line(
@@ -607,7 +634,10 @@ pub(super) async fn run_single_agent_loop_unified_impl(
 
 #[cfg(test)]
 mod tests {
-    use super::{effective_max_tool_calls_for_turn, resolve_effective_turn_timeout_secs};
+    use super::{
+        TurnPhase, build_partial_timeout_messages, effective_max_tool_calls_for_turn,
+        resolve_effective_turn_timeout_secs,
+    };
 
     #[test]
     fn turn_timeout_respects_tool_wall_clock_budget() {
@@ -639,5 +669,29 @@ mod tests {
     #[test]
     fn edit_mode_keeps_configured_tool_call_limit() {
         assert_eq!(effective_max_tool_calls_for_turn(32, false), 32);
+    }
+
+    #[test]
+    fn plan_mode_requesting_partial_timeout_includes_continue_nudge() {
+        let (timeout_message, timeout_error_message) =
+            build_partial_timeout_messages(660, TurnPhase::Requesting, 25, 0, true, true);
+        assert!(timeout_message.contains("Nudge with \"continue\""));
+        assert!(timeout_error_message.contains("Nudge with \"continue\""));
+    }
+
+    #[test]
+    fn edit_mode_requesting_partial_timeout_omits_continue_nudge() {
+        let (timeout_message, timeout_error_message) =
+            build_partial_timeout_messages(660, TurnPhase::Requesting, 25, 0, false, true);
+        assert!(!timeout_message.contains("Nudge with \"continue\""));
+        assert!(!timeout_error_message.contains("Nudge with \"continue\""));
+    }
+
+    #[test]
+    fn requesting_timeout_without_tool_activity_omits_continue_nudge() {
+        let (timeout_message, timeout_error_message) =
+            build_partial_timeout_messages(660, TurnPhase::Requesting, 0, 0, true, false);
+        assert!(!timeout_message.contains("Nudge with \"continue\""));
+        assert!(!timeout_error_message.contains("Nudge with \"continue\""));
     }
 }
