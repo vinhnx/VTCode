@@ -218,7 +218,10 @@ fn audit_tool_categories() {
             ],
         ),
         ("Code Execution", vec!["execute_code"]),
-        ("Planning & Meta", vec!["task_tracker", "search_tools"]),
+        (
+            "Planning & Meta",
+            vec!["task_tracker", "plan_task_tracker", "search_tools"],
+        ),
         ("Diagnostic & Introspection", vec!["agent_info"]),
         ("Network", vec!["web_fetch"]),
     ]);
@@ -262,6 +265,7 @@ fn audit_tool_policy_distribution() {
                 "resize_pty_session",
                 "close_pty_session",
                 "task_tracker",
+                "plan_task_tracker",
                 "search_tools",
             ],
         ),

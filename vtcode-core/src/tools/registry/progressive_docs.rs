@@ -222,6 +222,36 @@ pub fn minimal_tool_signatures() -> HashMap<&'static str, ToolSignature> {
     );
 
     sigs.insert(
+        tools::TASK_TRACKER,
+        ToolSignature {
+            name: tools::TASK_TRACKER,
+            brief: "Track multi-step checklist",
+            required_params: vec![("action", "string", "create|update|list|add")],
+            common_params: vec![
+                ("items", "array", "Task descriptions"),
+                ("index", "integer", "Item index for update"),
+                ("status", "string", "pending|in_progress|completed|blocked"),
+            ],
+            token_estimate: 35,
+        },
+    );
+
+    sigs.insert(
+        tools::PLAN_TASK_TRACKER,
+        ToolSignature {
+            name: tools::PLAN_TASK_TRACKER,
+            brief: "Plan-mode scoped checklist",
+            required_params: vec![("action", "string", "create|update|list|add")],
+            common_params: vec![
+                ("items", "array", "Task descriptions"),
+                ("index_path", "string", "Hierarchical path (e.g., 2.1)"),
+                ("status", "string", "pending|in_progress|completed|blocked"),
+            ],
+            token_estimate: 35,
+        },
+    );
+
+    sigs.insert(
         tools::SKILL,
         ToolSignature {
             name: tools::SKILL,

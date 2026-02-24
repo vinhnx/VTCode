@@ -180,7 +180,7 @@ impl IncrementalSystemPrompt {
             );
             let _ = writeln!(
                 prompt,
-                "# Re-plan now: use `task_tracker` to define composable slices (files + outcome + verify) before more mutating edits."
+                "# Re-plan now: use `task_tracker` (or `plan_task_tracker` in Plan Mode) to define composable slices (files + outcome + verify) before more mutating edits."
             );
         }
         if context.error_count > 0 {

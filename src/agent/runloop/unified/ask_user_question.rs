@@ -3,7 +3,7 @@ use std::sync::Arc;
 use anyhow::{Context, Result};
 use serde::Deserialize;
 use serde_json::{Value, json};
-use tokio::sync::Notify;
+use tokio::{sync::Notify, task};
 
 use vtcode_core::ui::tui::{
     InlineHandle, InlineListItem, InlineListSearchConfig, InlineListSelection, InlineSession,
@@ -52,6 +52,26 @@ struct AskUserItem {
     badge: Option<String>,
 }
 
+fn resolve_current_step(tabs: &[AskUserTab], default_tab_id: Option<&str>) -> usize {
+    default_tab_id
+        .and_then(|id| tabs.iter().position(|tab| tab.id == id))
+        .unwrap_or(0)
+}
+
+fn find_default_choice_selection(
+    items: &[InlineListItem],
+    default_choice_id: &str,
+) -> Option<InlineListSelection> {
+    items.iter().find_map(|item| {
+        if let Some(InlineListSelection::AskUserChoice { choice_id, .. }) = &item.selection
+            && choice_id == default_choice_id
+        {
+            return item.selection.clone();
+        }
+        None
+    })
+}
+
 pub(crate) async fn execute_ask_user_question_tool(
     handle: &InlineHandle,
     session: &mut InlineSession,
@@ -68,11 +88,19 @@ pub(crate) async fn execute_ask_user_question_tool(
             "error": "No tabs provided"
         }));
     }
+    if parsed.tabs.iter().any(|tab| tab.items.is_empty()) {
+        return Ok(json!({
+            "cancelled": true,
+            "error": "Each tab must include at least one item"
+        }));
+    }
 
     let title = parsed
         .title
         .clone()
         .unwrap_or_else(|| "Question".to_string());
+    let current_step = resolve_current_step(&parsed.tabs, parsed.default_tab_id.as_deref());
+    let default_tab_id = parsed.tabs.get(current_step).map(|tab| tab.id.as_str());
 
     let steps: Vec<WizardStep> = parsed
         .tabs
@@ -100,19 +128,11 @@ pub(crate) async fn execute_ask_user_question_tool(
                 })
                 .collect();
 
-            // Find default choice for this tab if provided
-            let answer = if let Some(choice_id) = parsed.default_choice_id.as_deref() {
-                items.iter().find_map(|item| {
-                    if let Some(InlineListSelection::AskUserChoice {
-                        choice_id: cid, ..
-                    }) = &item.selection
-                    {
-                        if cid == choice_id {
-                            return item.selection.clone();
-                        }
-                    }
-                    None
-                })
+            let answer = if default_tab_id == Some(tab.id.as_str()) {
+                parsed
+                    .default_choice_id
+                    .as_deref()
+                    .and_then(|choice_id| find_default_choice_selection(&items, choice_id))
             } else {
                 None
             };
@@ -130,12 +150,6 @@ pub(crate) async fn execute_ask_user_question_tool(
         })
         .collect();
 
-    let current_step = parsed
-        .default_tab_id
-        .as_deref()
-        .and_then(|id| parsed.tabs.iter().position(|t| t.id == id))
-        .unwrap_or(0);
-
     // Enable search by default for better UX on larger lists.
     let search = Some(InlineListSearchConfig {
         label: "Search".to_string(),
@@ -144,6 +158,7 @@ pub(crate) async fn execute_ask_user_question_tool(
 
     handle.show_tabbed_list_modal(title, steps, current_step, search);
     handle.force_redraw();
+    task::yield_now().await;
     match wait_for_wizard_modal(handle, session, ctrl_c_state, ctrl_c_notify).await? {
         WizardModalOutcome::Submitted(mut selections) => {
             if let Some(InlineListSelection::AskUserChoice {
@@ -168,5 +183,80 @@ pub(crate) async fn execute_ask_user_question_tool(
                 Ok(json!({"cancelled": true}))
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resolve_current_step_uses_default_tab_when_found() {
+        let tabs = vec![
+            AskUserTab {
+                id: "a".to_string(),
+                title: "A".to_string(),
+                items: vec![AskUserItem {
+                    id: "1".to_string(),
+                    title: "one".to_string(),
+                    subtitle: None,
+                    badge: None,
+                }],
+            },
+            AskUserTab {
+                id: "b".to_string(),
+                title: "B".to_string(),
+                items: vec![AskUserItem {
+                    id: "2".to_string(),
+                    title: "two".to_string(),
+                    subtitle: None,
+                    badge: None,
+                }],
+            },
+        ];
+
+        assert_eq!(resolve_current_step(&tabs, Some("b")), 1);
+        assert_eq!(resolve_current_step(&tabs, Some("missing")), 0);
+        assert_eq!(resolve_current_step(&tabs, None), 0);
+    }
+
+    #[test]
+    fn find_default_choice_selection_matches_item_id() {
+        let items = vec![
+            InlineListItem {
+                title: "Alpha".to_string(),
+                subtitle: None,
+                badge: None,
+                indent: 0,
+                selection: Some(InlineListSelection::AskUserChoice {
+                    tab_id: "tab".to_string(),
+                    choice_id: "alpha".to_string(),
+                    text: None,
+                }),
+                search_value: None,
+            },
+            InlineListItem {
+                title: "Beta".to_string(),
+                subtitle: None,
+                badge: None,
+                indent: 0,
+                selection: Some(InlineListSelection::AskUserChoice {
+                    tab_id: "tab".to_string(),
+                    choice_id: "beta".to_string(),
+                    text: None,
+                }),
+                search_value: None,
+            },
+        ];
+
+        let selected = find_default_choice_selection(&items, "beta");
+        assert!(matches!(
+            selected,
+            Some(InlineListSelection::AskUserChoice {
+                choice_id,
+                ..
+            }) if choice_id == "beta"
+        ));
+        assert!(find_default_choice_selection(&items, "missing").is_none());
     }
 }

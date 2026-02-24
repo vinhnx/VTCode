@@ -3,13 +3,13 @@
 
 [agent]
 # Primary LLM provider to use (e.g., "openai", "gemini", "anthropic", "openrouter")
-provider = "ollama"
+provider = "huggingface"
 
 # Environment variable containing the API key for the provider
-api_key_env = "OLLAMA_API_KEY"
+api_key_env = "HF_TOKEN"
 
 # Default model to use when no specific model is specified
-default_model = "glm-5:cloud"
+default_model = "zai-org/GLM-5:novita"
 
 # Personal/local overrides should live in user config, not workspace config:
 #   ~/.vtcode/vtcode.toml
@@ -56,7 +56,7 @@ include_working_directory = true
 # "edit" - Full tool access for file modifications and command execution (default)
 # "plan" - Read-only mode that produces implementation plans without making changes
 # Toggle during session with Shift+Tab or /plan command
-default_editing_mode = "edit"
+default_editing_mode = "plan"
 require_plan_confirmation = true
 autonomous_mode = false
 credential_storage_mode = "keyring"
@@ -271,10 +271,16 @@ load_skill = "allow"
 open_file = "allow"
 search_file = "allow"
 spawn_subagent = "allow"
-task_tracker = "allow"
+task_tracker = "prompt"
 exec_code = "allow"
 "send_command<|channel|>analysis" = "allow"
 "assistant<|channel|>apply_patch" = "allow"
+plan_task_tracker = "prompt"
+plan_checklist = "prompt"
+plan_tasks = "prompt"
+plan_manager = "prompt"
+track_tasks = "prompt"
+checklist = "prompt"
 
 [security.gatekeeper]
 warn_on_quarantine = true

@@ -104,6 +104,11 @@ pub(crate) async fn render_tool_output(
             )
             .await;
         }
+        Some(tools::TASK_TRACKER) | Some(tools::PLAN_TASK_TRACKER) => {
+            if render_tracker_view(renderer, val)? {
+                return Ok(());
+            }
+        }
         _ => {}
     }
 
@@ -206,6 +211,29 @@ pub(crate) async fn render_tool_output(
         .await?;
     }
     Ok(())
+}
+
+fn render_tracker_view(renderer: &mut AnsiRenderer, val: &Value) -> Result<bool> {
+    let Some(view) = val.get("view").and_then(Value::as_object) else {
+        return Ok(false);
+    };
+    let title = view
+        .get("title")
+        .and_then(Value::as_str)
+        .unwrap_or("Updated Plan");
+
+    renderer.line(MessageStyle::ToolDetail, &format!("• {}", title))?;
+    if let Some(lines) = view.get("lines").and_then(Value::as_array) {
+        for line in lines {
+            if let Some(display) = line.get("display").and_then(Value::as_str) {
+                renderer.line(MessageStyle::ToolDetail, display)?;
+            } else if let Some(text) = line.as_str() {
+                renderer.line(MessageStyle::ToolDetail, text)?;
+            }
+        }
+    }
+
+    Ok(true)
 }
 
 fn render_simple_tool_status(

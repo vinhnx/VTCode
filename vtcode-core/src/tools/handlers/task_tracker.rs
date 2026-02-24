@@ -54,6 +54,15 @@ impl TaskStatus {
             TaskStatus::Blocked => "[!]",
         }
     }
+
+    fn view_symbol(&self) -> &'static str {
+        match self {
+            TaskStatus::Pending => "•",
+            TaskStatus::InProgress => ">",
+            TaskStatus::Completed => "✔",
+            TaskStatus::Blocked => "!",
+        }
+    }
 }
 
 /// A single task item
@@ -128,6 +137,28 @@ impl TaskChecklist {
                     "status": item.status.to_string()
                 })
             }).collect::<Vec<_>>()
+        })
+    }
+
+    fn view(&self) -> Value {
+        let lines = self
+            .items
+            .iter()
+            .enumerate()
+            .map(|(idx, item)| {
+                let branch = if idx + 1 == self.items.len() { "└" } else { "├" };
+                json!({
+                    "display": format!("{} {} {}", branch, item.status.view_symbol(), item.description),
+                    "status": item.status.to_string(),
+                    "text": item.description,
+                    "index_path": item.index.to_string(),
+                })
+            })
+            .collect::<Vec<_>>();
+
+        json!({
+            "title": "Updated Plan",
+            "lines": lines,
         })
     }
 }
@@ -301,13 +332,15 @@ impl TaskTrackerTool {
 
         self.save_checklist(&checklist).await?;
         let summary = checklist.summary();
+        let view = checklist.view();
         *self.checklist.write().await = Some(checklist);
 
         Ok(json!({
             "status": "created",
             "message": "Task checklist created successfully.",
             "task_file": self.task_file().display().to_string(),
-            "checklist": summary
+            "checklist": summary,
+            "view": view
         }))
     }
 
@@ -359,7 +392,8 @@ impl TaskTrackerTool {
         Ok(json!({
             "status": "updated",
             "message": format!("Item {} status changed: {} → {}", index, old_status, new_status_str),
-            "checklist": summary
+            "checklist": summary,
+            "view": checklist.view()
         }))
     }
 
@@ -372,7 +406,8 @@ impl TaskTrackerTool {
         match guard.as_ref() {
             Some(checklist) => Ok(json!({
                 "status": "ok",
-                "checklist": checklist.summary()
+                "checklist": checklist.summary(),
+                "view": checklist.view()
             })),
             None => Ok(json!({
                 "status": "empty",
@@ -413,7 +448,8 @@ impl TaskTrackerTool {
         Ok(json!({
             "status": "added",
             "message": format!("Added item {}: {}", new_index, desc),
-            "checklist": summary
+            "checklist": summary,
+            "view": checklist.view()
         }))
     }
 }

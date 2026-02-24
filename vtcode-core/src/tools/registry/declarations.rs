@@ -618,6 +618,67 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
         // HUMAN-IN-THE-LOOP (HITL)
         // ============================================================
         FunctionDeclaration {
+            name: tools::TASK_TRACKER.to_string(),
+            description: "Track implementation progress with a structured checklist. Actions: create, update, list, add.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": ["create", "update", "list", "add"],
+                        "description": "Action to perform."
+                    },
+                    "title": {"type": "string", "description": "Checklist title (create)."},
+                    "items": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Task items (create)."
+                    },
+                    "index": {"type": "integer", "description": "1-based index (update)."},
+                    "status": {
+                        "type": "string",
+                        "enum": ["pending", "in_progress", "completed", "blocked"],
+                        "description": "New status (update)."
+                    },
+                    "description": {"type": "string", "description": "Task text (add)."},
+                    "notes": {"type": "string", "description": "Optional notes."}
+                },
+                "required": ["action"]
+            }),
+        },
+
+        FunctionDeclaration {
+            name: tools::PLAN_TASK_TRACKER.to_string(),
+            description: "Plan-mode scoped hierarchical checklist persisted under .vtcode/plans/<plan>.tasks.md. Actions: create, update, list, add.".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": ["create", "update", "list", "add"],
+                        "description": "Action to perform."
+                    },
+                    "title": {"type": "string", "description": "Checklist title (create)."},
+                    "items": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Task items (create). Leading 2-space indentation indicates nesting."
+                    },
+                    "index_path": {"type": "string", "description": "Hierarchical path for update (example: 2.1)."},
+                    "status": {
+                        "type": "string",
+                        "enum": ["pending", "in_progress", "completed", "blocked"],
+                        "description": "New status (update)."
+                    },
+                    "description": {"type": "string", "description": "Task text (add)."},
+                    "parent_index_path": {"type": "string", "description": "Parent path for add (example: 2)."},
+                    "notes": {"type": "string", "description": "Optional notes."}
+                },
+                "required": ["action"]
+            }),
+        },
+
+        FunctionDeclaration {
             name: tools::REQUEST_USER_INPUT.to_string(),
             description: "Ask the user 1-3 structured questions with optional multiple-choice options. Use when you need clarification, preference input, or a decision from the user before proceeding. Prefer this over asking in plain text.".to_string(),
             parameters: json!({

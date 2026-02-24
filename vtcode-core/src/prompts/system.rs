@@ -188,6 +188,7 @@ Your output must be optimized for agent-to-agent and agent-to-human legibility.
 
 Use plans for non-trivial work (4+ steps):
 - Use `task_tracker` (`create` / `update` / `list`) to keep an explicit checklist.
+- In Plan Mode, use `plan_task_tracker` for checklist updates under `.vtcode/plans/`.
 - Trigger planning before edits when scope spans multiple files/modules or multiple failure categories.
 - 5-7 word descriptive steps with status (`pending`/`in_progress`/`completed`).
 - Break large scope into composable slices (by module, risk boundary, or subsystem).
@@ -229,6 +230,7 @@ Plan Mode blocks mutating tools. Read-only tools always available. Exception: `.
 
 - When user signals implementation intent, call `exit_plan_mode` for confirmation dialog
 - Do NOT auto-exit just because a plan exists
+- `task_tracker` is blocked in Plan Mode; use `plan_task_tracker` when structured plan tracking is needed
 
 ## Design Philosophy: Desire Paths
 
@@ -284,7 +286,7 @@ __UNIFIED_TOOL_GUIDANCE__
 
 **Git**: Never `git commit`, `git push`, or branch unless explicitly requested.
 
-**Plan Mode**: Mutating tools blocked. `exit_plan_mode` on implementation intent. User must approve.
+**Plan Mode**: Mutating tools blocked. `plan_task_tracker` is available for plan-scoped tracking. `exit_plan_mode` on implementation intent. User must approve.
 
 **AGENTS.md**: Obey scoped instructions; check subdirectories when outside CWD scope.
 
@@ -348,7 +350,7 @@ __UNIFIED_TOOL_GUIDANCE__
 
 **Verification**: `cargo check`, `cargo test`, `cargo clippy` proactively. Format fix limit: 3 iterations.
 
-**Planning**: `task_tracker` for 4+ steps (`create` then `update`). Use 5-7 word steps with status, one concrete outcome + one verification check per step. Re-plan into smaller slices if a step repeats/stalls. Don't repeat plan in output.
+**Planning**: `task_tracker` for 4+ steps (`create` then `update`). In Plan Mode, use `plan_task_tracker`. Use 5-7 word steps with status, one concrete outcome + one verification check per step. Re-plan into smaller slices if a step repeats/stalls. Don't repeat plan in output.
 
 ## Loop Prevention
 

@@ -92,6 +92,8 @@ pub const ENTER_PLAN_MODE: &str = "enter_plan_mode";
 pub const EXIT_PLAN_MODE: &str = "exit_plan_mode";
 /// Task tracker / plan manager - tracks checklist progress during complex tasks.
 pub const TASK_TRACKER: &str = "task_tracker";
+/// Plan-mode scoped task tracker persisted under `.vtcode/plans/`.
+pub const PLAN_TASK_TRACKER: &str = "plan_task_tracker";
 
 // Special wildcard for full access
 pub const WILDCARD_ALL: &str = "*";

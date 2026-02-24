@@ -57,6 +57,7 @@ pub mod turn_diff_tracker;
 // Handler implementations
 pub mod grep_files_handler;
 pub mod list_dir_handler;
+pub mod plan_task_tracker;
 pub mod plan_mode;
 pub mod read_file;
 pub mod shell_handler;
@@ -140,6 +141,7 @@ pub use spawn_subagent::SpawnSubagentTool;
 pub use plan_mode::{EnterPlanModeTool, ExitPlanModeTool, PlanModeState};
 
 // Task tracker (NL2Repo-Bench)
+pub use plan_task_tracker::PlanTaskTrackerTool;
 pub use task_tracker::TaskTrackerTool;
 
 // Core tool handler types
