@@ -44,6 +44,7 @@ This section contains information for developers who want to contribute to, modi
 - **[Testing Strategies](./testing-strategies.md)** - Comprehensive testing approaches
 - **[Performance Optimization](./performance.md)** - Optimization techniques and best practices
 - **[Asset Synchronization](./asset-synchronization.md)** - Managing embedded assets between workspace and crate
+- **[Changelog Generation](./CHANGELOG_GENERATION.md)** - Automated changelog generation with git-cliff
 
 ## **Technical Deep Dives**
 

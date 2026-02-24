@@ -1,0 +1,147 @@
+# git-cliff configuration file
+# https://git-cliff.org/docs/configuration
+
+[changelog]
+# Template for the changelog
+header = """
+---
+
+# Changelog
+
+All notable changes to vtcode will be documented in this file.
+"""
+
+body = """
+{% if version %}\
+    ## {{ version | trim_start_matches(pat="v") }} - {{ timestamp | date(format="%Y-%m-%d") }}
+{% else %}\
+    ## [unreleased]
+{% endif %}\
+{% for group, commits in commits | group_by(attribute="group") %}\
+    \n
+    ### {{ group | upper_first }}
+    {% for commit in commits %}\
+        - {{ commit.message | upper_first }} ({% if commit.remote.username %}@{{ commit.remote.username }}{% else %}{{ commit.author.name }}{% endif %})\n
+    {% endfor %}\
+{% endfor %}\n
+"""
+
+footer = """
+"""
+
+# Remove leading and trailing whitespace from the template
+trim = true
+
+# Postprocessors for changelog entries
+postprocessors = []
+
+[git]
+# Parse commits according to conventional commits format
+conventional_commits = true
+
+# Exclude commits that don't follow conventional commits format
+filter_unconventional = true
+
+# Split commits by newlines
+split_commits = false
+
+# Preprocess commit messages before parsing
+commit_preprocessors = [
+    # Remove issue/PR references from the end of commit messages to avoid duplication
+    { pattern = '\((https://github.com/vinhnx/vtcode/pull/\d+)\)', replace = "" },
+    { pattern = '\(#\d+\)', replace = "" },
+]
+
+# Protect commits from being parsed (e.g., version bumps, release commits)
+commit_parsers = [
+    # Features
+    { message = "^feat", group = "Features" },
+    { message = "^feat\\(.*\\):", group = "Features" },
+    
+    # Bug Fixes
+    { message = "^fix", group = "Bug Fixes" },
+    { message = "^fix\\(.*\\):", group = "Bug Fixes" },
+    
+    # Performance
+    { message = "^perf", group = "Performance" },
+    { message = "^perf\\(.*\\):", group = "Performance" },
+    
+    # Refactors
+    { message = "^refactor", group = "Refactors" },
+    { message = "^refactor\\(.*\\):", group = "Refactors" },
+    
+    # Security
+    { message = "^security", group = "Security" },
+    { message = "^security\\(.*\\):", group = "Security" },
+    
+    # Documentation
+    { message = "^docs", group = "Documentation" },
+    { message = "^docs\\(.*\\):", group = "Documentation" },
+    
+    # Tests
+    { message = "^test", group = "Tests" },
+    { message = "^test\\(.*\\):", group = "Tests" },
+    
+    # Build
+    { message = "^build", group = "Build" },
+    { message = "^build\\(.*\\):", group = "Build" },
+    
+    # CI
+    { message = "^ci", group = "CI" },
+    { message = "^ci\\(.*\\):", group = "CI" },
+    
+    # Dependencies
+    { message = "^deps", group = "Dependencies" },
+    { message = "^deps\\(.*\\):", group = "Dependencies" },
+    
+    # Chores (excluded from changelog by default)
+    { message = "^chore", group = "Chores", skip = true },
+    { message = "^chore\\(.*\\):", group = "Chores", skip = true },
+    
+    # Catch-all for other commits
+    { message = ".*", group = "Other" },
+]
+
+# Protect specific commits from being included in the changelog
+protect_breaking_commits = false
+
+# Filter out commits
+filter_commits = true
+
+# Tags configuration
+tag_pattern = "v[0-9]*"
+
+# Pattern to match tags with optional 'v' prefix
+tag_regex = "(?P<version>v?[0-9]+\\.[0-9]+\\.[0-9]+)"
+
+# Regex to exclude commits from the changelog (matches your current config)
+exclude_patterns = [
+    "chore\\(release\\):",
+    "bump version",
+    "update version",
+    "version bump",
+    "release v?\\d+\\.\\d+\\.\\d+",
+    "chore.*version",
+    "chore.*release",
+    "build.*version",
+    "update.*version.*number",
+    "bump.*version.*to",
+    "update homebrew",
+    "update changelog",
+]
+
+# Sort commits within a tag
+sort_commits = "oldest"
+
+# Link to remote repository
+remote = "github"
+
+# Remote configuration
+[remote.github]
+owner = "vinhnx"
+repo = "vtcode"
+
+# Gitmoji configuration
+[gitmoji]
+# Enable gitmoji parsing
+enable = false
