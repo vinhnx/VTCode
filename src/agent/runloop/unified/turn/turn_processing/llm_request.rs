@@ -26,9 +26,34 @@ unsafe impl Sync for UnsafeSendContext {}
 
 fn is_retryable_llm_error(message: &str) -> bool {
     let msg = message.to_ascii_lowercase();
+    let non_retryable = [
+        "invalid api key",
+        "authentication failed",
+        "unauthorized",
+        "forbidden",
+        "permission denied",
+        "monthly spending limit",
+        "insufficient credits",
+        "quota exceeded",
+        "billing",
+        "payment required",
+        "bad request",
+        "400",
+        "401",
+        "403",
+        "404",
+        "not found",
+        "model not found",
+    ];
+    if non_retryable.iter().any(|needle| msg.contains(needle)) {
+        return false;
+    }
+
     [
         "rate limit",
         "timeout",
+        "timed out",
+        "429",
         "internal server error",
         "500",
         "502",
@@ -499,6 +524,20 @@ mod tests {
     #[test]
     fn retryable_llm_error_excludes_non_transient_messages() {
         assert!(!is_retryable_llm_error("Provider error: Invalid API key"));
+    }
+
+    #[test]
+    fn retryable_llm_error_excludes_forbidden_quota_failures() {
+        assert!(!is_retryable_llm_error(
+            "Provider error: HuggingFace API error (403 Forbidden): {\"error\":\"You have exceeded your monthly spending limit.\"}"
+        ));
+    }
+
+    #[test]
+    fn retryable_llm_error_includes_rate_limit_429() {
+        assert!(is_retryable_llm_error(
+            "Provider error: 429 Too Many Requests"
+        ));
     }
 
     #[test]

@@ -39,6 +39,8 @@ pub struct HarnessTurnState {
     pub phase: TurnPhase,
     pub turn_started_at: Instant,
     pub tool_calls: usize,
+    pub blocked_tool_calls: usize,
+    pub consecutive_blocked_tool_calls: usize,
     pub consecutive_spool_chunk_reads: usize,
     pub tool_budget_warning_emitted: bool,
     pub tool_budget_exhausted_emitted: bool,
@@ -61,6 +63,8 @@ impl HarnessTurnState {
             phase: TurnPhase::Preparing,
             turn_started_at: Instant::now(),
             tool_calls: 0,
+            blocked_tool_calls: 0,
+            consecutive_blocked_tool_calls: 0,
             consecutive_spool_chunk_reads: 0,
             tool_budget_warning_emitted: false,
             tool_budget_exhausted_emitted: false,
@@ -80,6 +84,16 @@ impl HarnessTurnState {
 
     pub fn record_tool_call(&mut self) {
         self.tool_calls = self.tool_calls.saturating_add(1);
+    }
+
+    pub fn record_blocked_tool_call(&mut self) -> usize {
+        self.blocked_tool_calls = self.blocked_tool_calls.saturating_add(1);
+        self.consecutive_blocked_tool_calls = self.consecutive_blocked_tool_calls.saturating_add(1);
+        self.consecutive_blocked_tool_calls
+    }
+
+    pub fn reset_blocked_tool_call_streak(&mut self) {
+        self.consecutive_blocked_tool_calls = 0;
     }
 
     pub fn tool_budget_usage_ratio(&self) -> f64 {
@@ -230,5 +244,23 @@ mod tests {
         assert!(state.tool_budget_exhausted());
         state.mark_tool_budget_exhausted_emitted();
         assert!(state.tool_budget_exhausted_emitted);
+    }
+
+    #[test]
+    fn harness_state_tracks_blocked_call_streak() {
+        let mut state = HarnessTurnState::new(
+            TurnRunId("run-1".to_string()),
+            TurnId("turn-1".to_string()),
+            4,
+            10,
+            1,
+        );
+
+        assert_eq!(state.blocked_tool_calls, 0);
+        assert_eq!(state.record_blocked_tool_call(), 1);
+        assert_eq!(state.record_blocked_tool_call(), 2);
+        assert_eq!(state.blocked_tool_calls, 2);
+        state.reset_blocked_tool_call_streak();
+        assert_eq!(state.consecutive_blocked_tool_calls, 0);
     }
 }

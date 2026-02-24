@@ -54,8 +54,8 @@ pub fn sort_tool_definitions(mut tools: Vec<ToolDefinition>) -> Vec<ToolDefiniti
 mod tests {
     use std::collections::HashSet;
 
-    use super::sort_tool_definitions;
     use super::PRIORITY_TOOLS;
+    use super::sort_tool_definitions;
     use crate::llm::provider::ToolDefinition;
 
     #[test]

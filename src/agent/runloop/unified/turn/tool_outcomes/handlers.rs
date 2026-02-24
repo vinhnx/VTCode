@@ -4,7 +4,10 @@ use anyhow::Result;
 use serde_json::{Value, json};
 use std::time::Duration;
 
-use vtcode_core::config::constants::defaults::DEFAULT_MAX_SEQUENTIAL_SPOOL_CHUNK_READS_PER_TURN;
+use vtcode_core::config::constants::defaults::{
+    DEFAULT_MAX_CONSECUTIVE_BLOCKED_TOOL_CALLS_PER_TURN,
+    DEFAULT_MAX_SEQUENTIAL_SPOOL_CHUNK_READS_PER_TURN,
+};
 use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::tools::registry::labels::tool_action_label;
@@ -85,6 +88,45 @@ fn build_tool_budget_exhausted_reason(used: usize, max: usize) -> String {
     format!(
         "Tool-call budget exhausted for this turn ({used}/{max}). Start a new turn with \"continue\" to proceed."
     )
+}
+
+fn max_consecutive_blocked_tool_calls_per_turn(ctx: &TurnProcessingContext<'_>) -> usize {
+    ctx.vt_cfg
+        .map(|cfg| cfg.tools.max_consecutive_blocked_tool_calls_per_turn)
+        .filter(|value| *value > 0)
+        .unwrap_or(DEFAULT_MAX_CONSECUTIVE_BLOCKED_TOOL_CALLS_PER_TURN)
+}
+
+pub(super) fn enforce_blocked_tool_call_guard(
+    ctx: &mut TurnProcessingContext<'_>,
+    tool_call_id: &str,
+    tool_name: &str,
+    args: &Value,
+) -> Option<TurnHandlerOutcome> {
+    let streak = ctx.harness_state.record_blocked_tool_call();
+    let max_streak = max_consecutive_blocked_tool_calls_per_turn(ctx);
+    if streak <= max_streak {
+        return None;
+    }
+
+    let display_tool = tool_action_label(tool_name, args);
+    let block_reason = format!(
+        "Consecutive blocked tool calls reached per-turn cap ({max_streak}). Last blocked call: '{display_tool}'. Stopping turn to prevent retry churn."
+    );
+    push_tool_response(
+        ctx.working_history,
+        tool_call_id.to_string(),
+        build_failure_error_content(
+            format!("Consecutive blocked tool calls exceeded cap ({max_streak}) for this turn."),
+            "blocked_streak",
+        ),
+    );
+    ctx.working_history
+        .push(uni::Message::system(block_reason.clone()));
+
+    Some(TurnHandlerOutcome::Break(TurnLoopResult::Blocked {
+        reason: Some(block_reason),
+    }))
 }
 
 fn compact_loop_key_part(value: &str, max_chars: usize) -> String {
@@ -448,8 +490,18 @@ pub(crate) async fn handle_single_tool_call<'a, 'b, 'tool>(
     // 1. Validate (Circuit Breaker, Rate Limit, Loop Detection, Safety, Permission)
     let prepared = match validate_tool_call(t_ctx.ctx, &tool_call_id, tool_name, &args_val).await? {
         ValidationResult::Outcome(outcome) => return Ok(Some(outcome)),
-        ValidationResult::Blocked => return Ok(None),
-        ValidationResult::Proceed(prepared) => prepared,
+        ValidationResult::Blocked => {
+            if let Some(outcome) =
+                enforce_blocked_tool_call_guard(t_ctx.ctx, &tool_call_id, tool_name, &args_val)
+            {
+                return Ok(Some(outcome));
+            }
+            return Ok(None);
+        }
+        ValidationResult::Proceed(prepared) => {
+            t_ctx.ctx.harness_state.reset_blocked_tool_call_streak();
+            prepared
+        }
     };
 
     // 3. Execute and Handle Result
@@ -548,9 +600,10 @@ pub(crate) async fn validate_tool_call<'a>(
         let used = ctx.harness_state.tool_calls;
         let max = ctx.harness_state.max_tool_calls;
         let remaining = ctx.harness_state.remaining_tool_calls();
-        ctx.working_history.push(uni::Message::system(
-            build_tool_budget_warning_message(used, max, remaining),
-        ));
+        ctx.working_history
+            .push(uni::Message::system(build_tool_budget_warning_message(
+                used, max, remaining,
+            )));
         ctx.harness_state.mark_tool_budget_warning_emitted();
     }
 

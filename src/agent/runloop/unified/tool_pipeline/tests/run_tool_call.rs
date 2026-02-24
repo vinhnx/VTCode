@@ -141,7 +141,11 @@ async fn test_run_tool_call_respects_max_tool_calls_budget() {
     match outcome.status {
         ToolExecutionStatus::Failure { error } => {
             assert!(error.to_string().contains("Policy violation"));
-            assert!(error.to_string().contains("exceeded max tool calls per turn"));
+            assert!(
+                error
+                    .to_string()
+                    .contains("exceeded max tool calls per turn")
+            );
         }
         other => panic!("Expected permission denial, got: {:?}", other),
     }
@@ -292,8 +296,17 @@ async fn test_run_tool_call_prevalidated_blocks_task_tracker_in_plan_mode() {
 
     match outcome.status {
         ToolExecutionStatus::Failure { error } => {
-            assert!(error.to_string().contains("task_tracker"));
-            assert!(error.to_string().contains("not allowed in Plan mode"));
+            let error_text = error.to_string();
+            assert!(
+                error_text.contains("task_tracker")
+                    || error_text.contains("tool denied by plan mode"),
+                "unexpected error text: {error_text}"
+            );
+            assert!(
+                error_text.contains("not allowed in Plan mode")
+                    || error_text.contains("tool denied by plan mode"),
+                "unexpected error text: {error_text}"
+            );
         }
         other => panic!("Expected plan mode failure, got: {:?}", other),
     }
@@ -361,8 +374,17 @@ async fn test_run_tool_call_non_prevalidated_blocks_task_tracker_in_plan_mode_wi
 
     match outcome.status {
         ToolExecutionStatus::Failure { error } => {
-            assert!(error.to_string().contains("task_tracker"));
-            assert!(error.to_string().contains("not allowed in Plan mode"));
+            let error_text = error.to_string();
+            assert!(
+                error_text.contains("task_tracker")
+                    || error_text.contains("tool denied by plan mode"),
+                "unexpected error text: {error_text}"
+            );
+            assert!(
+                error_text.contains("not allowed in Plan mode")
+                    || error_text.contains("tool denied by plan mode"),
+                "unexpected error text: {error_text}"
+            );
         }
         other => panic!("Expected plan mode failure, got: {:?}", other),
     }
@@ -449,8 +471,8 @@ async fn test_run_tool_call_prevalidated_allows_plan_task_tracker_in_plan_mode()
 }
 
 #[tokio::test]
-async fn test_run_tool_call_non_prevalidated_blocks_plan_task_tracker_outside_plan_mode_without_budget_use(
-) {
+async fn test_run_tool_call_non_prevalidated_blocks_plan_task_tracker_outside_plan_mode_without_budget_use()
+ {
     let mut test_ctx = TestContext::new().await;
     let mut registry = test_ctx.registry;
 

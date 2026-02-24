@@ -66,6 +66,7 @@ pub(super) async fn prompt_session_limit_increase<S: UiSession + ?Sized>(
         "Session Limit Reached".to_string(),
         description_lines,
         options,
+        100,
     )
     .await
 }
@@ -88,28 +89,28 @@ pub(super) async fn prompt_tool_loop_limit_increase<S: UiSession + ?Sized>(
 
     let options = vec![
         InlineListItem {
-            title: "+200 tool loops".to_string(),
-            subtitle: Some("Continue with 200 more tool loops".to_string()),
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::SessionLimitIncrease(200)),
-            search_value: Some("increase 200 two hundred plus more continue".to_string()),
-        },
-        InlineListItem {
-            title: "+100 tool loops".to_string(),
-            subtitle: Some("Continue with 100 more tool loops".to_string()),
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::SessionLimitIncrease(100)),
-            search_value: Some("increase 100 hundred plus more continue".to_string()),
-        },
-        InlineListItem {
             title: "+50 tool loops".to_string(),
             subtitle: Some("Continue with 50 more tool loops".to_string()),
             badge: None,
             indent: 0,
             selection: Some(InlineListSelection::SessionLimitIncrease(50)),
             search_value: Some("increase 50 fifty plus more continue".to_string()),
+        },
+        InlineListItem {
+            title: "+20 tool loops".to_string(),
+            subtitle: Some("Continue with 20 more tool loops".to_string()),
+            badge: None,
+            indent: 0,
+            selection: Some(InlineListSelection::SessionLimitIncrease(20)),
+            search_value: Some("increase 20 twenty plus more continue".to_string()),
+        },
+        InlineListItem {
+            title: "+10 tool loops".to_string(),
+            subtitle: Some("Continue with 10 more tool loops".to_string()),
+            badge: None,
+            indent: 0,
+            selection: Some(InlineListSelection::SessionLimitIncrease(10)),
+            search_value: Some("increase 10 ten plus more continue".to_string()),
         },
         InlineListItem {
             title: "".to_string(),
@@ -137,6 +138,7 @@ pub(super) async fn prompt_tool_loop_limit_increase<S: UiSession + ?Sized>(
         "Tool Loop Limit Reached".to_string(),
         description_lines,
         options,
+        20,
     )
     .await
 }
@@ -149,6 +151,7 @@ async fn prompt_limit_increase_modal<S: UiSession + ?Sized>(
     title: String,
     description_lines: Vec<String>,
     options: Vec<vtcode_core::ui::tui::InlineListItem>,
+    default_increment: usize,
 ) -> Result<Option<usize>> {
     use vtcode_core::ui::tui::InlineListSelection;
 
@@ -156,7 +159,7 @@ async fn prompt_limit_increase_modal<S: UiSession + ?Sized>(
         title,
         description_lines,
         options.clone(),
-        Some(InlineListSelection::SessionLimitIncrease(100)),
+        Some(InlineListSelection::SessionLimitIncrease(default_increment)),
         None,
     );
 

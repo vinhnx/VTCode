@@ -13,7 +13,9 @@
 //! - `add`: Add a new item to an existing checklist
 
 use crate::config::constants::tools;
-use crate::utils::file_utils::{ensure_dir_exists, read_file_with_context, write_file_with_context};
+use crate::utils::file_utils::{
+    ensure_dir_exists, read_file_with_context, write_file_with_context,
+};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -255,7 +257,10 @@ impl TaskTrackerTool {
                 notes_lines.push(line.to_string());
                 continue;
             }
-            if let Some(rest) = trimmed.strip_prefix("- [x] ").or(trimmed.strip_prefix("- [X] ")) {
+            if let Some(rest) = trimmed
+                .strip_prefix("- [x] ")
+                .or(trimmed.strip_prefix("- [X] "))
+            {
                 items.push(TaskItem {
                     index: idx,
                     description: rest.to_string(),
@@ -311,7 +316,9 @@ impl TaskTrackerTool {
             .to_string();
         let item_descs = args.items.as_deref().unwrap_or(&[]);
         if item_descs.is_empty() {
-            anyhow::bail!("At least one item is required for 'create'. Provide items: [\"step 1\", \"step 2\", ...]");
+            anyhow::bail!(
+                "At least one item is required for 'create'. Provide items: [\"step 1\", \"step 2\", ...]"
+            );
         }
 
         let items: Vec<TaskItem> = item_descs

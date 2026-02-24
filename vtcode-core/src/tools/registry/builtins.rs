@@ -95,7 +95,9 @@ pub(super) fn builtin_tool_registrations(
             tools::TASK_TRACKER,
             CapabilityLevel::Basic,
             TaskTrackerTool::new(
-                plan_state.workspace_root().unwrap_or_else(|| PathBuf::new()),
+                plan_state
+                    .workspace_root()
+                    .unwrap_or_else(|| PathBuf::new()),
             ),
         )
         .with_aliases(["plan_manager", "track_tasks", "checklist"]),

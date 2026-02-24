@@ -34,6 +34,11 @@ pub struct ToolsConfig {
     #[serde(default = "default_max_repeated_tool_calls")]
     pub max_repeated_tool_calls: usize,
 
+    /// Maximum consecutive blocked tool calls allowed per turn before forcing a
+    /// turn break. This prevents long blocked-call churn from consuming CPU.
+    #[serde(default = "default_max_consecutive_blocked_tool_calls_per_turn")]
+    pub max_consecutive_blocked_tool_calls_per_turn: usize,
+
     /// Optional per-second rate limit for tool calls to smooth bursty retries.
     /// When unset, the runtime defaults apply.
     #[serde(default = "default_max_tool_rate_per_second")]
@@ -119,6 +124,8 @@ impl Default for ToolsConfig {
             policies,
             max_tool_loops: default_max_tool_loops(),
             max_repeated_tool_calls: default_max_repeated_tool_calls(),
+            max_consecutive_blocked_tool_calls_per_turn:
+                default_max_consecutive_blocked_tool_calls_per_turn(),
             max_tool_rate_per_second: default_max_tool_rate_per_second(),
             max_sequential_spool_chunk_reads: default_max_sequential_spool_chunk_reads(),
             web_fetch: WebFetchConfig::default(),
@@ -176,6 +183,11 @@ const fn default_max_tool_loops() -> usize {
 #[inline]
 const fn default_max_repeated_tool_calls() -> usize {
     defaults::DEFAULT_MAX_REPEATED_TOOL_CALLS
+}
+
+#[inline]
+const fn default_max_consecutive_blocked_tool_calls_per_turn() -> usize {
+    defaults::DEFAULT_MAX_CONSECUTIVE_BLOCKED_TOOL_CALLS_PER_TURN
 }
 
 #[inline]

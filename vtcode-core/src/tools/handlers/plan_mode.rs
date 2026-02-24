@@ -682,7 +682,11 @@ mod tests {
         let plans_dir = state.plans_dir();
         std::fs::create_dir_all(&plans_dir).unwrap();
         let plan_file = plans_dir.join("merge-test.md");
-        std::fs::write(&plan_file, "# Test Plan\n\n## Plan of Work\n- [ ] Base step\n").unwrap();
+        std::fs::write(
+            &plan_file,
+            "# Test Plan\n\n## Plan of Work\n- [ ] Base step\n",
+        )
+        .unwrap();
         let tracker_file = plans_dir.join("merge-test.tasks.md");
         std::fs::write(
             &tracker_file,
@@ -692,7 +696,10 @@ mod tests {
         state.set_plan_file(Some(plan_file)).await;
 
         let tool = ExitPlanModeTool::new(state.clone());
-        let result = tool.execute(json!({ "reason": "merge test" })).await.unwrap();
+        let result = tool
+            .execute(json!({ "reason": "merge test" }))
+            .await
+            .unwrap();
 
         assert_eq!(result["status"], "pending_confirmation");
         assert_eq!(

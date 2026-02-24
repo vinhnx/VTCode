@@ -54,7 +54,8 @@ pub fn combined_beta_header_value(
         }
     }
 
-    if config.config.extended_thinking_enabled && config.model != models::anthropic::CLAUDE_OPUS_4_6 {
+    if config.config.extended_thinking_enabled && config.model != models::anthropic::CLAUDE_OPUS_4_6
+    {
         pieces.push(config.config.interleaved_thinking_beta.clone());
     }
 

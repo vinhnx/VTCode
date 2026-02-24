@@ -57,8 +57,8 @@ pub mod turn_diff_tracker;
 // Handler implementations
 pub mod grep_files_handler;
 pub mod list_dir_handler;
-pub mod plan_task_tracker;
 pub mod plan_mode;
+pub mod plan_task_tracker;
 pub mod read_file;
 pub mod shell_handler;
 pub mod spawn_subagent;

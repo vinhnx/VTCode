@@ -416,6 +416,10 @@ max_tool_loops = 20
 # Maximum number of repeated identical tool calls (prevents stuck loops)
 max_repeated_tool_calls = 2
 
+# Maximum consecutive blocked tool calls before force-breaking the turn
+# Helps prevent high-CPU churn when calls are repeatedly denied/blocked
+max_consecutive_blocked_tool_calls_per_turn = 8
+
 # Maximum sequential spool-chunk reads per turn before nudging targeted extraction/summarization
 max_sequential_spool_chunk_reads = 6
 

@@ -3,13 +3,13 @@
 
 [agent]
 # Primary LLM provider to use (e.g., "openai", "gemini", "anthropic", "openrouter")
-provider = "huggingface"
+provider = "ollama"
 
 # Environment variable containing the API key for the provider
-api_key_env = "HF_TOKEN"
+api_key_env = "OLLAMA_API_KEY"
 
 # Default model to use when no specific model is specified
-default_model = "zai-org/GLM-5:novita"
+default_model = "gpt-oss:20b-cloud"
 
 # Personal/local overrides should live in user config, not workspace config:
 #   ~/.vtcode/vtcode.toml
@@ -78,8 +78,9 @@ use_for_git_history = true
 default_policy = "allow"
 
 # Maximum number of tool loops allowed per turn (prevents infinite loops)
-max_tool_loops = 50
-max_repeated_tool_calls = 3
+max_tool_loops = 20
+max_repeated_tool_calls = 2
+max_consecutive_blocked_tool_calls_per_turn = 8
 max_sequential_spool_chunk_reads = 6
 
 [agent.onboarding]
@@ -155,7 +156,7 @@ max_open_circuits = 3
 recovery_cooldown = 60
 
 [agent.harness]
-max_tool_calls_per_turn = 48
+max_tool_calls_per_turn = 32
 max_tool_wall_clock_secs = 600
 max_tool_retries = 2
 
@@ -271,16 +272,23 @@ load_skill = "allow"
 open_file = "allow"
 search_file = "allow"
 spawn_subagent = "allow"
-task_tracker = "allow"
+task_tracker = "prompt"
 exec_code = "allow"
 "send_command<|channel|>analysis" = "allow"
 "assistant<|channel|>apply_patch" = "allow"
-plan_task_tracker = "allow"
+plan_task_tracker = "prompt"
 plan_checklist = "prompt"
 plan_tasks = "prompt"
 plan_manager = "prompt"
 track_tasks = "prompt"
 checklist = "prompt"
+plan_on = "prompt"
+plan_start = "prompt"
+switch_to_plan_mode = "prompt"
+switch_plan_mode = "prompt"
+mode_plan = "prompt"
+planner_mode = "prompt"
+"/plan" = "prompt"
 
 [security.gatekeeper]
 warn_on_quarantine = true
