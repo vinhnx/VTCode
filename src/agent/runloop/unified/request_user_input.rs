@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use serde::Deserialize;
 use serde_json::{Value, json};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::Notify;
 use tokio::task;
@@ -74,12 +74,15 @@ pub(crate) async fn execute_request_user_input_tool(
         }));
     }
 
+    let resolved_options = resolve_question_options(&parsed.questions);
+
     // Build wizard steps from questions
     let steps: Vec<WizardStep> = parsed
         .questions
         .iter()
-        .map(|q| {
-            let items = build_question_items(q);
+        .zip(resolved_options)
+        .map(|(q, options)| {
+            let items = build_question_items_with_options(q, options);
 
             WizardStep {
                 title: q.header.clone(),
@@ -189,11 +192,20 @@ pub(crate) async fn execute_request_user_input_tool(
     }
 }
 
+#[cfg(test)]
 fn build_question_items(question: &RequestUserInputQuestion) -> Vec<InlineListItem> {
     let options = question
         .options
         .clone()
         .or_else(|| generate_suggested_options(question));
+    build_question_items_with_options(question, options)
+}
+
+fn build_question_items_with_options(
+    question: &RequestUserInputQuestion,
+    options: Option<Vec<RequestUserInputOption>>,
+) -> Vec<InlineListItem> {
+    let options = options.map(ensure_recommended_first);
 
     if let Some(options) = options {
         let mut items: Vec<InlineListItem> = options
@@ -243,15 +255,170 @@ fn build_question_items(question: &RequestUserInputQuestion) -> Vec<InlineListIt
     }
 }
 
+fn resolve_question_options(
+    questions: &[RequestUserInputQuestion],
+) -> Vec<Option<Vec<RequestUserInputOption>>> {
+    let mut provided_signature_counts: HashMap<String, usize> = HashMap::new();
+    for question in questions {
+        if let Some(options) = question.options.as_ref() {
+            let signature = options_signature(options);
+            if !signature.is_empty() {
+                *provided_signature_counts.entry(signature).or_insert(0) += 1;
+            }
+        }
+    }
+
+    questions
+        .iter()
+        .map(|question| match question.options.clone() {
+            Some(provided_options) => {
+                let signature = options_signature(&provided_options);
+                let repeated_signature = provided_signature_counts
+                    .get(&signature)
+                    .copied()
+                    .unwrap_or(0)
+                    > 1;
+                if should_regenerate_provided_options(
+                    question,
+                    &provided_options,
+                    repeated_signature,
+                ) {
+                    generate_suggested_options(question).or(Some(provided_options))
+                } else {
+                    Some(provided_options)
+                }
+            }
+            None => generate_suggested_options(question),
+        })
+        .collect()
+}
+
+fn should_regenerate_provided_options(
+    question: &RequestUserInputQuestion,
+    options: &[RequestUserInputOption],
+    repeated_signature: bool,
+) -> bool {
+    if options.is_empty() || options.len() > 3 {
+        return true;
+    }
+
+    if repeated_signature {
+        return true;
+    }
+
+    if options
+        .iter()
+        .any(|option| option.label.trim().is_empty() || option.description.trim().is_empty())
+    {
+        return true;
+    }
+
+    let unique_labels = options
+        .iter()
+        .map(|option| normalize_option_text(&option.label))
+        .collect::<HashSet<_>>();
+    if unique_labels.len() != options.len() {
+        return true;
+    }
+
+    let question_text = question.question.to_lowercase();
+    let generic_option_count = options
+        .iter()
+        .filter(|option| is_generic_planning_option_label(&option.label))
+        .count();
+    if generic_option_count == options.len()
+        && contains_any(
+            &question_text,
+            &[
+                "user-visible outcome",
+                "user visible outcome",
+                "break the work",
+                "composable steps",
+                "exact command",
+                "manual check",
+                "prove it is complete",
+                "proves it is complete",
+            ],
+        )
+    {
+        return true;
+    }
+
+    false
+}
+
+fn options_signature(options: &[RequestUserInputOption]) -> String {
+    let mut entries = options
+        .iter()
+        .map(|option| {
+            format!(
+                "{}::{}",
+                normalize_option_text(&option.label),
+                normalize_option_text(&option.description)
+            )
+        })
+        .collect::<Vec<_>>();
+
+    entries.sort_unstable();
+    entries.join("||")
+}
+
+fn normalize_option_text(text: &str) -> String {
+    let lowered = text.to_lowercase().replace("(recommended)", "");
+    lowered
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .trim()
+        .to_string()
+}
+
+fn is_generic_planning_option_label(label: &str) -> bool {
+    let normalized = normalize_option_text(label);
+    contains_any(
+        &normalized,
+        &[
+            "minimal implementation slice",
+            "minimal implementation",
+            "implementation slice",
+            "balanced implementation",
+            "comprehensive implementation",
+            "quick win",
+            "deep dive",
+            "thorough implementation",
+        ],
+    )
+}
+
+fn ensure_recommended_first(
+    mut options: Vec<RequestUserInputOption>,
+) -> Vec<RequestUserInputOption> {
+    if options.is_empty() {
+        return options;
+    }
+
+    for option in &mut options {
+        option.label = option
+            .label
+            .replace("(Recommended)", "")
+            .replace("(recommended)", "")
+            .trim()
+            .to_string();
+    }
+
+    if !options[0].label.contains("(Recommended)") {
+        options[0].label.push_str(" (Recommended)");
+    }
+
+    options
+}
+
 fn generate_suggested_options(
     question: &RequestUserInputQuestion,
 ) -> Option<Vec<RequestUserInputOption>> {
-    if question.options.is_some() {
-        return None;
-    }
-
-    let local_context = format!("{} {} {}", question.id, question.header, question.question);
-    let local_context = local_context.to_lowercase();
+    let question_context = question.question.to_lowercase();
+    let metadata_context = format!("{} {}", question.id, question.header).to_lowercase();
+    let local_context = format!("{} {}", question_context, metadata_context);
     let mut global_context = String::new();
     if let Some(focus_area) = question.focus_area.as_ref() {
         global_context.push(' ');
@@ -263,7 +430,7 @@ fn generate_suggested_options(
     }
     let global_context = global_context.to_lowercase();
 
-    let intent = classify_question_intent(&local_context);
+    let intent = classify_question_intent(&question_context, &metadata_context);
     let mut options = match intent {
         QuestionIntent::OutcomeAndConstraints => outcome_and_constraint_options(),
         QuestionIntent::StepDecomposition => step_decomposition_options(),
@@ -300,9 +467,15 @@ enum QuestionIntent {
     GenericPlanning,
 }
 
-fn classify_question_intent(local_context: &str) -> QuestionIntent {
+fn classify_question_intent(question_context: &str, metadata_context: &str) -> QuestionIntent {
+    detect_question_intent(question_context)
+        .or_else(|| detect_question_intent(metadata_context))
+        .unwrap_or(QuestionIntent::GenericPlanning)
+}
+
+fn detect_question_intent(context: &str) -> Option<QuestionIntent> {
     if contains_any(
-        local_context,
+        context,
         &[
             "user-visible outcome",
             "user visible outcome",
@@ -312,11 +485,11 @@ fn classify_question_intent(local_context: &str) -> QuestionIntent {
             "non goals",
         ],
     ) {
-        return QuestionIntent::OutcomeAndConstraints;
+        return Some(QuestionIntent::OutcomeAndConstraints);
     }
 
     if contains_any(
-        local_context,
+        context,
         &[
             "break the work",
             "composable steps",
@@ -328,11 +501,11 @@ fn classify_question_intent(local_context: &str) -> QuestionIntent {
             "implementation steps",
         ],
     ) {
-        return QuestionIntent::StepDecomposition;
+        return Some(QuestionIntent::StepDecomposition);
     }
 
     if contains_any(
-        local_context,
+        context,
         &[
             "exact command",
             "manual check",
@@ -343,11 +516,11 @@ fn classify_question_intent(local_context: &str) -> QuestionIntent {
             "completion check",
         ],
     ) {
-        return QuestionIntent::VerificationEvidence;
+        return Some(QuestionIntent::VerificationEvidence);
     }
 
     if contains_any(
-        local_context,
+        context,
         &[
             "prioritize first",
             "should we prioritize",
@@ -357,11 +530,11 @@ fn classify_question_intent(local_context: &str) -> QuestionIntent {
             "pick direction",
         ],
     ) {
-        return QuestionIntent::PrioritySelection;
+        return Some(QuestionIntent::PrioritySelection);
     }
 
     if contains_any(
-        local_context,
+        context,
         &[
             "improve",
             "improvement",
@@ -371,10 +544,10 @@ fn classify_question_intent(local_context: &str) -> QuestionIntent {
             "focus",
         ],
     ) {
-        return QuestionIntent::GenericImprovement;
+        return Some(QuestionIntent::GenericImprovement);
     }
 
-    QuestionIntent::GenericPlanning
+    None
 }
 
 fn outcome_and_constraint_options() -> Vec<RequestUserInputOption> {
@@ -781,6 +954,146 @@ mod tests {
         assert!(outcome[0].label.contains("Recommended"));
         assert!(steps[0].label.contains("Recommended"));
         assert!(verification[0].label.contains("Recommended"));
+    }
+
+    #[test]
+    fn provided_duplicate_options_are_regenerated_per_question() {
+        let duplicate_options = vec![
+            RequestUserInputOption {
+                label: "Minimal implementation slice (Recommended)".to_string(),
+                description: "Ship only the smallest possible scope.".to_string(),
+            },
+            RequestUserInputOption {
+                label: "Balanced implementation".to_string(),
+                description: "Ship medium scope with moderate risk.".to_string(),
+            },
+            RequestUserInputOption {
+                label: "Comprehensive implementation".to_string(),
+                description: "Ship full scope with deeper validation.".to_string(),
+            },
+        ];
+
+        let questions = vec![
+            RequestUserInputQuestion {
+                id: "goal".to_string(),
+                header: "Goal".to_string(),
+                question: "What user-visible outcome should this change deliver, and what constraints or non-goals must be respected?".to_string(),
+                options: Some(duplicate_options.clone()),
+                focus_area: None,
+                analysis_hints: Vec::new(),
+            },
+            RequestUserInputQuestion {
+                id: "constraints".to_string(),
+                header: "Plan".to_string(),
+                question: "Break the work into 3-7 composable steps. For each step include target file(s) and a concrete expected outcome.".to_string(),
+                options: Some(duplicate_options.clone()),
+                focus_area: None,
+                analysis_hints: Vec::new(),
+            },
+            RequestUserInputQuestion {
+                id: "verification".to_string(),
+                header: "Verification".to_string(),
+                question: "For each step, what exact command or manual check proves it is complete?"
+                    .to_string(),
+                options: Some(duplicate_options),
+                focus_area: None,
+                analysis_hints: Vec::new(),
+            },
+        ];
+
+        let resolved = resolve_question_options(&questions);
+        assert_eq!(resolved.len(), 3);
+
+        let goal_labels = resolved[0]
+            .as_ref()
+            .expect("goal options should resolve")
+            .iter()
+            .map(|option| option.label.clone())
+            .collect::<Vec<_>>();
+        let step_labels = resolved[1]
+            .as_ref()
+            .expect("step options should resolve")
+            .iter()
+            .map(|option| option.label.clone())
+            .collect::<Vec<_>>();
+        let verification_labels = resolved[2]
+            .as_ref()
+            .expect("verification options should resolve")
+            .iter()
+            .map(|option| option.label.clone())
+            .collect::<Vec<_>>();
+
+        assert_ne!(goal_labels, step_labels);
+        assert_ne!(step_labels, verification_labels);
+        assert_ne!(goal_labels, verification_labels);
+    }
+
+    #[test]
+    fn valid_provided_options_are_preserved() {
+        let provided_options = vec![
+            RequestUserInputOption {
+                label: "Outcome KPI (Recommended)".to_string(),
+                description: "Define one measurable user-visible result.".to_string(),
+            },
+            RequestUserInputOption {
+                label: "Constraint checklist".to_string(),
+                description: "Lock boundaries before implementation.".to_string(),
+            },
+            RequestUserInputOption {
+                label: "MVP boundary".to_string(),
+                description: "Limit scope to the smallest deliverable.".to_string(),
+            },
+        ];
+
+        let questions = vec![RequestUserInputQuestion {
+            id: "goal".to_string(),
+            header: "Goal".to_string(),
+            question: "What user-visible outcome should this change deliver, and what constraints or non-goals must be respected?".to_string(),
+            options: Some(provided_options.clone()),
+            focus_area: None,
+            analysis_hints: Vec::new(),
+        }];
+
+        let resolved = resolve_question_options(&questions);
+        let resolved_options = resolved[0]
+            .as_ref()
+            .expect("provided options should be preserved");
+
+        assert_eq!(resolved_options.len(), provided_options.len());
+        for (resolved_option, provided_option) in resolved_options.iter().zip(provided_options) {
+            assert_eq!(resolved_option.label, provided_option.label);
+            assert_eq!(resolved_option.description, provided_option.description);
+        }
+    }
+
+    #[test]
+    fn id_keyword_does_not_override_question_text_intent() {
+        let question = RequestUserInputQuestion {
+            id: "constraints".to_string(),
+            header: "Plan".to_string(),
+            question: "For each step, what exact command or manual check proves it is complete?"
+                .to_string(),
+            options: None,
+            focus_area: None,
+            analysis_hints: Vec::new(),
+        };
+
+        let options = generate_suggested_options(&question).expect("verification options");
+        let labels = options
+            .iter()
+            .map(|option| option.label.to_lowercase())
+            .collect::<Vec<_>>();
+
+        assert!(
+            labels
+                .iter()
+                .any(|label| label.contains("command-based proof"))
+        );
+        assert!(
+            !labels
+                .iter()
+                .any(|label| label.contains("dependency-first slices"))
+        );
     }
 
     #[test]
