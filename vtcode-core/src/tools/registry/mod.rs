@@ -392,6 +392,34 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn preflight_normalizes_plan_mode_force_on_aliases() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+
+        let on_outcome = registry.preflight_validate_call("plan_on", &json!({}))?;
+        assert_eq!(on_outcome.normalized_tool_name, tools::ENTER_PLAN_MODE);
+
+        let slash_outcome = registry.preflight_validate_call("/plan", &json!({}))?;
+        assert_eq!(slash_outcome.normalized_tool_name, tools::ENTER_PLAN_MODE);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn preflight_normalizes_plan_mode_force_off_aliases() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+
+        let off_outcome = registry.preflight_validate_call("mode_edit", &json!({}))?;
+        assert_eq!(off_outcome.normalized_tool_name, tools::EXIT_PLAN_MODE);
+
+        let slash_outcome = registry.preflight_validate_call("/edit", &json!({}))?;
+        assert_eq!(slash_outcome.normalized_tool_name, tools::EXIT_PLAN_MODE);
+
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn suggest_fallback_prefers_unified_exec_for_exec_code_alias() -> Result<()> {
         let temp_dir = TempDir::new()?;
         let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;

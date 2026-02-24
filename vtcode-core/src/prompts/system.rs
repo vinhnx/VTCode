@@ -74,7 +74,7 @@ pub const PLAN_MODE_READ_ONLY_NOTICE_LINE: &str = "Plan Mode is active. Mutating
 pub const PLAN_MODE_EXIT_INSTRUCTION_LINE: &str =
     "Call `exit_plan_mode` when ready to transition to implementation.";
 /// Shared reminder appended when presenting plans while still in Plan Mode.
-pub const PLAN_MODE_IMPLEMENT_REMINDER: &str = "• I’m still in Plan Mode, so I can’t implement yet. If you want me to execute the plan, please switch out of Plan Mode (or explicitly say “exit plan mode and implement”).";
+pub const PLAN_MODE_IMPLEMENT_REMINDER: &str = "• I’m still in Plan Mode, so I can’t implement yet. To execute, say “implement” (or “yes”, “continue”, “go”, “start”). To keep planning, say “stay in plan mode” and tell me what to revise.";
 
 /// DEFAULT SYSTEM PROMPT (v6.0 - Harness-engineered, provider-agnostic)
 /// Incorporates harness engineering patterns:
