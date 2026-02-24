@@ -83,6 +83,20 @@ pub fn format_tool_parameters(text: &str) -> String {
     formatted
 }
 
+pub(super) fn pty_wrapped_continuation_prefix(base_prefix: &str, line_text: &str) -> String {
+    let hang_width = if line_text.starts_with("  └ ")
+        || line_text.starts_with("  │ ")
+        || line_text.starts_with("    ")
+    {
+        4
+    } else if line_text.starts_with("• Ran ") {
+        "• Ran ".chars().count()
+    } else {
+        0
+    };
+    format!("{}{}", base_prefix, " ".repeat(hang_width))
+}
+
 /// Wrap a line of text to fit within the specified width
 pub fn wrap_line(line: Line<'static>, max_width: usize) -> Vec<Line<'static>> {
     if max_width == 0 {
@@ -414,5 +428,18 @@ mod tests {
         assert!(is_list_item("  - Indented"));
         assert!(!is_list_item("Regular text"));
         assert!(!is_list_item(""));
+    }
+
+    #[test]
+    fn test_pty_wrapped_continuation_prefix() {
+        assert_eq!(
+            pty_wrapped_continuation_prefix("  ", "  └ cargo check"),
+            "      "
+        );
+        assert_eq!(
+            pty_wrapped_continuation_prefix("  ", "• Ran cargo check -p vtcode"),
+            "        "
+        );
+        assert_eq!(pty_wrapped_continuation_prefix("  ", "plain output"), "  ");
     }
 }
