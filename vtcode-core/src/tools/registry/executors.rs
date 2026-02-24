@@ -7,6 +7,7 @@ use crate::tools::registry::declarations::{
 };
 use crate::tools::tool_intent;
 use crate::tools::traits::Tool;
+use crate::tools::types::VTCodePtySession;
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64;
 
@@ -91,6 +92,54 @@ fn is_valid_pty_session_id(session_id: &str) -> bool {
         && session_id
             .chars()
             .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+}
+
+fn build_session_command_display(session: &VTCodePtySession) -> String {
+    let args = &session.args;
+    if let Some(flag_index) = args
+        .iter()
+        .position(|arg| matches!(arg.as_str(), "-c" | "/C" | "-Command"))
+        && let Some(command) = args.get(flag_index + 1)
+        && !command.trim().is_empty()
+    {
+        return command.clone();
+    }
+
+    let mut parts = Vec::with_capacity(1 + args.len());
+    if !session.command.trim().is_empty() {
+        parts.push(session.command.as_str());
+    }
+    for arg in args {
+        if !arg.trim().is_empty() {
+            parts.push(arg.as_str());
+        }
+    }
+
+    if parts.is_empty() {
+        "unknown".to_string()
+    } else {
+        shell_words::join(parts)
+    }
+}
+
+fn attach_pty_response_context(
+    response: &mut Value,
+    session_id: &str,
+    command: &str,
+    working_directory: Option<&str>,
+    rows: u16,
+    cols: u16,
+    is_exited: bool,
+) {
+    response["id"] = json!(session_id);
+    response["session_id"] = json!(session_id);
+    response["command"] = json!(command);
+    response["working_directory"] = working_directory
+        .map(|value| json!(value))
+        .unwrap_or(Value::Null);
+    response["rows"] = json!(rows);
+    response["cols"] = json!(cols);
+    response["is_exited"] = json!(is_exited);
 }
 
 fn extract_run_session_id_from_tool_output_path(path: &str) -> Option<String> {
@@ -606,6 +655,7 @@ impl ToolRegistry {
             "run_pty_cmd requires a 'command' value",
             "PTY command cannot be empty",
         )?;
+        let requested_command = command.clone();
         let is_git_diff = is_git_diff_command(&command);
 
         let shell_program = resolve_shell_preference(
@@ -674,6 +724,12 @@ impl ToolRegistry {
         } else {
             shell_words::join(command.iter().map(|part| part.as_str()))
         };
+        let requested_command_display =
+            if should_use_windows_command_tokenizer(Some(&shell_program)) {
+                join_windows_command(&requested_command)
+            } else {
+                shell_words::join(requested_command.iter().map(|part| part.as_str()))
+            };
 
         // Use explicit max_tokens if provided, otherwise check if command suggests a limit
         let max_tokens = payload
@@ -699,7 +755,7 @@ impl ToolRegistry {
 
         let session_id = generate_session_id("run");
 
-        self.pty_manager().create_session(
+        let session_metadata = self.pty_manager().create_session(
             session_id.clone(),
             command,
             working_dir_path,
@@ -761,6 +817,15 @@ impl ToolRegistry {
             "output": output,
             "wall_time": wall_time,
         });
+        attach_pty_response_context(
+            &mut response,
+            &session_id,
+            &requested_command_display,
+            session_metadata.working_dir.as_deref(),
+            session_metadata.rows,
+            session_metadata.cols,
+            exit_code.is_some(),
+        );
 
         if let Some(code) = exit_code {
             response["exit_code"] = json!(code);
@@ -811,6 +876,8 @@ impl ToolRegistry {
             .and_then(|v| v.as_u64())
             .map(|v| v as usize)
             .unwrap_or(crate::config::constants::defaults::DEFAULT_PTY_OUTPUT_MAX_TOKENS);
+        let session_metadata = self.pty_manager().snapshot_session(sid)?;
+        let session_command = build_session_command_display(&session_metadata);
 
         self.pty_manager()
             .send_input_to_session(sid, input.as_bytes(), false)?;
@@ -832,6 +899,15 @@ impl ToolRegistry {
             "output": output,
             "wall_time": capture.duration.as_secs_f64(),
         });
+        attach_pty_response_context(
+            &mut response,
+            sid,
+            &session_command,
+            session_metadata.working_dir.as_deref(),
+            session_metadata.rows,
+            session_metadata.cols,
+            capture.exit_code.is_some(),
+        );
 
         if let Some(code) = capture.exit_code {
             response["exit_code"] = json!(code);
@@ -870,6 +946,8 @@ impl ToolRegistry {
                 raw_sid
             ));
         }
+        let session_metadata = self.pty_manager().snapshot_session(sid)?;
+        let session_command = build_session_command_display(&session_metadata);
 
         let yield_time_ms = payload
             .get("yield_time_ms")
@@ -886,6 +964,15 @@ impl ToolRegistry {
             "output": output,
             "wall_time": capture.duration.as_secs_f64(),
         });
+        attach_pty_response_context(
+            &mut response,
+            sid,
+            &session_command,
+            session_metadata.working_dir.as_deref(),
+            session_metadata.rows,
+            session_metadata.cols,
+            capture.exit_code.is_some(),
+        );
 
         if let Some(code) = capture.exit_code {
             response["exit_code"] = json!(code);
@@ -1396,6 +1483,55 @@ mod token_efficiency_tests {
         assert_eq!(suggest_max_tokens_for_command("ls -la"), None);
         assert_eq!(suggest_max_tokens_for_command("grep pattern file"), None);
         assert_eq!(suggest_max_tokens_for_command("echo hello"), None);
+    }
+}
+
+#[cfg(test)]
+mod pty_context_tests {
+    use super::{attach_pty_response_context, build_session_command_display};
+    use crate::tools::types::VTCodePtySession;
+    use serde_json::json;
+
+    #[test]
+    fn build_session_command_display_unwraps_shell_c_argument() {
+        let session = VTCodePtySession {
+            id: "run-123".to_string(),
+            command: "zsh".to_string(),
+            args: vec![
+                "-l".to_string(),
+                "-c".to_string(),
+                "cargo check".to_string(),
+            ],
+            working_dir: Some(".".to_string()),
+            rows: 24,
+            cols: 80,
+            screen_contents: None,
+            scrollback: None,
+        };
+
+        assert_eq!(build_session_command_display(&session), "cargo check");
+    }
+
+    #[test]
+    fn attach_pty_response_context_sets_expected_keys() {
+        let mut response = json!({ "output": "ok" });
+        attach_pty_response_context(
+            &mut response,
+            "run-123",
+            "cargo check",
+            Some("."),
+            30,
+            120,
+            false,
+        );
+
+        assert_eq!(response["id"], "run-123");
+        assert_eq!(response["session_id"], "run-123");
+        assert_eq!(response["command"], "cargo check");
+        assert_eq!(response["working_directory"], ".");
+        assert_eq!(response["rows"], 30);
+        assert_eq!(response["cols"], 120);
+        assert_eq!(response["is_exited"], false);
     }
 }
 

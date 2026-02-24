@@ -72,9 +72,14 @@ pub(super) async fn execute_with_cache_and_streaming(
     );
     let mut pty_stream_runtime: Option<PtyStreamRuntime> = None;
     let previous_progress_callback = if should_stream_pty {
+        let stream_command = extract_pty_stream_command(name, args_val);
         let tail_limit = resolve_stdout_tail_limit(vt_cfg);
-        let (runtime, callback) =
-            PtyStreamRuntime::start(handle.clone(), progress_reporter.clone(), tail_limit);
+        let (runtime, callback) = PtyStreamRuntime::start(
+            handle.clone(),
+            progress_reporter.clone(),
+            tail_limit,
+            stream_command,
+        );
         pty_stream_runtime = Some(runtime);
         Some(registry.replace_progress_callback(Some(callback)))
     } else {
@@ -139,6 +144,82 @@ pub(super) async fn execute_with_cache_and_streaming(
     outcome
 }
 
+fn extract_pty_stream_command(tool_name: &str, args: &Value) -> Option<String> {
+    let command_value = match tool_name {
+        tools::RUN_PTY_CMD | tools::SHELL => {
+            args.get("command").or_else(|| args.get("raw_command"))
+        }
+        tools::UNIFIED_EXEC | tools::EXEC_PTY_CMD | tools::EXEC => {
+            let action = args.get("action").and_then(Value::as_str).or_else(|| {
+                if args.get("command").is_some()
+                    || args.get("cmd").is_some()
+                    || args.get("raw_command").is_some()
+                {
+                    Some("run")
+                } else {
+                    None
+                }
+            });
+            if action == Some("run") {
+                args.get("command")
+                    .or_else(|| args.get("cmd"))
+                    .or_else(|| args.get("raw_command"))
+            } else {
+                None
+            }
+        }
+        _ => None,
+    }?;
+
+    let command = command_value_to_string(command_value)?;
+    match extract_command_args_suffix(args) {
+        Some(suffix) => Some(format!("{} {}", command, suffix)),
+        None => Some(command),
+    }
+}
+
+fn command_value_to_string(value: &Value) -> Option<String> {
+    if let Some(command) = value.as_str() {
+        let normalized = command.split_whitespace().collect::<Vec<_>>().join(" ");
+        if normalized.is_empty() {
+            None
+        } else {
+            Some(normalized)
+        }
+    } else if let Some(parts) = value.as_array() {
+        let joined = parts
+            .iter()
+            .filter_map(Value::as_str)
+            .map(str::trim)
+            .filter(|part| !part.is_empty())
+            .collect::<Vec<_>>()
+            .join(" ");
+        if joined.is_empty() {
+            None
+        } else {
+            Some(joined)
+        }
+    } else {
+        None
+    }
+}
+
+fn extract_command_args_suffix(args: &Value) -> Option<String> {
+    let arg_values = args.get("args")?.as_array()?;
+    let suffix = arg_values
+        .iter()
+        .filter_map(Value::as_str)
+        .map(str::trim)
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ");
+    if suffix.is_empty() {
+        None
+    } else {
+        Some(suffix)
+    }
+}
+
 async fn try_cache_hit(
     registry: &ToolRegistry,
     tool_result_cache: &Arc<tokio::sync::RwLock<ToolResultCache>>,
@@ -190,6 +271,56 @@ async fn try_cache_hit(
         );
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+    use vtcode_core::config::constants::tools;
+
+    use super::extract_pty_stream_command;
+
+    #[test]
+    fn extracts_command_for_run_pty_cmd() {
+        let args = json!({ "command": "cargo check -p vtcode-core" });
+        assert_eq!(
+            extract_pty_stream_command(tools::RUN_PTY_CMD, &args),
+            Some("cargo check -p vtcode-core".to_string())
+        );
+    }
+
+    #[test]
+    fn extracts_command_for_unified_exec_run_action() {
+        let args = json!({
+            "action": "run",
+            "command": ["cargo", "check", "-p", "vtcode-core"]
+        });
+        assert_eq!(
+            extract_pty_stream_command(tools::UNIFIED_EXEC, &args),
+            Some("cargo check -p vtcode-core".to_string())
+        );
+    }
+
+    #[test]
+    fn ignores_non_run_unified_exec_actions() {
+        let args = json!({
+            "action": "poll",
+            "session_id": "run-123"
+        });
+        assert_eq!(extract_pty_stream_command(tools::UNIFIED_EXEC, &args), None);
+    }
+
+    #[test]
+    fn appends_args_suffix_for_run_pty_cmd() {
+        let args = json!({
+            "command": "cargo",
+            "args": ["check", "-p", "vtcode-core"]
+        });
+        assert_eq!(
+            extract_pty_stream_command(tools::RUN_PTY_CMD, &args),
+            Some("cargo check -p vtcode-core".to_string())
+        );
+    }
 }
 
 async fn try_loop_detection_cache_hit(
