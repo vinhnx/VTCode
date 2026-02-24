@@ -208,6 +208,7 @@ async fn execute_tool_with_progress(
         .await;
     }
 
+    emit_tool_retry_outcome_metric(name, &status, attempt, max_tool_retries, retry_allowed);
     status
 }
 
@@ -417,10 +418,7 @@ fn retry_delay_for_status(
         }
         ToolExecutionStatus::Failure { error } => {
             let error_type = classify_error(error);
-            if matches!(
-                error_type,
-                ToolErrorType::Timeout | ToolErrorType::NetworkError
-            ) {
+            if should_retry_error_type(error_type) {
                 Some(backoff_for_attempt(attempt))
             } else {
                 None
@@ -428,6 +426,13 @@ fn retry_delay_for_status(
         }
         _ => None,
     }
+}
+
+fn should_retry_error_type(error_type: ToolErrorType) -> bool {
+    matches!(
+        error_type,
+        ToolErrorType::Timeout | ToolErrorType::NetworkError
+    )
 }
 
 fn backoff_for_attempt(attempt: usize) -> Duration {
@@ -449,8 +454,39 @@ fn status_label(status: &ToolExecutionStatus) -> &'static str {
     }
 }
 
+fn emit_tool_retry_outcome_metric(
+    tool_name: &str,
+    status: &ToolExecutionStatus,
+    retries_used: usize,
+    max_tool_retries: usize,
+    retry_allowed: bool,
+) {
+    let success = matches!(status, ToolExecutionStatus::Success { .. });
+    if retries_used == 0 && success {
+        return;
+    }
+
+    let attempts_made = retries_used.saturating_add(1);
+    let exhausted_retry_budget =
+        !success && retry_allowed && retries_used >= max_tool_retries && max_tool_retries > 0;
+    tracing::info!(
+        target: "vtcode.tool.metrics",
+        metric = "tool_retry_outcome",
+        tool = tool_name,
+        attempts_made,
+        retries_used,
+        max_tool_retries,
+        retry_allowed,
+        success,
+        exhausted_retry_budget,
+        final_status = status_label(status),
+        "tool metric"
+    );
+}
+
 #[cfg(test)]
 mod tests {
+    use anyhow::anyhow;
     use serde_json::json;
     use tempfile::TempDir;
 
@@ -473,6 +509,28 @@ mod tests {
 
         assert!(retry_delay_for_status(&timeout_status, 0, 2, true).is_some());
         assert!(retry_delay_for_status(&timeout_status, 0, 2, false).is_none());
+    }
+
+    #[test]
+    fn retry_delay_skips_policy_and_validation_failures() {
+        let denied = ToolExecutionStatus::Failure {
+            error: anyhow!("tool denied by policy"),
+        };
+        let invalid = ToolExecutionStatus::Failure {
+            error: anyhow!("invalid arguments: missing field"),
+        };
+
+        assert!(retry_delay_for_status(&denied, 0, 2, true).is_none());
+        assert!(retry_delay_for_status(&invalid, 0, 2, true).is_none());
+    }
+
+    #[test]
+    fn retry_delay_allows_network_failures() {
+        let network = ToolExecutionStatus::Failure {
+            error: anyhow!("network connection reset"),
+        };
+
+        assert!(retry_delay_for_status(&network, 0, 2, true).is_some());
     }
 
     #[tokio::test]

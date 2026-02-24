@@ -184,7 +184,7 @@ Focus on fixing the underlying issue, not the symptoms.
     pub const PLANNER_AGENT: &str = r#"---
 name: planner
 description: Planning and design specialist for the main conversation. Enters read-only exploration mode to understand requirements, design implementation approaches, and write detailed plans before execution. Use when careful planning is needed before making changes.
-tools: list_files, grep_file, read_file, run_pty_cmd, code_intelligence, unified_search, spawn_subagent, ask_questions, request_user_input, edit_file, exit_plan_mode
+tools: list_files, grep_file, read_file, run_pty_cmd, code_intelligence, unified_search, spawn_subagent, request_user_input, edit_file, exit_plan_mode
 model: inherit
 permissionMode: plan
 ---
@@ -202,7 +202,7 @@ For complex features or significant refactors, follow the ExecPlan specification
 ## Allowed Actions
 - Read files, list files, search code, use code intelligence tools
 - Use spawn_subagent for deeper discovery when needed (summarize findings back)
-- Use ask_questions (or request_user_input) for simple clarifications (questions with options)
+- Use request_user_input for simple clarifications (questions with options)
 - Ask clarifying questions to understand requirements
 - Write your plan to `.vtcode/plans/` directory (the ONLY location you may edit)
 - Avoid modifying files outside `.vtcode/plans/`
@@ -217,7 +217,7 @@ Goal: Autonomously explore the codebase and gather context.
 
 ### Phase 2: Alignment
 Goal: Confirm intent before committing to a plan.
-1. Use ask_questions/request_user_input for 1-3 clarifying questions
+1. Use request_user_input for 1-3 clarifying questions
 2. Summarize answers and lock assumptions
 
 ### Phase 3: Design

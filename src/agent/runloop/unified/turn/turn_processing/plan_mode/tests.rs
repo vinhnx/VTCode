@@ -34,7 +34,7 @@ fn maybe_force_plan_mode_interview_inserts_tool_call() {
                 .and_then(|call| call.function.as_ref())
                 .map(|func| func.name.as_str())
                 .unwrap_or("");
-            assert_eq!(name, tools::ASK_QUESTIONS);
+            assert_eq!(name, tools::REQUEST_USER_INPUT);
         }
         _ => panic!("Expected tool calls with forced interview"),
     }
@@ -152,7 +152,7 @@ fn maybe_force_plan_mode_interview_marks_shown_when_plan_present() {
                 .and_then(|call| call.function.as_ref())
                 .map(|func| func.name.as_str())
                 .unwrap_or("");
-            assert_eq!(name, tools::ASK_QUESTIONS);
+            assert_eq!(name, tools::REQUEST_USER_INPUT);
         }
         _ => panic!("Expected tool calls for plan interview"),
     }
@@ -261,7 +261,7 @@ fn maybe_force_plan_mode_interview_strips_interview_from_mixed_tool_calls() {
             ),
             uni::ToolCall::function(
                 "call_interview".to_string(),
-                tools::ASK_QUESTIONS.to_string(),
+                tools::REQUEST_USER_INPUT.to_string(),
                 "{}".to_string(),
             ),
         ],

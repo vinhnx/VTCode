@@ -205,7 +205,7 @@ pub enum InlineListSelection {
     ToolApprovalPermanent,
     SessionLimitIncrease(usize),
 
-    /// Selection returned from the `ask_user_question` HITL tool.
+    /// Selection shape used by legacy tabbed HITL flows.
     AskUserChoice {
         tab_id: String,
         choice_id: String,

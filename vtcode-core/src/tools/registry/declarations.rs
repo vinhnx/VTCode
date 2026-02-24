@@ -680,62 +680,107 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
 
         FunctionDeclaration {
             name: tools::REQUEST_USER_INPUT.to_string(),
-            description: "Ask the user 1-3 structured questions with optional multiple-choice options. Use when you need clarification, preference input, or a decision from the user before proceeding. Prefer this over asking in plain text.".to_string(),
+            description: "Canonical HITL tool: ask the user 1-3 structured questions with optional multiple-choice options. Legacy ask_questions/ask_user_question payloads are accepted for compatibility.".to_string(),
             parameters: json!({
                 "type": "object",
-                "properties": {
-                    "questions": {
-                        "type": "array",
-                        "description": "Questions to show the user (1-3). Prefer 1 unless multiple independent decisions block progress.",
-                        "minItems": 1,
-                        "maxItems": 3,
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "id": {
-                                    "type": "string",
-                                    "description": "Stable identifier for mapping answers (snake_case)."
-                                },
-                                "header": {
-                                    "type": "string",
-                                    "description": "Short header label shown in the UI (12 or fewer chars)."
-                                },
-                                "question": {
-                                    "type": "string",
-                                    "description": "Single-sentence prompt shown to the user."
-                                },
-                                "focus_area": {
-                                    "type": "string",
-                                    "description": "Optional short topic hint used to bias auto-suggested choices when options are omitted."
-                                },
-                                "analysis_hints": {
-                                    "type": "array",
-                                    "description": "Optional weakness/risk hints used by the UI to generate suggested options.",
-                                    "items": {
-                                        "type": "string"
-                                    },
-                                    "maxItems": 8
-                                },
-                                "options": {
-                                    "type": "array",
-                                    "description": "Optional 1-3 mutually exclusive choices. Put the recommended option first and suffix its label with '(Recommended)'. Do not include an 'Other' option; the UI adds that automatically. If omitted, the UI may auto-suggest options using question text and hints.",
-                                    "minItems": 1,
-                                    "maxItems": 3,
-                                    "items": {
-                                        "type": "object",
-                                        "properties": {
-                                            "label": {"type": "string", "description": "User-facing label (1-5 words)."},
-                                            "description": {"type": "string", "description": "One short sentence explaining impact."}
+                "anyOf": [
+                    {
+                        "additionalProperties": false,
+                        "properties": {
+                            "questions": {
+                                "type": "array",
+                                "description": "Questions to show the user (1-3). Prefer 1 unless multiple independent decisions block progress.",
+                                "minItems": 1,
+                                "maxItems": 3,
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "id": {
+                                            "type": "string",
+                                            "description": "Stable identifier for mapping answers (snake_case)."
                                         },
-                                        "required": ["label", "description"]
-                                    }
+                                        "header": {
+                                            "type": "string",
+                                            "description": "Short header label shown in the UI (12 or fewer chars)."
+                                        },
+                                        "question": {
+                                            "type": "string",
+                                            "description": "Single-sentence prompt shown to the user."
+                                        },
+                                        "focus_area": {
+                                            "type": "string",
+                                            "description": "Optional short topic hint used to bias auto-suggested choices when options are omitted."
+                                        },
+                                        "analysis_hints": {
+                                            "type": "array",
+                                            "description": "Optional weakness/risk hints used by the UI to generate suggested options.",
+                                            "items": {
+                                                "type": "string"
+                                            },
+                                            "maxItems": 8
+                                        },
+                                        "options": {
+                                            "type": "array",
+                                            "description": "Optional 1-3 mutually exclusive choices. Put the recommended option first and suffix its label with '(Recommended)'. Do not include an 'Other' option; the UI adds that automatically. If omitted, the UI may auto-suggest options using question text and hints.",
+                                            "minItems": 1,
+                                            "maxItems": 3,
+                                            "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "label": {"type": "string", "description": "User-facing label (1-5 words)."},
+                                                    "description": {"type": "string", "description": "One short sentence explaining impact."}
+                                                },
+                                                "required": ["label", "description"]
+                                            }
+                                        }
+                                    },
+                                    "required": ["id", "header", "question"]
+                                }
+                            }
+                        },
+                        "required": ["questions"]
+                    },
+                    {
+                        "additionalProperties": false,
+                        "properties": {
+                            "title": {"type": "string", "description": "Legacy modal title (accepted for compatibility)"},
+                            "question": {"type": "string", "description": "Legacy prompt shown to the user"},
+                            "tabs": {
+                                "type": "array",
+                                "minItems": 1,
+                                "description": "Legacy tabbed choices accepted for compatibility.",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "id": {"type": "string"},
+                                        "title": {"type": "string"},
+                                        "items": {
+                                            "type": "array",
+                                            "minItems": 1,
+                                            "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "id": {"type": "string"},
+                                                    "title": {"type": "string"},
+                                                    "subtitle": {"type": "string"},
+                                                    "badge": {"type": "string"}
+                                                },
+                                                "required": ["id", "title"]
+                                            }
+                                        }
+                                    },
+                                    "required": ["id", "title", "items"]
                                 }
                             },
-                            "required": ["id", "header", "question"]
-                        }
+                            "allow_freeform": {"type": "boolean"},
+                            "freeform_label": {"type": "string"},
+                            "freeform_placeholder": {"type": "string"},
+                            "default_tab_id": {"type": "string"},
+                            "default_choice_id": {"type": "string"}
+                        },
+                        "required": ["question", "tabs"]
                     }
-                },
-                "required": ["questions"]
+                ]
             }),
         },
     ]

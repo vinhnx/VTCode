@@ -370,7 +370,7 @@ pub async fn run_turn_loop(
 
         // Process the LLM response
         let allow_plan_interview = turn_processing_ctx.session_stats.is_plan_mode()
-            && turn_config.ask_questions_enabled
+            && turn_config.request_user_input_enabled
             && crate::agent::runloop::unified::turn::turn_processing::plan_mode_interview_ready(
                 turn_processing_ctx.session_stats,
             );
@@ -380,11 +380,13 @@ pub async fn run_turn_loop(
             turn_processing_ctx.working_history.len(),
             turn_processing_ctx.session_stats.is_plan_mode(),
             allow_plan_interview,
-            turn_config.ask_questions_enabled,
+            turn_config.request_user_input_enabled,
             Some(&validation_cache),
             Some(turn_processing_ctx.tool_registry),
         )?;
-        if turn_processing_ctx.session_stats.is_plan_mode() && turn_config.ask_questions_enabled {
+        if turn_processing_ctx.session_stats.is_plan_mode()
+            && turn_config.request_user_input_enabled
+        {
             processing_result = maybe_force_plan_mode_interview(
                 processing_result,
                 response.content.as_deref(),

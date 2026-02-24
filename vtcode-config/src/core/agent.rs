@@ -181,6 +181,18 @@ pub struct AgentConfig {
     #[serde(default = "default_include_working_directory")]
     pub include_working_directory: bool,
 
+    /// Controls inclusion of the structured reasoning tag instructions block.
+    ///
+    /// Behavior:
+    /// - `Some(true)`: always include structured reasoning instructions.
+    /// - `Some(false)`: never include structured reasoning instructions.
+    /// - `None` (default): include only for `default` and `specialized` prompt modes.
+    ///
+    /// This keeps lightweight/minimal prompts smaller by default while allowing
+    /// explicit opt-in when users want tag-based reasoning guidance.
+    #[serde(default)]
+    pub include_structured_reasoning_tags: Option<bool>,
+
     /// Custom instructions provided by the user via configuration to guide agent behavior
     #[serde(default)]
     pub user_instructions: Option<String>,
@@ -380,6 +392,7 @@ impl Default for AgentConfig {
             include_temporal_context: default_include_temporal_context(),
             temporal_context_use_utc: false, // Default to local time
             include_working_directory: default_include_working_directory(),
+            include_structured_reasoning_tags: None,
             user_instructions: None,
             default_editing_mode: EditingMode::default(),
             require_plan_confirmation: default_require_plan_confirmation(),
@@ -391,6 +404,14 @@ impl Default for AgentConfig {
 }
 
 impl AgentConfig {
+    /// Determine whether structured reasoning tag instructions should be included.
+    pub fn should_include_structured_reasoning_tags(&self) -> bool {
+        self.include_structured_reasoning_tags.unwrap_or(matches!(
+            self.system_prompt_mode,
+            SystemPromptMode::Default | SystemPromptMode::Specialized
+        ))
+    }
+
     /// Validate LLM generation parameters
     pub fn validate_llm_params(&self) -> Result<(), String> {
         // Validate temperature range
@@ -1012,5 +1033,35 @@ mod tests {
         assert_eq!(config.default_editing_mode, EditingMode::Edit);
         assert!(config.require_plan_confirmation);
         assert!(!config.autonomous_mode);
+    }
+
+    #[test]
+    fn test_structured_reasoning_defaults_follow_prompt_mode() {
+        let mut config = AgentConfig::default();
+
+        config.system_prompt_mode = SystemPromptMode::Default;
+        assert!(config.should_include_structured_reasoning_tags());
+
+        config.system_prompt_mode = SystemPromptMode::Specialized;
+        assert!(config.should_include_structured_reasoning_tags());
+
+        config.system_prompt_mode = SystemPromptMode::Minimal;
+        assert!(!config.should_include_structured_reasoning_tags());
+
+        config.system_prompt_mode = SystemPromptMode::Lightweight;
+        assert!(!config.should_include_structured_reasoning_tags());
+    }
+
+    #[test]
+    fn test_structured_reasoning_explicit_override() {
+        let mut config = AgentConfig {
+            system_prompt_mode: SystemPromptMode::Minimal,
+            include_structured_reasoning_tags: Some(true),
+            ..AgentConfig::default()
+        };
+        assert!(config.should_include_structured_reasoning_tags());
+
+        config.include_structured_reasoning_tags = Some(false);
+        assert!(!config.should_include_structured_reasoning_tags());
     }
 }

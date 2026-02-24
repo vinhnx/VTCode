@@ -121,7 +121,6 @@
 //! the monolithic implementation into focused, reusable components.
 
 pub mod apply_patch;
-pub mod ask_user_question;
 pub mod builder;
 pub mod code_intelligence;
 pub mod constants;

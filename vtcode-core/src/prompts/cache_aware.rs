@@ -5,7 +5,8 @@ const PRIORITY_TOOLS: &[&str] = &[
     "unified_search",
     "unified_file",
     "unified_exec",
-    "ask_user_question",
+    "request_user_input",
+    "plan_task_tracker",
     "task_tracker",
     "exit_plan_mode",
 ];
@@ -88,7 +89,7 @@ mod tests {
                 serde_json::json!({}),
             ),
             ToolDefinition::function(
-                "ask_user_question".to_string(),
+                "request_user_input".to_string(),
                 "ask".to_string(),
                 serde_json::json!({}),
             ),
@@ -116,7 +117,7 @@ mod tests {
             vec![
                 "unified_search",
                 "unified_file",
-                "ask_user_question",
+                "request_user_input",
                 "alpha_tool",
                 "zebra_tool"
             ]

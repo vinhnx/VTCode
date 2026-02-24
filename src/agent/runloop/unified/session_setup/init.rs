@@ -314,7 +314,7 @@ async fn build_tool_definitions(
         }
     }
 
-    tool_definitions
+    vtcode_core::prompts::sort_tool_definitions(tool_definitions)
 }
 
 async fn maybe_attach_mcp_client(

@@ -27,7 +27,7 @@ use crate::llm::factory::create_provider_for_model;
 use crate::llm::provider as uni_provider;
 use crate::llm::{AnyClient, make_client};
 use crate::prompts::system::compose_system_instruction_text;
-use crate::tools::{ToolRegistry, build_function_declarations};
+use crate::tools::{ToolRegistry, build_function_declarations_cached};
 
 use anyhow::{Result, anyhow};
 use parking_lot::Mutex;
@@ -229,21 +229,21 @@ impl AgentRunner {
     async fn build_agent_tools(&self) -> Result<Vec<Tool>> {
         use crate::llm::providers::gemini::sanitize_function_parameters;
 
-        // Build function declarations based on available tools
-        let declarations = build_function_declarations();
+        let declarations =
+            build_function_declarations_cached(self.config().agent.tool_documentation_mode);
 
         // Filter tools based on agent type and permissions
         let mut allowed_tools = Vec::with_capacity(declarations.len());
-        for decl in declarations {
+        for decl in declarations.iter() {
             if !self.is_tool_allowed(&decl.name).await {
                 continue;
             }
 
             allowed_tools.push(Tool {
                 function_declarations: vec![crate::gemini::FunctionDeclaration {
-                    name: decl.name,
-                    description: decl.description,
-                    parameters: sanitize_function_parameters(decl.parameters),
+                    name: decl.name.clone(),
+                    description: decl.description.clone(),
+                    parameters: sanitize_function_parameters(decl.parameters.clone()),
                 }],
             });
         }

@@ -43,7 +43,7 @@ impl PromptTemplates {
 
     /// Get tool usage prompt
     pub fn tool_usage_prompt() -> &'static str {
-        "Tools: grep_file (search), list_files (explore), read_file (read), edit_file (modify), run_pty_cmd (shell), ask_questions (Ask Questions tool for structured input; Plan mode only), request_user_input (legacy alias; Plan mode only). Use specific tools over shell ls/find/grep. Scoped paths, max_results≤5, response_format='concise', paginate with page/per_page. Follow truncation guidance. IMPORTANT: When you need user input for choices, preferences, or clarifications, you MUST use ask_questions (or request_user_input) instead of asking in plain text. This shows a proper UI to the user."
+        "Tools: unified_search (search/list), unified_file (read/write/edit), unified_exec (shell/pty), request_user_input (Plan mode only). Prefer unified tools over shell ls/find/grep for discovery and file operations. Keep paths scoped, paginate large reads, and follow truncation guidance. IMPORTANT: For choices or clarifications, use request_user_input instead of plain-text questions so the UI can render structured input."
     }
 
     /// Get workspace context prompt
@@ -63,6 +63,6 @@ impl PromptTemplates {
 
     /// Get skills available prompt (inspired by OpenAI Codex)
     pub fn skills_available_prompt() -> &'static str {
-        "## Skills\nSpecialized capabilities from .agents/skills/. Use search_tools to discover. (.vtcode/skills is deprecated but still supported.)"
+        "## Skills\nSpecialized capabilities from .agents/skills/. Use list_skills to discover, load_skill to activate, and load_skill_resource for deeper assets."
     }
 }

@@ -1,5 +1,6 @@
 use super::AgentRunner;
 use crate::config::constants::tools;
+use crate::tools::registry::{ToolErrorType, classify_error};
 use crate::utils::error_messages::ERR_TOOL_DENIED;
 use anyhow::{Result, anyhow};
 use serde_json::Value;
@@ -32,9 +33,7 @@ impl AgentRunner {
         }
 
         // Enforce policy gate: Allow and Prompt are executable, Deny blocks
-        self.is_tool_allowed(canonical).await;
-
-        true
+        self.is_tool_allowed(canonical).await
     }
 
     /// Execute a tool by name with given arguments.
@@ -132,13 +131,14 @@ impl AgentRunner {
         for (attempt, delay_ms) in RETRY_DELAYS_MS.iter().enumerate() {
             match registry.execute_tool_ref(tool_name, args).await {
                 Ok(result) => return Ok(result),
-                Err(e) if attempt < 2 => {
-                    last_error = Some(e);
-                    tokio::time::sleep(Duration::from_millis(*delay_ms)).await;
-                    continue;
-                }
                 Err(e) => {
+                    let should_retry = should_retry_tool_error(&e);
                     last_error = Some(e);
+                    if should_retry && attempt < RETRY_DELAYS_MS.len().saturating_sub(1) {
+                        tokio::time::sleep(Duration::from_millis(*delay_ms)).await;
+                        continue;
+                    }
+                    break;
                 }
             }
         }
@@ -149,5 +149,34 @@ impl AgentRunner {
                 .map(|e| e.to_string())
                 .unwrap_or_else(|| "unknown error".to_string())
         ))
+    }
+}
+
+fn should_retry_tool_error(error: &anyhow::Error) -> bool {
+    matches!(
+        classify_error(error),
+        ToolErrorType::Timeout | ToolErrorType::NetworkError
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::should_retry_tool_error;
+    use anyhow::anyhow;
+
+    #[test]
+    fn retries_only_for_transient_error_types() {
+        assert!(should_retry_tool_error(&anyhow!(
+            "network connection dropped"
+        )));
+        assert!(should_retry_tool_error(&anyhow!("operation timed out")));
+    }
+
+    #[test]
+    fn does_not_retry_policy_or_validation_failures() {
+        assert!(!should_retry_tool_error(&anyhow!("tool denied by policy")));
+        assert!(!should_retry_tool_error(&anyhow!(
+            "invalid arguments: missing required field"
+        )));
     }
 }

@@ -147,6 +147,16 @@ async fn test_ask_questions_alias_resolves_to_request_user_input() {
     assert_eq!(tool.name(), tools::REQUEST_USER_INPUT);
 }
 
+#[tokio::test]
+async fn test_ask_user_question_alias_resolves_to_request_user_input() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let registry = ToolRegistry::new(tmp.path().to_path_buf()).await;
+    let tool = registry
+        .get_tool(tools::ASK_USER_QUESTION)
+        .expect("ask_user_question alias should resolve");
+    assert_eq!(tool.name(), tools::REQUEST_USER_INPUT);
+}
+
 #[test]
 fn test_process_tool_output() {
     // Test successful output

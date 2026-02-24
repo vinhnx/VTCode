@@ -17,9 +17,7 @@ impl AgentRunner {
                 function: Some(FunctionDefinition {
                     name: decl.name,
                     description: decl.description,
-                    parameters: crate::llm::providers::gemini::sanitize_function_parameters(
-                        decl.parameters,
-                    ),
+                    parameters: decl.parameters,
                 }),
                 shell: None,
                 grammar: None,
@@ -28,7 +26,7 @@ impl AgentRunner {
             })
             .collect();
 
-        Ok(tools)
+        Ok(crate::prompts::sort_tool_definitions(tools))
     }
 
     /// Validate LLM request before sending to provider.
