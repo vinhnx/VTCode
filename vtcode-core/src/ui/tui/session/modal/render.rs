@@ -1,4 +1,5 @@
 use crate::config::constants::ui;
+use crate::ui::markdown::render_markdown;
 use crate::ui::tui::types::SecurePromptConfig;
 use ratatui::{
     prelude::*,
@@ -10,6 +11,84 @@ use super::layout::{ModalBodyContext, ModalRenderStyles, ModalSection};
 use super::state::{ModalListState, ModalSearchState, WizardModalState, WizardStepState};
 use crate::ui::tui::session::terminal_capabilities;
 use std::mem;
+
+fn markdown_to_plain_lines(text: &str) -> Vec<String> {
+    let mut lines = render_markdown(text)
+        .into_iter()
+        .map(|line| {
+            line.segments
+                .into_iter()
+                .map(|segment| segment.text)
+                .collect::<String>()
+        })
+        .collect::<Vec<_>>();
+
+    while lines.last().is_some_and(|line| line.trim().is_empty()) {
+        lines.pop();
+    }
+
+    if lines.is_empty() {
+        vec![String::new()]
+    } else {
+        lines
+    }
+}
+
+fn wrap_line_to_width(line: &str, width: usize) -> Vec<String> {
+    if width == 0 {
+        return vec![line.to_owned()];
+    }
+
+    if line.is_empty() {
+        return vec![String::new()];
+    }
+
+    let mut rows = Vec::new();
+    let mut current = String::new();
+    let mut current_width = 0usize;
+
+    for ch in line.chars() {
+        let ch_width = unicode_width::UnicodeWidthChar::width(ch)
+            .unwrap_or(0)
+            .max(1);
+        if current_width + ch_width > width && !current.is_empty() {
+            rows.push(std::mem::take(&mut current));
+            current_width = 0;
+            if ch.is_whitespace() {
+                continue;
+            }
+        }
+
+        current.push(ch);
+        current_width += ch_width;
+    }
+
+    if !current.is_empty() {
+        rows.push(current);
+    }
+
+    if rows.is_empty() {
+        vec![String::new()]
+    } else {
+        rows
+    }
+}
+
+fn render_markdown_lines_for_modal(text: &str, width: usize, style: Style) -> Vec<Line<'static>> {
+    let mut lines = Vec::new();
+    for line in markdown_to_plain_lines(text) {
+        let wrapped = wrap_line_to_width(line.as_str(), width);
+        for wrapped_line in wrapped {
+            lines.push(Line::from(Span::styled(wrapped_line, style)));
+        }
+    }
+
+    if lines.is_empty() {
+        vec![Line::default()]
+    } else {
+        lines
+    }
+}
 
 pub fn render_modal_list(
     frame: &mut Frame<'_>,
@@ -96,14 +175,39 @@ pub fn render_wizard_modal_body(
     let current_step_state = wizard.steps.get(wizard.current_step);
     let has_notes = current_step_state.is_some_and(|s| s.notes_active || !s.notes.is_empty());
     let instruction_lines = wizard.instruction_lines();
+    let content_width = area.width.max(1) as usize;
+    let header_lines = if is_multistep {
+        render_markdown_lines_for_modal(
+            wizard.question_header().as_str(),
+            content_width,
+            styles.header,
+        )
+    } else {
+        Vec::new()
+    };
+    let question_lines = wizard
+        .steps
+        .get(wizard.current_step)
+        .map(|step| {
+            render_markdown_lines_for_modal(step.question.as_str(), content_width, styles.header)
+        })
+        .unwrap_or_else(|| vec![Line::default()]);
 
     // Layout: [Header (1)] [Search (optional)] [Question (2)] [List] [Notes?] [Instructions?]
     let mut constraints = Vec::new();
-    constraints.push(Constraint::Length(1));
+    if is_multistep {
+        constraints.push(Constraint::Length(
+            header_lines.len().min(u16::MAX as usize) as u16,
+        ));
+    } else {
+        constraints.push(Constraint::Length(1));
+    }
     if wizard.search.is_some() {
         constraints.push(Constraint::Length(3));
     }
-    constraints.push(Constraint::Length(2));
+    constraints.push(Constraint::Length(
+        question_lines.len().max(1).min(u16::MAX as usize) as u16,
+    ));
     constraints.push(Constraint::Min(3));
     if has_notes {
         constraints.push(Constraint::Length(1));
@@ -118,10 +222,7 @@ pub fn render_wizard_modal_body(
 
     let mut idx = 0;
     if is_multistep {
-        let header = Paragraph::new(Line::from(Span::styled(
-            wizard.question_header(),
-            styles.header,
-        )));
+        let header = Paragraph::new(header_lines).wrap(Wrap { trim: false });
         frame.render_widget(header, chunks[idx]);
     } else {
         render_wizard_tabs(
@@ -139,15 +240,8 @@ pub fn render_wizard_modal_body(
         idx += 1;
     }
 
-    if let Some(step) = wizard.steps.get(wizard.current_step) {
-        let question_text = if is_multistep {
-            format!("  {}", step.question)
-        } else {
-            step.question.clone()
-        };
-        let question = Paragraph::new(Line::from(Span::styled(question_text, styles.header)));
-        frame.render_widget(question, chunks[idx]);
-    }
+    let question = Paragraph::new(question_lines).wrap(Wrap { trim: false });
+    frame.render_widget(question, chunks[idx]);
     idx += 1;
 
     if let Some(step) = wizard.steps.get_mut(wizard.current_step) {
@@ -695,4 +789,45 @@ fn modal_list_item(
 
     lines.push(Line::default());
     ListItem::new(lines)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn line_text(line: &Line<'_>) -> String {
+        line.spans
+            .iter()
+            .map(|span| span.content.clone().into_owned())
+            .collect::<String>()
+    }
+
+    #[test]
+    fn render_markdown_lines_for_modal_wraps_long_questions() {
+        let lines = render_markdown_lines_for_modal(
+            "What user-visible outcome should this change deliver, and what constraints or non-goals must remain unchanged?",
+            40,
+            Style::default(),
+        );
+
+        assert!(lines.len() > 1, "long question should wrap across lines");
+        for line in &lines {
+            let text = line_text(line);
+            assert!(
+                UnicodeWidthStr::width(text.as_str()) <= 40,
+                "line exceeded modal width: {text}"
+            );
+        }
+    }
+
+    #[test]
+    fn render_markdown_lines_for_modal_renders_markdown_headings() {
+        let lines =
+            render_markdown_lines_for_modal("### Goal\n- Reduce prompt size", 80, Style::default());
+
+        let rendered = lines.iter().map(line_text).collect::<Vec<_>>().join("\n");
+        assert!(rendered.contains("Goal"));
+        assert!(!rendered.contains("### Goal"));
+        assert!(rendered.contains("Reduce prompt size"));
+    }
 }

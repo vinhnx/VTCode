@@ -1,7 +1,10 @@
 use super::*;
 use crate::config::constants::ui;
 use crate::ui::tui::style::ratatui_style_from_inline;
-use crate::ui::tui::{InlineSegment, InlineTextStyle, InlineTheme};
+use crate::ui::tui::{
+    InlineListItem, InlineListSelection, InlineSegment, InlineTextStyle, InlineTheme,
+    WizardModalMode, WizardStep,
+};
 use ratatui::crossterm::event::{Event as CrosstermEvent, KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
     Terminal,
@@ -516,6 +519,97 @@ fn arrow_keys_never_launch_editor() {
             key_code
         );
     }
+}
+
+fn request_user_input_step(question_id: &str, label: &str) -> WizardStep {
+    WizardStep {
+        title: format!("Question {question_id}"),
+        question: format!("Select {question_id}"),
+        items: vec![InlineListItem {
+            title: label.to_string(),
+            subtitle: Some("Option".to_string()),
+            badge: None,
+            indent: 0,
+            selection: Some(InlineListSelection::RequestUserInputAnswer {
+                question_id: question_id.to_string(),
+                selected: vec![label.to_string()],
+                other: None,
+            }),
+            search_value: Some(label.to_string()),
+        }],
+        completed: false,
+        answer: None,
+        allow_freeform: true,
+        freeform_label: None,
+        freeform_placeholder: None,
+    }
+}
+
+#[test]
+fn wizard_multistep_submit_keeps_modal_open_until_last_step() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    let steps = vec![
+        request_user_input_step("q1", "Scope"),
+        request_user_input_step("q2", "Priority"),
+    ];
+
+    session.handle_command(InlineCommand::ShowWizardModal {
+        title: "Questions".to_string(),
+        steps,
+        current_step: 0,
+        search: None,
+        mode: WizardModalMode::MultiStep,
+    });
+    assert!(session.wizard_modal.is_some());
+
+    let first_submit = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    assert!(matches!(
+        first_submit,
+        Some(InlineEvent::WizardModalStepComplete { step: 0, .. })
+    ));
+    assert!(
+        session.wizard_modal.is_some(),
+        "wizard should remain open after intermediate step completion"
+    );
+    assert_eq!(
+        session
+            .wizard_modal
+            .as_ref()
+            .map(|wizard| wizard.current_step),
+        Some(1)
+    );
+
+    let final_submit = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    assert!(matches!(
+        final_submit,
+        Some(InlineEvent::WizardModalSubmit(selections)) if selections.len() == 2
+    ));
+    assert!(
+        session.wizard_modal.is_none(),
+        "wizard should close after final submission"
+    );
+}
+
+#[test]
+fn wizard_tabbed_submit_closes_modal_immediately() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    let steps = vec![request_user_input_step("q1", "Single choice")];
+
+    session.handle_command(InlineCommand::ShowWizardModal {
+        title: "Question".to_string(),
+        steps,
+        current_step: 0,
+        search: None,
+        mode: WizardModalMode::TabbedList,
+    });
+    assert!(session.wizard_modal.is_some());
+
+    let submit = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    assert!(matches!(
+        submit,
+        Some(InlineEvent::WizardModalSubmit(selections)) if selections.len() == 1
+    ));
+    assert!(session.wizard_modal.is_none());
 }
 
 #[test]
