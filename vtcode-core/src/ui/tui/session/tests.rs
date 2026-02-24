@@ -1164,7 +1164,12 @@ fn pty_block_hides_until_output_available() {
         }],
     );
 
-    let rendered = session.reflow_pty_lines(0, 80);
+    assert!(
+        session.reflow_pty_lines(0, 80).is_empty(),
+        "placeholder PTY line should remain hidden",
+    );
+
+    let rendered = session.reflow_pty_lines(1, 80);
     assert!(rendered.iter().any(|line| !line.spans.is_empty()));
 }
 
@@ -1176,6 +1181,56 @@ fn pty_block_skips_status_only_sequence() {
 
     assert!(session.reflow_pty_lines(0, 80).is_empty());
     assert!(session.reflow_pty_lines(1, 80).is_empty());
+}
+
+#[test]
+fn pty_wrapped_lines_keep_hanging_left_padding() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.push_line(
+        InlineMessageKind::Pty,
+        vec![InlineSegment {
+            text: "  └ this PTY output line wraps on narrow widths".to_string(),
+            style: std::sync::Arc::new(InlineTextStyle::default()),
+        }],
+    );
+
+    let rendered = session.reflow_pty_lines(0, 18);
+    assert!(
+        rendered.len() >= 2,
+        "expected wrapped PTY output, got {} line(s)",
+        rendered.len()
+    );
+
+    let first = line_text(&rendered[0]);
+    let second = line_text(&rendered[1]);
+
+    assert!(first.starts_with("    └ "), "first line was: {first:?}");
+    assert!(
+        second.starts_with("      "),
+        "wrapped line should keep hanging indent, got: {second:?}"
+    );
+}
+
+#[test]
+fn pty_wrapped_lines_do_not_exceed_viewport_width() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.push_line(
+        InlineMessageKind::Pty,
+        vec![InlineSegment {
+            text: "  └ this PTY output line wraps on narrow widths".to_string(),
+            style: std::sync::Arc::new(InlineTextStyle::default()),
+        }],
+    );
+
+    let width = 18usize;
+    let rendered = session.reflow_pty_lines(0, width as u16);
+    for line in rendered {
+        let line_width: usize = line.spans.iter().map(|span| span.width()).sum();
+        assert!(
+            line_width <= width,
+            "wrapped PTY line exceeded viewport width: {line_width} > {width}",
+        );
+    }
 }
 
 #[test]

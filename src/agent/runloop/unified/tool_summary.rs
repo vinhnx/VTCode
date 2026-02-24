@@ -155,11 +155,11 @@ pub(crate) fn render_tool_call_summary(
     if is_run_command {
         summary = command_line_candidate
             .as_ref()
-            .map(|command| format!("Run {}", command))
+            .map(|command| format!("Ran {}", command))
             .unwrap_or(summary);
     }
     if is_run_command && run_summary_is_placeholder(&summary) {
-        summary = "Run command".to_string();
+        summary = "Ran command".to_string();
     }
     let command_line = if is_run_command {
         None
@@ -178,7 +178,7 @@ pub(crate) fn render_tool_call_summary(
     line.push_str(&render_styled("•", palette.muted, Some("dim".to_string())));
     line.push(' ');
     let mut wrapped_run_segments: Option<Vec<String>> = None;
-    if let Some(command) = summary.strip_prefix("Run ") {
+    if let Some(command) = summary.strip_prefix("Ran ") {
         let wrapped = wrap_text_words(
             command,
             RUN_SUMMARY_FIRST_WIDTH,
@@ -189,13 +189,15 @@ pub(crate) fn render_tool_call_summary(
             .cloned()
             .unwrap_or_else(|| "command".to_string());
         wrapped_run_segments = Some(wrapped);
-        line.push_str(&render_styled("Run", palette.accent, None));
-        line.push(' ');
-        line.push_str(&render_summary_with_highlights(
-            &first_segment,
-            &summary_highlights,
-            main_color,
+        line.push_str(&render_styled(
+            "Ran",
             palette.accent,
+            Some("bold".to_string()),
+        ));
+        line.push(' ');
+        line.push_str(&render_run_command_segment(
+            &first_segment,
+            main_color,
             palette.muted,
         ));
     } else {
@@ -208,7 +210,7 @@ pub(crate) fn render_tool_call_summary(
         ));
     }
 
-    let stream_label = if summary.starts_with("Run ") {
+    let stream_label = if summary.starts_with("Ran ") {
         None
     } else {
         stream_label
@@ -301,13 +303,44 @@ fn render_summary_with_highlights(
     rendered
 }
 
+fn render_run_command_segment(segment: &str, command_color: Color, args_color: Color) -> String {
+    let (command, args) = split_command_and_args(segment);
+    if command.is_empty() {
+        return render_styled(segment, args_color, None);
+    }
+
+    let mut rendered = String::new();
+    rendered.push_str(&render_styled(command, command_color, None));
+    if !args.is_empty() {
+        rendered.push_str(&render_styled(&format!(" {}", args), args_color, None));
+    }
+    rendered
+}
+
+fn split_command_and_args(text: &str) -> (&str, &str) {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return ("", "");
+    }
+
+    for (idx, ch) in trimmed.char_indices() {
+        if ch.is_whitespace() {
+            let command = &trimmed[..idx];
+            let args = trimmed[idx..].trim_start();
+            return (command, args);
+        }
+    }
+
+    (trimmed, "")
+}
+
 fn build_tool_summary(action_label: &str, headline: &str) -> String {
     let normalized = headline.trim().trim_start_matches("MCP ").trim();
     if action_label == "Run command (PTY)" {
         if normalized.is_empty() {
-            return "Run command".to_string();
+            return "Ran command".to_string();
         }
-        return format!("Run {}", normalized);
+        return format!("Ran {}", normalized);
     }
     if normalized.is_empty() {
         return action_label.to_string();
@@ -327,7 +360,7 @@ fn build_tool_summary(action_label: &str, headline: &str) -> String {
 }
 
 fn run_summary_is_placeholder(summary: &str) -> bool {
-    let Some(command) = summary.strip_prefix("Run ") else {
+    let Some(command) = summary.strip_prefix("Ran ") else {
         return false;
     };
     let normalized = command.trim().to_ascii_lowercase();
@@ -692,7 +725,7 @@ mod tests {
     fn build_tool_summary_formats_run_command_as_ran() {
         assert_eq!(
             build_tool_summary("Run command (PTY)", "cargo check -p vtcode"),
-            "Run cargo check -p vtcode"
+            "Ran cargo check -p vtcode"
         );
     }
 
@@ -712,9 +745,9 @@ mod tests {
 
     #[test]
     fn run_summary_placeholder_detection_catches_generic_labels() {
-        assert!(run_summary_is_placeholder("Run Use Unified exec"));
-        assert!(run_summary_is_placeholder("Run bash"));
-        assert!(!run_summary_is_placeholder("Run cargo check -p vtcode"));
+        assert!(run_summary_is_placeholder("Ran Use Unified exec"));
+        assert!(run_summary_is_placeholder("Ran bash"));
+        assert!(!run_summary_is_placeholder("Ran cargo check -p vtcode"));
     }
 
     #[test]

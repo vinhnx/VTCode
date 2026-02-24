@@ -420,14 +420,14 @@ impl Session {
     pub(super) fn wrap_block_lines(
         &self,
         first_prefix: &str,
-        _continuation_prefix: &str,
+        continuation_prefix: &str,
         content: Vec<Span<'static>>,
         max_width: usize,
         border_style: Style,
     ) -> Vec<Line<'static>> {
         self.wrap_block_lines_with_options(
             first_prefix,
-            _continuation_prefix,
+            continuation_prefix,
             content,
             max_width,
             border_style,
@@ -440,14 +440,14 @@ impl Session {
     pub(super) fn wrap_block_lines_no_right_border(
         &self,
         first_prefix: &str,
-        _continuation_prefix: &str,
+        continuation_prefix: &str,
         content: Vec<Span<'static>>,
         max_width: usize,
         border_style: Style,
     ) -> Vec<Line<'static>> {
         self.wrap_block_lines_with_options(
             first_prefix,
-            _continuation_prefix,
+            continuation_prefix,
             content,
             max_width,
             border_style,
@@ -459,7 +459,7 @@ impl Session {
     fn wrap_block_lines_with_options(
         &self,
         first_prefix: &str,
-        _continuation_prefix: &str,
+        continuation_prefix: &str,
         content: Vec<Span<'static>>,
         max_width: usize,
         border_style: Style,
@@ -479,7 +479,9 @@ impl Session {
         } else {
             ""
         };
-        let prefix_width = first_prefix.chars().count();
+        let first_prefix_width = first_prefix.chars().count();
+        let continuation_prefix_width = continuation_prefix.chars().count();
+        let prefix_width = first_prefix_width.max(continuation_prefix_width);
         let border_width = right_border.chars().count();
         let consumed_width = prefix_width.saturating_add(border_width);
         let content_width = max_width.saturating_sub(consumed_width);
@@ -541,7 +543,12 @@ impl Session {
                 0
             };
 
-            let mut new_spans = vec![Span::styled(first_prefix.to_owned(), border_style)];
+            let active_prefix = if idx == 0 {
+                first_prefix
+            } else {
+                continuation_prefix
+            };
+            let mut new_spans = vec![Span::styled(active_prefix.to_owned(), border_style)];
 
             // For diff lines, preserve the diff prefix on continuation lines
             if idx > 0
@@ -780,10 +787,11 @@ impl Session {
         }
 
         let body_prefix = "  ";
-        let continuation_prefix = "  ";
+        let continuation_prefix =
+            text_utils::pty_wrapped_continuation_prefix(body_prefix, combined.as_str());
         lines.extend(self.wrap_block_lines_no_right_border(
             body_prefix,
-            continuation_prefix,
+            continuation_prefix.as_str(),
             body_spans,
             max_width,
             border_style,

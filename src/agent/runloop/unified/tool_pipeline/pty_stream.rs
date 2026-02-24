@@ -8,7 +8,9 @@ use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use vtcode_core::tools::registry::ToolProgressCallback;
 use vtcode_core::ui::theme;
-use vtcode_core::ui::tui::{InlineHandle, InlineMessageKind, InlineSegment, InlineTextStyle, convert_style};
+use vtcode_core::ui::tui::{
+    InlineHandle, InlineMessageKind, InlineSegment, InlineTextStyle, convert_style,
+};
 
 use crate::agent::runloop::unified::progress::ProgressReporter;
 
