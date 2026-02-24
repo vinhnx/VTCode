@@ -102,9 +102,16 @@ Creates multi-crate releases for VT Code using [`cargo-release`](https://github.
 4. **Distribution**: Publishes crates, optionally publishes npm package, triggers docs.rs rebuild, and builds binaries
 5. **GitHub Release**: `cargo release` uploads release notes using the generated changelog section
 
+**Changelog Generation:**
+
+-   Uses [git-cliff](https://git-cliff.org) for automated changelog generation from conventional commits
+-   Falls back to built-in generator if git-cliff is not installed
+-   Configuration in `cliff.toml` at project root
+-   Install git-cliff: `cargo install git-cliff`
+
 **Recent Updates:**
 
--   Fixed changelogithub CLI compatibility issues by switching to the official GitHub Action
+-   Integrated git-cliff for changelog generation
 -   Added proper workflow permissions for release creation
 -   Improved error handling and debugging information
 

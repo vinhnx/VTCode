@@ -12,21 +12,22 @@ This document explains how to create releases for the VT Code project, including
 3. The script will:
     - Bump versions in all workspace crates
     - Update dependencies between workspace crates
+    - Generate changelog using git-cliff
     - Create git commits and tags
     - Push changes to the remote repository
     - Publish to crates.io (unless --skip-crates is used)
 
 ## Changelog Generation
 
-Changelog generation happens automatically when tags are pushed:
+Changelog generation is handled by [git-cliff](https://git-cliff.org):
 
-1. The release script creates a git tag (e.g., `v0.20.0`)
-2. GitHub Actions workflow (`.github/workflows/release.yml`) is triggered
-3. The workflow runs `changelogithub` which:
-    - Analyzes git commits since the last tag
-    - Groups commits by type (feat, fix, etc.) based on conventional commits
-    - Updates `CHANGELOG.md` with new entries
-    - Creates a GitHub Release with the changelog content
+1. The release script calls git-cliff with the project configuration
+2. git-cliff analyzes git commits since the last tag
+3. Commits are grouped by type (feat, fix, etc.) based on conventional commits
+4. CHANGELOG.md is updated with new entries
+5. Release notes are generated for GitHub Releases
+
+For detailed documentation, see [Changelog Generation Guide](./development/CHANGELOG_GENERATION.md).
 
 ## Pre-release Versions
 
@@ -40,7 +41,7 @@ For pre-release versions, use:
 
 ## Configuration
 
--   Changelog generation is configured in `.github/changelogithub.config.js`
+-   Changelog generation is configured in `cliff.toml`
 -   Release process is configured in `release.toml`
 -   The release script is in `scripts/release.sh`
 

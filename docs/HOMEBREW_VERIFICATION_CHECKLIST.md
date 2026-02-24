@@ -30,7 +30,7 @@ Result: **PASS** ✅
 ### 2. Automation Pipeline
 
 **release.yml** (on tag push):
-- Generates changelog via changelogithub
+- Generates changelog via git-cliff
 - Creates GitHub Release
 
 **build-release.yml** (on release published):

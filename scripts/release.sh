@@ -298,12 +298,102 @@ generate_structured_changelog() {
     echo "$output"
 }
 
-# Changelog generation from commits
+# Changelog generation using git-cliff
 update_changelog_from_commits() {
     local version=$1
     local dry_run_flag=$2
 
-    print_info "Generating changelog for version $version from commits..."
+    print_info "Generating changelog for version $version using git-cliff..."
+
+    # Check if git-cliff is available
+    if command -v git-cliff >/dev/null 2>&1; then
+        print_info "Using git-cliff for changelog generation"
+        
+        if [[ "$dry_run_flag" == 'true' ]]; then
+            print_info "Dry run - would generate changelog with git-cliff"
+            git-cliff --config cliff.toml --unreleased 2>/dev/null || true
+            return 0
+        fi
+
+        # Generate changelog entry for the new version
+        # git-cliff will handle the version tagging automatically
+        local temp_changelog
+        temp_changelog=$(mktemp)
+        
+        # Generate changelog for the specific version
+        if git-cliff --config cliff.toml --output "$temp_changelog" 2>/dev/null; then
+            # Extract the new version section from git-cliff output
+            local date_str
+            date_str=$(date +%Y-%m-%d)
+            
+            # Read the generated changelog and extract the first version section
+            local changelog_content
+            changelog_content=$(cat "$temp_changelog")
+            
+            # Save to global variable for release notes use (GitHub Release body)
+            {
+                echo "## What's Changed"
+                echo ""
+                # Extract content after the first version header
+                echo "$changelog_content" | sed -n '/^## /,/^## /p' | head -n -1
+                echo ""
+                echo "**Full Changelog**: https://github.com/vinhnx/vtcode/compare/${version}"
+            } > "$RELEASE_NOTES_FILE"
+
+            if [[ -f CHANGELOG.md ]]; then
+                # Check if this version already exists in the changelog
+                if grep -q "^## $version " CHANGELOG.md; then
+                    print_warning "Version $version already exists in CHANGELOG.md, skipping update"
+                else
+                    # Use git-cliff's generated content, insert after header
+                    local header
+                    header=$(head -n 4 CHANGELOG.md)
+                    local remainder
+                    remainder=$(tail -n +5 CHANGELOG.md)
+                    {
+                        printf '%s\n' "$header"
+                        # Extract the first version section from git-cliff output
+                        echo "$changelog_content" | sed -n '/^## /,/^## /p' | head -n -1
+                        printf '%s\n' "$remainder"
+                    } > CHANGELOG.md
+                fi
+            else
+                # Create new changelog with git-cliff output
+                cp "$temp_changelog" CHANGELOG.md
+            fi
+            
+            rm -f "$temp_changelog"
+        else
+            print_warning "git-cliff failed, falling back to built-in changelog generator"
+            update_changelog_builtin "$version" "$dry_run_flag"
+            return $?
+        fi
+    else
+        print_warning "git-cliff not found, using built-in changelog generator"
+        print_info "Install with: cargo install git-cliff"
+        update_changelog_builtin "$version" "$dry_run_flag"
+        return $?
+    fi
+
+    git add CHANGELOG.md
+    if ! git diff --cached --quiet; then
+        GIT_AUTHOR_NAME="vtcode-release-bot" \
+        GIT_AUTHOR_EMAIL="noreply@vtcode.com" \
+        GIT_COMMITTER_NAME="vtcode-release-bot" \
+        GIT_COMMITTER_EMAIL="noreply@vtcode.com" \
+        git commit -m "docs: update changelog for $version [skip ci]"
+        print_success "Changelog updated and committed for version $version"
+    else
+        print_info "No changes to CHANGELOG.md to commit."
+    fi
+}
+
+# Built-in changelog generation (fallback when git-cliff is not available)
+update_changelog_builtin() {
+    local version=$1
+    local dry_run_flag=$2
+
+    print_info "Generating changelog for version $version from commits (builtin)..."
 
     # Find the most recent tag that follows SemVer (vX.Y.Z or X.Y.Z) in commit history
     # We exclude the version we're about to release if it already exists as a tag

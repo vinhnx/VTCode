@@ -28,9 +28,9 @@ brew upgrade vtcode  # Update to latest
 When `./scripts/release.sh` is run, the following happens automatically:
 
 1. **release.yml workflow** (triggered by git tag push):
-   - Generates changelog using changelogithub
+   - Generates changelog using git-cliff
    - Creates GitHub Release
-   
+
 2. **build-release.yml workflow** (triggered by release published):
    - Builds binaries for all platforms (macOS x86_64/ARM64, Linux x86_64/ARM64, Windows)
    - Uploads to GitHub Release

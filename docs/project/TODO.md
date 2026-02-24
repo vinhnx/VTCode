@@ -2924,10 +2924,3 @@ check plan errors
 ---
 
 check all modal implementation and unified and extract common. make sure the messages are properly wrapped and styled if needed.
-
----
-
-use https://git-cliff.org/docs/
-
----
-
