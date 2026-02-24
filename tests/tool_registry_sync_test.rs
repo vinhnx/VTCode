@@ -139,6 +139,7 @@ fn test_no_tools_in_constants_without_declarations() {
         "close_pty_session",
         "execute_code",
         "task_tracker",
+        "plan_task_tracker",
         "search_tools",
         "web_fetch",
     ];
@@ -165,6 +166,7 @@ fn test_no_tools_in_constants_without_declarations() {
             "resize_pty_session",
             "web_fetch",
             "task_tracker",
+            "plan_task_tracker",
         ]
         .iter()
         .copied(),
@@ -212,6 +214,7 @@ fn test_acp_tool_subset_is_documented() {
             "close_pty_session",
             "execute_code",
             "task_tracker",
+            "plan_task_tracker",
             "search_tools",
             "debug_agent",
             "analyze_agent",
@@ -289,6 +292,10 @@ async fn test_deprecated_update_plan_tool_not_registered() {
     assert!(
         registry.get_tool("task_tracker").is_some(),
         "task_tracker should be registered"
+    );
+    assert!(
+        registry.get_tool("plan_task_tracker").is_some(),
+        "plan_task_tracker should be registered"
     );
     assert!(
         registry.get_tool("update_plan").is_none(),

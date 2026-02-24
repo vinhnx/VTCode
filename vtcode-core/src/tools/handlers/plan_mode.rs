@@ -384,6 +384,47 @@ fn plan_has_actionable_steps(content: &str) -> bool {
     false
 }
 
+fn tracker_file_for_plan_file(plan_file: &std::path::Path) -> Option<PathBuf> {
+    let stem = plan_file.file_stem()?.to_str()?;
+    Some(plan_file.with_file_name(format!("{stem}.tasks.md")))
+}
+
+fn merge_plan_content(
+    plan_content: Option<String>,
+    tracker_content: Option<String>,
+) -> Option<String> {
+    match (plan_content, tracker_content) {
+        (Some(plan), Some(tracker)) => {
+            let plan_trimmed = plan.trim();
+            let tracker_trimmed = tracker.trim();
+            if plan_trimmed.is_empty() {
+                Some(tracker_trimmed.to_string())
+            } else if tracker_trimmed.is_empty() {
+                Some(plan_trimmed.to_string())
+            } else {
+                Some(format!("{plan_trimmed}\n\n{tracker_trimmed}\n"))
+            }
+        }
+        (Some(plan), None) => {
+            let trimmed = plan.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            }
+        }
+        (None, Some(tracker)) => {
+            let trimmed = tracker.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            }
+        }
+        (None, None) => None,
+    }
+}
+
 #[async_trait]
 impl Tool for ExitPlanModeTool {
     async fn execute(&self, args: Value) -> Result<Value> {
@@ -403,7 +444,7 @@ impl Tool for ExitPlanModeTool {
         let plan_baseline = self.state.plan_baseline().await;
 
         // Read the plan content if file exists
-        let (plan_content, plan_title) = if let Some(ref path) = plan_file {
+        let (raw_plan_content, plan_title) = if let Some(ref path) = plan_file {
             let title = path
                 .file_stem()
                 .and_then(|s| s.to_str())
@@ -416,6 +457,25 @@ impl Tool for ExitPlanModeTool {
         } else {
             (None, "Implementation Plan".to_string())
         };
+
+        // Merge optional plan task tracker sidecar content (if present) so the
+        // confirmation modal and readiness checks see the full plan state.
+        let tracker_file = plan_file
+            .as_ref()
+            .and_then(|path| tracker_file_for_plan_file(path));
+        let tracker_content = if let Some(ref path) = tracker_file {
+            if path.exists() {
+                match read_file_with_context(path, "plan tracker file").await {
+                    Ok(content) => Some(content),
+                    Err(_) => None,
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        let plan_content = merge_plan_content(raw_plan_content, tracker_content);
 
         // Parse structured plan content for the confirmation dialog
         let structured_plan = plan_content.as_ref().map(|content| {
@@ -449,6 +509,7 @@ impl Tool for ExitPlanModeTool {
                 "message": "Plan not ready for confirmation. Add actionable steps under a Plan of Work/Concrete Steps section (or a Phase section) and update the plan file in this session, then retry.",
                 "reason": args.reason,
                 "plan_file": plan_file.map(|p| p.display().to_string()),
+                "plan_tracker_file": tracker_file.map(|p| p.display().to_string()),
                 "plan_content": plan_content,
                 "requires_confirmation": false
             }));
@@ -492,6 +553,7 @@ impl Tool for ExitPlanModeTool {
             "message": "Plan ready for review. Waiting for user confirmation before execution.",
             "reason": args.reason,
             "plan_file": plan_file.map(|p| p.display().to_string()),
+            "plan_tracker_file": tracker_file.map(|p| p.display().to_string()),
             "plan_content": plan_content,
             "plan_summary": plan_summary,
             "pending_active_agent": "coder",
@@ -609,6 +671,37 @@ mod tests {
         let summary = &result["plan_summary"];
         assert_eq!(summary["total_steps"], 2);
         assert_eq!(summary["completed_steps"], 1);
+    }
+
+    #[tokio::test]
+    async fn test_exit_plan_mode_merges_plan_tracker_sidecar_content() {
+        let temp_dir = TempDir::new().unwrap();
+        let state = PlanModeState::new(temp_dir.path().to_path_buf());
+
+        state.enable();
+        let plans_dir = state.plans_dir();
+        std::fs::create_dir_all(&plans_dir).unwrap();
+        let plan_file = plans_dir.join("merge-test.md");
+        std::fs::write(&plan_file, "# Test Plan\n\n## Plan of Work\n- [ ] Base step\n").unwrap();
+        let tracker_file = plans_dir.join("merge-test.tasks.md");
+        std::fs::write(
+            &tracker_file,
+            "# Updated Plan\n\n## Plan of Work\n- [~] Tracker step\n",
+        )
+        .unwrap();
+        state.set_plan_file(Some(plan_file)).await;
+
+        let tool = ExitPlanModeTool::new(state.clone());
+        let result = tool.execute(json!({ "reason": "merge test" })).await.unwrap();
+
+        assert_eq!(result["status"], "pending_confirmation");
+        assert_eq!(
+            result["plan_tracker_file"],
+            tracker_file.display().to_string()
+        );
+        let plan_content = result["plan_content"].as_str().unwrap_or_default();
+        assert!(plan_content.contains("Base step"));
+        assert!(plan_content.contains("Tracker step"));
     }
 
     #[tokio::test]

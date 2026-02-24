@@ -47,6 +47,55 @@ pub enum RecoveryAction {
     Continue,
 }
 
+#[derive(Debug, Deserialize)]
+struct RecoveryPromptArgs {
+    #[serde(default)]
+    title: Option<String>,
+    question: String,
+    tabs: Vec<RecoveryTabArgs>,
+    #[serde(default)]
+    default_tab_id: Option<String>,
+    #[serde(default)]
+    default_choice_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct RecoveryTabArgs {
+    id: String,
+    title: String,
+    items: Vec<RecoveryItemArgs>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct RecoveryItemArgs {
+    id: String,
+    title: String,
+    #[serde(default)]
+    subtitle: Option<String>,
+    #[serde(default)]
+    badge: Option<String>,
+}
+
+fn resolve_current_step(tabs: &[RecoveryTabArgs], default_tab_id: Option<&str>) -> usize {
+    default_tab_id
+        .and_then(|id| tabs.iter().position(|tab| tab.id == id))
+        .unwrap_or(0)
+}
+
+fn find_default_choice_selection(
+    items: &[InlineListItem],
+    default_choice_id: &str,
+) -> Option<InlineListSelection> {
+    items.iter().find_map(|item| {
+        if let Some(InlineListSelection::AskUserChoice { choice_id, .. }) = &item.selection
+            && choice_id == default_choice_id
+        {
+            return item.selection.clone();
+        }
+        None
+    })
+}
+
 #[allow(dead_code)]
 impl RecoveryPromptBuilder {
     pub fn new(title: String) -> Self {
@@ -85,19 +134,30 @@ impl RecoveryPromptBuilder {
             badge: Option<String>,
         }
 
-        let tabs = vec![RecoveryTabInternal {
-            id: "recovery".to_string(),
-            title: "Recovery Options".to_string(),
-            items: self
-                .recommendations
-                .into_iter()
-                .map(|r| RecoveryItemInternal {
+        let mut default_choice_id: Option<String> = None;
+        let items: Vec<RecoveryItemInternal> = self
+            .recommendations
+            .into_iter()
+            .map(|r| {
+                if default_choice_id.is_none() && r.badge.as_deref() == Some("Recommended") {
+                    default_choice_id = Some(r.id.clone());
+                }
+                RecoveryItemInternal {
                     id: r.id,
                     title: r.title,
                     subtitle: Some(r.subtitle),
                     badge: r.badge,
-                })
-                .collect(),
+                }
+            })
+            .collect();
+        if default_choice_id.is_none() {
+            default_choice_id = items.first().map(|item| item.id.clone());
+        }
+
+        let tabs = vec![RecoveryTabInternal {
+            id: "recovery".to_string(),
+            title: "Recovery Options".to_string(),
+            items,
         }];
 
         json!({
@@ -106,7 +166,9 @@ impl RecoveryPromptBuilder {
             "tabs": tabs,
             "allow_freeform": true,
             "freeform_label": "Provide custom guidance",
-            "freeform_placeholder": "Describe what you'd like me to do next..."
+            "freeform_placeholder": "Describe what you'd like me to do next...",
+            "default_tab_id": "recovery",
+            "default_choice_id": default_choice_id
         })
     }
 }
@@ -119,49 +181,30 @@ pub async fn execute_recovery_prompt(
     ctrl_c_state: &Arc<CtrlCState>,
     ctrl_c_notify: &Arc<Notify>,
 ) -> Result<Value> {
-    #[derive(Debug, Deserialize)]
-    struct RecoveryPromptArgs {
-        #[serde(default)]
-        title: Option<String>,
-        question: String,
-        tabs: Vec<RecoveryTabArgs>,
-        #[serde(default)]
-        default_tab_id: Option<String>,
-    }
-
-    #[derive(Debug, Clone, Deserialize)]
-    struct RecoveryTabArgs {
-        id: String,
-        title: String,
-        items: Vec<RecoveryItemArgs>,
-    }
-
-    #[derive(Debug, Clone, Deserialize)]
-    struct RecoveryItemArgs {
-        id: String,
-        title: String,
-        #[serde(default)]
-        subtitle: Option<String>,
-        #[serde(default)]
-        badge: Option<String>,
-    }
-
     let parsed: RecoveryPromptArgs =
         serde_json::from_value(args.clone()).context("Invalid recovery prompt arguments")?;
 
     if parsed.tabs.is_empty() {
         return Ok(json!({ "cancelled": true, "error": "No tabs provided" }));
     }
+    if parsed.tabs.iter().any(|tab| tab.items.is_empty()) {
+        return Ok(json!({
+            "cancelled": true,
+            "error": "Each tab must include at least one item"
+        }));
+    }
 
     let title = parsed
         .title
         .unwrap_or_else(|| "Circuit Breaker Activated".to_string());
+    let current_step = resolve_current_step(&parsed.tabs, parsed.default_tab_id.as_deref());
+    let default_tab_id = parsed.tabs.get(current_step).map(|tab| tab.id.as_str());
 
     let steps: Vec<WizardStep> = parsed
         .tabs
         .iter()
         .map(|tab| {
-            let items = tab
+            let items: Vec<InlineListItem> = tab
                 .items
                 .iter()
                 .map(|item| InlineListItem {
@@ -183,24 +226,27 @@ pub async fn execute_recovery_prompt(
                 })
                 .collect();
 
+            let answer = if default_tab_id == Some(tab.id.as_str()) {
+                parsed
+                    .default_choice_id
+                    .as_deref()
+                    .and_then(|choice_id| find_default_choice_selection(&items, choice_id))
+            } else {
+                None
+            };
+
             WizardStep {
                 title: tab.title.clone(),
                 question: parsed.question.clone(),
                 items,
-                completed: false,
-                answer: None,
+                completed: answer.is_some(),
+                answer,
                 allow_freeform: true, // Recovery prompts often allow custom guidance
                 freeform_label: Some("Provide custom guidance".to_string()),
                 freeform_placeholder: Some("Describe what you'd like me to do next...".to_string()),
             }
         })
         .collect();
-
-    let current_step = parsed
-        .default_tab_id
-        .as_deref()
-        .and_then(|id| parsed.tabs.iter().position(|t| t.id == id))
-        .unwrap_or(0);
 
     let search = Some(InlineListSearchConfig {
         label: "Search".to_string(),
@@ -454,5 +500,104 @@ pub fn parse_recovery_response(response: &Value) -> Option<RecoveryAction> {
         "debug_agent" => Some(RecoveryAction::CallDebugAgent),
         "save_exit" => Some(RecoveryAction::SaveAndExit),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resolve_current_step_uses_default_tab_when_found() {
+        let tabs = vec![
+            RecoveryTabArgs {
+                id: "a".to_string(),
+                title: "A".to_string(),
+                items: vec![RecoveryItemArgs {
+                    id: "1".to_string(),
+                    title: "one".to_string(),
+                    subtitle: None,
+                    badge: None,
+                }],
+            },
+            RecoveryTabArgs {
+                id: "b".to_string(),
+                title: "B".to_string(),
+                items: vec![RecoveryItemArgs {
+                    id: "2".to_string(),
+                    title: "two".to_string(),
+                    subtitle: None,
+                    badge: None,
+                }],
+            },
+        ];
+
+        assert_eq!(resolve_current_step(&tabs, Some("b")), 1);
+        assert_eq!(resolve_current_step(&tabs, Some("missing")), 0);
+        assert_eq!(resolve_current_step(&tabs, None), 0);
+    }
+
+    #[test]
+    fn find_default_choice_selection_matches_item_id() {
+        let items = vec![
+            InlineListItem {
+                title: "Retry".to_string(),
+                subtitle: None,
+                badge: None,
+                indent: 0,
+                selection: Some(InlineListSelection::AskUserChoice {
+                    tab_id: "recovery".to_string(),
+                    choice_id: "retry_all".to_string(),
+                    text: None,
+                }),
+                search_value: None,
+            },
+            InlineListItem {
+                title: "Skip".to_string(),
+                subtitle: None,
+                badge: None,
+                indent: 0,
+                selection: Some(InlineListSelection::AskUserChoice {
+                    tab_id: "recovery".to_string(),
+                    choice_id: "skip".to_string(),
+                    text: None,
+                }),
+                search_value: None,
+            },
+        ];
+
+        let selected = find_default_choice_selection(&items, "skip");
+        assert!(matches!(
+            selected,
+            Some(InlineListSelection::AskUserChoice {
+                choice_id,
+                ..
+            }) if choice_id == "skip"
+        ));
+        assert!(find_default_choice_selection(&items, "missing").is_none());
+    }
+
+    #[test]
+    fn builder_sets_default_choice_to_recommended_option() {
+        let prompt = RecoveryPromptBuilder::new("Recovery".to_string())
+            .with_summary("summary".to_string())
+            .add_recommendation(RecoveryOption {
+                id: "retry_all".to_string(),
+                title: "Reset All & Retry".to_string(),
+                subtitle: "Clear all circuit breakers and try again".to_string(),
+                badge: Some("Recommended".to_string()),
+                action: RecoveryAction::ResetAllCircuits,
+            })
+            .add_recommendation(RecoveryOption {
+                id: "continue".to_string(),
+                title: "Continue Anyway".to_string(),
+                subtitle: "Ignore and proceed".to_string(),
+                badge: None,
+                action: RecoveryAction::Continue,
+            })
+            .build();
+
+        assert_eq!(prompt["default_tab_id"], "recovery");
+        assert_eq!(prompt["default_choice_id"], "retry_all");
     }
 }

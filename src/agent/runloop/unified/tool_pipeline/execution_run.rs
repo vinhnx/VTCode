@@ -3,6 +3,7 @@ use std::sync::Arc;
 use anyhow::anyhow;
 use serde_json::Value;
 use tokio::sync::Notify;
+use vtcode_core::config::constants::tools;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::exec::events::CommandExecutionStatus;
 
@@ -153,9 +154,16 @@ pub(crate) async fn run_tool_call_with_args(
         outcome
     };
 
-    if ctx.session_stats.is_plan_mode() && name == "task_tracker" {
+    if ctx.session_stats.is_plan_mode() && name == tools::TASK_TRACKER {
         return Ok(finish_with_status(ToolExecutionStatus::Failure {
             error: anyhow!("task_tracker is a TODO/checklist tool and is not allowed in Plan mode"),
+        }));
+    }
+    if !ctx.session_stats.is_plan_mode() && name == tools::PLAN_TASK_TRACKER {
+        return Ok(finish_with_status(ToolExecutionStatus::Failure {
+            error: anyhow!(
+                "plan_task_tracker is plan-scoped and only available when Plan mode is active"
+            ),
         }));
     }
 
