@@ -60,10 +60,10 @@ pub fn spawn_session_with_prompts(
     active_pty_sessions: Option<Arc<std::sync::atomic::AtomicUsize>>,
     keyboard_protocol: crate::config::KeyboardProtocolConfig,
 ) -> Result<InlineSession> {
-    use std::io::IsTerminal;
+    use crossterm::tty::IsTty;
 
     // Check stdin is a terminal BEFORE spawning the task
-    if !std::io::stdin().is_terminal() {
+    if !std::io::stdin().is_tty() {
         return Err(anyhow::anyhow!(
             "cannot run interactive TUI: stdin is not a terminal (must be run in an interactive terminal)"
         ));

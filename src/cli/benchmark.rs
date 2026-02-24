@@ -1,7 +1,7 @@
 use anyhow::{Context, Result, anyhow, bail};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::io::{self, IsTerminal, Read};
+use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use vtcode_core::config::VTCodeConfig;
@@ -13,6 +13,7 @@ use vtcode_core::core::agent::task::{ContextItem, Task};
 use vtcode_core::core::agent::types::AgentType;
 use vtcode_core::utils::file_utils::{read_file_with_context_sync, write_file_with_context_sync};
 use vtcode_core::utils::path::resolve_workspace_path;
+use vtcode_core::utils::tty::TtyExt;
 use vtcode_core::{RunnerTaskOutcome, RunnerTaskResults};
 
 use crate::workspace_trust::{WorkspaceTrustGateResult, ensure_workspace_trust};
@@ -276,7 +277,7 @@ fn load_spec_source(options: &BenchmarkCommandOptions) -> Result<String> {
 
     let mut buffer = String::new();
     let stdin = io::stdin();
-    if stdin.is_terminal() {
+    if stdin.is_tty_ext() {
         bail!(ERROR_SPEC_REQUIRED);
     }
 

@@ -128,6 +128,7 @@ pub mod session_archive;
 pub mod style_helpers;
 pub mod tokens;
 pub mod transcript;
+pub mod tty;
 pub mod unicode_monitor;
 pub mod validation;
 pub mod vtcodegitignore;

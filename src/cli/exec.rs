@@ -1,5 +1,5 @@
 use anyhow::{Context, Result, bail};
-use std::io::{self, IsTerminal, Read};
+use std::io::{self, Read};
 use std::path::PathBuf;
 use std::str::FromStr;
 use vtcode_core::config::VTCodeConfig;
@@ -12,6 +12,7 @@ use vtcode_core::core::agent::types::AgentType;
 use vtcode_core::exec::events::{ThreadEvent, ThreadItemDetails};
 use vtcode_core::utils::colors::style;
 use vtcode_core::utils::file_utils::write_file_with_context;
+use vtcode_core::utils::tty::TtyExt;
 use vtcode_core::utils::validation::validate_non_empty;
 
 use crate::workspace_trust::workspace_trust_level;
@@ -33,7 +34,7 @@ fn resolve_prompt(prompt_arg: Option<String>, quiet: bool) -> Result<String> {
         Some(p) if p != "-" => Ok(p),
         maybe_dash => {
             let force_stdin = matches!(maybe_dash.as_deref(), Some("-"));
-            if io::stdin().is_terminal() && !force_stdin {
+            if io::stdin().is_tty_ext() && !force_stdin {
                 bail!(
                     "No prompt provided. Pass a prompt argument, pipe input, or use '-' to read from stdin."
                 );
