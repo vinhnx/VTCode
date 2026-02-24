@@ -319,23 +319,27 @@ update_changelog_from_commits() {
         # git-cliff will handle the version tagging automatically
         local temp_changelog
         temp_changelog=$(mktemp)
-        
+
         # Generate changelog for the specific version
         if git-cliff --config cliff.toml --output "$temp_changelog" 2>/dev/null; then
             # Extract the new version section from git-cliff output
             local date_str
             date_str=$(date +%Y-%m-%d)
-            
+
             # Read the generated changelog and extract the first version section
             local changelog_content
             changelog_content=$(cat "$temp_changelog")
-            
+
+            # Extract content between first and second version headers (portable across macOS/Linux)
+            # Use awk instead of head -n -1 for BSD/macOS compatibility
+            local version_section
+            version_section=$(echo "$changelog_content" | awk '/^## /{if(++n==2)exit} n==1' )
+
             # Save to global variable for release notes use (GitHub Release body)
             {
                 echo "## What's Changed"
                 echo ""
-                # Extract content after the first version header
-                echo "$changelog_content" | sed -n '/^## /,/^## /p' | head -n -1
+                echo "$version_section"
                 echo ""
                 echo "**Full Changelog**: https://github.com/vinhnx/vtcode/compare/${version}"
             } > "$RELEASE_NOTES_FILE"
@@ -352,8 +356,7 @@ update_changelog_from_commits() {
                     remainder=$(tail -n +5 CHANGELOG.md)
                     {
                         printf '%s\n' "$header"
-                        # Extract the first version section from git-cliff output
-                        echo "$changelog_content" | sed -n '/^## /,/^## /p' | head -n -1
+                        printf '%s\n' "$version_section"
                         printf '%s\n' "$remainder"
                     } > CHANGELOG.md
                 fi
