@@ -2923,4 +2923,26 @@ check plan errors
 
 ---
 
-check all modal implementation and unified and extract common. make sure the messages are properly wrapped and styled if needed.
+for PTY output, currently it only show the ouput not the command. maybe we can show both? or at least show the command in the beginning so user have more context about the output in the TUI.
+
+ref:
+
+```
+$ cargo check -p vtcode-core 2>&1 | tail -30
+[... 6 lines truncated ...] View all
+    Checking hyper-rustls v0.27.7
+    Checking reqwest v0.12.28
+    Checking reqwest v0.13.1
+    Checking jsonschema v0.40.2
+    Checking vtcode-commons v0.82.3 (/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-commons)
+    Checking vtcode-acp-client v0.82.3 (/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-acp-client)
+    Checking openai-harmony v0.0.8
+    Checking rig-core v0.23.1
+    Checking rmcp v0.14.0
+    Checking vtcode-bash-runner v0.82.3 (/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-bash-runner)
+    Checking vtcode-exec-events v0.82.3 (/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-exec-events)
+    Checking vtcode-indexer v0.82.3 (/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-indexer)
+    Checking vtcode-config v0.82.3 (/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-config)
+    Checking vtcode-file-search v0.82.3 (/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-file-search)
+    Finished `dev` profile [unoptimized] target(s) in 28.59s
+```

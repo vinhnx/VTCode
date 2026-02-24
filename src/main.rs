@@ -13,7 +13,6 @@ use vtcode::startup::StartupContext;
 use vtcode_core::cli::args::{Cli, Commands};
 use vtcode_core::config::api_keys::load_dotenv;
 use vtcode_core::ui::tui::panic_hook;
-// FullTui import removed – not used in this binary.
 
 mod agent;
 mod cli; // local CLI handlers in src/cli // agent runloops (single-agent only)

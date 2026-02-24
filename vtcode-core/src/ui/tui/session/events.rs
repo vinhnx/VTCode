@@ -83,7 +83,12 @@ pub(super) fn handle_event(
             crate::ui::tui::session::render::apply_view_rows(session, rows);
             session.mark_dirty();
         }
-        _ => {}
+        CrosstermEvent::FocusGained => {
+            crate::notifications::set_global_terminal_focused(true);
+        }
+        CrosstermEvent::FocusLost => {
+            crate::notifications::set_global_terminal_focused(false);
+        }
     }
 }
 
