@@ -1,6 +1,8 @@
 use super::*;
-use crate::agent::runloop::unified::run_loop_context::TurnPhase;
 use crate::agent::runloop::unified::plan_mode_state::render_plan_mode_next_step_hint;
+use crate::agent::runloop::unified::run_loop_context::TurnPhase;
+
+const PLAN_MODE_MIN_TOOL_CALLS_PER_TURN: usize = 48;
 
 fn resolve_effective_turn_timeout_secs(
     configured_turn_timeout_secs: u64,
@@ -16,6 +18,14 @@ fn resolve_effective_turn_timeout_secs(
     let buffer_secs = 60_u64.max(llm_attempt_grace_secs);
     let min_for_harness = max_tool_wall_clock_secs.saturating_add(buffer_secs);
     configured_turn_timeout_secs.max(min_for_harness)
+}
+
+fn effective_max_tool_calls_for_turn(configured_limit: usize, plan_mode_active: bool) -> usize {
+    if plan_mode_active {
+        configured_limit.max(PLAN_MODE_MIN_TOOL_CALLS_PER_TURN)
+    } else {
+        configured_limit
+    }
 }
 
 pub(super) async fn run_single_agent_loop_unified_impl(
@@ -262,10 +272,15 @@ pub(super) async fn run_single_agent_loop_unified_impl(
             let mut history_backup: Option<Vec<vtcode_core::llm::provider::Message>> = None;
             let outcome = match loop {
                 let mut auto_exit_plan_mode_attempted = false;
+                let plan_mode_active = session_stats.is_plan_mode();
+                let max_tool_calls_per_turn = effective_max_tool_calls_for_turn(
+                    harness_config.max_tool_calls_per_turn,
+                    plan_mode_active,
+                );
                 let mut harness_state = HarnessTurnState::new(
                     TurnRunId(turn_run_id.0.clone()),
                     TurnId(SessionId::new().0),
-                    harness_config.max_tool_calls_per_turn,
+                    max_tool_calls_per_turn,
                     harness_config.max_tool_wall_clock_secs,
                     harness_config.max_tool_retries,
                 );
@@ -592,7 +607,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
 
 #[cfg(test)]
 mod tests {
-    use super::resolve_effective_turn_timeout_secs;
+    use super::{effective_max_tool_calls_for_turn, resolve_effective_turn_timeout_secs};
 
     #[test]
     fn turn_timeout_respects_tool_wall_clock_budget() {
@@ -613,5 +628,16 @@ mod tests {
     #[test]
     fn turn_timeout_expands_buffer_for_large_configs() {
         assert_eq!(resolve_effective_turn_timeout_secs(600, 600), 720);
+    }
+
+    #[test]
+    fn plan_mode_applies_tool_call_floor() {
+        assert_eq!(effective_max_tool_calls_for_turn(32, true), 48);
+        assert_eq!(effective_max_tool_calls_for_turn(64, true), 64);
+    }
+
+    #[test]
+    fn edit_mode_keeps_configured_tool_call_limit() {
+        assert_eq!(effective_max_tool_calls_for_turn(32, false), 32);
     }
 }

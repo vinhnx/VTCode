@@ -871,19 +871,35 @@ mod tests {
 
         for (i, (tool, args)) in sequence.iter().enumerate() {
             let res = detector.record_call(tool, args);
-            assert!(res.is_none(), "Call {} ({}) should not have triggered a warning", i + 1, tool);
+            assert!(
+                res.is_none(),
+                "Call {} ({}) should not have triggered a warning",
+                i + 1,
+                tool
+            );
         }
 
         // 6th call (any read-only) should trigger navigation loop warning (streak hits 6)
         let warning = detector.record_call(tools::READ_FILE, &read_args);
-        assert!(warning.is_some(), "6th call should have triggered a navigation loop warning");
+        assert!(
+            warning.is_some(),
+            "6th call should have triggered a navigation loop warning"
+        );
         assert!(warning.unwrap().contains("Navigation Loop Detected"));
 
         // A mutating call should reset the streak
         let write_args = serde_json::json!({"path": "src/new.rs", "content": "test"});
-        assert!(detector.record_call(tools::WRITE_FILE, &write_args).is_none());
-        
+        assert!(
+            detector
+                .record_call(tools::WRITE_FILE, &write_args)
+                .is_none()
+        );
+
         // Subsequent read calls should start from 0; single call should be fine
-        assert!(detector.record_call(tools::LIST_FILES, &list_args).is_none());
+        assert!(
+            detector
+                .record_call(tools::LIST_FILES, &list_args)
+                .is_none()
+        );
     }
 }

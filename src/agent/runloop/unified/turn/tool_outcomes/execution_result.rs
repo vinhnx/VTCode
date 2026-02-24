@@ -1,6 +1,7 @@
 //! Tool execution result handling for turn flow.
 
 use anyhow::Result;
+use vtcode_core::config::constants::defaults::DEFAULT_MAX_CONSECUTIVE_BLOCKED_TOOL_CALLS_PER_TURN;
 use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::tools::error_messages::agent_execution;
@@ -35,6 +36,53 @@ fn record_tool_execution(
         ctx.autonomous_executor.record_execution(tool_name, success);
     }
     ctx.telemetry.record_tool_usage(tool_name, success);
+}
+
+fn max_consecutive_blocked_tool_calls_per_turn(ctx: &TurnProcessingContext<'_>) -> usize {
+    ctx.vt_cfg
+        .map(|cfg| cfg.tools.max_consecutive_blocked_tool_calls_per_turn)
+        .filter(|value| *value > 0)
+        .unwrap_or(DEFAULT_MAX_CONSECUTIVE_BLOCKED_TOOL_CALLS_PER_TURN)
+}
+
+fn is_blocked_or_denied_failure(error: &str) -> bool {
+    if agent_execution::is_plan_mode_denial(error) {
+        return true;
+    }
+
+    let lowered = error.to_ascii_lowercase();
+    [
+        "tool permission denied",
+        "policy violation:",
+        "safety validation failed",
+        "tool argument validation failed",
+        "not allowed in plan mode",
+        "only available when plan mode is active",
+    ]
+    .iter()
+    .any(|marker| lowered.contains(marker))
+}
+
+fn emit_turn_metric_log(
+    ctx: &TurnProcessingContext<'_>,
+    metric: &'static str,
+    tool_name: &str,
+    blocked_streak: usize,
+    blocked_cap: usize,
+) {
+    tracing::info!(
+        target: "vtcode.turn.metrics",
+        metric,
+        run_id = %ctx.harness_state.run_id.0,
+        turn_id = %ctx.harness_state.turn_id.0,
+        plan_mode = ctx.session_stats.is_plan_mode(),
+        tool = %tool_name,
+        blocked_streak,
+        blocked_cap,
+        blocked_total = ctx.harness_state.blocked_tool_calls,
+        tool_calls = ctx.harness_state.tool_calls,
+        "turn metric"
+    );
 }
 
 /// Build standardized error content for tool failures.
@@ -255,6 +303,8 @@ async fn handle_success<'a>(
     pipeline_outcome: &ToolPipelineOutcome,
     output: &serde_json::Value,
 ) -> Result<()> {
+    t_ctx.ctx.harness_state.reset_blocked_tool_call_streak();
+
     let content_for_model = maybe_inline_spooled(tool_name, output);
     push_tool_response(t_ctx.ctx.working_history, tool_call_id, content_for_model);
 
@@ -304,6 +354,7 @@ async fn handle_failure<'a>(
 ) -> Result<Option<TurnHandlerOutcome>> {
     let error_str = error.to_string();
     let is_plan_mode_denial = agent_execution::is_plan_mode_denial(&error_str);
+    let blocked_or_denied_failure = is_blocked_or_denied_failure(&error_str);
     let should_auto_exit = is_plan_mode_denial
         && t_ctx.ctx.session_stats.is_plan_mode()
         && !t_ctx
@@ -313,6 +364,15 @@ async fn handle_failure<'a>(
 
     let error_msg = format!("Tool '{}' execution failed: {}", tool_name, error);
     tracing::debug!(tool = %tool_name, error = %error, "Tool execution failed");
+    if is_plan_mode_denial {
+        emit_turn_metric_log(
+            t_ctx.ctx,
+            "plan_mode_denial",
+            tool_name,
+            t_ctx.ctx.harness_state.consecutive_blocked_tool_calls,
+            max_consecutive_blocked_tool_calls_per_turn(t_ctx.ctx),
+        );
+    }
 
     push_tool_error_response(t_ctx, tool_call_id, tool_name, error_msg, "execution").await;
 
@@ -321,6 +381,32 @@ async fn handle_failure<'a>(
         && let Some(outcome) = handle_plan_mode_auto_exit(t_ctx, tool_start_time).await?
     {
         return Ok(Some(outcome));
+    }
+
+    if blocked_or_denied_failure {
+        let streak = t_ctx.ctx.harness_state.record_blocked_tool_call();
+        let max_streak = max_consecutive_blocked_tool_calls_per_turn(t_ctx.ctx);
+        if streak > max_streak {
+            emit_turn_metric_log(
+                t_ctx.ctx,
+                "blocked_streak_break",
+                tool_name,
+                streak,
+                max_streak,
+            );
+            let display_tool = tool_action_label(tool_name, args_val);
+            let block_reason = format!(
+                "Consecutive blocked/denied tool calls reached per-turn cap ({max_streak}). Last blocked call: '{display_tool}'. Stopping turn to prevent retry churn."
+            );
+            t_ctx.ctx
+                .working_history
+                .push(uni::Message::system(block_reason.clone()));
+            return Ok(Some(TurnHandlerOutcome::Break(TurnLoopResult::Blocked {
+                reason: Some(block_reason),
+            })));
+        }
+    } else {
+        t_ctx.ctx.harness_state.reset_blocked_tool_call_streak();
     }
 
     Ok(None)
@@ -563,5 +649,29 @@ mod tests {
             payload.get("fallback_tool_args"),
             Some(&serde_json::json!({"session_id":"run-1"}))
         );
+    }
+
+    #[test]
+    fn blocked_or_denied_failure_detects_guardable_errors() {
+        assert!(is_blocked_or_denied_failure(
+            "task_tracker is a TODO/checklist tool and is not allowed in Plan mode"
+        ));
+        assert!(is_blocked_or_denied_failure("Tool permission denied"));
+        assert!(is_blocked_or_denied_failure(
+            "Policy violation: exceeded max tool calls per turn (32)"
+        ));
+        assert!(is_blocked_or_denied_failure(
+            "Safety validation failed: command pattern denied"
+        ));
+    }
+
+    #[test]
+    fn blocked_or_denied_failure_ignores_runtime_execution_failures() {
+        assert!(!is_blocked_or_denied_failure(
+            "command exited with status 1"
+        ));
+        assert!(!is_blocked_or_denied_failure(
+            "stream request timed out after 30000ms"
+        ));
     }
 }

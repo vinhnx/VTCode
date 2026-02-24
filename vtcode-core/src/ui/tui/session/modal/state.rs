@@ -906,9 +906,7 @@ impl WizardModalState {
                     }
                 }
                 InlineListSelection::AskUserChoice {
-                    tab_id,
-                    choice_id,
-                    ..
+                    tab_id, choice_id, ..
                 } => {
                     let notes = step.notes.trim();
                     let text = if notes.is_empty() {

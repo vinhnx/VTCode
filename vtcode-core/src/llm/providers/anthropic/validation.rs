@@ -55,7 +55,8 @@ pub fn validate_request(
     }
 
     if let Some(budget) = request.thinking_budget
-        && budget < 1024 {
+        && budget < 1024
+    {
         let formatted_error = error_display::format_llm_error(
             "Anthropic",
             &format!("thinking_budget ({}) must be at least 1024 tokens.", budget),

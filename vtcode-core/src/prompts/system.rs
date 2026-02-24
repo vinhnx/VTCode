@@ -993,8 +993,7 @@ mod tests {
             config.agent.include_working_directory = false;
             config.agent.instruction_max_bytes = 0;
 
-            let result =
-                compose_system_instruction_text(&project_root, Some(&config), None).await;
+            let result = compose_system_instruction_text(&project_root, Some(&config), None).await;
 
             assert!(
                 result.contains("task_tracker"),

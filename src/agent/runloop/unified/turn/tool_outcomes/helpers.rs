@@ -1,18 +1,11 @@
 use crate::agent::runloop::unified::tool_pipeline::{ToolExecutionStatus, ToolPipelineOutcome};
-use once_cell::sync::Lazy;
 use rustc_hash::FxHashMap;
-use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
-use tracing::warn;
 use vtcode_core::llm::provider as uni;
 
 pub(crate) const EXIT_PLAN_MODE_REASON_AUTO_TRIGGER_ON_DENIAL: &str = "auto_trigger_on_plan_denial";
 pub(crate) const EXIT_PLAN_MODE_REASON_USER_REQUESTED_IMPLEMENTATION: &str =
     "user_requested_implementation";
-
-/// String interning pool for tool signatures to reduce allocations (~15% reduction)
-static SIGNATURE_POOL: Lazy<RwLock<FxHashMap<String, Arc<str>>>> =
-    Lazy::new(|| RwLock::new(FxHashMap::default()));
 
 /// Threshold: number of consecutive file mutations before the Anti-Blind-Editing
 /// warning fires. NL2Repo-Bench recommends verifying after every few edits.
@@ -22,9 +15,9 @@ pub(crate) const BLIND_EDITING_THRESHOLD: usize = 4;
 /// Loop warning fires.
 pub(crate) const NAVIGATION_LOOP_THRESHOLD: usize = 15;
 
-/// Optimized loop detection with interned signatures and exponential backoff
+/// Optimized loop detection with bounded signature keys and exponential backoff.
 pub(crate) struct LoopTracker {
-    attempts: FxHashMap<Arc<str>, (usize, Instant)>,
+    attempts: FxHashMap<String, (usize, Instant)>,
     #[allow(dead_code)]
     backoff_base: Duration,
     /// Counter for consecutive mutating file operations without execution/verification
@@ -44,9 +37,11 @@ impl LoopTracker {
     }
 
     /// Record an attempt and return the count
-    pub(crate) fn record(&mut self, signature: &str) -> usize {
-        let key: Arc<str> = Arc::from(signature);
-        let entry = self.attempts.entry(key).or_insert((0, Instant::now()));
+    pub(crate) fn record(&mut self, signature: String) -> usize {
+        let entry = self
+            .attempts
+            .entry(signature)
+            .or_insert((0, Instant::now()));
         entry.0 += 1;
         entry.1 = Instant::now();
         entry.0
@@ -106,37 +101,14 @@ pub(crate) fn build_step_exit_plan_mode_call_id(step_count: usize) -> String {
     format!("call_{step_count}_exit_plan_mode")
 }
 
-/// Generate and intern a tool signature to reduce string allocations
+/// Generate a tool signature key with predictable structure for loop tracking.
 pub(crate) fn signature_key_for(name: &str, args: &serde_json::Value) -> String {
     let args_str = serde_json::to_string(args).unwrap_or_else(|_| "{}".to_string());
-    let key = format!("{}:{}", name, args_str);
-
-    // Try to get from pool first (fast read path)
-    {
-        let pool = match SIGNATURE_POOL.read() {
-            Ok(pool) => pool,
-            Err(poisoned) => {
-                warn!("SIGNATURE_POOL read lock poisoned; recovering with inner state");
-                poisoned.into_inner()
-            }
-        };
-        if let Some(interned) = pool.get(&key) {
-            return interned.to_string();
-        }
-    }
-
-    // Not in pool, intern it (slow write path)
-    let mut pool = match SIGNATURE_POOL.write() {
-        Ok(pool) => pool,
-        Err(poisoned) => {
-            warn!("SIGNATURE_POOL write lock poisoned; recovering with inner state");
-            poisoned.into_inner()
-        }
-    };
-    // Double-check after acquiring write lock (another thread might have inserted)
-    pool.entry(key.clone())
-        .or_insert_with(|| Arc::from(key.as_str()))
-        .to_string()
+    let mut key = String::with_capacity(name.len() + args_str.len() + 1);
+    key.push_str(name);
+    key.push(':');
+    key.push_str(&args_str);
+    key
 }
 
 pub(crate) fn resolve_max_tool_retries(
@@ -163,7 +135,7 @@ pub(crate) fn update_repetition_tracker(
     }
 
     let signature_key = signature_key_for(name, args);
-    loop_tracker.record(&signature_key);
+    loop_tracker.record(signature_key);
 
     // Update NL2Repo-Bench metrics based on tool intent.
     //
@@ -173,7 +145,7 @@ pub(crate) fn update_repetition_tracker(
     // step (cargo check, cargo test, etc.) should RESET the mutation counter,
     // not increment it.
     use vtcode_core::config::constants::tools as tool_names;
-    
+
     let is_execution_tool = matches!(
         name,
         n if n == tool_names::UNIFIED_EXEC
@@ -181,7 +153,7 @@ pub(crate) fn update_repetition_tracker(
             || n == tool_names::EXECUTE_CODE
             || n == tool_names::SHELL
     );
-    
+
     if is_execution_tool {
         // Execution/verification step resets both counters
         loop_tracker.consecutive_mutations = 0;
@@ -292,8 +264,18 @@ mod tests {
         });
 
         // Two mutations
-        update_repetition_tracker(&mut tracker, &success, "edit_file", &json!({"path":"a","old_str":"x","new_str":"y"}));
-        update_repetition_tracker(&mut tracker, &success, "edit_file", &json!({"path":"b","old_str":"x","new_str":"y"}));
+        update_repetition_tracker(
+            &mut tracker,
+            &success,
+            "edit_file",
+            &json!({"path":"a","old_str":"x","new_str":"y"}),
+        );
+        update_repetition_tracker(
+            &mut tracker,
+            &success,
+            "edit_file",
+            &json!({"path":"b","old_str":"x","new_str":"y"}),
+        );
         assert_eq!(tracker.consecutive_mutations, 2);
 
         // Execution tool resets
@@ -369,4 +351,3 @@ mod tests {
         assert_eq!(tracker.consecutive_mutations, 1);
     }
 }
-

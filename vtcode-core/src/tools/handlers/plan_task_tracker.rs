@@ -6,7 +6,9 @@
 use super::plan_mode::PlanModeState;
 use crate::config::constants::tools;
 use crate::tools::traits::Tool;
-use crate::utils::file_utils::{ensure_dir_exists, read_file_with_context, write_file_with_context};
+use crate::utils::file_utils::{
+    ensure_dir_exists, read_file_with_context, write_file_with_context,
+};
 use anyhow::{Context, Result, bail};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -441,9 +443,7 @@ fn parse_document_from_markdown(content: &str) -> Option<PlanTaskDocument> {
             continue;
         }
 
-        if in_plan_section
-            && let Some(line) = parse_task_line(raw)
-        {
+        if in_plan_section && let Some(line) = parse_task_line(raw) {
             task_lines.push(line);
         }
     }
@@ -459,11 +459,16 @@ fn parse_document_from_markdown(content: &str) -> Option<PlanTaskDocument> {
     };
     let items = build_tree_from_flat(&task_lines);
 
-    Some(PlanTaskDocument { title, items, notes })
+    Some(PlanTaskDocument {
+        title,
+        items,
+        notes,
+    })
 }
 
 fn build_flat_create_lines(items: &[String]) -> Vec<FlatTaskLine> {
-    items.iter()
+    items
+        .iter()
         .filter_map(|raw| {
             let level = raw.chars().take_while(|c| *c == ' ').count() / 2;
             let trimmed = raw.trim();
@@ -561,9 +566,9 @@ impl PlanTaskTrackerTool {
     async fn save_document(&self, document: &PlanTaskDocument) -> Result<PathBuf> {
         let tracker_file = self.tracker_file().await?;
         if let Some(parent) = tracker_file.parent() {
-            ensure_dir_exists(parent)
-                .await
-                .with_context(|| format!("Failed to create plans directory: {}", parent.display()))?;
+            ensure_dir_exists(parent).await.with_context(|| {
+                format!("Failed to create plans directory: {}", parent.display())
+            })?;
         }
         write_file_with_context(
             &tracker_file,
@@ -598,7 +603,9 @@ impl PlanTaskTrackerTool {
     async fn handle_create(&self, args: &PlanTaskTrackerArgs) -> Result<Value> {
         let items = args.items.as_deref().unwrap_or(&[]);
         if items.is_empty() {
-            bail!("At least one item is required for 'create'. Provide items: [\"step 1\", \"step 2\", ...]");
+            bail!(
+                "At least one item is required for 'create'. Provide items: [\"step 1\", \"step 2\", ...]"
+            );
         }
 
         let flat_lines = build_flat_create_lines(items);
@@ -657,9 +664,7 @@ impl PlanTaskTrackerTool {
             "updated",
             format!(
                 "Item {} status changed: {} -> {}",
-                index_path,
-                old_status,
-                new_status_str
+                index_path, old_status, new_status_str
             ),
             &tracker_file,
             &document,
@@ -847,7 +852,9 @@ mod tests {
         assert_eq!(created["checklist"]["in_progress"], 1);
         assert_eq!(created["view"]["title"], "Updated Plan");
 
-        let lines = created["view"]["lines"].as_array().expect("view lines array");
+        let lines = created["view"]["lines"]
+            .as_array()
+            .expect("view lines array");
         assert!(!lines.is_empty());
         let first = lines[0]["display"].as_str().unwrap_or_default();
         assert!(first.contains('└') || first.contains('├'));

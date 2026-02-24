@@ -86,8 +86,7 @@ pub fn parse_response(response_json: Value, model: String) -> Result<LLMResponse
                         .and_then(|r| r.as_array())
                 {
                     for tool_ref in refs {
-                        if let Some(tool_name) =
-                            tool_ref.get("tool_name").and_then(|n| n.as_str())
+                        if let Some(tool_name) = tool_ref.get("tool_name").and_then(|n| n.as_str())
                         {
                             tool_references.push(tool_name.to_string());
                         }

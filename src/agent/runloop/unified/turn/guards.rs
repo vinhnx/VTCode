@@ -27,17 +27,29 @@ pub(crate) fn validate_tool_args_security(
 ) -> Option<Vec<String>> {
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
+    use std::io;
     use vtcode_core::tools::validation::{commands, paths};
+
+    struct HasherWriter<'a, H: Hasher>(&'a mut H);
+    impl<H: Hasher> io::Write for HasherWriter<'_, H> {
+        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+            self.0.write(buf);
+            Ok(buf.len())
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
 
     // Calculate hash for caching
     let args_hash = if validation_cache.is_some() {
         let mut hasher = DefaultHasher::new();
         name.hash(&mut hasher);
-        // Optimization: For large arguments, hashing the string is still faster than
-        // recursive Value hashing, but we can avoid to_string() if we use a
-        // specialized hasher or if we use serde_json::to_writer.
-        // For now, we keep it simple but acknowledge the allocation.
-        args.to_string().hash(&mut hasher);
+        if serde_json::to_writer(HasherWriter(&mut hasher), args).is_err() {
+            // Fallback path should be rare; keep it resilient.
+            args.to_string().hash(&mut hasher);
+        }
         Some(hasher.finish())
     } else {
         None

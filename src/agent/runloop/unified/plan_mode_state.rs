@@ -1,5 +1,5 @@
-use anyhow::Result;
 use crate::agent::runloop::unified::state::SessionStats;
+use anyhow::Result;
 use vtcode_core::tools::registry::ToolRegistry;
 use vtcode_core::ui::tui::{EditingMode, InlineHandle};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};

@@ -21,10 +21,19 @@ pub(super) struct PrecomputedTurnConfig {
 }
 
 #[inline]
-pub(super) fn extract_turn_config(vt_cfg: Option<&VTCodeConfig>) -> PrecomputedTurnConfig {
+pub(super) fn extract_turn_config(
+    vt_cfg: Option<&VTCodeConfig>,
+    plan_mode_active: bool,
+) -> PrecomputedTurnConfig {
     vt_cfg
         .map(|cfg| PrecomputedTurnConfig {
-            max_tool_loops: if cfg.tools.max_tool_loops > 0 {
+            max_tool_loops: if plan_mode_active {
+                if cfg.tools.max_tool_loops > 0 {
+                    cfg.tools.max_tool_loops.max(PLAN_MODE_MIN_TOOL_LOOPS)
+                } else {
+                    DEFAULT_MAX_TOOL_LOOPS.max(PLAN_MODE_MIN_TOOL_LOOPS)
+                }
+            } else if cfg.tools.max_tool_loops > 0 {
                 cfg.tools.max_tool_loops
             } else {
                 DEFAULT_MAX_TOOL_LOOPS
@@ -38,7 +47,11 @@ pub(super) fn extract_turn_config(vt_cfg: Option<&VTCodeConfig>) -> PrecomputedT
             ask_questions_enabled: cfg.chat.ask_questions.enabled,
         })
         .unwrap_or(PrecomputedTurnConfig {
-            max_tool_loops: DEFAULT_MAX_TOOL_LOOPS,
+            max_tool_loops: if plan_mode_active {
+                DEFAULT_MAX_TOOL_LOOPS.max(PLAN_MODE_MIN_TOOL_LOOPS)
+            } else {
+                DEFAULT_MAX_TOOL_LOOPS
+            },
             tool_repeat_limit: DEFAULT_MAX_REPEATED_TOOL_CALLS,
             max_session_turns: DEFAULT_MAX_CONVERSATION_TURNS,
             ask_questions_enabled: true,
@@ -49,6 +62,85 @@ pub(super) enum ToolLoopLimitAction {
     Proceed,
     ContinueLoop,
     BreakLoop,
+}
+
+const MAX_TOOL_LOOP_LIMIT_ABSOLUTE_CAP: usize = 120;
+const MAX_TOOL_LOOP_CAP_MULTIPLIER: usize = 3;
+const MAX_TOOL_LOOP_INCREMENT_PER_PROMPT: usize = 50;
+const PLAN_MODE_MIN_TOOL_LOOPS: usize = 40;
+const PLAN_MODE_MAX_TOOL_LOOP_LIMIT_ABSOLUTE_CAP: usize = 240;
+const PLAN_MODE_TOOL_LOOP_CAP_MULTIPLIER: usize = 6;
+const PLAN_MODE_MAX_TOOL_LOOP_INCREMENT_PER_PROMPT: usize = 80;
+
+fn configured_tool_loop_base_limit(ctx: &TurnLoopContext<'_>) -> usize {
+    let configured = ctx
+        .vt_cfg
+        .map(|cfg| cfg.tools.max_tool_loops)
+        .filter(|limit| *limit > 0)
+        .unwrap_or(DEFAULT_MAX_TOOL_LOOPS);
+    if ctx.session_stats.is_plan_mode() {
+        configured.max(PLAN_MODE_MIN_TOOL_LOOPS)
+    } else {
+        configured
+    }
+}
+
+fn tool_loop_hard_cap(base_limit: usize, plan_mode_active: bool) -> usize {
+    if plan_mode_active {
+        if base_limit >= PLAN_MODE_MAX_TOOL_LOOP_LIMIT_ABSOLUTE_CAP {
+            return base_limit;
+        }
+        return base_limit
+            .saturating_mul(PLAN_MODE_TOOL_LOOP_CAP_MULTIPLIER)
+            .min(PLAN_MODE_MAX_TOOL_LOOP_LIMIT_ABSOLUTE_CAP);
+    }
+    if base_limit >= MAX_TOOL_LOOP_LIMIT_ABSOLUTE_CAP {
+        return base_limit;
+    }
+    base_limit
+        .saturating_mul(MAX_TOOL_LOOP_CAP_MULTIPLIER)
+        .min(MAX_TOOL_LOOP_LIMIT_ABSOLUTE_CAP)
+}
+
+fn clamp_tool_loop_increment(
+    requested_increment: usize,
+    current_limit: usize,
+    hard_cap: usize,
+    plan_mode_active: bool,
+) -> usize {
+    let remaining = hard_cap.saturating_sub(current_limit);
+    let per_prompt_limit = if plan_mode_active {
+        PLAN_MODE_MAX_TOOL_LOOP_INCREMENT_PER_PROMPT
+    } else {
+        MAX_TOOL_LOOP_INCREMENT_PER_PROMPT
+    };
+    requested_increment
+        .min(per_prompt_limit)
+        .min(remaining)
+}
+
+fn emit_loop_hard_cap_break_metric(
+    ctx: &TurnLoopContext<'_>,
+    step_count: usize,
+    current_limit: usize,
+    base_limit: usize,
+    hard_cap: usize,
+    reason: &'static str,
+) {
+    tracing::info!(
+        target: "vtcode.turn.metrics",
+        metric = "loop_hard_cap_break",
+        reason,
+        run_id = %ctx.harness_state.run_id.0,
+        turn_id = %ctx.harness_state.turn_id.0,
+        plan_mode = ctx.session_stats.is_plan_mode(),
+        step_count,
+        current_limit,
+        base_limit,
+        hard_cap,
+        tool_calls = ctx.harness_state.tool_calls,
+        "turn metric"
+    );
 }
 
 pub(super) async fn handle_steering_messages(
@@ -424,6 +516,27 @@ pub(super) async fn maybe_handle_tool_loop_limit(
         &format!("Reached maximum tool loops ({})", *current_max_tool_loops),
     )?;
 
+    let plan_mode_active = ctx.session_stats.is_plan_mode();
+    let base_limit = configured_tool_loop_base_limit(ctx);
+    let hard_cap = tool_loop_hard_cap(base_limit, plan_mode_active);
+    if *current_max_tool_loops >= hard_cap {
+        emit_loop_hard_cap_break_metric(
+            ctx,
+            step_count,
+            *current_max_tool_loops,
+            base_limit,
+            hard_cap,
+            "hard_cap_reached",
+        );
+        display_status(
+            ctx.renderer,
+            &format!(
+                "Tool loop hard cap reached ({hard_cap}). Stopping turn to prevent runaway looping."
+            ),
+        )?;
+        return Ok(ToolLoopLimitAction::BreakLoop);
+    }
+
     match crate::agent::runloop::unified::tool_routing::prompt_tool_loop_limit_increase(
         ctx.handle,
         ctx.session,
@@ -433,9 +546,31 @@ pub(super) async fn maybe_handle_tool_loop_limit(
     )
     .await
     {
-        Ok(Some(increment)) => {
+        Ok(Some(requested_increment)) => {
+            let increment =
+                clamp_tool_loop_increment(
+                    requested_increment,
+                    *current_max_tool_loops,
+                    hard_cap,
+                    plan_mode_active,
+                );
+            if increment == 0 {
+                emit_loop_hard_cap_break_metric(
+                    ctx,
+                    step_count,
+                    *current_max_tool_loops,
+                    base_limit,
+                    hard_cap,
+                    "no_remaining_headroom",
+                );
+                display_status(
+                    ctx.renderer,
+                    "Tool loop limit cannot be increased further for this turn.",
+                )?;
+                return Ok(ToolLoopLimitAction::BreakLoop);
+            }
             let previous_max_tool_loops = *current_max_tool_loops;
-            *current_max_tool_loops = current_max_tool_loops.saturating_add(increment);
+            *current_max_tool_loops = (*current_max_tool_loops).saturating_add(increment);
             {
                 let mut validator = ctx.safety_validator.write().await;
                 let current_session_limit = validator.get_session_limit();
@@ -449,7 +584,10 @@ pub(super) async fn maybe_handle_tool_loop_limit(
             }
             display_status(
                 ctx.renderer,
-                &format!("Tool loop limit increased to {}", *current_max_tool_loops),
+                &format!(
+                    "Tool loop limit increased to {} (+{}, cap {})",
+                    *current_max_tool_loops, increment, hard_cap
+                ),
             )?;
             Ok(ToolLoopLimitAction::ContinueLoop)
         }
@@ -460,8 +598,10 @@ pub(super) async fn maybe_handle_tool_loop_limit(
 #[cfg(test)]
 mod tests {
     use super::{
-        should_exit_plan_mode_from_confirmation, should_exit_plan_mode_from_user_text,
+        clamp_tool_loop_increment, extract_turn_config, should_exit_plan_mode_from_confirmation,
+        should_exit_plan_mode_from_user_text, tool_loop_hard_cap, PLAN_MODE_MIN_TOOL_LOOPS,
     };
+    use vtcode_core::config::loader::VTCodeConfig;
     use vtcode_core::llm::provider as uni;
 
     #[test]
@@ -529,7 +669,9 @@ mod tests {
             uni::Message::user("yes".to_string()),
         ];
         assert!(should_exit_plan_mode_from_confirmation("yes", &history));
-        assert!(should_exit_plan_mode_from_confirmation("continue", &history));
+        assert!(should_exit_plan_mode_from_confirmation(
+            "continue", &history
+        ));
         assert!(should_exit_plan_mode_from_confirmation("go", &history));
         assert!(should_exit_plan_mode_from_confirmation("start", &history));
         assert!(should_exit_plan_mode_from_confirmation("begin", &history));
@@ -542,7 +684,9 @@ mod tests {
             uni::Message::user("yes".to_string()),
         ];
         assert!(!should_exit_plan_mode_from_confirmation("yes", &history));
-        assert!(!should_exit_plan_mode_from_confirmation("continue", &history));
+        assert!(!should_exit_plan_mode_from_confirmation(
+            "continue", &history
+        ));
     }
 
     #[test]
@@ -555,5 +699,40 @@ mod tests {
         ];
         assert!(!should_exit_plan_mode_from_confirmation("yes", &history));
         assert!(!should_exit_plan_mode_from_confirmation("start", &history));
+    }
+
+    #[test]
+    fn tool_loop_hard_cap_scales_and_bounds() {
+        assert_eq!(tool_loop_hard_cap(20, false), 60);
+        assert_eq!(tool_loop_hard_cap(40, false), 120);
+        assert_eq!(tool_loop_hard_cap(120, false), 120);
+        assert_eq!(tool_loop_hard_cap(200, false), 200);
+        assert_eq!(tool_loop_hard_cap(40, true), 240);
+        assert_eq!(tool_loop_hard_cap(120, true), 240);
+    }
+
+    #[test]
+    fn clamp_tool_loop_increment_respects_cap_and_per_prompt_limit() {
+        assert_eq!(clamp_tool_loop_increment(200, 20, 60, false), 40);
+        assert_eq!(clamp_tool_loop_increment(50, 20, 80, false), 50);
+        assert_eq!(clamp_tool_loop_increment(10, 75, 80, false), 5);
+        assert_eq!(clamp_tool_loop_increment(10, 80, 80, false), 0);
+        assert_eq!(clamp_tool_loop_increment(120, 80, 240, true), 80);
+    }
+
+    #[test]
+    fn extract_turn_config_applies_plan_mode_loop_floor() {
+        let mut cfg = VTCodeConfig::default();
+        cfg.tools.max_tool_loops = 20;
+        let turn_cfg = extract_turn_config(Some(&cfg), true);
+        assert_eq!(turn_cfg.max_tool_loops, PLAN_MODE_MIN_TOOL_LOOPS);
+    }
+
+    #[test]
+    fn extract_turn_config_keeps_non_plan_mode_loop_limit() {
+        let mut cfg = VTCodeConfig::default();
+        cfg.tools.max_tool_loops = 20;
+        let turn_cfg = extract_turn_config(Some(&cfg), false);
+        assert_eq!(turn_cfg.max_tool_loops, 20);
     }
 }

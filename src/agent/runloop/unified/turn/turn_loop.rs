@@ -212,7 +212,7 @@ pub async fn run_turn_loop(
     }
 
     // Optimization: Extract all frequently accessed config values once
-    let turn_config = extract_turn_config(ctx.vt_cfg);
+    let turn_config = extract_turn_config(ctx.vt_cfg, ctx.session_stats.is_plan_mode());
 
     let mut step_count = 0;
     let mut current_max_tool_loops = turn_config.max_tool_loops;
