@@ -1,6 +1,6 @@
 # Execution Plans
 
-Execution plans are self-contained, living design documents for complex multi-step work in VTCode. They capture the goal, context, steps, decisions made during execution, and retrospective notes.
+Execution plans are self-contained, living design documents for complex multi-step work in VT Code. They capture the goal, context, steps, decisions made during execution, and retrospective notes.
 
 ## Why Exec Plans?
 
@@ -36,12 +36,15 @@ Plans are numbered sequentially. Use `NNN-short-description.md` format.
 Every exec plan must contain these sections:
 
 ### 1. Goal
+
 One sentence describing the desired end state. Must be verifiable.
 
 ### 2. Context
+
 Why this work is needed. Link to related issues, tech debt items, or quality scores.
 
 ### 3. Steps
+
 Ordered list of steps with status markers:
 
 - `[ ]` — not started
@@ -50,6 +53,7 @@ Ordered list of steps with status markers:
 - `[!]` — blocked (include reason)
 
 Each step should be **composable**:
+
 - Scoped to one module/risk boundary.
 - Actionable in one execution pass.
 - Paired with a concrete expected outcome.
@@ -60,6 +64,7 @@ Preferred step pattern:
 `Step N: <action>. Outcome: <observable result>. Verify: <command/check>.`
 
 ### 4. Decision Log
+
 Timestamped entries for non-obvious choices made during execution:
 
 ```
@@ -68,6 +73,7 @@ Timestamped entries for non-obvious choices made during execution:
 ```
 
 ### 5. Retrospective
+
 Filled in after completion. What went well, what didn't, what to do differently.
 
 ---
@@ -103,12 +109,15 @@ Filled in after completion. What went well, what didn't, what to do differently.
 ## Retrospective
 
 ### What went well
+
 -
 
 ### What didn't
+
 -
 
 ### What to change
+
 -
 ```
 
@@ -119,11 +128,13 @@ Filled in after completion. What went well, what didn't, what to do differently.
 ### Creating an Exec Plan
 
 Create an exec plan when:
+
 - The task requires 5+ steps across multiple files or modules.
 - Architectural decisions need to be recorded.
 - The work might span multiple agent sessions.
 
 Do not create an exec plan for:
+
 - Single-file changes.
 - Bug fixes with obvious root causes.
 - Documentation-only updates.
@@ -151,6 +162,7 @@ Do not create an exec plan for:
 ## Relationship to Tech Debt Tracker
 
 Exec plans and tech debt items are complementary:
+
 - **Tech debt items** identify what needs fixing (the "what").
 - **Exec plans** describe how to fix it (the "how").
 

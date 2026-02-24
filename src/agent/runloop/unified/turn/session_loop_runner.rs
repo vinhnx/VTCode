@@ -7,7 +7,13 @@ fn resolve_effective_turn_timeout_secs(
 ) -> u64 {
     // Keep turn timeout aligned with harness wall-clock budget to avoid aborting
     // valid long-running tool+request cycles mid-turn.
-    let min_for_harness = max_tool_wall_clock_secs.saturating_add(60);
+    //
+    // The buffer must cover at least one LLM-attempt timeout window so a turn that
+    // reaches the harness wall-clock budget can still complete its in-flight request.
+    // Keep this formula aligned with turn_processing::llm_request::llm_attempt_timeout_secs.
+    let llm_attempt_grace_secs = (configured_turn_timeout_secs / 5).clamp(30, 120);
+    let buffer_secs = 60_u64.max(llm_attempt_grace_secs);
+    let min_for_harness = max_tool_wall_clock_secs.saturating_add(buffer_secs);
     configured_turn_timeout_secs.max(min_for_harness)
 }
 
@@ -595,5 +601,15 @@ mod tests {
     #[test]
     fn turn_timeout_keeps_higher_configured_value() {
         assert_eq!(resolve_effective_turn_timeout_secs(900, 600), 900);
+    }
+
+    #[test]
+    fn turn_timeout_includes_full_llm_attempt_grace() {
+        assert_eq!(resolve_effective_turn_timeout_secs(360, 360), 432);
+    }
+
+    #[test]
+    fn turn_timeout_expands_buffer_for_large_configs() {
+        assert_eq!(resolve_effective_turn_timeout_secs(600, 600), 720);
     }
 }

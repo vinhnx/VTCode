@@ -36,7 +36,7 @@ pub async fn execute_a2a_command(command: A2aCommands) -> anyhow::Result<()> {
     }
 }
 
-/// Serve VTCode as an A2A agent
+/// Serve VT Code as an A2A agent
 #[cfg(feature = "a2a-server")]
 async fn serve_a2a_agent(
     host: String,
@@ -48,7 +48,7 @@ async fn serve_a2a_agent(
     use crate::a2a::{AgentCard, TaskManager};
     use std::net::SocketAddr;
 
-    println!("Starting VTCode A2A Agent Server...");
+    println!("Starting VT Code A2A Agent Server...");
     println!("Feature: a2a-server enabled ✓");
 
     let base_url = base_url.unwrap_or_else(|| format!("http://{}:{}", host, port));

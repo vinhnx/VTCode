@@ -201,44 +201,7 @@ pub(super) async fn maybe_handle_plan_mode_exit_trigger(
     };
 
     let text = last_user_msg.content.as_text();
-    let normalized = text
-        .chars()
-        .take(500)
-        .map(|c| {
-            if c.is_alphanumeric() {
-                c.to_ascii_lowercase()
-            } else {
-                ' '
-            }
-        })
-        .collect::<String>();
-
-    let trigger_phrases = [
-        "start implement",
-        "start implementation",
-        "start implementing",
-        "implement now",
-        "begin implement",
-        "begin implementation",
-        "begin coding",
-        "proceed to implement",
-        "proceed with implementation",
-        "proceed to coding",
-        "proceed with coding",
-        "let s implement",
-        "lets implement",
-        "go ahead and implement",
-        "go ahead and code",
-        "ready to implement",
-        "start coding",
-        "start building",
-        "switch to agent mode",
-        "exit plan mode",
-        "exit plan mode and implement",
-    ];
-    let should_exit_plan = trigger_phrases
-        .iter()
-        .any(|phrase| normalized.contains(phrase));
+    let should_exit_plan = should_exit_plan_mode_from_user_text(&text);
 
     if !should_exit_plan {
         return Ok(false);
@@ -290,6 +253,76 @@ pub(super) async fn maybe_handle_plan_mode_exit_trigger(
     }
 }
 
+fn should_exit_plan_mode_from_user_text(text: &str) -> bool {
+    let normalized = normalize_user_intent_text(text);
+
+    // Prefer explicit "stay in plan mode" / "don't implement" instructions over
+    // generic implementation words that might appear in the same sentence.
+    let stay_phrases = [
+        "stay in plan mode",
+        "keep in plan mode",
+        "continue planning",
+        "keep planning",
+        "do not implement",
+        "don t implement",
+        "not ready to implement",
+        "don t exit plan mode",
+        "do not exit plan mode",
+    ];
+    if stay_phrases
+        .iter()
+        .any(|phrase| normalized.contains(phrase))
+    {
+        return false;
+    }
+
+    let trigger_phrases = [
+        "start implement",
+        "start implementation",
+        "start implementing",
+        "implement now",
+        "implement the plan",
+        "implement this plan",
+        "begin implement",
+        "begin implementation",
+        "begin coding",
+        "proceed to implement",
+        "proceed with implementation",
+        "proceed to coding",
+        "proceed with coding",
+        "execute the plan",
+        "execute this plan",
+        "let s implement",
+        "lets implement",
+        "go ahead and implement",
+        "go ahead and code",
+        "ready to implement",
+        "start coding",
+        "start building",
+        "switch to agent mode",
+        "switch to edit mode",
+        "go to edit mode",
+        "exit plan mode",
+        "exit plan mode and implement",
+    ];
+    trigger_phrases
+        .iter()
+        .any(|phrase| normalized.contains(phrase))
+}
+
+fn normalize_user_intent_text(text: &str) -> String {
+    text.chars()
+        .take(500)
+        .map(|c| {
+            if c.is_alphanumeric() {
+                c.to_ascii_lowercase()
+            } else {
+                ' '
+            }
+        })
+        .collect::<String>()
+}
+
 pub(super) async fn maybe_handle_tool_loop_limit(
     ctx: &mut TurnLoopContext<'_>,
     step_count: usize,
@@ -334,5 +367,38 @@ pub(super) async fn maybe_handle_tool_loop_limit(
             Ok(ToolLoopLimitAction::ContinueLoop)
         }
         _ => Ok(ToolLoopLimitAction::BreakLoop),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::should_exit_plan_mode_from_user_text;
+
+    #[test]
+    fn detects_implement_the_plan_trigger() {
+        assert!(should_exit_plan_mode_from_user_text("Implement the plan."));
+        assert!(should_exit_plan_mode_from_user_text(
+            "Please execute this plan and start coding."
+        ));
+    }
+
+    #[test]
+    fn detects_existing_exit_intents() {
+        assert!(should_exit_plan_mode_from_user_text(
+            "Exit plan mode and implement."
+        ));
+        assert!(should_exit_plan_mode_from_user_text(
+            "Switch to edit mode and proceed."
+        ));
+    }
+
+    #[test]
+    fn does_not_exit_when_user_wants_to_keep_planning() {
+        assert!(!should_exit_plan_mode_from_user_text(
+            "Don't implement yet, stay in plan mode and refine the plan."
+        ));
+        assert!(!should_exit_plan_mode_from_user_text(
+            "Continue planning for now."
+        ));
     }
 }

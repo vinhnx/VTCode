@@ -704,10 +704,22 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
                                     "type": "string",
                                     "description": "Single-sentence prompt shown to the user."
                                 },
+                                "focus_area": {
+                                    "type": "string",
+                                    "description": "Optional short topic hint used to bias auto-suggested choices when options are omitted."
+                                },
+                                "analysis_hints": {
+                                    "type": "array",
+                                    "description": "Optional weakness/risk hints used by the UI to generate suggested options.",
+                                    "items": {
+                                        "type": "string"
+                                    },
+                                    "maxItems": 8
+                                },
                                 "options": {
                                     "type": "array",
-                                    "description": "Optional 2-3 mutually exclusive choices. Put the recommended option first and suffix its label with '(Recommended)'.",
-                                    "minItems": 2,
+                                    "description": "Optional 1-3 mutually exclusive choices. Put the recommended option first and suffix its label with '(Recommended)'. Do not include an 'Other' option; the UI adds that automatically. If omitted, the UI may auto-suggest options using question text and hints.",
+                                    "minItems": 1,
                                     "maxItems": 3,
                                     "items": {
                                         "type": "object",

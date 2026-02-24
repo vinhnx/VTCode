@@ -160,13 +160,13 @@
     "send pty input": "allow",
     "show agent info": "allow",
     "write file": "allow",
-    "checklist": "allow",
-    "plan_checklist": "allow",
-    "plan_manager": "allow",
+    "checklist": "prompt",
+    "plan_checklist": "prompt",
+    "plan_manager": "prompt",
     "plan_task_tracker": "allow",
-    "plan_tasks": "allow",
-    "task_tracker": "allow",
-    "track_tasks": "allow"
+    "plan_tasks": "prompt",
+    "task_tracker": "prompt",
+    "track_tasks": "prompt"
   },
   "constraints": {},
   "mcp": {

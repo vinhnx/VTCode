@@ -1,6 +1,6 @@
 # Architectural Invariants
 
-Mechanical enforcement rules for VTCode. These are not suggestions — they are invariants that must hold at all times. Violations should be caught by CI, not code review.
+Mechanical enforcement rules for VT Code. These are not suggestions — they are invariants that must hold at all times. Violations should be caught by CI, not code review.
 
 Each invariant includes a **remediation** instruction so agents can fix violations without asking for help.
 
@@ -8,7 +8,7 @@ Each invariant includes a **remediation** instruction so agents can fix violatio
 
 ## 1. Layer Dependency Rules
 
-VTCode modules form a strict dependency DAG. No reverse imports.
+VT Code modules form a strict dependency DAG. No reverse imports.
 
 ```
 types / commons
@@ -25,6 +25,7 @@ types / commons
 ```
 
 Side crates with no upstream dependents:
+
 - `vtcode-bash-runner` — used by core/exec
 - `vtcode-markdown-store` — used by core
 - `vtcode-indexer` — used by core/tree_sitter
@@ -51,16 +52,16 @@ Each Rust source file should be ≤500 lines. Files exceeding this limit should 
 
 Enforced mechanically:
 
-| Element     | Convention    | Example                    |
-|-------------|---------------|----------------------------|
-| Functions   | `snake_case`  | `execute_tool`             |
-| Variables   | `snake_case`  | `provider_name`            |
-| Types       | `PascalCase`  | `ToolRegistry`             |
-| Structs     | `PascalCase`  | `McpProvider`              |
-| Enums       | `PascalCase`  | `SafetyDecision`           |
-| Constants   | `SCREAMING_SNAKE_CASE` | `DEFAULT_TIMEOUT` |
-| Modules     | `snake_case`  | `golden_path`              |
-| Crates      | `kebab-case`  | `vtcode-core`              |
+| Element   | Convention             | Example           |
+| --------- | ---------------------- | ----------------- |
+| Functions | `snake_case`           | `execute_tool`    |
+| Variables | `snake_case`           | `provider_name`   |
+| Types     | `PascalCase`           | `ToolRegistry`    |
+| Structs   | `PascalCase`           | `McpProvider`     |
+| Enums     | `PascalCase`           | `SafetyDecision`  |
+| Constants | `SCREAMING_SNAKE_CASE` | `DEFAULT_TIMEOUT` |
+| Modules   | `snake_case`           | `golden_path`     |
+| Crates    | `kebab-case`           | `vtcode-core`     |
 
 **Violation**: naming does not match the convention for its element type.
 **Remediation**: rename the item. Use your editor's rename refactoring to update all references. If it's a public API, check for downstream usage first.
@@ -129,10 +130,12 @@ All `.md` documentation files go in `docs/`. The only exceptions in repository r
 Within `docs/`, top-level `docs/*.md` is reserved for stable entrypoint docs. New one-off implementation notes, phase reports, and fix summaries must go to a domain folder (for example `docs/features/`) or archive path (for example `docs/archive/`).
 
 **Violation**:
+
 - a `.md` file in repository root outside the approved list.
 - a `docs/*.md` file that is not listed in `scripts/docs_top_level_allowlist.txt`.
 
 **Remediation**:
+
 1. Move the file to the appropriate `docs/<domain>/` path or `docs/archive/`.
 2. Update links that referenced the old path.
 3. Add to `scripts/docs_top_level_allowlist.txt` only when the file is intentionally a long-lived top-level entrypoint.
@@ -211,6 +214,7 @@ Core documentation entrypoints must not contain broken local markdown links.
 
 **Violation**: a local markdown link target in `AGENTS.md`, `README.md`, `docs/README.md`, `docs/INDEX.md`, or harness docs does not exist.
 **Remediation**:
+
 1. Fix or remove broken references.
 2. Keep links relative to the source markdown file when possible.
 3. Re-run `python3 scripts/check_docs_links.py`.
@@ -262,6 +266,7 @@ These invariants should be enforced by:
 4. **Code review** — last line of defense, not the primary enforcement mechanism.
 
 When adding a new invariant:
+
 1. Add it to this document with violation description and remediation.
 2. Implement automated enforcement (Clippy lint, CI script, or pre-commit hook).
 3. Fix all existing violations before merging.
@@ -271,11 +276,11 @@ When adding a new invariant:
 
 Not all invariants are fully enforced yet. Known violations are tracked in `docs/harness/TECH_DEBT_TRACKER.md`:
 
-| Invariant | Debt Item | Status |
-|-----------|-----------|--------|
-| #2 File Size Limits | TD-005 | TUI event handler modules likely exceed 500 lines |
-| #4 Structured Logging | TD-013 | Not yet audited; some legacy `println!` may exist |
-| #10 Lint Error Messages | TD-014 | Custom lints with remediation not yet implemented |
-| #7 Documentation Location | TD-001 | Top-level docs sprawl now gated by allowlist; consolidation still in-progress |
+| Invariant                 | Debt Item | Status                                                                        |
+| ------------------------- | --------- | ----------------------------------------------------------------------------- |
+| #2 File Size Limits       | TD-005    | TUI event handler modules likely exceed 500 lines                             |
+| #4 Structured Logging     | TD-013    | Not yet audited; some legacy `println!` may exist                             |
+| #10 Lint Error Messages   | TD-014    | Custom lints with remediation not yet implemented                             |
+| #7 Documentation Location | TD-001    | Top-level docs sprawl now gated by allowlist; consolidation still in-progress |
 
 Adding CI enforcement for invariants is itself tracked as future work. Until enforcement exists, these invariants are enforced by code review and agent discipline.

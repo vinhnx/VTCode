@@ -1,4 +1,4 @@
-//! Plugin loader for VTCode
+//! Plugin loader for VT Code
 //!
 //! Handles the discovery, installation, and loading of plugins from various sources.
 

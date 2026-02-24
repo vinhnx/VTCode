@@ -1,4 +1,4 @@
-//! Plugin marketplace system for VTCode
+//! Plugin marketplace system for VT Code
 //!
 //! This module implements a marketplace system for VT Code,
 //! allowing users to discover and install plugins from various sources.
