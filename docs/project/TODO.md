@@ -6794,3 +6794,8 @@ CRITICAL: vtcode cpu spike.
 ---
 
 use https://git-cliff.org/docs/
+
+---
+
+custom Terminal title (eg: ghostty)
+/Users/vinhnguyenxuan/Desktop/terminal_title.png
