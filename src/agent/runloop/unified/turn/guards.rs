@@ -272,6 +272,14 @@ fn normalize_turn_balancer_tool_name(name: &str) -> Cow<'_, str> {
     }
 }
 
+fn navigation_loop_guidance(plan_mode: bool) -> &'static str {
+    if plan_mode {
+        "WARNING: You have performed many consecutive read/search operations in Plan Mode without producing actionable output. Stop browsing, synthesize findings in concise bullets, then use `plan_task_tracker` (`create`/`update`) with concrete steps (files + outcome + verification), or ask one targeted blocking question."
+    } else {
+        "WARNING: You have performed many consecutive read/search operations without modifying any files or executing commands. Synthesize your findings and propose a concrete edit/action or explain why you are blocked."
+    }
+}
+
 pub(crate) async fn handle_turn_balancer(
     ctx: &mut TurnProcessingContext<'_>,
     step_count: usize,
@@ -279,10 +287,10 @@ pub(crate) async fn handle_turn_balancer(
     max_tool_loops: usize,
     tool_repeat_limit: usize,
 ) -> TurnHandlerOutcome {
-    use vtcode_core::llm::provider as uni;
     use crate::agent::runloop::unified::turn::tool_outcomes::helpers::{
         BLIND_EDITING_THRESHOLD, NAVIGATION_LOOP_THRESHOLD,
     };
+    use vtcode_core::llm::provider as uni;
 
     // NL2Repo-Bench checks run on every step (no backoff) since they
     // are safety guardrails, not performance optimizations.
@@ -312,8 +320,7 @@ pub(crate) async fn handle_turn_balancer(
             )
             .unwrap_or(());
         ctx.working_history.push(uni::Message::system(
-            "WARNING: You have performed many consecutive read/search operations without modifying any files or executing commands. Synthesize your findings and propose a concrete edit/action or explain why you are blocked."
-                .to_string(),
+            navigation_loop_guidance(ctx.session_stats.is_plan_mode()).to_string(),
         ));
         repeated_tool_attempts.consecutive_navigations = 0;
         return TurnHandlerOutcome::Continue;
@@ -370,7 +377,7 @@ pub(crate) async fn handle_turn_balancer(
 
 #[cfg(test)]
 mod tests {
-    use super::{is_readonly_signature, validate_tool_args_security};
+    use super::{is_readonly_signature, navigation_loop_guidance, validate_tool_args_security};
     use serde_json::json;
     use vtcode_core::config::constants::tools as tool_names;
 
@@ -413,5 +420,18 @@ mod tests {
             validate_tool_args_security(tool_names::EDIT_FILE, &args, None, None).unwrap();
         assert!(failures.iter().any(|msg| msg.contains("old_str")));
         assert!(failures.iter().any(|msg| msg.contains("new_str")));
+    }
+
+    #[test]
+    fn navigation_loop_guidance_mentions_plan_tracker_in_plan_mode() {
+        let guidance = navigation_loop_guidance(true);
+        assert!(guidance.contains("plan_task_tracker"));
+    }
+
+    #[test]
+    fn navigation_loop_guidance_uses_generic_text_outside_plan_mode() {
+        let guidance = navigation_loop_guidance(false);
+        assert!(guidance.contains("read/search operations"));
+        assert!(!guidance.contains("plan_task_tracker"));
     }
 }

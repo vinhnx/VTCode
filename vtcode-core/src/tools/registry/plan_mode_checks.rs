@@ -66,6 +66,17 @@ impl ToolRegistry {
     /// Returns true for non-mutating tools and plan-safe exceptions like
     /// writing to `.vtcode/plans/` or read-only unified tool actions.
     pub fn is_plan_mode_allowed(&self, tool_name: &str, args: &Value) -> bool {
+        use crate::config::constants::tools;
+        use crate::tools::names::canonical_tool_name;
+
+        // Enforce plan/task tracker mode split across all execution paths.
+        let canonical = canonical_tool_name(tool_name);
+        match canonical.as_ref() {
+            tools::TASK_TRACKER => return false,
+            tools::PLAN_TASK_TRACKER => return true,
+            _ => {}
+        }
+
         let intent = crate::tools::tool_intent::classify_tool_intent(tool_name, args);
         if !intent.mutating {
             return true;
@@ -194,6 +205,20 @@ mod tests {
             tools::WRITE_FILE,
             &json!({"path": "foo.txt", "content": "x"})
         ));
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn plan_mode_enforces_tracker_split() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+        registry.enable_plan_mode();
+
+        assert!(!registry.is_plan_mode_allowed(tools::TASK_TRACKER, &json!({"action": "list"})));
+        assert!(
+            registry.is_plan_mode_allowed(tools::PLAN_TASK_TRACKER, &json!({"action": "list"}))
+        );
 
         Ok(())
     }

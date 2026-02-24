@@ -1,4 +1,4 @@
-//! Plugin component handlers for VTCode
+//! Plugin component handlers for VT Code
 //!
 //! This module handles the different types of components that plugins can provide:
 //! - Commands (slash commands)

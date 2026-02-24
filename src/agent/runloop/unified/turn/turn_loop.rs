@@ -37,31 +37,6 @@ use crate::agent::runloop::unified::turn::turn_helpers::display_error;
 use vtcode_core::config::types::AgentConfig;
 use vtcode_core::core::agent::error_recovery::ErrorType;
 
-/// Maximum number of consecutive transient LLM failures before aborting.
-const MAX_TRANSIENT_LLM_RETRIES: usize = 2;
-/// Base backoff delay between transient LLM failure retries.
-const TRANSIENT_RETRY_BASE_DELAY: std::time::Duration = std::time::Duration::from_secs(2);
-
-/// Check whether an LLM request error looks transient (rate limit, timeout,
-/// server overload) and is worth retrying.
-fn is_transient_llm_error(err: &anyhow::Error) -> bool {
-    let msg = err.to_string().to_ascii_lowercase();
-    // Common transient indicators across LLM providers
-    msg.contains("rate limit")
-        || msg.contains("rate_limit")
-        || msg.contains("too many requests")
-        || msg.contains("429")
-        || msg.contains("timeout")
-        || msg.contains("timed out")
-        || msg.contains("overloaded")
-        || msg.contains("502")
-        || msg.contains("503")
-        || msg.contains("529")
-        || msg.contains("server error")
-        || msg.contains("connection reset")
-        || msg.contains("connection refused")
-}
-
 pub struct TurnLoopOutcome {
     pub result: TurnLoopResult,
     pub working_history: Vec<uni::Message>,
@@ -241,7 +216,6 @@ pub async fn run_turn_loop(
 
     let mut step_count = 0;
     let mut current_max_tool_loops = turn_config.max_tool_loops;
-    let mut consecutive_llm_failures: usize = 0;
     // Optimization: Interned signatures with exponential backoff for loop detection
     let mut repeated_tool_attempts = LoopTracker::new();
 
@@ -367,35 +341,8 @@ pub async fn run_turn_loop(
                     recovery.record_error("llm_request", format!("{:#}", err), ErrorType::Other);
                 }
 
-                // Retry transient errors (rate limits, timeouts, server overload)
-                if is_transient_llm_error(&err)
-                    && consecutive_llm_failures < MAX_TRANSIENT_LLM_RETRIES
-                {
-                    consecutive_llm_failures += 1;
-                    let backoff = TRANSIENT_RETRY_BASE_DELAY * consecutive_llm_failures as u32;
-                    tracing::warn!(
-                        error = %err,
-                        attempt = consecutive_llm_failures,
-                        max_retries = MAX_TRANSIENT_LLM_RETRIES,
-                        backoff_ms = backoff.as_millis() as u64,
-                        "Transient LLM error, retrying after backoff"
-                    );
-                    crate::agent::runloop::unified::turn::turn_helpers::display_status(
-                        ctx.renderer,
-                        &format!(
-                            "Transient error (attempt {}/{}), retrying in {}s...",
-                            consecutive_llm_failures,
-                            MAX_TRANSIENT_LLM_RETRIES,
-                            backoff.as_secs()
-                        ),
-                    )?;
-                    tokio::time::sleep(backoff).await;
-                    // Decrement step_count so the retry doesn't count against loop limits
-                    step_count = step_count.saturating_sub(1);
-                    continue;
-                }
-
-                // Non-transient or exhausted retries — abort
+                // execute_llm_request already performs retry/backoff for retryable provider errors.
+                // Avoid a second retry layer here, which can consume turn budget and cause timeouts.
                 // Restore input status on request failure to clear loading/shimmer state.
                 ctx.handle
                     .set_input_status(restore_status_left.clone(), restore_status_right.clone());
@@ -414,9 +361,6 @@ pub async fn run_turn_loop(
 
         // Track token usage for context awareness before any borrows occur
         let response_usage = response.usage.clone();
-
-        // Reset transient failure counter on successful request
-        consecutive_llm_failures = 0;
 
         if turn_processing_ctx.session_stats.is_plan_mode() {
             turn_processing_ctx

@@ -367,7 +367,7 @@ impl ToolRegistry {
 
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(30))
-            .user_agent("VTCode/1.0")
+            .user_agent("VT Code/1.0")
             .build()?;
 
         let response = client.get(url).send().await?;

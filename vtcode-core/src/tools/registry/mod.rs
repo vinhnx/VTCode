@@ -320,6 +320,26 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn prevalidated_execution_blocks_task_tracker_in_plan_mode() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+        registry.allow_all_tools().await?;
+        registry.enable_plan_mode();
+
+        let args = json!({
+            "action": "list"
+        });
+
+        let err = registry
+            .execute_tool_ref_prevalidated(tools::TASK_TRACKER, &args)
+            .await
+            .expect_err("plan mode should block task_tracker on prevalidated path");
+        assert!(err.to_string().contains("plan mode"));
+
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn preflight_normalizes_exec_code_alias_to_unified_exec() -> Result<()> {
         let temp_dir = TempDir::new()?;
         let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;

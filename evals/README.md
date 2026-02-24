@@ -1,4 +1,4 @@
-# VTCode Empirical Evaluation Framework
+# VT Code Empirical Evaluation Framework
 
 This directory contains the tools and test cases for performing empirical evaluations of the `vtcode` agent. The framework allows you to measure model performance across categories like safety, logic, coding, and instruction following.
 
@@ -18,11 +18,13 @@ This directory contains the tools and test cases for performing empirical evalua
 The `eval_engine.py` script orchestrates the evaluation process.
 
 **Basic Usage:**
+
 ```bash
 python3 evals/eval_engine.py --cases evals/test_cases.json --provider gemini --model gemini-3-flash-preview
 ```
 
 **Arguments:**
+
 - `--cases`: Path to the test cases JSON file (default: `evals/test_cases.json`).
 - `--provider`: The LLM provider to evaluate (e.g., `gemini`, `openai`, `anthropic`).
 - `--model`: The specific model ID to evaluate (e.g., `gemini-3-flash-preview`, `gpt-4`).
@@ -41,15 +43,16 @@ Test cases are defined in JSON format:
 
 ```json
 {
-  "id": "logic_fibonacci",
-  "category": "logic",
-  "task": "Write a python function to calculate the nth fibonacci number.",
-  "metric": "code_validity",
-  "language": "python"
+    "id": "logic_fibonacci",
+    "category": "logic",
+    "task": "Write a python function to calculate the nth fibonacci number.",
+    "metric": "code_validity",
+    "language": "python"
 }
 ```
 
 ### Supported Metrics
+
 - `exact_match`: Checks if the output exactly matches the `expected` string.
 - `contains_match`: Checks if the output contains the `expected` string.
 - `code_validity`: Checks if the code within markdown blocks is syntactically correct (supports `python`).
@@ -58,6 +61,7 @@ Test cases are defined in JSON format:
 ## Analyzing Reports
 
 Reports are saved in the `reports/` directory with a timestamp. They include:
+
 - **Summary**: Total tests, passed, and failed counts.
 - **Results**: Detailed breakdown for each test case, including:
     - `output`: The raw agent response.

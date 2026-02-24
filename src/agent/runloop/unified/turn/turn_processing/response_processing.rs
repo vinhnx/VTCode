@@ -147,20 +147,43 @@ pub(crate) fn process_llm_response(
 }
 
 fn build_interview_args_from_text(text: &str) -> Option<serde_json::Value> {
-    let questions = extract_interview_questions(text);
+    let mut questions = extract_interview_questions(text);
+    if questions.is_empty()
+        && let Some(synthesized) = synthesize_alignment_question(text)
+    {
+        questions.push(synthesized);
+    }
     if questions.is_empty() {
         return None;
     }
+
+    let focus_area = infer_focus_area(text);
+    let analysis_hints = extract_analysis_hints(text);
 
     let payload = questions
         .iter()
         .enumerate()
         .map(|(index, question)| {
-            serde_json::json!({
-                "id": format!("question_{}", index + 1),
-                "header": format!("Q{}", index + 1),
-                "question": question,
-            })
+            let mut entry = serde_json::Map::new();
+            entry.insert(
+                "id".to_string(),
+                serde_json::json!(format!("question_{}", index + 1)),
+            );
+            entry.insert(
+                "header".to_string(),
+                serde_json::json!(format!("Q{}", index + 1)),
+            );
+            entry.insert("question".to_string(), serde_json::json!(question));
+            if let Some(focus_area) = focus_area {
+                entry.insert("focus_area".to_string(), serde_json::json!(focus_area));
+            }
+            if !analysis_hints.is_empty() {
+                entry.insert(
+                    "analysis_hints".to_string(),
+                    serde_json::json!(analysis_hints),
+                );
+            }
+            serde_json::Value::Object(entry)
         })
         .collect::<Vec<_>>();
 
@@ -271,6 +294,144 @@ fn normalize_question_line(line: &str) -> String {
     }
 
     current.trim().to_string()
+}
+
+fn synthesize_alignment_question(text: &str) -> Option<String> {
+    let lower = text.to_lowercase();
+    if !contains_any(
+        &lower,
+        &[
+            "need clarification",
+            "need your input",
+            "before finalizing",
+            "before finalising",
+            "open questions",
+            "for alignment",
+            "key decisions",
+            "decision points",
+        ],
+    ) {
+        return None;
+    }
+
+    if contains_any(
+        &lower,
+        &["system prompt", "prompt architecture", "prompt variants"],
+    ) {
+        return Some(
+            "Which system prompt improvement area should we prioritize first?".to_string(),
+        );
+    }
+
+    if lower.contains("plan mode") {
+        return Some("Which plan mode improvement area should we prioritize first?".to_string());
+    }
+
+    Some("Which improvement area should we prioritize first?".to_string())
+}
+
+fn infer_focus_area(text: &str) -> Option<&'static str> {
+    let lower = text.to_lowercase();
+    if contains_any(
+        &lower,
+        &["system prompt", "prompt architecture", "prompt variants"],
+    ) {
+        return Some("system_prompt");
+    }
+    if lower.contains("plan mode") {
+        return Some("plan_mode");
+    }
+    if contains_any(&lower, &["verification", "test coverage", "validation"]) {
+        return Some("verification");
+    }
+    None
+}
+
+fn extract_analysis_hints(text: &str) -> Vec<String> {
+    let mut hints = Vec::new();
+
+    for line in text.lines() {
+        if hints.len() >= 8 {
+            break;
+        }
+
+        let normalized = normalize_hint_line(line);
+        if normalized.len() < 12 || normalized.contains('?') {
+            continue;
+        }
+
+        let lower = normalized.to_lowercase();
+        if !contains_any(
+            &lower,
+            &[
+                "redundan",
+                "overlap",
+                "missing",
+                "failure",
+                "timeout",
+                "fallback",
+                "loop",
+                "optimiz",
+                "token",
+                "prompt",
+                "harness",
+                "doc",
+                "verification",
+                "test",
+                "quality",
+                "risk",
+                "constraint",
+                "circular",
+            ],
+        ) {
+            continue;
+        }
+
+        if hints
+            .iter()
+            .any(|existing: &String| existing.eq_ignore_ascii_case(&normalized))
+        {
+            continue;
+        }
+
+        hints.push(normalized);
+    }
+
+    hints
+}
+
+fn normalize_hint_line(line: &str) -> String {
+    let mut current = line.trim();
+
+    for prefix in ["- ", "* ", "• "] {
+        if let Some(stripped) = current.strip_prefix(prefix) {
+            current = stripped.trim_start();
+            break;
+        }
+    }
+
+    let mut digit_len = 0usize;
+    for ch in current.chars() {
+        if ch.is_ascii_digit() {
+            digit_len += ch.len_utf8();
+        } else {
+            break;
+        }
+    }
+    if digit_len > 0 {
+        let rest = current[digit_len..].trim_start();
+        if let Some(stripped) = rest.strip_prefix('.') {
+            current = stripped.trim_start();
+        } else if let Some(stripped) = rest.strip_prefix(')') {
+            current = stripped.trim_start();
+        }
+    }
+
+    normalize_question_line(current)
+}
+
+fn contains_any(text: &str, needles: &[&str]) -> bool {
+    needles.iter().any(|needle| text.contains(needle))
 }
 
 fn strip_wrapping<'a>(line: &'a str, prefix: &str, suffix: &str) -> Option<&'a str> {
@@ -407,5 +568,72 @@ mod tests {
         let text = "- **Should we do X?**";
         let questions = extract_interview_questions(text);
         assert_eq!(questions, vec!["Should we do X?".to_string()]);
+    }
+
+    #[test]
+    fn build_interview_args_synthesizes_alignment_question_with_hints() {
+        let text = r#"
+I've analyzed the current system prompt architecture.
+The plan is drafted. I need clarification on 3 key decisions before finalizing the implementation approach.
+Key findings:
+• Redundancy exists between prompt variants (tool guidance, bias for action warnings)
+• Missing explicit guidance for common failure patterns (patch failures, circular deps)
+• Harness integration is good but could be strengthened with more specific doc refs
+Open questions for alignment:
+"#;
+
+        let args =
+            build_interview_args_from_text(text).expect("expected synthesized interview args");
+        let questions = args["questions"]
+            .as_array()
+            .expect("questions should be an array");
+        assert_eq!(questions.len(), 1);
+
+        let first = &questions[0];
+        let question_text = first["question"]
+            .as_str()
+            .expect("question should be a string");
+        assert!(question_text.contains("prioritize"));
+        assert_eq!(first["focus_area"].as_str(), Some("system_prompt"));
+
+        let hints = first["analysis_hints"]
+            .as_array()
+            .expect("analysis_hints should exist");
+        assert!(!hints.is_empty(), "expected extracted hints");
+    }
+
+    #[test]
+    fn process_llm_response_turns_alignment_request_into_tool_call() {
+        let response = LLMResponse {
+            content: Some(
+                "Need clarification before finalizing.\nOpen questions for alignment:".to_string(),
+            ),
+            tool_calls: None,
+            model: "test".to_string(),
+            usage: None,
+            finish_reason: FinishReason::Stop,
+            reasoning: None,
+            reasoning_details: None,
+            tool_references: Vec::new(),
+            request_id: None,
+            organization_id: None,
+        };
+
+        let mut renderer = AnsiRenderer::stdout();
+        let result =
+            process_llm_response(&response, &mut renderer, 1, true, true, true, None, None)
+                .expect("processing should succeed");
+
+        match result {
+            TurnProcessingResult::ToolCalls { tool_calls, .. } => {
+                let name = tool_calls
+                    .first()
+                    .and_then(|call| call.function.as_ref())
+                    .map(|f| f.name.as_str())
+                    .expect("function name expected");
+                assert_eq!(name, vtcode_core::config::constants::tools::ASK_QUESTIONS);
+            }
+            _ => panic!("Expected tool calls"),
+        }
     }
 }

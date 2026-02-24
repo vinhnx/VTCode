@@ -1,4 +1,4 @@
-//! Plugin validation and debugging tools for VTCode
+//! Plugin validation and debugging tools for VT Code
 //!
 //! Provides utilities for validating plugin manifests, structures, and debugging
 //! plugin functionality.

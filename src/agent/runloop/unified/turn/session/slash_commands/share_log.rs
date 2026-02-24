@@ -45,7 +45,7 @@ fn render_session_log_markdown(
     messages: &[serde_json::Value],
 ) -> String {
     let mut markdown = String::new();
-    markdown.push_str("# VTCode Session Log\n\n");
+    markdown.push_str("# VT Code Session Log\n\n");
     markdown.push_str(&format!("- Exported at: {}\n", exported_at));
     markdown.push_str(&format!("- Model: `{}`\n", model));
     markdown.push_str(&format!("- Workspace: `{}`\n", workspace.display()));

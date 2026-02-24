@@ -41,13 +41,25 @@ fn is_retryable_llm_error(message: &str) -> bool {
     .any(|needle| msg.contains(needle))
 }
 
-fn llm_attempt_timeout_secs(ctx: &TurnProcessingContext<'_>) -> u64 {
-    let turn_timeout_secs = ctx
-        .vt_cfg
-        .as_ref()
-        .map(|cfg| cfg.optimization.agent_execution.max_execution_time_secs)
-        .unwrap_or(300);
-    (turn_timeout_secs / 5).clamp(30, 120)
+fn supports_streaming_timeout_fallback(provider_name: &str) -> bool {
+    provider_name.eq_ignore_ascii_case("huggingface")
+}
+
+fn is_stream_timeout_error(message: &str) -> bool {
+    let msg = message.to_ascii_lowercase();
+    msg.contains("stream request timed out") || msg.contains("streaming request timed out")
+}
+
+fn llm_attempt_timeout_secs(turn_timeout_secs: u64, plan_mode: bool) -> u64 {
+    let baseline = (turn_timeout_secs / 5).clamp(30, 120);
+    if !plan_mode {
+        return baseline;
+    }
+
+    // Plan Mode requests usually include heavier context and can need
+    // extra first-token latency budget before retries are useful.
+    let plan_mode_budget = (turn_timeout_secs / 2).clamp(60, 120);
+    baseline.max(plan_mode_budget)
 }
 
 /// Execute an LLM request and return the response.
@@ -61,7 +73,12 @@ pub(crate) async fn execute_llm_request(
     let provider_name = ctx.provider_client.name().to_string();
     let plan_mode = ctx.session_stats.is_plan_mode();
     let context_window_size = ctx.provider_client.effective_context_size(active_model);
-    let request_timeout_secs = llm_attempt_timeout_secs(ctx);
+    let turn_timeout_secs = ctx
+        .vt_cfg
+        .as_ref()
+        .map(|cfg| cfg.optimization.agent_execution.max_execution_time_secs)
+        .unwrap_or(300);
+    let request_timeout_secs = llm_attempt_timeout_secs(turn_timeout_secs, plan_mode);
 
     let active_agent_name = ctx.session_stats.active_agent();
     let active_agent_prompt_body = vtcode_core::subagents::get_agent_prompt_body(active_agent_name);
@@ -89,7 +106,7 @@ pub(crate) async fn execute_llm_request(
     );
 
     let capabilities = uni::get_cached_capabilities(&**ctx.provider_client, active_model);
-    let use_streaming = capabilities.streaming;
+    let mut use_streaming = capabilities.streaming;
     let reasoning_effort = ctx.vt_cfg.as_ref().and_then(|cfg| {
         if capabilities.reasoning_effort {
             Some(cfg.agent.reasoning_effort)
@@ -159,7 +176,7 @@ pub(crate) async fn execute_llm_request(
         None
     };
 
-    let request = uni::LLMRequest {
+    let mut request = uni::LLMRequest {
         messages: ctx.working_history.to_vec(),
         system_prompt: Some(std::sync::Arc::new(system_prompt)),
         tools: current_tools,
@@ -257,6 +274,8 @@ pub(crate) async fn execute_llm_request(
             );
         }
 
+        request.stream = use_streaming;
+
         let step_result = if use_streaming {
             let state = ::vtcode_core::core::agent::session::AgentSessionState::new(
                 "chat_session".to_string(),
@@ -302,7 +321,7 @@ pub(crate) async fn execute_llm_request(
                     ctx.provider_client,
                     request.clone(),
                     &mut steering,
-                    Some(Duration::from_secs(60)),
+                    Some(Duration::from_secs(request_timeout_secs)),
                 ),
             )
             .await;
@@ -390,6 +409,16 @@ pub(crate) async fn execute_llm_request(
                 }
 
                 if is_retryable && attempt < MAX_RETRIES - 1 {
+                    if use_streaming
+                        && supports_streaming_timeout_fallback(&provider_name)
+                        && is_stream_timeout_error(&msg)
+                    {
+                        use_streaming = false;
+                        crate::agent::runloop::unified::turn::turn_helpers::display_status(
+                            ctx.renderer,
+                            "Streaming timed out; retrying with non-streaming for this provider.",
+                        )?;
+                    }
                     _spinner.finish();
                     continue;
                 }
@@ -470,6 +499,46 @@ mod tests {
     #[test]
     fn retryable_llm_error_excludes_non_transient_messages() {
         assert!(!is_retryable_llm_error("Provider error: Invalid API key"));
+    }
+
+    #[test]
+    fn supports_streaming_timeout_fallback_is_huggingface_only() {
+        assert!(supports_streaming_timeout_fallback("huggingface"));
+        assert!(supports_streaming_timeout_fallback("HUGGINGFACE"));
+        assert!(!supports_streaming_timeout_fallback("openai"));
+    }
+
+    #[test]
+    fn stream_timeout_error_detection_matches_common_messages() {
+        assert!(is_stream_timeout_error(
+            "Stream request timed out after 75s"
+        ));
+        assert!(is_stream_timeout_error(
+            "Streaming request timed out after configured timeout"
+        ));
+        assert!(!is_stream_timeout_error(
+            "LLM request timed out after 120 seconds"
+        ));
+    }
+
+    #[test]
+    fn llm_attempt_timeout_defaults_to_fifth_of_turn_budget() {
+        assert_eq!(llm_attempt_timeout_secs(300, false), 60);
+    }
+
+    #[test]
+    fn llm_attempt_timeout_expands_for_plan_mode() {
+        assert_eq!(llm_attempt_timeout_secs(300, true), 120);
+    }
+
+    #[test]
+    fn llm_attempt_timeout_plan_mode_respects_smaller_turn_budget() {
+        assert_eq!(llm_attempt_timeout_secs(180, true), 90);
+    }
+
+    #[test]
+    fn llm_attempt_timeout_respects_plan_mode_cap() {
+        assert_eq!(llm_attempt_timeout_secs(1_200, true), 120);
     }
 
     #[test]

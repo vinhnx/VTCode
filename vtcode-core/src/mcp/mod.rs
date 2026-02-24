@@ -2,7 +2,7 @@
 //!
 //! This module adapts the reference MCP client, server and type
 //! definitions from <https://github.com/openai/codex> to integrate them
-//! with VTCode's multi-provider configuration model. The original
+//! with VT Code's multi-provider configuration model. The original
 //! implementation inside this project had grown organically and mixed a
 //! large amount of bookkeeping logic with the lower level rmcp client
 //! transport. The rewritten version keeps the VT Code specific surface

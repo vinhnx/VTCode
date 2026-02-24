@@ -1,4 +1,4 @@
-//! Testing module for VTCode marketplace system
+//! Testing module for VT Code marketplace system
 //!
 //! This module provides tests and examples for using the marketplace system with actual sources.
 
@@ -13,7 +13,7 @@ use crate::marketplace::{
 
 /// Test the marketplace system with sample configurations
 pub async fn test_marketplace_system() -> Result<()> {
-    println!("Testing VTCode marketplace system...");
+    println!("Testing VT Code marketplace system...");
 
     // Create a temporary directory for testing
     let temp_dir = tempfile::tempdir()?;
@@ -220,7 +220,7 @@ pub fn test_plugin_validation() -> Result<()> {
 
 /// Run all marketplace tests
 pub async fn run_all_tests() -> Result<()> {
-    println!("Running VTCode marketplace system tests...\n");
+    println!("Running VT Code marketplace system tests...\n");
 
     test_plugin_validation()?;
     println!();

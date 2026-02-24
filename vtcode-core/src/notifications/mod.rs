@@ -1,4 +1,4 @@
-//! Push notification system for VTCode terminal clients
+//! Push notification system for VT Code terminal clients
 //! Handles important events like command failures, errors, policy approval requests,
 //! human in the loop interactions, completion and requests.
 
