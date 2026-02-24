@@ -286,10 +286,13 @@ async fn run_ask_with_tools(
     // the default behavior (with confirmations) will apply, which is appropriate
 
     // Create a single task for the prompt
-    let task_id = format!("ask-{}", std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_secs());
+    let task_id = format!(
+        "ask-{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .context("System clock is before UNIX_EPOCH while creating ask task id")?
+            .as_secs()
+    );
     let task = Task {
         id: task_id,
         title: "CLI Ask Task".to_string(),

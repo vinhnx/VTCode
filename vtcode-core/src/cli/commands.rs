@@ -1,7 +1,7 @@
 //! Command definitions and interfaces
 
 use crate::config::types::*;
-use anyhow::Result;
+use anyhow::{Context, Result};
 
 /// Result of executing a command
 #[derive(Debug, Clone)]
@@ -180,23 +180,18 @@ pub struct CommandContext {
 }
 
 impl CommandContext {
-    pub fn new(config: AgentConfig) -> Self {
-        let session_id = format!(
-            "session_{}",
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs()
-        );
+    pub fn new(config: AgentConfig) -> Result<Self> {
+        let start_time_secs = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .context("System clock is before UNIX_EPOCH while initializing command context")?
+            .as_secs();
+        let session_id = format!("session_{start_time_secs}");
 
-        Self {
+        Ok(Self {
             agent_config: config,
             session_info: SessionInfo {
                 session_id,
-                start_time: std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
-                    .as_secs(),
+                start_time: start_time_secs,
                 total_turns: 0,
                 total_decisions: 0,
                 error_count: 0,
@@ -211,7 +206,7 @@ impl CommandContext {
                 recovery_success_rate: 0.0,
             },
             start_time: std::time::Instant::now(),
-        }
+        })
     }
 
     pub fn update_metrics(&mut self) {

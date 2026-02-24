@@ -291,7 +291,9 @@ impl ToolExecutionHistory {
 
     /// Add a record to the history.
     pub fn add_record(&self, record: ToolExecutionRecord) {
-        let mut records = self.records.write().unwrap();
+        let Ok(mut records) = self.records.write() else {
+            return;
+        };
         records.push_back(record);
         while records.len() > self.max_records {
             records.pop_front();
@@ -316,7 +318,9 @@ impl ToolExecutionHistory {
 
     /// Get the most recent records.
     pub fn get_recent_records(&self, count: usize) -> Vec<ToolExecutionRecord> {
-        let records = self.records.read().unwrap();
+        let Ok(records) = self.records.read() else {
+            return Vec::new();
+        };
         let records_len = records.len();
         let start = records_len.saturating_sub(count);
         records.iter().skip(start).cloned().collect()
@@ -324,7 +328,9 @@ impl ToolExecutionHistory {
 
     /// Get recent failures in chronological order.
     pub fn get_recent_failures(&self, count: usize) -> Vec<ToolExecutionRecord> {
-        let records = self.records.read().unwrap();
+        let Ok(records) = self.records.read() else {
+            return Vec::new();
+        };
         let mut failures: Vec<ToolExecutionRecord> = records
             .iter()
             .rev()
@@ -343,7 +349,7 @@ impl ToolExecutionHistory {
         args: &Value,
         max_age: Duration,
     ) -> Option<Value> {
-        let records = self.records.read().unwrap();
+        let records = self.records.read().ok()?;
         let now = SystemTime::now();
 
         for record in records.iter().rev() {
@@ -380,7 +386,7 @@ impl ToolExecutionHistory {
         args: &Value,
         max_age: Duration,
     ) -> Option<Value> {
-        let records = self.records.read().unwrap();
+        let records = self.records.read().ok()?;
         let now = SystemTime::now();
 
         for record in records.iter().rev() {
@@ -427,7 +433,7 @@ impl ToolExecutionHistory {
         path: &str,
         max_age: Duration,
     ) -> Option<(usize, usize)> {
-        let records = self.records.read().unwrap();
+        let records = self.records.read().ok()?;
         let now = SystemTime::now();
         let expected_path = path.trim();
 
@@ -481,13 +487,14 @@ impl ToolExecutionHistory {
 
     /// Clear all records.
     pub fn clear(&self) {
-        let mut records = self.records.write().unwrap();
-        records.clear();
+        if let Ok(mut records) = self.records.write() {
+            records.clear();
+        }
     }
 
     /// Total number of execution records currently stored.
     pub fn len(&self) -> usize {
-        self.records.read().unwrap().len()
+        self.records.read().ok().map(|r| r.len()).unwrap_or(0)
     }
 
     /// Whether no execution records are currently stored.
@@ -535,7 +542,9 @@ impl ToolExecutionHistory {
             .checked_sub(window)
             .unwrap_or(SystemTime::UNIX_EPOCH);
 
-        let records = self.records.read().unwrap();
+        let Ok(records) = self.records.read() else {
+            return 0;
+        };
         records
             .iter()
             .rev()
@@ -557,7 +566,9 @@ impl ToolExecutionHistory {
             .load(std::sync::atomic::Ordering::Relaxed);
         let window = detect_window.max(limit.saturating_mul(2)).max(1);
 
-        let records = self.records.read().unwrap();
+        let Ok(records) = self.records.read() else {
+            return (false, 0, String::new());
+        };
         let recent: Vec<&ToolExecutionRecord> = records.iter().rev().take(window).collect();
 
         if recent.is_empty() {

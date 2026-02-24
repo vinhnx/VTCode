@@ -381,7 +381,7 @@ impl Session {
                 let badge_style = Style::default()
                     .fg(ratatui::style::Color::Yellow)
                     .add_modifier(Modifier::BOLD);
-                spans.push(Span::styled("[PLAN]".to_string(), badge_style));
+                spans.push(Span::styled("Plan mode on".to_string(), badge_style));
                 spans.push(Span::styled(
                     ui::HEADER_MODE_SECONDARY_SEPARATOR.to_owned(),
                     self.header_secondary_style(),
@@ -423,7 +423,7 @@ impl Session {
             let badge_style = Style::default()
                 .fg(ratatui::style::Color::Cyan)
                 .add_modifier(Modifier::BOLD);
-            spans.push(Span::styled("[FULL AUTO]".to_string(), badge_style));
+            spans.push(Span::styled("Accept edits".to_string(), badge_style));
             spans.push(Span::styled(
                 ui::HEADER_MODE_SECONDARY_SEPARATOR.to_owned(),
                 self.header_secondary_style(),

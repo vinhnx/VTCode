@@ -8,7 +8,9 @@ impl ToolRegistry {
         &self,
         callback: Option<ToolProgressCallback>,
     ) -> Option<ToolProgressCallback> {
-        let mut slot = self.progress_callback.write().unwrap();
+        let Ok(mut slot) = self.progress_callback.write() else {
+            return None;
+        };
         std::mem::replace(&mut *slot, callback)
     }
 
@@ -24,7 +26,7 @@ impl ToolRegistry {
 
     /// Get the current progress callback if set
     pub fn progress_callback(&self) -> Option<ToolProgressCallback> {
-        self.progress_callback.read().unwrap().clone()
+        self.progress_callback.read().ok().and_then(|g| g.clone())
     }
 }
 

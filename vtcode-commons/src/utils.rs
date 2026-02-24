@@ -1,6 +1,6 @@
 //! Generic utility functions
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use regex::Regex;
 use sha2::{Digest, Sha256};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -8,10 +8,16 @@ use std::time::{SystemTime, UNIX_EPOCH};
 /// Get current Unix timestamp in seconds
 #[inline]
 pub fn current_timestamp() -> u64 {
-    SystemTime::now()
+    current_timestamp_result().unwrap_or(0)
+}
+
+/// Get current Unix timestamp in seconds as a fallible operation.
+#[inline]
+pub fn current_timestamp_result() -> Result<u64> {
+    Ok(SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .expect("System time is before Unix epoch")
-        .as_secs()
+        .context("System clock is before UNIX_EPOCH while generating timestamp")?
+        .as_secs())
 }
 
 /// Calculate SHA256 hash of the given content

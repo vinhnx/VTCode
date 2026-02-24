@@ -4,7 +4,7 @@ use super::args::{Cli, ModelCommands};
 use crate::llm::factory::{create_provider_with_config, get_factory};
 use crate::utils::colors::{bold, cyan, dimmed, green, red, underline, yellow};
 use crate::utils::dot_config::{DotConfig, get_dot_manager, load_user_config};
-use anyhow::{Result, anyhow};
+use anyhow::{Context, Result, anyhow};
 
 /// Handle model management commands with concise output
 pub async fn handle_models_command(cli: &Cli, command: &ModelCommands) -> Result<()> {
@@ -40,7 +40,9 @@ async fn handle_list_models(_cli: &Cli) -> Result<()> {
 
     let config = load_user_config().await.unwrap_or_default();
     let factory = {
-        let guard = get_factory().lock().unwrap();
+        let guard = get_factory()
+            .lock()
+            .map_err(|err| anyhow!("LLM factory lock poisoned while listing providers: {err}"))?;
         guard.list_providers()
     }; // Lock is released here when guard goes out of scope
     let providers = factory;
@@ -125,7 +127,9 @@ fn is_provider_configured(config: &DotConfig, provider: &str) -> bool {
 /// Set default provider
 async fn handle_set_provider(_cli: &Cli, provider: &str) -> Result<()> {
     let available = {
-        let factory = get_factory().lock().unwrap();
+        let factory = get_factory()
+            .lock()
+            .map_err(|err| anyhow!("LLM factory lock poisoned while setting provider: {err}"))?;
         factory.list_providers()
     }; // Lock is released here when factory guard goes out of scope
 
@@ -138,7 +142,10 @@ async fn handle_set_provider(_cli: &Cli, provider: &str) -> Result<()> {
     }
 
     let manager = {
-        let guard = get_dot_manager().lock().unwrap();
+        let guard = get_dot_manager()
+            .context("Failed to initialize dot manager while setting provider")?
+            .lock()
+            .map_err(|err| anyhow!("Dot manager lock poisoned while setting provider: {err}"))?;
         guard.clone()
     }; // Lock is released here when guard goes out of scope
     manager
@@ -163,7 +170,10 @@ async fn handle_set_provider(_cli: &Cli, provider: &str) -> Result<()> {
 /// Set default model
 async fn handle_set_model(_cli: &Cli, model: &str) -> Result<()> {
     let manager = {
-        let guard = get_dot_manager().lock().unwrap();
+        let guard = get_dot_manager()
+            .context("Failed to initialize dot manager while setting model")?
+            .lock()
+            .map_err(|err| anyhow!("Dot manager lock poisoned while setting model: {err}"))?;
         guard.clone()
     }; // Lock is released here when guard goes out of scope
     manager
@@ -186,7 +196,12 @@ async fn handle_config_provider(
 ) -> Result<()> {
     // Clone manager once and reuse for both operations
     let manager = {
-        let guard = get_dot_manager().lock().unwrap();
+        let guard = get_dot_manager()
+            .context("Failed to initialize dot manager while configuring provider")?
+            .lock()
+            .map_err(|err| {
+                anyhow!("Dot manager lock poisoned while configuring provider: {err}")
+            })?;
         guard.clone()
     };
 

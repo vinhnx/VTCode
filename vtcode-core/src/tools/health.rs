@@ -150,7 +150,11 @@ impl ToolHealthTracker {
     }
     /// Get snapshot of all tool stats
     pub fn get_all_tool_stats(&self) -> HashMap<String, ToolStats> {
-        self.stats.read().unwrap().clone()
+        self.stats
+            .read()
+            .ok()
+            .map(|g| g.clone())
+            .unwrap_or_default()
     }
 }
 

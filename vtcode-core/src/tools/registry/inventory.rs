@@ -74,13 +74,19 @@ impl ToolInventory {
     /// Get alias usage metrics for debugging and analytics
     #[allow(dead_code)]
     pub fn alias_metrics(&self) -> AliasMetrics {
-        self.alias_metrics.lock().unwrap().clone()
+        self.alias_metrics
+            .lock()
+            .ok()
+            .map(|m| m.clone())
+            .unwrap_or_default()
     }
 
     /// Reset alias metrics
     #[allow(dead_code)]
     pub fn reset_alias_metrics(&self) {
-        *self.alias_metrics.lock().unwrap() = AliasMetrics::default();
+        if let Ok(mut m) = self.alias_metrics.lock() {
+            *m = AliasMetrics::default();
+        }
     }
 
     pub fn workspace_root(&self) -> &PathBuf {
@@ -114,8 +120,14 @@ impl ToolInventory {
         let aliases = registration.metadata().aliases().to_vec();
 
         {
-            let tools = self.tools.read().unwrap();
-            let aliases_map = self.aliases.read().unwrap();
+            let tools = self
+                .tools
+                .read()
+                .map_err(|e| anyhow::anyhow!("tool registry read lock poisoned: {e}"))?;
+            let aliases_map = self
+                .aliases
+                .read()
+                .map_err(|e| anyhow::anyhow!("alias registry read lock poisoned: {e}"))?;
 
             // Validate aliases don't conflict with existing tool names BEFORE registration
             for alias in &aliases {
@@ -146,7 +158,10 @@ impl ToolInventory {
 
         // Use entry API to check and insert in one operation
         {
-            let mut tools = self.tools.write().unwrap();
+            let mut tools = self
+                .tools
+                .write()
+                .map_err(|e| anyhow::anyhow!("tool registry write lock poisoned: {e}"))?;
             use std::collections::hash_map::Entry;
             match tools.entry(name_lower.clone()) {
                 Entry::Occupied(_) => {
@@ -159,7 +174,10 @@ impl ToolInventory {
                         use_count: std::sync::atomic::AtomicU64::new(0),
                     }));
                     // HP-7: Maintain sorted invariant - insert at correct position
-                    let mut sorted = self.sorted_names.write().unwrap();
+                    let mut sorted = self
+                        .sorted_names
+                        .write()
+                        .map_err(|e| anyhow::anyhow!("sorted names write lock poisoned: {e}"))?;
                     let pos = sorted.binary_search(&name_lower).unwrap_or_else(|e| e);
                     sorted.insert(pos, name_lower.clone());
                 }
@@ -167,11 +185,10 @@ impl ToolInventory {
         }
 
         // Add to frequently used set if it's a common tool
-        if self.is_common_tool(&name_lower) {
-            self.frequently_used
-                .write()
-                .unwrap()
-                .insert(name_lower.clone());
+        if self.is_common_tool(&name_lower)
+            && let Ok(mut freq) = self.frequently_used.write()
+        {
+            freq.insert(name_lower.clone());
         }
 
         // Register case-insensitive aliases and track metrics
@@ -187,8 +204,12 @@ impl ToolInventory {
 
     /// Register case-insensitive aliases for a tool and track metrics
     fn register_aliases(&self, canonical_name_lower: &str, aliases: &[String]) {
-        let mut aliases_map = self.aliases.write().unwrap();
-        let mut metrics = self.alias_metrics.lock().unwrap();
+        let Ok(mut aliases_map) = self.aliases.write() else {
+            return;
+        };
+        let Ok(mut metrics) = self.alias_metrics.lock() else {
+            return;
+        };
         for alias in aliases {
             let alias_lower = alias.to_ascii_lowercase();
             let target = canonical_name_lower.to_owned();
@@ -209,8 +230,8 @@ impl ToolInventory {
         let name_lower = name.to_ascii_lowercase();
 
         let resolved_name = {
-            let tools = self.tools.read().unwrap();
-            let aliases = self.aliases.read().unwrap();
+            let tools = self.tools.read().ok()?;
+            let aliases = self.aliases.read().ok()?;
 
             // First check if there's an alias mapping for this name
             // This takes priority when the direct tool is not LLM-visible
@@ -224,8 +245,9 @@ impl ToolInventory {
                 } else if let Some(ref aliased) = alias_target {
                     // Not LLM-visible but has an alias: prefer the alias target
                     // This routes "read_file" → "unified_file" when called by LLM
-                    let mut metrics = self.alias_metrics.lock().unwrap();
-                    if let Some((canonical, count)) = metrics.usage.get_mut(&name_lower) {
+                    if let Ok(mut metrics) = self.alias_metrics.lock()
+                        && let Some((canonical, count)) = metrics.usage.get_mut(&name_lower)
+                    {
                         *count += 1;
                         let count_val = *count;
                         let canonical_val = canonical.clone();
@@ -245,8 +267,9 @@ impl ToolInventory {
                 }
             } else if let Some(aliased) = alias_target {
                 // No direct registration but alias exists
-                let mut metrics = self.alias_metrics.lock().unwrap();
-                if let Some((canonical, count)) = metrics.usage.get_mut(&name_lower) {
+                if let Ok(mut metrics) = self.alias_metrics.lock()
+                    && let Some((canonical, count)) = metrics.usage.get_mut(&name_lower)
+                {
                     *count += 1;
                     let count_val = *count;
                     let canonical_val = canonical.clone();
@@ -265,7 +288,7 @@ impl ToolInventory {
         };
 
         // Now get with the resolved name
-        let tools = self.tools.read().unwrap();
+        let tools = self.tools.read().ok()?;
         if let Some(entry) = tools.get(&resolved_name) {
             if let Ok(mut last) = entry.last_used.write() {
                 *last = Instant::now();
@@ -275,8 +298,10 @@ impl ToolInventory {
                 .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
             // Track frequently used for aliased tools
-            if resolved_name != name_lower {
-                self.frequently_used.write().unwrap().insert(resolved_name);
+            if resolved_name != name_lower
+                && let Ok(mut freq) = self.frequently_used.write()
+            {
+                freq.insert(resolved_name);
             }
             return Some(entry.registration.clone());
         }
@@ -287,8 +312,8 @@ impl ToolInventory {
     /// Get a tool registration without updating usage metrics
     pub fn get_registration(&self, name: &str) -> Option<ToolRegistration> {
         let name_lower = name.to_ascii_lowercase();
-        let tools = self.tools.read().unwrap();
-        let aliases = self.aliases.read().unwrap();
+        let tools = self.tools.read().ok()?;
+        let aliases = self.aliases.read().ok()?;
 
         let resolved_name = if tools.contains_key(&name_lower) {
             &name_lower
@@ -305,16 +330,31 @@ impl ToolInventory {
 
     pub fn has_tool(&self, name: &str) -> bool {
         let name_lower = name.to_ascii_lowercase();
-        self.tools.read().unwrap().contains_key(&name_lower)
-            || self.aliases.read().unwrap().contains_key(&name_lower)
+        self.tools
+            .read()
+            .ok()
+            .is_some_and(|t| t.contains_key(&name_lower))
+            || self
+                .aliases
+                .read()
+                .ok()
+                .is_some_and(|a| a.contains_key(&name_lower))
     }
 
     pub fn available_tools(&self) -> Vec<String> {
-        self.sorted_names.read().unwrap().clone()
+        self.sorted_names
+            .read()
+            .ok()
+            .map(|s| s.clone())
+            .unwrap_or_default()
     }
 
     pub fn registered_aliases(&self) -> Vec<String> {
-        self.aliases.read().unwrap().keys().cloned().collect()
+        self.aliases
+            .read()
+            .ok()
+            .map(|a| a.keys().cloned().collect())
+            .unwrap_or_default()
     }
 
     /// Get all registered aliases with their canonical targets
@@ -322,20 +362,22 @@ impl ToolInventory {
     pub fn all_aliases(&self) -> Vec<(String, String)> {
         self.aliases
             .read()
-            .unwrap()
-            .iter()
-            .map(|(k, v)| (k.clone(), v.clone()))
-            .collect()
+            .ok()
+            .map(|a| a.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
+            .unwrap_or_default()
     }
 
     /// Snapshot registration metadata for policy/catalog synchronization
     pub fn registration_metadata(&self) -> Vec<(String, ToolMetadata)> {
         self.tools
             .read()
-            .unwrap()
-            .iter()
-            .map(|(name, entry)| (name.clone(), entry.registration.metadata().clone()))
-            .collect()
+            .ok()
+            .map(|t| {
+                t.iter()
+                    .map(|(name, entry)| (name.clone(), entry.registration.metadata().clone()))
+                    .collect()
+            })
+            .unwrap_or_default()
     }
 
     /// Check if a tool is commonly used
@@ -349,11 +391,17 @@ impl ToolInventory {
         const MAX_TOOLS: usize = 1000;
 
         // Only clean up if enough time has passed
-        if self.last_cache_cleanup.read().unwrap().elapsed() < CACHE_CLEANUP_INTERVAL {
+        let Ok(last_cleanup) = self.last_cache_cleanup.read() else {
+            return;
+        };
+        if last_cleanup.elapsed() < CACHE_CLEANUP_INTERVAL {
             return;
         }
+        drop(last_cleanup);
 
-        let mut tools = self.tools.write().unwrap();
+        let Ok(mut tools) = self.tools.write() else {
+            return;
+        };
         if tools.len() < MAX_TOOLS {
             return;
         }
@@ -364,12 +412,17 @@ impl ToolInventory {
         // Remove tools that haven't been used in a while and aren't frequently used
         tools.retain(|name, entry| {
             // Keep frequently used tools
-            if self.frequently_used.read().unwrap().contains(name) {
+            if self
+                .frequently_used
+                .read()
+                .ok()
+                .is_some_and(|f| f.contains(name))
+            {
                 return true;
             }
 
             // Keep tools used recently
-            let last_used = *entry.last_used.read().unwrap();
+            let last_used = entry.last_used.read().ok().map(|t| *t).unwrap_or(now);
             now.duration_since(last_used) < Duration::from_secs(3600) // 1 hour
         });
 

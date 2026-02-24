@@ -384,7 +384,7 @@ fn build_static_model_index(options: &[ModelOption]) -> StaticModelIndex {
 }
 
 fn dynamic_model_cache_path() -> Option<PathBuf> {
-    let manager = get_dot_manager().lock().ok()?.clone();
+    let manager = get_dot_manager().ok()?.lock().ok()?.clone();
     Some(
         manager
             .cache_dir("models")

@@ -14,9 +14,11 @@ impl ToolRegistry {
                 error = %e,
                 "Invalid timeout configuration detected, using defaults"
             );
-            *self.timeout_policy.write().unwrap() = ToolTimeoutPolicy::default();
-        } else {
-            *self.timeout_policy.write().unwrap() = policy;
+            if let Ok(mut guard) = self.timeout_policy.write() {
+                *guard = ToolTimeoutPolicy::default();
+            }
+        } else if let Ok(mut guard) = self.timeout_policy.write() {
+            *guard = policy;
         }
 
         self.resiliency.lock().adaptive_tuning =
@@ -24,7 +26,11 @@ impl ToolRegistry {
     }
 
     pub fn timeout_policy(&self) -> ToolTimeoutPolicy {
-        self.timeout_policy.read().unwrap().clone()
+        self.timeout_policy
+            .read()
+            .ok()
+            .map(|g| g.clone())
+            .unwrap_or_default()
     }
 
     pub fn rate_limit_per_minute(&self) -> Option<usize> {

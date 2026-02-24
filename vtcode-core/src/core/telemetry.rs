@@ -1,3 +1,4 @@
+use anyhow::{Context, Result};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -46,7 +47,12 @@ impl TelemetryManager {
         }
     }
 
-    pub fn get_snapshot(&self) -> TelemetryStats {
-        self.stats.lock().unwrap().clone()
+    pub fn get_snapshot(&self) -> Result<TelemetryStats> {
+        let stats = self
+            .stats
+            .lock()
+            .map_err(|err| anyhow::anyhow!("telemetry stats lock poisoned: {err}"))
+            .context("Failed to read telemetry snapshot")?;
+        Ok(stats.clone())
     }
 }

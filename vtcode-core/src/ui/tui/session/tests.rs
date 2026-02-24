@@ -824,7 +824,7 @@ fn header_lines_include_provider_model_and_metadata() {
         assert!(line_text.contains(&value));
     }
     // Trust is now shown as a badge, not in chain values
-    assert!(line_text.contains("[FULL AUTO]"));
+    assert!(line_text.contains("Accept edits"));
     // Removed assertion for HEADER_MCP_PREFIX since we're no longer showing MCP info in header
     assert!(!line_text.contains("Languages"));
     assert!(!line_text.contains(ui::HEADER_STATUS_LABEL));

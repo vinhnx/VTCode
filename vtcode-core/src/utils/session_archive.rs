@@ -439,7 +439,7 @@ impl SessionArchive {
         let mut perf = PerfSpan::new("vtcode.perf.session_progress_write_ms");
         perf.tag("mode", "async");
 
-        if !self.should_persist_progress(args.turn_number) {
+        if !self.should_persist_progress(args.turn_number)? {
             return Ok(self.path.clone());
         }
 
@@ -477,24 +477,28 @@ impl SessionArchive {
         Ok(self.path.clone())
     }
 
-    fn should_persist_progress(&self, turn_number: usize) -> bool {
+    fn should_persist_progress(&self, turn_number: usize) -> Result<bool> {
         let min_interval =
             Duration::from_millis(defaults::DEFAULT_SESSION_PROGRESS_MIN_INTERVAL_MS);
         let min_turns = defaults::DEFAULT_SESSION_PROGRESS_MIN_TURN_DELTA;
 
-        let mut throttle = self.progress_throttle.lock().unwrap();
+        let mut throttle = self
+            .progress_throttle
+            .lock()
+            .map_err(|err| anyhow::anyhow!("session progress throttle lock poisoned: {err}"))
+            .context("Failed to evaluate session progress persistence throttle")?;
         if turn_number <= throttle.last_turn {
-            return false;
+            return Ok(false);
         }
         if throttle.last_written.elapsed() < min_interval
             && turn_number.saturating_sub(throttle.last_turn) < min_turns
         {
-            return false;
+            return Ok(false);
         }
 
         throttle.last_written = Instant::now();
         throttle.last_turn = turn_number;
-        true
+        Ok(true)
     }
     /// Update loaded skills in the archive metadata
     pub fn set_loaded_skills(&mut self, skills: Vec<String>) {

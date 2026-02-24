@@ -224,10 +224,14 @@ async fn persist_workspace_trust(workspace: &Path, level: WorkspaceTrustLevel) -
 
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
+        .context("System clock is before UNIX_EPOCH while persisting workspace trust")?
         .as_secs();
 
-    let manager = get_dot_manager().lock().unwrap().clone();
+    let manager = get_dot_manager()
+        .context("Failed to initialize dot manager while persisting workspace trust")?
+        .lock()
+        .map_err(|err| anyhow!("Dot manager lock poisoned while persisting trust: {err}"))?
+        .clone();
 
     manager
         .update_config(|cfg| {

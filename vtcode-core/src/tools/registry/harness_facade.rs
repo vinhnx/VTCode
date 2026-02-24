@@ -26,14 +26,18 @@ impl ToolRegistry {
         &self,
         circuit_breaker: Arc<crate::tools::circuit_breaker::CircuitBreaker>,
     ) {
-        let mut slot = self.shared_circuit_breaker.write().unwrap();
-        *slot = Some(circuit_breaker);
+        if let Ok(mut slot) = self.shared_circuit_breaker.write() {
+            *slot = Some(circuit_breaker);
+        }
     }
 
     /// Return the shared per-tool circuit breaker when configured.
     pub fn shared_circuit_breaker(
         &self,
     ) -> Option<Arc<crate::tools::circuit_breaker::CircuitBreaker>> {
-        self.shared_circuit_breaker.read().unwrap().clone()
+        self.shared_circuit_breaker
+            .read()
+            .ok()
+            .and_then(|g| g.clone())
     }
 }
