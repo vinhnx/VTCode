@@ -2,6 +2,205 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## [unreleased]
+
+
+### Bug Fixes
+- Update versioning format to remove 'v' prefix in tags and URLs (@vinhnx)
+
+- Resolve critical scrolling issue and remove unused slash command handlers (@vinhnx)
+
+- Correct exec_code policy and update TODO for markdown rendering issue (@vinhnx)
+
+- Update default model in configuration to glm-5:cloud (@vinhnx)
+
+- Correct changelog generation to use the previous release tag instead of a fixed version. (@vinhnx)
+
+- Update chat input placeholders for clarity and improved user guidance (Vinh Nguyen)
+
+- Update chat input placeholders for clarity and improved user guidance (Vinh Nguyen)
+
+- Disable scroll indicator in status bar (Vinh Nguyen)
+
+
+
+### Documentation
+- Update changelog for 0.79.2 [skip ci] (vtcode-release-bot)
+
+- Update changelog for 0.79.3 [skip ci] (vtcode-release-bot)
+
+- Update changelog for 0.79.4 [skip ci] (vtcode-release-bot)
+
+- Update contributing guidelines to reference CONTRIBUTING.md and AGENTS.md. (@vinhnx)
+
+- Update changelog for 0.80.0 [skip ci] (vtcode-release-bot)
+
+- Update documentation for TECH_DEBT_TRACKER and QUALITY_SCORE; add tests for subagent loading and file operations (@vinhnx)
+
+- Update changelog for 0.80.1 [skip ci] (vtcode-release-bot)
+
+- Update changelog for 0.81.0 [skip ci] (vtcode-release-bot)
+
+- Update changelog for 0.81.1 [skip ci] (vtcode-release-bot)
+
+- Update changelog for 0.81.2 [skip ci] (vtcode-release-bot)
+
+- Update changelog for 0.81.3 [skip ci] (vtcode-release-bot)
+
+- Add a guide for adding new models to AGENTS.md. (@vinhnx)
+
+- Update changelog for 0.82.0 [skip ci] (vtcode-release-bot)
+
+- Update changelog for 0.82.1 [skip ci] (vtcode-release-bot)
+
+- Update TODO.md with additional PTY truncate display information and test references (@vinhnx)
+
+- Update changelog for 0.82.2 [skip ci] (vtcode-release-bot)
+
+- Update changelog for 0.83.0 [skip ci] (vtcode-release-bot)
+
+- Update changelog for 0.82.3 [skip ci] (vtcode-release-bot)
+
+- Update TODO.md with new tasks and references (Vinh Nguyen)
+
+- Update TODO.md with examples and improve TUI display for truncated outputs (Vinh Nguyen)
+
+
+
+### Features
+- Add MiniMax M2.5 model support across various providers and update related constants (@vinhnx)
+
+- Add Qwen3 Coder Next model support and update related constants (@vinhnx)
+
+- Add skill bundle import/export functionality with zip support (@vinhnx)
+
+- Implement plan mode toggle and strip proposed plan blocks in rendering (@vinhnx)
+
+- Implement in-process teammate runner and enhance team protocol messaging (@vinhnx)
+
+- Add /share-log command to export session log as JSON for debugging (@vinhnx)
+
+- Implement agent steering mechanism to control runloop execution, including stop, pause, resume, and input injection capabilities. (@vinhnx)
+
+- Enhance reasoning display by introducing structured `ReasoningSegment` with stages and improved rendering in the TUI. (@vinhnx)
+
+- Use configurable constants for agent session limits and expose the default max context tokens function. (@vinhnx)
+
+- Introduce agent legibility guidelines and refine steering message variants for clarity and structured output. (@vinhnx)
+
+- Add Kimi K2.5 model support across OpenRouter, Ollama, and HuggingFace. (@vinhnx)
+
+- Add sanitizer module for secret redaction and integrate into output handling (@vinhnx)
+
+- Implement credential storage using OS keyring and file fallback (@vinhnx)
+
+- Add timeout handling for turn metadata collection (@vinhnx)
+
+- Implement mouse scroll handling for improved navigation (@vinhnx)
+
+- Add Qwen3.5-397B-A17B model with hybrid architecture and update configuration (@vinhnx)
+
+- Implement secure storage for custom API keys using OS keyring (@vinhnx)
+
+- Add CI workflows for building Linux and Windows binaries; optimize release process (@vinhnx)
+
+- Add full CI mode to release script for all platforms (@vinhnx)
+
+- Refactor build process to use conditional cross compilation for Linux and Windows (@vinhnx)
+
+- Implement mouse scroll support for TUI session and history picker, and update default agent configuration to Ollama. (@vinhnx)
+
+- Render GFM tables inside markdown code blocks as tables and prevent word-wrapping for table lines in the TUI. (@vinhnx)
+
+- Implement mouse text selection in the TUI and add a new `vtcode.toml` configuration file. (@vinhnx)
+
+- Add Claude Sonnet 4.6 model support and integrate it across model definitions, parsing, catalog, and documentation. (@vinhnx)
+
+- Implement Gemini 3.1 Pro Preview models with updated token limits and system prompt handling. (@vinhnx)
+
+- Implement Gemini prompt caching with TTL using a new `CacheControl` part and add support for Gemini 3.1 Pro preview models. (@vinhnx)
+
+- Add `prompt_cache_key` to OpenAI requests for improved cache locality and simplify Responses API usage logic. (@vinhnx)
+
+- Add top-level cache control to Anthropic requests, with TTL determined by breakpoint consumption. (@vinhnx)
+
+- Standardize MiniMax-M2.5 model identifier, promote it as the default, and update configuration defaults. (@vinhnx)
+
+- Introduce CI cost optimization strategies, add a new `--ci-only` release mode, and document release workflow details. (@vinhnx)
+
+- Add prompt cache key to LLM requests and enhance unified_file tool execution diagnostics. (@vinhnx)
+
+- Refactor Ollama non-streaming request handling and add a fallback to non-streaming for initial stream failures. (@vinhnx)
+
+- Improve spooled tool output handling by verifying file existence and add a mechanism to suppress agent follow-up prompt detection for auto-generated prompts. (@vinhnx)
+
+- Enhance error handling and recovery mechanisms across various components (@vinhnx)
+
+- Implement tool reentrancy guard to prevent recursive execution and improve panic reporting with `better-panic`. (@vinhnx)
+
+- Implement chunked reading for spooled tool outputs with improved agent messaging and update default LLM provider configuration. (@vinhnx)
+
+- Add chunked file read spool progress tracking and refine token usage calculation for context management. (@vinhnx)
+
+- Generate consolidated checksums.txt for releases and centralize script utilities into common.sh. (@vinhnx)
+
+- Implement TaskTracker tool and enhance agent guards and documentation based on NL2Repo-Bench insights. (@vinhnx)
+
+- Integrate AI agent best practices into system prompts and loop detection for improved planning, root cause analysis, and uncertainty recognition. (@vinhnx)
+
+- Enhance documentation on grounding, uncertainty, and regression verification; improve loop detection guidance (@vinhnx)
+
+- Enhance `AskUserChoice` with freeform input, custom labels, placeholders, and default selections. (@vinhnx)
+
+- Implement freeform text input for wizard modals, guided by system prompt and toggled by the Tab key. (@vinhnx)
+
+- Refine plan mode transitions by adding more aliases, enabling contextual exit confirmations, and providing user guidance. (Vinh Nguyen)
+
+- Set custom terminal title for VT Code TUI (Vinh Nguyen)
+
+- Migrate changelog generation to git-cliff and update related documentation (Vinh Nguyen)
+
+
+
+### Other
+- Prevent footer panic when hint is absent, refactor path argument to `&Path`, and optimize sidebar string truncation. (@vinhnx)
+
+
+
+### Refactors
+- Remove unused ReasoningSegment import from turn_processing.rs (@vinhnx)
+
+- Reimplement LLM streaming and event handling using AgentSessionController and its event sink mechanism. (@vinhnx)
+
+- Extract large event handler modules into smaller files for improved navigation (@vinhnx)
+
+- Streamline file operations and enhance workspace path handling (@vinhnx)
+
+- Replace manual file operations with shared utility functions for consistency (@vinhnx)
+
+- Replace manual file operations with shared utility functions for consistency (@vinhnx)
+
+- Replace manual file operations with shared utility functions for consistency (@vinhnx)
+
+- Consolidate duplicated logic across workspace crates into shared utility functions (@vinhnx)
+
+- Streamline MCP tool management and indexing in ToolRegistry (@vinhnx)
+
+- Remove Rust cache step from release workflow (@vinhnx)
+
+- Clean up code formatting and improve readability across multiple files (@vinhnx)
+
+- Remove unused imports and enhance configuration for credential storage (@vinhnx)
+
+- Make TUI signal cleanup and dotfile permission backup UNIX-specific. (@vinhnx)
+
+- Improve previous SemVer tag identification by searching commit history in release scripts (@vinhnx)
+
+- Remove unified tool resolver module to streamline codebase (Vinh Nguyen)
+
+- Remove unused TUI components and improve event handling for focus changes (Vinh Nguyen)
+
+- Standardize continuation prefix handling in wrap_block_lines functions (Vinh Nguyen)
 ## 0.82.3 - 2026-02-24
 
 ### Features
