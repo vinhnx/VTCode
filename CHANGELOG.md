@@ -2,6 +2,28 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.83.0 - 2026-02-24
+
+### Features
+
+- Implement freeform text input for wizard modals, guided by system prompt and toggled by the Tab key. (9b54cdd6) (@vinhnx)
+- Enhance `AskUserChoice` with freeform input, custom labels, placeholders, and default selections. (53e0e111) (@vinhnx)
+- Enhance documentation on grounding, uncertainty, and regression verification; improve loop detection guidance (064ea630) (@vinhnx)
+- Integrate AI agent best practices into system prompts and loop detection for improved planning, root cause analysis, and uncertainty recognition. (91e5e295) (@vinhnx)
+- Implement TaskTracker tool and enhance agent guards and documentation based on NL2Repo-Bench insights. (45a9a159) (@vinhnx)
+
+### Refactors
+
+- improve previous SemVer tag identification by searching commit history in release scripts (0fcdce3d) (@vinhnx)
+
+### Other
+
+- Refactor user input option generation and enhance markdown rendering in modals (a72a63c0) (@vinhnx)
+- Add navigation loop guidance and improve plan mode handling (5d162ae6) (@vinhnx)
+- Add plan-mode task tracker with CRUD functionality and integrate with existing tools (56c7e3b8) (@vinhnx)
+- Rename UpdatePlanCommand to TaskTrackerCommand and refactor related files and documentation (b4520273) (@vinhnx)
+- Update commit (0642ff3b) (@vinhnx)
+
 ## 0.82.2 - 2026-02-23
 
 ### Features
