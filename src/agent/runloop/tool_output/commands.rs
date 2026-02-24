@@ -9,6 +9,25 @@ use super::commands_processing::{parse_command_tokens, preprocess_terminal_stdou
 use super::streams::{render_stream_section, resolve_stdout_tail_limit};
 use super::styles::{GitStyles, LsStyles};
 
+fn resolve_pty_session_id<'a>(payload: &'a Value) -> Option<&'a str> {
+    payload
+        .get("id")
+        .or_else(|| payload.get("session_id"))
+        .or_else(|| payload.get("process_id"))
+        .and_then(Value::as_str)
+}
+
+fn infer_pty_completion(payload: &Value, session_id: Option<&str>, exit_code: Option<i64>) -> bool {
+    payload
+        .get("is_exited")
+        .and_then(Value::as_bool)
+        .unwrap_or_else(|| exit_code.is_some() || session_id.is_none())
+}
+
+fn should_render_command_prompt(is_pty_session: bool, command: &str) -> bool {
+    is_pty_session && !command.trim().is_empty() && command != "unknown"
+}
+
 pub(crate) async fn render_terminal_command_panel(
     renderer: &mut AnsiRenderer,
     payload: &Value,
@@ -56,11 +75,9 @@ pub(crate) async fn render_terminal_command_panel(
     let spool_hint = unwrapped_payload.get("spool_hint").and_then(Value::as_str);
 
     // Check for session completion status (is_exited indicates if process is still running)
-    let is_completed = unwrapped_payload
-        .get("is_exited")
-        .and_then(Value::as_bool)
-        .unwrap_or(true);
     let exit_code = unwrapped_payload.get("exit_code").and_then(Value::as_i64);
+    let session_id = resolve_pty_session_id(&unwrapped_payload);
+    let is_completed = infer_pty_completion(&unwrapped_payload, session_id, exit_code);
     let command = if let Some(tokens) = &command_tokens {
         tokens.join(" ")
     } else {
@@ -70,7 +87,6 @@ pub(crate) async fn render_terminal_command_panel(
             .unwrap_or("unknown")
             .to_string()
     };
-    let session_id = unwrapped_payload.get("id").and_then(Value::as_str);
     let working_dir = unwrapped_payload
         .get("working_directory")
         .and_then(Value::as_str);
@@ -84,7 +100,7 @@ pub(crate) async fn render_terminal_command_panel(
         .unwrap_or(80);
 
     // If there's an 'output' field, this is likely a PTY session result
-    let is_pty_session = unwrapped_payload.get("id").is_some()
+    let is_pty_session = session_id.is_some()
         && (!output_raw.is_empty() || stdout_raw.is_empty() && stderr_raw.is_empty());
 
     let stdout = if is_pty_session {
@@ -100,7 +116,8 @@ pub(crate) async fn render_terminal_command_panel(
     let tail_limit = resolve_stdout_tail_limit(vt_config);
 
     // Display session status header if this is a PTY session
-    if is_pty_session && session_id.is_some() {
+    let mut command_prompt_rendered = false;
+    if is_pty_session {
         let status_symbol = if !is_completed { "▶" } else { "✓" };
         let status_badge = if !is_completed {
             format!("{} RUN", status_symbol)
@@ -135,9 +152,9 @@ pub(crate) async fn render_terminal_command_panel(
 
         renderer.line(MessageStyle::Tool, &header)?;
 
-        // Show full command only on separate line if truncated
-        if command.len() > 50 || working_dir.is_some() {
+        if should_render_command_prompt(is_pty_session, &command) {
             renderer.line(MessageStyle::ToolDetail, &format!("$ {}", command))?;
+            command_prompt_rendered = true;
         }
     }
 
@@ -145,9 +162,12 @@ pub(crate) async fn render_terminal_command_panel(
     if let Some(stdin) = unwrapped_payload.get("stdin").and_then(Value::as_str)
         && !stdin.trim().is_empty()
     {
-        // Show the input as if it came from a command prompt
-        let prompt = format!("$ {}", stdin.trim());
-        renderer.line(MessageStyle::ToolDetail, &prompt)?;
+        let stdin_trimmed = stdin.trim();
+        if !command_prompt_rendered || stdin_trimmed != command.trim() {
+            // Show the input as if it came from a command prompt
+            let prompt = format!("$ {}", stdin_trimmed);
+            renderer.line(MessageStyle::ToolDetail, &prompt)?;
+        }
     }
 
     // Special handling for exit code 127 (command not found) - show critical message prominently
@@ -280,4 +300,41 @@ pub(crate) async fn render_terminal_command_panel(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{infer_pty_completion, resolve_pty_session_id, should_render_command_prompt};
+    use serde_json::json;
+
+    #[test]
+    fn resolves_pty_session_id_with_fallback_keys() {
+        let from_id = json!({ "id": "run-1" });
+        assert_eq!(resolve_pty_session_id(&from_id), Some("run-1"));
+
+        let from_session = json!({ "session_id": "run-2" });
+        assert_eq!(resolve_pty_session_id(&from_session), Some("run-2"));
+
+        let from_process = json!({ "process_id": "run-3" });
+        assert_eq!(resolve_pty_session_id(&from_process), Some("run-3"));
+    }
+
+    #[test]
+    fn infers_running_state_without_is_exited() {
+        let payload = json!({ "process_id": "run-1" });
+        assert!(!infer_pty_completion(&payload, Some("run-1"), None));
+    }
+
+    #[test]
+    fn infers_completed_state_from_exit_code() {
+        let payload = json!({ "id": "run-1", "exit_code": 0 });
+        assert!(infer_pty_completion(&payload, Some("run-1"), Some(0)));
+    }
+
+    #[test]
+    fn command_prompt_only_for_known_pty_command() {
+        assert!(should_render_command_prompt(true, "cargo check"));
+        assert!(!should_render_command_prompt(false, "cargo check"));
+        assert!(!should_render_command_prompt(true, "unknown"));
+    }
 }

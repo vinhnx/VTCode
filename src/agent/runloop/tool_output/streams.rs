@@ -62,6 +62,8 @@ pub(crate) use streams_helpers::{
 
 /// Maximum number of lines to display in inline mode before truncating
 const INLINE_STREAM_MAX_LINES: usize = 30;
+/// Maximum number of lines for run-command output in TUI
+const RUN_COMMAND_MAX_LINES: usize = 12;
 /// Maximum line length before truncation to prevent TUI hang
 const MAX_LINE_LENGTH: usize = 150;
 /// Size threshold (bytes) below which output is displayed inline vs. spooled
@@ -92,6 +94,18 @@ fn calculate_preview_lines(content_size: usize) -> usize {
     }
 }
 
+fn format_hidden_lines_summary(hidden: usize) -> String {
+    if hidden == 1 {
+        "… +1 line".to_string()
+    } else {
+        format!("… +{} lines", hidden)
+    }
+}
+
+fn resolve_run_command_tail_limit(tail_limit: usize) -> usize {
+    tail_limit.clamp(1, RUN_COMMAND_MAX_LINES)
+}
+
 #[cfg_attr(
     feature = "profiling",
     tracing::instrument(
@@ -118,7 +132,9 @@ pub(crate) async fn render_stream_section(
     let is_run_command = matches!(
         tool_name,
         Some(vtcode_core::config::constants::tools::RUN_PTY_CMD)
+            | Some(vtcode_core::config::constants::tools::UNIFIED_EXEC)
     );
+    let run_command_tail_limit = resolve_run_command_tail_limit(tail_limit);
     let allow_ansi_for_tool = allow_ansi && !is_run_command;
     let apply_line_styles = !is_run_command;
     let force_tail_mode = is_run_command;
@@ -194,15 +210,22 @@ pub(crate) async fn render_stream_section(
 
         let hidden = total.saturating_sub(tail.len());
         if hidden > 0 {
-            msg_buffer.clear();
-            msg_buffer.push_str("[... ");
-            msg_buffer.push_str(&hidden.to_string());
-            msg_buffer.push_str(" line");
-            if hidden != 1 {
-                msg_buffer.push('s');
+            if is_run_command {
+                renderer.line(
+                    MessageStyle::ToolDetail,
+                    &format_hidden_lines_summary(hidden),
+                )?;
+            } else {
+                msg_buffer.clear();
+                msg_buffer.push_str("[... ");
+                msg_buffer.push_str(&hidden.to_string());
+                msg_buffer.push_str(" line");
+                if hidden != 1 {
+                    msg_buffer.push('s');
+                }
+                msg_buffer.push_str(" truncated ...]");
+                renderer.line(MessageStyle::ToolDetail, &msg_buffer)?;
             }
-            msg_buffer.push_str(" truncated ...]");
-            renderer.line(MessageStyle::ToolDetail, &msg_buffer)?;
         }
 
         if should_render_as_code_block(fallback_style) && !apply_line_styles {
@@ -245,12 +268,13 @@ pub(crate) async fn render_stream_section(
     if is_diff_content {
         let diff_lines = format_diff_content_lines(stripped_for_diff.as_ref());
         let total = diff_lines.len();
-        let effective_limit =
-            if renderer.prefers_untruncated_output() || matches!(mode, ToolOutputMode::Full) {
-                tail_limit.max(1000)
-            } else {
-                tail_limit
-            };
+        let effective_limit = if force_tail_mode {
+            run_command_tail_limit
+        } else if renderer.prefers_untruncated_output() || matches!(mode, ToolOutputMode::Full) {
+            tail_limit.max(1000)
+        } else {
+            tail_limit
+        };
         let (lines_slice, truncated) = if force_tail_mode || total > effective_limit {
             let start = total.saturating_sub(effective_limit);
             (&diff_lines[start..], total > effective_limit)
@@ -261,10 +285,17 @@ pub(crate) async fn render_stream_section(
         if truncated {
             let hidden = total.saturating_sub(lines_slice.len());
             if hidden > 0 {
-                renderer.line(
-                    MessageStyle::ToolDetail,
-                    &format!("[... {} lines truncated ...]", hidden),
-                )?;
+                if is_run_command {
+                    renderer.line(
+                        MessageStyle::ToolDetail,
+                        &format_hidden_lines_summary(hidden),
+                    )?;
+                } else {
+                    renderer.line(
+                        MessageStyle::ToolDetail,
+                        &format!("[... {} lines truncated ...]", hidden),
+                    )?;
+                }
             }
         }
 
@@ -318,7 +349,8 @@ pub(crate) async fn render_stream_section(
         let total_lines = effective_normalized_content.lines().count();
         (lines, total_lines, true) // Always mark as truncated if token-based truncation was applied
     } else if force_tail_mode {
-        let (tail, total) = tail_lines_streaming(normalized_content.as_ref(), tail_limit);
+        let (tail, total) =
+            tail_lines_streaming(normalized_content.as_ref(), run_command_tail_limit);
         let truncated = total > tail.len();
         (tail, total, truncated)
     } else {
@@ -354,6 +386,8 @@ pub(crate) async fn render_stream_section(
         format_buffer.clear();
         if was_truncated_by_tokens {
             format_buffer.push_str("[... content truncated by token budget ...]");
+        } else if is_run_command {
+            format_buffer.push_str(&format_hidden_lines_summary(hidden));
         } else {
             format_buffer.push_str("[... ");
             format_buffer.push_str(&hidden.to_string());

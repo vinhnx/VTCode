@@ -81,6 +81,19 @@ pub(crate) async fn render_tool_output(
             )
             .await;
         }
+        Some(tools::UNIFIED_EXEC) if should_render_unified_exec_terminal_panel(val) => {
+            let git_styles = GitStyles::new();
+            let ls_styles = LsStyles::from_env();
+            return render_terminal_command_panel(
+                renderer,
+                val,
+                &git_styles,
+                &ls_styles,
+                vt_config,
+                allow_tool_ansi,
+            )
+            .await;
+        }
         Some(tools::WEB_FETCH) => {
             return render_generic_output(renderer, val);
         }
@@ -248,6 +261,68 @@ fn render_simple_tool_status(
     }
 
     Ok(())
+}
+
+fn should_render_unified_exec_terminal_panel(val: &Value) -> bool {
+    let has_command = val
+        .get("command")
+        .map(|command| match command {
+            Value::String(text) => !text.trim().is_empty(),
+            Value::Array(parts) => !parts.is_empty(),
+            _ => false,
+        })
+        .unwrap_or(false);
+    let has_terminal_stream = val
+        .get("output")
+        .and_then(Value::as_str)
+        .is_some_and(|text| !text.trim().is_empty())
+        || val
+            .get("stdout")
+            .and_then(Value::as_str)
+            .is_some_and(|text| !text.trim().is_empty())
+        || val
+            .get("stderr")
+            .and_then(Value::as_str)
+            .is_some_and(|text| !text.trim().is_empty());
+    let has_session_context = ["id", "session_id", "process_id", "is_exited", "exit_code"]
+        .iter()
+        .any(|key| val.get(*key).is_some());
+
+    has_command || has_terminal_stream || has_session_context
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::should_render_unified_exec_terminal_panel;
+
+    #[test]
+    fn unified_exec_terminal_panel_detects_command_payload() {
+        let payload = json!({
+            "command": "cargo check",
+            "output": "Checking vtcode"
+        });
+        assert!(should_render_unified_exec_terminal_panel(&payload));
+    }
+
+    #[test]
+    fn unified_exec_terminal_panel_detects_session_payload() {
+        let payload = json!({
+            "session_id": "run-123",
+            "is_exited": true
+        });
+        assert!(should_render_unified_exec_terminal_panel(&payload));
+    }
+
+    #[test]
+    fn unified_exec_terminal_panel_ignores_non_terminal_payload() {
+        let payload = json!({
+            "sessions": [],
+            "success": true
+        });
+        assert!(!should_render_unified_exec_terminal_panel(&payload));
+    }
 }
 
 fn render_error_details(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> {

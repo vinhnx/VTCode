@@ -11,6 +11,7 @@ use vtcode_core::ui::tui::{InlineHandle, InlineMessageKind, InlineSegment, Inlin
 use crate::agent::runloop::unified::progress::ProgressReporter;
 
 pub(super) struct PtyStreamState {
+    command_prompt: Option<String>,
     lines: VecDeque<String>,
     current_line: String,
     displayed_count: usize,
@@ -19,8 +20,10 @@ pub(super) struct PtyStreamState {
 }
 
 impl PtyStreamState {
-    pub(super) fn new() -> Self {
+    pub(super) fn new(command_prompt: Option<String>) -> Self {
         Self {
+            command_prompt: normalize_command_prompt(command_prompt)
+                .map(|command| format_command_prompt(&command)),
             lines: VecDeque::new(),
             current_line: String::new(),
             displayed_count: 0,
@@ -83,28 +86,33 @@ impl PtyStreamState {
     }
 
     fn render_lines(&self, limit: usize) -> Vec<String> {
+        let mut rendered = Vec::new();
+        if let Some(prompt) = self.command_prompt.as_ref() {
+            rendered.push(prompt.clone());
+        }
         if limit == 0 {
-            return Vec::new();
+            return rendered;
         }
 
         let has_current = !self.current_line.trim().is_empty();
         let total = self.total_lines + usize::from(has_current);
         if total == 0 {
-            return Vec::new();
+            return rendered;
         }
 
         let mut truncated = false;
         let mut tail_limit = limit;
+        let mut hidden_lines = 0usize;
         if total > limit {
             truncated = true;
             tail_limit = tail_limit.saturating_sub(1);
+            hidden_lines = total.saturating_sub(tail_limit);
         }
 
         let start = total.saturating_sub(tail_limit);
         let base_index = self.total_lines.saturating_sub(self.lines.len());
-        let mut rendered = Vec::new();
         if truncated {
-            rendered.push("[... truncated ...]".to_string());
+            rendered.push(format_hidden_lines_summary(hidden_lines));
         }
 
         for (idx, line) in self.lines.iter().enumerate() {
@@ -153,6 +161,34 @@ impl PtyStreamState {
     }
 }
 
+fn format_hidden_lines_summary(hidden: usize) -> String {
+    if hidden == 1 {
+        "… +1 line".to_string()
+    } else {
+        format!("… +{} lines", hidden)
+    }
+}
+
+fn normalize_command_prompt(command_prompt: Option<String>) -> Option<String> {
+    command_prompt.and_then(|value| {
+        let collapsed = value.split_whitespace().collect::<Vec<_>>().join(" ");
+        if collapsed.is_empty() {
+            None
+        } else {
+            Some(collapsed)
+        }
+    })
+}
+
+fn format_command_prompt(command: &str) -> String {
+    let trimmed = command.trim_start();
+    if trimmed.starts_with('$') {
+        trimmed.to_string()
+    } else {
+        format!("$ {}", command)
+    }
+}
+
 pub(super) struct PtyStreamRuntime {
     sender: Option<mpsc::UnboundedSender<String>>,
     task: Option<JoinHandle<()>>,
@@ -160,17 +196,26 @@ pub(super) struct PtyStreamRuntime {
 }
 
 impl PtyStreamRuntime {
+    const MAX_LIVE_STREAM_LINES: usize = 12;
+
     pub(super) fn start(
         handle: InlineHandle,
         progress_reporter: ProgressReporter,
         tail_limit: usize,
+        command_prompt: Option<String>,
     ) -> (Self, ToolProgressCallback) {
         let (tx, mut rx) = mpsc::unbounded_channel::<String>();
         let active = Arc::new(AtomicBool::new(true));
         let worker_active = Arc::clone(&active);
+        let effective_tail_limit = tail_limit.clamp(1, Self::MAX_LIVE_STREAM_LINES);
 
         let task = tokio::spawn(async move {
-            let mut state = PtyStreamState::new();
+            let mut state = PtyStreamState::new(command_prompt);
+            let (replace_count, segments, _) = state.render_segments("", effective_tail_limit);
+            if !segments.is_empty() && worker_active.load(Ordering::Relaxed) {
+                handle.replace_last(replace_count, InlineMessageKind::Pty, segments);
+            }
+
             while let Some(output) = rx.recv().await {
                 if !worker_active.load(Ordering::Relaxed) {
                     break;
@@ -185,7 +230,7 @@ impl PtyStreamRuntime {
                 }
 
                 let (replace_count, segments, last_line) =
-                    state.render_segments(&cleaned_output, tail_limit);
+                    state.render_segments(&cleaned_output, effective_tail_limit);
                 if !segments.is_empty() && worker_active.load(Ordering::Relaxed) {
                     handle.replace_last(replace_count, InlineMessageKind::Pty, segments);
                 }
@@ -230,7 +275,7 @@ mod tests {
 
     #[test]
     fn pty_stream_state_streams_incremental_chunks() {
-        let mut state = PtyStreamState::new();
+        let mut state = PtyStreamState::new(None);
         state.apply_chunk("line1\nline2", 5);
         let rendered = state.render_lines(5);
         assert_eq!(rendered, vec!["line1".to_string(), "line2".to_string()]);
@@ -243,7 +288,7 @@ mod tests {
 
     #[test]
     fn pty_stream_state_handles_carriage_return_overwrite() {
-        let mut state = PtyStreamState::new();
+        let mut state = PtyStreamState::new(None);
         state.apply_chunk("start\rreplace\n", 5);
         let rendered = state.render_lines(5);
         assert_eq!(rendered, vec!["replace".to_string()]);
@@ -256,24 +301,57 @@ mod tests {
 
     #[test]
     fn pty_stream_state_applies_tail_truncation() {
-        let mut state = PtyStreamState::new();
+        let mut state = PtyStreamState::new(None);
         state.apply_chunk("a\nb\nc\nd\n", 3);
         let rendered = state.render_lines(3);
         assert_eq!(
             rendered,
+            vec!["… +2 lines".to_string(), "c".to_string(), "d".to_string()]
+        );
+    }
+
+    #[test]
+    fn pty_stream_state_formats_hidden_line_summary() {
+        let mut state = PtyStreamState::new(None);
+        state.apply_chunk("a\nb\nc\n", 2);
+        let rendered = state.render_lines(2);
+        assert_eq!(rendered, vec!["… +2 lines".to_string(), "c".to_string()]);
+    }
+
+    #[test]
+    fn pty_stream_state_deduplicates_consecutive_lines() {
+        let mut state = PtyStreamState::new(None);
+        state.apply_chunk("same\nsame\nnext\n", 5);
+        let rendered = state.render_lines(5);
+        assert_eq!(rendered, vec!["same".to_string(), "next".to_string()]);
+    }
+
+    #[test]
+    fn pty_stream_state_renders_command_prompt_without_output() {
+        let state = PtyStreamState::new(Some("cargo check".to_string()));
+        let rendered = state.render_lines(5);
+        assert_eq!(rendered, vec!["$ cargo check".to_string()]);
+    }
+
+    #[test]
+    fn pty_stream_state_keeps_command_prompt_with_truncated_tail() {
+        let mut state = PtyStreamState::new(Some("cargo check".to_string()));
+        state.apply_chunk("a\nb\nc\n", 2);
+        let rendered = state.render_lines(2);
+        assert_eq!(
+            rendered,
             vec![
-                "[... truncated ...]".to_string(),
-                "c".to_string(),
-                "d".to_string()
+                "$ cargo check".to_string(),
+                "… +2 lines".to_string(),
+                "c".to_string()
             ]
         );
     }
 
     #[test]
-    fn pty_stream_state_deduplicates_consecutive_lines() {
-        let mut state = PtyStreamState::new();
-        state.apply_chunk("same\nsame\nnext\n", 5);
+    fn normalizes_command_prompt_whitespace() {
+        let state = PtyStreamState::new(Some("  cargo   check \n -p  vtcode  ".to_string()));
         let rendered = state.render_lines(5);
-        assert_eq!(rendered, vec!["same".to_string(), "next".to_string()]);
+        assert_eq!(rendered, vec!["$ cargo check -p vtcode".to_string()]);
     }
 }
