@@ -51,7 +51,7 @@ pub const TOOL_LIST_FILES_SUMMARY_MAX_ITEMS: usize = 20;
 /// - Web fetch: Network access restricted in editor context
 /// - Search tools: Integrated into Zed's own search functionality
 /// - Plan mode tools (enter_plan_mode, exit_plan_mode): ACP has native session mode support - see https://agentclientprotocol.com/protocol/session-modes.md
-/// - HITL tools (ask_user_question): ACP has native permission request mechanism
+/// - HITL tools (request_user_input and legacy aliases): ACP has native permission request mechanism
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SupportedTool {
     ReadFile,

@@ -9,7 +9,6 @@ mod incremental_system_prompt;
 mod inline_events;
 mod intent_extractor;
 
-mod ask_user_question;
 mod mcp_support;
 mod mcp_tool_manager;
 mod model_selection;

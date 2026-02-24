@@ -94,23 +94,125 @@ impl ToolExecutionError {
 }
 
 pub fn classify_error(error: &Error) -> ToolErrorType {
-    let error_msg = error.to_string().to_lowercase();
+    let error_msg = error.to_string().to_ascii_lowercase();
 
-    if error_msg.contains("permission") || error_msg.contains("access denied") {
-        ToolErrorType::PermissionDenied
-    } else if error_msg.contains("not found") || error_msg.contains("no such file") {
-        ToolErrorType::ResourceNotFound
-    } else if error_msg.contains("timeout") || error_msg.contains("timed out") {
-        ToolErrorType::Timeout
-    } else if error_msg.contains("network") || error_msg.contains("connection") {
-        ToolErrorType::NetworkError
-    } else if error_msg.contains("invalid") || error_msg.contains("malformed") {
-        ToolErrorType::InvalidParameters
-    } else if error_msg.contains("policy") || error_msg.contains("denied") {
-        ToolErrorType::PolicyViolation
-    } else {
-        ToolErrorType::ExecutionError
+    let policy_markers = [
+        "policy violation",
+        "denied by policy",
+        "tool permission denied",
+        "safety validation failed",
+        "not allowed in plan mode",
+        "only available when plan mode is active",
+        "workspace boundary",
+        "blocked by policy",
+    ];
+    if contains_any(&error_msg, &policy_markers) {
+        return ToolErrorType::PolicyViolation;
     }
+
+    let invalid_markers = [
+        "invalid argument",
+        "invalid parameters",
+        "malformed",
+        "missing required",
+        "schema validation",
+        "argument validation failed",
+        "unknown field",
+        "type mismatch",
+    ];
+    if contains_any(&error_msg, &invalid_markers) {
+        return ToolErrorType::InvalidParameters;
+    }
+
+    let tool_not_found_markers = [
+        "tool not found",
+        "unknown tool",
+        "unsupported tool",
+        "no such tool",
+    ];
+    if contains_any(&error_msg, &tool_not_found_markers) {
+        return ToolErrorType::ToolNotFound;
+    }
+
+    let resource_not_found_markers = [
+        "no such file",
+        "no such directory",
+        "file not found",
+        "directory not found",
+        "resource not found",
+        "path not found",
+        "enoent",
+    ];
+    if contains_any(&error_msg, &resource_not_found_markers) {
+        return ToolErrorType::ResourceNotFound;
+    }
+
+    let permission_markers = [
+        "permission denied",
+        "access denied",
+        "operation not permitted",
+        "eacces",
+        "eperm",
+    ];
+    if contains_any(&error_msg, &permission_markers) {
+        return ToolErrorType::PermissionDenied;
+    }
+
+    let timeout_markers = ["timeout", "timed out", "deadline exceeded"];
+    if contains_any(&error_msg, &timeout_markers) {
+        return ToolErrorType::Timeout;
+    }
+
+    let non_retryable_limit_markers = [
+        "weekly usage limit",
+        "daily usage limit",
+        "monthly spending limit",
+        "insufficient credits",
+        "quota exceeded",
+        "billing",
+        "payment required",
+    ];
+    if contains_any(&error_msg, &non_retryable_limit_markers) {
+        return ToolErrorType::ExecutionError;
+    }
+
+    let network_markers = [
+        "network",
+        "connection",
+        "connection reset",
+        "connection refused",
+        "broken pipe",
+        "dns",
+        "name resolution",
+        "temporary failure in name resolution",
+        "service unavailable",
+        "temporarily unavailable",
+        "internal server error",
+        "bad gateway",
+        "gateway timeout",
+        "rate limit",
+        "too many requests",
+        "429",
+        "500",
+        "502",
+        "503",
+        "504",
+        "upstream connect error",
+        "tls handshake",
+        "socket hang up",
+        "econnreset",
+        "etimedout",
+    ];
+    if contains_any(&error_msg, &network_markers) {
+        return ToolErrorType::NetworkError;
+    }
+
+    ToolErrorType::ExecutionError
+}
+
+#[inline]
+fn contains_any(message: &str, markers: &[&str]) -> bool {
+    markers.iter().any(|marker| message.contains(marker))
 }
 
 // Use static string slices to avoid allocations for recovery suggestions
@@ -181,5 +283,47 @@ fn generate_recovery_info(error_type: ToolErrorType) -> (bool, Vec<Cow<'static, 
                 Cow::Borrowed("Use alternative tools that comply with policies"),
             ],
         ),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use anyhow::anyhow;
+
+    #[test]
+    fn classify_error_marks_rate_limit_as_network_error() {
+        let err = anyhow!("provider returned 429 Too Many Requests");
+        assert!(matches!(classify_error(&err), ToolErrorType::NetworkError));
+    }
+
+    #[test]
+    fn classify_error_marks_service_unavailable_as_network_error() {
+        let err = anyhow!("503 Service Unavailable");
+        assert!(matches!(classify_error(&err), ToolErrorType::NetworkError));
+    }
+
+    #[test]
+    fn classify_error_marks_weekly_usage_limit_as_execution_error() {
+        let err = anyhow!("you have reached your weekly usage limit");
+        assert!(matches!(
+            classify_error(&err),
+            ToolErrorType::ExecutionError
+        ));
+    }
+
+    #[test]
+    fn classify_error_marks_tool_not_found() {
+        let err = anyhow!("unknown tool: ask_questions");
+        assert!(matches!(classify_error(&err), ToolErrorType::ToolNotFound));
+    }
+
+    #[test]
+    fn classify_error_marks_policy_violation_before_permission() {
+        let err = anyhow!("tool permission denied by policy");
+        assert!(matches!(
+            classify_error(&err),
+            ToolErrorType::PolicyViolation
+        ));
     }
 }

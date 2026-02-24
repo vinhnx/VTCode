@@ -165,15 +165,15 @@ Your output must be optimized for agent-to-agent and agent-to-human legibility.
 
 ## Uncertainty Recognition
 
-- When facing ambiguous requirements or unclear scope, ask a clarifying question via `ask_user_question` or `request_user_input` rather than guessing.
+- When facing ambiguous requirements or unclear scope, use `request_user_input` in Plan Mode rather than guessing.
 - Prefer surfacing uncertainty early over delivering a confidently wrong result.
 - If a task has multiple valid interpretations, briefly state your assumption and proceed — but flag it so the user can redirect.
 - This is NOT a contradiction of "Bias for action": proceed when you have a reasonable default; pause when you genuinely don't.
 
 **Proactive Collaboration (HITL)**:
-- When using `ask_user_question`, always propose a recommended path by setting `default_tab_id` and `default_choice_id` based on your analysis.
-- Use `allow_freeform=true` when you believe the user might need to qualify their selection with additional context.
-- Provide descriptive `freeform_placeholder` values to guide the user's input.
+- When using `request_user_input`, provide focused 1-3 questions and place the recommended option first.
+- Prefer one blocking question at a time unless multiple independent decisions are needed.
+- Use stable snake_case `id` values and short `header` labels.
 
 ## Validation & Testing
 
@@ -334,7 +334,7 @@ Preambles: avoid unless needed. Trivial final answers: lead with outcomes, 1-3 s
 - Existing codebases: surgical, respectful. New work: ambitious, creative.
 - Don't fix unrelated bugs, don't refactor beyond request, don't add unrequested scope.
 - Never declare completion without verifying via an execution tool. Beware of overconfidence and "hallucination of verification".
-- When genuinely uncertain about ambiguous requirements, surface the ambiguity early via `ask_user_question` rather than guessing.
+- When genuinely uncertain about ambiguous requirements, use `request_user_input` in Plan Mode rather than guessing.
 
 ## Methodical Approach for Complex Tasks
 
@@ -469,11 +469,14 @@ pub async fn compose_system_instruction_text(
 
     // Select base prompt based on configured mode
     use crate::config::types::SystemPromptMode;
-    let (base_prompt, mode_name) = match vtcode_config.map(|c| c.agent.system_prompt_mode) {
-        Some(SystemPromptMode::Minimal) => (MINIMAL_SYSTEM_PROMPT, "minimal"),
-        Some(SystemPromptMode::Lightweight) => (DEFAULT_LIGHTWEIGHT_PROMPT, "lightweight"),
-        Some(SystemPromptMode::Specialized) => (DEFAULT_SPECIALIZED_PROMPT, "specialized"),
-        Some(SystemPromptMode::Default) | None => (DEFAULT_SYSTEM_PROMPT, "default"),
+    let prompt_mode = vtcode_config
+        .map(|c| c.agent.system_prompt_mode)
+        .unwrap_or(SystemPromptMode::Default);
+    let (base_prompt, mode_name) = match prompt_mode {
+        SystemPromptMode::Minimal => (MINIMAL_SYSTEM_PROMPT, "minimal"),
+        SystemPromptMode::Lightweight => (DEFAULT_LIGHTWEIGHT_PROMPT, "lightweight"),
+        SystemPromptMode::Specialized => (DEFAULT_SPECIALIZED_PROMPT, "specialized"),
+        SystemPromptMode::Default => (DEFAULT_SYSTEM_PROMPT, "default"),
     };
 
     tracing::debug!(
@@ -497,8 +500,10 @@ pub async fn compose_system_instruction_text(
     let estimated_capacity = base_len + config_overhead + instruction_hierarchy_size + 1024; // +512 for enhancements
     let mut instruction = String::with_capacity(estimated_capacity);
     instruction.push_str(base_prompt);
-    instruction.push_str("\n\n");
-    instruction.push_str(STRUCTURED_REASONING_INSTRUCTIONS);
+    if should_include_structured_reasoning(vtcode_config, prompt_mode) {
+        instruction.push_str("\n\n");
+        instruction.push_str(STRUCTURED_REASONING_INSTRUCTIONS);
+    }
 
     // Replace unified tool guidance placeholder with actual constant
     if instruction.contains("__UNIFIED_TOOL_GUIDANCE__") {
@@ -567,11 +572,9 @@ pub async fn compose_system_instruction_text(
         );
 
         if cfg.chat.ask_questions.enabled {
-            instruction.push_str(
-                "- **Ask Questions tool**: Enabled in Plan mode only (`ask_questions` alias for `request_user_input`)\n",
-            );
+            instruction.push_str("- **request_user_input tool**: Enabled in Plan mode only\n");
         } else {
-            instruction.push_str("- **Ask Questions tool**: Disabled\n");
+            instruction.push_str("- **request_user_input tool**: Disabled\n");
         }
 
         if cfg.mcp.enabled {
@@ -667,6 +670,22 @@ pub async fn compose_system_instruction_text(
     }
 
     instruction
+}
+
+fn should_include_structured_reasoning(
+    vtcode_config: Option<&crate::config::VTCodeConfig>,
+    mode: crate::config::types::SystemPromptMode,
+) -> bool {
+    if let Some(cfg) = vtcode_config {
+        return cfg.agent.should_include_structured_reasoning_tags();
+    }
+
+    // Backward-compatible fallback when no config is available.
+    matches!(
+        mode,
+        crate::config::types::SystemPromptMode::Default
+            | crate::config::types::SystemPromptMode::Specialized
+    )
 }
 
 /// Generate system instruction with configuration and AGENTS.md guidelines incorporated
@@ -813,6 +832,9 @@ fn cache_key(project_root: &Path, vtcode_config: Option<&crate::config::VTCodeCo
         cfg.agent.instruction_files.hash(&mut hasher);
         cfg.agent.include_working_directory.hash(&mut hasher);
         cfg.agent.include_temporal_context.hash(&mut hasher);
+        cfg.agent
+            .include_structured_reasoning_tags
+            .hash(&mut hasher);
         // Use discriminant since SystemPromptMode doesn't derive Hash
         std::mem::discriminant(&cfg.agent.system_prompt_mode).hash(&mut hasher);
     } else {
@@ -911,6 +933,60 @@ mod tests {
             result.len() < 4400,
             "Lightweight should be compact (<4.4K chars, was {} chars)",
             result.len()
+        );
+    }
+
+    #[tokio::test]
+    async fn test_lightweight_mode_skips_structured_reasoning_by_default() {
+        let mut config = VTCodeConfig::default();
+        config.agent.system_prompt_mode = SystemPromptMode::Lightweight;
+        config.agent.include_temporal_context = false;
+        config.agent.include_working_directory = false;
+        config.agent.instruction_max_bytes = 0;
+        config.agent.include_structured_reasoning_tags = None;
+
+        let result =
+            compose_system_instruction_text(&PathBuf::from("."), Some(&config), None).await;
+
+        assert!(
+            !result.contains("## Structured Reasoning"),
+            "Lightweight mode should omit structured reasoning by default"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_lightweight_mode_allows_explicit_structured_reasoning() {
+        let mut config = VTCodeConfig::default();
+        config.agent.system_prompt_mode = SystemPromptMode::Lightweight;
+        config.agent.include_temporal_context = false;
+        config.agent.include_working_directory = false;
+        config.agent.instruction_max_bytes = 0;
+        config.agent.include_structured_reasoning_tags = Some(true);
+
+        let result =
+            compose_system_instruction_text(&PathBuf::from("."), Some(&config), None).await;
+
+        assert!(
+            result.contains("## Structured Reasoning"),
+            "Lightweight mode should include structured reasoning when explicitly enabled"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_default_mode_includes_structured_reasoning_by_default() {
+        let mut config = VTCodeConfig::default();
+        config.agent.system_prompt_mode = SystemPromptMode::Default;
+        config.agent.include_temporal_context = false;
+        config.agent.include_working_directory = false;
+        config.agent.instruction_max_bytes = 0;
+        config.agent.include_structured_reasoning_tags = None;
+
+        let result =
+            compose_system_instruction_text(&PathBuf::from("."), Some(&config), None).await;
+
+        assert!(
+            result.contains("## Structured Reasoning"),
+            "Default mode should include structured reasoning by default"
         );
     }
 

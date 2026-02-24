@@ -43,6 +43,8 @@ pub(crate) const WORKSPACE_TRUST_DOWNGRADE_SKIPPED_LOG: &str =
 pub(crate) const TOOLS_EXCLUDED_FROM_ACP: &[&str] = &[
     tools::ENTER_PLAN_MODE,
     tools::EXIT_PLAN_MODE,
+    tools::REQUEST_USER_INPUT,
+    tools::ASK_QUESTIONS,
     tools::ASK_USER_QUESTION,
 ];
 

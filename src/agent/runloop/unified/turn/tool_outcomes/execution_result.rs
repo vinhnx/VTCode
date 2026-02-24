@@ -85,6 +85,129 @@ fn emit_turn_metric_log(
     );
 }
 
+const MAX_ERROR_MESSAGE_CHARS: usize = 420;
+const MAX_FALLBACK_ARGS_PREVIEW_CHARS: usize = 140;
+const MAX_FALLBACK_ARGS_INLINE_CHARS: usize = 240;
+
+fn truncate_text_for_model(value: &str, max_chars: usize) -> (String, bool) {
+    let total_chars = value.chars().count();
+    if total_chars <= max_chars {
+        return (value.to_string(), false);
+    }
+
+    const MARKER: &str = " ... [truncated] ... ";
+    let marker_chars = MARKER.chars().count();
+    if max_chars <= marker_chars + 16 {
+        let mut truncated = value.chars().take(max_chars).collect::<String>();
+        truncated.push_str(" [truncated]");
+        return (truncated, true);
+    }
+
+    let available = max_chars.saturating_sub(marker_chars);
+    let head_chars = (available * 2) / 3;
+    let tail_chars = available.saturating_sub(head_chars);
+    let head = value.chars().take(head_chars).collect::<String>();
+    let tail = value
+        .chars()
+        .skip(total_chars.saturating_sub(tail_chars))
+        .collect::<String>();
+    let mut truncated = String::with_capacity(max_chars + 20);
+    truncated.push_str(&head);
+    truncated.push_str(MARKER);
+    truncated.push_str(&tail);
+    (truncated, true)
+}
+
+fn compact_json_preview(serialized: &str, max_chars: usize) -> String {
+    let (preview, _) = truncate_text_for_model(serialized, max_chars);
+    preview
+}
+
+fn serialize_json_for_model(value: &serde_json::Value) -> String {
+    serde_json::to_string(value).unwrap_or_else(|_| "<invalid-json>".to_string())
+}
+
+fn should_inline_fallback_args(serialized_args: &str) -> bool {
+    serialized_args.chars().count() <= MAX_FALLBACK_ARGS_INLINE_CHARS
+}
+
+fn push_fallback_args(
+    payload: &mut serde_json::Value,
+    args: serde_json::Value,
+    args_preview: &str,
+    inline_full_args: bool,
+) {
+    if let Some(obj) = payload.as_object_mut() {
+        if inline_full_args {
+            obj.insert("fallback_tool_args".to_string(), args);
+        } else {
+            obj.insert(
+                "fallback_tool_args_preview".to_string(),
+                serde_json::Value::String(args_preview.to_string()),
+            );
+            obj.insert(
+                "fallback_tool_args_truncated".to_string(),
+                serde_json::Value::Bool(true),
+            );
+        }
+    }
+}
+
+fn push_error_truncation_flag(payload: &mut serde_json::Value, error_truncated: bool) {
+    if !error_truncated {
+        return;
+    }
+    if let Some(obj) = payload.as_object_mut() {
+        obj.insert("error_truncated".to_string(), serde_json::Value::Bool(true));
+    }
+}
+
+fn fallback_args_preview_and_inline(
+    fallback_tool_args: &Option<serde_json::Value>,
+) -> (Option<String>, bool) {
+    let Some(args) = fallback_tool_args else {
+        return (None, false);
+    };
+    let serialized = serialize_json_for_model(args);
+    let preview = compact_json_preview(&serialized, MAX_FALLBACK_ARGS_PREVIEW_CHARS);
+    (Some(preview), should_inline_fallback_args(&serialized))
+}
+
+fn failure_guidance(
+    error_msg: &str,
+    failure_kind: &'static str,
+) -> (&'static str, bool, &'static str) {
+    if failure_kind == "timeout" {
+        return (
+            "timeout",
+            true,
+            "Retry with a smaller scope or increase timeout budget.",
+        );
+    }
+
+    if check_is_argument_error(error_msg) {
+        return (
+            "invalid_arguments",
+            true,
+            "Fix tool arguments to match the tool schema before retrying.",
+        );
+    }
+
+    if is_blocked_or_denied_failure(error_msg) {
+        return (
+            "policy_blocked",
+            false,
+            "Switch to an allowed tool or mode instead of retrying the same call.",
+        );
+    }
+
+    (
+        "execution_failure",
+        true,
+        "Try an alternative tool path or narrower input scope.",
+    )
+}
+
 /// Build standardized error content for tool failures.
 ///
 /// This is the canonical error content builder used across all tool execution paths.
@@ -94,29 +217,49 @@ pub(crate) fn build_error_content(
     fallback_tool_args: Option<serde_json::Value>,
     failure_kind: &'static str,
 ) -> serde_json::Value {
+    let (error_text, error_truncated) =
+        truncate_text_for_model(&error_msg, MAX_ERROR_MESSAGE_CHARS);
+    let (error_class, is_recoverable, next_action) = failure_guidance(&error_msg, failure_kind);
+    let (args_preview, inline_full_args) = fallback_args_preview_and_inline(&fallback_tool_args);
+
     if let Some(tool) = fallback_tool {
-        let suggestion = if let Some(args) = fallback_tool_args.as_ref() {
-            format!("Try '{}' with args {} as a fallback approach.", tool, args)
+        let suggestion = if let Some(args_preview) = args_preview.as_deref() {
+            format!(
+                "Try '{}' with args {} as a fallback approach.",
+                tool, args_preview
+            )
         } else {
             format!("Try '{}' as a fallback approach.", tool)
         };
         let mut payload = serde_json::json!({
-            "error": error_msg,
+            "error": error_text,
             "failure_kind": failure_kind,
+            "error_class": error_class,
+            "is_recoverable": is_recoverable,
+            "next_action": next_action,
             "fallback_tool": tool,
             "fallback_suggestion": suggestion,
         });
-        if let Some(args) = fallback_tool_args
-            && let Some(obj) = payload.as_object_mut()
-        {
-            obj.insert("fallback_tool_args".to_string(), args);
+        push_error_truncation_flag(&mut payload, error_truncated);
+        if let Some(args) = fallback_tool_args {
+            push_fallback_args(
+                &mut payload,
+                args,
+                args_preview.as_deref().unwrap_or("<invalid-json>"),
+                inline_full_args,
+            );
         }
         payload
     } else {
-        serde_json::json!({
-            "error": error_msg,
+        let mut payload = serde_json::json!({
+            "error": error_text,
             "failure_kind": failure_kind,
-        })
+            "error_class": error_class,
+            "is_recoverable": is_recoverable,
+            "next_action": next_action,
+        });
+        push_error_truncation_flag(&mut payload, error_truncated);
+        payload
     }
 }
 
@@ -649,6 +792,73 @@ mod tests {
         assert_eq!(
             payload.get("fallback_tool_args"),
             Some(&serde_json::json!({"session_id":"run-1"}))
+        );
+        assert_eq!(
+            payload.get("error_class").and_then(|v| v.as_str()),
+            Some("execution_failure")
+        );
+        assert_eq!(
+            payload.get("is_recoverable").and_then(|v| v.as_bool()),
+            Some(true)
+        );
+    }
+
+    #[test]
+    fn build_error_content_truncates_large_errors() {
+        let large_error = format!("Tool failed: {}", "x".repeat(700));
+        let payload = build_error_content(large_error, None, None, "execution");
+
+        assert_eq!(
+            payload.get("error_truncated").and_then(|v| v.as_bool()),
+            Some(true)
+        );
+        let rendered = payload
+            .get("error")
+            .and_then(|v| v.as_str())
+            .expect("error field");
+        assert!(rendered.contains("[truncated]"));
+    }
+
+    #[test]
+    fn build_error_content_marks_policy_denials_non_recoverable() {
+        let payload = build_error_content(
+            "tool permission denied by policy".to_string(),
+            None,
+            None,
+            "execution",
+        );
+
+        assert_eq!(
+            payload.get("error_class").and_then(|v| v.as_str()),
+            Some("policy_blocked")
+        );
+        assert_eq!(
+            payload.get("is_recoverable").and_then(|v| v.as_bool()),
+            Some(false)
+        );
+    }
+
+    #[test]
+    fn build_error_content_compacts_large_fallback_args() {
+        let payload = build_error_content(
+            "boom".to_string(),
+            Some(tool_names::READ_FILE.to_string()),
+            Some(serde_json::json!({"content": "x".repeat(600)})),
+            "execution",
+        );
+
+        assert!(payload.get("fallback_tool_args").is_none());
+        assert_eq!(
+            payload
+                .get("fallback_tool_args_truncated")
+                .and_then(|v| v.as_bool()),
+            Some(true)
+        );
+        assert!(
+            payload
+                .get("fallback_tool_args_preview")
+                .and_then(|v| v.as_str())
+                .is_some()
         );
     }
 

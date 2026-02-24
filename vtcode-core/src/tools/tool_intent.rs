@@ -41,6 +41,7 @@ pub fn classify_tool_intent(tool_name: &str, args: &Value) -> ToolIntent {
             | tools::ENTER_PLAN_MODE
             | tools::EXIT_PLAN_MODE
             | tools::ASK_USER_QUESTION
+            | tools::ASK_QUESTIONS
             | tools::REQUEST_USER_INPUT
             | tools::LIST_SKILLS
             | tools::LOAD_SKILL

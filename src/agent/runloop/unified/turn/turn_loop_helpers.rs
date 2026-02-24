@@ -17,7 +17,7 @@ pub(super) struct PrecomputedTurnConfig {
     pub(super) max_tool_loops: usize,
     pub(super) tool_repeat_limit: usize,
     pub(super) max_session_turns: usize,
-    pub(super) ask_questions_enabled: bool,
+    pub(super) request_user_input_enabled: bool,
 }
 
 #[inline]
@@ -44,7 +44,7 @@ pub(super) fn extract_turn_config(
                 DEFAULT_MAX_REPEATED_TOOL_CALLS
             },
             max_session_turns: cfg.agent.max_conversation_turns,
-            ask_questions_enabled: cfg.chat.ask_questions.enabled,
+            request_user_input_enabled: cfg.chat.ask_questions.enabled,
         })
         .unwrap_or(PrecomputedTurnConfig {
             max_tool_loops: if plan_mode_active {
@@ -54,7 +54,7 @@ pub(super) fn extract_turn_config(
             },
             tool_repeat_limit: DEFAULT_MAX_REPEATED_TOOL_CALLS,
             max_session_turns: DEFAULT_MAX_CONVERSATION_TURNS,
-            ask_questions_enabled: true,
+            request_user_input_enabled: true,
         })
 }
 

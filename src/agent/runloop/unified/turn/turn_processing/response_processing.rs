@@ -15,7 +15,7 @@ pub(crate) fn process_llm_response(
     conversation_len: usize,
     plan_mode_active: bool,
     allow_plan_interview: bool,
-    ask_questions_enabled: bool,
+    request_user_input_enabled: bool,
     validation_cache: Option<
         &std::sync::Arc<vtcode_core::tools::validation_cache::ValidationCache>,
     >,
@@ -105,7 +105,7 @@ pub(crate) fn process_llm_response(
 
     if !interpreted_textual_call
         && allow_plan_interview
-        && ask_questions_enabled
+        && request_user_input_enabled
         && tool_calls.is_empty()
         && let Some(text) = final_text.clone()
         && let Some(args) = build_interview_args_from_text(&text)
@@ -114,7 +114,7 @@ pub(crate) fn process_llm_response(
         let call_id = format!("call_interview_{}", conversation_len);
         tool_calls.push(uni::ToolCall::function(
             call_id.clone(),
-            tools::ASK_QUESTIONS.to_string(),
+            tools::REQUEST_USER_INPUT.to_string(),
             args_json,
         ));
         interpreted_textual_call = true;
@@ -631,7 +631,10 @@ Open questions for alignment:
                     .and_then(|call| call.function.as_ref())
                     .map(|f| f.name.as_str())
                     .expect("function name expected");
-                assert_eq!(name, vtcode_core::config::constants::tools::ASK_QUESTIONS);
+                assert_eq!(
+                    name,
+                    vtcode_core::config::constants::tools::REQUEST_USER_INPUT
+                );
             }
             _ => panic!("Expected tool calls"),
         }

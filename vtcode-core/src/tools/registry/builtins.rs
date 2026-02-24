@@ -2,7 +2,6 @@ use std::path::PathBuf;
 
 use crate::config::constants::tools;
 use crate::config::types::CapabilityLevel;
-use crate::tools::ask_user_question::AskUserQuestionTool;
 use crate::tools::handlers::{
     EnterPlanModeTool, ExitPlanModeTool, PlanModeState, PlanTaskTrackerTool, TaskTrackerTool,
 };
@@ -38,17 +37,15 @@ pub(super) fn builtin_tool_registrations(
         // HUMAN-IN-THE-LOOP (HITL)
         // ============================================================
         ToolRegistration::from_tool_instance(
-            tools::ASK_USER_QUESTION,
-            CapabilityLevel::Basic,
-            AskUserQuestionTool,
-        )
-        .with_llm_visibility(false),
-        ToolRegistration::from_tool_instance(
             tools::REQUEST_USER_INPUT,
             CapabilityLevel::Basic,
             RequestUserInputTool,
         )
-        .with_aliases([tools::ASK_QUESTIONS, "askQuestions"]),
+        .with_aliases([
+            tools::ASK_QUESTIONS,
+            "askQuestions",
+            tools::ASK_USER_QUESTION,
+        ]),
         // ============================================================
         // PLAN MODE (enter/exit)
         // ============================================================

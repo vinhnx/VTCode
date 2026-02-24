@@ -253,7 +253,7 @@ fn inject_plan_mode_interview(
     let args = default_plan_mode_interview_args();
     let args_json = serde_json::to_string(&args).unwrap_or_else(|_| "{}".to_string());
     let call_id = format!("call_plan_interview_{}", conversation_len);
-    let call = uni::ToolCall::function(call_id, tools::ASK_QUESTIONS.to_string(), args_json);
+    let call = uni::ToolCall::function(call_id, tools::REQUEST_USER_INPUT.to_string(), args_json);
 
     session_stats.mark_plan_mode_interview_shown();
 
@@ -328,7 +328,7 @@ fn filter_interview_tool_calls(
             .map(|func| {
                 matches!(
                     func.name.as_str(),
-                    tools::ASK_QUESTIONS | tools::REQUEST_USER_INPUT
+                    tools::ASK_QUESTIONS | tools::REQUEST_USER_INPUT | tools::ASK_USER_QUESTION
                 )
             })
             .unwrap_or(false);

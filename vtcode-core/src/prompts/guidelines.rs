@@ -110,7 +110,7 @@ pub fn generate_tool_guidelines(
              same operation. Instead: (1) Acknowledge the issue to the user, (2) Diagnose the root \
              cause, (3) Re-plan into smaller composable slices with expected outcome + verification \
              (use `task_tracker` when available), (4) Execute one slice and verify before the next. \
-             Never retry the same tool call more than 2-3 times with identical or similar arguments."
+             Avoid repeated calls with identical arguments; change approach immediately after a failed repeat."
                 .to_string(),
         );
     }

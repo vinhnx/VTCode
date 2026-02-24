@@ -24,6 +24,10 @@ struct UnsafeSendContext {
 unsafe impl Send for UnsafeSendContext {}
 unsafe impl Sync for UnsafeSendContext {}
 
+fn contains_any(message: &str, markers: &[&str]) -> bool {
+    markers.iter().any(|marker| message.contains(marker))
+}
+
 fn is_retryable_llm_error(message: &str) -> bool {
     let msg = message.to_ascii_lowercase();
     let non_retryable = [
@@ -32,25 +36,33 @@ fn is_retryable_llm_error(message: &str) -> bool {
         "unauthorized",
         "forbidden",
         "permission denied",
+        "usage limit",
+        "weekly usage limit",
+        "daily usage limit",
         "monthly spending limit",
         "insufficient credits",
         "quota exceeded",
         "billing",
         "payment required",
         "bad request",
+        "context length exceeded",
+        "maximum context length",
+        "token limit exceeded",
+        "invalid request",
         "400",
         "401",
         "403",
         "404",
-        "not found",
         "model not found",
+        "endpoint not found",
     ];
-    if non_retryable.iter().any(|needle| msg.contains(needle)) {
+    if contains_any(&msg, &non_retryable) {
         return false;
     }
 
-    [
+    let retryable = [
         "rate limit",
+        "too many requests",
         "timeout",
         "timed out",
         "429",
@@ -58,12 +70,24 @@ fn is_retryable_llm_error(message: &str) -> bool {
         "500",
         "502",
         "503",
+        "504",
+        "bad gateway",
+        "gateway timeout",
         "service unavailable",
+        "temporarily unavailable",
+        "overloaded",
+        "try again",
+        "retry later",
+        "connection reset",
+        "connection refused",
         "connection",
+        "socket hang up",
+        "econnreset",
+        "etimedout",
+        "deadline exceeded",
         "network",
-    ]
-    .iter()
-    .any(|needle| msg.contains(needle))
+    ];
+    contains_any(&msg, &retryable)
 }
 
 fn supports_streaming_timeout_fallback(provider_name: &str) -> bool {
@@ -94,6 +118,129 @@ fn llm_attempt_timeout_secs(turn_timeout_secs: u64, plan_mode: bool, provider_na
     baseline.max(plan_mode_budget)
 }
 
+fn compact_error_message(message: &str, max_chars: usize) -> String {
+    if message.chars().count() <= max_chars {
+        return message.to_string();
+    }
+    let mut preview = message.chars().take(max_chars).collect::<String>();
+    preview.push_str("... [truncated]");
+    preview
+}
+
+fn emit_tool_catalog_cache_metrics(
+    ctx: &TurnProcessingContext<'_>,
+    step_count: usize,
+    model: &str,
+    cache_hit: bool,
+    plan_mode: bool,
+    request_user_input_enabled: bool,
+    available_tools: usize,
+) {
+    tracing::info!(
+        target: "vtcode.turn.metrics",
+        metric = "tool_catalog_cache",
+        run_id = %ctx.harness_state.run_id.0,
+        turn_id = %ctx.harness_state.turn_id.0,
+        turn = step_count,
+        model,
+        cache_hit,
+        plan_mode,
+        request_user_input_enabled,
+        available_tools,
+        "turn metric"
+    );
+
+    #[derive(serde::Serialize)]
+    struct ToolCatalogCacheRecord<'a> {
+        kind: &'static str,
+        turn: usize,
+        model: &'a str,
+        cache_hit: bool,
+        plan_mode: bool,
+        request_user_input_enabled: bool,
+        available_tools: usize,
+        ts: i64,
+    }
+
+    ctx.traj.log(&ToolCatalogCacheRecord {
+        kind: "tool_catalog_cache_metrics",
+        turn: step_count,
+        model,
+        cache_hit,
+        plan_mode,
+        request_user_input_enabled,
+        available_tools,
+        ts: chrono::Utc::now().timestamp(),
+    });
+}
+
+#[allow(clippy::too_many_arguments)]
+fn emit_llm_retry_metrics(
+    ctx: &TurnProcessingContext<'_>,
+    step_count: usize,
+    model: &str,
+    plan_mode: bool,
+    attempts_made: usize,
+    max_retries: usize,
+    success: bool,
+    stream_fallback_used: bool,
+    last_error_retryable: Option<bool>,
+    last_error_preview: Option<&str>,
+) {
+    let retries_used = attempts_made.saturating_sub(1);
+    let exhausted_retry_budget = !success && attempts_made >= max_retries;
+    tracing::info!(
+        target: "vtcode.turn.metrics",
+        metric = "llm_retry_outcome",
+        run_id = %ctx.harness_state.run_id.0,
+        turn_id = %ctx.harness_state.turn_id.0,
+        turn = step_count,
+        model,
+        plan_mode,
+        attempts_made,
+        retries_used,
+        max_retries,
+        success,
+        exhausted_retry_budget,
+        stream_fallback_used,
+        last_error_retryable = last_error_retryable.unwrap_or(false),
+        "turn metric"
+    );
+
+    #[derive(serde::Serialize)]
+    struct LlmRetryMetricsRecord<'a> {
+        kind: &'static str,
+        turn: usize,
+        model: &'a str,
+        plan_mode: bool,
+        attempts_made: usize,
+        retries_used: usize,
+        max_retries: usize,
+        success: bool,
+        exhausted_retry_budget: bool,
+        stream_fallback_used: bool,
+        last_error_retryable: Option<bool>,
+        last_error: Option<&'a str>,
+        ts: i64,
+    }
+
+    ctx.traj.log(&LlmRetryMetricsRecord {
+        kind: "llm_retry_metrics",
+        turn: step_count,
+        model,
+        plan_mode,
+        attempts_made,
+        retries_used,
+        max_retries,
+        success,
+        exhausted_retry_budget,
+        stream_fallback_used,
+        last_error_retryable,
+        last_error: last_error_preview,
+        ts: chrono::Utc::now().timestamp(),
+    });
+}
+
 /// Execute an LLM request and return the response.
 pub(crate) async fn execute_llm_request(
     ctx: &mut TurnProcessingContext<'_>,
@@ -104,6 +251,11 @@ pub(crate) async fn execute_llm_request(
 ) -> Result<(uni::LLMResponse, bool)> {
     let provider_name = ctx.provider_client.name().to_string();
     let plan_mode = ctx.session_stats.is_plan_mode();
+    let request_user_input_enabled = ctx
+        .vt_cfg
+        .as_ref()
+        .map(|cfg| cfg.chat.ask_questions.enabled)
+        .unwrap_or(true);
     let context_window_size = ctx.provider_client.effective_context_size(active_model);
     let turn_timeout_secs = ctx
         .vt_cfg
@@ -155,11 +307,24 @@ pub(crate) async fn execute_llm_request(
         Some(0.7)
     };
 
-    let current_tools = ctx.tool_catalog.sorted_snapshot(ctx.tools).await;
+    let tool_snapshot = ctx
+        .tool_catalog
+        .filtered_snapshot_with_stats(ctx.tools, plan_mode, request_user_input_enabled)
+        .await;
+    let current_tools = tool_snapshot.snapshot;
     let openai_prompt_cache_enabled = provider_name.eq_ignore_ascii_case("openai")
         && ctx.config.prompt_cache.enabled
         && ctx.config.prompt_cache.providers.openai.enabled;
     let has_tools = current_tools.is_some();
+    emit_tool_catalog_cache_metrics(
+        ctx,
+        step_count,
+        active_model,
+        tool_snapshot.cache_hit,
+        plan_mode,
+        request_user_input_enabled,
+        current_tools.as_ref().map_or(0, |defs| defs.len()),
+    );
     if let Some(defs) = current_tools.as_ref()
         && !openai_prompt_cache_enabled
     {
@@ -231,11 +396,16 @@ pub(crate) async fn execute_llm_request(
 
     const MAX_RETRIES: usize = 3;
     let mut llm_result = Err(anyhow::anyhow!("LLM request failed to execute"));
+    let mut attempts_made = 0usize;
+    let mut stream_fallback_used = false;
+    let mut last_error_retryable: Option<bool> = None;
+    let mut last_error_preview: Option<String> = None;
 
     #[cfg(debug_assertions)]
     let mut request_timer = Instant::now();
 
     for attempt in 0..MAX_RETRIES {
+        attempts_made = attempt + 1;
         if attempt > 0 {
             use crate::agent::runloop::unified::turn::turn_helpers::calculate_backoff;
             let delay = calculate_backoff(attempt - 1, 500, 10_000);
@@ -432,6 +602,8 @@ pub(crate) async fn execute_llm_request(
             Err(err) => {
                 let msg = err.to_string();
                 let is_retryable = is_retryable_llm_error(&msg);
+                last_error_retryable = Some(is_retryable);
+                last_error_preview = Some(compact_error_message(&msg, 180));
 
                 if !crate::agent::runloop::unified::turn::turn_helpers::should_continue_operation(
                     ctx.ctrl_c_state,
@@ -447,6 +619,7 @@ pub(crate) async fn execute_llm_request(
                         && is_stream_timeout_error(&msg)
                     {
                         use_streaming = false;
+                        stream_fallback_used = true;
                         crate::agent::runloop::unified::turn::turn_helpers::display_status(
                             ctx.renderer,
                             "Streaming timed out; retrying with non-streaming for this provider.",
@@ -475,6 +648,27 @@ pub(crate) async fn execute_llm_request(
             "Provider request finished"
         );
     }
+
+    if attempts_made == 0 {
+        attempts_made = 1;
+    }
+    if last_error_preview.is_none()
+        && let Err(err) = &llm_result
+    {
+        last_error_preview = Some(compact_error_message(&err.to_string(), 180));
+    }
+    emit_llm_retry_metrics(
+        ctx,
+        step_count,
+        active_model,
+        plan_mode,
+        attempts_made,
+        MAX_RETRIES,
+        llm_result.is_ok(),
+        stream_fallback_used,
+        last_error_retryable,
+        last_error_preview.as_deref(),
+    );
 
     let (response, response_streamed) = match llm_result {
         Ok(result) => result,
@@ -545,6 +739,23 @@ mod tests {
     fn retryable_llm_error_includes_rate_limit_429() {
         assert!(is_retryable_llm_error(
             "Provider error: 429 Too Many Requests"
+        ));
+    }
+
+    #[test]
+    fn retryable_llm_error_includes_service_unavailable_class() {
+        assert!(is_retryable_llm_error(
+            "Provider error: 503 Service Unavailable"
+        ));
+        assert!(is_retryable_llm_error(
+            "Provider error: 504 Gateway Timeout"
+        ));
+    }
+
+    #[test]
+    fn retryable_llm_error_excludes_usage_limit_messages() {
+        assert!(!is_retryable_llm_error(
+            "Provider error: you have reached your weekly usage limit"
         ));
     }
 
