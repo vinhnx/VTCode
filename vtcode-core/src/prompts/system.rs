@@ -47,7 +47,6 @@ use tracing::warn;
 /// Unified tool guidance referenced by all prompt variants to reduce duplication
 const UNIFIED_TOOL_GUIDANCE: &str = r#"**Search & exploration**:
 - Prefer `unified_search` (action='grep') for fast searches over repeated `read` calls
-- Use `unified_search` (action='intelligence') for semantic queries
 - Read complete files once; don't re-invoke `read` on same file
 - For spooled outputs, advance `read_file`/`unified_file` offsets; never repeat identical chunk args
 - If 2+ chunk reads stall progress, switch to `grep_file`/`unified_search` and summarize before more reads

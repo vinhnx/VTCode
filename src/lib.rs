@@ -1,7 +1,7 @@
 //! # VT Code - Terminal Coding Agent
 //!
 //! VT Code is a Rust-based terminal coding agent that pairs a streamlined
-//! crossterm-powered interface with semantic code understanding backed by tree-sitter.
+//! crossterm-powered interface with LLM-native code understanding and robust shell safety.
 //! It is designed for developers who need precise context handling,
 //! secure tool execution, and configurable multi-provider AI workflows.
 //!
@@ -9,8 +9,10 @@
 //!
 //! - **Multi-provider agent**: integrations for OpenAI, Anthropic, xAI,
 //!   DeepSeek, Gemini, OpenRouter, and Ollama (local) with automatic failover and spend guards.
-//! - **Semantic code intelligence**: tree-sitter parsers for Rust, Python,
-//!   JavaScript, TypeScript, Go, and Java.
+//! - **Semantic code understanding**: LLM-native code analysis and navigation (Rust, Python,
+//!   JavaScript, TypeScript, Go, Java, and more) without the need for local grammar libraries.
+//! - **Bash shell safety**: tree-sitter-bash integration for critical command validation
+//!   and security enforcement.
 //! - **Modern terminal experience**: inline renderer with streaming PTY output,
 //!   slash commands, and customizable Ciapre-inspired theming.
 //! - **Workspace-aware automation**: git-aware fuzzy navigation, workspace
@@ -56,7 +58,7 @@
 //! VT Code separates reusable library components from the CLI entrypoint:
 //!
 //! - `vtcode-core/` exposes the agent runtime, provider abstractions (`llm/`),
-//!   tool registry (`tools/`), configuration loaders, and tree-sitter
+//!   tool registry (`tools/`), configuration loaders, and shell safety
 //!   integrations orchestrated with Tokio.
 //! - `src/main.rs` embeds the inline UI, Clap-based CLI, and runtime wiring.
 //! - MCP (Model Context Protocol) tools provide contextual resources (e.g.

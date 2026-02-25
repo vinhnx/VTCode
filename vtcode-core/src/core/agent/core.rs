@@ -14,9 +14,8 @@ use crate::core::decision_tracker::DecisionTracker;
 use crate::core::error_recovery::{ErrorRecoveryManager, ErrorType};
 use crate::llm::AnyClient;
 use crate::tools::ToolRegistry;
-use crate::tools::tree_sitter::{CodeAnalysis, TreeSitterAnalyzer};
 use crate::utils::colors::style;
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
@@ -29,7 +28,6 @@ pub struct Agent {
     decision_tracker: DecisionTracker,
     error_recovery: ErrorRecoveryManager,
 
-    tree_sitter_analyzer: TreeSitterAnalyzer,
     session_info: SessionInfo,
     start_time: std::time::Instant,
 }
@@ -57,7 +55,6 @@ impl Agent {
             optimization_config,
             decision_tracker: components.decision_tracker,
             error_recovery: components.error_recovery,
-            tree_sitter_analyzer: components.tree_sitter_analyzer,
             session_info: components.session_info,
             start_time: std::time::Instant::now(),
         }
@@ -83,7 +80,6 @@ impl Agent {
             optimization_config,
             decision_tracker: components.decision_tracker,
             error_recovery: components.error_recovery,
-            tree_sitter_analyzer: components.tree_sitter_analyzer,
             session_info: components.session_info,
             start_time: std::time::Instant::now(),
         }
@@ -227,67 +223,6 @@ impl Agent {
     /// Get model-agnostic client reference
     pub fn llm(&self) -> &AnyClient {
         &self.client
-    }
-
-    /// Get tree-sitter analyzer reference
-    pub fn tree_sitter_analyzer(&self) -> &TreeSitterAnalyzer {
-        &self.tree_sitter_analyzer
-    }
-
-    /// Get mutable tree-sitter analyzer reference
-    pub fn tree_sitter_analyzer_mut(&mut self) -> &mut TreeSitterAnalyzer {
-        &mut self.tree_sitter_analyzer
-    }
-
-    /// Analyze a file using tree-sitter
-    pub fn analyze_file_with_tree_sitter(
-        &mut self,
-        file_path: &std::path::Path,
-        source_code: &str,
-    ) -> Result<CodeAnalysis> {
-        // Detect language from file extension
-        let language = self
-            .tree_sitter_analyzer
-            .detect_language_from_path(file_path)
-            .map_err(|e| {
-                anyhow!(
-                    "Failed to detect language for {}: {}",
-                    file_path.display(),
-                    e
-                )
-            })?;
-
-        // Parse the file
-        let syntax_tree = self.tree_sitter_analyzer.parse(source_code, language)?;
-
-        // Extract symbols
-        let symbols = self
-            .tree_sitter_analyzer
-            .extract_symbols(&syntax_tree, source_code, language)
-            .unwrap_or_default();
-
-        // Extract dependencies
-        let dependencies = self
-            .tree_sitter_analyzer
-            .extract_dependencies(&syntax_tree, language)
-            .unwrap_or_default();
-
-        // Calculate metrics
-        let metrics = self
-            .tree_sitter_analyzer
-            .calculate_metrics(&syntax_tree, source_code)
-            .unwrap_or_default();
-
-        Ok(CodeAnalysis {
-            file_path: file_path.to_string_lossy().into_owned(),
-            language,
-            symbols,
-            dependencies,
-            metrics,
-            issues: Vec::new(),
-            complexity: crate::tools::tree_sitter::analysis::ComplexityMetrics::default(),
-            structure: crate::tools::tree_sitter::analysis::CodeStructure::default(),
-        })
     }
 
     /// Update session statistics

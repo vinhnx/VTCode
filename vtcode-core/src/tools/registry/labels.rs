@@ -11,7 +11,6 @@ pub fn tool_action_label(tool_name: &str, args: &Value) -> String {
         name if name == tool_names::EXECUTE_CODE => "Run code".to_string(),
         name if name == tool_names::LIST_FILES => "List files".to_string(),
         name if name == tool_names::GREP_FILE => "Search text".to_string(),
-        name if name == tool_names::CODE_INTELLIGENCE => "Code intelligence".to_string(),
         name if name == tool_names::SEARCH_TOOLS => "List tools".to_string(),
         name if name == tool_names::GET_ERRORS => "List errors".to_string(),
         name if name == tool_names::AGENT_INFO => "Show agent info".to_string(),

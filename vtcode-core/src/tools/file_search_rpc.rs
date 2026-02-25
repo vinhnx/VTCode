@@ -286,7 +286,6 @@ impl FileSearchRpcHandler {
         let _symbol: String = serde_json::from_value(params.clone())
             .context("Failed to parse find_references parameters")?;
 
-        // Future: Integrate with code_intelligence tool for proper symbol analysis
         Ok(json!({
             "matches": [],
             "message": "find_references not yet implemented",

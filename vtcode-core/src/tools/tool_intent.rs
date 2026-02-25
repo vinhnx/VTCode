@@ -35,7 +35,6 @@ pub fn classify_tool_intent(tool_name: &str, args: &Value) -> ToolIntent {
             tools::READ_FILE
             | tools::LIST_FILES
             | tools::GREP_FILE
-            | tools::CODE_INTELLIGENCE
             | tools::UNIFIED_SEARCH
             | tools::AGENT_INFO
             | tools::ENTER_PLAN_MODE

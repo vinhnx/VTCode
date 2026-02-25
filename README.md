@@ -6,7 +6,7 @@
 
 ---
 
-<strong>VT Code</strong> is an open-source coding agent, with semantic code intelligence via Tree-sitter. Supports multiple LLM providers with automatic failover and efficient context management.
+<strong>VT Code</strong> is an open-source coding agent with LLM-native code understanding and robust shell safety. Supports multiple LLM providers with automatic failover and efficient context management.
 
 <p align="center">
   <img src="./resources/gif/vtcode.gif" alt="VT Code" />
@@ -147,9 +147,9 @@ VT Code follows the [Command Line Interface Guidelines](https://clig.dev/) and s
 
 ### Key Features
 
-- **Security First**: Multi-layered security model with execution policy, tool policies, and argument injection protection
+- **Security First**: Multi-layered security model with tree-sitter-bash command validation, execution policy, and sandbox isolation
 - **Multi-Provider AI**: OpenAI, Anthropic, xAI, DeepSeek, Gemini, Z.AI, Moonshot AI, OpenRouter, MiniMax, Ollama (local)
-- **Code Intelligence**: Tree-sitter powered code navigation with go-to-definition, find-references, hover, and symbol search (Rust, Python, JavaScript/TypeScript, Go, Java, Swift, Bash)
+- **Semantic Code Understanding**: LLM-native code analysis and navigation (Rust, Python, JavaScript/TypeScript, Go, Java, and more)
 - **Smart Tools**: Built-in code analysis, file operations, terminal commands, and refactoring
 - **Agent Skills**: Comprehensive skills location system with multi-location support and precedence handling, aligned with the [open Agent Skills standard](http://agentskills.io/) ([docs](./docs/SKILLS_GUIDE.md))
 - **Subagents**: Delegate tasks to specialized agents (explore/plan/general/code-reviewer/debugger) via `spawn_subagent`; see [docs/subagents/SUBAGENTS.md](./docs/subagents/SUBAGENTS.md)

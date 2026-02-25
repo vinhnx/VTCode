@@ -1,5 +1,18 @@
-use crate::tools::tree_sitter::LanguageSupport;
 use std::collections::HashMap;
+
+/// Supported language for linting tools
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LanguageSupport {
+    Rust,
+    Python,
+    JavaScript,
+    TypeScript,
+    Go,
+    Java,
+    Bash,
+    Swift,
+}
+
 
 /// Linting tool configuration
 #[derive(Debug, Clone)]

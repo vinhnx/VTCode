@@ -40,13 +40,9 @@ pub fn render_pty_output_fn(output: &str, title: &str, command: Option<&str>) ->
     Ok(())
 }
 
-/// Summarize workspace languages
+/// Summarize workspace languages using file extension heuristics
 pub fn summarize_workspace_languages(root: &std::path::Path) -> Option<String> {
     use indexmap::IndexMap;
-    let analyzer = match crate::tools::tree_sitter::analyzer::TreeSitterAnalyzer::new() {
-        Ok(a) => a,
-        Err(_) => return None,
-    };
     let mut counts: IndexMap<String, usize> = IndexMap::new();
     let mut total = 0usize;
     for entry in walkdir::WalkDir::new(root)
@@ -55,11 +51,26 @@ pub fn summarize_workspace_languages(root: &std::path::Path) -> Option<String> {
         .filter_map(|e| e.ok())
     {
         let path = entry.path();
-        if path.is_file()
-            && let Ok(lang) = analyzer.detect_language_from_path(path)
-        {
-            *counts.entry(format!("{:?}", lang)).or_insert(0) += 1;
-            total += 1;
+        if path.is_file() {
+            if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+                let lang = match ext {
+                    "rs" => "Rust",
+                    "py" => "Python",
+                    "js" | "jsx" => "JavaScript",
+                    "ts" | "tsx" => "TypeScript",
+                    "go" => "Go",
+                    "java" => "Java",
+                    "sh" | "bash" => "Bash",
+                    "swift" => "Swift",
+                    "c" | "h" => "C",
+                    "cpp" | "cc" | "cxx" | "hpp" => "C++",
+                    "rb" => "Ruby",
+                    "php" => "PHP",
+                    _ => continue,
+                };
+                *counts.entry(lang.to_string()).or_insert(0) += 1;
+                total += 1;
+            }
         }
         if total > 5000 {
             break;

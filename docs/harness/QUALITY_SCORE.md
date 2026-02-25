@@ -177,22 +177,22 @@ Last reviewed: 2026-02-16
 
 ---
 
-## Tree-Sitter / Code Intelligence
+## Optimized Code Understanding & Bash Safety
 
-**Scope**: `vtcode-indexer/`, `vtcode-core/src/tree_sitter/`
-**Related debt**: TD-009 (resolved)
+**Scope**: `vtcode-indexer/`, `vtcode-core/src/command_safety/`
+**Related debt**: none open
 
-| Dimension        | Grade | Evidence / Notes                                                                                                |
-| ---------------- | ----- | --------------------------------------------------------------------------------------------------------------- |
-| Test Coverage    | B     | Language parsing and code-intelligence operations have test coverage.                                           |
-| API Stability    | B     | Operation APIs and caching approach are stable.                                                                 |
-| Agent Legibility | B     | Operation dispatch and language extension patterns are understandable.                                          |
-| Error Handling   | B     | Parser unavailability fallbacks are handled gracefully.                                                         |
-| Documentation    | B     | `docs/LANGUAGE_SUPPORT.md` now documents the language support matrix; `docs/vtcode_indexer.md` remains concise. |
+| Dimension        | Grade | Evidence / Notes                                                                                                                                                            |
+| ---------------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Test Coverage    | B+    | Critical bash command parsing has high test coverage. LLM-native understanding is empirically validated via evals.                                                         |
+| API Stability    | A     | Shift to LLM-native understanding simplified the system and removed heavy grammar dependencies.                                                                             |
+| Agent Legibility | A     | Unified tool guidance clearly explains the shift to LLM-native semantic analysis and the importance of bash safety.                                                         |
+| Error Handling   | B+    | Robust fallbacks for unparseable shell commands; LLM handles syntax errors in general programming languages.                                                                |
+| Documentation    | B+    | `docs/LANGUAGE_SUPPORT.md` and `docs/user-guide/tree-sitter-integration.md` updated to reflect the new architecture.                                                        |
 
-**Overall: B**
-**Priority action**: expand indexer docs with additional operational examples and troubleshooting paths.
-**Verify**: `rg --line-number \"^#|^##\" docs/vtcode_indexer.md docs/LANGUAGE_SUPPORT.md`
+**Overall: B+**
+**Priority action**: expand bash safety tests with more complex obfuscation patterns and edge-case shell syntax.
+**Verify**: `cargo nextest run -p vtcode-core --test shell_parser_tests`
 
 ---
 
@@ -226,6 +226,6 @@ Last reviewed: 2026-02-16
 | MCP Integration | B+      | Complete OAuth and lifecycle negative-path tests.                          | active improvement |
 | Subagent System | B       | Add custom-loading and isolation tests.                                    | active improvement |
 | PTY/Exec        | B       | Expand PTY regression coverage for shell-init and cross-platform behavior. | active improvement |
-| Tree-Sitter     | B       | Deepen operational docs beyond support matrix.                             | maintenance        |
-| TUI             | B       | Add higher-level integration tests for modal flows and queue editing.      | active improvement |
-| Documentation   | B       | Burn down top-level docs allowlist through ongoing consolidation/archival. | active improvement |
+| Tree-Sitter / Safety | B+      | Expand bash safety tests with obfuscation patterns.                       | maintenance        |
+| TUI                 | B       | Add higher-level integration tests for modal flows and queue editing.      | active improvement |
+| Documentation       | B       | Burn down top-level docs allowlist through ongoing consolidation/archival. | active improvement |

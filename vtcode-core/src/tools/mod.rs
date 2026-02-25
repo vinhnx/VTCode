@@ -52,8 +52,6 @@
 //! - **Command Policies**: Safety and execution controls
 //!
 //! #### Code Analysis
-//! - **Tree-Sitter**: Syntax-aware code analysis
-//!
 //! ## Tool Execution
 //!
 //! ```rust,no_run
@@ -122,7 +120,6 @@
 
 pub mod apply_patch;
 pub mod builder;
-pub mod code_intelligence;
 pub mod constants;
 pub mod error_messages;
 pub mod request_user_input;
@@ -167,7 +164,6 @@ pub mod terminal_app;
 pub mod tool_effectiveness;
 pub mod tool_intent;
 pub mod traits;
-pub mod tree_sitter;
 pub mod types;
 pub mod validation;
 pub mod validation_cache;
@@ -210,7 +206,6 @@ pub use async_pipeline::{
 };
 pub use autonomous_executor::{AutonomousExecutor, AutonomousPolicy};
 pub use cache::FileCache;
-pub use code_intelligence::{CodeIntelligenceInput, CodeIntelligenceOutput, CodeIntelligenceTool};
 pub use command_cache::PermissionCache;
 pub use command_resolver::CommandResolver;
 pub use editing::{Patch, PatchError, PatchHunk, PatchLine, PatchOperation};

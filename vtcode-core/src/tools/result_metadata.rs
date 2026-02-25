@@ -359,50 +359,6 @@ impl ResultScorer for FindScorer {
     }
 }
 
-/// Scorer for tree-sitter parsing results
-pub struct TreeSitterScorer;
-
-impl ResultScorer for TreeSitterScorer {
-    fn score(&self, result: &Value) -> ResultMetadata {
-        let mut metadata = ResultMetadata {
-            content_types: vec!["code".to_string(), "ast".to_string()],
-            ..ResultMetadata::default()
-        };
-
-        match result {
-            Value::Object(map) => {
-                // Tree-sitter results are highly structured
-                metadata.confidence = 0.95;
-                metadata.relevance = 0.85;
-
-                if let Some(nodes) = map.get("nodes")
-                    && let Some(arr) = nodes.as_array()
-                {
-                    metadata.result_count = arr.len();
-                }
-
-                metadata.completeness = if metadata.result_count > 0 {
-                    ResultCompleteness::Complete
-                } else {
-                    ResultCompleteness::Empty
-                };
-
-                // Very low false positive likelihood
-                metadata.false_positive_likelihood = 0.01;
-            }
-            _ => {
-                metadata = ResultMetadata::error();
-            }
-        }
-
-        metadata
-    }
-
-    fn tool_name(&self) -> &str {
-        "tree_sitter_query"
-    }
-}
-
 /// Scorer for shell command results
 pub struct ShellScorer;
 
@@ -458,10 +414,6 @@ impl ScorerRegistry {
         scorers.insert(
             "find".to_string(),
             Box::new(FindScorer) as Box<dyn ResultScorer>,
-        );
-        scorers.insert(
-            "tree_sitter_query".to_string(),
-            Box::new(TreeSitterScorer) as Box<dyn ResultScorer>,
         );
         scorers.insert(
             "shell".to_string(),

@@ -13,7 +13,6 @@ The agent should primarily use these 3 unified tools, which handle multiple acti
 - **Primary Actions**:
   - `action='grep'` - Regex/literal search in files
   - `action='list'` - List files and directories
-  - `action='intelligence'` - Tree-sitter code navigation (goto_definition, find_references, hover)
   - `action='tools'` - Discover available tools
   - `action='errors'` - Get session errors
   - `action='agent'` - Agent diagnostics
@@ -22,7 +21,6 @@ The agent should primarily use these 3 unified tools, which handle multiple acti
 - **Aliases** (all map to `unified_search`):
   - `grep_file` - Search files
   - `list_files` - List directory contents
-  - `code_intelligence` - Code navigation
   - `agent_info` - Agent status/diagnostics
   - `web_fetch` - Fetch URLs
   - `search_tools` - Find tools
@@ -197,7 +195,7 @@ The system prompt (in `vtcode-core/src/prompts/system.rs`) instructs agents to:
 
 ### Primary Tools (Always Available)
 ```
-**Search**: `unified_search` for all discovery (grep, list, intelligence)
+**Search**: `unified_search` for all discovery (grep, list)
 **Modify**: `unified_file` for all file operations (read, write, edit, patch, delete)
 **Execute**: `unified_exec` for all shell commands and code execution
 **Discover**: `list_skills` and `load_skill` to find/activate dormant tools

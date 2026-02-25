@@ -51,7 +51,7 @@ pub async fn handle_toggle_plan_mode(
         ctx.renderer.line(MessageStyle::Output, "")?;
         ctx.renderer.line(
             MessageStyle::Info,
-            "Allowed tools: read_file, list_files, grep_file, code_intelligence, unified_search, request_user_input, spawn_subagent",
+            "Allowed tools: read_file, list_files, grep_file, unified_search, request_user_input, spawn_subagent",
         )?;
         crate::agent::runloop::unified::plan_mode_state::render_plan_mode_next_step_hint(
             ctx.renderer,

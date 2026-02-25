@@ -441,7 +441,6 @@ impl AcpToolRegistry {
             }
             n if n == tools::DELETE_FILE => agent_client_protocol::ToolKind::Delete,
             n if n == tools::WEB_FETCH => agent_client_protocol::ToolKind::Fetch,
-            n if n == tools::CODE_INTELLIGENCE => agent_client_protocol::ToolKind::Search,
             _ => agent_client_protocol::ToolKind::Other,
         }
     }
