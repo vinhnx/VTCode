@@ -18,7 +18,7 @@ impl FromStr for ModelId {
         use crate::config::constants::models;
 
         // Explicitly handle built-in models that might be shadowed by OpenRouter
-        if s == models::zai::GLM_5 {
+        if s == models::zai::GLM_5 || s == models::zai::GLM_5_LEGACY {
             return Ok(ModelId::ZaiGlm5);
         }
 
@@ -98,7 +98,9 @@ impl FromStr for ModelId {
             s if s == models::xai::GROK_4_CODE_LATEST => Ok(ModelId::XaiGrok4CodeLatest),
             s if s == models::xai::GROK_4_VISION => Ok(ModelId::XaiGrok4Vision),
             // Z.AI models
-            s if s == models::zai::GLM_5 => Ok(ModelId::ZaiGlm5),
+            s if s == models::zai::GLM_5 || s == models::zai::GLM_5_LEGACY => {
+                Ok(ModelId::ZaiGlm5)
+            }
             // Moonshot models
             // Ollama models
             s if s == models::ollama::GPT_OSS_20B => Ok(ModelId::OllamaGptOss20b),

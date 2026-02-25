@@ -19,6 +19,7 @@ impl AgentRunner {
                     description: decl.description,
                     parameters: decl.parameters,
                 }),
+                web_search: None,
                 shell: None,
                 grammar: None,
                 strict: None,

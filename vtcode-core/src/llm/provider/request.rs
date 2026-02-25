@@ -46,6 +46,7 @@ pub struct LLMRequest {
     pub verbosity: Option<VerbosityLevel>,
 
     /// Advanced generation parameters
+    pub do_sample: Option<bool>,
     pub top_p: Option<f32>,
     pub top_k: Option<i32>,
     pub presence_penalty: Option<f32>,

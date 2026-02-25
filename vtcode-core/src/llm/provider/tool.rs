@@ -47,6 +47,10 @@ pub struct ToolDefinition {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub function: Option<FunctionDefinition>,
 
+    /// Provider-native web search configuration payload (e.g. Z.AI `web_search` tool).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub web_search: Option<Value>,
+
     /// Shell tool configuration (GPT-5.1 specific)
     /// Describes shell command capabilities and constraints
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -158,6 +162,7 @@ impl ToolDefinition {
                 description: sanitized_description,
                 parameters,
             }),
+            web_search: None,
             shell: None,
             grammar: None,
             strict: None,
@@ -205,6 +210,7 @@ impl ToolDefinition {
                     "required": ["query"]
                 }),
             }),
+            web_search: None,
             shell: None,
             grammar: None,
             strict: None,
@@ -239,6 +245,7 @@ impl ToolDefinition {
                     ]
                 }),
             }),
+            web_search: None,
             shell: None,
             grammar: None,
             strict: None,
@@ -257,6 +264,7 @@ impl ToolDefinition {
                 description: sanitized_description,
                 parameters: json!({}), // Custom tools may not need parameters
             }),
+            web_search: None,
             shell: None,
             grammar: None,
             strict: None,
@@ -270,8 +278,22 @@ impl ToolDefinition {
         Self {
             tool_type: "grammar".to_owned(),
             function: None,
+            web_search: None,
             shell: None,
             grammar: Some(GrammarDefinition { syntax, definition }),
+            strict: None,
+            defer_loading: None,
+        }
+    }
+
+    /// Create a provider-native web search tool definition.
+    pub fn web_search(config: Value) -> Self {
+        Self {
+            tool_type: "web_search".to_owned(),
+            function: None,
+            web_search: Some(config),
+            shell: None,
+            grammar: None,
             strict: None,
             defer_loading: None,
         }
@@ -305,11 +327,12 @@ impl ToolDefinition {
             "shell" => self.validate_shell(),
             "custom" => self.validate_custom(),
             "grammar" => self.validate_grammar(),
+            "web_search" => self.validate_web_search(),
             "tool_search_tool_regex_20251119" | "tool_search_tool_bm25_20251119" => {
                 self.validate_function()
             }
             other => Err(format!(
-                "Unsupported tool type: {}. Supported types: function, apply_patch, shell, custom, grammar, tool_search_tool_*",
+                "Unsupported tool type: {}. Supported types: function, apply_patch, shell, custom, grammar, web_search, tool_search_tool_*",
                 other
             )),
         }
@@ -396,6 +419,14 @@ impl ToolDefinition {
             Ok(())
         } else {
             Err("Grammar tool missing grammar definition".to_owned())
+        }
+    }
+
+    fn validate_web_search(&self) -> Result<(), String> {
+        if self.web_search.is_some() {
+            Ok(())
+        } else {
+            Err("web_search tool missing web_search configuration".to_owned())
         }
     }
 }

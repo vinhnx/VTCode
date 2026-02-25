@@ -24,6 +24,18 @@ pub fn serialize_tools_openai_format(tools: &[ToolDefinition]) -> Option<Vec<Val
         tools
             .iter()
             .filter_map(|tool| {
+                if tool.tool_type == "web_search" {
+                    let mut payload = serde_json::Map::new();
+                    payload.insert("type".to_owned(), Value::String("web_search".to_owned()));
+                    payload.insert(
+                        "web_search".to_owned(),
+                        tool.web_search
+                            .clone()
+                            .unwrap_or_else(|| json!({"enable": true})),
+                    );
+                    return Some(Value::Object(payload));
+                }
+
                 // For OpenAI-compatible APIs, normalize all tools to function type
                 // Special types like "apply_patch", "shell", "custom" are GPT-5.x specific
                 if let Some(func) = &tool.function {
@@ -257,6 +269,7 @@ const KEY_ROLE: &str = "role";
 const KEY_CONTENT: &str = "content";
 const KEY_TOOL_CALLS: &str = "tool_calls";
 const KEY_TOOL_CALL_ID: &str = "tool_call_id";
+const KEY_REASONING_CONTENT: &str = "reasoning_content";
 
 /// Serializes messages to OpenAI-compatible JSON format.
 /// Used by DeepSeek, Moonshot, and other OpenAI-compatible providers.
@@ -310,6 +323,16 @@ pub fn serialize_messages_openai_format(
             message_map.insert(
                 KEY_TOOL_CALL_ID.to_owned(),
                 Value::String(tool_call_id.clone()),
+            );
+        }
+
+        if provider_key == "zai"
+            && message.role == crate::llm::provider::MessageRole::Assistant
+            && let Some(reasoning) = &message.reasoning
+        {
+            message_map.insert(
+                KEY_REASONING_CONTENT.to_owned(),
+                Value::String(reasoning.clone()),
             );
         }
 

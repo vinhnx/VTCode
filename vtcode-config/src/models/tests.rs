@@ -172,6 +172,10 @@ fn test_model_from_string() {
         models::zai::GLM_5.parse::<ModelId>().unwrap(),
         ModelId::ZaiGlm5
     );
+    assert_eq!(
+        models::zai::GLM_5_LEGACY.parse::<ModelId>().unwrap(),
+        ModelId::ZaiGlm5
+    );
     for entry in openrouter_generated::ENTRIES {
         // Skip models that are shadowed by built-in variants with the same ID
         if entry.id == models::zai::GLM_5 {
