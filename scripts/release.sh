@@ -710,6 +710,26 @@ main() {
         skip_binaries=true
     fi
 
+    # 0.5 Regenerate Documentation Map
+    print_info "Step 0.5: Regenerating documentation map and syncing assets..."
+    if [[ "$dry_run" == 'true' ]]; then
+        print_info "Dry run - would run: python3 scripts/generate_docs_map.py && python3 scripts/sync_embedded_assets.py"
+    else
+        python3 scripts/generate_docs_map.py
+        python3 scripts/sync_embedded_assets.py
+        git add docs/modules/vtcode_docs_map.md vtcode-core/embedded_assets_source/docs/modules/vtcode_docs_map.md
+        if ! git diff --cached --quiet; then
+            GIT_AUTHOR_NAME="vtcode-release-bot" \
+            GIT_AUTHOR_EMAIL="noreply@vtcode.com" \
+            GIT_COMMITTER_NAME="vtcode-release-bot" \
+            GIT_COMMITTER_EMAIL="noreply@vtcode.com" \
+            git commit -m "docs: update documentation map [skip ci]"
+            print_success "Documentation map updated and committed"
+        else
+            print_info "Documentation map already up to date"
+        fi
+    fi
+
     # 1. Local Build (both macOS architectures for Homebrew, or current platform on Linux)
     if [[ "$skip_binaries" == 'false' ]]; then
         if [[ "$dry_run" == 'true' ]]; then
