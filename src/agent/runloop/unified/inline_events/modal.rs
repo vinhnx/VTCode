@@ -61,19 +61,35 @@ impl<'a> InlineModalProcessor<'a> {
     ) -> Result<InlineLoopAction> {
         // Handle plan approval selections (Claude Code style HITL)
         match &selection {
+            InlineListSelection::PlanApprovalClearContextAutoAccept => {
+                renderer.line(
+                    MessageStyle::Info,
+                    "✓ Plan approved. Clearing context and auto-accepting edits.",
+                )?;
+                return Ok(InlineLoopAction::PlanApproved {
+                    auto_accept: true,
+                    clear_context: true,
+                });
+            }
             InlineListSelection::PlanApprovalExecute => {
                 renderer.line(
                     MessageStyle::Info,
                     "✓ Plan approved. Executing with manual approval for each change.",
                 )?;
-                return Ok(InlineLoopAction::PlanApproved { auto_accept: false });
+                return Ok(InlineLoopAction::PlanApproved {
+                    auto_accept: false,
+                    clear_context: false,
+                });
             }
             InlineListSelection::PlanApprovalAutoAccept => {
                 renderer.line(
                     MessageStyle::Info,
                     "✓ Plan approved. Auto-accepting edits for this session.",
                 )?;
-                return Ok(InlineLoopAction::PlanApproved { auto_accept: true });
+                return Ok(InlineLoopAction::PlanApproved {
+                    auto_accept: true,
+                    clear_context: false,
+                });
             }
             InlineListSelection::PlanApprovalEditPlan => {
                 renderer.line(

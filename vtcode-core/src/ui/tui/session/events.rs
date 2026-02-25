@@ -105,6 +105,15 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
     let has_alt = raw_alt && !has_command;
 
     if let Some(modal) = session.modal.as_mut() {
+        if modal.is_plan_confirmation
+            && has_control
+            && matches!(key.code, KeyCode::Char('g') | KeyCode::Char('G'))
+        {
+            session.close_modal();
+            session.mark_dirty();
+            return Some(InlineEvent::LaunchEditor);
+        }
+
         let result = modal.handle_list_key_event(
             &key,
             ModalKeyModifiers {

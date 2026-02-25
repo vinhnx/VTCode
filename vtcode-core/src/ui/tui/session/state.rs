@@ -191,9 +191,11 @@ impl Session {
         let state = ModalState {
             title,
             lines,
+            footer_hint: None,
             list: None,
             search: None,
             secure_prompt,
+            is_plan_confirmation: false,
             popup_state: PopupState::default(),
             restore_input: true,
             restore_cursor: true,
@@ -223,9 +225,11 @@ impl Session {
         let state = ModalState {
             title,
             lines,
+            footer_hint: None,
             list: Some(list_state),
             search: search_state,
             secure_prompt: None,
+            is_plan_confirmation: false,
             popup_state: PopupState::default(),
             restore_input: true,
             restore_cursor: true,

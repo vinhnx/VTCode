@@ -122,16 +122,24 @@ pub(super) async fn run_interaction_loop_impl(
                 InlineLoopAction::Exit(reason) => {
                     return Ok(InteractionOutcome::Exit { reason });
                 }
-                InlineLoopAction::PlanApproved { auto_accept } => {
+                InlineLoopAction::PlanApproved {
+                    auto_accept,
+                    clear_context,
+                } => {
                     ctx.renderer.line(
                         MessageStyle::Info,
-                        if auto_accept {
+                        if clear_context {
+                            "Plan approved. Clearing context and auto-accepting edits..."
+                        } else if auto_accept {
                             "Plan approved with auto-accept. Starting execution..."
                         } else {
                             "Plan approved. Starting execution with manual approval..."
                         },
                     )?;
-                    return Ok(InteractionOutcome::PlanApproved { auto_accept });
+                    return Ok(InteractionOutcome::PlanApproved {
+                        auto_accept,
+                        clear_context,
+                    });
                 }
                 InlineLoopAction::PlanEditRequested => {
                     ctx.renderer.line(

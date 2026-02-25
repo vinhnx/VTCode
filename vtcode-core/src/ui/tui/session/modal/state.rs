@@ -12,8 +12,10 @@ use tui_popup::PopupState;
 pub struct ModalState {
     pub title: String,
     pub lines: Vec<String>,
+    pub footer_hint: Option<String>,
     pub list: Option<ModalListState>,
     pub secure_prompt: Option<SecurePromptConfig>,
+    pub is_plan_confirmation: bool,
     #[allow(dead_code)]
     pub popup_state: PopupState,
     #[allow(dead_code)]

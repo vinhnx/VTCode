@@ -470,6 +470,24 @@ fn control_e_does_not_launch_editor() {
 }
 
 #[test]
+fn control_g_launches_editor_from_plan_confirmation_modal() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.input_status_right = Some("model | 25% context".to_string());
+    let plan = crate::ui::tui::types::PlanContent::from_markdown(
+        "Test Plan".to_string(),
+        "## Plan of Work\n- Step 1",
+        Some(".vtcode/plans/test-plan.md".to_string()),
+    );
+    crate::ui::tui::session::command::show_plan_confirmation_modal(&mut session, plan);
+
+    let event = KeyEvent::new(KeyCode::Char('g'), KeyModifiers::CONTROL);
+    let result = session.process_key(event);
+
+    assert!(matches!(result, Some(InlineEvent::LaunchEditor)));
+    assert!(session.modal.is_none());
+}
+
+#[test]
 fn control_super_e_does_not_launch_editor() {
     let text = "hello world";
     let mut session = session_with_input(text, 0);

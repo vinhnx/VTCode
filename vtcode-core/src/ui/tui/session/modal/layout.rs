@@ -31,6 +31,7 @@ pub struct ModalListLayout {
 
 pub struct ModalBodyContext<'a, 'b> {
     pub instructions: &'a [String],
+    pub footer_hint: Option<&'a str>,
     pub list: Option<&'b mut ModalListState>,
     pub styles: &'a ModalRenderStyles,
     pub secure_prompt: Option<&'a SecurePromptConfig>,
