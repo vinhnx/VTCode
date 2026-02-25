@@ -244,6 +244,12 @@ opt-level = 3
 debug = false
 incremental = false
 
+# Profile for bloaty analysis - optimized but with debug info
+[profile.bloaty]
+inherits = "release"
+debug = true
+strip = false
+
 
 
 [[bin]]
