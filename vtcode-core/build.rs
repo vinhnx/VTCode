@@ -6,7 +6,8 @@ use std::path::{Path, PathBuf};
 
 use vtcode_config::models::openrouter_generated::{ENTRIES, VENDOR_MODELS};
 
-const EMBEDDED_ASSETS: &[(&str, &str)] = &[("docs/modules/vtcode_docs_map.md", "docs/vtcode_docs_map.md")];
+const EMBEDDED_ASSETS: &[(&str, &str)] =
+    &[("docs/modules/vtcode_docs_map.md", "docs/vtcode_docs_map.md")];
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Suppress macOS malloc warnings in build output

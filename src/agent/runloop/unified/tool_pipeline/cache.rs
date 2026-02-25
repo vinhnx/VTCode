@@ -3,7 +3,7 @@ use vtcode_core::tools::result_cache::ToolCacheKey;
 
 /// Determine if a tool is cacheable based on tool type and arguments
 /// This function implements enhanced caching logic to support more tools
-pub(super) fn is_tool_cacheable(tool_name: &str, args: &Value) -> bool {
+pub(super) fn is_tool_cacheable(tool_name: &str, _args: &Value) -> bool {
     // Always cache these read-only tools (original set)
     if matches!(
         tool_name,
