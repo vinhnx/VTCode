@@ -124,19 +124,36 @@ impl GeminiProvider {
             if message.role == MessageRole::Assistant
                 && let Some(tool_calls) = &message.tool_calls
             {
+                let is_gemini3 = request.model.contains("gemini-3");
                 for tool_call in tool_calls {
                     if let Some(ref func) = tool_call.function {
                         let parsed_args =
                             serde_json::from_str(&func.arguments).unwrap_or_else(|_| json!({}));
+
+                        // Gemini 3 models require thought_signature on function call parts.
+                        // If the streaming response didn't include it, use the validator skip
+                        // token to prevent 400 errors. This is documented by Google as a
+                        // fallback for cases where signatures are unavailable.
+                        // See: https://ai.google.dev/gemini-api/docs/thought-signatures
+                        let thought_signature = if is_gemini3
+                            && tool_call.thought_signature.is_none()
+                        {
+                            tracing::trace!(
+                                function_name = %func.name,
+                                "Gemini 3: using skip_thought_signature_validator fallback"
+                            );
+                            Some("skip_thought_signature_validator".to_string())
+                        } else {
+                            tool_call.thought_signature.clone()
+                        };
+
                         parts.push(Part::FunctionCall {
                             function_call: GeminiFunctionCall {
                                 name: func.name.clone(),
                                 args: parsed_args,
                                 id: Some(tool_call.id.clone()),
                             },
-                            // Preserve thought signature from the tool call
-                            // This is critical for Gemini 3 Pro to maintain reasoning context
-                            thought_signature: tool_call.thought_signature.clone(),
+                            thought_signature,
                         });
                     }
                 }
@@ -358,14 +375,21 @@ impl GeminiProvider {
 
         let mut text_content = String::new();
         let mut tool_calls = Vec::new();
+        // Track thought signature from text parts to attach to subsequent function calls
+        // This is needed because Gemini 3 sometimes attaches the signature to the reasoning text
+        // but requires it to be present on the function call when replayed in history.
+        let mut last_text_thought_signature: Option<String> = None;
 
         for part in candidate.content.parts {
             match part {
                 Part::Text {
                     text,
-                    thought_signature: _,
+                    thought_signature,
                 } => {
                     text_content.push_str(&text);
+                    if thought_signature.is_some() {
+                        last_text_thought_signature = thought_signature;
+                    }
                 }
                 Part::InlineData { .. } => {}
                 Part::FunctionCall {
@@ -382,6 +406,11 @@ impl GeminiProvider {
                             tool_calls.len()
                         )
                     });
+
+                    // Use the signature from the function call, or fall back to the one from preceding text
+                    let effective_signature =
+                        thought_signature.or(last_text_thought_signature.clone());
+
                     tool_calls.push(ToolCall {
                         id: call_id,
                         call_type: "function".to_string(),
@@ -391,7 +420,7 @@ impl GeminiProvider {
                                 .unwrap_or_else(|_| "{}".to_string()),
                         }),
                         text: None,
-                        thought_signature,
+                        thought_signature: effective_signature,
                     });
                 }
                 Part::FunctionResponse { .. } => {}

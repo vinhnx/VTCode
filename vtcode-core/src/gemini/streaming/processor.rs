@@ -698,8 +698,21 @@ impl StreamingProcessor {
 
         for part in source_parts {
             match (target.last_mut(), &part) {
-                (Some(Part::Text { text: existing, .. }), Part::Text { text: new_text, .. }) => {
+                (
+                    Some(Part::Text {
+                        text: existing,
+                        thought_signature: existing_sig,
+                    }),
+                    Part::Text {
+                        text: new_text,
+                        thought_signature: new_sig,
+                    },
+                ) => {
                     existing.push_str(new_text);
+                    // Preserve thought signature if it arrives in a later chunk
+                    if existing_sig.is_none() && new_sig.is_some() {
+                        *existing_sig = new_sig.clone();
+                    }
                 }
                 _ => target.push(part),
             }

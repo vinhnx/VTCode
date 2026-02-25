@@ -74,15 +74,30 @@ impl SystemInstruction {
     }
 }
 
+/// IMPORTANT: Variant ordering matters for `#[serde(untagged)]` deserialization.
+/// Serde tries variants in declaration order and returns the first successful match.
+/// Variants with required fields (FunctionCall, FunctionResponse, InlineData, Text)
+/// must come BEFORE CacheControl, which has only optional fields and would otherwise
+/// act as a catch-all, matching any JSON object.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum Part {
-    Text {
-        text: String,
-        /// Gemini 3 Pro thought signature for maintaining reasoning context
-        /// Must be preserved and sent back exactly as received
+    #[serde(rename_all = "camelCase")]
+    FunctionCall {
+        function_call: crate::gemini::function_calling::FunctionCall,
+        /// Gemini 3 thought signature for maintaining reasoning context
+        /// Required for sequential function calling, optional for parallel calls (only first has it)
         #[serde(skip_serializing_if = "Option::is_none")]
-        #[serde(rename = "thoughtSignature")]
+        #[serde(rename = "thoughtSignature", alias = "thought_signature")]
+        thought_signature: Option<String>,
+    },
+    #[serde(rename_all = "camelCase")]
+    FunctionResponse {
+        function_response: crate::gemini::function_calling::FunctionResponse,
+        /// Gemini 3 thought signature for maintaining reasoning context
+        /// Preserved when echoing function responses back to the model
+        #[serde(skip_serializing_if = "Option::is_none")]
+        #[serde(rename = "thoughtSignature", alias = "thought_signature")]
         thought_signature: Option<String>,
     },
     #[serde(rename_all = "camelCase")]
@@ -90,28 +105,19 @@ pub enum Part {
         #[serde(rename = "inline_data")]
         inline_data: InlineData,
     },
+    Text {
+        text: String,
+        /// Gemini 3 thought signature for maintaining reasoning context
+        /// Must be preserved and sent back exactly as received
+        #[serde(skip_serializing_if = "Option::is_none")]
+        #[serde(rename = "thoughtSignature", alias = "thought_signature")]
+        thought_signature: Option<String>,
+    },
+    /// CacheControl MUST be last: it has only optional fields and would match any JSON object
     #[serde(rename_all = "camelCase")]
     CacheControl {
         #[serde(rename = "ttlSeconds")]
         ttl_seconds: Option<u64>,
-    },
-    #[serde(rename_all = "camelCase")]
-    FunctionCall {
-        function_call: crate::gemini::function_calling::FunctionCall,
-        /// Gemini 3 Pro thought signature for maintaining reasoning context
-        /// Required for sequential function calling, optional for parallel calls (only first has it)
-        #[serde(skip_serializing_if = "Option::is_none")]
-        #[serde(rename = "thoughtSignature")]
-        thought_signature: Option<String>,
-    },
-    #[serde(rename_all = "camelCase")]
-    FunctionResponse {
-        function_response: crate::gemini::function_calling::FunctionResponse,
-        /// Gemini 3 Pro thought signature for maintaining reasoning context
-        /// Preserved when echoing function responses back to the model
-        #[serde(skip_serializing_if = "Option::is_none")]
-        #[serde(rename = "thoughtSignature")]
-        thought_signature: Option<String>,
     },
 }
 
