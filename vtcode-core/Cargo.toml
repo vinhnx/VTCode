@@ -26,7 +26,7 @@ include = [
 [dependencies]
 anyhow = { workspace = true }
 clap = { version = "4.5", features = ["derive"] }
-reqwest = { version = "0.12", features = ["json", "rustls-tls", "stream"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 json5 = "1.3"
