@@ -135,17 +135,16 @@ impl GeminiProvider {
                         // token to prevent 400 errors. This is documented by Google as a
                         // fallback for cases where signatures are unavailable.
                         // See: https://ai.google.dev/gemini-api/docs/thought-signatures
-                        let thought_signature = if is_gemini3
-                            && tool_call.thought_signature.is_none()
-                        {
-                            tracing::trace!(
-                                function_name = %func.name,
-                                "Gemini 3: using skip_thought_signature_validator fallback"
-                            );
-                            Some("skip_thought_signature_validator".to_string())
-                        } else {
-                            tool_call.thought_signature.clone()
-                        };
+                        let thought_signature =
+                            if is_gemini3 && tool_call.thought_signature.is_none() {
+                                tracing::trace!(
+                                    function_name = %func.name,
+                                    "Gemini 3: using skip_thought_signature_validator fallback"
+                                );
+                                Some("skip_thought_signature_validator".to_string())
+                            } else {
+                                tool_call.thought_signature.clone()
+                            };
 
                         parts.push(Part::FunctionCall {
                             function_call: GeminiFunctionCall {

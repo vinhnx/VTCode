@@ -109,7 +109,10 @@ impl ZAIProvider {
         let normalized_model = normalize_model_id(&request.model);
         let has_preserved_reasoning = request.messages.iter().any(|message| {
             message.role == crate::llm::provider::MessageRole::Assistant
-                && message.reasoning.as_ref().is_some_and(|reasoning| !reasoning.is_empty())
+                && message
+                    .reasoning
+                    .as_ref()
+                    .is_some_and(|reasoning| !reasoning.is_empty())
         });
 
         payload.insert("model".to_owned(), Value::String(normalized_model));
@@ -153,7 +156,11 @@ impl ZAIProvider {
 
         if request.stream {
             payload.insert("stream".to_string(), Value::Bool(true));
-            if request.tools.as_ref().is_some_and(|tools| !tools.is_empty()) {
+            if request
+                .tools
+                .as_ref()
+                .is_some_and(|tools| !tools.is_empty())
+            {
                 payload.insert("tool_stream".to_string(), Value::Bool(true));
             }
         }
@@ -177,7 +184,11 @@ impl ZAIProvider {
                 _ => serde_json::Value::String("auto".to_string()),
             };
             payload.insert("tool_choice".to_string(), tool_choice_value);
-        } else if request.tools.as_ref().is_some_and(|tools| !tools.is_empty()) {
+        } else if request
+            .tools
+            .as_ref()
+            .is_some_and(|tools| !tools.is_empty())
+        {
             payload.insert(
                 "tool_choice".to_string(),
                 serde_json::Value::String("auto".to_string()),
@@ -497,7 +508,10 @@ mod tests {
 
     #[test]
     fn normalizes_legacy_glm5_model_id() {
-        assert_eq!(normalize_model_id(models::zai::GLM_5_LEGACY), models::zai::GLM_5);
+        assert_eq!(
+            normalize_model_id(models::zai::GLM_5_LEGACY),
+            models::zai::GLM_5
+        );
     }
 
     #[test]
@@ -580,7 +594,8 @@ mod tests {
 
     #[test]
     fn zai_base_url_uses_explicit_override() {
-        let resolved = resolve_zai_base_url(Some("https://api.z.ai/api/coding/paas/v4".to_string()));
+        let resolved =
+            resolve_zai_base_url(Some("https://api.z.ai/api/coding/paas/v4".to_string()));
         assert_eq!(resolved, "https://api.z.ai/api/coding/paas/v4");
     }
 
@@ -597,7 +612,10 @@ mod tests {
         let payload = provider
             .convert_to_zai_format(&request)
             .expect("payload should be valid");
-        assert_eq!(payload.get("do_sample").and_then(|v| v.as_bool()), Some(false));
+        assert_eq!(
+            payload.get("do_sample").and_then(|v| v.as_bool()),
+            Some(false)
+        );
     }
 
     #[test]
@@ -700,9 +718,7 @@ mod tests {
             .expect("messages should be serialized");
         let first = messages.first().expect("at least one message");
         assert_eq!(
-            first
-                .get("reasoning_content")
-                .and_then(|v| v.as_str()),
+            first.get("reasoning_content").and_then(|v| v.as_str()),
             Some("chain")
         );
     }
@@ -713,11 +729,13 @@ mod tests {
         let request = LLMRequest {
             model: models::zai::GLM_5.to_string(),
             messages: vec![Message::user("latest economic events".to_string())],
-            tools: Some(Arc::new(vec![ToolDefinition::web_search(serde_json::json!({
-                "enable": true,
-                "search_engine": "search-prime",
-                "count": 5
-            }))])),
+            tools: Some(Arc::new(vec![ToolDefinition::web_search(
+                serde_json::json!({
+                    "enable": true,
+                    "search_engine": "search-prime",
+                    "count": 5
+                }),
+            )])),
             ..Default::default()
         };
 
@@ -729,9 +747,13 @@ mod tests {
             .and_then(|v| v.as_array())
             .expect("tools should be serialized");
         let first = tools.first().expect("at least one tool");
-        assert_eq!(first.get("type").and_then(|v| v.as_str()), Some("web_search"));
         assert_eq!(
-            first.get("web_search")
+            first.get("type").and_then(|v| v.as_str()),
+            Some("web_search")
+        );
+        assert_eq!(
+            first
+                .get("web_search")
                 .and_then(|v| v.get("search_engine"))
                 .and_then(|v| v.as_str()),
             Some("search-prime")

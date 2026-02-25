@@ -307,7 +307,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                             let mut ledger = decision_ledger.write().await;
                             *ledger = vtcode_core::core::decision_tracker::DecisionTracker::new();
                         }
-                        *session_stats =
+                        session_stats =
                             crate::agent::runloop::unified::state::SessionStats::default();
                         vtcode_core::utils::transcript::clear();
                         renderer.clear_screen();
@@ -531,7 +531,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                     let mut ledger = decision_ledger.write().await;
                     *ledger = vtcode_core::core::decision_tracker::DecisionTracker::new();
                 }
-                *session_stats = crate::agent::runloop::unified::state::SessionStats::default();
+                session_stats = crate::agent::runloop::unified::state::SessionStats::default();
                 vtcode_core::utils::transcript::clear();
                 renderer.clear_screen();
                 renderer.line(MessageStyle::Info, "Cleared conversation history.")?;
