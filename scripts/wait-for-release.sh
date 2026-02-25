@@ -27,6 +27,7 @@ get_required_assets() {
             echo "vtcode-$RELEASE_TAG-x86_64-apple-darwin.tar.gz"
             ;;
         Linux-x86_64)
+            echo "vtcode-$RELEASE_TAG-x86_64-unknown-linux-musl.tar.gz"
             echo "vtcode-$RELEASE_TAG-x86_64-unknown-linux-gnu.tar.gz"
             ;;
         MINGW*-x86_64|MSYS*-x86_64)
@@ -46,7 +47,8 @@ check_release() {
     local release_state
     local has_binary=false
     local has_checksums=false
-    local binary_asset
+    local binary_asset=""
+    local required_assets
     
     response=$(curl -fsSL "$GITHUB_API" 2>/dev/null || echo "")
     
@@ -62,12 +64,15 @@ check_release() {
     fi
     
     # Get required binary for this platform
-    binary_asset=$(get_required_assets)
-    
-    # Check for binary asset
-    if echo "$response" | grep -q "\"name\": \"$binary_asset\""; then
-        has_binary=true
-    fi
+    required_assets=$(get_required_assets)
+    while IFS= read -r asset; do
+        [[ -z "$asset" ]] && continue
+        if echo "$response" | grep -q "\"name\": \"$asset\""; then
+            has_binary=true
+            binary_asset="$asset"
+            break
+        fi
+    done <<< "$required_assets"
     
     # Check for checksums
     if echo "$response" | grep -q '"name": "checksums.txt"'; then
@@ -92,7 +97,8 @@ show_status() {
     local response
     local has_assets
     local asset_count
-    local binary_asset
+    local binary_asset=""
+    local required_assets
     
     response=$(curl -fsSL "$GITHUB_API" 2>/dev/null || echo "")
     
@@ -104,12 +110,20 @@ show_status() {
     asset_count=$(echo "$response" | grep -o '"name": "vtcode-' | wc -l)
     
     if [[ $asset_count -gt 0 ]]; then
-        binary_asset=$(get_required_assets)
-        if echo "$response" | grep -q "\"name\": \"$binary_asset\""; then
+        required_assets=$(get_required_assets)
+        while IFS= read -r asset; do
+            [[ -z "$asset" ]] && continue
+            if echo "$response" | grep -q "\"name\": \"$asset\""; then
+                binary_asset="$asset"
+                break
+            fi
+        done <<< "$required_assets"
+
+        if [[ -n "$binary_asset" ]]; then
             log_success "Binary for your platform is ready: $binary_asset"
             has_assets=true
         else
-            log_info "Binaries available: $asset_count/4"
+            log_info "Binaries available: $asset_count/5"
         fi
     else
         log_info "Waiting for binaries to be built..."

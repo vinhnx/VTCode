@@ -34,7 +34,7 @@ get_platform() {
             echo "x86_64-apple-darwin|macOS Intel|vtcode-$RELEASE_TAG-x86_64-apple-darwin.tar.gz"
             ;;
         Linux-x86_64)
-            echo "x86_64-unknown-linux-gnu|Linux|vtcode-$RELEASE_TAG-x86_64-unknown-linux-gnu.tar.gz"
+            echo "x86_64-unknown-linux-musl|Linux|vtcode-$RELEASE_TAG-x86_64-unknown-linux-musl.tar.gz"
             ;;
         MINGW*-x86_64|MSYS*-x86_64)
             echo "x86_64-pc-windows-msvc|Windows|vtcode-$RELEASE_TAG-x86_64-pc-windows-msvc.zip"
@@ -56,8 +56,15 @@ PLATFORM_INFO=$(get_platform)
 ARCH=$(echo "$PLATFORM_INFO" | cut -d'|' -f1)
 DESC=$(echo "$PLATFORM_INFO" | cut -d'|' -f2)
 BINARY_NAME=$(echo "$PLATFORM_INFO" | cut -d'|' -f3)
+FALLBACK_BINARY=""
+if [[ "$ARCH" == "x86_64-unknown-linux-musl" ]]; then
+    FALLBACK_BINARY="vtcode-$RELEASE_TAG-x86_64-unknown-linux-gnu.tar.gz"
+fi
 echo "Your Platform: $DESC"
 echo "Binary Name:   $BINARY_NAME"
+if [[ -n "$FALLBACK_BINARY" ]]; then
+    echo "Fallback:      $FALLBACK_BINARY"
+fi
 echo ""
 
 # Fetch release info
@@ -82,7 +89,13 @@ PUBLISHED_AT=$(echo "$RESPONSE" | grep -o '"published_at":"[^"]*' | cut -d'"' -f
 # Count assets
 TOTAL_ASSETS=$(echo "$RESPONSE" | grep -o '"name": "vtcode-' | wc -l)
 HAS_CHECKSUMS=$(echo "$RESPONSE" | grep -q '"name": "checksums.txt"' && echo "yes" || echo "no")
-HAS_YOUR_BINARY=$(echo "$RESPONSE" | grep -q "\"name\": \"$BINARY_NAME\"" && echo "yes" || echo "no")
+if echo "$RESPONSE" | grep -q "\"name\": \"$BINARY_NAME\""; then
+    HAS_YOUR_BINARY="yes"
+elif [[ -n "$FALLBACK_BINARY" ]] && echo "$RESPONSE" | grep -q "\"name\": \"$FALLBACK_BINARY\""; then
+    HAS_YOUR_BINARY="yes"
+else
+    HAS_YOUR_BINARY="no"
+fi
 
 # Display status
 printf '%b\n' "${BLUE}Release Status:${NC}"
@@ -99,7 +112,7 @@ fi
 echo ""
 
 printf '%b\n' "${BLUE}Assets:${NC}"
-printf '%b\n' "  Total Binaries:    $TOTAL_ASSETS/4"
+printf '%b\n' "  Total Binaries:    $TOTAL_ASSETS/5"
 printf '%b' "  Your Binary:       "
 if [[ "$HAS_YOUR_BINARY" == "yes" ]]; then
     printf '%b\n' "${GREEN}✓ Available${NC}"

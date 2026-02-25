@@ -37,6 +37,11 @@ jobs:
             target: x86_64-unknown-linux-gnu
             use_cross: true
 
+          # Linux - x86_64 musl (portable static libc)
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            use_cross: true
+
           # Windows - x86_64 (most common) - Must use windows-latest
           - os: windows-latest
             target: x86_64-pc-windows-msvc
