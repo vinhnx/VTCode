@@ -206,3 +206,14 @@ ctrl-g to edit in VS Code · ~/.claude/plans/piped-beaming-puppy.md
 ---
 
 improve terminal title from static "> VT Code" to dynamic title reflecting current file or task, e.g. "> VT Code | Editing Foo.rs" or "> VT Code | Running $ cmd" or "> VT Code | Debugging Bar.swift", or "> VT Code | Action Required" for HITL. This provides better context and feedback on what the agent is doing. Reference bottom status bar view dynamic status updates for inspiration on content and formatting. Keep it concise but informative, and update it in real-time as the agent switches tasks or files. On idle or default state, it can revert to "> VT Code".
+
+---
+
+CRITIAL:
+
+1. release include outside contributed that not in contribution graph (vinhnguyen2308)
+2. release note should include diff changelog from semver. current <-> last
+3. Full Changelog: https://github.com/vinhnx/vtcode/compare/0.82.5 is not corrrect
+4. release note should be generated from semver. current <-> last
+
+https://github.com/vinhnx/VTCode/releases/tag/0.82.5
