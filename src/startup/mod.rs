@@ -209,12 +209,12 @@ impl StartupContext {
             )
         };
 
-        let provider = match args.provider.clone() {
-            Some(value) => value,
-            None => infer_provider(None, &model)
-                .map(|provider| provider.to_string())
-                .unwrap_or_else(|| config.agent.provider.clone()),
-        };
+        let provider = resolve_provider(
+            args.provider.clone().or_else(provider_env_override),
+            config.agent.provider.as_str(),
+            &model,
+            model_source,
+        );
 
         initialize_dot_folder().await.ok();
 
@@ -350,6 +350,40 @@ impl StartupContext {
     }
 }
 
+fn resolve_provider(
+    cli_provider: Option<String>,
+    configured_provider: &str,
+    model: &str,
+    model_source: ModelSelectionSource,
+) -> String {
+    if let Some(provider) = cli_provider {
+        return provider;
+    }
+
+    if matches!(model_source, ModelSelectionSource::CliOverride)
+        && let Some(provider) = infer_provider(None, model)
+    {
+        return provider.to_string();
+    }
+
+    let configured_provider = configured_provider.trim();
+    if !configured_provider.is_empty() {
+        return configured_provider.to_owned();
+    }
+
+    infer_provider(None, model)
+        .map(|provider| provider.to_string())
+        .unwrap_or_else(|| defaults::DEFAULT_PROVIDER.to_owned())
+}
+
+fn provider_env_override() -> Option<String> {
+    std::env::var("VTCODE_PROVIDER")
+        .ok()
+        .or_else(|| std::env::var("provider").ok())
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
+}
+
 fn resolve_team_context(config: &mut VTCodeConfig, args: &Cli) -> Result<Option<TeamContext>> {
     let has_team_args = args.team.is_some() || args.teammate.is_some() || args.team_role.is_some();
     if !has_team_args {
@@ -447,5 +481,38 @@ mod validation_tests {
         let provider = "openai";
         let msg = check_prompt_cache_retention_compat(&cfg, model, provider);
         assert!(msg.is_none());
+    }
+
+    #[test]
+    fn provider_resolution_prefers_configured_provider_for_config_model() {
+        let provider = resolve_provider(
+            None,
+            "zai",
+            vtcode_core::config::constants::models::ollama::MINIMAX_M25_CLOUD,
+            ModelSelectionSource::WorkspaceConfig,
+        );
+        assert_eq!(provider, "zai");
+    }
+
+    #[test]
+    fn provider_resolution_infers_from_cli_model_without_cli_provider() {
+        let provider = resolve_provider(
+            None,
+            "zai",
+            vtcode_core::config::constants::models::ollama::MINIMAX_M25_CLOUD,
+            ModelSelectionSource::CliOverride,
+        );
+        assert_eq!(provider, "ollama");
+    }
+
+    #[test]
+    fn provider_resolution_uses_cli_provider_when_present() {
+        let provider = resolve_provider(
+            Some("minimax".to_owned()),
+            "zai",
+            vtcode_core::config::constants::models::ollama::MINIMAX_M25_CLOUD,
+            ModelSelectionSource::CliOverride,
+        );
+        assert_eq!(provider, "minimax");
     }
 }

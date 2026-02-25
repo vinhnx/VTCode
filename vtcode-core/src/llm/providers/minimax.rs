@@ -71,13 +71,15 @@ impl MinimaxProvider {
         api_key: String,
         model_behavior: Option<ModelConfig>,
     ) -> Self {
+        let resolved_base = override_base_url(
+            urls::MINIMAX_API_BASE,
+            base_url,
+            Some(env_vars::MINIMAX_BASE_URL),
+        );
+
         Self {
             http_client: HttpClient::new(),
-            base_url: override_base_url(
-                urls::MINIMAX_API_BASE,
-                base_url,
-                Some(env_vars::MINIMAX_BASE_URL),
-            ),
+            base_url: normalize_openai_base_url(&resolved_base),
             model,
             api_key,
             model_behavior,
@@ -111,6 +113,37 @@ impl MinimaxProvider {
             "stream": stream
         }))
     }
+}
+
+fn normalize_openai_base_url(base_url: &str) -> String {
+    let trimmed = base_url.trim().trim_end_matches('/');
+    if trimmed.is_empty() {
+        return "https://api.minimax.io/v1".to_string();
+    }
+
+    if let Some(prefix) = trimmed.strip_suffix("/v1/messages") {
+        let prefix = prefix.trim_end_matches('/');
+        if let Some(no_anthropic) = prefix.strip_suffix("/anthropic") {
+            return format!("{}/v1", no_anthropic.trim_end_matches('/'));
+        }
+        return format!("{}/v1", prefix);
+    }
+    if let Some(prefix) = trimmed.strip_suffix("/messages") {
+        return format!("{}/v1", prefix.trim_end_matches('/'));
+    }
+
+    if let Some(prefix) = trimmed.strip_suffix("/anthropic/v1") {
+        return format!("{}/v1", prefix.trim_end_matches('/'));
+    }
+    if let Some(prefix) = trimmed.strip_suffix("/anthropic") {
+        return format!("{}/v1", prefix.trim_end_matches('/'));
+    }
+
+    if trimmed.ends_with("/v1") {
+        return trimmed.to_string();
+    }
+
+    format!("{trimmed}/v1")
 }
 
 #[async_trait]
@@ -304,5 +337,34 @@ impl LLMClient for MinimaxProvider {
 
     fn model_id(&self) -> &str {
         &self.model
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::normalize_openai_base_url;
+
+    #[test]
+    fn normalize_minimax_anthropic_base_to_openai_v1() {
+        assert_eq!(
+            normalize_openai_base_url("https://api.minimax.io/anthropic"),
+            "https://api.minimax.io/v1"
+        );
+    }
+
+    #[test]
+    fn normalize_minimax_anthropic_messages_base_to_openai_v1() {
+        assert_eq!(
+            normalize_openai_base_url("https://api.minimax.io/anthropic/v1/messages"),
+            "https://api.minimax.io/v1"
+        );
+    }
+
+    #[test]
+    fn preserve_openai_v1_base() {
+        assert_eq!(
+            normalize_openai_base_url("https://api.minimax.io/v1"),
+            "https://api.minimax.io/v1"
+        );
     }
 }
