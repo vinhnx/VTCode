@@ -162,6 +162,10 @@ fn test_model_from_string() {
         models::zai::GLM_5.parse::<ModelId>().unwrap(),
         ModelId::ZaiGlm5
     );
+    assert_eq!(
+        models::zai::GLM_5_LEGACY.parse::<ModelId>().unwrap(),
+        ModelId::ZaiGlm5
+    );
     // Invalid model
     assert!("invalid-model".parse::<ModelId>().is_err());
 }

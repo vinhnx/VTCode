@@ -234,11 +234,11 @@ pub struct ZAIProviderConfig;
 
 impl ProviderConfig for ZAIProviderConfig {
     const PROVIDER_KEY: &'static str = "zai";
-    const DISPLAY_NAME: &'static str = "ZAI";
+    const DISPLAY_NAME: &'static str = "Z.AI";
     const DEFAULT_MODEL: &'static str = crate::config::constants::models::zai::DEFAULT_MODEL;
     const API_BASE_URL: &'static str = crate::config::constants::urls::Z_AI_API_BASE;
     const BASE_URL_ENV_VAR: Option<&'static str> =
-        Some(crate::config::constants::env_vars::Z_AI_BASE_URL);
+        Some(crate::config::constants::env_vars::ZAI_BASE_URL);
 
     type PromptCacheSettings = ();
 

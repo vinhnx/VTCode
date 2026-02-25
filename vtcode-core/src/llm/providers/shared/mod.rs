@@ -136,13 +136,19 @@ impl ToolCallBuilder {
 }
 
 pub fn update_tool_calls(builders: &mut Vec<ToolCallBuilder>, deltas: &[Value]) {
-    for (index, delta) in deltas.iter().enumerate() {
+    for (position, delta) in deltas.iter().enumerate() {
+        let index = delta
+            .get("index")
+            .and_then(|value| value.as_u64())
+            .map(|value| value as usize)
+            .unwrap_or(position);
+
         if builders.len() <= index {
-            builders.push(ToolCallBuilder::default());
+            builders.resize_with(index + 1, ToolCallBuilder::default);
         }
         let builder = builders
             .get_mut(index)
-            .expect("tool call builder must exist after push");
+            .expect("tool call builder must exist after resize");
 
         builder.apply_delta(delta);
     }
@@ -595,6 +601,28 @@ mod tests {
             .as_ref()
             .expect("function call should be present");
         assert_eq!(func.arguments, "{\"value\":1}");
+    }
+
+    #[test]
+    fn update_tool_calls_respects_explicit_index() {
+        let mut builders = Vec::new();
+        let deltas = vec![json!({
+            "index": 2,
+            "id": "call_3",
+            "function": {
+                "name": "get_weather",
+                "arguments": "{\"city\":\"Beijing\"}"
+            }
+        })];
+
+        update_tool_calls(&mut builders, &deltas);
+
+        let calls = finalize_tool_calls(builders).expect("call expected");
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].id, "call_3");
+        let function = calls[0].function.as_ref().expect("function expected");
+        assert_eq!(function.name, "get_weather");
+        assert_eq!(function.arguments, "{\"city\":\"Beijing\"}");
     }
 
     #[test]
