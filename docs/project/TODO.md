@@ -204,5 +204,3 @@ ctrl-g to edit in VS Code · ~/.claude/plans/piped-beaming-puppy.md
 /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/docs/BLOATY_ANALYSIS.md
 
 ---
-
-revamp docs/modules/vtcode_docs_map.md with latest docs/ and update hooks and script to regen docs map when build release
