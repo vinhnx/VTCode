@@ -510,6 +510,55 @@ fn parallel_function_calls_single_signature() {
 }
 
 #[test]
+fn thought_signature_propagation_from_text_to_function_call() {
+    use crate::gemini::function_calling::FunctionCall as GeminiFunctionCall;
+    use crate::gemini::models::{Candidate, Content, GenerateContentResponse, Part};
+
+    let test_signature = "text_reasoning_signature_789".to_string();
+
+    // Scenario: Gemini 3 returns reasoning text with a signature, followed by a function call without one.
+    // The signature from the text should be attached to the function call.
+    let response = GenerateContentResponse {
+        candidates: vec![Candidate {
+            content: Content {
+                role: "model".to_string(),
+                parts: vec![
+                    Part::Text {
+                        text: "I think I should check the weather.".to_string(),
+                        thought_signature: Some(test_signature.clone()),
+                    },
+                    Part::FunctionCall {
+                        function_call: GeminiFunctionCall {
+                            name: "get_weather".to_string(),
+                            args: json!({"city": "Tokyo"}),
+                            id: Some("call_tokyo".to_string()),
+                        },
+                        thought_signature: None, // Missing on function call itself
+                    },
+                ],
+            },
+            finish_reason: Some("FUNCTION_CALL".to_string()),
+        }],
+        prompt_feedback: None,
+        usage_metadata: None,
+    };
+
+    let llm_response = GeminiProvider::convert_from_gemini_response(
+        response,
+        models::google::GEMINI_3_FLASH_PREVIEW.to_string(),
+    )
+    .expect("conversion should succeed");
+
+    let tool_calls = llm_response.tool_calls.expect("should have tool calls");
+    assert_eq!(tool_calls.len(), 1);
+    assert_eq!(
+        tool_calls[0].thought_signature,
+        Some(test_signature),
+        "thought signature should be propagated from text part to function call"
+    );
+}
+
+#[test]
 fn gemini_provider_supports_reasoning_effort_for_gemini3() {
     use crate::config::constants::models;
     use crate::config::models::ModelId;
@@ -806,5 +855,88 @@ mod caching_tests {
                 "Cache control or TTL should be configured when explicit_ttl_seconds is set"
             );
         }
+    }
+}
+
+#[test]
+fn part_json_deserialization_function_call_with_thought_signature() {
+    use crate::gemini::models::Part;
+
+    // Test 1: FunctionCall with thoughtSignature (camelCase - native Gemini API)
+    let json_camel = json!({
+        "functionCall": {"name": "test_func", "args": {"key": "value"}},
+        "thoughtSignature": "sig_camel_123"
+    });
+    let part: Part = serde_json::from_value(json_camel)
+        .expect("should deserialize function call with camelCase thoughtSignature");
+    match &part {
+        Part::FunctionCall {
+            function_call,
+            thought_signature,
+        } => {
+            assert_eq!(function_call.name, "test_func");
+            assert_eq!(
+                thought_signature.as_deref(),
+                Some("sig_camel_123"),
+                "thoughtSignature (camelCase) should be captured"
+            );
+        }
+        other => panic!("Expected FunctionCall, got {:?}", other),
+    }
+
+    // Test 2: FunctionCall WITHOUT thought signature
+    let json_no_sig = json!({
+        "functionCall": {"name": "test_func", "args": {"key": "value"}}
+    });
+    let part2: Part = serde_json::from_value(json_no_sig)
+        .expect("should deserialize function call without signature");
+    match &part2 {
+        Part::FunctionCall {
+            function_call,
+            thought_signature,
+        } => {
+            assert_eq!(function_call.name, "test_func");
+            assert_eq!(thought_signature, &None, "missing signature should be None");
+        }
+        other => panic!("Expected FunctionCall, got {:?}", other),
+    }
+
+    // Test 3: Text part
+    let json_text = json!({"text": "hello world"});
+    let part3: Part = serde_json::from_value(json_text).expect("should deserialize text part");
+    match &part3 {
+        Part::Text { text, .. } => {
+            assert_eq!(text, "hello world");
+        }
+        other => panic!("Expected Text, got {:?}", other),
+    }
+
+    // Test 4: Full candidate with function call + thought signature (simulates API response)
+    let candidate_json = json!({
+        "content": {
+            "role": "model",
+            "parts": [{
+                "functionCall": {"name": "run_pty_cmd", "args": {"command": "cargo check"}},
+                "thoughtSignature": "api_signature_abc"
+            }]
+        },
+        "finishReason": "FUNCTION_CALL"
+    });
+    let candidate: crate::gemini::streaming::StreamingCandidate =
+        serde_json::from_value(candidate_json).expect("should deserialize streaming candidate");
+    assert_eq!(candidate.content.parts.len(), 1);
+    match &candidate.content.parts[0] {
+        Part::FunctionCall {
+            function_call,
+            thought_signature,
+        } => {
+            assert_eq!(function_call.name, "run_pty_cmd");
+            assert_eq!(
+                thought_signature.as_deref(),
+                Some("api_signature_abc"),
+                "thought signature should be preserved from API response"
+            );
+        }
+        other => panic!("Expected FunctionCall in candidate, got {:?}", other),
     }
 }
