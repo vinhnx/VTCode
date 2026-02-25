@@ -17,7 +17,7 @@ impl ModelId {
                 | ModelId::Gemini31ProPreviewCustomTools
                 | ModelId::GPT5
                 | ModelId::GPT52
-                | ModelId::GPT5Codex
+                | ModelId::GPT53Codex
                 | ModelId::ClaudeOpus46
                 | ModelId::ClaudeSonnet46
                 | ModelId::ClaudeOpus41
@@ -59,7 +59,7 @@ impl ModelId {
                 | ModelId::Gemini3FlashPreview
                 | ModelId::GPT5
                 | ModelId::GPT52
-                | ModelId::GPT5Codex
+                | ModelId::GPT53Codex
                 | ModelId::ClaudeOpus46
                 | ModelId::ClaudeSonnet46
                 | ModelId::ClaudeOpus45
@@ -102,15 +102,10 @@ impl ModelId {
             ModelId::Gemini3ProPreview | ModelId::Gemini3FlashPreview => "3",
             // OpenAI generations
             ModelId::GPT52 | ModelId::GPT52Codex => "5.2",
+            ModelId::GPT53Codex => "5.3",
             ModelId::GPT5
-            | ModelId::GPT5Codex
             | ModelId::GPT5Mini
             | ModelId::GPT5Nano
-            | ModelId::GPT51
-            | ModelId::GPT51Codex
-            | ModelId::GPT51CodexMax
-            | ModelId::GPT51Mini
-            | ModelId::CodexMiniLatest
             | ModelId::OpenAIGptOss20b
             | ModelId::OpenAIGptOss120b => "5",
             // Anthropic generations

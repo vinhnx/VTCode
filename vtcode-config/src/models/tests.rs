@@ -15,10 +15,8 @@ fn test_model_string_conversion() {
     );
     // OpenAI models
     assert_eq!(ModelId::GPT5.as_str(), models::GPT_5);
-    assert_eq!(ModelId::GPT5Codex.as_str(), models::GPT_5_CODEX);
     assert_eq!(ModelId::GPT5Mini.as_str(), models::GPT_5_MINI);
     assert_eq!(ModelId::GPT5Nano.as_str(), models::GPT_5_NANO);
-    assert_eq!(ModelId::CodexMiniLatest.as_str(), models::CODEX_MINI_LATEST);
     // Anthropic models
     assert_eq!(ModelId::ClaudeOpus46.as_str(), models::CLAUDE_OPUS_4_6);
     assert_eq!(ModelId::ClaudeSonnet46.as_str(), models::CLAUDE_SONNET_4_6);
@@ -74,20 +72,12 @@ fn test_model_from_string() {
     // OpenAI models
     assert_eq!(models::GPT_5.parse::<ModelId>().unwrap(), ModelId::GPT5);
     assert_eq!(
-        models::GPT_5_CODEX.parse::<ModelId>().unwrap(),
-        ModelId::GPT5Codex
-    );
-    assert_eq!(
         models::GPT_5_MINI.parse::<ModelId>().unwrap(),
         ModelId::GPT5Mini
     );
     assert_eq!(
         models::GPT_5_NANO.parse::<ModelId>().unwrap(),
         ModelId::GPT5Nano
-    );
-    assert_eq!(
-        models::CODEX_MINI_LATEST.parse::<ModelId>().unwrap(),
-        ModelId::CodexMiniLatest
     );
     assert_eq!(
         models::openai::GPT_OSS_20B.parse::<ModelId>().unwrap(),
@@ -211,7 +201,6 @@ fn test_provider_parsing() {
 fn test_model_providers() {
     assert_eq!(ModelId::Gemini3FlashPreview.provider(), Provider::Gemini);
     assert_eq!(ModelId::GPT5.provider(), Provider::OpenAI);
-    assert_eq!(ModelId::GPT5Codex.provider(), Provider::OpenAI);
     assert_eq!(ModelId::ClaudeOpus46.provider(), Provider::Anthropic);
     assert_eq!(ModelId::ClaudeSonnet46.provider(), Provider::Anthropic);
     assert_eq!(ModelId::ClaudeSonnet45.provider(), Provider::Anthropic);
@@ -364,7 +353,6 @@ fn test_model_variants() {
 
     // Pro variants
     assert!(ModelId::GPT5.is_pro_variant());
-    assert!(ModelId::GPT5Codex.is_pro_variant());
     assert!(ModelId::ClaudeOpus46.is_pro_variant());
     assert!(ModelId::ClaudeSonnet46.is_pro_variant());
     assert!(ModelId::DeepSeekReasoner.is_pro_variant());
@@ -385,7 +373,6 @@ fn test_model_variants() {
 
     // Top tier models
     assert!(ModelId::GPT5.is_top_tier());
-    assert!(ModelId::GPT5Codex.is_top_tier());
     assert!(ModelId::ClaudeOpus46.is_top_tier());
     assert!(ModelId::ClaudeSonnet45.is_top_tier());
     assert!(ModelId::ClaudeSonnet4.is_top_tier());
@@ -408,10 +395,8 @@ fn test_model_generation() {
 
     // OpenAI generations
     assert_eq!(ModelId::GPT5.generation(), "5");
-    assert_eq!(ModelId::GPT5Codex.generation(), "5");
     assert_eq!(ModelId::GPT5Mini.generation(), "5");
     assert_eq!(ModelId::GPT5Nano.generation(), "5");
-    assert_eq!(ModelId::CodexMiniLatest.generation(), "5");
 
     // Anthropic generations
     assert_eq!(ModelId::ClaudeOpus46.generation(), "4.6");
@@ -459,7 +444,6 @@ fn test_models_for_provider() {
 
     let openai_models = ModelId::models_for_provider(Provider::OpenAI);
     assert!(openai_models.contains(&ModelId::GPT5));
-    assert!(openai_models.contains(&ModelId::GPT5Codex));
     assert!(!openai_models.contains(&ModelId::Gemini3FlashPreview));
 
     let anthropic_models = ModelId::models_for_provider(Provider::Anthropic);

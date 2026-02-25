@@ -96,8 +96,8 @@ fn chat_completions_payload_uses_function_wrapper() {
 #[test]
 fn responses_payload_uses_function_wrapper() {
     let provider =
-        OpenAIProvider::with_model(String::new(), models::openai::GPT_5_CODEX.to_string());
-    let request = sample_request(models::openai::GPT_5_CODEX);
+        OpenAIProvider::with_model(String::new(), models::openai::GPT_5.to_string());
+    let request = sample_request(models::openai::GPT_5);
     let payload = provider
         .convert_to_openai_responses_format(&request)
         .expect("conversion should succeed");
@@ -105,8 +105,7 @@ fn responses_payload_uses_function_wrapper() {
     let instructions = payload
         .get("instructions")
         .and_then(Value::as_str)
-        .expect("instructions should be set for codex");
-    assert!(instructions.contains("You are Codex, based on GPT-5"));
+        .expect("instructions should be set");
 
     let tools = payload
         .get("tools")
@@ -118,6 +117,7 @@ fn responses_payload_uses_function_wrapper() {
         tool_object.get("name").and_then(Value::as_str),
         Some("search_workspace")
     );
+}
 }
 
 #[test]
@@ -348,7 +348,7 @@ fn responses_payload_excludes_retention_for_non_responses_model() {
 
     let provider = OpenAIProvider::from_config(
         Some("key".to_string()),
-        Some(models::openai::CODEX_MINI_LATEST.to_string()),
+        Some(models::openai::GPT_OSS_20B.to_string()),
         None,
         Some(pc),
         None,
@@ -356,7 +356,7 @@ fn responses_payload_excludes_retention_for_non_responses_model() {
         None,
     );
 
-    let request = sample_request(models::openai::CODEX_MINI_LATEST);
+    let request = sample_request(models::openai::GPT_OSS_20B);
     let payload = provider
         .convert_to_openai_responses_format(&request)
         .expect("conversion should succeed");
@@ -456,8 +456,8 @@ fn chat_completions_uses_max_completion_tokens_field() {
 #[test]
 fn chat_completions_applies_temperature_independent_of_max_tokens() {
     let provider =
-        OpenAIProvider::with_model(String::new(), models::openai::CODEX_MINI_LATEST.to_string());
-    let mut request = sample_request(models::openai::CODEX_MINI_LATEST);
+        OpenAIProvider::with_model(String::new(), models::openai::GPT_5.to_string());
+    let mut request = sample_request(models::openai::GPT_5);
     request.temperature = Some(0.4);
 
     let payload = provider
@@ -475,8 +475,8 @@ fn chat_completions_applies_temperature_independent_of_max_tokens() {
 #[test]
 fn responses_payload_omits_parallel_tool_config_when_not_supported() {
     let provider =
-        OpenAIProvider::with_model(String::new(), models::openai::GPT_5_CODEX.to_string());
-    let mut request = sample_request(models::openai::GPT_5_CODEX);
+        OpenAIProvider::with_model(String::new(), models::openai::GPT_5.to_string());
+    let mut request = sample_request(models::openai::GPT_5);
     request.parallel_tool_calls = Some(true);
     request.parallel_tool_config = Some(Box::new(ParallelToolConfig {
         disable_parallel_tool_use: true,
@@ -503,7 +503,6 @@ mod streaming_tests {
         // Test that GPT-5 models return false for supports_streaming
         let test_models = [
             models::openai::GPT_5,
-            models::openai::GPT_5_CODEX,
             models::openai::GPT_5_MINI,
             models::openai::GPT_5_NANO,
         ];

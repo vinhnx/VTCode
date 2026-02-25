@@ -28,22 +28,11 @@ impl ModelId {
             ModelId::GPT52Codex => {
                 "GPT-5.2 variant optimized for agentic coding tasks with reasoning effort support"
             }
-            ModelId::GPT5Codex => {
-                "Code-focused GPT-5 variant optimized for tool calling and structured outputs"
-            }
             ModelId::GPT5Mini => "Latest efficient OpenAI model, great for most tasks",
             ModelId::GPT5Nano => "Latest most cost-effective OpenAI model",
-            ModelId::GPT51 => {
-                "Enhanced most capable OpenAI model with improved reasoning and capabilities"
+            ModelId::GPT53Codex => {
+                "GPT-5.3 variant optimized for agentic coding tasks with reasoning effort support (low, medium, high, xhigh)"
             }
-            ModelId::GPT51Codex => {
-                "Code-focused GPT-5.1 variant optimized for tool calling and structured outputs"
-            }
-            ModelId::GPT51CodexMax => {
-                "Maximum context code-focused GPT-5.1 variant optimized for large codebases"
-            }
-            ModelId::GPT51Mini => "Enhanced efficient OpenAI model with improved capabilities",
-            ModelId::CodexMiniLatest => "Latest Codex model optimized for code generation",
             ModelId::OpenAIGptOss20b => {
                 "OpenAI's open-source 20B parameter GPT-OSS model using harmony tokenization"
             }

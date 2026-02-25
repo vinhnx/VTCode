@@ -104,10 +104,6 @@ impl OpenRouterProvider {
         }
     }
 
-    pub(super) fn is_gpt5_codex_model(model: &str) -> bool {
-        model == models::openrouter::OPENAI_GPT_5_CODEX
-    }
-
     pub(super) fn resolve_model<'a>(&'a self, request: &'a LLMRequest) -> &'a str {
         if request.model.trim().is_empty() {
             self.model.as_str()

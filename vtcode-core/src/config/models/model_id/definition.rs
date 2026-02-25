@@ -19,22 +19,12 @@ pub enum ModelId {
     GPT52,
     /// GPT-5.2 Codex - Code-focused GPT-5.2 variant optimized for agentic coding
     GPT52Codex,
-    /// GPT-5 Codex - Code-focused GPT-5 variant using the Responses API
-    GPT5Codex,
+    /// GPT-5.3 Codex - Code-focused GPT-5.3 variant optimized for agentic coding with xhigh reasoning
+    GPT53Codex,
     /// GPT-5 Mini - Latest efficient OpenAI model (2025-08-07)
     GPT5Mini,
     /// GPT-5 Nano - Latest most cost-effective OpenAI model (2025-08-07)
     GPT5Nano,
-    /// GPT-5.1 - Enhanced latest most capable OpenAI model with improved reasoning (2025-11-14)
-    GPT51,
-    /// GPT-5.1 Codex - Code-focused GPT-5.1 variant using the Responses API
-    GPT51Codex,
-    /// GPT-5.1 Codex Max - Maximum context code-focused GPT-5.1 variant
-    GPT51CodexMax,
-    /// GPT-5.1 Mini - Enhanced efficient OpenAI model with improved capabilities (2025-11-14)
-    GPT51Mini,
-    /// Codex Mini Latest - Latest Codex model for code generation (2025-05-16)
-    CodexMiniLatest,
     /// GPT-OSS 20B - OpenAI's open-source 20B parameter model using harmony
     OpenAIGptOss20b,
     /// GPT-OSS 120B - OpenAI's open-source 120B parameter model using harmony
@@ -223,8 +213,6 @@ pub enum ModelId {
     OpenRouterOpenAIGptOss20b,
     /// OpenAI GPT-5 - OpenAI GPT-5 model accessed through OpenRouter
     OpenRouterOpenAIGpt5,
-    /// OpenAI GPT-5 Codex - OpenRouter listing for GPT-5 Codex
-    OpenRouterOpenAIGpt5Codex,
     /// OpenAI GPT-5 Chat - Chat optimised GPT-5 endpoint without tool use
     OpenRouterOpenAIGpt5Chat,
 
@@ -245,16 +233,6 @@ pub enum ModelId {
     OpenRouterMistralaiMistralLarge2512,
     /// DeepSeek V3.1 Nex N1 - Nex AGI DeepSeek V3.1 Nex N1 model via OpenRouter
     OpenRouterNexAgiDeepseekV31NexN1,
-    /// OpenAI GPT-5.1 - OpenAI GPT-5.1 model accessed through OpenRouter
-    OpenRouterOpenAIGpt51,
-    /// OpenAI GPT-5.1-Codex - OpenRouter listing for GPT-5.1 Codex
-    OpenRouterOpenAIGpt51Codex,
-    /// OpenAI GPT-5.1-Codex-Max - OpenRouter listing for GPT-5.1 Codex Max
-    OpenRouterOpenAIGpt51CodexMax,
-    /// OpenAI GPT-5.1-Codex-Mini - OpenRouter listing for GPT-5.1 Codex Mini
-    OpenRouterOpenAIGpt51CodexMini,
-    /// OpenAI GPT-5.1 Chat - Chat optimised GPT-5.1 endpoint without tool use
-    OpenRouterOpenAIGpt51Chat,
     /// OpenAI GPT-5.2 - OpenAI GPT-5.2 model accessed through OpenRouter
     OpenRouterOpenAIGpt52,
     /// OpenAI GPT-5.2 Chat - Chat optimised GPT-5.2 endpoint without tool use

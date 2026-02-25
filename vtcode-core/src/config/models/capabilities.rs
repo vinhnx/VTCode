@@ -58,12 +58,8 @@ impl ModelId {
             }
             ModelId::Gemini3ProPreview => Some(ModelId::Gemini3FlashPreview),
             ModelId::GPT52 => Some(ModelId::GPT5Mini),
-            ModelId::GPT52Codex => Some(ModelId::CodexMiniLatest),
+            ModelId::GPT52Codex => Some(ModelId::GPT5Mini),
             ModelId::GPT5 => Some(ModelId::GPT5Mini),
-            ModelId::GPT5Codex => Some(ModelId::CodexMiniLatest),
-            ModelId::GPT51 => Some(ModelId::GPT51Mini),
-            ModelId::GPT51Codex => Some(ModelId::CodexMiniLatest),
-            ModelId::GPT51CodexMax => Some(ModelId::CodexMiniLatest),
             ModelId::DeepSeekReasoner => Some(ModelId::DeepSeekChat),
             ModelId::XaiGrok4 => Some(ModelId::XaiGrok4Mini),
             ModelId::XaiGrok4Code => Some(ModelId::XaiGrok4CodeLatest),
@@ -106,7 +102,7 @@ impl ModelId {
                 | ModelId::OpenRouterGoogleGemini31ProPreview
                 | ModelId::GPT5
                 | ModelId::GPT52
-                | ModelId::GPT5Codex
+                | ModelId::GPT53Codex
                 | ModelId::ClaudeOpus46
                 | ModelId::ClaudeSonnet46
                 | ModelId::ClaudeOpus41
@@ -151,7 +147,7 @@ impl ModelId {
                 | ModelId::Gemini3FlashPreview
                 | ModelId::GPT52
                 | ModelId::GPT5
-                | ModelId::GPT5Codex
+                | ModelId::GPT53Codex
                 | ModelId::ClaudeOpus46
                 | ModelId::ClaudeSonnet46
                 | ModelId::ClaudeOpus45
@@ -196,15 +192,10 @@ impl ModelId {
             ModelId::Gemini3ProPreview | ModelId::Gemini3FlashPreview => "3",
             // OpenAI generations
             ModelId::GPT52 | ModelId::GPT52Codex => "5.2",
+            ModelId::GPT53Codex => "5.3",
             ModelId::GPT5
-            | ModelId::GPT5Codex
             | ModelId::GPT5Mini
             | ModelId::GPT5Nano
-            | ModelId::GPT51
-            | ModelId::GPT51Codex
-            | ModelId::GPT51CodexMax
-            | ModelId::GPT51Mini
-            | ModelId::CodexMiniLatest
             | ModelId::OpenAIGptOss20b
             | ModelId::OpenAIGptOss120b => "5",
             // Anthropic generations
@@ -287,7 +278,6 @@ impl ModelId {
             | ModelId::OpenRouterOpenAIGptOss120bFree
             | ModelId::OpenRouterOpenAIGptOss20b
             | ModelId::OpenRouterOpenAIGpt5
-            | ModelId::OpenRouterOpenAIGpt5Codex
             | ModelId::OpenRouterOpenAIGpt5Chat
             | ModelId::OpenRouterGoogleGemini31ProPreview
             | ModelId::OpenRouterAnthropicClaudeSonnet45
@@ -301,11 +291,6 @@ impl ModelId {
             | ModelId::OpenRouterAmazonNova2LiteV1
             | ModelId::OpenRouterMistralaiMistralLarge2512
             | ModelId::OpenRouterNexAgiDeepseekV31NexN1
-            | ModelId::OpenRouterOpenAIGpt51
-            | ModelId::OpenRouterOpenAIGpt51Codex
-            | ModelId::OpenRouterOpenAIGpt51CodexMax
-            | ModelId::OpenRouterOpenAIGpt51CodexMini
-            | ModelId::OpenRouterOpenAIGpt51Chat
             | ModelId::OpenRouterOpenAIGpt52
             | ModelId::OpenRouterOpenAIGpt52Chat
             | ModelId::OpenRouterOpenAIGpt52Codex
@@ -319,16 +304,11 @@ impl ModelId {
         }
     }
 
-    /// Determine if this model is a GPT-5.1+ variant with enhanced tool support
+    /// Determine if this model is a GPT-5.2+ variant with enhanced tool support
     pub fn is_gpt51_variant(&self) -> bool {
         matches!(
             self,
-            ModelId::GPT52
-                | ModelId::GPT52Codex
-                | ModelId::GPT51
-                | ModelId::GPT51Codex
-                | ModelId::GPT51CodexMax
-                | ModelId::GPT51Mini
+            ModelId::GPT52 | ModelId::GPT52Codex
         )
     }
 

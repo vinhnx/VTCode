@@ -438,7 +438,7 @@
       "zai-org/GLM-5": {
         "id": "zai-org/GLM-5",
         "name": "GLM-5",
-        "description": "Powerful text generation model.",
+        "description": "Z.AI GLM-5 flagship foundation model available via Hugging Face router.",
         "reasoning": true,
         "tool_call": true,
         "modalities": {
@@ -564,25 +564,6 @@
           ]
         },
         "context": 131072,
-        "capabilities": {
-          "structured_output": true
-        }
-      },
-      "zai-org/GLM-5": {
-        "id": "zai-org/GLM-5",
-        "name": "GLM-5",
-        "description": "Z.AI GLM-5 flagship foundation model available via Hugging Face router.",
-        "reasoning": true,
-        "tool_call": true,
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "context": 200000,
         "capabilities": {
           "structured_output": true
         }
@@ -1635,38 +1616,6 @@
           "doc_comment": "OpenAI GPT-5 Chat - Chat optimised GPT-5 endpoint without tool use"
         }
       },
-      "openai/gpt-5-codex": {
-        "id": "openai/gpt-5-codex",
-        "name": "OpenAI: GPT-5 Codex",
-        "reasoning": true,
-        "tool_call": true,
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "context": 400000,
-        "max_output_tokens": 128000,
-        "cost": {
-          "input": 1.25e-06,
-          "output": 1e-05
-        },
-        "vtcode": {
-          "variant": "OpenRouterOpenAIGpt5Codex",
-          "constant": "OPENAI_GPT_5_CODEX",
-          "vendor": "openai",
-          "display": "OpenAI GPT-5 Codex",
-          "description": "OpenRouter listing for GPT-5 Codex",
-          "efficient": false,
-          "top_tier": true,
-          "generation": "2025-09-20",
-          "doc_comment": "OpenAI GPT-5 Codex - OpenRouter listing for GPT-5 Codex"
-        }
-      },
       "openai/gpt-oss-120b": {
         "id": "openai/gpt-oss-120b",
         "name": "OpenAI: gpt-oss-120b",
@@ -2538,168 +2487,6 @@
           "top_tier": true,
           "generation": "V3.1-Nex",
           "doc_comment": "DeepSeek V3.1 Nex N1 - Nex AGI DeepSeek V3.1 Nex N1 model via OpenRouter"
-        }
-      },
-      "openai/gpt-5.1": {
-        "id": "openai/gpt-5.1",
-        "name": "OpenAI: GPT-5.1",
-        "reasoning": false,
-        "tool_call": true,
-        "modalities": {
-          "input": [
-            "text",
-            "image",
-            "file"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "context": 400000,
-        "max_output_tokens": 128000,
-        "cost": {
-          "input": 1.25e-06,
-          "output": 1e-05
-        },
-        "vtcode": {
-          "variant": "OpenRouterOpenAIGpt51",
-          "constant": "OPENAI_GPT_5_1",
-          "vendor": "openai",
-          "display": "OpenAI GPT-5.1",
-          "description": "OpenAI GPT-5.1 model accessed through OpenRouter",
-          "efficient": false,
-          "top_tier": true,
-          "generation": "2025-11-20",
-          "doc_comment": "OpenAI GPT-5.1 - OpenAI GPT-5.1 model accessed through OpenRouter"
-        }
-      },
-      "openai/gpt-5.1-codex": {
-        "id": "openai/gpt-5.1-codex",
-        "name": "OpenAI: GPT-5.1-Codex",
-        "reasoning": true,
-        "tool_call": true,
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "context": 400000,
-        "max_output_tokens": 128000,
-        "cost": {
-          "input": 1.25e-06,
-          "output": 1e-05
-        },
-        "vtcode": {
-          "variant": "OpenRouterOpenAIGpt51Codex",
-          "constant": "OPENAI_GPT_5_1_CODEX",
-          "vendor": "openai",
-          "display": "OpenAI GPT-5.1-Codex",
-          "description": "OpenRouter listing for GPT-5.1 Codex",
-          "efficient": false,
-          "top_tier": true,
-          "generation": "2025-11-20",
-          "doc_comment": "OpenAI GPT-5.1-Codex - OpenRouter listing for GPT-5.1 Codex"
-        }
-      },
-      "openai/gpt-5.1-codex-max": {
-        "id": "openai/gpt-5.1-codex-max",
-        "name": "OpenAI: GPT-5.1-Codex-Max",
-        "reasoning": true,
-        "tool_call": true,
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "context": 400000,
-        "max_output_tokens": 128000,
-        "cost": {
-          "input": 1.5e-06,
-          "output": 1.2e-05
-        },
-        "vtcode": {
-          "variant": "OpenRouterOpenAIGpt51CodexMax",
-          "constant": "OPENAI_GPT_5_1_CODEX_MAX",
-          "vendor": "openai",
-          "display": "OpenAI GPT-5.1-Codex-Max",
-          "description": "OpenRouter listing for GPT-5.1 Codex Max",
-          "efficient": false,
-          "top_tier": true,
-          "generation": "2025-11-25",
-          "doc_comment": "OpenAI GPT-5.1-Codex-Max - OpenRouter listing for GPT-5.1 Codex Max"
-        }
-      },
-      "openai/gpt-5.1-codex-mini": {
-        "id": "openai/gpt-5.1-codex-mini",
-        "name": "OpenAI: GPT-5.1-Codex-Mini",
-        "reasoning": true,
-        "tool_call": true,
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "context": 200000,
-        "max_output_tokens": 64000,
-        "cost": {
-          "input": 8e-07,
-          "output": 6e-06
-        },
-        "vtcode": {
-          "variant": "OpenRouterOpenAIGpt51CodexMini",
-          "constant": "OPENAI_GPT_5_1_CODEX_MINI",
-          "vendor": "openai",
-          "display": "OpenAI GPT-5.1-Codex-Mini",
-          "description": "OpenRouter listing for GPT-5.1 Codex Mini",
-          "efficient": true,
-          "top_tier": false,
-          "generation": "2025-11-15",
-          "doc_comment": "OpenAI GPT-5.1-Codex-Mini - OpenRouter listing for GPT-5.1 Codex Mini"
-        }
-      },
-      "openai/gpt-5.1-chat": {
-        "id": "openai/gpt-5.1-chat",
-        "name": "OpenAI: GPT-5.1 Chat",
-        "reasoning": false,
-        "tool_call": false,
-        "modalities": {
-          "input": [
-            "file",
-            "image",
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "context": 128000,
-        "max_output_tokens": 16384,
-        "cost": {
-          "input": 1.25e-06,
-          "output": 1e-05
-        },
-        "vtcode": {
-          "variant": "OpenRouterOpenAIGpt51Chat",
-          "constant": "OPENAI_GPT_5_1_CHAT",
-          "vendor": "openai",
-          "display": "OpenAI GPT-5.1 Chat",
-          "description": "Chat optimised GPT-5.1 endpoint without tool use",
-          "efficient": false,
-          "top_tier": false,
-          "generation": "2025-11-20",
-          "doc_comment": "OpenAI GPT-5.1 Chat - Chat optimised GPT-5.1 endpoint without tool use"
         }
       },
       "openai/gpt-5.2": {

@@ -17,7 +17,6 @@ impl provider::LLMProvider for OpenAIProvider {
         if matches!(
             self.model.as_ref(),
             models::openai::GPT_5
-                | models::openai::GPT_5_CODEX
                 | models::openai::GPT_5_MINI
                 | models::openai::GPT_5_NANO
         ) {

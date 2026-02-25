@@ -16,7 +16,7 @@ async fn cli_override_with_non_responses_model_warns() {
         "--workspace",
         workspace.to_str().unwrap(),
         "--model",
-        "codex-mini-latest",
+        "gpt-oss-20b",
         "--config",
         "prompt_cache.providers.openai.prompt_cache_retention=24h",
     ])

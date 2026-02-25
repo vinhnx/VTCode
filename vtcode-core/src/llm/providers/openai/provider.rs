@@ -57,12 +57,6 @@ pub struct OpenAIProvider {
 }
 
 impl OpenAIProvider {
-    fn is_gpt5_codex_model(model: &str) -> bool {
-        model == models::openai::GPT_5_CODEX
-            || model == models::openai::GPT_5_1_CODEX
-            || model == models::openai::GPT_5_1_CODEX_MAX
-    }
-
     fn is_responses_api_model(model: &str) -> bool {
         models::openai::RESPONSES_API_MODELS.contains(&model)
     }
@@ -73,9 +67,6 @@ impl OpenAIProvider {
 
     fn requires_responses_api(model: &str) -> bool {
         model == models::openai::GPT_5
-            || model == models::openai::GPT_5_CODEX
-            || model == models::openai::GPT_5_1_CODEX
-            || model == models::openai::GPT_5_1_CODEX_MAX
     }
 
     fn default_responses_state(model: &str) -> ResponsesApiState {
@@ -203,11 +194,8 @@ impl OpenAIProvider {
 
     fn supports_temperature_parameter(model: &str) -> bool {
         if model == models::openai::GPT_5
-            || model == models::openai::GPT_5_CODEX
             || model == models::openai::GPT_5_MINI
             || model == models::openai::GPT_5_NANO
-            || model == models::openai::GPT_5_1_CODEX
-            || model == models::openai::GPT_5_1_CODEX_MAX
         {
             return false;
         }
@@ -267,7 +255,6 @@ impl OpenAIProvider {
             supports_temperature: Self::supports_temperature_parameter(&request.model),
             supports_reasoning_effort: self.supports_reasoning_effort(&request.model),
             supports_reasoning: self.supports_reasoning(&request.model),
-            is_gpt5_codex_model: Self::is_gpt5_codex_model(&request.model),
             is_responses_api_model: Self::is_responses_api_model(&request.model),
             supports_prompt_cache_key: is_native_openai,
             prompt_cache_key: request.prompt_cache_key.as_deref(),

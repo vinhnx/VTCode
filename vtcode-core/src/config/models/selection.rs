@@ -18,7 +18,6 @@ impl ModelId {
             ModelId::Gemini3ProPreview,
             ModelId::GPT52,
             ModelId::GPT5,
-            ModelId::GPT51,
             ModelId::OpenAIGptOss20b,
             ModelId::ClaudeOpus45,
             ModelId::ClaudeSonnet46,

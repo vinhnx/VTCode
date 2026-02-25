@@ -467,7 +467,7 @@ mod validation_tests {
     fn retention_warning_for_non_responses_model() {
         let mut cfg = VTCodeConfig::default();
         cfg.prompt_cache.providers.openai.prompt_cache_retention = Some("24h".to_owned());
-        let model = "codex-mini-latest"; // not in responses API list
+        let model = "gpt-oss-20b"; // not in responses API list
         let provider = "openai";
         let msg = check_prompt_cache_retention_compat(&cfg, model, provider);
         assert!(msg.is_some());
