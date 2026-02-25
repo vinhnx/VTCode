@@ -308,10 +308,20 @@ update_changelog_from_commits() {
     # Check if git-cliff is available
     if command -v git-cliff >/dev/null 2>&1; then
         print_info "Using git-cliff for changelog generation"
-        
+
+        # Set GitHub token for git-cliff if available
+        local github_token=""
+        if command -v gh >/dev/null 2>&1; then
+            github_token=$(gh auth token 2>/dev/null || true)
+        fi
+
         if [[ "$dry_run_flag" == 'true' ]]; then
             print_info "Dry run - would generate changelog with git-cliff"
-            git-cliff --config cliff.toml --unreleased 2>/dev/null || true
+            if [[ -n "$github_token" ]]; then
+                GITHUB_TOKEN="$github_token" git-cliff --config cliff.toml --tag "$version" --unreleased 2>/dev/null || git-cliff --config cliff.toml --offline --tag "$version" --unreleased 2>/dev/null || true
+            else
+                git-cliff --config cliff.toml --offline --tag "$version" --unreleased 2>/dev/null || true
+            fi
             return 0
         fi
 
@@ -321,7 +331,18 @@ update_changelog_from_commits() {
         temp_changelog=$(mktemp)
 
         # Generate changelog for the specific version
-        if git-cliff --config cliff.toml --output "$temp_changelog" 2>/dev/null; then
+        # Use --tag to set the version number for the changelog entry
+        # Use GitHub token if available for fetching usernames
+        if [[ -n "$github_token" ]]; then
+            print_info "Using GitHub authentication for changelog generation"
+            GITHUB_TOKEN="$github_token" git-cliff --config cliff.toml --tag "$version" --output "$temp_changelog" 2>/dev/null || \
+            git-cliff --config cliff.toml --offline --tag "$version" --output "$temp_changelog" 2>/dev/null || true
+        else
+            print_info "GitHub token not found, using offline mode"
+            git-cliff --config cliff.toml --offline --tag "$version" --output "$temp_changelog" 2>/dev/null || true
+        fi
+
+        if [[ -s "$temp_changelog" ]]; then
             # Extract the new version section from git-cliff output
             local date_str
             date_str=$(date +%Y-%m-%d)

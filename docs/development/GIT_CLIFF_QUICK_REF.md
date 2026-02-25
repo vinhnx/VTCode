@@ -13,11 +13,12 @@ docker run --rm -v "$(pwd):/app" -w /app ghcr.io/orhunp/git-cliff:latest --help
 ## Common Commands
 
 ```bash
-# Generate full changelog
-git-cliff --config cliff.toml --output CHANGELOG.md
+# Generate changelog for a release (use actual version number)
+# Uses GitHub token if available, falls back to email prefix
+git-cliff --config cliff.toml --tag "0.82.4" --unreleased --output CHANGELOG.md
 
-# Preview unreleased changes
-git-cliff --config cliff.toml --unreleased
+# Preview unreleased changes for upcoming release
+git-cliff --config cliff.toml --tag "0.82.4" --unreleased
 
 # Show last 3 versions
 git-cliff --config cliff.toml --latest 3
@@ -25,6 +26,11 @@ git-cliff --config cliff.toml --latest 3
 # Custom range
 git-cliff --config cliff.toml v0.80.0..v0.82.0
 ```
+
+**Note:** 
+- **Online mode** (with `GITHUB_TOKEN`): Fetches actual GitHub usernames - works for all contributors including outside contributors
+- **Offline mode** (without token): Uses email prefix as fallback
+- Use `--tag "<version>"` with `--unreleased` for release changelog
 
 ## Release Workflow
 

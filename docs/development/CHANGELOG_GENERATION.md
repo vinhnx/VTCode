@@ -45,24 +45,48 @@ The following conventional commit types are recognized:
 
 ## Usage
 
+### Authentication
+
+git-cliff can operate in two modes:
+
+**Online mode (recommended):** Fetches GitHub usernames from commit metadata
+```bash
+export GITHUB_TOKEN=$(gh auth token)  # Get token from gh CLI
+git-cliff --config cliff.toml --tag "0.82.4" --unreleased
+```
+
+Benefits:
+- Shows actual GitHub usernames for all contributors
+- Works with outside contributors automatically
+- No hardcoded email mappings needed
+
+**Offline mode:** Uses email prefix as fallback (no API calls)
+```bash
+git-cliff --config cliff.toml --tag "0.82.4" --unreleased
+```
+
+Note: Offline mode shows email prefix (e.g., `@username`) instead of GitHub username.
+
+The release script automatically detects and uses your GitHub token if available.
+
+### Generate Changelog for a Release
+
+```bash
+# Generate changelog for a specific version (for releases)
+git-cliff --config cliff.toml --tag "0.82.4" --unreleased --output CHANGELOG.md
+
+# Preview before writing
+git-cliff --config cliff.toml --tag "0.82.4" --unreleased
+```
+
 ### Generate Full Changelog
 
 ```bash
-# Generate complete changelog
+# Generate complete changelog from all tags
 git-cliff --config cliff.toml --output CHANGELOG.md
 
 # Preview without writing to file
 git-cliff --config cliff.toml
-```
-
-### Generate Unreleased Changes
-
-```bash
-# Show changes since last tag
-git-cliff --config cliff.toml --unreleased
-
-# Include unreleased in output
-git-cliff --config cliff.toml --unreleased --output CHANGELOG.md
 ```
 
 ### Generate Recent Versions
