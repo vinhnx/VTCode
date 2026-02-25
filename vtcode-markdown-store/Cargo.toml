@@ -1,6 +1,6 @@
 [package]
 name = "vtcode-markdown-store"
-version = "0.82.6"
+version = "0.83.0"
 edition = "2024"
 authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
 description = "Markdown-backed storage utilities extracted from VT Code"
