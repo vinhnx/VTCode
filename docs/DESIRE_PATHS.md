@@ -55,17 +55,16 @@ These are patterns agents have tried or might try that aren't yet smooth:
 
 **Current friction**:
 ```
-code_intelligence {
-  "operation": "goto_definition",
-  "file_path": "src/main.rs",
-  "line": 10,
-  "character": 5
+unified_search {
+  "action": "grep",
+  "pattern": "fn main",
+  "path": "src/"
 }
 ```
 
 **Intuitive expectation**:
 ```
-code_intelligence goto_definition src/main.rs 10 5
+unified_search grep "fn main" src/
 ```
 
 **Priority**: Medium (requires tool refactoring)

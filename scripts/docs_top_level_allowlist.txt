@@ -298,7 +298,6 @@ docs/grep-quick-reference.md
 docs/grep-tool-enhancement-summary.md
 docs/grep-tool-guide.md
 docs/hooks-guide.md
-docs/improved_system_prompts.md
 docs/lmstudio-codex-integration.md
 docs/lmstudio-quick-reference.md
 docs/maintenance_guide.md

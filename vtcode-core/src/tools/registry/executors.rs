@@ -80,7 +80,7 @@ fn missing_unified_file_action_error(args: &Value) -> anyhow::Error {
 fn missing_unified_search_action_error(args: &Value) -> anyhow::Error {
     anyhow!(
         "Missing action in unified_search. Provide `action` or inferable fields: \
-         `pattern|query` (grep), `path` (list), `keyword` (tools), `operation` (intelligence), \
+         `pattern|query` (grep), `path` (list), `keyword` (tools), \
          `scope` (errors), `url` (web), `sub_action|name` (skill). Received keys: {}",
         summarized_arg_keys(args)
     )
