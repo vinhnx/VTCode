@@ -21,7 +21,7 @@ examples = []
 
 [dependencies]
 vtcode-commons = { path = "../vtcode-commons", version = "0.82.4" }
-vtcode-core = { path = "../vtcode-core", version = "0.82.4" }
+vtcode-core = { path = "../vtcode-core", version = "0.82.4", default-features = false }
 vtcode-acp-client = { path = "../vtcode-acp-client", version = "0.82.4" }
 anyhow = { workspace = true }
 async-trait = "0.1"
