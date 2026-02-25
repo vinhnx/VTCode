@@ -712,6 +712,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "lang-rust")]
     fn test_extraction_rust() {
         let source = "fn my_func() {} struct MyStruct {}";
         let mut parser = tree_sitter::Parser::new();

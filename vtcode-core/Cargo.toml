@@ -53,12 +53,12 @@ dialoguer = "0.12.0"
 regex = { workspace = true }
 shell-words = "1.1"
 tree-sitter = "0.26"
-tree-sitter-rust = "0.24"
-tree-sitter-python = "0.25"
-tree-sitter-javascript = "0.25"
-tree-sitter-typescript = "0.23"
-tree-sitter-go = "0.25"
-tree-sitter-java = "0.23"
+tree-sitter-rust = { version = "0.24", optional = true }
+tree-sitter-python = { version = "0.25", optional = true }
+tree-sitter-javascript = { version = "0.25", optional = true }
+tree-sitter-typescript = { version = "0.23", optional = true }
+tree-sitter-go = { version = "0.25", optional = true }
+tree-sitter-java = { version = "0.23", optional = true }
 tree-sitter-bash = "0.25"
 indexmap = { version = "2.13", features = ["serde"] }
 itertools = "0.14.0"
@@ -193,7 +193,21 @@ name = "migration_test"
 path = "examples/migration_test.rs"
 
 [features]
-default = []
+default = ["tree-sitter-languages"]
+tree-sitter-languages = [
+    "lang-rust",
+    "lang-python",
+    "lang-javascript",
+    "lang-typescript",
+    "lang-go",
+    "lang-java",
+]
+lang-rust = ["dep:tree-sitter-rust"]
+lang-python = ["dep:tree-sitter-python"]
+lang-javascript = ["dep:tree-sitter-javascript"]
+lang-typescript = ["dep:tree-sitter-typescript"]
+lang-go = ["dep:tree-sitter-go"]
+lang-java = ["dep:tree-sitter-java"]
 swift = ["dep:tree-sitter-swift"]
 schema = ["dep:schemars"]
 a2a-server = ["dep:axum", "dep:tower", "dep:tower-http", "dep:tokio-stream"]

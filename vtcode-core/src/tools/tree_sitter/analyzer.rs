@@ -1135,22 +1135,26 @@ impl TreeSitterAnalyzer {
 /// Helper function to get tree-sitter language
 pub fn get_language(language: LanguageSupport) -> Result<Language> {
     let lang = match language {
+        #[cfg(feature = "lang-rust")]
         LanguageSupport::Rust => tree_sitter_rust::LANGUAGE,
+        #[cfg(feature = "lang-python")]
         LanguageSupport::Python => tree_sitter_python::LANGUAGE,
+        #[cfg(feature = "lang-javascript")]
         LanguageSupport::JavaScript => tree_sitter_javascript::LANGUAGE,
+        #[cfg(feature = "lang-typescript")]
         LanguageSupport::TypeScript => tree_sitter_typescript::LANGUAGE_TYPESCRIPT,
+        #[cfg(feature = "lang-go")]
         LanguageSupport::Go => tree_sitter_go::LANGUAGE,
+        #[cfg(feature = "lang-java")]
         LanguageSupport::Java => tree_sitter_java::LANGUAGE,
         LanguageSupport::Bash => tree_sitter_bash::LANGUAGE,
-        LanguageSupport::Swift => {
-            #[cfg(feature = "swift")]
-            {
-                tree_sitter_swift::LANGUAGE
-            }
-            #[cfg(not(feature = "swift"))]
-            {
-                return Err(TreeSitterError::UnsupportedLanguage("Swift".to_string()).into());
-            }
+        #[cfg(feature = "swift")]
+        LanguageSupport::Swift => tree_sitter_swift::LANGUAGE,
+        #[allow(unreachable_patterns)]
+        _ => {
+            return Err(
+                TreeSitterError::UnsupportedLanguage(format!("{language}")).into(),
+            );
         }
     };
     Ok(lang.into())

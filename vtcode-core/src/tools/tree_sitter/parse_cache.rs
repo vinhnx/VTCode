@@ -201,11 +201,17 @@ impl CachedTreeSitterAnalyzer {
 
         // Initialize parsers for each language
         let languages = vec![
+            #[cfg(feature = "lang-rust")]
             LanguageSupport::Rust,
+            #[cfg(feature = "lang-python")]
             LanguageSupport::Python,
+            #[cfg(feature = "lang-javascript")]
             LanguageSupport::JavaScript,
+            #[cfg(feature = "lang-typescript")]
             LanguageSupport::TypeScript,
+            #[cfg(feature = "lang-go")]
             LanguageSupport::Go,
+            #[cfg(feature = "lang-java")]
             LanguageSupport::Java,
             LanguageSupport::Bash,
             #[cfg(feature = "swift")]
