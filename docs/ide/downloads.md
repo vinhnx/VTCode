@@ -10,7 +10,7 @@ Choose your favorite code editor to download VT Code:
 
 [![VSCode Marketplace](https://img.shields.io/visual-studio-marketplace/v/nguyenxuanvinh.vtcode-companion?style=for-the-badge&logo=visual-studio-code&logoColor=white&label=VSCode%20Marketplace)](https://marketplace.visualstudio.com/items?itemName=nguyenxuanvinh.vtcode-companion)
 
-The original VT Code extension for Visual Studio Code with full semantic code understanding and AI assistance.
+The original VT Code extension for Visual Studio Code with LLM-native code understanding and AI assistance.
 
 ### [Winsurf](./ide-downloads.md#winsurf)
 
@@ -28,7 +28,7 @@ VT Code is available for Cursor through the Open VSX Registry. Install directly 
 
 VT Code is a Rust-based AI coding assistant that provides:
 
--   **Semantic Code Intelligence**: Deep code understanding using Tree-sitter and ripgrep
+-   **Semantic Code Understanding**: LLM-native code understanding and ripgrep integration
 -   **Multi-Provider AI**: Support for OpenAI, Anthropic, Google, xAI, DeepSeek, and more
 -   **Security First**: Built-in safeguards with human-in-the-loop controls
 -   **Offline Analysis**: Analyze your codebase without sending code to external services
@@ -96,4 +96,4 @@ For detailed setup instructions, see our [Cursor and Windsurf Setup Guide](./cur
 
 ---
 
-_VT Code is designed to work with your favorite IDE to provide semantic code intelligence and AI assistance. All VS Code compatible editors can use VT Code through the Open VSX registry._
+_VT Code is designed to work with your favorite IDE to provide LLM-native code understanding and AI assistance. All VS Code compatible editors can use VT Code through the Open VSX registry._

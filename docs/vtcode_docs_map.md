@@ -30,9 +30,9 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **User Questions**: "What tools does VT Code have?", "How do file operations work?", "Can VT Code search code?", "What search capabilities exist?", "How does the tool system work?"
 
 - **File**: `docs/vtcode_indexer.md`
-  - **Content**: Workspace indexing and context management
-  - **Topics**: Project analysis, context generation, file discovery
-  - **User Questions**: "How does VT Code understand my project?", "Can VT Code analyze code?", "How does workspace indexing work?", "What programming languages are supported?"
+  - **Content**: Workspace file indexing and discovery
+  - **Topics**: Project discovery, file hashing, fast search
+  - **User Questions**: "How does VT Code discover my files?", "How does workspace indexing work?"
 
 - **File**: `docs/CUSTOM_TOOLS.md`
   - **Content**: Guide for developing custom tools and extensions
@@ -162,11 +162,6 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **User Questions**: "What was the complete optimization project?", "What are the final results?", "What documentation is available?"
 
 ### Advanced Features & Research
-
-- **File**: `docs/improved_system_prompts.md`
-  - **Content**: Advanced system prompt engineering
-  - **Topics**: Prompt optimization, workflow automation
-  - **User Questions**: "How do system prompts work?", "Can I customize behavior?", "How do I optimize prompts?"
 
 - **File**: `docs/agent-teams.md`
   - **Content**: Experimental agent teams in VT Code
@@ -347,7 +342,7 @@ This document serves as an index of all VT Code documentation. When users ask qu
 ### Advanced Features
 
 
-- **Tree-sitter Integration**: Code parsing for 6+ programming languages
+- **Bash Safety Parsing**: Accurate shell command validation via tree-sitter-bash
 - **MCP Protocol**: Model Context Protocol integration for enhanced capabilities
 - **PTY Integration**: Full pseudo-terminal support for interactive programs
 - **Agent Coordination**: Multi-agent workflow support (Orchestrator, Explorer, Coder)

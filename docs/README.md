@@ -38,9 +38,10 @@ VT Code represents a modern approach to AI-powered software development, featuri
 -   **Decision Ledger** - Structured, compact record of key decisions injected each turn for consistency
 -   **Error Recovery & Resilience** - Intelligent error handling with pattern detection and context preservation
 -   **Conversation Summarization** - Automatic compression when exceeding thresholds with quality assessment
--   **Multi-Provider LLM Support** - Gemini, OpenAI, Anthropic, OpenRouter integration
--   **Advanced Code Intelligence** - Tree-sitter parsers for 6+ programming languages
--   **Enterprise-Grade Safety** - Comprehensive security controls and path validation
+- **Multi-Provider LLM Support** - Gemini, OpenAI, Anthropic, OpenRouter integration
+- **LLM-Native Code Understanding** - Precise semantic analysis across all modern languages
+- **Bash Safety Parsing** - Accurate shell command validation via tree-sitter-bash
+- **Enterprise-Grade Safety** - Comprehensive security controls and path validation
 -   **Flexible Configuration** - TOML-based configuration with granular policies
 -   **Workspace-First Execution** - Full read/write/command capabilities anchored to `WORKSPACE_DIR` with built-in indexing workflows
 
@@ -105,14 +106,15 @@ Deploying VT Code in production? Focus on enterprise features:
 -   **Context Compression** - Summarizes older turns while preserving ledger, errors, and recent activity
 -   **Tool Traces** - Tool inputs/outputs summarized and fed back for continuity
 
-### Advanced Code Intelligence
+### LLM-Native Code Understanding
 
--   **Tree-Sitter Integration** - Syntax-aware parsing for Rust, Python, JavaScript, TypeScript, Go, Java
--   **Intelligent Search** - Ripgrep and Tree-sitter powered code analysis
+-   **Semantic Analysis** - Deep code understanding across Rust, Python, JavaScript, TypeScript, Go, Java, and more
+-   **Bash Safety Parsing** - Tree-sitter-bash for critical shell command validation
+-   **Intelligent Search** - Ripgrep powered code analysis and discovery
 -   **Fuzzy File Discovery** - Git-aware traversal using `ignore` with `nucleo-matcher` scoring
--   **Symbol Analysis** - Function, class, and variable extraction
+-   **Symbol Analysis** - LLM-native function, class, and variable extraction
 -   **Dependency Mapping** - Import relationship analysis
--   **Code Quality Assessment** - Complexity and maintainability scoring
+-   **Code Quality Assessment** - Complexity and maintainability scoring via AI analysis
 
 ### Comprehensive Tool Suite
 
@@ -317,9 +319,9 @@ VT Code builds upon key developments in AI agent technology:
 
 -   **Anthropic's Agent Patterns** - Tool design and safety principles
 -   **Cognition's Context Engineering** - Long-running agent reliability and Decision Ledger
--   **Single-Agent Architecture** - Reliable coordination patterns
--   **Tree-Sitter Ecosystem** - Advanced code parsing capabilities
--   **Rust Community** - High-performance systems programming
+- **Single-Agent Architecture** - Reliable coordination patterns
+- **Tree-Sitter Bash Grammar** - Critical shell command validation
+- **Rust Community** - High-performance systems programming
 
 ---
 

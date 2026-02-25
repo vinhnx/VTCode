@@ -201,12 +201,10 @@ ctrl-g to edit in VS Code · ~/.claude/plans/piped-beaming-puppy.md
 
 ---
 
-improve terminal title from static "> VT Code" to dynamic title reflecting current file or task, e.g. "> VT Code ({short project name}) | Editing Foo.rs" or "> VT Code ({short project name}) | Running $ cmd" or "> VT Code ({short project name}) | Debugging Bar.swift", or "> VT Code ({short project name}) | Action Required" for HITL. This provides better context and feedback on what the agent is doing. Reference bottom status bar view dynamic status updates for inspiration on content and formatting. Keep it concise but informative, and update it in real-time as the agent switches tasks or files. On idle or default state, it can revert to "> VT Code ({short project name})" or "> VT Code".
-
----
-
 /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/docs/BLOATY_ANALYSIS.md
 
 ---
 
-check if code_intelligence is still valid, if not, remove
+/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/docs
+
+scan and sweep reference docs and update related path everywhere

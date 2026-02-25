@@ -84,9 +84,6 @@ impl ManPageGenerator {
             .text([bold("ask"), roman(" "), italic("PROMPT")])
             .text([roman("Single prompt mode without tools")])
             .control("TP", [])
-            .text([bold("analyze")])
-            .text([roman("Analyze workspace with tree-sitter integration")])
-            .control("TP", [])
             .text([bold("performance")])
             .text([roman("Display performance metrics and system status")])
             .control("TP", [])
@@ -107,9 +104,6 @@ impl ManPageGenerator {
             .control("TP", [])
             .text([bold("chat-verbose")])
             .text([roman("Verbose interactive chat with enhanced transparency")])
-            .control("TP", [])
-            .text([bold("analyze")])
-            .text([roman("Analyze workspace with tree-sitter integration")])
             .control("TP", [])
             .text([bold("performance")])
             .text([roman("Display performance metrics and system status")])
@@ -154,9 +148,6 @@ impl ManPageGenerator {
             .control("TP", [])
             .text([bold("security")])
             .text([roman("Security and safety management")])
-            .control("TP", [])
-            .text([bold("tree-sitter")])
-            .text([roman("Tree-sitter code analysis tools")])
             .control("SH", ["EXAMPLES"])
             .text([roman("Start interactive chat:")])
             .text([bold("  vtcode chat")])
@@ -220,7 +211,6 @@ impl ManPageGenerator {
         match command {
             "chat" => Self::generate_chat_man_page(),
             "ask" => Self::generate_ask_man_page(),
-            "analyze" => Self::generate_analyze_man_page(),
             "performance" => Self::generate_performance_man_page(),
             "benchmark" => Self::generate_benchmark_man_page(),
             "create-project" => Self::generate_create_project_man_page(),
@@ -301,68 +291,6 @@ impl ManPageGenerator {
     }
 
     /// Generate man page for the analyze command
-    fn generate_analyze_man_page() -> Result<String> {
-        let current_date = Self::current_date();
-        let page = Roff::new()
-            .control(
-                "TH",
-                [
-                    "VTCODE-ANALYZE",
-                    "1",
-                    &current_date,
-                    "VT Code",
-                    "User Commands",
-                ],
-            )
-            .control("SH", ["NAME"])
-            .text([roman(
-                "vtcode-analyze - Analyze workspace with tree-sitter integration",
-            )])
-            .control("SH", ["SYNOPSIS"])
-            .text([
-                bold("vtcode"),
-                roman(" ["),
-                bold("OPTIONS"),
-                roman("] "),
-                bold("analyze"),
-            ])
-            .control("SH", ["DESCRIPTION"])
-            .text([
-                roman(
-                    "Analyze the current workspace using tree-sitter integration. Provides project",
-                ),
-                roman(
-                    " structure analysis, language detection, code complexity metrics, dependency",
-                ),
-                roman(" insights, and symbol extraction for supported languages."),
-            ])
-            .control("SH", ["SUPPORTED LANGUAGES"])
-            .text([roman(
-                "• Rust • Python • JavaScript • TypeScript • Go • Java",
-            )])
-            .control("SH", ["FEATURES"])
-            .control("TP", [])
-            .text([bold("Project Structure")])
-            .text([roman("Directory tree and file organization analysis")])
-            .control("TP", [])
-            .text([bold("Language Detection")])
-            .text([roman("Automatic detection of programming languages used")])
-            .control("TP", [])
-            .text([bold("Code Metrics")])
-            .text([roman("Complexity analysis and code quality metrics")])
-            .control("TP", [])
-            .text([bold("Symbol Extraction")])
-            .text([roman("Functions, classes, and other code symbols")])
-            .control("SH", ["EXAMPLES"])
-            .text([roman("Analyze current workspace:")])
-            .text([bold("  vtcode analyze")])
-            .control("SH", ["SEE ALSO"])
-            .text([bold("vtcode(1)"), roman(", "), bold("vtcode-chat(1)")])
-            .render();
-
-        Ok(page)
-    }
-
     /// Generate man page for the performance command
     fn generate_performance_man_page() -> Result<String> {
         let current_date = Self::current_date();
@@ -516,14 +444,13 @@ impl ManPageGenerator {
             .text([
                 roman("Create a complete Rust project with advanced features and integrations."),
                 roman(" Supports web frameworks, database integration, authentication systems,"),
-                roman(" testing setup, and tree-sitter integration."),
+                roman(" testing setup, and security policies."),
             ])
             .control("SH", ["AVAILABLE FEATURES"])
             .text([roman("• web - Web framework (Axum, Rocket, Warp)")])
             .text([roman("• auth - Authentication system")])
             .text([roman("• db - Database integration")])
             .text([roman("• test - Testing setup")])
-            .text([roman("• tree-sitter - Code analysis integration")])
             .control("SH", ["EXAMPLES"])
             .text([roman("Create web app with auth and database:")])
             .text([bold("  vtcode create-project myapp web,auth,db")])
@@ -566,7 +493,7 @@ impl ManPageGenerator {
             .text([
                 roman("Initialize a project with enhanced dot-folder structure for VT Code."),
                 roman(" Creates project directory structure, config files, cache directories,"),
-                roman(" embeddings storage, and tree-sitter parser setup."),
+                roman(" embeddings storage, and security policies."),
             ])
             .control("SH", ["DIRECTORY STRUCTURE"])
             .text([roman(
@@ -642,7 +569,6 @@ impl ManPageGenerator {
             .text([roman("• mcp - Manage Model Context Protocol providers")])
             .text([roman("• models - Manage models and providers")])
             .text([roman("• security - Security and safety management")])
-            .text([roman("• tree-sitter - Tree-sitter code analysis tools")])
             .text([roman("• acp - Agent Client Protocol bridge for IDE integrations")])
             .text([roman("• chat-verbose - Verbose interactive chat with transparency")])
             .text([roman("• man - Man page generation (this command)")])
