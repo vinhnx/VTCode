@@ -72,6 +72,7 @@ mod reverse_search;
 mod spinner;
 mod state;
 pub mod terminal_capabilities;
+mod terminal_title;
 #[cfg(test)]
 mod tests;
 mod tool_renderer;
@@ -215,4 +216,10 @@ pub struct Session {
     pub(crate) header_lines_cache: Option<Vec<Line<'static>>>,
     pub(crate) header_height_cache: std::collections::HashMap<u16, u16>,
     pub(crate) queued_inputs_preview_cache: Option<Vec<String>>,
+
+    // --- Terminal Title ---
+    /// Workspace root path for dynamic title generation
+    pub(crate) workspace_root: Option<std::path::PathBuf>,
+    /// Last set terminal title to avoid redundant updates
+    last_terminal_title: Option<String>,
 }

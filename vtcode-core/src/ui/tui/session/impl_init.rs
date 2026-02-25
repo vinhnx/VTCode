@@ -176,6 +176,10 @@ impl Session {
             header_lines_cache: None,
             header_height_cache: std::collections::HashMap::new(),
             queued_inputs_preview_cache: None,
+
+            // --- Terminal Title ---
+            workspace_root: None,
+            last_terminal_title: None,
         };
         session.ensure_prompt_style_color();
         session

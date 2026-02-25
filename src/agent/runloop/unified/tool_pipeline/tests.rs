@@ -75,6 +75,7 @@ impl TestContext {
             10,
             None,
             None,
+            Some(workspace.clone()),
         ) {
             Ok(session) => session,
             Err(err) if err.to_string().contains("stdin is not a terminal") => {
