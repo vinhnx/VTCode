@@ -3,13 +3,13 @@
 
 [agent]
 # Primary LLM provider to use (e.g., "openai", "gemini", "anthropic", "openrouter")
-provider = "minimax"
+provider = "openai"
 
 # Environment variable containing the API key for the provider
-api_key_env = "MINIMAX_API_KEY"
+api_key_env = "OPENAI_API_KEY"
 
 # Default model to use when no specific model is specified
-default_model = "MiniMax-M2"
+default_model = "gpt-5.3-codex"
 
 # Personal/local overrides should live in user config, not workspace config:
 #   ~/.vtcode/vtcode.toml
