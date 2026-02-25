@@ -12,8 +12,7 @@ use ratatui::crossterm::{
     },
     execute,
     terminal::{
-        self, EnterAlternateScreen, LeaveAlternateScreen, SetTitle, disable_raw_mode,
-        enable_raw_mode,
+        self, EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
     },
 };
 use ratatui::{
@@ -364,6 +363,7 @@ pub struct TuiOptions {
     pub event_callback: Option<InlineEventCallback>,
     pub active_pty_sessions: Option<std::sync::Arc<std::sync::atomic::AtomicUsize>>,
     pub keyboard_protocol: crate::config::KeyboardProtocolConfig,
+    pub workspace_root: Option<std::path::PathBuf>,
 }
 
 pub async fn run_tui(
@@ -384,6 +384,7 @@ pub async fn run_tui(
     session.show_logs = options.show_logs;
     session.set_log_receiver(log_rx);
     session.active_pty_sessions = options.active_pty_sessions;
+    session.set_workspace_root(options.workspace_root.clone());
     register_tui_log_sender(log_tx);
 
     let keyboard_flags = crate::config::keyboard_protocol_to_flags(&options.keyboard_protocol);
@@ -393,9 +394,21 @@ pub async fn run_tui(
         execute!(stderr, EnterAlternateScreen).context(ALTERNATE_SCREEN_ERROR)?;
     }
 
-    // Set custom terminal title
-    execute!(stderr, SetTitle(TERMINAL_TITLE))
-        .unwrap_or_else(|_| tracing::debug!("failed to set terminal title"));
+    // Set initial terminal title with project name using OSC 2 sequence
+    let initial_title = options
+        .workspace_root
+        .as_ref()
+        .and_then(|path| {
+            path.file_name()
+                .or_else(|| path.parent()?.file_name())
+                .map(|name| format!("> VT Code ({})", name.to_string_lossy()))
+        })
+        .unwrap_or_else(|| TERMINAL_TITLE.to_string());
+
+    // Use OSC 2 sequence directly for cross-terminal compatibility
+    let osc_sequence = format!("\x1b]2;{}\x07", initial_title);
+    let _ = stderr.write_all(osc_sequence.as_bytes());
+    let _ = stderr.flush();
 
     let backend = CrosstermBackend::new(stderr);
     let mut terminal = Terminal::new(backend).context("failed to initialize inline terminal")?;
@@ -468,8 +481,8 @@ pub async fn run_tui(
         tracing::warn!(%error, "failed to restore terminal modes");
     }
 
-    // Clear terminal title on exit
-    let _ = execute!(io::stderr(), SetTitle(""));
+    // Clear terminal title on exit using OSC 2 sequence
+    session.clear_terminal_title();
 
     drive_result?;
     finalize_result?;
@@ -677,6 +690,9 @@ async fn drive_terminal<B: Backend>(
                 }
             }
         }
+
+        // Update terminal title based on current activity state
+        session.update_terminal_title();
 
         if session.thinking_spinner.is_active
             || session.is_running_activity()

@@ -13,7 +13,6 @@ pub enum LanguageSupport {
     Swift,
 }
 
-
 /// Linting tool configuration
 #[derive(Debug, Clone)]
 pub struct LintConfig {

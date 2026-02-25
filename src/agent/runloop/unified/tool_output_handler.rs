@@ -341,6 +341,7 @@ mod tests {
             10,
             None,
             None,
+            Some(workspace.clone()),
         )
         .unwrap();
         let handle = session.clone_inline_handle();

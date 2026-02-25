@@ -35,6 +35,7 @@ pub fn spawn_session(
     inline_rows: u16,
     event_callback: Option<InlineEventCallback>,
     active_pty_sessions: Option<Arc<std::sync::atomic::AtomicUsize>>,
+    workspace_root: Option<std::path::PathBuf>,
 ) -> Result<InlineSession> {
     spawn_session_with_prompts(
         theme,
@@ -44,6 +45,7 @@ pub fn spawn_session(
         event_callback,
         active_pty_sessions,
         crate::config::KeyboardProtocolConfig::default(),
+        workspace_root,
     )
 }
 
@@ -57,6 +59,7 @@ pub fn spawn_session_with_prompts(
     event_callback: Option<InlineEventCallback>,
     active_pty_sessions: Option<Arc<std::sync::atomic::AtomicUsize>>,
     keyboard_protocol: crate::config::KeyboardProtocolConfig,
+    workspace_root: Option<std::path::PathBuf>,
 ) -> Result<InlineSession> {
     use crossterm::tty::IsTty;
 
@@ -84,6 +87,7 @@ pub fn spawn_session_with_prompts(
                 event_callback,
                 active_pty_sessions,
                 keyboard_protocol,
+                workspace_root,
             },
         )
         .await

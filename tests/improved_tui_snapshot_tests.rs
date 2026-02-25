@@ -130,6 +130,7 @@ async fn test_tui_session_creation() {
         10,                 // inline_rows
         None,               // event_callback
         None,               // active_pty_sessions
+        None,               // workspace_root
     );
 
     // Verify that the session was created successfully

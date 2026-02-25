@@ -344,7 +344,9 @@ impl ToolRegistry {
                 let tool = self.inventory.file_ops_tool().clone();
                 tool.execute(args).await
             }
-            UnifiedSearchAction::Intelligence => Ok(serde_json::json!({"error": "Code intelligence (tree-sitter) has been removed. Use grep/search tools instead."})),
+            UnifiedSearchAction::Intelligence => Ok(
+                serde_json::json!({"error": "Code intelligence (tree-sitter) has been removed. Use grep/search tools instead."}),
+            ),
             UnifiedSearchAction::Tools => self.execute_search_tools(args).await,
             UnifiedSearchAction::Errors => self.execute_get_errors(args).await,
             UnifiedSearchAction::Agent => self.execute_agent_info().await,

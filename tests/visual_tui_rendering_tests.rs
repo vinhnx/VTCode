@@ -41,6 +41,7 @@ async fn test_visual_user_agent_exchange() {
         12, // inline_rows
         None,
         None,
+        None, // workspace_root
     );
 
     // Add content that would render visually
@@ -90,6 +91,7 @@ async fn test_visual_code_rendering() {
         15, // inline_rows
         None,
         None,
+        None, // workspace_root
     );
 
     if let Ok(sess) = session {
@@ -135,6 +137,7 @@ async fn test_visual_tool_output() {
         10, // inline_rows
         None,
         None,
+        None, // workspace_root
     );
 
     if let Ok(sess) = session {
@@ -196,6 +199,7 @@ async fn test_visual_error_handling() {
         12, // inline_rows
         None,
         None,
+        None, // workspace_root
     );
 
     if let Ok(sess) = session {
@@ -293,6 +297,7 @@ async fn test_visual_header_variations() {
             8,
             None,
             None,
+            None, // workspace_root
         );
 
         if let Ok(sess) = session {

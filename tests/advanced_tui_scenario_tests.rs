@@ -45,6 +45,7 @@ async fn test_real_ui_scenario_with_commands() {
         12, // inline_rows
         None,
         None,
+        None, // workspace_root
     );
 
     // Verify session was created

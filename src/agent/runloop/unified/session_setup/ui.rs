@@ -99,6 +99,7 @@ pub(crate) async fn initialize_session_ui(
         vt_cfg
             .map(|cfg| cfg.ui.keyboard_protocol.clone())
             .unwrap_or_default(),
+        Some(config.workspace.clone()),
     )
     .context("failed to launch inline session")?;
     if skip_confirmations {
