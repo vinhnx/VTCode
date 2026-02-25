@@ -56,16 +56,16 @@ git-cliff --config cliff.toml --tag "0.82.4" --unreleased
 ```
 
 Benefits:
-- Shows actual GitHub usernames for all contributors
+- Shows actual GitHub usernames with @ prefix (e.g., `@vinhnx`)
 - Works with outside contributors automatically
 - No hardcoded email mappings needed
 
-**Offline mode:** Uses email prefix as fallback (no API calls)
+**Offline mode:** Uses git commit author name (no API calls)
 ```bash
 git-cliff --config cliff.toml --tag "0.82.4" --unreleased
 ```
 
-Note: Offline mode shows email prefix (e.g., `@username`) instead of GitHub username.
+Note: Offline mode shows the full git author name as-is (e.g., `Vinh Nguyen`).
 
 The release script automatically detects and uses your GitHub token if available.
 

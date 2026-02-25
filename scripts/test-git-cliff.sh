@@ -33,12 +33,18 @@ else
 fi
 
 # Get the latest version for testing
-LATEST_VERSION="0.82.4"
+LATEST_VERSION="0.82.5"
 
-# Test 1: Generate changelog for last version with tag
+# Find previous semver version
+PREVIOUS_VERSION=$(git tag | grep -E '^[vV]?[0-9]+\.[0-9]+\.[0-9]+$' | sed 's/^[vV]//' | sort -t. -k1,1rn -k2,2rn -k3,3rn | awk -v ver="$LATEST_VERSION" '$0 != ver {print; exit}')
+
+echo "Previous version: $PREVIOUS_VERSION"
+echo "Current version: $LATEST_VERSION"
 echo ""
-echo "=== Test 1: Latest version with tag ==="
-git-cliff --config cliff.toml --tag "$LATEST_VERSION" --unreleased 2>&1 | head -50
+
+# Test 1: Generate changelog with semver range
+echo "=== Test 1: Changelog with semver range ($PREVIOUS_VERSION..HEAD) ==="
+git-cliff --config cliff.toml --tag "$LATEST_VERSION" "${PREVIOUS_VERSION}..HEAD" 2>&1 | head -60
 echo ""
 
 # Test 2: Generate changelog for last 3 versions
@@ -54,7 +60,7 @@ echo ""
 echo "=== Tests complete ==="
 echo ""
 echo "To regenerate CHANGELOG.md for a release:"
-echo "  git-cliff --config cliff.toml --tag <version> --unreleased --output CHANGELOG.md"
+echo "  git-cliff --config cliff.toml --tag <version> --range <prev>..HEAD --output CHANGELOG.md"
 echo ""
 echo "To preview unreleased changes:"
-echo "  git-cliff --config cliff.toml --tag <version> --unreleased"
+echo "  git-cliff --config cliff.toml --tag <version> --range <prev>..HEAD"

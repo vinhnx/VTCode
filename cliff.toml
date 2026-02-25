@@ -21,7 +21,7 @@ body = """
     ### {{ group | upper_first }}
 
     {% for commit in commits %}\
-        - {{ commit.message | split(pat="\n") | first | upper_first }} ({% if commit.id %}{{ commit.id | truncate(length=8, end="") }}{% else %}unknown{% endif %}) (@{% if commit.remote.username %}{{ commit.remote.username }}{% else %}{{ commit.author.email | split(pat="@") | first | lower }}{% endif %})
+        - {{ commit.message | split(pat="\n") | first | upper_first }} ({% if commit.id %}{{ commit.id | truncate(length=8, end="") }}{% else %}unknown{% endif %}) ({% if commit.remote.username %}@{{ commit.remote.username }}{% else %}{{ commit.author.name }}{% endif %})
     {% endfor %}
 
 {% endfor %}\
@@ -138,11 +138,11 @@ protect_breaking_commits = false
 # Filter out commits
 filter_commits = true
 
-# Tags configuration
-tag_pattern = "v[0-9].*"
+# Tags configuration - match both v0.82.0 and 0.82.0 formats
+tag_pattern = "[vV]?[0-9]+\\.[0-9]+\\.[0-9]+"
 
 # Pattern to match tags with optional 'v' prefix
-tag_regex = "(?P<version>v?[0-9]+\\.[0-9]+\\.[0-9]+)"
+tag_regex = "(?P<version>[vV]?[0-9]+\\.[0-9]+\\.[0-9]+)"
 
 # Regex to exclude commits from the changelog (matches your current config)
 exclude_patterns = [
