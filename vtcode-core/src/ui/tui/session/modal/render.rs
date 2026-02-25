@@ -95,6 +95,7 @@ pub fn render_modal_list(
     area: Rect,
     list: &mut ModalListState,
     styles: &ModalRenderStyles,
+    footer_hint: Option<&str>,
 ) {
     if list.visible_indices.is_empty() {
         list.list_state.select(None);
@@ -103,7 +104,7 @@ pub fn render_modal_list(
             ui::MODAL_LIST_NO_RESULTS_MESSAGE.to_owned(),
             styles.detail,
         )))
-        .block(modal_list_block(list, styles))
+        .block(modal_list_block(list, styles, footer_hint))
         .wrap(Wrap { trim: true });
         frame.render_widget(message, area);
         return;
@@ -114,7 +115,7 @@ pub fn render_modal_list(
     list.ensure_visible(viewport_rows);
     let items = modal_list_items(list, styles);
     let widget = List::new(items)
-        .block(modal_list_block(list, styles))
+        .block(modal_list_block(list, styles, footer_hint))
         .highlight_style(styles.highlight)
         .highlight_symbol(ui::MODAL_LIST_HIGHLIGHT_FULL)
         .repeat_highlight_symbol(true);
@@ -245,7 +246,7 @@ pub fn render_wizard_modal_body(
     idx += 1;
 
     if let Some(step) = wizard.steps.get_mut(wizard.current_step) {
-        render_modal_list(frame, chunks[idx], &mut step.list, styles);
+        render_modal_list(frame, chunks[idx], &mut step.list, styles, None);
     }
     idx += 1;
 
@@ -282,11 +283,15 @@ pub fn render_wizard_modal_body(
     }
 }
 
-fn modal_list_block(list: &ModalListState, styles: &ModalRenderStyles) -> Block<'static> {
+fn modal_list_block(
+    list: &ModalListState,
+    styles: &ModalRenderStyles,
+    footer_hint: Option<&str>,
+) -> Block<'static> {
     let mut block = Block::bordered()
         .border_type(terminal_capabilities::get_border_type())
         .border_style(styles.border);
-    if let Some(summary) = modal_list_summary_line(list, styles) {
+    if let Some(summary) = modal_list_summary_line(list, styles, footer_hint) {
         block = block.title_bottom(summary);
     }
     block
@@ -296,9 +301,10 @@ fn modal_list_block(list: &ModalListState, styles: &ModalRenderStyles) -> Block<
 fn modal_list_summary_line(
     list: &ModalListState,
     styles: &ModalRenderStyles,
+    footer_hint: Option<&str>,
 ) -> Option<Line<'static>> {
     if !list.filter_active() {
-        return None;
+        return footer_hint.map(|hint| Line::from(Span::styled(hint.to_string(), styles.hint)));
     }
 
     let mut spans = Vec::new();
@@ -423,7 +429,13 @@ pub fn render_modal_body(frame: &mut Frame<'_>, area: Rect, context: ModalBodyCo
             }
             ModalSection::List => {
                 if let Some(list_state) = list_state.as_deref_mut() {
-                    render_modal_list(frame, *chunk, list_state, context.styles);
+                    render_modal_list(
+                        frame,
+                        *chunk,
+                        list_state,
+                        context.styles,
+                        context.footer_hint,
+                    );
                 }
             }
         }

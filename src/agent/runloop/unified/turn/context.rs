@@ -346,8 +346,21 @@ impl<'a> TurnProcessingContext<'a> {
 
         if matches!(
             confirmation,
-            PlanConfirmationOutcome::Execute | PlanConfirmationOutcome::AutoAccept
+            PlanConfirmationOutcome::Execute
+                | PlanConfirmationOutcome::AutoAccept
+                | PlanConfirmationOutcome::ClearContextAutoAccept
         ) {
+            self.handle.set_skip_confirmations(matches!(
+                confirmation,
+                PlanConfirmationOutcome::AutoAccept
+                    | PlanConfirmationOutcome::ClearContextAutoAccept
+            ));
+            if matches!(
+                confirmation,
+                PlanConfirmationOutcome::ClearContextAutoAccept
+            ) {
+                self.session_stats.request_context_clear();
+            }
             transition_to_edit_mode(self.tool_registry, self.session_stats, self.handle, true)
                 .await;
         }

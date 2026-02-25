@@ -238,8 +238,10 @@ fn show_modal(
     let state = ModalState {
         title,
         lines,
+        footer_hint: None,
         list: None,
         secure_prompt,
+        is_plan_confirmation: false,
         popup_state: PopupState::default(),
         restore_input: session.input_enabled,
         restore_cursor: session.cursor_visible,
@@ -270,8 +272,10 @@ fn show_list_modal(
     let state = ModalState {
         title,
         lines,
+        footer_hint: None,
         list: Some(list_state),
         secure_prompt: None,
+        is_plan_confirmation: false,
         popup_state: PopupState::default(),
         restore_input: session.input_enabled,
         restore_cursor: session.cursor_visible,
@@ -286,12 +290,19 @@ fn show_list_modal(
 /// Show plan confirmation modal.
 ///
 /// Displays the plan markdown and asks for confirmation.
-/// User can choose: Execute or stay in plan mode.
+/// User can choose from execute variants or return to plan editing.
 pub(crate) fn show_plan_confirmation_modal(
     session: &mut Session,
     plan: crate::ui::tui::types::PlanContent,
 ) {
     use crate::ui::tui::types::{InlineListItem, InlineListSelection};
+
+    let context_usage = format!(
+        "{} used",
+        extract_context_usage_percent(session.input_status_right.as_deref())
+            .map(|value| format!("{value}%"))
+            .unwrap_or_else(|| "--".to_string())
+    );
 
     let mut lines: Vec<String> = plan
         .raw_content
@@ -302,19 +313,46 @@ pub(crate) fn show_plan_confirmation_modal(
         lines.push(plan.summary.clone());
     }
 
-    // Two-option confirmation menu
+    lines.insert(
+        0,
+        "VT Code has written up a plan and is ready to execute. Would you like to proceed?"
+            .to_string(),
+    );
+
+    let footer_hint = plan
+        .file_path
+        .as_ref()
+        .map(|path| format!("ctrl-g to edit in VS Code · {path}"));
+
+    // Four-option confirmation menu
     let items = vec![
         InlineListItem {
-            title: "Yes, implement this plan".to_string(),
-            subtitle: Some("Switch to Default and start coding.".to_string()),
+            title: format!("Yes, clear context ({context_usage}) and auto-accept edits"),
+            subtitle: Some("Reset conversation history and execute immediately.".to_string()),
+            badge: None,
+            indent: 0,
+            selection: Some(InlineListSelection::PlanApprovalClearContextAutoAccept),
+            search_value: None,
+        },
+        InlineListItem {
+            title: "Yes, auto-accept edits".to_string(),
+            subtitle: Some("Keep context and execute with auto-approval.".to_string()),
+            badge: None,
+            indent: 0,
+            selection: Some(InlineListSelection::PlanApprovalAutoAccept),
+            search_value: None,
+        },
+        InlineListItem {
+            title: "Yes, manually approve edits".to_string(),
+            subtitle: Some("Keep context and confirm each edit before applying.".to_string()),
             badge: None,
             indent: 0,
             selection: Some(InlineListSelection::PlanApprovalExecute),
             search_value: None,
         },
         InlineListItem {
-            title: "No, stay in Plan mode".to_string(),
-            subtitle: Some("Continue planning with the model.".to_string()),
+            title: "Type here to tell Claude what to change".to_string(),
+            subtitle: Some("Return to plan mode and refine the plan.".to_string()),
             badge: None,
             indent: 0,
             selection: Some(InlineListSelection::PlanApprovalEditPlan),
@@ -322,13 +360,18 @@ pub(crate) fn show_plan_confirmation_modal(
         },
     ];
 
-    let list_state = ModalListState::new(items, Some(InlineListSelection::PlanApprovalExecute));
+    let list_state = ModalListState::new(
+        items,
+        Some(InlineListSelection::PlanApprovalClearContextAutoAccept),
+    );
 
     let state = ModalState {
-        title: "Implement this plan?".to_string(),
+        title: "Ready to code?".to_string(),
         lines,
+        footer_hint,
         list: Some(list_state),
         secure_prompt: None,
+        is_plan_confirmation: true,
         popup_state: PopupState::default(),
         restore_input: session.input_enabled,
         restore_cursor: session.cursor_visible,
@@ -338,6 +381,28 @@ pub(crate) fn show_plan_confirmation_modal(
     session.cursor_visible = false;
     session.modal = Some(state);
     mark_dirty(session);
+}
+
+fn extract_context_usage_percent(status_line: Option<&str>) -> Option<u8> {
+    let status_line = status_line?;
+    let words: Vec<&str> = status_line.split_whitespace().collect();
+    if words.len() < 2 {
+        return None;
+    }
+
+    for pair in words.windows(2) {
+        let candidate = pair[0].trim_end_matches('%');
+        let next = pair[1].trim_matches(|ch: char| ch == ',' || ch == '.');
+        if !next.eq_ignore_ascii_case("context") {
+            continue;
+        }
+
+        if let Ok(percent) = candidate.parse::<u8>() {
+            return Some(percent.min(100));
+        }
+    }
+
+    None
 }
 
 #[allow(dead_code)]

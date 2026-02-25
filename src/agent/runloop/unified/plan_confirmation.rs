@@ -22,10 +22,12 @@ use super::state::{CtrlCSignal, CtrlCState};
 /// Result of the plan confirmation flow
 #[derive(Debug, Clone)]
 pub enum PlanConfirmationOutcome {
-    /// User approved execution
+    /// User approved execution with manual edit approvals
     Execute,
     /// User approved with auto-accept enabled for future confirmations
     AutoAccept,
+    /// User approved with context clear and auto-accept enabled
+    ClearContextAutoAccept,
     /// User wants to edit the plan
     EditPlan,
     /// User cancelled
@@ -101,6 +103,9 @@ pub(crate) async fn execute_plan_confirmation(
                 return Ok(match result {
                     PlanConfirmationResult::Execute => PlanConfirmationOutcome::Execute,
                     PlanConfirmationResult::AutoAccept => PlanConfirmationOutcome::AutoAccept,
+                    PlanConfirmationResult::ClearContextAutoAccept => {
+                        PlanConfirmationOutcome::ClearContextAutoAccept
+                    }
                     PlanConfirmationResult::EditPlan => PlanConfirmationOutcome::EditPlan,
                     PlanConfirmationResult::Cancel => PlanConfirmationOutcome::Cancel,
                 });
@@ -115,6 +120,9 @@ pub(crate) async fn execute_plan_confirmation(
 
                 return Ok(match selection {
                     InlineListSelection::PlanApprovalExecute => PlanConfirmationOutcome::Execute,
+                    InlineListSelection::PlanApprovalClearContextAutoAccept => {
+                        PlanConfirmationOutcome::ClearContextAutoAccept
+                    }
                     InlineListSelection::PlanApprovalAutoAccept => {
                         PlanConfirmationOutcome::AutoAccept
                     }
@@ -161,6 +169,13 @@ pub(crate) fn plan_confirmation_outcome_to_json(outcome: &PlanConfirmationOutcom
             "action": "execute",
             "auto_accept": true,
             "message": "User approved with auto-accept. Proceed with implementation."
+        }),
+        PlanConfirmationOutcome::ClearContextAutoAccept => json!({
+            "status": "approved",
+            "action": "execute",
+            "auto_accept": true,
+            "clear_context": true,
+            "message": "User approved with context clear and auto-accept. Proceed with implementation."
         }),
         PlanConfirmationOutcome::EditPlan => json!({
             "status": "edit_requested",

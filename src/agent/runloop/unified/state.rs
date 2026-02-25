@@ -71,6 +71,8 @@ pub(crate) struct SessionStats {
     turn_stalled: bool,
     /// Reason associated with the last stalled turn, when available
     turn_stall_reason: Option<String>,
+    /// Whether context clear was requested after plan approval
+    pending_context_clear: bool,
 }
 
 impl SessionStats {
@@ -273,6 +275,14 @@ impl SessionStats {
 
     fn consume_follow_up_prompt_suppression(&mut self) -> bool {
         std::mem::take(&mut self.suppress_next_follow_up_prompt)
+    }
+
+    pub(crate) fn request_context_clear(&mut self) {
+        self.pending_context_clear = true;
+    }
+
+    pub(crate) fn take_context_clear_request(&mut self) -> bool {
+        std::mem::take(&mut self.pending_context_clear)
     }
 }
 

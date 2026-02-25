@@ -1336,6 +1336,7 @@ pub fn render_modal(session: &mut Session, frame: &mut Frame<'_>, viewport: Rect
         inner,
         ModalBodyContext {
             instructions: &modal.lines,
+            footer_hint: modal.footer_hint.as_deref(),
             list: modal.list.as_mut(),
             styles: &styles,
             secure_prompt: modal.secure_prompt.as_ref(),

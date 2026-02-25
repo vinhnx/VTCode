@@ -289,12 +289,31 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                     break;
                 }
                 InteractionOutcome::Continue { input } => input,
-                InteractionOutcome::PlanApproved { auto_accept } => {
+                InteractionOutcome::PlanApproved {
+                    auto_accept,
+                    clear_context,
+                } => {
                     handle.set_editing_mode(vtcode_core::ui::tui::EditingMode::Edit);
+                    handle.set_skip_confirmations(auto_accept);
                     if auto_accept {
                         renderer.line(
                             vtcode_core::utils::ansi::MessageStyle::Info,
                             "Auto-accept mode enabled for this session.",
+                        )?;
+                    }
+                    if clear_context {
+                        conversation_history.clear();
+                        {
+                            let mut ledger = decision_ledger.write().await;
+                            *ledger = vtcode_core::core::decision_tracker::DecisionTracker::new();
+                        }
+                        *session_stats =
+                            crate::agent::runloop::unified::state::SessionStats::default();
+                        vtcode_core::utils::transcript::clear();
+                        renderer.clear_screen();
+                        renderer.line(
+                            vtcode_core::utils::ansi::MessageStyle::Info,
+                            "Cleared conversation history.",
                         )?;
                     }
                     continue;
@@ -504,6 +523,20 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                         &format!("Failed to finalize turn: {}", err),
                     )
                     .ok();
+            }
+
+            if session_stats.take_context_clear_request() {
+                conversation_history.clear();
+                {
+                    let mut ledger = decision_ledger.write().await;
+                    *ledger = vtcode_core::core::decision_tracker::DecisionTracker::new();
+                }
+                *session_stats = crate::agent::runloop::unified::state::SessionStats::default();
+                vtcode_core::utils::transcript::clear();
+                renderer.clear_screen();
+                renderer.line(MessageStyle::Info, "Cleared conversation history.")?;
+                handle.set_editing_mode(vtcode_core::ui::tui::EditingMode::Edit);
+                handle.set_skip_confirmations(true);
             }
             last_activity_time = Some(Instant::now());
             vtcode_core::tools::cache::FILE_CACHE

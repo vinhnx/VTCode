@@ -44,8 +44,10 @@ fn sample_list_modal() -> ModalState {
     let mut modal = ModalState {
         title: "Test".to_owned(),
         lines: vec![],
+        footer_hint: None,
         list: Some(list_state),
         secure_prompt: None,
+        is_plan_confirmation: false,
         popup_state: PopupState::default(),
         restore_input: true,
         restore_cursor: true,
@@ -362,8 +364,10 @@ fn sample_list_modal_with_count(count: usize) -> ModalState {
     ModalState {
         title: "Test".to_owned(),
         lines: vec![],
+        footer_hint: None,
         list: Some(ModalListState::new(items, None)),
         secure_prompt: None,
+        is_plan_confirmation: false,
         popup_state: PopupState::default(),
         restore_input: true,
         restore_cursor: true,
