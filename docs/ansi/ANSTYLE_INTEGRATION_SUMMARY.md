@@ -187,7 +187,6 @@ Result: No errors
 
 -   `vtcode-core/src/utils/ratatui_styles.rs` - Bridge module (77 lines)
 -   `docs/styling_integration.md` - Comprehensive documentation
--   `docs/ANSTYLE_INTEGRATION_SUMMARY.md` - This file
 -   `vtcode-core/examples/anstyle_ratatui_example.rs` - Working example
 
 ### Modified Files

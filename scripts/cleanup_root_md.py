@@ -23,7 +23,6 @@ def cleanup_root_files():
         "vtcode_claude_skills_implementation.md": "docs/skills-enhanced/implementation.md",
         "vtcode_skills_improvement_guide.md": "docs/skills-enhanced/improvement-guide.md",
         "vtcode_skills_improvements_proven.md": "docs/skills-enhanced/improvements-proven.md",
-        "ENHANCED_IMPLEMENTATION_SUMMARY.md": "docs/skills-enhanced/enhanced-summary.md",
         "FINAL_SUMMARY.md": "docs/skills-enhanced/final-summary.md",
     }
     
@@ -62,7 +61,6 @@ def cleanup_root_files():
     remaining = list(base_dir.glob("*.md"))
     remaining = [f for f in remaining if f.name not in [
         "AGENTS.md", "CHANGELOG.md", "CODE_OF_CONDUCT.md", "CONTRIBUTING.md",
-        "README.md", "RELEASING.md", "SECURITY.md", "Cargo.toml", # Keep these
     ]]
     
     if remaining:

@@ -151,7 +151,6 @@ let line = Line::from(vec![
 ## See Also
 
 - `docs/styling_integration.md` - Detailed guide
-- `docs/ANSTYLE_INTEGRATION_SUMMARY.md` - Technical summary
 - `vtcode-core/examples/anstyle_ratatui_example.rs` - Full working example
 - `vtcode-core/src/utils/ratatui_styles.rs` - Module documentation
 

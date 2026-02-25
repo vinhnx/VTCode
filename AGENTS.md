@@ -120,15 +120,14 @@ Understanding these patterns requires reading multiple files across the codebase
     - **HTTP**: Remote server integration (requires `experimental_use_rmcp_client = true`)
     - **Child Process**: Managed stdio with lifecycle control
 - **Documentation**:
-    - Integration guide: `docs/MCP_INTEGRATION_GUIDE.md`
-    - Improvement designs: `docs/MCP_IMPROVEMENTS.md`
-    - Implementation roadmap: `docs/MCP_ROADMAP.md`
+    - Integration guide: `docs/mcp/MCP_INTEGRATION_GUIDE.md`
+    - Implementation roadmap: `docs/mcp/MCP_ROADMAP.md`
 
 ### Agent Skills
 
 - **Pattern**: Multi-location discovery with precedence — project `.vtcode/skills/` → user `~/.vtcode/skills/` → embedded resources
 - **Standard**: Compliant with the [agentskills.io](http://agentskills.io/) open standard for interoperability
-- **Documentation**: `docs/SKILLS_GUIDE.md`, `docs/AGENT_SKILLS_STANDARD.md`
+- **Documentation**: `docs/skills/SKILLS_GUIDE.md`, `docs/skills/AGENT_SKILLS_SPEC_IMPLEMENTATION.md`
 
 ### Subagent System
 
@@ -151,7 +150,7 @@ Understanding these patterns requires reading multiple files across the codebase
     - **Windows**: Placeholder for future mitigation policies
 - **Key Detail**: Uses `std::env::vars_os()` to handle non-UTF-8 environment variables correctly
 - **Exit Codes**: 5 (prctl), 6 (ptrace), 7 (setrlimit) indicate hardening failures
-- **Documentation**: `docs/PROCESS_HARDENING.md`
+- **Documentation**: `docs/development/PROCESS_HARDENING.md`
 - **Integration**: Called via `#[ctor::ctor]` in `src/main.rs:init()`
 
 **Working Directory Context**:
@@ -429,13 +428,13 @@ cargo clippy && cargo fmt --check && cargo check && cargo nexttest
 
 ## Self-Documentation
 
-When answering questions about VT Code itself, consult `docs/vtcode_docs_map.md` first to locate canonical references before answering.
+When answering questions about VT Code itself, consult `docs/modules/vtcode_docs_map.md` first to locate canonical references before answering.
 
 ## Additional Resources
 
 - **Architecture**: See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
-- **Security**: See [docs/SECURITY_MODEL.md](docs/SECURITY_MODEL.md)
-- **Contributing**: See [CONTRIBUTING.md](CONTRIBUTING.md)
+- **Security**: See [docs/security/SECURITY_MODEL.md](docs/security/SECURITY_MODEL.md)
+- **Contributing**: See [CONTRIBUTING.md](docs/CONTRIBUTING.md)
 - **Configuration**: See [docs/config/CONFIGURATION_PRECEDENCE.md](docs/config/CONFIGURATION_PRECEDENCE.md)
-- **Provider Setup**: See [docs/PROVIDER_GUIDES.md](docs/PROVIDER_GUIDES.md)
+- **Provider Setup**: See [docs/providers/PROVIDER_GUIDES.md](docs/providers/PROVIDER_GUIDES.md)
 - **Testing Guide**: See [docs/development/testing.md](docs/development/testing.md)

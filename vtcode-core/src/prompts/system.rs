@@ -233,7 +233,7 @@ Plan Mode blocks mutating tools. Read-only tools always available. Exception: `.
 
 ## Design Philosophy: Desire Paths
 
-When you guess wrong about commands or workflows, report it -- the system improves interfaces (not docs) to match intuitive expectations. See AGENTS.md and docs/DESIRE_PATHS.md.
+When you guess wrong about commands or workflows, report it -- the system improves interfaces (not docs) to match intuitive expectations. See AGENTS.md and docs/development/DESIRE_PATHS.md.
 
 ## Context Management
 

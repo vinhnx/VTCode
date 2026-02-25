@@ -525,8 +525,7 @@ RUST_LOG=debug cargo run
 
 ## See Also
 
--   [docs/EXECUTION_POLICY.md](./EXECUTION_POLICY.md) - Overall execution policy
--   [docs/PERMISSION_SYSTEM_INTEGRATION.md](./PERMISSION_SYSTEM_INTEGRATION.md) - Permission system details
+-   [docs/development/EXECUTION_POLICY.md](./development/EXECUTION_POLICY.md) - Overall execution policy
 -   [docs/environment/ALLOWED_COMMANDS_REFERENCE.md](./environment/ALLOWED_COMMANDS_REFERENCE.md) - Complete command reference
 -   [vtcode-config/src/core/commands.rs](../vtcode-config/src/core/commands.rs) - Implementation
 -   [vtcode.toml.example](../vtcode.toml.example) - Configuration examples

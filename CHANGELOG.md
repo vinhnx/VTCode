@@ -7153,7 +7153,6 @@ All notable changes to vtcode will be documented in this file.
     - improve: Increased diff preview display limit from 300 → 500 lines with improved user guidance
     - improve: Added comprehensive module-level documentation for token-aware truncation strategy
     - improve: Clarified token budget messaging to users about what content is preserved
-    - docs: Added TRUNCATION_IMPROVEMENTS.md explaining token-based truncation design and enhancements
 
 ### Refactors
 
@@ -8769,7 +8768,7 @@ All notable changes to vtcode will be documented in this file.
 '    - docs: update changelog for v0.36.0 [skip ci]
     - docs: update changelog for v0.35.19 [skip ci]
     - docs: add asset synchronization guide for managing embedded assets in vtcode-core
-    - docs: clean up vtcode_docs_map.md and remove unnecessary newlines in generate-agent-file.md
+    - docs: clean up modules/vtcode_docs_map.md and remove unnecessary newlines in generate-agent-file.md
     - docs: update changelog for v0.35.18 [skip ci]
     - docs: update changelog for v0.35.17 [skip ci]
     - docs: update changelog for v0.35.16 [skip ci]
@@ -8841,7 +8840,7 @@ All notable changes to vtcode will be documented in this file.
 '### Documentation$'
 '    - docs: update changelog for v0.35.19 [skip ci]
     - docs: add asset synchronization guide for managing embedded assets in vtcode-core
-    - docs: clean up vtcode_docs_map.md and remove unnecessary newlines in generate-agent-file.md
+    - docs: clean up modules/vtcode_docs_map.md and remove unnecessary newlines in generate-agent-file.md
     - docs: update changelog for v0.35.18 [skip ci]
     - docs: update changelog for v0.35.17 [skip ci]
     - docs: update changelog for v0.35.16 [skip ci]
@@ -8901,7 +8900,7 @@ All notable changes to vtcode will be documented in this file.
 
 '### Documentation$'
 '    - docs: add asset synchronization guide for managing embedded assets in vtcode-core
-    - docs: clean up vtcode_docs_map.md and remove unnecessary newlines in generate-agent-file.md
+    - docs: clean up modules/vtcode_docs_map.md and remove unnecessary newlines in generate-agent-file.md
     - docs: update changelog for v0.35.18 [skip ci]
     - docs: update changelog for v0.35.17 [skip ci]
     - docs: update changelog for v0.35.16 [skip ci]
@@ -9810,7 +9809,7 @@ All notable changes to vtcode will be documented in this file.
 ### `vtcode-bash-runner`
 
 -   Added feature-gated executors for process, pure-Rust, and dry-run operation so adopters can tailor shell execution strategies without forking the runner.F:vtcode-bash-runner/Cargo.toml†L1-L40F:vtcode-bash-runner/src/executor.rs†L1-L356
--   Introduced the `EventfulExecutor` bridge to emit `vtcode-exec-events` telemetry from standalone shell invocations, plus documentation covering the new feature flags and integrations.F:vtcode-bash-runner/src/executor.rs†L358-L470F:docs/vtcode_bash_runner.md†L1-L120F:docs/vtcode_exec_events.md†L1-L160
+-   Introduced the `EventfulExecutor` bridge to emit `vtcode-exec-events` telemetry from standalone shell invocations, plus documentation covering the new feature flags and integrations.F:vtcode-bash-runner/src/executor.rs†L358-L470F:docs/modules/modules/vtcode_bash_runner.md†L1-L120F:docs/modules/modules/vtcode_exec_events.md†L1-L160
 
 ### **Major Enhancements - Context Engineering & Attention Management** (Phase 1 & 2)
 

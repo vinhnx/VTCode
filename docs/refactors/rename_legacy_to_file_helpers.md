@@ -61,4 +61,3 @@ This refactor complements the recent edit_file bug fixes:
 - Bug #2: Fuzzy matching
 - Bug #3: Trailing newline preservation
 
-See: `/docs/fixes/edit_file_workflow_fix.md`

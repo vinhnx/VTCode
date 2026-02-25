@@ -113,7 +113,6 @@ User presses Enter
    - Complete feature summary
    - Benefits and compliance checklist
 
-6. **docs/features/FILE_REFERENCE_IMPROVEMENTS.md**
    - Detailed improvement documentation
    - Before/after comparisons
    - Performance metrics

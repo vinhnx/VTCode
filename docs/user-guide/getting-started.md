@@ -420,7 +420,7 @@ VT Code is designed with security as a first-class concern:
 
 - **[Security Guide](../guides/security.md)** - Complete security documentation
 - **[Security Model](../SECURITY_MODEL.md)** - Architecture and threat model
-- **[Tool Policies](../vtcode_tools_policy.md)** - Command execution policies
+- **[Tool Policies](../modules/vtcode_tools_policy.md)** - Command execution policies
 
 ## Next Steps
 
@@ -430,7 +430,7 @@ Now that you have VT Code running, explore:
 1. **[Lifecycle Hooks Guide](../guides/lifecycle-hooks.md)** - Execute shell commands in response to agent events for context enrichment, policy enforcement, and automation
 1. **[Configuration Guide](../config/CONFIGURATION_PRECEDENCE.md)** - Advanced configuration options and precedence rules
 1. **[Architecture Guide](../ARCHITECTURE.md)** - System design and components
-1. **[Provider Guides](../PROVIDER_GUIDES.md)** - LLM provider integration
+1. **[Provider Guides](../providers/PROVIDER_GUIDES.md)** - LLM provider integration
    - [OpenRouter Integration](../providers/openrouter.md)
 
 ## Contributing

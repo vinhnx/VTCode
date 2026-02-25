@@ -481,9 +481,7 @@ tool_documentation_mode = "full"
 ## Related Documentation
 
 - **System Prompt Modes**: `docs/features/SYSTEM_PROMPT_MODES.md`
-- **Phase 3 Technical Details**: `docs/PI_PHASE3_COMPLETE.md`
 - **Complete Integration Summary**: `PI_INTEGRATION_COMPLETE_SUMMARY.md`
-- **Pi Philosophy**: `docs/PI_CODING_AGENT_ANALYSIS.md`
 
 ---
 

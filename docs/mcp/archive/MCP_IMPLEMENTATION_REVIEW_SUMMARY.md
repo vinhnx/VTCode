@@ -459,7 +459,6 @@ vtcode doctor
 
 -   `docs/mcp/MCP_DIAGNOSTIC_GUIDE.md` — Error diagnosis for agents
 -   `docs/mcp/MCP_AGENT_QUICK_REFERENCE.md` — Quick lookup
--   `docs/AGENT_MCP_FAILURE_HANDLING.md` — Agent implementation
 
 ---
 

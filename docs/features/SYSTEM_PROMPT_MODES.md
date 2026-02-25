@@ -296,8 +296,6 @@ Verify:
 ## References
 
 - **Inspiration**: [Pi-coding-agent](https://mariozechner.at/posts/2025-11-30-pi-coding-agent/)
-- **Analysis**: `docs/PI_CODING_AGENT_ANALYSIS.md`
-- **Implementation**: `docs/PI_IMPLEMENTATION_SUMMARY.md`
 - **Example config**: `docs/examples/pi-minimal-config.toml`
 - **Terminal-Bench**: [Benchmark results](https://github.com/laude-institute/terminal-bench)
 
@@ -323,7 +321,6 @@ A: Inspired by it. VT Code gives you **choice** - minimal, default, or specializ
 - Try minimal mode: Add `system_prompt_mode = "minimal"` to `vtcode.toml`
 - Monitor session quality
 - Report feedback: https://github.com/anthropics/claude-code/issues
-- Read the analysis: `docs/PI_CODING_AGENT_ANALYSIS.md`
 
 ---
 

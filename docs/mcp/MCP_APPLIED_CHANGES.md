@@ -35,7 +35,6 @@ Apply Claude's official MCP documentation (https://code.claude.com/docs/en/mcp) 
 - Output Token Management (10K warning, 25K default limit)
 - Resource Management (URI-based resource identification)
 
-#### File: `docs/MCP_IMPROVEMENTS.md` (400+ lines)
 **Purpose**: Document performance improvements and architectural enhancements
 
 **Content**:
@@ -224,7 +223,6 @@ use mcp_types::InitializeRequestParams;
 ```
 docs/
 ├── MCP_INTEGRATION_GUIDE.md      [NEW] Comprehensive integration guide
-├── MCP_IMPROVEMENTS.md           [NEW] Performance enhancements
 ├── MCP_APPLIED_CHANGES.md        [NEW] This summary
 ├── MCP_AGENT_DIAGNOSTICS_INDEX.md [existing]
 └── MCP_COMPLETE_REVIEW_INDEX.md  [existing]
@@ -276,5 +274,4 @@ All changes maintain backward compatibility while enabling significant performan
 
 - **Official MCP**: https://modelcontextprotocol.io/
 - **Claude MCP Docs**: https://code.claude.com/docs/en/mcp
-- **VT Code Docs**: `docs/MCP_INTEGRATION_GUIDE.md` and `docs/MCP_IMPROVEMENTS.md`
 - **Agent Guidance**: `AGENTS.md` (MCP section)

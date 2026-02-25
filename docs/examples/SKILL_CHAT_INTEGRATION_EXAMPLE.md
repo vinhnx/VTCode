@@ -70,5 +70,3 @@ mentioned_skills = [("spreadsheet-generator", Skill { ... })]
 
 ## See Also
 
--   [Skill Mention Detection Guide](../SKILL_MENTION_DETECTION.md)
--   [Codex Skills Improvements](../CODEX_SKILLS_IMPROVEMENTS.md)

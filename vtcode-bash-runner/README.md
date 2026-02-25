@@ -1,6 +1,6 @@
 <img src="./resources/logo/vt_code_adaptive.svg" alt="vtcode"/>
 
-<a href="./docs/SKILLS_GUIDE.md"><img src="https://img.shields.io/badge/Agent%20Skills-BFB38F?style=for-the-badge&logo=anthropic" alt="Agent Skills"/></a> <a href="./docs/guides/mcp-integration.md"><img src="https://img.shields.io/badge/agent%20client%20protocol-black?style=for-the-badge&logo=zedindustries" alt="zed"/></a> <a href="./docs/guides/zed-acp.md"><img src="https://img.shields.io/badge/model%20context%20protocol-black?style=for-the-badge&logo=modelcontextprotocol" alt="MCP"/></a> <a href="./docs/OPEN_RESPONSES.md"><img src="https://img.shields.io/badge/Open%20Responses-Conformant-4CAF50?style=for-the-badge" alt="Open Responses Conformant"/></a>
+<a href="./docs/skills/skills/SKILLS_GUIDE.md"><img src="https://img.shields.io/badge/Agent%20Skills-BFB38F?style=for-the-badge&logo=anthropic" alt="Agent Skills"/></a> <a href="./docs/guides/mcp-integration.md"><img src="https://img.shields.io/badge/agent%20client%20protocol-black?style=for-the-badge&logo=zedindustries" alt="zed"/></a> <a href="./docs/guides/zed-acp.md"><img src="https://img.shields.io/badge/model%20context%20protocol-black?style=for-the-badge&logo=modelcontextprotocol" alt="MCP"/></a> <a href="./docs/protocols/protocols/OPEN_RESPONSES.md"><img src="https://img.shields.io/badge/Open%20Responses-Conformant-4CAF50?style=for-the-badge" alt="Open Responses Conformant"/></a>
 
 <a href="https://crates.io/crates/vtcode"><img src="https://img.shields.io/crates/v/vtcode?style=flat-square&color=D99A4E&label=crates.io" alt="Crates.io Version"/></a> <a href="https://github.com/vinhnx/vtcode/releases"><img src="https://img.shields.io/github/v/release/vinhnx/vtcode?style=flat-square&color=383B73&label=Release" alt="GitHub Release"/></a>
 
@@ -40,7 +40,6 @@ cargo install vtcode
 brew install vinhnx/tap/vtcode
 ```
 
-**See [Installation Guide](./docs/installation/) and [Native Installer Guide](./docs/NATIVE_INSTALLER.md) for more options and troubleshooting.**
 
 ## Usage
 
@@ -63,7 +62,7 @@ Key features of AgentSkills support:
 - **Multi-Location Support**: Skills can be loaded from local directories, remote repositories, or embedded resources
 - **Extensible Ecosystem**: Integrate with the growing ecosystem of Agent Skills for enhanced capabilities
 
-For more information about AgentSkills implementation in VT Code, see [Agent Skills Guide](./docs/SKILLS_GUIDE.md).
+For more information about AgentSkills implementation in VT Code, see [Agent Skills Guide](./docs/skills/skills/SKILLS_GUIDE.md).
 
 ### Supported Providers
 
@@ -106,7 +105,6 @@ The server supports:
 - System prompts
 - All major Anthropic API features
 
-For more information about Anthropic API compatibility, see [Anthropic API Documentation](./docs/anthropic-api.md).
 
 #### Open Responses Specification
 
@@ -119,7 +117,7 @@ Key features of Open Responses conformance:
 - **Agentic Loop Support**: Composable tool invocation and message orchestration
 - **Extension Points**: Provider-specific features via namespaced extensions (e.g., `vtcode:file_change`)
 
-For more information about Open Responses implementation, see [Open Responses Documentation](./docs/OPEN_RESPONSES.md).
+For more information about Open Responses implementation, see [Open Responses Documentation](./docs/protocols/protocols/OPEN_RESPONSES.md).
 
 ### Configuration
 
@@ -151,7 +149,7 @@ VT Code follows the [Command Line Interface Guidelines](https://clig.dev/) and s
 - **Multi-Provider AI**: OpenAI, Anthropic, xAI, DeepSeek, Gemini, Z.AI, Moonshot AI, OpenRouter, MiniMax, Ollama (local)
 - **Semantic Code Understanding**: LLM-native code analysis and navigation (Rust, Python, JavaScript/TypeScript, Go, Java, and more)
 - **Smart Tools**: Built-in code analysis, file operations, terminal commands, and refactoring
-- **Agent Skills**: Comprehensive skills location system with multi-location support and precedence handling, aligned with the [open Agent Skills standard](http://agentskills.io/) ([docs](./docs/SKILLS_GUIDE.md))
+- **Agent Skills**: Comprehensive skills location system with multi-location support and precedence handling, aligned with the [open Agent Skills standard](http://agentskills.io/) ([docs](./docs/skills/skills/SKILLS_GUIDE.md))
 - **Subagents**: Delegate tasks to specialized agents (explore/plan/general/code-reviewer/debugger) via `spawn_subagent`; see [docs/subagents/SUBAGENTS.md](./docs/subagents/SUBAGENTS.md)
 - **Editor Integration**: Native support for Zed IDE via Agent Client Protocol (ACP)
 - **Lifecycle Hooks**: Execute custom shell commands in response to agent events for context enrichment, policy enforcement, and automation ([docs](./docs/guides/lifecycle-hooks.md))
@@ -183,7 +181,7 @@ See [Security Model](./docs/SECURITY_MODEL.md) and [Sandbox Deep Dive](./docs/SA
     - [Command line interface](./docs/user-guide/commands.md)
 - [Subagents](./docs/subagents/SUBAGENTS.md)
 - [Configuration](./docs/config/CONFIGURATION_PRECEDENCE.md)
-- [**AI Provider Setup**](./docs/PROVIDER_GUIDES.md) - Complete guides for configuring different LLM providers:
+- [**AI Provider Setup**](./docs/providers/providers/PROVIDER_GUIDES.md) - Complete guides for configuring different LLM providers:
     - [OpenAI, Anthropic, Google Gemini](./docs/user-guide/getting-started.md#configure-your-llm-provider)
     - [OpenRouter](./docs/providers/openrouter.md)
     - [Ollama](./docs/providers/ollama.md)
@@ -191,8 +189,7 @@ See [Security Model](./docs/SECURITY_MODEL.md) and [Sandbox Deep Dive](./docs/SA
 - [**Context Engineering**](./docs/context_engineering.md)
     - [Token budget management](./docs/context_engineering_implementation.md#token-budget-tracking--attention-management)
     - [Dynamic context curation](./docs/context_engineering_implementation.md#phase-2-dynamic-context-curation)
-- [**Agent Skills**](./docs/SKILLS_GUIDE.md) - Comprehensive skills location system with multi-location support, precedence handling, and the [open Agent Skills standard](http://agentskills.io/).
-    - [**Standard Compliance**](./docs/AGENT_SKILLS_STANDARD.md) - How VT Code implements the Agent Skills standard
+- [**Agent Skills**](./docs/skills/skills/SKILLS_GUIDE.md) - Comprehensive skills location system with multi-location support, precedence handling, and the [open Agent Skills standard](http://agentskills.io/).
 - [**Agent Client Protocol (ACP)**](./docs/guides/zed-acp.md)
 - [**Zed Integration**](./docs/guides/zed-acp.md) - Agent Client Protocol Integration. VT Code is fully [capable ACP agent](https://agentclientprotocol.com/overview/agents), works with [ACP Clients](https://agentclientprotocol.com/overview/clients), for example [Zed](https://zed.dev/).
 - [**Lifecycle Hooks**](./docs/guides/lifecycle-hooks.md) - Execute shell commands in response to agent events, enabling context enrichment, policy enforcement, and automation
@@ -208,16 +205,12 @@ See [Security Model](./docs/SECURITY_MODEL.md) and [Sandbox Deep Dive](./docs/SA
     - [Event Handling](./docs/guides/tui-event-handling.md) - Terminal event architecture and patterns
     - [Async Architecture](./docs/guides/async-architecture.md) - Tokio async/await design and best practices
     - [Rendering Best Practices](./docs/guides/terminal-rendering-best-practices.md) - Widget rendering and display optimization
-- [**Ratatui Integration**](./docs/RATATUI_IMPROVEMENTS_SUMMARY.md) - Complete integration of Ratatui FAQ best practices
-    - [Summary](./docs/RATATUI_IMPROVEMENTS_SUMMARY.md) - Overview of all improvements
-    - [FAQ Integration](./docs/RATATUI_FAQ_INTEGRATION.md) - Mapping of FAQ topics to code
-    - [Async Improvements](./docs/ASYNC_IMPROVEMENTS.md) - Tokio best practices applied
+    - [FAQ Integration](./docs/tui/tui/RATATUI_FAQ_INTEGRATION.md) - Mapping of FAQ topics to code
 - [**Architecture**](./docs/ARCHITECTURE.md)
 - [**Security**](./docs/SECURITY_MODEL.md)
     - [Security Model](./docs/SECURITY_MODEL.md)
     - [Security Audit](./docs/SECURITY_AUDIT.md)
-    - [Tool Policies](./docs/vtcode_tools_policy.md)
-- [**Anthropic API Compatibility**](./docs/anthropic-api.md) - Documentation for Anthropic Messages API compatibility server
+    - [Tool Policies](./docs/modules/modules/vtcode_tools_policy.md)
 
 ---
 

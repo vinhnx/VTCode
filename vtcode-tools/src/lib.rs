@@ -8,7 +8,7 @@
 //! Feature flags mirror the extraction plan so adopters can opt into only the
 //! tool categories they need.
 //!
-//! See `docs/vtcode_tools_policy.md` for guidance on supplying a custom
+//! See `docs/modules/vtcode_tools_policy.md` for guidance on supplying a custom
 //! `ToolPolicyManager` when the `policies` feature is enabled, allowing
 //! consumers to store policy configuration outside of VT Code's defaults.
 

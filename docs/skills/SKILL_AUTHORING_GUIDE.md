@@ -446,7 +446,6 @@ User: Use $pdf-analyzer to extract tables from report.pdf
 → Executes with skill context
 ```
 
-See [SKILL_MENTION_DETECTION.md](SKILL_MENTION_DETECTION.md) for details.
 
 ### Progressive Loading
 
@@ -485,9 +484,6 @@ This minimizes token usage while keeping all skills discoverable.
 
 ## Related Documentation
 
--   [Codex Skills Improvements](CODEX_SKILLS_IMPROVEMENTS.md) - Lean rendering mode
--   [Skill Mention Detection](SKILL_MENTION_DETECTION.md) - Auto-trigger patterns
--   [Agent Skills Integration](AGENT_SKILLS_INTEGRATION.md) - Architecture overview
 -   [Anthropic Skills Spec](https://github.com/anthropics/skills/blob/main/spec/agent-skills-spec.md) - Official specification
 
 ## Troubleshooting

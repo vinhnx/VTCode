@@ -217,7 +217,6 @@ cargo test -p vtcode-core --lib utils::ratatui_styles
 -   **Main integration**: `vtcode-core/src/utils/ratatui_styles.rs`
 -   **CLI rendering**: `vtcode-core/src/utils/ansi.rs` (uses `AnsiRenderer`)
 -   **Documentation**: `docs/styling_integration.md`
--   **Color improvements**: `docs/COLOR_SYSTEM_IMPROVEMENTS.md`
 
 ## References
 

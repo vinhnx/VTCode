@@ -145,7 +145,7 @@ impl ExtensionError {
         err.suggestions = vec![
             "Check vtcode.toml syntax".to_string(),
             "Validate configuration: vtcode config validate".to_string(),
-            "Review configuration guide: docs/config.md".to_string(),
+            "Review configuration guide: docs/config/config.md".to_string(),
         ];
         err
     }

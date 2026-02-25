@@ -348,7 +348,7 @@ export NODE_OPTIONS="--max-old-space-size=4096"
 
 -   `docs/environment/PATH_VISIBILITY_FIX.md` - Technical details of the fix
 -   `docs/environment/ALLOWED_COMMANDS_REFERENCE.md` - Complete list of allowed commands
--   `docs/EXECUTION_POLICY.md` - Detailed execution policy documentation
+-   `docs/development/EXECUTION_POLICY.md` - Detailed execution policy documentation
 -   `docs/guides/security.md` - Security best practices
 -   `vtcode.toml` - Configuration file reference
 

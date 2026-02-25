@@ -9,7 +9,6 @@
 | **MCP_INTEGRATION_GUIDE.md** | 564 | Comprehensive guide to current MCP implementation | ✅ Complete |
 | **MCP_ASSESSMENT.md** | 300+ | Honest evaluation of current capabilities | ✅ Complete |
 | **MCP_ROADMAP.md** | 400+ | Detailed 4-phase improvement roadmap | ✅ Complete |
-| **MCP_IMPROVEMENTS.md** | 400+ | Design for connection pooling & caching | ✅ Complete |
 | **MCP_README.md** | 200+ | Navigation guide with realistic expectations | ✅ Complete |
 | **MCP_APPLIED_CHANGES.md** | 300+ | Summary of analysis (from first pass) | ✅ Archived |
 
@@ -86,7 +85,6 @@ These are **optional enhancements**, not critical for functionality.
 - Effort estimates and timelines
 
 ### For Technical Details
-**Reference**: `docs/MCP_IMPROVEMENTS.md`
 - Specific issues in each module
 - Exact type mismatches
 - Fix strategies with code examples
@@ -160,7 +158,6 @@ These are **optional enhancements**, not critical for functionality.
 
 ### Reference Materials
 ```
-6. docs/MCP_IMPROVEMENTS.md (technical details)
 7. docs/MCP_APPLIED_CHANGES.md (analysis summary)
 ```
 
@@ -255,7 +252,6 @@ Refer to the appropriate documentation file:
 - **How do I configure MCP?** → `MCP_INTEGRATION_GUIDE.md`
 - **What works and what doesn't?** → `MCP_ASSESSMENT.md`
 - **What's the improvement plan?** → `MCP_ROADMAP.md`
-- **How do I fix the cache module?** → `MCP_IMPROVEMENTS.md`
 - **Quick reference?** → `AGENTS.md` or `MCP_README.md`
 
 ---

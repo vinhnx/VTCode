@@ -184,7 +184,6 @@ vscode-extension/
     chat-view.css                    ENHANCED
     ...existing files...
  docs/
-     PHASE_1_IMPROVEMENTS.md          NEW
      PHASE_1_INTEGRATION.md           NEW (Step-by-step guide)
      ...existing files...
 ```
@@ -277,7 +276,6 @@ CSS animation     | GPU   |   No jank
 
 ### For Developers
 
-- **Component Documentation**: `docs/PHASE_1_IMPROVEMENTS.md`
     - Feature overview
     - Usage examples
     - Integration points
@@ -455,7 +453,6 @@ CSS animation     | GPU   |   No jank
 
 ## References
 
-- **Full Improvement Plan**: `docs/vscode-extension-improve-docs/VSCODE_EXTENSION_IMPROVEMENTS.md`
 - **12-Week Roadmap**: `docs/vscode-extension-improve-docs/VSCODE_EXTENSION_MIGRATION_ROADMAP.md`
 - **VS Copilot Reference**: https://github.com/microsoft/vscode-copilot-chat
 - **VS Code API**: https://code.visualstudio.com/api
@@ -466,7 +463,6 @@ CSS animation     | GPU   |   No jank
 
 For questions about Phase 1:
 
-- Review `docs/PHASE_1_IMPROVEMENTS.md` for component details
 - Check `docs/PHASE_1_INTEGRATION.md` for integration help
 - See troubleshooting section in integration guide
 

@@ -232,7 +232,6 @@ When contributing changes:
     -   Respect workspace trust and HITL in all new flows.
     -   Align with patterns from:
         -   `VSCODE_EXTENSION_CODE_EXAMPLES.md`
-        -   `VSCODE_EXTENSION_IMPROVEMENTS.md`
 -   Do not:
     -   Bypass `VtcodeBackend` with raw `spawn` calls.
     -   Introduce breaking command ID or setting changes without a migration plan.
@@ -248,7 +247,6 @@ For deeper details:
 -   Architecture:
     -   [`ARCHITECTURE.md`](ARCHITECTURE.md)
 -   Improvements & examples:
-    -   `docs/vscode-extension-improve-docs/VSCODE_EXTENSION_IMPROVEMENTS.md`
     -   `docs/vscode-extension-improve-docs/VSCODE_EXTENSION_CODE_EXAMPLES.md`
     -   `docs/vscode-extension-improve-docs/VSCODE_EXTENSION_MIGRATION_ROADMAP.md`
 -   Phase 2 guidance:

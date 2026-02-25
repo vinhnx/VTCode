@@ -464,7 +464,6 @@ Week 6:  Testing & Documentation
 
 ## References
 
-- Full improvement plan: `docs/vscode-extension-improve-docs/VSCODE_EXTENSION_IMPROVEMENTS.md`
 - Phase 1 status: `PHASE_1_STATUS.md`
 - VS Copilot Chat: https://github.com/microsoft/vscode-copilot-chat
 

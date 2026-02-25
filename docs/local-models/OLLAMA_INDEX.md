@@ -6,10 +6,7 @@ Comprehensive guide to the OpenAI Codex Ollama integration in VT Code.
 
 | Document | Purpose | Audience |
 |----------|---------|----------|
-| [OLLAMA_CODEX_SUMMARY.md](./OLLAMA_CODEX_SUMMARY.md) | Project completion overview | Project Leads |
-| [ollama-codex-integration.md](./ollama-codex-integration.md) | Deep dive into implementation | Architects |
 | [ollama-quick-reference.md](./ollama-quick-reference.md) | API reference and lookup | Developers |
-| [ollama-integration-examples.md](./ollama-integration-examples.md) | 8 practical code examples | Integrators |
 | [providers/ollama.md](./providers/ollama.md) | User-facing Ollama setup guide | End Users |
 
 ## Modules Overview
@@ -245,10 +242,7 @@ vtcode/
     ├── providers/
     │   └── ollama.md              (user guide)
     │
-    ├── ollama-codex-integration.md    (architecture)
     ├── ollama-quick-reference.md      (developer ref)
-    ├── ollama-integration-examples.md (code examples)
-    ├── OLLAMA_CODEX_SUMMARY.md        (project summary)
     └── OLLAMA_INDEX.md                (this file)
 ```
 
@@ -294,26 +288,20 @@ Handles both:
 
 ```
 OLLAMA_INDEX.md (this file)
-├── OLLAMA_CODEX_SUMMARY.md
 │   └── (overview of completed work)
 │
-├── ollama-codex-integration.md
 │   └── (detailed patterns and design)
 │
 ├── ollama-quick-reference.md
 │   └── (developer lookup)
 │
-└── ollama-integration-examples.md
     └── (8 practical scenarios)
 ```
 
 ## Questions?
 
 Refer to the appropriate document:
-- **"How do I...?"** → `ollama-integration-examples.md`
 - **"What's the API for...?"** → `ollama-quick-reference.md`
-- **"Why this design...?"** → `ollama-codex-integration.md`
-- **"What was completed...?"** → `OLLAMA_CODEX_SUMMARY.md`
 - **"How do I use Ollama...?"** → `providers/ollama.md`
 
 ---

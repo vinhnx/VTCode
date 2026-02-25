@@ -58,7 +58,6 @@
 | ------------------------------ | ------------------ | -------- |
 | **PHASE_1_STATUS.md**          | Phase 1 completion | Complete |
 | **PHASE_1_DELIVERABLES.txt**   | What was delivered | Complete |
-| `docs/PHASE_1_IMPROVEMENTS.md` | Component details  | Complete |
 | `docs/PHASE_1_INTEGRATION.md`  | Integration guide  | Complete |
 
 ### Analysis & Research Documents
@@ -66,7 +65,6 @@
 | Location                                                                   | Purpose            | Status   |
 | -------------------------------------------------------------------------- | ------------------ | -------- |
 | `docs/vscode-extension-improve-docs/INDEX.md`                              | Navigation hub     | Complete |
-| `docs/vscode-extension-improve-docs/VSCODE_EXTENSION_IMPROVEMENTS.md`      | Architecture ideas | Complete |
 | `docs/vscode-extension-improve-docs/VSCODE_EXTENSION_MIGRATION_ROADMAP.md` | Full 12-week plan  | Complete |
 | `docs/vscode-extension-improve-docs/VSCODE_EXTENSION_CODE_EXAMPLES.md`     | Code patterns      | Complete |
 | `docs/vscode-extension-improve-docs/VSCODE_QUICK_REFERENCE.md`             | Quick lookup       | Complete |
@@ -356,7 +354,6 @@ vscode-extension/
 
  docs/
     vscode-extension-improve-docs/    ← Full analysis
-    PHASE_1_IMPROVEMENTS.md           ← Phase 1 details
     PHASE_1_INTEGRATION.md            ← Integration guide
     ... (existing files)
 

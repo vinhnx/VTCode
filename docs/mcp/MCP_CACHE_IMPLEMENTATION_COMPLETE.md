@@ -154,7 +154,6 @@ cargo test --lib mcp::tool_discovery_cache::tests -- --nocapture
 
 ## References
 
-- **MCP Improvements**: `docs/MCP_IMPROVEMENTS.md`
 - **MCP Roadmap**: `docs/MCP_ROADMAP.md`
 - **Integration Guide**: `docs/MCP_INTEGRATION_GUIDE.md`
 - **AGENTS.md MCP Section**: Architecture overview

@@ -390,4 +390,3 @@ Error: Failed to parse response
 - [Client Library README](../vtcode-acp-client/README.md)
 - [ACP Specification](https://agentcommunicationprotocol.dev/)
 - [Example Code](../examples/acp_distributed_workflow.rs)
-- [Implementation Summary](./IMPLEMENTATION_SUMMARY.md)

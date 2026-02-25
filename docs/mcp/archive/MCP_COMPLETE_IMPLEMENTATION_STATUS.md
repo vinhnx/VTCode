@@ -268,14 +268,12 @@ Successfully implemented Anthropic's ["Code execution with MCP"](https://www.ant
 ## Documentation Structure
 
 ### Quick Reference
-- **CODE_EXECUTION_QUICK_START.md** (363 lines)
   - 60-second overview
   - 5 key patterns with examples
   - Performance expectations
   - Quick troubleshooting
 
 ### Agent Guides
-- **CODE_EXECUTION_AGENT_GUIDE.md** (580 lines)
   - When to use code execution
   - Step-by-step writing guide
   - 5 code patterns
@@ -480,7 +478,6 @@ execute_code(code=code, language="python3")
 save_skill(name="find_test_files", code=code, language="python3")
 ```
 
-**Read**: [CODE_EXECUTION_QUICK_START.md](./CODE_EXECUTION_QUICK_START.md)
 
 ### For Developers
 
@@ -567,8 +564,6 @@ cargo run -- metrics export --format prometheus
 - [MCP Specification](https://modelcontextprotocol.io/)
 
 ### vtcode Implementation
-- [Quick Start](./CODE_EXECUTION_QUICK_START.md)
-- [Agent Guide](./CODE_EXECUTION_AGENT_GUIDE.md)
 - [Architecture](./mcp_code_execution.md)
 - [Performance](./MCP_PERFORMANCE_BENCHMARKS.md)
 - [Observability](./STEP_7_OBSERVABILITY.md)

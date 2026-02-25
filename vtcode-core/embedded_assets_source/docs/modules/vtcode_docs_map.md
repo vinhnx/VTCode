@@ -29,12 +29,11 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: File operations, search tools, command execution, cache system
   - **User Questions**: "What tools does VT Code have?", "How do file operations work?", "Can VT Code search code?", "What search capabilities exist?", "How does the tool system work?"
 
-- **File**: `docs/vtcode_indexer.md`
+- **File**: `docs/modules/vtcode_indexer.md`
   - **Content**: Workspace file indexing and discovery
   - **Topics**: Project discovery, file hashing, fast search
   - **User Questions**: "How does VT Code discover my files?", "How does workspace indexing work?"
 
-- **File**: `docs/CUSTOM_TOOLS.md`
   - **Content**: Guide for developing custom tools and extensions
   - **Topics**: Tool development patterns, trait implementation, integration patterns
   - **User Questions**: "Can I add custom tools?", "How do I create my own VT Code extensions?", "What APIs are available for tool development?"
@@ -53,7 +52,7 @@ This document serves as an index of all VT Code documentation. When users ask qu
 
 ### LLM Providers & Models
 
-- **File**: `docs/PROVIDER_GUIDES.md`
+- **File**: `docs/providers/PROVIDER_GUIDES.md`
   - **Content**: LLM provider integration guides
   - **Topics**: OpenAI, Anthropic, Gemini, DeepSeek, xAI, OpenRouter integration
   - **User Questions**: "What LLM providers does VT Code support?", "How do I configure different models?", "Which LLM provider should I choose?"
@@ -116,47 +115,39 @@ This document serves as an index of all VT Code documentation. When users ask qu
 
 ### Code Optimization & Quality
 
-- **File**: `docs/optimization_report.md`
   - **Content**: Initial LLM provider optimization technical report
   - **Topics**: Error handling centralization, allocation optimization, code duplication elimination
   - **User Questions**: "How was VT Code optimized?", "What performance improvements were made?", "How is error handling implemented?"
 
-- **File**: `docs/optimization_phase2_complete.md`
   - **Content**: Phase 2 optimization completion report (MessageContent optimization)
   - **Topics**: Allocation reduction, Cow<str> optimization, string handling improvements
   - **User Questions**: "What optimizations were done in Phase 2?", "How were allocations reduced?"
 
-- **File**: `docs/optimization_phase3_complete.md`
   - **Content**: Phase 3 optimization completion report (Anthropic integration, dead code elimination)
   - **Topics**: Dead code removal, warning elimination, production readiness
   - **User Questions**: "What was done in Phase 3?", "How was code quality improved?"
 
-- **File**: `docs/optimization_final_summary.md`
   - **Content**: Comprehensive optimization summary across all phases
   - **Topics**: Complete metrics, provider coverage, performance improvements, best practices
   - **User Questions**: "What were the overall optimization results?", "How much faster is VT Code now?"
 
-- **File**: `docs/optimization_production_ready.md`
   - **Content**: Production readiness report with quality assurance results
   - **Topics**: Zero warnings achievement, test coverage, production deployment readiness
   - **User Questions**: "Is VT Code production ready?", "What quality checks were performed?"
 
-- **File**: `docs/performance_benchmarks.md`
+- **File**: `docs/benchmarks/performance_benchmarks.md`
   - **Content**: Detailed performance benchmarks and metrics
   - **Topics**: Benchmark methodology, allocation metrics, latency improvements, profiling tools
   - **User Questions**: "What are VT Code's performance benchmarks?", "How do I measure performance?", "What profiling tools are available?"
 
-- **File**: `docs/error_analytics_guide.md`
   - **Content**: Error monitoring and analytics framework
   - **Topics**: Metrics collection, alerting rules, error recovery strategies, dashboard templates
   - **User Questions**: "How do I monitor errors?", "What error analytics are available?", "How do I set up error tracking?"
 
-- **File**: `docs/maintenance_guide.md`
   - **Content**: Code quality and maintenance procedures
   - **Topics**: Daily/weekly/monthly checks, code review guidelines, performance monitoring, automation scripts
   - **User Questions**: "How do I maintain code quality?", "What are the maintenance procedures?", "How do I prevent regressions?"
 
-- **File**: `docs/complete_implementation_summary.md`
   - **Content**: Complete optimization implementation summary
   - **Topics**: All 4 phases, final metrics, deliverables, best practices, production handoff
   - **User Questions**: "What was the complete optimization project?", "What are the final results?", "What documentation is available?"
@@ -196,7 +187,6 @@ This document serves as an index of all VT Code documentation. When users ask qu
 
 ### Troubleshooting & Fixes
 
-- **File**: `docs/fixes/mcp_broken_pipe_fix.md`
   - **Content**: MCP integration troubleshooting
   - **Topics**: MCP protocol, connection issues, debugging
   - **User Questions**: "How does MCP integration work?", "What MCP tools are available?"
@@ -219,12 +209,10 @@ This document serves as an index of all VT Code documentation. When users ask qu
 
 ### Implementation & Updates
 
-- **File**: `docs/IMPLEMENTATION_COMPLETE.md`
   - **Content**: Implementation status and completed features
   - **Topics**: Feature completion, development milestones, roadmap
   - **User Questions**: "What features are implemented?", "What's the development status?"
 
-- **File**: `docs/SELF_UPDATE_IMPLEMENTATION.md`
   - **Content**: Self-update mechanisms and implementation
   - **Topics**: Automatic updates, version management, deployment
   - **User Questions**: "How do updates work?", "Can VT Code self-update?"

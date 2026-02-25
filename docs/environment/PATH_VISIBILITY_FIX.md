@@ -122,4 +122,4 @@ deny_list = ["rm -rf /", "shutdown", ...]
 deny_glob = ["rm -rf *", "sudo *", ...]
 ```
 
-See `docs/EXECUTION_POLICY.md` for complete details.
+See `docs/development/EXECUTION_POLICY.md` for complete details.

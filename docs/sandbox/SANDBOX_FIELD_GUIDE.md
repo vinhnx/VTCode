@@ -277,5 +277,5 @@ Out of scope:
 
 - [Security Model](security/SECURITY_MODEL.md) - Overall security architecture
 - [Command Allowlist](environment/ALLOWED_COMMANDS_REFERENCE.md) - Permitted commands
-- [Process Hardening](PROCESS_HARDENING.md) - Pre-main security measures
+- [Process Hardening](development/PROCESS_HARDENING.md) - Pre-main security measures
 

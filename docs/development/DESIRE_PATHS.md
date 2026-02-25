@@ -120,7 +120,7 @@ When implementing a new desire path:
 - [ ] Implement the alias/shortcut/flag
 - [ ] Verify it works with `cargo test` or similar
 - [ ] Document in AGENTS.md
-- [ ] Document in DESIRE_PATHS.md
+- [ ] Document in development/DESIRE_PATHS.md
 - [ ] Consider if the change needs release notes
 - [ ] Update any relevant CLI help text
 

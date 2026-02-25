@@ -431,7 +431,6 @@ Week 3+ (Phase 2)
 
 ## Related Documents
 
-- [VSCODE_EXTENSION_IMPROVEMENTS.md](../docs/vscode-extension-improve-docs/VSCODE_EXTENSION_IMPROVEMENTS.md) - Overall improvement plan
 - [VSCODE_EXTENSION_MIGRATION_ROADMAP.md](../docs/vscode-extension-improve-docs/VSCODE_EXTENSION_MIGRATION_ROADMAP.md) - Phase breakdown
 - [VSCODE_EXTENSION_CODE_EXAMPLES.md](../docs/vscode-extension-improve-docs/VSCODE_EXTENSION_CODE_EXAMPLES.md) - Implementation examples
 

@@ -31,12 +31,10 @@ Comprehensive optimization of scroll performance in VT Code's TUI, achieving **8
    - Phase timeline
    - Quality assurance
 
-2. **PHASE5_VERIFICATION.txt**
    - Build verification
    - Test results
    - Deployment readiness
 
-3. **PHASE5_CODE_DIFF.md**
    - Exact code changes
    - Line-by-line analysis
    - Impact assessment
@@ -90,14 +88,11 @@ Comprehensive optimization of scroll performance in VT Code's TUI, achieving **8
 
 ### For Reviewers
 1. Read: SCROLL_FINAL_SUMMARY.md
-2. Review: PHASE5_CODE_DIFF.md
-3. Check: PHASE5_VERIFICATION.txt
 4. Deploy: See DEPLOYMENT_CHECKLIST.md
 
 ### For Developers
 1. Understand: SCROLL_PERFORMANCE_ANALYSIS.md
 2. Implementation: SCROLL_PHASE5_IMPLEMENTATION.md
-3. Code: PHASE5_CODE_DIFF.md
 4. Debugging: docs/SCROLL_PERFORMANCE_GUIDE.md
 
 ### For Users
@@ -262,7 +257,6 @@ A: See DEPLOYMENT_CHECKLIST.md for rollback procedures.
 | Question | Document |
 |----------|----------|
 | How does it work? | SCROLL_PHASE5_IMPLEMENTATION.md |
-| What changed? | PHASE5_CODE_DIFF.md |
 | How to deploy? | DEPLOYMENT_CHECKLIST.md |
 | What's the plan? | SCROLL_FINAL_SUMMARY.md |
 | Root cause? | SCROLL_PERFORMANCE_ANALYSIS.md |
@@ -320,8 +314,6 @@ A: See DEPLOYMENT_CHECKLIST.md for rollback procedures.
 
 ### Immediate
 1. Review SCROLL_FINAL_SUMMARY.md
-2. Check PHASE5_VERIFICATION.txt
-3. Review code in PHASE5_CODE_DIFF.md
 
 ### For Deployment
 1. Follow DEPLOYMENT_CHECKLIST.md

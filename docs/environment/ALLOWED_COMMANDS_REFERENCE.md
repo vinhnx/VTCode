@@ -367,7 +367,7 @@ If a command runs but shows permission errors:
 
 ## See Also
 
--   `docs/EXECUTION_POLICY.md` - Detailed execution policy documentation
+-   `docs/development/EXECUTION_POLICY.md` - Detailed execution policy documentation
 -   `docs/guides/security.md` - Security best practices
 -   `docs/environment/PATH_VISIBILITY_FIX.md` - Details on the PATH inheritance fix
 -   `vtcode-config/src/constants.rs` - Source of truth for command lists

@@ -25,7 +25,6 @@ zed-extension/
  README.md                    # User documentation
  QUICK_START.md               # 5-minute setup guide
  DEVELOPMENT.md               # Development setup
- IMPLEMENTATION_ROADMAP.md    # Future features
  extension-features.md        # Feature documentation
  .gitignore                   # Git ignore rules
 ```

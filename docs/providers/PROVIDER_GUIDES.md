@@ -58,6 +58,5 @@ VT Code provides compatibility with the Anthropic Messages API to help connect e
   - `ANTHROPIC_BASE_URL=http://localhost:11434`
   - `ANTHROPIC_API_KEY=ollama` (required but ignored)
 - **Features:** Streaming, tool calling, vision support, multi-turn conversations
-- **Documentation:** [Anthropic API Compatibility](./anthropic-api.md)
 
 > ℹ Additional provider-specific guides will be added as new integrations land in VT Code.

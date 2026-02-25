@@ -184,12 +184,10 @@ pub use agent_optimization::{AgentBehaviorAnalyzer, ...};
 
 Agents can reference these docs for detailed guidance:
 
-1. **Quick Start** (`docs/CODE_EXECUTION_QUICK_START.md`)
 
     - 60-second overview
     - 5 key patterns with examples
 
-2. **Agent Guide** (`docs/CODE_EXECUTION_AGENT_GUIDE.md`)
 
     - When to use code execution
     - Step-by-step writing guide
@@ -250,7 +248,6 @@ When implementing new features:
 
 1. Leverage skill storage for common patterns
 2. Use code execution for bulk data processing
-3. Reference `docs/CODE_EXECUTION_AGENT_GUIDE.md` for patterns
 4. Monitor metrics in `vtcode-core/src/metrics/` for optimization
 
 ### For System Builders

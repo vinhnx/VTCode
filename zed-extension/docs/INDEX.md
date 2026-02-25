@@ -13,7 +13,6 @@ Complete navigation guide for the VT Code Zed extension documentation.
 ### Documentation
 
 -   **[extension-features.md](extension-features.md)** - Detailed feature documentation
--   **[IMPLEMENTATION_ROADMAP.md](IMPLEMENTATION_ROADMAP.md)** - Development roadmap
 -   **[DEVELOPMENT.md](DEVELOPMENT.md)** - Development setup and workflow
 
 ### License
@@ -67,7 +66,6 @@ Complete navigation guide for the VT Code Zed extension documentation.
 
 #### ...Understand Future Development Plans
 
-→ Review **[IMPLEMENTATION_ROADMAP.md](IMPLEMENTATION_ROADMAP.md)**
 
 -   Current status
 -   3-phase development plan
@@ -97,7 +95,6 @@ Complete navigation guide for the VT Code Zed extension documentation.
 | **README.md**                 | General overview                          | Everyone                  | 5-10 min  |
 | **extension-features.md**     | Feature documentation                     | Users, developers         | 10-15 min |
 | **DEVELOPMENT.md**            | Development workflow                      | Contributors              | 20-30 min |
-| **IMPLEMENTATION_ROADMAP.md** | Future plans and tasks                    | Contributors, maintainers | 15-20 min |
 | **INDEX.md**                  | This file - navigation                    | Everyone                  | 5 min     |
 
 ---
@@ -121,13 +118,11 @@ Complete navigation guide for the VT Code Zed extension documentation.
 
 1. [README.md](README.md) - Overview
 2. [DEVELOPMENT.md](DEVELOPMENT.md) - Setup
-3. [IMPLEMENTATION_ROADMAP.md](IMPLEMENTATION_ROADMAP.md) - Tasks
 4. Review `src/lib.rs` - Source code
 
 ### Path 4: Understand Architecture (30 minutes)
 
 1. [extension-features.md](extension-features.md) - Architecture diagram
-2. [IMPLEMENTATION_ROADMAP.md](IMPLEMENTATION_ROADMAP.md) - Design details
 3. [src/lib.rs](src/lib.rs) - Current implementation
 
 ---
@@ -182,7 +177,6 @@ Complete navigation guide for the VT Code Zed extension documentation.
 -   Build & publish instructions
 -   Troubleshooting for devs
 
-### IMPLEMENTATION_ROADMAP.md
 
 -   Current status checklist
 -   Phase 1-3 breakdown
@@ -243,7 +237,6 @@ zed-extension/
     SETUP_GUIDE.md (installation)
     QUICK_START.md (5-min guide)
     DEVELOPMENT.md (dev setup)
-    IMPLEMENTATION_ROADMAP.md (roadmap)
     extension-features.md (features)
 
  Configuration Files
@@ -304,7 +297,6 @@ zed-extension/
 
 ### Q: What features are planned?
 
-**A**: Check [IMPLEMENTATION_ROADMAP.md](IMPLEMENTATION_ROADMAP.md) for the full roadmap.
 
 ### Q: Can I contribute?
 
@@ -325,7 +317,6 @@ zed-extension/
 | SETUP_GUIDE.md            | Nov 2024     | Current |
 | QUICK_START.md            | Nov 2024     | Current |
 | DEVELOPMENT.md            | Nov 2024     | Current |
-| IMPLEMENTATION_ROADMAP.md | Nov 2024     | Current |
 | extension-features.md     | Nov 2024     | Current |
 
 ---
@@ -347,7 +338,6 @@ zed-extension/
 ### Development
 
 -   [Development Setup](DEVELOPMENT.md)
--   [Implementation Roadmap](IMPLEMENTATION_ROADMAP.md)
 -   [Source Code](src/lib.rs)
 
 ### Community & Support

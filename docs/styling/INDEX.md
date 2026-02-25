@@ -45,7 +45,6 @@ Achievements:
 
 **Documentation**:
 
--   [Phase 1 Completion Summary](PHASE1_COMPLETION_SUMMARY.md)
 -   [Styling Implementation Status](STYLING_IMPLEMENTATION_STATUS.md)
 
 ### Phase 2: Advanced Features ⏳ PLANNED
@@ -82,7 +81,6 @@ Expected enhancements:
 | [ARCHITECTURE.md](ARCHITECTURE.md)                                   | System design           | Architects/maintainers | 3 pages  |
 | [STYLING_QUICK_START.md](STYLING_QUICK_START.md)                     | Usage guide             | Developers             | 4 pages  |
 | [anstyle-crates-research.md](anstyle-crates-research.md)             | Technical research      | Advanced devs          | 10 pages |
-| [PHASE1_COMPLETION_SUMMARY.md](PHASE1_COMPLETION_SUMMARY.md)         | Phase 1 status          | Code reviewers         | 5 pages  |
 | [STYLING_IMPLEMENTATION_STATUS.md](STYLING_IMPLEMENTATION_STATUS.md) | Implementation details  | Maintainers            | 4 pages  |
 | [PHASE2_PLAN.md](PHASE2_PLAN.md)                                     | Phase 2 specification   | Project leads          | 6 pages  |
 | [PHASE2_QUICK_START.md](PHASE2_QUICK_START.md)                       | Phase 2 guide           | Implementation team    | 7 pages  |
@@ -239,7 +237,6 @@ For questions about:
 
 ### Previous Milestones
 
-See [PHASE1_COMPLETION_SUMMARY.md](PHASE1_COMPLETION_SUMMARY.md) and commit history for details.
 
 ---
 

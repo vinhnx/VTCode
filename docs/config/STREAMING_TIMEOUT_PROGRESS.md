@@ -177,5 +177,4 @@ async fn test_streaming_progress_callback() {
 ## Related
 
 - `docs/config/STREAMING_TIMEOUT.md` - Timeout configuration
-- `docs/STREAMING_TIMEOUT_HANDLING.md` - Error handling details
 - `vtcode-core/src/gemini/streaming/processor.rs` - Implementation

@@ -133,6 +133,4 @@ pub struct LMStudioClient {
 
 ## See Also
 
-- [LM Studio Integration Guide](./lmstudio-codex-integration.md)
 - [LM Studio Provider Guide](./providers/lmstudio.md)
-- [Ollama Integration](./ollama-codex-integration.md) (similar pattern)

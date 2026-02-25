@@ -270,7 +270,6 @@ trust_workspace = false
 ### Documentation Files
 
 - **STATUS.md** - Current project status
-- **IMPLEMENTATION_ROADMAP.md** - Feature roadmap
 - **PHASE\_\*\_COMPLETION.md** - Phase-specific details
 - **DEVELOPMENT.md** - Developer setup
 - **QUICK_START.md** - Getting started guide

@@ -311,7 +311,6 @@ vscode-extension/
     chat-view.css                  (ENHANCED)
     ...
  docs/
-     PHASE_1_IMPROVEMENTS.md        (NEW)
 ```
 
 ---
@@ -464,5 +463,4 @@ Ready for integration and Phase 2 planning.
 
 ## Related Documents
 
-- [VSCODE_EXTENSION_IMPROVEMENTS.md](../docs/vscode-extension-improve-docs/VSCODE_EXTENSION_IMPROVEMENTS.md) - Full improvement plan
 - [VSCODE_EXTENSION_MIGRATION_ROADMAP.md](../docs/vscode-extension-improve-docs/VSCODE_EXTENSION_MIGRATION_ROADMAP.md) - 12-week roadmap

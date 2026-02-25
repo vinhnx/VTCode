@@ -780,7 +780,6 @@ RUSTFLAGS="-C link-arg=-fuse-ld=mold" cargo build
 | ------------------------- | ------------------ | ----- |
 | 00-START-HERE.md          | Quick navigation   | N/A   |
 | STATUS.md                 | Project status     | ~350  |
-| IMPLEMENTATION_ROADMAP.md | Feature roadmap    | ~450  |
 | DEEP-REVIEW.md            | Technical analysis | ~600  |
 | OPTIMIZATION_ROADMAP.md   | v0.4.0 plans       | ~700  |
 | RELEASE_NOTES.md          | v0.3.0 details     | ~400  |

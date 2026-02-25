@@ -836,7 +836,6 @@ vtcode skills info <name>  # Preview
 - **Agent Skills Integration Guide**: http://agentskills.io/integrate-skills - How to add skills support to your agent
 - **Anthropic Skills Spec**: https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview
 - **Skills Cookbook**: https://github.com/anthropics/claude-cookbooks/tree/main/skills
-- **VT Code Skills Implementation**: `SKILLS_IMPLEMENTATION_SUMMARY.md`
 - **Integration Plan**: `SKILLS_INTEGRATION_PLAN.md`
 - **Location System**: `vtcode-core/src/skills/locations.rs` - Implementation details
 - **Precedence System**: Follows pi-mono pattern with VT Code-specific enhancements
