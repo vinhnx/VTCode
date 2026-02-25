@@ -122,7 +122,7 @@ unwrap_used = "deny"
 [dependencies]
 vtcode-acp-client = { path = "vtcode-acp-client", version = "0.82.4" }
 vtcode-config = { path = "vtcode-config", version = "0.82.4" }
-vtcode-core = { path = "vtcode-core", version = "0.82.4" }
+vtcode-core = { path = "vtcode-core", version = "0.82.4", default-features = false }
 anyhow = { workspace = true }
 clap = { version = "4.5", features = ["derive"] }
 serde_json = { workspace = true }
