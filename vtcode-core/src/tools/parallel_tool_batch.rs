@@ -62,7 +62,7 @@ impl ParallelToolBatch {
     /// - read_, list_, get_, grep_, search_, find_
     ///
     /// And specific known read-only tools:
-    /// - agent_info, code_intelligence (with read-only operations)
+    /// - agent_info (with read-only operations)
     #[inline]
     pub fn is_parallel_safe(name: &str) -> bool {
         const READ_ONLY_PREFIXES: &[&str] =

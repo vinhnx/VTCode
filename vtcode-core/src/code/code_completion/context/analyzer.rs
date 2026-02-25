@@ -1,17 +1,11 @@
 use super::CompletionContext;
-use crate::tools::tree_sitter::TreeSitterAnalyzer;
-// tree_sitter::Point import removed as it's not used
 
 /// Context analyzer for understanding code context
-pub struct ContextAnalyzer {
-    tree_sitter: TreeSitterAnalyzer,
-}
+pub struct ContextAnalyzer;
 
 impl ContextAnalyzer {
     pub fn new() -> Self {
-        Self {
-            tree_sitter: TreeSitterAnalyzer::new().expect("Failed to initialize TreeSitter"),
-        }
+        Self
     }
 
     /// Analyze code context at the given position
@@ -20,31 +14,32 @@ impl ContextAnalyzer {
         let prefix = self.extract_prefix(source, line, column);
 
         let mut context = CompletionContext::new(line, column, prefix, language);
-        context.scope = self.extract_scope(source, line, column);
+        context.scope = Vec::new();
         context.imports = self.extract_imports(source);
-        context.recent_symbols = self.extract_recent_symbols(source, line);
+        context.recent_symbols = Vec::new();
 
         context
     }
 
     fn detect_language(&self, source: &str) -> String {
-        // Try to detect language from content
-        if let Some(language) = self.tree_sitter.detect_language_from_content(source) {
-            return (match language {
-                crate::tools::tree_sitter::LanguageSupport::Rust => "rust",
-                crate::tools::tree_sitter::LanguageSupport::Python => "python",
-                crate::tools::tree_sitter::LanguageSupport::JavaScript => "javascript",
-                crate::tools::tree_sitter::LanguageSupport::TypeScript => "typescript",
-                crate::tools::tree_sitter::LanguageSupport::Go => "go",
-                crate::tools::tree_sitter::LanguageSupport::Java => "java",
-                crate::tools::tree_sitter::LanguageSupport::Bash => "bash",
-                crate::tools::tree_sitter::LanguageSupport::Swift => "swift",
-            })
-            .into();
+        let first_lines: String = source.lines().take(20).collect::<Vec<_>>().join("\n");
+        if first_lines.contains("use std::") || first_lines.contains("fn ") && first_lines.contains("->") {
+            "rust".into()
+        } else if first_lines.contains("import ") && first_lines.contains("from ") || first_lines.contains("def ") {
+            "python".into()
+        } else if first_lines.contains("interface ") || first_lines.contains(": string") || first_lines.contains(": number") {
+            "typescript".into()
+        } else if first_lines.contains("function ") || first_lines.contains("const ") || first_lines.contains("require(") {
+            "javascript".into()
+        } else if first_lines.contains("package ") && first_lines.contains("func ") {
+            "go".into()
+        } else if first_lines.contains("public class ") || first_lines.contains("import java.") {
+            "java".into()
+        } else if first_lines.starts_with("#!/bin/bash") || first_lines.starts_with("#!/bin/sh") {
+            "bash".into()
+        } else {
+            "rust".into()
         }
-
-        // Default to rust if no language detected
-        "rust".into()
     }
 
     fn extract_prefix(&self, source: &str, line: usize, column: usize) -> String {
@@ -56,212 +51,20 @@ impl ContextAnalyzer {
         }
     }
 
-    fn extract_scope(&mut self, source: &str, line: usize, column: usize) -> Vec<String> {
-        let language = self.detect_language(source);
-
-        // Parse the source code
-        let lang_support = match language.as_str() {
-            "rust" => crate::tools::tree_sitter::LanguageSupport::Rust,
-            "python" => crate::tools::tree_sitter::LanguageSupport::Python,
-            "javascript" => crate::tools::tree_sitter::LanguageSupport::JavaScript,
-            "typescript" => crate::tools::tree_sitter::LanguageSupport::TypeScript,
-            "go" => crate::tools::tree_sitter::LanguageSupport::Go,
-            "java" => crate::tools::tree_sitter::LanguageSupport::Java,
-            "bash" | "sh" => crate::tools::tree_sitter::LanguageSupport::Bash,
-            _ => crate::tools::tree_sitter::LanguageSupport::Rust,
-        };
-
-        // Try to parse the source code
-        if let Ok(tree) = self.tree_sitter.parse(source, lang_support) {
-            let root_node = tree.root_node();
-            let mut scopes = Vec::new();
-
-            // Find the node at the given line/column position
-            if let Some(node) = Self::find_node_at_position(root_node, line, column) {
-                // Walk up the tree to collect scope information
-                let mut current = Some(node);
-                while let Some(n) = current {
-                    let kind = n.kind();
-
-                    // Add relevant scope information
-                    if kind.contains("function") || kind.contains("method") {
-                        scopes.push(format!("function:{}", kind));
-                    } else if kind.contains("class") || kind.contains("struct") {
-                        scopes.push(format!("class:{}", kind));
-                    } else if kind.contains("module") || kind.contains("namespace") {
-                        scopes.push(format!("module:{}", kind));
-                    }
-
-                    current = n.parent();
-                }
-            }
-
-            scopes
-        } else {
-            vec![]
-        }
-    }
-
-    /// Extract import statements from source code
-    fn extract_imports(&mut self, source: &str) -> Vec<String> {
-        let language = self.detect_language(source);
-
-        // Parse the source code
-        let lang_support = match language.as_str() {
-            "rust" => crate::tools::tree_sitter::LanguageSupport::Rust,
-            "python" => crate::tools::tree_sitter::LanguageSupport::Python,
-            "javascript" => crate::tools::tree_sitter::LanguageSupport::JavaScript,
-            "typescript" => crate::tools::tree_sitter::LanguageSupport::TypeScript,
-            "go" => crate::tools::tree_sitter::LanguageSupport::Go,
-            "java" => crate::tools::tree_sitter::LanguageSupport::Java,
-            "bash" | "sh" => crate::tools::tree_sitter::LanguageSupport::Bash,
-            _ => crate::tools::tree_sitter::LanguageSupport::Rust,
-        };
-
-        if let Ok(tree) = self.tree_sitter.parse(source, lang_support) {
-            let root_node = tree.root_node();
-            let mut imports = Vec::new();
-
-            // Walk the tree to find import/require statements
-            Self::extract_imports_recursive(root_node, source, &lang_support, &mut imports);
-
-            imports
-        } else {
-            vec![]
-        }
-    }
-
-    /// Recursively extract import statements from the syntax tree
-    fn extract_imports_recursive(
-        node: tree_sitter::Node,
-        source: &str,
-        language: &crate::tools::tree_sitter::LanguageSupport,
-        imports: &mut Vec<String>,
-    ) {
-        let kind = node.kind();
-
-        // Check for import statements based on language
-        match language {
-            crate::tools::tree_sitter::LanguageSupport::Rust => {
-                if kind == "use_declaration" {
-                    let import_text = &source[node.start_byte()..node.end_byte()];
-                    imports.push(import_text.to_owned());
-                }
-            }
-            crate::tools::tree_sitter::LanguageSupport::Python => {
-                if kind == "import_statement" || kind == "import_from_statement" {
-                    let import_text = &source[node.start_byte()..node.end_byte()];
-                    imports.push(import_text.to_owned());
-                }
-            }
-            crate::tools::tree_sitter::LanguageSupport::JavaScript
-            | crate::tools::tree_sitter::LanguageSupport::TypeScript => {
-                if kind == "import_statement" {
-                    let import_text = &source[node.start_byte()..node.end_byte()];
-                    imports.push(import_text.to_owned());
-                }
-            }
-            crate::tools::tree_sitter::LanguageSupport::Bash => {
-                if kind == "command" {
-                    let import_text = &source[node.start_byte()..node.end_byte()];
-                    let trimmed = import_text.trim_start();
-                    if trimmed.starts_with("source ") || trimmed.starts_with(". ") {
-                        imports.push(import_text.to_owned());
-                    }
-                }
-            }
-            _ => {
-                // Generic approach for other languages
-                if kind.contains("import") || kind.contains("require") {
-                    let import_text = &source[node.start_byte()..node.end_byte()];
-                    imports.push(import_text.to_owned());
-                }
-            }
-        }
-
-        // Recursively process children
-        let mut cursor = node.walk();
-        for child in node.children(&mut cursor) {
-            Self::extract_imports_recursive(child, source, language, imports);
-        }
-    }
-
-    /// Extract recently used symbols from source code near the given line
-    fn extract_recent_symbols(&mut self, source: &str, line: usize) -> Vec<String> {
-        let language = self.detect_language(source);
-
-        // Parse the source code
-        let lang_support = match language.as_str() {
-            "rust" => crate::tools::tree_sitter::LanguageSupport::Rust,
-            "python" => crate::tools::tree_sitter::LanguageSupport::Python,
-            "javascript" => crate::tools::tree_sitter::LanguageSupport::JavaScript,
-            "typescript" => crate::tools::tree_sitter::LanguageSupport::TypeScript,
-            "go" => crate::tools::tree_sitter::LanguageSupport::Go,
-            "java" => crate::tools::tree_sitter::LanguageSupport::Java,
-            "bash" | "sh" => crate::tools::tree_sitter::LanguageSupport::Bash,
-            _ => crate::tools::tree_sitter::LanguageSupport::Rust,
-        };
-
-        // Try to parse the source code
-        if let Ok(tree) = self.tree_sitter.parse(source, lang_support) {
-            let _root_node = tree.root_node();
-            let mut symbols = Vec::new();
-
-            // Extract all symbols first
-            if let Ok(extracted_symbols) =
-                self.tree_sitter
-                    .extract_symbols(&tree, source, lang_support)
-            {
-                // Filter symbols that appear before the given line
-                for symbol in extracted_symbols {
-                    if symbol.position.row < line {
-                        symbols.push(symbol.name);
-                    }
-                }
-            }
-
-            // Return the last 10 symbols (most recent)
-            if symbols.len() > 10 {
-                symbols[symbols.len() - 10..].to_vec()
-            } else {
-                symbols
-            }
-        } else {
-            vec![]
-        }
-    }
-
-    /// Find the node that contains the given line/column position
-    fn find_node_at_position<'a>(
-        node: tree_sitter::Node<'a>,
-        line: usize,
-        column: usize,
-    ) -> Option<tree_sitter::Node<'a>> {
-        let start_pos = node.start_position();
-        let end_pos = node.end_position();
-
-        // Check if position is within this node
-        if start_pos.row <= line && end_pos.row >= line {
-            if start_pos.row == line && start_pos.column > column {
-                return None;
-            }
-            if end_pos.row == line && end_pos.column < column {
-                return None;
-            }
-
-            // Check children first (depth-first)
-            let mut cursor = node.walk();
-            for child in node.children(&mut cursor) {
-                if let Some(found) = Self::find_node_at_position(child, line, column) {
-                    return Some(found);
-                }
-            }
-
-            // If no child contains the position, this node does
-            return Some(node);
-        }
-
-        None
+    /// Extract import statements from source code using simple line scanning
+    fn extract_imports(&self, source: &str) -> Vec<String> {
+        source
+            .lines()
+            .filter(|line| {
+                let trimmed = line.trim();
+                trimmed.starts_with("use ")
+                    || trimmed.starts_with("import ")
+                    || trimmed.starts_with("from ")
+                    || trimmed.starts_with("require(")
+                    || trimmed.starts_with("const ") && trimmed.contains("require(")
+            })
+            .map(|s| s.to_string())
+            .collect()
     }
 }
 

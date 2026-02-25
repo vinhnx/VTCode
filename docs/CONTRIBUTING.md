@@ -16,7 +16,7 @@ Welcome to VT Code! We're excited that you're interested in contributing to this
 
 ## Getting Started
 
-VT Code is a Rust-based terminal coding agent with semantic code intelligence via Tree-sitter (parsers for Rust, Python, JavaScript/TypeScript, Go, Java). It supports multiple LLM providers with automatic failover, prompt caching, and token-efficient context management.
+VT Code is a Rust-based terminal coding agent with LLM-native code understanding and robust shell safety. It supports multiple LLM providers with automatic failover, prompt caching, and token-efficient context management.
 
 Before contributing, please familiarize yourself with:
 
@@ -231,7 +231,7 @@ pub async fn example_function(path: &str) -> Result<()> {
 - **Modular Tools**: Trait-based extensibility for built-in and custom tools
 - **Configuration Engine**: Deserializes `vtcode.toml` into validated structs
 - **Context Engineering System**: Implements iterative, per-turn curation with token budgeting
-- **Code Intelligence**: Tree-sitter integration for AST traversal
+- **Security & Safety**: Tree-sitter-bash for critical shell command validation and OS-native sandboxing
 - **MCP Integration**: Model Context Protocol support for extensible tooling
 
 ### User Interface

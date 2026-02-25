@@ -124,7 +124,6 @@ pub(crate) fn validate_tool_args_security(
         n if n == tool_names::EDIT_FILE => &["path", "old_str", "new_str"],
         n if n == tool_names::LIST_FILES => &["path"],
         n if n == tool_names::GREP_FILE => &["pattern", "path"],
-        n if n == tool_names::CODE_INTELLIGENCE => &["operation"],
         n if n == tool_names::RUN_PTY_CMD => &["command"],
         n if n == tool_names::APPLY_PATCH => &["patch"],
         _ => EMPTY_REQUIRED,
@@ -242,7 +241,6 @@ fn is_readonly_signature(signature: &str) -> bool {
         tool_names::READ_FILE
             | tool_names::GREP_FILE
             | tool_names::LIST_FILES
-            | tool_names::CODE_INTELLIGENCE
             | tool_names::SEARCH_TOOLS
             | tool_names::AGENT_INFO
             | tool_names::UNIFIED_SEARCH

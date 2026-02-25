@@ -7,7 +7,7 @@ pub(super) fn is_tool_cacheable(tool_name: &str, args: &Value) -> bool {
     // Always cache these read-only tools (original set)
     if matches!(
         tool_name,
-        "read_file" | "list_files" | "grep_search" | "find_files" | "tree_sitter_analyze"
+        "read_file" | "list_files" | "grep_search" | "find_files"
     ) {
         return true;
     }
@@ -18,20 +18,7 @@ pub(super) fn is_tool_cacheable(tool_name: &str, args: &Value) -> bool {
         return true;
     }
 
-    // Cache code intelligence tools with specific arguments
-    if tool_name == "code_intelligence" {
-        // Only cache specific code intelligence operations that are deterministic
-        if let Some(operation) = args.get("operation").and_then(|v| v.as_str()) {
-            matches!(
-                operation,
-                "hover" | "document_symbol" | "workspace_symbol" | "signature_help"
-            )
-        } else {
-            false
-        }
-    } else {
-        false
-    }
+    false
 }
 
 /// Enhanced cache key creation that includes workspace context in the target path

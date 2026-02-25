@@ -116,10 +116,6 @@ pub struct Cli {
     #[arg(long, global = true, value_enum)]
     pub teammate_mode: Option<TeammateModeArg>,
 
-    /// Enable tree-sitter code analysis
-    #[arg(long, global = true)]
-    pub enable_tree_sitter: bool,
-
     /// Enable research-preview features
     #[arg(long, global = true)]
     pub research_preview: bool,
@@ -478,10 +474,6 @@ pub enum Commands {
     /// Security and safety management
     Security,
 
-    /// Tree-sitter code analysis tools
-    #[command(name = "tree-sitter")]
-    TreeSitter,
-
     /// Generate or display man pages
     Man {
         /// Command name to generate man page for (optional)
@@ -710,7 +702,6 @@ pub struct ConfigFile {
     pub tools: Option<ToolConfig>,
     pub context: Option<ContextConfig>,
     pub logging: Option<LoggingConfig>,
-    pub tree_sitter: Option<TreeSitterConfig>,
     pub performance: Option<PerformanceConfig>,
     pub security: Option<SecurityConfig>,
 }
@@ -737,16 +728,6 @@ pub struct LoggingConfig {
     pub log_directory: Option<String>,
     pub max_log_files: Option<usize>,
     pub max_log_size_mb: Option<usize>,
-}
-
-/// Tree-sitter configuration
-#[derive(Debug, serde::Deserialize)]
-pub struct TreeSitterConfig {
-    pub enabled: Option<bool>,
-    pub supported_languages: Option<Vec<String>>,
-    pub max_file_size_kb: Option<usize>,
-    pub enable_symbol_extraction: Option<bool>,
-    pub enable_complexity_analysis: Option<bool>,
 }
 
 /// Performance monitoring configuration
@@ -785,7 +766,6 @@ impl Default for Cli {
             teammate: None,
             team_role: None,
             teammate_mode: None,
-            enable_tree_sitter: false,
             research_preview: false,
             security_level: "moderate".to_owned(),
             show_file_diffs: false,
@@ -876,7 +856,6 @@ impl Cli {
                     tools: None,
                     context: None,
                     logging: None,
-                    tree_sitter: None,
                     performance: None,
                     security: None,
                 });
@@ -896,7 +875,6 @@ impl Cli {
             tools: None,
             context: None,
             logging: None,
-            tree_sitter: None,
             performance: None,
             security: None,
         };
@@ -1002,11 +980,6 @@ impl Cli {
     /// Check if verbose mode is enabled
     pub fn is_verbose(&self) -> bool {
         self.verbose
-    }
-
-    /// Check if tree-sitter analysis is enabled
-    pub fn is_tree_sitter_enabled(&self) -> bool {
-        self.enable_tree_sitter
     }
 
     /// Check if performance monitoring is enabled

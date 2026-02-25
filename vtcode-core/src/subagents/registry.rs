@@ -184,7 +184,7 @@ Focus on fixing the underlying issue, not the symptoms.
     pub const PLANNER_AGENT: &str = r#"---
 name: planner
 description: Planning and design specialist for the main conversation. Enters read-only exploration mode to understand requirements, design implementation approaches, and write detailed plans before execution. Use when careful planning is needed before making changes.
-tools: list_files, grep_file, read_file, run_pty_cmd, code_intelligence, unified_search, spawn_subagent, request_user_input, edit_file, exit_plan_mode
+tools: list_files, grep_file, read_file, run_pty_cmd, unified_search, spawn_subagent, request_user_input, edit_file, exit_plan_mode
 model: inherit
 permissionMode: plan
 ---

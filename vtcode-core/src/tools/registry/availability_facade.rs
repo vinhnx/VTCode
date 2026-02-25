@@ -21,7 +21,6 @@ impl ToolRegistry {
             "repo_browser.list_files"
             | "list files"
             | "search text"
-            | "code intelligence"
             | "list tools"
             | "list errors"
             | "show agent info"
@@ -61,8 +60,7 @@ impl ToolRegistry {
         let candidates: &[&str] = match seed.as_str() {
             "read_file" => &["list_files", "grep_file", "unified_search"],
             "list_files" => &["read_file", "grep_file", "unified_search"],
-            "grep_file" => &["read_file", "unified_search", "code_intelligence"],
-            "code_intelligence" => &["grep_file", "read_file", "unified_search"],
+            "grep_file" => &["read_file", "unified_search"],
             "run_pty_cmd" | "shell" | "unified_exec" => {
                 &["unified_exec", "unified_search", "grep_file"]
             }

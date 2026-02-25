@@ -13,8 +13,10 @@
 //!   provider-specific caching capabilities (OpenAI's automatic caching, Anthropic's
 //!   cache_control blocks, Gemini's implicit/explicit caching) to reduce costs and
 //!   latency, with configurable settings per provider.
-//! - **Semantic Workspace Model**: incremental tree-sitter parsing for Rust,
-//!   Python, JavaScript, TypeScript, Go, and Java.
+//! - **Semantic Workspace Model**: LLM-native code analysis and navigation
+//!   across all modern programming languages.
+//! - **Bash Shell Safety**: tree-sitter-bash integration for critical command validation
+//!   and security enforcement.
 //! - **Tool System**: trait-driven registry for shell execution, file IO,
 //!   search, and custom commands, with Tokio-powered concurrency and PTY
 //!   streaming.
@@ -34,8 +36,6 @@
 //! - `tools/`: built-in tool implementations plus registration utilities.
 //! - `context/`: conversation management and memory.
 //! - `executor/`: async orchestration for tool invocations and streaming output.
-//! - `tree_sitter/`: language-specific parsers, syntax tree caching, and
-//!   semantic extraction helpers.
 //! - `core/prompt_caching`: cross-provider prompt caching system that leverages
 //!   provider-specific caching mechanisms for cost optimization and reduced latency.
 //!
@@ -280,7 +280,6 @@ pub use sandboxing::{
 };
 
 pub use tools::grep_file::GrepSearchManager;
-pub use tools::tree_sitter::TreeSitterAnalyzer;
 pub use tools::{AsyncToolPipeline, AsyncToolRequest, ExecutionPriority, OptimizedToolRegistry};
 pub use tools::{
     ToolRegistration, ToolRegistry, build_function_declarations,

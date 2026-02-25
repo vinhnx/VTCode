@@ -116,7 +116,6 @@ pub(super) fn builtin_tool_registrations(
         .with_aliases([
             tools::GREP_FILE,
             tools::LIST_FILES,
-            tools::CODE_INTELLIGENCE,
             tools::AGENT_INFO,
             tools::WEB_FETCH,
             tools::SKILL,
@@ -127,7 +126,6 @@ pub(super) fn builtin_tool_registrations(
             "repo_browser.list_files",
             "search text",
             "list files",
-            "code intelligence",
             "list tools",
             "list errors",
             "show agent info",
@@ -266,13 +264,6 @@ pub(super) fn builtin_tool_registrations(
             CapabilityLevel::Bash,
             false,
             ToolRegistry::close_pty_session_executor,
-        )
-        .with_llm_visibility(false),
-        ToolRegistration::new(
-            tools::CODE_INTELLIGENCE,
-            CapabilityLevel::CodeSearch,
-            false,
-            ToolRegistry::code_intelligence_executor,
         )
         .with_llm_visibility(false),
         ToolRegistration::new(

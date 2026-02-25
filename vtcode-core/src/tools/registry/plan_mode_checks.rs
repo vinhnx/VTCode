@@ -27,7 +27,6 @@ impl ToolRegistry {
             tool_names::READ_FILE,
             tool_names::LIST_FILES,
             tool_names::GREP_FILE,
-            tool_names::CODE_INTELLIGENCE,
             tool_names::UNIFIED_SEARCH,
             tool_names::AGENT_INFO,
             tool_names::ENTER_PLAN_MODE,

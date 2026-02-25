@@ -344,7 +344,7 @@ impl ToolRegistry {
                 let tool = self.inventory.file_ops_tool().clone();
                 tool.execute(args).await
             }
-            UnifiedSearchAction::Intelligence => self.execute_code_intelligence(args).await,
+            UnifiedSearchAction::Intelligence => Ok(serde_json::json!({"error": "Code intelligence (tree-sitter) has been removed. Use grep/search tools instead."})),
             UnifiedSearchAction::Tools => self.execute_search_tools(args).await,
             UnifiedSearchAction::Errors => self.execute_get_errors(args).await,
             UnifiedSearchAction::Agent => self.execute_agent_info().await,
@@ -619,10 +619,6 @@ impl ToolRegistry {
 
     pub(super) fn close_pty_session_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
         Box::pin(async move { self.execute_close_pty_session(args).await })
-    }
-
-    pub(super) fn code_intelligence_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
-        Box::pin(async move { self.execute_code_intelligence(args).await })
     }
 
     pub(super) fn get_errors_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
@@ -1003,11 +999,6 @@ impl ToolRegistry {
         self.decrement_active_pty_sessions();
 
         Ok(json!({ "success": true, "session_id": sid }))
-    }
-
-    async fn execute_code_intelligence(&self, args: Value) -> Result<Value> {
-        let tool = self.inventory.code_intelligence_tool();
-        tool.execute(args).await
     }
 
     async fn execute_get_errors(&self, args: Value) -> Result<Value> {

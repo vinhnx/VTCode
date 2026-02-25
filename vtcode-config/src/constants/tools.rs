@@ -1,7 +1,7 @@
 // ============================================================
 // UNIFIED TOOLS (Primary Interface)
 // ============================================================
-/// Unified search & discovery tool (aliases: grep_file, list_files, code_intelligence, etc.)
+/// Unified search & discovery tool (aliases: grep_file, list_files, etc.)
 pub const UNIFIED_SEARCH: &str = "unified_search";
 /// Unified shell execution & code execution tool (aliases: run_pty_cmd, execute_code, etc.)
 pub const UNIFIED_EXEC: &str = "unified_exec";
@@ -29,7 +29,6 @@ pub const SPAWN_SUBAGENT: &str = "spawn_subagent";
 // ============================================================
 pub const GREP_FILE: &str = "grep_file";
 pub const LIST_FILES: &str = "list_files";
-pub const CODE_INTELLIGENCE: &str = "code_intelligence";
 pub const SEARCH_TOOLS: &str = "search_tools";
 pub const SKILL: &str = "skill";
 pub const AGENT_INFO: &str = "agent_info";

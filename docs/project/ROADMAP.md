@@ -21,23 +21,18 @@ This document outlines planned enhancements and features for the vtcode coding a
 
 ## **High Priority - SWE-bench Performance Optimization**
 
-### 1. Tree-sitter Integration
+### 1. Optimized Code Understanding
 
--   **COMPLETED**: Tree-sitter integration with Rust bindings
--   **COMPLETED**: Multi-language support (Rust, Python, JavaScript, TypeScript, Go, Java)
--   **COMPLETED**: Research-preview code parsing and syntax-aware analysis
--   **COMPLETED**: Symbol extraction and code navigation
--   **COMPLETED**: Code complexity analysis and quality assessment
--   **COMPLETED**: Intelligent refactoring suggestions
+-   **COMPLETED**: Replaced heavy tree-sitter language grammars with LLM-native semantic analysis.
+-   **COMPLETED**: Retained tree-sitter-bash for critical shell command safety parsing.
+-   **COMPLETED**: Reduced binary size by ~7MB and simplified dependency graph.
+-   **COMPLETED**: Optimized memory usage by removing language-specific AST caches.
 
-**Next Phase**: Performance optimization and benchmarking
+### 2. LLM-Native Code Intelligence
 
-### 2. Research-preview Code Analysis
-
--   Add AST-based code analysis using tree-sitter
--   Implement symbol extraction and cross-reference analysis
--   Enable intelligent code completion suggestions
--   Add code structure visualization
+-   Leverage high-context LLMs for deep code understanding without local AST overhead.
+-   Implement symbol extraction and cross-reference analysis via LLM tool calls.
+-   Enable intelligent code completion suggestions based on project context.
 -   Implement dependency analysis and import management
 
 ### 3. Multi-language Support
@@ -147,14 +142,14 @@ Following Anthropic's breakthrough approach for maximum performance:
 -   **Error-Proofed Tools** - Comprehensive documentation and validation
 -   **Thorough Reasoning** - Encourage deep thinking for complex problems
 
-#### Phase 2: Research-preview Capabilities **COMPLETED**
+#### Phase 2: Code Understanding & Safety **COMPLETED**
 
--   **Tree-sitter Integration** - Full syntax-aware code understanding
--   **Multi-language Support** - Rust, Python, JavaScript, TypeScript, Go, Java
--   **Research-preview Code Analysis** - AST-based analysis with metrics and quality assessment
--   **Symbol Navigation** - Go-to-definition, search, and cross-referencing
--   **Intelligent Refactoring** - Safe code transformation with conflict detection
--   **SWE-bench Foundation** - Code understanding capabilities for performance optimization
+-   **Optimized Code Understanding** - Replaced heavy grammars with LLM-native semantic analysis
+-   **Bash Safety Parsing** - Tree-sitter-bash for critical shell command validation
+-   **Multi-language Support** - Universal coverage through LLM-native understanding
+-   **Research-preview Code Analysis** - Context-aware analysis with quality assessment
+-   **Intelligent Refactoring** - Safe code transformation with AI assistance
+-   **SWE-bench Foundation** - Semantic code understanding for benchmark optimization
 
 #### Phase 3: Optimization & Scale
 
@@ -187,8 +182,8 @@ Inspired by Anthropic's engineering excellence:
 
 **Immediate Priority:**
 
-1. **Tree-sitter Integration** - Enable syntax-aware code understanding
-2. **Multi-language Support** - Extend beyond Rust to Python, JavaScript, Go
+1. **LLM-Native Code Understanding** - Lightweight, secure, and semantic code analysis
+2. **Bash Safety Parsing** - Tree-sitter-bash for critical shell command validation
 3. **SWE-bench Evaluation** - Create performance measurement framework
 
 **Key Guidelines:**

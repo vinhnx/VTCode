@@ -83,7 +83,6 @@ pub use bash::{PtyCommandRequest, PtyCommandResult, PtyManager};
 #[cfg(feature = "search")]
 pub mod search {
     pub use vtcode_core::tools::grep_file::GrepSearchManager;
-    pub use vtcode_core::tools::tree_sitter::*;
 }
 
 #[cfg(feature = "search")]

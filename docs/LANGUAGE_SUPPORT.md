@@ -1,28 +1,32 @@
-# Tree-sitter Language Support Matrix
+# Language Support in VT Code
 
-`vtcode` uses [tree-sitter](https://tree-sitter.github.io/tree-sitter/) for advanced code analysis, symbol extraction, and syntax highlighting. 
+VT Code supports a wide range of programming languages through a combination of LLM-native understanding and robust shell integration.
 
-## Supported Languages
+## Semantic Understanding
 
-The following table lists the languages currently supported by `vtcode` and the features available for each.
+VT Code relies on the inherent ability of Large Language Models (LLMs) to understand and analyze code from raw text. This approach covers almost all modern programming languages including:
 
-| Language | Extensions | Symbol Extraction | Highlighting | Dependency Analysis | Notes |
-|----------|------------|-------------------|--------------|---------------------|-------|
-| Rust | `.rs` | Yes | Yes | Yes | |
-| Python | `.py` | Yes | Yes | Yes | |
-| JavaScript | `.js`, `.jsx` | Yes | Yes | Yes | |
-| TypeScript | `.ts`, `.tsx` | Yes | Yes | Yes | |
-| Go | `.go` | Yes | Yes | Basic | |
-| Java | `.java` | Yes | Yes | Basic | |
-| Bash | `.sh`, `.bash` | Yes | Yes | Yes | |
-| Swift | `.swift` | Yes | Yes | Basic | Requires `swift` feature |
+- **Rust**, **Python**, **JavaScript**, **TypeScript**, **Go**, **Java**, **C/C++**, **Swift**, **Ruby**, **PHP**, and many others.
 
-## Feature Implementation Status
+The agent uses tools like `grep_file` and `read_file` to explore these codebases, and its internal reasoning provides "LSP-like" capabilities (goto-definition, find-references) without the need for local AST-level parsing or grammar libraries for each language.
 
-- **Symbol Extraction**: Extraction of functions, classes, structs, interfaces, traits, and variables using language-specific tree-sitter queries.
-- **Highlighting**: Syntax highlighting using tree-sitter grammars (currently used for terminal UI and preview).
-- **Dependency Analysis**: Identification of imports/dependencies within the source file.
+## Tree-sitter Security Parsing (Bash)
 
-## Configuration
+While general code analysis is text-based, **Bash/Shell scripts** are explicitly parsed using [tree-sitter](https://tree-sitter.github.io/tree-sitter/) to ensure security.
 
-Language support is automatically detected based on file extensions. For more information on how to configure tree-sitter or add new languages, see the [Developer Documentation](development/README.md).
+| Language | Extensions | Analysis Method | Safety Level |
+|----------|------------|-----------------|--------------|
+| Bash/Shell | `.sh`, `.bash` | Tree-sitter AST | **High** (Parsed for command validation) |
+| All Others | Any | LLM Semantic | **Standard** |
+
+### Why use Tree-sitter for Bash?
+
+Shell commands can be notoriously difficult to validate with simple text matching due to pipes (`|`), logical operators (`&&`, `||`), and redirections. VT Code uses `tree-sitter-bash` to accurately decompose these commands into their constituent parts, ensuring that every subcommand is checked against the configured security policies before execution.
+
+## Syntax Highlighting
+
+Syntax highlighting in the terminal UI and previews is handled by the `syntect` crate, which uses Sublime Text-compatible grammars for a wide variety of languages. This provides a rich visual experience without the overhead of heavy tree-sitter grammars for every language.
+
+---
+
+*Note: Previous versions of VT Code used tree-sitter for multiple programming languages. These were removed to reduce binary size and complexity, as LLM-native analysis proved to be more flexible and equally accurate for coding tasks.*

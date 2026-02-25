@@ -24,7 +24,6 @@ fn required_args_for_tool(tool_name: &str) -> &'static [&'static str] {
         tool_names::EDIT_FILE => &["path", "old_str", "new_str"],
         tool_names::LIST_FILES => &["path"],
         tool_names::GREP_FILE => &["pattern", "path"],
-        tool_names::CODE_INTELLIGENCE => &["operation"],
         tool_names::RUN_PTY_CMD => &["command"],
         tool_names::APPLY_PATCH => &["patch"],
         _ => &[],

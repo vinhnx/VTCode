@@ -41,7 +41,7 @@ impl ManPageGenerator {
                 roman("VT Code is an advanced coding agent with single-agent architecture and Decision Ledger that provides"),
                 roman(" intelligent code generation, analysis, and modification capabilities. It supports"),
                 roman(" multiple LLM providers including Gemini, OpenAI, Anthropic, DeepSeek, xAI, Z.AI,"),
-                roman(" Moonshot AI, OpenRouter, and Ollama, and includes tree-sitter powered code analysis for"),
+                roman(" Moonshot AI, OpenRouter, and Ollama, and includes LLM-native semantic code understanding."),
                 roman(" Rust, Python, JavaScript, TypeScript, Go, and Java."),
             ])
             .control("SH", ["OPTIONS"])
@@ -58,9 +58,6 @@ impl ManPageGenerator {
             .control("TP", [])
             .text([bold("--workspace"), roman(" "), italic("PATH")])
             .text([roman("Set the workspace root directory for file operations")])
-            .control("TP", [])
-            .text([bold("--enable-tree-sitter")])
-            .text([roman("Enable tree-sitter code analysis")])
             .control("TP", [])
             .text([bold("--performance-monitoring")])
             .text([roman("Enable performance monitoring and metrics")])
@@ -252,7 +249,7 @@ impl ManPageGenerator {
             .text([
                 roman("Start an interactive AI coding assistant session."),
                 roman(" The chat command provides intelligent code generation, analysis, and modification"),
-                roman(" with support for multiple LLM providers and tree-sitter powered code analysis."),
+                roman(" with support for multiple LLM providers and semantic code analysis."),
             ])
             .control("SH", ["OPTIONS"])
             .text([roman("All global options are supported. See "), bold("vtcode(1)"), roman(" for details.")])

@@ -90,9 +90,9 @@ However, `vtcode-core` (the Rust crate) is a **library** you can use in your own
 ### How does VT Code differ from similar tools?
 
 VT Code is an **AI coding agent** with:
-- **Security-first:** Execution policies, workspace isolation, tool policies
+- **Security-first:** Execution policies, workspace isolation, tool policies, and tree-sitter-bash command validation
 - **Multi-LLM:** OpenAI, Anthropic, Gemini, Ollama, LM Studio, etc.
-- **Code intelligence:** Tree-sitter parsing for 6+ languages
+- **Semantic code understanding:** LLM-native analysis and navigation across all modern languages
 - **Context engineering:** Token budget tracking, dynamic context curation
 - **Editor integration:** Agent Client Protocol (ACP) for Zed, Cursor, etc.
 

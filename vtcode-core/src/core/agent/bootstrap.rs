@@ -23,7 +23,6 @@ use crate::core::error_recovery::ErrorRecoveryManager;
 use crate::ctx_err;
 use crate::llm::{AnyClient, make_client};
 use crate::tools::ToolRegistry;
-use crate::tools::tree_sitter::TreeSitterAnalyzer;
 use tracing::warn;
 
 /// Collection of dependencies required by the [`Agent`](super::core::Agent).
@@ -37,8 +36,6 @@ pub struct AgentComponentSet {
     pub decision_tracker: DecisionTracker,
     pub error_recovery: ErrorRecoveryManager,
     pub models_manager: Arc<ModelsManager>,
-
-    pub tree_sitter_analyzer: TreeSitterAnalyzer,
 
     pub session_info: SessionInfo,
 }
@@ -55,7 +52,6 @@ pub struct AgentComponentBuilder<'config> {
     error_recovery: Option<ErrorRecoveryManager>,
     models_manager: Option<Arc<ModelsManager>>,
 
-    tree_sitter_analyzer: Option<TreeSitterAnalyzer>,
     session_info: Option<SessionInfo>,
 }
 
@@ -69,7 +65,6 @@ impl<'config> AgentComponentBuilder<'config> {
             decision_tracker: None,
             error_recovery: None,
             models_manager: None,
-            tree_sitter_analyzer: None,
             session_info: None,
         }
     }
@@ -104,12 +99,6 @@ impl<'config> AgentComponentBuilder<'config> {
         self
     }
 
-    /// Override the tree-sitter analyzer instance.
-    pub fn with_tree_sitter_analyzer(mut self, analyzer: TreeSitterAnalyzer) -> Self {
-        self.tree_sitter_analyzer = Some(analyzer);
-        self
-    }
-
     /// Override the session metadata.
     pub fn with_session_info(mut self, session_info: SessionInfo) -> Self {
         self.session_info = Some(session_info);
@@ -123,12 +112,6 @@ impl<'config> AgentComponentBuilder<'config> {
         let client = match self.client.take() {
             Some(client) => client,
             None => create_llm_client(self.config)?,
-        };
-
-        let tree_sitter_analyzer = match self.tree_sitter_analyzer.take() {
-            Some(analyzer) => analyzer,
-            None => TreeSitterAnalyzer::new()
-                .context("Failed to initialize tree-sitter analyzer for agent components")?,
         };
 
         let session_info = match self.session_info.take() {
@@ -169,7 +152,6 @@ impl<'config> AgentComponentBuilder<'config> {
             decision_tracker,
             error_recovery,
             models_manager,
-            tree_sitter_analyzer,
 
             session_info,
         })

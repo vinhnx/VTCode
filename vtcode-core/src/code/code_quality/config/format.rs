@@ -1,4 +1,15 @@
-use crate::tools::tree_sitter::LanguageSupport;
+/// Supported language for formatting tools
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LanguageSupport {
+    Rust,
+    Python,
+    JavaScript,
+    TypeScript,
+    Go,
+    Java,
+    Bash,
+    Swift,
+}
 
 /// Code formatting tool configuration
 #[derive(Debug, Clone)]
