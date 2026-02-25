@@ -11,7 +11,7 @@ use crate::llm::rig_adapter::reasoning_parameters_for;
 use serde_json::{Value, json};
 use std::collections::HashSet;
 
-use super::responses_api::{build_codex_responses_payload, build_standard_responses_payload};
+use super::responses_api::build_standard_responses_payload;
 use super::tool_serialization;
 use super::types::MAX_COMPLETION_TOKENS_FIELD;
 
@@ -31,7 +31,6 @@ pub(crate) struct ResponsesRequestContext<'a> {
     pub supports_temperature: bool,
     pub supports_reasoning_effort: bool,
     pub supports_reasoning: bool,
-    pub is_gpt5_codex_model: bool,
     pub is_responses_api_model: bool,
     pub supports_prompt_cache_key: bool,
     pub prompt_cache_key: Option<&'a str>,
@@ -181,11 +180,7 @@ pub(crate) fn build_responses_request(
     request: &provider::LLMRequest,
     ctx: &ResponsesRequestContext<'_>,
 ) -> Result<Value, provider::LLMError> {
-    let responses_payload = if ctx.is_gpt5_codex_model {
-        build_codex_responses_payload(request)?
-    } else {
-        build_standard_responses_payload(request)?
-    };
+    let responses_payload = build_standard_responses_payload(request)?;
 
     if responses_payload.input.is_empty() {
         let formatted_error =
@@ -332,10 +327,8 @@ pub(crate) fn build_responses_request(
         }
     }
 
-    // Set default verbosity for GPT-5.1/5.2 models if no format options specified
-    if !has_format_options
-        && (request.model.starts_with("gpt-5.1") || request.model.starts_with("gpt-5.2"))
-    {
+    // Set default verbosity for GPT-5.2 models if no format options specified
+    if !has_format_options && request.model.starts_with("gpt-5.2") {
         text_format["verbosity"] = json!("medium");
         has_format_options = true;
     }
@@ -355,7 +348,7 @@ pub(crate) fn build_responses_request(
 
     // If configured, include the `prompt_cache_retention` value in the Responses API
     // request. This allows the user to extend the server-side prompt cache window
-    // (e.g., "24h") to increase cache reuse and reduce cost/latency on GPT-5.1.
+    // (e.g., "24h") to increase cache reuse and reduce cost/latency on GPT-5.
     // Only include prompt_cache_retention when both configured and when the selected
     // model uses the OpenAI Responses API.
     if ctx.is_responses_api_model

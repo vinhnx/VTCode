@@ -203,7 +203,7 @@ pub fn find_family_for_model(slug: &str) -> ModelFamily {
     }
 
     // OpenAI models
-    if slug.starts_with("gpt-5.2") || slug.starts_with("gpt-5.1") || slug.starts_with("gpt-5") {
+    if slug.starts_with("gpt-5.2") || slug.starts_with("gpt-5") {
         return model_family!(
             slug, "gpt-5", Provider::OpenAI,
             context_window: Some(MEDIUM_CONTEXT_WINDOW),

@@ -20,15 +20,10 @@ pub fn is_model_not_found(status: StatusCode, error_text: &str) -> bool {
 pub fn fallback_model_if_not_found(model: &str) -> Option<String> {
     match model {
         m if m == models::openai::GPT_5_2 || m == models::openai::GPT_5_2_ALIAS => {
-            Some(models::openai::GPT_5_1.to_string())
+            Some(models::openai::GPT_5.to_string())
         }
-        m if m == models::openai::GPT_5_1_MINI => Some(models::openai::GPT_5_1.to_string()),
         m if m == models::openai::GPT_5_MINI => Some(models::openai::GPT_5.to_string()),
         m if m == models::openai::GPT_5_NANO => Some(models::openai::GPT_5_MINI.to_string()),
-        m if m == models::openai::GPT_5_1_CODEX => Some(models::openai::GPT_5_CODEX.to_string()),
-        m if m == models::openai::GPT_5_1_CODEX_MAX => {
-            Some(models::openai::GPT_5_1_CODEX.to_string())
-        }
         _ => Some(models::openai::DEFAULT_MODEL.to_string()),
     }
 }

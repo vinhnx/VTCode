@@ -19,14 +19,9 @@ impl ModelId {
             ModelId::GPT5 => models::GPT_5,
             ModelId::GPT52 => models::GPT_5_2,
             ModelId::GPT52Codex => models::openai::GPT_5_2_CODEX,
-            ModelId::GPT5Codex => models::GPT_5_CODEX,
+            ModelId::GPT53Codex => models::openai::GPT_5_3_CODEX,
             ModelId::GPT5Mini => models::GPT_5_MINI,
             ModelId::GPT5Nano => models::GPT_5_NANO,
-            ModelId::GPT51 => models::GPT_5_1,
-            ModelId::GPT51Codex => models::GPT_5_1_CODEX,
-            ModelId::GPT51CodexMax => models::GPT_5_1_CODEX_MAX,
-            ModelId::GPT51Mini => models::GPT_5_1_MINI,
-            ModelId::CodexMiniLatest => models::CODEX_MINI_LATEST,
             ModelId::OpenAIGptOss20b => models::openai::GPT_OSS_20B,
             ModelId::OpenAIGptOss120b => models::openai::GPT_OSS_120B,
             // Anthropic models
@@ -122,7 +117,6 @@ impl ModelId {
             | ModelId::OpenRouterOpenAIGptOss20b
             | ModelId::OpenRouterOpenAIGptOss120bFree
             | ModelId::OpenRouterOpenAIGpt5
-            | ModelId::OpenRouterOpenAIGpt5Codex
             | ModelId::OpenRouterOpenAIGpt5Chat
             | ModelId::OpenRouterGoogleGemini31ProPreview
             | ModelId::OpenRouterAnthropicClaudeSonnet45
@@ -136,11 +130,6 @@ impl ModelId {
             | ModelId::OpenRouterAmazonNova2LiteV1
             | ModelId::OpenRouterMistralaiMistralLarge2512
             | ModelId::OpenRouterNexAgiDeepseekV31NexN1
-            | ModelId::OpenRouterOpenAIGpt51
-            | ModelId::OpenRouterOpenAIGpt51Codex
-            | ModelId::OpenRouterOpenAIGpt51CodexMax
-            | ModelId::OpenRouterOpenAIGpt51CodexMini
-            | ModelId::OpenRouterOpenAIGpt51Chat
             | ModelId::OpenRouterOpenAIGpt52
             | ModelId::OpenRouterOpenAIGpt52Chat
             | ModelId::OpenRouterOpenAIGpt52Codex
@@ -170,14 +159,9 @@ impl ModelId {
             ModelId::GPT5
             | ModelId::GPT52
             | ModelId::GPT52Codex
-            | ModelId::GPT5Codex
+            | ModelId::GPT53Codex
             | ModelId::GPT5Mini
             | ModelId::GPT5Nano
-            | ModelId::GPT51
-            | ModelId::GPT51Codex
-            | ModelId::GPT51CodexMax
-            | ModelId::GPT51Mini
-            | ModelId::CodexMiniLatest
             | ModelId::OpenAIGptOss20b
             | ModelId::OpenAIGptOss120b => Provider::OpenAI,
             ModelId::ClaudeOpus46
@@ -257,7 +241,6 @@ impl ModelId {
             | ModelId::OpenRouterOpenAIGptOss120bFree
             | ModelId::OpenRouterOpenAIGptOss20b
             | ModelId::OpenRouterOpenAIGpt5
-            | ModelId::OpenRouterOpenAIGpt5Codex
             | ModelId::OpenRouterOpenAIGpt5Chat
             | ModelId::OpenRouterGoogleGemini31ProPreview
             | ModelId::OpenRouterAnthropicClaudeSonnet45
@@ -271,11 +254,6 @@ impl ModelId {
             | ModelId::OpenRouterAmazonNova2LiteV1
             | ModelId::OpenRouterMistralaiMistralLarge2512
             | ModelId::OpenRouterNexAgiDeepseekV31NexN1
-            | ModelId::OpenRouterOpenAIGpt51
-            | ModelId::OpenRouterOpenAIGpt51Codex
-            | ModelId::OpenRouterOpenAIGpt51CodexMax
-            | ModelId::OpenRouterOpenAIGpt51CodexMini
-            | ModelId::OpenRouterOpenAIGpt51Chat
             | ModelId::OpenRouterOpenAIGpt52
             | ModelId::OpenRouterOpenAIGpt52Chat
             | ModelId::OpenRouterOpenAIGpt52Codex

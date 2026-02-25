@@ -2,7 +2,6 @@
 //!
 //! Keeps tool JSON shaping isolated from the main provider logic.
 
-use crate::config::constants::models;
 use crate::llm::provider;
 use serde_json::{Value, json};
 use std::collections::HashSet;
@@ -197,7 +196,4 @@ fn is_gpt5_or_newer(model: &str) -> bool {
         || normalized.contains("o1")
         || normalized.contains("o3")
         || normalized.contains("o4")
-        || model == models::openai::GPT_5_CODEX
-        || model == models::openai::GPT_5_1_CODEX
-        || model == models::openai::GPT_5_1_CODEX_MAX
 }

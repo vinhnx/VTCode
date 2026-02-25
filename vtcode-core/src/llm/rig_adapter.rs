@@ -87,7 +87,7 @@ pub fn reasoning_parameters_for(provider: Provider, effort: ReasoningEffortLevel
                 ReasoningEffortLevel::Low => openai::responses_api::ReasoningEffort::Low,
                 ReasoningEffortLevel::Medium => openai::responses_api::ReasoningEffort::Medium,
                 ReasoningEffortLevel::High => openai::responses_api::ReasoningEffort::High,
-                ReasoningEffortLevel::XHigh => return Some(json!({ "effort": "xhigh" })), // GPT-5.1-Codex-Max xhigh
+                ReasoningEffortLevel::XHigh => return Some(json!({ "effort": "xhigh" })), // GPT-5.2+ xhigh
             };
             reasoning = reasoning.with_effort(mapped);
             serde_json::to_value(reasoning).ok()

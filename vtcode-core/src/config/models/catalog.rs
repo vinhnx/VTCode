@@ -18,14 +18,9 @@ impl ModelId {
             ModelId::GPT5 => "GPT-5",
             ModelId::GPT52 => "GPT-5.2",
             ModelId::GPT52Codex => "GPT-5.2 Codex",
-            ModelId::GPT5Codex => "GPT-5 Codex",
+            ModelId::GPT53Codex => "GPT-5.3 Codex",
             ModelId::GPT5Mini => "GPT-5 Mini",
             ModelId::GPT5Nano => "GPT-5 Nano",
-            ModelId::GPT51 => "GPT-5.1",
-            ModelId::GPT51Codex => "GPT-5.1 Codex",
-            ModelId::GPT51CodexMax => "GPT-5.1 Codex Max",
-            ModelId::GPT51Mini => "GPT-5.1 Mini",
-            ModelId::CodexMiniLatest => "Codex Mini Latest",
             ModelId::OpenAIGptOss20b => "GPT-OSS 20B",
             ModelId::OpenAIGptOss120b => "GPT-OSS 120B",
             // Anthropic models
@@ -114,22 +109,11 @@ impl ModelId {
             ModelId::GPT52Codex => {
                 "GPT-5.2 variant optimized for agentic coding tasks with reasoning effort support"
             }
-            ModelId::GPT5Codex => {
-                "Code-focused GPT-5 variant optimized for tool calling and structured outputs"
+            ModelId::GPT53Codex => {
+                "GPT-5.3 variant optimized for agentic coding tasks with xhigh reasoning effort support"
             }
-            ModelId::GPT51 => {
-                "Enhanced most capable OpenAI model with improved reasoning and capabilities"
-            }
-            ModelId::GPT51Codex => {
-                "Code-focused GPT-5.1 variant optimized for tool calling and structured outputs"
-            }
-            ModelId::GPT51CodexMax => {
-                "Maximum context code-focused GPT-5.1 variant optimized for large codebases"
-            }
-            ModelId::GPT51Mini => "Enhanced efficient OpenAI model with improved capabilities",
             ModelId::GPT5Mini => "Latest efficient OpenAI model, great for most tasks",
             ModelId::GPT5Nano => "Latest most cost-effective OpenAI model",
-            ModelId::CodexMiniLatest => "Latest Codex model optimized for code generation",
             ModelId::OpenAIGptOss20b => {
                 "OpenAI's open-source 20B parameter GPT-OSS model using harmony tokenization"
             }
@@ -296,7 +280,6 @@ impl ModelId {
             | ModelId::OpenRouterOpenAIGptOss120bFree
             | ModelId::OpenRouterOpenAIGptOss20b
             | ModelId::OpenRouterOpenAIGpt5
-            | ModelId::OpenRouterOpenAIGpt5Codex
             | ModelId::OpenRouterOpenAIGpt5Chat
             | ModelId::OpenRouterGoogleGemini31ProPreview
             | ModelId::OpenRouterAnthropicClaudeSonnet45
@@ -310,11 +293,6 @@ impl ModelId {
             | ModelId::OpenRouterAmazonNova2LiteV1
             | ModelId::OpenRouterMistralaiMistralLarge2512
             | ModelId::OpenRouterNexAgiDeepseekV31NexN1
-            | ModelId::OpenRouterOpenAIGpt51
-            | ModelId::OpenRouterOpenAIGpt51Codex
-            | ModelId::OpenRouterOpenAIGpt51CodexMax
-            | ModelId::OpenRouterOpenAIGpt51CodexMini
-            | ModelId::OpenRouterOpenAIGpt51Chat
             | ModelId::OpenRouterOpenAIGpt52
             | ModelId::OpenRouterOpenAIGpt52Chat
             | ModelId::OpenRouterOpenAIGpt52Codex
@@ -343,14 +321,11 @@ impl ModelId {
             ModelId::GPT5,
             ModelId::GPT52,
             ModelId::GPT52Codex,
-            ModelId::GPT5Codex,
+            ModelId::GPT53Codex,
             ModelId::GPT5Mini,
             ModelId::GPT5Nano,
-            ModelId::GPT51,
-            ModelId::GPT51Codex,
-            ModelId::GPT51CodexMax,
-            ModelId::GPT51Mini,
-            ModelId::CodexMiniLatest,
+            ModelId::OpenAIGptOss20b,
+            ModelId::OpenAIGptOss120b,
             // Anthropic models
             ModelId::ClaudeOpus46,
             ModelId::ClaudeSonnet46,
@@ -367,8 +342,6 @@ impl ModelId {
             ModelId::DeepSeekReasoner,
             // Hugging Face models
             ModelId::HuggingFaceDeepseekV32,
-            ModelId::HuggingFaceOpenAIGptOss20b,
-            ModelId::HuggingFaceOpenAIGptOss120b,
             ModelId::HuggingFaceMinimaxM25Novita,
             ModelId::HuggingFaceDeepseekV32Novita,
             ModelId::HuggingFaceXiaomiMimoV2FlashNovita,

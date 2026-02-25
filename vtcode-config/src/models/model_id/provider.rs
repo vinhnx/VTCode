@@ -16,14 +16,9 @@ impl ModelId {
             ModelId::GPT5
             | ModelId::GPT52
             | ModelId::GPT52Codex
-            | ModelId::GPT5Codex
             | ModelId::GPT5Mini
             | ModelId::GPT5Nano
-            | ModelId::GPT51
-            | ModelId::GPT51Codex
-            | ModelId::GPT51CodexMax
-            | ModelId::GPT51Mini
-            | ModelId::CodexMiniLatest
+            | ModelId::GPT53Codex
             | ModelId::OpenAIGptOss20b
             | ModelId::OpenAIGptOss120b => Provider::OpenAI,
             ModelId::ClaudeOpus46
