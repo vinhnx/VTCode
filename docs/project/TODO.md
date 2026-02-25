@@ -204,3 +204,111 @@ ctrl-g to edit in VS Code · ~/.claude/plans/piped-beaming-puppy.md
 /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/docs/BLOATY_ANALYSIS.md
 
 ---
+
+gemini-3-flash-preview
+│ LLM request failed: Provider error: Gemini Content error: No valid content received from streaming A│
+│ PI
+╭─ Error ─────────────────────────────────────────────────────────────────────────────────────────────╮
+│ LLM request failed: Invalid request: Gemini Invalid request: [{ │
+│ "error": { │
+│ "code": 400, │
+│ "message": "Function call is missing a thought_signature in functionCall parts. This is required│
+│ for tools to work correctly, and missing thought_signature may lead to degraded model performance. │
+│ Additional data, function call `default_api:run_pty_cmd` , position 5. Please refer to https://ai.go│
+│ ogle.dev/gemini-api/docs/thought-signatures for more details.", │
+│ "status": "INVALID_ARGUMENT" │
+│ } │
+│ } │
+│ ] │
+╰─────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+```
+{
+  "metadata": {
+    "workspace_label": "vtcode",
+    "workspace_path": "/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode",
+    "model": "gemini-3-flash-preview",
+    "provider": "gemini",
+    "theme": "ciapre-dark",
+    "reasoning_effort": "low",
+    "loaded_skills": []
+  },
+  "started_at": "2026-02-25T10:53:38.737287Z",
+  "ended_at": "2026-02-25T10:55:16.906635Z",
+  "total_messages": 7,
+  "distinct_tools": [
+    "run_pty_cmd"
+  ],
+  "transcript": [
+    "what is this project about",
+    "LLM request failed: Provider error: Gemini Content error: No valid content received from streaming API",
+    "run cargo check",
+    "    ✓ run completed",
+    "LLM request failed: Invalid request: Gemini Invalid request: [{",
+    "  \"error\": {",
+    "    \"code\": 400,",
+    "    \"message\": \"Function call is missing a thought_signature in functionCall parts. This is required for tools to work correctly, and missing thought_signature may lead to degraded model performance. Additional data, function call `default_api:run_pty_cmd` , position 3. Please refer to https://ai.google.dev/gemini-api/docs/thought-signatures for more details.\",",
+    "    \"status\": \"INVALID_ARGUMENT\"",
+    "  }",
+    "}",
+    "]",
+    "run cargo fmt",
+    "    ✓ run completed",
+    "LLM request failed: Invalid request: Gemini Invalid request: [{",
+    "  \"error\": {",
+    "    \"code\": 400,",
+    "    \"message\": \"Function call is missing a thought_signature in functionCall parts. This is required for tools to work correctly, and missing thought_signature may lead to degraded model performance. Additional data, function call `default_api:run_pty_cmd` , position 5. Please refer to https://ai.google.dev/gemini-api/docs/thought-signatures for more details.\",",
+    "    \"status\": \"INVALID_ARGUMENT\"",
+    "  }",
+    "}",
+    "]",
+    "run cargo test",
+    "Tool 'Run command (PTY)' execution cancelled",
+    "LLM request failed: Invalid request: Gemini Invalid request: [{",
+    "  \"error\": {",
+    "    \"code\": 400,",
+    "    \"message\": \"Function call is missing a thought_signature in functionCall parts. This is required for tools to work correctly, and missing thought_signature may lead to degraded model performance. Additional data, function call `default_api:run_pty_cmd` , position 7. Please refer to https://ai.google.dev/gemini-api/docs/thought-signatures for more details.\",",
+    "    \"status\": \"INVALID_ARGUMENT\"",
+    "  }",
+    "}",
+    "]"
+  ],
+  "messages": [
+    {
+      "role": "User",
+      "content": "what is this project about",
+      "tool_call_id": null
+    },
+    {
+      "role": "User",
+      "content": "run cargo check",
+      "tool_call_id": null
+    },
+    {
+      "role": "Assistant",
+      "content": "",
+      "tool_call_id": null
+    },
+    {
+      "role": "User",
+      "content": "run cargo fmt",
+      "tool_call_id": null
+    },
+    {
+      "role": "Assistant",
+      "content": "",
+      "tool_call_id": null
+    },
+    {
+      "role": "User",
+      "content": "run cargo test",
+      "tool_call_id": null
+    },
+    {
+      "role": "Assistant",
+      "content": "",
+      "tool_call_id": null
+    }
+  ]
+}
+```
