@@ -80,7 +80,7 @@ detect_platform() {
             fi
             ;;
         Linux)
-            os="unknown-linux-gnu"
+            os="unknown-linux-musl"
             arch="x86_64"
             ;;
         MINGW*|MSYS*)
@@ -94,6 +94,25 @@ detect_platform() {
     esac
     
     echo "${arch}-${os}"
+}
+
+# Candidate platforms by preference for current host
+get_candidate_platforms() {
+    case "$(uname -s)-$(uname -m)" in
+        Linux-x86_64)
+            # Prefer musl for broad compatibility; fall back to gnu for older releases.
+            echo "x86_64-unknown-linux-musl x86_64-unknown-linux-gnu"
+            ;;
+        Darwin-arm64)
+            echo "aarch64-apple-darwin"
+            ;;
+        Darwin-x86_64)
+            echo "x86_64-apple-darwin"
+            ;;
+        *)
+            echo "$(detect_platform)"
+            ;;
+    esac
 }
 
 # Fetch limited releases info from GitHub API (last 5 versions)
@@ -355,7 +374,7 @@ main() {
     log_info "VT Code Native Installer"
     echo ""
 
-    # Detect platform
+    # Detect preferred platform (or platform fallback list)
     local platform
     platform=$(detect_platform)
     log_info "Detected platform: $platform"
@@ -370,23 +389,33 @@ main() {
     all_releases=$(fetch_recent_releases)
 
     # Find the most recent release with assets for this platform
-    local release_tag
+    local release_tag=""
+    local selected_platform=""
     local tag_file
-    tag_file=$(mktemp)
-    
-    (find_latest_release_tag "$all_releases" "$platform" > "$tag_file") &
-    local pid=$!
-    show_spinner "$pid" "Checking for compatible binaries..."
-    wait "$pid"
-    
-    release_tag=$(cat "$tag_file")
-    rm -f "$tag_file"
+    local candidate_platforms
+    candidate_platforms=$(get_candidate_platforms)
 
-    if [[ -z "$release_tag" ]]; then
+    for candidate in $candidate_platforms; do
+        tag_file=$(mktemp)
+        (find_latest_release_tag "$all_releases" "$candidate" > "$tag_file") &
+        local pid=$!
+        show_spinner "$pid" "Checking for compatible binaries..."
+        wait "$pid"
+
+        release_tag=$(cat "$tag_file")
+        rm -f "$tag_file"
+        if [[ -n "$release_tag" ]]; then
+            selected_platform="$candidate"
+            break
+        fi
+    done
+
+    if [[ -z "$release_tag" || -z "$selected_platform" ]]; then
         log_error "No releases with binaries found for platform: $platform"
         exit 1
     fi
 
+    platform="$selected_platform"
     log_success "Found compatible version: $release_tag"
 
     # Download binary

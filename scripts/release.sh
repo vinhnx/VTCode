@@ -908,7 +908,8 @@ main() {
             run_id=$(gh run list --workflow build-linux-windows.yml --branch main --event workflow_dispatch --limit 1 --json databaseId,conclusion --jq '.[] | select(.conclusion == "success") | .databaseId' | head -1)
         fi
 
-        local linux_downloaded=false
+        local linux_gnu_downloaded=false
+        local linux_musl_downloaded=false
         local windows_downloaded=false
 
         if [[ -n "$run_id" ]]; then
@@ -921,10 +922,21 @@ main() {
             if gh run download "$run_id" --name "vtcode-${released_version}-x86_64-unknown-linux-gnu" --dir "$ci_artifacts_dir" 2>/dev/null; then
                 mv "$ci_artifacts_dir"/*.tar.gz "$binaries_dir/" 2>/dev/null || true
                 mv "$ci_artifacts_dir"/*.sha256 "$binaries_dir/" 2>/dev/null || true
-                print_success "Downloaded: Linux x86_64"
-                linux_downloaded=true
+                print_success "Downloaded: Linux x86_64 gnu"
+                linux_gnu_downloaded=true
             else
-                print_warning "Could not download: Linux x86_64 (will use macOS binaries only)"
+                print_warning "Could not download: Linux x86_64 gnu"
+            fi
+
+            # Download Linux x86_64 musl artifact
+            print_info "Downloading Linux x86_64 musl artifact..."
+            if gh run download "$run_id" --name "vtcode-${released_version}-x86_64-unknown-linux-musl" --dir "$ci_artifacts_dir" 2>/dev/null; then
+                mv "$ci_artifacts_dir"/*.tar.gz "$binaries_dir/" 2>/dev/null || true
+                mv "$ci_artifacts_dir"/*.sha256 "$binaries_dir/" 2>/dev/null || true
+                print_success "Downloaded: Linux x86_64 musl"
+                linux_musl_downloaded=true
+            else
+                print_warning "Could not download: Linux x86_64 musl"
             fi
 
             # Download Windows x86_64 artifact
@@ -944,9 +956,10 @@ main() {
         fi
 
         # Summary of what we have
-        if [[ "$linux_downloaded" == false || "$windows_downloaded" == false ]]; then
+        if [[ "$linux_gnu_downloaded" == false || "$linux_musl_downloaded" == false || "$windows_downloaded" == false ]]; then
             print_warning "Some platform binaries are missing - release will include:"
-            [[ "$linux_downloaded" == true ]] && print_info "  ✓ Linux x86_64" || print_warning "  ✗ Linux x86_64"
+            [[ "$linux_gnu_downloaded" == true ]] && print_info "  ✓ Linux x86_64 gnu" || print_warning "  ✗ Linux x86_64 gnu"
+            [[ "$linux_musl_downloaded" == true ]] && print_info "  ✓ Linux x86_64 musl" || print_warning "  ✗ Linux x86_64 musl"
             [[ "$windows_downloaded" == true ]] && print_info "  ✓ Windows x86_64" || print_warning "  ✗ Windows x86_64"
             print_info "  ✓ macOS x86_64"
             print_info "  ✓ macOS aarch64"
