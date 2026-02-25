@@ -14,7 +14,7 @@ docker run --rm -v "$(pwd):/app" -w /app ghcr.io/orhunp/git-cliff:latest --help
 
 ```bash
 # Generate changelog for a release (use actual version number)
-# Uses GitHub token if available, falls back to email prefix
+# Uses GitHub token if available, falls back to git author name
 git-cliff --config cliff.toml --tag "0.82.4" --unreleased --output CHANGELOG.md
 
 # Preview unreleased changes for upcoming release
@@ -28,8 +28,8 @@ git-cliff --config cliff.toml v0.80.0..v0.82.0
 ```
 
 **Note:** 
-- **Online mode** (with `GITHUB_TOKEN`): Fetches actual GitHub usernames - works for all contributors including outside contributors
-- **Offline mode** (without token): Uses email prefix as fallback
+- **Online mode** (with `GITHUB_TOKEN`): Shows GitHub usernames with @ prefix (e.g., `@vinhnx`, `@contributor`)
+- **Offline mode** (without token): Shows full git author name (e.g., `Vinh Nguyen`)
 - Use `--tag "<version>"` with `--unreleased` for release changelog
 
 ## Release Workflow

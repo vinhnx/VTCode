@@ -305,6 +305,16 @@ update_changelog_from_commits() {
 
     print_info "Generating changelog for version $version using git-cliff..."
 
+    # Find the previous semver tag (handles both v0.82.0 and 0.82.0 formats)
+    local previous_version
+    previous_version=$(git tag | grep -E '^[vV]?[0-9]+\.[0-9]+\.[0-9]+$' | sed 's/^[vV]//' | sort -t. -k1,1rn -k2,2rn -k3,3rn | awk -v ver="$version" '$0 != ver {print; exit}')
+    
+    if [[ -n "$previous_version" ]]; then
+        print_info "Previous version tag: $previous_version"
+    else
+        print_warning "No previous semver tag found"
+    fi
+
     # Check if git-cliff is available
     if command -v git-cliff >/dev/null 2>&1; then
         print_info "Using git-cliff for changelog generation"
@@ -315,47 +325,52 @@ update_changelog_from_commits() {
             github_token=$(gh auth token 2>/dev/null || true)
         fi
 
+        # Set up git-cliff arguments
+        local cliff_args=("--config" "cliff.toml" "--tag" "$version")
+        if [[ -n "$github_token" ]]; then
+            export GITHUB_TOKEN="$github_token"
+        fi
+
         if [[ "$dry_run_flag" == 'true' ]]; then
             print_info "Dry run - would generate changelog with git-cliff"
-            if [[ -n "$github_token" ]]; then
-                GITHUB_TOKEN="$github_token" git-cliff --config cliff.toml --tag "$version" --unreleased 2>/dev/null || git-cliff --config cliff.toml --offline --tag "$version" --unreleased 2>/dev/null || true
+            if [[ -n "$previous_version" ]]; then
+                git-cliff "${cliff_args[@]}" --unreleased "${previous_version}..HEAD" 2>/dev/null || true
             else
-                git-cliff --config cliff.toml --offline --tag "$version" --unreleased 2>/dev/null || true
+                git-cliff "${cliff_args[@]}" --unreleased 2>/dev/null || true
             fi
             return 0
         fi
 
         # Generate changelog entry for the new version
-        # git-cliff will handle the version tagging automatically
         local temp_changelog
         temp_changelog=$(mktemp)
 
         # Generate changelog for the specific version
-        # Use --tag to set the version number for the changelog entry
-        # Use GitHub token if available for fetching usernames
-        if [[ -n "$github_token" ]]; then
-            print_info "Using GitHub authentication for changelog generation"
-            GITHUB_TOKEN="$github_token" git-cliff --config cliff.toml --tag "$version" --output "$temp_changelog" 2>/dev/null || \
-            git-cliff --config cliff.toml --offline --tag "$version" --output "$temp_changelog" 2>/dev/null || true
+        # Use range from previous version to current if available
+        if [[ -n "$previous_version" ]]; then
+            print_info "Generating changelog from $previous_version to $version"
+            git-cliff "${cliff_args[@]}" --output "$temp_changelog" "${previous_version}..HEAD" 2>/dev/null || \
+            git-cliff "${cliff_args[@]}" --output "$temp_changelog" 2>/dev/null || true
         else
-            print_info "GitHub token not found, using offline mode"
-            git-cliff --config cliff.toml --offline --tag "$version" --output "$temp_changelog" 2>/dev/null || true
+            git-cliff "${cliff_args[@]}" --output "$temp_changelog" 2>/dev/null || true
         fi
 
         if [[ -s "$temp_changelog" ]]; then
             # Extract the new version section from git-cliff output
-            local date_str
-            date_str=$(date +%Y-%m-%d)
-
-            # Read the generated changelog and extract the first version section
             local changelog_content
             changelog_content=$(cat "$temp_changelog")
 
             # Extract content between first and second version headers (portable across macOS/Linux)
-            # Use awk instead of head -n -1 for BSD/macOS compatibility
-            # Suppress SIGPIPE warning when awk exits early
             local version_section
             version_section=$(echo "$changelog_content" | awk '/^## /{if(++n==2)exit} n==1' 2>/dev/null || true)
+
+            # Build Full Changelog URL
+            local full_changelog_url
+            if [[ -n "$previous_version" ]]; then
+                full_changelog_url="https://github.com/vinhnx/vtcode/compare/${previous_version}...${version}"
+            else
+                full_changelog_url="https://github.com/vinhnx/vtcode/releases/tag/${version}"
+            fi
 
             # Save to global variable for release notes use (GitHub Release body)
             {
@@ -368,7 +383,7 @@ update_changelog_from_commits() {
                     echo "$changelog_content"
                 fi
                 echo ""
-                echo "**Full Changelog**: https://github.com/vinhnx/vtcode/compare/${version}"
+                echo "**Full Changelog**: ${full_changelog_url}"
             } > "$RELEASE_NOTES_FILE"
 
             if [[ -f CHANGELOG.md ]]; then
