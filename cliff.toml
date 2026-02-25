@@ -4,8 +4,6 @@
 [changelog]
 # Template for the changelog
 header = """
----
-
 # Changelog
 
 All notable changes to vtcode will be documented in this file.
@@ -14,20 +12,22 @@ All notable changes to vtcode will be documented in this file.
 body = """
 {% if version %}\
     ## {{ version | trim_start_matches(pat="v") }} - {{ timestamp | date(format="%Y-%m-%d") }}
+
 {% else %}\
     ## [unreleased]
+
 {% endif %}\
 {% for group, commits in commits | group_by(attribute="group") %}\
-    \n
     ### {{ group | upper_first }}
+
     {% for commit in commits %}\
-        - {{ commit.message | upper_first }} ({% if commit.remote.username %}@{{ commit.remote.username }}{% else %}{{ commit.author.name }}{% endif %})\n
-    {% endfor %}\
-{% endfor %}\n
+        - {{ commit.message | split(pat="\n") | first | upper_first }} ({% if commit.id %}{{ commit.id | truncate(length=8, end="") }}{% else %}unknown{% endif %}) (@{% if commit.remote.username %}{{ commit.remote.username }}{% else %}{{ commit.author.email | split(pat="@") | first | lower }}{% endif %})
+    {% endfor %}
+
+{% endfor %}\
 """
 
-footer = """
-"""
+footer = ""
 
 # Remove leading and trailing whitespace from the template
 trim = true
@@ -40,7 +40,7 @@ postprocessors = []
 conventional_commits = true
 
 # Exclude commits that don't follow conventional commits format
-filter_unconventional = true
+filter_unconventional = false
 
 # Split commits by newlines
 split_commits = false
@@ -50,56 +50,86 @@ commit_preprocessors = [
     # Remove issue/PR references from the end of commit messages to avoid duplication
     { pattern = '\((https://github.com/vinhnx/vtcode/pull/\d+)\)', replace = "" },
     { pattern = '\(#\d+\)', replace = "" },
+    # Normalize common non-standard commit prefixes (case-insensitive)
+    { pattern = '^[Dd]ocs:', replace = "docs:" },
+    { pattern = '^[Ff]eat:', replace = "feat:" },
+    { pattern = '^[Ff]ix:', replace = "fix:" },
+    { pattern = '^[Rr]efactor:', replace = "refactor:" },
+    { pattern = '^[Tt]est:', replace = "test:" },
+    { pattern = '^[Bb]uild:', replace = "build:" },
+    { pattern = '^[Cc]I:', replace = "ci:" },
+    { pattern = '^[Pp]erf:', replace = "perf:" },
+    { pattern = '^[Cc]hore:', replace = "chore:" },
+    # Truncate commits that have multiple conventional commit prefixes (malformed)
+    { pattern = '\s+(feat|fix|docs|refactor|test|build|ci|perf|chore|deps|security):.*$', replace = "" },
 ]
 
 # Protect commits from being parsed (e.g., version bumps, release commits)
 commit_parsers = [
+    # Skip changelog update commits (must come before other parsers)
+    { message = "^[a-zA-Z]+: update changelog for", skip = true },
+    { message = "update changelog for", skip = true },
+    { message = "\\[skip ci\\]", skip = true },
+    
+    # Skip release and version bump commits (be specific to avoid false positives)
+    { message = "^chore\\(release\\):", skip = true },
+    { message = "^chore: Release$", skip = true },
+    { message = "^chore: update homebrew", skip = true },
+    { message = "bump version.*to", skip = true },
+    { message = "update version.*number", skip = true },
+    { message = "version bump", skip = true },
+    
     # Features
-    { message = "^feat", group = "Features" },
-    { message = "^feat\\(.*\\):", group = "Features" },
-    
+    { message = "^feat", group = "Features", skip = false },
+    { message = "^feat\\(.*\\):", group = "Features", skip = false },
+
     # Bug Fixes
-    { message = "^fix", group = "Bug Fixes" },
-    { message = "^fix\\(.*\\):", group = "Bug Fixes" },
-    
+    { message = "^fix", group = "Bug Fixes", skip = false },
+    { message = "^fix\\(.*\\):", group = "Bug Fixes", skip = false },
+
     # Performance
-    { message = "^perf", group = "Performance" },
-    { message = "^perf\\(.*\\):", group = "Performance" },
-    
+    { message = "^perf", group = "Performance", skip = false },
+    { message = "^perf\\(.*\\):", group = "Performance", skip = false },
+
     # Refactors
-    { message = "^refactor", group = "Refactors" },
-    { message = "^refactor\\(.*\\):", group = "Refactors" },
-    
+    { message = "^refactor", group = "Refactors", skip = false },
+    { message = "^refactor\\(.*\\):", group = "Refactors", skip = false },
+
     # Security
-    { message = "^security", group = "Security" },
-    { message = "^security\\(.*\\):", group = "Security" },
-    
+    { message = "^security", group = "Security", skip = false },
+    { message = "^security\\(.*\\):", group = "Security", skip = false },
+
     # Documentation
-    { message = "^docs", group = "Documentation" },
-    { message = "^docs\\(.*\\):", group = "Documentation" },
-    
+    { message = "^docs", group = "Documentation", skip = false },
+    { message = "^docs\\(.*\\):", group = "Documentation", skip = false },
+
     # Tests
-    { message = "^test", group = "Tests" },
-    { message = "^test\\(.*\\):", group = "Tests" },
-    
+    { message = "^test", group = "Tests", skip = false },
+    { message = "^test\\(.*\\):", group = "Tests", skip = false },
+
     # Build
-    { message = "^build", group = "Build" },
-    { message = "^build\\(.*\\):", group = "Build" },
-    
+    { message = "^build", group = "Build", skip = false },
+    { message = "^build\\(.*\\):", group = "Build", skip = false },
+
     # CI
-    { message = "^ci", group = "CI" },
-    { message = "^ci\\(.*\\):", group = "CI" },
-    
+    { message = "^ci", group = "CI", skip = false },
+    { message = "^ci\\(.*\\):", group = "CI", skip = false },
+
     # Dependencies
-    { message = "^deps", group = "Dependencies" },
-    { message = "^deps\\(.*\\):", group = "Dependencies" },
-    
+    { message = "^deps", group = "Dependencies", skip = false },
+    { message = "^deps\\(.*\\):", group = "Dependencies", skip = false },
+
     # Chores (excluded from changelog by default)
     { message = "^chore", group = "Chores", skip = true },
     { message = "^chore\\(.*\\):", group = "Chores", skip = true },
+
+    # Skip generic/non-descriptive commits
+    { message = "^Update commit$", skip = true },
+    { message = "^Remove codes$", skip = true },
+    { message = "^Implement code changes", skip = true },
     
-    # Catch-all for other commits
-    { message = ".*", group = "Other" },
+    # Catch-all for other commits (not skipped, grouped as Other)
+    { message = ".*", group = "Other", skip = false },
 ]
 
 # Protect specific commits from being included in the changelog
@@ -109,7 +139,7 @@ protect_breaking_commits = false
 filter_commits = true
 
 # Tags configuration
-tag_pattern = "v[0-9]*"
+tag_pattern = "v[0-9].*"
 
 # Pattern to match tags with optional 'v' prefix
 tag_regex = "(?P<version>v?[0-9]+\\.[0-9]+\\.[0-9]+)"
@@ -127,21 +157,23 @@ exclude_patterns = [
     "update.*version.*number",
     "bump.*version.*to",
     "update homebrew",
-    "update changelog",
+    "Update changelog for",
+    "update changelog for",
+    "\\[skip ci\\]",
+    "Merge branch",
+    "Merge pull request",
 ]
 
 # Sort commits within a tag
 sort_commits = "oldest"
 
-# Link to remote repository
+# Link to remote repository (GitHub)
 remote = "github"
 
 # Remote configuration
 [remote.github]
 owner = "vinhnx"
 repo = "vtcode"
-
-# Gitmoji configuration
 [gitmoji]
 # Enable gitmoji parsing
 enable = false
