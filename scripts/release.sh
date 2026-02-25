@@ -911,6 +911,7 @@ main() {
         local linux_gnu_downloaded=false
         local linux_musl_downloaded=false
         local windows_downloaded=false
+        local require_windows="${RELEASE_REQUIRE_WINDOWS:-false}"
 
         if [[ -n "$run_id" ]]; then
             # Download all artifacts from the CI run
@@ -939,15 +940,19 @@ main() {
                 print_warning "Could not download: Linux x86_64 musl"
             fi
 
-            # Download Windows x86_64 artifact
-            print_info "Downloading Windows x86_64 artifact..."
-            if gh run download "$run_id" --name "vtcode-${released_version}-x86_64-pc-windows-msvc" --dir "$ci_artifacts_dir" 2>/dev/null; then
-                mv "$ci_artifacts_dir"/*.tar.gz "$binaries_dir/" 2>/dev/null || true
-                mv "$ci_artifacts_dir"/*.sha256 "$binaries_dir/" 2>/dev/null || true
-                print_success "Downloaded: Windows x86_64"
-                windows_downloaded=true
+            # Download Windows x86_64 artifact only when explicitly required.
+            if [[ "$require_windows" == "true" ]]; then
+                print_info "Downloading Windows x86_64 artifact..."
+                if gh run download "$run_id" --name "vtcode-${released_version}-x86_64-pc-windows-msvc" --dir "$ci_artifacts_dir" 2>/dev/null; then
+                    mv "$ci_artifacts_dir"/*.tar.gz "$binaries_dir/" 2>/dev/null || true
+                    mv "$ci_artifacts_dir"/*.sha256 "$binaries_dir/" 2>/dev/null || true
+                    print_success "Downloaded: Windows x86_64"
+                    windows_downloaded=true
+                else
+                    print_warning "Could not download: Windows x86_64"
+                fi
             else
-                print_warning "Could not download: Windows x86_64 (will use macOS binaries only)"
+                print_info "Skipping Windows artifact download (set RELEASE_REQUIRE_WINDOWS=true to enable)"
             fi
 
             rm -rf "$ci_artifacts_dir"
@@ -956,11 +961,15 @@ main() {
         fi
 
         # Summary of what we have
-        if [[ "$linux_gnu_downloaded" == false || "$linux_musl_downloaded" == false || "$windows_downloaded" == false ]]; then
+        if [[ "$linux_gnu_downloaded" == false || "$linux_musl_downloaded" == false || ( "$require_windows" == "true" && "$windows_downloaded" == false ) ]]; then
             print_warning "Some platform binaries are missing - release will include:"
             [[ "$linux_gnu_downloaded" == true ]] && print_info "  ✓ Linux x86_64 gnu" || print_warning "  ✗ Linux x86_64 gnu"
             [[ "$linux_musl_downloaded" == true ]] && print_info "  ✓ Linux x86_64 musl" || print_warning "  ✗ Linux x86_64 musl"
-            [[ "$windows_downloaded" == true ]] && print_info "  ✓ Windows x86_64" || print_warning "  ✗ Windows x86_64"
+            if [[ "$require_windows" == "true" ]]; then
+                [[ "$windows_downloaded" == true ]] && print_info "  ✓ Windows x86_64" || print_warning "  ✗ Windows x86_64"
+            else
+                print_info "  - Windows x86_64 (optional, skipped)"
+            fi
             print_info "  ✓ macOS x86_64"
             print_info "  ✓ macOS aarch64"
         fi

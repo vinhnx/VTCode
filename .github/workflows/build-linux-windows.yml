@@ -1,4 +1,4 @@
-name: Build Linux and Windows Binaries
+name: Build Linux Binaries (Windows Optional)
 
 on:
   workflow_dispatch:
@@ -7,57 +7,55 @@ on:
         description: 'Tag to build (e.g., 0.81.2)'
         required: true
         type: string
+      build_windows:
+        description: 'Also build Windows x86_64 binary (higher runner cost)'
+        required: false
+        type: boolean
+        default: false
   workflow_call:
     inputs:
       tag:
         description: 'Tag to build (e.g., 0.81.2)'
         required: true
         type: string
+      build_windows:
+        description: 'Also build Windows x86_64 binary (higher runner cost)'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
   actions: read
 
 # Cost optimization:
-# - Uses ubuntu-latest (cheaper than windows-latest) for Linux builds
-# - Uses Cross for Linux builds (no need for expensive Windows runners)
+# - Linux builds run on ubuntu-latest using Cross (lower cost)
+# - Windows build is opt-in only
 # - Minimal artifact retention (7 days)
 # - Efficient caching
 
 jobs:
-  build:
+  build-linux:
     name: Build (${{ matrix.target }})
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        include:
-          # Linux - x86_64 (most common) - Use Docker-based cross-compilation
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-            use_cross: true
-
-          # Linux - x86_64 musl (portable static libc)
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-musl
-            use_cross: true
-
-          # Windows - x86_64 (most common) - Must use windows-latest
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
-            use_cross: false
+        target:
+          - x86_64-unknown-linux-gnu
+          - x86_64-unknown-linux-musl
 
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.tag }}
-          fetch-depth: 1  # Shallow clone for faster checkout
+          fetch-depth: 1
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
-          components: rustfmt  # Only essential components
+          components: rustfmt
 
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
@@ -65,22 +63,14 @@ jobs:
           cache-on-failure: true
           key: ${{ matrix.target }}
 
-      - name: Install Cross (for Linux builds)
-        if: matrix.use_cross
+      - name: Install Cross
         run: cargo install cross --git https://github.com/cross-rs/cross.git --locked
-        # Cross allows building Linux binaries on Ubuntu runner (cheaper than ARM runners)
 
       - name: Build (${{ matrix.target }})
-        run: |
-          if [[ "${{ matrix.use_cross }}" == "true" ]]; then
-            cross build --release --target ${{ matrix.target }}
-          else
-            cargo build --release --target ${{ matrix.target }}
-          fi
+        run: cross build --release --target ${{ matrix.target }}
         shell: bash
 
       - name: Verify Linux TLS linkage
-        if: contains(matrix.target, 'linux')
         shell: bash
         run: |
           if cargo tree -e normal -i native-tls --target ${{ matrix.target }}; then
@@ -98,8 +88,6 @@ jobs:
         run: |
           if [ -f "target/${{ matrix.target }}/release/vtcode" ]; then
             echo "✓ Found Unix binary: vtcode"
-          elif [ -f "target/${{ matrix.target }}/release/vtcode.exe" ]; then
-            echo "✓ Found Windows binary: vtcode.exe"
           else
             echo "✗ Binary not found!" && exit 1
           fi
@@ -108,12 +96,7 @@ jobs:
         shell: bash
         run: |
           cd target/${{ matrix.target }}/release
-          if [ -f "vtcode.exe" ]; then
-            BINARY="vtcode.exe"
-          else
-            BINARY="vtcode"
-          fi
-          tar -czf ../../../vtcode-${{ inputs.tag }}-${{ matrix.target }}.tar.gz "$BINARY"
+          tar -czf ../../../vtcode-${{ inputs.tag }}-${{ matrix.target }}.tar.gz vtcode
           cd ../../../
           if command -v sha256sum &> /dev/null; then
             sha256sum vtcode-${{ inputs.tag }}-${{ matrix.target }}.tar.gz > vtcode-${{ inputs.tag }}-${{ matrix.target }}.sha256
@@ -128,6 +111,64 @@ jobs:
           path: |
             vtcode-${{ inputs.tag }}-${{ matrix.target }}.tar.gz
             vtcode-${{ inputs.tag }}-${{ matrix.target }}.sha256
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 6
+
+  build-windows:
+    if: ${{ inputs.build_windows == true || github.event.inputs.build_windows == 'true' }}
+    name: Build (x86_64-pc-windows-msvc)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+          fetch-depth: 1
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+          components: rustfmt
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          key: x86_64-pc-windows-msvc
+
+      - name: Build (x86_64-pc-windows-msvc)
+        run: cargo build --release --target x86_64-pc-windows-msvc
+        shell: bash
+
+      - name: Check Binary
+        shell: bash
+        run: |
+          if [ -f "target/x86_64-pc-windows-msvc/release/vtcode.exe" ]; then
+            echo "✓ Found Windows binary: vtcode.exe"
+          else
+            echo "✗ Binary not found!" && exit 1
+          fi
+
+      - name: Package
+        shell: bash
+        run: |
+          cd target/x86_64-pc-windows-msvc/release
+          tar -czf ../../../vtcode-${{ inputs.tag }}-x86_64-pc-windows-msvc.tar.gz vtcode.exe
+          cd ../../../
+          if command -v sha256sum &> /dev/null; then
+            sha256sum vtcode-${{ inputs.tag }}-x86_64-pc-windows-msvc.tar.gz > vtcode-${{ inputs.tag }}-x86_64-pc-windows-msvc.sha256
+          elif command -v shasum &> /dev/null; then
+            shasum -a 256 vtcode-${{ inputs.tag }}-x86_64-pc-windows-msvc.tar.gz > vtcode-${{ inputs.tag }}-x86_64-pc-windows-msvc.sha256
+          fi
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: vtcode-${{ inputs.tag }}-x86_64-pc-windows-msvc
+          path: |
+            vtcode-${{ inputs.tag }}-x86_64-pc-windows-msvc.tar.gz
+            vtcode-${{ inputs.tag }}-x86_64-pc-windows-msvc.sha256
           if-no-files-found: error
           retention-days: 7
           compression-level: 6

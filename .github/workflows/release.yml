@@ -1,4 +1,4 @@
-name: Release (All Platforms)
+name: Release (Linux Free Tier by Default)
 
 on:
   workflow_dispatch:
@@ -7,58 +7,40 @@ on:
         description: 'Tag to release (e.g., 0.81.2)'
         required: true
         type: string
+      build_windows:
+        description: 'Also build Windows x86_64 artifact (higher runner cost)'
+        required: false
+        type: boolean
+        default: false
+      build_macos:
+        description: 'Also build macOS artifacts (higher runner cost)'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
   packages: write
 
 # Cost-optimized release workflow
-# Builds only essential platforms:
-# - macOS x86_64 and aarch64 (free on public repos)
-# - Linux x86_64 via Cross (ubuntu-latest, cheaper)
-# - Windows x86_64 (windows-latest, required)
-#
-# Skipped (low demand, high cost):
-# - Linux ARM64 (aarch64-unknown-linux-gnu)
-# - Windows ARM64 (aarch64-pc-windows-msvc)
-#
-# For cost-optimized releases, use local script:
-# ./scripts/release.sh (builds macOS locally, CI for Linux/Windows)
+# Default (free-tier friendly): Linux-only on ubuntu runners
+# Optional: Windows/macOS can be enabled per release via workflow inputs
 
 jobs:
-  build:
+  build-linux:
     name: Build (${{ matrix.target }})
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        include:
-          # macOS - Apple Silicon (M1/M2/M3/M4) - Free on public repos
-          - os: macos-latest
-            target: aarch64-apple-darwin
-
-          # macOS - Intel (older Macs) - Free on public repos
-          - os: macos-latest
-            target: x86_64-apple-darwin
-
-          # Linux - x86_64 via Cross (ubuntu-latest is cheaper than ARM runners)
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-            use_cross: true
-
-          # Linux - x86_64 musl (portable static libc)
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-musl
-            use_cross: true
-
-          # Windows - x86_64 (required, most common)
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
+        target:
+          - x86_64-unknown-linux-gnu
+          - x86_64-unknown-linux-musl
 
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 1  # Shallow clone for faster checkout
+          fetch-depth: 1
           sparse-checkout: |
             !docs/
 
@@ -73,21 +55,14 @@ jobs:
           cache-on-failure: true
           key: ${{ matrix.target }}
 
-      - name: Install Cross (for Linux builds)
-        if: matrix.use_cross
+      - name: Install Cross
         run: cargo install cross --git https://github.com/cross-rs/cross.git --locked
 
       - name: Build (${{ matrix.target }})
-        run: |
-          if [[ "${{ matrix.use_cross }}" == "true" ]]; then
-            cross build --release --target ${{ matrix.target }}
-          else
-            cargo build --release --target ${{ matrix.target }}
-          fi
+        run: cross build --release --target ${{ matrix.target }}
         shell: bash
 
       - name: Verify Linux TLS linkage
-        if: contains(matrix.target, 'linux')
         shell: bash
         run: |
           if cargo tree -e normal -i native-tls --target ${{ matrix.target }}; then
@@ -105,8 +80,6 @@ jobs:
         run: |
           if [ -f "target/${{ matrix.target }}/release/vtcode" ]; then
             echo "✓ Found Unix binary: vtcode"
-          elif [ -f "target/${{ matrix.target }}/release/vtcode.exe" ]; then
-            echo "✓ Found Windows binary: vtcode.exe"
           else
             echo "✗ Binary not found!" && exit 1
           fi
@@ -115,12 +88,130 @@ jobs:
         shell: bash
         run: |
           cd target/${{ matrix.target }}/release
-          if [ -f "vtcode.exe" ]; then
-            BINARY="vtcode.exe"
-          else
-            BINARY="vtcode"
+          tar -czf ../../../vtcode-${{ github.event.inputs.tag }}-${{ matrix.target }}.tar.gz vtcode
+          cd ../../../
+          if command -v sha256sum &> /dev/null; then
+            sha256sum vtcode-${{ github.event.inputs.tag }}-${{ matrix.target }}.tar.gz > vtcode-${{ github.event.inputs.tag }}-${{ matrix.target }}.sha256
+          elif command -v shasum &> /dev/null; then
+            shasum -a 256 vtcode-${{ github.event.inputs.tag }}-${{ matrix.target }}.tar.gz > vtcode-${{ github.event.inputs.tag }}-${{ matrix.target }}.sha256
           fi
-          tar -czf ../../../vtcode-${{ github.event.inputs.tag }}-${{ matrix.target }}.tar.gz "$BINARY"
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: artifacts-${{ matrix.target }}
+          path: |
+            vtcode-${{ github.event.inputs.tag }}-${{ matrix.target }}.tar.gz
+            vtcode-${{ github.event.inputs.tag }}-${{ matrix.target }}.sha256
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 6
+
+  build-windows:
+    if: ${{ inputs.build_windows == true || github.event.inputs.build_windows == 'true' }}
+    name: Build (x86_64-pc-windows-msvc)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          sparse-checkout: |
+            !docs/
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          key: x86_64-pc-windows-msvc
+
+      - name: Build (x86_64-pc-windows-msvc)
+        run: cargo build --release --target x86_64-pc-windows-msvc
+        shell: bash
+
+      - name: Check Binary
+        shell: bash
+        run: |
+          if [ -f "target/x86_64-pc-windows-msvc/release/vtcode.exe" ]; then
+            echo "✓ Found Windows binary: vtcode.exe"
+          else
+            echo "✗ Binary not found!" && exit 1
+          fi
+
+      - name: Package
+        shell: bash
+        run: |
+          cd target/x86_64-pc-windows-msvc/release
+          tar -czf ../../../vtcode-${{ github.event.inputs.tag }}-x86_64-pc-windows-msvc.tar.gz vtcode.exe
+          cd ../../../
+          if command -v sha256sum &> /dev/null; then
+            sha256sum vtcode-${{ github.event.inputs.tag }}-x86_64-pc-windows-msvc.tar.gz > vtcode-${{ github.event.inputs.tag }}-x86_64-pc-windows-msvc.sha256
+          elif command -v shasum &> /dev/null; then
+            shasum -a 256 vtcode-${{ github.event.inputs.tag }}-x86_64-pc-windows-msvc.tar.gz > vtcode-${{ github.event.inputs.tag }}-x86_64-pc-windows-msvc.sha256
+          fi
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: artifacts-x86_64-pc-windows-msvc
+          path: |
+            vtcode-${{ github.event.inputs.tag }}-x86_64-pc-windows-msvc.tar.gz
+            vtcode-${{ github.event.inputs.tag }}-x86_64-pc-windows-msvc.sha256
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 6
+
+  build-macos:
+    if: ${{ inputs.build_macos == true || github.event.inputs.build_macos == 'true' }}
+    name: Build (${{ matrix.target }})
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - aarch64-apple-darwin
+          - x86_64-apple-darwin
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          sparse-checkout: |
+            !docs/
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          key: ${{ matrix.target }}
+
+      - name: Build (${{ matrix.target }})
+        run: cargo build --release --target ${{ matrix.target }}
+        shell: bash
+
+      - name: Check Binary
+        shell: bash
+        run: |
+          if [ -f "target/${{ matrix.target }}/release/vtcode" ]; then
+            echo "✓ Found Unix binary: vtcode"
+          else
+            echo "✗ Binary not found!" && exit 1
+          fi
+
+      - name: Package
+        shell: bash
+        run: |
+          cd target/${{ matrix.target }}/release
+          tar -czf ../../../vtcode-${{ github.event.inputs.tag }}-${{ matrix.target }}.tar.gz vtcode
           cd ../../../
           if command -v sha256sum &> /dev/null; then
             sha256sum vtcode-${{ github.event.inputs.tag }}-${{ matrix.target }}.tar.gz > vtcode-${{ github.event.inputs.tag }}-${{ matrix.target }}.sha256
@@ -141,7 +232,8 @@ jobs:
 
   create-release:
     name: Create GitHub Release
-    needs: build
+    needs: [build-linux, build-windows, build-macos]
+    if: ${{ always() && !cancelled() && !contains(needs.*.result, 'failure') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -159,7 +251,7 @@ jobs:
         run: |
           # Fetch all tags if not available
           git fetch --tags --force
-          
+
           # Find the most recent tag that follows SemVer (vX.Y.Z or X.Y.Z) in commit history
           # We exclude the tag currently being released
           PREV_TAG=$(git log --tags --simplify-by-decoration --pretty="format:%D" | grep -oE "tag: v?[0-9]+\.[0-9]+\.[0-9]+" | sed 's/tag: //;s/,.*//' | grep -vE "^(v)?${{ github.event.inputs.tag }}$" | head -n 1)
