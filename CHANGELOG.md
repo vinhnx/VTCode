@@ -2,6 +2,34 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.82.6 - 2026-02-25
+
+### Documentation
+
+- Update TODO.md with critical release notes and improve terminal title (08d978a5) (@vinhnx)
+- Update documentation map with enhanced topics and user questions (e7dc9369) (Vinh Nguyen)
+
+
+### Features
+
+- Implement dynamic terminal title updates based on agent activity (8c29b28f) (Vinh Nguyen)
+
+
+### Other
+
+- Implement XDG Base Directory Specification, add Zed extension file search commands, enhance PTY ANSI handling, and improve PTY pipe infrastructure. (03705867) (Vinh Nguyen)
+- Update documentation links and paths across multiple files (76d81123) (Vinh Nguyen)
+- Update LLM provider to Gemini and change default model and theme (9b20f88e) (Vinh Nguyen)
+- Fix gemini streaming processor and update TODO.md (04927325) (Vinh Nguyen)
+
+
+### Refactors
+
+- Enhance changelog generation and update test script for versioning (4383577f) (Vinh Nguyen)
+- Update documentation and improve terminology for unified search and code understanding (57e584eb) (Vinh Nguyen)
+- Improve cacheable tool logic and enhance formatting in build script (2b276290) (Vinh Nguyen)
+- Streamline provider resolution and update configuration to use Minimax (2b1d09c7) (Vinh Nguyen)
+- Update Z.AI model constants and enhance parsing logic for legacy support (44e33c22) (Vinh Nguyen)
 ## 0.82.5 - 2026-02-25
 
 ### Bug Fixes
