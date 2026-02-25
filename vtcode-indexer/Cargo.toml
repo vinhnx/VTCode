@@ -1,6 +1,6 @@
 [package]
 name = "vtcode-indexer"
-version = "0.82.4"
+version = "0.82.5"
 edition = "2024"
 authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
 description = "Workspace-friendly code indexer extracted from VT Code"
@@ -22,7 +22,7 @@ anyhow = "1.0"
 regex = "1.12"
 serde = { version = "1.0", features = ["derive"] }
 ignore = "0.4"                                     # Respect .gitignore, .ignore, etc.
-vtcode-commons = { path = "../vtcode-commons", version = "0.82.4" }
+vtcode-commons = { path = "../vtcode-commons", version = "0.82.5" }
 
 [dev-dependencies]
 tempfile = "3.24"
