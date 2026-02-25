@@ -171,8 +171,8 @@ ratatui = { version = "0.29", default-features = false, features = [
 regex = { workspace = true }
 rustc-hash = { workspace = true }
 smallvec = "1.13"
-self_update = { version = "0.42", features = ["archive-tar", "compression-flate2"] }
-reqwest = { version = "0.12", features = ["json", "stream"] }
+self_update = { version = "0.42", default-features = false, features = ["archive-tar", "compression-flate2", "rustls"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
 semver = "1.0"
 thiserror = { workspace = true }
 axum = { version = "0.8", optional = true }

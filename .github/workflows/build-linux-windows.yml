@@ -65,13 +65,6 @@ jobs:
         run: cargo install cross --git https://github.com/cross-rs/cross.git --locked
         # Cross allows building Linux binaries on Ubuntu runner (cheaper than ARM runners)
 
-      - name: Setup OpenSSL (Windows)
-        if: matrix.os == 'windows-latest'
-        run: |
-          echo "OPENSSL_DIR=" >> $GITHUB_ENV
-          echo "OPENSSL_STATIC=1" >> $GITHUB_ENV
-        shell: bash
-
       - name: Build (${{ matrix.target }})
         run: |
           if [[ "${{ matrix.use_cross }}" == "true" ]]; then
@@ -80,8 +73,20 @@ jobs:
             cargo build --release --target ${{ matrix.target }}
           fi
         shell: bash
-        env:
-          OPENSSL_STATIC: ${{ contains(matrix.target, 'linux') && '1' || '' }}
+
+      - name: Verify Linux TLS linkage
+        if: contains(matrix.target, 'linux')
+        shell: bash
+        run: |
+          if cargo tree -e normal -i native-tls --target ${{ matrix.target }}; then
+            echo "✗ native-tls detected in Linux dependency graph" >&2
+            exit 1
+          fi
+          if cargo tree -e normal -i openssl-sys --target ${{ matrix.target }}; then
+            echo "✗ openssl-sys detected in Linux dependency graph" >&2
+            exit 1
+          fi
+          echo "✓ Linux dependency graph is rustls-only (no native-tls/openssl-sys)"
 
       - name: Check Binary
         shell: bash

@@ -16,7 +16,7 @@ keywords = ["vtcode", "acp", "agent", "client-connection", "vt"]
 agent-client-protocol = "0.9.3"
 anyhow = "1.0"
 tokio = { version = "1.49", features = ["full"] }
-reqwest = { version = "0.12", features = ["json", "stream"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { workspace = true }
 tracing = "0.1"

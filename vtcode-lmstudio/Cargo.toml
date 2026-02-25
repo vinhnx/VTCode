@@ -11,7 +11,7 @@ name = "vtcode_lmstudio"
 path = "src/lib.rs"
 
 [dependencies]
-reqwest = { version = "0.12", features = ["json", "stream"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
 serde_json.workspace = true
 tokio.workspace = true
 tracing = { version = "0.1", features = ["log"] }
