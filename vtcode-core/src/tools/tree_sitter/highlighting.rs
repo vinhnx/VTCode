@@ -67,19 +67,25 @@ impl TreeSitterInjectionHighlighter {
         // tree-sitter language constants may be exposed as functions (LanguageFn)
         // so convert to the binding's `Language` type via `into()`.
         let ts_language: Language = match language {
+            #[cfg(feature = "lang-rust")]
             LanguageSupport::Rust => tree_sitter_rust::LANGUAGE.into(),
+            #[cfg(feature = "lang-python")]
             LanguageSupport::Python => tree_sitter_python::LANGUAGE.into(),
+            #[cfg(feature = "lang-javascript")]
             LanguageSupport::JavaScript => tree_sitter_javascript::LANGUAGE.into(),
+            #[cfg(feature = "lang-typescript")]
             LanguageSupport::TypeScript => tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into(),
+            #[cfg(feature = "lang-go")]
             LanguageSupport::Go => tree_sitter_go::LANGUAGE.into(),
+            #[cfg(feature = "lang-java")]
             LanguageSupport::Java => tree_sitter_java::LANGUAGE.into(),
             LanguageSupport::Bash => tree_sitter_bash::LANGUAGE.into(),
             #[cfg(feature = "swift")]
             LanguageSupport::Swift => tree_sitter_swift::LANGUAGE.into(),
-            #[cfg(not(feature = "swift"))]
-            LanguageSupport::Swift => {
+            #[allow(unreachable_patterns)]
+            _ => {
                 return Err(TreeSitterError::UnsupportedLanguage(
-                    "Swift support not enabled".into(),
+                    format!("{language} support not enabled"),
                 )
                 .into());
             }
