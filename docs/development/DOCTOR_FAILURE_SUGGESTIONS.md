@@ -214,6 +214,5 @@ Possible improvements:
 
 ## Related Documentation
 
--   `DOCTOR_IMPROVEMENTS.md` - Overview of all doctor enhancements
 -   `DOCTOR_REFERENCE.md` - Quick reference guide
 -   `DOCTOR_COMPLETE_CHANGELOG.md` - Technical implementation details

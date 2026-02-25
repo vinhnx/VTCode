@@ -188,6 +188,6 @@ What do you want to find?
 
 ## See Also
 
-- Full guide: `docs/grep-tool-guide.md`
+- Full guide: `docs/development/grep-tool-guide.md`
 - System prompt: Agent instructions for grep usage
 - ripgrep docs: https://github.com/BurntSushi/ripgrep

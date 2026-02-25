@@ -157,7 +157,6 @@ zed-extension/
     output.rs           (170 lines, 8 tests)
  Cargo.toml              (Updated with dependencies)
  extension.toml          (Metadata: v0.2.0)
- IMPLEMENTATION_ROADMAP.md (Updated with completion status)
 ```
 
 ## Ready for Phase 2
@@ -178,7 +177,6 @@ This foundation enables:
 4. **Error Handling** - Professional UX and troubleshooting
 5. **Performance** - Async execution and caching
 
-See `IMPLEMENTATION_ROADMAP.md` for detailed Phase 2 tasks.
 
 ---
 

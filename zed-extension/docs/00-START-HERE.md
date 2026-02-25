@@ -19,7 +19,6 @@ Welcome to the VT Code Zed Extension project. This document helps you navigate t
 ### For Project Overview
 
 -   ** [STATUS.md](./STATUS.md)** - Current project status and metrics
--   ** [IMPLEMENTATION_ROADMAP.md](./IMPLEMENTATION_ROADMAP.md)** - Complete feature roadmap
 -   ** [RELEASE_NOTES.md](./RELEASE_NOTES.md)** - v0.3.0 release notes
 
 ### For Quality Details
@@ -35,7 +34,6 @@ Welcome to the VT Code Zed Extension project. This document helps you navigate t
 
 ### Phase Completion Details
 
--   **Phase 1**: [PHASE_1_COMPLETION.md](./PHASE_1_COMPLETION.md)
 -   **Phase 2.1**: [PHASE_2_1_COMPLETION.md](./PHASE_2_1_COMPLETION.md)
 -   **Phase 2.2**: [PHASE_2_2_COMPLETION.md](./PHASE_2_2_COMPLETION.md)
 -   **Phase 2.3**: [PHASE_2_3_COMPLETION.md](./PHASE_2_3_COMPLETION.md)
@@ -166,7 +164,6 @@ cargo test --lib   #   107/107 passing
 ### For Contributors
 
 1. Review [DEVELOPMENT.md](./DEVELOPMENT.md) for setup
-2. Check [IMPLEMENTATION_ROADMAP.md](./IMPLEMENTATION_ROADMAP.md) for planned features
 3. Look at phase completion docs for detailed implementation
 4. Run `cargo test --lib` to verify everything works
 
@@ -253,7 +250,6 @@ cargo check && cargo clippy && cargo fmt --check && cargo test --lib
 00-START-HERE.md (you are here)
 
  STATUS.md  Current metrics & progress
- IMPLEMENTATION_ROADMAP.md  Feature roadmap & phases
  RELEASE_NOTES.md  v0.3.0 release details
  SESSION_SUMMARY.md  Recent improvements
  FINAL_SUMMARY.txt  Verification report
@@ -263,7 +259,6 @@ cargo check && cargo clippy && cargo fmt --check && cargo test --lib
  SETUP_GUIDE.md  Installation guide
  INDEX.md  Full documentation index
 
- PHASE_1_COMPLETION.md  Phase 1 details
  PHASE_1_IMPLEMENTATION.md  Phase 1 implementation
  PHASE_1_CHECKLIST.md  Phase 1 checklist
 

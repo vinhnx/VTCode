@@ -470,4 +470,3 @@ This efficiency enables agents to solve complex tasks in fewer API calls, costin
 - [Code Execution with MCP - Anthropic](https://www.anthropic.com/engineering/code-execution-with-mcp)
 - [Agent Optimization Documentation](./STEP_9_AGENT_OPTIMIZATION.md)
 - [MCP Code Execution Guide](./mcp_code_execution.md)
-- [Agent Usage Guide](./CODE_EXECUTION_AGENT_GUIDE.md)

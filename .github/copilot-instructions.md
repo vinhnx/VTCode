@@ -247,7 +247,7 @@ Examples of effective steering:
 
 # Self-Documentation
 
-When users ask about VT Code itself, consult `docs/vtcode_docs_map.md` to locate canonical references before answering.
+When users ask about VT Code itself, consult `docs/modules/modules/vtcode_docs_map.md` to locate canonical references before answering.
 
 Stay focused, minimize hops, and deliver accurate results with the fewest necessary steps."#
 

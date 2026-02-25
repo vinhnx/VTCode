@@ -34,9 +34,8 @@ The principle: if an agent cannot complete a task autonomously from information 
 | Security Model           | `docs/SECURITY.md`                        | Security invariants reference the security docs.                                    |
 | MCP Integration          | `docs/mcp/00_START_HERE.md`               | MCP domain quality score references this.                                           |
 | Subagents Guide          | `docs/subagents/SUBAGENTS.md`             | Subagent domain quality score references this.                                      |
-| Process Hardening        | `docs/PROCESS_HARDENING.md`               | Security domain quality score references this.                                      |
-| Provider Guides          | `docs/PROVIDER_GUIDES.md`                 | LLM domain quality score references this.                                           |
-| Golden Path Architecture | `docs/GOLDEN_PATH_ARCHITECTURE.md`        | Tool system architecture, referenced by quality score.                              |
+| Process Hardening        | `docs/development/PROCESS_HARDENING.md`               | Security domain quality score references this.                                      |
+| Provider Guides          | `docs/providers/PROVIDER_GUIDES.md`                 | LLM domain quality score references this.                                           |
 
 ## Navigation
 

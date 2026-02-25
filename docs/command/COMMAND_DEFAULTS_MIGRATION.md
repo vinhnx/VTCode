@@ -426,6 +426,5 @@ extra_path_entries = [
 ## See Also
 
 -   [COMMAND_SECURITY_MODEL.md](./COMMAND_SECURITY_MODEL.md) - Full command security details
--   [QUICK_COMMAND_REFERENCE.md](./QUICK_COMMAND_REFERENCE.md) - Quick reference for allowed/blocked commands
 -   [vtcode.toml.example](../vtcode.toml.example) - Example configuration with all safe defaults
 -   [AGENTS.md](../AGENTS.md) - Agent guidelines

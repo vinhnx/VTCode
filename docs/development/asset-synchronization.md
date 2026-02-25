@@ -21,7 +21,7 @@ The following assets are currently synchronized:
 
 | Source (Workspace) | Destination (Crate) | Purpose |
 |-------------------|-------------------|---------|
-| `docs/vtcode_docs_map.md` | `vtcode-core/embedded_assets_source/docs/vtcode_docs_map.md` | Documentation map for self-documentation |
+| `docs/modules/vtcode_docs_map.md` | `vtcode-core/embedded_assets_source/docs/modules/vtcode_docs_map.md` | Documentation map for self-documentation |
 
 ## **Using the Sync Script**
 
@@ -51,7 +51,7 @@ python3 scripts/sync_embedded_assets.py --dry-run
 
 **Always run the sync script after making changes to synchronized assets:**
 
--   After editing `docs/vtcode_docs_map.md`
+-   After editing `docs/modules/vtcode_docs_map.md`
 -   After adding or removing synchronized assets
 
 ### **Integration with Development Workflow**
@@ -62,7 +62,7 @@ When updating documentation in the workspace:
 
 ```bash
 # 1. Make your documentation changes
-vim docs/vtcode_docs_map.md
+vim docs/modules/vtcode_docs_map.md
 
 # 2. Preview the sync to see what will be updated
 python3 scripts/sync_embedded_assets.py --dry-run

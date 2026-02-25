@@ -18,7 +18,6 @@
 - Implementation checklist
 
 ### For Agent Implementation
- **Agent guidelines:** [`docs/AGENT_MCP_FAILURE_HANDLING.md`](./AGENT_MCP_FAILURE_HANDLING.md)
 - Agent response templates
 - Type-by-type response map
 - Implementation checklist
@@ -39,12 +38,10 @@
 ### LLM Agent (Generating User Guidance)
 1. Catch MCP tool failure
 2. Identify error type from `MCP_AGENT_QUICK_REFERENCE.md`
-3. Use template from `AGENT_MCP_FAILURE_HANDLING.md`
 4. Reference detailed guide if needed (`MCP_DIAGNOSTIC_GUIDE.md`)
 5. Provide step-by-step diagnostics and fixes
 
 ### Extension Developer (Implementing Error Handling)
-1. Review `AGENT_MCP_FAILURE_HANDLING.md` (implementation section)
 2. Classify errors using type categories
 3. Generate diagnostic guidance
 4. Display to user in structured format
@@ -98,7 +95,6 @@ The time tool will be available once the server starts.
 
 ```
 docs/
- AGENT_MCP_FAILURE_HANDLING.md     ← Agent implementation guide
  MCP_AGENT_DIAGNOSTICS_INDEX.md   ← This file
  mcp/
      MCP_AGENT_QUICK_REFERENCE.md  ← Quick lookup

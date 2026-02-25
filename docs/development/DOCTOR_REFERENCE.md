@@ -144,4 +144,4 @@ See these files for detailed configuration:
 
 -   `docs/config/CONFIGURATION_PRECEDENCE.md` - How settings are loaded
 -   `vtcode.toml.example` - Example configuration with all options
--   `docs/PROVIDER_GUIDES.md` - Provider-specific setup
+-   `docs/providers/PROVIDER_GUIDES.md` - Provider-specific setup

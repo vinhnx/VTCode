@@ -279,9 +279,7 @@ cargo check
 
 ## Documentation Created
 
-1. [FILE_REFERENCE_IMPROVEMENTS.md](file:///Users/vinh.nguyenxuan/Developer/learn-by-doing/vtcode/docs/features/FILE_REFERENCE_IMPROVEMENTS.md)
 2. [FILE_REFERENCE_PANIC_FIX.md](file:///Users/vinh.nguyenxuan/Developer/learn-by-doing/vtcode/docs/features/FILE_REFERENCE_PANIC_FIX.md)
-3. [FILE_BROWSER_UX_IMPROVEMENTS.md](file:///Users/vinh.nguyenxuan/Developer/learn-by-doing/vtcode/docs/features/FILE_BROWSER_UX_IMPROVEMENTS.md)
 4. [FILE_BROWSER_FUZZY_SEARCH.md](file:///Users/vinh.nguyenxuan/Developer/learn-by-doing/vtcode/docs/features/FILE_BROWSER_FUZZY_SEARCH.md)
 5. [FILE_BROWSER_SORTING.md](file:///Users/vinh.nguyenxuan/Developer/learn-by-doing/vtcode/docs/features/FILE_BROWSER_SORTING.md)
 6. [FILE_BROWSER_TREE_VIEW_FIXES.md](file:///Users/vinh.nguyenxuan/Developer/learn-by-doing/vtcode/docs/features/FILE_BROWSER_TREE_VIEW_FIXES.md)

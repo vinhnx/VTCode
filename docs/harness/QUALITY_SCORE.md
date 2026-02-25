@@ -36,7 +36,7 @@ Last reviewed: 2026-02-16
 | API Stability    | B     | Multi-provider factory pattern is stable. Model metadata remains centralized in `docs/models.json`.           |
 | Agent Legibility | B     | Clear provider abstraction and extension pattern.                                                             |
 | Error Handling   | A     | Uses `anyhow::Result` with context; provider error handling includes failover pathways.                       |
-| Documentation    | B     | `docs/PROVIDER_GUIDES.md` exists and is maintained.                                                           |
+| Documentation    | B     | `docs/providers/PROVIDER_GUIDES.md` exists and is maintained.                                                           |
 
 **Overall: B**
 **Priority action**: add integration tests that exercise multi-provider failover behavior under provider failure.
@@ -91,7 +91,7 @@ Last reviewed: 2026-02-16
 | ---------------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Test Coverage    | B     | Command safety and file-ops boundary regressions are covered; process-hardening env filtering tests now include additional edge cases. OS-specific hardening still has CI depth limits. |
 | API Stability    | B     | Security boundary model and tool policy behavior are stable.                                                                                                                            |
-| Agent Legibility | B     | Security docs are organized (`docs/PROCESS_HARDENING.md`, `docs/security/`).                                                                                                            |
+| Agent Legibility | B     | Security docs are organized (`docs/development/PROCESS_HARDENING.md`, `docs/security/`).                                                                                                            |
 | Error Handling   | A     | Hardening paths expose explicit failure codes and policy outcomes.                                                                                                                      |
 | Documentation    | A     | Security docs are consolidated with index and quick reference.                                                                                                                          |
 
@@ -188,7 +188,7 @@ Last reviewed: 2026-02-16
 | API Stability    | A     | Shift to LLM-native understanding simplified the system and removed heavy grammar dependencies.                                                                             |
 | Agent Legibility | A     | Unified tool guidance clearly explains the shift to LLM-native semantic analysis and the importance of bash safety.                                                         |
 | Error Handling   | B+    | Robust fallbacks for unparseable shell commands; LLM handles syntax errors in general programming languages.                                                                |
-| Documentation    | B+    | `docs/LANGUAGE_SUPPORT.md` and `docs/user-guide/tree-sitter-integration.md` updated to reflect the new architecture.                                                        |
+| Documentation    | B+    | `docs/protocols/LANGUAGE_SUPPORT.md` and `docs/user-guide/tree-sitter-integration.md` updated to reflect the new architecture.                                                        |
 
 **Overall: B+**
 **Priority action**: expand bash safety tests with more complex obfuscation patterns and edge-case shell syntax.

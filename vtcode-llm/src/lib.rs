@@ -9,7 +9,7 @@
 //! This crate exposes feature flags so downstream projects can opt into
 //! provider-specific exports, function calling helpers, or streaming telemetry
 //! utilities without pulling additional API surface by default. Consult
-//! `docs/vtcode_llm_environment.md` for a full overview of environment
+//! `docs/modules/vtcode_llm_environment.md` for a full overview of environment
 //! variables, configuration patterns, and the optional mock client helpers.
 
 pub mod config;

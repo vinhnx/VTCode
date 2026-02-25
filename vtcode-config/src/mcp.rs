@@ -839,7 +839,7 @@ mod tests {
         let mut config = McpAllowListConfig {
             enforce: true,
             default: McpAllowListRules {
-                resources: Some(vec!["docs/*".to_string()]),
+                resources: Some(vec!["docs/**/*".to_string()]),
                 ..Default::default()
             },
             ..Default::default()
@@ -854,8 +854,8 @@ mod tests {
             .insert("context7".to_string(), provider_rules);
 
         assert!(config.is_resource_allowed("context7", "journals/2024"));
-        assert!(!config.is_resource_allowed("context7", "docs/manual"));
-        assert!(config.is_resource_allowed("other", "docs/reference"));
+        assert!(config.is_resource_allowed("other", "docs/config/config.md"));
+        assert!(config.is_resource_allowed("other", "docs/guides/zed-acp.md"));
         assert!(!config.is_resource_allowed("other", "journals/2023"));
     }
 

@@ -15,18 +15,17 @@ Last reviewed: 2026-02-16
 
 - [Configuration Precedence](config/CONFIGURATION_PRECEDENCE.md) - Runtime config loading order.
 - [Config Field Reference](config/CONFIG_FIELD_REFERENCE.md) - Field-level schema reference.
-- [Provider Guides](PROVIDER_GUIDES.md) - LLM provider setup and behavior.
+- [Provider Guides](providers/PROVIDER_GUIDES.md) - LLM provider setup and behavior.
 - [Security Model](security/SECURITY_MODEL.md) - Security architecture.
-- [Process Hardening](PROCESS_HARDENING.md) - Runtime hardening controls.
+- [Process Hardening](development/PROCESS_HARDENING.md) - Runtime hardening controls.
 - [MCP Start Here](mcp/00_START_HERE.md) - MCP integration onboarding.
 - [Subagents Guide](subagents/SUBAGENTS.md) - Subagent types and configuration.
 - [Testing Guide](development/testing.md) - Test strategy and commands.
-- [Available Tools](AVAILABLE_TOOLS.md) - Tool catalog and usage.
 
 ## Engineering References
 
-- [Language Support Matrix](LANGUAGE_SUPPORT.md) - Tree-sitter and language support status.
-- [Indexer Notes](vtcode_indexer.md) - Indexer behavior and usage.
+- [Language Support Matrix](protocols/LANGUAGE_SUPPORT.md) - Tree-sitter and language support status.
+- [Indexer Notes](modules/vtcode_indexer.md) - Indexer behavior and usage.
 - [Development Guide](development/README.md) - Local dev workflows.
 - [Roadmap](project/ROADMAP.md) - Planned work.
 
@@ -34,7 +33,6 @@ Last reviewed: 2026-02-16
 
 - `docs/mcp/archive/` - Historical MCP implementation reports.
 - `docs/async/` - Async migration implementation logs.
-- `docs/phases/` and `docs/phase5/` - Prior phase delivery artifacts.
 - `docs/vscode-extension-improve-docs/` - VS Code extension review artifacts.
 
 When adding implementation summaries or one-off reports, prefer a domain folder or an archive path instead of placing files at `docs/*.md`.

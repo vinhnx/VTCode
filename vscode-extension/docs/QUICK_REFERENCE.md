@@ -337,7 +337,6 @@ import {
 | errorPresentation.ts      | Error formatting           | src/error/ |
 | errorPresentation.test.ts | Error handler tests        | src/error/ |
 | chat-view.css             | Enhanced styles            | media/     |
-| PHASE_1_IMPROVEMENTS.md   | Component docs             | docs/      |
 | PHASE_1_INTEGRATION.md    | Integration guide          | docs/      |
 
 ---
@@ -362,7 +361,6 @@ export const ERROR_MESSAGES
 
 ## Links & Resources
 
-- **Component Docs**: `docs/PHASE_1_IMPROVEMENTS.md`
 - **Integration Guide**: `docs/PHASE_1_INTEGRATION.md`
 - **Phase Status**: `PHASE_1_STATUS.md`
 - **Full Roadmap**: `docs/vscode-extension-improve-docs/VSCODE_EXTENSION_MIGRATION_ROADMAP.md`

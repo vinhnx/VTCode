@@ -61,7 +61,6 @@ use vtcode_core::config::ToolPolicy;
 
 ### Documentation Created
 
-#### 1. `docs/development/DOCTOR_IMPROVEMENTS.md`
 Comprehensive overview of:
 - Enhanced output format with example
 - New configuration diagnostics
@@ -176,7 +175,6 @@ No compilation errors
 | `src/agent/runloop/unified/diagnostics.rs` | Modified | ✅ |
 | `src/agent/runloop/unified/turn/session/slash_commands/diagnostics.rs` | Modified | ✅ |
 | `src/agent/runloop/unified/turn/session/slash_commands/handlers.rs` | Modified | ✅ |
-| `docs/development/DOCTOR_IMPROVEMENTS.md` | Created | ✅ |
 | `docs/development/DOCTOR_REFERENCE.md` | Created | ✅ |
 | `docs/development/DOCTOR_COMPLETE_CHANGELOG.md` | Created | ✅ |
 | `docs/project/TODO.md` | Updated | ✅ |

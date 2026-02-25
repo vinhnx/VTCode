@@ -2,8 +2,8 @@
 #
 # This file demonstrates all available configuration options for VT Code.
 # For detailed explanations of each option, see the complete documentation:
-# - Local copy: ./docs/config.md in your project
-# - Online: https://github.com/vinhnx/vtcode/blob/main/docs/config.md
+# - Local copy: ./docs/config/config.md in your project
+# - Online: https://github.com/vinhnx/vtcode/blob/main/docs/config/config.md
 #
 # Configuration files like this can be placed in your project root directory
 # to customize VT Code behavior for specific projects.

@@ -1246,7 +1246,7 @@ interleaved_thinking_type_enabled = "enabled"
 
 # Tool Search Configuration (advanced-tool-use beta)
 # Enables dynamic tool discovery for large tool catalogs (up to 10k tools)
-# See docs/TOOL_SEARCH.md for detailed documentation
+# See docs/tools/TOOL_SEARCH.md for detailed documentation
 [provider.anthropic.tool_search]
 # Enable tool search feature (requires Claude Sonnet 4.5+ or Opus 4.5+)
 # Default: false
@@ -1272,7 +1272,6 @@ always_available_tools = []
 
 # Dotfile Protection Configuration
 # Prevents automatic modification of hidden configuration files (dotfiles)
-# See docs/DOTFILE_PROTECTION.md for complete documentation
 [dotfile_protection]
 # Enable dotfile protection globally
 # Default: true

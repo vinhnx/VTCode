@@ -45,7 +45,7 @@ Complete guide to VT Code's security documentation.
 - Compliance considerations
 - Deployment guidelines
 
- **[Tool Policies](./vtcode_tools_policy.md)**
+ **[Tool Policies](./modules/vtcode_tools_policy.md)**
 - Command execution policies
 - Approval workflows
 - Policy configuration
@@ -110,7 +110,7 @@ Complete guide to VT Code's security documentation.
 
 ### Tool Policy
 - **File**: `~/.config/vtcode/tool_policy.toml`
-- **Documentation**: [Tool Policies](./vtcode_tools_policy.md)
+- **Documentation**: [Tool Policies](./modules/vtcode_tools_policy.md)
 
 ### Workspace Configuration
 - **File**: `vtcode.toml`

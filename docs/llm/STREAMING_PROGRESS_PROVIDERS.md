@@ -382,4 +382,3 @@ async fn test_streaming_progress() {
 
 - `vtcode-core/src/llm/providers/streaming_progress.rs` - Implementation
 - `docs/config/STREAMING_TIMEOUT_PROGRESS.md` - Gemini-specific details
-- `docs/STREAMING_TIMEOUT_HANDLING.md` - Error handling details

@@ -373,8 +373,6 @@ let files = parse_response(response);
 ## References
 
 - [Command Builder Pattern](../zed-extension/src/command_builder.rs)
-- [File Search Implementation](../docs/FILE_SEARCH_INTEGRATION_GUIDE.md)
-- [VT Code Core Integration](../docs/PHASE_2C_INTEGRATION_STATUS.md)
 
 ## Status
 

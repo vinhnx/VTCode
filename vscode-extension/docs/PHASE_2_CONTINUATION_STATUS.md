@@ -312,7 +312,6 @@ Plan to complete all command extractions by end of week, then begin participant 
 ## References
 
 -   **Phase 2 Roadmap**: `VSCODE_EXTENSION_MIGRATION_ROADMAP.md`
--   **Improvements Overview**: `../../docs/vscode-extension-improve-docs/VSCODE_EXTENSION_IMPROVEMENTS.md`
 -   **ICommand Interface**: `src/types/command.ts`
 -   **CommandRegistry**: `src/commandRegistry.ts`
 

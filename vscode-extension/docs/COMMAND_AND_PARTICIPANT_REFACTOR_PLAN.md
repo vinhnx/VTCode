@@ -475,7 +475,6 @@ Implement incrementally without breaking users:
 Detailed UX and code are covered in:
 
 -   `VSCODE_EXTENSION_CODE_EXAMPLES.md`
--   `VSCODE_EXTENSION_IMPROVEMENTS.md`
 
 This refactor plan prepares for them by:
 

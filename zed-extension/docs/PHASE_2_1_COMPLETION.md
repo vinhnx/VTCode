@@ -217,7 +217,6 @@ This implementation enables:
 3. Add settings UI helpers
 4. Support configuration migration
 
-See `IMPLEMENTATION_ROADMAP.md` for detailed Phase 2.2 tasks.
 
 ## Build Verification
 

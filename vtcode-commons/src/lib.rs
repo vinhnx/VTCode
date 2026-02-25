@@ -3,7 +3,7 @@
 //! `vtcode-tools` decoupled from VT Code's internal configuration and
 //! telemetry wiring while still sharing common contracts.
 //!
-//! See `docs/vtcode_commons_reference.md` for ready-to-use adapters that
+//! See `docs/modules/vtcode_commons_reference.md` for ready-to-use adapters that
 //! demonstrate how downstream consumers can wire these traits into their own
 //! applications or tests.
 

@@ -282,8 +282,6 @@ pub fn diagnostic_summary(&self) -> String
 
 **Documentation**:
 
--   `IMPLEMENTATION_ROADMAP.md` - Master roadmap
--   `PHASE_1_COMPLETION.md` - Phase 1 details
 -   `PHASE_2_1_COMPLETION.md` - Phase 2.1 details
 -   `PHASE_2_2_COMPLETION.md` - Phase 2.2 details
 -   `DEVELOPMENT.md` - Development guide

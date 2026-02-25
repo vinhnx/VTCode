@@ -311,7 +311,6 @@ Summary [1.901s] 31 tests run: 31 passed, 1 skipped
 1. `docs/research/codex_issue_review.md` - Original issue analysis
 2. `docs/research/codex_issue_implementation_progress.md` - Progress tracking
 3. `docs/research/codex_issue_final_review.md` - Comprehensive review
-4. `docs/research/CODEX_IMPLEMENTATION_SUMMARY.md` - This document
 
 ---
 

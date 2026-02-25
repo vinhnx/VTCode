@@ -121,7 +121,7 @@ If you suspect a security issue:
 - [Complete Security Model](./SECURITY_MODEL.md)
 - [Security Audit](./SECURITY_AUDIT.md)
 - [Security Guide](./guides/security.md)
--  [Tool Policies](./vtcode_tools_policy.md)
+-  [Tool Policies](./modules/vtcode_tools_policy.md)
 
 ## Security Updates
 

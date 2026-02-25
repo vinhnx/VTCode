@@ -380,6 +380,4 @@ import { ErrorPresentationHandler, type ErrorPresentation } from "./error/errorP
 
 ## Related Documentation
 
-- [PHASE_1_IMPROVEMENTS.md](./PHASE_1_IMPROVEMENTS.md) - Component documentation
-- [../../docs/vscode-extension-improve-docs/VSCODE_EXTENSION_IMPROVEMENTS.md](../../docs/vscode-extension-improve-docs/VSCODE_EXTENSION_IMPROVEMENTS.md) - Full improvement plan
 - [../../docs/vscode-extension-improve-docs/VSCODE_EXTENSION_MIGRATION_ROADMAP.md](../../docs/vscode-extension-improve-docs/VSCODE_EXTENSION_MIGRATION_ROADMAP.md) - 12-week roadmap

@@ -144,7 +144,6 @@ uvx mcp-server-time --help             # Test server
 
 ###  Implementation Guides (Existing)
 
-#### 5. **`docs/AGENT_MCP_FAILURE_HANDLING.md`** (328 lines)
 
 **Agent implementation guide** with 5 type-specific response templates:
 - For agents generating diagnostic messages
@@ -221,7 +220,6 @@ uvx mcp-server-time --help             # Test server
 docs/
  MCP_COMPLETE_REVIEW_INDEX.md          ← You are here
  MCP_IMPLEMENTATION_REVIEW_SUMMARY.md  ← Start here (managers)
- AGENT_MCP_FAILURE_HANDLING.md         ← For agent developers
  MCP_AGENT_DIAGNOSTICS_INDEX.md        ← Navigation hub
  mcp/
     MCP_RUST_SDK_ALIGNMENT.md         ← Deep technical review

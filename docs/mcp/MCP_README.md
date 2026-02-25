@@ -20,7 +20,6 @@ The authoritative guide for MCP integration in VT Code, based on Claude's offici
 
 ---
 
-### 2. **MCP_IMPROVEMENTS.md** ⚡
 Performance enhancements and architectural improvements to VT Code's MCP system.
 
 **Read this to understand:**
@@ -37,7 +36,6 @@ Performance enhancements and architectural improvements to VT Code's MCP system.
 - 99%+ cache hit reduction for repeated queries
 - Better resource utilization and timeouts
 
-**Link**: [MCP_IMPROVEMENTS.md](./MCP_IMPROVEMENTS.md)
 
 ---
 
@@ -74,7 +72,6 @@ Complete review and analysis of the MCP system.
 3. Configure: Create `.mcp.json` or update `vtcode.toml`
 
 ### For Performance Tuning
-1. Read: [MCP_IMPROVEMENTS.md](./MCP_IMPROVEMENTS.md) (Performance features)
 2. Enable: Connection pooling in `vtcode.toml`
 3. Monitor: Use stats and diagnostics APIs
 
@@ -302,7 +299,6 @@ vtcode/
 ├── docs/
 │   ├── MCP_README.md                 ← You are here
 │   ├── MCP_INTEGRATION_GUIDE.md      [Core documentation]
-│   ├── MCP_IMPROVEMENTS.md           [Performance guide]
 │   ├── MCP_APPLIED_CHANGES.md        [Change summary]
 │   ├── MCP_AGENT_DIAGNOSTICS_INDEX.md
 │   └── MCP_COMPLETE_REVIEW_INDEX.md

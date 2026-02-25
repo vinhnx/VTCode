@@ -16,13 +16,11 @@ All Model Context Protocol documentation for VT Code is organized by purpose and
 ### 📚 For Deep Understanding (1-2 hours)
 **To understand how MCP works in VT Code**
 - `MCP_INTEGRATION_GUIDE.md` - Complete integration reference
-- `MCP_IMPROVEMENTS.md` - Technical details of performance enhancements
 - `AGENTS.md` (MCP section) - Architecture reference
 
 ### 🛠️ For Implementation (Reference)
 **When actively working on MCP improvements**
 - `MCP_ROADMAP.md` - Detailed implementation steps
-- `MCP_IMPROVEMENTS.md` - Type mismatches and fix strategies
 - `docs/project/TODO.md` - Backlog with documentation links
 
 ---
@@ -35,7 +33,6 @@ All Model Context Protocol documentation for VT Code is organized by purpose and
 | **MCP_ASSESSMENT.md** | Honest evaluation | Technical leads | 15 min |
 | **MCP_ROADMAP.md** | Implementation plan | Engineers | 20 min |
 | **MCP_INTEGRATION_GUIDE.md** | Complete reference | All users | 30 min |
-| **MCP_IMPROVEMENTS.md** | Technical details | Implementation team | 20 min |
 | **MCP_README.md** | Navigation guide | New users | 10 min |
 | **AGENTS.md** (MCP section) | Quick reference | All users | 5 min |
 
@@ -50,7 +47,6 @@ MCP_FINAL_SUMMARY.md (Executive Summary)
     ↓
     ├─→ MCP_ASSESSMENT.md (Honest Status)
     │       ├─→ MCP_ROADMAP.md (Implementation)
-    │       └─→ MCP_IMPROVEMENTS.md (Technical Details)
     │
     └─→ MCP_INTEGRATION_GUIDE.md (How It Works)
             ├─→ AGENTS.md - MCP Section (Quick Ref)
@@ -60,7 +56,6 @@ BACKLOG INTEGRATION
     ↓
 docs/project/TODO.md
     ├─→ Links to MCP_ROADMAP.md (Phase 2)
-    ├─→ Links to MCP_IMPROVEMENTS.md (Issues)
     └─→ References all MCP docs
 ```
 
@@ -98,7 +93,6 @@ docs/project/TODO.md
 - **Security**: Validation, allowlists, timeouts
 - **Enterprise**: Managed config, audit ready
 
-### MCP_IMPROVEMENTS.md (Key Points)
 - **Connection Pool Issues**: 4 specific type mismatches identified
 - **Cache Issues**: 4 specific struct field mismatches identified
 - **Fix Strategies**: Concrete approaches for each issue
@@ -116,7 +110,6 @@ docs/
 ├── MCP_ASSESSMENT.md               ← For honest evaluation
 ├── MCP_ROADMAP.md                  ← For planning
 ├── MCP_INTEGRATION_GUIDE.md        ← For learning
-├── MCP_IMPROVEMENTS.md             ← For implementation
 ├── MCP_README.md                   ← Navigation guide
 ├── MCP_APPLIED_CHANGES.md          ← Analysis summary
 ├── MCP_AGENT_DIAGNOSTICS_INDEX.md  ← Existing diagnostics
@@ -145,7 +138,6 @@ AGENTS.md                           ← MCP section (quick ref)
 
 ### Scenario 3: Engineer Implementing Fixes
 1. Skim: `MCP_ASSESSMENT.md` (status overview)
-2. Study: `MCP_IMPROVEMENTS.md` (detailed issues)
 3. Reference: `MCP_ROADMAP.md` (implementation steps)
 4. Check: `docs/project/TODO.md` (backlog entry)
 
@@ -239,7 +231,6 @@ A: `docs/project/TODO.md` with links to all relevant documentation.
 - Current implementation → `MCP_INTEGRATION_GUIDE.md`
 - Implementation status → `MCP_ASSESSMENT.md`
 - Next steps → `MCP_ROADMAP.md`
-- Technical details → `MCP_IMPROVEMENTS.md`
 - Navigation → `MCP_README.md` or this document
 
 **Start with**: `MCP_FINAL_SUMMARY.md` or `MCP_README.md`
