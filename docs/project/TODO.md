@@ -104,3 +104,7 @@ https://huggingface.co/Qwen/Qwen3.5-397B-A17B?inference_api=true&inference_provi
 ---
 
 check to implement terminal-based notifications for important agent events, such as tool call results, errors, or completion status. This could involve using libraries like `notify-rust` for desktop notifications or implementing a custom notification system within the terminal UI to ensure users are promptly informed of critical updates without needing to constantly monitor the terminal output. emulator: ghosty, iterm, terminal, xterm, warp, kitty, alacritty, wezterm.
+
+---
+
+add syntax highlight for bash command in tui, to improve readability and user experience when executing shell commands through the terminal interface. This could involve integrating a syntax highlighting library that supports bash syntax, allowing users to easily distinguish between different components of the command, such as keywords, variables, and strings, enhancing clarity and reducing the likelihood of errors when composing or reviewing commands in the terminal UI.
