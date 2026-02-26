@@ -309,7 +309,7 @@ pub struct OllamaProviderConfig;
 impl ProviderConfig for OllamaProviderConfig {
     const PROVIDER_KEY: &'static str = "ollama";
     const DISPLAY_NAME: &'static str = "Ollama";
-    const DEFAULT_MODEL: &'static str = "llama3.1";
+    const DEFAULT_MODEL: &'static str = "gpt-oss:20b";
     const API_BASE_URL: &'static str = "http://localhost:11434";
     const BASE_URL_ENV_VAR: Option<&'static str> = None;
 
@@ -571,19 +571,6 @@ pub fn create_provider_unified(
         }
         Provider::Ollama => {
             let mut builder = create_provider_builder!(OllamaProviderConfig);
-            if let Some(m) = model {
-                builder = builder.model(m);
-            }
-            if let Some(url) = base_url {
-                builder = builder.base_url(url);
-            }
-            if let Some(t) = timeouts {
-                builder = builder.timeouts(t);
-            }
-            Ok(builder.build())
-        }
-        Provider::LmStudio => {
-            let mut builder = create_provider_builder!(LmStudioProviderConfig);
             if let Some(m) = model {
                 builder = builder.model(m);
             }

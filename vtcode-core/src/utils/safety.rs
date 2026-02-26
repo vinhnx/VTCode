@@ -25,19 +25,19 @@ impl SafetyValidator {
         use crate::config::constants::models;
         // Parse the requested model
         let model_id = match requested_model {
-            s if s == models::google::GEMINI_3_PRO_PREVIEW => Some(ModelId::Gemini3ProPreview),
+            s if s == models::google::GEMINI_3_1_PRO_PREVIEW => Some(ModelId::Gemini31ProPreview),
             s if s == models::google::GEMINI_3_FLASH_PREVIEW => Some(ModelId::Gemini3FlashPreview),
             _ => None,
         };
 
         // Check if this is the most capable (and expensive) model
-        if let Some(ModelId::Gemini3ProPreview) = model_id {
+        if let Some(ModelId::Gemini31ProPreview) = model_id {
             let current_default = ModelId::default();
 
             if skip_confirmations {
                 println!(
                     "{}",
-                    style("Using Gemini 3 Pro model (confirmations skipped)").cyan()
+                    style("Using Gemini 3.1 Pro model (confirmations skipped)").cyan()
                 );
                 return Ok(requested_model.to_string());
             }
@@ -45,7 +45,7 @@ impl SafetyValidator {
             if PRO_MODEL_AUTO_ACCEPT.load(Ordering::Relaxed) {
                 println!(
                     "{}",
-                    style("Using Gemini 3 Pro model (auto-accept enabled)").cyan()
+                    style("Using Gemini 3.1 Pro model (auto-accept enabled)").cyan()
                 );
                 return Ok(requested_model.to_string());
             }
@@ -98,8 +98,8 @@ impl SafetyValidator {
         match (from_id, to_id) {
             (Some(from), Some(to)) => {
                 // Switching to Pro model requires confirmation
-                !matches!(to, ModelId::Gemini3ProPreview)
-                    || matches!(from, ModelId::Gemini3ProPreview)
+                !matches!(to, ModelId::Gemini31ProPreview)
+                    || matches!(from, ModelId::Gemini31ProPreview)
             }
             _ => true, // Unknown models are allowed
         }

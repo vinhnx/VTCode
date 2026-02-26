@@ -28,7 +28,7 @@ pub enum ReasoningEffortLevel {
     Medium,
     /// High reasoning effort - maps to high thinking level for Gemini 3 Pro
     High,
-    /// Extra high reasoning effort - for gpt-5.2-codex+ long-running tasks
+    /// Extra high reasoning effort - for gpt-5.3-codex+ long-running tasks
     XHigh,
 }
 

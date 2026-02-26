@@ -17,11 +17,11 @@ use vtcode_core::{
 
 #[test]
 fn test_response_object_compliance() {
-    let mut response = Response::new("resp_test", "gpt-4o");
+    let mut response = Response::new("resp_test", "gpt-5");
 
     // 1. Check mandatory fields
     assert_eq!(response.object, "response");
-    assert_eq!(response.model, "gpt-4o");
+    assert_eq!(response.model, "gpt-5");
     assert_eq!(response.status, ResponseStatus::InProgress);
     assert!(response.created_at > 0);
 
@@ -153,7 +153,7 @@ fn test_request_object_compliance() {
 
 #[test]
 fn test_incomplete_response_compliance() {
-    let mut response = Response::new("resp_inc", "gpt-4o");
+    let mut response = Response::new("resp_inc", "gpt-5");
 
     response.incomplete(IncompleteReason::MaxOutputTokens);
 

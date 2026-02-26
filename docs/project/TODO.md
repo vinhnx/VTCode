@@ -44,6 +44,11 @@ https://huggingface.co/Qwen/Qwen3.5-397B-A17B?inference_api=true&inference_provi
 
 add syntax highlight for bash command in tui, to improve readability and user experience when executing shell commands through the terminal interface. This could involve integrating a syntax highlighting library that supports bash syntax, allowing users to easily distinguish between different components of the command, such as keywords, variables, and strings, enhancing clarity and reducing the likelihood of errors when composing or reviewing commands in the terminal UI.
 
+The TUI now syntax-highlights fenced code blocks and diffs,
+
+https://github.com/openai/codex/pull/11447
+https://github.com/openai/codex/pull/12581
+
 ---
 
 check edit file patch preview to show condense info with git changes lines + small offset only, don't show full file
@@ -187,3 +192,19 @@ to prevent future drift/regressions.
   accordingly.
 - Drift bug fix is included: missing Moonshot/OpenRouter variants in core behavior are treated as
   defects and corrected via unification.
+
+---
+
+The TUI picked up new convenience commands: /copy copies the latest complete assistant reply, while /clear and Ctrl-L clear the screen without losing thread context, with /clear also able to start a fresh chat. (#12444, #12520, #12613, #12628)
+
+---
+
+https://github.com/openai/codex/releases/tag/rust-v0.105.0
+
+---
+
+update changelog summarization logic ref `https://github.com/openai/codex/releases/tag/rust-v0.105.0`
+
+---
+
+@ parsing in the chat composer is more reliable, so commands like npx -y @scope/pkg@latest no longer accidentally open the file picker or block submission. (#12643 https://github.com/openai/codex/pull/12643)

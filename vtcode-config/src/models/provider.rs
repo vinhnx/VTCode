@@ -21,8 +21,6 @@ pub enum Provider {
     OpenRouter,
     /// Local Ollama models
     Ollama,
-    /// LM Studio local server (OpenAI-compatible)
-    LmStudio,
     /// Moonshot.ai models
     Moonshot,
     /// xAI Grok models
@@ -45,7 +43,6 @@ impl Provider {
             Provider::DeepSeek => "DEEPSEEK_API_KEY",
             Provider::OpenRouter => "OPENROUTER_API_KEY",
             Provider::Ollama => "OLLAMA_API_KEY",
-            Provider::LmStudio => "LMSTUDIO_API_KEY",
             Provider::Moonshot => "MOONSHOT_API_KEY",
             Provider::XAI => "XAI_API_KEY",
             Provider::ZAI => "ZAI_API_KEY",
@@ -59,16 +56,15 @@ impl Provider {
         vec![
             Provider::OpenAI,
             Provider::Anthropic,
+            Provider::Minimax,
             Provider::Gemini,
             Provider::DeepSeek,
+            Provider::HuggingFace,
             Provider::OpenRouter,
             Provider::Ollama,
-            Provider::LmStudio,
             Provider::Moonshot,
             Provider::XAI,
             Provider::ZAI,
-            Provider::Minimax,
-            Provider::HuggingFace,
         ]
     }
 
@@ -81,12 +77,28 @@ impl Provider {
             Provider::DeepSeek => "DeepSeek",
             Provider::OpenRouter => "OpenRouter",
             Provider::Ollama => "Ollama",
-            Provider::LmStudio => "LM Studio",
             Provider::Moonshot => "Moonshot",
             Provider::XAI => "xAI",
             Provider::ZAI => "Z.AI",
             Provider::Minimax => "MiniMax",
             Provider::HuggingFace => "Hugging Face",
+        }
+    }
+
+    pub fn is_dynamic(&self) -> bool {
+        self.is_local()
+    }
+
+    pub fn is_local(&self) -> bool {
+        matches!(self, Provider::Ollama)
+    }
+
+    pub fn local_install_instructions(&self) -> Option<&'static str> {
+        match self {
+            Provider::Ollama => Some(
+                "Ollama server is not running. To start:\n  1. Install Ollama from https://ollama.com\n  2. Run 'ollama serve' in a terminal\n  3. Pull models using 'ollama pull <model-name>' (e.g., 'ollama pull gpt-oss:20b')",
+            ),
+            _ => None,
         }
     }
 
@@ -101,12 +113,19 @@ impl Provider {
             Provider::DeepSeek => model == models::deepseek::DEEPSEEK_REASONER,
             Provider::OpenRouter => {
                 if let Ok(model_id) = ModelId::from_str(model) {
-                    return model_id.is_reasoning_variant();
+                    if let Some(meta) = crate::models::openrouter_generated::metadata_for(model_id)
+                    {
+                        return meta.reasoning;
+                    }
+                    return matches!(
+                        model_id,
+                        ModelId::OpenRouterMinimaxM25
+                            | ModelId::OpenRouterQwen3CoderNext
+                    );
                 }
                 models::openrouter::REASONING_MODELS.contains(&model)
             }
             Provider::Ollama => models::ollama::REASONING_LEVEL_MODELS.contains(&model),
-            Provider::LmStudio => false,
             Provider::Moonshot => models::moonshot::REASONING_MODELS.contains(&model),
             Provider::XAI => model == models::xai::GROK_4 || model == models::xai::GROK_4_CODE,
             Provider::ZAI => models::zai::REASONING_MODELS.contains(&model),
@@ -127,7 +146,6 @@ impl fmt::Display for Provider {
             Provider::DeepSeek => write!(f, "deepseek"),
             Provider::OpenRouter => write!(f, "openrouter"),
             Provider::Ollama => write!(f, "ollama"),
-            Provider::LmStudio => write!(f, "lmstudio"),
             Provider::Moonshot => write!(f, "moonshot"),
             Provider::XAI => write!(f, "xai"),
             Provider::ZAI => write!(f, "zai"),
@@ -148,7 +166,6 @@ impl FromStr for Provider {
             "deepseek" => Ok(Provider::DeepSeek),
             "openrouter" => Ok(Provider::OpenRouter),
             "ollama" => Ok(Provider::Ollama),
-            "lmstudio" => Ok(Provider::LmStudio),
             "moonshot" => Ok(Provider::Moonshot),
             "xai" => Ok(Provider::XAI),
             "zai" => Ok(Provider::ZAI),

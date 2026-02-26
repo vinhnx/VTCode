@@ -404,39 +404,6 @@
         "doc_comment": "DeepSeek V3.2 Reasoner - Thinking mode via OpenRouter"
       }
     },
-    "openai/gpt-5.2": {
-      "id": "openai/gpt-5.2",
-      "name": "OpenAI: GPT-5.2",
-      "reasoning": false,
-      "tool_call": true,
-      "modalities": {
-        "input": [
-          "text",
-          "image",
-          "file"
-        ],
-        "output": [
-          "text"
-        ]
-      },
-      "context": 400000,
-      "max_output_tokens": 128000,
-      "cost": {
-        "input": 1.3e-06,
-        "output": 1.05e-05
-      },
-      "vtcode": {
-        "variant": "OpenRouterOpenAIGpt52",
-        "constant": "OPENAI_GPT_5_2",
-        "vendor": "openai",
-        "display": "OpenAI GPT-5.2",
-        "description": "OpenAI GPT-5.2 model accessed through OpenRouter",
-        "efficient": false,
-        "top_tier": true,
-        "generation": "2025-12-15",
-        "doc_comment": "OpenAI GPT-5.2 - OpenAI GPT-5.2 model accessed through OpenRouter"
-      }
-    },
     "deepseek/deepseek-v3.2": {
       "id": "deepseek/deepseek-v3.2",
       "name": "DeepSeek: DeepSeek V3.2",
@@ -466,39 +433,6 @@
         "top_tier": true,
         "generation": "V3.2",
         "doc_comment": "DeepSeek V3.2 - Standard model with thinking support via OpenRouter"
-      }
-    },
-    "openai/gpt-5.2-chat": {
-      "id": "openai/gpt-5.2-chat",
-      "name": "OpenAI: GPT-5.2 Chat",
-      "reasoning": false,
-      "tool_call": false,
-      "modalities": {
-        "input": [
-          "file",
-          "image",
-          "text"
-        ],
-        "output": [
-          "text"
-        ]
-      },
-      "context": 128000,
-      "max_output_tokens": 16384,
-      "cost": {
-        "input": 1.3e-06,
-        "output": 1.05e-05
-      },
-      "vtcode": {
-        "variant": "OpenRouterOpenAIGpt52Chat",
-        "constant": "OPENAI_GPT_5_2_CHAT",
-        "vendor": "openai",
-        "display": "OpenAI GPT-5.2 Chat",
-        "description": "Chat optimised GPT-5.2 endpoint without tool use",
-        "efficient": false,
-        "top_tier": false,
-        "generation": "2025-12-20",
-        "doc_comment": "OpenAI GPT-5.2 Chat - Chat optimised GPT-5.2 endpoint without tool use"
       }
     },
     "deepseek/deepseek-v3.2-exp": {
@@ -532,38 +466,6 @@
         "doc_comment": "DeepSeek V3.2 Exp - Experimental DeepSeek V3.2 listing"
       }
     },
-    "openai/gpt-5.2-codex": {
-      "id": "openai/gpt-5.2-codex",
-      "name": "OpenAI: GPT-5.2-Codex",
-      "reasoning": true,
-      "tool_call": true,
-      "modalities": {
-        "input": [
-          "text",
-          "image"
-        ],
-        "output": [
-          "text"
-        ]
-      },
-      "context": 400000,
-      "max_output_tokens": 128000,
-      "cost": {
-        "input": 1.3e-06,
-        "output": 1.05e-05
-      },
-      "vtcode": {
-        "variant": "OpenRouterOpenAIGpt52Codex",
-        "constant": "OPENAI_GPT_5_2_CODEX",
-        "vendor": "openai",
-        "display": "OpenAI GPT-5.2-Codex",
-        "description": "OpenRouter listing for GPT-5.2 Codex",
-        "efficient": false,
-        "top_tier": true,
-        "generation": "2025-12-20",
-        "doc_comment": "OpenAI GPT-5.2-Codex - OpenRouter listing for GPT-5.2 Codex"
-      }
-    },
     "deepseek/deepseek-v3.2-speciale": {
       "id": "deepseek/deepseek-v3.2-speciale",
       "name": "DeepSeek: DeepSeek V3.2 Speciale",
@@ -595,70 +497,6 @@
         "doc_comment": "DeepSeek V3.2 Speciale - Enhanced reasoning with maxed-out capabilities"
       }
     },
-    "openai/gpt-5.2-pro": {
-      "id": "openai/gpt-5.2-pro",
-      "name": "OpenAI: GPT-5.2 Pro",
-      "reasoning": false,
-      "tool_call": true,
-      "modalities": {
-        "input": [
-          "text",
-          "image",
-          "file"
-        ],
-        "output": [
-          "text"
-        ]
-      },
-      "context": 400000,
-      "max_output_tokens": 128000,
-      "cost": {
-        "input": 1.5e-06,
-        "output": 1.2e-05
-      },
-      "vtcode": {
-        "variant": "OpenRouterOpenAIGpt52Pro",
-        "constant": "OPENAI_GPT_5_2_PRO",
-        "vendor": "openai",
-        "display": "OpenAI GPT-5.2 Pro",
-        "description": "Professional tier GPT-5.2 model accessed through OpenRouter",
-        "efficient": false,
-        "top_tier": true,
-        "generation": "2025-12-25",
-        "doc_comment": "OpenAI GPT-5.2 Pro - Professional tier GPT-5.2 model accessed through OpenRouter"
-      }
-    },
-    "moonshotai/kimi-k2-0905": {
-      "id": "moonshotai/kimi-k2-0905",
-      "name": "MoonshotAI: Kimi K2 0905",
-      "reasoning": false,
-      "tool_call": true,
-      "modalities": {
-        "input": [
-          "text"
-        ],
-        "output": [
-          "text"
-        ]
-      },
-      "context": 262144,
-      "max_output_tokens": 262144,
-      "cost": {
-        "input": 3.9e-07,
-        "output": 1.9e-06
-      },
-      "vtcode": {
-        "variant": "OpenRouterMoonshotaiKimiK20905",
-        "constant": "MOONSHOTAI_KIMI_K2_0905",
-        "vendor": "moonshotai",
-        "display": "Kimi K2 0905",
-        "description": "MoonshotAI Kimi K2 0905 MoE release optimised for coding agents",
-        "efficient": false,
-        "top_tier": true,
-        "generation": "K2-0905",
-        "doc_comment": "Kimi K2 0905 - MoonshotAI Kimi K2 0905 MoE release optimised for coding agents"
-      }
-    },
     "openai/o1-pro": {
       "id": "openai/o1-pro",
       "name": "OpenAI: o1-pro",
@@ -688,38 +526,6 @@
         "top_tier": true,
         "generation": "o1-series",
         "doc_comment": "OpenAI o1-pro - OpenAI o1-pro advanced reasoning model via OpenRouter"
-      }
-    },
-    "moonshotai/kimi-k2-thinking": {
-      "id": "moonshotai/kimi-k2-thinking",
-      "name": "MoonshotAI: Kimi K2 Thinking",
-      "reasoning": true,
-      "tool_call": true,
-      "modalities": {
-        "input": [
-          "text"
-        ],
-        "output": [
-          "text"
-        ]
-      },
-      "context": 262144,
-      "max_output_tokens": 262144,
-      "cost": {
-        "input_cache_hit": 1.5e-07,
-        "input": 6e-07,
-        "output": 2.5e-06
-      },
-      "vtcode": {
-        "variant": "OpenRouterMoonshotaiKimiK2Thinking",
-        "constant": "MOONSHOTAI_KIMI_K2_THINKING",
-        "vendor": "moonshotai",
-        "display": "Kimi K2 Thinking",
-        "description": "MoonshotAI reasoning-tier Kimi K2 release optimized for long-horizon agents",
-        "efficient": false,
-        "top_tier": true,
-        "generation": "K2-Thinking",
-        "doc_comment": "Kimi K2 Thinking - MoonshotAI reasoning-tier Kimi K2 release optimized for long-horizon agents"
       }
     },
     "openai/gpt-5": {

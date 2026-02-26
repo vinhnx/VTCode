@@ -52,9 +52,6 @@ pub fn verify_model_with_rig(
         Provider::Ollama => {
             // Rig does not provide an Ollama integration; validation is skipped.
         }
-        Provider::LmStudio => {
-            // LM Studio uses the OpenAI-compatible API; rig has no direct client.
-        }
         Provider::XAI => {
             let client = xai::Client::new(api_key);
             let _ = client.completion_model(model);
@@ -123,7 +120,6 @@ pub fn reasoning_parameters_for(provider: Provider, effort: ReasoningEffortLevel
         },
         Provider::Minimax => None,
         Provider::Ollama => None,
-        Provider::LmStudio => None,
         Provider::ZAI => match effort {
             ReasoningEffortLevel::None => None,
             ReasoningEffortLevel::Minimal => Some(json!({

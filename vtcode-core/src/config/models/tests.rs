@@ -395,3 +395,34 @@ fn test_fallback_models() {
     assert!(fallbacks.contains(&ModelId::ZaiGlm5));
     assert!(fallbacks.contains(&ModelId::OpenRouterGrokCodeFast1));
 }
+
+#[test]
+fn test_reexported_model_id_provider_types() {
+    let model: vtcode_config::models::ModelId = ModelId::GPT53Codex;
+    let provider: vtcode_config::models::Provider = Provider::Moonshot;
+    assert_eq!(model, vtcode_config::models::ModelId::GPT53Codex);
+    assert_eq!(provider, vtcode_config::models::Provider::Moonshot);
+}
+
+#[test]
+fn test_moonshot_and_openrouter_minimax_variants() {
+    assert_eq!(
+        models::moonshot::MINIMAX_M2_5.parse::<ModelId>().unwrap(),
+        ModelId::MoonshotMinimaxM25
+    );
+    assert_eq!(
+        models::moonshot::QWEN3_CODER_NEXT
+            .parse::<ModelId>()
+            .unwrap(),
+        ModelId::MoonshotQwen3CoderNext
+    );
+    assert_eq!(
+        "minimax/minimax-m2.5".parse::<ModelId>().unwrap(),
+        ModelId::OpenRouterMinimaxM25
+    );
+    assert_eq!(ModelId::MoonshotMinimaxM25.provider(), Provider::Moonshot);
+    assert_eq!(
+        ModelId::OpenRouterMinimaxM25.provider(),
+        Provider::OpenRouter
+    );
+}
