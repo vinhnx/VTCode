@@ -5,6 +5,7 @@ use crate::config::{
     ToolDocumentationMode, ToolPolicy, UiDisplayMode, VerbosityLevel,
 };
 use ratatui::widgets::ListState;
+use vtcode_config::NotificationDeliveryMode;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ConfigItemKind {
@@ -364,6 +365,97 @@ impl ConfigPalette {
             description: Some("Preserve ANSI color codes from tool output".to_string()),
         });
 
+        // Notifications Enabled
+        items.push(ConfigItem {
+            key: "ui.notifications.enabled".to_string(),
+            label: "Notifications Enabled".to_string(),
+            kind: ConfigItemKind::Bool {
+                value: config.ui.notifications.enabled,
+            },
+            description: Some("Enable runtime notifications for critical agent events".to_string()),
+        });
+
+        // Notification Delivery Mode
+        items.push(ConfigItem {
+            key: "ui.notifications.delivery_mode".to_string(),
+            label: "Notification Delivery".to_string(),
+            kind: ConfigItemKind::Enum {
+                value: match config.ui.notifications.delivery_mode {
+                    NotificationDeliveryMode::Terminal => "terminal".to_string(),
+                    NotificationDeliveryMode::Hybrid => "hybrid".to_string(),
+                    NotificationDeliveryMode::Desktop => "desktop".to_string(),
+                },
+                options: vec![
+                    "terminal".to_string(),
+                    "hybrid".to_string(),
+                    "desktop".to_string(),
+                ],
+            },
+            description: Some(
+                "Delivery mode: terminal bell/OSC, hybrid, or desktop-first".to_string(),
+            ),
+        });
+
+        // Notification focus suppression
+        items.push(ConfigItem {
+            key: "ui.notifications.suppress_when_focused".to_string(),
+            label: "Notify In Background Only".to_string(),
+            kind: ConfigItemKind::Bool {
+                value: config.ui.notifications.suppress_when_focused,
+            },
+            description: Some("Suppress notifications while terminal is focused".to_string()),
+        });
+
+        // Tool failure notifications
+        items.push(ConfigItem {
+            key: "ui.notifications.tool_failure".to_string(),
+            label: "Notify Tool Failures".to_string(),
+            kind: ConfigItemKind::Bool {
+                value: config.ui.notifications.tool_failure,
+            },
+            description: Some("Alert when tool execution fails".to_string()),
+        });
+
+        // Error notifications
+        items.push(ConfigItem {
+            key: "ui.notifications.error".to_string(),
+            label: "Notify Errors".to_string(),
+            kind: ConfigItemKind::Bool {
+                value: config.ui.notifications.error,
+            },
+            description: Some("Alert on runtime/system errors".to_string()),
+        });
+
+        // Completion notifications
+        items.push(ConfigItem {
+            key: "ui.notifications.completion".to_string(),
+            label: "Notify Completion".to_string(),
+            kind: ConfigItemKind::Bool {
+                value: config.ui.notifications.completion,
+            },
+            description: Some("Alert when turn/session completes".to_string()),
+        });
+
+        // HITL notifications
+        items.push(ConfigItem {
+            key: "ui.notifications.hitl".to_string(),
+            label: "Notify HITL Prompts".to_string(),
+            kind: ConfigItemKind::Bool {
+                value: config.ui.notifications.hitl,
+            },
+            description: Some("Alert when approval/user input is required".to_string()),
+        });
+
+        // Tool success notifications
+        items.push(ConfigItem {
+            key: "ui.notifications.tool_success".to_string(),
+            label: "Notify Tool Success".to_string(),
+            kind: ConfigItemKind::Bool {
+                value: config.ui.notifications.tool_success,
+            },
+            description: Some("Alert for successful tool calls (can be noisy)".to_string()),
+        });
+
         // Syntax Highlighting
         items.push(ConfigItem {
             key: "syntax_highlighting.enabled".to_string(),
@@ -608,6 +700,47 @@ impl ConfigPalette {
                 }
                 "ui.allow_tool_ansi" => {
                     self.config.ui.allow_tool_ansi = !self.config.ui.allow_tool_ansi;
+                    changed = true;
+                }
+                "ui.notifications.enabled" => {
+                    self.config.ui.notifications.enabled = !self.config.ui.notifications.enabled;
+                    changed = true;
+                }
+                "ui.notifications.delivery_mode" => {
+                    self.config.ui.notifications.delivery_mode =
+                        match self.config.ui.notifications.delivery_mode {
+                            NotificationDeliveryMode::Terminal => NotificationDeliveryMode::Hybrid,
+                            NotificationDeliveryMode::Hybrid => NotificationDeliveryMode::Desktop,
+                            NotificationDeliveryMode::Desktop => NotificationDeliveryMode::Terminal,
+                        };
+                    changed = true;
+                }
+                "ui.notifications.suppress_when_focused" => {
+                    self.config.ui.notifications.suppress_when_focused =
+                        !self.config.ui.notifications.suppress_when_focused;
+                    changed = true;
+                }
+                "ui.notifications.tool_failure" => {
+                    self.config.ui.notifications.tool_failure =
+                        !self.config.ui.notifications.tool_failure;
+                    changed = true;
+                }
+                "ui.notifications.error" => {
+                    self.config.ui.notifications.error = !self.config.ui.notifications.error;
+                    changed = true;
+                }
+                "ui.notifications.completion" => {
+                    self.config.ui.notifications.completion =
+                        !self.config.ui.notifications.completion;
+                    changed = true;
+                }
+                "ui.notifications.hitl" => {
+                    self.config.ui.notifications.hitl = !self.config.ui.notifications.hitl;
+                    changed = true;
+                }
+                "ui.notifications.tool_success" => {
+                    self.config.ui.notifications.tool_success =
+                        !self.config.ui.notifications.tool_success;
                     changed = true;
                 }
                 "agent.theme" => {

@@ -584,6 +584,16 @@ log_permission_prompts = true
 cache_enabled = true
 cache_ttl_seconds = 300
 
+[ui.notifications]
+enabled = true
+delivery_mode = "hybrid"
+suppress_when_focused = true
+tool_failure = true
+error = true
+completion = true
+hitl = true
+tool_success = false
+
 [sandbox.seccomp]
 enabled = true
 profile = "strict"

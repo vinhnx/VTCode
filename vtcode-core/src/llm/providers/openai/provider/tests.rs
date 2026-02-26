@@ -203,7 +203,7 @@ fn responses_payload_includes_prompt_cache_retention() {
 
     let provider = OpenAIProvider::from_config(
         Some("key".to_owned()),
-        Some(models::openai::GPT_5_1.to_string()),
+        Some(models::openai::GPT_5_2.to_string()),
         None,
         Some(pc),
         None,
@@ -211,7 +211,7 @@ fn responses_payload_includes_prompt_cache_retention() {
         None,
     );
 
-    let request = sample_request(models::openai::GPT_5_1);
+    let request = sample_request(models::openai::GPT_5_2);
     let payload = provider
         .convert_to_openai_responses_format(&request)
         .expect("conversion should succeed");
@@ -228,7 +228,7 @@ fn responses_payload_includes_prompt_cache_retention() {
 fn responses_payload_includes_prompt_cache_key_for_native_openai() {
     let provider = OpenAIProvider::from_config(
         Some("key".to_owned()),
-        Some(models::openai::GPT_5_1.to_string()),
+        Some(models::openai::GPT_5_2.to_string()),
         None,
         None,
         None,
@@ -236,7 +236,7 @@ fn responses_payload_includes_prompt_cache_key_for_native_openai() {
         None,
     );
 
-    let mut request = sample_request(models::openai::GPT_5_1);
+    let mut request = sample_request(models::openai::GPT_5_2);
     request.prompt_cache_key = Some("vtcode:openai:session-123".to_string());
     let payload = provider
         .convert_to_openai_responses_format(&request)
@@ -269,7 +269,7 @@ fn chat_payload_includes_prompt_cache_key_for_native_openai() {
 fn responses_payload_omits_prompt_cache_key_for_non_native_openai_base_url() {
     let provider = OpenAIProvider::from_config(
         Some("key".to_owned()),
-        Some(models::openai::GPT_5_1.to_string()),
+        Some(models::openai::GPT_5_2.to_string()),
         Some("https://example.local/v1".to_string()),
         None,
         None,
@@ -277,7 +277,7 @@ fn responses_payload_omits_prompt_cache_key_for_non_native_openai_base_url() {
         None,
     );
 
-    let mut request = sample_request(models::openai::GPT_5_1);
+    let mut request = sample_request(models::openai::GPT_5_2);
     request.prompt_cache_key = Some("vtcode:openai:session-xyz".to_string());
     let payload = provider
         .convert_to_openai_responses_format(&request)
@@ -293,7 +293,7 @@ fn responses_payload_excludes_prompt_cache_retention_when_not_set() {
     pc.providers.openai.prompt_cache_retention = None;
     let provider = OpenAIProvider::from_config(
         Some("key".to_string()),
-        Some(models::openai::GPT_5_1.to_string()),
+        Some(models::openai::GPT_5_2.to_string()),
         None,
         Some(pc),
         None,
@@ -301,7 +301,7 @@ fn responses_payload_excludes_prompt_cache_retention_when_not_set() {
         None,
     );
 
-    let mut request = sample_request(models::openai::GPT_5_1);
+    let mut request = sample_request(models::openai::GPT_5_2);
     request.stream = true;
     let payload = provider
         .convert_to_openai_responses_format(&request)
@@ -317,7 +317,7 @@ fn responses_payload_includes_prompt_cache_retention_streaming() {
 
     let provider = OpenAIProvider::from_config(
         Some("key".to_string()),
-        Some(models::openai::GPT_5_1.to_string()),
+        Some(models::openai::GPT_5_2.to_string()),
         None,
         Some(pc),
         None,
@@ -325,7 +325,7 @@ fn responses_payload_includes_prompt_cache_retention_streaming() {
         None,
     );
 
-    let mut request = sample_request(models::openai::GPT_5_1);
+    let mut request = sample_request(models::openai::GPT_5_2);
     request.stream = true;
     let payload = provider
         .convert_to_openai_responses_format(&request)
@@ -368,7 +368,7 @@ fn provider_from_config_respects_prompt_cache_retention() {
     pc.providers.openai.prompt_cache_retention = Some("72h".to_owned());
     let provider = OpenAIProvider::from_config(
         Some("key".to_string()),
-        Some(models::openai::GPT_5_1.to_string()),
+        Some(models::openai::GPT_5_2.to_string()),
         None,
         Some(pc.clone()),
         None,
@@ -543,7 +543,7 @@ mod caching_tests {
         // Must use an exact model name from RESPONSES_API_MODELS
         let request = provider::LLMRequest {
             messages: vec![provider::Message::user("Hello".to_string())],
-            model: crate::config::constants::models::openai::GPT_5_1_CODEX.to_string(),
+            model: crate::config::constants::models::openai::GPT_5_2_CODEX.to_string(),
             ..Default::default()
         };
 

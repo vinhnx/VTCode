@@ -6,7 +6,9 @@ use tokio::sync::Mutex;
 use vtcode_core::mcp::{
     ElicitationAction, McpElicitationHandler, McpElicitationRequest, McpElicitationResponse,
 };
-use vtcode_core::utils::ansi_codes::notify_attention;
+use vtcode_core::{
+    NotificationEvent, send_global_notification, utils::ansi_codes::notify_attention,
+};
 
 /// Interactive handler that prompts the user on the terminal when an MCP provider
 /// requests additional input via the elicitation flow.
@@ -36,7 +38,16 @@ impl McpElicitationHandler for InteractiveMcpElicitationHandler {
         let _guard = self.prompt_lock.lock().await;
 
         // Notify the user that attention is required
-        notify_attention(self.hitl_notification_bell, Some("MCP input required"));
+        if self.hitl_notification_bell
+            && let Err(err) = send_global_notification(NotificationEvent::HumanInTheLoop {
+                prompt: "MCP input required".to_string(),
+                context: format!("Provider: {}", provider),
+            })
+            .await
+        {
+            tracing::debug!(error = %err, "Failed to emit MCP HITL notification");
+            notify_attention(true, Some("MCP input required"));
+        }
 
         tracing::info!("MCP elicitation request from '{}'", provider);
         tracing::info!("{}", request.message);

@@ -168,7 +168,7 @@ fn test_model_from_string() {
     );
     for entry in openrouter_generated::ENTRIES {
         // Skip models that are shadowed by built-in variants with the same ID
-        if entry.id == models::zai::GLM_5 {
+        if entry.id == models::zai::GLM_5 || entry.id == models::zai::GLM_5_LEGACY {
             continue;
         }
         assert_eq!(entry.id.parse::<ModelId>().unwrap(), entry.variant);
@@ -252,7 +252,7 @@ fn test_model_providers() {
 fn test_provider_defaults() {
     assert_eq!(
         ModelId::default_orchestrator_for_provider(Provider::Gemini),
-        ModelId::Gemini3ProPreview
+        ModelId::Gemini31ProPreview
     );
     assert_eq!(
         ModelId::default_orchestrator_for_provider(Provider::OpenAI),
@@ -341,7 +341,7 @@ fn test_provider_defaults() {
 #[test]
 fn test_model_defaults() {
     assert_eq!(ModelId::default(), ModelId::Gemini3FlashPreview);
-    assert_eq!(ModelId::default_orchestrator(), ModelId::Gemini3ProPreview);
+    assert_eq!(ModelId::default_orchestrator(), ModelId::Gemini31ProPreview);
     assert_eq!(ModelId::default_subagent(), ModelId::Gemini3FlashPreview);
 }
 

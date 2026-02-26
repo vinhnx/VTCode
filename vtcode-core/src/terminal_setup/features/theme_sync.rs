@@ -222,6 +222,38 @@ white = '{bright_white}'
             )
         }
 
+        TerminalType::WezTerm => {
+            format!(
+                r#"-- VT Code Dark Theme for WezTerm
+return {{
+  colors = {{
+    background = "{background}",
+    foreground = "{foreground}",
+    cursor_bg = "{cursor}",
+    selection_bg = "{selection_bg}",
+  }},
+}}
+"#,
+                background = theme.background,
+                foreground = theme.foreground,
+                cursor = theme.cursor,
+                selection_bg = theme.selection_bg,
+            )
+        }
+
+        TerminalType::TerminalApp => {
+            r#"Terminal.app theme sync requires profile color configuration.
+Configure profile colors in Terminal → Settings → Profiles.
+"#
+            .to_string()
+        }
+
+        TerminalType::Xterm => {
+            r#"xterm theme sync is configured via X resources (e.g. ~/.Xresources).
+"#
+            .to_string()
+        }
+
         TerminalType::Zed => {
             format!(
                 r#"// VT Code Dark Theme for Zed

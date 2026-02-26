@@ -4,6 +4,7 @@ use anyhow::Result;
 use vtcode_core::config::constants::defaults::DEFAULT_MAX_CONSECUTIVE_BLOCKED_TOOL_CALLS_PER_TURN;
 use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::llm::provider as uni;
+use vtcode_core::notifications::{notify_tool_failure, notify_tool_success};
 use vtcode_core::tools::error_messages::agent_execution;
 use vtcode_core::tools::registry::labels::tool_action_label;
 use vtcode_core::utils::ansi::MessageStyle;
@@ -446,6 +447,14 @@ async fn handle_success<'a>(
     pipeline_outcome: &ToolPipelineOutcome,
     output: &serde_json::Value,
 ) -> Result<()> {
+    if let Err(err) = notify_tool_success(tool_name, None).await {
+        tracing::debug!(
+            tool = %tool_name,
+            error = %err,
+            "Failed to emit tool success notification"
+        );
+    }
+
     t_ctx.ctx.harness_state.reset_blocked_tool_call_streak();
 
     let content_for_model = maybe_inline_spooled(tool_name, output);
@@ -496,6 +505,14 @@ async fn handle_failure<'a>(
     tool_start_time: std::time::Instant,
 ) -> Result<Option<TurnHandlerOutcome>> {
     let error_str = error.to_string();
+    if let Err(err) = notify_tool_failure(tool_name, &error_str, None).await {
+        tracing::debug!(
+            tool = %tool_name,
+            error = %err,
+            "Failed to emit tool failure notification"
+        );
+    }
+
     let is_plan_mode_denial = agent_execution::is_plan_mode_denial(&error_str);
     let blocked_or_denied_failure = is_blocked_or_denied_failure(&error_str);
     let should_auto_exit = is_plan_mode_denial
@@ -562,6 +579,14 @@ async fn handle_timeout(
     tool_name: &str,
     error: &vtcode_core::tools::registry::ToolExecutionError,
 ) -> Result<()> {
+    if let Err(err) = notify_tool_failure(tool_name, &error.message, Some("timeout")).await {
+        tracing::debug!(
+            tool = %tool_name,
+            error = %err,
+            "Failed to emit timeout notification"
+        );
+    }
+
     let error_msg = format!("Tool '{}' timed out: {}", tool_name, error.message);
     tracing::debug!(tool = %tool_name, error = %error.message, "Tool timed out");
 

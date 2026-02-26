@@ -515,6 +515,16 @@ bold_is_bright = false
 safe_colors_only = false
 color_scheme_mode = "auto"
 
+[ui.notifications]
+enabled = true
+delivery_mode = "hybrid"
+suppress_when_focused = true
+tool_failure = true
+error = true
+completion = true
+hitl = true
+tool_success = false
+
 [ui.status_line]
 mode = "Auto"
 refresh_interval_ms = 1000

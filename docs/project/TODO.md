@@ -108,3 +108,24 @@ check to implement terminal-based notifications for important agent events, such
 ---
 
 add syntax highlight for bash command in tui, to improve readability and user experience when executing shell commands through the terminal interface. This could involve integrating a syntax highlighting library that supports bash syntax, allowing users to easily distinguish between different components of the command, such as keywords, variables, and strings, enhancing clarity and reducing the likelihood of errors when composing or reviewing commands in the terminal UI.
+
+---
+
+check edit file patch preview to show condense info with git changes lines + small offset only, don't show full file
+
+reference:
+
+```
+• Edited vtcode-config/src/loader/config.rs (+2 -2)
+    536  # Suppress notifications while terminal is focused
+    537 -suppress_when_focused = false
+    537 +suppress_when_focused = true
+    538
+        ⋮
+    545  # Success notifications for tool call results
+    546 -tool_success = true
+    546 +tool_success = false
+    547
+```
+
+reference currently PTY's truncated file preview logic

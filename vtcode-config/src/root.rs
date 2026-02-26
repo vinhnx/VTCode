@@ -53,6 +53,72 @@ pub enum UiDisplayMode {
     Focused,
 }
 
+/// Notification delivery mode for terminal attention events.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum NotificationDeliveryMode {
+    /// Terminal-native alerts only (bell/OSC).
+    Terminal,
+    /// Terminal alerts with desktop notifications when supported.
+    #[default]
+    Hybrid,
+    /// Desktop notifications first; fall back to terminal alerts when unavailable.
+    Desktop,
+}
+
+/// Notification preferences for terminal and desktop alerts.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct UiNotificationsConfig {
+    /// Master toggle for all runtime notifications.
+    #[serde(default = "default_notifications_enabled")]
+    pub enabled: bool,
+
+    /// Notification transport strategy.
+    #[serde(default)]
+    pub delivery_mode: NotificationDeliveryMode,
+
+    /// Suppress notifications while terminal focus is active.
+    #[serde(default = "default_notifications_suppress_when_focused")]
+    pub suppress_when_focused: bool,
+
+    /// Notify when a tool call fails.
+    #[serde(default = "default_notifications_tool_failure")]
+    pub tool_failure: bool,
+
+    /// Notify on runtime/system errors.
+    #[serde(default = "default_notifications_error")]
+    pub error: bool,
+
+    /// Notify on turn/session completion events.
+    #[serde(default = "default_notifications_completion")]
+    pub completion: bool,
+
+    /// Notify when human input/approval is required.
+    #[serde(default = "default_notifications_hitl")]
+    pub hitl: bool,
+
+    /// Notify on successful tool calls.
+    #[serde(default = "default_notifications_tool_success")]
+    pub tool_success: bool,
+}
+
+impl Default for UiNotificationsConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_notifications_enabled(),
+            delivery_mode: NotificationDeliveryMode::default(),
+            suppress_when_focused: default_notifications_suppress_when_focused(),
+            tool_failure: default_notifications_tool_failure(),
+            error: default_notifications_error(),
+            completion: default_notifications_completion(),
+            hitl: default_notifications_hitl(),
+            tool_success: default_notifications_tool_success(),
+        }
+    }
+}
+
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct UiConfig {
@@ -147,6 +213,10 @@ pub struct UiConfig {
     /// - "dark": Force dark mode theme selection
     #[serde(default = "default_color_scheme_mode")]
     pub color_scheme_mode: ColorSchemeMode,
+
+    /// Notification preferences for attention events.
+    #[serde(default)]
+    pub notifications: UiNotificationsConfig,
 }
 
 /// Color scheme mode for theme selection
@@ -191,6 +261,34 @@ fn default_message_block_spacing() -> bool {
     true
 }
 
+fn default_notifications_enabled() -> bool {
+    true
+}
+
+fn default_notifications_suppress_when_focused() -> bool {
+    true
+}
+
+fn default_notifications_tool_failure() -> bool {
+    true
+}
+
+fn default_notifications_error() -> bool {
+    true
+}
+
+fn default_notifications_completion() -> bool {
+    true
+}
+
+fn default_notifications_hitl() -> bool {
+    true
+}
+
+fn default_notifications_tool_success() -> bool {
+    false
+}
+
 fn default_ask_questions_enabled() -> bool {
     true
 }
@@ -218,6 +316,7 @@ impl Default for UiConfig {
             bold_is_bright: default_bold_is_bright(),
             safe_colors_only: default_safe_colors_only(),
             color_scheme_mode: default_color_scheme_mode(),
+            notifications: UiNotificationsConfig::default(),
         }
     }
 }

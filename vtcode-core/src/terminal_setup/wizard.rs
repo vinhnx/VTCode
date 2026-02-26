@@ -157,6 +157,51 @@ pub async fn run_terminal_setup_wizard(
         TerminalType::Alacritty => {
             crate::terminal_setup::terminals::alacritty::generate_config(&enabled_features)?
         }
+        TerminalType::WezTerm => {
+            renderer.line_if_not_empty(MessageStyle::Info)?;
+            renderer.line(
+                MessageStyle::Info,
+                "WezTerm detected. Apply settings in ~/.wezterm.lua (manual setup).",
+            )?;
+            for line in
+                crate::terminal_setup::features::notifications::get_notification_instructions(
+                    terminal_type,
+                )
+            {
+                renderer.line(MessageStyle::Info, &line)?;
+            }
+            return Ok(());
+        }
+        TerminalType::TerminalApp => {
+            renderer.line_if_not_empty(MessageStyle::Info)?;
+            renderer.line(
+                MessageStyle::Info,
+                "Terminal.app detected. Configure profile settings manually.",
+            )?;
+            for line in
+                crate::terminal_setup::features::notifications::get_notification_instructions(
+                    terminal_type,
+                )
+            {
+                renderer.line(MessageStyle::Info, &line)?;
+            }
+            return Ok(());
+        }
+        TerminalType::Xterm => {
+            renderer.line_if_not_empty(MessageStyle::Info)?;
+            renderer.line(
+                MessageStyle::Info,
+                "xterm detected. Configure via X resources manually.",
+            )?;
+            for line in
+                crate::terminal_setup::features::notifications::get_notification_instructions(
+                    terminal_type,
+                )
+            {
+                renderer.line(MessageStyle::Info, &line)?;
+            }
+            return Ok(());
+        }
         TerminalType::Zed => {
             crate::terminal_setup::terminals::zed::generate_config(&enabled_features)?
         }

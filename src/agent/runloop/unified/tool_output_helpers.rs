@@ -129,7 +129,7 @@ fn compact_run_completion_line(
 ) -> Option<String> {
     if let Some(exit_code) = output.get("exit_code").and_then(serde_json::Value::as_i64) {
         if exit_code == 0 {
-            return Some("✓ run completed".to_string());
+            return Some("✓ run completed (exit code: 0)".to_string());
         }
         return Some(format!("✗ run error, exit code: {}", exit_code));
     }

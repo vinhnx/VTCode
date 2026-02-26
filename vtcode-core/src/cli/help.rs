@@ -14,6 +14,6 @@ mod tests {
     fn help_contains_known_model() {
         let snippet = openai_responses_models_help();
         assert!(snippet.contains(models::openai::GPT_5));
-        assert!(snippet.contains(models::openai::GPT_5_1));
+        assert!(snippet.contains(models::openai::GPT_5_2));
     }
 }

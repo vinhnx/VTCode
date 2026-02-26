@@ -183,6 +183,7 @@ tool-chat = []
 profiling = []                            # Enable tracing instrumentation for performance profiling
 anthropic-api = ["vtcode-core/anthropic-api", "dep:axum"]
 a2a-server = ["vtcode-core/a2a-server"]   # Enable OAuth callback server for provider authentication
+desktop-notifications = ["vtcode-core/desktop-notifications"]
 
 [profile.dev]
 debug = 0

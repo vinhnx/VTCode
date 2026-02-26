@@ -12,6 +12,9 @@ pub enum TerminalType {
     Ghostty,
     Kitty,
     Alacritty,
+    WezTerm,
+    TerminalApp,
+    Xterm,
     Zed,
     Warp,
     ITerm2,
@@ -41,6 +44,10 @@ impl TerminalType {
 
             if term_lower.contains("ghostty") {
                 return Ok(TerminalType::Ghostty);
+            } else if term_lower.contains("wezterm") {
+                return Ok(TerminalType::WezTerm);
+            } else if term_lower.contains("apple_terminal") {
+                return Ok(TerminalType::TerminalApp);
             } else if term_lower.contains("iterm") {
                 return Ok(TerminalType::ITerm2);
             } else if term_lower.contains("vscode") {
@@ -82,6 +89,8 @@ impl TerminalType {
                 return Ok(TerminalType::Kitty);
             } else if term_lower.contains("alacritty") {
                 return Ok(TerminalType::Alacritty);
+            } else if term_lower.contains("xterm") {
+                return Ok(TerminalType::Xterm);
             }
         }
 
@@ -99,6 +108,20 @@ impl TerminalType {
 
             // Alacritty supports all features
             (TerminalType::Alacritty, _) => true,
+
+            // WezTerm supports all features
+            (TerminalType::WezTerm, _) => true,
+
+            // Terminal.app supports multiline/shell integration/notifications
+            (TerminalType::TerminalApp, TerminalFeature::Multiline) => true,
+            (TerminalType::TerminalApp, TerminalFeature::ShellIntegration) => true,
+            (TerminalType::TerminalApp, TerminalFeature::Notifications) => true,
+            (TerminalType::TerminalApp, _) => false,
+
+            // xterm supports baseline multiline and bell notifications
+            (TerminalType::Xterm, TerminalFeature::Multiline) => true,
+            (TerminalType::Xterm, TerminalFeature::Notifications) => true,
+            (TerminalType::Xterm, _) => false,
 
             // Zed: multiline, theme, and notifications only
             (TerminalType::Zed, TerminalFeature::Multiline) => true,
@@ -172,6 +195,21 @@ impl TerminalType {
                         .join("alacritty.toml")
                 }
             }
+
+            TerminalType::WezTerm => home_dir.join(".wezterm.lua"),
+
+            TerminalType::TerminalApp => {
+                if cfg!(target_os = "macos") {
+                    home_dir
+                        .join("Library")
+                        .join("Preferences")
+                        .join("com.apple.Terminal.plist")
+                } else {
+                    anyhow::bail!("Terminal.app is only available on macOS")
+                }
+            }
+
+            TerminalType::Xterm => home_dir.join(".Xresources"),
 
             TerminalType::Zed => {
                 // Zed uses settings.json in its config directory
@@ -283,6 +321,9 @@ impl TerminalType {
             TerminalType::Ghostty => "Ghostty",
             TerminalType::Kitty => "Kitty",
             TerminalType::Alacritty => "Alacritty",
+            TerminalType::WezTerm => "WezTerm",
+            TerminalType::TerminalApp => "Terminal.app",
+            TerminalType::Xterm => "xterm",
             TerminalType::Zed => "Zed",
             TerminalType::Warp => "Warp",
             TerminalType::ITerm2 => "iTerm2",
@@ -296,7 +337,13 @@ impl TerminalType {
 
     /// Check if terminal requires manual setup (vs automatic config)
     pub fn requires_manual_setup(&self) -> bool {
-        matches!(self, TerminalType::ITerm2 | TerminalType::VSCode)
+        matches!(
+            self,
+            TerminalType::ITerm2
+                | TerminalType::VSCode
+                | TerminalType::TerminalApp
+                | TerminalType::Xterm
+        )
     }
 }
 

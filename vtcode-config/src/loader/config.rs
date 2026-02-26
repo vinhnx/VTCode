@@ -525,6 +525,26 @@ inline_viewport_rows = 16
 # Show timeline navigation panel
 show_timeline_pane = false
 
+# Runtime notification preferences
+[ui.notifications]
+# Master toggle for terminal/desktop notifications
+enabled = true
+
+# Delivery mode: "terminal", "hybrid", or "desktop"
+delivery_mode = "hybrid"
+
+# Suppress notifications while terminal is focused
+suppress_when_focused = true
+
+# High-signal event toggles
+tool_failure = true
+error = true
+completion = true
+hitl = true
+
+# Success notifications for tool call results
+tool_success = false
+
 # Status line configuration
 [ui.status_line]
 # Status line mode ("auto", "command", "hidden")
