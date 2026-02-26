@@ -2,6 +2,11 @@ use super::*;
 
 impl Session {
     pub fn apply_config(&mut self, config: &crate::config::loader::VTCodeConfig) {
+        if let Err(err) = crate::notifications::apply_global_notification_config_from_vtcode(config)
+        {
+            tracing::warn!("Failed to apply notification config at runtime: {}", err);
+        }
+
         // Apply theme changes in real-time
         if crate::ui::theme::set_active_theme(&config.agent.theme).is_ok() {
             let active_styles = crate::ui::theme::active_styles();

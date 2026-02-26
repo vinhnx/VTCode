@@ -66,6 +66,31 @@ pub fn generate_notification_config(
                 .push("# Ghostty also supports shell integration notifications via:".to_string());
             config_lines.push("# - Terminal bell escape sequences (\\a)".to_string());
         }
+        TerminalType::WezTerm => {
+            config_lines.push("# WezTerm Notification Configuration".to_string());
+            config_lines.push("# WezTerm supports terminal bell notifications and can".to_string());
+            config_lines.push("# surface desktop alerts depending on OS integration.".to_string());
+            config_lines.push("#".to_string());
+            config_lines.push("# Recommended: keep bell enabled and test with:".to_string());
+            config_lines.push("# echo -e \"\\a\"".to_string());
+        }
+        TerminalType::TerminalApp => {
+            config_lines.push("# Terminal.app Notification Configuration".to_string());
+            config_lines
+                .push("# macOS Terminal supports audible alerts via terminal bell.".to_string());
+            config_lines.push("#".to_string());
+            config_lines.push("# 1. Open Terminal → Settings → Profiles → Advanced".to_string());
+            config_lines.push("# 2. Configure bell/alerts according to preference".to_string());
+            config_lines.push("# 3. Test with: echo -e \"\\a\"".to_string());
+        }
+        TerminalType::Xterm => {
+            config_lines.push("# xterm Notification Configuration".to_string());
+            config_lines
+                .push("# xterm provides reliable bell notifications (audible/visual).".to_string());
+            config_lines.push("#".to_string());
+            config_lines.push("# Ensure bell is enabled in your X resources.".to_string());
+            config_lines.push("# Test with: echo -e \"\\a\"".to_string());
+        }
         _ => {
             config_lines.push(format!("# {:?} Notification Configuration", terminal_type));
             config_lines
@@ -106,6 +131,21 @@ pub fn get_notification_instructions(terminal_type: TerminalType) -> Vec<String>
             "2. GO TO: Terminal → Bell section".to_string(),
             "3. ENABLE: 'Visual Bell' or 'Audible Bell' as preferred".to_string(),
             "4. CONFIGURE: Set 'Bell Duration' for visual notifications".to_string(),
+        ],
+        TerminalType::WezTerm => vec![
+            "1. OPEN: WezTerm settings (~/.wezterm.lua)".to_string(),
+            "2. ENABLE: Bell/alert behavior as preferred".to_string(),
+            "3. TEST: Run 'echo -e \"\\a\"'".to_string(),
+        ],
+        TerminalType::TerminalApp => vec![
+            "1. OPEN: Terminal → Settings → Profiles → Advanced".to_string(),
+            "2. CONFIGURE: Alert/Bell behavior".to_string(),
+            "3. TEST: Run 'echo -e \"\\a\"'".to_string(),
+        ],
+        TerminalType::Xterm => vec![
+            "1. CHECK: xterm bell settings in X resources".to_string(),
+            "2. ENABLE: Audible or visual bell".to_string(),
+            "3. TEST: Run 'echo -e \"\\a\"'".to_string(),
         ],
         _ => vec![
             format!("1. CHECK: Documentation for {:?}", terminal_type),

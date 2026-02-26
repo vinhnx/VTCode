@@ -40,6 +40,23 @@ bindings = [
 "#
         .to_string(),
 
+        TerminalType::WezTerm => r#"-- WezTerm copy/paste is built-in.
+-- Optional:
+--   enable_kitty_keyboard = true
+"#
+        .to_string(),
+
+        TerminalType::TerminalApp => r#"Terminal.app copy/paste is built-in.
+Configure profile behavior in Terminal → Settings.
+"#
+        .to_string(),
+
+        TerminalType::Xterm => {
+            r#"xterm copy/paste behavior is controlled via X resources and selection settings.
+"#
+            .to_string()
+        }
+
         TerminalType::Zed => r#"// Copy/paste is built into Zed
 // No additional configuration needed
 "#

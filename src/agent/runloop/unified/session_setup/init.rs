@@ -33,6 +33,7 @@ use vtcode_core::llm::{
 use vtcode_core::models::ModelId;
 use vtcode_core::tools::build_function_declarations_cached;
 use vtcode_core::tools::{ApprovalRecorder, SearchMetrics, ToolRegistry, ToolResultCache};
+use vtcode_core::{apply_global_notification_config_from_vtcode, init_global_notification_manager};
 
 #[allow(clippy::unnecessary_cast)]
 fn vtcode_config_circuit_breaker_to_core(
@@ -69,6 +70,17 @@ pub(crate) async fn initialize_session(
     full_auto: bool,
     resume: Option<&ResumeSession>,
 ) -> Result<SessionState> {
+    if let Some(cfg) = vt_cfg {
+        if let Err(err) = apply_global_notification_config_from_vtcode(cfg) {
+            warn!("Failed to apply notification configuration: {}", err);
+        }
+    } else if let Err(err) = init_global_notification_manager() {
+        tracing::debug!(
+            "Notification manager already initialized or unavailable: {}",
+            err
+        );
+    }
+
     let tool_documentation_mode = vt_cfg
         .map(|cfg| cfg.agent.tool_documentation_mode)
         .unwrap_or_default();

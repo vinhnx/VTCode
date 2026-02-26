@@ -34,8 +34,8 @@ pub enum HitlNotifyMode {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TerminalNotifyKind {
     BellOnly,
-    Iterm2,
-    Kitty,
+    Osc9,
+    Osc777,
 }
 
 static DETECTED_NOTIFY_KIND: Lazy<TerminalNotifyKind> = Lazy::new(detect_terminal_notify_kind);
@@ -84,8 +84,8 @@ pub fn notify_attention(default_enabled: bool, message: Option<&str>) {
 
     if matches!(mode, HitlNotifyMode::Rich) {
         match *DETECTED_NOTIFY_KIND {
-            TerminalNotifyKind::Kitty => send_kitty_notification(message),
-            TerminalNotifyKind::Iterm2 => send_iterm_notification(message),
+            TerminalNotifyKind::Osc9 => send_osc9_notification(message),
+            TerminalNotifyKind::Osc777 => send_osc777_notification(message),
             TerminalNotifyKind::BellOnly => {} // No-op
         }
     }
@@ -112,35 +112,48 @@ fn hitl_notify_mode(default_enabled: bool) -> HitlNotifyMode {
 }
 
 fn detect_terminal_notify_kind() -> TerminalNotifyKind {
+    if let Ok(explicit_kind) = std::env::var("VTCODE_NOTIFY_KIND") {
+        let explicit = explicit_kind.trim().to_ascii_lowercase();
+        return match explicit.as_str() {
+            "osc9" => TerminalNotifyKind::Osc9,
+            "osc777" => TerminalNotifyKind::Osc777,
+            "bell" | "off" => TerminalNotifyKind::BellOnly,
+            _ => TerminalNotifyKind::BellOnly,
+        };
+    }
+
     let term = std::env::var("TERM")
         .unwrap_or_default()
         .to_ascii_lowercase();
     let term_program = std::env::var("TERM_PROGRAM")
         .unwrap_or_default()
         .to_ascii_lowercase();
+    let has_kitty = std::env::var("KITTY_WINDOW_ID").is_ok();
+    let has_iterm = std::env::var("ITERM_SESSION_ID").is_ok();
+    let has_wezterm = std::env::var("WEZTERM_PANE").is_ok();
+    let has_vte = std::env::var("VTE_VERSION").is_ok();
 
-    if term.contains("kitty") || std::env::var("KITTY_WINDOW_ID").is_ok() {
-        return TerminalNotifyKind::Kitty;
-    }
-
-    if term_program.contains("iterm") || std::env::var("ITERM_SESSION_ID").is_ok() {
-        return TerminalNotifyKind::Iterm2;
-    }
-
-    TerminalNotifyKind::BellOnly
+    detect_terminal_notify_kind_from(
+        &term,
+        &term_program,
+        has_kitty,
+        has_iterm,
+        has_wezterm,
+        has_vte,
+    )
 }
 
-fn send_kitty_notification(message: Option<&str>) {
+fn send_osc777_notification(message: Option<&str>) {
     let body = sanitize_notification_text(message.unwrap_or("Human approval required"));
-    let title = "VT Code";
-    let payload = format!("{}\\;777;notify={};body={}", OSC, title, body);
+    let title = sanitize_notification_text("VT Code");
+    let payload = build_osc777_payload(&title, &body);
     print!("{}{}", payload, BEL);
     let _ = std::io::stdout().flush();
 }
 
-fn send_iterm_notification(message: Option<&str>) {
+fn send_osc9_notification(message: Option<&str>) {
     let body = sanitize_notification_text(message.unwrap_or("Human approval required"));
-    let payload = format!("{}\\;9;{}", OSC, body);
+    let payload = build_osc9_payload(&body);
     print!("{}{}", payload, BEL);
     let _ = std::io::stdout().flush();
 }
@@ -155,6 +168,96 @@ fn sanitize_notification_text(raw: &str) -> String {
         cleaned.truncate(MAX_LEN);
     }
     cleaned.replace(';', ":")
+}
+
+fn detect_terminal_notify_kind_from(
+    term: &str,
+    term_program: &str,
+    has_kitty: bool,
+    has_iterm: bool,
+    has_wezterm: bool,
+    has_vte: bool,
+) -> TerminalNotifyKind {
+    if term.contains("kitty") || has_kitty {
+        return TerminalNotifyKind::Osc777;
+    }
+
+    if term_program.contains("ghostty")
+        || term_program.contains("iterm")
+        || term_program.contains("wezterm")
+        || term_program.contains("warp")
+        || term_program.contains("apple_terminal")
+        || has_iterm
+        || has_wezterm
+    {
+        return TerminalNotifyKind::Osc9;
+    }
+
+    if has_vte {
+        return TerminalNotifyKind::Osc777;
+    }
+
+    TerminalNotifyKind::BellOnly
+}
+
+fn build_osc777_payload(title: &str, body: &str) -> String {
+    format!("{}777;notify;{};{}", OSC, title, body)
+}
+
+fn build_osc9_payload(body: &str) -> String {
+    format!("{}9;{}", OSC, body)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn terminal_mapping_is_deterministic() {
+        assert_eq!(
+            detect_terminal_notify_kind_from("xterm-kitty", "", false, false, false, false),
+            TerminalNotifyKind::Osc777
+        );
+        assert_eq!(
+            detect_terminal_notify_kind_from(
+                "xterm-ghostty",
+                "ghostty",
+                false,
+                false,
+                false,
+                false
+            ),
+            TerminalNotifyKind::Osc9
+        );
+        assert_eq!(
+            detect_terminal_notify_kind_from(
+                "xterm-256color",
+                "wezterm",
+                false,
+                false,
+                false,
+                false
+            ),
+            TerminalNotifyKind::Osc9
+        );
+        assert_eq!(
+            detect_terminal_notify_kind_from("xterm-256color", "", false, false, false, true),
+            TerminalNotifyKind::Osc777
+        );
+        assert_eq!(
+            detect_terminal_notify_kind_from("xterm-256color", "", false, false, false, false),
+            TerminalNotifyKind::BellOnly
+        );
+    }
+
+    #[test]
+    fn osc_payload_format_is_stable() {
+        assert_eq!(build_osc9_payload("done"), format!("{}9;done", OSC));
+        assert_eq!(
+            build_osc777_payload("VT Code", "finished"),
+            format!("{}777;notify;VT Code;finished", OSC)
+        );
+    }
 }
 
 // === Reset ===

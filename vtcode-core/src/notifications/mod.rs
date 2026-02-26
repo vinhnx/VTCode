@@ -5,8 +5,11 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use std::sync::RwLock;
 use std::sync::atomic::{AtomicBool, Ordering};
-use tokio::sync::RwLock;
+
+use crate::config::loader::VTCodeConfig;
+use vtcode_config::NotificationDeliveryMode;
 
 /// Types of important events that trigger notifications
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -21,6 +24,11 @@ pub enum NotificationEvent {
     ToolFailure {
         tool_name: String,
         error: String,
+        details: Option<String>,
+    },
+    /// Tool execution succeeded
+    ToolSuccess {
+        tool_name: String,
         details: Option<String>,
     },
     /// General error occurred
@@ -69,12 +77,14 @@ pub struct NotificationConfig {
     pub completion_notifications: bool,
     /// Enable request notifications
     pub request_notifications: bool,
-    /// Use terminal bell for notifications
-    pub use_terminal_bell: bool,
-    /// Use rich notifications (desktop notifications if supported)
-    pub use_rich_notifications: bool,
+    /// Enable tool success notifications
+    pub tool_success_notifications: bool,
     /// Enable/disable all terminal notifications (overrides other settings)
     pub terminal_notifications_enabled: bool,
+    /// Suppress notifications while terminal is focused.
+    pub suppress_when_focused: bool,
+    /// Delivery mode for notifications.
+    pub delivery_mode: NotificationDeliveryMode,
 }
 
 impl Default for NotificationConfig {
@@ -86,9 +96,29 @@ impl Default for NotificationConfig {
             hitl_notifications: true,
             completion_notifications: true,
             request_notifications: true,
-            use_terminal_bell: true,
-            use_rich_notifications: true,
+            tool_success_notifications: false,
             terminal_notifications_enabled: true,
+            suppress_when_focused: true,
+            delivery_mode: NotificationDeliveryMode::Hybrid,
+        }
+    }
+}
+
+impl NotificationConfig {
+    /// Build runtime notification config from full VTCodeConfig.
+    pub fn from_vtcode_config(config: &VTCodeConfig) -> Self {
+        let notifications = &config.ui.notifications;
+        Self {
+            command_failure_notifications: notifications.tool_failure,
+            error_notifications: notifications.error,
+            policy_approval_notifications: notifications.hitl,
+            hitl_notifications: notifications.hitl,
+            completion_notifications: notifications.completion,
+            request_notifications: notifications.hitl,
+            tool_success_notifications: notifications.tool_success,
+            terminal_notifications_enabled: notifications.enabled,
+            suppress_when_focused: notifications.suppress_when_focused,
+            delivery_mode: notifications.delivery_mode,
         }
     }
 }
@@ -119,7 +149,11 @@ impl NotificationManager {
 
     /// Send a notification for an event
     pub async fn send_notification(&self, event: NotificationEvent) -> Result<()> {
-        let config = self.config.read().await;
+        let config = self
+            .config
+            .read()
+            .expect("notification config lock poisoned")
+            .clone();
 
         // Check if terminal notifications are enabled globally first
         if !config.terminal_notifications_enabled {
@@ -129,7 +163,7 @@ impl NotificationManager {
         // Check if the terminal is currently focused/active
         // Only send notifications when the terminal is NOT active (user is not using it)
         let is_terminal_active = self.terminal_focused.load(Ordering::Relaxed);
-        if is_terminal_active {
+        if is_terminal_active && config.suppress_when_focused {
             // Terminal is active, don't send notification to avoid interrupting the user
             return Ok(());
         }
@@ -143,6 +177,11 @@ impl NotificationManager {
             NotificationEvent::ToolFailure { .. } => {
                 if config.command_failure_notifications {
                     // Using same config as command failures
+                    self.send_notification_impl(&event, &config).await?;
+                }
+            }
+            NotificationEvent::ToolSuccess { .. } => {
+                if config.tool_success_notifications {
                     self.send_notification_impl(&event, &config).await?;
                 }
             }
@@ -190,14 +229,24 @@ impl NotificationManager {
         // Format the notification message based on the event type
         let message = self.format_notification_message(event);
 
-        // Send terminal bell if configured
-        if config.use_terminal_bell {
-            self.send_terminal_bell(&message).await;
-        }
-
-        // Send rich notification if configured
-        if config.use_rich_notifications {
-            self.send_rich_notification(&message).await;
+        match config.delivery_mode {
+            NotificationDeliveryMode::Terminal => {
+                self.send_terminal_bell(&message).await;
+            }
+            NotificationDeliveryMode::Hybrid => {
+                self.send_terminal_bell(&message).await;
+                self.send_rich_notification(&message).await;
+            }
+            NotificationDeliveryMode::Desktop => {
+                #[cfg(feature = "desktop-notifications")]
+                {
+                    self.send_rich_notification(&message).await;
+                }
+                #[cfg(not(feature = "desktop-notifications"))]
+                {
+                    self.send_terminal_bell(&message).await;
+                }
+            }
         }
 
         Ok(())
@@ -230,6 +279,13 @@ impl NotificationManager {
                     .unwrap_or_default();
                 format!("Tool '{}' failed: {}{}", tool_name, error, details_str)
             }
+            NotificationEvent::ToolSuccess { tool_name, details } => {
+                let details_str = details
+                    .as_ref()
+                    .map(|d| format!(" - {}", d))
+                    .unwrap_or_default();
+                format!("Tool '{}' completed{}", tool_name, details_str)
+            }
             NotificationEvent::Error { message, context } => {
                 let context_str = context
                     .as_ref()
@@ -258,7 +314,11 @@ impl NotificationManager {
                     .as_ref()
                     .map(|d| format!(" - {}", d))
                     .unwrap_or_default();
-                format!("Task '{}' {}{}", task, status_str, details_str)
+                if task == "turn" {
+                    format!("Agent turn ended: {}{}", status_str, details_str)
+                } else {
+                    format!("Task '{}' {}{}", task, status_str, details_str)
+                }
             }
             NotificationEvent::Request {
                 request_type,
@@ -303,13 +363,37 @@ impl NotificationManager {
 
     /// Update the notification configuration
     pub async fn update_config(&self, new_config: NotificationConfig) {
-        let mut config = self.config.write().await;
+        let mut config = self
+            .config
+            .write()
+            .expect("notification config lock poisoned");
+        *config = new_config;
+    }
+
+    /// Synchronously update notification configuration.
+    pub fn update_config_sync(&self, new_config: NotificationConfig) {
+        let mut config = self
+            .config
+            .write()
+            .expect("notification config lock poisoned");
         *config = new_config;
     }
 
     /// Get the current notification configuration
     pub async fn get_config(&self) -> NotificationConfig {
-        let config = self.config.read().await;
+        let config = self
+            .config
+            .read()
+            .expect("notification config lock poisoned");
+        config.clone()
+    }
+
+    /// Get the current notification configuration synchronously.
+    pub fn get_config_sync(&self) -> NotificationConfig {
+        let config = self
+            .config
+            .read()
+            .expect("notification config lock poisoned");
         config.clone()
     }
 
@@ -343,9 +427,32 @@ pub fn init_global_notification_manager() -> Result<()> {
         .map_err(|_| anyhow::anyhow!("Failed to set global notification manager"))
 }
 
+/// Initialize the global notification manager with explicit configuration.
+pub fn init_global_notification_manager_with_config(config: NotificationConfig) -> Result<()> {
+    let manager = NotificationManager::with_config(config);
+    GLOBAL_NOTIFICATION_MANAGER
+        .set(manager)
+        .map_err(|_| anyhow::anyhow!("Failed to set global notification manager"))
+}
+
 /// Get a reference to the global notification manager
 pub fn get_global_notification_manager() -> Option<&'static NotificationManager> {
     GLOBAL_NOTIFICATION_MANAGER.get()
+}
+
+/// Ensure the global manager is initialized, then apply updated configuration.
+pub fn apply_global_notification_config(config: NotificationConfig) -> Result<()> {
+    if let Some(manager) = get_global_notification_manager() {
+        manager.update_config_sync(config);
+        return Ok(());
+    }
+    init_global_notification_manager_with_config(config)
+}
+
+/// Build and apply notification settings from VTCodeConfig.
+pub fn apply_global_notification_config_from_vtcode(config: &VTCodeConfig) -> Result<()> {
+    let notification_config = NotificationConfig::from_vtcode_config(config);
+    apply_global_notification_config(notification_config)
 }
 
 /// Send a notification using the global notification manager
@@ -384,6 +491,18 @@ pub async fn notify_tool_failure(
     let event = NotificationEvent::ToolFailure {
         tool_name: tool_name.to_string(),
         error: error.to_string(),
+        details: details.map(|s| s.to_string()),
+    };
+    send_global_notification(event).await
+}
+
+/// Convenience function to send a tool success notification
+pub async fn notify_tool_success(
+    tool_name: &str,
+    details: Option<&str>,
+) -> Result<(), anyhow::Error> {
+    let event = NotificationEvent::ToolSuccess {
+        tool_name: tool_name.to_string(),
         details: details.map(|s| s.to_string()),
     };
     send_global_notification(event).await

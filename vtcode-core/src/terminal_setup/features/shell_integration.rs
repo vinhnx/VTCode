@@ -57,6 +57,26 @@ shell_integration_startup_mode enabled
 "#
         .to_string(),
 
+        TerminalType::WezTerm => {
+            r#"-- WezTerm shell integration is available via shell integration scripts.
+-- See: https://wezfurlong.org/wezterm/shell-integration.html
+"#
+            .to_string()
+        }
+
+        TerminalType::TerminalApp => {
+            r#"Terminal.app supports shell integration through shell startup files.
+Use OSC 7 sequences in your prompt hooks for directory tracking.
+"#
+            .to_string()
+        }
+
+        TerminalType::Xterm => {
+            r#"xterm shell integration relies on OSC escape sequences in shell prompt hooks.
+"#
+            .to_string()
+        }
+
         TerminalType::Zed => r#"// Zed terminal has built-in shell integration
 // Working directory and command tracking enabled by default
 {

@@ -12,6 +12,9 @@ pub fn generate_config(terminal_type: TerminalType) -> Result<String> {
         TerminalType::Ghostty => generate_ghostty_config(),
         TerminalType::Kitty => generate_kitty_config(),
         TerminalType::Alacritty => generate_alacritty_config(),
+        TerminalType::WezTerm => generate_wezterm_config(),
+        TerminalType::TerminalApp => generate_terminal_app_instructions(),
+        TerminalType::Xterm => generate_xterm_instructions(),
         TerminalType::Zed => generate_zed_config(),
         TerminalType::Warp => {
             // Warp has built-in multiline support, no config needed
@@ -28,6 +31,29 @@ pub fn generate_config(terminal_type: TerminalType) -> Result<String> {
     };
 
     Ok(config)
+}
+
+/// WezTerm: Lua keybinding example.
+fn generate_wezterm_config() -> String {
+    r#"keys = {
+  { key = "Enter", mods = "SHIFT", action = wezterm.action.SendString("\n") },
+}
+"#
+    .to_string()
+}
+
+/// Terminal.app: manual key mapping guidance.
+fn generate_terminal_app_instructions() -> String {
+    r#"Terminal.app uses profile key mappings.
+Add Shift+Enter mapping to send \n in your active profile."#
+        .to_string()
+}
+
+/// xterm: baseline guidance.
+fn generate_xterm_instructions() -> String {
+    r#"xterm multiline can be configured through X resources or window manager key mapping.
+Ensure Shift+Enter sends a newline sequence."#
+        .to_string()
 }
 
 /// Ghostty: keybind = shift+enter=text:\n

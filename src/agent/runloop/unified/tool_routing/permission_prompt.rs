@@ -6,6 +6,7 @@ use serde_json::Value;
 use tokio::sync::Notify;
 use tokio::task;
 use vtcode_core::core::interfaces::ui::UiSession;
+use vtcode_core::notifications::{NotificationEvent, send_global_notification};
 use vtcode_core::ui::tui::InlineEvent;
 use vtcode_core::ui::tui::InlineHandle;
 use vtcode_core::utils::ansi::AnsiRenderer;
@@ -181,10 +182,15 @@ pub(super) async fn prompt_tool_permission<S: UiSession + ?Sized>(
     ];
 
     let default_selection = InlineListSelection::ToolApproval(true);
-    vtcode_core::utils::ansi_codes::notify_attention(
-        hitl_notification_bell,
-        Some("Tool approval required"),
-    );
+    if hitl_notification_bell
+        && let Err(err) = send_global_notification(NotificationEvent::HumanInTheLoop {
+            prompt: "Tool approval required".to_string(),
+            context: format!("Tool: {}", tool_name),
+        })
+        .await
+    {
+        tracing::debug!(error = %err, "Failed to emit HITL notification");
+    }
     handle.show_list_modal(
         "Tool Permission Required".to_string(),
         description_lines,

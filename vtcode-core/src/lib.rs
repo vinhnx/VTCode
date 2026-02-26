@@ -240,9 +240,11 @@ pub use models_manager::{
     model_family::find_family_for_model,
 };
 pub use notifications::{
-    NotificationConfig, NotificationEvent, NotificationManager, get_global_notification_manager,
-    init_global_notification_manager, notify_command_failure, notify_error,
-    notify_human_in_the_loop, notify_tool_failure, send_global_notification,
+    NotificationConfig, NotificationEvent, NotificationManager, apply_global_notification_config,
+    apply_global_notification_config_from_vtcode, get_global_notification_manager,
+    init_global_notification_manager, init_global_notification_manager_with_config,
+    notify_command_failure, notify_error, notify_human_in_the_loop, notify_tool_failure,
+    notify_tool_success, send_global_notification,
 };
 pub use orchestrator::{
     DistributedOrchestrator, ExecutionTarget, ExecutorRegistry, LocalExecutor, ScheduledWork,

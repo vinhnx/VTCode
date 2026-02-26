@@ -24,6 +24,7 @@ use vtcode_core::core::agent::steering::SteeringMessage;
 use vtcode_core::core::decision_tracker::DecisionTracker;
 use vtcode_core::core::trajectory::TrajectoryLogger;
 use vtcode_core::llm::provider as uni;
+use vtcode_core::notifications::{CompletionStatus, NotificationEvent, send_global_notification};
 use vtcode_core::tools::ToolResultCache;
 use vtcode_core::tools::{ApprovalRecorder, ToolRegistry};
 use vtcode_core::ui::tui::{InlineHandle, InlineSession};
@@ -459,6 +460,7 @@ pub async fn run_turn_loop(
             tracing::debug!(error = %e, "harness turn outcome event emission failed");
         }
     }
+    emit_turn_outcome_notification(&result).await;
 
     // Final outcome with the correct result status
     Ok(TurnLoopOutcome {
@@ -466,4 +468,46 @@ pub async fn run_turn_loop(
         working_history,
         turn_modified_files,
     })
+}
+
+async fn emit_turn_outcome_notification(result: &TurnLoopResult) {
+    let event = match result {
+        TurnLoopResult::Completed => Some(NotificationEvent::Completion {
+            task: "turn".to_string(),
+            status: CompletionStatus::Success,
+            details: None,
+        }),
+        TurnLoopResult::Blocked { reason } => Some(NotificationEvent::Completion {
+            task: "turn".to_string(),
+            status: CompletionStatus::PartialSuccess,
+            details: reason.clone(),
+        }),
+        TurnLoopResult::Aborted => Some(NotificationEvent::Completion {
+            task: "turn".to_string(),
+            status: CompletionStatus::Failure,
+            details: Some("Turn aborted".to_string()),
+        }),
+        TurnLoopResult::Cancelled => Some(NotificationEvent::Completion {
+            task: "turn".to_string(),
+            status: CompletionStatus::Cancelled,
+            details: Some("Turn cancelled".to_string()),
+        }),
+        TurnLoopResult::Exit => None,
+    };
+
+    if matches!(result, TurnLoopResult::Aborted)
+        && let Err(err) = send_global_notification(NotificationEvent::Error {
+            message: "Turn aborted".to_string(),
+            context: Some("turn".to_string()),
+        })
+        .await
+    {
+        tracing::debug!(error = %err, "Failed to emit turn error notification");
+    }
+
+    if let Some(notification) = event
+        && let Err(err) = send_global_notification(notification).await
+    {
+        tracing::debug!(error = %err, "Failed to emit turn outcome notification");
+    }
 }
