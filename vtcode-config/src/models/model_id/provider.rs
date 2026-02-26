@@ -34,7 +34,8 @@ impl ModelId {
             | ModelId::HuggingFaceDeepseekV32Novita
             | ModelId::HuggingFaceXiaomiMimoV2FlashNovita
             | ModelId::HuggingFaceGlm5Novita
-            | ModelId::HuggingFaceQwen3CoderNextNovita => Provider::HuggingFace,
+            | ModelId::HuggingFaceQwen3CoderNextNovita
+            | ModelId::HuggingFaceQwen35397BA17BTogether => Provider::HuggingFace,
             ModelId::XaiGrok4
             | ModelId::XaiGrok4Mini
             | ModelId::XaiGrok4Code

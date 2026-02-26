@@ -78,6 +78,8 @@ pub enum ModelId {
     HuggingFaceGlm5Novita,
     /// Qwen3-Coder-Next via Novita inference provider on Hugging Face router
     HuggingFaceQwen3CoderNextNovita,
+    /// Qwen3.5-397B-A17B via Together inference provider on Hugging Face router
+    HuggingFaceQwen35397BA17BTogether,
 
     // xAI models
     /// Grok-4 - Flagship xAI model with advanced reasoning

@@ -141,6 +141,9 @@ impl ModelId {
             ModelId::HuggingFaceQwen3CoderNextNovita => {
                 "Qwen3-Coder-Next via Novita inference provider on HuggingFace router. Coding-optimized model with reasoning capabilities."
             }
+            ModelId::HuggingFaceQwen35397BA17BTogether => {
+                "Qwen3.5-397B-A17B via Together inference provider on HuggingFace router. Vision-language model with linear attention and sparse MoE, 1M context window."
+            }
             ModelId::OpenRouterMinimaxM25 => "MiniMax-M2.5 flagship model via OpenRouter",
             ModelId::OpenRouterQwen3CoderNext => {
                 "Next-generation Qwen3 coding model optimized for agentic workflows via OpenRouter"

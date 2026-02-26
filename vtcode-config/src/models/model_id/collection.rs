@@ -73,6 +73,7 @@ impl ModelId {
             ModelId::HuggingFaceXiaomiMimoV2FlashNovita,
             ModelId::HuggingFaceGlm5Novita,
             ModelId::HuggingFaceQwen3CoderNextNovita,
+            ModelId::HuggingFaceQwen35397BA17BTogether,
             ModelId::OpenRouterMinimaxM25,
             ModelId::OpenRouterQwen3CoderNext,
         ];
