@@ -8,40 +8,6 @@ implement self update logic for vtcode.
 
 Perform a comprehensive review and optimization of the vtcode agent harness, prioritizing execution speed, computational efficiency, and token economy. Refactor the tool call architecture to minimize overhead and latency, while implementing robust error handling strategies to significantly reduce the agent's error rate and ensure reliable, effective performance.
 
---
-
-improve and fix syntax highlighting in raw markdown code
-/Users/vinhnguyenxuan/Documents/vtcode-resources/wrong_syntax_highlight.png
-
----
-
----
-
-improve system prompt "/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/plans/improve-system-prompt-v2.md"
-
----
-
-## Summary
-
-Goal: improve speed, token efficiency, and tool-call reliability while
-minimizing regression risk.
-Strategy: fix correctness bugs first, then reduce prompt/tool overhead with
-config-compatible, surgical changes.
-
-## Key Findings Driving This Plan
-
-- is_valid_tool does not enforce policy result (it calls policy check and
-  ignores return), causing false “valid” decisions and avoidable failures/
-  retries.
-- Core runner path builds full tool declarations without using cached/mode-
-  aware docs (tool_documentation_mode), wasting tokens and startup work.
-- Prompt/tool guidance has naming drift (ask_user_question vs ask_questions vs
-  request_user_input) and legacy references, increasing tool-call mistakes.
-- STRUCTURED_REASONING_INSTRUCTIONS is always appended, including lightweight/
-  minimal flows, adding fixed token overhead.
-- Loop/retry behavior is split across layers, with some non-retryable failures
-  still retried.
-
 ---
 
 /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/docs/BLOATY_ANALYSIS.md
@@ -103,10 +69,6 @@ https://huggingface.co/Qwen/Qwen3.5-397B-A17B?inference_api=true&inference_provi
 
 ---
 
-check to implement terminal-based notifications for important agent events, such as tool call results, errors, or completion status. This could involve using libraries like `notify-rust` for desktop notifications or implementing a custom notification system within the terminal UI to ensure users are promptly informed of critical updates without needing to constantly monitor the terminal output. emulator: ghosty, iterm, terminal, xterm, warp, kitty, alacritty, wezterm.
-
----
-
 add syntax highlight for bash command in tui, to improve readability and user experience when executing shell commands through the terminal interface. This could involve integrating a syntax highlighting library that supports bash syntax, allowing users to easily distinguish between different components of the command, such as keywords, variables, and strings, enhancing clarity and reducing the likelihood of errors when composing or reviewing commands in the terminal UI.
 
 ---
@@ -129,3 +91,28 @@ reference:
 ```
 
 reference currently PTY's truncated file preview logic
+
+---
+
+idea: add timer for task / turns
+
+```
+─ Worked for 1m 30s ─────────────────────────────────────────────────────────────────────────────────────
+```
+
+```
+• Running targeted clippy checks (2m 47s • esc to interrupt) · 1 background terminal running · /ps to vie
+```
+
+---
+
+add context calculation logic and display at bottom status bar, showing how many tokens are currently in context and how many are left before reaching the model's limit. This would help users manage their prompts and tool calls more effectively, ensuring they stay within the token limits of the LLM and avoid unexpected truncation or errors due to exceeding context size.
+
+suggested display format:
+
+```
+
+> Continue, or @files, /commands, Shift+Tab: cycle modes, Control+C: cancel task, tab: queue messages
+
+Ghostty main*                                                              gemini-3-flash-preview | (low) | 17% context left
+```

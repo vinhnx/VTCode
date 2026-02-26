@@ -38,7 +38,9 @@ fn test_workspace_path_caching() {
 
     // Verify we can use the cached path
     assert_eq!(cached_workspace, workspace);
-    assert!(cached_workspace.exists() || workspace == PathBuf::from("."));
+    assert!(
+        cached_workspace.exists() || workspace == std::path::Path::new(".")
+    );
 }
 
 #[test]

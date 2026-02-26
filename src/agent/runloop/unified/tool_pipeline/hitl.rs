@@ -17,11 +17,7 @@ pub(crate) async fn execute_hitl_tool(
     ctrl_c_notify: &Arc<Notify>,
     editing_mode: EditingMode,
 ) -> Option<Result<Value>> {
-    if matches!(
-        tool_name,
-        tools::REQUEST_USER_INPUT | tools::ASK_QUESTIONS | tools::ASK_USER_QUESTION
-    ) && editing_mode != EditingMode::Plan
-    {
+    if tool_name == tools::REQUEST_USER_INPUT && editing_mode != EditingMode::Plan {
         let message = format!(
             "request_user_input is unavailable in {} mode",
             editing_mode.display_name()
@@ -30,7 +26,7 @@ pub(crate) async fn execute_hitl_tool(
     }
 
     match tool_name {
-        tools::REQUEST_USER_INPUT | tools::ASK_QUESTIONS | tools::ASK_USER_QUESTION => Some(
+        tools::REQUEST_USER_INPUT => Some(
             request_user_input::execute_request_user_input_tool(
                 handle,
                 session,

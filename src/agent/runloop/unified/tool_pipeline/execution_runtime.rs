@@ -273,6 +273,41 @@ async fn try_cache_hit(
     None
 }
 
+async fn try_loop_detection_cache_hit(
+    registry: &ToolRegistry,
+    tool_result_cache: &Arc<tokio::sync::RwLock<ToolResultCache>>,
+    name: &str,
+    args_val: &Value,
+    cache_target: &str,
+) -> Option<ToolExecutionStatus> {
+    let workspace_path = registry.workspace_root().to_string_lossy().to_string();
+    let cache_key = create_enhanced_cache_key(name, args_val, cache_target, &workspace_path);
+    let mut cache = tool_result_cache.write().await;
+    if let Some(cached_output) = cache.get(&cache_key) {
+        match parse_cached_output(&cached_output) {
+            Ok(cached_json) => {
+                return Some(ToolExecutionStatus::Success {
+                    output: cached_json,
+                    stdout: None,
+                    modified_files: vec![],
+                    command_success: true,
+                    has_more: false,
+                });
+            }
+            Err(error) => {
+                warn!(
+                    target: "vtcode.performance.cache",
+                    tool = name,
+                    error = %error,
+                    "Discarding malformed cached output after loop detection"
+                );
+                cache.invalidate_for_path(cache_target);
+            }
+        }
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use serde_json::json;
@@ -321,39 +356,4 @@ mod tests {
             Some("cargo check -p vtcode-core".to_string())
         );
     }
-}
-
-async fn try_loop_detection_cache_hit(
-    registry: &ToolRegistry,
-    tool_result_cache: &Arc<tokio::sync::RwLock<ToolResultCache>>,
-    name: &str,
-    args_val: &Value,
-    cache_target: &str,
-) -> Option<ToolExecutionStatus> {
-    let workspace_path = registry.workspace_root().to_string_lossy().to_string();
-    let cache_key = create_enhanced_cache_key(name, args_val, cache_target, &workspace_path);
-    let mut cache = tool_result_cache.write().await;
-    if let Some(cached_output) = cache.get(&cache_key) {
-        match parse_cached_output(&cached_output) {
-            Ok(cached_json) => {
-                return Some(ToolExecutionStatus::Success {
-                    output: cached_json,
-                    stdout: None,
-                    modified_files: vec![],
-                    command_success: true,
-                    has_more: false,
-                });
-            }
-            Err(error) => {
-                warn!(
-                    target: "vtcode.performance.cache",
-                    tool = name,
-                    error = %error,
-                    "Discarding malformed cached output after loop detection"
-                );
-                cache.invalidate_for_path(cache_target);
-            }
-        }
-    }
-    None
 }

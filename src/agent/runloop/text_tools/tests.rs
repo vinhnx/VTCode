@@ -437,7 +437,7 @@ fn test_parse_tagged_tool_call_handles_double_tag_malformed_xml() {
     let (name, args) = result.unwrap();
     assert_eq!(name, "list_files");
     // Args should be empty object since no valid args were found
-    assert!(args.as_object().map_or(true, |o| o.is_empty()));
+    assert!(args.as_object().is_none_or(|o| o.is_empty()));
 }
 
 #[test]

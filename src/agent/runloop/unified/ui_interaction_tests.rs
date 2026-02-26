@@ -129,6 +129,7 @@ fn build_request() -> uni::LLMRequest {
         reasoning_effort: None,
         effort: None,
         verbosity: None,
+        do_sample: None,
         top_p: None,
         top_k: None,
         presence_penalty: None,

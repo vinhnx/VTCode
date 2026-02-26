@@ -170,6 +170,7 @@ fn test_anthropic_tool_message_handling() {
         effort: None,
         output_format: None,
         verbosity: Some(VerbosityLevel::default()),
+        do_sample: None,
         top_p: None,
         top_k: None,
         presence_penalty: None,

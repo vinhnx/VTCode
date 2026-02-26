@@ -106,7 +106,7 @@ mod file_search_integration_tests {
     fn test_filter_by_extension() {
         // Note: This test demonstrates the filter API without creating FileMatch objects
         // The actual filtering happens internally in the file_search_bridge module
-        let test_paths = vec!["src/main.rs", "config.toml", "src/data.json"];
+        let test_paths = ["src/main.rs", "config.toml", "src/data.json"];
 
         // Simulate what filter_by_extension would do
         let rust_and_toml: Vec<_> = test_paths
@@ -120,7 +120,7 @@ mod file_search_integration_tests {
     #[test]
     fn test_filter_by_pattern() {
         // Note: This test demonstrates the filter API without creating FileMatch objects
-        let test_paths = vec!["src/utils.rs", "tests/utils_test.rs", "src/main.rs"];
+        let test_paths = ["src/utils.rs", "tests/utils_test.rs", "src/main.rs"];
 
         // Simulate what filter_by_pattern would do
         let src_files: Vec<_> = test_paths

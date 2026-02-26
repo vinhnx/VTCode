@@ -101,7 +101,7 @@ fn responses_payload_uses_function_wrapper() {
         .convert_to_openai_responses_format(&request)
         .expect("conversion should succeed");
 
-    let instructions = payload
+    let _instructions = payload
         .get("instructions")
         .and_then(Value::as_str)
         .expect("instructions should be set");

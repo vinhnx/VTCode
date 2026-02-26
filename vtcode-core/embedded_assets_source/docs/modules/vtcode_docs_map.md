@@ -598,8 +598,7 @@ This document serves as an index of all VT Code documentation. When users ask qu
 
 - **File**: `docs/project/TODO.md`
   - **Content**: TODO.md
-  - **Topics**: Summary, Key Findings Driving This Plan
-  - **User Questions**: "What can you tell me about TODO.md?", "How does Summary work?", "How does Key Findings Driving This Plan work?"
+  - **User Questions**: "What can you tell me about TODO.md?"
 
 - **File**: `docs/harness/TECH_DEBT_TRACKER.md`
   - **Content**: Tech Debt Tracker

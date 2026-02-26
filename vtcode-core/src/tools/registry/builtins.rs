@@ -40,12 +40,7 @@ pub(super) fn builtin_tool_registrations(
             tools::REQUEST_USER_INPUT,
             CapabilityLevel::Basic,
             RequestUserInputTool,
-        )
-        .with_aliases([
-            tools::ASK_QUESTIONS,
-            "askQuestions",
-            tools::ASK_USER_QUESTION,
-        ]),
+        ),
         // ============================================================
         // PLAN MODE (enter/exit)
         // ============================================================

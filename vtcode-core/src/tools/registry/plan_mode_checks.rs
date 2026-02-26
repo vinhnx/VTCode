@@ -31,8 +31,6 @@ impl ToolRegistry {
             tool_names::AGENT_INFO,
             tool_names::ENTER_PLAN_MODE,
             tool_names::EXIT_PLAN_MODE,
-            tool_names::ASK_USER_QUESTION,
-            tool_names::ASK_QUESTIONS,
             tool_names::REQUEST_USER_INPUT,
             tool_names::LIST_SKILLS,
             tool_names::LOAD_SKILL,

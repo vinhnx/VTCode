@@ -21,13 +21,6 @@ struct RequestUserInputArgs {
 }
 
 #[derive(Debug, Deserialize)]
-#[serde(untagged)]
-enum RequestUserInputPayload {
-    Structured(RequestUserInputArgs),
-    LegacyAskUserQuestion(LegacyAskUserQuestionArgs),
-}
-
-#[derive(Debug, Deserialize)]
 struct RequestUserInputQuestion {
     id: String,
     header: String,
@@ -47,41 +40,6 @@ struct RequestUserInputOption {
     description: String,
 }
 
-#[derive(Debug, Deserialize)]
-struct LegacyAskUserQuestionArgs {
-    #[serde(default)]
-    title: Option<String>,
-    question: String,
-    tabs: Vec<LegacyAskUserQuestionTab>,
-    #[serde(default)]
-    default_tab_id: Option<String>,
-    #[serde(default)]
-    default_choice_id: Option<String>,
-    #[serde(default)]
-    allow_freeform: bool,
-    #[serde(default)]
-    freeform_label: Option<String>,
-    #[serde(default)]
-    freeform_placeholder: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-struct LegacyAskUserQuestionTab {
-    id: String,
-    title: String,
-    items: Vec<LegacyAskUserQuestionItem>,
-}
-
-#[derive(Debug, Deserialize)]
-struct LegacyAskUserQuestionItem {
-    id: String,
-    title: String,
-    #[serde(default)]
-    subtitle: Option<String>,
-    #[serde(default)]
-    badge: Option<String>,
-}
-
 /// Response format matching Codex's request_user_input tool output.
 #[derive(Debug, serde::Serialize)]
 struct RequestUserInputResponse {
@@ -95,16 +53,8 @@ struct RequestUserInputAnswer {
     other: Option<String>,
 }
 
-#[derive(Debug, Default)]
-struct LegacyResponseProjection {
-    question_order: Vec<String>,
-    tab_by_question_id: HashMap<String, String>,
-    choice_by_question_and_label: HashMap<(String, String), String>,
-}
-
 struct NormalizedRequestUserInput {
     args: RequestUserInputArgs,
-    legacy_projection: Option<LegacyResponseProjection>,
     wizard_mode: WizardModalMode,
     current_step: usize,
     title_override: Option<String>,
@@ -126,7 +76,6 @@ pub(crate) async fn execute_request_user_input_tool(
 ) -> Result<Value> {
     let NormalizedRequestUserInput {
         args: parsed,
-        legacy_projection,
         wizard_mode,
         current_step,
         title_override,
@@ -257,19 +206,8 @@ pub(crate) async fn execute_request_user_input_tool(
             }
 
             let response = RequestUserInputResponse { answers };
-            let mut value = serde_json::to_value(response)
-                .map_err(|e| anyhow::anyhow!("Failed to serialize response: {}", e))?;
-
-            if let Some(projection) = legacy_projection.as_ref()
-                && let Some((tab_id, choice_id, text)) = project_legacy_response(&value, projection)
-                && let Some(map) = value.as_object_mut()
-            {
-                map.insert("tab_id".to_string(), json!(tab_id));
-                map.insert("choice_id".to_string(), json!(choice_id));
-                map.insert("text".to_string(), text.map_or(Value::Null, Value::String));
-            }
-
-            Ok(value)
+            serde_json::to_value(response)
+                .map_err(|e| anyhow::anyhow!("Failed to serialize response: {}", e))
         }
         WizardModalOutcome::Cancelled { signal } => {
             if let Some(signal) = signal {
@@ -282,228 +220,16 @@ pub(crate) async fn execute_request_user_input_tool(
 }
 
 fn normalize_request_user_input_args(args: &Value) -> Result<NormalizedRequestUserInput> {
-    let payload: RequestUserInputPayload = serde_json::from_value(args.clone())?;
-    match payload {
-        RequestUserInputPayload::Structured(parsed) => Ok(NormalizedRequestUserInput {
-            args: parsed,
-            legacy_projection: None,
-            wizard_mode: WizardModalMode::MultiStep,
-            current_step: 0,
-            title_override: None,
-            allow_freeform: true,
-            freeform_label: None,
-            freeform_placeholder: None,
-        }),
-        RequestUserInputPayload::LegacyAskUserQuestion(legacy) => {
-            convert_legacy_ask_user_question_args(legacy)
-        }
-    }
-}
-
-fn convert_legacy_ask_user_question_args(
-    legacy: LegacyAskUserQuestionArgs,
-) -> Result<NormalizedRequestUserInput> {
-    #[derive(Debug)]
-    struct LegacyOptionCandidate {
-        choice_id: String,
-        label: String,
-        description: String,
-    }
-
-    let LegacyAskUserQuestionArgs {
-        title,
-        question,
-        tabs,
-        default_tab_id,
-        default_choice_id,
-        allow_freeform,
-        freeform_label,
-        freeform_placeholder,
-    } = legacy;
-
-    if tabs.is_empty() {
-        return Err(anyhow::anyhow!("No tabs provided"));
-    }
-    if tabs.iter().any(|tab| tab.items.is_empty()) {
-        return Err(anyhow::anyhow!("Each tab must include at least one item"));
-    }
-
-    let mut questions = Vec::with_capacity(tabs.len());
-    let mut projection = LegacyResponseProjection::default();
-    let default_tab_id = default_tab_id.as_deref();
-    let default_choice_id = default_choice_id.as_deref();
-    let mut current_step = 0usize;
-
-    for (tab_index, tab) in tabs.into_iter().enumerate() {
-        let tab_id = if tab.id.trim().is_empty() {
-            format!("tab_{}", tab_index + 1)
-        } else {
-            tab.id
-        };
-        let header = if tab.title.trim().is_empty() {
-            format!("Choice {}", tab_index + 1)
-        } else {
-            tab.title
-        };
-
-        let mut options = tab
-            .items
-            .into_iter()
-            .enumerate()
-            .map(|(choice_index, item)| {
-                let choice_id = if item.id.trim().is_empty() {
-                    format!("choice_{}", choice_index + 1)
-                } else {
-                    item.id
-                };
-                let label = if item.title.trim().is_empty() {
-                    choice_id.clone()
-                } else {
-                    item.title
-                };
-                LegacyOptionCandidate {
-                    choice_id,
-                    label,
-                    description: compose_legacy_item_description(item.subtitle, item.badge),
-                }
-            })
-            .collect::<Vec<_>>();
-
-        if default_tab_id == Some(tab_id.as_str())
-            && let Some(default_choice) = default_choice_id
-            && let Some(pos) = options
-                .iter()
-                .position(|option| option.choice_id == default_choice)
-        {
-            current_step = tab_index;
-            let mut recommended = options.remove(pos);
-            if !recommended.label.contains("(Recommended)") {
-                recommended.label.push_str(" (Recommended)");
-            }
-            options.insert(0, recommended);
-        } else if default_tab_id == Some(tab_id.as_str()) {
-            current_step = tab_index;
-        }
-
-        let mut seen_labels = HashSet::new();
-        let mut normalized_options = Vec::with_capacity(options.len());
-        for mut option in options {
-            if !seen_labels.insert(normalize_option_text(&option.label)) {
-                let base_label = option.label.clone();
-                let mut suffix = 1usize;
-                loop {
-                    option.label = if suffix == 1 {
-                        format!("{base_label} ({})", option.choice_id)
-                    } else {
-                        format!("{base_label} ({})", suffix)
-                    };
-                    if seen_labels.insert(normalize_option_text(&option.label)) {
-                        break;
-                    }
-                    suffix += 1;
-                }
-            }
-            projection.choice_by_question_and_label.insert(
-                (tab_id.clone(), option.label.clone()),
-                option.choice_id.clone(),
-            );
-            normalized_options.push(RequestUserInputOption {
-                label: option.label,
-                description: option.description,
-            });
-        }
-
-        projection.question_order.push(tab_id.clone());
-        projection
-            .tab_by_question_id
-            .insert(tab_id.clone(), tab_id.clone());
-        questions.push(RequestUserInputQuestion {
-            id: tab_id,
-            header,
-            question: question.clone(),
-            options: Some(normalized_options),
-            focus_area: None,
-            analysis_hints: Vec::new(),
-        });
-    }
-
+    let parsed: RequestUserInputArgs = serde_json::from_value(args.clone())?;
     Ok(NormalizedRequestUserInput {
-        args: RequestUserInputArgs { questions },
-        legacy_projection: Some(projection),
-        wizard_mode: WizardModalMode::TabbedList,
-        current_step,
-        title_override: title
-            .as_deref()
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .map(ToOwned::to_owned)
-            .or_else(|| Some("Question".to_string())),
-        allow_freeform,
-        freeform_label,
-        freeform_placeholder,
+        args: parsed,
+        wizard_mode: WizardModalMode::MultiStep,
+        current_step: 0,
+        title_override: None,
+        allow_freeform: true,
+        freeform_label: None,
+        freeform_placeholder: None,
     })
-}
-
-fn compose_legacy_item_description(subtitle: Option<String>, badge: Option<String>) -> String {
-    let subtitle = subtitle
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty());
-    let badge = badge
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty());
-    match (subtitle, badge) {
-        (Some(subtitle), Some(badge)) => format!("{subtitle} [{badge}]"),
-        (Some(subtitle), None) => subtitle.to_string(),
-        (None, Some(badge)) => format!("Badge: {badge}"),
-        (None, None) => "Select this option".to_string(),
-    }
-}
-
-fn project_legacy_response(
-    response: &Value,
-    projection: &LegacyResponseProjection,
-) -> Option<(String, String, Option<String>)> {
-    let answers = response.get("answers")?.as_object()?;
-
-    for question_id in &projection.question_order {
-        let Some(answer) = answers.get(question_id).and_then(|value| value.as_object()) else {
-            continue;
-        };
-        let tab_id = projection
-            .tab_by_question_id
-            .get(question_id)
-            .cloned()
-            .unwrap_or_else(|| question_id.clone());
-
-        let text = answer
-            .get("other")
-            .and_then(|value| value.as_str())
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .map(ToOwned::to_owned);
-
-        if let Some(label) = answer
-            .get("selected")
-            .and_then(|value| value.as_array())
-            .and_then(|selected| selected.first())
-            .and_then(|entry| entry.as_str())
-        {
-            let choice_id = projection
-                .choice_by_question_and_label
-                .get(&(question_id.clone(), label.to_string()))
-                .cloned()
-                .unwrap_or_else(|| label.to_string());
-            return Some((tab_id, choice_id, text));
-        }
-
-        if text.is_some() {
-            return Some((tab_id, String::new(), text));
-        }
-    }
-
-    None
 }
 
 #[cfg(test)]
@@ -1467,88 +1193,30 @@ mod tests {
     }
 
     #[test]
-    fn legacy_ask_user_question_payload_normalizes_to_questions() {
-        let legacy_args = json!({
-            "question": "Which direction should we take?",
-            "tabs": [
+    fn structured_payload_normalizes_to_multi_step_mode() {
+        let args = json!({
+            "questions": [
                 {
                     "id": "scope",
-                    "title": "Scope",
-                    "items": [
-                        {"id": "minimal", "title": "Minimal scope", "subtitle": "Smallest viable slice"},
-                        {"id": "full", "title": "Full scope", "subtitle": "Complete implementation"}
-                    ]
-                },
-                {
-                    "id": "risk",
-                    "title": "Risk",
-                    "items": [
-                        {"id": "low", "title": "Low risk"},
-                        {"id": "high", "title": "High risk"}
+                    "header": "Scope",
+                    "question": "Which direction should we take?",
+                    "options": [
+                        {"label": "Minimal (Recommended)", "description": "Smallest viable slice"},
+                        {"label": "Full", "description": "Complete implementation"}
                     ]
                 }
-            ],
-            "default_tab_id": "scope",
-            "default_choice_id": "minimal"
+            ]
         });
 
-        let normalized = normalize_request_user_input_args(&legacy_args).expect("normalize legacy");
-        assert_eq!(normalized.args.questions.len(), 2);
-        assert!(normalized.legacy_projection.is_some());
-        assert_eq!(normalized.wizard_mode, WizardModalMode::TabbedList);
+        let normalized = normalize_request_user_input_args(&args).expect("normalize structured");
+        assert_eq!(normalized.args.questions.len(), 1);
+        assert_eq!(normalized.wizard_mode, WizardModalMode::MultiStep);
         assert_eq!(normalized.current_step, 0);
-
-        let first = &normalized.args.questions[0];
-        assert_eq!(first.id, "scope");
-        let first_options = first.options.as_ref().expect("options");
-        assert!(!first_options.is_empty());
-        assert!(first_options[0].label.contains("(Recommended)"));
+        assert_eq!(normalized.title_override, None);
     }
 
     #[test]
-    fn legacy_normalization_preserves_ui_hints_and_default_tab() {
-        let legacy_args = json!({
-            "title": "Choose implementation strategy",
-            "question": "How should we proceed?",
-            "tabs": [
-                {
-                    "id": "safe",
-                    "title": "Safe",
-                    "items": [
-                        {"id": "minimal", "title": "Minimal change"}
-                    ]
-                },
-                {
-                    "id": "fast",
-                    "title": "Fast",
-                    "items": [
-                        {"id": "ship", "title": "Ship quickly"}
-                    ]
-                }
-            ],
-            "default_tab_id": "fast",
-            "allow_freeform": true,
-            "freeform_label": "Notes",
-            "freeform_placeholder": "Add constraints"
-        });
-
-        let normalized = normalize_request_user_input_args(&legacy_args).expect("normalize legacy");
-        assert_eq!(normalized.wizard_mode, WizardModalMode::TabbedList);
-        assert_eq!(normalized.current_step, 1);
-        assert_eq!(
-            normalized.title_override.as_deref(),
-            Some("Choose implementation strategy")
-        );
-        assert!(normalized.allow_freeform);
-        assert_eq!(normalized.freeform_label.as_deref(), Some("Notes"));
-        assert_eq!(
-            normalized.freeform_placeholder.as_deref(),
-            Some("Add constraints")
-        );
-    }
-
-    #[test]
-    fn legacy_projection_maps_selected_label_back_to_choice_id() {
+    fn legacy_payload_is_rejected() {
         let legacy_args = json!({
             "question": "Choose one",
             "tabs": [
@@ -1562,30 +1230,7 @@ mod tests {
                 }
             ]
         });
-        let normalized = normalize_request_user_input_args(&legacy_args).expect("normalize legacy");
-        let projection = normalized
-            .legacy_projection
-            .as_ref()
-            .expect("legacy projection");
-        let selected_label = normalized.args.questions[0]
-            .options
-            .as_ref()
-            .expect("options")[0]
-            .label
-            .clone();
-
-        let response = json!({
-            "answers": {
-                "scope": {
-                    "selected": [selected_label],
-                    "other": null
-                }
-            }
-        });
-
-        let projected =
-            project_legacy_response(&response, projection).expect("project legacy response");
-        assert_eq!(projected.0, "scope");
-        assert_eq!(projected.1, "minimal");
+        let result = normalize_request_user_input_args(&legacy_args);
+        assert!(result.is_err());
     }
 }

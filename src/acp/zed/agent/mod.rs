@@ -7,6 +7,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 use tokio::sync::{Mutex, mpsc};
 use tracing::warn;
+use vtcode_core::config::ToolDocumentationMode;
 use vtcode_core::config::constants::tools;
 use vtcode_core::config::types::{AgentConfig as CoreAgentConfig, CapabilityLevel};
 use vtcode_core::config::{AgentClientProtocolZedConfig, CommandsConfig, ToolsConfig};
@@ -14,7 +15,7 @@ use vtcode_core::llm::provider::ToolDefinition;
 use vtcode_core::tools::file_ops::FileOpsTool;
 use vtcode_core::tools::grep_file::GrepSearchManager;
 use vtcode_core::tools::registry::{
-    ToolRegistry as CoreToolRegistry, build_function_declarations,
+    ToolRegistry as CoreToolRegistry, build_function_declarations_cached,
     build_function_declarations_for_level,
 };
 
@@ -99,9 +100,10 @@ impl ZedAgent {
         }
 
         if available_local_tools.contains(tools::RUN_PTY_CMD)
-            && let Some(run_decl) = build_function_declarations()
-                .into_iter()
-                .find(|decl| decl.name == tools::RUN_PTY_CMD)
+            && let Some(run_decl) =
+                build_function_declarations_cached(ToolDocumentationMode::default())
+                    .iter()
+                    .find(|decl| decl.name == tools::RUN_PTY_CMD)
         {
             let already_registered = local_definitions
                 .iter()

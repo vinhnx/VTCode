@@ -18,9 +18,7 @@ fn can_parallelize_batch_tool_call(prepared: &PreparedToolCall) -> bool {
         prepared.canonical_name.as_str(),
         tools::ENTER_PLAN_MODE
             | tools::EXIT_PLAN_MODE
-            | tools::ASK_USER_QUESTION
             | tools::REQUEST_USER_INPUT
-            | tools::ASK_QUESTIONS
             | tools::RUN_PTY_CMD
             | tools::UNIFIED_EXEC
             | tools::SEND_PTY_INPUT
