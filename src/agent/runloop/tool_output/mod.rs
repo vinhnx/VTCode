@@ -291,40 +291,6 @@ fn should_render_unified_exec_terminal_panel(val: &Value) -> bool {
     has_command || has_terminal_stream || has_session_context
 }
 
-#[cfg(test)]
-mod tests {
-    use serde_json::json;
-
-    use super::should_render_unified_exec_terminal_panel;
-
-    #[test]
-    fn unified_exec_terminal_panel_detects_command_payload() {
-        let payload = json!({
-            "command": "cargo check",
-            "output": "Checking vtcode"
-        });
-        assert!(should_render_unified_exec_terminal_panel(&payload));
-    }
-
-    #[test]
-    fn unified_exec_terminal_panel_detects_session_payload() {
-        let payload = json!({
-            "session_id": "run-123",
-            "is_exited": true
-        });
-        assert!(should_render_unified_exec_terminal_panel(&payload));
-    }
-
-    #[test]
-    fn unified_exec_terminal_panel_ignores_non_terminal_payload() {
-        let payload = json!({
-            "sessions": [],
-            "success": true
-        });
-        assert!(!should_render_unified_exec_terminal_panel(&payload));
-    }
-}
-
 fn render_error_details(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> {
     if let Some(error_msg) = val.get("message").and_then(|v| v.as_str()) {
         renderer.line(MessageStyle::ToolError, &format!("Error: {}", error_msg))?;
@@ -401,4 +367,38 @@ fn render_error_details(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> 
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::should_render_unified_exec_terminal_panel;
+
+    #[test]
+    fn unified_exec_terminal_panel_detects_command_payload() {
+        let payload = json!({
+            "command": "cargo check",
+            "output": "Checking vtcode"
+        });
+        assert!(should_render_unified_exec_terminal_panel(&payload));
+    }
+
+    #[test]
+    fn unified_exec_terminal_panel_detects_session_payload() {
+        let payload = json!({
+            "session_id": "run-123",
+            "is_exited": true
+        });
+        assert!(should_render_unified_exec_terminal_panel(&payload));
+    }
+
+    #[test]
+    fn unified_exec_terminal_panel_ignores_non_terminal_payload() {
+        let payload = json!({
+            "sessions": [],
+            "success": true
+        });
+        assert!(!should_render_unified_exec_terminal_panel(&payload));
+    }
 }

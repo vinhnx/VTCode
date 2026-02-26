@@ -324,12 +324,7 @@ fn filter_interview_tool_calls(
         let is_interview = call
             .function
             .as_ref()
-            .map(|func| {
-                matches!(
-                    func.name.as_str(),
-                    tools::ASK_QUESTIONS | tools::REQUEST_USER_INPUT | tools::ASK_USER_QUESTION
-                )
-            })
+            .map(|func| func.name == tools::REQUEST_USER_INPUT)
             .unwrap_or(false);
 
         if is_interview {

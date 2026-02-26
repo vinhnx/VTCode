@@ -30,8 +30,5 @@ async fn test_plugin_system_compilation() {
     };
 
     // Validate the manifest - this should compile
-    let _result = PluginValidator::validate_manifest(&manifest);
-
-    // If we get here, the basic functionality compiles
-    assert!(true);
+    assert!(PluginValidator::validate_manifest(&manifest).is_ok());
 }

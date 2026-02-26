@@ -248,6 +248,18 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn request_user_input_aliases_are_not_registered() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+
+        assert!(registry.get_tool(tools::REQUEST_USER_INPUT).is_some());
+        assert!(registry.get_tool(tools::ASK_QUESTIONS).is_none());
+        assert!(registry.get_tool(tools::ASK_USER_QUESTION).is_none());
+
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn allows_registering_custom_tools() -> Result<()> {
         let temp_dir = TempDir::new()?;
         let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;

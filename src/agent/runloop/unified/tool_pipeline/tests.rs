@@ -105,13 +105,13 @@ mod run_tool_call;
 #[tokio::test]
 async fn test_execute_tool_with_timeout() {
     // Setup test dependencies
-    let mut registry = ToolRegistry::new(std::env::current_dir().unwrap()).await;
+    let registry = ToolRegistry::new(std::env::current_dir().unwrap()).await;
     let ctrl_c_state = Arc::new(CtrlCState::new());
     let ctrl_c_notify = Arc::new(Notify::new());
 
     // Test a simple tool execution with unknown tool
     let result = execute_tool_with_timeout(
-        &mut registry,
+        &registry,
         "test_tool",
         json!({}),
         &ctrl_c_state,
@@ -139,23 +139,19 @@ async fn test_execute_tool_with_timeout() {
 }
 
 #[tokio::test]
-async fn test_ask_questions_alias_resolves_to_request_user_input() {
+async fn test_ask_questions_alias_is_rejected() {
     let tmp = tempfile::TempDir::new().unwrap();
     let registry = ToolRegistry::new(tmp.path().to_path_buf()).await;
-    let tool = registry
-        .get_tool(tools::ASK_QUESTIONS)
-        .expect("ask_questions alias should resolve");
-    assert_eq!(tool.name(), tools::REQUEST_USER_INPUT);
+    let tool = registry.get_tool(tools::ASK_QUESTIONS);
+    assert!(tool.is_none());
 }
 
 #[tokio::test]
-async fn test_ask_user_question_alias_resolves_to_request_user_input() {
+async fn test_ask_user_question_alias_is_rejected() {
     let tmp = tempfile::TempDir::new().unwrap();
     let registry = ToolRegistry::new(tmp.path().to_path_buf()).await;
-    let tool = registry
-        .get_tool(tools::ASK_USER_QUESTION)
-        .expect("ask_user_question alias should resolve");
-    assert_eq!(tool.name(), tools::REQUEST_USER_INPUT);
+    let tool = registry.get_tool(tools::ASK_USER_QUESTION);
+    assert!(tool.is_none());
 }
 
 #[test]

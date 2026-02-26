@@ -140,10 +140,7 @@ pub(crate) fn should_expose_tool_in_mode(
         return true;
     };
 
-    if matches!(
-        name,
-        tool_names::REQUEST_USER_INPUT | tool_names::ASK_QUESTIONS | tool_names::ASK_USER_QUESTION
-    ) {
+    if name == tool_names::REQUEST_USER_INPUT {
         return plan_mode && request_user_input_enabled;
     }
 
@@ -199,7 +196,6 @@ mod tests {
             function_tool(tool_names::UNIFIED_SEARCH),
             function_tool(tool_names::PLAN_TASK_TRACKER),
             function_tool(tool_names::REQUEST_USER_INPUT),
-            function_tool(tool_names::ASK_USER_QUESTION),
             function_tool(tool_names::TASK_TRACKER),
         ]);
 
@@ -214,7 +210,6 @@ mod tests {
         assert!(names.contains(&tool_names::TASK_TRACKER));
         assert!(!names.contains(&tool_names::PLAN_TASK_TRACKER));
         assert!(!names.contains(&tool_names::REQUEST_USER_INPUT));
-        assert!(!names.contains(&tool_names::ASK_USER_QUESTION));
     }
 
     #[test]
@@ -223,7 +218,6 @@ mod tests {
             function_tool(tool_names::UNIFIED_SEARCH),
             function_tool(tool_names::PLAN_TASK_TRACKER),
             function_tool(tool_names::REQUEST_USER_INPUT),
-            function_tool(tool_names::ASK_USER_QUESTION),
             function_tool(tool_names::TASK_TRACKER),
         ]);
 
@@ -237,7 +231,6 @@ mod tests {
         assert!(names.contains(&tool_names::UNIFIED_SEARCH));
         assert!(names.contains(&tool_names::PLAN_TASK_TRACKER));
         assert!(names.contains(&tool_names::REQUEST_USER_INPUT));
-        assert!(names.contains(&tool_names::ASK_USER_QUESTION));
         assert!(!names.contains(&tool_names::TASK_TRACKER));
     }
 
