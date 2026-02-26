@@ -6,7 +6,7 @@ use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use super::styles::{GitStyles, LsStyles, select_line_style};
 #[path = "files_diff.rs"]
 mod files_diff;
-pub(super) use files_diff::format_diff_content_lines;
+pub(super) use files_diff::{format_condensed_edit_diff_lines, format_diff_content_lines};
 
 /// Constants for line and content limits (compact display)
 const MAX_DIFF_LINE_LENGTH: usize = 100; // Reduced for compact view
@@ -81,7 +81,7 @@ pub(crate) fn render_write_file_preview(
 
     if !diff_content.is_empty() {
         renderer.line(MessageStyle::ToolDetail, "")?;
-        render_diff_content(renderer, diff_content, git_styles, ls_styles)?;
+        render_edit_diff_preview(renderer, diff_content, git_styles, ls_styles)?;
     }
 
     if get_bool(diff_value, "truncated") {
@@ -400,6 +400,28 @@ fn render_diff_content(
     ls_styles: &LsStyles,
 ) -> Result<()> {
     let lines_to_render = format_diff_content_lines(diff_content);
+
+    for line in lines_to_render {
+        let truncated = truncate_text_safe(&line, MAX_DIFF_LINE_LENGTH);
+        if let Some(style) =
+            select_line_style(Some(tools::WRITE_FILE), truncated, git_styles, ls_styles)
+        {
+            renderer.line_with_override_style(MessageStyle::ToolDetail, style, truncated)?;
+        } else {
+            renderer.line(MessageStyle::ToolDetail, truncated)?;
+        }
+    }
+
+    Ok(())
+}
+
+fn render_edit_diff_preview(
+    renderer: &mut AnsiRenderer,
+    diff_content: &str,
+    git_styles: &GitStyles,
+    ls_styles: &LsStyles,
+) -> Result<()> {
+    let lines_to_render = format_condensed_edit_diff_lines(diff_content);
 
     for line in lines_to_render {
         let truncated = truncate_text_safe(&line, MAX_DIFF_LINE_LENGTH);

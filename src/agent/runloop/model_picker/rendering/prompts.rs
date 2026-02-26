@@ -27,7 +27,8 @@ pub(crate) fn render_reasoning_inline(
     });
 
     // For GPT-5.2 and GPT-5.3 Codex models, show "None" first as the default option (fastest)
-    let is_gpt5_responses = selection.model_id.starts_with("gpt-5.2") || selection.model_id.starts_with("gpt-5.3");
+    let is_gpt5_responses =
+        selection.model_id.starts_with("gpt-5.2") || selection.model_id.starts_with("gpt-5.3");
     if is_gpt5_responses {
         items.push(InlineListItem {
             title: reasoning_level_label(ReasoningEffortLevel::None).to_string(),
@@ -103,7 +104,8 @@ pub(crate) fn prompt_reasoning_plain(
     selection: &SelectionDetail,
     current: ReasoningEffortLevel,
 ) -> Result<()> {
-    let is_responses_flagship = selection.model_id.starts_with("gpt-5.2") || selection.model_id.starts_with("gpt-5.3");
+    let is_responses_flagship =
+        selection.model_id.starts_with("gpt-5.2") || selection.model_id.starts_with("gpt-5.3");
     let is_codex_max = selection.model_id.contains("codex-max");
     let xhigh_suffix = if is_codex_max { "/xhigh" } else { "" };
 

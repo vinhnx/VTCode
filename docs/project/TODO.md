@@ -51,25 +51,6 @@ https://github.com/openai/codex/pull/12581
 
 ---
 
-check edit file patch preview to show condense info with git changes lines + small offset only, don't show full file
-
-reference:
-
-```
-• Edited vtcode-config/src/loader/config.rs (+2 -2)
-    536  # Suppress notifications while terminal is focused
-    537 -suppress_when_focused = false
-    537 +suppress_when_focused = true
-    538
-        ⋮
-    545  # Success notifications for tool call results
-    546 -tool_success = true
-    546 +tool_success = false
-    547
-```
-
-reference currently PTY's truncated file preview logic
-
 ---
 
 idea: add timer for task / turns

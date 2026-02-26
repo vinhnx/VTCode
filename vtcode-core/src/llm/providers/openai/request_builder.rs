@@ -325,7 +325,9 @@ pub(crate) fn build_responses_request(
     }
 
     // Set default verbosity for GPT-5.2+ models if no format options specified
-    if !has_format_options && (request.model.starts_with("gpt-5.2") || request.model.starts_with("gpt-5.3")) {
+    if !has_format_options
+        && (request.model.starts_with("gpt-5.2") || request.model.starts_with("gpt-5.3"))
+    {
         text_format["verbosity"] = json!("medium");
         has_format_options = true;
     }
