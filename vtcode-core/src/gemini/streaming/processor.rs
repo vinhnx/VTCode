@@ -532,6 +532,10 @@ impl StreamingProcessor {
     {
         let mut _has_valid_content = false;
 
+        if candidate.finish_reason.is_some() {
+            _has_valid_content = true;
+        }
+
         // Process each part of the content
         for part in &candidate.content.parts {
             match part {
