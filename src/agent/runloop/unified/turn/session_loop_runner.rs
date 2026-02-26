@@ -329,6 +329,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                 ),
                 harness_config.max_tool_wall_clock_secs,
             );
+            let turn_started_at = Instant::now();
             let mut attempts = 0;
             let mut history_backup: Option<Vec<vtcode_core::llm::provider::Message>> = None;
             let outcome = match loop {
@@ -502,6 +503,11 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                     }
                 }
             };
+            let turn_elapsed = turn_started_at.elapsed();
+            let show_turn_timer = vt_cfg
+                .as_ref()
+                .map(|cfg| cfg.ui.show_turn_timer)
+                .unwrap_or(true);
             if let Err(err) = crate::agent::runloop::unified::turn::apply_turn_outcome(
                 &outcome,
                 crate::agent::runloop::unified::turn::TurnOutcomeContext {
@@ -513,6 +519,8 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                     checkpoint_manager: checkpoint_manager.as_ref(),
                     next_checkpoint_turn: &mut next_checkpoint_turn,
                     session_end_reason: &mut session_end_reason,
+                    turn_elapsed,
+                    show_turn_timer,
                 },
             )
             .await

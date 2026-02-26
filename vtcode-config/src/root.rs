@@ -182,6 +182,10 @@ pub struct UiConfig {
     #[serde(default = "default_message_block_spacing")]
     pub message_block_spacing: bool,
 
+    /// Show per-turn elapsed timer line after completed turns
+    #[serde(default = "default_show_turn_timer")]
+    pub show_turn_timer: bool,
+
     // === Color Accessibility Configuration ===
     // Based on NO_COLOR standard, Ghostty minimum-contrast, and terminal color portability research
     // See: https://no-color.org/, https://ghostty.org/docs/config/reference#minimum-contrast
@@ -261,6 +265,10 @@ fn default_message_block_spacing() -> bool {
     true
 }
 
+fn default_show_turn_timer() -> bool {
+    true
+}
+
 fn default_notifications_enabled() -> bool {
     true
 }
@@ -311,6 +319,7 @@ impl Default for UiConfig {
             show_sidebar: default_show_sidebar(),
             dim_completed_todos: default_dim_completed_todos(),
             message_block_spacing: default_message_block_spacing(),
+            show_turn_timer: default_show_turn_timer(),
             // Color accessibility defaults
             minimum_contrast: default_minimum_contrast(),
             bold_is_bright: default_bold_is_bright(),

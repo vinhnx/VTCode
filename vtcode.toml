@@ -3,13 +3,13 @@
 
 [agent]
 # Primary LLM provider to use (e.g., "openai", "gemini", "anthropic", "openrouter")
-provider = "huggingface"
+provider = "gemini"
 
 # Environment variable containing the API key for the provider
-api_key_env = "HF_TOKEN"
+api_key_env = "GEMINI_API_KEY"
 
 # Default model to use when no specific model is specified
-default_model = "Qwen/Qwen3.5-397B-A17B:together"
+default_model = "gemini-3-flash-preview"
 
 # Personal/local overrides should live in user config, not workspace config:
 #   ~/.vtcode/vtcode.toml
