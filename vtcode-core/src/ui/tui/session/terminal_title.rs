@@ -159,9 +159,9 @@ impl Session {
             // Split on "Running command:" and take the part after it
             let parts: Vec<&str> = cleaned.splitn(2, "Running command:").collect();
             if parts.len() == 2 {
-                let command = parts[1].trim().split_whitespace().next()?;
+                let command = parts[1].split_whitespace().next()?;
                 // Get basename only (remove path)
-                let cmd_name = command.split('/').last().unwrap_or(command);
+                let cmd_name = command.split('/').next_back().unwrap_or(command);
                 return Some(cmd_name.to_string());
             }
         }
@@ -171,7 +171,7 @@ impl Session {
             // Split on "Running tool:" and take the part after it
             let parts: Vec<&str> = cleaned.splitn(2, "Running tool:").collect();
             if parts.len() == 2 {
-                let tool = parts[1].trim().split_whitespace().next()?;
+                let tool = parts[1].split_whitespace().next()?;
                 return Some(tool.to_string());
             }
         }
@@ -189,7 +189,7 @@ impl Session {
                 let filename = after[..end_pos].trim();
                 if !filename.is_empty() {
                     // Just show the filename without path
-                    let name = filename.split('/').last().unwrap_or(filename);
+                    let name = filename.split('/').next_back().unwrap_or(filename);
                     return Some(name.to_string());
                 }
             }

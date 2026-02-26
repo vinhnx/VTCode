@@ -17,6 +17,7 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 
 type PlanTaskStatus = TaskTrackingStatus;
 
@@ -80,12 +81,12 @@ impl PlanTaskDocument {
     fn to_markdown(&self) -> String {
         let mut out = format!("# {}\n\n## Plan of Work\n\n", self.title);
         write_markdown_nodes(&self.items, 0, &mut out);
-        if let Some(notes) = self.notes.as_deref() {
-            if !notes.trim().is_empty() {
-                out.push_str("\n## Notes\n\n");
-                out.push_str(notes.trim());
-                out.push('\n');
-            }
+        if let Some(notes) = self.notes.as_deref()
+            && !notes.trim().is_empty()
+        {
+            out.push_str("\n## Notes\n\n");
+            out.push_str(notes.trim());
+            out.push('\n');
         }
         out
     }

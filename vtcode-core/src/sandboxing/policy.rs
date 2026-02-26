@@ -503,8 +503,10 @@ impl SeccompProfile {
 /// 3. What survives between runs? (lifecycle)
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
+#[derive(Default)]
 pub enum SandboxPolicy {
     /// No write access to the filesystem; network access disabled.
+    #[default]
     ReadOnly,
 
     /// Write access limited to the specified roots; network controlled by allowlist.
@@ -556,12 +558,6 @@ pub enum SandboxPolicy {
         /// Description of the external sandbox mechanism.
         description: String,
     },
-}
-
-impl Default for SandboxPolicy {
-    fn default() -> Self {
-        Self::ReadOnly
-    }
 }
 
 impl SandboxPolicy {

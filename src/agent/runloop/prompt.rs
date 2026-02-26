@@ -5,7 +5,10 @@ use tokio::sync::RwLock;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::context::{ConversationMemory, EntityResolver, ProactiveGatherer, WorkspaceState};
-use vtcode_core::llm::{factory::create_provider_with_config, provider as uni};
+use vtcode_core::llm::{
+    factory::{ProviderConfig, create_provider_with_config},
+    provider as uni,
+};
 
 const MIN_PROMPT_LENGTH_FOR_REFINEMENT: usize = 20;
 const MIN_PROMPT_WORDS_FOR_REFINEMENT: usize = 4;
@@ -78,13 +81,15 @@ pub(crate) async fn refine_user_prompt_if_enabled(
 
     let Ok(refiner) = create_provider_with_config(
         &provider_name,
-        Some(cfg.api_key.clone()),
-        None,
-        Some(refiner_model.clone()),
-        Some(cfg.prompt_cache.clone()),
-        None,
-        None,
-        cfg.model_behavior.clone(),
+        ProviderConfig {
+            api_key: Some(cfg.api_key.clone()),
+            base_url: None,
+            model: Some(refiner_model.clone()),
+            prompt_cache: Some(cfg.prompt_cache.clone()),
+            timeouts: None,
+            anthropic: None,
+            model_behavior: cfg.model_behavior.clone(),
+        },
     ) else {
         return raw.to_string();
     };

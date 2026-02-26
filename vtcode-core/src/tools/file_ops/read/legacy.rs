@@ -47,21 +47,21 @@ impl FileOpsTool {
             ));
         }
 
-        if let Some(encoding) = input.encoding.as_deref() {
-            if encoding.eq_ignore_ascii_case("base64") {
-                let bytes =
-                    with_file_context(tokio::fs::read(file_path).await, "read file", file_path)?;
-                let encoded = base64::engine::general_purpose::STANDARD.encode(&bytes);
-                let metadata = json!({
-                    "size_bytes": bytes.len(),
-                    "size_lines": 0,
-                    "is_truncated": false,
-                    "type": "file",
-                    "content_kind": "binary",
-                    "encoding": "base64",
-                });
-                return Ok((encoded, metadata, false));
-            }
+        if let Some(encoding) = input.encoding.as_deref()
+            && encoding.eq_ignore_ascii_case("base64")
+        {
+            let bytes =
+                with_file_context(tokio::fs::read(file_path).await, "read file", file_path)?;
+            let encoded = base64::engine::general_purpose::STANDARD.encode(&bytes);
+            let metadata = json!({
+                "size_bytes": bytes.len(),
+                "size_lines": 0,
+                "is_truncated": false,
+                "type": "file",
+                "content_kind": "binary",
+                "encoding": "base64",
+            });
+            return Ok((encoded, metadata, false));
         }
 
         if input.max_tokens.is_some() || input.max_lines.is_some() || input.chunk_lines.is_some() {
@@ -141,7 +141,7 @@ impl FileOpsTool {
             return Ok((content, metadata, false));
         }
 
-        let mut head_lines = input.chunk_lines.unwrap_or_else(|| max_lines / 2);
+        let mut head_lines = input.chunk_lines.unwrap_or(max_lines / 2);
         if head_lines == 0 {
             head_lines = 1;
         }

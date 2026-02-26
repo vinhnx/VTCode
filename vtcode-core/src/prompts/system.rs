@@ -81,6 +81,7 @@ pub const PLAN_MODE_IMPLEMENT_REMINDER: &str = "• I’m still in Plan Mode, so
 /// - Repo as system of record; agent legibility over human aesthetics
 /// - Enforce invariants, not implementations
 /// - Entropy management via golden principles + boy scout rule
+///
 /// Works with all providers: Gemini, Anthropic, OpenAI, xAI, DeepSeek, etc.
 const DEFAULT_SYSTEM_PROMPT: &str = r#"# VT Code Coding Assistant
 
@@ -604,13 +605,11 @@ pub async fn compose_system_instruction_text(
     if !prompt_context
         .map(|ctx| ctx.skip_standard_instructions)
         .unwrap_or(false)
+        && let Some(cfg) = vtcode_config
+        && let Some(user_inst) = &cfg.agent.user_instructions
     {
-        if let Some(cfg) = vtcode_config {
-            if let Some(user_inst) = &cfg.agent.user_instructions {
-                instruction.push_str("\n\n## USER INSTRUCTIONS\n");
-                instruction.push_str(user_inst);
-            }
-        }
+        instruction.push_str("\n\n## USER INSTRUCTIONS\n");
+        instruction.push_str(user_inst);
     }
 
     if let Some(bundle) = instruction_bundle {

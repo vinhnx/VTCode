@@ -44,9 +44,10 @@ impl Session {
 
         for entry in self.queued_inputs.iter().rev().take(2) {
             let trimmed = truncate_to_width(entry, available);
-            let mut spans = Vec::new();
-            spans.push(Span::styled(prefix.to_owned(), prefix_style));
-            spans.push(Span::styled(trimmed, message_style));
+            let spans = vec![
+                Span::styled(prefix.to_owned(), prefix_style),
+                Span::styled(trimmed, message_style),
+            ];
             lines.push(Line::from(spans));
         }
 

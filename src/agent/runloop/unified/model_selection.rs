@@ -7,7 +7,7 @@ use tempfile::Builder;
 use vtcode_core::config::api_keys::{ApiKeySources, get_api_key};
 use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
 use vtcode_core::config::types::{AgentConfig as CoreAgentConfig, UiSurfacePreference};
-use vtcode_core::llm::factory::create_provider_with_config;
+use vtcode_core::llm::factory::{ProviderConfig, create_provider_with_config};
 use vtcode_core::llm::provider::LLMProvider;
 use vtcode_core::llm::rig_adapter::{reasoning_parameters_for, verify_model_with_rig};
 use vtcode_core::ui::tui::InlineHandle;
@@ -84,13 +84,15 @@ pub(crate) async fn finalize_model_selection(
         let provider_name = selection.provider.clone();
         let new_client = create_provider_with_config(
             &provider_name,
-            Some(api_key.clone()),
-            None,
-            Some(selection.model.clone()),
-            Some(config.prompt_cache.clone()),
-            None,
-            None,
-            config.model_behavior.clone(),
+            ProviderConfig {
+                api_key: Some(api_key.clone()),
+                base_url: None,
+                model: Some(selection.model.clone()),
+                prompt_cache: Some(config.prompt_cache.clone()),
+                timeouts: None,
+                anthropic: None,
+                model_behavior: config.model_behavior.clone(),
+            },
         )
         .context("Failed to initialize provider for the selected model")?;
         *provider_client = new_client;

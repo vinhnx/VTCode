@@ -187,7 +187,7 @@ impl ToolHandler for ToolToHandlerAdapter {
 
     async fn is_mutating(&self, _invocation: &ToolInvocation) -> bool {
         // Conservative default: assume mutating unless we know otherwise
-        matches!(self.tool.default_permission(), ToolPolicy::Allow) == false
+        !matches!(self.tool.default_permission(), ToolPolicy::Allow)
     }
 
     async fn handle(&self, invocation: ToolInvocation) -> Result<ToolOutput, ToolCallError> {

@@ -7,7 +7,7 @@ use tracing::warn;
 const MAX_THEME_CACHE_SIZE: usize = 32;
 const DEFAULT_THEME_NAME: &str = "base16-ocean.dark";
 
-static SHARED_SYNTAX_SET: Lazy<SyntaxSet> = Lazy::new(|| SyntaxSet::load_defaults_newlines());
+static SHARED_SYNTAX_SET: Lazy<SyntaxSet> = Lazy::new(SyntaxSet::load_defaults_newlines);
 
 static SHARED_THEME_CACHE: Lazy<parking_lot::RwLock<HashMap<String, Theme>>> = Lazy::new(|| {
     match ThemeSet::load_defaults() {

@@ -100,3 +100,7 @@ Accessibility: Screen reader mode, configurable reasoning visibility, and respon
 ---
 
 https://huggingface.co/Qwen/Qwen3.5-397B-A17B?inference_api=true&inference_provider=together&language=sh&client=curl
+
+---
+
+check to implement terminal-based notifications for important agent events, such as tool call results, errors, or completion status. This could involve using libraries like `notify-rust` for desktop notifications or implementing a custom notification system within the terminal UI to ensure users are promptly informed of critical updates without needing to constantly monitor the terminal output. emulator: ghosty, iterm, terminal, xterm, warp, kitty, alacritty, wezterm.

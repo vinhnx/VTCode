@@ -898,15 +898,14 @@ impl McpClient {
                 .map(str::to_owned);
 
             // Try to find text content in the content array
-            if message.is_none() {
-                if let Some(content) = result_obj
+            if message.is_none()
+                && let Some(content) = result_obj
                     .and_then(|o| o.get("content"))
                     .and_then(Value::as_array)
-                {
-                    message = content.iter().find_map(|block| {
-                        block.get("text").and_then(Value::as_str).map(str::to_owned)
-                    });
-                }
+            {
+                message = content
+                    .iter()
+                    .find_map(|block| block.get("text").and_then(Value::as_str).map(str::to_owned));
             }
 
             let message = message.unwrap_or_else(|| "Unknown MCP tool error".to_owned());
@@ -927,17 +926,17 @@ impl McpClient {
             .and_then(|o| o.get("_meta"))
             .or_else(|| result_obj.and_then(|o| o.get("meta")))
             .and_then(Value::as_object)
+            && !meta.is_empty()
         {
-            if !meta.is_empty() {
-                payload.insert("meta".into(), Value::Object(meta.clone()));
-            }
+            payload.insert("meta".into(), Value::Object(meta.clone()));
         }
 
         // Add content if present
-        if let Some(content) = result_obj.and_then(|o| o.get("content")) {
-            if !content.is_null() && !content.as_array().map(|a| a.is_empty()).unwrap_or(true) {
-                payload.insert("content".into(), content.clone());
-            }
+        if let Some(content) = result_obj.and_then(|o| o.get("content"))
+            && !content.is_null()
+            && !content.as_array().map(|a| a.is_empty()).unwrap_or(true)
+        {
+            payload.insert("content".into(), content.clone());
         }
 
         Ok(Value::Object(payload))

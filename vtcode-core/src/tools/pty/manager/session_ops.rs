@@ -177,11 +177,7 @@ impl PtyManager {
             content.push_str("|------------|---------|-------------|------|\n");
 
             for session in sessions {
-                let cwd = session
-                    .working_dir
-                    .as_ref()
-                    .map(|s| s.as_str())
-                    .unwrap_or("-");
+                let cwd = session.working_dir.as_deref().unwrap_or("-");
                 let cmd_truncated = if session.command.len() > 25 {
                     format!("{}...", &session.command[..22])
                 } else {

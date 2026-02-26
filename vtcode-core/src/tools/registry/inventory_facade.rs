@@ -37,16 +37,15 @@ impl ToolRegistry {
             });
 
         // Cache the result if optimizations are enabled and tool was found
-        if let Some(ref tool_arc) = tool {
-            if self
+        if let Some(ref tool_arc) = tool
+            && self
                 .optimization_config
                 .tool_registry
                 .use_optimized_registry
-            {
-                self.hot_tool_cache
-                    .write()
-                    .put(name.to_string(), tool_arc.clone());
-            }
+        {
+            self.hot_tool_cache
+                .write()
+                .put(name.to_string(), tool_arc.clone());
         }
 
         tool

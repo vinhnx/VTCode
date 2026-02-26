@@ -22,6 +22,17 @@ use super::tool_handler::{
 };
 use crate::tools::editing::{Patch, PatchOperation};
 
+/// Context for intercepting apply_patch commands
+pub struct InterceptApplyPatchContext<'a> {
+    pub cwd: &'a Path,
+    pub timeout_ms: Option<u64>,
+    pub session: &'a dyn super::tool_handler::ToolSession,
+    pub turn: &'a super::tool_handler::TurnContext,
+    pub tracker: Option<&'a Arc<tokio::sync::Mutex<super::tool_handler::DiffTracker>>>,
+    pub call_id: &'a str,
+    pub tool_name: &'a str,
+}
+
 /// Apply patch handler
 pub struct ApplyPatchHandler;
 
@@ -300,19 +311,14 @@ pub fn create_apply_patch_json_tool() -> ToolSpec {
     })
 }
 
-/// Intercept apply_patch from shell commands
+/// Intercept apply_patch from shell command
 ///
 /// This checks if a shell command is actually an apply_patch invocation
 /// and handles it through the apply_patch handler instead.
+#[allow(clippy::too_many_arguments)]
 pub async fn intercept_apply_patch(
     command: &[String],
-    cwd: &Path,
-    timeout_ms: Option<u64>,
-    session: &dyn super::tool_handler::ToolSession,
-    turn: &super::tool_handler::TurnContext,
-    tracker: Option<&Arc<tokio::sync::Mutex<super::tool_handler::DiffTracker>>>,
-    call_id: &str,
-    tool_name: &str,
+    ctx: InterceptApplyPatchContext<'_>,
 ) -> Result<Option<ToolOutput>, ToolCallError> {
     // Check if this is an apply_patch command
     let (is_apply_patch, patch_content) = parse_apply_patch_command(command);
@@ -326,10 +332,10 @@ pub async fn intercept_apply_patch(
     };
 
     // Log warning about using shell for apply_patch
-    session
+    ctx.session
         .record_warning(format!(
             "apply_patch was requested via {}. Use the apply_patch tool instead of exec_command.",
-            tool_name
+            ctx.tool_name
         ))
         .await;
 
@@ -337,35 +343,41 @@ pub async fn intercept_apply_patch(
     let patch = Patch::parse(&patch_input)
         .map_err(|e| ToolCallError::respond(format!("Failed to parse patch: {}", e)))?;
 
-    let changes = convert_patch_to_changes(&patch, cwd);
+    let changes = convert_patch_to_changes(&patch, ctx.cwd);
 
     // Create emitter
     let emitter = ToolEmitter::apply_patch(changes.clone(), true);
-    let event_ctx = ToolEventCtx::new(session, turn, call_id, tracker);
+    let event_ctx = ToolEventCtx::new(ctx.session, ctx.turn, ctx.call_id, ctx.tracker);
     emitter.begin(event_ctx).await;
 
     // Execute
     let req = ApplyPatchRequest {
         patch: patch_input,
-        cwd: cwd.to_path_buf(),
-        timeout_ms,
+        cwd: ctx.cwd.to_path_buf(),
+        timeout_ms: ctx.timeout_ms,
         user_explicitly_approved: true,
     };
 
     let mut orchestrator = ToolOrchestrator::new();
     let mut runtime = ApplyPatchRuntime::new();
     let tool_ctx = ToolCtx {
-        session,
-        turn,
-        call_id: call_id.to_string(),
-        tool_name: tool_name.to_string(),
+        session: ctx.session,
+        turn: ctx.turn,
+        call_id: ctx.call_id.to_string(),
+        tool_name: ctx.tool_name.to_string(),
     };
 
     let result = orchestrator
-        .run(&mut runtime, &req, &tool_ctx, turn, turn.approval_policy)
+        .run(
+            &mut runtime,
+            &req,
+            &tool_ctx,
+            ctx.turn,
+            ctx.turn.approval_policy,
+        )
         .await;
 
-    let event_ctx = ToolEventCtx::new(session, turn, call_id, tracker);
+    let event_ctx = ToolEventCtx::new(ctx.session, ctx.turn, ctx.call_id, ctx.tracker);
     let content = emitter.finish(event_ctx, result).await?;
 
     Ok(Some(ToolOutput::Function {

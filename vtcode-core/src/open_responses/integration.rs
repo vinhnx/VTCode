@@ -165,10 +165,10 @@ impl OpenResponsesIntegration {
         self.events.push(event.clone());
 
         // Send to callback if registered
-        if let Some(callback) = &self.callback {
-            if let Ok(mut cb) = callback.lock() {
-                cb(event);
-            }
+        if let Some(callback) = &self.callback
+            && let Ok(mut cb) = callback.lock()
+        {
+            cb(event);
         }
     }
 }
@@ -204,29 +204,29 @@ impl ToOpenResponse for crate::llm::provider::LLMResponse {
         }
 
         // Add content as message item if present
-        if let Some(content) = &self.content {
-            if !content.is_empty() {
-                let item = OutputItem::completed_message(
-                    super::response::generate_item_id(),
-                    super::items::MessageRole::Assistant,
-                    vec![super::ContentPart::output_text(content)],
-                );
-                response.add_output(item);
-            }
+        if let Some(content) = &self.content
+            && !content.is_empty()
+        {
+            let item = OutputItem::completed_message(
+                super::response::generate_item_id(),
+                super::items::MessageRole::Assistant,
+                vec![super::ContentPart::output_text(content)],
+            );
+            response.add_output(item);
         }
 
         // Add reasoning if present
-        if let Some(reasoning) = &self.reasoning {
-            if !reasoning.is_empty() {
-                let item = OutputItem::Reasoning(super::items::ReasoningItem {
-                    id: super::response::generate_item_id(),
-                    status: super::ItemStatus::Completed,
-                    summary: None,
-                    content: Some(reasoning.clone()),
-                    encrypted_content: None,
-                });
-                response.add_output(item);
-            }
+        if let Some(reasoning) = &self.reasoning
+            && !reasoning.is_empty()
+        {
+            let item = OutputItem::Reasoning(super::items::ReasoningItem {
+                id: super::response::generate_item_id(),
+                status: super::ItemStatus::Completed,
+                summary: None,
+                content: Some(reasoning.clone()),
+                encrypted_content: None,
+            });
+            response.add_output(item);
         }
 
         // Add tool calls as function call items

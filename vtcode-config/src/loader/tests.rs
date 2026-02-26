@@ -154,6 +154,42 @@ fn syntax_highlighting_defaults_are_valid() {
     config
         .validate()
         .expect("default syntax highlighting config should be valid");
+    assert!(
+        config
+            .enabled_languages
+            .iter()
+            .any(|lang| lang.eq_ignore_ascii_case("markdown"))
+    );
+    assert!(
+        config
+            .enabled_languages
+            .iter()
+            .any(|lang| lang.eq_ignore_ascii_case("md"))
+    );
+    assert!(
+        config
+            .enabled_languages
+            .iter()
+            .any(|lang| lang.eq_ignore_ascii_case("bash"))
+    );
+    assert!(
+        config
+            .enabled_languages
+            .iter()
+            .any(|lang| lang.eq_ignore_ascii_case("sh"))
+    );
+    assert!(
+        config
+            .enabled_languages
+            .iter()
+            .any(|lang| lang.eq_ignore_ascii_case("shell"))
+    );
+    assert!(
+        config
+            .enabled_languages
+            .iter()
+            .any(|lang| lang.eq_ignore_ascii_case("zsh"))
+    );
 }
 
 #[test]

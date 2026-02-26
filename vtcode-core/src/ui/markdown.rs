@@ -807,7 +807,7 @@ fn choose_markdown_accent(base_style: Style, candidates: &[Style]) -> Option<ans
     candidates.iter().find_map(|candidate| {
         candidate
             .get_fg_color()
-            .filter(|color| base_fg.map_or(true, |base| base != *color))
+            .filter(|color| base_fg != Some(*color))
     })
 }
 

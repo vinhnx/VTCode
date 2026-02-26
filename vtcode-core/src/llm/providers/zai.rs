@@ -206,11 +206,11 @@ impl ZAIProvider {
 
             use crate::config::models::Provider;
             use crate::llm::rig_adapter::reasoning_parameters_for;
-            if let Some(reasoning_params) = reasoning_parameters_for(Provider::ZAI, effort) {
-                if let Some(params_obj) = reasoning_params.as_object() {
-                    for (k, v) in params_obj {
-                        payload.insert(k.clone(), v.clone());
-                    }
+            if let Some(reasoning_params) = reasoning_parameters_for(Provider::ZAI, effort)
+                && let Some(params_obj) = reasoning_params.as_object()
+            {
+                for (k, v) in params_obj {
+                    payload.insert(k.clone(), v.clone());
                 }
             }
         }
@@ -378,10 +378,9 @@ impl LLMProvider for ZAIProvider {
 
                             if let Some(reasoning) =
                                 delta.get("reasoning_content").and_then(|c| c.as_str())
+                                && let Some(d) = aggregator.handle_reasoning(reasoning)
                             {
-                                if let Some(d) = aggregator.handle_reasoning(reasoning) {
-                                    let _ = tx.send(Ok(LLMStreamEvent::Reasoning { delta: d }));
-                                }
+                                let _ = tx.send(Ok(LLMStreamEvent::Reasoning { delta: d }));
                             }
 
                             if let Some(tool_calls) =
@@ -396,12 +395,11 @@ impl LLMProvider for ZAIProvider {
                         }
                     }
 
-                    if let Some(_usage_value) = value.get("usage") {
-                        if let Some(usage) =
+                    if let Some(_usage_value) = value.get("usage")
+                        && let Some(usage) =
                             crate::llm::providers::common::parse_usage_openai_format(&value, false)
-                        {
-                            aggregator.set_usage(usage);
-                        }
+                    {
+                        aggregator.set_usage(usage);
                     }
                     Ok(())
                 },

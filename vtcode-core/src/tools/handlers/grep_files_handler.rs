@@ -219,23 +219,21 @@ impl GrepFilesHandler {
         let file_name = path.file_name().unwrap_or_default().to_string_lossy();
 
         // Check include pattern
-        if let Some(include) = &args.include {
-            if !glob::Pattern::new(include)
+        if let Some(include) = &args.include
+            && !glob::Pattern::new(include)
                 .map(|p| p.matches(&file_name))
                 .unwrap_or(false)
-            {
-                return false;
-            }
+        {
+            return false;
         }
 
         // Check exclude pattern
-        if let Some(exclude) = &args.exclude {
-            if glob::Pattern::new(exclude)
+        if let Some(exclude) = &args.exclude
+            && glob::Pattern::new(exclude)
                 .map(|p| p.matches(&file_name))
                 .unwrap_or(false)
-            {
-                return false;
-            }
+        {
+            return false;
         }
 
         true

@@ -161,25 +161,23 @@ impl PluginCache {
         // Walk through all files in the plugin directory to check for traversal attempts
         let mut stack = vec![plugin_path.to_path_buf()];
         while let Some(current_path) = stack.pop() {
-            if current_path.is_dir() {
-                if let Ok(entries) = std::fs::read_dir(&current_path) {
-                    for entry in entries {
-                        if let Ok(entry) = entry {
-                            let entry_path = entry.path();
-                            let entry_str = entry_path.to_string_lossy();
+            if current_path.is_dir()
+                && let Ok(entries) = std::fs::read_dir(&current_path)
+            {
+                for entry in entries.flatten() {
+                    let entry_path = entry.path();
+                    let entry_str = entry_path.to_string_lossy();
 
-                            // Check for path traversal in the file/directory names
-                            if entry_str.contains("../") || entry_str.contains("..\\") {
-                                return Err(PluginError::LoadingError(format!(
-                                    "Plugin contains path traversal in file: {}",
-                                    entry_path.display()
-                                )));
-                            }
+                    // Check for path traversal in the file/directory names
+                    if entry_str.contains("../") || entry_str.contains("..\\") {
+                        return Err(PluginError::LoadingError(format!(
+                            "Plugin contains path traversal in file: {}",
+                            entry_path.display()
+                        )));
+                    }
 
-                            if entry_path.is_dir() {
-                                stack.push(entry_path);
-                            }
-                        }
+                    if entry_path.is_dir() {
+                        stack.push(entry_path);
                     }
                 }
             }

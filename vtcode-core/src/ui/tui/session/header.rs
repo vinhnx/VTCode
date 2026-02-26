@@ -406,14 +406,14 @@ impl Session {
 
         // Show OAuth badge if using OpenRouter with OAuth authentication
         let provider_lower = self.header_context.provider.to_lowercase();
-        if provider_lower.contains("openrouter") {
-            if let Some(oauth_span) = OAuthTuiStatus::current().badge_span() {
-                spans.push(oauth_span);
-                spans.push(Span::styled(
-                    ui::HEADER_MODE_SECONDARY_SEPARATOR.to_owned(),
-                    self.header_secondary_style(),
-                ));
-            }
+        if provider_lower.contains("openrouter")
+            && let Some(oauth_span) = OAuthTuiStatus::current().badge_span()
+        {
+            spans.push(oauth_span);
+            spans.push(Span::styled(
+                ui::HEADER_MODE_SECONDARY_SEPARATOR.to_owned(),
+                self.header_secondary_style(),
+            ));
         }
 
         // Show trust level badge with color coding
@@ -585,34 +585,34 @@ impl Session {
 
     /// Generate header line with slash command and keyboard shortcut suggestions
     fn header_suggestions_line(&self) -> Option<Line<'static>> {
-        let mut spans = Vec::new();
-
-        spans.push(Span::styled(
-            "/help",
-            self.header_primary_style().add_modifier(Modifier::BOLD),
-        ));
-        spans.push(Span::styled(
-            " · ",
-            self.header_secondary_style().add_modifier(Modifier::DIM),
-        ));
-        spans.push(Span::styled(
-            "/model",
-            self.header_primary_style().add_modifier(Modifier::BOLD),
-        ));
-        spans.push(Span::styled(
-            "  |  ",
-            self.header_secondary_style().add_modifier(Modifier::DIM),
-        ));
-        spans.push(Span::styled(
-            "↑↓",
-            self.header_primary_style().add_modifier(Modifier::BOLD),
-        ));
-        spans.push(Span::styled(" Nav · ", self.header_secondary_style()));
-        spans.push(Span::styled(
-            "Tab",
-            self.header_primary_style().add_modifier(Modifier::BOLD),
-        ));
-        spans.push(Span::styled(" Complete", self.header_secondary_style()));
+        let spans = vec![
+            Span::styled(
+                "/help",
+                self.header_primary_style().add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                " · ",
+                self.header_secondary_style().add_modifier(Modifier::DIM),
+            ),
+            Span::styled(
+                "/model",
+                self.header_primary_style().add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                "  |  ",
+                self.header_secondary_style().add_modifier(Modifier::DIM),
+            ),
+            Span::styled(
+                "↑↓",
+                self.header_primary_style().add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(" Nav · ", self.header_secondary_style()),
+            Span::styled(
+                "Tab",
+                self.header_primary_style().add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(" Complete", self.header_secondary_style()),
+        ];
 
         Some(Line::from(spans))
     }

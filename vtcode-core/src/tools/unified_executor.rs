@@ -371,12 +371,11 @@ impl ToolRegistryAdapter {
         // Check plan mode enforcement
         if ctx.policy_config.plan_mode_enforced
             && let Ok(is_mutating) = self.is_tool_mutating(name).await
+            && is_mutating
         {
-            if is_mutating {
-                return ApprovalState::Blocked {
-                    reason: "Plan mode: mutating tools blocked".to_string(),
-                };
-            }
+            return ApprovalState::Blocked {
+                reason: "Plan mode: mutating tools blocked".to_string(),
+            };
         }
 
         // Check trust level bypass
@@ -480,10 +479,10 @@ impl UnifiedToolExecutor for ToolRegistryAdapter {
                 // Only read-only tools for untrusted context
                 let mut filtered = Vec::new();
                 for name in all_tools {
-                    if let Ok(is_mutating) = self.is_tool_mutating(&name).await {
-                        if !is_mutating {
-                            filtered.push(name);
-                        }
+                    if let Ok(is_mutating) = self.is_tool_mutating(&name).await
+                        && !is_mutating
+                    {
+                        filtered.push(name);
                     }
                 }
                 filtered

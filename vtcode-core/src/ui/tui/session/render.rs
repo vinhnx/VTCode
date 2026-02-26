@@ -1061,7 +1061,7 @@ fn justify_wrapped_lines(
                         .collect::<String>(),
                 )
             };
-            let line_text: &str = &*line_text_storage;
+            let line_text: &str = &line_text_storage;
             let trimmed_start = line_text.trim_start();
             trimmed_start.starts_with("```") || trimmed_start.starts_with("~~~")
         };
@@ -1101,7 +1101,7 @@ fn should_justify_message_line(
     if line.spans.len() != 1 {
         return false;
     }
-    let text: &str = &*line.spans[0].content;
+    let text: &str = &line.spans[0].content;
     if text.trim().is_empty() {
         return false;
     }
@@ -1129,7 +1129,7 @@ fn justify_message_line(
     max_width: usize,
 ) -> Line<'static> {
     let span = &line.spans[0];
-    if let Some(justified) = justify_plain_text(&*span.content, max_width) {
+    if let Some(justified) = justify_plain_text(&span.content, max_width) {
         Line::from(justified).style(span.style)
     } else {
         line.clone()
@@ -1222,22 +1222,22 @@ pub fn render_modal(session: &mut Session, frame: &mut Frame<'_>, viewport: Rect
     }
 
     // Auto-approve modals when skip_confirmations is set (for tests and headless mode)
-    if session.skip_confirmations {
-        if let Some(mut modal) = session.modal.take() {
-            if let Some(list) = &mut modal.list {
-                if let Some(_selection) = list.current_selection() {
-                    // Note: We can't easily emit an event from here without access to the sender.
-                    // Instead, we just clear the modal and assume the tool execution logic
-                    // or whatever triggered the modal will check skip_confirmations as well.
-                    // This is handled in ensure_tool_permission.
-                }
-            }
-            session.input_enabled = modal.restore_input;
-            session.cursor_visible = modal.restore_cursor;
-            session.needs_full_clear = true;
-            session.needs_redraw = true;
-            return;
+    if session.skip_confirmations
+        && let Some(mut modal) = session.modal.take()
+    {
+        if let Some(list) = &mut modal.list
+            && let Some(_selection) = list.current_selection()
+        {
+            // Note: We can't easily emit an event from here without access to the sender.
+            // Instead, we just clear the modal and assume the tool execution logic
+            // or whatever triggered the modal will check skip_confirmations as well.
+            // This is handled in ensure_tool_permission.
         }
+        session.input_enabled = modal.restore_input;
+        session.cursor_visible = modal.restore_cursor;
+        session.needs_full_clear = true;
+        session.needs_redraw = true;
+        return;
     }
 
     let styles = modal_render_styles(session);

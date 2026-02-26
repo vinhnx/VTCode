@@ -118,13 +118,12 @@ impl ListDirHandler {
             }
 
             // Apply pattern filter
-            if let Some(pattern) = &args.pattern {
-                if !glob::Pattern::new(pattern)
+            if let Some(pattern) = &args.pattern
+                && !glob::Pattern::new(pattern)
                     .map(|p| p.matches(&file_name))
                     .unwrap_or(true)
-                {
-                    continue;
-                }
+            {
+                continue;
             }
 
             let metadata = entry.metadata().await.ok();

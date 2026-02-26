@@ -195,11 +195,12 @@ impl InputManager {
     pub fn add_to_history(&mut self, entry: InputHistoryEntry) {
         if !entry.is_empty() {
             // Avoid duplicates
-            if let Some(last) = self.history.last() {
-                if last.content == entry.content && last.elements == entry.elements {
-                    self.reset_history_navigation();
-                    return;
-                }
+            if let Some(last) = self.history.last()
+                && last.content == entry.content
+                && last.elements == entry.elements
+            {
+                self.reset_history_navigation();
+                return;
             }
             self.history.push(entry);
         }

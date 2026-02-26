@@ -69,6 +69,7 @@ fn build_partial_timeout_messages(
     (renderer_message, error_message)
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(super) async fn run_single_agent_loop_unified_impl(
     config: &CoreAgentConfig,
     _vt_cfg: Option<VTCodeConfig>,
@@ -97,7 +98,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
 
         let session_id = resume_ref
             .map(|resume| SessionId::from_string(resume.identifier.clone()))
-            .unwrap_or_else(SessionId::new);
+            .unwrap_or_default();
         let _session_created_at = Utc::now();
         let _session_state_path = session_path(Path::new(&config.workspace), &session_id);
         let _session_trigger = if resume_ref.is_some() {

@@ -90,10 +90,10 @@ where
     let key_str = serde_json::to_string(&key).unwrap_or_default();
 
     // Check if we already have a cached decision
-    if let Some(decision) = store.get(&key_str).await {
-        if matches!(decision, ReviewDecision::ApprovedForSession) {
-            return ReviewDecision::Approved;
-        }
+    if let Some(decision) = store.get(&key_str).await
+        && matches!(decision, ReviewDecision::ApprovedForSession)
+    {
+        return ReviewDecision::Approved;
     }
 
     // Fetch new decision

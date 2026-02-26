@@ -50,14 +50,13 @@ pub(crate) fn create_chat_stream(
                             .into_llm_error("OpenAI")
                     })?;
 
-                    if let Some(usage_val) = payload.get("usage") {
-                        if let Ok(u) = serde_json::from_value::<provider::Usage>(usage_val.clone()) {
+                    if let Some(usage_val) = payload.get("usage")
+                        && let Ok(u) = serde_json::from_value::<provider::Usage>(usage_val.clone()) {
                             aggregator.set_usage(u);
                         }
-                    }
 
-                    if let Some(choices) = payload.get("choices").and_then(|v| v.as_array()) {
-                        if let Some(choice) = choices.first() {
+                    if let Some(choices) = payload.get("choices").and_then(|v| v.as_array())
+                        && let Some(choice) = choices.first() {
                             if let Some(delta) = choice.get("delta") {
                                 if let Some(content) = delta.get("content").and_then(|v| v.as_str()) {
                                     telemetry.on_content_delta(content);
@@ -66,12 +65,11 @@ pub(crate) fn create_chat_stream(
                                     }
                                 }
 
-                                if let Some(reasoning) = delta.get("reasoning_content").and_then(|v| v.as_str()) {
-                                    if let Some(delta) = aggregator.handle_reasoning(reasoning) {
+                                if let Some(reasoning) = delta.get("reasoning_content").and_then(|v| v.as_str())
+                                    && let Some(delta) = aggregator.handle_reasoning(reasoning) {
                                         telemetry.on_reasoning_delta(&delta);
                                         yield provider::LLMStreamEvent::Reasoning { delta };
                                     }
-                                }
 
                                 if let Some(tool_deltas) = delta.get("tool_calls").and_then(|v| v.as_array()) {
                                     aggregator.handle_tool_calls(tool_deltas);
@@ -89,7 +87,6 @@ pub(crate) fn create_chat_stream(
                                 });
                             }
                         }
-                    }
                 }
             }
         }
@@ -248,11 +245,10 @@ pub(crate) fn create_responses_stream(
 
         if response.content.is_none() {
             response.content = final_aggregator_response.content;
-        } else if let (Some(c), Some(agg_c)) = (&mut response.content, final_aggregator_response.content) {
-            if !c.contains(&agg_c) {
+        } else if let (Some(c), Some(agg_c)) = (&mut response.content, final_aggregator_response.content)
+            && !c.contains(&agg_c) {
                 c.push_str(&agg_c);
             }
-        }
 
         if response.reasoning.is_none() {
             response.reasoning = final_aggregator_response.reasoning;

@@ -32,21 +32,21 @@ impl PluginValidator {
         }
 
         // Validate version format if present
-        if let Some(version) = &manifest.version {
-            if !Self::is_valid_version(version) {
-                return Err(PluginError::ManifestValidationError(
-                    "Plugin version must follow semantic versioning (e.g., 1.0.0)".to_string(),
-                ));
-            }
+        if let Some(version) = &manifest.version
+            && !Self::is_valid_version(version)
+        {
+            return Err(PluginError::ManifestValidationError(
+                "Plugin version must follow semantic versioning (e.g., 1.0.0)".to_string(),
+            ));
         }
 
         // Validate author if present
-        if let Some(author) = &manifest.author {
-            if author.name.is_empty() {
-                return Err(PluginError::ManifestValidationError(
-                    "Plugin author name is required when author is specified".to_string(),
-                ));
-            }
+        if let Some(author) = &manifest.author
+            && author.name.is_empty()
+        {
+            return Err(PluginError::ManifestValidationError(
+                "Plugin author name is required when author is specified".to_string(),
+            ));
         }
 
         Ok(())
@@ -164,7 +164,7 @@ impl PluginDebugger {
         let agents_count = manifest.agents.as_ref().map_or(0, |a| a.len());
         let skills_count = manifest.skills.as_ref().map_or(0, |s| s.len());
 
-        output.push_str(&format!("  Components:\n"));
+        output.push_str("  Components:\n");
         output.push_str(&format!("    Commands: {}\n", commands_count));
         output.push_str(&format!("    Agents: {}\n", agents_count));
         output.push_str(&format!("    Skills: {}\n", skills_count));

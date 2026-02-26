@@ -91,11 +91,7 @@ pub(super) fn builtin_tool_registrations(
         ToolRegistration::from_tool_instance(
             tools::TASK_TRACKER,
             CapabilityLevel::Basic,
-            TaskTrackerTool::new(
-                plan_state
-                    .workspace_root()
-                    .unwrap_or_else(|| PathBuf::new()),
-            ),
+            TaskTrackerTool::new(plan_state.workspace_root().unwrap_or_else(PathBuf::new)),
         )
         .with_aliases(["plan_manager", "track_tasks", "checklist"]),
         ToolRegistration::from_tool_instance(
@@ -312,13 +308,13 @@ pub(super) fn builtin_tool_registrations(
     // Apply descriptions and schemas from signatures where available
     let decls = build_minimal_declarations(&sigs);
     for reg in &mut registrations {
-        if let Some(sig) = sigs.get(reg.name()) {
-            if let Some(decl) = decls.iter().find(|d| d.name == reg.name()) {
-                *reg = reg
-                    .clone()
-                    .with_description(sig.brief)
-                    .with_parameter_schema(decl.parameters.clone());
-            }
+        if let Some(sig) = sigs.get(reg.name())
+            && let Some(decl) = decls.iter().find(|d| d.name == reg.name())
+        {
+            *reg = reg
+                .clone()
+                .with_description(sig.brief)
+                .with_parameter_schema(decl.parameters.clone());
         }
     }
 

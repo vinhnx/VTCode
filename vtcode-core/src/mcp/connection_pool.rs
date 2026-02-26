@@ -51,7 +51,6 @@ impl McpConnectionPool {
             .map(|config| {
                 let elicitation_handler = elicitation_handler.clone();
                 let allowlist_snapshot = allowlist_snapshot.clone();
-                let tool_timeout = tool_timeout;
 
                 async move {
                     self.initialize_provider(

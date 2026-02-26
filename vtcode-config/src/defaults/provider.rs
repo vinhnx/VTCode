@@ -25,6 +25,9 @@ static DEFAULT_SYNTAX_LANGUAGES: Lazy<Vec<String>> = Lazy::new(|| {
         "sql",
         "csharp",
         "bash",
+        "sh",
+        "shell",
+        "zsh",
         "swift",
         "diff",
         "patch",
@@ -34,6 +37,7 @@ static DEFAULT_SYNTAX_LANGUAGES: Lazy<Vec<String>> = Lazy::new(|| {
         "yaml",
         "toml",
         "markdown",
+        "md",
     ]
     .into_iter()
     .map(String::from)

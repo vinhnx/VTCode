@@ -1050,11 +1050,10 @@ impl LLMProvider for OllamaProvider {
                             .map(|v| !v.is_empty())
                             .unwrap_or(false);
 
-                        if let Some(thinking) = message.thinking {
-                            if let Some(delta) = aggregator.handle_reasoning(&thinking) {
+                        if let Some(thinking) = message.thinking
+                            && let Some(delta) = aggregator.handle_reasoning(&thinking) {
                                 yield LLMStreamEvent::Reasoning { delta };
                             }
-                        }
 
                         if let Some(content) = message.content {
                             for event in aggregator.handle_content(&content) {

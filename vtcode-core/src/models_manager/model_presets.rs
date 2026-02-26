@@ -346,7 +346,8 @@ fn openai_presets() -> Vec<ModelPreset> {
             id: "gpt-5.3-codex".to_string(),
             model: "gpt-5.3-codex".to_string(),
             display_name: "GPT-5.3 Codex".to_string(),
-            description: "GPT-5.3 variant optimized for agentic coding with xhigh reasoning".to_string(),
+            description: "GPT-5.3 variant optimized for agentic coding with xhigh reasoning"
+                .to_string(),
             provider: Provider::OpenAI,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
             supported_reasoning_efforts: vec![
@@ -421,7 +422,8 @@ fn openai_presets() -> Vec<ModelPreset> {
             id: "gpt-oss-120b".to_string(),
             model: "gpt-oss-120b".to_string(),
             display_name: "GPT-OSS 120B".to_string(),
-            description: "OpenAI's open-source 120B parameter model with advanced reasoning".to_string(),
+            description: "OpenAI's open-source 120B parameter model with advanced reasoning"
+                .to_string(),
             provider: Provider::OpenAI,
             default_reasoning_effort: ReasoningEffortLevel::Medium,
             supported_reasoning_efforts: vec![

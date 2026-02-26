@@ -104,7 +104,7 @@ fn format_hidden_lines_summary(hidden: usize) -> String {
     }
 }
 
-fn collect_run_command_preview<'a>(content: &'a str) -> (SmallVec<[&'a str; 32]>, usize, usize) {
+fn collect_run_command_preview(content: &str) -> (SmallVec<[&str; 32]>, usize, usize) {
     let lines: SmallVec<[&str; 32]> = content.lines().collect();
     let total = lines.len();
     let preview_size = RUN_COMMAND_HEAD_PREVIEW_LINES + RUN_COMMAND_TAIL_PREVIEW_LINES;

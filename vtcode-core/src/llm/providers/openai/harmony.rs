@@ -62,12 +62,12 @@ pub(super) fn parse_harmony_tool_call_from_text(text: &str) -> Option<(String, V
 
             // Look for JSON in the remaining text
             let remaining = &after_to[space_pos..];
-            if let Some(json_start) = remaining.find('{') {
-                if let Some(json_end) = remaining.rfind('}') {
-                    let json_text = &remaining[json_start..=json_end];
-                    if let Ok(args) = serde_json::from_str(json_text) {
-                        return Some((tool_name, args));
-                    }
+            if let Some(json_start) = remaining.find('{')
+                && let Some(json_end) = remaining.rfind('}')
+            {
+                let json_text = &remaining[json_start..=json_end];
+                if let Ok(args) = serde_json::from_str(json_text) {
+                    return Some((tool_name, args));
                 }
             }
         }

@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use anyhow::{Result, bail};
 use serde::{Deserialize, Serialize};
 
@@ -16,8 +18,10 @@ impl std::fmt::Display for TaskTrackingStatus {
     }
 }
 
-impl TaskTrackingStatus {
-    pub fn from_str(value: &str) -> Result<Self> {
+impl FromStr for TaskTrackingStatus {
+    type Err = anyhow::Error;
+
+    fn from_str(value: &str) -> Result<Self> {
         match value {
             "pending" => Ok(Self::Pending),
             "in_progress" => Ok(Self::InProgress),
@@ -29,7 +33,9 @@ impl TaskTrackingStatus {
             ),
         }
     }
+}
 
+impl TaskTrackingStatus {
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Pending => "pending",

@@ -109,7 +109,7 @@ pub(super) fn set_command_environment_from_snapshot(
     // Merge extra paths into PATH
     let path_key = OsString::from("PATH");
     let current_path = snapshot.env.get("PATH").map(OsString::from);
-    let current_path_ref = current_path.as_ref().map(|p| p.as_os_str());
+    let current_path_ref = current_path.as_deref();
     if let Some(merged) = path_env::merge_path_env(current_path_ref, extra_paths) {
         builder.env(path_key, merged);
     }

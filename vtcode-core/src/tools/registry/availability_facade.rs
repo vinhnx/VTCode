@@ -81,10 +81,10 @@ impl ToolRegistry {
     /// Get a list of all available tools, including MCP tools.
     pub async fn available_tools(&self) -> Vec<String> {
         // Use try_read to avoid blocking on contested locks
-        if let Ok(cache) = self.cached_available_tools.try_read() {
-            if let Some(tools) = cache.as_ref() {
-                return tools.clone();
-            }
+        if let Ok(cache) = self.cached_available_tools.try_read()
+            && let Some(tools) = cache.as_ref()
+        {
+            return tools.clone();
         }
 
         // HP-7: Inventory tools are already sorted, just convert to Vec
@@ -118,14 +118,14 @@ impl ToolRegistry {
         };
 
         // Resolve tool (handles built-ins, MCP proxies, and aliases)
-        if let Some(registration) = self.inventory.get_registration(tool_name) {
-            if let Some(schema) = registration.parameter_schema() {
-                return Some(wrap_schema(
-                    tool_name,
-                    registration.metadata().description().unwrap_or(""),
-                    &schema,
-                ));
-            }
+        if let Some(registration) = self.inventory.get_registration(tool_name)
+            && let Some(schema) = registration.parameter_schema()
+        {
+            return Some(wrap_schema(
+                tool_name,
+                registration.metadata().description().unwrap_or(""),
+                schema,
+            ));
         }
 
         None

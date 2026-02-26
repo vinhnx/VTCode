@@ -602,7 +602,7 @@ impl ToolPolicyManager {
 
     fn resolve_config_policy(tools_config: &ToolsConfig, tool_name: &str) -> ConfigToolPolicy {
         let canonical = canonical_tool_name(tool_name);
-        let lookup: &str = &*canonical;
+        let lookup: &str = &canonical;
 
         if let Some(policy) = tools_config.policies.get(lookup) {
             return *policy;

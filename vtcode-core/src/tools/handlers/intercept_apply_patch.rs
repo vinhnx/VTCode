@@ -188,12 +188,12 @@ fn extract_patch_from_command(command: &[String]) -> Result<String, ApplyPatchEr
 /// Extract content from a heredoc-style string
 fn extract_heredoc_content(input: &str) -> Option<String> {
     // Simple heredoc extraction
-    if let Some(start) = input.find("<<<") {
-        if let Some(end_marker_start) = input[start + 3..].find('\n') {
-            let content_start = start + 3 + end_marker_start + 1;
-            if let Some(eof_pos) = input[content_start..].find("EOF") {
-                return Some(input[content_start..content_start + eof_pos].to_string());
-            }
+    if let Some(start) = input.find("<<<")
+        && let Some(end_marker_start) = input[start + 3..].find('\n')
+    {
+        let content_start = start + 3 + end_marker_start + 1;
+        if let Some(eof_pos) = input[content_start..].find("EOF") {
+            return Some(input[content_start..content_start + eof_pos].to_string());
         }
     }
     None

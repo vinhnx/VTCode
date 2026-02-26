@@ -147,16 +147,16 @@ impl ResponseBuilder {
         emitter.output_item_added(&self.response.id, output_index, output_item.clone());
 
         // Emit ContentPartAdded for items with text content
-        if let OutputItem::Message(ref msg) = output_item {
-            if !msg.content.is_empty() {
-                emitter.emit(ResponseStreamEvent::ContentPartAdded {
-                    response_id: self.response.id.clone(),
-                    item_id: item.id.clone(),
-                    output_index,
-                    content_index: 0,
-                    part: msg.content[0].clone(),
-                });
-            }
+        if let OutputItem::Message(ref msg) = output_item
+            && !msg.content.is_empty()
+        {
+            emitter.emit(ResponseStreamEvent::ContentPartAdded {
+                response_id: self.response.id.clone(),
+                item_id: item.id.clone(),
+                output_index,
+                content_index: 0,
+                part: msg.content[0].clone(),
+            });
         }
     }
 

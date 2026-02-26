@@ -20,10 +20,10 @@ pub fn validate_command_safety(command: &str) -> Result<()> {
     }
 
     // Check for unquoted semicolons (command chaining)
-    if let Some(pos) = command.find(';') {
-        if !is_in_quotes(command, pos) {
-            bail!("Unquoted command chaining detected");
-        }
+    if let Some(pos) = command.find(';')
+        && !is_in_quotes(command, pos)
+    {
+        bail!("Unquoted command chaining detected");
     }
 
     // Optimization: Create lowercase only once, defer until needed

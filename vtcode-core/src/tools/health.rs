@@ -88,33 +88,33 @@ impl ToolHealthTracker {
 
     /// Check health and returns (is_healthy, reason)
     pub fn check_health(&self, tool_name: &str) -> (bool, Option<String>) {
-        if let Ok(stats_map) = self.stats.read() {
-            if let Some(stats) = stats_map.get(tool_name) {
-                // Criterion 1: Consecutive failures (Circuit Breaker)
-                if stats.consecutive_failures >= self.failure_threshold {
+        if let Ok(stats_map) = self.stats.read()
+            && let Some(stats) = stats_map.get(tool_name)
+        {
+            // Criterion 1: Consecutive failures (Circuit Breaker)
+            if stats.consecutive_failures >= self.failure_threshold {
+                return (
+                    false,
+                    Some(format!(
+                        "{} consecutive failures",
+                        stats.consecutive_failures
+                    )),
+                );
+            }
+
+            // Criterion 2: Recent error rate (Degredation)
+            // Only enforce if we have enough data (at least half window)
+            if stats.recent_history.len() >= 5 {
+                let failures = stats.recent_history.iter().filter(|r| !r.success).count();
+                let failure_rate = failures as f64 / stats.recent_history.len() as f64;
+                if failure_rate > 0.6 {
                     return (
                         false,
                         Some(format!(
-                            "{} consecutive failures",
-                            stats.consecutive_failures
+                            "High recent failure rate: {:.1}%",
+                            failure_rate * 100.0
                         )),
                     );
-                }
-
-                // Criterion 2: Recent error rate (Degredation)
-                // Only enforce if we have enough data (at least half window)
-                if stats.recent_history.len() >= 5 {
-                    let failures = stats.recent_history.iter().filter(|r| !r.success).count();
-                    let failure_rate = failures as f64 / stats.recent_history.len() as f64;
-                    if failure_rate > 0.6 {
-                        return (
-                            false,
-                            Some(format!(
-                                "High recent failure rate: {:.1}%",
-                                failure_rate * 100.0
-                            )),
-                        );
-                    }
                 }
             }
         }

@@ -291,12 +291,11 @@ impl LLMProvider for XAIProvider {
                         }
                     }
 
-                    if let Some(_usage_value) = value.get("usage") {
-                        if let Some(usage) =
+                    if let Some(_usage_value) = value.get("usage")
+                        && let Some(usage) =
                             crate::llm::providers::common::parse_usage_openai_format(&value, false)
-                        {
-                            aggregator.set_usage(usage);
-                        }
+                    {
+                        aggregator.set_usage(usage);
                     }
                     Ok(())
                 },

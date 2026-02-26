@@ -284,16 +284,13 @@ pub fn is_list_item(text: &str) -> bool {
 
     // Numbered patterns: "1.", "1)", "a.", "a)"
     let mut chars = trimmed.chars();
-    if let Some(first) = chars.next() {
-        if first.is_ascii_digit() || first.is_ascii_alphabetic() {
-            if let Some(second) = chars.next() {
-                if second == '.' || second == ')' {
-                    if let Some(third) = chars.next() {
-                        return third == ' ';
-                    }
-                }
-            }
-        }
+    if let Some(first) = chars.next()
+        && (first.is_ascii_digit() || first.is_ascii_alphabetic())
+        && let Some(second) = chars.next()
+        && (second == '.' || second == ')')
+        && let Some(third) = chars.next()
+    {
+        return third == ' ';
     }
 
     false

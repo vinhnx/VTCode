@@ -1199,24 +1199,23 @@ impl ToolRegistry {
                 if let Some(ref callback) = progress_callback {
                     let now = Instant::now();
                     // Flush pending lines if interval elapsed or if we have a complete line
-                    if now.duration_since(last_ui_update) >= ui_update_interval
-                        || pending_lines.contains('\n')
+                    if (now.duration_since(last_ui_update) >= ui_update_interval
+                        || pending_lines.contains('\n'))
+                        && !pending_lines.is_empty()
                     {
-                        if !pending_lines.is_empty() {
-                            callback(tool_name, &pending_lines);
-                            pending_lines.clear();
-                            last_ui_update = now;
-                        }
+                        callback(tool_name, &pending_lines);
+                        pending_lines.clear();
+                        last_ui_update = now;
                     }
                 }
             }
 
             if start.elapsed() >= yield_duration {
                 // Flush any remaining pending lines
-                if let Some(ref callback) = progress_callback {
-                    if !pending_lines.is_empty() {
-                        callback(tool_name, &pending_lines);
-                    }
+                if let Some(ref callback) = progress_callback
+                    && !pending_lines.is_empty()
+                {
+                    callback(tool_name, &pending_lines);
                 }
                 return PtyEphemeralCapture {
                     output,
@@ -1264,12 +1263,12 @@ fn parse_command_parts(
         _ => return Err(anyhow!("{}", missing_error)),
     };
 
-    if let Some(args_value) = payload.get("args") {
-        if let Some(args_array) = args_value.as_array() {
-            for value in args_array {
-                if let Some(part) = value.as_str() {
-                    parts.push(part.to_string());
-                }
+    if let Some(args_value) = payload.get("args")
+        && let Some(args_array) = args_value.as_array()
+    {
+        for value in args_array {
+            if let Some(part) = value.as_str() {
+                parts.push(part.to_string());
             }
         }
     }
@@ -1369,11 +1368,7 @@ fn parse_pty_dimension(name: &str, value: Option<&Value>, default: u16) -> Resul
 }
 
 fn generate_session_id(prefix: &str) -> String {
-    format!(
-        "{}-{}",
-        prefix,
-        uuid::Uuid::new_v4().to_string()[..8].to_string()
-    )
+    format!("{}-{}", prefix, &uuid::Uuid::new_v4().to_string()[..8])
 }
 
 fn strip_ansi(text: &str) -> String {

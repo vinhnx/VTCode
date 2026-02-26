@@ -250,10 +250,10 @@ impl ShellSnapshotManager {
 
         {
             let snapshot = self.snapshot.read();
-            if let Some(ref snap) = *snapshot {
-                if snap.is_valid(&shell_path, self.ttl) {
-                    return Ok(Arc::clone(snap));
-                }
+            if let Some(ref snap) = *snapshot
+                && snap.is_valid(&shell_path, self.ttl)
+            {
+                return Ok(Arc::clone(snap));
             }
         }
 
@@ -261,10 +261,10 @@ impl ShellSnapshotManager {
 
         {
             let snapshot = self.snapshot.read();
-            if let Some(ref snap) = *snapshot {
-                if snap.is_valid(&shell_path, self.ttl) {
-                    return Ok(Arc::clone(snap));
-                }
+            if let Some(ref snap) = *snapshot
+                && snap.is_valid(&shell_path, self.ttl)
+            {
+                return Ok(Arc::clone(snap));
             }
         }
 

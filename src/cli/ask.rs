@@ -7,7 +7,7 @@ use vtcode_core::{
     cli::args::AskOutputFormat,
     config::types::AgentConfig as CoreAgentConfig,
     llm::{
-        factory::{create_provider_for_model, create_provider_with_config},
+        factory::{create_provider_for_model, create_provider_with_config, ProviderConfig},
         provider::{
             FinishReason, LLMRequest, LLMResponse, LLMStreamEvent, Message, ToolChoice, Usage,
         },
@@ -134,13 +134,15 @@ async fn run_ask_without_tools(
         Ok(provider) => provider,
         Err(_) => create_provider_with_config(
             &config.provider,
-            Some(config.api_key.clone()),
-            None,
-            Some(config.model.clone()),
-            Some(config.prompt_cache.clone()),
-            None,
-            None,
-            Some(config.model_behavior.clone()),
+            ProviderConfig {
+                api_key: Some(config.api_key.clone()),
+                base_url: None,
+                model: Some(config.model.clone()),
+                prompt_cache: Some(config.prompt_cache.clone()),
+                timeouts: None,
+                anthropic: None,
+                model_behavior: Some(config.model_behavior.clone()),
+            },
         )
         .context("Failed to initialize provider for ask command")?,
     };

@@ -297,12 +297,11 @@ impl AutonomousExecutor {
             }
 
             // Check if within workspace
-            if let Some(workspace) = &self.workspace_dir {
-                if resolve_workspace_path(workspace, path_obj).is_ok()
-                    || is_within_workspace_lexically(workspace, path_obj)
-                {
-                    return Ok(());
-                }
+            if let Some(workspace) = &self.workspace_dir
+                && (resolve_workspace_path(workspace, path_obj).is_ok()
+                    || is_within_workspace_lexically(workspace, path_obj))
+            {
+                return Ok(());
             }
 
             anyhow::bail!(

@@ -284,6 +284,7 @@ pub(crate) fn build_model_status_with_context(
 }
 
 /// Build model status with all context indicators including spooled files
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn build_model_status_with_context_and_spooled(
     model: &str,
     reasoning: &str,

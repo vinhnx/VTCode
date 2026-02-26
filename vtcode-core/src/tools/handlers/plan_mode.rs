@@ -94,7 +94,7 @@ impl PlanModeState {
 
     /// Get the baseline time for plan readiness checks
     pub async fn plan_baseline(&self) -> Option<SystemTime> {
-        self.plan_baseline.read().await.clone()
+        *self.plan_baseline.read().await
     }
 
     /// Get the current plan file path
@@ -465,10 +465,7 @@ impl Tool for ExitPlanModeTool {
             .and_then(|path| tracker_file_for_plan_file(path));
         let tracker_content = if let Some(ref path) = tracker_file {
             if path.exists() {
-                match read_file_with_context(path, "plan tracker file").await {
-                    Ok(content) => Some(content),
-                    Err(_) => None,
-                }
+                read_file_with_context(path, "plan tracker file").await.ok()
             } else {
                 None
             }

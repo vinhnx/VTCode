@@ -201,21 +201,22 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
     }
 
     // Handle history picker (Ctrl+R) - Visual fuzzy search for command history
-    if has_control && matches!(key.code, KeyCode::Char('r') | KeyCode::Char('R')) {
-        if !session.history_picker_state.active {
-            // Open the history picker
-            session.history_picker_state.open(&session.input_manager);
-            // Get history with attachments for fuzzy search
-            let history: Vec<(String, Vec<crate::llm::provider::ContentPart>)> = session
-                .input_manager
-                .history()
-                .iter()
-                .map(|entry| (entry.content().to_string(), entry.attachment_elements()))
-                .collect();
-            session.history_picker_state.update_search(&history);
-            session.mark_dirty();
-            return None;
-        }
+    if has_control
+        && matches!(key.code, KeyCode::Char('r') | KeyCode::Char('R'))
+        && !session.history_picker_state.active
+    {
+        // Open the history picker
+        session.history_picker_state.open(&session.input_manager);
+        // Get history with attachments for fuzzy search
+        let history: Vec<(String, Vec<crate::llm::provider::ContentPart>)> = session
+            .input_manager
+            .history()
+            .iter()
+            .map(|entry| (entry.content().to_string(), entry.attachment_elements()))
+            .collect();
+        session.history_picker_state.update_search(&history);
+        session.mark_dirty();
+        return None;
     }
 
     // Handle history picker if active
@@ -290,7 +291,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
             // Ctrl+J is a line feed character, insert newline for multiline input
             session.insert_char('\n');
             session.mark_dirty();
-            return None;
+            None
         }
         KeyCode::BackTab => {
             // Shift+Tab: Toggle editing mode (delegate mode when teams are active)
@@ -690,13 +691,9 @@ pub(super) fn handle_diff_preview_key(
     session: &mut Session,
     key: &KeyEvent,
 ) -> Option<InlineEvent> {
-    if session.diff_preview.is_none() {
-        return None;
-    }
+    session.diff_preview.as_ref()?;
 
-    let Some(ref mut diff_state) = session.diff_preview else {
-        return None;
-    };
+    let diff_state = session.diff_preview.as_mut()?;
 
     match key.code {
         KeyCode::Tab => {

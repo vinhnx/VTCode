@@ -89,10 +89,10 @@ impl SkillsManager {
 
         if !force_reload {
             if let Ok(cache) = self.cache_by_cwd.read() {
-                if let Some(cached) = cache.get(cwd) {
-                    if !cached.is_expired(self.cache_ttl) {
-                        return cached.outcome.clone();
-                    }
+                if let Some(cached) = cache.get(cwd)
+                    && !cached.is_expired(self.cache_ttl)
+                {
+                    return cached.outcome.clone();
                 }
             } else {
                 tracing::warn!("skills metadata cache lock poisoned while reading cache");
@@ -195,10 +195,10 @@ impl SkillsManager {
         // Check cache first
         {
             if let Ok(cache) = self.instruction_cache.read() {
-                if let Some(cached) = cache.get(skill_name) {
-                    if !cached.is_expired(self.instruction_cache_ttl) {
-                        return Ok(cached.skill.clone());
-                    }
+                if let Some(cached) = cache.get(skill_name)
+                    && !cached.is_expired(self.instruction_cache_ttl)
+                {
+                    return Ok(cached.skill.clone());
                 }
             } else {
                 tracing::warn!("skill instruction cache lock poisoned while reading cache");

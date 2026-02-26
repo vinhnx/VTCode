@@ -51,26 +51,26 @@ pub fn summarize_workspace_languages(root: &std::path::Path) -> Option<String> {
         .filter_map(|e| e.ok())
     {
         let path = entry.path();
-        if path.is_file() {
-            if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
-                let lang = match ext {
-                    "rs" => "Rust",
-                    "py" => "Python",
-                    "js" | "jsx" => "JavaScript",
-                    "ts" | "tsx" => "TypeScript",
-                    "go" => "Go",
-                    "java" => "Java",
-                    "sh" | "bash" => "Bash",
-                    "swift" => "Swift",
-                    "c" | "h" => "C",
-                    "cpp" | "cc" | "cxx" | "hpp" => "C++",
-                    "rb" => "Ruby",
-                    "php" => "PHP",
-                    _ => continue,
-                };
-                *counts.entry(lang.to_string()).or_insert(0) += 1;
-                total += 1;
-            }
+        if path.is_file()
+            && let Some(ext) = path.extension().and_then(|e| e.to_str())
+        {
+            let lang = match ext {
+                "rs" => "Rust",
+                "py" => "Python",
+                "js" | "jsx" => "JavaScript",
+                "ts" | "tsx" => "TypeScript",
+                "go" => "Go",
+                "java" => "Java",
+                "sh" | "bash" => "Bash",
+                "swift" => "Swift",
+                "c" | "h" => "C",
+                "cpp" | "cc" | "cxx" | "hpp" => "C++",
+                "rb" => "Ruby",
+                "php" => "PHP",
+                _ => continue,
+            };
+            *counts.entry(lang.to_string()).or_insert(0) += 1;
+            total += 1;
         }
         if total > 5000 {
             break;

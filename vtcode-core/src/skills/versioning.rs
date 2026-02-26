@@ -116,14 +116,14 @@ pub fn resolve_version(
             Ok(v.clone())
         }
         SkillVersion::Latest => {
-            if let Some(lock) = lockfile {
-                if let Some(locked) = lock.get_locked(&manifest.name) {
-                    debug!(
-                        "Using locked version '{}' for '{}' (Latest requested)",
-                        locked, manifest.name
-                    );
-                    return Ok(locked.to_string());
-                }
+            if let Some(lock) = lockfile
+                && let Some(locked) = lock.get_locked(&manifest.name)
+            {
+                debug!(
+                    "Using locked version '{}' for '{}' (Latest requested)",
+                    locked, manifest.name
+                );
+                return Ok(locked.to_string());
             }
 
             if let Some(ref latest) = manifest.latest_version {
@@ -153,10 +153,10 @@ pub fn resolve_default_version(
     manifest: &SkillManifest,
     lockfile: Option<&SkillLockfile>,
 ) -> String {
-    if let Some(lock) = lockfile {
-        if let Some(locked) = lock.get_locked(&manifest.name) {
-            return locked.to_string();
-        }
+    if let Some(lock) = lockfile
+        && let Some(locked) = lock.get_locked(&manifest.name)
+    {
+        return locked.to_string();
     }
 
     if let Some(ref default) = manifest.default_version {

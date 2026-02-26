@@ -9,6 +9,7 @@ use crate::agent::runloop::unified::turn::guards::validate_tool_args_security;
 
 /// Process an LLM response and return a `TurnProcessingResult` describing whether
 /// there are tool calls to run, a textual assistant response, or nothing.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn process_llm_response(
     response: &vtcode_core::llm::provider::LLMResponse,
     renderer: &mut AnsiRenderer,

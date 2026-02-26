@@ -39,7 +39,7 @@ impl ToolRegistry {
 
     pub(super) fn decay_adaptive_timeout(&self, category: ToolTimeoutCategory) {
         let mut state = self.resiliency.lock();
-        let tuning = state.adaptive_tuning.clone();
+        let tuning = state.adaptive_tuning;
 
         if let Some(adaptive) = state.adaptive_timeout_ceiling.get_mut(&category) {
             if adaptive.as_millis() == 0 {
@@ -101,7 +101,7 @@ impl ToolRegistry {
 
     pub(super) fn record_tool_latency(&self, category: ToolTimeoutCategory, duration: Duration) {
         let mut state = self.resiliency.lock();
-        let tuning = state.adaptive_tuning.clone();
+        let tuning = state.adaptive_tuning;
 
         let stats = state
             .latency_stats
