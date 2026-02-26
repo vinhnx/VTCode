@@ -15,8 +15,6 @@ improve and fix syntax highlighting in raw markdown code
 
 ---
 
-idea: maybe align plan_task_tracker mode with task_tracker as subsystem for agent planning and execution flow.
-
 ---
 
 improve system prompt "/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/plans/improve-system-prompt-v2.md"
@@ -82,3 +80,23 @@ I see the problem now. The codebase has two separate ModelId enums:
     The proper fix would be to have vtcode-core re-export ModelId from
     vtcode-config, but that would be a larger refactoring. For now, both enums
     have been updated with GPT53Codex.
+
+---
+
+Shell integration: respects $SHELL environment variable and supports the ! prefix for direct shell execution.
+
+---
+
+Keyboard-first navigation: Full UNIX keybinding support (Ctrl+A/E/W/U/K, Alt+arrows), suspend/resume with Ctrl+Z, and a quick help overlay with ?.
+
+---
+
+Ctrl+X, Ctrl+E, Ctrl+G: Open your preferred terminal editor for composing longer prompts.
+
+---
+
+Accessibility: Screen reader mode, configurable reasoning visibility, and responsive layout for narrow terminals.
+
+---
+
+https://huggingface.co/Qwen/Qwen3.5-397B-A17B?inference_api=true&inference_provider=together&language=sh&client=curl

@@ -62,6 +62,7 @@ pub mod plan_task_tracker;
 pub mod read_file;
 pub mod shell_handler;
 pub mod spawn_subagent;
+pub mod task_tracking;
 pub mod task_tracker;
 
 // Re-export main types for convenience
