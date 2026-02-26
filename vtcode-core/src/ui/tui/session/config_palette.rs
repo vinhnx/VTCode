@@ -341,6 +341,16 @@ impl ConfigPalette {
             description: Some("Add blank lines between message blocks".to_string()),
         });
 
+        // Show Turn Timer
+        items.push(ConfigItem {
+            key: "ui.show_turn_timer".to_string(),
+            label: "Show Turn Timer".to_string(),
+            kind: ConfigItemKind::Bool {
+                value: config.ui.show_turn_timer,
+            },
+            description: Some("Show elapsed-time divider after completed turns".to_string()),
+        });
+
         // Tool Output Mode
         items.push(ConfigItem {
             key: "ui.tool_output_mode".to_string(),
@@ -894,6 +904,10 @@ impl ConfigPalette {
                     self.config.ui.message_block_spacing = !self.config.ui.message_block_spacing;
                     changed = true;
                 }
+                "ui.show_turn_timer" => {
+                    self.config.ui.show_turn_timer = !self.config.ui.show_turn_timer;
+                    changed = true;
+                }
                 "ui.inline_viewport_rows"
                 | "pty.default_rows"
                 | "pty.default_cols"
@@ -1009,6 +1023,26 @@ mod tests {
             palette.config.ui.allow_tool_ansi, initial_value,
             "Value should default back"
         );
+    }
+
+    #[test]
+    fn test_toggle_show_turn_timer() {
+        let mut palette = setup_palette();
+        let index = palette
+            .items
+            .iter()
+            .position(|i| i.key == "ui.show_turn_timer")
+            .expect("Should have ui.show_turn_timer item");
+
+        palette.list_state.select(Some(index));
+        let initial_value = palette.config.ui.show_turn_timer;
+
+        palette.toggle_selected();
+        assert_ne!(
+            palette.config.ui.show_turn_timer, initial_value,
+            "Show turn timer should toggle"
+        );
+        assert!(palette.modified, "Modified flag should be true");
     }
 
     #[test]

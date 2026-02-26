@@ -7,7 +7,7 @@ use crate::agent::runloop::unified::state::SessionStats;
 use crate::agent::runloop::unified::tool_catalog::ToolCatalogState;
 use std::sync::Arc;
 use std::sync::RwLock;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use tokio::sync::Notify;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::core::agent::snapshots::SnapshotManager;
@@ -75,6 +75,8 @@ pub struct TurnOutcomeContext<'a> {
     pub checkpoint_manager: Option<&'a SnapshotManager>,
     pub next_checkpoint_turn: &'a mut usize,
     pub session_end_reason: &'a mut crate::hooks::lifecycle::SessionEndReason,
+    pub turn_elapsed: Duration,
+    pub show_turn_timer: bool,
 }
 
 /// Context for turn processing operations

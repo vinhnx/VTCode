@@ -43,17 +43,7 @@ https://github.com/openai/codex/pull/12581
 
 ---
 
----
-
-idea: add timer for task / turns
-
-```
-─ Worked for 1m 30s ─────────────────────────────────────────────────────────────────────────────────────
-```
-
-```
-• Running targeted clippy checks (2m 47s • esc to interrupt) · 1 background terminal running · /ps to vie
-```
+increase pty dimmed background contrast to improve visibility of the terminal output, especially in low-light environments or for users with visual impairments. This enhancement would involve adjusting the color scheme to provide a clearer distinction between the background and the text, making it easier for users to read and interact with the terminal interface effectively. but not too bright to cause eye strain.
 
 ---
 

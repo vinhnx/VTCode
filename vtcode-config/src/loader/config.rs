@@ -522,6 +522,9 @@ allow_tool_ansi = false
 # Number of rows to allocate for inline UI viewport
 inline_viewport_rows = 16
 
+# Show elapsed time divider after each completed turn
+show_turn_timer = true
+
 # Show timeline navigation panel
 show_timeline_pane = false
 
