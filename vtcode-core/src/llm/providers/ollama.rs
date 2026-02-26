@@ -932,6 +932,43 @@ impl LLMProvider for OllamaProvider {
                 .unwrap_or(false)
     }
 
+    async fn count_prompt_tokens_exact(
+        &self,
+        request: &LLMRequest,
+    ) -> Result<Option<u32>, LLMError> {
+        let mut request = request.clone();
+        self.validate_request(&request)?;
+        if request.model.is_empty() {
+            request.model = self.model.clone();
+        }
+
+        let mut payload = self.build_payload(&request, false)?;
+        let options = payload.options.get_or_insert(OllamaChatOptions {
+            temperature: None,
+            num_predict: None,
+        });
+        options.num_predict = Some(0);
+        options.temperature = None;
+
+        let response = self
+            .authorized_post(self.chat_url())
+            .json(&payload)
+            .send()
+            .await
+            .map_err(|e| format_network_error("Ollama", &e))?;
+
+        if !response.status().is_success() {
+            return Ok(None);
+        }
+
+        let parsed = response
+            .json::<OllamaChatResponse>()
+            .await
+            .map_err(|e| format_parse_error("Ollama", &e))?;
+
+        Ok(parsed.prompt_eval_count)
+    }
+
     async fn generate(&self, mut request: LLMRequest) -> Result<LLMResponse, LLMError> {
         self.validate_request(&request)?;
         if request.model.is_empty() {
@@ -1179,6 +1216,8 @@ impl LLMClient for OllamaProvider {
 mod tests {
     use super::*;
     use crate::llm::provider::{ContentPart, Message, MessageContent};
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
 
     fn test_provider() -> OllamaProvider {
         OllamaProvider::from_config(
@@ -1230,5 +1269,68 @@ mod tests {
         let message = &payload.messages[0];
         assert_eq!(message.content.as_deref(), Some("no images"));
         assert!(message.images.is_none());
+    }
+
+    #[tokio::test]
+    async fn exact_count_uses_chat_zero_predict_prompt_eval_count() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/api/chat"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "done": true,
+                "prompt_eval_count": 42,
+                "eval_count": 0,
+                "message": { "role": "assistant", "content": "" }
+            })))
+            .mount(&server)
+            .await;
+
+        let provider = OllamaProvider::new_with_client(
+            String::new(),
+            "test-model".to_string(),
+            reqwest::Client::new(),
+            server.uri(),
+            TimeoutsConfig::default(),
+        );
+
+        let request = LLMRequest {
+            model: "test-model".to_string(),
+            messages: vec![Message::user("hello".to_string())],
+            ..Default::default()
+        };
+
+        let count = <OllamaProvider as LLMProvider>::count_prompt_tokens_exact(&provider, &request)
+            .await
+            .expect("count should succeed");
+        assert_eq!(count, Some(42));
+    }
+
+    #[tokio::test]
+    async fn exact_count_returns_none_when_unavailable() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/api/chat"))
+            .respond_with(ResponseTemplate::new(404))
+            .mount(&server)
+            .await;
+
+        let provider = OllamaProvider::new_with_client(
+            String::new(),
+            "test-model".to_string(),
+            reqwest::Client::new(),
+            server.uri(),
+            TimeoutsConfig::default(),
+        );
+
+        let request = LLMRequest {
+            model: "test-model".to_string(),
+            messages: vec![Message::user("hello".to_string())],
+            ..Default::default()
+        };
+
+        let count = <OllamaProvider as LLMProvider>::count_prompt_tokens_exact(&provider, &request)
+            .await
+            .expect("count should succeed");
+        assert_eq!(count, None);
     }
 }

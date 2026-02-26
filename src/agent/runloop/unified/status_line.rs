@@ -24,9 +24,11 @@ pub(crate) struct InputStatusState {
     pub(crate) last_git_refresh: Option<Instant>,
     pub(crate) command_value: Option<String>,
     pub(crate) last_command_refresh: Option<Instant>,
-    // Context efficiency metrics
+    // Context usage metrics
     pub(crate) context_utilization: Option<f64>,
     pub(crate) context_tokens: Option<usize>,
+    pub(crate) context_limit_tokens: Option<usize>,
+    pub(crate) context_remaining_tokens: Option<usize>,
     #[allow(dead_code)]
     pub(crate) semantic_value_per_token: Option<f64>,
     pub(crate) is_cancelling: bool,
@@ -49,6 +51,36 @@ pub(crate) fn update_context_efficiency(
     state.context_utilization = Some(utilization);
     state.context_tokens = Some(tokens);
     state.semantic_value_per_token = Some(semantic_per_token);
+}
+
+pub(crate) fn update_context_budget(
+    state: &mut InputStatusState,
+    used_tokens: usize,
+    limit_tokens: usize,
+) {
+    if limit_tokens == 0 {
+        state.context_utilization = None;
+        state.context_tokens = None;
+        state.context_limit_tokens = None;
+        state.context_remaining_tokens = None;
+        return;
+    }
+
+    let used = used_tokens.min(limit_tokens);
+    let remaining = limit_tokens.saturating_sub(used);
+    let left_percent = (remaining as f64 / limit_tokens as f64) * 100.0;
+
+    state.context_utilization = Some(left_percent.clamp(0.0, 100.0));
+    state.context_tokens = Some(used);
+    state.context_limit_tokens = Some(limit_tokens);
+    state.context_remaining_tokens = Some(remaining);
+}
+
+pub(crate) fn clear_context_budget(state: &mut InputStatusState) {
+    state.context_utilization = None;
+    state.context_tokens = None;
+    state.context_limit_tokens = None;
+    state.context_remaining_tokens = None;
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -262,7 +294,7 @@ fn build_model_status_right(model: &str, reasoning: &str) -> Option<String> {
 
 /// Build status display with context efficiency metrics
 ///
-/// Format: "model | 12.5K tokens | 65% context"
+/// Format: "model | 65% context left"
 #[allow(dead_code)]
 pub(crate) fn build_model_status_with_context(
     model: &str,
@@ -303,21 +335,10 @@ pub(crate) fn build_model_status_with_context_and_spooled(
 
     parts.push(model.to_string());
 
-    if let Some(tokens) = total_tokens {
-        let formatted = if tokens >= 1_000_000 {
-            format!("{:.1}M", tokens as f64 / 1_000_000.0)
-        } else if tokens >= 1_000 {
-            format!("{:.1}K", tokens as f64 / 1_000.0)
-        } else {
-            tokens.to_string()
-        };
-        parts.push(format!("{} tokens", formatted));
-    }
-
-    if let Some(util) = context_utilization
-        && util > 0.0
+    if total_tokens.is_some()
+        && let Some(util) = context_utilization
     {
-        parts.push(format!("{:.0}% context", util.min(100.0)));
+        parts.push(format!("{:.0}% context left", util.clamp(0.0, 100.0)));
     }
 
     // Show spooled files indicator when files have been spooled
@@ -342,6 +363,57 @@ pub(crate) fn build_model_status_with_context_and_spooled(
     }
 
     Some(parts.join(" | "))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::build_model_status_with_context_and_spooled;
+
+    #[test]
+    fn status_line_shows_context_left_percent() {
+        let status = build_model_status_with_context_and_spooled(
+            "gemini-3-flash-preview",
+            "low",
+            Some(17.0),
+            Some(83_000),
+            false,
+            None,
+            None,
+            false,
+        );
+
+        assert_eq!(
+            status.as_deref(),
+            Some("gemini-3-flash-preview | 17% context left | (low)")
+        );
+    }
+
+    #[test]
+    fn status_line_clamps_context_left_percent() {
+        let high = build_model_status_with_context_and_spooled(
+            "model",
+            "",
+            Some(150.0),
+            Some(1_000),
+            false,
+            None,
+            None,
+            false,
+        );
+        let low = build_model_status_with_context_and_spooled(
+            "model",
+            "",
+            Some(-10.0),
+            Some(1_000),
+            false,
+            None,
+            None,
+            false,
+        );
+
+        assert_eq!(high.as_deref(), Some("model | 100% context left"));
+        assert_eq!(low.as_deref(), Some("model | 0% context left"));
+    }
 }
 
 /// Update spooled files count in status state

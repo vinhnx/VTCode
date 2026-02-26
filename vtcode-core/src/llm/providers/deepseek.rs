@@ -18,9 +18,10 @@ use serde_json::{Map, Value};
 
 use super::{
     common::{
-        extract_prompt_cache_settings, map_finish_reason_common, override_base_url,
-        parse_response_openai_format, resolve_model, serialize_messages_openai_format,
-        serialize_tools_openai_format, validate_request_common,
+        execute_token_count_request, extract_prompt_cache_settings, map_finish_reason_common,
+        override_base_url, parse_prompt_tokens_from_count_response, parse_response_openai_format,
+        resolve_model, serialize_messages_openai_format, serialize_tools_openai_format,
+        strip_generation_controls_for_token_count, validate_request_common,
     },
     error_handling::handle_openai_http_error,
     extract_reasoning_trace,
@@ -249,6 +250,36 @@ impl LLMProvider for DeepSeekProvider {
             .unwrap_or(false)
     }
 
+    async fn count_prompt_tokens_exact(
+        &self,
+        request: &LLMRequest,
+    ) -> Result<Option<u32>, LLMError> {
+        let mut request = request.clone();
+        if request.model.trim().is_empty() {
+            request.model = self.model.clone();
+        }
+
+        let mut payload = self.convert_to_deepseek_format(&request)?;
+        strip_generation_controls_for_token_count(&mut payload);
+
+        let url = format!(
+            "{}/responses/input_tokens",
+            self.base_url.trim_end_matches('/')
+        );
+        let response_json = execute_token_count_request(
+            self.http_client.post(&url).bearer_auth(&self.api_key),
+            &payload,
+            PROVIDER_NAME,
+        )
+        .await?;
+
+        let Some(response_json) = response_json else {
+            return Ok(None);
+        };
+
+        Ok(parse_prompt_tokens_from_count_response(&response_json))
+    }
+
     async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
         let mut request = request;
         if request.model.trim().is_empty() {
@@ -442,5 +473,105 @@ impl LLMClient for DeepSeekProvider {
 
     fn model_id(&self) -> &str {
         &self.model
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::DeepSeekProvider;
+    use crate::config::TimeoutsConfig;
+    use crate::config::constants::models;
+    use crate::llm::provider::{LLMProvider, LLMRequest, Message};
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    fn sample_request(model: &str) -> LLMRequest {
+        LLMRequest {
+            model: model.to_string(),
+            messages: vec![Message::user("hello".to_string())],
+            ..Default::default()
+        }
+    }
+
+    #[tokio::test]
+    async fn exact_count_uses_deepseek_input_tokens_endpoint() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/v1/responses/input_tokens"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "input_tokens": 201
+            })))
+            .mount(&server)
+            .await;
+
+        let provider = DeepSeekProvider::new_with_client(
+            "test-key".to_string(),
+            models::deepseek::DEFAULT_MODEL.to_string(),
+            reqwest::Client::new(),
+            format!("{}/v1", server.uri()),
+            TimeoutsConfig::default(),
+        );
+
+        let count = <DeepSeekProvider as LLMProvider>::count_prompt_tokens_exact(
+            &provider,
+            &sample_request(models::deepseek::DEFAULT_MODEL),
+        )
+        .await
+        .expect("count should succeed");
+        assert_eq!(count, Some(201));
+    }
+
+    #[tokio::test]
+    async fn exact_count_accepts_prompt_tokens_shape() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/v1/responses/input_tokens"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "prompt_tokens": 66
+            })))
+            .mount(&server)
+            .await;
+
+        let provider = DeepSeekProvider::new_with_client(
+            "test-key".to_string(),
+            models::deepseek::DEFAULT_MODEL.to_string(),
+            reqwest::Client::new(),
+            format!("{}/v1", server.uri()),
+            TimeoutsConfig::default(),
+        );
+
+        let count = <DeepSeekProvider as LLMProvider>::count_prompt_tokens_exact(
+            &provider,
+            &sample_request(models::deepseek::DEFAULT_MODEL),
+        )
+        .await
+        .expect("count should succeed");
+        assert_eq!(count, Some(66));
+    }
+
+    #[tokio::test]
+    async fn exact_count_returns_none_when_unavailable() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/v1/responses/input_tokens"))
+            .respond_with(ResponseTemplate::new(404))
+            .mount(&server)
+            .await;
+
+        let provider = DeepSeekProvider::new_with_client(
+            "test-key".to_string(),
+            models::deepseek::DEFAULT_MODEL.to_string(),
+            reqwest::Client::new(),
+            format!("{}/v1", server.uri()),
+            TimeoutsConfig::default(),
+        );
+
+        let count = <DeepSeekProvider as LLMProvider>::count_prompt_tokens_exact(
+            &provider,
+            &sample_request(models::deepseek::DEFAULT_MODEL),
+        )
+        .await
+        .expect("count should succeed");
+        assert_eq!(count, None);
     }
 }

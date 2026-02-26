@@ -555,6 +555,80 @@ pub fn parse_usage_openai_format(
         })
 }
 
+/// Remove generation-tuning fields for token-count estimation requests.
+#[inline]
+pub fn strip_generation_controls_for_token_count(payload: &mut Value) {
+    if let Some(object) = payload.as_object_mut() {
+        object.remove("stream");
+        object.remove("temperature");
+        object.remove("top_p");
+        object.remove("top_k");
+        object.remove("max_output_tokens");
+        object.remove("max_tokens");
+        object.remove("reasoning");
+        object.remove("reasoning_effort");
+    }
+}
+
+/// Parse prompt token count from common count-response shapes across providers.
+#[inline]
+pub fn parse_prompt_tokens_from_count_response(value: &Value) -> Option<u32> {
+    value
+        .get("input_tokens")
+        .and_then(Value::as_u64)
+        .or_else(|| {
+            value
+                .get("usage")
+                .and_then(|usage| usage.get("input_tokens"))
+                .and_then(Value::as_u64)
+        })
+        .or_else(|| value.get("prompt_tokens").and_then(Value::as_u64))
+        .or_else(|| {
+            value
+                .get("usage")
+                .and_then(|usage| usage.get("prompt_tokens"))
+                .and_then(Value::as_u64)
+        })
+        .and_then(|raw| u32::try_from(raw).ok())
+}
+
+/// Execute a token-count request and return parsed JSON on success.
+/// Returns `Ok(None)` for non-success HTTP status so callers can treat unsupported
+/// endpoints as "exact counting unavailable" without raising provider errors.
+pub async fn execute_token_count_request(
+    builder: reqwest::RequestBuilder,
+    payload: &Value,
+    provider_name: &str,
+) -> Result<Option<Value>, LLMError> {
+    let response = builder.json(payload).send().await.map_err(|e| {
+        let formatted_error = error_display::format_llm_error(
+            provider_name,
+            &format!("Token count network error: {}", e),
+        );
+        LLMError::Network {
+            message: formatted_error,
+            metadata: None,
+        }
+    })?;
+
+    if !response.status().is_success() {
+        return Ok(None);
+    }
+
+    let value = response.json().await.map_err(|e| {
+        let formatted_error = error_display::format_llm_error(
+            provider_name,
+            &format!("Failed to parse token count response: {}", e),
+        );
+        LLMError::Provider {
+            message: formatted_error,
+            metadata: None,
+        }
+    })?;
+
+    Ok(Some(value))
+}
+
 /// Parses OpenAI-compatible response format.
 /// Used by DeepSeek, Moonshot, and other OpenAI-compatible providers.
 ///

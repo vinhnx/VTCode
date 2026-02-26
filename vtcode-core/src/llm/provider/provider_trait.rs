@@ -110,6 +110,16 @@ pub trait LLMProvider: Send + Sync {
     /// Generate completion
     async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError>;
 
+    /// Count prompt tokens exactly using a provider-native endpoint when available.
+    ///
+    /// Returns `Ok(None)` when the provider does not expose an exact counting API.
+    async fn count_prompt_tokens_exact(
+        &self,
+        _request: &LLMRequest,
+    ) -> Result<Option<u32>, LLMError> {
+        Ok(None)
+    }
+
     /// Stream completion (optional)
     async fn stream(&self, request: LLMRequest) -> Result<LLMStream, LLMError> {
         // Default implementation falls back to non-streaming

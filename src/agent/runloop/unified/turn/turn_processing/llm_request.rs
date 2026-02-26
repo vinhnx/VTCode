@@ -388,11 +388,30 @@ pub(crate) async fn execute_llm_request(
         prompt_cache_key,
         ..Default::default()
     };
-    let action_suggestion = extract_action_from_messages(ctx.working_history);
-
     if let Err(err) = ctx.provider_client.as_ref().validate_request(&request) {
         return Err(anyhow::Error::new(err));
     }
+
+    match ctx
+        .provider_client
+        .count_prompt_tokens_exact(&request)
+        .await
+    {
+        Ok(Some(exact_prompt_tokens)) => {
+            ctx.context_manager
+                .set_pending_exact_prompt_token_count(exact_prompt_tokens as usize);
+        }
+        Ok(None) => {}
+        Err(error) => {
+            tracing::warn!(
+                provider = %provider_name,
+                model = %active_model,
+                error = %error,
+                "Exact prompt token counting unavailable for this request"
+            );
+        }
+    }
+    let action_suggestion = extract_action_from_messages(ctx.working_history);
 
     const MAX_RETRIES: usize = 3;
     let mut llm_result = Err(anyhow::anyhow!("LLM request failed to execute"));

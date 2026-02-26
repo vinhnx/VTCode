@@ -3,6 +3,10 @@ use crate::llm::error_display;
 use crate::llm::provider::{
     LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent,
 };
+use crate::llm::providers::common::{
+    execute_token_count_request, parse_prompt_tokens_from_count_response,
+    strip_generation_controls_for_token_count,
+};
 use crate::llm::providers::error_handling::{format_network_error, format_parse_error};
 
 use async_stream::try_stream;
@@ -39,6 +43,35 @@ impl LLMProvider for OpenRouterProvider {
     fn supports_tools(&self, model: &str) -> bool {
         use crate::config::constants::models;
         !models::openrouter::TOOL_UNAVAILABLE_MODELS.contains(&model)
+    }
+
+    async fn count_prompt_tokens_exact(
+        &self,
+        request: &LLMRequest,
+    ) -> Result<Option<u32>, LLMError> {
+        let mut payload = self.convert_to_openrouter_format(request)?;
+        strip_generation_controls_for_token_count(&mut payload);
+
+        let url = format!(
+            "{}/responses/input_tokens",
+            self.base_url.trim_end_matches('/')
+        );
+        let value = execute_token_count_request(
+            self.http_client
+                .post(&url)
+                .header("Authorization", format!("Bearer {}", self.api_key))
+                .header("HTTP-Referer", "https://vtcode.dev")
+                .header("X-Title", "VT Code"),
+            &payload,
+            "OpenRouter",
+        )
+        .await?;
+
+        let Some(value) = value else {
+            return Ok(None);
+        };
+
+        Ok(parse_prompt_tokens_from_count_response(&value))
     }
 
     async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {

@@ -838,7 +838,7 @@ interleaved_thinking_beta = "interleaved-thinking-2025-05-14"
 interleaved_thinking_budget_tokens = 31999
 interleaved_thinking_type_enabled = "enabled"
 effort = "low"
-count_tokens_enabled = false
+count_tokens_enabled = true
 
 [provider.anthropic.tool_search]
 enabled = false

@@ -47,17 +47,6 @@ increase pty dimmed background contrast to improve visibility of the terminal ou
 
 ---
 
-add context calculation logic and display at bottom status bar, showing how many tokens are currently in context and how many are left before reaching the model's limit. This would help users manage their prompts and tool calls more effectively, ensuring they stay within the token limits of the LLM and avoid unexpected truncation or errors due to exceeding context size.
-
-suggested display format:
-
-```
-
-> Continue, or @files, /commands, Shift+Tab: cycle modes, Control+C: cancel task, tab: queue messages
-
-Ghostty main*                                                              gemini-3-flash-preview | (low) | 17% context left
-```
-
 ---
 
 The TUI picked up new convenience commands: /copy copies the latest complete assistant reply, while /clear and Ctrl-L clear the screen without losing thread context, with /clear also able to start a fresh chat. (#12444, #12520, #12613, #12628)

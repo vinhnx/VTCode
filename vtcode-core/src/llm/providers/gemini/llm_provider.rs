@@ -45,6 +45,50 @@ impl LLMProvider for GeminiProvider {
         }
     }
 
+    async fn count_prompt_tokens_exact(
+        &self,
+        request: &LLMRequest,
+    ) -> Result<Option<u32>, LLMError> {
+        let gemini_request = self.convert_to_gemini_request(request)?;
+        let mut payload =
+            serde_json::to_value(&gemini_request).map_err(|e| LLMError::Provider {
+                message: error_display::format_llm_error(
+                    "Gemini",
+                    &format!("Failed to serialize countTokens request: {}", e),
+                ),
+                metadata: None,
+            })?;
+
+        if let Some(object) = payload.as_object_mut() {
+            object.remove("generationConfig");
+        }
+
+        let url = format!("{}/models/{}:countTokens", self.base_url, request.model);
+        let response = self
+            .http_client
+            .post(&url)
+            .header("x-goog-api-key", self.api_key.as_ref())
+            .json(&payload)
+            .send()
+            .await
+            .map_err(|e| format_network_error("Gemini", &e))?;
+
+        if !response.status().is_success() {
+            return Ok(None);
+        }
+
+        let value: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|e| format_parse_error("Gemini", &e))?;
+        let total = value
+            .get("totalTokens")
+            .and_then(|v| v.as_u64())
+            .and_then(|v| u32::try_from(v).ok());
+
+        Ok(total)
+    }
+
     async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
         let model = request.model.clone();
         let gemini_request = self.convert_to_gemini_request(&request)?;
