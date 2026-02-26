@@ -20,33 +20,6 @@ also consider open sourcing the tui modules as a standalone library for other pr
 
 ---
 
-I see the problem now. The codebase has two separate ModelId enums:
-
-     1. `vtcode-config/src/models/model_id.rs` - Used by vtcode-config crate
-     2. `vtcode-core/src/config/models/model_id/definition.rs` - Used by
-        vtcode-core crate
-
-    These are NOT unified - they're completely separate enums that need to be
-    kept in sync manually. This is indeed a design issue, but it's the current
-    architecture.
-
-    I've already added GPT53Codex to both enums:
-     - ✅ vtcode-config/src/models/model_id.rs (line 41)
-     - ✅ vtcode-core/src/config/models/model_id/definition.rs (line 22)
-
-    And all the corresponding implementations in both crates. The build
-    succeeded, which means both enums are now in sync.
-
-    Why this architecture exists:
-     - vtcode-config handles configuration, constants, and model metadata
-     - vtcode-core handles the core agent logic, LLM providers, and runtime
-       behavior
-     - They're separate crates that can be used independently
-
-    The proper fix would be to have vtcode-core re-export ModelId from
-    vtcode-config, but that would be a larger refactoring. For now, both enums
-    have been updated with GPT53Codex.
-
 ---
 
 Shell integration: respects $SHELL environment variable and supports the ! prefix for direct shell execution.
@@ -116,3 +89,101 @@ suggested display format:
 
 Ghostty main*                                                              gemini-3-flash-preview | (low) | 17% context left
 ```
+
+---
+
+# Unify ModelId/Provider on vtcode-config and add hard regression gates
+
+## Summary
+
+Unify vtcode-core to use vtcode-config’s ModelId, Provider, and ModelParseError as the single source
+of truth, while preserving current vtcode-core runtime behavior. Remove duplicated model/provider
+definitions from vtcode-core, port core-only helper APIs into vtcode-config, and add CI-failing tests
+to prevent future drift/regressions.
+
+## Implementation Plan
+
+1. Baseline and lock current behavior in tests.
+
+- Add/adjust tests that explicitly cover current vtcode-core defaults and helper behavior (especially
+  provider defaults and reasoning/tool helper methods).
+- Add explicit tests for known drifted models: MoonshotMinimaxM25, MoonshotQwen3CoderNext,
+  OpenRouterMinimaxM25, and GPT53Codex.
+
+2. Port core-only ModelId APIs into vtcode-config.
+
+- Add to vtcode-config/src/models/model_id/\*:
+    - default_model()
+    - non_reasoning_variant()
+    - is_gpt51_variant()
+    - supports_apply_patch_tool()
+    - supports_shell_tool()
+- Keep method signatures compatible with current vtcode-core callers.
+- Preserve existing OpenRouter metadata behavior and docsrs guards.
+
+3. Port core-only Provider APIs into vtcode-config.
+
+- Add to vtcode-config/src/models/provider.rs:
+    - is_dynamic()
+    - is_local()
+    - local_install_instructions()
+- Preserve current vtcode-core semantics for these methods.
+
+4. Align vtcode-config behavior to current vtcode-core behavior where they differ.
+
+- Update defaults/order/selection logic in vtcode-config to match current vtcode-core runtime
+  behavior (per your decision).
+- Keep bug-fix improvements from config superset (Moonshot/OpenRouter coverage), not old drifted
+  omissions.
+
+5. Rewire vtcode-core config model module to re-export shared types.
+
+- In vtcode-core/src/config/models.rs, replace local model/provider/error module wiring with re-
+  exports from vtcode_config::models.
+- Keep public path stability (crate::config::models::{ModelId, Provider, ModelParseError} remains
+  valid).
+
+6. Remove now-redundant duplicated files from vtcode-core.
+
+- Delete/retire duplicated enum/parser/provider/catalog/capability modules no longer needed after re-
+  export.
+- Keep only genuinely core-specific logic that cannot live in vtcode-config (if any remains after
+  step 2/3).
+
+7. Add hard CI gates for regression prevention.
+
+- Add a vtcode-core test proving shared-type identity via behavior (parse/format/default/provider
+  (as_str, from_str, provider, defaults, capability helpers).
+
+8. Validate end-to-end.
+    - cargo clippy
+
+- vtcode-core::config::models::Provider becomes a re-export of vtcode_config::models::Provider.
+- vtcode-core::config::models::ModelParseError becomes a re-export of
+  vtcode_config::models::ModelParseError.
+- vtcode-config gains additional helper methods previously only present in vtcode-core (ModelId and
+  Provider methods listed above).
+
+## Test Cases and Scenarios
+
+- Parsing roundtrip:
+    - GPT53Codex, Moonshot models, OpenRouter minimax/minimax-m2.5.
+- Provider mapping:
+    - Every newly covered model returns expected provider.
+- Defaults invariants:
+    - default_orchestrator_for_provider, default_subagent_for_provider, default_single_for_provider
+      match preserved vtcode-core behavior.
+- Capability invariants:
+    - supports_reasoning_effort, supports_tool_calls, non_reasoning_variant,
+      supports_apply_patch_tool, supports_shell_tool.
+- Re-export stability:
+    - Existing vtcode-core call sites compile without local enum/provider definitions.
+
+## Assumptions and Chosen Defaults
+
+- Chosen scope: full unification (single source of truth in vtcode-config).
+- Guardrail strictness: hard CI gate (failing tests on regressions).
+- Canonical behavior policy: preserve current vtcode-core runtime behavior, and align vtcode-config
+  accordingly.
+- Drift bug fix is included: missing Moonshot/OpenRouter variants in core behavior are treated as
+  defects and corrected via unification.
