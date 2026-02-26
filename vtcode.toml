@@ -20,7 +20,7 @@ default_model = "gemini-3-flash-preview"
 #   default_model = "zai-org/GLM-5:novita"
 
 # Visual theme for the terminal interface
-theme = "ciapre-dark"
+theme = "mono"
 
 # Temperature for main LLM responses (0.0-1.0)
 # Lower values = more deterministic, higher values = more creative
@@ -147,6 +147,7 @@ minimum_contrast = 4.5
 bold_is_bright = false
 safe_colors_only = false
 color_scheme_mode = "auto"
+show_turn_timer = true
 
 [agent.circuit_breaker]
 enabled = true

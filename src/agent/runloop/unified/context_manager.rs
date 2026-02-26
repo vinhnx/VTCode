@@ -37,6 +37,10 @@ struct ContextStats {
     last_total_tokens: usize,
     /// Cumulative completion tokens, retained for diagnostics only.
     completion_tokens_cumulative: usize,
+    /// Whether current token usage comes from exact provider-reported usage.
+    has_exact_prompt_usage: bool,
+    /// Exact prompt token count from provider-native count endpoint for in-flight request.
+    pending_exact_prompt_tokens: Option<usize>,
 }
 
 /// Token budget status for proactive context management
@@ -90,6 +94,10 @@ impl ContextManager {
         _history: &[uni::Message],
         context_window_size: usize,
     ) -> PreRequestAction {
+        if !self.cached_stats.has_exact_prompt_usage {
+            return PreRequestAction::Proceed;
+        }
+
         let usage_ratio = if context_window_size == 0 {
             0.0
         } else {
@@ -131,7 +139,6 @@ impl ContextManager {
     /// We prioritize prompt-side pressure as the compaction signal:
     /// - `prompt_tokens` when available
     /// - fallback to `total_tokens - completion_tokens`
-    /// - final fallback to cumulative completion growth
     pub(crate) fn update_token_usage(&mut self, usage: &Option<uni::Usage>) {
         if let Some(usage) = usage {
             let prompt_tokens = usage.prompt_tokens as usize;
@@ -156,7 +163,21 @@ impl ContextManager {
 
             self.cached_stats.last_prompt_tokens = estimated_prompt_pressure;
             self.cached_stats.total_token_usage = estimated_prompt_pressure;
+            self.cached_stats.has_exact_prompt_usage = true;
+            self.cached_stats.pending_exact_prompt_tokens = None;
+        } else if let Some(exact_prompt_tokens) =
+            self.cached_stats.pending_exact_prompt_tokens.take()
+        {
+            self.cached_stats.last_prompt_tokens = exact_prompt_tokens;
+            self.cached_stats.total_token_usage = exact_prompt_tokens;
+            self.cached_stats.has_exact_prompt_usage = true;
+        } else {
+            self.cached_stats.has_exact_prompt_usage = false;
         }
+    }
+
+    pub(crate) fn set_pending_exact_prompt_token_count(&mut self, exact_prompt_tokens: usize) {
+        self.cached_stats.pending_exact_prompt_tokens = Some(exact_prompt_tokens);
     }
 
     /// Validate that ContextManager token tracking matches provider-reported usage
@@ -207,7 +228,7 @@ impl ContextManager {
     /// Compute usage ratio once, avoiding repeated division
     #[inline]
     fn usage_ratio(&self, context_window_size: usize) -> f64 {
-        if context_window_size == 0 {
+        if !self.cached_stats.has_exact_prompt_usage || context_window_size == 0 {
             0.0
         } else {
             self.cached_stats.total_token_usage as f64 / context_window_size as f64
@@ -265,6 +286,14 @@ impl ContextManager {
         self.cached_stats.total_token_usage
     }
 
+    pub(crate) fn current_exact_token_usage(&self) -> Option<usize> {
+        if self.cached_stats.has_exact_prompt_usage {
+            Some(self.cached_stats.total_token_usage)
+        } else {
+            None
+        }
+    }
+
     pub(crate) async fn build_system_prompt(
         &mut self,
         attempt_history: &[uni::Message],
@@ -316,7 +345,7 @@ impl ContextManager {
             discovered_skills: self.loaded_skills.read().await.values().cloned().collect(),
             context_window_size: params.context_window_size,
             current_token_usage: if supports_context_awareness {
-                Some(self.cached_stats.total_token_usage)
+                self.current_exact_token_usage()
             } else {
                 None
             },

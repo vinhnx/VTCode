@@ -16,8 +16,9 @@ use reqwest::Client as HttpClient;
 use serde_json::{Map, Value};
 
 use super::common::{
-    map_finish_reason_common, parse_response_openai_format, resolve_model,
-    serialize_messages_openai_format, serialize_tools_openai_format, validate_request_common,
+    execute_token_count_request, map_finish_reason_common, parse_prompt_tokens_from_count_response,
+    parse_response_openai_format, resolve_model, serialize_messages_openai_format,
+    serialize_tools_openai_format, validate_request_common,
 };
 use super::error_handling::handle_openai_http_error;
 
@@ -268,6 +269,50 @@ impl LLMProvider for ZAIProvider {
                 .unwrap_or(false)
     }
 
+    async fn count_prompt_tokens_exact(
+        &self,
+        request: &LLMRequest,
+    ) -> Result<Option<u32>, LLMError> {
+        // Z.AI tokenizer endpoint documents model + messages payload.
+        // If tools are present, we cannot guarantee exact full-prompt accounting.
+        if request
+            .tools
+            .as_ref()
+            .is_some_and(|tools| !tools.is_empty())
+        {
+            return Ok(None);
+        }
+
+        let model = if request.model.trim().is_empty() {
+            self.model.clone()
+        } else {
+            request.model.clone()
+        };
+        let normalized_model = normalize_model_id(&model);
+        let messages = serialize_messages_openai_format(request, PROVIDER_KEY)?;
+        let payload = serde_json::json!({
+            "model": normalized_model,
+            "messages": messages
+        });
+
+        let url = format!("{}/tokenizer", self.base_url.trim_end_matches('/'));
+        let response_json = execute_token_count_request(
+            self.http_client
+                .post(&url)
+                .bearer_auth(&self.api_key)
+                .header("Accept-Language", "en-US,en"),
+            &payload,
+            PROVIDER_NAME,
+        )
+        .await?;
+
+        let Some(response_json) = response_json else {
+            return Ok(None);
+        };
+
+        Ok(parse_prompt_tokens_from_count_response(&response_json))
+    }
+
     async fn generate(&self, mut request: LLMRequest) -> Result<LLMResponse, LLMError> {
         if request.model.trim().is_empty() {
             request.model = self.model.clone();
@@ -503,6 +548,8 @@ mod tests {
     use crate::config::types::ReasoningEffortLevel;
     use crate::llm::provider::{LLMRequest, Message, ToolChoice, ToolDefinition};
     use std::sync::Arc;
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
 
     #[test]
     fn normalizes_legacy_glm5_model_id() {
@@ -885,5 +932,99 @@ mod tests {
                 .and_then(|v| v.as_str()),
             Some("disabled")
         );
+    }
+
+    #[tokio::test]
+    async fn exact_count_uses_zai_tokenizer_endpoint() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/v4/tokenizer"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "usage": {
+                    "prompt_tokens": 73
+                }
+            })))
+            .mount(&server)
+            .await;
+
+        let provider = ZAIProvider::new_with_client(
+            "test-key".to_string(),
+            models::zai::GLM_5.to_string(),
+            reqwest::Client::new(),
+            format!("{}/v4", server.uri()),
+            crate::config::TimeoutsConfig::default(),
+        );
+
+        let request = LLMRequest {
+            model: models::zai::GLM_5.to_string(),
+            messages: vec![Message::user("hello".to_string())],
+            ..Default::default()
+        };
+
+        let count = <ZAIProvider as crate::llm::provider::LLMProvider>::count_prompt_tokens_exact(
+            &provider, &request,
+        )
+        .await
+        .expect("count should succeed");
+        assert_eq!(count, Some(73));
+    }
+
+    #[tokio::test]
+    async fn exact_count_returns_none_when_tokenizer_unavailable() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/v4/tokenizer"))
+            .respond_with(ResponseTemplate::new(404))
+            .mount(&server)
+            .await;
+
+        let provider = ZAIProvider::new_with_client(
+            "test-key".to_string(),
+            models::zai::GLM_5.to_string(),
+            reqwest::Client::new(),
+            format!("{}/v4", server.uri()),
+            crate::config::TimeoutsConfig::default(),
+        );
+
+        let request = LLMRequest {
+            model: models::zai::GLM_5.to_string(),
+            messages: vec![Message::user("hello".to_string())],
+            ..Default::default()
+        };
+
+        let count = <ZAIProvider as crate::llm::provider::LLMProvider>::count_prompt_tokens_exact(
+            &provider, &request,
+        )
+        .await
+        .expect("count should succeed");
+        assert_eq!(count, None);
+    }
+
+    #[tokio::test]
+    async fn exact_count_returns_none_when_tools_present() {
+        let provider = ZAIProvider::new("test-key".to_string());
+        let request = LLMRequest {
+            model: models::zai::GLM_5.to_string(),
+            messages: vec![Message::user("hello".to_string())],
+            tools: Some(Arc::new(vec![ToolDefinition::function(
+                "get_weather".to_string(),
+                "Get weather".to_string(),
+                serde_json::json!({
+                    "type": "object",
+                    "properties": {
+                        "location": {"type": "string"}
+                    },
+                    "required": ["location"]
+                }),
+            )])),
+            ..Default::default()
+        };
+
+        let count = <ZAIProvider as crate::llm::provider::LLMProvider>::count_prompt_tokens_exact(
+            &provider, &request,
+        )
+        .await
+        .expect("count should succeed");
+        assert_eq!(count, None);
     }
 }

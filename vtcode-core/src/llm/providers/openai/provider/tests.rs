@@ -600,3 +600,89 @@ mod caching_tests {
         assert!(json.get("prompt_cache_retention").is_none());
     }
 }
+
+mod exact_count_tests {
+    use super::*;
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    #[tokio::test]
+    async fn exact_count_uses_openai_input_tokens_endpoint() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/v1/responses/input_tokens"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "input_tokens": 321
+            })))
+            .mount(&server)
+            .await;
+
+        let provider = OpenAIProvider::new_with_client(
+            "test-key".to_owned(),
+            models::openai::GPT_5_2.to_owned(),
+            reqwest::Client::new(),
+            format!("{}/v1", server.uri()),
+            crate::config::TimeoutsConfig::default(),
+        );
+        let request = sample_request(models::openai::GPT_5_2);
+
+        let count = <OpenAIProvider as provider::LLMProvider>::count_prompt_tokens_exact(
+            &provider, &request,
+        )
+        .await
+        .expect("count should succeed");
+
+        assert_eq!(count, Some(321));
+    }
+
+    #[tokio::test]
+    async fn exact_count_accepts_usage_input_tokens_shape() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/v1/responses/input_tokens"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "usage": {"input_tokens": 77}
+            })))
+            .mount(&server)
+            .await;
+
+        let provider = OpenAIProvider::new_with_client(
+            "test-key".to_owned(),
+            models::openai::GPT_5_2.to_owned(),
+            reqwest::Client::new(),
+            format!("{}/v1", server.uri()),
+            crate::config::TimeoutsConfig::default(),
+        );
+        let request = sample_request(models::openai::GPT_5_2);
+
+        let count = <OpenAIProvider as provider::LLMProvider>::count_prompt_tokens_exact(
+            &provider, &request,
+        )
+        .await
+        .expect("count should succeed");
+
+        assert_eq!(count, Some(77));
+    }
+
+    #[tokio::test]
+    async fn exact_count_returns_none_for_non_native_openai_base_url() {
+        let provider = OpenAIProvider::from_config(
+            Some("key".to_owned()),
+            Some(models::openai::GPT_5_2.to_owned()),
+            Some("https://example.local/v1".to_owned()),
+            None,
+            None,
+            None,
+            None,
+        );
+        let request = sample_request(models::openai::GPT_5_2);
+
+        let count = <OpenAIProvider as provider::LLMProvider>::count_prompt_tokens_exact(
+            &provider, &request,
+        )
+        .await
+        .expect("count should succeed");
+
+        assert_eq!(count, None);
+    }
+}

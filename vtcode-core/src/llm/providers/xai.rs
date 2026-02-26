@@ -16,8 +16,10 @@ use reqwest::Client as HttpClient;
 use serde_json::{Map, Value};
 
 use super::common::{
-    map_finish_reason_common, override_base_url, parse_response_openai_format, resolve_model,
-    serialize_messages_openai_format, serialize_tools_openai_format, validate_request_common,
+    execute_token_count_request, map_finish_reason_common, override_base_url,
+    parse_prompt_tokens_from_count_response, parse_response_openai_format, resolve_model,
+    serialize_messages_openai_format, serialize_tools_openai_format,
+    strip_generation_controls_for_token_count, validate_request_common,
 };
 use super::error_handling::handle_openai_http_error;
 
@@ -171,6 +173,36 @@ impl LLMProvider for XAIProvider {
             .as_ref()
             .and_then(|b| b.model_supports_reasoning_effort)
             .unwrap_or(false)
+    }
+
+    async fn count_prompt_tokens_exact(
+        &self,
+        request: &LLMRequest,
+    ) -> Result<Option<u32>, LLMError> {
+        let mut request = request.clone();
+        if request.model.trim().is_empty() {
+            request.model = self.model.clone();
+        }
+
+        let mut payload = self.convert_to_xai_format(&request)?;
+        strip_generation_controls_for_token_count(&mut payload);
+
+        let url = format!(
+            "{}/responses/input_tokens",
+            self.base_url.trim_end_matches('/')
+        );
+        let response_json = execute_token_count_request(
+            self.http_client.post(&url).bearer_auth(&self.api_key),
+            &payload,
+            PROVIDER_NAME,
+        )
+        .await?;
+
+        let Some(response_json) = response_json else {
+            return Ok(None);
+        };
+
+        Ok(parse_prompt_tokens_from_count_response(&response_json))
     }
 
     async fn generate(&self, mut request: LLMRequest) -> Result<LLMResponse, LLMError> {

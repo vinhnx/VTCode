@@ -255,6 +255,7 @@ fn test_update_token_usage_prefers_prompt_pressure() {
         cache_read_tokens: None,
     }));
     assert_eq!(manager.current_token_usage(), 1000);
+    assert_eq!(manager.current_exact_token_usage(), Some(1000));
 
     // Update with second response: usage tracks latest prompt pressure, not cumulative output.
     manager.update_token_usage(&Some(uni::Usage {
@@ -266,6 +267,7 @@ fn test_update_token_usage_prefers_prompt_pressure() {
         cache_read_tokens: None,
     }));
     assert_eq!(manager.current_token_usage(), 2500);
+    assert_eq!(manager.current_exact_token_usage(), Some(2500));
 }
 
 #[test]
@@ -288,4 +290,31 @@ fn test_update_token_usage_falls_back_when_prompt_missing() {
 
     // Fallback estimate = total - completion.
     assert_eq!(manager.current_token_usage(), 2500);
+}
+
+#[test]
+fn test_update_token_usage_without_usage_is_not_exact() {
+    let mut manager = ContextManager::new(
+        "sys".into(),
+        (),
+        Arc::new(RwLock::new(HashMap::new())),
+        None,
+    );
+
+    manager.update_token_usage(&None);
+    assert_eq!(manager.current_exact_token_usage(), None);
+}
+
+#[test]
+fn test_update_token_usage_uses_pending_exact_count_when_usage_missing() {
+    let mut manager = ContextManager::new(
+        "sys".into(),
+        (),
+        Arc::new(RwLock::new(HashMap::new())),
+        None,
+    );
+
+    manager.set_pending_exact_prompt_token_count(4096);
+    manager.update_token_usage(&None);
+    assert_eq!(manager.current_exact_token_usage(), Some(4096));
 }

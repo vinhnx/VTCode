@@ -169,3 +169,102 @@ fn parse_usage_value_includes_cache_metrics() {
     assert_eq!(usage.cache_read_tokens, Some(90));
     assert_eq!(usage.cache_creation_tokens, Some(15));
 }
+
+mod exact_count_tests {
+    use super::*;
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    fn sample_request(model: &str) -> LLMRequest {
+        LLMRequest {
+            messages: vec![Message::user("hello".to_string())],
+            model: model.to_string(),
+            ..Default::default()
+        }
+    }
+
+    #[tokio::test]
+    async fn exact_count_uses_openrouter_input_tokens_endpoint() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/v1/responses/input_tokens"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "input_tokens": 111
+            })))
+            .mount(&server)
+            .await;
+
+        let provider = OpenRouterProvider::new_with_client(
+            "key".to_string(),
+            models::openrouter::DEFAULT_MODEL.to_string(),
+            reqwest::Client::new(),
+            format!("{}/v1", server.uri()),
+            crate::config::TimeoutsConfig::default(),
+        );
+
+        let count = <OpenRouterProvider as LLMProvider>::count_prompt_tokens_exact(
+            &provider,
+            &sample_request(models::openrouter::DEFAULT_MODEL),
+        )
+        .await
+        .expect("count should succeed");
+
+        assert_eq!(count, Some(111));
+    }
+
+    #[tokio::test]
+    async fn exact_count_accepts_prompt_tokens_shape() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/v1/responses/input_tokens"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "prompt_tokens": 99
+            })))
+            .mount(&server)
+            .await;
+
+        let provider = OpenRouterProvider::new_with_client(
+            "key".to_string(),
+            models::openrouter::DEFAULT_MODEL.to_string(),
+            reqwest::Client::new(),
+            format!("{}/v1", server.uri()),
+            crate::config::TimeoutsConfig::default(),
+        );
+
+        let count = <OpenRouterProvider as LLMProvider>::count_prompt_tokens_exact(
+            &provider,
+            &sample_request(models::openrouter::DEFAULT_MODEL),
+        )
+        .await
+        .expect("count should succeed");
+
+        assert_eq!(count, Some(99));
+    }
+
+    #[tokio::test]
+    async fn exact_count_returns_none_when_unavailable() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/v1/responses/input_tokens"))
+            .respond_with(ResponseTemplate::new(404))
+            .mount(&server)
+            .await;
+
+        let provider = OpenRouterProvider::new_with_client(
+            "key".to_string(),
+            models::openrouter::DEFAULT_MODEL.to_string(),
+            reqwest::Client::new(),
+            format!("{}/v1", server.uri()),
+            crate::config::TimeoutsConfig::default(),
+        );
+
+        let count = <OpenRouterProvider as LLMProvider>::count_prompt_tokens_exact(
+            &provider,
+            &sample_request(models::openrouter::DEFAULT_MODEL),
+        )
+        .await
+        .expect("count should succeed");
+
+        assert_eq!(count, None);
+    }
+}

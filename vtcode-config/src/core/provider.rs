@@ -54,7 +54,7 @@ pub struct AnthropicConfig {
     /// Enable token counting via the count_tokens endpoint
     /// When enabled, the agent can estimate input token counts before making API calls
     /// Useful for proactive management of rate limits and costs
-    #[serde(default)]
+    #[serde(default = "default_count_tokens_enabled")]
     pub count_tokens_enabled: bool,
 }
 
@@ -69,9 +69,14 @@ impl Default for AnthropicConfig {
             interleaved_thinking_type_enabled: default_interleaved_thinking_type(),
             tool_search: ToolSearchConfig::default(),
             effort: default_effort(),
-            count_tokens_enabled: false,
+            count_tokens_enabled: default_count_tokens_enabled(),
         }
     }
+}
+
+#[inline]
+fn default_count_tokens_enabled() -> bool {
+    true
 }
 
 /// Configuration for Anthropic's tool search feature (advanced-tool-use beta)
