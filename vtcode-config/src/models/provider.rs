@@ -119,8 +119,7 @@ impl Provider {
                     }
                     return matches!(
                         model_id,
-                        ModelId::OpenRouterMinimaxM25
-                            | ModelId::OpenRouterQwen3CoderNext
+                        ModelId::OpenRouterMinimaxM25 | ModelId::OpenRouterQwen3CoderNext
                     );
                 }
                 models::openrouter::REASONING_MODELS.contains(&model)

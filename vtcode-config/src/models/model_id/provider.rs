@@ -57,8 +57,9 @@ impl ModelId {
             | ModelId::OllamaNemotron3Nano30bCloud
             | ModelId::OllamaGlm5Cloud => Provider::Ollama,
             ModelId::MinimaxM25 | ModelId::MinimaxM2 => Provider::Minimax,
-            ModelId::OpenRouterMinimaxM25
-            | ModelId::OpenRouterQwen3CoderNext => Provider::OpenRouter,
+            ModelId::OpenRouterMinimaxM25 | ModelId::OpenRouterQwen3CoderNext => {
+                Provider::OpenRouter
+            }
             _ => unreachable!(),
         }
     }

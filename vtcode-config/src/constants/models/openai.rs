@@ -10,22 +10,10 @@ pub const SUPPORTED_MODELS: &[&str] = &[
 ];
 
 /// Models that require the OpenAI Responses API
-pub const RESPONSES_API_MODELS: &[&str] = &[
-    GPT_5,
-    GPT_5_2,
-    GPT_5_MINI,
-    GPT_5_NANO,
-    GPT_5_3_CODEX,
-];
+pub const RESPONSES_API_MODELS: &[&str] = &[GPT_5, GPT_5_2, GPT_5_MINI, GPT_5_NANO, GPT_5_3_CODEX];
 
 /// Models that support the OpenAI reasoning parameter payload
-pub const REASONING_MODELS: &[&str] = &[
-    GPT_5,
-    GPT_5_2,
-    GPT_5_MINI,
-    GPT_5_NANO,
-    GPT_5_3_CODEX,
-];
+pub const REASONING_MODELS: &[&str] = &[GPT_5, GPT_5_2, GPT_5_MINI, GPT_5_NANO, GPT_5_3_CODEX];
 
 /// Models that do not expose structured tool calling on the OpenAI platform
 pub const TOOL_UNAVAILABLE_MODELS: &[&str] = &[];
