@@ -318,3 +318,25 @@ fn test_update_token_usage_uses_pending_exact_count_when_usage_missing() {
     manager.update_token_usage(&None);
     assert_eq!(manager.current_exact_token_usage(), Some(4096));
 }
+
+#[test]
+fn test_update_token_usage_prefers_pending_exact_when_usage_zeroed() {
+    let mut manager = ContextManager::new(
+        "sys".into(),
+        (),
+        Arc::new(RwLock::new(HashMap::new())),
+        None,
+    );
+
+    manager.set_pending_exact_prompt_token_count(2048);
+    manager.update_token_usage(&Some(uni::Usage {
+        prompt_tokens: 0,
+        completion_tokens: 0,
+        total_tokens: 0,
+        cached_prompt_tokens: None,
+        cache_creation_tokens: None,
+        cache_read_tokens: None,
+    }));
+
+    assert_eq!(manager.current_exact_token_usage(), Some(2048));
+}

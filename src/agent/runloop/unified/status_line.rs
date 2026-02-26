@@ -335,7 +335,7 @@ pub(crate) fn build_model_status_with_context_and_spooled(
 
     parts.push(model.to_string());
 
-    if total_tokens.is_some()
+    if total_tokens.is_some_and(|tokens| tokens > 0)
         && let Some(util) = context_utilization
     {
         parts.push(format!("{:.0}% context left", util.clamp(0.0, 100.0)));
@@ -413,6 +413,22 @@ mod tests {
 
         assert_eq!(high.as_deref(), Some("model | 100% context left"));
         assert_eq!(low.as_deref(), Some("model | 0% context left"));
+    }
+
+    #[test]
+    fn status_line_hides_context_left_when_total_tokens_zero() {
+        let status = build_model_status_with_context_and_spooled(
+            "model",
+            "low",
+            Some(100.0),
+            Some(0),
+            false,
+            None,
+            None,
+            false,
+        );
+
+        assert_eq!(status.as_deref(), Some("model | (low)"));
     }
 }
 
