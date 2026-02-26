@@ -115,9 +115,9 @@ impl ModelPickerState {
             return Err(anyhow!("Reasoning requested before selecting a model"));
         };
 
-        // For GPT-5.2 models, disable reasoning by setting effort to "none" on the same model
+        // For GPT-5.2 and GPT-5.3 Codex models, disable reasoning by setting effort to "none" on the same model
         // rather than switching to a different model
-        if current_selection.model_id.starts_with("gpt-5.2") {
+        if current_selection.model_id.starts_with("gpt-5.2") || current_selection.model_id.starts_with("gpt-5.3") {
             self.selected_reasoning = Some(ReasoningEffortLevel::None);
             renderer.line(
                 MessageStyle::Info,

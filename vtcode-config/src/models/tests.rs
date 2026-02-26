@@ -10,8 +10,8 @@ fn test_model_string_conversion() {
         models::GEMINI_3_FLASH_PREVIEW
     );
     assert_eq!(
-        ModelId::Gemini3ProPreview.as_str(),
-        models::GEMINI_3_PRO_PREVIEW
+        ModelId::Gemini31ProPreview.as_str(),
+        models::GEMINI_3_1_PRO_PREVIEW
     );
     // OpenAI models
     assert_eq!(ModelId::GPT5.as_str(), models::GPT_5);
@@ -64,10 +64,6 @@ fn test_model_from_string() {
     assert_eq!(
         models::GEMINI_3_FLASH_PREVIEW.parse::<ModelId>().unwrap(),
         ModelId::Gemini3FlashPreview
-    );
-    assert_eq!(
-        models::GEMINI_3_PRO_PREVIEW.parse::<ModelId>().unwrap(),
-        ModelId::Gemini3ProPreview
     );
     // OpenAI models
     assert_eq!(models::GPT_5.parse::<ModelId>().unwrap(), ModelId::GPT5);
@@ -213,24 +209,6 @@ fn test_model_providers() {
     assert_eq!(ModelId::OllamaGptOss120bCloud.provider(), Provider::Ollama);
     assert_eq!(ModelId::OllamaQwen317b.provider(), Provider::Ollama);
     assert_eq!(
-        ModelId::LmStudioMetaLlama38BInstruct.provider(),
-        Provider::LmStudio
-    );
-    assert_eq!(
-        ModelId::LmStudioMetaLlama318BInstruct.provider(),
-        Provider::LmStudio
-    );
-    assert_eq!(
-        ModelId::LmStudioQwen257BInstruct.provider(),
-        Provider::LmStudio
-    );
-    assert_eq!(ModelId::LmStudioGemma22BIt.provider(), Provider::LmStudio);
-    assert_eq!(ModelId::LmStudioGemma29BIt.provider(), Provider::LmStudio);
-    assert_eq!(
-        ModelId::LmStudioPhi31Mini4kInstruct.provider(),
-        Provider::LmStudio
-    );
-    assert_eq!(
         ModelId::OpenRouterGrokCodeFast1.provider(),
         Provider::OpenRouter
     );
@@ -279,10 +257,6 @@ fn test_provider_defaults() {
         ModelId::OllamaGptOss20b
     );
     assert_eq!(
-        ModelId::default_orchestrator_for_provider(Provider::LmStudio),
-        ModelId::LmStudioMetaLlama318BInstruct
-    );
-    assert_eq!(
         ModelId::default_orchestrator_for_provider(Provider::ZAI),
         ModelId::ZaiGlm5
     );
@@ -315,32 +289,12 @@ fn test_provider_defaults() {
         ModelId::default_subagent_for_provider(Provider::Ollama),
         ModelId::OllamaQwen317b
     );
-    assert_eq!(
-        ModelId::default_subagent_for_provider(Provider::LmStudio),
-        ModelId::LmStudioQwen257BInstruct
-    );
-    assert_eq!(
-        ModelId::default_subagent_for_provider(Provider::ZAI),
-        ModelId::OllamaGlm5Cloud
-    );
-
-    assert_eq!(
-        ModelId::default_single_for_provider(Provider::DeepSeek),
-        ModelId::DeepSeekReasoner
-    );
-    assert_eq!(
-        ModelId::default_single_for_provider(Provider::Ollama),
-        ModelId::OllamaGptOss20b
-    );
-    assert_eq!(
-        ModelId::default_single_for_provider(Provider::LmStudio),
-        ModelId::LmStudioMetaLlama318BInstruct
-    );
 }
 
 #[test]
 fn test_model_defaults() {
     assert_eq!(ModelId::default(), ModelId::Gemini3FlashPreview);
+    assert_eq!(ModelId::default_model(), ModelId::Gemini3FlashPreview);
     assert_eq!(ModelId::default_orchestrator(), ModelId::Gemini31ProPreview);
     assert_eq!(ModelId::default_subagent(), ModelId::Gemini3FlashPreview);
 }
@@ -417,19 +371,7 @@ fn test_model_generation() {
     assert_eq!(ModelId::XaiGrok4CodeLatest.generation(), "4");
     assert_eq!(ModelId::XaiGrok4Vision.generation(), "4");
     // Z.AI generations
-    assert_eq!(ModelId::ZaiGlm5.generation(), "GLM-5");
-    assert_eq!(
-        ModelId::LmStudioMetaLlama38BInstruct.generation(),
-        "meta-llama-3"
-    );
-    assert_eq!(
-        ModelId::LmStudioMetaLlama318BInstruct.generation(),
-        "meta-llama-3.1"
-    );
-    assert_eq!(ModelId::LmStudioQwen257BInstruct.generation(), "qwen2.5");
-    assert_eq!(ModelId::LmStudioGemma22BIt.generation(), "gemma-2");
-    assert_eq!(ModelId::LmStudioGemma29BIt.generation(), "gemma-2");
-    assert_eq!(ModelId::LmStudioPhi31Mini4kInstruct.generation(), "phi-3.1");
+    assert_eq!(ModelId::ZaiGlm5.generation(), "5");
 
     for entry in openrouter_generated::ENTRIES {
         assert_eq!(entry.variant.generation(), entry.generation);
@@ -482,22 +424,12 @@ fn test_models_for_provider() {
     assert!(ollama_models.contains(&ModelId::OllamaQwen3Next80bCloud));
     assert!(ollama_models.contains(&ModelId::OllamaMistralLarge3675bCloud));
     assert!(ollama_models.contains(&ModelId::OllamaQwen3Coder480bCloud));
-    assert!(ollama_models.contains(&ModelId::OllamaGemini3ProPreviewLatestCloud));
     assert!(ollama_models.contains(&ModelId::OllamaGemini3FlashPreviewCloud));
     assert!(ollama_models.contains(&ModelId::OllamaDevstral2123bCloud));
     assert!(ollama_models.contains(&ModelId::OllamaMinimaxM2Cloud));
     assert!(ollama_models.contains(&ModelId::OllamaMinimaxM25Cloud));
     assert!(ollama_models.contains(&ModelId::OllamaNemotron3Nano30bCloud));
     assert!(ollama_models.contains(&ModelId::OllamaGlm5Cloud));
-
-    let lmstudio_models = ModelId::models_for_provider(Provider::LmStudio);
-    assert!(lmstudio_models.contains(&ModelId::LmStudioMetaLlama38BInstruct));
-    assert!(lmstudio_models.contains(&ModelId::LmStudioMetaLlama318BInstruct));
-    assert!(lmstudio_models.contains(&ModelId::LmStudioQwen257BInstruct));
-    assert!(lmstudio_models.contains(&ModelId::LmStudioGemma22BIt));
-    assert!(lmstudio_models.contains(&ModelId::LmStudioGemma29BIt));
-    assert!(lmstudio_models.contains(&ModelId::LmStudioPhi31Mini4kInstruct));
-    assert_eq!(lmstudio_models.len(), 6);
 
     let hf_models = ModelId::models_for_provider(Provider::HuggingFace);
     assert!(hf_models.contains(&ModelId::HuggingFaceDeepseekV32));
@@ -555,6 +487,7 @@ fn test_fallback_models() {
     let fallbacks = ModelId::fallback_models();
     assert!(!fallbacks.is_empty());
     assert!(fallbacks.contains(&ModelId::Gemini3FlashPreview));
+    assert!(fallbacks.contains(&ModelId::GPT52));
     assert!(fallbacks.contains(&ModelId::GPT5));
     assert!(fallbacks.contains(&ModelId::ClaudeOpus41));
     assert!(fallbacks.contains(&ModelId::ClaudeSonnet46));
@@ -563,4 +496,80 @@ fn test_fallback_models() {
     assert!(fallbacks.contains(&ModelId::XaiGrok4));
     assert!(fallbacks.contains(&ModelId::ZaiGlm5));
     assert!(fallbacks.contains(&ModelId::OpenRouterGrokCodeFast1));
+}
+
+#[test]
+fn test_provider_local_helpers() {
+    assert!(Provider::Ollama.is_local());
+    assert!(Provider::LmStudio.is_local());
+    assert!(!Provider::OpenAI.is_local());
+    assert!(Provider::Ollama.is_dynamic());
+    assert!(Provider::LmStudio.is_dynamic());
+    assert!(!Provider::OpenAI.is_dynamic());
+    assert!(Provider::Ollama.local_install_instructions().is_some());
+    assert!(Provider::LmStudio.local_install_instructions().is_some());
+    assert!(Provider::OpenAI.local_install_instructions().is_none());
+}
+
+#[test]
+fn test_core_capability_helpers() {
+    assert_eq!(
+        ModelId::DeepSeekReasoner.non_reasoning_variant(),
+        Some(ModelId::DeepSeekChat)
+    );
+    assert!(ModelId::GPT52.supports_shell_tool());
+    assert!(!ModelId::GPT53Codex.supports_apply_patch_tool());
+}
+
+#[test]
+fn test_enum_variants_match_all_models_collection() {
+    let src = include_str!("model_id.rs");
+    let mut in_enum = false;
+    let mut enum_variants = std::collections::BTreeSet::new();
+
+    for raw in src.lines() {
+        let line = raw.trim();
+        if line.starts_with("pub enum ModelId") {
+            in_enum = true;
+            continue;
+        }
+        if in_enum && line.starts_with('}') {
+            break;
+        }
+        if !in_enum
+            || line.is_empty()
+            || line.starts_with("//")
+            || line.starts_with("///")
+            || line.starts_with("#[")
+        {
+            continue;
+        }
+        if let Some((name, _)) = line.split_once(',') {
+            enum_variants.insert(name.trim().to_string());
+        }
+    }
+
+    let all_models_vec = ModelId::all_models();
+    let all_models: std::collections::BTreeSet<String> = all_models_vec
+        .iter()
+        .map(|model| format!("{model:?}"))
+        .collect();
+
+    assert_eq!(
+        all_models_vec.len(),
+        all_models.len(),
+        "all_models should not contain duplicate variants"
+    );
+    assert_eq!(all_models, enum_variants);
+}
+
+#[test]
+fn test_all_models_have_non_empty_metadata_and_parse() {
+    for model in ModelId::all_models() {
+        assert!(!model.as_str().is_empty());
+        assert!(!model.display_name().is_empty());
+        assert!(!model.description().is_empty());
+        assert!(!model.generation().is_empty());
+        assert!(ModelId::from_str(model.as_str()).is_ok());
+    }
 }

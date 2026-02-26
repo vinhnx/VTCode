@@ -14,9 +14,6 @@ impl ModelId {
             ModelId::Gemini31ProPreviewCustomTools => {
                 "Gemini 3.1 Pro variant optimized for agentic workflows using custom tools and bash"
             }
-            ModelId::Gemini3ProPreview => {
-                "Preview of next-generation Gemini 3 Pro model with advanced reasoning and capabilities"
-            }
             ModelId::Gemini3FlashPreview => {
                 "Our most intelligent model built for speed, combining frontier intelligence with superior search and grounding"
             }
@@ -24,9 +21,6 @@ impl ModelId {
             ModelId::GPT5 => "Latest most capable OpenAI model with advanced reasoning",
             ModelId::GPT52 => {
                 "Latest flagship OpenAI model with improved reasoning, xhigh effort, and built-in compaction support"
-            }
-            ModelId::GPT52Codex => {
-                "GPT-5.2 variant optimized for agentic coding tasks with reasoning effort support"
             }
             ModelId::GPT5Mini => "Latest efficient OpenAI model, great for most tasks",
             ModelId::GPT5Nano => "Latest most cost-effective OpenAI model",
@@ -59,9 +53,6 @@ impl ModelId {
             ModelId::ClaudeSonnet4 => {
                 "Previous balanced Anthropic model maintained for compatibility"
             }
-            ModelId::ClaudeOpus4 => "Previous generation premium flagship model",
-            ModelId::ClaudeSonnet37 => "Latest model in the Claude 3 family with extended thinking",
-            ModelId::ClaudeHaiku35 => "Highly efficient model for high-volume tasks",
             // DeepSeek models
             ModelId::DeepSeekChat => {
                 "DeepSeek V3.2 - Fast, efficient chat model for immediate responses"
@@ -110,8 +101,8 @@ impl ModelId {
             ModelId::OllamaGemini3FlashPreviewCloud => {
                 "Gemini 3 Flash offers frontier intelligence built for speed at a fraction of the cost."
             }
-            ModelId::OllamaGemini3ProPreviewLatestCloud => {
-                "Gemini 3 Pro Preview Latest offers advanced reasoning and long context capabilities."
+            ModelId::OllamaDevstral2123bCloud => {
+                "Mistral Devstral 2 123B cloud deployment via Ollama for advanced coding workflows"
             }
             ModelId::OllamaNemotron3Nano30bCloud => {
                 "NVIDIA Nemotron-3-Nano 30B brings efficient excellence to code"
@@ -121,24 +112,6 @@ impl ModelId {
             }
             ModelId::OllamaMinimaxM2Cloud => {
                 "Cloud-hosted MiniMax-M2 model accessed through Ollama Cloud for reasoning tasks"
-            }
-            ModelId::LmStudioMetaLlama38BInstruct => {
-                "Meta Llama 3 8B running through LM Studio's local OpenAI-compatible server"
-            }
-            ModelId::LmStudioMetaLlama318BInstruct => {
-                "Meta Llama 3.1 8B running through LM Studio's local OpenAI-compatible server"
-            }
-            ModelId::LmStudioQwen257BInstruct => {
-                "Qwen2.5 7B hosted in LM Studio for local experimentation and coding tasks"
-            }
-            ModelId::LmStudioGemma22BIt => {
-                "Gemma 2 2B IT deployed via LM Studio for lightweight on-device assistance"
-            }
-            ModelId::LmStudioGemma29BIt => {
-                "Gemma 2 9B IT served locally via LM Studio when you need additional capacity"
-            }
-            ModelId::LmStudioPhi31Mini4kInstruct => {
-                "Phi-3.1 Mini 4K hosted in LM Studio for compact reasoning and experimentation"
             }
             ModelId::MinimaxM25 => {
                 "Latest MiniMax-M2.5 model with further improvements in reasoning and coding"

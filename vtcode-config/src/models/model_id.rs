@@ -20,8 +20,6 @@ pub enum ModelId {
     Gemini31ProPreview,
     /// Gemini 3.1 Pro Preview Custom Tools - Optimized for custom tools & bash
     Gemini31ProPreviewCustomTools,
-    /// Gemini 3 Pro Preview - Preview of next-generation Gemini model
-    Gemini3ProPreview,
     /// Gemini 3 Flash Preview - Our most intelligent model built for speed, combining frontier intelligence with superior search and grounding
     #[default]
     Gemini3FlashPreview,
@@ -31,8 +29,6 @@ pub enum ModelId {
     GPT5,
     /// GPT-5.2 - Latest flagship general-purpose OpenAI model (2025-12-11)
     GPT52,
-    /// GPT-5.2 Codex - Code-focused GPT-5.2 variant optimized for agentic coding
-    GPT52Codex,
     /// GPT-5 Mini - Latest efficient OpenAI model (2025-08-07)
     GPT5Mini,
     /// GPT-5 Nano - Latest most cost-effective OpenAI model (2025-08-07)
@@ -59,12 +55,6 @@ pub enum ModelId {
     ClaudeHaiku45,
     /// Claude Sonnet 4 - Previous balanced Anthropic model (2025-05-14)
     ClaudeSonnet4,
-    /// Claude Opus 4 - Previous flagship model (2025-05-14)
-    ClaudeOpus4,
-    /// Claude Sonnet 3.7 - Latest Claude 3 Sonnet (2025-02-19)
-    ClaudeSonnet37,
-    /// Claude Haiku 3.5 - Latest Claude 3 Haiku (2024-10-22)
-    ClaudeHaiku35,
 
     // DeepSeek models
     /// DeepSeek V3.2 Chat - Fast non-thinking mode
@@ -127,8 +117,6 @@ pub enum ModelId {
     OllamaMistralLarge3675bCloud,
     /// Qwen3 Coder 480B Cloud - Cloud-hosted Qwen3 Coder model served via Ollama Cloud
     OllamaQwen3Coder480bCloud,
-    /// Gemini 3 Pro Preview Latest Cloud - Google Gemini 3 Pro Preview via Ollama Cloud
-    OllamaGemini3ProPreviewLatestCloud,
     /// Devstral 2 123B Cloud - Mistral Devstral 2 123B model via Ollama Cloud
     OllamaDevstral2123bCloud,
     /// MiniMax-M2 Cloud - Cloud-hosted MiniMax-M2 model served via Ollama Cloud
@@ -147,20 +135,6 @@ pub enum ModelId {
     MinimaxM25,
     /// MiniMax-M2 - MiniMax reasoning-focused model
     MinimaxM2,
-
-    // LM Studio models
-    /// Meta Llama 3 8B Instruct served locally via LM Studio
-    LmStudioMetaLlama38BInstruct,
-    /// Meta Llama 3.1 8B Instruct served locally via LM Studio
-    LmStudioMetaLlama318BInstruct,
-    /// Qwen2.5 7B Instruct served locally via LM Studio
-    LmStudioQwen257BInstruct,
-    /// Gemma 2 2B IT served locally via LM Studio
-    LmStudioGemma22BIt,
-    /// Gemma 2 9B IT served locally via LM Studio
-    LmStudioGemma29BIt,
-    /// Phi-3.1 Mini 4K Instruct served locally via LM Studio
-    LmStudioPhi31Mini4kInstruct,
 
     // OpenRouter models
     /// Grok Code Fast 1 - Fast OpenRouter coding model powered by xAI Grok
@@ -249,26 +223,12 @@ pub enum ModelId {
     OpenRouterMistralaiMistralLarge2512,
     /// DeepSeek V3.1 Nex N1 - Nex AGI DeepSeek V3.1 Nex N1 model via OpenRouter
     OpenRouterNexAgiDeepseekV31NexN1,
-    /// OpenAI GPT-5.2 - OpenAI GPT-5.2 model accessed through OpenRouter
-    OpenRouterOpenAIGpt52,
-    /// OpenAI GPT-5.2 Chat - Chat optimised GPT-5.2 endpoint without tool use
-    OpenRouterOpenAIGpt52Chat,
-    /// OpenAI GPT-5.2-Codex - OpenRouter listing for GPT-5.2 Codex
-    OpenRouterOpenAIGpt52Codex,
-    /// OpenAI GPT-5.2 Pro - Professional tier GPT-5.2 model accessed through OpenRouter
-    OpenRouterOpenAIGpt52Pro,
     /// OpenAI o1-pro - OpenAI o1-pro advanced reasoning model via OpenRouter
     OpenRouterOpenAIO1Pro,
     /// Step 3.5 Flash (free) - StepFun's most capable open-source reasoning model via OpenRouter
     OpenRouterStepfunStep35FlashFree,
     /// GLM-5 - Z.AI GLM-5 flagship foundation model via OpenRouter
     OpenRouterZaiGlm5,
-    /// MoonshotAI: Kimi K2 0905 - MoonshotAI Kimi K2 0905 MoE release optimised for coding agents
-    OpenRouterMoonshotaiKimiK20905,
-    /// MoonshotAI: Kimi K2 Thinking - MoonshotAI reasoning-tier Kimi K2 release optimized for long-horizon agents
-    OpenRouterMoonshotaiKimiK2Thinking,
-    /// MoonshotAI: Kimi K2.5 - MoonshotAI Kimi K2.5 multimodal model with long-context and reasoning capabilities via OpenRouter
-    OpenRouterMoonshotaiKimiK25,
     /// MiniMax-M2.5 - MiniMax flagship model via OpenRouter
     OpenRouterMinimaxM25,
 }

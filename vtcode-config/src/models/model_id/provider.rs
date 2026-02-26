@@ -11,11 +11,9 @@ impl ModelId {
         match self {
             ModelId::Gemini31ProPreview
             | ModelId::Gemini31ProPreviewCustomTools
-            | ModelId::Gemini3ProPreview
             | ModelId::Gemini3FlashPreview => Provider::Gemini,
             ModelId::GPT5
             | ModelId::GPT52
-            | ModelId::GPT52Codex
             | ModelId::GPT5Mini
             | ModelId::GPT5Nano
             | ModelId::GPT53Codex
@@ -27,10 +25,7 @@ impl ModelId {
             | ModelId::ClaudeOpus41
             | ModelId::ClaudeSonnet45
             | ModelId::ClaudeHaiku45
-            | ModelId::ClaudeSonnet4
-            | ModelId::ClaudeOpus4
-            | ModelId::ClaudeSonnet37
-            | ModelId::ClaudeHaiku35 => Provider::Anthropic,
+            | ModelId::ClaudeSonnet4 => Provider::Anthropic,
             ModelId::DeepSeekChat | ModelId::DeepSeekReasoner => Provider::DeepSeek,
             ModelId::HuggingFaceDeepseekV32
             | ModelId::HuggingFaceOpenAIGptOss20b
@@ -55,23 +50,15 @@ impl ModelId {
             | ModelId::OllamaQwen3Next80bCloud
             | ModelId::OllamaMistralLarge3675bCloud
             | ModelId::OllamaQwen3Coder480bCloud
-            | ModelId::OllamaGemini3ProPreviewLatestCloud
             | ModelId::OllamaGemini3FlashPreviewCloud
             | ModelId::OllamaDevstral2123bCloud
             | ModelId::OllamaMinimaxM2Cloud
             | ModelId::OllamaMinimaxM25Cloud
             | ModelId::OllamaNemotron3Nano30bCloud
             | ModelId::OllamaGlm5Cloud => Provider::Ollama,
-            ModelId::LmStudioMetaLlama38BInstruct
-            | ModelId::LmStudioMetaLlama318BInstruct
-            | ModelId::LmStudioQwen257BInstruct
-            | ModelId::LmStudioGemma22BIt
-            | ModelId::LmStudioGemma29BIt
-            | ModelId::LmStudioPhi31Mini4kInstruct => Provider::LmStudio,
             ModelId::MinimaxM25 | ModelId::MinimaxM2 => Provider::Minimax,
-            ModelId::OpenRouterMinimaxM25 | ModelId::OpenRouterQwen3CoderNext => {
-                Provider::OpenRouter
-            }
+            ModelId::OpenRouterMinimaxM25
+            | ModelId::OpenRouterQwen3CoderNext => Provider::OpenRouter,
             _ => unreachable!(),
         }
     }

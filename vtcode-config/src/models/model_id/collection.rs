@@ -1,4 +1,5 @@
 use crate::models::Provider;
+use std::collections::HashSet;
 
 use super::ModelId;
 
@@ -14,12 +15,10 @@ impl ModelId {
             // Gemini models
             ModelId::Gemini31ProPreview,
             ModelId::Gemini31ProPreviewCustomTools,
-            ModelId::Gemini3ProPreview,
             ModelId::Gemini3FlashPreview,
             // OpenAI models
             ModelId::GPT5,
             ModelId::GPT52,
-            ModelId::GPT52Codex,
             ModelId::GPT5Mini,
             ModelId::GPT5Nano,
             ModelId::GPT53Codex,
@@ -32,10 +31,7 @@ impl ModelId {
             ModelId::ClaudeOpus41,
             ModelId::ClaudeSonnet45,
             ModelId::ClaudeHaiku45,
-            ModelId::ClaudeOpus4,
             ModelId::ClaudeSonnet4,
-            ModelId::ClaudeSonnet37,
-            ModelId::ClaudeHaiku35,
             // DeepSeek models
             ModelId::DeepSeekChat,
             ModelId::DeepSeekReasoner,
@@ -60,24 +56,18 @@ impl ModelId {
             ModelId::OllamaMistralLarge3675bCloud,
             ModelId::OllamaQwen3Coder480bCloud,
             ModelId::OllamaGlm5Cloud,
-            ModelId::OllamaGemini3ProPreviewLatestCloud,
             ModelId::OllamaGemini3FlashPreviewCloud,
             ModelId::OllamaDevstral2123bCloud,
             ModelId::OllamaMinimaxM2Cloud,
             ModelId::OllamaMinimaxM25Cloud,
             ModelId::OllamaNemotron3Nano30bCloud,
-            // LM Studio models
-            ModelId::LmStudioMetaLlama38BInstruct,
-            ModelId::LmStudioMetaLlama318BInstruct,
-            ModelId::LmStudioQwen257BInstruct,
-            ModelId::LmStudioGemma22BIt,
-            ModelId::LmStudioGemma29BIt,
-            ModelId::LmStudioPhi31Mini4kInstruct,
             // MiniMax models
             ModelId::MinimaxM25,
             ModelId::MinimaxM2,
             // Hugging Face models
             ModelId::HuggingFaceDeepseekV32,
+            ModelId::HuggingFaceOpenAIGptOss20b,
+            ModelId::HuggingFaceOpenAIGptOss120b,
             ModelId::HuggingFaceMinimaxM25Novita,
             ModelId::HuggingFaceDeepseekV32Novita,
             ModelId::HuggingFaceXiaomiMimoV2FlashNovita,
@@ -87,6 +77,8 @@ impl ModelId {
             ModelId::OpenRouterQwen3CoderNext,
         ];
         models.extend(Self::openrouter_models());
+        let mut seen = HashSet::new();
+        models.retain(|model| seen.insert(*model));
         models
     }
 

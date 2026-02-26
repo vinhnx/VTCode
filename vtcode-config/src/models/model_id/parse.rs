@@ -25,13 +25,10 @@ impl FromStr for ModelId {
             s if s == models::GEMINI_3_1_PRO_PREVIEW_CUSTOMTOOLS => {
                 Ok(ModelId::Gemini31ProPreviewCustomTools)
             }
-            s if s == models::GEMINI_3_PRO_PREVIEW => Ok(ModelId::Gemini3ProPreview),
             s if s == models::GEMINI_3_FLASH_PREVIEW => Ok(ModelId::Gemini3FlashPreview),
             // OpenAI models
             s if s == models::GPT_5 => Ok(ModelId::GPT5),
-            s if s == models::openai::GPT_5_2 => Ok(ModelId::GPT52),
-            s if s == models::openai::GPT_5_2_ALIAS => Ok(ModelId::GPT52),
-            s if s == models::openai::GPT_5_2_CODEX => Ok(ModelId::GPT52Codex),
+            s if s == models::GPT_5_2 => Ok(ModelId::GPT52),
             s if s == models::GPT_5_MINI => Ok(ModelId::GPT5Mini),
             s if s == models::GPT_5_NANO => Ok(ModelId::GPT5Nano),
             s if s == models::openai::GPT_5_3_CODEX => Ok(ModelId::GPT53Codex),
@@ -49,12 +46,6 @@ impl FromStr for ModelId {
             s if s == models::CLAUDE_SONNET_4_5_20250929 => Ok(ModelId::ClaudeSonnet45),
             s if s == models::CLAUDE_SONNET_4_20250514 => Ok(ModelId::ClaudeSonnet4),
             s if s == models::CLAUDE_SONNET_4_0 => Ok(ModelId::ClaudeSonnet4),
-            s if s == models::CLAUDE_OPUS_4_20250514 => Ok(ModelId::ClaudeOpus4),
-            s if s == models::CLAUDE_OPUS_4_0 => Ok(ModelId::ClaudeOpus4),
-            s if s == models::CLAUDE_3_7_SONNET_20250219 => Ok(ModelId::ClaudeSonnet37),
-            s if s == models::CLAUDE_3_7_SONNET_LATEST => Ok(ModelId::ClaudeSonnet37),
-            s if s == models::CLAUDE_3_5_HAIKU_20241022 => Ok(ModelId::ClaudeHaiku35),
-            s if s == models::CLAUDE_3_5_HAIKU_LATEST => Ok(ModelId::ClaudeHaiku35),
             // DeepSeek models
             s if s == models::DEEPSEEK_CHAT => Ok(ModelId::DeepSeekChat),
             s if s == models::DEEPSEEK_REASONER => Ok(ModelId::DeepSeekReasoner),
@@ -82,9 +73,6 @@ impl FromStr for ModelId {
                 Ok(ModelId::OllamaQwen3Coder480bCloud)
             }
             s if s == models::ollama::GLM_5_CLOUD => Ok(ModelId::OllamaGlm5Cloud),
-            s if s == models::ollama::GEMINI_3_PRO_PREVIEW_LATEST_CLOUD => {
-                Ok(ModelId::OllamaGemini3ProPreviewLatestCloud)
-            }
             s if s == models::ollama::GEMINI_3_FLASH_PREVIEW_CLOUD => {
                 Ok(ModelId::OllamaGemini3FlashPreviewCloud)
             }
@@ -95,18 +83,6 @@ impl FromStr for ModelId {
             }
             s if s == models::ollama::NEMOTRON_3_NANO_30B_CLOUD => {
                 Ok(ModelId::OllamaNemotron3Nano30bCloud)
-            }
-            s if s == models::lmstudio::META_LLAMA_3_8B_INSTRUCT => {
-                Ok(ModelId::LmStudioMetaLlama38BInstruct)
-            }
-            s if s == models::lmstudio::META_LLAMA_31_8B_INSTRUCT => {
-                Ok(ModelId::LmStudioMetaLlama318BInstruct)
-            }
-            s if s == models::lmstudio::QWEN25_7B_INSTRUCT => Ok(ModelId::LmStudioQwen257BInstruct),
-            s if s == models::lmstudio::GEMMA_2_2B_IT => Ok(ModelId::LmStudioGemma22BIt),
-            s if s == models::lmstudio::GEMMA_2_9B_IT => Ok(ModelId::LmStudioGemma29BIt),
-            s if s == models::lmstudio::PHI_31_MINI_4K_INSTRUCT => {
-                Ok(ModelId::LmStudioPhi31Mini4kInstruct)
             }
             s if s == models::minimax::MINIMAX_M2_5 => Ok(ModelId::MinimaxM25),
             s if s == models::minimax::MINIMAX_M2 => Ok(ModelId::MinimaxM2),

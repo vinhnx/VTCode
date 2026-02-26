@@ -175,7 +175,7 @@ pub(super) fn reasoning_level_description(level: ReasoningEffortLevel) -> &'stat
         ReasoningEffortLevel::Medium => reasoning::DESCRIPTION_MEDIUM,
         ReasoningEffortLevel::High => reasoning::DESCRIPTION_HIGH,
         ReasoningEffortLevel::XHigh => {
-            "Maximum reasoning for hardest long-running tasks (gpt-5.2-codex+ only)"
+            "Maximum reasoning for hardest long-running tasks (gpt-5.2/gpt-5.3-codex+ only)"
         }
     }
 }
@@ -211,9 +211,6 @@ pub(super) fn provider_requires_api_key(provider: Provider, model_id: &str, env_
         if !is_cloud_model {
             return false;
         }
-    }
-    if provider == Provider::LmStudio {
-        return false;
     }
 
     // For OpenRouter, check OAuth token first

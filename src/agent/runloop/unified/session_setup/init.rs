@@ -309,7 +309,7 @@ async fn build_tool_definitions(
         .collect();
 
     if let Ok(model_id) = ModelId::from_str(&config.model)
-        && model_id.is_gpt51_variant()
+        && model_id.supports_shell_tool()
     {
         tool_definitions.push(uni::ToolDefinition::apply_patch(
             "Apply VT Code patches to modify files. IMPORTANT: Use VT Code format (*** Begin Patch, *** Update File: path, @@ context, -/+ lines, *** End Patch), NOT unified diff (---/+++) format. The tool creates, updates, or deletes file content.".to_string(),

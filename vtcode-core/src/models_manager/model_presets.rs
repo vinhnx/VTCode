@@ -180,7 +180,6 @@ pub fn presets_for_provider(provider: Provider) -> Vec<ModelPreset> {
         Provider::OpenRouter => openrouter_presets(),
         Provider::Ollama => ollama_presets(),
         Provider::Moonshot => moonshot_presets(),
-        Provider::LmStudio => lmstudio_presets(),
         Provider::HuggingFace => huggingface_presets(),
     }
 }
@@ -211,29 +210,6 @@ fn gemini_presets() -> Vec<ModelPreset> {
                 },
             ],
             is_default: true,
-            upgrade: None,
-            show_in_picker: true,
-            supported_in_api: true,
-            context_window: Some(1_048_576),
-        },
-        ModelPreset {
-            id: "gemini-3-pro-preview".to_string(),
-            model: "gemini-3-pro-preview".to_string(),
-            display_name: "Gemini 3 Pro Preview".to_string(),
-            description: "Preview of next-generation Gemini with advanced reasoning".to_string(),
-            provider: Provider::Gemini,
-            default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Medium,
-                    description: "Balanced reasoning".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::High,
-                    description: "Deep reasoning".to_string(),
-                },
-            ],
-            is_default: false,
             upgrade: None,
             show_in_picker: true,
             supported_in_api: true,
@@ -314,33 +290,6 @@ fn openai_presets() -> Vec<ModelPreset> {
             show_in_picker: true,
             supported_in_api: true,
             context_window: Some(128_000),
-        },
-        ModelPreset {
-            id: "gpt-5.2-codex".to_string(),
-            model: "gpt-5.2-codex".to_string(),
-            display_name: "GPT-5.2 Codex".to_string(),
-            description: "GPT-5.2 variant optimized for agentic coding tasks".to_string(),
-            provider: Provider::OpenAI,
-            default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Low,
-                    description: "Fast".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Medium,
-                    description: "Balanced".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::High,
-                    description: "Deep".to_string(),
-                },
-            ],
-            is_default: false,
-            upgrade: None,
-            show_in_picker: false,
-            supported_in_api: true,
-            context_window: Some(400_000),
         },
         ModelPreset {
             id: "gpt-5.3-codex".to_string(),
@@ -695,30 +644,6 @@ fn openrouter_presets() -> Vec<ModelPreset> {
             supported_in_api: true,
             context_window: Some(128_000),
         },
-        ModelPreset {
-            id: "openrouter/moonshotai/kimi-k2.5".to_string(),
-            model: "moonshotai/kimi-k2.5".to_string(),
-            display_name: "Kimi K2.5 (OpenRouter)".to_string(),
-            description: "MoonshotAI Kimi K2.5 with long-context and multimodal capabilities"
-                .to_string(),
-            provider: Provider::OpenRouter,
-            default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Medium,
-                    description: "Balanced".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::High,
-                    description: "Deep thinking".to_string(),
-                },
-            ],
-            is_default: false,
-            upgrade: None,
-            show_in_picker: true,
-            supported_in_api: true,
-            context_window: Some(256_000),
-        },
     ]
 }
 
@@ -741,77 +666,11 @@ fn ollama_presets() -> Vec<ModelPreset> {
             supported_in_api: true,
             context_window: Some(96_000),
         },
-        ModelPreset {
-            id: "ollama/kimi-k2.5:cloud".to_string(),
-            model: "kimi-k2.5:cloud".to_string(),
-            display_name: "Kimi K2.5 (Ollama Cloud)".to_string(),
-            description: "MoonshotAI Kimi K2.5 with long-context and multimodal capabilities"
-                .to_string(),
-            provider: Provider::Ollama,
-            default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Medium,
-                    description: "Balanced".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::High,
-                    description: "Deep thinking".to_string(),
-                },
-            ],
-            is_default: false,
-            upgrade: None,
-            show_in_picker: true,
-            supported_in_api: true,
-            context_window: Some(256_000),
-        },
     ]
 }
 
 fn moonshot_presets() -> Vec<ModelPreset> {
-    vec![ModelPreset {
-        id: "kimi-k2.5".to_string(),
-        model: "kimi-k2.5".to_string(),
-        display_name: "Kimi K2.5".to_string(),
-        description: "Latest Moonshot flagship model".to_string(),
-        provider: Provider::Moonshot,
-        default_reasoning_effort: ReasoningEffortLevel::Medium,
-        supported_reasoning_efforts: vec![
-            ReasoningEffortPreset {
-                effort: ReasoningEffortLevel::Medium,
-                description: "Balanced".to_string(),
-            },
-            ReasoningEffortPreset {
-                effort: ReasoningEffortLevel::High,
-                description: "Deep thinking".to_string(),
-            },
-        ],
-        is_default: true,
-        upgrade: None,
-        show_in_picker: true,
-        supported_in_api: true,
-        context_window: Some(262_144),
-    }]
-}
-
-fn lmstudio_presets() -> Vec<ModelPreset> {
-    vec![ModelPreset {
-        id: "lmstudio/qwen2.5-7b-instruct".to_string(),
-        model: "qwen2.5-7b-instruct".to_string(),
-        display_name: "Qwen 2.5 7B (LM Studio)".to_string(),
-        description: "Qwen 2.5 served locally via LM Studio".to_string(),
-        provider: Provider::LmStudio,
-        default_reasoning_effort: ReasoningEffortLevel::Medium,
-        supported_reasoning_efforts: vec![ReasoningEffortPreset {
-            effort: ReasoningEffortLevel::Medium,
-            description: "Balanced".to_string(),
-        }],
-        is_default: true,
-        upgrade: None,
-        show_in_picker: true,
-        supported_in_api: true,
-        context_window: Some(32_000),
-    }]
+    vec![]
 }
 
 fn huggingface_presets() -> Vec<ModelPreset> {
@@ -832,29 +691,6 @@ fn huggingface_presets() -> Vec<ModelPreset> {
             show_in_picker: true,
             supported_in_api: true,
             context_window: Some(128_000),
-        },
-        ModelPreset {
-            id: "huggingface/kimi-k2.5-novita".to_string(),
-            model: "moonshotai/Kimi-K2.5:novita".to_string(),
-            display_name: "Kimi K2.5 (Hugging Face)".to_string(),
-            description: "MoonshotAI Kimi K2.5 via Hugging Face Inference (Novita)".to_string(),
-            provider: Provider::HuggingFace,
-            default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Medium,
-                    description: "Balanced".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::High,
-                    description: "Deep thinking".to_string(),
-                },
-            ],
-            is_default: false,
-            upgrade: None,
-            show_in_picker: true,
-            supported_in_api: true,
-            context_window: Some(256_000),
         },
     ]
 }

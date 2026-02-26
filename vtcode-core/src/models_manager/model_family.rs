@@ -203,17 +203,7 @@ pub fn find_family_for_model(slug: &str) -> ModelFamily {
     }
 
     // OpenAI models
-    if slug.starts_with("gpt-5.2") || slug.starts_with("gpt-5") {
-        return model_family!(
-            slug, "gpt-5", Provider::OpenAI,
-            context_window: Some(MEDIUM_CONTEXT_WINDOW),
-            supports_thinking: true,
-            supports_parallel_tool_calls: true,
-            supports_reasoning_summaries: true,
-            shell_type: ShellToolType::ShellCommand,
-        );
-    }
-    if slug.starts_with("gpt-5") || slug.starts_with("chatgpt-4") {
+    if slug.starts_with("gpt-5") {
         return model_family!(
             slug, "gpt-5", Provider::OpenAI,
             context_window: Some(DEFAULT_CONTEXT_WINDOW),
@@ -354,14 +344,6 @@ pub fn find_family_for_model(slug: &str) -> ModelFamily {
         );
     }
 
-    // LM Studio local models
-    if slug.starts_with("lmstudio/") || slug.contains("lmstudio") {
-        return model_family!(
-            slug, "lmstudio-local", Provider::LmStudio,
-            context_window: Some(DEFAULT_CONTEXT_WINDOW),
-        );
-    }
-
     // OpenRouter models (fallback for unrecognized patterns)
     if slug.contains("/") {
         return model_family!(
@@ -391,7 +373,7 @@ mod tests {
 
     #[test]
     fn test_gpt5_family_detection() {
-        let family = find_family_for_model("gpt-5.2-codex");
+        let family = find_family_for_model("gpt-5.3-codex");
         assert_eq!(family.family, "gpt-5");
         assert_eq!(family.provider, Provider::OpenAI);
         assert!(family.supports_thinking);

@@ -9,7 +9,6 @@ use tokio::fs;
 
 use vtcode_core::config::constants::{env_vars, urls};
 use vtcode_core::config::models::Provider;
-use vtcode_core::llm::providers::lmstudio::fetch_lmstudio_models;
 use vtcode_core::llm::providers::ollama::fetch_ollama_models;
 use vtcode_core::utils::dot_config::{DotConfig, get_dot_manager, load_user_config};
 use vtcode_core::utils::file_utils::write_file_with_context;
@@ -34,16 +33,9 @@ pub(super) struct DynamicModelRegistry {
 impl DynamicModelRegistry {
     pub(super) async fn load(options: &[ModelOption], workspace: Option<&Path>) -> Self {
         let endpoints = ProviderEndpointConfig::gather(workspace).await;
-        let static_index = build_static_model_index(options);
+        let _static_index = build_static_model_index(options);
         let mut cache_store = CachedDynamicModelStore::load().await;
-        let (lmstudio_result, lmstudio_warning) = cache_store
-            .fetch_with_cache(
-                Provider::LmStudio,
-                endpoints.lmstudio.clone(),
-                fetch_lmstudio_models,
-            )
-            .await;
-        let (ollama_result, ollama_warning) = cache_store
+        let (_ollama_result, ollama_warning) = cache_store
             .fetch_with_cache(
                 Provider::Ollama,
                 endpoints.ollama.clone(),
@@ -52,27 +44,6 @@ impl DynamicModelRegistry {
             .await;
         let _ = cache_store.persist().await;
         let mut registry = Self::default();
-        registry.process_fetch(
-            Provider::LmStudio,
-            lmstudio_result,
-            endpoints
-                .lmstudio
-                .clone()
-                .unwrap_or_else(|| urls::LMSTUDIO_API_BASE.to_string()),
-            &static_index,
-        );
-        if let Some(warning) = lmstudio_warning {
-            registry.record_warning(Provider::LmStudio, warning);
-        }
-        registry.process_fetch(
-            Provider::Ollama,
-            ollama_result,
-            endpoints
-                .ollama
-                .clone()
-                .unwrap_or_else(|| urls::OLLAMA_API_BASE.to_string()),
-            &static_index,
-        );
         if let Some(warning) = ollama_warning {
             registry.record_warning(Provider::Ollama, warning);
         }
@@ -195,7 +166,6 @@ impl DynamicModelRegistry {
 
 #[derive(Clone, Default)]
 struct ProviderEndpointConfig {
-    lmstudio: Option<String>,
     ollama: Option<String>,
 }
 
@@ -204,18 +174,12 @@ impl ProviderEndpointConfig {
         let _ = workspace;
         let dot_config = load_user_config().await.ok();
         Self {
-            lmstudio: Self::extract_base_url(Provider::LmStudio, dot_config.as_ref()),
             ollama: Self::extract_base_url(Provider::Ollama, dot_config.as_ref()),
         }
     }
 
     fn extract_base_url(provider: Provider, dot_config: Option<&DotConfig>) -> Option<String> {
         let from_config = dot_config.and_then(|cfg| match provider {
-            Provider::LmStudio => cfg
-                .providers
-                .lmstudio
-                .as_ref()
-                .and_then(|c| c.base_url.clone()),
             Provider::Ollama => cfg
                 .providers
                 .ollama
@@ -240,7 +204,6 @@ impl ProviderEndpointConfig {
 
     fn env_override(provider: Provider) -> Option<String> {
         let key = match provider {
-            Provider::LmStudio => env_vars::LMSTUDIO_BASE_URL,
             Provider::Ollama => env_vars::OLLAMA_BASE_URL,
             _ => return None,
         };
@@ -394,7 +357,6 @@ fn dynamic_model_cache_path() -> Option<PathBuf> {
 
 fn default_provider_base(provider: Provider) -> &'static str {
     match provider {
-        Provider::LmStudio => urls::LMSTUDIO_API_BASE,
         Provider::Ollama => urls::OLLAMA_API_BASE,
         _ => "",
     }

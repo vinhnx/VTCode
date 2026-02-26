@@ -254,7 +254,7 @@ async fn test_visual_header_variations() {
     // Test different header contexts that would appear visually different
     let contexts_and_snapshots = vec![
         (
-            "openai_gpt4",
+            "openai_gpt5",
             InlineHeaderContext {
                 provider: "openai".to_string(),
                 model: "gpt-5".to_string(),

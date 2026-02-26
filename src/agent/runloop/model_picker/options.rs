@@ -32,9 +32,8 @@ pub(super) static MODEL_OPTIONS: Lazy<Vec<ModelOption>> = Lazy::new(|| {
 pub(super) fn picker_provider_order() -> Vec<Provider> {
     let mut providers: Vec<Provider> = Provider::all_providers()
         .into_iter()
-        .filter(|provider| !matches!(provider, Provider::LmStudio | Provider::Ollama))
+        .filter(|provider| !matches!(provider, Provider::Ollama))
         .collect();
-    providers.push(Provider::LmStudio);
     providers.push(Provider::Ollama);
     providers
 }
