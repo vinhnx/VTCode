@@ -5,6 +5,9 @@
 
 use super::plan_mode::PlanModeState;
 use crate::config::constants::tools;
+use crate::tools::handlers::task_tracking::{
+    TaskCounts, TaskTrackingStatus, append_notes, parse_marked_status_prefix, parse_status_prefix,
+};
 use crate::tools::traits::Tool;
 use crate::utils::file_utils::{
     ensure_dir_exists, read_file_with_context, write_file_with_context,
@@ -15,56 +18,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-enum PlanTaskStatus {
-    Pending,
-    InProgress,
-    Completed,
-    Blocked,
-}
-
-impl PlanTaskStatus {
-    fn from_str(value: &str) -> Result<Self> {
-        match value {
-            "pending" => Ok(Self::Pending),
-            "in_progress" => Ok(Self::InProgress),
-            "completed" => Ok(Self::Completed),
-            "blocked" => Ok(Self::Blocked),
-            other => bail!(
-                "Invalid status '{}'. Use: pending, in_progress, completed, blocked",
-                other
-            ),
-        }
-    }
-
-    fn as_str(&self) -> &'static str {
-        match self {
-            Self::Pending => "pending",
-            Self::InProgress => "in_progress",
-            Self::Completed => "completed",
-            Self::Blocked => "blocked",
-        }
-    }
-
-    fn markdown_marker(&self) -> &'static str {
-        match self {
-            Self::Pending => "[ ]",
-            Self::InProgress => "[~]",
-            Self::Completed => "[x]",
-            Self::Blocked => "[!]",
-        }
-    }
-
-    fn view_symbol(&self) -> &'static str {
-        match self {
-            Self::Pending => "•",
-            Self::InProgress => ">",
-            Self::Completed => "✔",
-            Self::Blocked => "!",
-        }
-    }
-}
+type PlanTaskStatus = TaskTrackingStatus;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct PlanTaskNode {
@@ -122,15 +76,6 @@ struct FlatTaskLine {
     description: String,
 }
 
-#[derive(Default)]
-struct TaskCounts {
-    total: usize,
-    completed: usize,
-    in_progress: usize,
-    pending: usize,
-    blocked: usize,
-}
-
 impl PlanTaskDocument {
     fn to_markdown(&self) -> String {
         let mut out = format!("# {}\n\n## Plan of Work\n\n", self.title);
@@ -156,11 +101,7 @@ impl PlanTaskDocument {
             "in_progress": counts.in_progress,
             "pending": counts.pending,
             "blocked": counts.blocked,
-            "progress_percent": if counts.total > 0 {
-                (counts.completed as f64 / counts.total as f64 * 100.0).round() as usize
-            } else {
-                0
-            },
+            "progress_percent": counts.progress_percent(),
             "items": flatten_items_json(&self.items),
         })
     }
@@ -178,13 +119,7 @@ impl PlanTaskDocument {
 
 fn count_nodes(nodes: &[PlanTaskNode], counts: &mut TaskCounts) {
     for node in nodes {
-        counts.total += 1;
-        match node.status {
-            PlanTaskStatus::Pending => counts.pending += 1,
-            PlanTaskStatus::InProgress => counts.in_progress += 1,
-            PlanTaskStatus::Completed => counts.completed += 1,
-            PlanTaskStatus::Blocked => counts.blocked += 1,
-        }
+        counts.add(&node.status);
         count_nodes(&node.children, counts);
     }
 }
@@ -195,7 +130,7 @@ fn write_markdown_nodes(nodes: &[PlanTaskNode], level: usize, out: &mut String) 
         out.push_str(&format!(
             "{}- {} {}\n",
             indent,
-            node.status.markdown_marker(),
+            node.status.plan_checkbox(),
             node.description
         ));
         write_markdown_nodes(&node.children, level + 1, out);
@@ -265,24 +200,6 @@ fn build_view_lines(
     }
 }
 
-fn parse_status_prefix(value: &str) -> (PlanTaskStatus, String) {
-    let trimmed = value.trim_start();
-    let mapping = [
-        ("[x] ", PlanTaskStatus::Completed),
-        ("[X] ", PlanTaskStatus::Completed),
-        ("[~] ", PlanTaskStatus::InProgress),
-        ("[/] ", PlanTaskStatus::InProgress),
-        ("[!] ", PlanTaskStatus::Blocked),
-        ("[ ] ", PlanTaskStatus::Pending),
-    ];
-    for (prefix, status) in mapping {
-        if let Some(rest) = trimmed.strip_prefix(prefix) {
-            return (status, rest.to_string());
-        }
-    }
-    (PlanTaskStatus::Pending, trimmed.to_string())
-}
-
 fn parse_task_line(line: &str) -> Option<FlatTaskLine> {
     let indent_spaces = line.chars().take_while(|c| *c == ' ').count();
     let level = indent_spaces / 2;
@@ -292,30 +209,15 @@ fn parse_task_line(line: &str) -> Option<FlatTaskLine> {
         .or_else(|| trimmed.strip_prefix("* "))
         .or_else(|| trimmed.strip_prefix("+ "))?;
 
-    let markers = [
-        ("[x] ", PlanTaskStatus::Completed),
-        ("[X] ", PlanTaskStatus::Completed),
-        ("[~] ", PlanTaskStatus::InProgress),
-        ("[/] ", PlanTaskStatus::InProgress),
-        ("[!] ", PlanTaskStatus::Blocked),
-        ("[ ] ", PlanTaskStatus::Pending),
-    ];
-
-    for (marker, status) in markers {
-        if let Some(desc) = rest.strip_prefix(marker) {
-            let description = desc.trim();
-            if description.is_empty() {
-                return None;
-            }
-            return Some(FlatTaskLine {
-                level,
-                status,
-                description: description.to_string(),
-            });
-        }
+    let (status, description) = parse_marked_status_prefix(rest)?;
+    if description.trim().is_empty() {
+        return None;
     }
-
-    None
+    Some(FlatTaskLine {
+        level,
+        status,
+        description: description.trim().to_string(),
+    })
 }
 
 fn build_tree_from_flat(lines: &[FlatTaskLine]) -> Vec<PlanTaskNode> {
@@ -486,40 +388,6 @@ fn build_flat_create_lines(items: &[String]) -> Vec<FlatTaskLine> {
             })
         })
         .collect()
-}
-
-fn append_notes(existing: Option<String>, append: Option<&str>) -> Option<String> {
-    match (existing, append) {
-        (None, None) => None,
-        (Some(text), None) => {
-            if text.trim().is_empty() {
-                None
-            } else {
-                Some(text)
-            }
-        }
-        (None, Some(extra)) => {
-            let trimmed = extra.trim();
-            if trimmed.is_empty() {
-                None
-            } else {
-                Some(trimmed.to_string())
-            }
-        }
-        (Some(text), Some(extra)) => {
-            let left = text.trim();
-            let right = extra.trim();
-            if left.is_empty() && right.is_empty() {
-                None
-            } else if left.is_empty() {
-                Some(right.to_string())
-            } else if right.is_empty() {
-                Some(left.to_string())
-            } else {
-                Some(format!("{left}\n{right}"))
-            }
-        }
-    }
 }
 
 pub struct PlanTaskTrackerTool {

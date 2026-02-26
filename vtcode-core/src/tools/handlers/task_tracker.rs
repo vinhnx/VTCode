@@ -13,6 +13,9 @@
 //! - `add`: Add a new item to an existing checklist
 
 use crate::config::constants::tools;
+use crate::tools::handlers::task_tracking::{
+    TaskCounts, TaskTrackingStatus, append_notes, parse_marked_status_prefix,
+};
 use crate::utils::file_utils::{
     ensure_dir_exists, read_file_with_context, write_file_with_context,
 };
@@ -26,46 +29,7 @@ use tokio::sync::RwLock;
 
 use crate::tools::traits::Tool;
 
-/// Status of a single task item
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "snake_case")]
-pub enum TaskStatus {
-    Pending,
-    InProgress,
-    Completed,
-    Blocked,
-}
-
-impl std::fmt::Display for TaskStatus {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            TaskStatus::Pending => write!(f, "pending"),
-            TaskStatus::InProgress => write!(f, "in_progress"),
-            TaskStatus::Completed => write!(f, "completed"),
-            TaskStatus::Blocked => write!(f, "blocked"),
-        }
-    }
-}
-
-impl TaskStatus {
-    fn checkbox(&self) -> &'static str {
-        match self {
-            TaskStatus::Pending => "[ ]",
-            TaskStatus::InProgress => "[/]",
-            TaskStatus::Completed => "[x]",
-            TaskStatus::Blocked => "[!]",
-        }
-    }
-
-    fn view_symbol(&self) -> &'static str {
-        match self {
-            TaskStatus::Pending => "•",
-            TaskStatus::InProgress => ">",
-            TaskStatus::Completed => "✔",
-            TaskStatus::Blocked => "!",
-        }
-    }
-}
+pub type TaskStatus = TaskTrackingStatus;
 
 /// A single task item
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -90,7 +54,7 @@ impl TaskChecklist {
         for item in &self.items {
             md.push_str(&format!(
                 "- {} {}\n",
-                item.status.checkbox(),
+                item.status.flat_checkbox(),
                 item.description
             ));
         }
@@ -101,37 +65,19 @@ impl TaskChecklist {
     }
 
     fn summary(&self) -> Value {
-        let total = self.items.len();
-        let completed = self
-            .items
-            .iter()
-            .filter(|i| i.status == TaskStatus::Completed)
-            .count();
-        let in_progress = self
-            .items
-            .iter()
-            .filter(|i| i.status == TaskStatus::InProgress)
-            .count();
-        let blocked = self
-            .items
-            .iter()
-            .filter(|i| i.status == TaskStatus::Blocked)
-            .count();
-        let pending = total - completed - in_progress - blocked;
-        let progress_pct = if total > 0 {
-            (completed as f64 / total as f64 * 100.0).round() as usize
-        } else {
-            0
-        };
+        let mut counts = TaskCounts::default();
+        for item in &self.items {
+            counts.add(&item.status);
+        }
 
         json!({
             "title": self.title,
-            "total": total,
-            "completed": completed,
-            "in_progress": in_progress,
-            "pending": pending,
-            "blocked": blocked,
-            "progress_percent": progress_pct,
+            "total": counts.total,
+            "completed": counts.completed,
+            "in_progress": counts.in_progress,
+            "pending": counts.pending,
+            "blocked": counts.blocked,
+            "progress_percent": counts.progress_percent(),
             "items": self.items.iter().map(|item| {
                 json!({
                     "index": item.index,
@@ -257,37 +203,15 @@ impl TaskTrackerTool {
                 notes_lines.push(line.to_string());
                 continue;
             }
-            if let Some(rest) = trimmed
-                .strip_prefix("- [x] ")
-                .or(trimmed.strip_prefix("- [X] "))
-            {
-                items.push(TaskItem {
-                    index: idx,
-                    description: rest.to_string(),
-                    status: TaskStatus::Completed,
-                });
-                idx += 1;
-            } else if let Some(rest) = trimmed.strip_prefix("- [/] ") {
-                items.push(TaskItem {
-                    index: idx,
-                    description: rest.to_string(),
-                    status: TaskStatus::InProgress,
-                });
-                idx += 1;
-            } else if let Some(rest) = trimmed.strip_prefix("- [!] ") {
-                items.push(TaskItem {
-                    index: idx,
-                    description: rest.to_string(),
-                    status: TaskStatus::Blocked,
-                });
-                idx += 1;
-            } else if let Some(rest) = trimmed.strip_prefix("- [ ] ") {
-                items.push(TaskItem {
-                    index: idx,
-                    description: rest.to_string(),
-                    status: TaskStatus::Pending,
-                });
-                idx += 1;
+            if let Some(rest) = trimmed.strip_prefix("- ") {
+                if let Some((status, description)) = parse_marked_status_prefix(rest) {
+                    items.push(TaskItem {
+                        index: idx,
+                        description,
+                        status,
+                    });
+                    idx += 1;
+                }
             }
         }
 
@@ -368,16 +292,7 @@ impl TaskTrackerTool {
             .as_deref()
             .context("'status' is required for 'update' (pending|in_progress|completed|blocked)")?;
 
-        let new_status = match status_str {
-            "pending" => TaskStatus::Pending,
-            "in_progress" => TaskStatus::InProgress,
-            "completed" => TaskStatus::Completed,
-            "blocked" => TaskStatus::Blocked,
-            other => anyhow::bail!(
-                "Invalid status '{}'. Use: pending, in_progress, completed, blocked",
-                other
-            ),
-        };
+        let new_status = TaskStatus::from_str(status_str)?;
 
         // Find position first to avoid borrow conflicts
         let item_count = checklist.items.len();
@@ -444,10 +359,7 @@ impl TaskTrackerTool {
             status: TaskStatus::Pending,
         });
 
-        if let Some(ref notes) = args.notes {
-            let existing = checklist.notes.take().unwrap_or_default();
-            checklist.notes = Some(format!("{}\n{}", existing, notes).trim().to_string());
-        }
+        checklist.notes = append_notes(checklist.notes.take(), args.notes.as_deref());
 
         self.save_checklist(checklist).await?;
         let summary = checklist.summary();
