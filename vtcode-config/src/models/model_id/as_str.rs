@@ -56,6 +56,7 @@ impl ModelId {
             ModelId::OllamaQwen3Coder480bCloud => models::ollama::QWEN3_CODER_480B_CLOUD,
             ModelId::OllamaDevstral2123bCloud => models::ollama::DEVSTRAL_2_123B_CLOUD,
             ModelId::OllamaMinimaxM2Cloud => models::ollama::MINIMAX_M2_CLOUD,
+            ModelId::OllamaMinimaxM25Cloud => models::ollama::MINIMAX_M25_CLOUD,
             ModelId::OllamaNemotron3Nano30bCloud => models::ollama::NEMOTRON_3_NANO_30B_CLOUD,
             // Hugging Face models
             ModelId::HuggingFaceDeepseekV32 => models::huggingface::DEEPSEEK_V32,
@@ -69,6 +70,9 @@ impl ModelId {
             ModelId::HuggingFaceGlm5Novita => models::huggingface::ZAI_GLM_5_NOVITA,
             ModelId::HuggingFaceQwen3CoderNextNovita => {
                 models::huggingface::QWEN3_CODER_NEXT_NOVITA
+            }
+            ModelId::HuggingFaceQwen35397BA17BTogether => {
+                models::huggingface::QWEN3_5_397B_A17B_TOGETHER
             }
             // MiniMax models
             ModelId::MinimaxM25 => models::minimax::MINIMAX_M2_5,
