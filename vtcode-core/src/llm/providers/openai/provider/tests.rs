@@ -95,8 +95,7 @@ fn chat_completions_payload_uses_function_wrapper() {
 
 #[test]
 fn responses_payload_uses_function_wrapper() {
-    let provider =
-        OpenAIProvider::with_model(String::new(), models::openai::GPT_5.to_string());
+    let provider = OpenAIProvider::with_model(String::new(), models::openai::GPT_5.to_string());
     let request = sample_request(models::openai::GPT_5);
     let payload = provider
         .convert_to_openai_responses_format(&request)
@@ -117,7 +116,6 @@ fn responses_payload_uses_function_wrapper() {
         tool_object.get("name").and_then(Value::as_str),
         Some("search_workspace")
     );
-}
 }
 
 #[test]
@@ -455,8 +453,7 @@ fn chat_completions_uses_max_completion_tokens_field() {
 
 #[test]
 fn chat_completions_applies_temperature_independent_of_max_tokens() {
-    let provider =
-        OpenAIProvider::with_model(String::new(), models::openai::GPT_5.to_string());
+    let provider = OpenAIProvider::with_model(String::new(), models::openai::GPT_5.to_string());
     let mut request = sample_request(models::openai::GPT_5);
     request.temperature = Some(0.4);
 
@@ -474,8 +471,7 @@ fn chat_completions_applies_temperature_independent_of_max_tokens() {
 
 #[test]
 fn responses_payload_omits_parallel_tool_config_when_not_supported() {
-    let provider =
-        OpenAIProvider::with_model(String::new(), models::openai::GPT_5.to_string());
+    let provider = OpenAIProvider::with_model(String::new(), models::openai::GPT_5.to_string());
     let mut request = sample_request(models::openai::GPT_5);
     request.parallel_tool_calls = Some(true);
     request.parallel_tool_config = Some(Box::new(ParallelToolConfig {

@@ -302,13 +302,13 @@ impl FileSearchRpcHandler {
 /// # Returns
 ///
 /// Parsed RPC request or error response
-pub fn parse_rpc_request(json_string: &str) -> Result<RpcRequest, RpcResponse> {
+pub fn parse_rpc_request(json_string: &str) -> Result<RpcRequest, Box<RpcResponse>> {
     match serde_json::from_str::<RpcRequest>(json_string) {
         Ok(request) => Ok(request),
         Err(err) => {
             let error_response =
                 RpcResponse::error(None, RpcError::invalid_request(err.to_string()));
-            Err(error_response)
+            Err(Box::new(error_response))
         }
     }
 }

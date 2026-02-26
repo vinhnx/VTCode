@@ -5,8 +5,18 @@
 
 use crate::tools::improvements_errors::ObservabilityContext;
 use serde_json::{Map, Value};
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Instant;
+
+/// Type alias for the async continuation function
+type AsyncContinuation<'a> =
+    Box<dyn Fn(ToolRequest) -> Pin<Box<dyn Future<Output = ToolResult> + Send>> + Send + Sync + 'a>;
+
+/// Type alias for the owned async continuation function
+type AsyncContinuationOwned =
+    Box<dyn Fn(ToolRequest) -> Pin<Box<dyn Future<Output = ToolResult> + Send>> + Send + Sync>;
 
 /// Async middleware trait
 #[async_trait::async_trait]
@@ -15,19 +25,8 @@ pub trait AsyncMiddleware: Send + Sync {
     fn name(&self) -> &str;
 
     /// Execute middleware
-    async fn execute<'a>(
-        &'a self,
-        request: ToolRequest,
-        next: Box<
-            dyn Fn(
-                    ToolRequest,
-                )
-                    -> std::pin::Pin<Box<dyn std::future::Future<Output = ToolResult> + Send>>
-                + Send
-                + Sync
-                + 'a,
-        >,
-    ) -> ToolResult;
+    async fn execute<'a>(&'a self, request: ToolRequest, next: AsyncContinuation<'a>)
+    -> ToolResult;
 }
 
 /// Tool request
@@ -80,14 +79,7 @@ impl AsyncMiddlewareChain {
         fn build_chain(
             middlewares: &[Arc<dyn AsyncMiddleware>],
             executor: Arc<dyn Fn(ToolRequest) -> ToolResult + Send + Sync>,
-        ) -> Box<
-            dyn Fn(
-                    ToolRequest,
-                )
-                    -> std::pin::Pin<Box<dyn std::future::Future<Output = ToolResult> + Send>>
-                + Send
-                + Sync,
-        > {
+        ) -> AsyncContinuationOwned {
             if middlewares.is_empty() {
                 Box::new(move |req: ToolRequest| {
                     let result = executor(req);
@@ -101,14 +93,7 @@ impl AsyncMiddlewareChain {
                     let current = current.clone();
                     let rest = rest.clone();
                     Box::pin(async move {
-                        let next: Box<
-                            dyn Fn(
-                                    ToolRequest,
-                                ) -> std::pin::Pin<
-                                    Box<dyn std::future::Future<Output = ToolResult> + Send>,
-                                > + Send
-                                + Sync,
-                        > = Box::new(move |r: ToolRequest| {
+                        let next: AsyncContinuationOwned = Box::new(move |r: ToolRequest| {
                             let rest = rest.clone();
                             Box::pin(async move { rest(r).await })
                         });

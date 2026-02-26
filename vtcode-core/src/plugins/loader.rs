@@ -194,7 +194,7 @@ impl PluginLoader {
         let plugin_name = name.map(|s| s.to_string()).unwrap_or_else(|| {
             marketplace_id
                 .split('/')
-                .last()
+                .next_back()
                 .unwrap_or(marketplace_id)
                 .to_string()
         });
@@ -263,10 +263,10 @@ impl PluginLoader {
             if path.is_dir() {
                 // Check if it contains a plugin manifest
                 let manifest_path = path.join(".vtcode-plugin/plugin.json");
-                if manifest_path.exists() {
-                    if let Some(name) = path.file_name() {
-                        plugins.push(name.to_string_lossy().to_string());
-                    }
+                if manifest_path.exists()
+                    && let Some(name) = path.file_name()
+                {
+                    plugins.push(name.to_string_lossy().to_string());
                 }
             }
         }
@@ -317,7 +317,7 @@ impl PluginLoader {
         // Extract name from git URL (e.g., https://github.com/user/repo.git -> repo)
         url.trim_end_matches(".git")
             .split('/')
-            .last()
+            .next_back()
             .unwrap_or("unknown-plugin")
             .to_string()
     }
@@ -326,7 +326,7 @@ impl PluginLoader {
     fn extract_name_from_url(&self, url: &str) -> String {
         // Extract name from URL path
         url.split('/')
-            .last()
+            .next_back()
             .unwrap_or("unknown-plugin")
             .to_string()
     }

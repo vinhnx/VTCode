@@ -111,24 +111,24 @@ impl McpCircuitBreaker {
         };
 
         // Try to load state
-        if let Ok(data) = fs::read_to_string(&path) {
-            if let Ok(state) = serde_json::from_str::<PersistedState>(&data) {
-                breaker.state.store(state.state, Ordering::Release);
-                breaker
-                    .consecutive_failures
-                    .store(state.consecutive_failures, Ordering::Relaxed);
+        if let Ok(data) = fs::read_to_string(&path)
+            && let Ok(state) = serde_json::from_str::<PersistedState>(&data)
+        {
+            breaker.state.store(state.state, Ordering::Release);
+            breaker
+                .consecutive_failures
+                .store(state.consecutive_failures, Ordering::Relaxed);
 
-                if let Some(epoch) = state.last_failure_epoch_secs {
-                    // Only restore if plausible (roughly sanity check vs now)
-                    let now = SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .unwrap_or_default()
-                        .as_secs();
-                    // If it's in the past and within reasonable bounds (e.g. not older than a year and not in future)
-                    if epoch <= now {
-                        *breaker.last_failure_time.lock() =
-                            Some(std::time::UNIX_EPOCH + std::time::Duration::from_secs(epoch));
-                    }
+            if let Some(epoch) = state.last_failure_epoch_secs {
+                // Only restore if plausible (roughly sanity check vs now)
+                let now = SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs();
+                // If it's in the past and within reasonable bounds (e.g. not older than a year and not in future)
+                if epoch <= now {
+                    *breaker.last_failure_time.lock() =
+                        Some(std::time::UNIX_EPOCH + std::time::Duration::from_secs(epoch));
                 }
             }
         }

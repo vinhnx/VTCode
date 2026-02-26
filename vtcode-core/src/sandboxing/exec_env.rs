@@ -9,22 +9,17 @@ use tokio_util::sync::CancellationToken;
 use super::SandboxPermissions;
 
 /// Mechanism to terminate an exec invocation before it finishes naturally.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub enum ExecExpiration {
     /// Timeout after a specified duration.
     Timeout(Duration),
 
     /// Use the default timeout.
+    #[default]
     DefaultTimeout,
 
     /// Cancel via a cancellation token.
     Cancellation(CancellationToken),
-}
-
-impl Default for ExecExpiration {
-    fn default() -> Self {
-        Self::DefaultTimeout
-    }
 }
 
 impl From<Option<u64>> for ExecExpiration {

@@ -258,18 +258,18 @@ impl ToolRouter {
         mcp_prefix: Option<&str>,
     ) -> Result<ToolCall, ToolCallError> {
         // Check if this is an MCP tool call (has server prefix)
-        if let Some(prefix) = mcp_prefix {
-            if name.starts_with(prefix) {
-                let parts: Vec<&str> = name.splitn(2, '/').collect();
-                if parts.len() == 2 {
-                    return Ok(ToolCall {
-                        tool_name: name.clone(),
-                        call_id,
-                        payload: ToolPayload::Mcp {
-                            arguments: Some(serde_json::from_str(&arguments).unwrap_or_default()),
-                        },
-                    });
-                }
+        if let Some(prefix) = mcp_prefix
+            && name.starts_with(prefix)
+        {
+            let parts: Vec<&str> = name.splitn(2, '/').collect();
+            if parts.len() == 2 {
+                return Ok(ToolCall {
+                    tool_name: name.clone(),
+                    call_id,
+                    payload: ToolPayload::Mcp {
+                        arguments: Some(serde_json::from_str(&arguments).unwrap_or_default()),
+                    },
+                });
             }
         }
 

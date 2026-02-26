@@ -213,33 +213,33 @@ fn validate_reasoning_constraints(
         });
     }
 
-    if let Some(top_p) = request.top_p {
-        if !(0.95..=1.0).contains(&top_p) {
-            let formatted_error = error_display::format_llm_error(
-                "Anthropic",
-                &format!(
-                    "top_p must be between 0.95 and 1.0 (got {}) when extended thinking is enabled.",
-                    top_p
-                ),
-            );
-            return Err(LLMError::InvalidRequest {
-                message: formatted_error,
-                metadata: None,
-            });
-        }
+    if let Some(top_p) = request.top_p
+        && !(0.95..=1.0).contains(&top_p)
+    {
+        let formatted_error = error_display::format_llm_error(
+            "Anthropic",
+            &format!(
+                "top_p must be between 0.95 and 1.0 (got {}) when extended thinking is enabled.",
+                top_p
+            ),
+        );
+        return Err(LLMError::InvalidRequest {
+            message: formatted_error,
+            metadata: None,
+        });
     }
 
-    if let Some(last_msg) = request.messages.last() {
-        if last_msg.role == MessageRole::Assistant {
-            let formatted_error = error_display::format_llm_error(
-                "Anthropic",
-                "Pre-filling assistant responses is not supported when extended thinking is enabled.",
-            );
-            return Err(LLMError::InvalidRequest {
-                message: formatted_error,
-                metadata: None,
-            });
-        }
+    if let Some(last_msg) = request.messages.last()
+        && last_msg.role == MessageRole::Assistant
+    {
+        let formatted_error = error_display::format_llm_error(
+            "Anthropic",
+            "Pre-filling assistant responses is not supported when extended thinking is enabled.",
+        );
+        return Err(LLMError::InvalidRequest {
+            message: formatted_error,
+            metadata: None,
+        });
     }
 
     Ok(())
@@ -320,20 +320,20 @@ fn validate_schema_object(
             }
             "minItems" | "maxItems" | "uniqueItems" => {
                 if key == "minItems" {
-                    if let Some(min_items) = value.as_u64() {
-                        if min_items > 1 {
-                            let formatted_error = error_display::format_llm_error(
-                                "Anthropic",
-                                &format!(
-                                    "Array minItems only supports values 0 or 1, got {}, path: {}",
-                                    min_items, path
-                                ),
-                            );
-                            return Err(LLMError::InvalidRequest {
-                                message: formatted_error,
-                                metadata: None,
-                            });
-                        }
+                    if let Some(min_items) = value.as_u64()
+                        && min_items > 1
+                    {
+                        let formatted_error = error_display::format_llm_error(
+                            "Anthropic",
+                            &format!(
+                                "Array minItems only supports values 0 or 1, got {}, path: {}",
+                                min_items, path
+                            ),
+                        );
+                        return Err(LLMError::InvalidRequest {
+                            message: formatted_error,
+                            metadata: None,
+                        });
                     }
                 } else {
                     let formatted_error = error_display::format_llm_error(
@@ -350,20 +350,20 @@ fn validate_schema_object(
                 }
             }
             "additionalProperties" => {
-                if let Some(additional_props) = value.as_bool() {
-                    if additional_props {
-                        let formatted_error = error_display::format_llm_error(
-                            "Anthropic",
-                            &format!(
-                                "additionalProperties must be set to false, got {}, path: {}",
-                                additional_props, path
-                            ),
-                        );
-                        return Err(LLMError::InvalidRequest {
-                            message: formatted_error,
-                            metadata: None,
-                        });
-                    }
+                if let Some(additional_props) = value.as_bool()
+                    && additional_props
+                {
+                    let formatted_error = error_display::format_llm_error(
+                        "Anthropic",
+                        &format!(
+                            "additionalProperties must be set to false, got {}, path: {}",
+                            additional_props, path
+                        ),
+                    );
+                    return Err(LLMError::InvalidRequest {
+                        message: formatted_error,
+                        metadata: None,
+                    });
                 }
             }
             "properties" => {

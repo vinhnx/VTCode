@@ -304,13 +304,13 @@ impl Session {
 
         // Cache the reflowed content for this width in the transcript cache
         // This supports future reflows and width-specific optimizations
-        if !visible_lines.is_empty() {
-            if let Some(mut cache) = self.transcript_cache.take() {
-                // Convert the visible lines back to grouped by message for width-specific cache
-                // This enables efficient reflow when width changes
-                cache.cache_width_content(width, vec![visible_lines.clone()]);
-                self.transcript_cache = Some(cache);
-            }
+        if !visible_lines.is_empty()
+            && let Some(mut cache) = self.transcript_cache.take()
+        {
+            // Convert the visible lines back to grouped by message for width-specific cache
+            // This enables efficient reflow when width changes
+            cache.cache_width_content(width, vec![visible_lines.clone()]);
+            self.transcript_cache = Some(cache);
         }
 
         // Cache for next render (wrapped in Arc for cheap sharing)

@@ -365,15 +365,14 @@ impl ToolExecutionHistory {
                 continue;
             }
 
-            if let Ok(result) = &record.result {
-                if result
+            if let Ok(result) = &record.result
+                && result
                     .get("spooled_to_file")
                     .and_then(|v| v.as_bool())
                     .unwrap_or(false)
-                    && spool_path_exists(result)
-                {
-                    return Some(result.clone());
-                }
+                && spool_path_exists(result)
+            {
+                return Some(result.clone());
             }
         }
         None

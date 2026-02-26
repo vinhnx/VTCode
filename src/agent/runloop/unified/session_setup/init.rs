@@ -25,7 +25,10 @@ use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::core::agent::state::recover_history_from_crash;
 use vtcode_core::core::decision_tracker::DecisionTracker;
-use vtcode_core::llm::{factory::create_provider_with_config, provider as uni};
+use vtcode_core::llm::{
+    factory::{ProviderConfig, create_provider_with_config},
+    provider as uni,
+};
 
 use vtcode_core::models::ModelId;
 use vtcode_core::tools::build_function_declarations_cached;
@@ -261,13 +264,15 @@ fn create_provider_client(
     };
     create_provider_with_config(
         &provider_name,
-        Some(config.api_key.clone()),
-        None,
-        Some(config.model.clone()),
-        Some(config.prompt_cache.clone()),
-        None,
-        vt_cfg.map(|cfg| cfg.provider.anthropic.clone()),
-        vt_cfg.map(|cfg| cfg.model.clone()),
+        ProviderConfig {
+            api_key: Some(config.api_key.clone()),
+            base_url: None,
+            model: Some(config.model.clone()),
+            prompt_cache: Some(config.prompt_cache.clone()),
+            timeouts: None,
+            anthropic: vt_cfg.map(|cfg| cfg.provider.anthropic.clone()),
+            model_behavior: vt_cfg.map(|cfg| cfg.model.clone()),
+        },
     )
     .context("Failed to initialize provider client")
 }

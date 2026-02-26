@@ -318,14 +318,11 @@ impl TerminalSurface {
         let resolved_rows = resolved_rows.max(1);
 
         // Check if terminal supports the features we need
-        if stderr_is_terminal {
-            if let Some(caps) = capabilities {
-                if !caps.is_basic_tui() {
-                    tracing::warn!(
-                        "Terminal has limited capabilities, some features may be disabled"
-                    );
-                }
-            }
+        if stderr_is_terminal
+            && let Some(caps) = capabilities
+            && !caps.is_basic_tui()
+        {
+            tracing::warn!("Terminal has limited capabilities, some features may be disabled");
         }
 
         let use_alternate = match preference {
@@ -469,10 +466,10 @@ pub async fn run_tui(
         None
     };
 
-    if let Some(result) = leave_alternate_result {
-        if let Err(error) = result {
-            tracing::warn!(%error, "failed to leave alternate screen");
-        }
+    if let Some(result) = leave_alternate_result
+        && let Err(error) = result
+    {
+        tracing::warn!(%error, "failed to leave alternate screen");
     }
 
     // Restore terminal modes (handles all modes including raw mode)

@@ -244,8 +244,7 @@ fn truncate_string(s: &str, max_width: usize) -> String {
         let end = s
             .char_indices()
             .map(|(i, _)| i)
-            .filter(|&i| i <= target)
-            .next_back()
+            .rfind(|&i| i <= target)
             .unwrap_or(0);
         format!("{}...", &s[..end])
     }

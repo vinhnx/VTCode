@@ -51,10 +51,10 @@ impl ToolRegistry {
         }
 
         // Check trait-based tools
-        if let Some(reg) = self.inventory.get_registration(normalized) {
-            if let super::ToolHandler::TraitObject(tool) = reg.handler() {
-                return tool.is_mutating();
-            }
+        if let Some(reg) = self.inventory.get_registration(normalized)
+            && let super::ToolHandler::TraitObject(tool) = reg.handler()
+        {
+            return tool.is_mutating();
         }
 
         // Conservative default: unknown tools are considered mutating

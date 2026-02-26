@@ -226,9 +226,9 @@ pub fn parse_skill_content_with_defaults(
 }
 
 fn infer_description_from_instructions(instructions: &str) -> Option<String> {
-    let mut lines = instructions.lines();
+    let lines = instructions.lines();
     let mut paragraph = Vec::new();
-    while let Some(line) = lines.next() {
+    for line in lines {
         let trimmed = line.trim();
         if trimmed.is_empty() {
             if !paragraph.is_empty() {

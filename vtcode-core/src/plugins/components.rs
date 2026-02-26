@@ -41,7 +41,7 @@ impl CommandsHandler {
             let mut entries = fs::read_dir(&default_commands_dir).await?;
             while let Some(entry) = entries.next_entry().await? {
                 let path = entry.path();
-                if path.is_file() && path.extension().map_or(false, |ext| ext == "md") {
+                if path.is_file() && path.extension().is_some_and(|ext| ext == "md") {
                     command_files.push(path);
                 }
             }
@@ -78,7 +78,7 @@ impl AgentsHandler {
             let mut entries = fs::read_dir(&default_agents_dir).await?;
             while let Some(entry) = entries.next_entry().await? {
                 let path = entry.path();
-                if path.is_file() && path.extension().map_or(false, |ext| ext == "md") {
+                if path.is_file() && path.extension().is_some_and(|ext| ext == "md") {
                     agent_files.push(path);
                 }
             }

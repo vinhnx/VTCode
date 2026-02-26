@@ -140,8 +140,7 @@ pub trait Tool: Send + Sync {
         if pattern == "*" {
             return true;
         }
-        if pattern.ends_with('*') {
-            let prefix = &pattern[..pattern.len() - 1];
+        if let Some(prefix) = pattern.strip_suffix('*') {
             return self.kind().starts_with(prefix);
         }
         self.kind() == pattern

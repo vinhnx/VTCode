@@ -67,13 +67,7 @@ pub fn generate_notification_config(
             config_lines.push("# - Terminal bell escape sequences (\\a)".to_string());
         }
         _ => {
-            config_lines.push(
-                format!(
-                    "# {} Notification Configuration",
-                    format!("{:?}", terminal_type)
-                )
-                .to_string(),
-            );
+            config_lines.push(format!("# {:?} Notification Configuration", terminal_type));
             config_lines
                 .push("# This terminal supports standard ANSI bell notifications.".to_string());
             config_lines.push(
@@ -114,11 +108,7 @@ pub fn get_notification_instructions(terminal_type: TerminalType) -> Vec<String>
             "4. CONFIGURE: Set 'Bell Duration' for visual notifications".to_string(),
         ],
         _ => vec![
-            format!(
-                "1. CHECK: Documentation for {}",
-                format!("{:?}", terminal_type)
-            )
-            .to_string(),
+            format!("1. CHECK: Documentation for {:?}", terminal_type),
             "2. CONFIGURE: Terminal bell/notifications in preferences".to_string(),
             "3. TEST: Use 'echo -e \"\\a\"' to test bell notification".to_string(),
         ],

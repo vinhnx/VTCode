@@ -379,14 +379,14 @@ impl Session {
                 let stripped = text_utils::strip_ansi_codes(&line_text);
                 text_utils::is_list_item(stripped.as_ref())
             });
-        if suppress_prefix_bullet && !ui::INLINE_AGENT_QUOTE_PREFIX.is_empty() {
-            if let Some(prefix_span) = prefix_spans
+        if suppress_prefix_bullet
+            && !ui::INLINE_AGENT_QUOTE_PREFIX.is_empty()
+            && let Some(prefix_span) = prefix_spans
                 .first_mut()
                 .filter(|span| AsRef::<str>::as_ref(&span.content) == ui::INLINE_AGENT_QUOTE_PREFIX)
-            {
-                let replacement = " ".repeat(UnicodeWidthStr::width(ui::INLINE_AGENT_QUOTE_PREFIX));
-                prefix_span.content = replacement.into();
-            }
+        {
+            let replacement = " ".repeat(UnicodeWidthStr::width(ui::INLINE_AGENT_QUOTE_PREFIX));
+            prefix_span.content = replacement.into();
         }
 
         let indent = " ".repeat(prefix_width);
@@ -511,7 +511,7 @@ impl Session {
             content.first().and_then(|span| {
                 let text: &str = span.content.as_ref();
                 // Find the prefix (e.g., "- " or "+ ") including leading whitespace
-                if let Some(pos) = text.find(|c: char| c == '-' || c == '+') {
+                if let Some(pos) = text.find(['-', '+']) {
                     let prefix = &text[..=pos];
                     // Include the space after the prefix if present
                     let full_prefix =
@@ -860,7 +860,7 @@ impl Session {
                         .collect::<String>(),
                 )
             };
-            let line_text: &str = &*line_text_storage;
+            let line_text: &str = &line_text_storage;
             let trimmed_start = line_text.trim_start();
 
             let mut next_in_fenced_block = in_fenced_block;
@@ -929,7 +929,7 @@ impl Session {
         if line.spans.len() != 1 {
             return false;
         }
-        let text: &str = &*line.spans[0].content;
+        let text: &str = &line.spans[0].content;
         if text.trim().is_empty() {
             return false;
         }
@@ -959,7 +959,7 @@ impl Session {
         max_width: usize,
     ) -> Line<'static> {
         let span = &line.spans[0];
-        if let Some(justified) = text_utils::justify_plain_text(&*span.content, max_width) {
+        if let Some(justified) = text_utils::justify_plain_text(&span.content, max_width) {
             Line::from(justified).style(span.style)
         } else {
             line.clone()

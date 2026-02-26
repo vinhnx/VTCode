@@ -126,8 +126,8 @@ impl SlashPalette {
         self.list_state
             .selected()
             .and_then(|index| self.suggestions.get(index))
-            .and_then(|suggestion| match suggestion {
-                SlashPaletteSuggestion::Static(info) => Some(*info),
+            .map(|suggestion| match suggestion {
+                SlashPaletteSuggestion::Static(info) => *info,
             })
     }
 
@@ -179,8 +179,8 @@ impl SlashPalette {
                 None
             } else if new_suggestions
                 .iter()
-                .filter_map(|suggestion| match suggestion {
-                    SlashPaletteSuggestion::Static(info) => Some(info),
+                .map(|suggestion| match suggestion {
+                    SlashPaletteSuggestion::Static(info) => info,
                 })
                 .all(|info| info.name.starts_with(&normalized))
             {

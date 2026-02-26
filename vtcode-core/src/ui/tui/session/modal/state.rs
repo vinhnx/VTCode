@@ -734,46 +734,44 @@ impl WizardModalState {
         }
 
         // Search handling (if enabled)
-        if let Some(search) = self.search.as_mut() {
-            if let Some(step) = self.steps.get_mut(self.current_step) {
-                match key.code {
-                    KeyCode::Char(ch)
-                        if !modifiers.control && !modifiers.alt && !modifiers.command =>
-                    {
-                        search.push_char(ch);
+        if let Some(search) = self.search.as_mut()
+            && let Some(step) = self.steps.get_mut(self.current_step)
+        {
+            match key.code {
+                KeyCode::Char(ch) if !modifiers.control && !modifiers.alt && !modifiers.command => {
+                    search.push_char(ch);
+                    step.list.apply_search(&search.query);
+                    return ModalListKeyResult::Redraw;
+                }
+                KeyCode::Backspace => {
+                    if search.backspace() {
                         step.list.apply_search(&search.query);
                         return ModalListKeyResult::Redraw;
                     }
-                    KeyCode::Backspace => {
-                        if search.backspace() {
-                            step.list.apply_search(&search.query);
-                            return ModalListKeyResult::Redraw;
-                        }
-                        return ModalListKeyResult::HandledNoRedraw;
-                    }
-                    KeyCode::Delete => {
-                        if search.clear() {
-                            step.list.apply_search(&search.query);
-                            return ModalListKeyResult::Redraw;
-                        }
-                        return ModalListKeyResult::HandledNoRedraw;
-                    }
-                    KeyCode::Tab => {
-                        if let Some(best_match) = step.list.get_best_matching_item(&search.query) {
-                            search.query = best_match;
-                            step.list.apply_search(&search.query);
-                            return ModalListKeyResult::Redraw;
-                        }
-                        return ModalListKeyResult::HandledNoRedraw;
-                    }
-                    KeyCode::Esc => {
-                        if search.clear() {
-                            step.list.apply_search(&search.query);
-                            return ModalListKeyResult::Redraw;
-                        }
-                    }
-                    _ => {}
+                    return ModalListKeyResult::HandledNoRedraw;
                 }
+                KeyCode::Delete => {
+                    if search.clear() {
+                        step.list.apply_search(&search.query);
+                        return ModalListKeyResult::Redraw;
+                    }
+                    return ModalListKeyResult::HandledNoRedraw;
+                }
+                KeyCode::Tab => {
+                    if let Some(best_match) = step.list.get_best_matching_item(&search.query) {
+                        search.query = best_match;
+                        step.list.apply_search(&search.query);
+                        return ModalListKeyResult::Redraw;
+                    }
+                    return ModalListKeyResult::HandledNoRedraw;
+                }
+                KeyCode::Esc => {
+                    if search.clear() {
+                        step.list.apply_search(&search.query);
+                        return ModalListKeyResult::Redraw;
+                    }
+                }
+                _ => {}
             }
         }
 
@@ -782,19 +780,17 @@ impl WizardModalState {
             && !modifiers.alt
             && !modifiers.command
             && self.search.is_none()
+            && let KeyCode::Char(ch) = key.code
+            && ch.is_ascii_digit()
+            && ch != '0'
         {
-            if let KeyCode::Char(ch) = key.code
-                && ch.is_ascii_digit()
-                && ch != '0'
+            let target_index = ch.to_digit(10).unwrap_or(1).saturating_sub(1) as usize;
+            if let Some(step) = self.steps.get_mut(self.current_step)
+                && step.list.select_nth_selectable(target_index)
             {
-                let target_index = ch.to_digit(10).unwrap_or(1).saturating_sub(1) as usize;
-                if let Some(step) = self.steps.get_mut(self.current_step)
-                    && step.list.select_nth_selectable(target_index)
-                {
-                    return self.submit_current_selection();
-                }
-                return ModalListKeyResult::HandledNoRedraw;
+                return self.submit_current_selection();
             }
+            return ModalListKeyResult::HandledNoRedraw;
         }
 
         match key.code {
@@ -963,10 +959,10 @@ impl WizardModalState {
         let step = self.steps.get(self.current_step)?;
         if step.notes_active || !step.notes.is_empty() {
             let label = step.freeform_label.as_deref().unwrap_or("›");
-            if step.notes.is_empty() {
-                if let Some(placeholder) = step.freeform_placeholder.as_ref() {
-                    return Some(format!("{} {}", label, placeholder));
-                }
+            if step.notes.is_empty()
+                && let Some(placeholder) = step.freeform_placeholder.as_ref()
+            {
+                return Some(format!("{} {}", label, placeholder));
             }
             Some(format!("{} {}", label, step.notes))
         } else {

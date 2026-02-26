@@ -250,27 +250,27 @@ pub fn render_wizard_modal_body(
     }
     idx += 1;
 
-    if let Some(step) = wizard.steps.get(wizard.current_step) {
-        if step.notes_active || !step.notes.is_empty() {
-            let label_text = step.freeform_label.as_deref().unwrap_or("›");
-            let mut spans = vec![Span::styled(format!("{} ", label_text), styles.header)];
+    if let Some(step) = wizard.steps.get(wizard.current_step)
+        && (step.notes_active || !step.notes.is_empty())
+    {
+        let label_text = step.freeform_label.as_deref().unwrap_or("›");
+        let mut spans = vec![Span::styled(format!("{} ", label_text), styles.header)];
 
-            if step.notes.is_empty() {
-                if let Some(placeholder) = step.freeform_placeholder.as_ref() {
-                    spans.push(Span::styled(placeholder.clone(), styles.detail));
-                }
-            } else {
-                spans.push(Span::styled(step.notes.clone(), styles.selectable));
+        if step.notes.is_empty() {
+            if let Some(placeholder) = step.freeform_placeholder.as_ref() {
+                spans.push(Span::styled(placeholder.clone(), styles.detail));
             }
-
-            if step.notes_active {
-                spans.push(Span::styled("▌", styles.highlight));
-            }
-
-            let notes = Paragraph::new(Line::from(spans));
-            frame.render_widget(notes, chunks[idx]);
-            idx += 1;
+        } else {
+            spans.push(Span::styled(step.notes.clone(), styles.selectable));
         }
+
+        if step.notes_active {
+            spans.push(Span::styled("▌", styles.highlight));
+        }
+
+        let notes = Paragraph::new(Line::from(spans));
+        frame.render_widget(notes, chunks[idx]);
+        idx += 1;
     }
 
     if !instruction_lines.is_empty() && idx < chunks.len() {
@@ -666,7 +666,7 @@ pub(super) fn highlight_segments(
 
         let mut search_start = 0usize;
         while search_start < lower.len() {
-            let Some(pos) = lower[search_start..].find(&needle) else {
+            let Some(pos) = lower[search_start..].find(needle) else {
                 break;
             };
             let byte_start = search_start + pos;

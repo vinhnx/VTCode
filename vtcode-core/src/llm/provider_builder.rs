@@ -119,7 +119,9 @@ mod http_client_pool {
     use std::sync::{Arc, RwLock};
     use std::time::Duration;
 
-    static CLIENT_POOL: Lazy<Arc<RwLock<HashMap<String, Arc<HttpClient>>>>> = Lazy::new(|| {
+    type HttpClientPool = Arc<RwLock<HashMap<String, Arc<HttpClient>>>>;
+
+    static CLIENT_POOL: Lazy<HttpClientPool> = Lazy::new(|| {
         let mut pool = HashMap::new();
 
         // Default client

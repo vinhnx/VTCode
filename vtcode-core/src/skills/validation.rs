@@ -768,20 +768,17 @@ impl SkillValidator {
         }
 
         // Check cache
-        if let Ok(metadata) = std::fs::metadata(schema_path) {
-            if let Ok(mtime) = metadata.modified() {
-                if let Some((cached_mtime, cached_result)) =
-                    self.schema_validation_cache.get(schema_path)
-                {
-                    if *cached_mtime == mtime {
-                        let mut result = cached_result.clone();
-                        // Update execution time to reflect cache hit (near zero)
-                        result.execution_time_ms = start_time.elapsed().as_millis() as u64;
-                        result.message = format!("{} (cached)", result.message);
-                        return result;
-                    }
-                }
-            }
+        if let Ok(metadata) = std::fs::metadata(schema_path)
+            && let Ok(mtime) = metadata.modified()
+            && let Some((cached_mtime, cached_result)) =
+                self.schema_validation_cache.get(schema_path)
+            && *cached_mtime == mtime
+        {
+            let mut result = cached_result.clone();
+            // Update execution time to reflect cache hit (near zero)
+            result.execution_time_ms = start_time.elapsed().as_millis() as u64;
+            result.message = format!("{} (cached)", result.message);
+            return result;
         }
 
         let result = match read_file_with_context_sync(schema_path, "skill JSON schema") {
@@ -827,11 +824,11 @@ impl SkillValidator {
         };
 
         // Update cache
-        if let Ok(metadata) = std::fs::metadata(schema_path) {
-            if let Ok(mtime) = metadata.modified() {
-                self.schema_validation_cache
-                    .insert(schema_path.to_path_buf(), (mtime, result.clone()));
-            }
+        if let Ok(metadata) = std::fs::metadata(schema_path)
+            && let Ok(mtime) = metadata.modified()
+        {
+            self.schema_validation_cache
+                .insert(schema_path.to_path_buf(), (mtime, result.clone()));
         }
 
         result

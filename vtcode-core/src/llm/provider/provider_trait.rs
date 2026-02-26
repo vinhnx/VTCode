@@ -29,10 +29,10 @@ pub fn get_cached_capabilities(provider: &dyn LLMProvider, model: &str) -> Provi
     let cache_key = format!("{}::{}", provider.name(), model);
 
     // Check if already cached
-    if let Ok(cache) = CAPABILITY_CACHE.read() {
-        if let Some(caps) = cache.get(&cache_key) {
-            return caps.clone();
-        }
+    if let Ok(cache) = CAPABILITY_CACHE.read()
+        && let Some(caps) = cache.get(&cache_key)
+    {
+        return caps.clone();
     }
 
     // Compute capabilities

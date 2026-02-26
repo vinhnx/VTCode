@@ -6,7 +6,7 @@ pub const SUPPORTED_MODELS: &[&str] = &[
     "gpt-5.2",
     "gpt-5.2-2025-12-11",
     "gpt-5.2-codex",
-    "gpt-5.3-codex",     // GPT-5.3 Codex optimized for agentic coding with reasoning effort support
+    "gpt-5.3-codex", // GPT-5.3 Codex optimized for agentic coding with reasoning effort support
     "gpt-oss-20b",
     "gpt-oss-120b",
 ];

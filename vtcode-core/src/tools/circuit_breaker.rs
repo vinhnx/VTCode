@@ -3,9 +3,10 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum CircuitState {
-    Closed,   // Normal operation, allow all calls
+    #[default]
+    Closed, // Normal operation, allow all calls
     Open,     // Failing, reject all calls immediately
     HalfOpen, // Testing, allow limited calls to check recovery
 }
@@ -25,12 +26,6 @@ impl CircuitState {
     #[inline]
     fn can_transition_to(&self, target: CircuitState) -> bool {
         self.valid_transitions().contains(&target)
-    }
-}
-
-impl Default for CircuitState {
-    fn default() -> Self {
-        CircuitState::Closed
     }
 }
 
@@ -188,12 +183,12 @@ impl CircuitBreaker {
         let states = self.tool_states.read();
         let state = states.get(tool_name)?;
 
-        if state.status == CircuitState::Open {
-            if let Some(last) = state.last_failure_time {
-                let backoff = state.current_backoff;
-                let elapsed = last.elapsed();
-                return backoff.checked_sub(elapsed);
-            }
+        if state.status == CircuitState::Open
+            && let Some(last) = state.last_failure_time
+        {
+            let backoff = state.current_backoff;
+            let elapsed = last.elapsed();
+            return backoff.checked_sub(elapsed);
         }
         None
     }

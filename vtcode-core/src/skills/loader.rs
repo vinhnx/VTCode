@@ -264,33 +264,32 @@ fn discover_metadata_under_root(root: &SkillRoot, outcome: &mut SkillLoadOutcome
                 queue.push_back(path.clone());
 
                 // For tools, try to extract metadata without full parsing
-                if root.is_tool_root {
-                    if let Ok(Some(tool_meta)) = try_load_tool_from_dir(&path, root.scope) {
-                        outcome.skills.push(tool_meta);
-                    }
+                if root.is_tool_root
+                    && let Ok(Some(tool_meta)) = try_load_tool_from_dir(&path, root.scope)
+                {
+                    outcome.skills.push(tool_meta);
                 }
                 continue;
             }
 
             // Check for SKILL.md but only extract stub metadata
             // Extract skill name from parent directory name as fallback
-            if file_name == "SKILL.md" {
-                if let Some(skill_dir_name) = path
+            if file_name == "SKILL.md"
+                && let Some(skill_dir_name) = path
                     .parent()
                     .and_then(|p| p.file_name())
                     .and_then(|n| n.to_str())
-                {
-                    // Create minimal metadata stub without parsing
-                    // This allows quick skill listing with ~50-100 tokens instead of full manifest parsing
-                    outcome.skills.push(SkillMetadata {
-                        name: skill_dir_name.to_string(),
-                        description: format!("Skill from {}", skill_dir_name), // Placeholder
-                        short_description: None,
-                        path: path.clone(),
-                        scope: root.scope,
-                        manifest: None, // Important: Don't parse manifest
-                    });
-                }
+            {
+                // Create minimal metadata stub without parsing
+                // This allows quick skill listing with ~50-100 tokens instead of full manifest parsing
+                outcome.skills.push(SkillMetadata {
+                    name: skill_dir_name.to_string(),
+                    description: format!("Skill from {}", skill_dir_name), // Placeholder
+                    short_description: None,
+                    path: path.clone(),
+                    scope: root.scope,
+                    manifest: None, // Important: Don't parse manifest
+                });
             }
         }
     }
@@ -452,9 +451,9 @@ fn is_executable_file(path: &Path) -> bool {
 #[derive(Debug, Clone)]
 pub enum EnhancedSkill {
     /// Traditional instruction-based skill
-    Traditional(Skill),
+    Traditional(Box<Skill>),
     /// CLI-based tool skill
-    CliTool(CliToolBridge),
+    CliTool(Box<CliToolBridge>),
 }
 
 /// High-level loader that provides discovery and validation features
@@ -487,7 +486,7 @@ impl EnhancedSkillLoader {
                 let path = skill_ctx.path();
                 let (manifest, instructions) = crate::skills::manifest::parse_skill_file(path)?;
                 let skill = Skill::new(manifest, path.clone(), instructions)?;
-                return Ok(EnhancedSkill::Traditional(skill));
+                return Ok(EnhancedSkill::Traditional(Box::new(skill)));
             }
         }
 
@@ -495,7 +494,7 @@ impl EnhancedSkillLoader {
         for tool_config in &result.tools {
             if tool_config.name == name {
                 let bridge = CliToolBridge::new(tool_config.clone())?;
-                return Ok(EnhancedSkill::CliTool(bridge));
+                return Ok(EnhancedSkill::CliTool(Box::new(bridge)));
             }
         }
 

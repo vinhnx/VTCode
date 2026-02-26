@@ -31,38 +31,38 @@ impl OpenRouterProvider {
             });
 
             if msg.role == MessageRole::Assistant {
-                if let Some(tool_calls) = &msg.tool_calls {
-                    if !tool_calls.is_empty() {
-                        let tool_calls_json: Vec<Value> = tool_calls
-                            .iter()
-                            .filter_map(|tc| {
-                                tc.function.as_ref().map(|func| {
-                                    json!({
-                                        "id": tc.id,
-                                        "type": "function",
-                                        "function": {
-                                            "name": func.name,
-                                            "arguments": func.arguments
-                                        }
-                                    })
+                if let Some(tool_calls) = &msg.tool_calls
+                    && !tool_calls.is_empty()
+                {
+                    let tool_calls_json: Vec<Value> = tool_calls
+                        .iter()
+                        .filter_map(|tc| {
+                            tc.function.as_ref().map(|func| {
+                                json!({
+                                    "id": tc.id,
+                                    "type": "function",
+                                    "function": {
+                                        "name": func.name,
+                                        "arguments": func.arguments
+                                    }
                                 })
                             })
-                            .collect();
-                        message["tool_calls"] = Value::Array(tool_calls_json);
-                    }
+                        })
+                        .collect();
+                    message["tool_calls"] = Value::Array(tool_calls_json);
                 }
 
-                if let Some(reasoning_details) = &msg.reasoning_details {
-                    if !reasoning_details.is_empty() {
-                        message["reasoning_details"] = Value::Array(reasoning_details.clone());
-                    }
+                if let Some(reasoning_details) = &msg.reasoning_details
+                    && !reasoning_details.is_empty()
+                {
+                    message["reasoning_details"] = Value::Array(reasoning_details.clone());
                 }
             }
 
-            if msg.role == MessageRole::Tool {
-                if let Some(tool_call_id) = &msg.tool_call_id {
-                    message["tool_call_id"] = Value::String(tool_call_id.clone());
-                }
+            if msg.role == MessageRole::Tool
+                && let Some(tool_call_id) = &msg.tool_call_id
+            {
+                message["tool_call_id"] = Value::String(tool_call_id.clone());
             }
 
             messages.push(message);
@@ -91,24 +91,24 @@ impl OpenRouterProvider {
             provider_request["temperature"] = json!(temperature);
         }
 
-        if let Some(tools) = &request.tools {
-            if !tools.is_empty() {
-                let tools_json: Vec<Value> = tools
-                    .iter()
-                    .filter_map(|tool| {
-                        let func = tool.function.as_ref()?;
-                        Some(json!({
-                            "type": "function",
-                            "function": {
-                                "name": func.name,
-                                "description": func.description,
-                                "parameters": func.parameters
-                            }
-                        }))
-                    })
-                    .collect();
-                provider_request["tools"] = Value::Array(tools_json);
-            }
+        if let Some(tools) = &request.tools
+            && !tools.is_empty()
+        {
+            let tools_json: Vec<Value> = tools
+                .iter()
+                .filter_map(|tool| {
+                    let func = tool.function.as_ref()?;
+                    Some(json!({
+                        "type": "function",
+                        "function": {
+                            "name": func.name,
+                            "description": func.description,
+                            "parameters": func.parameters
+                        }
+                    }))
+                })
+                .collect();
+            provider_request["tools"] = Value::Array(tools_json);
         }
 
         if let Some(tool_choice) = &request.tool_choice {
@@ -119,13 +119,13 @@ impl OpenRouterProvider {
             provider_request["parallel_tool_calls"] = Value::Bool(parallel);
         }
 
-        if let Some(effort) = request.reasoning_effort {
-            if self.supports_reasoning_effort(resolved_model) {
-                if let Some(payload) = reasoning_parameters_for(Provider::OpenRouter, effort) {
-                    provider_request["reasoning"] = payload;
-                } else {
-                    provider_request["reasoning"] = json!({ "effort": effort.as_str() });
-                }
+        if let Some(effort) = request.reasoning_effort
+            && self.supports_reasoning_effort(resolved_model)
+        {
+            if let Some(payload) = reasoning_parameters_for(Provider::OpenRouter, effort) {
+                provider_request["reasoning"] = payload;
+            } else {
+                provider_request["reasoning"] = json!({ "effort": effort.as_str() });
             }
         }
 

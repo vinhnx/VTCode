@@ -144,10 +144,10 @@ pub fn parse_responses_payload(
 
                 if let Some(summary_array) = item.get("summary").and_then(|v| v.as_array()) {
                     for summary_part in summary_array {
-                        if let Some(text) = summary_part.get("text").and_then(|v| v.as_str()) {
-                            if !text.is_empty() {
-                                reasoning_text_fragments.push(text.to_string());
-                            }
+                        if let Some(text) = summary_part.get("text").and_then(|v| v.as_str())
+                            && !text.is_empty()
+                        {
+                            reasoning_text_fragments.push(text.to_string());
                         }
                     }
                 }
@@ -373,10 +373,10 @@ pub fn build_standard_responses_payload(
 
                 active_tool_call_ids.remove(tool_call_id);
 
-                if !tool_content.is_empty() {
-                    if let Value::Object(ref mut map) = tool_result {
-                        map.insert("content".to_owned(), json!(tool_content));
-                    }
+                if !tool_content.is_empty()
+                    && let Value::Object(ref mut map) = tool_result
+                {
+                    map.insert("content".to_owned(), json!(tool_content));
                 }
 
                 input.push(json!({
@@ -539,10 +539,10 @@ pub fn build_codex_responses_payload(
 
                 active_tool_call_ids.remove(&tool_call_id);
 
-                if !tool_content.is_empty() {
-                    if let Value::Object(ref mut map) = tool_result {
-                        map.insert("content".to_string(), json!(tool_content));
-                    }
+                if !tool_content.is_empty()
+                    && let Value::Object(ref mut map) = tool_result
+                {
+                    map.insert("content".to_string(), json!(tool_content));
                 }
 
                 input.push(json!({

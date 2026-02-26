@@ -67,7 +67,7 @@ pub(crate) fn install_system_skills(codex_home: &Path) -> Result<(), SystemSkill
 }
 
 fn anyhow_to_io(err: anyhow::Error) -> std::io::Error {
-    std::io::Error::new(std::io::ErrorKind::Other, err.to_string())
+    std::io::Error::other(err.to_string())
 }
 
 fn read_marker(path: &Path) -> Result<String, SystemSkillsError> {

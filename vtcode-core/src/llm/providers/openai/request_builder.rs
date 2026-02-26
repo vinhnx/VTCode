@@ -140,36 +140,33 @@ pub(crate) fn build_chat_request(
         }
     }
 
-    if ctx.supports_tools {
-        if let Some(tools) = &request.tools
-            && let Some(serialized) = tool_serialization::serialize_tools(tools, ctx.model)
+    if ctx.supports_tools
+        && let Some(tools) = &request.tools
+        && let Some(serialized) = tool_serialization::serialize_tools(tools, ctx.model)
+    {
+        openai_request["tools"] = serialized;
+
+        let has_custom_tool = tools.iter().any(|tool| tool.tool_type == "custom");
+        if has_custom_tool {
+            openai_request["parallel_tool_calls"] = Value::Bool(false);
+        }
+
+        if let Some(tool_choice) = &request.tool_choice {
+            openai_request["tool_choice"] = tool_choice.to_provider_format("openai");
+        }
+
+        if request.parallel_tool_calls.is_some()
+            && openai_request.get("parallel_tool_calls").is_none()
+            && let Some(parallel) = request.parallel_tool_calls
         {
-            openai_request["tools"] = serialized;
+            openai_request["parallel_tool_calls"] = Value::Bool(parallel);
+        }
 
-            let has_custom_tool = tools.iter().any(|tool| tool.tool_type == "custom");
-            if has_custom_tool {
-                openai_request["parallel_tool_calls"] = Value::Bool(false);
-            }
-
-            if let Some(tool_choice) = &request.tool_choice {
-                openai_request["tool_choice"] = tool_choice.to_provider_format("openai");
-            }
-
-            if request.parallel_tool_calls.is_some()
-                && openai_request.get("parallel_tool_calls").is_none()
-            {
-                if let Some(parallel) = request.parallel_tool_calls {
-                    openai_request["parallel_tool_calls"] = Value::Bool(parallel);
-                }
-            }
-
-            if ctx.supports_parallel_tool_config {
-                if let Some(config) = &request.parallel_tool_config {
-                    if let Ok(config_value) = serde_json::to_value(config) {
-                        openai_request["parallel_tool_config"] = config_value;
-                    }
-                }
-            }
+        if ctx.supports_parallel_tool_config
+            && let Some(config) = &request.parallel_tool_config
+            && let Ok(config_value) = serde_json::to_value(config)
+        {
+            openai_request["parallel_tool_config"] = config_value;
         }
     }
 
@@ -200,10 +197,10 @@ pub(crate) fn build_responses_request(
     // 'output_types' is part of the GPT-5 Responses API spec
     openai_request["output_types"] = json!(["message", "tool_call"]);
 
-    if let Some(instructions) = responses_payload.instructions {
-        if !instructions.trim().is_empty() {
-            openai_request["instructions"] = json!(instructions);
-        }
+    if let Some(instructions) = responses_payload.instructions
+        && !instructions.trim().is_empty()
+    {
+        openai_request["instructions"] = json!(instructions);
     }
 
     let mut sampling_parameters = json!({});
@@ -256,7 +253,7 @@ pub(crate) fn build_responses_request(
 
         // Only set parallel tool calls if not overridden due to custom tools
         if let Some(parallel) = request.parallel_tool_calls
-            && !openai_request.get("parallel_tool_calls").is_some()
+            && openai_request.get("parallel_tool_calls").is_none()
         {
             openai_request["parallel_tool_calls"] = Value::Bool(parallel);
         }
@@ -314,15 +311,15 @@ pub(crate) fn build_responses_request(
 
         if !grammar_tools.is_empty() {
             // Use the first grammar definition found
-            if let Some(grammar_tool) = grammar_tools.first() {
-                if let Some(ref grammar) = grammar_tool.grammar {
-                    text_format["format"] = json!({
-                        "type": "grammar",
-                        "syntax": grammar.syntax,
-                        "definition": grammar.definition
-                    });
-                    has_format_options = true;
-                }
+            if let Some(grammar_tool) = grammar_tools.first()
+                && let Some(ref grammar) = grammar_tool.grammar
+            {
+                text_format["format"] = json!({
+                    "type": "grammar",
+                    "syntax": grammar.syntax,
+                    "definition": grammar.definition
+                });
+                has_format_options = true;
             }
         }
     }

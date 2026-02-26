@@ -1252,6 +1252,29 @@ fn pty_wrapped_lines_do_not_exceed_viewport_width() {
 }
 
 #[test]
+fn pty_lines_are_force_dimmed() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.push_line(
+        InlineMessageKind::Pty,
+        vec![InlineSegment {
+            text: "plain pty output".to_string(),
+            style: std::sync::Arc::new(InlineTextStyle::default()),
+        }],
+    );
+
+    let rendered = session.reflow_pty_lines(0, 80);
+    let body_span = rendered
+        .iter()
+        .flat_map(|line| line.spans.iter())
+        .find(|span| span.content.contains("plain pty output"))
+        .expect("expected PTY body span");
+    assert!(
+        body_span.style.add_modifier.contains(Modifier::DIM),
+        "PTY body spans should be dimmed"
+    );
+}
+
+#[test]
 fn transcript_shows_content_when_viewport_smaller_than_padding() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
 

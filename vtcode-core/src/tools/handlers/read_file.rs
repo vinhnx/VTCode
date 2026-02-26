@@ -1,5 +1,5 @@
 use std::collections::VecDeque;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 
@@ -348,7 +348,7 @@ impl ReadFileHandler {
     }
 
     /// Read a single range from a file.
-    async fn read_range(&self, path: &PathBuf, range: &ReadRange) -> Result<RangeResult> {
+    async fn read_range(&self, path: &Path, range: &ReadRange) -> Result<RangeResult> {
         let offset = range.offset.max(1);
         let limit = range.limit.max(1);
 

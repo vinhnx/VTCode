@@ -306,10 +306,7 @@ impl ModelId {
 
     /// Determine if this model is a GPT-5.2+ variant with enhanced tool support
     pub fn is_gpt51_variant(&self) -> bool {
-        matches!(
-            self,
-            ModelId::GPT52 | ModelId::GPT52Codex
-        )
+        matches!(self, ModelId::GPT52 | ModelId::GPT52Codex)
     }
 
     /// Determine if this model supports GPT-5.1+/5.2 apply_patch tool type

@@ -125,7 +125,7 @@ fn default_update_interval() -> u32 {
 
 impl MarketplaceSettings {
     /// Load marketplace settings from a configuration file
-    pub async fn load_from_file(config_path: &PathBuf) -> Result<Self> {
+    pub async fn load_from_file(config_path: &Path) -> Result<Self> {
         if !config_path.exists() {
             // Return default settings if file doesn't exist
             return Ok(Self::default());
@@ -144,7 +144,7 @@ impl MarketplaceSettings {
     }
 
     /// Save marketplace settings to a configuration file
-    pub async fn save_to_file(&self, config_path: &PathBuf) -> Result<()> {
+    pub async fn save_to_file(&self, config_path: &Path) -> Result<()> {
         let content =
             toml::to_string(&self).with_context(|| "Failed to serialize marketplace settings")?;
 

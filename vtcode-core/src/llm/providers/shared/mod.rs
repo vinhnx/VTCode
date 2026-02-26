@@ -323,11 +323,11 @@ where
         organization_id: None,
     };
 
-    if let Some(value) = last_response_value {
-        if value.get("usage").is_some() {
-            final_response.usage =
-                crate::llm::providers::common::parse_usage_openai_format(&value, true);
-        }
+    if let Some(value) = last_response_value
+        && value.get("usage").is_some()
+    {
+        final_response.usage =
+            crate::llm::providers::common::parse_usage_openai_format(&value, true);
     }
 
     Ok(final_response)

@@ -289,15 +289,6 @@ pub enum TrustMode {
 }
 
 impl TrustMode {
-    pub fn from_str(s: &str) -> Self {
-        match s.to_lowercase().as_str() {
-            "session" => Self::Session,
-            "always" => Self::Always,
-            "autotrust" | "auto-trust" | "auto" => Self::AutoTrust,
-            _ => Self::Once,
-        }
-    }
-
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Once => "Once",
@@ -504,7 +495,7 @@ impl PlanContent {
             if trimmed.starts_with(|c: char| c.is_ascii_digit()) && trimmed.contains('.') {
                 total_steps += 1;
                 if let Some(ref mut phase) = current_phase {
-                    let desc = trimmed.splitn(2, '.').nth(1).unwrap_or("").trim();
+                    let desc = trimmed.split_once('.').map(|x| x.1).unwrap_or("").trim();
                     phase.steps.push(PlanStep {
                         number: phase.steps.len() + 1,
                         description: desc.to_string(),
@@ -710,14 +701,6 @@ impl EditingMode {
         match self {
             Self::Edit => "Edit",
             Self::Plan => "Plan",
-        }
-    }
-
-    /// Parse mode from string (case-insensitive)
-    pub fn from_str(s: &str) -> Self {
-        match s.to_lowercase().as_str() {
-            "plan" => Self::Plan,
-            _ => Self::Edit, // Default to edit for unknown values
         }
     }
 }

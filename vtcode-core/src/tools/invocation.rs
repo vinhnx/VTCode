@@ -211,7 +211,7 @@ impl InvocationBuilder {
     /// Build the ToolInvocation.
     pub fn build(self) -> ToolInvocation {
         ToolInvocation {
-            id: self.id.unwrap_or_else(ToolInvocationId::new),
+            id: self.id.unwrap_or_default(),
             tool_name: self.tool_name,
             args: self.args,
             session_id: self.session_id,

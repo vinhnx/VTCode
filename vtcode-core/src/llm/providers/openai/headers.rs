@@ -15,10 +15,10 @@ pub(crate) fn apply_turn_metadata(
     builder: RequestBuilder,
     metadata: &Option<Value>,
 ) -> RequestBuilder {
-    if let Some(metadata) = metadata {
-        if let Ok(metadata_str) = serde_json::to_string(metadata) {
-            return builder.header("X-Turn-Metadata", metadata_str);
-        }
+    if let Some(metadata) = metadata
+        && let Ok(metadata_str) = serde_json::to_string(metadata)
+    {
+        return builder.header("X-Turn-Metadata", metadata_str);
     }
     builder
 }

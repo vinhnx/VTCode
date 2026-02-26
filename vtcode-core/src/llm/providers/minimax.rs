@@ -279,19 +279,15 @@ impl LLMProvider for MinimaxProvider {
                             continue;
                         }
 
-                        if let Ok(payload) = serde_json::from_str::<Value>(trimmed) {
-                            if let Some(choices) = payload.get("choices").and_then(|v| v.as_array()) {
-                                if let Some(choice) = choices.first() {
-                                    if let Some(delta) = choice.get("delta") {
-                                        if let Some(content) = delta.get("content").and_then(|v| v.as_str()) {
+                        if let Ok(payload) = serde_json::from_str::<Value>(trimmed)
+                            && let Some(choices) = payload.get("choices").and_then(|v| v.as_array())
+                                && let Some(choice) = choices.first()
+                                    && let Some(delta) = choice.get("delta")
+                                        && let Some(content) = delta.get("content").and_then(|v| v.as_str()) {
                                             for ev in aggregator.handle_content(content) {
                                                 yield ev;
                                             }
                                         }
-                                    }
-                                }
-                            }
-                        }
                     }
                 }
             }

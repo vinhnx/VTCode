@@ -613,6 +613,12 @@ enabled_languages = [
     "typescript",
     "go",
     "java",
+    "bash",
+    "sh",
+    "shell",
+    "zsh",
+    "markdown",
+    "md",
 ]
 
 # Timeout for syntax highlighting operations (milliseconds)

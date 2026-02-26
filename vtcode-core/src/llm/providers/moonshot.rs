@@ -258,11 +258,11 @@ impl LLMProvider for MoonshotProvider {
                     if let Some(choices) = value.get("choices").and_then(|c| c.as_array())
                         && let Some(choice) = choices.first()
                     {
-                        if let Some(delta) = choice.get("delta") {
-                            if let Some(content) = delta.get("content").and_then(|c| c.as_str()) {
-                                for event in aggregator.handle_content(content) {
-                                    let _ = tx.send(Ok(event));
-                                }
+                        if let Some(delta) = choice.get("delta")
+                            && let Some(content) = delta.get("content").and_then(|c| c.as_str())
+                        {
+                            for event in aggregator.handle_content(content) {
+                                let _ = tx.send(Ok(event));
                             }
                         }
 
@@ -271,12 +271,11 @@ impl LLMProvider for MoonshotProvider {
                         }
                     }
 
-                    if let Some(_usage_value) = value.get("usage") {
-                        if let Some(usage) =
+                    if let Some(_usage_value) = value.get("usage")
+                        && let Some(usage) =
                             crate::llm::providers::common::parse_usage_openai_format(&value, false)
-                        {
-                            aggregator.set_usage(usage);
-                        }
+                    {
+                        aggregator.set_usage(usage);
                     }
                     Ok(())
                 },

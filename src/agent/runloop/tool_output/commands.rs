@@ -9,7 +9,7 @@ use super::commands_processing::{parse_command_tokens, preprocess_terminal_stdou
 use super::streams::{render_stream_section, resolve_stdout_tail_limit};
 use super::styles::{GitStyles, LsStyles};
 
-fn resolve_pty_session_id<'a>(payload: &'a Value) -> Option<&'a str> {
+fn resolve_pty_session_id(payload: &Value) -> Option<&str> {
     payload
         .get("id")
         .or_else(|| payload.get("session_id"))

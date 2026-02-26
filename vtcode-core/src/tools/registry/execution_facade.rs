@@ -30,7 +30,7 @@ const REENTRANCY_PER_TOOL_LIMIT: usize = 1;
 static TOOL_REENTRANCY_STACKS: Lazy<Mutex<HashMap<TokioTaskId, Vec<String>>>> =
     Lazy::new(|| Mutex::new(HashMap::new()));
 thread_local! {
-    static THREAD_REENTRANCY_STACK: RefCell<Vec<String>> = RefCell::new(Vec::new());
+    static THREAD_REENTRANCY_STACK: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
 }
 
 fn lock_reentrancy_stacks() -> std::sync::MutexGuard<'static, HashMap<TokioTaskId, Vec<String>>> {
@@ -252,18 +252,17 @@ impl ToolRegistry {
             };
 
         // PERFORMANCE OPTIMIZATION: Update hot cache with resolved tool if optimizations enabled
-        if let Some(tool_arc) = cached_tool.as_ref() {
-            if self
+        if let Some(tool_arc) = cached_tool.as_ref()
+            && self
                 .optimization_config
                 .tool_registry
                 .use_optimized_registry
-                && tool_name != name
-            {
-                // Cache the canonical name too for faster future lookups
-                self.hot_tool_cache
-                    .write()
-                    .put(tool_name.clone(), tool_arc.clone());
-            }
+            && tool_name != name
+        {
+            // Cache the canonical name too for faster future lookups
+            self.hot_tool_cache
+                .write()
+                .put(tool_name.clone(), tool_arc.clone());
         }
 
         let requested_name = name.to_string();
@@ -343,14 +342,14 @@ impl ToolRegistry {
         let readonly_classification = if prevalidated {
             #[cfg(debug_assertions)]
             {
-                if let Err(err) = self.preflight_validate_call(&tool_name, args) {
-                    if !agent_execution::is_plan_mode_denial(&err.to_string()) {
-                        debug_assert!(
-                            false,
-                            "prevalidated execution received invalid call for '{}': {}",
-                            tool_name, err
-                        );
-                    }
+                if let Err(err) = self.preflight_validate_call(&tool_name, args)
+                    && !agent_execution::is_plan_mode_denial(&err.to_string())
+                {
+                    debug_assert!(
+                        false,
+                        "prevalidated execution received invalid call for '{}': {}",
+                        tool_name, err
+                    );
                 }
             }
             !crate::tools::tool_intent::classify_tool_intent(&tool_name, args).mutating
@@ -916,7 +915,7 @@ impl ToolRegistry {
                 let mcp_name = mcp_tool_name
                     .as_deref()
                     .context("MCP tool routing inconsistency: resolved MCP tool name missing")?;
-                self.execute_mcp_tool(&mcp_name, args).await
+                self.execute_mcp_tool(mcp_name, args).await
             } else if let Some(registration) = self.inventory.registration_for(&tool_name) {
                 // Log deprecation warning if tool is deprecated
                 if registration.is_deprecated() {

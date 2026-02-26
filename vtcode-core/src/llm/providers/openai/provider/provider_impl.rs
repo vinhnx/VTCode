@@ -16,9 +16,7 @@ impl provider::LLMProvider for OpenAIProvider {
         // OpenAI requires ID verification for GPT-5 models, so we must disable streaming
         if matches!(
             self.model.as_ref(),
-            models::openai::GPT_5
-                | models::openai::GPT_5_MINI
-                | models::openai::GPT_5_NANO
+            models::openai::GPT_5 | models::openai::GPT_5_MINI | models::openai::GPT_5_NANO
         ) {
             return false;
         }

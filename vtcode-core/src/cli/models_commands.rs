@@ -1,7 +1,7 @@
 //! Model management command handlers with concise, actionable output
 
 use super::args::{Cli, ModelCommands};
-use crate::llm::factory::{create_provider_with_config, get_factory};
+use crate::llm::factory::{ProviderConfig, create_provider_with_config, get_factory};
 use crate::utils::colors::{bold, cyan, dimmed, green, red, underline, yellow};
 use crate::utils::dot_config::{DotConfig, get_dot_manager, load_user_config};
 use anyhow::{Context, Result, anyhow};
@@ -61,13 +61,15 @@ async fn handle_list_models(_cli: &Cli) -> Result<()> {
 
         if let Ok(provider) = create_provider_with_config(
             provider_name,
-            Some("dummy".to_owned()),
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
+            ProviderConfig {
+                api_key: Some("dummy".to_owned()),
+                base_url: None,
+                model: None,
+                prompt_cache: None,
+                timeouts: None,
+                anthropic: None,
+                model_behavior: None,
+            },
         ) {
             let models = provider.supported_models();
             let current_model = &config.preferences.default_model;
@@ -276,13 +278,15 @@ async fn handle_test_provider(_cli: &Cli, provider: &str) -> Result<()> {
 
     let provider_instance = create_provider_with_config(
         provider,
-        api_key,
-        base_url,
-        model.clone(),
-        None,
-        None,
-        None,
-        None,
+        ProviderConfig {
+            api_key,
+            base_url,
+            model: model.clone(),
+            prompt_cache: None,
+            timeouts: None,
+            anthropic: None,
+            model_behavior: None,
+        },
     )?;
 
     let test_request = crate::llm::provider::LLMRequest {

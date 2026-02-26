@@ -9,6 +9,7 @@ use serde_json::json;
 use std::collections::HashSet;
 use std::sync::Arc;
 use tracing::warn;
+use vtcode_core::llm::factory::ProviderConfig;
 use vtcode_core::llm::factory::{create_provider_for_model, create_provider_with_config};
 use vtcode_core::llm::provider::{LLMRequest, LLMStreamEvent, Message};
 
@@ -117,13 +118,15 @@ impl acp::Agent for ZedAgent {
             Ok(provider) => provider,
             Err(_) => create_provider_with_config(
                 &self.config.provider,
-                Some(self.config.api_key.clone()),
-                None,
-                Some(self.config.model.clone()),
-                Some(self.config.prompt_cache.clone()),
-                None,
-                None,
-                self.config.model_behavior.clone(),
+                ProviderConfig {
+                    api_key: Some(self.config.api_key.clone()),
+                    base_url: None,
+                    model: Some(self.config.model.clone()),
+                    prompt_cache: Some(self.config.prompt_cache.clone()),
+                    timeouts: None,
+                    anthropic: None,
+                    model_behavior: self.config.model_behavior.clone(),
+                },
             )
             .map_err(acp::Error::into_internal_error)?,
         };

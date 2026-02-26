@@ -33,7 +33,7 @@ impl PluginTemplate {
         // Write the plugin manifest
         let manifest_path = vtcode_plugin_dir.join("plugin.json");
         let manifest_json =
-            serde_json::to_string_pretty(manifest).map_err(|e| PluginError::JsonError(e))?;
+            serde_json::to_string_pretty(manifest).map_err(PluginError::JsonError)?;
         fs::write(&manifest_path, &manifest_json)
             .await
             .map_err(|e| {

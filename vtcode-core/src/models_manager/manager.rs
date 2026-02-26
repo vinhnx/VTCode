@@ -399,10 +399,8 @@ impl ModelsManager {
     /// Ensure there's at least one default model
     fn ensure_defaults(&self, presets: &mut [ModelPreset]) {
         let has_default = presets.iter().any(|p| p.is_default);
-        if !has_default {
-            if let Some(first) = presets.first_mut() {
-                first.is_default = true;
-            }
+        if !has_default && let Some(first) = presets.first_mut() {
+            first.is_default = true;
         }
     }
 

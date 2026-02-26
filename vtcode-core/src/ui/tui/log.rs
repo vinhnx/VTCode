@@ -253,12 +253,11 @@ fn theme_for_current_config() -> Theme {
     };
     let resolved_name = theme_name.clone().unwrap_or_else(default_theme_name);
     {
-        if let Ok(cache) = LOG_THEME_CACHE.read() {
-            if let Some((cached_name, cached)) = &*cache {
-                if *cached_name == resolved_name {
-                    return cached.clone();
-                }
-            }
+        if let Ok(cache) = LOG_THEME_CACHE.read()
+            && let Some((cached_name, cached)) = &*cache
+            && *cached_name == resolved_name
+        {
+            return cached.clone();
         }
     }
 

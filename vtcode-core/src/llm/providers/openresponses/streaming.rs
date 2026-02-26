@@ -192,11 +192,8 @@ pub fn parse_sse_event(line: &str) -> Option<StreamEvent> {
 /// Extract the event type from an SSE event line.
 pub fn extract_event_type(line: &str) -> Option<String> {
     let line = line.trim();
-    if let Some(event_type) = line.strip_prefix("event: ") {
-        Some(event_type.to_string())
-    } else {
-        None
-    }
+    line.strip_prefix("event: ")
+        .map(|event_type| event_type.to_string())
 }
 
 /// Accumulator for building responses from streaming events.
@@ -241,17 +238,17 @@ impl StreamAccumulator {
     pub fn process_event(&mut self, event: &StreamEvent) {
         match event.event_type.as_str() {
             "response.created" | "response.in_progress" => {
-                if let StreamEventData::Response(data) = &event.data {
-                    if let Some(response) = &data.response {
-                        self.response_id = response
-                            .get("id")
-                            .and_then(|v| v.as_str())
-                            .map(String::from);
-                        self.model = response
-                            .get("model")
-                            .and_then(|v| v.as_str())
-                            .map(String::from);
-                    }
+                if let StreamEventData::Response(data) = &event.data
+                    && let Some(response) = &data.response
+                {
+                    self.response_id = response
+                        .get("id")
+                        .and_then(|v| v.as_str())
+                        .map(String::from);
+                    self.model = response
+                        .get("model")
+                        .and_then(|v| v.as_str())
+                        .map(String::from);
                 }
             }
             "response.output_text.delta" => {
@@ -270,39 +267,39 @@ impl StreamAccumulator {
                 }
             }
             "response.function_call_arguments.delta" => {
-                if let StreamEventData::FunctionCallDelta(data) = &event.data {
-                    if let Some(ref mut fc) = self.current_function_call {
-                        fc.arguments.push_str(&data.delta);
-                    }
+                if let StreamEventData::FunctionCallDelta(data) = &event.data
+                    && let Some(ref mut fc) = self.current_function_call
+                {
+                    fc.arguments.push_str(&data.delta);
                 }
             }
             "response.output_item.added" => {
-                if let StreamEventData::OutputItem(data) = &event.data {
-                    if let Some(item) = &data.item {
-                        // Check if this is a function call item
-                        if item.get("type").and_then(|v| v.as_str()) == Some("function_call") {
-                            let fc = AccumulatingFunctionCall {
-                                id: item
-                                    .get("id")
-                                    .and_then(|v| v.as_str())
-                                    .unwrap_or_default()
-                                    .to_string(),
-                                call_id: item
-                                    .get("call_id")
-                                    .and_then(|v| v.as_str())
-                                    .unwrap_or_default()
-                                    .to_string(),
-                                name: item
-                                    .get("name")
-                                    .and_then(|v| v.as_str())
-                                    .unwrap_or_default()
-                                    .to_string(),
-                                arguments: String::new(),
-                            };
-                            self.current_function_call = Some(fc);
-                        }
-                        self.output_items.push(item.clone());
+                if let StreamEventData::OutputItem(data) = &event.data
+                    && let Some(item) = &data.item
+                {
+                    // Check if this is a function call item
+                    if item.get("type").and_then(|v| v.as_str()) == Some("function_call") {
+                        let fc = AccumulatingFunctionCall {
+                            id: item
+                                .get("id")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or_default()
+                                .to_string(),
+                            call_id: item
+                                .get("call_id")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or_default()
+                                .to_string(),
+                            name: item
+                                .get("name")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or_default()
+                                .to_string(),
+                            arguments: String::new(),
+                        };
+                        self.current_function_call = Some(fc);
                     }
+                    self.output_items.push(item.clone());
                 }
             }
             "response.output_item.done" => {

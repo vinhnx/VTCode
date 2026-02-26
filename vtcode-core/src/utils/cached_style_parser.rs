@@ -27,10 +27,10 @@ impl CachedStyleParser {
     /// Parse and cache a Git-style color string (e.g., "bold red blue")
     pub fn parse_git_style(&self, input: &str) -> Result<AnsiStyle> {
         // Check cache first
-        if let Ok(cache) = self.git_cache.read() {
-            if let Some(cached) = cache.get(input) {
-                return Ok(*cached);
-            }
+        if let Ok(cache) = self.git_cache.read()
+            && let Some(cached) = cache.get(input)
+        {
+            return Ok(*cached);
         }
 
         // Parse and cache result
@@ -47,10 +47,10 @@ impl CachedStyleParser {
     /// Parse and cache an LS_COLORS-style string (e.g., "01;34")
     pub fn parse_ls_colors(&self, input: &str) -> Result<AnsiStyle> {
         // Check cache first
-        if let Ok(cache) = self.ls_colors_cache.read() {
-            if let Some(cached) = cache.get(input) {
-                return Ok(*cached);
-            }
+        if let Ok(cache) = self.ls_colors_cache.read()
+            && let Some(cached) = cache.get(input)
+        {
+            return Ok(*cached);
         }
 
         // Parse and cache result

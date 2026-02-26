@@ -278,30 +278,13 @@ pub fn create_provider_for_model(
 #[allow(clippy::result_large_err)]
 pub fn create_provider_with_config(
     provider_name: &str,
-    api_key: Option<String>,
-    base_url: Option<String>,
-    model: Option<String>,
-    prompt_cache: Option<PromptCachingConfig>,
-    timeouts: Option<TimeoutsConfig>,
-    anthropic: Option<AnthropicConfig>,
-    model_behavior: Option<ModelConfig>,
+    config: ProviderConfig,
 ) -> Result<Box<dyn LLMProvider>, LLMError> {
     let factory = get_factory().lock().map_err(|_| LLMError::Provider {
         message: ctx_err!("llm factory", "lock poisoned"),
         metadata: None,
     })?;
-    factory.create_provider(
-        provider_name,
-        ProviderConfig {
-            api_key,
-            base_url,
-            model,
-            prompt_cache,
-            timeouts,
-            anthropic,
-            model_behavior,
-        },
-    )
+    factory.create_provider(provider_name, config)
 }
 
 /// Macro to implement BuiltinProvider for providers with standard from_config signature

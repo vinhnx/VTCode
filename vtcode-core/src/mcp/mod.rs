@@ -227,38 +227,38 @@ fn format_tool_markdown(tool: &McpToolInfo) -> String {
 
     // Extract required fields if present
     if let Some(obj) = tool.input_schema.as_object() {
-        if let Some(required) = obj.get("required").and_then(|v| v.as_array()) {
-            if !required.is_empty() {
-                content.push_str("## Required Parameters\n\n");
-                for req in required {
-                    if let Some(name) = req.as_str() {
-                        content.push_str(&format!("- `{}`\n", name));
-                    }
+        if let Some(required) = obj.get("required").and_then(|v| v.as_array())
+            && !required.is_empty()
+        {
+            content.push_str("## Required Parameters\n\n");
+            for req in required {
+                if let Some(name) = req.as_str() {
+                    content.push_str(&format!("- `{}`\n", name));
                 }
-                content.push('\n');
             }
+            content.push('\n');
         }
 
         // Extract properties descriptions
-        if let Some(props) = obj.get("properties").and_then(|v| v.as_object()) {
-            if !props.is_empty() {
-                content.push_str("## Parameters\n\n");
-                for (param_name, param_schema) in props {
-                    let param_type = param_schema
-                        .get("type")
-                        .and_then(|t| t.as_str())
-                        .unwrap_or("any");
-                    let param_desc = param_schema
-                        .get("description")
-                        .and_then(|d| d.as_str())
-                        .unwrap_or("");
-                    content.push_str(&format!("### `{}`\n\n", param_name));
-                    content.push_str(&format!("- **Type**: {}\n", param_type));
-                    if !param_desc.is_empty() {
-                        content.push_str(&format!("- **Description**: {}\n", param_desc));
-                    }
-                    content.push('\n');
+        if let Some(props) = obj.get("properties").and_then(|v| v.as_object())
+            && !props.is_empty()
+        {
+            content.push_str("## Parameters\n\n");
+            for (param_name, param_schema) in props {
+                let param_type = param_schema
+                    .get("type")
+                    .and_then(|t| t.as_str())
+                    .unwrap_or("any");
+                let param_desc = param_schema
+                    .get("description")
+                    .and_then(|d| d.as_str())
+                    .unwrap_or("");
+                content.push_str(&format!("### `{}`\n\n", param_name));
+                content.push_str(&format!("- **Type**: {}\n", param_type));
+                if !param_desc.is_empty() {
+                    content.push_str(&format!("- **Description**: {}\n", param_desc));
                 }
+                content.push('\n');
             }
         }
     }

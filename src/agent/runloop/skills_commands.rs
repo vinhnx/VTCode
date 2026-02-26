@@ -201,7 +201,10 @@ Shortcuts:
                             "✓ Loaded skill: {}\nℹ Instructions are now [ACTIVE] and persistent in the agent prompt.",
                             skill.name()
                         );
-                        Ok(SkillCommandOutcome::LoadSkill { skill, message })
+                        Ok(SkillCommandOutcome::LoadSkill {
+                            skill: *skill,
+                            message,
+                        })
                     }
                     vtcode_core::skills::loader::EnhancedSkill::CliTool(_) => {
                         Ok(SkillCommandOutcome::Error {
@@ -269,7 +272,10 @@ Shortcuts:
         SkillCommandAction::Use { name, input } => match loader.get_skill(&name).await {
             Ok(enhanced_skill) => match enhanced_skill {
                 vtcode_core::skills::loader::EnhancedSkill::Traditional(skill) => {
-                    Ok(SkillCommandOutcome::UseSkill { skill, input })
+                    Ok(SkillCommandOutcome::UseSkill {
+                        skill: *skill,
+                        input,
+                    })
                 }
                 vtcode_core::skills::loader::EnhancedSkill::CliTool(_) => {
                     Ok(SkillCommandOutcome::Error {
@@ -347,7 +353,7 @@ pub async fn detect_mentioned_skills(
         if let Ok(enhanced_skill) = loader.get_skill(&name).await
             && let vtcode_core::skills::loader::EnhancedSkill::Traditional(skill) = enhanced_skill
         {
-            skills.push((name.clone(), skill));
+            skills.push((name.clone(), *skill));
         }
     }
 

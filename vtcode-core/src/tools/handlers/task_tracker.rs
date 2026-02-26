@@ -12,6 +12,8 @@
 //! - `list`: Show the current task checklist and its status
 //! - `add`: Add a new item to an existing checklist
 
+use std::str::FromStr;
+
 use crate::config::constants::tools;
 use crate::tools::handlers::task_tracking::{
     TaskCounts, TaskTrackingStatus, append_notes, parse_marked_status_prefix,
@@ -203,15 +205,15 @@ impl TaskTrackerTool {
                 notes_lines.push(line.to_string());
                 continue;
             }
-            if let Some(rest) = trimmed.strip_prefix("- ") {
-                if let Some((status, description)) = parse_marked_status_prefix(rest) {
-                    items.push(TaskItem {
-                        index: idx,
-                        description,
-                        status,
-                    });
-                    idx += 1;
-                }
+            if let Some(rest) = trimmed.strip_prefix("- ")
+                && let Some((status, description)) = parse_marked_status_prefix(rest)
+            {
+                items.push(TaskItem {
+                    index: idx,
+                    description,
+                    status,
+                });
+                idx += 1;
             }
         }
 
