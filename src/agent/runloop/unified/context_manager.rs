@@ -144,6 +144,8 @@ impl ContextManager {
             let prompt_tokens = usage.prompt_tokens as usize;
             let completion_tokens = usage.completion_tokens as usize;
             let total_tokens = usage.total_tokens as usize;
+            let has_any_usage_signal =
+                prompt_tokens > 0 || completion_tokens > 0 || total_tokens > 0;
 
             self.cached_stats.completion_tokens_cumulative = self
                 .cached_stats
@@ -153,6 +155,10 @@ impl ContextManager {
 
             let estimated_prompt_pressure = if prompt_tokens > 0 {
                 prompt_tokens
+            } else if let Some(exact_prompt_tokens) =
+                self.cached_stats.pending_exact_prompt_tokens.take()
+            {
+                exact_prompt_tokens
             } else if total_tokens > completion_tokens {
                 total_tokens.saturating_sub(completion_tokens)
             } else {
@@ -160,6 +166,11 @@ impl ContextManager {
                     .total_token_usage
                     .saturating_add(completion_tokens)
             };
+
+            if !has_any_usage_signal && estimated_prompt_pressure == 0 {
+                self.cached_stats.has_exact_prompt_usage = false;
+                return;
+            }
 
             self.cached_stats.last_prompt_tokens = estimated_prompt_pressure;
             self.cached_stats.total_token_usage = estimated_prompt_pressure;
