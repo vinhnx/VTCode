@@ -138,6 +138,7 @@ pub(super) fn selection_from_option(option: &ModelOption) -> SelectionDetail {
     }
 }
 
+#[allow(dead_code)]
 pub(super) fn selection_from_dynamic(provider: Provider, model_id: &str) -> SelectionDetail {
     let env_key = provider.default_api_key_env().to_string();
     let requires_api_key = provider_requires_api_key(provider, model_id, &env_key);
