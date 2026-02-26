@@ -109,7 +109,10 @@ pub async fn apply_turn_outcome(
             if ctx.show_turn_timer {
                 ctx.renderer.line(
                     MessageStyle::Info,
-                    &format!("Worked for {}", format_turn_elapsed_label(ctx.turn_elapsed)),
+                    &format!(
+                        "─ Worked for {} ─",
+                        format_turn_elapsed_label(ctx.turn_elapsed)
+                    ),
                 )?;
             }
             ctx.ctrl_c_state.clear_cancel();
@@ -194,7 +197,7 @@ mod tests {
         .expect("apply completed outcome");
 
         let lines = drain_appended_lines(&mut receiver);
-        assert!(lines.iter().any(|line| line == "Worked for 1m 30s"));
+        assert!(lines.iter().any(|line| line == "─ Worked for 1m 30s ─"));
     }
 
     #[tokio::test]
