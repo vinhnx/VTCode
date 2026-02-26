@@ -31,6 +31,7 @@ pub(super) struct DynamicModelRegistry {
 }
 
 impl DynamicModelRegistry {
+    #[allow(dead_code)]
     pub(super) async fn load(options: &[ModelOption], workspace: Option<&Path>) -> Self {
         let endpoints = ProviderEndpointConfig::gather(workspace).await;
         let _static_index = build_static_model_index(options);
@@ -75,6 +76,7 @@ impl DynamicModelRegistry {
             .map(|msg| msg.as_str())
     }
 
+    #[allow(dead_code)]
     fn process_fetch(
         &mut self,
         provider: Provider,
@@ -98,6 +100,7 @@ impl DynamicModelRegistry {
         }
     }
 
+    #[allow(dead_code)]
     fn register_provider_models(
         &mut self,
         provider: Provider,
@@ -133,6 +136,7 @@ impl DynamicModelRegistry {
         }
     }
 
+    #[allow(dead_code)]
     fn register_model(&mut self, provider: Provider, detail: SelectionDetail) {
         let index = self.entries.len();
         self.entries.push(detail);
@@ -142,6 +146,7 @@ impl DynamicModelRegistry {
             .push(index);
     }
 
+    #[allow(dead_code)]
     fn has_model(&self, provider: Provider, candidate: &str) -> bool {
         if let Some(indexes) = self.provider_models.get(&provider) {
             for index in indexes {
@@ -155,6 +160,7 @@ impl DynamicModelRegistry {
         false
     }
 
+    #[allow(dead_code)]
     fn record_error(&mut self, provider: Provider, message: String) {
         self.provider_errors.insert(provider, message);
     }
