@@ -213,7 +213,7 @@ Failing to align with the project's structural constraints (missing init files, 
 - Use `read_file` with `offset`/`limit` (1-indexed) for targeted sections
 - Large files: prefer `rg` pattern search over full content
 
-**Spooled outputs** (>8KB): Auto-saved to `.vtcode/context/tool_outputs/`. Access via `read_file`/`grep_file`. Don't re-run commands -- use the spool.
+**Spooled outputs** (>8KB): Use `spool_path` with `read_file`/`grep_file`; avoid re-running commands.
 
 ## Execution Policy & Sandboxing
 
@@ -595,9 +595,6 @@ pub async fn compose_system_instruction_text(
             instruction
                 .push_str("- `.vtcode/terminals/` - Terminal session output with metadata\n");
             instruction.push_str("- `.agents/skills/INDEX.md` - Available skills index\n\n");
-            instruction.push_str(
-                "**Tip**: For spooled results, use `read_file`/`grep_file` on `spool_path`.\n",
-            );
         }
 
         instruction.push_str("\n**IMPORTANT**: Respect policy gates. Commands outside allowlists require confirmation.\n");

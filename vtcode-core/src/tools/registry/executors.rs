@@ -65,7 +65,8 @@ fn missing_unified_exec_action_error(args: &Value) -> anyhow::Error {
     anyhow!(
         "Missing unified_exec action. Use `action` or fields: \
          `command|cmd|raw_command` (run), `session_id`+`input|chars|text` (write), \
-         `session_id` (poll), `spool_path|query|head_lines|tail_lines|max_matches|literal` (inspect), \
+         `session_id` (poll), `action:\"continue\"` with `session_id` and optional `input|chars|text`, \
+         `spool_path|query|head_lines|tail_lines|max_matches|literal` (inspect), \
          or `action:\"list\"|\"close\"`. Keys: {}",
         summarized_arg_keys(args)
     )
@@ -133,12 +134,11 @@ fn attach_pty_response_context(
     cols: u16,
     is_exited: bool,
 ) {
-    response["id"] = json!(session_id);
     response["session_id"] = json!(session_id);
     response["command"] = json!(command);
-    response["working_directory"] = working_directory
-        .map(|value| json!(value))
-        .unwrap_or(Value::Null);
+    if let Some(value) = working_directory {
+        response["working_directory"] = json!(value);
+    }
     response["rows"] = json!(rows);
     response["cols"] = json!(cols);
     response["is_exited"] = json!(is_exited);
@@ -190,6 +190,7 @@ fn build_read_pty_fallback_args(args: &Value, error_message: &str) -> Option<Val
 const DEFAULT_INSPECT_HEAD_LINES: usize = 30;
 const DEFAULT_INSPECT_TAIL_LINES: usize = 30;
 const DEFAULT_INSPECT_MAX_MATCHES: usize = 200;
+const PTY_CONTINUATION_PROMPT: &str = "Use `next_poll_args`.";
 
 fn clamp_inspect_lines(value: Option<u64>, default: usize) -> usize {
     value.map(|v| v as usize).unwrap_or(default).min(5_000)
@@ -332,6 +333,7 @@ impl ToolRegistry {
             UnifiedExecAction::Run => self.execute_run_pty_cmd(args).await,
             UnifiedExecAction::Write => self.execute_send_pty_input(args).await,
             UnifiedExecAction::Poll => self.execute_read_pty_session(args).await,
+            UnifiedExecAction::Continue => self.execute_continue_pty_session(args).await,
             UnifiedExecAction::Inspect => self.execute_inspect_pty_output(args).await,
             UnifiedExecAction::List => self.execute_list_pty_sessions().await,
             UnifiedExecAction::Close => self.execute_close_pty_session(args).await,
@@ -968,7 +970,7 @@ impl ToolRegistry {
             response["truncated"] = json!(true);
         }
         if truncated || exit_code.is_none() {
-            response["follow_up_prompt"] = json!("More output available. Use `next_poll_args`.");
+            response["follow_up_prompt"] = json!(PTY_CONTINUATION_PROMPT);
             response["next_poll_args"] = json!({
                 "session_id": session_id
             });
@@ -1042,15 +1044,13 @@ impl ToolRegistry {
         if let Some(code) = capture.exit_code {
             response["exit_code"] = json!(code);
             self.decrement_active_pty_sessions();
-        } else {
-            response["session_id"] = json!(sid);
         }
 
         if truncated {
             response["truncated"] = json!(true);
         }
         if truncated || capture.exit_code.is_none() {
-            response["follow_up_prompt"] = json!("More output available. Use `next_poll_args`.");
+            response["follow_up_prompt"] = json!(PTY_CONTINUATION_PROMPT);
             response["next_poll_args"] = json!({
                 "session_id": sid
             });
@@ -1107,11 +1107,22 @@ impl ToolRegistry {
         if let Some(code) = capture.exit_code {
             response["exit_code"] = json!(code);
             self.decrement_active_pty_sessions();
-        } else {
-            response["session_id"] = json!(sid);
         }
 
         Ok(response)
+    }
+
+    async fn execute_continue_pty_session(&self, args: Value) -> Result<Value> {
+        if args
+            .get("input")
+            .or_else(|| args.get("chars"))
+            .or_else(|| args.get("text"))
+            .is_some()
+        {
+            self.execute_send_pty_input(args).await
+        } else {
+            self.execute_read_pty_session(args).await
+        }
     }
 
     async fn execute_inspect_pty_output(&self, args: Value) -> Result<Value> {
@@ -1754,7 +1765,6 @@ mod pty_context_tests {
             false,
         );
 
-        assert_eq!(response["id"], "run-123");
         assert_eq!(response["session_id"], "run-123");
         assert_eq!(response["command"], "cargo check");
         assert_eq!(response["working_directory"], ".");

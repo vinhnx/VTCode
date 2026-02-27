@@ -145,12 +145,16 @@ pub fn minimal_tool_signatures() -> HashMap<&'static str, ToolSignature> {
             brief: "Run or inspect command sessions",
             required_params: vec![],
             common_params: vec![
-                ("action", "string", "run|write|poll|inspect|list|close|code"),
+                (
+                    "action",
+                    "string",
+                    "run|write|poll|continue|inspect|list|close|code",
+                ),
                 ("command", "string", "Command for run"),
                 (
                     "session_id",
                     "string",
-                    "Session for write/poll/inspect/close",
+                    "Session for write/poll/continue/inspect/close",
                 ),
             ],
             token_estimate: 40,

@@ -25,14 +25,16 @@ async fn test_pty_functionality() {
     assert_eq!(response["success"], true);
     let output = response["output"].as_str().unwrap_or_default();
     assert!(output.contains("Cargo.toml"));
-    assert!(response["id"].as_str().is_some());
+    assert!(response["session_id"].as_str().is_some());
     assert!(
         response["command"]
             .as_str()
             .unwrap_or_default()
             .contains("ls")
     );
-    assert!(response["working_directory"].is_string() || response["working_directory"].is_null());
+    assert!(
+        response["working_directory"].is_string() || response.get("working_directory").is_none()
+    );
     assert!(response["rows"].is_number());
     assert!(response["cols"].is_number());
     assert!(response["is_exited"].is_boolean());
@@ -85,7 +87,7 @@ async fn test_pty_waits_for_completion_over_yield() {
     assert_eq!(result["success"], true);
     assert_eq!(result.get("process_id"), None);
     assert_eq!(result["exit_code"].as_i64(), Some(0));
-    assert!(result["id"].as_str().is_some());
+    assert!(result["session_id"].as_str().is_some());
     assert!(result["is_exited"].as_bool().unwrap_or(false));
     let output = result["output"].as_str().unwrap_or_default();
     assert!(output.contains("done"));
@@ -244,7 +246,7 @@ async fn test_read_pty_session_includes_command_context_fields() {
     let sid = start
         .get("process_id")
         .and_then(|v| v.as_str())
-        .or_else(|| start.get("id").and_then(|v| v.as_str()))
+        .or_else(|| start.get("session_id").and_then(|v| v.as_str()))
         .expect("session id should be present")
         .to_string();
 
@@ -260,14 +262,14 @@ async fn test_read_pty_session_includes_command_context_fields() {
         .expect("read pty session");
 
     assert_eq!(read["success"], true);
-    assert_eq!(read["id"].as_str(), Some(sid.as_str()));
+    assert_eq!(read["session_id"].as_str(), Some(sid.as_str()));
     assert!(
         read["command"]
             .as_str()
             .unwrap_or_default()
             .contains("sleep 1")
     );
-    assert!(read["working_directory"].is_string() || read["working_directory"].is_null());
+    assert!(read["working_directory"].is_string() || read.get("working_directory").is_none());
     assert!(read["rows"].is_number());
     assert!(read["cols"].is_number());
     assert!(read["is_exited"].is_boolean());

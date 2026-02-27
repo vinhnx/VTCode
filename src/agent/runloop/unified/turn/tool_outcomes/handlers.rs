@@ -345,10 +345,6 @@ fn enforce_spool_chunk_read_guard(
         tool_call_id.to_string(),
         build_spool_chunk_guard_error_content(spool_path, max_reads_per_turn),
     );
-    ctx.working_history.push(uni::Message::system(format!(
-        "Spool chunk cap reached for '{}'. Next: run `grep_file` with a targeted pattern, then summarize before more chunk reads.",
-        spool_path
-    )));
 
     Some(ValidationResult::Outcome(TurnHandlerOutcome::Break(
         TurnLoopResult::Blocked {
@@ -434,9 +430,22 @@ fn loop_detection_tool_key(canonical_tool_name: &str, args: &serde_json::Value) 
         tool_names::UNIFIED_EXEC => {
             let action = tool_intent::unified_exec_action(args).unwrap_or("run");
             let action = action.to_ascii_lowercase();
-            if matches!(action.as_str(), "poll" | "close" | "inspect")
+            if matches!(action.as_str(), "poll" | "continue" | "close" | "inspect")
                 && let Some(session_id) = args.get("session_id").and_then(|v| v.as_str())
             {
+                if action == "continue"
+                    && let Some(input) = args
+                        .get("input")
+                        .or_else(|| args.get("chars"))
+                        .or_else(|| args.get("text"))
+                        .and_then(|v| v.as_str())
+                {
+                    return format!(
+                        "{canonical_tool_name}::{action}::{}::{}",
+                        compact_loop_key_part(session_id, 80),
+                        compact_loop_key_part(input, 40)
+                    );
+                }
                 return format!(
                     "{canonical_tool_name}::{action}::{}",
                     compact_loop_key_part(session_id, 80)
@@ -699,7 +708,10 @@ pub(crate) async fn validate_tool_call<'a>(
                 push_tool_response(
                     ctx.working_history,
                     tool_call_id.to_string(),
-                    spooled.to_string(),
+                    super::execution_result::maybe_inline_spooled(
+                        &canonical_tool_name,
+                        &spooled,
+                    ),
                 );
                 return Ok(ValidationResult::Blocked);
             }
@@ -728,7 +740,10 @@ pub(crate) async fn validate_tool_call<'a>(
                 push_tool_response(
                     ctx.working_history,
                     tool_call_id.to_string(),
-                    reused.to_string(),
+                    super::execution_result::maybe_inline_spooled(
+                        &canonical_tool_name,
+                        &reused,
+                    ),
                 );
                 return Ok(ValidationResult::Blocked);
             }
