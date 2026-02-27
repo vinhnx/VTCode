@@ -13,8 +13,8 @@ use tokio::time::sleep;
 
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::llm::provider as uni;
-use vtcode_core::ui::tui::InlineHandle;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
+use vtcode_tui::InlineHandle;
 
 use super::state::{CtrlCState, SessionStats};
 

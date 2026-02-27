@@ -6,8 +6,8 @@ use tokio::sync::Notify;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::llm::provider::{self as uni};
-use vtcode_core::ui::tui::{InlineHandle, InlineSession};
 use vtcode_core::utils::ansi::AnsiRenderer;
+use vtcode_tui::{InlineHandle, InlineSession};
 
 use crate::agent::runloop::model_picker::ModelPickerState;
 use crate::agent::runloop::unified::palettes::ActivePalette;

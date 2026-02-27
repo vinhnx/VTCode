@@ -6,8 +6,8 @@ use tokio::task::JoinHandle;
 use anyhow::Result;
 use vtcode_core::config::constants::output_limits;
 use vtcode_core::llm::provider as uni;
-use vtcode_core::ui::tui::InlineHandle;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
+use vtcode_tui::InlineHandle;
 
 use crate::hooks::lifecycle::{HookMessage, HookMessageLevel};
 

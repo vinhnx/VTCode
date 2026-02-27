@@ -3,7 +3,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use tokio::sync::Notify;
 use vtcode_core::core::interfaces::ui::UiSession;
-use vtcode_core::ui::tui::{InlineEvent, InlineHandle};
+use vtcode_tui::{InlineEvent, InlineHandle};
 
 use crate::agent::runloop::unified::state::CtrlCState;
 
@@ -14,7 +14,7 @@ pub(super) async fn prompt_session_limit_increase<S: UiSession + ?Sized>(
     ctrl_c_notify: &Arc<Notify>,
     max_limit: usize,
 ) -> Result<Option<usize>> {
-    use vtcode_core::ui::tui::{InlineListItem, InlineListSelection};
+    use vtcode_tui::{InlineListItem, InlineListSelection};
 
     let description_lines = vec![
         format!("Session tool limit reached: {}", max_limit),
@@ -78,7 +78,7 @@ pub(super) async fn prompt_tool_loop_limit_increase<S: UiSession + ?Sized>(
     ctrl_c_notify: &Arc<Notify>,
     max_limit: usize,
 ) -> Result<Option<usize>> {
-    use vtcode_core::ui::tui::{InlineListItem, InlineListSelection};
+    use vtcode_tui::{InlineListItem, InlineListSelection};
 
     let description_lines = vec![
         format!("Maximum tool loops reached: {}", max_limit),
@@ -150,10 +150,10 @@ async fn prompt_limit_increase_modal<S: UiSession + ?Sized>(
     ctrl_c_notify: &Arc<Notify>,
     title: String,
     description_lines: Vec<String>,
-    options: Vec<vtcode_core::ui::tui::InlineListItem>,
+    options: Vec<vtcode_tui::InlineListItem>,
     default_increment: usize,
 ) -> Result<Option<usize>> {
-    use vtcode_core::ui::tui::InlineListSelection;
+    use vtcode_tui::InlineListSelection;
 
     handle.show_list_modal(
         title,

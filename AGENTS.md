@@ -212,6 +212,15 @@ let config = Config::load("vtcode.toml")?;
 - `README.md` is the only exception (stays in root)
 - Use `docs/models.json` for latest LLM model metadata
 
+### Documents Orgranization
+
+- `docs/ARCHITECTURE.md`: High-level architecture overview
+- `docs/security/SECURITY_MODEL.md`: Security design and threat model
+- `docs/config/CONFIGURATION_PRECEDENCE.md`: Configuration loading order and best practices
+- `docs/providers/PROVIDER_GUIDES.md`: Setup guides for LLM providers
+- `docs/development/testing.md`: Testing strategy and infrastructure
+- All docs should be in a respective subdirectory under `docs/` for organization and discoverability.
+
 ## Testing Infrastructure
 
 ### Test Organization

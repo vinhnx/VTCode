@@ -3,8 +3,8 @@ use std::io::{self, Read};
 
 use vtcode_core::cli::args::AgentClientProtocolTarget;
 use vtcode_core::cli::args::Cli;
-use vtcode_core::ui::tui::log::make_tui_log_layer;
 use vtcode_core::utils::tty::TtyExt;
+use vtcode_tui::log::make_tui_log_layer;
 
 /// Detect available IDE for automatic connection when --ide flag is used.
 pub(crate) fn detect_available_ide() -> Result<Option<AgentClientProtocolTarget>> {

@@ -4,7 +4,7 @@ use serde_json::Value;
 use tokio::sync::Notify;
 use vtcode_core::config::constants::tools;
 use vtcode_core::config::loader::VTCodeConfig;
-use vtcode_core::ui::tui::PlanContent;
+use vtcode_tui::PlanContent;
 
 use crate::agent::runloop::unified::plan_confirmation::{
     PlanConfirmationOutcome, execute_plan_confirmation, plan_confirmation_outcome_to_json,

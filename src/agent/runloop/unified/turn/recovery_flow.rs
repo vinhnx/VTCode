@@ -9,7 +9,7 @@ use tokio::task;
 
 use vtcode_core::core::agent::error_recovery::{ErrorType, RecoveryDiagnostics};
 use vtcode_core::tools::circuit_breaker::ToolCircuitDiagnostics;
-use vtcode_core::ui::tui::{
+use vtcode_tui::{
     InlineEvent, InlineHandle, InlineListItem, InlineListSearchConfig, InlineListSelection,
     InlineSession, WizardStep,
 };

@@ -10,8 +10,10 @@ use vtcode_core::config::constants::tools;
 use vtcode_core::tools::registry::ToolRegistry;
 use vtcode_core::tools::registry::ToolTimeoutCategory;
 use vtcode_core::ui::theme;
-use vtcode_core::ui::tui::{InlineHandle, InlineSession, spawn_session, theme_from_styles};
 use vtcode_core::utils::ansi::AnsiRenderer;
+use vtcode_tui::{
+    InlineHandle, InlineSession, SessionOptions, spawn_session_with_options, theme_from_styles,
+};
 
 /// Helper function to create test registry with common setup
 async fn create_test_registry(workspace: &std::path::Path) -> ToolRegistry {
@@ -20,7 +22,7 @@ async fn create_test_registry(workspace: &std::path::Path) -> ToolRegistry {
 
 /// Helper function to create test renderer with default config
 fn create_test_renderer(
-    handle: &vtcode_core::ui::tui::InlineHandle,
+    handle: &vtcode_tui::InlineHandle,
 ) -> vtcode_core::utils::ansi::AnsiRenderer {
     AnsiRenderer::with_inline_ui(handle.clone(), Default::default())
 }
@@ -54,8 +56,8 @@ fn build_harness_state_with(
 struct TestContext {
     registry: ToolRegistry,
     renderer: vtcode_core::utils::ansi::AnsiRenderer,
-    session: vtcode_core::ui::tui::InlineSession,
-    handle: vtcode_core::ui::tui::InlineHandle,
+    session: vtcode_tui::InlineSession,
+    handle: vtcode_tui::InlineHandle,
     approval_recorder: vtcode_core::tools::ApprovalRecorder,
     workspace: std::path::PathBuf,
 }
@@ -68,14 +70,13 @@ impl TestContext {
         let registry = create_test_registry(&workspace).await;
         let active_styles = theme::active_styles();
         let theme_spec = theme_from_styles(&active_styles);
-        let mut session = match spawn_session(
+        let mut session = match spawn_session_with_options(
             theme_spec,
-            None,
-            vtcode_core::config::types::UiSurfacePreference::default(),
-            10,
-            None,
-            None,
-            Some(workspace.clone()),
+            SessionOptions {
+                inline_rows: 10,
+                workspace_root: Some(workspace.clone()),
+                ..SessionOptions::default()
+            },
         ) {
             Ok(session) => session,
             Err(err) if err.to_string().contains("stdin is not a terminal") => {

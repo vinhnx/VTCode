@@ -48,5 +48,5 @@ pub(crate) fn spawn_signal_handler(
 }
 
 fn emergency_terminal_cleanup() {
-    let _ = vtcode_core::ui::tui::panic_hook::restore_tui();
+    let _ = vtcode_tui::panic_hook::restore_tui();
 }

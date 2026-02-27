@@ -1,9 +1,10 @@
 use super::render::highlight_segments;
 use super::*;
 use crate::config::constants::ui;
-use crate::ui::InlineListSelection;
-use crate::ui::tui::types::WizardModalMode;
-use crate::ui::{InlineEvent, InlineListItem, InlineListSearchConfig, WizardStep};
+use crate::ui::tui::{
+    InlineEvent, InlineListItem, InlineListSearchConfig, InlineListSelection, WizardStep,
+    types::WizardModalMode,
+};
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::style::{Modifier, Style};
 use tui_popup::PopupState;

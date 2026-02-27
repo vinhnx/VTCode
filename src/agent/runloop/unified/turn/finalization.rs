@@ -2,10 +2,10 @@
 use anyhow::Result;
 use std::io;
 use vtcode_core::llm::provider as uni;
-use vtcode_core::ui::tui::InlineHandle;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::session_archive::{SessionArchive, SessionMessage};
 use vtcode_core::utils::transcript;
+use vtcode_tui::InlineHandle;
 
 use crate::agent::runloop::unified::async_mcp_manager::AsyncMcpManager;
 use crate::agent::runloop::unified::state::SessionStats;
@@ -20,7 +20,7 @@ use super::utils::render_hook_messages;
 fn restore_terminal_on_exit() -> io::Result<()> {
     // Use the centralized TUI restoration logic from vtcode-core
     // This handles draining events, clearing the line, and proper restoration order
-    vtcode_core::ui::tui::panic_hook::restore_tui()
+    vtcode_tui::panic_hook::restore_tui()
 }
 
 pub(super) async fn finalize_session(

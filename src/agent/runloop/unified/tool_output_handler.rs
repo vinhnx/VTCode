@@ -215,7 +215,7 @@ mod tests {
     use vtcode_core::tools::registry::ToolRegistry;
     use vtcode_core::tools::result_cache::ToolCacheKey;
     use vtcode_core::ui::theme;
-    use vtcode_core::ui::tui::{spawn_session, theme_from_styles};
+    use vtcode_tui::{SessionOptions, spawn_session_with_options, theme_from_styles};
 
     fn build_harness_state() -> crate::agent::runloop::unified::run_loop_context::HarnessTurnState {
         crate::agent::runloop::unified::run_loop_context::HarnessTurnState::new(
@@ -334,14 +334,13 @@ mod tests {
         let mut registry = ToolRegistry::new(workspace.clone()).await;
         let permission_cache_arc = Arc::new(tokio::sync::RwLock::new(ToolPermissionCache::new()));
 
-        let mut session = spawn_session(
+        let mut session = spawn_session_with_options(
             theme_from_styles(&theme::active_styles()),
-            None,
-            vtcode_core::config::types::UiSurfacePreference::default(),
-            10,
-            None,
-            None,
-            Some(workspace.clone()),
+            SessionOptions {
+                inline_rows: 10,
+                workspace_root: Some(workspace.clone()),
+                ..SessionOptions::default()
+            },
         )
         .unwrap();
         let handle = session.clone_inline_handle();
@@ -426,14 +425,13 @@ mod tests {
         let mut registry = ToolRegistry::new(workspace.clone()).await;
         let permission_cache_arc = Arc::new(tokio::sync::RwLock::new(ToolPermissionCache::new()));
 
-        let mut session = spawn_session(
+        let mut session = spawn_session_with_options(
             theme_from_styles(&theme::active_styles()),
-            None,
-            vtcode_core::config::types::UiSurfacePreference::default(),
-            10,
-            None,
-            None,
-            Some(workspace.clone()),
+            SessionOptions {
+                inline_rows: 10,
+                workspace_root: Some(workspace.clone()),
+                ..SessionOptions::default()
+            },
         )
         .unwrap();
         let handle = session.clone_inline_handle();

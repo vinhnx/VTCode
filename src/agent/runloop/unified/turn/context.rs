@@ -18,9 +18,9 @@ use vtcode_core::exec::events::{
 };
 use vtcode_core::llm::provider as uni;
 use vtcode_core::llm::providers::ReasoningSegment;
-use vtcode_core::ui::tui::InlineHandle;
-use vtcode_core::ui::tui::PlanContent;
 use vtcode_core::utils::ansi::AnsiRenderer;
+use vtcode_tui::InlineHandle;
+use vtcode_tui::PlanContent;
 
 use crate::agent::runloop::unified::state::CtrlCState;
 
@@ -100,7 +100,7 @@ pub(crate) struct TurnProcessingContext<'a> {
     pub context_manager: &'a mut crate::agent::runloop::unified::context_manager::ContextManager,
     pub last_forced_redraw: &'a mut Instant,
     pub input_status_state: &'a mut crate::agent::runloop::unified::status_line::InputStatusState,
-    pub session: &'a mut vtcode_core::ui::tui::InlineSession,
+    pub session: &'a mut vtcode_tui::InlineSession,
     pub lifecycle_hooks: Option<&'a crate::hooks::lifecycle::LifecycleHookEngine>,
     pub default_placeholder: &'a Option<String>,
     pub tool_permission_cache: &'a Arc<tokio::sync::RwLock<vtcode_core::acp::ToolPermissionCache>>,

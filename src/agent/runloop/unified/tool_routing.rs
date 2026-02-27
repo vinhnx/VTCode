@@ -18,8 +18,8 @@ use vtcode_core::tools::registry::{ToolPermissionDecision, ToolRegistry};
 use vtcode_core::tools::{
     JustificationExtractor, ToolRiskContext, ToolRiskScorer, ToolSource, WorkspaceTrust,
 };
-use vtcode_core::ui::tui::InlineHandle;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
+use vtcode_tui::InlineHandle;
 
 use super::state::CtrlCState;
 use super::tool_summary::{describe_tool_action, humanize_tool_name};

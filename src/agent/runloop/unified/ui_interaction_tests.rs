@@ -6,8 +6,8 @@ use futures::stream;
 use std::sync::Arc;
 use tokio::sync::{Notify, mpsc};
 use vtcode_core::llm::provider as uni;
-use vtcode_core::ui::tui::{InlineCommand, InlineHandle};
 use vtcode_core::utils::ansi::AnsiRenderer;
+use vtcode_tui::{InlineCommand, InlineHandle};
 
 #[derive(Clone)]
 struct CompletedOnlyProvider {

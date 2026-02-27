@@ -10,9 +10,9 @@ use vtcode_core::config::types::{AgentConfig as CoreAgentConfig, UiSurfacePrefer
 use vtcode_core::llm::factory::{ProviderConfig, create_provider_with_config};
 use vtcode_core::llm::provider::LLMProvider;
 use vtcode_core::llm::rig_adapter::{reasoning_parameters_for, verify_model_with_rig};
-use vtcode_core::ui::tui::InlineHandle;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::file_utils::{ensure_dir_exists, read_file_with_context};
+use vtcode_tui::InlineHandle;
 
 use vtcode_config::auth::CustomApiKeyStorage;
 

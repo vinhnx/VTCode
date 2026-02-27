@@ -512,8 +512,8 @@ pub(crate) async fn execute_llm_request(
                 );
 
             let send_ctx = UnsafeSendContext {
-                handle: ctx.handle as *const ::vtcode_core::ui::tui::InlineHandle
-                    as *mut ::vtcode_core::ui::tui::InlineHandle as usize,
+                handle: ctx.handle as *const ::vtcode_tui::InlineHandle
+                    as *mut ::vtcode_tui::InlineHandle as usize,
             };
 
             let event_sink = Arc::new(Mutex::new(Box::new(
@@ -523,9 +523,8 @@ pub(crate) async fn execute_llm_request(
                         AgentEvent::OutputDelta { .. } => {}
                         AgentEvent::ThinkingDelta { .. } => {}
                         AgentEvent::ThinkingStage { stage } => {
-                            let h: &mut ::vtcode_core::ui::tui::InlineHandle = &mut *(send_ctx
-                                .handle
-                                as *mut ::vtcode_core::ui::tui::InlineHandle);
+                            let h: &mut ::vtcode_tui::InlineHandle =
+                                &mut *(send_ctx.handle as *mut ::vtcode_tui::InlineHandle);
                             h.set_input_status(Some(stage), None);
                         }
                         _ => {}

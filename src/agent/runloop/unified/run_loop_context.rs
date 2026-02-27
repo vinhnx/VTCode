@@ -8,9 +8,9 @@ use vtcode_core::core::trajectory::TrajectoryLogger;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::tools::ToolRegistry;
 use vtcode_core::tools::ToolResultCache;
-use vtcode_core::ui::tui::InlineHandle;
-use vtcode_core::ui::tui::InlineSession;
 use vtcode_core::utils::ansi::AnsiRenderer;
+use vtcode_tui::InlineHandle;
+use vtcode_tui::InlineSession;
 // use crate::agent::runloop::unified::mcp_tool_manager::McpToolManager; // unused
 use crate::agent::runloop::mcp_events::McpPanelState;
 use crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter;

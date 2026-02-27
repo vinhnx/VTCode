@@ -6,7 +6,7 @@ use crate::agent::runloop::unified::tool_call_safety::ToolCallSafetyValidator;
 use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::core::agent::error_recovery::ErrorRecoveryState;
 use vtcode_core::tools::ApprovalRecorder;
-use vtcode_core::ui::tui::EditingMode;
+use vtcode_tui::EditingMode;
 
 /// Default agent profile names for mode switching
 pub const PLANNER_AGENT: &str = "planner";
