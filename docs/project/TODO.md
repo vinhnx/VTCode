@@ -39,6 +39,11 @@ add syntax highlight for bash command in tui, to improve readability and user ex
 The TUI now syntax-highlights fenced code blocks and diffs,
 
 https://github.com/openai/codex/pull/11447
+
+---
+
+THIS
+feat(tui): add theme-aware diff backgrounds with capability-graded palettes#12581
 https://github.com/openai/codex/pull/12581
 
 ---
@@ -61,4 +66,44 @@ update changelog summarization logic ref `https://github.com/openai/codex/releas
 
 ---
 
-@ parsing in the chat composer is more reliable, so commands like npx -y @scope/pkg@latest no longer accidentally open the file picker or block submission. (#12643 https://github.com/openai/codex/pull/12643)
+## ✅ COMPLETED: @ parsing in chat composer is now more reliable
+
+Commands like `npx -y @scope/pkg@latest` no longer accidentally open the file picker. Natural language prompts like "choose @files and do X" properly trigger the file picker.
+
+**Implementation:**
+
+1. **is_npm_command_context()** - Detects npm/npx/yarn/pnpm/bun contexts:
+   - Checks for command words at word boundaries (space or start/end of string)
+   - Catches both forms: `npm i` and `npm install`
+   - Covers all major package managers
+
+2. **looks_like_file_path()** - Context-aware path validation:
+   - Extensions (`.ts`, `.js`) → file path
+   - Separators + extensions (`src/main.rs`) → file path
+   - Relative/absolute paths (`./`, `../`, `/`, `~/`) → always file path
+   - Contains `@` (version spec like `@1.0.0`) → always rejected
+   - Bare identifiers:
+     - In npm context (`npm i @types`) → rejected (packages)
+     - In normal context (`choose @files`) → allowed (file picker)
+
+**Test Coverage (11 cases):**
+```
+✓ npx -y @openai/codex@latest      → Rejected (npm + @version)
+✓ npm install @scope/package       → Rejected (npm + no extension)
+✓ npm i @types/node                → Rejected (npm + no extension)
+✓ yarn add @babel/core             → Rejected (yarn + no extension)
+✓ pnpm install @vitejs/plugin-vue  → Rejected (pnpm + no extension)
+✓ @src/main.rs                     → Allowed (extension + separator)
+✓ @./src/components/Button.tsx     → Allowed (relative path)
+✓ @/etc/config.txt                 → Allowed (absolute path)
+✓ choose @files and do something   → Allowed (conversation context)
+✓ edit @config                     → Allowed (conversation context)
+✓ npm i @types                     → Rejected (npm context + bare)
+```
+
+**Files Modified:**
+
+- `vtcode-core/src/ui/tui/session/file_palette.rs`: Enhanced detection (+70 lines, 11 tests)
+- `vtcode-core/src/ui/tui/session/input.rs`: Image path filtering (+13 lines)
+
+**Ref:** Applied from Codex PR #12643 https://github.com/openai/codex/pull/12643
