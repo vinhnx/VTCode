@@ -556,6 +556,23 @@ fn compact_image_label(content: &str) -> Option<String> {
     }
 
     let without_at = unquoted.strip_prefix('@').unwrap_or(unquoted);
+
+    // Skip npm scoped package patterns like @scope/package@version
+    if without_at.contains('/')
+        && !without_at.starts_with('.')
+        && !without_at.starts_with('/')
+        && !without_at.starts_with("~/")
+    {
+        // Check if this looks like @scope/package (npm package)
+        let parts: Vec<&str> = without_at.split('/').collect();
+        if parts.len() >= 2 && !parts[0].is_empty() {
+            // Reject if it looks like a package name (no extension on second component)
+            if !parts[parts.len() - 1].contains('.') {
+                return None;
+            }
+        }
+    }
+
     let without_scheme = without_at.strip_prefix("file://").unwrap_or(without_at);
     let path = Path::new(without_scheme);
     if !is_image_path(path) {
