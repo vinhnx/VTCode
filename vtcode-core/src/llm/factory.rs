@@ -1,7 +1,7 @@
 use super::providers::{
     AnthropicProvider, DeepSeekProvider, GeminiProvider, HuggingFaceProvider, LmStudioProvider,
     MinimaxProvider, MoonshotProvider, OllamaProvider, OpenAIProvider, OpenResponsesProvider,
-    OpenRouterProvider, XAIProvider, ZAIProvider,
+    OpenRouterProvider, ZAIProvider,
 };
 use crate::config::TimeoutsConfig;
 use crate::config::core::{AnthropicConfig, ModelConfig, PromptCachingConfig};
@@ -61,7 +61,6 @@ impl LLMFactory {
             "moonshot" => MoonshotProvider,
             "ollama" => OllamaProvider,
             "lmstudio" => LmStudioProvider,
-            "xai" => XAIProvider,
             "zai" => ZAIProvider,
         );
 
@@ -127,8 +126,6 @@ impl LLMFactory {
             Some("deepseek".to_owned())
         } else if m.contains("gemini") || m.starts_with("palm") {
             Some("gemini".to_owned())
-        } else if m.starts_with("grok-") || m.starts_with("xai-") {
-            Some("xai".to_owned())
         } else if m.starts_with("glm-") {
             Some("zai".to_owned())
         } else if m.starts_with("lmstudio-community/") {
@@ -356,6 +353,5 @@ impl_builtin_provider!(
     MoonshotProvider,
     OllamaProvider,
     LmStudioProvider,
-    XAIProvider,
     ZAIProvider,
 );

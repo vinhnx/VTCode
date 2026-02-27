@@ -18,7 +18,6 @@ the secret values.
 | `anthropic`  | `ANTHROPIC_API_KEY`  | –                | Required for Claude models.                                                                                       |
 | `deepseek`   | `DEEPSEEK_API_KEY`   | –                | Required for DeepSeek models.                                                                                     |
 | `openrouter` | `OPENROUTER_API_KEY` | –                | Required for OpenRouter routing.                                                                                  |
-| `xai`        | `XAI_API_KEY`        | –                | Required for xAI Grok models.                                                                                     |
 | `zai`        | `ZAI_API_KEY`        | –                | Required for Zhipu AI (Z.AI) models.                                                                              |
 | `moonshot`   | `MOONSHOT_API_KEY`   | –                | Required for Moonshot AI models.                                                                                  |
 | `lmstudio`   | `LMSTUDIO_API_KEY`   | –                | Optional; provide when the LM Studio developer server enforces auth. Override host/port with `LMSTUDIO_BASE_URL`. |

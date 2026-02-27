@@ -32,12 +32,6 @@ impl ModelId {
             // DeepSeek models
             ModelId::DeepSeekChat => models::DEEPSEEK_CHAT,
             ModelId::DeepSeekReasoner => models::DEEPSEEK_REASONER,
-            // xAI models
-            ModelId::XaiGrok4 => models::xai::GROK_4,
-            ModelId::XaiGrok4Mini => models::xai::GROK_4_MINI,
-            ModelId::XaiGrok4Code => models::xai::GROK_4_CODE,
-            ModelId::XaiGrok4CodeLatest => models::xai::GROK_4_CODE_LATEST,
-            ModelId::XaiGrok4Vision => models::xai::GROK_4_VISION,
             // Z.AI models
             ModelId::ZaiGlm5 => models::zai::GLM_5,
             // Moonshot models

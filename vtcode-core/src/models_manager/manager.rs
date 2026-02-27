@@ -274,7 +274,6 @@ impl ModelsManager {
             Provider::OpenAI => OPENAI_DEFAULT_MODEL.to_string(),
             Provider::Anthropic => ANTHROPIC_DEFAULT_MODEL.to_string(),
             Provider::DeepSeek => "deepseek-reasoner".to_string(),
-            Provider::XAI => "grok-4".to_string(),
             Provider::ZAI => "glm-5".to_string(),
             Provider::Minimax => "MiniMax-M2.5".to_string(),
             Provider::OpenRouter => "deepseek/deepseek-chat".to_string(),

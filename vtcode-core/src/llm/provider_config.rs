@@ -192,43 +192,6 @@ impl ProviderConfig for MoonshotProviderConfig {
     }
 }
 
-/// XAI provider configuration
-pub struct XAIProviderConfig;
-
-impl ProviderConfig for XAIProviderConfig {
-    const PROVIDER_KEY: &'static str = "xai";
-    const DISPLAY_NAME: &'static str = "XAI";
-    const DEFAULT_MODEL: &'static str = crate::config::constants::models::xai::DEFAULT_MODEL;
-    const API_BASE_URL: &'static str = crate::config::constants::urls::XAI_API_BASE;
-    const BASE_URL_ENV_VAR: Option<&'static str> =
-        Some(crate::config::constants::env_vars::XAI_BASE_URL);
-
-    type PromptCacheSettings = ();
-
-    fn create_provider(
-        api_key: String,
-        model: String,
-        base_url: String,
-        _prompt_cache_enabled: bool,
-        _prompt_cache_settings: Self::PromptCacheSettings,
-        timeouts: TimeoutsConfig,
-    ) -> Box<dyn LLMProvider> {
-        use crate::llm::providers::common::get_http_client_for_timeouts;
-        use crate::llm::providers::xai::XAIProvider;
-
-        Box::new(XAIProvider::new_with_client(
-            api_key,
-            model,
-            get_http_client_for_timeouts(
-                std::time::Duration::from_secs(30),
-                std::time::Duration::from_secs(timeouts.default_ceiling_seconds),
-            ),
-            base_url,
-            timeouts,
-        ))
-    }
-}
-
 /// ZAI provider configuration
 pub struct ZAIProviderConfig;
 
@@ -507,22 +470,6 @@ pub fn create_provider_unified(
         }
         Provider::Moonshot => {
             let mut builder = create_provider_builder!(MoonshotProviderConfig);
-            if let Some(key) = api_key {
-                builder = builder.api_key(key);
-            }
-            if let Some(m) = model {
-                builder = builder.model(m);
-            }
-            if let Some(url) = base_url {
-                builder = builder.base_url(url);
-            }
-            if let Some(t) = timeouts {
-                builder = builder.timeouts(t);
-            }
-            Ok(builder.build())
-        }
-        Provider::XAI => {
-            let mut builder = create_provider_builder!(XAIProviderConfig);
             if let Some(key) = api_key {
                 builder = builder.api_key(key);
             }

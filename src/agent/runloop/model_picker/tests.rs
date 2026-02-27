@@ -33,16 +33,6 @@ fn model_picker_lists_new_anthropic_models() {
 }
 
 #[test]
-fn model_picker_lists_new_xai_models() {
-    let options = MODEL_OPTIONS.as_slice();
-    assert!(has_model(options, ModelId::XaiGrok4));
-    assert!(has_model(options, ModelId::XaiGrok4Mini));
-    assert!(has_model(options, ModelId::XaiGrok4Code));
-    assert!(has_model(options, ModelId::XaiGrok4CodeLatest));
-    assert!(has_model(options, ModelId::XaiGrok4Vision));
-}
-
-#[test]
 fn model_picker_lists_new_zai_models() {
     let options = MODEL_OPTIONS.as_slice();
     assert!(has_model(options, ModelId::ZaiGlm5));

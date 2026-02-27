@@ -3,7 +3,7 @@ use crate::config::types::ReasoningEffortLevel;
 use anyhow::Result;
 use rig::client::CompletionClient;
 use rig::providers::gemini::completion::gemini_api_types::ThinkingConfig;
-use rig::providers::{anthropic, deepseek, gemini, openai, openrouter, xai};
+use rig::providers::{anthropic, deepseek, gemini, openai, openrouter};
 use serde_json::{Value, json};
 
 /// Result of validating a provider/model combination through rig-core.
@@ -51,10 +51,6 @@ pub fn verify_model_with_rig(
         }
         Provider::Ollama => {
             // Rig does not provide an Ollama integration; validation is skipped.
-        }
-        Provider::XAI => {
-            let client = xai::Client::new(api_key);
-            let _ = client.completion_model(model);
         }
         Provider::Moonshot => {
             // Moonshot does not have a rig client integration yet.

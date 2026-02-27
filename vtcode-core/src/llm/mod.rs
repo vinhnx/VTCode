@@ -192,7 +192,7 @@ pub use optimized_client::{OptimizedLLMClient, OptimizedRequest, OptimizedRespon
 pub use provider::{FinishReason, LLMStream, LLMStreamEvent, Usage};
 pub use providers::{
     AnthropicProvider, GeminiProvider, HuggingFaceProvider, OllamaProvider, OpenAIProvider,
-    XAIProvider, ZAIProvider,
+    ZAIProvider,
 };
 pub use tool_bridge::{
     CorrelationStats, IntentFulfillment, MessageCorrelationTracker, MessageToolCorrelation,

@@ -37,15 +37,6 @@ fn test_model_string_conversion() {
         ModelId::HuggingFaceQwen3CoderNextNovita.as_str(),
         models::huggingface::QWEN3_CODER_NEXT_NOVITA
     );
-    // xAI models
-    assert_eq!(ModelId::XaiGrok4.as_str(), models::xai::GROK_4);
-    assert_eq!(ModelId::XaiGrok4Mini.as_str(), models::xai::GROK_4_MINI);
-    assert_eq!(ModelId::XaiGrok4Code.as_str(), models::xai::GROK_4_CODE);
-    assert_eq!(
-        ModelId::XaiGrok4CodeLatest.as_str(),
-        models::xai::GROK_4_CODE_LATEST
-    );
-    assert_eq!(ModelId::XaiGrok4Vision.as_str(), models::xai::GROK_4_VISION);
     // Z.AI models
     assert_eq!(ModelId::ZaiGlm5.as_str(), models::zai::GLM_5);
 }
@@ -126,27 +117,6 @@ fn test_model_from_string() {
             .unwrap(),
         ModelId::HuggingFaceQwen3CoderNextNovita
     );
-    // xAI models
-    assert_eq!(
-        models::xai::GROK_4.parse::<ModelId>().unwrap(),
-        ModelId::XaiGrok4
-    );
-    assert_eq!(
-        models::xai::GROK_4_MINI.parse::<ModelId>().unwrap(),
-        ModelId::XaiGrok4Mini
-    );
-    assert_eq!(
-        models::xai::GROK_4_CODE.parse::<ModelId>().unwrap(),
-        ModelId::XaiGrok4Code
-    );
-    assert_eq!(
-        models::xai::GROK_4_CODE_LATEST.parse::<ModelId>().unwrap(),
-        ModelId::XaiGrok4CodeLatest
-    );
-    assert_eq!(
-        models::xai::GROK_4_VISION.parse::<ModelId>().unwrap(),
-        ModelId::XaiGrok4Vision
-    );
     // Z.AI models
     assert_eq!(
         models::zai::GLM_5.parse::<ModelId>().unwrap(),
@@ -173,7 +143,6 @@ fn test_provider_parsing() {
         "openrouter".parse::<Provider>().unwrap(),
         Provider::OpenRouter
     );
-    assert_eq!("xai".parse::<Provider>().unwrap(), Provider::XAI);
     assert_eq!("zai".parse::<Provider>().unwrap(), Provider::ZAI);
     assert_eq!("moonshot".parse::<Provider>().unwrap(), Provider::Moonshot);
     assert_eq!("lmstudio".parse::<Provider>().unwrap(), Provider::LmStudio);
@@ -189,7 +158,6 @@ fn test_model_providers() {
     assert_eq!(ModelId::ClaudeSonnet45.provider(), Provider::Anthropic);
     assert_eq!(ModelId::ClaudeHaiku45.provider(), Provider::Anthropic);
     assert_eq!(ModelId::DeepSeekChat.provider(), Provider::DeepSeek);
-    assert_eq!(ModelId::XaiGrok4.provider(), Provider::XAI);
     assert_eq!(ModelId::ZaiGlm5.provider(), Provider::ZAI);
     assert_eq!(ModelId::OllamaGptOss20b.provider(), Provider::Ollama);
     assert_eq!(ModelId::OllamaGptOss120bCloud.provider(), Provider::Ollama);
@@ -215,10 +183,6 @@ fn test_provider_defaults() {
         ModelId::DeepSeekReasoner
     );
     assert_eq!(
-        ModelId::default_orchestrator_for_provider(Provider::XAI),
-        ModelId::XaiGrok4
-    );
-    assert_eq!(
         ModelId::default_orchestrator_for_provider(Provider::Ollama),
         ModelId::OllamaGptOss20b
     );
@@ -242,10 +206,6 @@ fn test_provider_defaults() {
     assert_eq!(
         ModelId::default_subagent_for_provider(Provider::DeepSeek),
         ModelId::DeepSeekChat
-    );
-    assert_eq!(
-        ModelId::default_subagent_for_provider(Provider::XAI),
-        ModelId::XaiGrok4Code
     );
     assert_eq!(
         ModelId::default_subagent_for_provider(Provider::Ollama),
@@ -295,7 +255,6 @@ fn test_model_variants() {
     assert!(ModelId::Gemini3FlashPreview.is_efficient_variant());
     assert!(ModelId::GPT5Mini.is_efficient_variant());
     assert!(ModelId::ClaudeHaiku45.is_efficient_variant());
-    assert!(ModelId::XaiGrok4Code.is_efficient_variant());
     assert!(ModelId::DeepSeekChat.is_efficient_variant());
     assert!(!ModelId::GPT5.is_efficient_variant());
 
@@ -303,8 +262,6 @@ fn test_model_variants() {
     assert!(ModelId::GPT5.is_top_tier());
     assert!(ModelId::ClaudeOpus46.is_top_tier());
     assert!(ModelId::ClaudeSonnet45.is_top_tier());
-    assert!(ModelId::XaiGrok4.is_top_tier());
-    assert!(ModelId::XaiGrok4CodeLatest.is_top_tier());
     assert!(ModelId::DeepSeekReasoner.is_top_tier());
     assert!(ModelId::ZaiGlm5.is_top_tier());
     assert!(ModelId::Gemini3FlashPreview.is_top_tier());
@@ -332,12 +289,6 @@ fn test_model_generation() {
     assert_eq!(ModelId::DeepSeekChat.generation(), "V3.2-Exp");
     assert_eq!(ModelId::DeepSeekReasoner.generation(), "V3.2-Exp");
 
-    // xAI generations
-    assert_eq!(ModelId::XaiGrok4.generation(), "4");
-    assert_eq!(ModelId::XaiGrok4Mini.generation(), "4");
-    assert_eq!(ModelId::XaiGrok4Code.generation(), "4");
-    assert_eq!(ModelId::XaiGrok4CodeLatest.generation(), "4");
-    assert_eq!(ModelId::XaiGrok4Vision.generation(), "4");
     // Z.AI generations
     assert_eq!(ModelId::ZaiGlm5.generation(), "5");
 }
@@ -363,13 +314,6 @@ fn test_models_for_provider() {
     assert!(deepseek_models.contains(&ModelId::DeepSeekChat));
     assert!(deepseek_models.contains(&ModelId::DeepSeekReasoner));
 
-    let xai_models = ModelId::models_for_provider(Provider::XAI);
-    assert!(xai_models.contains(&ModelId::XaiGrok4));
-    assert!(xai_models.contains(&ModelId::XaiGrok4Mini));
-    assert!(xai_models.contains(&ModelId::XaiGrok4Code));
-    assert!(xai_models.contains(&ModelId::XaiGrok4CodeLatest));
-    assert!(xai_models.contains(&ModelId::XaiGrok4Vision));
-
     let zai_models = ModelId::models_for_provider(Provider::ZAI);
     assert!(zai_models.contains(&ModelId::ZaiGlm5));
 
@@ -391,9 +335,7 @@ fn test_fallback_models() {
     assert!(fallbacks.contains(&ModelId::ClaudeSonnet46));
     assert!(fallbacks.contains(&ModelId::ClaudeSonnet45));
     assert!(fallbacks.contains(&ModelId::DeepSeekReasoner));
-    assert!(fallbacks.contains(&ModelId::XaiGrok4));
     assert!(fallbacks.contains(&ModelId::ZaiGlm5));
-    assert!(fallbacks.contains(&ModelId::OpenRouterGrokCodeFast1));
 }
 
 #[test]

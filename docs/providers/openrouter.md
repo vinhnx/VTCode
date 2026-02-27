@@ -18,13 +18,7 @@ ENV
 
 ## Quickstart
 
-Run VT Code against the Grok fast coding model:
-
-```bash
-vtcode --provider openrouter --model x-ai/grok-code-fast-1 chat
-```
-
-Switch to the Qwen3 Coder model optimised for IDE workflows:
+Run VT Code against the Qwen3 Coder model optimised for IDE workflows:
 
 ```bash
 vtcode --provider openrouter --model qwen/qwen3-coder chat

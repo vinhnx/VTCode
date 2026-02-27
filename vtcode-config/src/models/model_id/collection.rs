@@ -35,12 +35,6 @@ impl ModelId {
             // DeepSeek models
             ModelId::DeepSeekChat,
             ModelId::DeepSeekReasoner,
-            // xAI models
-            ModelId::XaiGrok4,
-            ModelId::XaiGrok4Mini,
-            ModelId::XaiGrok4Code,
-            ModelId::XaiGrok4CodeLatest,
-            ModelId::XaiGrok4Vision,
             // Z.AI models
             ModelId::ZaiGlm5,
             // Moonshot models

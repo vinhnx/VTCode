@@ -15,9 +15,7 @@ impl ModelId {
             ModelId::ClaudeOpus41,
             ModelId::ClaudeSonnet45,
             ModelId::DeepSeekReasoner,
-            ModelId::XaiGrok4,
             ModelId::ZaiGlm5,
-            ModelId::OpenRouterGrokCodeFast1,
         ]
     }
 
@@ -46,8 +44,7 @@ impl ModelId {
             Provider::DeepSeek => ModelId::DeepSeekReasoner,
             Provider::HuggingFace => ModelId::HuggingFaceOpenAIGptOss120b,
             Provider::Moonshot => ModelId::Gemini31ProPreview,
-            Provider::XAI => ModelId::XaiGrok4,
-            Provider::OpenRouter => ModelId::OpenRouterGrokCodeFast1,
+            Provider::OpenRouter => ModelId::OpenRouterQwen3Coder,
             Provider::Ollama => ModelId::OllamaGptOss20b,
             Provider::ZAI => ModelId::ZaiGlm5,
         }
@@ -63,8 +60,7 @@ impl ModelId {
             Provider::DeepSeek => ModelId::DeepSeekChat,
             Provider::HuggingFace => ModelId::HuggingFaceOpenAIGptOss20b,
             Provider::Moonshot => ModelId::Gemini3FlashPreview,
-            Provider::XAI => ModelId::XaiGrok4Code,
-            Provider::OpenRouter => ModelId::OpenRouterGrokCodeFast1,
+            Provider::OpenRouter => ModelId::OpenRouterQwen3Coder,
             Provider::Ollama => ModelId::OllamaQwen317b,
             Provider::ZAI => ModelId::OllamaGlm5Cloud,
         }
@@ -80,8 +76,7 @@ impl ModelId {
             Provider::DeepSeek => ModelId::DeepSeekReasoner,
             Provider::HuggingFace => ModelId::HuggingFaceOpenAIGptOss120b,
             Provider::Moonshot => ModelId::Gemini3FlashPreview,
-            Provider::XAI => ModelId::XaiGrok4,
-            Provider::OpenRouter => ModelId::OpenRouterGrokCodeFast1,
+            Provider::OpenRouter => ModelId::OpenRouterQwen3Coder,
             Provider::Ollama => ModelId::OllamaGptOss20b,
             Provider::ZAI => ModelId::ZaiGlm5,
         }

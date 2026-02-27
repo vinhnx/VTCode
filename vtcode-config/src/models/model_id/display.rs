@@ -30,12 +30,6 @@ impl ModelId {
             // DeepSeek models
             ModelId::DeepSeekChat => "DeepSeek V3.2 Chat",
             ModelId::DeepSeekReasoner => "DeepSeek V3.2 Reasoner",
-            // xAI models
-            ModelId::XaiGrok4 => "Grok-4",
-            ModelId::XaiGrok4Mini => "Grok-4 Mini",
-            ModelId::XaiGrok4Code => "Grok-4 Code",
-            ModelId::XaiGrok4CodeLatest => "Grok-4 Code Latest",
-            ModelId::XaiGrok4Vision => "Grok-4 Vision",
             // Z.AI models
             ModelId::ZaiGlm5 => "GLM 5",
             // Ollama models

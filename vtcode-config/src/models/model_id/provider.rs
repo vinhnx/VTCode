@@ -36,11 +36,6 @@ impl ModelId {
             | ModelId::HuggingFaceGlm5Novita
             | ModelId::HuggingFaceQwen3CoderNextNovita
             | ModelId::HuggingFaceQwen35397BA17BTogether => Provider::HuggingFace,
-            ModelId::XaiGrok4
-            | ModelId::XaiGrok4Mini
-            | ModelId::XaiGrok4Code
-            | ModelId::XaiGrok4CodeLatest
-            | ModelId::XaiGrok4Vision => Provider::XAI,
             ModelId::ZaiGlm5 => Provider::ZAI,
             ModelId::MoonshotMinimaxM25 | ModelId::MoonshotQwen3CoderNext => Provider::Moonshot,
             ModelId::OllamaGptOss20b
