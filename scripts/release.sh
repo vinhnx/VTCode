@@ -196,13 +196,44 @@ clean_commit_message() {
     echo "$message" | sed -E 's/^[a-z]+(\([^)]+\))?:[[:space:]]*//'
 }
 
+# Collect unique contributors from a commit range
+generate_contributors_section() {
+    local commits_range="$1"
+    local contributors=""
+    local seen_usernames=""
+
+    while IFS= read -r author_email; do
+        [[ -z "$author_email" ]] && continue
+        local username=$(get_github_username "$author_email")
+        [[ -z "$username" || "$username" == "vtcode-release-bot" ]] && continue
+
+        # Deduplicate (bash 3.2 compatible)
+        if [[ "$seen_usernames" != *"|${username}|"* ]]; then
+            seen_usernames="${seen_usernames}|${username}|"
+            if [[ -n "$contributors" ]]; then
+                contributors="${contributors}, @${username}"
+            else
+                contributors="@${username}"
+            fi
+        fi
+    done < <(git log "$commits_range" --no-merges --pretty=format:"%ae")
+
+    if [[ -n "$contributors" ]]; then
+        echo "### Contributors"$'\n'
+        echo "$contributors"
+    fi
+}
+
 # Group commits by type and generate structured changelog
+# Produces a Highlights section (Features, Bug Fixes, Documentation) followed by Other Changes,
+# inspired by the OpenAI Codex release format (https://github.com/openai/codex/releases)
 # Note: Uses simple arrays instead of associative arrays for bash 3.2 compatibility (macOS)
 generate_structured_changelog() {
     local commits_range="$1"
 
-    # Define type order (priority)
-    local type_order="feat fix perf refactor security docs test build ci deps chore other"
+    # Highlight types shown at the top; everything else goes under "Other Changes"
+    local highlight_types="feat fix docs"
+    local other_types="perf refactor security test build ci deps chore other"
 
     # Initialize storage for each type (using prefix variables instead of associative arrays)
     local feat_commits=""
@@ -260,20 +291,43 @@ generate_structured_changelog() {
         esac
     done < <(git log "$commits_range" --no-merges --pretty=format:"%h|%s")
 
-    # Generate structured output
+    # --- Build output with Highlights / Other Changes split ---
     local output=""
-    local has_content=false
+    local has_highlights=false
+    local has_other=false
 
-    # Process each type in order (using case for bash 3.2 compatibility)
-    for type in $type_order; do
+    # Highlights section (Features, Bug Fixes, Documentation)
+    output+="### Highlights"$'\n\n'
+
+    for type in $highlight_types; do
         local commits=""
         case "$type" in
             feat) commits="$feat_commits" ;;
             fix) commits="$fix_commits" ;;
+            docs) commits="$docs_commits" ;;
+        esac
+
+        if [[ -n "$commits" ]]; then
+            local title=$(get_type_title "$type")
+            output+="#### ${title}"$'\n\n'
+            output+="${commits}"$'\n'
+            has_highlights=true
+        fi
+    done
+
+    if [[ "$has_highlights" == false ]]; then
+        output+="*No highlighted changes*"$'\n\n'
+    fi
+
+    # Other Changes section (Performance, Refactors, Security, Tests, Build, CI, Deps, Chores, Other)
+    local other_output=""
+
+    for type in $other_types; do
+        local commits=""
+        case "$type" in
             perf) commits="$perf_commits" ;;
             refactor) commits="$refactor_commits" ;;
             security) commits="$security_commits" ;;
-            docs) commits="$docs_commits" ;;
             test) commits="$test_commits" ;;
             build) commits="$build_commits" ;;
             ci) commits="$ci_commits" ;;
@@ -284,14 +338,25 @@ generate_structured_changelog() {
 
         if [[ -n "$commits" ]]; then
             local title=$(get_type_title "$type")
-
-            output="${output}### ${title}"$'\n\n'
-            output="${output}${commits}"$'\n'
-            has_content=true
+            other_output+="#### ${title}"$'\n\n'
+            other_output+="${commits}"$'\n'
+            has_other=true
         fi
     done
 
-    if [[ "$has_content" == false ]]; then
+    if [[ "$has_other" == true ]]; then
+        output+="### Other Changes"$'\n\n'
+        output+="${other_output}"
+    fi
+
+    # Contributors section
+    local contributors_section
+    contributors_section=$(generate_contributors_section "$commits_range")
+    if [[ -n "$contributors_section" ]]; then
+        output+="${contributors_section}"$'\n'
+    fi
+
+    if [[ "$has_highlights" == false && "$has_other" == false ]]; then
         output="*No significant changes*"$'\n'
     fi
 

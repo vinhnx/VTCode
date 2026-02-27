@@ -77,9 +77,3 @@ The TUI picked up new convenience commands: /copy copies the latest complete ass
 ---
 
 https://github.com/openai/codex/releases/tag/rust-v0.105.0
-
----
-
-update changelog summarization logic ref `https://github.com/openai/codex/releases/tag/rust-v0.105.0`
-
----
