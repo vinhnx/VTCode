@@ -190,6 +190,17 @@ pub const THEME_RED_LUMINANCE_COEFFICIENT: f64 = 0.2126;
 pub const THEME_GREEN_LUMINANCE_COEFFICIENT: f64 = 0.7152;
 pub const THEME_BLUE_LUMINANCE_COEFFICIENT: f64 = 0.0722;
 pub const THEME_LUMINANCE_LIGHTEN_RATIO: f64 = 0.2;
+/// Lighten ratio for PTY output text — subdued but readable (higher = brighter)
+pub const THEME_PTY_OUTPUT_LIGHTEN_RATIO: f64 = 0.45;
+
+/// Subdued gray for diff line numbers
+pub const DIFF_LINE_NUMBER_R: u8 = 0x4a;
+pub const DIFF_LINE_NUMBER_G: u8 = 0x4a;
+pub const DIFF_LINE_NUMBER_B: u8 = 0x4a;
+/// Medium gray for input placeholder text
+pub const PLACEHOLDER_R: u8 = 0x88;
+pub const PLACEHOLDER_G: u8 = 0x88;
+pub const PLACEHOLDER_B: u8 = 0x88;
 
 // === Safe ANSI Color Palette ===
 // Based on terminal color portability research: https://blog.xoria.org/terminal-colors/

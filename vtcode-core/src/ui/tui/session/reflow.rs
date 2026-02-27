@@ -10,7 +10,7 @@ use ratatui::prelude::*;
 use unicode_width::UnicodeWidthStr;
 
 use super::super::style::ratatui_style_from_inline;
-use super::super::types::{InlineMessageKind, InlineTextStyle};
+use super::super::types::InlineMessageKind;
 use super::{Session, message::MessageLine, render, terminal_capabilities, text_utils};
 use crate::config::constants::ui;
 
@@ -216,15 +216,7 @@ impl Session {
             return grouped_lines;
         }
 
-        let border_style = {
-            let inline = InlineTextStyle {
-                color: self.theme.secondary.or(self.theme.foreground),
-                ..Default::default()
-            };
-            ratatui_style_from_inline(&inline, self.theme.foreground)
-                .add_modifier(Modifier::DIM)
-                .remove_modifier(Modifier::BOLD)
-        };
+        let border_style = self.styles.dimmed_border_style(true);
 
         let border_type = terminal_capabilities::get_border_type();
         let border = block_chars(border_type);
@@ -590,8 +582,7 @@ impl Session {
             width as usize
         };
 
-        let border_style =
-            ratatui_style_from_inline(&self.styles.tool_border_style(), self.theme.foreground);
+        let border_style = self.styles.border_style();
 
         // Check if this is the start of a tool block
         let prev_is_tool = if index > 0 {
@@ -752,9 +743,7 @@ impl Session {
             return Vec::new();
         }
 
-        let mut border_style =
-            ratatui_style_from_inline(&self.styles.tool_border_style(), self.theme.foreground);
-        border_style = border_style.add_modifier(Modifier::DIM);
+        let border_style = self.styles.border_style();
 
         let prev_is_pty = index
             .checked_sub(1)
@@ -774,15 +763,14 @@ impl Session {
             return Vec::new();
         }
 
-        // Render body content - strip ANSI codes to ensure plain text output
-        let fallback = self
-            .text_fallback(InlineMessageKind::Pty)
-            .or(self.theme.foreground);
+        // Render body content - strip ANSI codes to ensure plain text output.
+        // Use the theme's pty_body color as fallback instead of terminal DIM
+        // for consistent, readable contrast across terminals.
+        let pty_fallback = self.theme.pty_body.or(self.theme.foreground);
         let mut body_spans = Vec::new();
         for segment in &line.segments {
             let stripped_text = render::strip_ansi_codes(&segment.text);
-            let mut style = ratatui_style_from_inline(&segment.style, fallback);
-            style = style.add_modifier(Modifier::DIM);
+            let style = ratatui_style_from_inline(&segment.style, pty_fallback);
             body_spans.push(Span::styled(stripped_text.into_owned(), style));
         }
 

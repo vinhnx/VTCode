@@ -38,6 +38,7 @@ pub fn theme_from_styles(styles: &theme::ThemeStyles) -> InlineTheme {
         secondary: convert_style_color(&styles.secondary),
         tool_accent: convert_style_color(&styles.tool),
         tool_body: convert_style_color(&styles.tool_detail),
+        pty_body: convert_style_color(&styles.pty_output),
     }
 }
 
@@ -101,4 +102,13 @@ pub fn ratatui_style_from_inline(
     }
 
     resolved
+}
+
+/// Convert an `anstyle::Style` directly to a `ratatui::style::Style`.
+///
+/// Provides full effect mapping (bold, italic, underline, dim) in a single step,
+/// eliminating the need for intermediate `InlineTextStyle` conversions.
+pub fn ratatui_style_from_ansi(style: AnsiStyle) -> Style {
+    let inline = convert_style(style);
+    ratatui_style_from_inline(&inline, None)
 }

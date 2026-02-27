@@ -1,7 +1,8 @@
-use anstyle::{AnsiColor, Color as AnsiColorEnum, RgbColor};
+use anstyle::{AnsiColor, Color as AnsiColorEnum};
 use ratatui::prelude::*;
 
 use crate::config::constants::ui;
+use crate::ui::theme::mix;
 use crate::ui::tui::{
     style::{ratatui_color_from_ansi, ratatui_style_from_inline},
     types::{InlineMessageKind, InlineTextStyle, InlineTheme},
@@ -18,6 +19,25 @@ pub fn normalize_tool_name(tool_name: &str) -> &'static str {
         "run" | "command" | "bash" | "sh" => "run",
         _ => "other",
     }
+}
+
+/// Get the inline style for a tool based on its normalized name.
+/// Shared by both `SessionStyles` and standalone rendering contexts.
+pub fn tool_inline_style_for(tool_name: &str, theme: &InlineTheme) -> InlineTextStyle {
+    let normalized_name = normalize_tool_name(tool_name);
+    let mut style = InlineTextStyle::default().bold();
+
+    style.color = match normalized_name {
+        "read" => Some(AnsiColor::Cyan.into()),
+        "list" => Some(AnsiColor::Green.into()),
+        "search" => Some(AnsiColor::Cyan.into()),
+        "write" => Some(AnsiColor::Magenta.into()),
+        "run" => Some(AnsiColor::Red.into()),
+        "git" | "version_control" => Some(AnsiColor::Cyan.into()),
+        _ => theme.tool_accent.or(theme.primary).or(theme.foreground),
+    };
+
+    style
 }
 
 /// Styling utilities for the Session UI
@@ -51,45 +71,7 @@ impl SessionStyles {
     /// Get the inline style for a tool based on its name
     #[allow(dead_code)]
     pub fn tool_inline_style(&self, tool_name: &str) -> InlineTextStyle {
-        let normalized_name = normalize_tool_name(tool_name);
-        let mut style = InlineTextStyle::default().bold();
-
-        // Assign distinctive colors based on normalized tool type
-        style.color = match normalized_name {
-            "read" => {
-                // Cyan for file reading operations
-                Some(AnsiColor::Cyan.into())
-            }
-            "list" => {
-                // Green for listing operations
-                Some(AnsiColor::Green.into())
-            }
-            "search" => {
-                // Cyan for search operations
-                Some(AnsiColor::Cyan.into())
-            }
-            "write" => {
-                // Magenta for write/edit operations
-                Some(AnsiColor::Magenta.into())
-            }
-            "run" => {
-                // Red for execution operations
-                Some(AnsiColor::Red.into())
-            }
-            "git" | "version_control" => {
-                // Cyan for version control
-                Some(AnsiColor::Cyan.into())
-            }
-            _ => {
-                // Use the default tool accent color for other tools
-                self.theme
-                    .tool_accent
-                    .or(self.theme.primary)
-                    .or(self.theme.foreground)
-            }
-        };
-
-        style
+        tool_inline_style_for(tool_name, &self.theme)
     }
 
     /// Get the tool border style
@@ -136,10 +118,22 @@ impl SessionStyles {
         }
     }
 
-    /// Get the border style
+    /// Get the border style (dimmed)
     pub fn border_style(&self) -> Style {
-        ratatui_style_from_inline(&self.border_inline_style(), self.theme.foreground)
-            .add_modifier(Modifier::DIM)
+        self.dimmed_border_style(true)
+    }
+
+    /// Get a border style with configurable boldness.
+    /// When `suppress_bold` is true, the BOLD modifier is removed — useful for
+    /// info/error/warning block borders that should appear subtle.
+    pub fn dimmed_border_style(&self, suppress_bold: bool) -> Style {
+        let mut style =
+            ratatui_style_from_inline(&self.border_inline_style(), self.theme.foreground)
+                .add_modifier(Modifier::DIM);
+        if suppress_bold {
+            style = style.remove_modifier(Modifier::BOLD);
+        }
+        style
     }
 
     pub fn input_background_style(&self) -> Style {
@@ -150,7 +144,7 @@ impl SessionStyles {
 
         let resolved = match (background, self.theme.foreground) {
             (AnsiColorEnum::Rgb(bg), Some(AnsiColorEnum::Rgb(fg))) => {
-                AnsiColorEnum::Rgb(mix_rgb(bg, fg, ui::THEME_INPUT_BACKGROUND_MIX_RATIO))
+                AnsiColorEnum::Rgb(mix(bg, fg, ui::THEME_INPUT_BACKGROUND_MIX_RATIO))
             }
             (color, _) => color,
         };
@@ -199,19 +193,4 @@ impl SessionStyles {
         let resolved = ratatui_style_from_inline(&style, self.theme.foreground);
         resolved.add_modifier(Modifier::DIM)
     }
-}
-
-fn mix_rgb(color: RgbColor, target: RgbColor, ratio: f64) -> RgbColor {
-    let ratio = ratio.clamp(0.0, 1.0);
-    let blend = |channel: u8, target_channel: u8| -> u8 {
-        let channel = f64::from(channel);
-        let target_channel = f64::from(target_channel);
-        ((channel + (target_channel - channel) * ratio).round()).clamp(0.0, 255.0) as u8
-    };
-
-    RgbColor(
-        blend(color.0, target.0),
-        blend(color.1, target.1),
-        blend(color.2, target.2),
-    )
 }

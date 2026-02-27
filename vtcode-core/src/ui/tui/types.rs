@@ -186,6 +186,7 @@ pub struct InlineTheme {
     pub secondary: Option<AnsiColorEnum>,
     pub tool_accent: Option<AnsiColorEnum>,
     pub tool_body: Option<AnsiColorEnum>,
+    pub pty_body: Option<AnsiColorEnum>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

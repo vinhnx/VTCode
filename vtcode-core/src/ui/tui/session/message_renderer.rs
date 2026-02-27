@@ -1,13 +1,9 @@
-use ratatui::{
-    style::{Modifier, Style},
-    text::Span,
-};
+use ratatui::{style::Modifier, text::Span};
 
 use super::super::style::ratatui_style_from_inline;
 use super::super::types::{InlineMessageKind, InlineTextStyle, InlineTheme};
 use super::message::{MessageLabels, MessageLine};
 use crate::config::constants::ui;
-use crate::ui::tui::session::styling::normalize_tool_name;
 
 // Note: format_tool_parameters and simplify_tool_display are available in super::text_utils
 // if needed for future use.
@@ -54,14 +50,18 @@ pub(super) fn render_message_spans(
     }
 
     if line.kind == InlineMessageKind::Pty {
-        // Render PTY content directly without header decoration
-        let fallback = text_fallback_fn(line.kind).or(theme.foreground);
+        // Render PTY content with a subdued foreground color instead of the
+        // terminal DIM modifier, which can be too faint on many terminals.
+        // Segments that carry their own ANSI color keep it; uncolored segments
+        // get the theme's pty_body color for consistent, readable contrast.
+        let pty_fallback = theme.pty_body.or(theme.foreground);
         for segment in &line.segments {
-            let mut dim_style = InlineTextStyle::default().dim();
-            dim_style.color = segment.style.color;
-            dim_style.bg_color = segment.style.bg_color;
-            dim_style.effects |= segment.style.effects;
-            let style = ratatui_style_from_inline(&dim_style, fallback);
+            let pty_style = InlineTextStyle {
+                color: segment.style.color,
+                bg_color: segment.style.bg_color,
+                effects: segment.style.effects,
+            };
+            let style = ratatui_style_from_inline(&pty_style, pty_fallback);
             spans.push(Span::styled(segment.text.clone(), style));
         }
         if !spans.is_empty() {
@@ -160,31 +160,4 @@ fn strip_tool_status_prefix(text: &str) -> &str {
         }
     }
     text
-}
-
-#[allow(dead_code)]
-fn tool_inline_style(tool_name: &str, theme: &InlineTheme) -> InlineTextStyle {
-    let normalized_name = normalize_tool_name(tool_name);
-    let mut style = InlineTextStyle::default().bold();
-
-    style.color = match normalized_name {
-        "read" => Some(anstyle::AnsiColor::Cyan.into()),
-        "list" => Some(anstyle::AnsiColor::Green.into()),
-        "search" => Some(anstyle::AnsiColor::Cyan.into()),
-        "write" => Some(anstyle::AnsiColor::Magenta.into()),
-        "run" => Some(anstyle::AnsiColor::Red.into()),
-        "git" | "version_control" => Some(anstyle::AnsiColor::Cyan.into()),
-        _ => theme.tool_accent.or(theme.primary).or(theme.foreground),
-    };
-
-    style
-}
-
-#[allow(dead_code)]
-fn accent_style(theme: &InlineTheme) -> Style {
-    let accent_inline = InlineTextStyle {
-        color: theme.primary.or(theme.foreground),
-        ..InlineTextStyle::default()
-    };
-    ratatui_style_from_inline(&accent_inline, theme.foreground)
 }

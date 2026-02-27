@@ -190,6 +190,22 @@ impl ThemePalette {
         // Tool output style: use default terminal styling (no color/bold/dim effects)
         let tool_output_style = Style::new();
 
+        // PTY output style: subdued foreground for terminal output that's readable
+        // but visually distinct from agent/user text — avoids terminal DIM modifier
+        // which can be too faint on many terminals
+        let pty_output_candidate = lighten(tool_body_color, ui::THEME_PTY_OUTPUT_LIGHTEN_RATIO);
+        let pty_output_color = ensure_contrast(
+            pty_output_candidate,
+            background,
+            min_contrast,
+            &[
+                lighten(text_color, ui::THEME_PTY_OUTPUT_LIGHTEN_RATIO),
+                tool_body_color,
+                text_color,
+            ],
+        );
+        let pty_output_style = Style::new().fg_color(Some(Color::Rgb(pty_output_color)));
+
         ThemeStyles {
             info: Self::style_from(info_color, true),
             error: Self::style_from(alert_color, true),
@@ -199,6 +215,7 @@ impl ThemePalette {
             tool: tool_style,
             tool_detail: tool_detail_style,
             tool_output: tool_output_style,
+            pty_output: pty_output_style,
             status: Self::style_from(
                 ensure_contrast(
                     lighten(primary, ui::THEME_PRIMARY_STATUS_LIGHTEN_RATIO),
@@ -245,6 +262,7 @@ pub struct ThemeStyles {
     pub tool: Style,
     pub tool_detail: Style,
     pub tool_output: Style,
+    pub pty_output: Style,
     pub status: Style,
     pub mcp: Style,
     pub user: Style,
@@ -606,7 +624,7 @@ fn ensure_contrast(
     candidate
 }
 
-fn mix(color: RgbColor, target: RgbColor, ratio: f64) -> RgbColor {
+pub(crate) fn mix(color: RgbColor, target: RgbColor, ratio: f64) -> RgbColor {
     let ratio = ratio.clamp(ui::THEME_MIX_RATIO_MIN, ui::THEME_MIX_RATIO_MAX);
     let blend = |c: u8, t: u8| -> u8 {
         let c = c as f64;
