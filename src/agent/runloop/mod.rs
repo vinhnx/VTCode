@@ -9,6 +9,7 @@ mod slash_commands;
 mod telemetry;
 mod text_tools;
 mod tool_output;
+mod tui_compat;
 mod ui;
 pub mod unified;
 mod welcome;

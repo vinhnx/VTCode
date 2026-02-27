@@ -46,7 +46,7 @@ impl Session {
                     .or_else(|| path.parent()?.file_name())
                     .map(|name| name.to_string_lossy().to_string())
             })
-            .unwrap_or_else(|| "VT Code".to_string())
+            .unwrap_or_else(|| self.app_name.clone())
     }
 
     /// Strip spinner characters and leading whitespace from status text
@@ -127,26 +127,32 @@ impl Session {
                 // Sanitize context for terminal title (remove special chars)
                 let sanitized_ctx = sanitize_for_terminal_title(&ctx);
                 return truncate_title(format!(
-                    "> VT Code ({}) | {} {}",
-                    project_name, action, sanitized_ctx
+                    "> {} ({}) | {} {}",
+                    self.app_name, project_name, action, sanitized_ctx
                 ));
             } else {
-                return truncate_title(format!("> VT Code ({}) | {}", project_name, action));
+                return truncate_title(format!(
+                    "> {} ({}) | {}",
+                    self.app_name, project_name, action
+                ));
             }
         }
 
         // Check for PTY sessions (long-running processes)
         if self.is_running_activity() {
-            return truncate_title(format!("> VT Code ({}) | Running", project_name));
+            return truncate_title(format!("> {} ({}) | Running", self.app_name, project_name));
         }
 
         // Check for HITL (Human in the Loop) states
         if self.has_status_spinner() {
-            return truncate_title(format!("> VT Code ({}) | Action Required", project_name));
+            return truncate_title(format!(
+                "> {} ({}) | Action Required",
+                self.app_name, project_name
+            ));
         }
 
         // Default idle state
-        truncate_title(format!("> VT Code ({})", project_name))
+        truncate_title(format!("> {} ({})", self.app_name, project_name))
     }
 
     /// Extract additional context from status (filename, command, etc.)

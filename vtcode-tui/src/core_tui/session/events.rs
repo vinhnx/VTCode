@@ -2,6 +2,7 @@ use super::*;
 use ratatui::crossterm::event::{KeyEventKind, KeyModifiers, MouseEvent, MouseEventKind};
 use std::sync::Arc;
 
+use super::super::types::ContentPart;
 use crate::ui::tui::InlineSegment;
 use crate::ui::tui::session::modal::{ModalKeyModifiers, ModalListKeyResult};
 
@@ -84,10 +85,10 @@ pub(super) fn handle_event(
             session.mark_dirty();
         }
         CrosstermEvent::FocusGained => {
-            crate::notifications::set_global_terminal_focused(true);
+            // No-op: focus tracking is host/application concern.
         }
         CrosstermEvent::FocusLost => {
-            crate::notifications::set_global_terminal_focused(false);
+            // No-op: focus tracking is host/application concern.
         }
     }
 }
@@ -182,10 +183,6 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
         return None;
     }
 
-    if handle_config_palette_key(session, &key) {
-        return None;
-    }
-
     if crate::ui::tui::session::slash::try_handle_slash_navigation(
         session,
         &key,
@@ -208,7 +205,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
         // Open the history picker
         session.history_picker_state.open(&session.input_manager);
         // Get history with attachments for fuzzy search
-        let history: Vec<(String, Vec<crate::llm::provider::ContentPart>)> = session
+        let history: Vec<(String, Vec<ContentPart>)> = session
             .input_manager
             .history()
             .iter()
@@ -222,7 +219,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
     // Handle history picker if active
     if session.history_picker_state.active {
         // Get history with attachments for search updates
-        let history: Vec<(String, Vec<crate::llm::provider::ContentPart>)> = session
+        let history: Vec<(String, Vec<ContentPart>)> = session
             .input_manager
             .history()
             .iter()
@@ -810,80 +807,6 @@ pub(super) fn handle_file_palette_key(session: &mut Session, key: &KeyEvent) -> 
                 crate::ui::tui::session::command::close_file_palette(session);
                 session.mark_dirty();
             }
-            true
-        }
-        _ => false,
-    }
-}
-
-#[allow(dead_code)]
-pub(super) fn handle_config_palette_key(session: &mut Session, key: &KeyEvent) -> bool {
-    if !session.config_palette_active {
-        return false;
-    }
-
-    let Some(palette) = session.config_palette.as_mut() else {
-        return false;
-    };
-
-    match key.code {
-        KeyCode::Up => {
-            palette.move_up();
-            session.mark_dirty();
-            true
-        }
-        KeyCode::Down => {
-            palette.move_down();
-            session.mark_dirty();
-            true
-        }
-        KeyCode::Enter | KeyCode::Char(' ') => {
-            palette.toggle_selected();
-            let config = palette.config.clone();
-            if let Err(e) = palette.apply_changes() {
-                tracing::error!("Failed to save config: {}", e);
-            }
-            session.apply_config(&config);
-            session.mark_dirty();
-            true
-        }
-        KeyCode::Left => {
-            palette.adjust_numeric_val(-1);
-            let config = palette.config.clone();
-            if let Err(e) = palette.apply_changes() {
-                tracing::error!("Failed to save config: {}", e);
-            }
-            session.apply_config(&config);
-            session.mark_dirty();
-            true
-        }
-        KeyCode::Right => {
-            palette.adjust_numeric_val(1);
-            let config = palette.config.clone();
-            if let Err(e) = palette.apply_changes() {
-                tracing::error!("Failed to save config: {}", e);
-            }
-            session.apply_config(&config);
-            session.mark_dirty();
-            true
-        }
-        KeyCode::Esc => {
-            // Extract config before closing to apply changes to session
-            let config = palette.config.clone();
-
-            // Save and close
-            if let Err(e) = palette.apply_changes() {
-                eprintln!("Failed to save config: {}", e);
-            }
-            session.config_palette = None;
-            session.config_palette_active = false;
-            session.input_enabled = true;
-            session.cursor_visible = true;
-
-            // Apply config to session state (real-time reload)
-            session.apply_config(&config);
-
-            session.mark_dirty();
             true
         }
         _ => false,

@@ -1,6 +1,6 @@
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-use crate::llm::provider::ContentPart;
+use super::super::types::ContentPart;
 
 use super::input_manager::InputManager;
 

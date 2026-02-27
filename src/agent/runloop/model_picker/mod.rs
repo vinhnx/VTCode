@@ -2,6 +2,7 @@ use anyhow::{Context, Result, anyhow};
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
+use crate::agent::runloop::tui_compat::from_tui_reasoning;
 use vtcode::interactive_list::SelectionInterrupted;
 use vtcode_config::auth::CustomApiKeyStorage;
 use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
@@ -368,7 +369,7 @@ impl ModelPickerState {
             PickerStep::AwaitReasoning => match choice {
                 InlineListSelection::Reasoning(level) => {
                     renderer.close_modal();
-                    self.apply_reasoning_choice(renderer, level)
+                    self.apply_reasoning_choice(renderer, from_tui_reasoning(level))
                 }
                 InlineListSelection::DisableReasoning => {
                     renderer.close_modal();

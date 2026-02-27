@@ -31,7 +31,15 @@ impl Session {
     }
 
     pub fn new(theme: InlineTheme, placeholder: Option<String>, view_rows: u16) -> Self {
-        Self::new_with_logs(theme, placeholder, view_rows, true)
+        Self::new_with_logs(
+            theme,
+            placeholder,
+            view_rows,
+            true,
+            None,
+            Vec::new(),
+            "Agent TUI".to_string(),
+        )
     }
 
     pub fn new_with_logs(
@@ -39,42 +47,36 @@ impl Session {
         placeholder: Option<String>,
         view_rows: u16,
         show_logs: bool,
+        appearance: Option<AppearanceConfig>,
+        slash_commands: Vec<crate::ui::tui::types::SlashCommandItem>,
+        app_name: String,
     ) -> Self {
-        Self::new_with_config_and_logs(theme, placeholder, view_rows, show_logs, None)
-    }
-
-    pub fn new_with_config(
-        theme: InlineTheme,
-        placeholder: Option<String>,
-        view_rows: u16,
-    ) -> Result<Self> {
-        let config_manager = crate::config::loader::ConfigManager::load()?;
-        let config = config_manager.config().clone();
-        Ok(Self::new_with_config_and_logs(
+        Self::new_with_options(
             theme,
             placeholder,
             view_rows,
-            true,
-            Some(config),
-        ))
+            show_logs,
+            appearance,
+            slash_commands,
+            app_name,
+        )
     }
 
-    fn new_with_config_and_logs(
+    fn new_with_options(
         theme: InlineTheme,
         placeholder: Option<String>,
         view_rows: u16,
         show_logs: bool,
-        config: Option<VTCodeConfig>,
+        appearance: Option<AppearanceConfig>,
+        slash_commands: Vec<crate::ui::tui::types::SlashCommandItem>,
+        app_name: String,
     ) -> Self {
         let resolved_rows = view_rows.max(2);
         let initial_header_rows = ui::INLINE_HEADER_HEIGHT;
         let reserved_rows = initial_header_rows + Self::input_block_height_for_lines(1);
         let initial_transcript_rows = resolved_rows.saturating_sub(reserved_rows).max(1);
 
-        let appearance = config
-            .as_ref()
-            .map(AppearanceConfig::from_config)
-            .unwrap_or_default();
+        let appearance = appearance.unwrap_or_default();
 
         let mut session = Self {
             // --- Managers (Phase 2) ---
@@ -101,7 +103,7 @@ impl Session {
             input_compact_mode: false,
 
             // --- UI State ---
-            slash_palette: SlashPalette::new(),
+            slash_palette: SlashPalette::with_commands(slash_commands),
             navigation_state: ListState::default(), // Kept for backward compatibility
             input_enabled: true,
             cursor_visible: true,
@@ -140,11 +142,8 @@ impl Session {
             in_tool_code_fence: false,
 
             // --- Palette Management ---
-            config_palette: None,
-            config_palette_active: false,
             file_palette: None,
             file_palette_active: false,
-            deferred_file_browser_trigger: false,
 
             // --- Thinking Indicator ---
             thinking_spinner: ThinkingSpinner::new(),
@@ -178,6 +177,7 @@ impl Session {
             queued_inputs_preview_cache: None,
 
             // --- Terminal Title ---
+            app_name,
             workspace_root: None,
             last_terminal_title: None,
         };

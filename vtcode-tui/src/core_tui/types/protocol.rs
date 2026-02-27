@@ -95,7 +95,6 @@ pub enum InlineCommand {
         files: Vec<String>,
         workspace: std::path::PathBuf,
     },
-    OpenConfigPalette,
     ClearScreen,
     SuspendEventLoop,
     ResumeEventLoop,
@@ -104,7 +103,7 @@ pub enum InlineCommand {
     SetEditingMode(EditingMode),
     /// Update autonomous mode state in header context
     SetAutonomousMode(bool),
-    /// Show plan confirmation dialog (Claude Code style HITL)
+    /// Show plan confirmation dialog (human-in-the-loop)
     /// Displays Implementation Blueprint and asks user to approve before execution
     ShowPlanConfirmation {
         plan: Box<PlanContent>,
@@ -156,7 +155,7 @@ pub enum InlineEvent {
     /// Cycle active teammate (Shift+Up/Down when agent teams are active)
     TeamPrev,
     TeamNext,
-    /// Plan confirmation result (Claude Code style HITL)
+    /// Plan confirmation result (human-in-the-loop)
     PlanConfirmation(PlanConfirmationResult),
     /// Diff preview approval - apply edit changes
     DiffPreviewApply,
@@ -377,11 +376,7 @@ impl InlineHandle {
         self.send_command(InlineCommand::LoadFilePalette { files, workspace });
     }
 
-    pub fn open_config_palette(&self) {
-        self.send_command(InlineCommand::OpenConfigPalette);
-    }
-
-    /// Show plan confirmation dialog (Claude Code style Implementation Blueprint)
+    /// Show plan confirmation dialog for implementation blueprint review
     ///
     /// Displays the implementation plan and asks user to approve before execution.
     /// User can choose: Execute or Stay in Plan Mode (continue planning).

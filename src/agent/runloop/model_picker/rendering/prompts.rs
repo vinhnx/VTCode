@@ -1,5 +1,6 @@
 use std::path::Path;
 
+use crate::agent::runloop::tui_compat::to_tui_reasoning;
 use anyhow::Result;
 use vtcode_core::config::models::Provider;
 use vtcode_core::config::types::ReasoningEffortLevel;
@@ -22,7 +23,7 @@ pub(crate) fn render_reasoning_inline(
         subtitle: Some(KEEP_CURRENT_DESCRIPTION.to_string()),
         badge: Some(CURRENT_BADGE.to_string()),
         indent: 0,
-        selection: Some(InlineListSelection::Reasoning(current)),
+        selection: Some(InlineListSelection::Reasoning(to_tui_reasoning(current))),
         search_value: None,
     });
 
@@ -35,7 +36,9 @@ pub(crate) fn render_reasoning_inline(
             subtitle: Some(reasoning_level_description(ReasoningEffortLevel::None).to_string()),
             badge: Some("GPT-5.x".to_string()),
             indent: 0,
-            selection: Some(InlineListSelection::Reasoning(ReasoningEffortLevel::None)),
+            selection: Some(InlineListSelection::Reasoning(to_tui_reasoning(
+                ReasoningEffortLevel::None,
+            ))),
             search_value: None,
         });
     }
@@ -59,7 +62,7 @@ pub(crate) fn render_reasoning_inline(
             subtitle: Some(reasoning_level_description(level).to_string()),
             badge: None,
             indent: 0,
-            selection: Some(InlineListSelection::Reasoning(level)),
+            selection: Some(InlineListSelection::Reasoning(to_tui_reasoning(level))),
             search_value: None,
         });
     }
@@ -93,7 +96,7 @@ pub(crate) fn render_reasoning_inline(
         STEP_TWO_TITLE,
         lines,
         items,
-        Some(InlineListSelection::Reasoning(current)),
+        Some(InlineListSelection::Reasoning(to_tui_reasoning(current))),
         None,
     );
     Ok(())

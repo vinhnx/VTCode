@@ -1,3 +1,4 @@
+use crate::SlashCommandItem;
 use crate::{KeyboardProtocolSettings, SessionSurface};
 
 /// Provides high-level workspace metadata for header rendering.
@@ -29,7 +30,7 @@ impl Default for HostSessionDefaults {
     fn default() -> Self {
         Self {
             surface_preference: SessionSurface::default(),
-            inline_rows: vtcode_config::constants::ui::DEFAULT_INLINE_VIEWPORT_ROWS,
+            inline_rows: crate::config::constants::ui::DEFAULT_INLINE_VIEWPORT_ROWS,
             keyboard_protocol: KeyboardProtocolSettings::default(),
         }
     }
@@ -40,5 +41,20 @@ pub trait HostAdapter: WorkspaceInfoProvider + NotificationProvider + ThemeProvi
     /// Provide host-specific defaults for TUI session startup.
     fn session_defaults(&self) -> HostSessionDefaults {
         HostSessionDefaults::default()
+    }
+
+    /// Provide slash command metadata to render in the command palette.
+    fn slash_commands(&self) -> Vec<SlashCommandItem> {
+        Vec::new()
+    }
+
+    /// Display name used in terminal title and lightweight UI copy.
+    fn app_name(&self) -> String {
+        "Agent TUI".to_string()
+    }
+
+    /// Optional hint shown when interactive TTY requirements are not met.
+    fn non_interactive_hint(&self) -> Option<String> {
+        None
     }
 }

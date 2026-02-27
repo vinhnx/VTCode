@@ -26,7 +26,7 @@ struct TerminalState {
 /// # Example
 ///
 /// ```no_run
-/// use vtcode_core::ui::tui::alternate_screen::AlternateScreenSession;
+/// use vtcode_tui::core_tui::alternate_screen::AlternateScreenSession;
 ///
 /// // Run a closure in alternate screen with automatic cleanup
 /// let result = AlternateScreenSession::run(|| {

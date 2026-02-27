@@ -11,8 +11,8 @@ use crate::config::types::UiSurfacePreference;
 use crate::ui::tui::log::{clear_tui_log_sender, register_tui_log_sender, set_log_theme_name};
 
 use super::{
-    session::Session,
-    types::{InlineCommand, InlineEvent, InlineEventCallback, InlineTheme},
+    session::{Session, config::AppearanceConfig},
+    types::{InlineCommand, InlineEvent, InlineEventCallback, InlineTheme, SlashCommandItem},
 };
 
 mod drive;
@@ -29,8 +29,6 @@ use surface::TerminalSurface;
 use terminal_io::{drain_terminal_events, finalize_terminal, prepare_terminal};
 use terminal_modes::{enable_terminal_modes, restore_terminal_modes};
 
-/// Terminal title displayed when VT Code TUI is active
-const TERMINAL_TITLE: &str = "> VT Code";
 const ALTERNATE_SCREEN_ERROR: &str = "failed to enter alternate inline screen";
 
 pub struct TuiOptions {
@@ -44,6 +42,9 @@ pub struct TuiOptions {
     pub active_pty_sessions: Option<std::sync::Arc<std::sync::atomic::AtomicUsize>>,
     pub keyboard_protocol: crate::config::KeyboardProtocolConfig,
     pub workspace_root: Option<std::path::PathBuf>,
+    pub slash_commands: Vec<SlashCommandItem>,
+    pub appearance: Option<AppearanceConfig>,
+    pub app_name: String,
 }
 
 pub async fn run_tui(
@@ -60,7 +61,15 @@ pub async fn run_tui(
     let surface = TerminalSurface::detect(options.surface_preference, options.inline_rows)?;
     let (log_tx, log_rx) = tokio::sync::mpsc::unbounded_channel();
     set_log_theme_name(options.log_theme.clone());
-    let mut session = Session::new_with_config(options.theme, options.placeholder, surface.rows())?;
+    let mut session = Session::new_with_logs(
+        options.theme,
+        options.placeholder,
+        surface.rows(),
+        options.show_logs,
+        options.appearance.clone(),
+        options.slash_commands,
+        options.app_name.clone(),
+    );
     session.show_logs = options.show_logs;
     session.set_log_receiver(log_rx);
     session.active_pty_sessions = options.active_pty_sessions;
@@ -81,9 +90,9 @@ pub async fn run_tui(
         .and_then(|path| {
             path.file_name()
                 .or_else(|| path.parent()?.file_name())
-                .map(|name| format!("> VT Code ({})", name.to_string_lossy()))
+                .map(|name| format!("> {} ({})", options.app_name, name.to_string_lossy()))
         })
-        .unwrap_or_else(|| TERMINAL_TITLE.to_string());
+        .unwrap_or_else(|| format!("> {}", options.app_name));
 
     // Use OSC 2 sequence directly for cross-terminal compatibility
     let osc_sequence = format!("\x1b]2;{}\x07", initial_title);

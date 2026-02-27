@@ -7,11 +7,9 @@ use super::super::types::{
 };
 use super::{
     Session,
-    config_palette::ConfigPalette,
     file_palette::{FilePalette, extract_file_reference},
     modal::{ModalListState, ModalSearchState, ModalState},
 };
-use crate::config::loader::ConfigManager;
 
 #[allow(dead_code)]
 const USER_PREFIX: &str = "";
@@ -139,9 +137,6 @@ pub fn handle_command(session: &mut Session, command: InlineCommand) {
         }
         InlineCommand::ClearScreen => {
             clear_screen(session);
-        }
-        InlineCommand::OpenConfigPalette => {
-            open_config_palette(session);
         }
         InlineCommand::SuspendEventLoop
         | InlineCommand::ResumeEventLoop
@@ -320,8 +315,7 @@ pub(crate) fn show_plan_confirmation_modal(
 
     lines.insert(
         0,
-        "VT Code has written up a plan and is ready to execute. Would you like to proceed?"
-            .to_string(),
+        "A plan is ready to execute. Would you like to proceed?".to_string(),
     );
 
     let footer_hint = plan
@@ -356,7 +350,7 @@ pub(crate) fn show_plan_confirmation_modal(
             search_value: None,
         },
         InlineListItem {
-            title: "Type here to tell Claude what to change".to_string(),
+            title: "Type feedback to revise the plan".to_string(),
             subtitle: Some("Return to plan mode and refine the plan.".to_string()),
             badge: None,
             indent: 0,
@@ -927,30 +921,6 @@ fn reset_line(session: &mut Session, kind: InlineMessageKind) {
         return;
     }
     start_line(session, kind);
-}
-pub fn open_config_palette(session: &mut Session) {
-    match ConfigManager::load() {
-        Ok(manager) => {
-            let palette = ConfigPalette::new(manager);
-            session.config_palette = Some(palette);
-            session.config_palette_active = true;
-            // Disable input while in palette
-            session.input_enabled = false;
-            session.cursor_visible = false;
-            mark_dirty(session);
-        }
-        Err(e) => {
-            // Display error
-            let segments = vec![super::super::types::InlineSegment {
-                text: format!("Failed to load configuration: {}", e),
-                style: std::sync::Arc::new(
-                    super::super::types::InlineTextStyle::default()
-                        .with_color(Some(anstyle::Color::Ansi(anstyle::AnsiColor::Red))),
-                ),
-            }];
-            push_line(session, InlineMessageKind::Error, segments);
-        }
-    }
 }
 
 /// Show diff preview modal for file edit approval

@@ -5,7 +5,7 @@
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::widgets::ListState;
 
-use crate::llm::provider::ContentPart;
+use super::super::types::ContentPart;
 use crate::ui::search::fuzzy_score;
 
 use super::input_manager::InputManager;

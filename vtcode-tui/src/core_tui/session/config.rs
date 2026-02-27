@@ -90,30 +90,6 @@ impl Default for AppearanceConfig {
 }
 
 impl AppearanceConfig {
-    /// Create AppearanceConfig from VTCodeConfig
-    pub fn from_config(config: &crate::config::loader::VTCodeConfig) -> Self {
-        Self {
-            theme: config.agent.theme.clone(),
-            ui_mode: match config.ui.display_mode {
-                crate::config::UiDisplayMode::Full => UiMode::Full,
-                crate::config::UiDisplayMode::Minimal => UiMode::Minimal,
-                crate::config::UiDisplayMode::Focused => UiMode::Focused,
-            },
-            show_sidebar: config.ui.show_sidebar,
-            min_content_width: 40,
-            min_navigation_width: 20,
-            navigation_width_percent: 25,
-            transcript_bottom_padding: 0,
-            dim_completed_todos: config.ui.dim_completed_todos,
-            message_block_spacing: if config.ui.message_block_spacing {
-                1
-            } else {
-                0
-            },
-            customization: CustomizationConfig::default(),
-        }
-    }
-
     /// Check if sidebar should be shown based on ui_mode and show_sidebar
     pub fn should_show_sidebar(&self) -> bool {
         match self.ui_mode {

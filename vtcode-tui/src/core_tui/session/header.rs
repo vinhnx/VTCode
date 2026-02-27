@@ -14,7 +14,14 @@ use crate::config::constants::ui;
 use super::super::types::{InlineHeaderContext, InlineHeaderHighlight};
 use super::terminal_capabilities;
 use super::{Session, ratatui_color_from_ansi};
-use crate::llm::providers::clean_reasoning_text;
+
+fn clean_reasoning_text(text: &str) -> String {
+    text.lines()
+        .map(str::trim_end)
+        .filter(|line| !line.trim().is_empty())
+        .collect::<Vec<_>>()
+        .join("\n")
+}
 
 fn capitalize_first_letter(s: &str) -> String {
     let mut chars = s.chars();
@@ -370,7 +377,6 @@ impl Session {
 
     pub fn header_meta_line(&self) -> Line<'static> {
         use super::super::types::EditingMode;
-        use crate::ui::tui::oauth_status::OAuthTuiStatus;
 
         let mut spans = Vec::new();
 
@@ -398,18 +404,6 @@ impl Session {
                 .fg(ratatui::style::Color::Green)
                 .add_modifier(Modifier::BOLD);
             spans.push(Span::styled("[AUTO]".to_string(), badge_style));
-            spans.push(Span::styled(
-                ui::HEADER_MODE_SECONDARY_SEPARATOR.to_owned(),
-                self.header_secondary_style(),
-            ));
-        }
-
-        // Show OAuth badge if using OpenRouter with OAuth authentication
-        let provider_lower = self.header_context.provider.to_lowercase();
-        if provider_lower.contains("openrouter")
-            && let Some(oauth_span) = OAuthTuiStatus::current().badge_span()
-        {
-            spans.push(oauth_span);
             spans.push(Span::styled(
                 ui::HEADER_MODE_SECONDARY_SEPARATOR.to_owned(),
                 self.header_secondary_style(),
