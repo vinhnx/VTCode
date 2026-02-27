@@ -17,13 +17,33 @@ body = """
     ## [unreleased]
 
 {% endif %}\
+### Highlights
 {% for group, commits in commits | group_by(attribute="group") %}\
-    ### {{ group | upper_first }}
+{% if group == "Features" or group == "Bug Fixes" or group == "Documentation" %}\
 
-    {% for commit in commits %}\
-        - {{ commit.message | split(pat="\n") | first | upper_first }} ({% if commit.id %}{{ commit.id | truncate(length=8, end="") }}{% else %}unknown{% endif %}) ({% if commit.remote.username %}@{{ commit.remote.username }}{% else %}{{ commit.author.name }}{% endif %})
-    {% endfor %}
+#### {{ group | upper_first }}
 
+{% for commit in commits %}\
+        - {{ commit.message | split(pat="\n") | first | upper_first }} ({% if commit.id %}{{ commit.id | truncate(length=8, end="") }}{% else %}unknown{% endif %}) {% if commit.remote.username %}(@{{ commit.remote.username }}){% endif %}
+{% endfor %}\
+{% endif %}\
+{% endfor %}\
+
+### Other Changes
+{% for group, commits in commits | group_by(attribute="group") %}\
+{% if group != "Features" and group != "Bug Fixes" and group != "Documentation" %}\
+
+#### {{ group | upper_first }}
+
+{% for commit in commits %}\
+        - {{ commit.message | split(pat="\n") | first | upper_first }} ({% if commit.id %}{{ commit.id | truncate(length=8, end="") }}{% else %}unknown{% endif %}) {% if commit.remote.username %}(@{{ commit.remote.username }}){% endif %}
+{% endfor %}\
+{% endif %}\
+{% endfor %}\
+
+### Contributors
+{% for contributor in commits | map(attribute="remote.username") | unique %}\
+{% if contributor %}@{{ contributor }} {% endif %}\
 {% endfor %}\
 """
 
