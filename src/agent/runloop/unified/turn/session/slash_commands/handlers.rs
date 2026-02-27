@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use serde_json;
+use vtcode_core::llm::provider::MessageRole;
 
 use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
 use vtcode_core::config::types::EditingMode as ConfigEditingMode;
@@ -187,6 +188,57 @@ pub async fn handle_clear_conversation(
     ctx.renderer
         .line(MessageStyle::Info, "Cleared conversation history.")?;
     ctx.renderer.line_if_not_empty(MessageStyle::Output)?;
+    Ok(SlashCommandControl::Continue)
+}
+
+pub async fn handle_clear_screen(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
+    ctx.renderer.clear_screen();
+    ctx.renderer.line(
+        MessageStyle::Info,
+        "Cleared screen. Conversation context is preserved.",
+    )?;
+    ctx.renderer.line_if_not_empty(MessageStyle::Output)?;
+    Ok(SlashCommandControl::Continue)
+}
+
+pub async fn handle_copy_latest_assistant_reply(
+    ctx: SlashCommandContext<'_>,
+) -> Result<SlashCommandControl> {
+    let latest_reply = ctx.conversation_history.iter().rev().find_map(|message| {
+        if message.role != MessageRole::Assistant {
+            return None;
+        }
+        if message
+            .tool_calls
+            .as_ref()
+            .is_some_and(|calls| !calls.is_empty())
+        {
+            return None;
+        }
+        let text = message.content.as_text();
+        let trimmed = text.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_string())
+        }
+    });
+
+    if let Some(reply) = latest_reply {
+        vtcode_tui::core_tui::session::mouse_selection::MouseSelectionState::copy_to_clipboard_osc52(
+            &reply,
+        );
+        ctx.renderer.line(
+            MessageStyle::Info,
+            "Copied latest assistant reply to clipboard.",
+        )?;
+    } else {
+        ctx.renderer.line(
+            MessageStyle::Warning,
+            "No complete assistant reply found to copy yet.",
+        )?;
+    }
+
     Ok(SlashCommandControl::Continue)
 }
 

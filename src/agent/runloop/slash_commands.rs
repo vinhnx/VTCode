@@ -63,7 +63,9 @@ pub enum SlashCommandOutcome {
     StartFileBrowser {
         initial_filter: Option<String>,
     },
+    ClearScreen,
     ClearConversation,
+    CopyLatestAssistantReply,
     ShowStatus,
     ManageMcp {
         action: McpCommandAction,
@@ -313,12 +315,20 @@ pub async fn handle_slash_command(
             })
         }
         "config" | "settings" => Ok(SlashCommandOutcome::ShowConfig),
-        "clear" => {
+        "clear" => match args {
+            "" => Ok(SlashCommandOutcome::ClearScreen),
+            "new" | "--new" | "fresh" | "--fresh" => Ok(SlashCommandOutcome::ClearConversation),
+            _ => {
+                renderer.line(MessageStyle::Error, "Usage: /clear [new]")?;
+                Ok(SlashCommandOutcome::Handled)
+            }
+        },
+        "copy" => {
             if !args.is_empty() {
-                renderer.line(MessageStyle::Error, "Usage: /clear")?;
+                renderer.line(MessageStyle::Error, "Usage: /copy")?;
                 return Ok(SlashCommandOutcome::Handled);
             }
-            Ok(SlashCommandOutcome::ClearConversation)
+            Ok(SlashCommandOutcome::CopyLatestAssistantReply)
         }
         "status" => Ok(SlashCommandOutcome::ShowStatus),
         "doctor" => {

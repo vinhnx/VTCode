@@ -104,7 +104,11 @@ pub async fn handle_outcome(
         SlashCommandOutcome::ExecuteTool { name, args } => {
             handlers::handle_execute_tool(ctx, name, args).await
         }
+        SlashCommandOutcome::ClearScreen => handlers::handle_clear_screen(ctx).await,
         SlashCommandOutcome::ClearConversation => handlers::handle_clear_conversation(ctx).await,
+        SlashCommandOutcome::CopyLatestAssistantReply => {
+            handlers::handle_copy_latest_assistant_reply(ctx).await
+        }
         SlashCommandOutcome::ShowStatus => handlers::handle_show_status(ctx).await,
         SlashCommandOutcome::ManageMcp { action } => handlers::handle_manage_mcp(ctx, action).await,
 

@@ -290,6 +290,10 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
             session.mark_dirty();
             None
         }
+        KeyCode::Char('l') | KeyCode::Char('L') if has_control => {
+            session.mark_dirty();
+            Some(InlineEvent::Submit("/clear".to_string()))
+        }
         KeyCode::BackTab => {
             // Shift+Tab: Toggle editing mode (delegate mode when teams are active)
             session.mark_dirty();

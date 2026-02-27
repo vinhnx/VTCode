@@ -338,6 +338,13 @@ fn control_enter_queues_submission() {
 }
 
 #[test]
+fn control_l_submits_clear_command() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    let event = session.process_key(KeyEvent::new(KeyCode::Char('l'), KeyModifiers::CONTROL));
+    assert!(matches!(event, Some(InlineEvent::Submit(value)) if value == "/clear"));
+}
+
+#[test]
 fn tab_queues_submission() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
 
