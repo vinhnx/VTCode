@@ -92,6 +92,13 @@ pub(crate) fn process_llm_tool_output(output: Value) -> ToolExecutionStatus {
     let command_success = exit_code == 0;
     let stdout = output
         .get("stdout")
+        .or_else(|| {
+            if is_command_like_output(&output) {
+                output.get("output")
+            } else {
+                None
+            }
+        })
         .and_then(|value| value.as_str())
         .map(|s| s.trim())
         .filter(|s| !s.is_empty())
@@ -120,6 +127,15 @@ pub(crate) fn process_llm_tool_output(output: Value) -> ToolExecutionStatus {
     }
 }
 
+fn is_command_like_output(output: &Value) -> bool {
+    output.get("command").is_some()
+        || output.get("working_directory").is_some()
+        || output.get("session_id").is_some()
+        || output.get("process_id").is_some()
+        || output.get("is_exited").is_some()
+        || output.get("exit_code").is_some()
+}
+
 #[cfg(test)]
 mod tests {
     use serde_json::json;
@@ -143,5 +159,22 @@ mod tests {
     #[test]
     fn malformed_cached_json_is_rejected() {
         assert!(parse_cached_output("{not-valid-json").is_err());
+    }
+
+    #[test]
+    fn falls_back_to_output_for_command_like_stdout() {
+        let status = process_llm_tool_output(json!({
+            "command": "ls -la",
+            "output": "file-a\nfile-b\n",
+            "exit_code": 0,
+            "is_exited": true
+        }));
+
+        match status {
+            ToolExecutionStatus::Success { stdout, .. } => {
+                assert_eq!(stdout.as_deref(), Some("file-a\nfile-b"));
+            }
+            _ => panic!("expected success status"),
+        }
     }
 }

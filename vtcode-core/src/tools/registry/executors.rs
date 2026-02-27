@@ -1376,7 +1376,7 @@ fn strip_ansi(text: &str) -> String {
 }
 
 fn filter_pty_output(text: &str) -> String {
-    text.to_string()
+    text.replace("\r\n", "\n").replace('\r', "\n")
 }
 
 // Conservative PTY command policy inspired by bash allow/deny defaults.
@@ -1471,6 +1471,17 @@ mod token_efficiency_tests {
         assert_eq!(suggest_max_tokens_for_command("ls -la"), None);
         assert_eq!(suggest_max_tokens_for_command("grep pattern file"), None);
         assert_eq!(suggest_max_tokens_for_command("echo hello"), None);
+    }
+}
+
+#[cfg(test)]
+mod pty_output_filter_tests {
+    use super::filter_pty_output;
+
+    #[test]
+    fn normalizes_crlf_sequences() {
+        let raw = "a\r\nb\rc\n";
+        assert_eq!(filter_pty_output(raw), "a\nb\nc\n");
     }
 }
 

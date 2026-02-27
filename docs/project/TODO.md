@@ -77,3 +77,13 @@ The TUI picked up new convenience commands: /copy copies the latest complete ass
 ---
 
 https://github.com/openai/codex/releases/tag/rust-v0.105.0
+
+---
+
+review potential gap in unified_exec, and vtcode's tools and identify which wastes tokens broadly, and which are more efficient. optimize the inefficient ones, and consider adding new tools that can help reduce token usage in common scenarios.
+for example, if there are tools that require multiple calls to achieve a common task, consider consolidating them into a single tool that can perform the entire task in one call, thus reducing the number of interactions and tokens used. Additionally, review the prompts and responses for each tool to ensure they are concise and effective, minimizing unnecessary verbosity that can lead to increased token consumption.
+or
+• I found a concrete gap affecting non-diff unified_exec: command payloads still
+often carry duplicated text (output + stdout), which wastes tokens broadly. I’m
+patching normalization and fallback handling so all command-like tool calls
+benefit, not only git diff. => should be fixed by the new unified_exec refactor, which normalizes all tool calls to have a consistent structure and eliminates redundant information in the payload, thus optimizing token usage across all tools that utilize the unified_exec interface.
