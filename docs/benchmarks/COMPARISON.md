@@ -35,7 +35,6 @@ See [GPT5_NANO_VS_GEMINI.md](GPT5_NANO_VS_GEMINI.md) for detailed comparison.
 **Specialized:**
 
 -   gpt-5-codex
--   grok-4-code
 -   qwen3-coder
 
 ### Configuration Variations

@@ -49,12 +49,6 @@ impl FromStr for ModelId {
             // DeepSeek models
             s if s == models::DEEPSEEK_CHAT => Ok(ModelId::DeepSeekChat),
             s if s == models::DEEPSEEK_REASONER => Ok(ModelId::DeepSeekReasoner),
-            // xAI models
-            s if s == models::xai::GROK_4 => Ok(ModelId::XaiGrok4),
-            s if s == models::xai::GROK_4_MINI => Ok(ModelId::XaiGrok4Mini),
-            s if s == models::xai::GROK_4_CODE => Ok(ModelId::XaiGrok4Code),
-            s if s == models::xai::GROK_4_CODE_LATEST => Ok(ModelId::XaiGrok4CodeLatest),
-            s if s == models::xai::GROK_4_VISION => Ok(ModelId::XaiGrok4Vision),
             // Z.AI models
             s if s == models::zai::GLM_5 || s == models::zai::GLM_5_LEGACY => Ok(ModelId::ZaiGlm5),
             // Moonshot models

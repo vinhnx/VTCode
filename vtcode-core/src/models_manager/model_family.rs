@@ -278,22 +278,6 @@ pub fn find_family_for_model(slug: &str) -> ModelFamily {
         );
     }
 
-    // xAI Grok models
-    if slug.contains("grok-4") {
-        return model_family!(
-            slug, "grok-4", Provider::XAI,
-            context_window: Some(DEFAULT_CONTEXT_WINDOW),
-            supports_thinking: true,
-            supports_parallel_tool_calls: true,
-        );
-    }
-    if slug.contains("grok") {
-        return model_family!(
-            slug, "grok", Provider::XAI,
-            context_window: Some(DEFAULT_CONTEXT_WINDOW),
-        );
-    }
-
     // Z.AI GLM models
     if slug.contains("glm-5") {
         return model_family!(

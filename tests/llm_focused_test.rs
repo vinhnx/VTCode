@@ -7,7 +7,7 @@ use vtcode_core::llm::{
     provider::{LLMProvider, LLMRequest, Message, MessageRole},
     providers::{
         AnthropicProvider, GeminiProvider, LmStudioProvider, MoonshotProvider, OllamaProvider,
-        OpenAIProvider, OpenRouterProvider, XAIProvider,
+        OpenAIProvider, OpenRouterProvider,
     },
 };
 
@@ -21,13 +21,12 @@ fn test_provider_factory_basic() {
     assert!(providers.contains(&"anthropic".to_string()));
     assert!(providers.contains(&"openrouter".to_string()));
     assert!(providers.contains(&"moonshot".to_string()));
-    assert!(providers.contains(&"xai".to_string()));
     assert!(providers.contains(&"deepseek".to_string()));
     assert!(providers.contains(&"zai".to_string()));
     assert!(providers.contains(&"ollama".to_string()));
     assert!(providers.contains(&"lmstudio".to_string()));
     assert!(providers.contains(&"minimax".to_string()));
-    assert_eq!(providers.len(), 13);
+    assert_eq!(providers.len(), 12);
 }
 
 #[test]
@@ -51,12 +50,8 @@ fn test_provider_auto_detection() {
         Some("gemini".to_string())
     );
     assert_eq!(
-        factory.provider_from_model(models::OPENROUTER_X_AI_GROK_CODE_FAST_1),
+        factory.provider_from_model(models::OPENROUTER_QWEN3_CODER),
         Some("openrouter".to_string())
-    );
-    assert_eq!(
-        factory.provider_from_model(models::xai::GROK_4),
-        Some("xai".to_string())
     );
     assert_eq!(
         factory.provider_from_model("kimi-k2.5"),
@@ -88,15 +83,12 @@ fn test_unified_client_creation() {
     assert!(anthropic.is_ok());
 
     let openrouter = create_provider_for_model(
-        models::OPENROUTER_X_AI_GROK_CODE_FAST_1,
+        models::OPENROUTER_QWEN3_CODER,
         "test_key".to_string(),
         None,
         None,
     );
     assert!(openrouter.is_ok());
-
-    let xai = create_provider_for_model(models::xai::GROK_4, "test_key".to_string(), None, None);
-    assert!(xai.is_ok());
 
     let moonshot = create_provider_for_model("kimi-k2.5", "test_key".to_string(), None, None);
     assert!(moonshot.is_ok());

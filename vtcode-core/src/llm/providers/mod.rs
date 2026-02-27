@@ -13,7 +13,6 @@ pub mod openai;
 pub mod openresponses;
 pub mod openrouter;
 pub mod streaming_progress;
-pub mod xai;
 pub mod zai;
 
 pub mod common;
@@ -45,5 +44,4 @@ pub use openrouter::OpenRouterProvider;
 pub use streaming_progress::{
     StreamingProgressBuilder, StreamingProgressCallback, StreamingProgressTracker,
 };
-pub use xai::XAIProvider;
 pub use zai::ZAIProvider;

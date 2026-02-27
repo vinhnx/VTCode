@@ -47,8 +47,6 @@ impl ModelId {
             }
             ModelId::GPT52 | ModelId::GPT5 => Some(ModelId::GPT5Mini),
             ModelId::DeepSeekReasoner => Some(ModelId::DeepSeekChat),
-            ModelId::XaiGrok4 => Some(ModelId::XaiGrok4Mini),
-            ModelId::XaiGrok4Code => Some(ModelId::XaiGrok4CodeLatest),
             ModelId::ZaiGlm5 => Some(ModelId::OllamaGlm5Cloud),
             ModelId::ClaudeOpus46
             | ModelId::ClaudeSonnet46
@@ -92,7 +90,6 @@ impl ModelId {
                 | ModelId::ClaudeSonnet46
                 | ModelId::ClaudeOpus41
                 | ModelId::DeepSeekReasoner
-                | ModelId::XaiGrok4
                 | ModelId::ZaiGlm5
                 | ModelId::OpenRouterStepfunStep35FlashFree
                 | ModelId::MinimaxM25
@@ -115,7 +112,6 @@ impl ModelId {
                 | ModelId::GPT5Nano
                 | ModelId::ClaudeHaiku45
                 | ModelId::DeepSeekChat
-                | ModelId::XaiGrok4Code
         )
     }
 
@@ -140,8 +136,6 @@ impl ModelId {
                 | ModelId::ClaudeSonnet45
                 | ModelId::ClaudeSonnet4
                 | ModelId::DeepSeekReasoner
-                | ModelId::XaiGrok4
-                | ModelId::XaiGrok4CodeLatest
                 | ModelId::ZaiGlm5
                 | ModelId::OpenRouterStepfunStep35FlashFree
                 | ModelId::HuggingFaceQwen3CoderNextNovita
@@ -189,12 +183,6 @@ impl ModelId {
             ModelId::ClaudeSonnet4 => "4",
             // DeepSeek generations
             ModelId::DeepSeekChat | ModelId::DeepSeekReasoner => "V3.2-Exp",
-            // xAI generations
-            ModelId::XaiGrok4
-            | ModelId::XaiGrok4Mini
-            | ModelId::XaiGrok4Code
-            | ModelId::XaiGrok4CodeLatest
-            | ModelId::XaiGrok4Vision => "4",
             // Z.AI generations
             ModelId::ZaiGlm5 => "5",
             ModelId::OllamaGptOss20b => "oss",

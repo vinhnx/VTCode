@@ -13,7 +13,6 @@ pub fn supported_for(provider: &str) -> Option<&'static [&'static str]> {
         #[cfg(docsrs)]
         "openrouter" => Some(&[]),
         "moonshot" => Some(models::moonshot::SUPPORTED_MODELS),
-        "xai" => Some(models::xai::SUPPORTED_MODELS),
         "zai" => Some(models::zai::SUPPORTED_MODELS),
         "ollama" => Some(models::ollama::SUPPORTED_MODELS),
         _ => None,
@@ -33,7 +32,6 @@ pub fn default_for(provider: &str) -> Option<&'static str> {
         #[cfg(docsrs)]
         "openrouter" => Some("openrouter/auto"), // Fallback for docs.rs build
         "moonshot" => None,
-        "xai" => Some(models::xai::DEFAULT_MODEL),
         "zai" => Some(models::zai::DEFAULT_MODEL),
         "ollama" => Some(models::ollama::DEFAULT_MODEL),
         _ => None,

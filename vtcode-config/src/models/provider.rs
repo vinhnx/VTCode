@@ -23,8 +23,6 @@ pub enum Provider {
     Ollama,
     /// Moonshot.ai models
     Moonshot,
-    /// xAI Grok models
-    XAI,
     /// Z.AI GLM models
     ZAI,
     /// MiniMax models
@@ -44,7 +42,6 @@ impl Provider {
             Provider::OpenRouter => "OPENROUTER_API_KEY",
             Provider::Ollama => "OLLAMA_API_KEY",
             Provider::Moonshot => "MOONSHOT_API_KEY",
-            Provider::XAI => "XAI_API_KEY",
             Provider::ZAI => "ZAI_API_KEY",
             Provider::Minimax => "MINIMAX_API_KEY",
             Provider::HuggingFace => "HF_TOKEN",
@@ -63,7 +60,6 @@ impl Provider {
             Provider::OpenRouter,
             Provider::Ollama,
             Provider::Moonshot,
-            Provider::XAI,
             Provider::ZAI,
         ]
     }
@@ -78,7 +74,6 @@ impl Provider {
             Provider::OpenRouter => "OpenRouter",
             Provider::Ollama => "Ollama",
             Provider::Moonshot => "Moonshot",
-            Provider::XAI => "xAI",
             Provider::ZAI => "Z.AI",
             Provider::Minimax => "MiniMax",
             Provider::HuggingFace => "Hugging Face",
@@ -126,7 +121,6 @@ impl Provider {
             }
             Provider::Ollama => models::ollama::REASONING_LEVEL_MODELS.contains(&model),
             Provider::Moonshot => models::moonshot::REASONING_MODELS.contains(&model),
-            Provider::XAI => model == models::xai::GROK_4 || model == models::xai::GROK_4_CODE,
             Provider::ZAI => models::zai::REASONING_MODELS.contains(&model),
             Provider::Minimax => {
                 model == models::minimax::MINIMAX_M2_5 || model == models::minimax::MINIMAX_M2
@@ -146,7 +140,6 @@ impl fmt::Display for Provider {
             Provider::OpenRouter => write!(f, "openrouter"),
             Provider::Ollama => write!(f, "ollama"),
             Provider::Moonshot => write!(f, "moonshot"),
-            Provider::XAI => write!(f, "xai"),
             Provider::ZAI => write!(f, "zai"),
             Provider::Minimax => write!(f, "minimax"),
             Provider::HuggingFace => write!(f, "huggingface"),
@@ -166,7 +159,6 @@ impl FromStr for Provider {
             "openrouter" => Ok(Provider::OpenRouter),
             "ollama" => Ok(Provider::Ollama),
             "moonshot" => Ok(Provider::Moonshot),
-            "xai" => Ok(Provider::XAI),
             "zai" => Ok(Provider::ZAI),
             "minimax" => Ok(Provider::Minimax),
             "huggingface" => Ok(Provider::HuggingFace),

@@ -81,18 +81,6 @@ pub enum ModelId {
     /// Qwen3.5-397B-A17B via Together inference provider on Hugging Face router
     HuggingFaceQwen35397BA17BTogether,
 
-    // xAI models
-    /// Grok-4 - Flagship xAI model with advanced reasoning
-    XaiGrok4,
-    /// Grok-4 Mini - Efficient xAI model variant
-    XaiGrok4Mini,
-    /// Grok-4 Code - Code-focused Grok deployment
-    XaiGrok4Code,
-    /// Grok-4 Code Latest - Latest Grok code model with enhanced reasoning tools
-    XaiGrok4CodeLatest,
-    /// Grok-4 Vision - Multimodal Grok model
-    XaiGrok4Vision,
-
     /// GLM-5 - Flagship Z.ai foundation model for complex systems
     ZaiGlm5,
 
@@ -139,14 +127,6 @@ pub enum ModelId {
     MinimaxM2,
 
     // OpenRouter models
-    /// Grok Code Fast 1 - Fast OpenRouter coding model powered by xAI Grok
-    OpenRouterGrokCodeFast1,
-    /// Grok 4 Fast - Reasoning-focused Grok endpoint with transparent traces
-    OpenRouterGrok4Fast,
-    /// Grok 4.1 Fast - Enhanced Grok 4.1 fast inference with improved reasoning
-    OpenRouterGrok41Fast,
-    /// Grok 4 - Flagship Grok 4 endpoint exposed through OpenRouter
-    OpenRouterGrok4,
     /// Qwen3 Max - Flagship Qwen3 mixture for general reasoning
     OpenRouterQwen3Max,
     /// Qwen3 235B A22B - Mixture-of-experts Qwen3 235B general model

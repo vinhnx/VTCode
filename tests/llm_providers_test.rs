@@ -9,7 +9,7 @@ use vtcode_core::llm::{
     provider::{LLMProvider, LLMRequest, Message, MessageRole, ToolDefinition},
     providers::{
         AnthropicProvider, GeminiProvider, LmStudioProvider, MoonshotProvider, OllamaProvider,
-        OpenAIProvider, OpenRouterProvider, XAIProvider,
+        OpenAIProvider, OpenRouterProvider,
     },
 };
 
@@ -24,7 +24,6 @@ fn test_provider_factory_creation() {
     assert!(providers.contains(&"anthropic".to_string()));
     assert!(providers.contains(&"openrouter".to_string()));
     assert!(providers.contains(&"moonshot".to_string()));
-    assert!(providers.contains(&"xai".to_string()));
     assert!(providers.contains(&"deepseek".to_string()));
     assert!(providers.contains(&"zai".to_string()));
     assert!(providers.contains(&"ollama".to_string()));
@@ -73,10 +72,6 @@ fn test_provider_auto_detection() {
 
     // Test OpenRouter models
     assert_eq!(
-        factory.provider_from_model(models::OPENROUTER_X_AI_GROK_CODE_FAST_1),
-        Some("openrouter".to_string())
-    );
-    assert_eq!(
         factory.provider_from_model(models::OPENROUTER_QWEN3_CODER),
         Some("openrouter".to_string())
     );
@@ -89,16 +84,6 @@ fn test_provider_auto_detection() {
     assert_eq!(
         factory.provider_from_model(models::lmstudio::META_LLAMA_31_8B_INSTRUCT),
         Some("lmstudio".to_string())
-    );
-
-    // Test xAI models
-    assert_eq!(
-        factory.provider_from_model(models::xai::GROK_4),
-        Some("xai".to_string())
-    );
-    assert_eq!(
-        factory.provider_from_model(models::xai::GROK_4_CODE_LATEST),
-        Some("xai".to_string())
     );
 
     // Test Moonshot models
@@ -142,15 +127,12 @@ fn test_provider_creation() {
     assert!(anthropic.is_ok());
 
     let openrouter = create_provider_for_model(
-        models::OPENROUTER_X_AI_GROK_CODE_FAST_1,
+        models::OPENROUTER_QWEN3_CODER,
         "test_key".to_string(),
         None,
         None,
     );
     assert!(openrouter.is_ok());
-
-    let xai = create_provider_for_model(models::xai::GROK_4, "test_key".to_string(), None, None);
-    assert!(xai.is_ok());
 
     let moonshot = create_provider_for_model("kimi-k2.5", "test_key".to_string(), None, None);
     assert!(moonshot.is_ok());
@@ -192,7 +174,7 @@ fn test_unified_client_creation() {
     }
 
     let openrouter_client = create_provider_for_model(
-        models::OPENROUTER_X_AI_GROK_CODE_FAST_1,
+        models::OPENROUTER_QWEN3_CODER,
         "test_key".to_string(),
         None,
         None,
@@ -200,13 +182,6 @@ fn test_unified_client_creation() {
     assert!(openrouter_client.is_ok());
     if let Ok(client) = openrouter_client {
         assert_eq!(client.name(), "openrouter");
-    }
-
-    let xai_client =
-        create_provider_for_model(models::xai::GROK_4, "test_key".to_string(), None, None);
-    assert!(xai_client.is_ok());
-    if let Ok(client) = xai_client {
-        assert_eq!(client.name(), "xai");
     }
 
     let moonshot_client =
@@ -274,18 +249,11 @@ fn test_provider_supported_models() {
 
     let openrouter = OpenRouterProvider::new("test_key".to_string());
     let openrouter_models = openrouter.supported_models();
-    assert!(openrouter_models.contains(&models::OPENROUTER_X_AI_GROK_CODE_FAST_1.to_string()));
     assert!(openrouter_models.contains(&models::OPENROUTER_QWEN3_CODER.to_string()));
     assert!(
         openrouter_models.contains(&models::OPENROUTER_ANTHROPIC_CLAUDE_SONNET_4_5.to_string())
     );
     assert!(openrouter_models.len() >= 2);
-
-    let xai = XAIProvider::new("test_key".to_string());
-    let xai_models = xai.supported_models();
-    assert!(xai_models.contains(&models::xai::GROK_4.to_string()));
-    assert!(xai_models.contains(&models::xai::GROK_4_CODE.to_string()));
-    assert!(xai_models.len() >= 2);
 
     let moonshot = MoonshotProvider::new("test_key".to_string());
     let moonshot_models = moonshot.supported_models();
@@ -306,9 +274,6 @@ fn test_provider_names() {
 
     let openrouter = OpenRouterProvider::new("test_key".to_string());
     assert_eq!(openrouter.name(), "openrouter");
-
-    let xai = XAIProvider::new("test_key".to_string());
-    assert_eq!(xai.name(), "xai");
 
     let moonshot = MoonshotProvider::new("test_key".to_string());
     assert_eq!(moonshot.name(), "moonshot");

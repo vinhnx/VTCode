@@ -25,7 +25,7 @@ This index collects provider-specific guides for configuring VT Code with differ
     -   [API overview](https://openrouter.ai/docs/api-reference/overview/llms)
     -   [Streaming](https://openrouter.ai/docs/api-reference/streaming/llms)
     -   [Model catalog](https://openrouter.ai/docs/llms)
--   Default models: `x-ai/grok-code-fast-1`, `qwen/qwen3-coder` (override via `vtcode.toml` or CLI `--model`).
+-   Default model: `qwen/qwen3-coder` (override via `vtcode.toml` or CLI `--model`).
 
 ## Ollama Local & Cloud Models
 

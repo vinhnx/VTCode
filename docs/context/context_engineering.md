@@ -169,7 +169,7 @@ Our tools are designed with context efficiency in mind:
 [context.token_budget]
 enabled = true
 # Model for tokenizer - use latest models from docs/models.json
-# Examples: "gpt-5-mini", "gpt-5-nano", "claude-sonnet-4", "grok-4", "deepseek-chat"
+# Examples: "gpt-5-mini", "gpt-5-nano", "claude-sonnet-4", "deepseek-chat"
 model = "gpt-5-nano"
 warning_threshold = 0.75  # Warn at 75% usage
 

@@ -9,7 +9,6 @@ pub mod ollama;
 pub mod openai;
 pub mod openresponses;
 pub mod openrouter;
-pub mod xai;
 pub mod zai;
 
 // Backwards compatibility - keep old constants working
@@ -44,20 +43,8 @@ pub const CLAUDE_3_5_HAIKU_LATEST: &str = anthropic::CLAUDE_3_5_HAIKU_LATEST;
 pub const MINIMAX_M2: &str = minimax::MINIMAX_M2;
 pub const MINIMAX_M2_5: &str = minimax::MINIMAX_M2_5;
 pub const GLM_5: &str = zai::GLM_5;
-pub const XAI_GROK_4: &str = xai::GROK_4;
-pub const XAI_GROK_4_MINI: &str = xai::GROK_4_MINI;
-pub const XAI_GROK_4_CODE: &str = xai::GROK_4_CODE;
-pub const XAI_GROK_4_CODE_LATEST: &str = xai::GROK_4_CODE_LATEST;
-pub const XAI_GROK_4_VISION: &str = xai::GROK_4_VISION;
-pub const XAI_GROK_3: &str = xai::GROK_3;
-pub const XAI_GROK_2: &str = xai::GROK_2_1212;
-pub const XAI_GROK_BETA: &str = xai::GROK_BETA;
 pub const DEEPSEEK_CHAT: &str = deepseek::DEEPSEEK_CHAT;
 pub const DEEPSEEK_REASONER: &str = deepseek::DEEPSEEK_REASONER;
-#[cfg(not(docsrs))]
-pub const OPENROUTER_X_AI_GROK_CODE_FAST_1: &str = openrouter::X_AI_GROK_CODE_FAST_1;
-#[cfg(docsrs)]
-pub const OPENROUTER_X_AI_GROK_CODE_FAST_1: &str = "x-ai/grok-code-fast-1";
 #[cfg(not(docsrs))]
 pub const OPENROUTER_QWEN3_CODER: &str = openrouter::QWEN3_CODER;
 #[cfg(docsrs)]

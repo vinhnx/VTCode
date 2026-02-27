@@ -155,9 +155,6 @@ pub fn builtin_model_presets() -> Vec<ModelPreset> {
     // DeepSeek presets
     presets.extend(deepseek_presets());
 
-    // xAI presets
-    presets.extend(xai_presets());
-
     // Z.AI presets
     presets.extend(zai_presets());
 
@@ -174,7 +171,6 @@ pub fn presets_for_provider(provider: Provider) -> Vec<ModelPreset> {
         Provider::OpenAI => openai_presets(),
         Provider::Anthropic => anthropic_presets(),
         Provider::DeepSeek => deepseek_presets(),
-        Provider::XAI => xai_presets(),
         Provider::ZAI => zai_presets(),
         Provider::Minimax => minimax_presets(),
         Provider::OpenRouter => openrouter_presets(),
@@ -515,51 +511,6 @@ fn deepseek_presets() -> Vec<ModelPreset> {
             supported_reasoning_efforts: vec![ReasoningEffortPreset {
                 effort: ReasoningEffortLevel::Medium,
                 description: "Fast".to_string(),
-            }],
-            is_default: false,
-            upgrade: None,
-            show_in_picker: true,
-            supported_in_api: true,
-            context_window: Some(128_000),
-        },
-    ]
-}
-
-fn xai_presets() -> Vec<ModelPreset> {
-    vec![
-        ModelPreset {
-            id: "grok-4".to_string(),
-            model: "grok-4".to_string(),
-            display_name: "Grok 4".to_string(),
-            description: "Flagship xAI model with advanced reasoning".to_string(),
-            provider: Provider::XAI,
-            default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::Medium,
-                    description: "Balanced".to_string(),
-                },
-                ReasoningEffortPreset {
-                    effort: ReasoningEffortLevel::High,
-                    description: "Deep".to_string(),
-                },
-            ],
-            is_default: true,
-            upgrade: None,
-            show_in_picker: true,
-            supported_in_api: true,
-            context_window: Some(128_000),
-        },
-        ModelPreset {
-            id: "grok-4-code".to_string(),
-            model: "grok-4-code".to_string(),
-            display_name: "Grok 4 Code".to_string(),
-            description: "Code-focused Grok deployment".to_string(),
-            provider: Provider::XAI,
-            default_reasoning_effort: ReasoningEffortLevel::Medium,
-            supported_reasoning_efforts: vec![ReasoningEffortPreset {
-                effort: ReasoningEffortLevel::Medium,
-                description: "Balanced".to_string(),
             }],
             is_default: false,
             upgrade: None,

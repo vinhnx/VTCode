@@ -60,14 +60,6 @@ impl ModelId {
             ModelId::DeepSeekReasoner => {
                 "DeepSeek V3.2 - Thinking mode with integrated tool-use and reasoning capability"
             }
-            // xAI models
-            ModelId::XaiGrok4 => "Flagship Grok 4 model with long context and tool use",
-            ModelId::XaiGrok4Mini => "Efficient Grok 4 Mini tuned for low latency",
-            ModelId::XaiGrok4Code => "Code-specialized Grok 4 deployment with tool support",
-            ModelId::XaiGrok4CodeLatest => {
-                "Latest Grok 4 code model offering enhanced reasoning traces"
-            }
-            ModelId::XaiGrok4Vision => "Multimodal Grok 4 model with image understanding",
             // Z.AI models
             ModelId::ZaiGlm5 => {
                 "Z.ai flagship GLM-5 foundation model engineered for complex systems design and long-horizon agent workflows"
