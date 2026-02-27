@@ -1252,7 +1252,7 @@ fn pty_wrapped_lines_do_not_exceed_viewport_width() {
 }
 
 #[test]
-fn pty_lines_are_force_dimmed() {
+fn pty_lines_use_subdued_foreground() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
     session.push_line(
         InlineMessageKind::Pty,
@@ -1268,9 +1268,11 @@ fn pty_lines_are_force_dimmed() {
         .flat_map(|line| line.spans.iter())
         .find(|span| span.content.contains("plain pty output"))
         .expect("expected PTY body span");
+    // PTY output should NOT use terminal DIM modifier (too faint on many terminals).
+    // Instead it should use a subdued foreground color for better visibility.
     assert!(
-        body_span.style.add_modifier.contains(Modifier::DIM),
-        "PTY body spans should be dimmed"
+        !body_span.style.add_modifier.contains(Modifier::DIM),
+        "PTY body spans should not use DIM modifier"
     );
 }
 

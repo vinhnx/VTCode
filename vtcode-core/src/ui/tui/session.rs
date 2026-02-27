@@ -100,7 +100,8 @@ use super::types::InlineHeaderHighlight;
 use crate::ui::tui::log::{LogEntry, highlight_log_entry};
 
 const USER_PREFIX: &str = "";
-const PLACEHOLDER_COLOR: RgbColor = RgbColor(0x88, 0x88, 0x88);
+const PLACEHOLDER_COLOR: RgbColor =
+    RgbColor(ui::PLACEHOLDER_R, ui::PLACEHOLDER_G, ui::PLACEHOLDER_B);
 const MAX_LOG_LINES: usize = 256;
 const MAX_LOG_DRAIN_PER_TICK: usize = 256;
 

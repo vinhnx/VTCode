@@ -10,6 +10,8 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph},
 };
 
+use super::super::style::{ratatui_color_from_ansi, ratatui_style_from_ansi};
+use crate::config::constants::ui;
 use crate::ui::markdown::highlight_line_for_diff;
 use crate::ui::tui::session::Session;
 use crate::ui::tui::types::{DiffPreviewState, TrustMode};
@@ -54,19 +56,19 @@ fn render_file_header(
     additions: usize,
     deletions: usize,
 ) {
-    let header_style = Style::default().fg(anstyle_color_to_ratatui(palette.header_fg));
+    let header_style = Style::default().fg(ratatui_color_from_ansi(palette.header_fg));
     let header = Line::from(vec![
         Span::styled("← Edit ", header_style),
         Span::styled(&preview.file_path, header_style),
         Span::styled(" (", header_style),
         Span::styled(
             format!("+{}", additions),
-            Style::default().fg(anstyle_color_to_ratatui(palette.added_fg)),
+            Style::default().fg(ratatui_color_from_ansi(palette.added_fg)),
         ),
         Span::styled(" ", header_style),
         Span::styled(
             format!("-{}", deletions),
-            Style::default().fg(anstyle_color_to_ratatui(palette.removed_fg)),
+            Style::default().fg(ratatui_color_from_ansi(palette.removed_fg)),
         ),
         Span::styled(")", header_style),
     ]);
@@ -96,45 +98,6 @@ fn detect_language(file_path: &str) -> Option<&'static str> {
     }
 }
 
-fn anstyle_to_ratatui(anstyle: anstyle::Style) -> Style {
-    let mut style = Style::default();
-    if let Some(fg) = anstyle.get_fg_color() {
-        style = style.fg(anstyle_color_to_ratatui(fg));
-    }
-    if anstyle.get_effects().contains(anstyle::Effects::BOLD) {
-        style = style.add_modifier(Modifier::BOLD);
-    }
-    if anstyle.get_effects().contains(anstyle::Effects::ITALIC) {
-        style = style.add_modifier(Modifier::ITALIC);
-    }
-    style
-}
-
-fn anstyle_color_to_ratatui(color: anstyle::Color) -> Color {
-    match color {
-        anstyle::Color::Ansi(c) => match c {
-            anstyle::AnsiColor::Black => Color::Black,
-            anstyle::AnsiColor::Red => Color::Red,
-            anstyle::AnsiColor::Green => Color::Green,
-            anstyle::AnsiColor::Yellow => Color::Yellow,
-            anstyle::AnsiColor::Blue => Color::Blue,
-            anstyle::AnsiColor::Magenta => Color::DarkGray,
-            anstyle::AnsiColor::Cyan => Color::Cyan,
-            anstyle::AnsiColor::White => Color::White,
-            anstyle::AnsiColor::BrightBlack => Color::DarkGray,
-            anstyle::AnsiColor::BrightRed => Color::Red,
-            anstyle::AnsiColor::BrightGreen => Color::Green,
-            anstyle::AnsiColor::BrightYellow => Color::Yellow,
-            anstyle::AnsiColor::BrightBlue => Color::Blue,
-            anstyle::AnsiColor::BrightMagenta => Color::DarkGray,
-            anstyle::AnsiColor::BrightCyan => Color::Cyan,
-            anstyle::AnsiColor::BrightWhite => Color::Gray,
-        },
-        anstyle::Color::Ansi256(c) => Color::Indexed(c.0),
-        anstyle::Color::Rgb(rgb) => Color::Rgb(rgb.0, rgb.1, rgb.2),
-    }
-}
-
 fn highlight_line_with_bg(
     line: &str,
     language: Option<&str>,
@@ -145,7 +108,7 @@ fn highlight_line_with_bg(
         segments
             .into_iter()
             .map(|(anstyle, t)| {
-                let mut style = anstyle_to_ratatui(anstyle);
+                let mut style = ratatui_style_from_ansi(anstyle);
                 if let Some(bg_color) = bg {
                     style = style.bg(bg_color);
                 }
@@ -213,11 +176,15 @@ fn render_diff_content(
             let line_num_str = format!("{:>4} ", line_num);
             let text = diff_line.text.trim_end_matches('\n');
 
-            let fg_line_num = Color::Rgb(0x4a, 0x4a, 0x4a);
+            let fg_line_num = Color::Rgb(
+                ui::DIFF_LINE_NUMBER_R,
+                ui::DIFF_LINE_NUMBER_G,
+                ui::DIFF_LINE_NUMBER_B,
+            );
             let (prefix, fg, is_change) = match diff_line.kind {
                 DiffLineKind::Context => (" ", fg_line_num, false),
-                DiffLineKind::Addition => ("+", anstyle_color_to_ratatui(palette.added_fg), true),
-                DiffLineKind::Deletion => ("-", anstyle_color_to_ratatui(palette.removed_fg), true),
+                DiffLineKind::Addition => ("+", ratatui_color_from_ansi(palette.added_fg), true),
+                DiffLineKind::Deletion => ("-", ratatui_color_from_ansi(palette.removed_fg), true),
             };
 
             let mut spans = vec![
