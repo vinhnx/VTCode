@@ -414,7 +414,7 @@ pub(crate) async fn handle_tool_execution_result<'a>(
     Ok(None)
 }
 
-fn maybe_inline_spooled(_tool_name: &str, output: &serde_json::Value) -> String {
+pub(super) fn maybe_inline_spooled(_tool_name: &str, output: &serde_json::Value) -> String {
     let mut sanitized = output.clone();
     if let Some(obj) = sanitized.as_object_mut() {
         let next_poll_args = obj
@@ -471,8 +471,8 @@ fn maybe_inline_spooled(_tool_name: &str, output: &serde_json::Value) -> String 
             obj.remove("working_directory");
         }
 
+        obj.remove("follow_up_prompt");
         if next_poll_args.is_some() || next_read_args.is_some() {
-            obj.remove("follow_up_prompt");
             obj.remove("has_more");
         }
 

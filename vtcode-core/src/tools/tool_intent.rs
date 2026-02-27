@@ -14,6 +14,7 @@ pub struct ToolIntent {
 pub fn classify_tool_intent(tool_name: &str, args: &Value) -> ToolIntent {
     let canonical = canonical_tool_name(tool_name);
     let tool = canonical.as_ref();
+    let has_exec_input = unified_exec_has_input(args);
 
     let readonly_unified_action = match tool {
         tools::UNIFIED_FILE => unified_file_action(args)
@@ -24,6 +25,7 @@ pub fn classify_tool_intent(tool_name: &str, args: &Value) -> ToolIntent {
                 action.eq_ignore_ascii_case("poll")
                     || action.eq_ignore_ascii_case("list")
                     || action.eq_ignore_ascii_case("inspect")
+                    || (action.eq_ignore_ascii_case("continue") && !has_exec_input)
             })
             .unwrap_or(false),
         tools::UNIFIED_SEARCH => true,
@@ -71,6 +73,7 @@ pub fn classify_tool_intent(tool_name: &str, args: &Value) -> ToolIntent {
             .map(|action| {
                 action.eq_ignore_ascii_case("run")
                     || action.eq_ignore_ascii_case("write")
+                    || (action.eq_ignore_ascii_case("continue") && has_exec_input)
                     || action.eq_ignore_ascii_case("code")
             })
             .unwrap_or(mutating),
@@ -157,6 +160,10 @@ pub fn unified_exec_action(args: &Value) -> Option<&str> {
     })
 }
 
+fn unified_exec_has_input(args: &Value) -> bool {
+    args.get("input").is_some() || args.get("chars").is_some() || args.get("text").is_some()
+}
+
 /// Determine the action for unified_search tool based on args.
 /// Returns the action string or None if no inference is possible.
 pub fn unified_search_action(args: &Value) -> Option<&str> {
@@ -217,6 +224,29 @@ mod tests {
         assert!(!intent.mutating);
         assert!(intent.readonly_unified_action);
         assert!(intent.retry_safe);
+    }
+
+    #[test]
+    fn unified_exec_continue_without_input_is_retry_safe() {
+        let intent = classify_tool_intent(
+            tools::UNIFIED_EXEC,
+            &json!({"action": "continue", "session_id": "run-1"}),
+        );
+        assert!(!intent.mutating);
+        assert!(intent.readonly_unified_action);
+        assert!(intent.retry_safe);
+    }
+
+    #[test]
+    fn unified_exec_continue_with_input_is_mutating_and_destructive() {
+        let intent = classify_tool_intent(
+            tools::UNIFIED_EXEC,
+            &json!({"action": "continue", "session_id": "run-1", "input": "q"}),
+        );
+        assert!(intent.mutating);
+        assert!(intent.destructive);
+        assert!(!intent.readonly_unified_action);
+        assert!(!intent.retry_safe);
     }
 
     #[test]

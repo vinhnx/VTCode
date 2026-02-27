@@ -33,6 +33,7 @@ pub enum UnifiedExecAction {
     Run,
     Write,
     Poll,
+    Continue,
     Inspect,
     List,
     Close,
@@ -337,13 +338,13 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
 
         FunctionDeclaration {
             name: tools::UNIFIED_EXEC.to_string(),
-            description: "Run commands and manage PTY sessions. Use inspect for one-call output preview/filtering from session or spool file.".to_string(),
+            description: "Run commands and manage PTY sessions. Use continue for one-call send+read, or inspect for one-call output preview/filtering from session or spool file.".to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
                     "command": {"type": "string", "description": "Raw command (no shell redirections)."},
                     "input": {"type": "string", "description": "stdin content for write action."},
-                    "session_id": {"type": "string", "description": "Session id for write/poll/inspect/close."},
+                    "session_id": {"type": "string", "description": "Session id for write/poll/continue/inspect/close."},
                     "spool_path": {"type": "string", "description": "Spool file path for inspect action."},
                     "query": {"type": "string", "description": "Optional line filter for inspect output or run output."},
                     "head_lines": {"type": "integer", "description": "Inspect head preview lines."},
@@ -359,7 +360,7 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
                     },
                     "action": {
                         "type": "string",
-                        "enum": ["run", "write", "poll", "inspect", "list", "close", "code"],
+                        "enum": ["run", "write", "poll", "continue", "inspect", "list", "close", "code"],
                         "description": "Action. Inferred from command/code/input/session_id/spool_path when omitted."
                     },
                     "workdir": {"type": "string", "description": "Working directory for new sessions."},
@@ -999,6 +1000,11 @@ mod tests {
             actions
                 .iter()
                 .any(|value| value.as_str() == Some("inspect"))
+        );
+        assert!(
+            actions
+                .iter()
+                .any(|value| value.as_str() == Some("continue"))
         );
     }
 

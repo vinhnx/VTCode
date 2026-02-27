@@ -349,23 +349,13 @@ impl FileOpsTool {
                         if let Some(plan) = spool_plan {
                             let has_more = lines_returned >= plan.limit;
                             let next_offset = plan.offset.saturating_add(lines_returned);
-                            let follow_up_prompt = if has_more {
-                                "Use `next_read_args` for the next chunk; use `grep_file` for targeted matches."
-                                    .to_string()
-                            } else {
-                                format!(
-                                    "End of spooled output at line {}.",
-                                    next_offset.saturating_sub(1)
-                                )
-                            };
 
                             builder = builder
                                 .field("spool_chunked", json!(true))
                                 .field("chunk_limit", json!(plan.limit))
                                 .field("lines_returned", json!(lines_returned))
                                 .field("has_more", json!(has_more))
-                                .field("next_offset", json!(next_offset))
-                                .field("follow_up_prompt", json!(follow_up_prompt));
+                                .field("next_offset", json!(next_offset));
                             if has_more {
                                 builder = builder.field(
                                     "next_read_args",
@@ -375,6 +365,8 @@ impl FileOpsTool {
                                         "limit": plan.limit
                                     }),
                                 );
+                                builder = builder
+                                    .field("follow_up_prompt", json!("Use `next_read_args`."));
                             }
                         }
 
