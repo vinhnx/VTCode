@@ -68,6 +68,10 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
             description: "Browse and select files from workspace (usage: /files [filter])",
         },
         SlashCommandInfo {
+            name: "copy",
+            description: "Copy the latest complete assistant reply to clipboard",
+        },
+        SlashCommandInfo {
             name: "skills",
             description: "Manage skills and plugins (usage: /skills list|load|unload|use)",
         },
@@ -104,7 +108,7 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
         },
         SlashCommandInfo {
             name: "clear",
-            description: "Clear the screen and conversation history",
+            description: "Clear visible screen (usage: /clear [new])",
         },
         SlashCommandInfo {
             name: "new",
@@ -262,7 +266,7 @@ mod tests {
     #[test]
     fn prefix_matches_are_sorted_alphabetically() {
         let names = names_for("c");
-        assert_eq!(names, vec!["clear", "command", "config", "context"]);
+        assert_eq!(names, vec!["clear", "command", "config", "context", "copy"]);
     }
 
     #[test]

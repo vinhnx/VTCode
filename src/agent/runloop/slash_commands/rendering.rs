@@ -145,7 +145,7 @@ pub(super) fn render_help(
             "  Ctrl+C – Cancel current input or generation",
         )?;
         renderer.line(MessageStyle::Info, "  Ctrl+D – Exit VT Code session")?;
-        renderer.line(MessageStyle::Info, "  Ctrl+L – Clear terminal screen")?;
+        renderer.line(MessageStyle::Info, "  Ctrl+L – Clear screen (keep context)")?;
         renderer.line(
             MessageStyle::Info,
             "  Ctrl+R – Reverse search command history",

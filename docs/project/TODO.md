@@ -58,15 +58,6 @@ Accessibility: Screen reader mode, configurable reasoning visibility, and respon
 
 ---
 
-add syntax highlight for bash command in tui, to improve readability and user experience when executing shell commands through the terminal interface. This could involve integrating a syntax highlighting library that supports bash syntax, allowing users to easily distinguish between different components of the command, such as keywords, variables, and strings, enhancing clarity and reducing the likelihood of errors when composing or reviewing commands in the terminal UI.
-
-The TUI now syntax-highlights fenced code blocks and diffs,
-
-https://github.com/openai/codex/pull/11447
-
-
----
-
 The TUI picked up new convenience commands: /copy copies the latest complete assistant reply, while /clear and Ctrl-L clear the screen without losing thread context, with /clear also able to start a fresh chat. (#12444, #12520, #12613, #12628)
 
 ---
