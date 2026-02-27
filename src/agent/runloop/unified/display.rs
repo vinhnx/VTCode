@@ -235,27 +235,108 @@ fn highlight_shell_user_input(message: &str) -> Option<String> {
         return Some(format!("{}{}", prefix, highlight_shell_command(command)));
     }
 
-    if let Some((_, args)) =
-        crate::agent::runloop::unified::shell::detect_explicit_run_command(trimmed)
-        && let Some(command) = args.get("command").and_then(|value| value.as_str())
-    {
+    if let Some((prefix_end, command)) = extract_run_command_for_highlight(trimmed) {
         if !is_valid_bash_grammar(strip_matching_backticks(command)) {
             return None;
         }
-        let after_run = &trimmed[3..];
-        let run_ws_len = after_run.len() - after_run.trim_start().len();
+        let prefix = &trimmed[..prefix_end];
         let prefix_style = AnsiStyle::new()
             .fg_color(Some(AnsiColorEnum::Ansi(AnsiColor::White)))
             .effects(Effects::DIMMED);
-        let prefix = format!(
-            "{}{}{}{}{}",
+        let prefix_rendered = format!(
+            "{}{}{}{}",
             prefix_style,
             &message[..leading_ws_bytes],
-            &trimmed[..3],
-            &after_run[..run_ws_len],
+            prefix,
             Reset
         );
-        return Some(format!("{}{}", prefix, highlight_shell_command(command)));
+        return Some(format!(
+            "{}{}",
+            prefix_rendered,
+            highlight_shell_command_preserve_text(command)
+        ));
+    }
+
+    None
+}
+
+fn highlight_shell_command_preserve_text(command: &str) -> String {
+    let trimmed = command.trim();
+    if trimmed.len() >= 2 && trimmed.starts_with('`') && trimmed.ends_with('`') {
+        let leading_len = command.len() - command.trim_start().len();
+        let trailing_len = command.len() - command.trim_end().len();
+        let leading = &command[..leading_len];
+        let trailing = &command[command.len() - trailing_len..];
+        let inner = &trimmed[1..trimmed.len() - 1];
+        return format!(
+            "{}`{}`{}",
+            leading,
+            highlight_shell_command(inner),
+            trailing
+        );
+    }
+    highlight_shell_command(command)
+}
+
+fn extract_run_command_for_highlight(input: &str) -> Option<(usize, &str)> {
+    if !input.to_ascii_lowercase().starts_with("run ") {
+        return None;
+    }
+
+    let mut index = 3usize;
+    while let Some(ch) = input[index..].chars().next() {
+        if !ch.is_whitespace() {
+            break;
+        }
+        index += ch.len_utf8();
+    }
+    if index >= input.len() {
+        return None;
+    }
+
+    let mut remainder = &input[index..];
+    let mut consumed = 0usize;
+    while let Some((used, rest)) = consume_leading_wrapper(remainder) {
+        consumed += used;
+        remainder = rest;
+        while let Some(ch) = remainder.chars().next() {
+            if !ch.is_whitespace() {
+                break;
+            }
+            consumed += ch.len_utf8();
+            remainder = &remainder[ch.len_utf8()..];
+        }
+    }
+
+    let command_start = index + consumed;
+    if command_start >= input.len() {
+        return None;
+    }
+
+    Some((command_start, &input[command_start..]))
+}
+
+fn consume_leading_wrapper(input: &str) -> Option<(usize, &str)> {
+    let lower = input.to_ascii_lowercase();
+    let candidates = [
+        "unix command ",
+        "shell command ",
+        "command ",
+        "cmd ",
+        "please ",
+        "kindly ",
+        "just ",
+        "quickly ",
+        "quick ",
+        "a quick ",
+        "an quick ",
+    ];
+
+    for candidate in candidates {
+        if lower.starts_with(candidate) {
+            let used = candidate.len();
+            return Some((used, &input[used..]));
+        }
     }
 
     None
@@ -264,12 +345,12 @@ fn highlight_shell_user_input(message: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use vtcode_core::utils::ansi_parser::strip_ansi;
 
     #[test]
     fn highlights_run_prefix_user_input() {
         let highlighted = highlight_shell_user_input("run cargo fmt").expect("should highlight");
-        assert!(highlighted.contains("run "));
-        assert!(!highlighted.contains("run cargo fmt"));
+        assert_eq!(strip_ansi(&highlighted), "run cargo fmt");
         assert!(highlighted.contains("cargo"));
         assert!(highlighted.contains("fmt"));
     }
@@ -290,9 +371,16 @@ mod tests {
     #[test]
     fn strips_backticks_from_explicit_run_command() {
         let highlighted = highlight_shell_user_input("run `cargo fmt`").expect("should highlight");
-        assert!(!highlighted.contains("`cargo fmt`"));
+        assert_eq!(strip_ansi(&highlighted), "run `cargo fmt`");
         assert!(highlighted.contains("cargo"));
         assert!(highlighted.contains("fmt"));
+    }
+
+    #[test]
+    fn preserves_text_with_unix_command_wrapper() {
+        let highlighted =
+            highlight_shell_user_input("run unix command ls -la").expect("should highlight");
+        assert_eq!(strip_ansi(&highlighted), "run unix command ls -la");
     }
 
     #[test]
