@@ -141,12 +141,16 @@ impl ToolResponseBuilder {
             obj.insert("error".to_string(), json!(err));
         }
 
-        if let Some(c) = self.content {
+        let content_value = self.content;
+        if let Some(c) = content_value.as_ref() {
             obj.insert("content".to_string(), json!(c));
         }
 
         if let Some(s) = self.stdout {
-            obj.insert("stdout".to_string(), json!(s));
+            let duplicates_content = content_value.as_deref() == Some(s.as_str());
+            if !duplicates_content {
+                obj.insert("stdout".to_string(), json!(s));
+            }
         }
 
         if !self.modified_files.is_empty() {
@@ -198,5 +202,21 @@ impl ToolResponseBuilder {
         }
 
         res
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ToolResponseBuilder;
+
+    #[test]
+    fn build_json_omits_stdout_when_same_as_content() {
+        let value = ToolResponseBuilder::new("test")
+            .content("same")
+            .stdout("same")
+            .build_json();
+
+        assert_eq!(value.get("content").and_then(|v| v.as_str()), Some("same"));
+        assert!(value.get("stdout").is_none());
     }
 }

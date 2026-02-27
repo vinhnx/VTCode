@@ -221,26 +221,17 @@ impl IncrementalSystemPrompt {
                 let remaining = context_size.saturating_sub(used);
                 let guidance = context.token_budget_guidance;
 
-                // Context Anxiety Counter-prompting
-                // Reassure the model to prevent rushing when approaching limits
-                let anxiety_reassurance =
-                    if remaining < context_size / 2 && remaining > context_size / 4 {
-                        " You have sufficient context—focus on quality over speed."
-                    } else {
-                        ""
-                    };
-
                 if guidance.is_empty() {
                     let _ = writeln!(
                         prompt,
-                        "<system_warning>Token usage: {}/{}; {} remaining{}</system_warning>",
-                        used, context_size, remaining, anxiety_reassurance
+                        "<system_warning>Token usage: {}/{}; {} remaining.</system_warning>",
+                        used, context_size, remaining
                     );
                 } else {
                     let _ = writeln!(
                         prompt,
-                        "<system_warning>Token usage: {}/{}; {} remaining. {}{}</system_warning>",
-                        used, context_size, remaining, guidance, anxiety_reassurance
+                        "<system_warning>Token usage: {}/{}; {} remaining. {}</system_warning>",
+                        used, context_size, remaining, guidance
                     );
                 }
             }

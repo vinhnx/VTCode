@@ -260,17 +260,17 @@ impl ContextManager {
         if usage_ratio >= TOKEN_BUDGET_CRITICAL_THRESHOLD {
             (
                 TokenBudgetStatus::Critical,
-                "CRITICAL: Update artifacts (task.md/docs) and consider starting a new session.",
+                "CRITICAL: Update artifacts and consider a new session.",
             )
         } else if usage_ratio >= TOKEN_BUDGET_HIGH_THRESHOLD {
             (
                 TokenBudgetStatus::High,
-                "HIGH: Start summarizing key findings and preparing for context handoff.",
+                "HIGH: Summarize key findings and prepare a handoff.",
             )
         } else if usage_ratio >= TOKEN_BUDGET_WARNING_THRESHOLD {
             (
                 TokenBudgetStatus::Warning,
-                "WARNING: Consider updating progress docs to preserve important context.",
+                "WARNING: Update progress docs to preserve context.",
             )
         } else {
             (TokenBudgetStatus::Normal, "")

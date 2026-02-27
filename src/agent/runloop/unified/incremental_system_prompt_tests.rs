@@ -141,7 +141,7 @@ async fn test_context_awareness_token_budget_warning() {
         context_window_size: Some(200_000),
         current_token_usage: Some(130_000),
         supports_context_awareness: true,
-        token_budget_guidance: "WARNING: Consider updating progress docs to preserve important context.",
+        token_budget_guidance: "WARNING: Update progress docs to preserve context.",
     };
 
     let prompt = prompt_builder
@@ -158,7 +158,7 @@ async fn test_context_awareness_token_budget_warning() {
 
     assert!(prompt.contains("<budget:token_budget>200000</budget:token_budget>"));
     assert!(prompt.contains("Token usage: 130000/200000; 70000 remaining"));
-    assert!(prompt.contains("WARNING: Consider updating progress docs"));
+    assert!(prompt.contains("WARNING: Update progress docs"));
 }
 
 #[tokio::test]
@@ -178,7 +178,7 @@ async fn test_context_awareness_token_budget_high() {
         context_window_size: Some(200_000),
         current_token_usage: Some(176_000),
         supports_context_awareness: true,
-        token_budget_guidance: "HIGH: Start summarizing key findings and preparing for context handoff.",
+        token_budget_guidance: "HIGH: Summarize key findings and prepare a handoff.",
     };
 
     let prompt = prompt_builder
@@ -195,7 +195,7 @@ async fn test_context_awareness_token_budget_high() {
 
     assert!(prompt.contains("<budget:token_budget>200000</budget:token_budget>"));
     assert!(prompt.contains("Token usage: 176000/200000; 24000 remaining"));
-    assert!(prompt.contains("HIGH: Start summarizing key findings"));
+    assert!(prompt.contains("HIGH: Summarize key findings"));
 }
 
 #[tokio::test]
@@ -215,7 +215,7 @@ async fn test_context_awareness_token_budget_critical() {
         context_window_size: Some(200_000),
         current_token_usage: Some(190_000),
         supports_context_awareness: true,
-        token_budget_guidance: "CRITICAL: Update artifacts (task.md/docs) and consider starting a new session.",
+        token_budget_guidance: "CRITICAL: Update artifacts and consider a new session.",
     };
 
     let prompt = prompt_builder

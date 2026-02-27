@@ -182,7 +182,7 @@ fn failure_guidance(
         return (
             "timeout",
             true,
-            "Retry with a smaller scope or increase timeout budget.",
+            "Retry with smaller scope or higher timeout.",
         );
     }
 
@@ -190,7 +190,7 @@ fn failure_guidance(
         return (
             "invalid_arguments",
             true,
-            "Fix tool arguments to match the tool schema before retrying.",
+            "Fix tool arguments to match the schema.",
         );
     }
 
@@ -198,14 +198,14 @@ fn failure_guidance(
         return (
             "policy_blocked",
             false,
-            "Switch to an allowed tool or mode instead of retrying the same call.",
+            "Switch to an allowed tool or mode.",
         );
     }
 
     (
         "execution_failure",
         true,
-        "Try an alternative tool path or narrower input scope.",
+        "Try an alternative tool or narrower scope.",
     )
 }
 
@@ -224,14 +224,6 @@ pub(crate) fn build_error_content(
     let (args_preview, inline_full_args) = fallback_args_preview_and_inline(&fallback_tool_args);
 
     if let Some(tool) = fallback_tool {
-        let suggestion = if let Some(args_preview) = args_preview.as_deref() {
-            format!(
-                "Try '{}' with args {} as a fallback approach.",
-                tool, args_preview
-            )
-        } else {
-            format!("Try '{}' as a fallback approach.", tool)
-        };
         let mut payload = serde_json::json!({
             "error": error_text,
             "failure_kind": failure_kind,
@@ -239,7 +231,6 @@ pub(crate) fn build_error_content(
             "is_recoverable": is_recoverable,
             "next_action": next_action,
             "fallback_tool": tool,
-            "fallback_suggestion": suggestion,
         });
         push_error_truncation_flag(&mut payload, error_truncated);
         if let Some(args) = fallback_tool_args {
@@ -426,6 +417,34 @@ pub(crate) async fn handle_tool_execution_result<'a>(
 fn maybe_inline_spooled(_tool_name: &str, output: &serde_json::Value) -> String {
     let mut sanitized = output.clone();
     if let Some(obj) = sanitized.as_object_mut() {
+        let next_poll_args = obj
+            .get("next_poll_args")
+            .and_then(serde_json::Value::as_object)
+            .cloned();
+        let next_read_args = obj
+            .get("next_read_args")
+            .and_then(serde_json::Value::as_object)
+            .cloned();
+
+        obj.remove("message");
+        obj.remove("metadata");
+        obj.remove("no_spool");
+
+        if obj
+            .get("success")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false)
+        {
+            obj.remove("success");
+        }
+        if obj
+            .get("status")
+            .and_then(serde_json::Value::as_str)
+            .is_some_and(|status| status == "success")
+        {
+            obj.remove("status");
+        }
+
         if obj
             .get("spooled_to_file")
             .and_then(serde_json::Value::as_bool)
@@ -433,6 +452,9 @@ fn maybe_inline_spooled(_tool_name: &str, output: &serde_json::Value) -> String 
         {
             obj.remove("spool_hint");
             obj.remove("spooled_bytes");
+        }
+        if obj.get("spool_path").is_some() {
+            obj.remove("spooled_to_file");
         }
 
         if matches!(
@@ -447,6 +469,83 @@ fn maybe_inline_spooled(_tool_name: &str, output: &serde_json::Value) -> String 
             .is_some_and(serde_json::Value::is_null)
         {
             obj.remove("working_directory");
+        }
+
+        if next_poll_args.is_some() || next_read_args.is_some() {
+            obj.remove("follow_up_prompt");
+            obj.remove("has_more");
+        }
+
+        if let Some(next_poll) = next_poll_args.as_ref()
+            && let Some(next_session_id) = next_poll.get("session_id")
+            && obj.get("session_id") == Some(next_session_id)
+        {
+            obj.remove("session_id");
+        }
+
+        if let Some(next_read) = next_read_args.as_ref() {
+            if let Some(next_offset) = next_read.get("offset")
+                && obj.get("next_offset") == Some(next_offset)
+            {
+                obj.remove("next_offset");
+            }
+            if let Some(next_limit) = next_read.get("limit")
+                && obj.get("chunk_limit") == Some(next_limit)
+            {
+                obj.remove("chunk_limit");
+            }
+        }
+
+        for key in [
+            "has_more",
+            "truncated",
+            "auto_recovered",
+            "reused_spooled_output",
+            "reused_recent_result",
+            "loop_detected",
+            "query_truncated",
+        ] {
+            if obj
+                .get(key)
+                .and_then(serde_json::Value::as_bool)
+                .is_some_and(|value| !value)
+            {
+                obj.remove(key);
+            }
+        }
+
+        if matches!(
+            (obj.get("output"), obj.get("stdout")),
+            (Some(output), Some(stdout)) if output == stdout
+        ) {
+            obj.remove("stdout");
+        }
+
+        obj.remove("rows");
+        obj.remove("cols");
+        obj.remove("wall_time");
+
+        let process_session_id = obj.get("session_id").or_else(|| {
+            next_poll_args
+                .as_ref()
+                .and_then(|next_poll| next_poll.get("session_id"))
+        });
+        if matches!(
+            (obj.get("process_id"), process_session_id),
+            (Some(process_id), Some(session_id)) if process_id == session_id
+        ) {
+            obj.remove("process_id");
+        }
+
+        if next_poll_args.is_some() {
+            obj.remove("command");
+            if obj
+                .get("is_exited")
+                .and_then(serde_json::Value::as_bool)
+                .is_some_and(|value| !value)
+            {
+                obj.remove("is_exited");
+            }
         }
     }
 
@@ -896,9 +995,29 @@ mod tests {
                 "spool_path": ".vtcode/context/tool_outputs/run-1.txt",
                 "spool_hint": "verbose hint",
                 "spooled_bytes": 12345,
+                "success": true,
+                "status": "success",
+                "message": "ok",
+                "metadata": {"size_bytes": 100},
+                "no_spool": false,
                 "id": "run-1",
                 "session_id": "run-1",
-                "working_directory": null
+                "process_id": "run-1",
+                "command": "cargo check -p vtcode",
+                "is_exited": false,
+                "working_directory": null,
+                "rows": 24,
+                "cols": 80,
+                "wall_time": 1.23,
+                "follow_up_prompt": "More output available.",
+                "has_more": false,
+                "truncated": false,
+                "auto_recovered": false,
+                "query_truncated": false,
+                "stdout": "tail",
+                "next_poll_args": {
+                    "session_id": "run-1"
+                }
             }),
         );
 
@@ -906,9 +1025,66 @@ mod tests {
             serde_json::from_str(&serialized).expect("serialized JSON payload");
         assert!(parsed.get("spool_hint").is_none());
         assert!(parsed.get("spooled_bytes").is_none());
+        assert!(parsed.get("spooled_to_file").is_none());
+        assert!(parsed.get("success").is_none());
+        assert!(parsed.get("status").is_none());
+        assert!(parsed.get("message").is_none());
+        assert!(parsed.get("metadata").is_none());
+        assert!(parsed.get("no_spool").is_none());
         assert!(parsed.get("id").is_none());
+        assert!(parsed.get("process_id").is_none());
+        assert!(parsed.get("command").is_none());
+        assert!(parsed.get("is_exited").is_none());
         assert!(parsed.get("working_directory").is_none());
-        assert_eq!(parsed["session_id"], "run-1");
+        assert!(parsed.get("rows").is_none());
+        assert!(parsed.get("cols").is_none());
+        assert!(parsed.get("wall_time").is_none());
+        assert!(parsed.get("follow_up_prompt").is_none());
+        assert!(parsed.get("has_more").is_none());
+        assert!(parsed.get("truncated").is_none());
+        assert!(parsed.get("auto_recovered").is_none());
+        assert!(parsed.get("query_truncated").is_none());
+        assert!(parsed.get("stdout").is_none());
+        assert!(parsed.get("session_id").is_none());
+        assert_eq!(
+            parsed.get("next_poll_args"),
+            Some(&serde_json::json!({"session_id":"run-1"}))
+        );
+    }
+
+    #[test]
+    fn maybe_inline_spooled_compacts_next_read_duplicates() {
+        let serialized = maybe_inline_spooled(
+            tool_names::READ_FILE,
+            &serde_json::json!({
+                "path": ".vtcode/context/tool_outputs/unified_exec_1.txt",
+                "spooled_to_file": true,
+                "spool_path": ".vtcode/context/tool_outputs/unified_exec_1.txt",
+                "has_more": true,
+                "next_offset": 81,
+                "chunk_limit": 40,
+                "next_read_args": {
+                    "path": ".vtcode/context/tool_outputs/unified_exec_1.txt",
+                    "offset": 81,
+                    "limit": 40
+                }
+            }),
+        );
+
+        let parsed: serde_json::Value =
+            serde_json::from_str(&serialized).expect("serialized JSON payload");
+        assert!(parsed.get("spooled_to_file").is_none());
+        assert!(parsed.get("has_more").is_none());
+        assert!(parsed.get("next_offset").is_none());
+        assert!(parsed.get("chunk_limit").is_none());
+        assert_eq!(
+            parsed.get("next_read_args"),
+            Some(&serde_json::json!({
+                "path": ".vtcode/context/tool_outputs/unified_exec_1.txt",
+                "offset": 81,
+                "limit": 40
+            }))
+        );
     }
 
     #[test]

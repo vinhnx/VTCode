@@ -24,7 +24,7 @@ use vtcode_tui::PlanContent;
 
 use crate::agent::runloop::unified::state::CtrlCState;
 
-const AUTONOMOUS_CONTINUE_DIRECTIVE: &str = "Do not stop with intent-only updates (for example: 'let me check...'). Execute the next concrete action now, then provide a completion summary or explicit blocker with next action.";
+const AUTONOMOUS_CONTINUE_DIRECTIVE: &str = "Do not stop with intent-only updates. Execute the next concrete action now, then report completion or blocker.";
 
 pub enum TurnLoopResult {
     Completed,

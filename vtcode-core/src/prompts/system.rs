@@ -46,16 +46,15 @@ use tracing::warn;
 
 /// Unified tool guidance referenced by all prompt variants to reduce duplication
 const UNIFIED_TOOL_GUIDANCE: &str = r#"**Search & exploration**:
-- Prefer `unified_search` (action='grep') for fast searches over repeated `read` calls
-- Read complete files once; don't re-invoke `read` on same file
-- For spooled outputs, advance `read_file`/`unified_file` offsets; never repeat identical chunk args
-- If 2+ chunk reads stall progress, switch to `grep_file`/`unified_search` and summarize before more reads
-- Use `unified_exec` with `rg` (ripgrep) for patterns—much faster than `grep`
+- Prefer `unified_search` (action='grep') and `rg` over repeated reads/`grep`
+- Read a file once; avoid duplicate `read` calls
+- For spooled output, advance offsets; don't repeat identical chunk args
+- If chunk reads stall, switch to targeted `grep_file`/`unified_search` and summarize
 
 **Code modification**:
 - `unified_file` (action='edit') for surgical changes; action='write' for new or full replacements
 - After a successful patch/edit, continue without redundant re-reads
-- If patch/edit fails repeatedly, stop retrying and re-plan into smaller slices (files + outcome + verification) before trying again
+- If patch/edit fails repeatedly, stop retrying and re-plan smaller slices
 - Use `git log` and `git blame` for code history context
 - **Never**: `git commit`, `git push`, or branch creation unless explicitly requested
 
@@ -63,7 +62,7 @@ const UNIFIED_TOOL_GUIDANCE: &str = r#"**Search & exploration**:
 - `unified_exec` for all shell commands (PTY/interactive/long-running). `run_pty_cmd` is an alias.
 - Prefer `rg` over `grep` for pattern matching
 - Stay in WORKSPACE_DIR; confirm destructive ops (rm, force-push)
-- **After command output**: Always acknowledge the result briefly and suggest next steps"#;
+- After command output, acknowledge result briefly and suggest next steps"#;
 
 /// Shared Plan Mode header used by both static and incremental prompt builders.
 pub const PLAN_MODE_READ_ONLY_HEADER: &str = "# PLAN MODE (READ-ONLY)";
@@ -73,7 +72,7 @@ pub const PLAN_MODE_READ_ONLY_NOTICE_LINE: &str = "Plan Mode is active. Mutating
 pub const PLAN_MODE_EXIT_INSTRUCTION_LINE: &str =
     "Call `exit_plan_mode` when ready to transition to implementation.";
 /// Shared reminder appended when presenting plans while still in Plan Mode.
-pub const PLAN_MODE_IMPLEMENT_REMINDER: &str = "• I’m still in Plan Mode, so I can’t implement yet. To execute, say “implement” (or “yes”, “continue”, “go”, “start”). To keep planning, say “stay in plan mode” and tell me what to revise.";
+pub const PLAN_MODE_IMPLEMENT_REMINDER: &str = "• Still in Plan Mode (read-only). Say “implement” to execute, or “stay in plan mode” to revise.";
 
 /// DEFAULT SYSTEM PROMPT (v6.0 - Harness-engineered, provider-agnostic)
 /// Incorporates harness engineering patterns:
@@ -596,10 +595,12 @@ pub async fn compose_system_instruction_text(
             instruction
                 .push_str("- `.vtcode/terminals/` - Terminal session output with metadata\n");
             instruction.push_str("- `.agents/skills/INDEX.md` - Available skills index\n\n");
-            instruction.push_str("**Tip**: When a tool result says 'spooled to file', use `read_file` to access the full output.\n");
+            instruction.push_str(
+                "**Tip**: For spooled results, use `read_file`/`grep_file` on `spool_path`.\n",
+            );
         }
 
-        instruction.push_str("\n**IMPORTANT**: Respect these configuration policies. Commands not in the allow list will require user confirmation. Always inform users when actions require confirmation due to security policies.\n");
+        instruction.push_str("\n**IMPORTANT**: Respect policy gates. Commands outside allowlists require confirmation.\n");
     }
 
     if !prompt_context
