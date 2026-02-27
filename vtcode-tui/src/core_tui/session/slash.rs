@@ -220,7 +220,7 @@ fn preview_selected_slash_suggestion(session: &mut Session) {
     let mut new_input = String::new();
     new_input.push_str(prefix);
     new_input.push('/');
-    new_input.push_str(command.name);
+    new_input.push_str(command.name.as_str());
     let cursor_position = new_input.len();
 
     if !suffix.is_empty() {
@@ -268,14 +268,8 @@ pub(super) fn apply_selected_slash_suggestion(session: &mut Session) -> bool {
     session.input_manager.set_content(new_input);
     session.input_manager.set_cursor(cursor_position);
 
-    if command_name == "files" {
-        clear_slash_suggestions(session);
-        session.mark_dirty();
-        session.deferred_file_browser_trigger = true;
-    } else {
-        clear_slash_suggestions(session);
-        session.mark_dirty();
-    }
+    clear_slash_suggestions(session);
+    session.mark_dirty();
 
     true
 }
@@ -341,14 +335,7 @@ pub(super) fn autocomplete_slash_suggestion(session: &mut Session) -> bool {
     session.input_manager.set_content(new_input);
     session.input_manager.set_cursor(cursor_position);
 
-    let deferred_files = best_command == "files";
-
     clear_slash_suggestions(session);
-
-    if deferred_files {
-        session.deferred_file_browser_trigger = true;
-    }
-
     session.mark_dirty();
     true
 }

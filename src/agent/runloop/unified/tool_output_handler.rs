@@ -204,6 +204,7 @@ pub(crate) async fn handle_pipeline_output_from_turn_ctx(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::agent::runloop::tui_compat::inline_theme_from_core_styles;
     use std::io::{IsTerminal, stdin};
     use std::sync::Arc;
     use tempfile::TempDir;
@@ -215,7 +216,7 @@ mod tests {
     use vtcode_core::tools::registry::ToolRegistry;
     use vtcode_core::tools::result_cache::ToolCacheKey;
     use vtcode_core::ui::theme;
-    use vtcode_tui::{SessionOptions, spawn_session_with_options, theme_from_styles};
+    use vtcode_tui::{SessionOptions, spawn_session_with_options};
 
     fn build_harness_state() -> crate::agent::runloop::unified::run_loop_context::HarnessTurnState {
         crate::agent::runloop::unified::run_loop_context::HarnessTurnState::new(
@@ -335,7 +336,7 @@ mod tests {
         let permission_cache_arc = Arc::new(tokio::sync::RwLock::new(ToolPermissionCache::new()));
 
         let mut session = spawn_session_with_options(
-            theme_from_styles(&theme::active_styles()),
+            inline_theme_from_core_styles(&theme::active_styles()),
             SessionOptions {
                 inline_rows: 10,
                 workspace_root: Some(workspace.clone()),
@@ -426,7 +427,7 @@ mod tests {
         let permission_cache_arc = Arc::new(tokio::sync::RwLock::new(ToolPermissionCache::new()));
 
         let mut session = spawn_session_with_options(
-            theme_from_styles(&theme::active_styles()),
+            inline_theme_from_core_styles(&theme::active_styles()),
             SessionOptions {
                 inline_rows: 10,
                 workspace_root: Some(workspace.clone()),

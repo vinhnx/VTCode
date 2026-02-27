@@ -142,9 +142,6 @@ impl Session {
             InlineCommand::ClearScreen => {
                 self.clear_screen();
             }
-            InlineCommand::OpenConfigPalette => {
-                command::open_config_palette(self);
-            }
             InlineCommand::SuspendEventLoop
             | InlineCommand::ResumeEventLoop
             | InlineCommand::ClearInputQueue => {

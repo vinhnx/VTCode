@@ -6,7 +6,6 @@ use crate::ui::theme;
 use crate::ui::tui::{
     InlineHandle, InlineListItem, InlineListSearchConfig, InlineListSelection, InlineMessageKind,
     InlineSegment, InlineTextStyle, SecurePromptConfig, convert_style as convert_to_inline_style,
-    theme_from_styles,
 };
 use crate::utils::ansi_capabilities::AnsiCapabilities;
 pub use crate::utils::message_style::MessageStyle;
@@ -862,8 +861,8 @@ impl InlineSink {
     fn resolve_fallback_style(&self, style: Style) -> InlineTextStyle {
         let mut text_style = convert_to_inline_style(style);
         if text_style.color.is_none() {
-            let theme = theme_from_styles(&theme::active_styles());
-            text_style = text_style.merge_color(theme.foreground);
+            let active = theme::active_styles();
+            text_style = text_style.merge_color(Some(active.foreground));
         }
         text_style
     }

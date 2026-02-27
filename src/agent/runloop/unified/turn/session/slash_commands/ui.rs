@@ -2,9 +2,9 @@ use anyhow::Result;
 use vtcode_core::ui::theme;
 use vtcode_core::utils::ansi::MessageStyle;
 use vtcode_core::utils::session_archive;
-use vtcode_tui::theme_from_styles;
 
 use crate::agent::runloop::model_picker::{ModelPickerStart, ModelPickerState};
+use crate::agent::runloop::tui_compat::inline_theme_from_core_styles;
 use crate::agent::runloop::unified::display::persist_theme_preference;
 use crate::agent::runloop::unified::model_selection::finalize_model_selection;
 use crate::agent::runloop::unified::palettes::{
@@ -20,7 +20,7 @@ pub async fn handle_theme_changed(
 ) -> Result<SlashCommandControl> {
     persist_theme_preference(ctx.renderer, &theme_id).await?;
     let styles = theme::active_styles();
-    ctx.handle.set_theme(theme_from_styles(&styles));
+    ctx.handle.set_theme(inline_theme_from_core_styles(&styles));
     apply_prompt_style(ctx.handle);
     Ok(SlashCommandControl::Continue)
 }

@@ -6289,6 +6289,7 @@ dependencies = [
  "vtcode-file-search",
  "vtcode-indexer",
  "vtcode-markdown-store",
+ "vtcode-tui",
  "walkdir",
  "which",
  "wiremock",
@@ -6398,9 +6399,14 @@ name = "vtcode-tui"
 version = "0.83.0"
 dependencies = [
  "anstyle",
+ "anstyle-git",
+ "anstyle-ls",
+ "anstyle-query",
+ "anstyle-syntect",
  "anyhow",
  "base64",
  "better-panic",
+ "catppuccin",
  "chrono",
  "crossterm 0.29.0",
  "futures",
@@ -6408,6 +6414,8 @@ dependencies = [
  "line-clipping",
  "nucleo-matcher",
  "once_cell",
+ "parking_lot",
+ "pulldown-cmark",
  "ratatui 0.30.0",
  "regex",
  "serde",
@@ -6423,8 +6431,6 @@ dependencies = [
  "tui-shimmer",
  "unicode-segmentation",
  "unicode-width 0.2.0",
- "vtcode-config",
- "vtcode-core",
 ]
 
 [[package]]

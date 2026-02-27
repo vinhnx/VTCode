@@ -6,11 +6,10 @@ use chrono::Local;
 use vtcode_core::ui::theme;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::session_archive::SessionListing;
-use vtcode_tui::{
-    InlineHandle, InlineListItem, InlineListSelection, convert_style, theme_from_styles,
-};
+use vtcode_tui::{InlineHandle, InlineListItem, InlineListSelection, convert_style};
 
 use crate::agent::runloop::slash_commands::ThemePaletteMode;
+use crate::agent::runloop::tui_compat::inline_theme_from_core_styles;
 
 use super::display::persist_theme_preference;
 
@@ -156,7 +155,7 @@ pub(crate) async fn handle_palette_selection(
                             )?;
                             persist_theme_preference(renderer, &theme_id).await?;
                             let styles = theme::active_styles();
-                            handle.set_theme(theme_from_styles(&styles));
+                            handle.set_theme(inline_theme_from_core_styles(&styles));
                             apply_prompt_style(handle);
                         }
                         Err(err) => {

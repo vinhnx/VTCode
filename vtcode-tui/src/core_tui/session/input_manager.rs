@@ -4,7 +4,7 @@
 /// and command history navigation.
 use std::time::Instant;
 
-use crate::llm::provider::ContentPart;
+use super::super::types::ContentPart;
 
 #[derive(Clone, Debug)]
 pub struct InputHistoryEntry {

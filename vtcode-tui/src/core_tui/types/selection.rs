@@ -33,7 +33,7 @@ pub enum InlineListSelection {
         other: Option<String>,
     },
 
-    /// Plan confirmation dialog result (Claude Code style HITL)
+    /// Plan confirmation dialog result (human-in-the-loop flow)
     PlanApprovalExecute,
     /// Clear conversation context and auto-accept edits
     PlanApprovalClearContextAutoAccept,

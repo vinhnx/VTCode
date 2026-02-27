@@ -196,14 +196,6 @@ impl Widget for &mut SessionWidget<'_> {
             return;
         }
 
-        // Handle deferred triggers
-        if self.session.deferred_file_browser_trigger {
-            self.session.deferred_file_browser_trigger = false;
-            self.session.input_manager.insert_char('@');
-            self.session.check_file_reference_trigger();
-            self.session.mark_dirty();
-        }
-
         // Pull log entries
         self.session.poll_log_entries();
 

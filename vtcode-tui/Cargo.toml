@@ -14,18 +14,25 @@ categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
 anstyle = "1.0"
+anstyle-syntect = "1.0"
+anstyle-git = "1.1"
+anstyle-ls = "1.0"
+anstyle-query = "1.1"
 anyhow = "1.0"
 base64 = { workspace = true }
 better-panic = "0.3"
+catppuccin = { version = "2.5", default-features = false }
 chrono = { version = "0.4", features = ["serde"] }
-vtcode-core = { path = "../vtcode-core", version = "0.83.0", default-features = false }
-vtcode-config = { path = "../vtcode-config", version = "0.83.0", default-features = false }
 crossterm = { workspace = true, features = ["event-stream"] }
 futures = "0.3"
 humantime = "2.1"
 line-clipping = "0.3"
 nucleo-matcher = "0.3"
 once_cell = "1.19"
+parking_lot = "0.12"
+pulldown-cmark = { version = "0.13", default-features = false, features = [
+    "html",
+] }
 ratatui = { version = "0.30", default-features = false, features = [
     "crossterm",
     "unstable-rendered-line-info",

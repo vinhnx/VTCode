@@ -99,25 +99,21 @@ pub(super) fn persist_mode_settings(
 }
 
 pub async fn handle_show_config(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
-    if ctx.renderer.supports_inline_ui() {
-        ctx.handle.open_config_palette();
-    } else {
-        let workspace_path = ctx.config.workspace.clone();
-        let vt_snapshot = ctx.vt_cfg.clone();
-        match load_config_modal_content(workspace_path, vt_snapshot).await {
-            Ok(content) => {
-                ctx.renderer
-                    .line(MessageStyle::Info, &content.source_label)?;
-                for line in &content.config_lines {
-                    ctx.renderer.line(MessageStyle::Info, line)?;
-                }
+    let workspace_path = ctx.config.workspace.clone();
+    let vt_snapshot = ctx.vt_cfg.clone();
+    match load_config_modal_content(workspace_path, vt_snapshot).await {
+        Ok(content) => {
+            ctx.renderer
+                .line(MessageStyle::Info, &content.source_label)?;
+            for line in &content.config_lines {
+                ctx.renderer.line(MessageStyle::Info, line)?;
             }
-            Err(err) => {
-                ctx.renderer.line(
-                    MessageStyle::Error,
-                    &format!("Failed to load configuration for display: {}", err),
-                )?;
-            }
+        }
+        Err(err) => {
+            ctx.renderer.line(
+                MessageStyle::Error,
+                &format!("Failed to load configuration for display: {}", err),
+            )?;
         }
     }
     Ok(SlashCommandControl::Continue)

@@ -71,7 +71,6 @@ impl Session {
         self.render_input(frame, input_area);
         render::render_modal(self, frame, viewport);
         slash::render_slash_palette(self, frame, viewport);
-        render::render_config_palette(self, frame, viewport);
         render::render_file_palette(self, frame, viewport);
 
         // Render diff preview modal if active

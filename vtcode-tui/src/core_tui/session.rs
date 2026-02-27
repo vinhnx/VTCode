@@ -1,7 +1,5 @@
 use std::{collections::VecDeque, sync::Arc, time::Instant};
 
-use anyhow::Result;
-
 #[cfg(test)]
 use anstyle::Color as AnsiColorEnum;
 use anstyle::RgbColor;
@@ -25,12 +23,10 @@ use super::{
     },
 };
 use crate::config::constants::ui;
-use crate::config::loader::VTCodeConfig;
 use crate::ui::tui::widgets::SessionWidget;
 
 pub mod file_palette;
 mod header;
-mod impl_config;
 mod impl_events;
 mod impl_init;
 mod impl_input;
@@ -57,7 +53,6 @@ mod transcript;
 
 // New modular components (refactored from main session.rs)
 mod command;
-pub mod config_palette;
 mod editing;
 
 pub mod config;
@@ -78,7 +73,6 @@ mod tests;
 mod tool_renderer;
 mod trust;
 
-use self::config_palette::ConfigPalette;
 use self::file_palette::FilePalette;
 use self::history_picker::HistoryPickerState;
 use self::input_manager::InputManager;
@@ -96,7 +90,7 @@ use self::styling::SessionStyles;
 use self::transcript::TranscriptReflowCache;
 #[cfg(test)]
 use super::types::InlineHeaderHighlight;
-// use crate::tools::TaskPlan; // Commented out - plan functionality removed
+// TaskPlan integration intentionally omitted in this UI crate.
 use crate::ui::tui::log::{LogEntry, highlight_log_entry};
 
 const USER_PREFIX: &str = "";
@@ -182,11 +176,8 @@ pub struct Session {
     in_tool_code_fence: bool,
 
     // --- Palette Management ---
-    pub(crate) config_palette: Option<ConfigPalette>,
-    pub(crate) config_palette_active: bool,
     pub(crate) file_palette: Option<FilePalette>,
     pub(crate) file_palette_active: bool,
-    pub(crate) deferred_file_browser_trigger: bool,
 
     // --- Thinking Indicator ---
     pub(crate) thinking_spinner: ThinkingSpinner,
@@ -219,6 +210,8 @@ pub struct Session {
     pub(crate) queued_inputs_preview_cache: Option<Vec<String>>,
 
     // --- Terminal Title ---
+    /// Product/app name used in terminal title branding
+    pub(crate) app_name: String,
     /// Workspace root path for dynamic title generation
     pub(crate) workspace_root: Option<std::path::PathBuf>,
     /// Last set terminal title to avoid redundant updates

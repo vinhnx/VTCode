@@ -1,4 +1,4 @@
-//! Panic hook implementation for VT Code TUI applications
+//! Panic hook implementation for terminal UI applications
 //! This module provides a panic hook that restores terminal state when a panic occurs,
 //! preventing terminal corruption, and provides enhanced panic formatting for different build types.
 

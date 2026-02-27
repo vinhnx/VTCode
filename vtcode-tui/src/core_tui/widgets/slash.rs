@@ -206,6 +206,7 @@ impl<'a> SlashWidget<'a> {
 mod tests {
     use super::*;
     use crate::ui::tui::InlineTheme;
+    use crate::ui::tui::types::SlashCommandItem;
     use ratatui::Terminal;
     use ratatui::backend::TestBackend;
 
@@ -215,7 +216,10 @@ mod tests {
     }
 
     fn create_test_palette() -> SlashPalette {
-        let mut palette = SlashPalette::new();
+        let mut palette = SlashPalette::with_commands(vec![
+            SlashCommandItem::new("help", "Show help"),
+            SlashCommandItem::new("hello", "Demo command"),
+        ]);
         // Add some test suggestions
         palette.update(Some("he"), 5);
         palette
@@ -257,7 +261,10 @@ mod tests {
     #[test]
     fn test_slash_widget_render_with_suggestions() {
         let session = create_test_session();
-        let mut palette = SlashPalette::new();
+        let mut palette = SlashPalette::with_commands(vec![
+            SlashCommandItem::new("help", "Show help"),
+            SlashCommandItem::new("hello", "Demo command"),
+        ]);
         palette.update(Some(""), 5); // This should populate with some default suggestions
         let viewport = ratatui::layout::Rect::new(0, 0, 80, 24);
 

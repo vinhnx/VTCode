@@ -12,7 +12,6 @@ use super::super::types::{InlineMessageKind, InlineTextStyle};
 use super::terminal_capabilities;
 use super::{
     Session,
-    config_palette::ConfigItemKind,
     file_palette::FilePalette,
     message::MessageLine,
     modal::{
@@ -28,7 +27,7 @@ mod palettes;
 mod spans;
 
 pub use modal_renderer::render_modal;
-pub use palettes::{render_config_palette, render_file_palette};
+pub use palettes::render_file_palette;
 use spans::{accent_style, border_style, default_style, invalidate_scroll_metrics, text_fallback};
 
 pub(super) fn render_message_spans(session: &Session, index: usize) -> Vec<Span<'static>> {
@@ -60,17 +59,6 @@ pub fn render(session: &mut Session, frame: &mut Frame<'_>) {
     if session.needs_full_clear {
         frame.render_widget(Clear, size);
         session.needs_full_clear = false;
-    }
-
-    // Handle deferred file browser trigger (after slash modal dismisses)
-    if session.deferred_file_browser_trigger {
-        session.deferred_file_browser_trigger = false;
-        if session.input_enabled && session.modal.is_none() {
-            // Insert @ to trigger file browser now that slash modal is gone
-            session.input_manager.insert_char('@');
-            session.check_file_reference_trigger();
-            session.mark_dirty(); // Ensure UI updates
-        }
     }
 
     // Pull any newly forwarded log entries before layout calculations
@@ -122,7 +110,6 @@ pub fn render(session: &mut Session, frame: &mut Frame<'_>) {
     render_modal(session, frame, size);
     super::slash::render_slash_palette(session, frame, size);
     render_file_palette(session, frame, size);
-    render_config_palette(session, frame, size);
 }
 
 fn render_log_view(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {

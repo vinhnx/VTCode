@@ -77,10 +77,10 @@ impl Session {
                 self.mark_dirty();
             }
             CrosstermEvent::FocusGained => {
-                crate::notifications::set_global_terminal_focused(true);
+                // No-op: focus tracking is host/application concern.
             }
             CrosstermEvent::FocusLost => {
-                crate::notifications::set_global_terminal_focused(false);
+                // No-op: focus tracking is host/application concern.
             }
         }
     }

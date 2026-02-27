@@ -1,5 +1,9 @@
 use super::types::{SessionState, SessionUISetup};
 use crate::agent::runloop::ResumeSession;
+use crate::agent::runloop::tui_compat::{
+    inline_theme_from_core_styles, to_tui_appearance, to_tui_keyboard_protocol,
+    to_tui_slash_commands, to_tui_surface,
+};
 use crate::agent::runloop::ui::{build_inline_header_context, render_session_banner};
 use crate::agent::runloop::unified::turn::utils::render_hook_messages;
 use crate::agent::runloop::unified::turn::workspace::load_workspace_files;
@@ -15,14 +19,13 @@ use vtcode_core::config::constants::ui;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::llm::provider as uni;
+use vtcode_core::ui::slash::SLASH_COMMANDS;
 use vtcode_core::ui::theme;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::formatting::indent_block;
 use vtcode_core::utils::session_archive::{SessionArchive, SessionArchiveMetadata};
 use vtcode_core::utils::transcript;
-use vtcode_tui::{
-    InlineEvent, InlineEventCallback, SessionOptions, spawn_session_with_options, theme_from_styles,
-};
+use vtcode_tui::{InlineEvent, InlineEventCallback, SessionOptions, spawn_session_with_options};
 
 pub(crate) async fn initialize_session_ui(
     config: &CoreAgentConfig,
@@ -51,7 +54,7 @@ pub(crate) async fn initialize_session_ui(
     );
 
     let active_styles = theme::active_styles();
-    let theme_spec = theme_from_styles(&active_styles);
+    let theme_spec = inline_theme_from_core_styles(&active_styles);
     let default_placeholder = session_state
         .session_bootstrap
         .placeholder
@@ -93,14 +96,20 @@ pub(crate) async fn initialize_session_ui(
         theme_spec.clone(),
         SessionOptions {
             placeholder: default_placeholder.clone(),
-            surface_preference: config.ui_surface.into(),
+            surface_preference: to_tui_surface(config.ui_surface),
             inline_rows,
             event_callback: Some(interrupt_callback),
             active_pty_sessions: Some(pty_counter.clone()),
             keyboard_protocol: vt_cfg
-                .map(|cfg| cfg.ui.keyboard_protocol.clone().into())
+                .map(|cfg| to_tui_keyboard_protocol(cfg.ui.keyboard_protocol.clone()))
                 .unwrap_or_default(),
             workspace_root: Some(config.workspace.clone()),
+            slash_commands: to_tui_slash_commands(SLASH_COMMANDS.as_slice()),
+            appearance: vt_cfg.map(to_tui_appearance),
+            app_name: "VT Code".to_string(),
+            non_interactive_hint: Some(
+                "Use `vtcode ask \"your prompt\"` for non-interactive input.".to_string(),
+            ),
         },
     )
     .context("failed to launch inline session")?;

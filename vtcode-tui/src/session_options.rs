@@ -1,9 +1,10 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use vtcode_config::root::KeyboardProtocolConfig;
+use crate::config::KeyboardProtocolConfig;
+use crate::core_tui::session::config::AppearanceConfig;
 
-use crate::{InlineEventCallback, InlineSession, InlineTheme};
+use crate::{InlineEventCallback, InlineSession, InlineTheme, SlashCommandItem};
 
 /// Standalone surface preference for selecting inline vs alternate rendering.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -14,7 +15,7 @@ pub enum SessionSurface {
     Inline,
 }
 
-impl From<SessionSurface> for vtcode_config::UiSurfacePreference {
+impl From<SessionSurface> for crate::config::UiSurfacePreference {
     fn from(value: SessionSurface) -> Self {
         match value {
             SessionSurface::Auto => Self::Auto,
@@ -24,12 +25,12 @@ impl From<SessionSurface> for vtcode_config::UiSurfacePreference {
     }
 }
 
-impl From<vtcode_config::UiSurfacePreference> for SessionSurface {
-    fn from(value: vtcode_config::UiSurfacePreference) -> Self {
+impl From<crate::config::UiSurfacePreference> for SessionSurface {
+    fn from(value: crate::config::UiSurfacePreference) -> Self {
         match value {
-            vtcode_config::UiSurfacePreference::Auto => Self::Auto,
-            vtcode_config::UiSurfacePreference::Alternate => Self::Alternate,
-            vtcode_config::UiSurfacePreference::Inline => Self::Inline,
+            crate::config::UiSurfacePreference::Auto => Self::Auto,
+            crate::config::UiSurfacePreference::Alternate => Self::Alternate,
+            crate::config::UiSurfacePreference::Inline => Self::Inline,
         }
     }
 }
@@ -87,6 +88,10 @@ pub struct SessionOptions {
     pub active_pty_sessions: Option<Arc<std::sync::atomic::AtomicUsize>>,
     pub keyboard_protocol: KeyboardProtocolSettings,
     pub workspace_root: Option<PathBuf>,
+    pub slash_commands: Vec<SlashCommandItem>,
+    pub appearance: Option<AppearanceConfig>,
+    pub app_name: String,
+    pub non_interactive_hint: Option<String>,
 }
 
 impl Default for SessionOptions {
@@ -94,11 +99,15 @@ impl Default for SessionOptions {
         Self {
             placeholder: None,
             surface_preference: SessionSurface::Auto,
-            inline_rows: vtcode_config::constants::ui::DEFAULT_INLINE_VIEWPORT_ROWS,
+            inline_rows: crate::config::constants::ui::DEFAULT_INLINE_VIEWPORT_ROWS,
             event_callback: None,
             active_pty_sessions: None,
             keyboard_protocol: KeyboardProtocolSettings::default(),
             workspace_root: None,
+            slash_commands: Vec::new(),
+            appearance: None,
+            app_name: "Agent TUI".to_string(),
+            non_interactive_hint: None,
         }
     }
 }
@@ -112,17 +121,20 @@ impl SessionOptions {
             inline_rows: defaults.inline_rows,
             keyboard_protocol: defaults.keyboard_protocol,
             workspace_root: host.workspace_root(),
+            slash_commands: host.slash_commands(),
+            app_name: host.app_name(),
+            non_interactive_hint: host.non_interactive_hint(),
             ..Self::default()
         }
     }
 }
 
-/// Spawn a session using standalone options that avoid direct `vtcode-core` config types.
+/// Spawn a session using standalone options and local config types.
 pub fn spawn_session_with_options(
     theme: InlineTheme,
     options: SessionOptions,
 ) -> anyhow::Result<InlineSession> {
-    crate::spawn_session_with_prompts(
+    crate::core_tui::spawn_session_with_prompts_and_options(
         theme,
         options.placeholder,
         options.surface_preference.into(),
@@ -131,6 +143,10 @@ pub fn spawn_session_with_options(
         options.active_pty_sessions,
         options.keyboard_protocol.into(),
         options.workspace_root,
+        options.slash_commands,
+        options.appearance,
+        options.app_name,
+        options.non_interactive_hint,
     )
 }
 
@@ -191,7 +207,7 @@ mod tests {
         ];
 
         for variant in variants {
-            let converted: vtcode_config::UiSurfacePreference = variant.into();
+            let converted: crate::config::UiSurfacePreference = variant.into();
             let roundtrip = SessionSurface::from(converted);
             assert_eq!(variant, roundtrip);
         }
