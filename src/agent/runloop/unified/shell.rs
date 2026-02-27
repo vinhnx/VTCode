@@ -1,5 +1,6 @@
 use serde_json::json;
 use shell_words::split as shell_split;
+use vtcode_core::command_safety::shell_parser::parse_shell_commands_tree_sitter;
 use vtcode_core::config::constants::tools;
 
 /// Detect if user input is an explicit "run <command>" request.
@@ -26,28 +27,370 @@ pub(crate) fn detect_explicit_run_command(input: &str) -> Option<(String, serde_
         return None;
     }
 
-    // Don't intercept if it looks like a natural language request
-    // e.g., "run the tests" or "run all unit tests"
-    let natural_language_indicators = [
-        "the ", "all ", "some ", "this ", "that ", "my ", "our ", "a ", "an ",
-    ];
-    let command_lower = command_part.to_lowercase();
-    for indicator in natural_language_indicators {
-        if command_lower.starts_with(indicator) {
-            return None;
-        }
+    let normalized_command = normalize_natural_language_command(command_part);
+
+    // Don't intercept if it still looks like a natural-language request
+    // after normalization attempts.
+    if looks_like_natural_language_request(&normalized_command) {
+        return None;
     }
 
-    if contains_chained_instruction(command_part) {
+    if contains_chained_instruction(&normalized_command) {
+        return None;
+    }
+
+    if !looks_like_shell_command(&normalized_command) {
         return None;
     }
 
     // Build the tool call arguments
     let args = json!({
-        "command": command_part
+        "command": normalized_command
     });
 
     Some((tools::RUN_PTY_CMD.to_string(), args))
+}
+
+fn normalize_natural_language_command(command_part: &str) -> String {
+    let extracted = extract_inline_backtick_command(command_part).unwrap_or(command_part);
+    let cleaned = strip_command_wrappers(strip_leading_polite_prefixes(extracted));
+    normalize_cargo_phrase(cleaned)
+        .or_else(|| normalize_node_package_manager_phrase(cleaned))
+        .or_else(|| normalize_pytest_phrase(cleaned))
+        .or_else(|| normalize_unix_phrase(cleaned))
+        .unwrap_or_else(|| cleaned.to_string())
+}
+
+fn normalize_cargo_phrase(command_part: &str) -> Option<String> {
+    let tokens: Vec<&str> = command_part.split_whitespace().collect();
+    let lowered_tokens: Vec<String> = tokens
+        .iter()
+        .map(|token| token.to_ascii_lowercase())
+        .collect();
+    if lowered_tokens.len() < 2 || lowered_tokens.first()? != "cargo" {
+        return None;
+    }
+
+    match lowered_tokens.get(1).map(String::as_str) {
+        Some("test") => normalize_cargo_test_phrase(&tokens, &lowered_tokens),
+        Some("check") => normalize_cargo_check_phrase(&tokens, &lowered_tokens),
+        _ => None,
+    }
+}
+
+fn normalize_cargo_test_phrase(tokens: &[&str], lowered_tokens: &[String]) -> Option<String> {
+    // cargo test on <bin> bin for func <name>
+    if lowered_tokens.len() >= 8
+        && lowered_tokens[2] == "on"
+        && lowered_tokens[4] == "bin"
+        && lowered_tokens[5] == "for"
+        && matches!(
+            lowered_tokens[6].as_str(),
+            "func" | "function" | "test" | "case"
+        )
+    {
+        let bin_name = trim_token(tokens[3]);
+        let test_name_joined = tokens[7..].join(" ");
+        let test_name = trim_token(&test_name_joined);
+        if !bin_name.is_empty() && !test_name.is_empty() {
+            return Some(format!("cargo test --bin {} {}", bin_name, test_name));
+        }
+    }
+
+    // cargo test on <pkg> package|crate
+    if lowered_tokens.len() >= 5
+        && lowered_tokens[2] == "on"
+        && matches!(lowered_tokens[4].as_str(), "package" | "pkg" | "crate")
+    {
+        let package_name = trim_token(tokens[3]);
+        if !package_name.is_empty() {
+            return Some(format!("cargo test -p {}", package_name));
+        }
+    }
+
+    None
+}
+
+fn normalize_cargo_check_phrase(tokens: &[&str], lowered_tokens: &[String]) -> Option<String> {
+    // cargo check on <pkg> package|crate
+    if lowered_tokens.len() >= 5
+        && lowered_tokens[2] == "on"
+        && matches!(lowered_tokens[4].as_str(), "package" | "pkg" | "crate")
+    {
+        let package_name = trim_token(tokens[3]);
+        if !package_name.is_empty() {
+            return Some(format!("cargo check -p {}", package_name));
+        }
+    }
+
+    // cargo check on <bin> bin
+    if lowered_tokens.len() >= 5 && lowered_tokens[2] == "on" && lowered_tokens[4] == "bin" {
+        let bin_name = trim_token(tokens[3]);
+        if !bin_name.is_empty() {
+            return Some(format!("cargo check --bin {}", bin_name));
+        }
+    }
+
+    None
+}
+
+fn normalize_node_package_manager_phrase(command_part: &str) -> Option<String> {
+    let tokens: Vec<&str> = command_part.split_whitespace().collect();
+    let lowered_tokens: Vec<String> = tokens
+        .iter()
+        .map(|token| token.to_ascii_lowercase())
+        .collect();
+    if lowered_tokens.len() < 2 {
+        return None;
+    }
+
+    let pm = lowered_tokens.first()?.as_str();
+    if !matches!(pm, "npm" | "pnpm") {
+        return None;
+    }
+
+    match lowered_tokens.get(1).map(String::as_str) {
+        // npm test on <workspace> workspace|package|project
+        Some("test")
+            if lowered_tokens.len() >= 5
+                && lowered_tokens[2] == "on"
+                && matches!(
+                    lowered_tokens[4].as_str(),
+                    "workspace" | "package" | "pkg" | "project"
+                ) =>
+        {
+            let target = trim_token(tokens[3]);
+            if target.is_empty() {
+                return None;
+            }
+            Some(format!("{} test --workspace {}", pm, target))
+        }
+        // npm run <script> on <workspace> workspace|package|project
+        Some("run")
+            if lowered_tokens.len() >= 6
+                && lowered_tokens[3] == "on"
+                && matches!(
+                    lowered_tokens[5].as_str(),
+                    "workspace" | "package" | "pkg" | "project"
+                ) =>
+        {
+            let script = trim_token(tokens[2]);
+            let target = trim_token(tokens[4]);
+            if script.is_empty() || target.is_empty() {
+                return None;
+            }
+            Some(format!("{} run {} --workspace {}", pm, script, target))
+        }
+        _ => None,
+    }
+}
+
+fn normalize_pytest_phrase(command_part: &str) -> Option<String> {
+    let tokens: Vec<&str> = command_part.split_whitespace().collect();
+    let lowered_tokens: Vec<String> = tokens
+        .iter()
+        .map(|token| token.to_ascii_lowercase())
+        .collect();
+    if lowered_tokens.len() < 2 || lowered_tokens.first()? != "pytest" {
+        return None;
+    }
+
+    // pytest on <path> for func|function|test|case <name>
+    if lowered_tokens.len() >= 6
+        && lowered_tokens[1] == "on"
+        && lowered_tokens[3] == "for"
+        && matches!(
+            lowered_tokens[4].as_str(),
+            "func" | "function" | "test" | "case"
+        )
+    {
+        let path = trim_token(tokens[2]);
+        let test_name_joined = tokens[5..].join(" ");
+        let test_name = trim_token(&test_name_joined);
+        if path.is_empty() || test_name.is_empty() {
+            return None;
+        }
+        return Some(format!("pytest {} -k {}", path, test_name));
+    }
+
+    // pytest on <path>
+    if lowered_tokens.len() >= 3 && lowered_tokens[1] == "on" {
+        let path_joined = tokens[2..].join(" ");
+        let path = trim_token(&path_joined);
+        if path.is_empty() {
+            return None;
+        }
+        return Some(format!("pytest {}", path));
+    }
+
+    // pytest for func|function|test|case <name>
+    if lowered_tokens.len() >= 4
+        && lowered_tokens[1] == "for"
+        && matches!(
+            lowered_tokens[2].as_str(),
+            "func" | "function" | "test" | "case"
+        )
+    {
+        let test_name_joined = tokens[3..].join(" ");
+        let test_name = trim_token(&test_name_joined);
+        if test_name.is_empty() {
+            return None;
+        }
+        return Some(format!("pytest -k {}", test_name));
+    }
+
+    None
+}
+
+fn normalize_unix_phrase(command_part: &str) -> Option<String> {
+    let tokens: Vec<&str> = command_part.split_whitespace().collect();
+    let lowered_tokens: Vec<String> = tokens
+        .iter()
+        .map(|token| token.to_ascii_lowercase())
+        .collect();
+    if lowered_tokens.len() < 2 {
+        return None;
+    }
+
+    let cmd = lowered_tokens.first()?.as_str();
+
+    // Generic unix/dev command pattern: "<cmd> on <target>" -> "<cmd> <target>"
+    // Works for common commands where "on" naturally denotes target path/file.
+    let on_compatible_commands = [
+        "ls", "cat", "head", "tail", "wc", "du", "df", "tree", "stat", "file", "bat", "less",
+        "more", "git", "cargo", "pytest", "npm", "pnpm", "node", "python", "python3", "go", "java",
+        "javac", "rustc", "make", "cmake", "docker", "kubectl",
+    ];
+    if lowered_tokens[1] == "on" && on_compatible_commands.contains(&cmd) {
+        let target_joined = tokens[2..].join(" ");
+        let target = trim_token(&target_joined);
+        if !target.is_empty() {
+            return Some(format!("{} {}", tokens[0], target));
+        }
+    }
+
+    // grep/rg natural phrase:
+    // "grep for TODO on src" -> "grep TODO src"
+    if matches!(cmd, "grep" | "rg")
+        && lowered_tokens.len() >= 5
+        && lowered_tokens[1] == "for"
+        && let Some(on_idx) = lowered_tokens[2..].iter().position(|token| token == "on")
+    {
+        let on_idx = on_idx + 2;
+        let pattern_joined = tokens[2..on_idx].join(" ");
+        let pattern = trim_token(&pattern_joined);
+        let target_joined = tokens[on_idx + 1..].join(" ");
+        let target = trim_token(&target_joined);
+        if !pattern.is_empty() && !target.is_empty() {
+            return Some(format!("{} {} {}", tokens[0], pattern, target));
+        }
+    }
+
+    // find natural phrase:
+    // "find on src for *.rs" -> "find src -name *.rs"
+    if cmd == "find"
+        && lowered_tokens.len() >= 5
+        && lowered_tokens[1] == "on"
+        && let Some(for_idx) = lowered_tokens[2..].iter().position(|token| token == "for")
+    {
+        let for_idx = for_idx + 2;
+        let base_joined = tokens[2..for_idx].join(" ");
+        let base = trim_token(&base_joined);
+        let pattern_joined = tokens[for_idx + 1..].join(" ");
+        let pattern = trim_token(&pattern_joined);
+        if !base.is_empty() && !pattern.is_empty() {
+            return Some(format!("find {} -name {}", base, pattern));
+        }
+    }
+
+    None
+}
+
+fn looks_like_natural_language_request(command_part: &str) -> bool {
+    let natural_language_indicators = [
+        "the ", "all ", "some ", "this ", "that ", "my ", "our ", "a ", "an ",
+    ];
+    let command_lower = command_part.to_ascii_lowercase();
+    natural_language_indicators
+        .iter()
+        .any(|indicator| command_lower.starts_with(indicator))
+}
+
+fn looks_like_shell_command(command_part: &str) -> bool {
+    parse_shell_commands_tree_sitter(command_part)
+        .map(|commands| !commands.is_empty())
+        .unwrap_or(false)
+}
+
+fn strip_leading_polite_prefixes(command_part: &str) -> &str {
+    let mut input = command_part.trim();
+    loop {
+        let lowered = input.to_ascii_lowercase();
+        let stripped = if lowered.starts_with("please ") {
+            input.get(7..)
+        } else if lowered.starts_with("kindly ") {
+            input.get(7..)
+        } else if lowered.starts_with("just ") {
+            input.get(5..)
+        } else if lowered.starts_with("quickly ") {
+            input.get(8..)
+        } else if lowered.starts_with("quick ") {
+            input.get(6..)
+        } else if lowered.starts_with("a quick ") {
+            input.get(8..)
+        } else if lowered.starts_with("an quick ") {
+            input.get(9..)
+        } else {
+            None
+        };
+
+        if let Some(rest) = stripped {
+            input = rest.trim_start();
+            continue;
+        }
+        return input;
+    }
+}
+
+fn strip_command_wrappers(command_part: &str) -> &str {
+    let mut input = command_part.trim();
+    loop {
+        let lowered = input.to_ascii_lowercase();
+        let stripped = if lowered.starts_with("command ") {
+            input.get(8..)
+        } else if lowered.starts_with("unix command ") {
+            input.get(13..)
+        } else if lowered.starts_with("shell command ") {
+            input.get(14..)
+        } else if lowered.starts_with("cmd ") {
+            input.get(4..)
+        } else {
+            None
+        };
+
+        if let Some(rest) = stripped {
+            input = rest.trim_start();
+            continue;
+        }
+        return input;
+    }
+}
+
+fn extract_inline_backtick_command(command_part: &str) -> Option<&str> {
+    let start = command_part.find('`')?;
+    let remainder = command_part.get(start + 1..)?;
+    let end_rel = remainder.find('`')?;
+    let extracted = remainder.get(..end_rel)?.trim();
+    if extracted.is_empty() {
+        return None;
+    }
+    Some(extracted)
+}
+
+fn trim_token(token: &str) -> &str {
+    token
+        .trim()
+        .trim_end_matches(|ch: char| matches!(ch, '.' | ',' | ';' | '!' | '?'))
 }
 
 fn contains_chained_instruction(command_part: &str) -> bool {
@@ -147,5 +490,136 @@ mod tests {
         assert!(detect_explicit_run_command("run").is_none());
         assert!(detect_explicit_run_command("run ").is_none());
         assert!(detect_explicit_run_command("run  ").is_none());
+    }
+
+    #[test]
+    fn test_detect_explicit_run_command_normalizes_natural_cargo_test_phrase() {
+        let result = detect_explicit_run_command(
+            "run cargo test on vtcode bin for func highlights_run_prefix_user_input",
+        );
+        assert!(result.is_some());
+        let (_, args) = result.expect("normalized command expected");
+        assert_eq!(
+            args["command"],
+            "cargo test --bin vtcode highlights_run_prefix_user_input"
+        );
+    }
+
+    #[test]
+    fn test_detect_explicit_run_command_keeps_standard_cargo_test() {
+        let result = detect_explicit_run_command("run cargo test --bin vtcode smoke_test");
+        assert!(result.is_some());
+        let (_, args) = result.expect("command expected");
+        assert_eq!(args["command"], "cargo test --bin vtcode smoke_test");
+    }
+
+    #[test]
+    fn test_detect_explicit_run_command_normalizes_cargo_check_package_phrase() {
+        let result = detect_explicit_run_command("run cargo check on vtcode-core package");
+        assert!(result.is_some());
+        let (_, args) = result.expect("normalized command expected");
+        assert_eq!(args["command"], "cargo check -p vtcode-core");
+    }
+
+    #[test]
+    fn test_detect_explicit_run_command_strips_polite_prefixes() {
+        let result = detect_explicit_run_command("run please cargo check");
+        assert!(result.is_some());
+        let (_, args) = result.expect("normalized command expected");
+        assert_eq!(args["command"], "cargo check");
+    }
+
+    #[test]
+    fn test_detect_explicit_run_command_extracts_backtick_command() {
+        let result = detect_explicit_run_command(
+            "run please use `cargo test --bin vtcode highlights_run_prefix_user_input`",
+        );
+        assert!(result.is_some());
+        let (_, args) = result.expect("normalized command expected");
+        assert_eq!(
+            args["command"],
+            "cargo test --bin vtcode highlights_run_prefix_user_input"
+        );
+    }
+
+    #[test]
+    fn test_detect_explicit_run_command_normalizes_npm_workspace_test_phrase() {
+        let result = detect_explicit_run_command("run npm test on web workspace");
+        assert!(result.is_some());
+        let (_, args) = result.expect("normalized command expected");
+        assert_eq!(args["command"], "npm test --workspace web");
+    }
+
+    #[test]
+    fn test_detect_explicit_run_command_normalizes_pnpm_workspace_script_phrase() {
+        let result = detect_explicit_run_command("run pnpm run lint on frontend package");
+        assert!(result.is_some());
+        let (_, args) = result.expect("normalized command expected");
+        assert_eq!(args["command"], "pnpm run lint --workspace frontend");
+    }
+
+    #[test]
+    fn test_detect_explicit_run_command_normalizes_pytest_path_phrase() {
+        let result = detect_explicit_run_command("run pytest on tests/unit/test_shell.py");
+        assert!(result.is_some());
+        let (_, args) = result.expect("normalized command expected");
+        assert_eq!(args["command"], "pytest tests/unit/test_shell.py");
+    }
+
+    #[test]
+    fn test_detect_explicit_run_command_normalizes_pytest_function_phrase() {
+        let result =
+            detect_explicit_run_command("run pytest for func test_detect_explicit_run_command");
+        assert!(result.is_some());
+        let (_, args) = result.expect("normalized command expected");
+        assert_eq!(
+            args["command"],
+            "pytest -k test_detect_explicit_run_command"
+        );
+    }
+
+    #[test]
+    fn test_detect_explicit_run_command_normalizes_pytest_path_and_function_phrase() {
+        let result = detect_explicit_run_command(
+            "run pytest on tests/unit/test_shell.py for func test_detect_explicit_run_command",
+        );
+        assert!(result.is_some());
+        let (_, args) = result.expect("normalized command expected");
+        assert_eq!(
+            args["command"],
+            "pytest tests/unit/test_shell.py -k test_detect_explicit_run_command"
+        );
+    }
+
+    #[test]
+    fn test_detect_explicit_run_command_strips_unix_command_wrapper() {
+        let result = detect_explicit_run_command("run unix command ls -la");
+        assert!(result.is_some());
+        let (_, args) = result.expect("normalized command expected");
+        assert_eq!(args["command"], "ls -la");
+    }
+
+    #[test]
+    fn test_detect_explicit_run_command_normalizes_unix_on_pattern() {
+        let result = detect_explicit_run_command("run ls on /tmp");
+        assert!(result.is_some());
+        let (_, args) = result.expect("normalized command expected");
+        assert_eq!(args["command"], "ls /tmp");
+    }
+
+    #[test]
+    fn test_detect_explicit_run_command_normalizes_grep_for_on_pattern() {
+        let result = detect_explicit_run_command("run rg for TODO on src");
+        assert!(result.is_some());
+        let (_, args) = result.expect("normalized command expected");
+        assert_eq!(args["command"], "rg TODO src");
+    }
+
+    #[test]
+    fn test_detect_explicit_run_command_normalizes_find_on_for_pattern() {
+        let result = detect_explicit_run_command("run find on src for *.rs");
+        assert!(result.is_some());
+        let (_, args) = result.expect("normalized command expected");
+        assert_eq!(args["command"], "find src -name *.rs");
     }
 }
