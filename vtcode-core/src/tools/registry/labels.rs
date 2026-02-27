@@ -35,6 +35,7 @@ pub fn tool_action_label(tool_name: &str, args: &Value) -> String {
                 "run" => "Run command (PTY)".to_string(),
                 "write" => "Send PTY input".to_string(),
                 "poll" => "Read PTY session".to_string(),
+                "inspect" => "Inspect PTY output".to_string(),
                 "list" => "List PTY sessions".to_string(),
                 "close" => "Close PTY session".to_string(),
                 "code" => "Run code".to_string(),
@@ -45,7 +46,6 @@ pub fn tool_action_label(tool_name: &str, args: &Value) -> String {
             match tool_intent::unified_search_action(args).unwrap_or("grep") {
                 "grep" => "Search text".to_string(),
                 "list" => "List files".to_string(),
-                "intelligence" => "Code intelligence".to_string(),
                 "tools" => "List tools".to_string(),
                 "errors" => "List errors".to_string(),
                 "agent" => "Show agent info".to_string(),

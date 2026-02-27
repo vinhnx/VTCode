@@ -131,20 +131,6 @@ fn tail_preview_content(content: &str, tail_bytes: usize, max_lines: usize) -> S
     )
 }
 
-fn build_spool_hint(tool_name: &str, spool_path: &str) -> String {
-    if is_pty_tool_name(tool_name) {
-        format!(
-            "Large command output was spooled to \"{}\". Read full output with read_file path=\"{}\" (or keep polling with read_pty_session while the process is running).",
-            spool_path, spool_path
-        )
-    } else {
-        format!(
-            "Large output was spooled to \"{}\". Use read_file/grep_file to inspect details.",
-            spool_path
-        )
-    }
-}
-
 /// Configuration for the output spooler
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SpoolerConfig {
@@ -465,7 +451,6 @@ impl ToolOutputSpooler {
             condense_content(&spool_result.content)
         };
         let spool_path = spool_result.file_path.to_string_lossy().to_string();
-        let spool_hint = build_spool_hint(tool_name, &spool_path);
 
         let mut response = match value {
             Value::Object(map) => Value::Object(map),
@@ -505,11 +490,6 @@ impl ToolOutputSpooler {
 
             obj.insert("spooled_to_file".to_string(), json!(true));
             obj.insert("spool_path".to_string(), json!(spool_path));
-            obj.insert(
-                "spooled_bytes".to_string(),
-                json!(spool_result.original_bytes),
-            );
-            obj.insert("spool_hint".to_string(), json!(spool_hint));
 
             if let Some(src) = source_path
                 && !obj.contains_key("source_path")
@@ -878,12 +858,7 @@ mod tests {
                 .and_then(|v| v.as_str())
                 .is_some_and(|s| s.contains("tail preview"))
         );
-        assert!(
-            result
-                .get("spool_hint")
-                .and_then(|v| v.as_str())
-                .is_some_and(|s| s.contains("read_file"))
-        );
+        assert!(result.get("spool_hint").is_none());
     }
 
     #[tokio::test]

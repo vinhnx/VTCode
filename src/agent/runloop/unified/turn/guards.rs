@@ -258,8 +258,10 @@ fn is_readonly_signature(signature: &str) -> bool {
         let lower_json = args_json.to_ascii_lowercase();
         return lower_json.contains(r#""action":"poll""#)
             || lower_json.contains(r#""action":"list""#)
+            || lower_json.contains(r#""action":"inspect""#)
             || lower_json.contains(r#""action": "poll""#)
-            || lower_json.contains(r#""action": "list""#);
+            || lower_json.contains(r#""action": "list""#)
+            || lower_json.contains(r#""action": "inspect""#);
     }
 
     false

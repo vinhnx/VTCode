@@ -434,12 +434,20 @@ fn loop_detection_tool_key(canonical_tool_name: &str, args: &serde_json::Value) 
         tool_names::UNIFIED_EXEC => {
             let action = tool_intent::unified_exec_action(args).unwrap_or("run");
             let action = action.to_ascii_lowercase();
-            if matches!(action.as_str(), "poll" | "close")
+            if matches!(action.as_str(), "poll" | "close" | "inspect")
                 && let Some(session_id) = args.get("session_id").and_then(|v| v.as_str())
             {
                 return format!(
                     "{canonical_tool_name}::{action}::{}",
                     compact_loop_key_part(session_id, 80)
+                );
+            }
+            if action == "inspect"
+                && let Some(spool_path) = args.get("spool_path").and_then(|v| v.as_str())
+            {
+                return format!(
+                    "{canonical_tool_name}::{action}::{}",
+                    compact_loop_key_part(spool_path, 120)
                 );
             }
             if action == "run"

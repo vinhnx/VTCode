@@ -87,3 +87,13 @@ or
 often carry duplicated text (output + stdout), which wastes tokens broadly. I’m
 patching normalization and fallback handling so all command-like tool calls
 benefit, not only git diff. => should be fixed by the new unified_exec refactor, which normalizes all tool calls to have a consistent structure and eliminates redundant information in the payload, thus optimizing token usage across all tools that utilize the unified_exec interface.
+
+• I identified three additional broad token waste points and I’m patching them
+now.
+
+1. Remove duplicated spool guidance reaching the model twice (spool_hint field
+   plus extra system nudge).
+2. Trim repeated/unused metadata in model-facing tool payloads (spool_hint,
+   spooled_bytes, duplicate id==session_id, null working_directory).
+3. Shorten high-frequency follow-up prompts for PTY and spool-chunk reads, and
+   provide compact structured continuation args for chunked spool reads.

@@ -158,10 +158,10 @@ pub enum ToolDocumentationMode {
     Minimal,
     /// Signatures + common parameters (~1,200 tokens total) - Smart hints
     /// Best for: General usage, balances overhead vs guidance (recommended)
+    #[default]
     Progressive,
     /// Full documentation upfront (~3,000 tokens total) - Current behavior
     /// Best for: Maximum hand-holding, comprehensive parameter documentation
-    #[default]
     Full,
 }
 

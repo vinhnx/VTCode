@@ -350,13 +350,11 @@ impl FileOpsTool {
                             let has_more = lines_returned >= plan.limit;
                             let next_offset = plan.offset.saturating_add(lines_returned);
                             let follow_up_prompt = if has_more {
-                                format!(
-                                    "Spool output is chunked to avoid context bloat. Prefer targeted extraction first (for example: grep_file {{\"pattern\":\"warning:\",\"path\":\"{}\"}}). If you still need more raw lines, continue with read_file {{\"path\":\"{}\",\"offset\":{},\"limit\":{}}}.",
-                                    requested_path, requested_path, next_offset, plan.limit
-                                )
+                                "Spool chunked. Use `next_read_args` to continue, or grep_file for targeted matches."
+                                    .to_string()
                             } else {
                                 format!(
-                                    "Reached end of spooled output at line {}.",
+                                    "End of spooled output at line {}.",
                                     next_offset.saturating_sub(1)
                                 )
                             };
@@ -368,6 +366,16 @@ impl FileOpsTool {
                                 .field("has_more", json!(has_more))
                                 .field("next_offset", json!(next_offset))
                                 .field("follow_up_prompt", json!(follow_up_prompt));
+                            if has_more {
+                                builder = builder.field(
+                                    "next_read_args",
+                                    json!({
+                                        "path": requested_path.clone(),
+                                        "offset": next_offset,
+                                        "limit": plan.limit
+                                    }),
+                                );
+                            }
                         }
 
                         let response = builder.build_json();
@@ -809,11 +817,19 @@ mod read_tests {
         assert_eq!(result["lines_returned"], SPOOL_CHUNK_DEFAULT_LIMIT_LINES);
         assert_eq!(result["has_more"], true);
         assert_eq!(result["next_offset"], SPOOL_CHUNK_DEFAULT_LIMIT_LINES + 1);
+        assert_eq!(
+            result["next_read_args"],
+            json!({
+                "path": ".vtcode/context/tool_outputs/unified_exec_123.txt",
+                "offset": SPOOL_CHUNK_DEFAULT_LIMIT_LINES + 1,
+                "limit": SPOOL_CHUNK_DEFAULT_LIMIT_LINES
+            })
+        );
         assert!(
             result["follow_up_prompt"]
                 .as_str()
                 .unwrap_or_default()
-                .contains("read_file")
+                .contains("next_read_args")
         );
     }
 }

@@ -72,7 +72,6 @@ pub(crate) async fn render_terminal_command_panel(
         .and_then(Value::as_bool)
         .unwrap_or(false);
     let spool_path = unwrapped_payload.get("spool_path").and_then(Value::as_str);
-    let spool_hint = unwrapped_payload.get("spool_hint").and_then(Value::as_str);
 
     // Check for session completion status (is_exited indicates if process is still running)
     let exit_code = unwrapped_payload.get("exit_code").and_then(Value::as_i64);
@@ -272,9 +271,7 @@ pub(crate) async fn render_terminal_command_panel(
 
     if spooled_to_file {
         renderer.line(MessageStyle::ToolDetail, "")?;
-        if let Some(hint) = spool_hint {
-            renderer.line(MessageStyle::ToolDetail, hint)?;
-        } else if let Some(path) = spool_path {
+        if let Some(path) = spool_path {
             renderer.line(
                 MessageStyle::ToolDetail,
                 &format!(
