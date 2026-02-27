@@ -421,6 +421,10 @@ pub(super) fn maybe_inline_spooled(_tool_name: &str, output: &serde_json::Value)
             .get("next_poll_args")
             .and_then(serde_json::Value::as_object)
             .cloned();
+        let next_continue_args = obj
+            .get("next_continue_args")
+            .and_then(serde_json::Value::as_object)
+            .cloned();
         let next_read_args = obj
             .get("next_read_args")
             .and_then(serde_json::Value::as_object)
@@ -472,7 +476,7 @@ pub(super) fn maybe_inline_spooled(_tool_name: &str, output: &serde_json::Value)
         }
 
         obj.remove("follow_up_prompt");
-        if next_poll_args.is_some() || next_read_args.is_some() {
+        if next_poll_args.is_some() || next_continue_args.is_some() || next_read_args.is_some() {
             obj.remove("has_more");
         }
 
@@ -481,6 +485,15 @@ pub(super) fn maybe_inline_spooled(_tool_name: &str, output: &serde_json::Value)
             && obj.get("session_id") == Some(next_session_id)
         {
             obj.remove("session_id");
+        }
+        if let Some(next_continue) = next_continue_args.as_ref()
+            && let Some(next_session_id) = next_continue.get("session_id")
+            && obj.get("session_id") == Some(next_session_id)
+        {
+            obj.remove("session_id");
+        }
+        if next_continue_args.is_some() {
+            obj.remove("next_poll_args");
         }
 
         if let Some(next_read) = next_read_args.as_ref() {
@@ -529,6 +542,11 @@ pub(super) fn maybe_inline_spooled(_tool_name: &str, output: &serde_json::Value)
             next_poll_args
                 .as_ref()
                 .and_then(|next_poll| next_poll.get("session_id"))
+                .or_else(|| {
+                    next_continue_args
+                        .as_ref()
+                        .and_then(|next_continue| next_continue.get("session_id"))
+                })
         });
         if matches!(
             (obj.get("process_id"), process_session_id),
@@ -537,7 +555,7 @@ pub(super) fn maybe_inline_spooled(_tool_name: &str, output: &serde_json::Value)
             obj.remove("process_id");
         }
 
-        if next_poll_args.is_some() {
+        if next_poll_args.is_some() || next_continue_args.is_some() {
             obj.remove("command");
             if obj
                 .get("is_exited")

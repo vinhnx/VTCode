@@ -708,10 +708,7 @@ pub(crate) async fn validate_tool_call<'a>(
                 push_tool_response(
                     ctx.working_history,
                     tool_call_id.to_string(),
-                    super::execution_result::maybe_inline_spooled(
-                        &canonical_tool_name,
-                        &spooled,
-                    ),
+                    super::execution_result::maybe_inline_spooled(&canonical_tool_name, &spooled),
                 );
                 return Ok(ValidationResult::Blocked);
             }
@@ -740,10 +737,7 @@ pub(crate) async fn validate_tool_call<'a>(
                 push_tool_response(
                     ctx.working_history,
                     tool_call_id.to_string(),
-                    super::execution_result::maybe_inline_spooled(
-                        &canonical_tool_name,
-                        &reused,
-                    ),
+                    super::execution_result::maybe_inline_spooled(&canonical_tool_name, &reused),
                 );
                 return Ok(ValidationResult::Blocked);
             }
