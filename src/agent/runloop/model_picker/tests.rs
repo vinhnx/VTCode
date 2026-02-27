@@ -56,7 +56,7 @@ fn model_picker_lists_new_ollama_cloud_models() {
 #[test]
 fn model_picker_lists_new_gemini_models() {
     let options = MODEL_OPTIONS.as_slice();
-    assert!(has_model(options, ModelId::Gemini3ProPreview));
+    assert!(has_model(options, ModelId::Gemini31ProPreview));
 }
 
 #[test]

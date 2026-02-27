@@ -11,12 +11,14 @@ use ratatui::{
 };
 
 use super::super::style::{ratatui_color_from_ansi, ratatui_style_from_ansi};
-use crate::config::constants::ui;
 use crate::ui::markdown::highlight_line_for_diff;
 use crate::ui::tui::session::Session;
 use crate::ui::tui::types::{DiffPreviewState, TrustMode};
 use crate::utils::diff::{DiffBundle, DiffLineKind, DiffOptions, compute_diff_with_theme};
-use crate::utils::diff_styles::DiffColorPalette;
+use crate::utils::diff_styles::{
+    DiffColorLevel, DiffColorPalette, DiffLineType, DiffTheme, style_gutter, style_line_bg,
+    style_sign,
+};
 
 pub fn render_diff_preview(session: &Session, frame: &mut Frame<'_>, area: Rect) {
     let Some(preview) = session.diff_preview.as_ref() else {
@@ -24,6 +26,8 @@ pub fn render_diff_preview(session: &Session, frame: &mut Frame<'_>, area: Rect)
     };
 
     let palette = DiffColorPalette::default();
+    let diff_theme = DiffTheme::detect();
+    let color_level = DiffColorLevel::detect();
     let diff_bundle = compute_diff_with_theme(
         &preview.before,
         &preview.after,
@@ -44,7 +48,7 @@ pub fn render_diff_preview(session: &Session, frame: &mut Frame<'_>, area: Rect)
     .split(area);
 
     render_file_header(frame, chunks[0], preview, &palette, additions, deletions);
-    render_diff_content(frame, chunks[1], preview, &palette, &diff_bundle);
+    render_diff_content(frame, chunks[1], preview, &palette, &diff_bundle, diff_theme, color_level);
     render_controls(frame, chunks[2], preview);
 }
 
@@ -145,8 +149,10 @@ fn render_diff_content(
     frame: &mut Frame<'_>,
     area: Rect,
     preview: &DiffPreviewState,
-    palette: &DiffColorPalette,
+    _palette: &DiffColorPalette,
     diff_bundle: &DiffBundle,
+    diff_theme: DiffTheme,
+    color_level: DiffColorLevel,
 ) {
     let language = detect_language(&preview.file_path);
 
@@ -176,30 +182,45 @@ fn render_diff_content(
             let line_num_str = format!("{:>4} ", line_num);
             let text = diff_line.text.trim_end_matches('\n');
 
-            let fg_line_num = Color::Rgb(
-                ui::DIFF_LINE_NUMBER_R,
-                ui::DIFF_LINE_NUMBER_G,
-                ui::DIFF_LINE_NUMBER_B,
-            );
-            let (prefix, fg, is_change) = match diff_line.kind {
-                DiffLineKind::Context => (" ", fg_line_num, false),
-                DiffLineKind::Addition => ("+", ratatui_color_from_ansi(palette.added_fg), true),
-                DiffLineKind::Deletion => ("-", ratatui_color_from_ansi(palette.removed_fg), true),
+            let line_type = match diff_line.kind {
+                DiffLineKind::Context => DiffLineType::Context,
+                DiffLineKind::Addition => DiffLineType::Insert,
+                DiffLineKind::Deletion => DiffLineType::Delete,
+            };
+
+            let gutter_style = style_gutter(line_type, diff_theme, color_level);
+            let sign_style = style_sign(line_type, diff_theme, color_level);
+            let line_bg = style_line_bg(line_type, diff_theme, color_level);
+            let content_bg = match line_type {
+                DiffLineType::Context => None,
+                DiffLineType::Insert => Some(crate::utils::diff_styles::add_line_bg(diff_theme, color_level)),
+                DiffLineType::Delete => Some(crate::utils::diff_styles::del_line_bg(diff_theme, color_level)),
+            };
+
+            let prefix = match line_type {
+                DiffLineType::Insert => "+",
+                DiffLineType::Delete => "-",
+                DiffLineType::Context => " ",
             };
 
             let mut spans = vec![
-                Span::styled(
-                    prefix,
-                    Style::default().fg(fg).add_modifier(if is_change {
-                        Modifier::BOLD
-                    } else {
-                        Modifier::empty()
-                    }),
-                ),
-                Span::styled(line_num_str, Style::default().fg(fg)),
+                Span::styled(prefix.to_string(), sign_style),
+                Span::styled(line_num_str, gutter_style),
             ];
-            spans.extend(highlight_line_with_bg(text, language, None));
-            lines.push(Line::from(spans));
+
+            // For changed lines with syntax highlighting, apply bg tint
+            let highlighted = highlight_line_with_bg(text, language, content_bg);
+            if line_type == DiffLineType::Delete {
+                // Dim deleted lines so additions are more scannable
+                spans.extend(highlighted.into_iter().map(|mut s| {
+                    s.style = s.style.add_modifier(Modifier::DIM);
+                    s
+                }));
+            } else {
+                spans.extend(highlighted);
+            }
+
+            lines.push(Line::from(spans).style(line_bg));
         }
     }
 

@@ -64,7 +64,9 @@ impl ContextOptimizer {
             tools::GREP_FILE => self.optimize_grep_result(result),
             tools::LIST_FILES => self.optimize_list_files_result(result),
             tools::READ_FILE => self.optimize_read_file_result(result),
-            "shell" | tools::RUN_PTY_CMD => self.optimize_command_result(result),
+            "shell" | tools::RUN_PTY_CMD | tools::UNIFIED_EXEC => {
+                self.optimize_command_result(result)
+            }
             _ => result,
         };
 
@@ -206,29 +208,34 @@ impl ContextOptimizer {
     /// Optimize command output - extract errors only
     /// Optimize command output - extract errors only
     fn optimize_command_result(&self, result: Value) -> Value {
-        if let Some(obj) = result.as_object()
-            && let Some(stdout) = obj.get("stdout").and_then(|v| v.as_str())
-        {
-            let lines: Vec<&str> = stdout.lines().collect();
-            let is_truncated = lines.len() > MAX_FILE_LINES;
+        if let Some(obj) = result.as_object() {
+            let stream_key = if obj.get("stdout").and_then(|v| v.as_str()).is_some() {
+                "stdout"
+            } else {
+                "output"
+            };
+            if let Some(stdout) = obj.get(stream_key).and_then(|v| v.as_str()) {
+                let lines: Vec<&str> = stdout.lines().collect();
+                let is_truncated = lines.len() > MAX_FILE_LINES;
 
-            if is_truncated {
-                let truncated = lines[..MAX_FILE_LINES].join("\n");
-                let lines_count = stdout.lines().count();
+                if is_truncated {
+                    let truncated = lines[..MAX_FILE_LINES].join("\n");
+                    let lines_count = stdout.lines().count();
 
-                // Clone the original object to preserve exit_code, stderr, etc.
-                let mut new_obj = obj.clone();
-                new_obj.insert("stdout".to_string(), json!(truncated));
-                new_obj.insert("is_truncated".to_string(), json!(true));
-                new_obj.insert("original_lines".to_string(), json!(lines_count));
-                new_obj.insert(
+                    // Clone the original object to preserve exit_code, stderr, etc.
+                    let mut new_obj = obj.clone();
+                    new_obj.insert(stream_key.to_string(), json!(truncated));
+                    new_obj.insert("is_truncated".to_string(), json!(true));
+                    new_obj.insert("original_lines".to_string(), json!(lines_count));
+                    new_obj.insert(
                     "note".to_string(),
                     json!(
                         "Output truncated. Use 'grep_file' or specific commands to search content."
                     ),
                 );
 
-                return Value::Object(new_obj);
+                    return Value::Object(new_obj);
+                }
             }
         }
         result
@@ -365,5 +372,24 @@ mod tests {
 
         // Cleanup
         let _ = std::fs::remove_file(&temp_path);
+    }
+
+    #[tokio::test]
+    async fn test_unified_exec_output_optimization_with_output_field() {
+        let mut optimizer = ContextOptimizer::new();
+        let long_output = (0..2505)
+            .map(|i| format!("line-{i}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let result = json!({
+            "command": "ls -la",
+            "output": long_output,
+            "exit_code": 0,
+            "is_exited": true
+        });
+
+        let optimized = optimizer.optimize_result(tools::UNIFIED_EXEC, result).await;
+        assert_eq!(optimized["is_truncated"], true);
+        assert!(optimized["output"].as_str().unwrap().lines().count() <= MAX_FILE_LINES);
     }
 }

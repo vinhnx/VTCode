@@ -621,3 +621,128 @@ async fn test_run_tool_call_invalid_preflight_does_not_consume_budget() {
     ));
     assert_eq!(ctx.harness_state.tool_calls, 0);
 }
+
+#[tokio::test]
+async fn test_run_tool_call_unified_exec_git_diff_uses_cache_on_repeat() {
+    let mut test_ctx = TestContext::new().await;
+    std::fs::create_dir_all(&test_ctx.workspace).expect("create workspace directory");
+    std::fs::write(test_ctx.workspace.join("a.txt"), "same-content\n").expect("write a.txt");
+    std::fs::write(test_ctx.workspace.join("b.txt"), "same-content\n").expect("write b.txt");
+
+    let mut registry = test_ctx.registry;
+    let permission_cache_arc = Arc::new(tokio::sync::RwLock::new(ToolPermissionCache::new()));
+    {
+        let mut cache = permission_cache_arc.write().await;
+        cache.cache_grant(tools::UNIFIED_EXEC.to_string(), PermissionGrant::Permanent);
+    }
+
+    let result_cache = Arc::new(tokio::sync::RwLock::new(ToolResultCache::new(32)));
+    let decision_ledger = Arc::new(tokio::sync::RwLock::new(DecisionTracker::new()));
+    let mut session_stats = crate::agent::runloop::unified::state::SessionStats::default();
+    let mut mcp_panel = crate::agent::runloop::mcp_events::McpPanelState::new(10, true);
+    let approval_recorder = test_ctx.approval_recorder;
+    let traj = TrajectoryLogger::new(&test_ctx.workspace);
+    let tools = Arc::new(tokio::sync::RwLock::new(Vec::new()));
+
+    let mut harness_state = build_harness_state();
+    let mut ctx = crate::agent::runloop::unified::run_loop_context::RunLoopContext {
+        renderer: &mut test_ctx.renderer,
+        handle: &test_ctx.handle,
+        tool_registry: &mut registry,
+        tools: &tools,
+        tool_result_cache: &result_cache,
+        tool_permission_cache: &permission_cache_arc,
+        decision_ledger: &decision_ledger,
+        session_stats: &mut session_stats,
+        mcp_panel_state: &mut mcp_panel,
+        approval_recorder: &approval_recorder,
+        session: &mut test_ctx.session,
+        safety_validator: None,
+        traj: &traj,
+        harness_state: &mut harness_state,
+        harness_emitter: None,
+    };
+
+    let args = serde_json::to_string(&json!({
+        "action": "run",
+        "command": "git diff --no-index ./a.txt ./b.txt"
+    }))
+    .expect("serialize unified_exec args");
+
+    let first_call = vtcode_core::llm::provider::ToolCall::function(
+        "call_unified_exec_1".to_string(),
+        tools::UNIFIED_EXEC.to_string(),
+        args.clone(),
+    );
+    let second_call = vtcode_core::llm::provider::ToolCall::function(
+        "call_unified_exec_2".to_string(),
+        tools::UNIFIED_EXEC.to_string(),
+        args,
+    );
+
+    let ctrl_c_state = Arc::new(CtrlCState::new());
+    let ctrl_c_notify = Arc::new(Notify::new());
+
+    let first_outcome = run_tool_call(
+        &mut ctx,
+        &first_call,
+        &ctrl_c_state,
+        &ctrl_c_notify,
+        None,
+        None,
+        true,
+        None,
+        0,
+        false,
+    )
+    .await
+    .expect("first unified_exec call must run");
+
+    let second_outcome = run_tool_call(
+        &mut ctx,
+        &second_call,
+        &ctrl_c_state,
+        &ctrl_c_notify,
+        None,
+        None,
+        true,
+        None,
+        0,
+        false,
+    )
+    .await
+    .expect("second unified_exec call must run");
+
+    let extract_session_id = |status: &ToolExecutionStatus| -> String {
+        match status {
+            ToolExecutionStatus::Success {
+                output,
+                command_success,
+                ..
+            } => {
+                assert!(*command_success);
+                output
+                    .get("session_id")
+                    .or_else(|| output.get("id"))
+                    .and_then(|value| value.as_str())
+                    .expect("command output should include session id")
+                    .to_string()
+            }
+            other => panic!("Expected success status, got: {:?}", other),
+        }
+    };
+
+    let first_session_id = extract_session_id(&first_outcome.status);
+    let second_session_id = extract_session_id(&second_outcome.status);
+    assert_eq!(first_session_id, second_session_id);
+
+    let first_output = match &first_outcome.status {
+        ToolExecutionStatus::Success { output, .. } => output,
+        _ => unreachable!(),
+    };
+    let second_output = match &second_outcome.status {
+        ToolExecutionStatus::Success { output, .. } => output,
+        _ => unreachable!(),
+    };
+    assert_eq!(first_output, second_output);
+}

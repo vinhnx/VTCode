@@ -131,7 +131,7 @@ pub(super) async fn execute_with_cache_and_streaming(
     } = &outcome
     {
         tool_spinner.finish();
-        if is_cacheable_tool && *command_success {
+        if is_cacheable_tool && should_cache_success_output(name, output, *command_success) {
             let workspace_path = registry.workspace_root().to_string_lossy().to_string();
             let cache_key =
                 create_enhanced_cache_key(name, args_val, &cache_target, &workspace_path);
@@ -142,6 +142,46 @@ pub(super) async fn execute_with_cache_and_streaming(
     }
 
     outcome
+}
+
+fn should_cache_success_output(name: &str, output: &Value, command_success: bool) -> bool {
+    if !command_success {
+        return false;
+    }
+
+    if !is_command_tool(name) {
+        return true;
+    }
+
+    if output.get("has_more").and_then(Value::as_bool) == Some(true) {
+        return false;
+    }
+    if output.get("follow_up_prompt").is_some() {
+        return false;
+    }
+    if output.get("process_id").is_some() {
+        return false;
+    }
+    if output.get("is_exited").and_then(Value::as_bool) == Some(false) {
+        return false;
+    }
+    if output.get("is_exited").is_some() && output.get("exit_code").is_none() {
+        return false;
+    }
+
+    true
+}
+
+fn is_command_tool(name: &str) -> bool {
+    matches!(
+        name,
+        tools::RUN_PTY_CMD
+            | tools::SHELL
+            | tools::UNIFIED_EXEC
+            | tools::EXEC_PTY_CMD
+            | tools::EXEC
+            | tools::SEND_PTY_INPUT
+    )
 }
 
 fn extract_pty_stream_command(tool_name: &str, args: &Value) -> Option<String> {
@@ -313,7 +353,7 @@ mod tests {
     use serde_json::json;
     use vtcode_core::config::constants::tools;
 
-    use super::extract_pty_stream_command;
+    use super::{extract_pty_stream_command, should_cache_success_output};
 
     #[test]
     fn extracts_command_for_run_pty_cmd() {
@@ -355,5 +395,40 @@ mod tests {
             extract_pty_stream_command(tools::RUN_PTY_CMD, &args),
             Some("cargo check -p vtcode-core".to_string())
         );
+    }
+
+    #[test]
+    fn caches_completed_command_outputs_only() {
+        let completed = json!({
+            "output": "diff --git a b",
+            "exit_code": 0,
+            "is_exited": true
+        });
+        let partial = json!({
+            "output": "partial",
+            "is_exited": false,
+            "process_id": "run-123",
+            "follow_up_prompt": "read more"
+        });
+
+        assert!(should_cache_success_output(
+            tools::RUN_PTY_CMD,
+            &completed,
+            true
+        ));
+        assert!(!should_cache_success_output(
+            tools::RUN_PTY_CMD,
+            &partial,
+            true
+        ));
+    }
+
+    #[test]
+    fn caches_non_command_success_outputs() {
+        let output = json!({
+            "matches": []
+        });
+
+        assert!(should_cache_success_output("read_file", &output, true));
     }
 }
