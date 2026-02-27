@@ -12,7 +12,7 @@ use serde_json::{Value, json};
 use tokio::sync::Notify;
 use tokio::task;
 
-use vtcode_core::ui::tui::{
+use vtcode_tui::{
     InlineEvent, InlineHandle, InlineListSelection, InlineSession, PlanConfirmationResult,
     PlanContent,
 };

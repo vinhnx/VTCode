@@ -18,8 +18,8 @@ use vtcode_core::core::agent::snapshots::{
     DEFAULT_CHECKPOINTS_ENABLED, DEFAULT_MAX_AGE_DAYS, DEFAULT_MAX_SNAPSHOTS,
 };
 use vtcode_core::llm::provider::{self as uni, LLMRequest, LLMResponse};
-use vtcode_core::ui::tui::{InlineEvent, InlineHandle, PlanConfirmationResult};
 use vtcode_core::utils::ansi::AnsiRenderer;
+use vtcode_tui::{InlineEvent, InlineHandle, PlanConfirmationResult};
 
 #[derive(Clone)]
 struct DummyProvider;

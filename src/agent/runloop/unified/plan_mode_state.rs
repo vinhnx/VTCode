@@ -1,8 +1,8 @@
 use crate::agent::runloop::unified::state::SessionStats;
 use anyhow::Result;
 use vtcode_core::tools::registry::ToolRegistry;
-use vtcode_core::ui::tui::{EditingMode, InlineHandle};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
+use vtcode_tui::{EditingMode, InlineHandle};
 
 pub(crate) fn render_plan_mode_next_step_hint(renderer: &mut AnsiRenderer) -> Result<()> {
     renderer.line(

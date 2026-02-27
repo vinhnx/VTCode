@@ -7,8 +7,8 @@ use tokio::sync::Notify;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig;
 use vtcode_core::llm::provider as uni;
-use vtcode_core::ui::tui::InlineHandle;
 use vtcode_core::utils::ansi::AnsiRenderer;
+use vtcode_tui::InlineHandle;
 
 use crate::agent::runloop::ResumeSession;
 use crate::agent::runloop::model_picker::ModelPickerState;
@@ -24,7 +24,7 @@ use crate::hooks::lifecycle::SessionEndReason;
 #[allow(clippy::too_many_arguments)]
 pub(crate) struct InteractionLoopContext<'a> {
     pub renderer: &'a mut AnsiRenderer,
-    pub session: &'a mut vtcode_core::ui::tui::InlineSession,
+    pub session: &'a mut vtcode_tui::InlineSession,
     pub handle: &'a InlineHandle,
     pub ctrl_c_state: &'a Arc<CtrlCState>,
     pub ctrl_c_notify: &'a Arc<Notify>,

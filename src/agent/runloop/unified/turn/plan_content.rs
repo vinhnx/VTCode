@@ -1,5 +1,5 @@
 use serde_json::Value;
-use vtcode_core::ui::tui::{PlanContent, PlanPhase, PlanStep};
+use vtcode_tui::{PlanContent, PlanPhase, PlanStep};
 
 /// Parses a plan content structure from a JSON value.
 pub(crate) fn parse_plan_content_from_json(json: &Value) -> PlanContent {

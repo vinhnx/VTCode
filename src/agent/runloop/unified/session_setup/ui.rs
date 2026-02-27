@@ -16,13 +16,13 @@ use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::ui::theme;
-use vtcode_core::ui::tui::{
-    InlineEvent, InlineEventCallback, spawn_session_with_prompts, theme_from_styles,
-};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::formatting::indent_block;
 use vtcode_core::utils::session_archive::{SessionArchive, SessionArchiveMetadata};
 use vtcode_core::utils::transcript;
+use vtcode_tui::{
+    InlineEvent, InlineEventCallback, SessionOptions, spawn_session_with_options, theme_from_styles,
+};
 
 pub(crate) async fn initialize_session_ui(
     config: &CoreAgentConfig,
@@ -89,17 +89,19 @@ pub(crate) async fn initialize_session_ui(
         .tool_registry
         .set_active_pty_sessions(pty_counter.clone());
 
-    let mut session = spawn_session_with_prompts(
+    let mut session = spawn_session_with_options(
         theme_spec.clone(),
-        default_placeholder.clone(),
-        config.ui_surface,
-        inline_rows,
-        Some(interrupt_callback),
-        Some(pty_counter.clone()),
-        vt_cfg
-            .map(|cfg| cfg.ui.keyboard_protocol.clone())
-            .unwrap_or_default(),
-        Some(config.workspace.clone()),
+        SessionOptions {
+            placeholder: default_placeholder.clone(),
+            surface_preference: config.ui_surface.into(),
+            inline_rows,
+            event_callback: Some(interrupt_callback),
+            active_pty_sessions: Some(pty_counter.clone()),
+            keyboard_protocol: vt_cfg
+                .map(|cfg| cfg.ui.keyboard_protocol.clone().into())
+                .unwrap_or_default(),
+            workspace_root: Some(config.workspace.clone()),
+        },
     )
     .context("failed to launch inline session")?;
     if skip_confirmations {

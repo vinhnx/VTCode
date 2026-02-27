@@ -3,8 +3,8 @@ use anyhow::Result;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::llm::provider::{self as uni};
-use vtcode_core::ui::tui::{InlineEvent, InlineHandle};
 use vtcode_core::utils::ansi::AnsiRenderer;
+use vtcode_tui::{InlineEvent, InlineHandle};
 
 use crate::agent::runloop::model_picker::ModelPickerState;
 use crate::agent::runloop::unified::palettes::ActivePalette;
@@ -135,7 +135,7 @@ impl<'a> InlineEventContext<'a> {
                 crate::agent::runloop::unified::inline_events::TeamSwitchDirection::Next,
             ),
             InlineEvent::PlanConfirmation(result) => {
-                use vtcode_core::ui::tui::PlanConfirmationResult;
+                use vtcode_tui::PlanConfirmationResult;
                 // Handle plan confirmation result (Claude Code style HITL)
                 match result {
                     PlanConfirmationResult::Execute => InlineLoopAction::PlanApproved {

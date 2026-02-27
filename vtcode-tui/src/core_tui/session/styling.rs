@@ -1,14 +1,29 @@
-use anstyle::{AnsiColor, Color as AnsiColorEnum};
+use anstyle::{AnsiColor, Color as AnsiColorEnum, RgbColor};
 use ratatui::prelude::*;
 
 use crate::config::constants::ui;
-use crate::ui::theme::mix;
 use crate::ui::tui::{
     style::{ratatui_color_from_ansi, ratatui_style_from_inline},
     types::{InlineMessageKind, InlineTextStyle, InlineTheme},
 };
 
 use super::message::MessageLine;
+
+fn mix(color: RgbColor, target: RgbColor, ratio: f64) -> RgbColor {
+    let ratio = ratio.clamp(ui::THEME_MIX_RATIO_MIN, ui::THEME_MIX_RATIO_MAX);
+    let blend = |c: u8, t: u8| -> u8 {
+        let c = c as f64;
+        let t = t as f64;
+        ((c + (t - c) * ratio).round()).clamp(ui::THEME_BLEND_CLAMP_MIN, ui::THEME_BLEND_CLAMP_MAX)
+            as u8
+    };
+
+    RgbColor(
+        blend(color.0, target.0),
+        blend(color.1, target.1),
+        blend(color.2, target.2),
+    )
+}
 
 pub fn normalize_tool_name(tool_name: &str) -> &'static str {
     match tool_name.to_lowercase().as_str() {

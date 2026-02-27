@@ -4,11 +4,11 @@ use anyhow::Result;
 use chrono::Local;
 
 use vtcode_core::ui::theme;
-use vtcode_core::ui::tui::{
-    InlineHandle, InlineListItem, InlineListSelection, convert_style, theme_from_styles,
-};
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::session_archive::SessionListing;
+use vtcode_tui::{
+    InlineHandle, InlineListItem, InlineListSelection, convert_style, theme_from_styles,
+};
 
 use crate::agent::runloop::slash_commands::ThemePaletteMode;
 

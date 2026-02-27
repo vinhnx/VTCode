@@ -6084,6 +6084,7 @@ dependencies = [
  "vtcode-acp-client",
  "vtcode-config",
  "vtcode-core",
+ "vtcode-tui",
  "walkdir",
  "webbrowser",
  "windows-sys 0.61.2",
@@ -6389,6 +6390,40 @@ dependencies = [
  "tokio",
  "vtcode-acp-client",
  "vtcode-commons",
+ "vtcode-core",
+]
+
+[[package]]
+name = "vtcode-tui"
+version = "0.83.0"
+dependencies = [
+ "anstyle",
+ "anyhow",
+ "base64",
+ "better-panic",
+ "chrono",
+ "crossterm 0.29.0",
+ "futures",
+ "humantime",
+ "line-clipping",
+ "nucleo-matcher",
+ "once_cell",
+ "ratatui 0.30.0",
+ "regex",
+ "serde",
+ "signal-hook 0.4.3",
+ "syntect",
+ "terminal_size",
+ "tokio",
+ "tokio-util",
+ "toml",
+ "tracing",
+ "tracing-subscriber",
+ "tui-popup",
+ "tui-shimmer",
+ "unicode-segmentation",
+ "unicode-width 0.2.0",
+ "vtcode-config",
  "vtcode-core",
 ]
 

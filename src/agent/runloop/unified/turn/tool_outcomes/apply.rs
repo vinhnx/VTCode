@@ -128,8 +128,8 @@ mod tests {
     use std::collections::BTreeSet;
     use std::sync::Arc;
     use tokio::sync::mpsc::{UnboundedReceiver, unbounded_channel};
-    use vtcode_core::ui::tui::{InlineCommand, InlineHandle};
     use vtcode_core::utils::ansi::AnsiRenderer;
+    use vtcode_tui::{InlineCommand, InlineHandle};
 
     fn renderer_with_channel() -> (InlineHandle, AnsiRenderer, UnboundedReceiver<InlineCommand>) {
         let (tx, rx) = unbounded_channel();

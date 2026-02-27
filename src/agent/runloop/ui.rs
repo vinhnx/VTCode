@@ -4,8 +4,8 @@ use vtcode_core::config::WorkspaceTrustLevel;
 use vtcode_core::config::constants::ui;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::tool_policy::{ToolPolicy, ToolPolicyManager};
-use vtcode_core::ui::tui::InlineHeaderContext;
 use vtcode_core::utils::ansi::AnsiRenderer;
+use vtcode_tui::InlineHeaderContext;
 
 use tracing::warn;
 
@@ -137,7 +137,7 @@ pub(crate) async fn build_inline_header_context(
     // Check if we're running in the home directory and add a warning if so
     let mut highlights = session_bootstrap.header_highlights.clone();
     if is_home_directory(&config.workspace) {
-        highlights.push(vtcode_core::ui::tui::InlineHeaderHighlight {
+        highlights.push(vtcode_tui::InlineHeaderHighlight {
             title: "Warning".to_string(),
             lines: vec![
                 "You are running VT Code in your home directory. It is recommended to run in a project-specific directory for better organization and safety."
@@ -290,7 +290,7 @@ pub(crate) async fn build_inline_header_context(
         tools: tools_value,
         mcp: mcp_value,
         highlights, // Use the modified highlights that may include the home directory warning
-        editing_mode: vtcode_core::ui::tui::EditingMode::default(),
+        editing_mode: vtcode_tui::EditingMode::default(),
         autonomous_mode: false,
         reasoning_stage: None,
     })

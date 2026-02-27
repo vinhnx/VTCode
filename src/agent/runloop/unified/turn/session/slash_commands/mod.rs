@@ -11,8 +11,8 @@ use vtcode_core::llm::provider as uni;
 use vtcode_core::tools::ToolRegistry;
 
 // use vtcode_core::ui::theme;
-use vtcode_core::ui::tui::{InlineHandle, InlineSession};
 use vtcode_core::utils::ansi::AnsiRenderer;
+use vtcode_tui::{InlineHandle, InlineSession};
 // use vtcode_core::utils::session_archive;
 // use vtcode_core::utils::transcript;
 

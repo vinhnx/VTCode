@@ -17,9 +17,9 @@ use vtcode_core::core::trajectory::TrajectoryLogger;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::tools::ApprovalRecorder;
 use vtcode_core::tools::{SearchMetrics, ToolRegistry, ToolResultCache};
-use vtcode_core::ui::tui::{InlineHandle, InlineSession};
 use vtcode_core::utils::ansi::AnsiRenderer;
 use vtcode_core::utils::session_archive::SessionArchive;
+use vtcode_tui::{InlineHandle, InlineSession};
 
 pub(crate) struct SessionState {
     pub session_bootstrap: SessionBootstrap,

@@ -294,7 +294,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                     auto_accept,
                     clear_context,
                 } => {
-                    handle.set_editing_mode(vtcode_core::ui::tui::EditingMode::Edit);
+                    handle.set_editing_mode(vtcode_tui::EditingMode::Edit);
                     handle.set_skip_confirmations(auto_accept);
                     if auto_accept {
                         renderer.line(
@@ -544,7 +544,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                 vtcode_core::utils::transcript::clear();
                 renderer.clear_screen();
                 renderer.line(MessageStyle::Info, "Cleared conversation history.")?;
-                handle.set_editing_mode(vtcode_core::ui::tui::EditingMode::Edit);
+                handle.set_editing_mode(vtcode_tui::EditingMode::Edit);
                 handle.set_skip_confirmations(true);
             }
             last_activity_time = Some(Instant::now());

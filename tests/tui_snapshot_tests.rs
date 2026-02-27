@@ -7,7 +7,7 @@
 //! To update snapshots, run: `cargo insta review`
 
 use insta::assert_snapshot;
-use vtcode_core::ui::tui::{
+use vtcode_tui::{
     EditingMode, InlineHeaderContext, InlineMessageKind, InlineSegment, InlineTextStyle,
 };
 

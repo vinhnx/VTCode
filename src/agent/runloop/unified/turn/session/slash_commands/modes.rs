@@ -1,7 +1,7 @@
 use anyhow::Result;
 use vtcode_core::config::types::EditingMode as ConfigEditingMode;
-use vtcode_core::ui::tui::EditingMode;
 use vtcode_core::utils::ansi::MessageStyle;
+use vtcode_tui::EditingMode;
 
 use super::{SlashCommandContext, SlashCommandControl};
 

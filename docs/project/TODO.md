@@ -14,6 +14,10 @@ extract tui modules to separate files for better organization and maintainabilit
 
 also consider open sourcing the tui modules as a standalone library for other projects to use, which would require further refactoring and documentation to ensure it is reusable and adaptable to different contexts.
 
+Status: completed (module extraction + standalone `vtcode-tui` options/host adapter API + docs/examples + app/test callsite migration to `SessionOptions` launch path).
+
+check docs/guides/tui-library.md
+
 ---
 
 ---
@@ -34,6 +38,10 @@ Accessibility: Screen reader mode, configurable reasoning visibility, and respon
 
 ---
 
+/Users/vinhnguyenxuan/Documents/vtcode-resources/color-commands.png
+
+---
+
 add syntax highlight for bash command in tui, to improve readability and user experience when executing shell commands through the terminal interface. This could involve integrating a syntax highlighting library that supports bash syntax, allowing users to easily distinguish between different components of the command, such as keywords, variables, and strings, enhancing clarity and reducing the likelihood of errors when composing or reviewing commands in the terminal UI.
 
 The TUI now syntax-highlights fenced code blocks and diffs,
@@ -45,12 +53,6 @@ https://github.com/openai/codex/pull/11447
 THIS
 feat(tui): add theme-aware diff backgrounds with capability-graded palettes#12581
 https://github.com/openai/codex/pull/12581
-
----
-
-increase pty dimmed background contrast to improve visibility of the terminal output, especially in low-light environments or for users with visual impairments. This enhancement would involve adjusting the color scheme to provide a clearer distinction between the background and the text, making it easier for users to read and interact with the terminal interface effectively. but not too bright to cause eye strain.
-
----
 
 ---
 

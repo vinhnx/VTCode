@@ -27,8 +27,8 @@ use vtcode_core::llm::provider as uni;
 use vtcode_core::notifications::{CompletionStatus, NotificationEvent, send_global_notification};
 use vtcode_core::tools::ToolResultCache;
 use vtcode_core::tools::{ApprovalRecorder, ToolRegistry};
-use vtcode_core::ui::tui::{InlineHandle, InlineSession};
 use vtcode_core::utils::ansi::AnsiRenderer;
+use vtcode_tui::{InlineHandle, InlineSession};
 
 // Using `tool_output_handler::handle_pipeline_output_from_turn_ctx` adapter where needed
 

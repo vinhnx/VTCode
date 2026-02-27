@@ -7,9 +7,9 @@
 
 use insta::assert_snapshot;
 use ratatui::{Terminal, backend::TestBackend};
-use vtcode_core::ui::tui::{
+use vtcode_tui::{
     InlineHeaderContext, InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme,
-    spawn_session,
+    SessionOptions, spawn_session_with_options,
 };
 
 /// Test visual rendering of a simple user-agent exchange
@@ -34,14 +34,13 @@ async fn test_visual_user_agent_exchange() {
     );
 
     // Create a session to populate with content
-    let session = spawn_session(
+    let session = spawn_session_with_options(
         InlineTheme::default(),
-        Some("Ask me anything...".to_string()),
-        Default::default(),
-        12, // inline_rows
-        None,
-        None,
-        None, // workspace_root
+        SessionOptions {
+            placeholder: Some("Ask me anything...".to_string()),
+            inline_rows: 12,
+            ..SessionOptions::default()
+        },
     );
 
     // Add content that would render visually
@@ -84,14 +83,13 @@ async fn test_visual_code_rendering() {
     let backend = TestBackend::new(100, 25);
     let mut terminal = Terminal::new(backend).unwrap();
 
-    let session = spawn_session(
+    let session = spawn_session_with_options(
         InlineTheme::default(),
-        Some("Enter code to analyze...".to_string()),
-        Default::default(),
-        15, // inline_rows
-        None,
-        None,
-        None, // workspace_root
+        SessionOptions {
+            placeholder: Some("Enter code to analyze...".to_string()),
+            inline_rows: 15,
+            ..SessionOptions::default()
+        },
     );
 
     if let Ok(sess) = session {
@@ -130,14 +128,13 @@ async fn test_visual_tool_output() {
     let backend = TestBackend::new(80, 20);
     let mut terminal = Terminal::new(backend).unwrap();
 
-    let session = spawn_session(
+    let session = spawn_session_with_options(
         InlineTheme::default(),
-        Some("Enter command...".to_string()),
-        Default::default(),
-        10, // inline_rows
-        None,
-        None,
-        None, // workspace_root
+        SessionOptions {
+            placeholder: Some("Enter command...".to_string()),
+            inline_rows: 10,
+            ..SessionOptions::default()
+        },
     );
 
     if let Ok(sess) = session {
@@ -192,14 +189,13 @@ async fn test_visual_error_handling() {
     let backend = TestBackend::new(80, 20);
     let mut terminal = Terminal::new(backend).unwrap();
 
-    let session = spawn_session(
+    let session = spawn_session_with_options(
         InlineTheme::default(),
-        Some("Enter command (errors possible)...".to_string()),
-        Default::default(),
-        12, // inline_rows
-        None,
-        None,
-        None, // workspace_root
+        SessionOptions {
+            placeholder: Some("Enter command (errors possible)...".to_string()),
+            inline_rows: 12,
+            ..SessionOptions::default()
+        },
     );
 
     if let Ok(sess) = session {
@@ -290,14 +286,13 @@ async fn test_visual_header_variations() {
         let mut terminal = Terminal::new(backend).unwrap();
 
         // Create session with specific header context
-        let session = spawn_session(
+        let session = spawn_session_with_options(
             InlineTheme::default(),
-            Some("Working...".to_string()),
-            Default::default(),
-            8,
-            None,
-            None,
-            None, // workspace_root
+            SessionOptions {
+                placeholder: Some("Working...".to_string()),
+                inline_rows: 8,
+                ..SessionOptions::default()
+            },
         );
 
         if let Ok(sess) = session {

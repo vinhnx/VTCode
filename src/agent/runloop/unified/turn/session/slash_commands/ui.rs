@@ -1,8 +1,8 @@
 use anyhow::Result;
 use vtcode_core::ui::theme;
-use vtcode_core::ui::tui::theme_from_styles;
 use vtcode_core::utils::ansi::MessageStyle;
 use vtcode_core::utils::session_archive;
+use vtcode_tui::theme_from_styles;
 
 use crate::agent::runloop::model_picker::{ModelPickerStart, ModelPickerState};
 use crate::agent::runloop::unified::display::persist_theme_preference;

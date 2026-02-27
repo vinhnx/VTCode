@@ -235,6 +235,11 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: Overview, Security Architecture, Threat Model, Configuration, Best Practices
   - **User Questions**: "What can you tell me about Security Guide?", "How does Overview work?", "How does Security Architecture work?"
 
+- **File**: `docs/guides/tui-library.md`
+  - **Content**: TUI Library Guide
+  - **Topics**: What It Provides, Current Architecture, Usage, Host Traits
+  - **User Questions**: "What can you tell me about TUI Library Guide?", "How does What It Provides work?", "How does Current Architecture work?"
+
 - **File**: `docs/guides/COLOR_GUIDELINES.md`
   - **Content**: Terminal Color Guidelines
   - **Topics**: Standards Implemented, Configuration Reference, Light/Dark Mode Detection, Bold-is-Bright Compatibility, Available Themes

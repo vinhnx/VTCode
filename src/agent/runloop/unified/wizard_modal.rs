@@ -5,7 +5,7 @@ use anyhow::Result;
 use tokio::sync::Notify;
 use tokio::task;
 
-use vtcode_core::ui::tui::{InlineEvent, InlineHandle, InlineListSelection, InlineSession};
+use vtcode_tui::{InlineEvent, InlineHandle, InlineListSelection, InlineSession};
 
 use super::state::{CtrlCSignal, CtrlCState};
 

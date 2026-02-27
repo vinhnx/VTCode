@@ -8,9 +8,9 @@
 use anstyle::Effects;
 use insta::assert_snapshot;
 use ratatui::{Terminal, backend::TestBackend};
-use vtcode_core::ui::tui::{
+use vtcode_tui::{
     InlineHeaderContext, InlineMessageKind, InlineSegment, InlineTextStyle, InlineTheme,
-    spawn_session,
+    SessionOptions, spawn_session_with_options,
 };
 
 /// Test TUI with actual conversation history
@@ -38,14 +38,13 @@ fn test_tui_with_conversation_history() {
 #[ignore] // Requires interactive terminal (stdin must be a TTY)
 async fn test_real_ui_scenario_with_commands() {
     // Create a session with initial parameters
-    let session = spawn_session(
+    let session = spawn_session_with_options(
         InlineTheme::default(),
-        Some("Type your message here...".to_string()),
-        Default::default(),
-        12, // inline_rows
-        None,
-        None,
-        None, // workspace_root
+        SessionOptions {
+            placeholder: Some("Type your message here...".to_string()),
+            inline_rows: 12,
+            ..SessionOptions::default()
+        },
     );
 
     // Verify session was created

@@ -59,6 +59,7 @@ license = "MIT"
 members = [
     "vtcode-acp-client",
     "vtcode-core",
+    "vtcode-tui",
     "vtcode-commons",
     "vtcode-config",
     "vtcode-llm",
@@ -123,6 +124,7 @@ unwrap_used = "deny"
 vtcode-acp-client = { path = "vtcode-acp-client", version = "0.83.0" }
 vtcode-config = { path = "vtcode-config", version = "0.83.0" }
 vtcode-core = { path = "vtcode-core", version = "0.83.0", default-features = false }
+vtcode-tui = { path = "vtcode-tui", version = "0.83.0" }
 anyhow = { workspace = true }
 clap = { version = "4.5", features = ["derive"] }
 serde_json = { workspace = true }

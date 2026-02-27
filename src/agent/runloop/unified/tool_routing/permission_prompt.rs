@@ -7,9 +7,9 @@ use tokio::sync::Notify;
 use tokio::task;
 use vtcode_core::core::interfaces::ui::UiSession;
 use vtcode_core::notifications::{NotificationEvent, send_global_notification};
-use vtcode_core::ui::tui::InlineEvent;
-use vtcode_core::ui::tui::InlineHandle;
 use vtcode_core::utils::ansi::AnsiRenderer;
+use vtcode_tui::InlineEvent;
+use vtcode_tui::InlineHandle;
 
 use crate::agent::runloop::unified::state::{CtrlCSignal, CtrlCState};
 use crate::agent::runloop::unified::ui_interaction::PlaceholderGuard;
@@ -85,7 +85,7 @@ pub(super) async fn prompt_tool_permission<S: UiSession + ?Sized>(
     approval_recorder: Option<&vtcode_core::tools::ApprovalRecorder>,
     hitl_notification_bell: bool,
 ) -> Result<HitlDecision> {
-    use vtcode_core::ui::tui::{InlineListItem, InlineListSelection};
+    use vtcode_tui::{InlineListItem, InlineListSelection};
 
     let mut description_lines = vec![
         format!("Tool: {}", tool_name),

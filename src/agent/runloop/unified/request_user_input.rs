@@ -6,7 +6,7 @@ use std::sync::Arc;
 use tokio::sync::Notify;
 use tokio::task;
 
-use vtcode_core::ui::tui::{
+use vtcode_tui::{
     InlineHandle, InlineListItem, InlineListSelection, InlineMessageKind, InlineSegment,
     InlineSession, InlineTextStyle, WizardModalMode, WizardStep,
 };

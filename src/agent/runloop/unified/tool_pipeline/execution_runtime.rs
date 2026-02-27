@@ -28,7 +28,7 @@ pub(super) async fn execute_with_cache_and_streaming(
     args_val: &Value,
     ctrl_c_state: &Arc<CtrlCState>,
     ctrl_c_notify: &Arc<Notify>,
-    handle: &vtcode_core::ui::tui::InlineHandle,
+    handle: &vtcode_tui::InlineHandle,
     vt_cfg: Option<&VTCodeConfig>,
     max_tool_retries: usize,
 ) -> ToolExecutionStatus {

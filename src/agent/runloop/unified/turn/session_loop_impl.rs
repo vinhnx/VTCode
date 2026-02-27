@@ -115,7 +115,7 @@ impl Drop for TerminalCleanupGuard {
     fn drop(&mut self) {
         // Minimal terminal cleanup as last resort using centralized logic
         // The TUI's run_inline_tui should handle full cleanup, this is just a safety net
-        let _ = vtcode_core::ui::tui::panic_hook::restore_tui();
+        let _ = vtcode_tui::panic_hook::restore_tui();
 
         // Ensure stdout is also flushed
         let mut stdout = std::io::stdout();
