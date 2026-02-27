@@ -424,19 +424,33 @@ pub(crate) async fn handle_tool_execution_result<'a>(
 }
 
 fn maybe_inline_spooled(_tool_name: &str, output: &serde_json::Value) -> String {
-    serialize_output(output)
-}
+    let mut sanitized = output.clone();
+    if let Some(obj) = sanitized.as_object_mut() {
+        if obj
+            .get("spooled_to_file")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false)
+        {
+            obj.remove("spool_hint");
+            obj.remove("spooled_bytes");
+        }
 
-fn is_pty_like_tool(tool_name: &str) -> bool {
-    matches!(
-        tool_name,
-        tool_names::RUN_PTY_CMD
-            | tool_names::READ_PTY_SESSION
-            | tool_names::SEND_PTY_INPUT
-            | tool_names::UNIFIED_EXEC
-            | tool_names::SHELL
-            | tool_names::EXECUTE_CODE
-    )
+        if matches!(
+            (obj.get("id"), obj.get("session_id")),
+            (Some(id), Some(session_id)) if id == session_id
+        ) {
+            obj.remove("id");
+        }
+
+        if obj
+            .get("working_directory")
+            .is_some_and(serde_json::Value::is_null)
+        {
+            obj.remove("working_directory");
+        }
+    }
+
+    serialize_output(&sanitized)
 }
 
 async fn handle_success<'a>(
@@ -459,21 +473,6 @@ async fn handle_success<'a>(
 
     let content_for_model = maybe_inline_spooled(tool_name, output);
     push_tool_response(t_ctx.ctx.working_history, tool_call_id, content_for_model);
-
-    if let Some(spool_path) = output.get("spool_path").and_then(|v| v.as_str()) {
-        let nudge = if is_pty_like_tool(tool_name) {
-            format!(
-                "Output was large; only a tail preview is kept inline. Full command output is in \"{}\". Use read_file path=\"{}\" (or read_pty_session for live session polling).",
-                spool_path, spool_path
-            )
-        } else {
-            format!(
-                "Output was large and condensed. Full content saved to \"{}\". Use read_file or grep_file if you need more.",
-                spool_path
-            )
-        };
-        t_ctx.ctx.working_history.push(uni::Message::system(nudge));
-    }
 
     // Handle UI output and file modifications
     let vt_cfg = t_ctx.ctx.vt_cfg;
@@ -885,6 +884,31 @@ mod tests {
                 .and_then(|v| v.as_str())
                 .is_some()
         );
+    }
+
+    #[test]
+    fn maybe_inline_spooled_removes_redundant_fields() {
+        let serialized = maybe_inline_spooled(
+            tool_names::UNIFIED_EXEC,
+            &serde_json::json!({
+                "output": "tail",
+                "spooled_to_file": true,
+                "spool_path": ".vtcode/context/tool_outputs/run-1.txt",
+                "spool_hint": "verbose hint",
+                "spooled_bytes": 12345,
+                "id": "run-1",
+                "session_id": "run-1",
+                "working_directory": null
+            }),
+        );
+
+        let parsed: serde_json::Value =
+            serde_json::from_str(&serialized).expect("serialized JSON payload");
+        assert!(parsed.get("spool_hint").is_none());
+        assert!(parsed.get("spooled_bytes").is_none());
+        assert!(parsed.get("id").is_none());
+        assert!(parsed.get("working_directory").is_none());
+        assert_eq!(parsed["session_id"], "run-1");
     }
 
     #[test]

@@ -520,6 +520,13 @@ pub(crate) fn describe_tool_action(tool_name: &str, args: &Value) -> (String, Ha
                     format!("{}Read PTY session", if is_mcp_tool { "MCP " } else { "" }),
                     HashSet::new(),
                 ),
+                "inspect" => (
+                    format!(
+                        "{}Inspect PTY output",
+                        if is_mcp_tool { "MCP " } else { "" }
+                    ),
+                    HashSet::new(),
+                ),
                 "list" => (
                     format!("{}List PTY sessions", if is_mcp_tool { "MCP " } else { "" }),
                     HashSet::new(),

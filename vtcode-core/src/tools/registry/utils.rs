@@ -53,10 +53,15 @@ fn is_command_like_output(obj: &serde_json::Map<String, Value>) -> bool {
         || obj.contains_key("working_directory")
         || obj.contains_key("session_id")
         || obj.contains_key("process_id")
+        || obj.contains_key("spool_path")
         || obj.contains_key("is_exited")
         || obj.contains_key("exit_code")
         || obj.contains_key("rows")
         || obj.contains_key("cols")
+        || obj
+            .get("content_type")
+            .and_then(Value::as_str)
+            .is_some_and(|value| value == "exec_inspect")
 }
 
 pub(super) fn lines_match(content_lines: &[&str], expected_lines: &[&str]) -> bool {
@@ -120,5 +125,17 @@ mod tests {
 
         assert!(normalized.get("stdout").is_none());
         assert_eq!(normalized["output"], "hello\n");
+    }
+
+    #[test]
+    fn inspect_output_does_not_backfill_stdout() {
+        let normalized = normalize_tool_output(json!({
+            "output": "1: src/main.rs",
+            "spool_path": ".vtcode/context/tool_outputs/run-1.txt",
+            "content_type": "exec_inspect"
+        }));
+
+        assert!(normalized.get("stdout").is_none());
+        assert_eq!(normalized["output"], "1: src/main.rs");
     }
 }

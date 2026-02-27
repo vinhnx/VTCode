@@ -144,7 +144,7 @@ impl DiffColorPalette {
 
 use ratatui::style::{Color as RatatuiColor, Modifier, Style as RatatuiStyle};
 
-use super::ansi_capabilities::{ColorDepth, ColorScheme, detect_color_scheme, CAPABILITIES};
+use super::ansi_capabilities::{CAPABILITIES, ColorDepth, ColorScheme, detect_color_scheme};
 
 /// Terminal background theme for diff rendering.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -188,25 +188,25 @@ impl DiffColorLevel {
 
 // ── Truecolor palette ──────────────────────────────────────────────────────
 
-const DARK_TC_ADD_LINE_BG: (u8, u8, u8) = (33, 58, 43);      // #213A2B
-const DARK_TC_DEL_LINE_BG: (u8, u8, u8) = (74, 34, 29);      // #4A221D
+const DARK_TC_ADD_LINE_BG: (u8, u8, u8) = (33, 58, 43); // #213A2B
+const DARK_TC_DEL_LINE_BG: (u8, u8, u8) = (74, 34, 29); // #4A221D
 
-const LIGHT_TC_ADD_LINE_BG: (u8, u8, u8) = (218, 251, 225);  // #DAFBE1 (GitHub-style)
-const LIGHT_TC_DEL_LINE_BG: (u8, u8, u8) = (255, 235, 233);  // #FFEBE9 (GitHub-style)
-const LIGHT_TC_ADD_NUM_BG: (u8, u8, u8) = (172, 238, 187);   // #ACEEBB (gutter, saturated)
-const LIGHT_TC_DEL_NUM_BG: (u8, u8, u8) = (255, 206, 203);   // #FFCECB (gutter, saturated)
-const LIGHT_TC_GUTTER_FG: (u8, u8, u8) = (31, 35, 40);       // #1F2328 (near-black)
+const LIGHT_TC_ADD_LINE_BG: (u8, u8, u8) = (218, 251, 225); // #DAFBE1 (GitHub-style)
+const LIGHT_TC_DEL_LINE_BG: (u8, u8, u8) = (255, 235, 233); // #FFEBE9 (GitHub-style)
+const LIGHT_TC_ADD_NUM_BG: (u8, u8, u8) = (172, 238, 187); // #ACEEBB (gutter, saturated)
+const LIGHT_TC_DEL_NUM_BG: (u8, u8, u8) = (255, 206, 203); // #FFCECB (gutter, saturated)
+const LIGHT_TC_GUTTER_FG: (u8, u8, u8) = (31, 35, 40); // #1F2328 (near-black)
 
 // ── 256-color palette ──────────────────────────────────────────────────────
 
-const DARK_256_ADD_LINE_BG: u8 = 22;   // DarkGreen
-const DARK_256_DEL_LINE_BG: u8 = 52;   // DarkRed
+const DARK_256_ADD_LINE_BG: u8 = 22; // DarkGreen
+const DARK_256_DEL_LINE_BG: u8 = 52; // DarkRed
 
 const LIGHT_256_ADD_LINE_BG: u8 = 194; // Honeydew2
 const LIGHT_256_DEL_LINE_BG: u8 = 224; // MistyRose1
-const LIGHT_256_ADD_NUM_BG: u8 = 157;  // DarkSeaGreen2
-const LIGHT_256_DEL_NUM_BG: u8 = 217;  // LightPink1
-const LIGHT_256_GUTTER_FG: u8 = 236;   // Grey19
+const LIGHT_256_ADD_NUM_BG: u8 = 157; // DarkSeaGreen2
+const LIGHT_256_DEL_NUM_BG: u8 = 217; // LightPink1
+const LIGHT_256_GUTTER_FG: u8 = 236; // Grey19
 
 // ── Background color selectors ─────────────────────────────────────────────
 
@@ -393,28 +393,42 @@ mod tests {
 
     #[test]
     fn context_line_bg_is_default() {
-        let style = style_line_bg(DiffLineType::Context, DiffTheme::Dark, DiffColorLevel::TrueColor);
+        let style = style_line_bg(
+            DiffLineType::Context,
+            DiffTheme::Dark,
+            DiffColorLevel::TrueColor,
+        );
         assert_eq!(style, RatatuiStyle::default());
     }
 
     #[test]
     fn dark_gutter_is_dim() {
-        let style = style_gutter(DiffLineType::Context, DiffTheme::Dark, DiffColorLevel::TrueColor);
+        let style = style_gutter(
+            DiffLineType::Context,
+            DiffTheme::Dark,
+            DiffColorLevel::TrueColor,
+        );
         assert!(style.add_modifier.contains(Modifier::DIM));
     }
 
     #[test]
     fn light_gutter_has_opaque_bg() {
-        let style = style_gutter(DiffLineType::Insert, DiffTheme::Light, DiffColorLevel::TrueColor);
+        let style = style_gutter(
+            DiffLineType::Insert,
+            DiffTheme::Light,
+            DiffColorLevel::TrueColor,
+        );
         assert!(style.bg.is_some());
         assert!(style.fg.is_some());
     }
 
     #[test]
     fn dark_ansi16_content_forces_black_fg() {
-        let style = style_content(DiffLineType::Insert, DiffTheme::Dark, DiffColorLevel::Ansi16);
+        let style = style_content(
+            DiffLineType::Insert,
+            DiffTheme::Dark,
+            DiffColorLevel::Ansi16,
+        );
         assert_eq!(style.fg, Some(RatatuiColor::Black));
     }
 }
-
-

@@ -10,6 +10,7 @@ use crate::tools::traits::Tool;
 use crate::tools::types::VTCodePtySession;
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64;
+use regex::Regex;
 
 use anyhow::{Context, Result, anyhow};
 use chrono;
@@ -19,6 +20,7 @@ use std::{
     path::{Path, PathBuf},
     time::{Duration, Instant, SystemTime},
 };
+use tokio::fs;
 
 use super::ToolRegistry;
 
@@ -63,7 +65,8 @@ fn missing_unified_exec_action_error(args: &Value) -> anyhow::Error {
     anyhow!(
         "Missing action in unified_exec. Provide `action` or inferable fields: \
          `command|cmd|raw_command` (run), `input|chars|text` with `session_id` (write), \
-         `session_id` (poll), or `action:\"list\"`/`action:\"close\"`. \
+         `session_id` (poll), `spool_path|query|head_lines|tail_lines|max_matches|literal` (inspect), \
+         or `action:\"list\"`/`action:\"close\"`. \
          Received keys: {}",
         summarized_arg_keys(args)
     )
@@ -185,6 +188,110 @@ fn build_read_pty_fallback_args(args: &Value, error_message: &str) -> Option<Val
     Some(Value::Object(payload))
 }
 
+const DEFAULT_INSPECT_HEAD_LINES: usize = 30;
+const DEFAULT_INSPECT_TAIL_LINES: usize = 30;
+const DEFAULT_INSPECT_MAX_MATCHES: usize = 200;
+
+fn clamp_inspect_lines(value: Option<u64>, default: usize) -> usize {
+    value.map(|v| v as usize).unwrap_or(default).min(5_000)
+}
+
+fn clamp_max_matches(value: Option<u64>) -> usize {
+    value
+        .map(|v| v as usize)
+        .unwrap_or(DEFAULT_INSPECT_MAX_MATCHES)
+        .clamp(1, 10_000)
+}
+
+fn build_head_tail_preview(content: &str, head_lines: usize, tail_lines: usize) -> (String, bool) {
+    let lines: Vec<&str> = content.lines().collect();
+    if lines.is_empty() {
+        return (String::new(), false);
+    }
+
+    let head = head_lines.max(1);
+    let tail = tail_lines.max(1);
+    if lines.len() <= head + tail {
+        return (lines.join("\n"), false);
+    }
+
+    let omitted = lines.len().saturating_sub(head + tail);
+    let mut preview = Vec::with_capacity(head + tail + 1);
+    preview.extend(lines.iter().take(head).copied().map(String::from));
+    preview.push(format!("[... omitted {} lines ...]", omitted));
+    preview.extend(
+        lines
+            .iter()
+            .rev()
+            .take(tail)
+            .rev()
+            .copied()
+            .map(String::from),
+    );
+    (preview.join("\n"), true)
+}
+
+fn filter_lines(
+    content: &str,
+    query: &str,
+    literal: bool,
+    max_matches: usize,
+) -> Result<(String, usize, bool)> {
+    let matcher = if literal {
+        None
+    } else {
+        Some(Regex::new(query).with_context(|| format!("Invalid regex query: {}", query))?)
+    };
+
+    let mut matches = Vec::new();
+    let mut total_matches = 0usize;
+
+    for (idx, line) in content.lines().enumerate() {
+        let is_match = if literal {
+            line.contains(query)
+        } else {
+            matcher
+                .as_ref()
+                .map(|regex| regex.is_match(line))
+                .unwrap_or(false)
+        };
+        if !is_match {
+            continue;
+        }
+
+        total_matches = total_matches.saturating_add(1);
+        if matches.len() < max_matches {
+            matches.push(format!("{}: {}", idx + 1, line));
+        }
+    }
+
+    let truncated = total_matches > max_matches;
+    Ok((matches.join("\n"), total_matches, truncated))
+}
+
+fn resolve_workspace_scoped_path(workspace_root: &Path, raw_path: &str) -> Result<PathBuf> {
+    let path = Path::new(raw_path.trim());
+    if path.as_os_str().is_empty() {
+        return Err(anyhow!("spool_path cannot be empty"));
+    }
+
+    let absolute = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        workspace_root.join(path)
+    };
+    let normalized = crate::utils::path::normalize_path(&absolute);
+    let normalized_workspace = crate::utils::path::normalize_path(workspace_root);
+    if !normalized.starts_with(&normalized_workspace) {
+        return Err(anyhow!(
+            "spool_path must stay within workspace: {}",
+            raw_path
+        ));
+    }
+
+    Ok(normalized)
+}
+
 impl ToolRegistry {
     pub(super) fn unified_exec_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
         Box::pin(async move { self.execute_unified_exec(args).await })
@@ -226,6 +333,7 @@ impl ToolRegistry {
             UnifiedExecAction::Run => self.execute_run_pty_cmd(args).await,
             UnifiedExecAction::Write => self.execute_send_pty_input(args).await,
             UnifiedExecAction::Poll => self.execute_read_pty_session(args).await,
+            UnifiedExecAction::Inspect => self.execute_inspect_pty_output(args).await,
             UnifiedExecAction::List => self.execute_list_pty_sessions().await,
             UnifiedExecAction::Close => self.execute_close_pty_session(args).await,
             UnifiedExecAction::Code => self.execute_code(args).await,
@@ -345,7 +453,7 @@ impl ToolRegistry {
                 tool.execute(args).await
             }
             UnifiedSearchAction::Intelligence => Ok(
-                serde_json::json!({"error": "Code intelligence (tree-sitter) has been removed. Use grep/search tools instead."}),
+                serde_json::json!({"error": "Action 'intelligence' is deprecated. Use action='grep' or action='list'."}),
             ),
             UnifiedSearchAction::Tools => self.execute_search_tools(args).await,
             UnifiedSearchAction::Errors => self.execute_get_errors(args).await,
@@ -837,7 +945,7 @@ impl ToolRegistry {
         }
         if truncated || exit_code.is_none() {
             response["follow_up_prompt"] = json!(format!(
-                "Command output incomplete. Read more with read_pty_session session_id=\"{}\" before rerunning the command.",
+                "More output available. Use read_pty_session session_id=\"{}\".",
                 session_id
             ));
         }
@@ -919,7 +1027,7 @@ impl ToolRegistry {
         }
         if truncated || capture.exit_code.is_none() {
             response["follow_up_prompt"] = json!(format!(
-                "Command output incomplete. Read more with read_pty_session session_id=\"{}\" before rerunning the command.",
+                "More output available. Use read_pty_session session_id=\"{}\".",
                 sid
             ));
         }
@@ -977,6 +1085,104 @@ impl ToolRegistry {
             self.decrement_active_pty_sessions();
         } else {
             response["session_id"] = json!(sid);
+        }
+
+        Ok(response)
+    }
+
+    async fn execute_inspect_pty_output(&self, args: Value) -> Result<Value> {
+        let payload = args
+            .as_object()
+            .ok_or_else(|| anyhow!("inspect requires a JSON object"))?;
+
+        let query = payload
+            .get("query")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty());
+        let literal = payload
+            .get("literal")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let max_matches = clamp_max_matches(payload.get("max_matches").and_then(Value::as_u64));
+        let head_lines = clamp_inspect_lines(
+            payload.get("head_lines").and_then(Value::as_u64),
+            DEFAULT_INSPECT_HEAD_LINES,
+        );
+        let tail_lines = clamp_inspect_lines(
+            payload.get("tail_lines").and_then(Value::as_u64),
+            DEFAULT_INSPECT_TAIL_LINES,
+        );
+
+        let source_session_id = payload
+            .get("session_id")
+            .and_then(Value::as_str)
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty());
+        let source_spool_path = payload
+            .get("spool_path")
+            .and_then(Value::as_str)
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty());
+
+        let content = if let Some(spool_path) = source_spool_path.as_deref() {
+            let resolved =
+                resolve_workspace_scoped_path(self.inventory.workspace_root(), spool_path)?;
+            fs::read_to_string(&resolved).await.with_context(|| {
+                format!("Failed to read inspect spool path: {}", resolved.display())
+            })?
+        } else if let Some(session_id) = source_session_id.as_deref() {
+            if !is_valid_pty_session_id(session_id) {
+                return Err(anyhow!(
+                    "Invalid session_id for inspect: '{}'. Expected an ASCII token (letters, digits, '-', '_').",
+                    session_id
+                ));
+            }
+
+            let mut read_args = serde_json::Map::new();
+            read_args.insert("session_id".to_string(), json!(session_id));
+            if let Some(yield_time_ms) = payload.get("yield_time_ms").cloned() {
+                read_args.insert("yield_time_ms".to_string(), yield_time_ms);
+            } else {
+                read_args.insert("yield_time_ms".to_string(), json!(0));
+            }
+
+            let read_result = self
+                .execute_read_pty_session(Value::Object(read_args))
+                .await
+                .context("Failed to inspect PTY session output")?;
+            read_result
+                .get("output")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_string()
+        } else {
+            return Err(anyhow!(
+                "inspect requires either `session_id` or `spool_path`"
+            ));
+        };
+
+        let (output, matched_count, truncated) = if let Some(query) = query {
+            let (filtered, count, is_truncated) =
+                filter_lines(&content, query, literal, max_matches)?;
+            (filtered, count, is_truncated)
+        } else {
+            let (preview, is_truncated) = build_head_tail_preview(&content, head_lines, tail_lines);
+            (preview, 0, is_truncated)
+        };
+
+        let mut response = json!({
+            "output": output,
+            "matched_count": matched_count,
+            "truncated": truncated,
+            "success": true,
+            "content_type": "exec_inspect"
+        });
+        if let Some(session_id) = source_session_id {
+            response["session_id"] = json!(session_id);
+        }
+        if let Some(spool_path) = source_spool_path {
+            response["spool_path"] = json!(spool_path);
         }
 
         Ok(response)
@@ -1572,8 +1778,9 @@ mod git_diff_tests {
 #[cfg(test)]
 mod unified_action_error_tests {
     use super::{
+        build_head_tail_preview, clamp_inspect_lines, clamp_max_matches,
         extract_run_session_id_from_read_file_error, extract_run_session_id_from_tool_output_path,
-        missing_unified_exec_action_error, missing_unified_search_action_error,
+        filter_lines, missing_unified_exec_action_error, missing_unified_search_action_error,
         patch_source_from_args, summarized_arg_keys,
     };
     use serde_json::json;
@@ -1644,5 +1851,34 @@ mod unified_action_error_tests {
             extract_run_session_id_from_read_file_error("no session"),
             None
         );
+    }
+
+    #[test]
+    fn inspect_helpers_clamp_limits() {
+        assert_eq!(clamp_inspect_lines(Some(0), 30), 0);
+        assert_eq!(clamp_inspect_lines(Some(9_999), 30), 5_000);
+        assert_eq!(clamp_max_matches(None), 200);
+        assert_eq!(clamp_max_matches(Some(0)), 1);
+        assert_eq!(clamp_max_matches(Some(50_000)), 10_000);
+    }
+
+    #[test]
+    fn inspect_helpers_build_head_tail_preview() {
+        let content = "l1\nl2\nl3\nl4\nl5\nl6";
+        let (preview, truncated) = build_head_tail_preview(content, 2, 2);
+        assert!(truncated);
+        assert!(preview.contains("l1"));
+        assert!(preview.contains("l2"));
+        assert!(preview.contains("l5"));
+        assert!(preview.contains("l6"));
+    }
+
+    #[test]
+    fn inspect_helpers_filter_lines_literal() {
+        let (output, matched, truncated) =
+            filter_lines("alpha\nbeta\nalpha2", "alpha", true, 1).expect("filter");
+        assert_eq!(matched, 2);
+        assert!(truncated);
+        assert!(output.contains("1: alpha"));
     }
 }

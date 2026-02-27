@@ -43,11 +43,11 @@ pub enum ToolDocumentationMode {
 
     /// Signatures + smart hints (~1,200 tokens total)
     /// Best for: General usage, balances overhead vs guidance
+    #[default]
     Progressive,
 
     /// Full documentation upfront (~3,000 tokens total)
     /// Best for: Maximum hand-holding, current behavior
-    #[default]
     Full,
 }
 
@@ -138,6 +138,25 @@ pub fn minimal_tool_signatures() -> HashMap<&'static str, ToolSignature> {
         },
     );
 
+    sigs.insert(
+        tools::UNIFIED_EXEC,
+        ToolSignature {
+            name: tools::UNIFIED_EXEC,
+            brief: "Run or inspect command sessions",
+            required_params: vec![],
+            common_params: vec![
+                ("action", "string", "run|write|poll|inspect|list|close|code"),
+                ("command", "string", "Command for run"),
+                (
+                    "session_id",
+                    "string",
+                    "Session for write/poll/inspect/close",
+                ),
+            ],
+            token_estimate: 40,
+        },
+    );
+
     // FILE OPERATIONS
     sigs.insert(
         tools::READ_FILE,
@@ -151,6 +170,37 @@ pub fn minimal_tool_signatures() -> HashMap<&'static str, ToolSignature> {
                 ("max_tokens", "integer", "Token limit"),
             ],
             token_estimate: 40,
+        },
+    );
+
+    sigs.insert(
+        tools::UNIFIED_FILE,
+        ToolSignature {
+            name: tools::UNIFIED_FILE,
+            brief: "Read/write/edit/patch files",
+            required_params: vec![("path", "string", "File path")],
+            common_params: vec![
+                ("action", "string", "read|write|edit|patch|delete|move|copy"),
+                ("content", "string", "Content for write"),
+                ("old_str", "string", "Match text for edit"),
+                ("new_str", "string", "Replacement for edit"),
+            ],
+            token_estimate: 42,
+        },
+    );
+
+    sigs.insert(
+        tools::UNIFIED_SEARCH,
+        ToolSignature {
+            name: tools::UNIFIED_SEARCH,
+            brief: "Search files, tools, agent state, web, skills",
+            required_params: vec![("action", "string", "grep|list|tools|errors|agent|web|skill")],
+            common_params: vec![
+                ("pattern", "string", "Pattern for grep/errors"),
+                ("path", "string", "Target directory"),
+                ("keyword", "string", "Keyword for tools action"),
+            ],
+            token_estimate: 42,
         },
     );
 
@@ -540,10 +590,10 @@ mod tests {
 
     #[test]
     fn test_mode_default() {
-        // Verify default mode is Full (backward compatibility)
+        // Verify default mode is Progressive (token-efficient default)
         assert_eq!(
             ToolDocumentationMode::default(),
-            ToolDocumentationMode::Full
+            ToolDocumentationMode::Progressive
         );
     }
 }

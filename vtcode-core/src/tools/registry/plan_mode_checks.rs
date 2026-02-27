@@ -153,7 +153,7 @@ impl ToolRegistry {
     }
 
     /// Check if a unified tool call represents a read-only action.
-    /// Allows `unified_file` with action "read" and `unified_exec` with actions "poll" or "list".
+    /// Allows `unified_file` with action "read" and `unified_exec` with actions "poll", "list", or "inspect".
     #[allow(dead_code)]
     pub(super) fn is_readonly_unified_action(&self, tool_name: &str, args: &Value) -> bool {
         crate::tools::tool_intent::classify_tool_intent(tool_name, args).readonly_unified_action
@@ -180,6 +180,10 @@ mod tests {
         assert!(registry.is_retry_safe_call(
             tools::UNIFIED_EXEC,
             &json!({"action": "poll", "session_id": 42})
+        ));
+        assert!(registry.is_retry_safe_call(
+            tools::UNIFIED_EXEC,
+            &json!({"action": "inspect", "spool_path": ".vtcode/context/tool_outputs/run-1.txt"})
         ));
         assert!(registry.is_retry_safe_call(tools::READ_FILE, &json!({"path": "README.md"})));
 

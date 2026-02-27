@@ -48,7 +48,15 @@ pub fn render_diff_preview(session: &Session, frame: &mut Frame<'_>, area: Rect)
     .split(area);
 
     render_file_header(frame, chunks[0], preview, &palette, additions, deletions);
-    render_diff_content(frame, chunks[1], preview, &palette, &diff_bundle, diff_theme, color_level);
+    render_diff_content(
+        frame,
+        chunks[1],
+        preview,
+        &palette,
+        &diff_bundle,
+        diff_theme,
+        color_level,
+    );
     render_controls(frame, chunks[2], preview);
 }
 
@@ -193,8 +201,14 @@ fn render_diff_content(
             let line_bg = style_line_bg(line_type, diff_theme, color_level);
             let content_bg = match line_type {
                 DiffLineType::Context => None,
-                DiffLineType::Insert => Some(crate::utils::diff_styles::add_line_bg(diff_theme, color_level)),
-                DiffLineType::Delete => Some(crate::utils::diff_styles::del_line_bg(diff_theme, color_level)),
+                DiffLineType::Insert => Some(crate::utils::diff_styles::add_line_bg(
+                    diff_theme,
+                    color_level,
+                )),
+                DiffLineType::Delete => Some(crate::utils::diff_styles::del_line_bg(
+                    diff_theme,
+                    color_level,
+                )),
             };
 
             let prefix = match line_type {

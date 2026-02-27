@@ -7,6 +7,9 @@
     "agent_info",
     "apply patch",
     "apply_patch",
+    "ask_questions",
+    "ask_user_question",
+    "askquestions",
     "bash",
     "checklist",
     "close pty session",
@@ -186,7 +189,10 @@
     "switch_edit_mode": "allow",
     "switch_plan_mode": "prompt",
     "switch_to_edit_mode": "allow",
-    "switch_to_plan_mode": "prompt"
+    "switch_to_plan_mode": "prompt",
+    "ask_questions": "allow",
+    "ask_user_question": "allow",
+    "askquestions": "allow"
   },
   "constraints": {},
   "mcp": {

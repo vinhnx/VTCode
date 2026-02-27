@@ -21,7 +21,9 @@ pub fn classify_tool_intent(tool_name: &str, args: &Value) -> ToolIntent {
             .unwrap_or(false),
         tools::UNIFIED_EXEC => unified_exec_action(args)
             .map(|action| {
-                action.eq_ignore_ascii_case("poll") || action.eq_ignore_ascii_case("list")
+                action.eq_ignore_ascii_case("poll")
+                    || action.eq_ignore_ascii_case("list")
+                    || action.eq_ignore_ascii_case("inspect")
             })
             .unwrap_or(false),
         tools::UNIFIED_SEARCH => true,
@@ -139,6 +141,14 @@ pub fn unified_exec_action(args: &Value) -> Option<&str> {
             || args.get("text").is_some()
         {
             Some("write")
+        } else if args.get("spool_path").is_some()
+            || args.get("query").is_some()
+            || args.get("head_lines").is_some()
+            || args.get("tail_lines").is_some()
+            || args.get("max_matches").is_some()
+            || args.get("literal").is_some()
+        {
+            Some("inspect")
         } else if args.get("session_id").is_some() {
             Some("poll")
         } else {
@@ -156,8 +166,6 @@ pub fn unified_search_action(args: &Value) -> Option<&str> {
             Some("grep")
         } else if args.get("keyword").is_some() {
             Some("tools")
-        } else if args.get("operation").is_some() {
-            Some("intelligence")
         } else if args.get("url").is_some() {
             Some("web")
         } else if args.get("sub_action").is_some() || args.get("name").is_some() {
@@ -194,6 +202,17 @@ mod tests {
         let intent = classify_tool_intent(
             tools::UNIFIED_EXEC,
             &json!({"action": "poll", "session_id": 1}),
+        );
+        assert!(!intent.mutating);
+        assert!(intent.readonly_unified_action);
+        assert!(intent.retry_safe);
+    }
+
+    #[test]
+    fn unified_exec_inspect_is_retry_safe() {
+        let intent = classify_tool_intent(
+            tools::UNIFIED_EXEC,
+            &json!({"action": "inspect", "spool_path": ".vtcode/context/tool_outputs/run-1.txt"}),
         );
         assert!(!intent.mutating);
         assert!(intent.readonly_unified_action);
@@ -239,6 +258,17 @@ mod tests {
         assert!(intent.mutating);
         assert!(intent.destructive);
         assert!(!intent.readonly_unified_action);
+    }
+
+    #[test]
+    fn unified_exec_spool_path_alias_infers_inspect() {
+        let intent = classify_tool_intent(
+            tools::UNIFIED_EXEC,
+            &json!({"spool_path": ".vtcode/context/tool_outputs/run-1.txt"}),
+        );
+        assert!(!intent.mutating);
+        assert!(!intent.destructive);
+        assert!(intent.readonly_unified_action);
     }
 
     #[test]

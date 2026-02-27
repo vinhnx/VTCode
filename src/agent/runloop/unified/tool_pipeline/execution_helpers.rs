@@ -132,8 +132,13 @@ fn is_command_like_output(output: &Value) -> bool {
         || output.get("working_directory").is_some()
         || output.get("session_id").is_some()
         || output.get("process_id").is_some()
+        || output.get("spool_path").is_some()
         || output.get("is_exited").is_some()
         || output.get("exit_code").is_some()
+        || output
+            .get("content_type")
+            .and_then(Value::as_str)
+            .is_some_and(|value| value == "exec_inspect")
 }
 
 #[cfg(test)]
@@ -173,6 +178,22 @@ mod tests {
         match status {
             ToolExecutionStatus::Success { stdout, .. } => {
                 assert_eq!(stdout.as_deref(), Some("file-a\nfile-b"));
+            }
+            _ => panic!("expected success status"),
+        }
+    }
+
+    #[test]
+    fn falls_back_to_output_for_inspect_payload() {
+        let status = process_llm_tool_output(json!({
+            "output": "1: src/main.rs",
+            "spool_path": ".vtcode/context/tool_outputs/run-1.txt",
+            "content_type": "exec_inspect"
+        }));
+
+        match status {
+            ToolExecutionStatus::Success { stdout, .. } => {
+                assert_eq!(stdout.as_deref(), Some("1: src/main.rs"));
             }
             _ => panic!("expected success status"),
         }

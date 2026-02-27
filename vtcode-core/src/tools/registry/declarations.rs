@@ -33,6 +33,7 @@ pub enum UnifiedExecAction {
     Run,
     Write,
     Poll,
+    Inspect,
     List,
     Close,
     Code,
@@ -71,9 +72,7 @@ use serde_json::{Map, Value, json};
 use vtcode_config::ToolDocumentationMode;
 
 use super::builtins::builtin_tool_registrations;
-use super::progressive_docs::{
-    build_minimal_declarations, build_progressive_declarations, minimal_tool_signatures,
-};
+use super::progressive_docs::minimal_tool_signatures;
 
 const PATH_ALIAS_WITH_TARGET: &[(&str, &str)] = &[
     ("file_path", "Alias for path"),
@@ -338,33 +337,39 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
 
         FunctionDeclaration {
             name: tools::UNIFIED_EXEC.to_string(),
-            description: "Unified execution tool (canonical PTY/shell runner). Aliases include run_pty_cmd, shell, exec, execute_code, and PTY session actions (create/list/read/send/close). IMPORTANT: 'command' is the raw command string WITHOUT shell redirections (2>&1, >, |). The tool captures stdout/stderr automatically. For 'run' action, provide 'command' parameter.".to_string(),
+            description: "Run commands and manage PTY sessions. Use inspect for one-call output preview/filtering from session or spool file.".to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
-                    "command": {"type": "string", "description": "The raw command to execute (no shell redirections like 2>&1 or | - tool captures all output automatically)."},
-                    "input": {"type": "string", "description": "The input to write to stdin (for an existing session)."},
-                    "session_id": {"type": "string", "description": "The session ID to target (required for write, poll, and close)."},
-                    "code": {"type": "string", "description": "Python 3 or JavaScript code to execute (for 'code' action)."},
+                    "command": {"type": "string", "description": "Raw command (no shell redirections)."},
+                    "input": {"type": "string", "description": "stdin content for write action."},
+                    "session_id": {"type": "string", "description": "Session id for write/poll/inspect/close."},
+                    "spool_path": {"type": "string", "description": "Spool file path for inspect action."},
+                    "query": {"type": "string", "description": "Optional filter for inspect output."},
+                    "head_lines": {"type": "integer", "description": "Inspect head preview lines."},
+                    "tail_lines": {"type": "integer", "description": "Inspect tail preview lines."},
+                    "max_matches": {"type": "integer", "description": "Max filtered matches for inspect.", "default": 200},
+                    "literal": {"type": "boolean", "description": "Treat inspect query as literal text.", "default": false},
+                    "code": {"type": "string", "description": "Code to execute for code action."},
                     "language": {
                         "type": "string",
                         "enum": ["python3", "javascript"],
-                        "description": "Programming language for 'code' action.",
+                        "description": "Language for code action.",
                         "default": "python3"
                     },
                     "action": {
                         "type": "string",
-                        "enum": ["run", "write", "poll", "list", "close", "code"],
-                        "description": "Action to perform. If not provided, it's inferred: 'run' if command is present, 'code' if code is present, 'write' if input is present, 'poll' if only session_id is present."
+                        "enum": ["run", "write", "poll", "inspect", "list", "close", "code"],
+                        "description": "Action. Inferred from command/code/input/session_id/spool_path when omitted."
                     },
                     "workdir": {"type": "string", "description": "Working directory for new sessions."},
                     "cwd": {"type": "string", "description": "Alias for workdir."},
-                    "shell": {"type": "string", "description": "Shell to use (e.g., /bin/bash)."},
-                    "login": {"type": "boolean", "description": "Whether to use a login shell.", "default": true},
+                    "shell": {"type": "string", "description": "Shell binary."},
+                    "login": {"type": "boolean", "description": "Use login shell.", "default": true},
                     "timeout_secs": {"type": "integer", "description": "Timeout in seconds.", "default": 180},
                     "yield_time_ms": {"type": "integer", "description": "Time to wait for output (ms).", "default": 1000},
                     "confirm": {"type": "boolean", "description": "Confirm destructive ops.", "default": false},
-                    "max_output_tokens": {"type": "integer", "description": "Max tokens to return."},
+                    "max_output_tokens": {"type": "integer", "description": "Max output tokens."},
                     "track_files": {"type": "boolean", "description": "Track file changes during code execution.", "default": false}
                 }
             }),
@@ -399,14 +404,14 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
 
         FunctionDeclaration {
             name: tools::UNIFIED_SEARCH.to_string(),
-            description: "Unified discovery tool. Search code (grep), list files, perform semantic navigation (intelligence), find tools, check agent status/errors, fetch web content, or load skills.".to_owned(),
+            description: "Unified discovery tool: grep, list, tool discovery, errors, agent status, web fetch, and skills.".to_owned(),
             parameters: json!({
                 "type": "object",
                 "properties": {
                     "action": {
                         "type": "string",
-                        "enum": ["grep", "list", "intelligence", "tools", "errors", "agent", "web", "skill"],
-                        "description": "Action to perform. 'grep' (regex search), 'list' (file listing), 'intelligence' (code navigation), 'tools' (find tools), 'errors' (session errors), 'agent' (status), 'web' (fetch URL), 'skill' (load skill)."
+                        "enum": ["grep", "list", "tools", "errors", "agent", "web", "skill"],
+                        "description": "Action to perform."
                     },
                     "pattern": {"type": "string", "description": "Regex or literal pattern for 'grep' or 'errors' search."},
                     "path": {"type": "string", "description": "Directory or file path to search in.", "default": "."},
@@ -425,13 +430,6 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
                         "description": "Mode for 'list' (list|recursive|tree|etc) or 'agent' (debug|analyze|full) action.",
                         "default": "list"
                     },
-                    "operation": {
-                        "type": "string",
-                        "enum": ["goto_definition", "find_references", "hover", "document_symbol", "workspace_symbol"],
-                        "description": "Operation for 'intelligence' action."
-                    },
-                    "line": {"type": "integer", "description": "Line number for 'intelligence' operations (0-indexed)."},
-                    "character": {"type": "integer", "description": "Character offset for 'intelligence' operations (0-indexed)."},
                     "max_results": {"type": "integer", "description": "Max results to return.", "default": 100},
                     "case_sensitive": {"type": "boolean", "description": "Case-sensitive search.", "default": false},
                     "context_lines": {"type": "integer", "description": "Context lines for 'grep' results.", "default": 0},
@@ -782,40 +780,108 @@ pub fn build_function_declarations_cached(
 pub fn build_function_declarations_with_mode(
     tool_documentation_mode: ToolDocumentationMode,
 ) -> Vec<FunctionDeclaration> {
-    // Select base declarations based on documentation mode
-    let mut declarations = match tool_documentation_mode {
-        ToolDocumentationMode::Minimal => {
-            tracing::debug!(
-                mode = "minimal",
-                "Building minimal tool declarations (~800 tokens total)"
-            );
-            let signatures = minimal_tool_signatures();
-            build_minimal_declarations(&signatures)
-        }
-        ToolDocumentationMode::Progressive => {
-            tracing::debug!(
-                mode = "progressive",
-                "Building progressive tool declarations (~1,200 tokens total)"
-            );
-            let signatures = minimal_tool_signatures();
-            build_progressive_declarations(&signatures)
-        }
+    let mut declarations = base_function_declarations();
+
+    match tool_documentation_mode {
         ToolDocumentationMode::Full => {
             tracing::debug!(
                 mode = "full",
                 "Building full tool declarations (~3,000 tokens total)"
             );
-            base_function_declarations()
+            apply_metadata_overrides(&mut declarations);
         }
-    };
-
-    // Apply metadata overrides only for full mode
-    // (minimal/progressive already have optimized structure)
-    if tool_documentation_mode == ToolDocumentationMode::Full {
-        apply_metadata_overrides(&mut declarations);
+        ToolDocumentationMode::Progressive => {
+            tracing::debug!(
+                mode = "progressive",
+                "Building progressive tool declarations from canonical schema"
+            );
+            compact_declarations_for_mode(&mut declarations, tool_documentation_mode);
+        }
+        ToolDocumentationMode::Minimal => {
+            tracing::debug!(
+                mode = "minimal",
+                "Building minimal tool declarations from canonical schema"
+            );
+            compact_declarations_for_mode(&mut declarations, tool_documentation_mode);
+        }
     }
 
     declarations
+}
+
+fn compact_declarations_for_mode(
+    declarations: &mut [FunctionDeclaration],
+    mode: ToolDocumentationMode,
+) {
+    let signatures = minimal_tool_signatures();
+    for decl in declarations {
+        decl.description = compact_tool_description(
+            decl.name.as_str(),
+            decl.description.as_str(),
+            mode,
+            &signatures,
+        );
+        remove_schema_descriptions(&mut decl.parameters);
+    }
+}
+
+fn compact_tool_description(
+    name: &str,
+    original: &str,
+    mode: ToolDocumentationMode,
+    signatures: &std::collections::HashMap<&str, super::ToolSignature>,
+) -> String {
+    if let Some(sig) = signatures.get(name) {
+        return sig.brief.to_string();
+    }
+
+    let max_len = match mode {
+        ToolDocumentationMode::Minimal => 64,
+        ToolDocumentationMode::Progressive => 120,
+        ToolDocumentationMode::Full => usize::MAX,
+    };
+
+    first_sentence_with_limit(original, max_len)
+}
+
+fn first_sentence_with_limit(text: &str, max_len: usize) -> String {
+    let sentence = text
+        .split('.')
+        .next()
+        .unwrap_or(text)
+        .trim()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+
+    if sentence.len() <= max_len {
+        sentence
+    } else {
+        let target = max_len.saturating_sub(1);
+        let end = sentence
+            .char_indices()
+            .map(|(i, _)| i)
+            .rfind(|&i| i <= target)
+            .unwrap_or(0);
+        format!("{}…", &sentence[..end])
+    }
+}
+
+fn remove_schema_descriptions(value: &mut Value) {
+    match value {
+        Value::Object(map) => {
+            map.remove("description");
+            for nested in map.values_mut() {
+                remove_schema_descriptions(nested);
+            }
+        }
+        Value::Array(items) => {
+            for item in items {
+                remove_schema_descriptions(item);
+            }
+        }
+        _ => {}
+    }
 }
 
 /// Build function declarations filtered by capability level
@@ -886,6 +952,72 @@ fn permission_label(permission: &ToolPolicy) -> &'static str {
         ToolPolicy::Allow => "allow",
         ToolPolicy::Deny => "deny",
         ToolPolicy::Prompt => "prompt",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::build_function_declarations_with_mode;
+    use crate::config::constants::tools;
+    use crate::config::types::ToolDocumentationMode;
+    use std::collections::BTreeSet;
+
+    #[test]
+    fn all_modes_expose_same_tool_names() {
+        let full: BTreeSet<String> =
+            build_function_declarations_with_mode(ToolDocumentationMode::Full)
+                .into_iter()
+                .map(|decl| decl.name)
+                .collect();
+        let minimal: BTreeSet<String> =
+            build_function_declarations_with_mode(ToolDocumentationMode::Minimal)
+                .into_iter()
+                .map(|decl| decl.name)
+                .collect();
+        let progressive: BTreeSet<String> =
+            build_function_declarations_with_mode(ToolDocumentationMode::Progressive)
+                .into_iter()
+                .map(|decl| decl.name)
+                .collect();
+
+        assert_eq!(full, minimal);
+        assert_eq!(full, progressive);
+    }
+
+    #[test]
+    fn unified_exec_schema_advertises_inspect_action() {
+        let declarations = build_function_declarations_with_mode(ToolDocumentationMode::Full);
+        let unified_exec = declarations
+            .iter()
+            .find(|decl| decl.name == tools::UNIFIED_EXEC)
+            .expect("unified_exec declaration");
+
+        let actions = unified_exec.parameters["properties"]["action"]["enum"]
+            .as_array()
+            .expect("action enum");
+        assert!(
+            actions
+                .iter()
+                .any(|value| value.as_str() == Some("inspect"))
+        );
+    }
+
+    #[test]
+    fn unified_search_schema_hides_intelligence_action() {
+        let declarations = build_function_declarations_with_mode(ToolDocumentationMode::Full);
+        let unified_search = declarations
+            .iter()
+            .find(|decl| decl.name == tools::UNIFIED_SEARCH)
+            .expect("unified_search declaration");
+
+        let actions = unified_search.parameters["properties"]["action"]["enum"]
+            .as_array()
+            .expect("action enum");
+        assert!(
+            !actions
+                .iter()
+                .any(|value| value.as_str() == Some("intelligence"))
+        );
     }
 }
 
