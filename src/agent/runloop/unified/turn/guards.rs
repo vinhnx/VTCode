@@ -286,9 +286,9 @@ fn normalize_turn_balancer_tool_name(name: &str) -> Cow<'_, str> {
 
 fn navigation_loop_guidance(plan_mode: bool) -> &'static str {
     if plan_mode {
-        "WARNING: You have performed many consecutive read/search operations in Plan Mode without producing actionable output. Stop browsing, synthesize findings in concise bullets, then use `plan_task_tracker` (`create`/`update`) with concrete steps (files + outcome + verification), or ask one targeted blocking question."
+        "WARNING: Too many read/search steps in Plan Mode without an actionable output. Stop browsing, summarize key findings, then update `plan_task_tracker` with concrete steps (files + outcome + verification), or ask one blocking question."
     } else {
-        "WARNING: You have performed many consecutive read/search operations without modifying any files or executing commands. Synthesize your findings and propose a concrete edit/action or explain why you are blocked."
+        "WARNING: Too many read/search steps without edits or execution. Summarize findings and propose the next concrete edit/action, or explain the blocker."
     }
 }
 
@@ -316,7 +316,7 @@ pub(crate) async fn handle_turn_balancer(
             )
             .unwrap_or(());
         ctx.working_history.push(uni::Message::system(
-            "CRITICAL: You have made multiple consecutive file modifications without running any tests or execution commands. Stop editing and use 'unified_exec' or 'run_pty_cmd' to verify your changes compile and tests pass before proceeding. Avoid 'Blind Editing'."
+            "CRITICAL: Multiple edits were made without verification. Stop editing and run `unified_exec`/`run_pty_cmd` to compile or test before proceeding."
                 .to_string(),
         ));
         repeated_tool_attempts.consecutive_mutations = 0;
@@ -366,7 +366,7 @@ pub(crate) async fn handle_turn_balancer(
             )
             .unwrap_or(()); // Best effort
         ctx.working_history.push(uni::Message::system(
-            "Turn balancer paused turn after repeated low-signal calls.".to_string(),
+            "Turn balancer paused after repeated low-signal calls.".to_string(),
         ));
         // Record in ledger
         {
@@ -443,7 +443,7 @@ mod tests {
     #[test]
     fn navigation_loop_guidance_uses_generic_text_outside_plan_mode() {
         let guidance = navigation_loop_guidance(false);
-        assert!(guidance.contains("read/search operations"));
+        assert!(guidance.contains("read/search"));
         assert!(!guidance.contains("plan_task_tracker"));
     }
 }

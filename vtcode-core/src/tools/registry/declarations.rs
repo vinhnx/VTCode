@@ -345,11 +345,11 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
                     "input": {"type": "string", "description": "stdin content for write action."},
                     "session_id": {"type": "string", "description": "Session id for write/poll/inspect/close."},
                     "spool_path": {"type": "string", "description": "Spool file path for inspect action."},
-                    "query": {"type": "string", "description": "Optional filter for inspect output."},
+                    "query": {"type": "string", "description": "Optional line filter for inspect output or run output."},
                     "head_lines": {"type": "integer", "description": "Inspect head preview lines."},
                     "tail_lines": {"type": "integer", "description": "Inspect tail preview lines."},
-                    "max_matches": {"type": "integer", "description": "Max filtered matches for inspect.", "default": 200},
-                    "literal": {"type": "boolean", "description": "Treat inspect query as literal text.", "default": false},
+                    "max_matches": {"type": "integer", "description": "Max filtered matches for inspect or run query.", "default": 200},
+                    "literal": {"type": "boolean", "description": "Treat query as literal text.", "default": false},
                     "code": {"type": "string", "description": "Code to execute for code action."},
                     "language": {
                         "type": "string",
@@ -376,7 +376,7 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
         },
 
         FunctionDeclaration {            name: tools::UNIFIED_FILE.to_string(),
-            description: "Unified file operation tool. IMPORTANT: For 'edit' action, old_str must EXACTLY match the file (whitespace, newlines). Read the file first to get exact content. For 'patch' action, use '*** Update File' format, NOT unified diff (---/+++ format).".to_owned(),
+            description: "Unified file ops: read, write, edit, patch, delete, move, copy. For edit, `old_str` must match exactly. For patch, use VT Code patch format (`*** Begin Patch`), not unified diff.".to_owned(),
             parameters: json!({
                 "type": "object",
                 "properties": {
@@ -445,7 +445,7 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
         // ============================================================
         FunctionDeclaration {
             name: tools::READ_FILE.to_string(),
-            description: "Read file contents. Returns content/status/message JSON with line-number prefixes (e.g., '12: ...'). Supports chunked reads. Offsets are 1-indexed. Don't retry if status='success'.".to_string(),
+            description: "Read file content with optional offsets, limits, and chunked reads (1-indexed).".to_string(),
             parameters: {
                 let mut properties = Map::new();
                 insert_string_with_aliases(

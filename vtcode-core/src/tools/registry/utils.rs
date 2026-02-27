@@ -13,14 +13,7 @@ pub(super) fn normalize_tool_output(mut val: Value) -> Value {
         .map(|value| value == "git_diff")
         .unwrap_or(false);
 
-    if !obj.contains_key("stdout") {
-        if !is_git_diff_output
-            && !is_command_like_output
-            && let Some(output) = obj.get("output").and_then(|v| v.as_str())
-        {
-            obj.insert("stdout".into(), json!(output.trim_end()));
-        }
-    } else if let Some(stdout) = obj.get_mut("stdout")
+    if let Some(stdout) = obj.get_mut("stdout")
         && let Some(s) = stdout.as_str()
     {
         *stdout = json!(s.trim_end());
@@ -93,12 +86,13 @@ mod tests {
     }
 
     #[test]
-    fn backfills_stdout_for_non_diff_output() {
+    fn does_not_backfill_stdout_for_non_diff_output() {
         let normalized = normalize_tool_output(json!({
             "output": "ok\n"
         }));
 
-        assert_eq!(normalized["stdout"], "ok");
+        assert!(normalized.get("stdout").is_none());
+        assert_eq!(normalized["output"], "ok\n");
     }
 
     #[test]

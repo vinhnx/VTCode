@@ -540,7 +540,7 @@ pub(crate) fn describe_tool_action(tool_name: &str, args: &Value) -> (String, Ha
                     HashSet::new(),
                 ),
                 _ => (
-                    format!("{}Use Unified exec", if is_mcp_tool { "MCP " } else { "" }),
+                    format!("{}unified_exec", if is_mcp_tool { "MCP " } else { "" }),
                     HashSet::new(),
                 ),
             }

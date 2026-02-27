@@ -132,7 +132,7 @@ fn test_token_budget_status_warning_threshold() {
     );
     assert_eq!(
         manager.get_token_budget_guidance(200_000),
-        "WARNING: Consider updating progress docs to preserve important context."
+        "WARNING: Update progress docs to preserve context."
     );
 }
 
@@ -154,7 +154,7 @@ fn test_token_budget_status_high_threshold() {
     );
     assert_eq!(
         manager.get_token_budget_guidance(200_000),
-        "HIGH: Start summarizing key findings and preparing for context handoff."
+        "HIGH: Summarize key findings and prepare a handoff."
     );
 }
 
@@ -176,7 +176,7 @@ fn test_token_budget_status_critical_threshold() {
     );
     assert_eq!(
         manager.get_token_budget_guidance(200_000),
-        "CRITICAL: Update artifacts (task.md/docs) and consider starting a new session."
+        "CRITICAL: Update artifacts and consider a new session."
     );
 }
 

@@ -304,7 +304,7 @@ fn max_sequential_spool_chunk_reads_per_turn(ctx: &TurnProcessingContext<'_>) ->
 fn build_spool_chunk_guard_error_content(path: &str, max_reads_per_turn: usize) -> String {
     super::execution_result::build_error_content(
         format!(
-            "Sequential spool chunk reads exceeded per-turn cap ({}). Switch to targeted extraction or summarize current findings before reading more chunks from '{}'.",
+            "Spool chunk reads exceeded per-turn cap ({}). Use targeted extraction before reading more from '{}'.",
             max_reads_per_turn, path
         ),
         Some(tool_names::GREP_FILE.to_string()),
@@ -336,7 +336,7 @@ fn enforce_spool_chunk_read_guard(
 
     let display_tool = tool_action_label(canonical_tool_name, args);
     let block_reason = format!(
-        "Spool chunk read guard halted repeated '{}' calls for this turn.\nUse targeted extraction (`grep_file`) or summarize current findings before reading more chunks.",
+        "Spool chunk guard stopped repeated '{}' calls for this turn.\nUse `grep_file` or summarize before more chunk reads.",
         display_tool
     );
 
@@ -346,7 +346,7 @@ fn enforce_spool_chunk_read_guard(
         build_spool_chunk_guard_error_content(spool_path, max_reads_per_turn),
     );
     ctx.working_history.push(uni::Message::system(format!(
-        "Spool chunk cap reached for '{}'. Recommended next step: run `grep_file` with a targeted pattern, then summarize findings before continuing chunk reads.",
+        "Spool chunk cap reached for '{}'. Next: run `grep_file` with a targeted pattern, then summarize before more chunk reads.",
         spool_path
     )));
 
@@ -664,7 +664,7 @@ pub(crate) async fn validate_tool_call<'a>(
             tracing::warn!(tool = %loop_tool_key, "Loop detector blocked tool");
             let display_tool = tool_action_label(&canonical_tool_name, args_val);
             let block_reason = format!(
-                "Loop detector halted repeated '{}' calls for this turn.\nType \"continue\" to retry from this point with a different strategy.",
+                "Loop detector stopped repeated '{}' calls for this turn.\nType \"continue\" to retry with a different strategy.",
                 display_tool
             );
             // Ensure no orphan PTY processes keep running after a hard loop-detection stop.
@@ -678,15 +678,21 @@ pub(crate) async fn validate_tool_call<'a>(
                 Duration::from_secs(120),
             ) {
                 if let Some(obj) = spooled.as_object_mut() {
+                    obj.remove("output");
+                    obj.remove("content");
+                    obj.remove("stdout");
+                    obj.remove("stderr");
+                    obj.remove("stderr_preview");
                     obj.insert(
                         "reused_spooled_output".to_string(),
                         serde_json::Value::Bool(true),
                     );
                     obj.insert("loop_detected".to_string(), serde_json::Value::Bool(true));
+                    obj.insert("spool_ref_only".to_string(), serde_json::Value::Bool(true));
                     obj.insert(
                         "loop_detected_note".to_string(),
                         serde_json::Value::String(
-                            "Loop detected; reusing spooled output from a recent identical call. Read the spooled file instead of re-running the tool.".to_string(),
+                            "Loop detected; using recent spool reference. Read the spool file instead of re-running this call.".to_string(),
                         ),
                     );
                 }
@@ -714,7 +720,7 @@ pub(crate) async fn validate_tool_call<'a>(
                     obj.insert(
                         "loop_detected_note".to_string(),
                         serde_json::Value::String(
-                            "Loop detected on repeated identical read-only call; reusing recent successful output. Pivot to targeted extraction (`grep_file`) or summarize before another read."
+                            "Loop detected on repeated read-only call; reusing recent output. Use `grep_file` or summarize before another read."
                                 .to_string(),
                         ),
                     );
@@ -739,7 +745,7 @@ pub(crate) async fn validate_tool_call<'a>(
 
             if preflight.readonly_classification {
                 ctx.working_history.push(uni::Message::system(
-                    "Loop detector blocked repeated read-only calls. Use targeted extraction (`grep_file`) or adjust `offset`/`limit` before retrying."
+                    "Loop detector blocked repeated read-only calls. Use `grep_file` or adjust `offset`/`limit` before retrying."
                         .to_string(),
                 ));
                 return Ok(ValidationResult::Blocked);

@@ -114,6 +114,6 @@ pub(crate) async fn handle_direct_tool_execution(
         }));
     }
 
-    let follow_up = format!("I ran `{}`. How would you like to proceed?", tool_name_str);
+    let follow_up = format!("Ran `{}`. Next step?", tool_name_str);
     Ok(Some(InteractionOutcome::Continue { input: follow_up }))
 }

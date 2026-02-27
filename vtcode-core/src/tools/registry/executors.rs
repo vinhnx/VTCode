@@ -63,11 +63,10 @@ fn serialized_payload_size_bytes(args: &Value) -> usize {
 
 fn missing_unified_exec_action_error(args: &Value) -> anyhow::Error {
     anyhow!(
-        "Missing action in unified_exec. Provide `action` or inferable fields: \
-         `command|cmd|raw_command` (run), `input|chars|text` with `session_id` (write), \
+        "Missing unified_exec action. Use `action` or fields: \
+         `command|cmd|raw_command` (run), `session_id`+`input|chars|text` (write), \
          `session_id` (poll), `spool_path|query|head_lines|tail_lines|max_matches|literal` (inspect), \
-         or `action:\"list\"`/`action:\"close\"`. \
-         Received keys: {}",
+         or `action:\"list\"|\"close\"`. Keys: {}",
         summarized_arg_keys(args)
     )
 }
@@ -82,9 +81,9 @@ fn missing_unified_file_action_error(args: &Value) -> anyhow::Error {
 
 fn missing_unified_search_action_error(args: &Value) -> anyhow::Error {
     anyhow!(
-        "Missing action in unified_search. Provide `action` or inferable fields: \
+        "Missing unified_search action. Use `action` or fields: \
          `pattern|query` (grep), `path` (list), `keyword` (tools), \
-         `scope` (errors), `url` (web), `sub_action|name` (skill). Received keys: {}",
+         `scope` (errors), `url` (web), `sub_action|name` (skill). Keys: {}",
         summarized_arg_keys(args)
     )
 }
@@ -844,6 +843,17 @@ impl ToolRegistry {
             .map(|v| v as usize)
             .or_else(|| suggest_max_tokens_for_command(&display_command))
             .unwrap_or(crate::config::constants::defaults::DEFAULT_PTY_OUTPUT_MAX_TOKENS);
+        let inspect_query = payload
+            .get("query")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty());
+        let inspect_literal = payload
+            .get("literal")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let inspect_max_matches =
+            clamp_max_matches(payload.get("max_matches").and_then(Value::as_u64));
 
         enforce_pty_command_policy(&display_command, confirm)?;
 
@@ -918,11 +928,25 @@ impl ToolRegistry {
             }
         }
 
+        let mut matched_count = None;
+        let mut query_truncated = false;
+        if let Some(query) = inspect_query {
+            let (filtered, count, truncated_matches) =
+                filter_lines(&output, query, inspect_literal, inspect_max_matches)?;
+            output = filtered;
+            matched_count = Some(count);
+            query_truncated = truncated_matches;
+        }
+
         let wall_time = start.elapsed().as_secs_f64();
         let mut response = json!({
             "output": output,
             "wall_time": wall_time,
         });
+        if let Some(count) = matched_count {
+            response["matched_count"] = json!(count);
+            response["query_truncated"] = json!(query_truncated);
+        }
         attach_pty_response_context(
             &mut response,
             &session_id,
@@ -944,10 +968,10 @@ impl ToolRegistry {
             response["truncated"] = json!(true);
         }
         if truncated || exit_code.is_none() {
-            response["follow_up_prompt"] = json!(format!(
-                "More output available. Use read_pty_session session_id=\"{}\".",
-                session_id
-            ));
+            response["follow_up_prompt"] = json!("More output available. Use `next_poll_args`.");
+            response["next_poll_args"] = json!({
+                "session_id": session_id
+            });
         }
         if is_git_diff {
             response["no_spool"] = json!(true);
@@ -1026,10 +1050,10 @@ impl ToolRegistry {
             response["truncated"] = json!(true);
         }
         if truncated || capture.exit_code.is_none() {
-            response["follow_up_prompt"] = json!(format!(
-                "More output available. Use read_pty_session session_id=\"{}\".",
-                sid
-            ));
+            response["follow_up_prompt"] = json!("More output available. Use `next_poll_args`.");
+            response["next_poll_args"] = json!({
+                "session_id": sid
+            });
         }
 
         Ok(response)
@@ -1799,7 +1823,7 @@ mod unified_action_error_tests {
             "session_id": "123"
         }));
         let text = err.to_string();
-        assert!(text.contains("Missing action in unified_exec"));
+        assert!(text.contains("Missing unified_exec action"));
         assert!(text.contains("foo"));
         assert!(text.contains("session_id"));
     }
@@ -1810,7 +1834,7 @@ mod unified_action_error_tests {
             "unexpected": true
         }));
         let text = err.to_string();
-        assert!(text.contains("Missing action in unified_search"));
+        assert!(text.contains("Missing unified_search action"));
         assert!(text.contains("unexpected"));
     }
 
