@@ -366,7 +366,8 @@ impl FileOpsTool {
                                     }),
                                 );
                                 builder = builder
-                                    .field("follow_up_prompt", json!("Use `next_read_args`."));
+                                    .field("follow_up_prompt", json!("Use `next_read_args`."))
+                                    .field("preferred_next_action", json!("read_file.next_chunk"));
                             }
                         }
 

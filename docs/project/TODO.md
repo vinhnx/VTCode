@@ -64,11 +64,6 @@ The TUI now syntax-highlights fenced code blocks and diffs,
 
 https://github.com/openai/codex/pull/11447
 
----
-
-THIS
-feat(tui): add theme-aware diff backgrounds with capability-graded palettes#12581
-https://github.com/openai/codex/pull/12581
 
 ---
 

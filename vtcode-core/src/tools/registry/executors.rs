@@ -191,6 +191,7 @@ const DEFAULT_INSPECT_HEAD_LINES: usize = 30;
 const DEFAULT_INSPECT_TAIL_LINES: usize = 30;
 const DEFAULT_INSPECT_MAX_MATCHES: usize = 200;
 const PTY_CONTINUATION_PROMPT: &str = "Use `next_poll_args`.";
+const PTY_PREFERRED_NEXT_ACTION: &str = "unified_exec.continue";
 
 fn clamp_inspect_lines(value: Option<u64>, default: usize) -> usize {
     value.map(|v| v as usize).unwrap_or(default).min(5_000)
@@ -974,6 +975,11 @@ impl ToolRegistry {
             response["next_poll_args"] = json!({
                 "session_id": session_id
             });
+            response["next_continue_args"] = json!({
+                "action": "continue",
+                "session_id": session_id
+            });
+            response["preferred_next_action"] = json!(PTY_PREFERRED_NEXT_ACTION);
         }
         if is_git_diff {
             response["no_spool"] = json!(true);
@@ -1054,6 +1060,11 @@ impl ToolRegistry {
             response["next_poll_args"] = json!({
                 "session_id": sid
             });
+            response["next_continue_args"] = json!({
+                "action": "continue",
+                "session_id": sid
+            });
+            response["preferred_next_action"] = json!(PTY_PREFERRED_NEXT_ACTION);
         }
 
         Ok(response)
@@ -1107,6 +1118,15 @@ impl ToolRegistry {
         if let Some(code) = capture.exit_code {
             response["exit_code"] = json!(code);
             self.decrement_active_pty_sessions();
+        } else {
+            response["next_poll_args"] = json!({
+                "session_id": sid
+            });
+            response["next_continue_args"] = json!({
+                "action": "continue",
+                "session_id": sid
+            });
+            response["preferred_next_action"] = json!(PTY_PREFERRED_NEXT_ACTION);
         }
 
         Ok(response)

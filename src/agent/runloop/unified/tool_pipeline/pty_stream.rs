@@ -6,6 +6,7 @@ use std::time::Duration;
 use anstyle::{AnsiColor, Color as AnsiColorEnum, Effects, Style as AnsiStyle};
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
+use vtcode_core::command_safety::shell_parser::parse_shell_commands_tree_sitter;
 use vtcode_core::tools::registry::ToolProgressCallback;
 use vtcode_core::ui::theme;
 use vtcode_tui::{InlineHandle, InlineMessageKind, InlineSegment, InlineTextStyle, convert_style};
@@ -21,6 +22,10 @@ struct PtyLineStyles {
     verb: Arc<InlineTextStyle>,
     command: Arc<InlineTextStyle>,
     args: Arc<InlineTextStyle>,
+    keyword: Arc<InlineTextStyle>,
+    variable: Arc<InlineTextStyle>,
+    string: Arc<InlineTextStyle>,
+    option: Arc<InlineTextStyle>,
     truncation: Arc<InlineTextStyle>,
 }
 
@@ -34,8 +39,30 @@ impl PtyLineStyles {
                 .fg_color(Some(AnsiColorEnum::Ansi(AnsiColor::Magenta)))
                 .effects(Effects::BOLD),
         ));
-        let command = Arc::new(convert_style(theme_styles.primary));
-        let args = Arc::new(convert_style(theme_styles.tool_detail));
+        let command = Arc::new(convert_style(
+            AnsiStyle::new()
+                .fg_color(Some(AnsiColorEnum::Ansi(AnsiColor::Green)))
+                .effects(Effects::BOLD),
+        ));
+        let args = Arc::new(convert_style(
+            AnsiStyle::new()
+                .fg_color(Some(AnsiColorEnum::Ansi(AnsiColor::White)))
+                .effects(Effects::DIMMED),
+        ));
+        let keyword = Arc::new(convert_style(
+            AnsiStyle::new()
+                .fg_color(Some(AnsiColorEnum::Ansi(AnsiColor::Magenta)))
+                .effects(Effects::BOLD),
+        ));
+        let variable = Arc::new(convert_style(
+            AnsiStyle::new().fg_color(Some(AnsiColorEnum::Ansi(AnsiColor::Yellow))),
+        ));
+        let string = Arc::new(convert_style(
+            AnsiStyle::new().fg_color(Some(AnsiColorEnum::Ansi(AnsiColor::Yellow))),
+        ));
+        let option = Arc::new(convert_style(
+            AnsiStyle::new().fg_color(Some(AnsiColorEnum::Ansi(AnsiColor::Red))),
+        ));
         let truncation = Arc::new(convert_style(theme_styles.tool_detail.dimmed()));
 
         Self {
@@ -44,29 +71,152 @@ impl PtyLineStyles {
             verb,
             command,
             args,
+            keyword,
+            variable,
+            string,
+            option,
             truncation,
         }
     }
 }
 
-fn split_command_and_args(text: &str) -> (&str, &str) {
-    let trimmed = text.trim();
-    if trimmed.is_empty() {
-        return ("", "");
-    }
-    for (idx, ch) in trimmed.char_indices() {
-        if ch.is_whitespace() {
-            let command = &trimmed[..idx];
-            let args = trimmed[idx..].trim_start();
-            return (command, args);
+fn is_bash_keyword(token: &str) -> bool {
+    matches!(
+        token,
+        "if" | "then"
+            | "else"
+            | "elif"
+            | "fi"
+            | "for"
+            | "in"
+            | "do"
+            | "done"
+            | "while"
+            | "until"
+            | "case"
+            | "esac"
+            | "function"
+            | "select"
+            | "time"
+            | "coproc"
+            | "{"
+            | "}"
+            | "[["
+            | "]]"
+    )
+}
+
+fn is_command_separator(token: &str) -> bool {
+    matches!(token, "|" | "||" | "&&" | ";" | ";;" | "&")
+}
+
+fn tokenize_preserve_whitespace(text: &str) -> Vec<&str> {
+    let mut parts = Vec::new();
+    let mut in_single = false;
+    let mut in_double = false;
+    let mut escaped = false;
+    let mut token_start: Option<usize> = None;
+    let mut token_is_whitespace = false;
+
+    for (idx, ch) in text.char_indices() {
+        if escaped {
+            escaped = false;
+        } else if ch == '\\' && !in_single {
+            escaped = true;
+        } else if ch == '\'' && !in_double {
+            in_single = !in_single;
+        } else if ch == '"' && !in_single {
+            in_double = !in_double;
+        }
+
+        let is_whitespace = !in_single && !in_double && ch.is_whitespace();
+        match token_start {
+            None => {
+                token_start = Some(idx);
+                token_is_whitespace = is_whitespace;
+            }
+            Some(start) if token_is_whitespace != is_whitespace => {
+                parts.push(&text[start..idx]);
+                token_start = Some(idx);
+                token_is_whitespace = is_whitespace;
+            }
+            _ => {}
         }
     }
-    (trimmed, "")
+
+    if let Some(start) = token_start {
+        parts.push(&text[start..]);
+    }
+
+    parts
+}
+
+fn style_for_token<'a>(
+    token: &'a str,
+    expect_command: &mut bool,
+    styles: &'a PtyLineStyles,
+) -> Arc<InlineTextStyle> {
+    if token.trim().is_empty() {
+        return Arc::clone(&styles.output);
+    }
+
+    if is_command_separator(token) {
+        *expect_command = true;
+        return Arc::clone(&styles.args);
+    }
+
+    if token.starts_with('"')
+        || token.starts_with('\'')
+        || token.ends_with('"')
+        || token.ends_with('\'')
+    {
+        *expect_command = false;
+        return Arc::clone(&styles.string);
+    }
+
+    if token.starts_with('$') || token.contains("=$") || token.starts_with("${") {
+        *expect_command = false;
+        return Arc::clone(&styles.variable);
+    }
+
+    if token.starts_with('-') && token.len() > 1 {
+        *expect_command = false;
+        return Arc::clone(&styles.option);
+    }
+
+    if is_bash_keyword(token) {
+        *expect_command = true;
+        return Arc::clone(&styles.keyword);
+    }
+
+    if *expect_command {
+        *expect_command = false;
+        return Arc::clone(&styles.command);
+    }
+
+    Arc::clone(&styles.args)
+}
+
+fn bash_segments(text: &str, styles: &PtyLineStyles, expect_command: bool) -> Vec<InlineSegment> {
+    let mut segments = Vec::new();
+    let mut command_expected = expect_command;
+    for token in tokenize_preserve_whitespace(text) {
+        segments.push(InlineSegment {
+            text: token.to_string(),
+            style: style_for_token(token, &mut command_expected, styles),
+        });
+    }
+    segments
+}
+
+fn is_valid_bash_grammar(command: &str) -> bool {
+    parse_shell_commands_tree_sitter(command)
+        .map(|commands| !commands.is_empty())
+        .unwrap_or(false)
 }
 
 fn line_to_segments(line: &str, styles: &PtyLineStyles) -> Vec<InlineSegment> {
     if let Some(command_text) = line.strip_prefix("• Ran ") {
-        let (command, args) = split_command_and_args(command_text);
         let mut segments = vec![
             InlineSegment {
                 text: "• ".to_string(),
@@ -81,15 +231,11 @@ fn line_to_segments(line: &str, styles: &PtyLineStyles) -> Vec<InlineSegment> {
                 style: Arc::clone(&styles.output),
             },
         ];
-        if !command.is_empty() {
+        if is_valid_bash_grammar(command_text) {
+            segments.extend(bash_segments(command_text, styles, true));
+        } else {
             segments.push(InlineSegment {
-                text: command.to_string(),
-                style: Arc::clone(&styles.command),
-            });
-        }
-        if !args.is_empty() {
-            segments.push(InlineSegment {
-                text: format!(" {}", args),
+                text: command_text.to_string(),
                 style: Arc::clone(&styles.args),
             });
         }
@@ -97,7 +243,7 @@ fn line_to_segments(line: &str, styles: &PtyLineStyles) -> Vec<InlineSegment> {
     }
 
     if let Some(text) = line.strip_prefix("  │ ") {
-        return vec![
+        let mut segments = vec![
             InlineSegment {
                 text: "  ".to_string(),
                 style: Arc::clone(&styles.output),
@@ -107,10 +253,19 @@ fn line_to_segments(line: &str, styles: &PtyLineStyles) -> Vec<InlineSegment> {
                 style: Arc::clone(&styles.glyph),
             },
             InlineSegment {
-                text: format!(" {}", text),
-                style: Arc::clone(&styles.args),
+                text: " ".to_string(),
+                style: Arc::clone(&styles.output),
             },
         ];
+        if is_valid_bash_grammar(text) {
+            segments.extend(bash_segments(text, styles, false));
+        } else {
+            segments.push(InlineSegment {
+                text: text.to_string(),
+                style: Arc::clone(&styles.args),
+            });
+        }
+        return segments;
     }
 
     if let Some(text) = line.strip_prefix("  └ ") {
@@ -210,22 +365,17 @@ impl PtyStreamState {
     }
 
     fn push_line(&mut self) {
-        let trimmed = self.current_line.trim_end();
-        if trimmed.trim().is_empty() {
-            self.current_line.clear();
-            return;
-        }
+        let line = self.current_line.clone();
 
         if self
             .last_pushed_line
             .as_ref()
-            .is_some_and(|previous| previous == trimmed)
+            .is_some_and(|previous| previous == &line)
         {
             self.current_line.clear();
             return;
         }
 
-        let line = trimmed.to_string();
         self.last_pushed_line = Some(line.clone());
         if self.head_lines.len() < LIVE_PREVIEW_HEAD_LINES {
             self.head_lines.push(line);
@@ -245,7 +395,7 @@ impl PtyStreamState {
             return rendered;
         }
 
-        let has_current = !self.current_line.trim().is_empty();
+        let has_current = !self.current_line.is_empty();
         let total = self.total_lines + usize::from(has_current);
         if total == 0 {
             return rendered;
@@ -263,10 +413,7 @@ impl PtyStreamState {
                 first_output_line = false;
             }
             if has_current {
-                rendered.push(prefix_stream_line(
-                    self.current_line.trim_end(),
-                    first_output_line,
-                ));
+                rendered.push(prefix_stream_line(&self.current_line, first_output_line));
             }
             return rendered;
         }
@@ -283,7 +430,7 @@ impl PtyStreamState {
 
         let mut tail_preview: Vec<String> = self.tail_lines.iter().cloned().collect();
         if has_current {
-            tail_preview.push(self.current_line.trim_end().to_string());
+            tail_preview.push(self.current_line.clone());
             if tail_preview.len() > LIVE_PREVIEW_TAIL_LINES {
                 let drop = tail_preview.len() - LIVE_PREVIEW_TAIL_LINES;
                 tail_preview.drain(..drop);
@@ -297,8 +444,8 @@ impl PtyStreamState {
     }
 
     fn last_display_line(&self) -> Option<String> {
-        if !self.current_line.trim().is_empty() {
-            return Some(self.current_line.trim_end().to_string());
+        if !self.current_line.is_empty() {
+            return Some(self.current_line.clone());
         }
         self.tail_lines
             .back()
@@ -512,6 +659,14 @@ impl PtyStreamRuntime {
 mod tests {
     use super::*;
 
+    fn flatten_text(segments: &[InlineSegment]) -> String {
+        segments
+            .iter()
+            .map(|segment| segment.text.as_str())
+            .collect::<Vec<_>>()
+            .join("")
+    }
+
     #[test]
     fn pty_stream_state_streams_incremental_chunks() {
         let mut state = PtyStreamState::new(None);
@@ -580,6 +735,22 @@ mod tests {
     }
 
     #[test]
+    fn pty_stream_state_preserves_indentation_and_blank_lines() {
+        let mut state = PtyStreamState::new(None);
+        state.apply_chunk("  fn main() {\n\n    println!(\"hi\");\n  }\n", 8);
+        let rendered = state.render_lines(8);
+        assert_eq!(
+            rendered,
+            vec![
+                "  └   fn main() {".to_string(),
+                "    ".to_string(),
+                "        println!(\"hi\");".to_string(),
+                "      }".to_string(),
+            ]
+        );
+    }
+
+    #[test]
     fn pty_stream_state_renders_command_prompt_without_output() {
         let state = PtyStreamState::new(Some("cargo check".to_string()));
         let rendered = state.render_lines(5);
@@ -621,5 +792,51 @@ mod tests {
         assert_eq!(rendered.len(), 2);
         assert!(rendered[0].starts_with("• Ran cargo test -p vtcode run_command_preview_"));
         assert!(rendered[1].starts_with("  │ build_tool_summary_formats_run_command_as_ran"));
+    }
+
+    #[test]
+    fn tokenization_preserves_whitespace() {
+        let tokens = tokenize_preserve_whitespace("cargo   check -p  vtcode");
+        assert_eq!(
+            tokens,
+            vec!["cargo", "   ", "check", " ", "-p", "  ", "vtcode"]
+        );
+    }
+
+    #[test]
+    fn line_to_segments_preserves_command_text() {
+        let styles = PtyLineStyles::new();
+        let line = "• Ran echo \"$HOME\" && cargo check";
+        let segments = line_to_segments(line, &styles);
+        assert_eq!(flatten_text(&segments), line);
+    }
+
+    #[test]
+    fn line_to_segments_distinguishes_command_and_args_styles() {
+        let styles = PtyLineStyles::new();
+        let segments = line_to_segments("• Ran cargo fmt", &styles);
+        let cargo_style = segments
+            .iter()
+            .find(|segment| segment.text == "cargo")
+            .map(|segment| Arc::clone(&segment.style))
+            .expect("cargo token should be present");
+        let fmt_style = segments
+            .iter()
+            .find(|segment| segment.text == "fmt")
+            .map(|segment| Arc::clone(&segment.style))
+            .expect("fmt token should be present");
+        assert_ne!(*cargo_style, *fmt_style);
+    }
+
+    #[test]
+    fn line_to_segments_skips_highlighting_for_invalid_bash_grammar() {
+        let styles = PtyLineStyles::new();
+        let segments = line_to_segments("• Ran )(", &styles);
+        let invalid_style = segments
+            .iter()
+            .find(|segment| segment.text == ")(")
+            .map(|segment| Arc::clone(&segment.style))
+            .expect("invalid token should be present");
+        assert_eq!(*invalid_style, *styles.args);
     }
 }

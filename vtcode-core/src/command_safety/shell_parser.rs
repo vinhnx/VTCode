@@ -58,6 +58,15 @@ pub fn parse_shell_commands(script: &str) -> std::result::Result<Vec<Vec<String>
     parse_with_basic_tokenization(script)
 }
 
+/// Parses a shell script using tree-sitter bash grammar only (no fallback tokenization).
+///
+/// Use this when caller behavior must be strictly gated on bash grammar validity.
+pub fn parse_shell_commands_tree_sitter(
+    script: &str,
+) -> std::result::Result<Vec<Vec<String>>, String> {
+    parse_with_tree_sitter(script)
+}
+
 /// Parses shell script using tree-sitter bash grammar
 fn parse_with_tree_sitter(script: &str) -> std::result::Result<Vec<Vec<String>>, String> {
     let parser_guard = get_bash_parser();
