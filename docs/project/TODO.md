@@ -20,6 +20,22 @@ check docs/guides/tui-library.md
 
 ---
 
+splash command should be in core and not related to tui component
+
+---
+
+tui module should just be plug and play tui rust component for
+other agents to use. no concrete business logic
+
+---
+
+› splash command should be generic confirgurable and doesn't hold
+concrete logic
+
+---
+
+extract and open source more components from vtcode-core
+
 ---
 
 Shell integration: respects $SHELL environment variable and supports the ! prefix for direct shell execution.
