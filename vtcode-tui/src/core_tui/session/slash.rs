@@ -396,13 +396,7 @@ pub(super) fn try_handle_slash_navigation(
 }
 
 fn should_submit_immediately_from_palette(session: &Session) -> bool {
-    let Some(command) = session
-        .input_manager
-        .content()
-        .trim_start()
-        .split_whitespace()
-        .next()
-    else {
+    let Some(command) = session.input_manager.content().split_whitespace().next() else {
         return false;
     };
 

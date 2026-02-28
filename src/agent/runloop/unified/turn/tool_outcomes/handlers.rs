@@ -54,15 +54,36 @@ fn build_failure_error_content(error: String, failure_kind: &'static str) -> Str
     super::execution_result::build_error_content(error, None, None, failure_kind).to_string()
 }
 
-fn build_validation_error_content(error: String, validation_stage: &'static str) -> String {
-    // Validation errors have additional fields, so we construct them directly
-    serde_json::json!({
+fn build_validation_error_content_with_fallback(
+    error: String,
+    validation_stage: &'static str,
+    fallback_tool: Option<String>,
+    fallback_tool_args: Option<Value>,
+) -> String {
+    let is_recoverable = fallback_tool.is_some();
+    let next_action = if is_recoverable {
+        "Retry with fallback_tool_args."
+    } else {
+        "Fix tool arguments to match the schema."
+    };
+    let mut payload = serde_json::json!({
         "error": error,
         "failure_kind": "validation",
+        "error_class": "invalid_arguments",
         "validation_stage": validation_stage,
         "retryable": false,
-    })
-    .to_string()
+        "is_recoverable": is_recoverable,
+        "next_action": next_action,
+    });
+    if let Some(obj) = payload.as_object_mut() {
+        if let Some(tool) = fallback_tool {
+            obj.insert("fallback_tool".to_string(), Value::String(tool));
+        }
+        if let Some(args) = fallback_tool_args {
+            obj.insert("fallback_tool_args".to_string(), args);
+        }
+    }
+    payload.to_string()
 }
 
 fn build_rate_limit_error_content(tool_name: &str, retry_after_ms: u64) -> String {
@@ -280,6 +301,51 @@ fn maybe_apply_spool_read_offset_hint(
         }
     }
     adjusted
+}
+
+fn preflight_validation_fallback(
+    tool_name: &str,
+    args_val: &Value,
+    error: &anyhow::Error,
+) -> Option<(String, Value)> {
+    let error_text = error.to_string();
+    let is_unified_search = tool_name == tool_names::UNIFIED_SEARCH
+        || error_text.contains("tool 'unified_search'")
+        || error_text.contains("for 'unified_search'");
+    if !is_unified_search {
+        return None;
+    }
+
+    let normalized = tool_intent::normalize_unified_search_args(args_val);
+    if normalized == *args_val || normalized.get("action").is_none() {
+        return None;
+    }
+
+    Some((tool_names::UNIFIED_SEARCH.to_string(), normalized))
+}
+
+fn try_recover_preflight_for_unified_search(
+    ctx: &mut TurnProcessingContext<'_>,
+    tool_name: &str,
+    args_val: &Value,
+    error: &anyhow::Error,
+) -> Option<(vtcode_core::tools::registry::ToolPreflightOutcome, Value)> {
+    let (_, recovered_args) = preflight_validation_fallback(tool_name, args_val, error)?;
+    match ctx
+        .tool_registry
+        .preflight_validate_call(tool_name, &recovered_args)
+    {
+        Ok(preflight) => Some((preflight, recovered_args)),
+        Err(recovery_err) => {
+            tracing::debug!(
+                tool = tool_name,
+                original_error = %error,
+                recovery_error = %recovery_err,
+                "Unified search preflight recovery failed"
+            );
+            None
+        }
+    }
 }
 
 fn spool_chunk_read_path<'a>(canonical_tool_name: &str, args: &'a Value) -> Option<&'a str> {
@@ -587,26 +653,45 @@ pub(crate) async fn validate_tool_call<'a>(
         return Ok(ValidationResult::Blocked);
     }
 
-    let preflight = match ctx
+    let (preflight, preflight_args) = match ctx
         .tool_registry
         .preflight_validate_call(tool_name, args_val)
     {
-        Ok(preflight) => preflight,
+        Ok(preflight) => (preflight, args_val.clone()),
         Err(err) => {
-            push_tool_response(
-                ctx.working_history,
-                tool_call_id.to_string(),
-                build_validation_error_content(
-                    format!("Tool preflight validation failed: {}", err),
-                    "preflight",
-                ),
-            );
-            return Ok(ValidationResult::Blocked);
+            if let Some((recovered_preflight, recovered_args)) =
+                try_recover_preflight_for_unified_search(ctx, tool_name, args_val, &err)
+            {
+                tracing::info!(
+                    tool = tool_name,
+                    "Recovered preflight for unified_search by normalizing arguments"
+                );
+                (recovered_preflight, recovered_args)
+            } else {
+                let fallback = preflight_validation_fallback(tool_name, args_val, &err);
+                let (fallback_tool, fallback_tool_args) = fallback
+                    .map(|(tool, args)| (Some(tool), Some(args)))
+                    .unwrap_or((None, None));
+                push_tool_response(
+                    ctx.working_history,
+                    tool_call_id.to_string(),
+                    build_validation_error_content_with_fallback(
+                        format!("Tool preflight validation failed: {}", err),
+                        "preflight",
+                        fallback_tool,
+                        fallback_tool_args,
+                    ),
+                );
+                return Ok(ValidationResult::Blocked);
+            }
         }
     };
     let canonical_tool_name = preflight.normalized_tool_name.clone();
-    let effective_args =
-        maybe_apply_spool_read_offset_hint(ctx.tool_registry, &canonical_tool_name, args_val);
+    let effective_args = maybe_apply_spool_read_offset_hint(
+        ctx.tool_registry,
+        &canonical_tool_name,
+        &preflight_args,
+    );
 
     // Charge tool-call budget only after preflight succeeds.
     ctx.harness_state.record_tool_call();
@@ -968,7 +1053,11 @@ async fn acquire_adaptive_rate_limit_slot<'a>(
 
 #[cfg(test)]
 mod tests {
-    use super::{loop_detection_tool_key, spool_chunk_read_path};
+    use super::{
+        build_validation_error_content_with_fallback, loop_detection_tool_key,
+        preflight_validation_fallback, spool_chunk_read_path,
+    };
+    use anyhow::anyhow;
     use serde_json::json;
     use vtcode_core::config::constants::tools as tool_names;
 
@@ -1045,5 +1134,37 @@ mod tests {
         });
         let path = spool_chunk_read_path(tool_names::READ_FILE, &args);
         assert_eq!(path, None);
+    }
+
+    #[test]
+    fn preflight_fallback_normalizes_unified_search_args() {
+        let error = anyhow!(
+            "Invalid arguments for tool 'unified_search': \"action\" is a required property"
+        );
+        let args = json!({
+            "Pattern": "LLMStreamEvent::",
+            "Path": "."
+        });
+        let fallback = preflight_validation_fallback(tool_names::UNIFIED_SEARCH, &args, &error)
+            .expect("fallback expected for recoverable unified_search preflight");
+        assert_eq!(fallback.0, tool_names::UNIFIED_SEARCH);
+        assert_eq!(fallback.1["action"], "grep");
+        assert_eq!(fallback.1["pattern"], "LLMStreamEvent::");
+    }
+
+    #[test]
+    fn validation_error_payload_includes_fallback_metadata() {
+        let payload = build_validation_error_content_with_fallback(
+            "Tool preflight validation failed: x".to_string(),
+            "preflight",
+            Some(tool_names::UNIFIED_SEARCH.to_string()),
+            Some(json!({"action":"grep","pattern":"foo","path":"."})),
+        );
+        let parsed: serde_json::Value =
+            serde_json::from_str(&payload).expect("validation payload should be json");
+        assert_eq!(parsed["error_class"], "invalid_arguments");
+        assert_eq!(parsed["is_recoverable"], true);
+        assert_eq!(parsed["fallback_tool"], tool_names::UNIFIED_SEARCH);
+        assert_eq!(parsed["fallback_tool_args"]["action"], "grep");
     }
 }

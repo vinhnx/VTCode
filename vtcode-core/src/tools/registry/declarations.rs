@@ -850,7 +850,6 @@ fn first_sentence_with_limit(text: &str, max_len: usize) -> String {
         .split('.')
         .next()
         .unwrap_or(text)
-        .trim()
         .split_whitespace()
         .collect::<Vec<_>>()
         .join(" ");

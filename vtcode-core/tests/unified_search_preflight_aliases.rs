@@ -73,3 +73,20 @@ async fn preflight_rejects_unified_search_when_action_cannot_be_inferred() -> Re
     assert!(err_text.contains("action"));
     Ok(())
 }
+
+#[tokio::test]
+async fn preflight_accepts_unified_search_with_case_variant_keys() -> Result<()> {
+    let temp_dir = TempDir::new()?;
+    let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+
+    let outcome = registry.preflight_validate_call(
+        tools::UNIFIED_SEARCH,
+        &json!({
+            "Pattern": "ReasoningStage",
+            "Path": "."
+        }),
+    )?;
+
+    assert_eq!(outcome.normalized_tool_name, tools::UNIFIED_SEARCH);
+    Ok(())
+}

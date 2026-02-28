@@ -326,9 +326,7 @@ fn strip_leading_polite_prefixes(command_part: &str) -> &str {
     let mut input = command_part.trim();
     loop {
         let lowered = input.to_ascii_lowercase();
-        let stripped = if lowered.starts_with("please ") {
-            input.get(7..)
-        } else if lowered.starts_with("kindly ") {
+        let stripped = if lowered.starts_with("please ") || lowered.starts_with("kindly ") {
             input.get(7..)
         } else if lowered.starts_with("just ") {
             input.get(5..)
@@ -388,9 +386,7 @@ fn extract_inline_backtick_command(command_part: &str) -> Option<&str> {
 }
 
 fn trim_token(token: &str) -> &str {
-    token
-        .trim()
-        .trim_end_matches(|ch: char| matches!(ch, '.' | ',' | ';' | '!' | '?'))
+    token.trim().trim_end_matches(['.', ',', ';', '!', '?'])
 }
 
 fn contains_chained_instruction(command_part: &str) -> bool {
