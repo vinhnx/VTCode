@@ -1,20 +1,17 @@
-use anstyle::{Effects, Style as AnsiStyle};
 use anyhow::Result;
 use serde_json::Value;
+use vtcode_commons::diff_paths::{language_hint_from_path, looks_like_diff_content};
+use vtcode_core::config::ToolOutputMode;
 use vtcode_core::config::constants::tools;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
-use super::styles::{GitStyles, LsStyles, select_line_style};
+use super::streams::render_diff_content_block;
+use super::styles::{GitStyles, LsStyles};
 #[path = "files_diff.rs"]
 mod files_diff;
-#[cfg(test)]
-pub(super) use files_diff::format_diff_content_lines;
-pub(super) use files_diff::{
-    format_condensed_edit_diff_lines, format_diff_content_lines_with_numbers,
-};
+pub(crate) use files_diff::format_diff_content_lines_with_numbers;
 
 /// Constants for line and content limits (compact display)
-const MAX_DIFF_LINE_LENGTH: usize = 100; // Reduced for compact view
 const MAX_DISPLAYED_FILES: usize = 100; // Limit displayed files to reduce clutter
 
 /// Safely truncate text to a maximum character length, respecting UTF-8 boundaries
@@ -86,7 +83,7 @@ pub(crate) fn render_write_file_preview(
 
     if !diff_content.is_empty() {
         renderer.line(MessageStyle::ToolDetail, "")?;
-        render_edit_diff_preview(renderer, diff_content, git_styles, ls_styles)?;
+        render_diff_content(renderer, diff_content, git_styles, ls_styles)?;
     }
 
     if get_bool(diff_value, "truncated") {
@@ -334,7 +331,8 @@ pub(crate) fn render_read_file_output(renderer: &mut AnsiRenderer, val: &Value) 
             renderer.line(MessageStyle::ToolDetail, "")?;
             render_diff_content(renderer, content, &git_styles, &ls_styles)?;
         } else {
-            render_content_preview(renderer, content)?;
+            let file_path = get_string(val, "file_path").or_else(|| get_string(val, "path"));
+            render_content_preview(renderer, content, file_path)?;
         }
     }
 
@@ -342,8 +340,8 @@ pub(crate) fn render_read_file_output(renderer: &mut AnsiRenderer, val: &Value) 
 }
 
 const MAX_BATCH_DISPLAY_FILES: usize = 10;
-const MAX_PREVIEW_LINES: usize = 4;
-const MAX_PREVIEW_LINE_LEN: usize = 80;
+const MAX_PREVIEW_LINES: usize = 12;
+const MAX_FULL_RENDER_LINES: usize = 80;
 
 fn shorten_path(path: &str, max_len: usize) -> String {
     if path.len() <= max_len {
@@ -375,23 +373,39 @@ fn strip_line_number(line: &str) -> &str {
     line
 }
 
-fn render_content_preview(renderer: &mut AnsiRenderer, content: &str) -> Result<()> {
-    let meaningful: Vec<&str> = content
-        .lines()
-        .map(strip_line_number)
-        .map(|l| l.trim())
-        .filter(|l| !l.is_empty())
-        .take(MAX_PREVIEW_LINES)
-        .collect();
-
-    if meaningful.is_empty() {
+fn render_content_preview(
+    renderer: &mut AnsiRenderer,
+    content: &str,
+    file_path: Option<&str>,
+) -> Result<()> {
+    let all_lines: Vec<&str> = content.lines().map(strip_line_number).collect();
+    if all_lines.is_empty() || all_lines.iter().all(|line| line.trim().is_empty()) {
         return Ok(());
     }
+    let show_all = all_lines.len() <= MAX_FULL_RENDER_LINES;
+    let display_lines: &[&str] = if show_all {
+        &all_lines
+    } else {
+        &all_lines[..MAX_PREVIEW_LINES.min(all_lines.len())]
+    };
 
     renderer.line(MessageStyle::ToolDetail, "")?;
-    for line in &meaningful {
-        let display = truncate_text_safe(line, MAX_PREVIEW_LINE_LEN);
-        renderer.line(MessageStyle::ToolDetail, &format!("  {}", display))?;
+
+    let language = file_path
+        .and_then(language_hint_from_path)
+        .unwrap_or_default();
+    let mut markdown = format!("```{language}\n");
+    for line in display_lines {
+        markdown.push_str(line);
+        markdown.push('\n');
+    }
+    markdown.push_str("```");
+    renderer.render_markdown_output(MessageStyle::ToolDetail, &markdown)?;
+    if !show_all {
+        renderer.line(
+            MessageStyle::ToolDetail,
+            &format!("… +{} more lines", all_lines.len() - display_lines.len()),
+        )?;
     }
 
     Ok(())
@@ -404,76 +418,16 @@ fn render_diff_content(
     git_styles: &GitStyles,
     ls_styles: &LsStyles,
 ) -> Result<()> {
-    let lines_to_render = format_diff_content_lines_with_numbers(diff_content);
-    render_diff_lines(renderer, &lines_to_render, git_styles, ls_styles)
-}
-
-fn render_edit_diff_preview(
-    renderer: &mut AnsiRenderer,
-    diff_content: &str,
-    git_styles: &GitStyles,
-    ls_styles: &LsStyles,
-) -> Result<()> {
-    let lines_to_render = format_condensed_edit_diff_lines(diff_content);
-    render_diff_lines(renderer, &lines_to_render, git_styles, ls_styles)
-}
-
-fn render_diff_lines(
-    renderer: &mut AnsiRenderer,
-    lines_to_render: &[String],
-    git_styles: &GitStyles,
-    ls_styles: &LsStyles,
-) -> Result<()> {
-    for line in lines_to_render {
-        let truncated = truncate_text_safe(&line, MAX_DIFF_LINE_LENGTH);
-        if let Some(style) =
-            select_line_style(Some(tools::WRITE_FILE), truncated, git_styles, ls_styles)
-        {
-            let display_line = format_diff_line_for_display(truncated, style);
-            renderer.line_with_override_style(MessageStyle::ToolDetail, style, &display_line)?;
-        } else {
-            renderer.line(MessageStyle::ToolDetail, truncated)?;
-        }
-    }
-
-    Ok(())
-}
-
-fn format_diff_line_for_display(line: &str, style: AnsiStyle) -> String {
-    if let Some((gutter, content)) = split_diff_gutter(line) {
-        let dimmed = AnsiStyle::new().effects(Effects::DIMMED);
-        return format!("{dimmed}{gutter}{style}{content}");
-    }
-    line.to_string()
-}
-
-fn split_diff_gutter(line: &str) -> Option<(&str, &str)> {
-    let mut chars = line.char_indices();
-    let (_, marker) = chars.next()?;
-    if !matches!(marker, '+' | '-' | ' ') {
-        return None;
-    }
-
-    let rest = line.get(1..)?;
-    let first_digit = rest.find(|c: char| c.is_ascii_digit())?;
-    if first_digit == 0 || !rest[..first_digit].chars().all(|c| c == ' ') {
-        return None;
-    }
-
-    let digits = &rest[first_digit..];
-    let digits_len = digits.chars().take_while(|c| c.is_ascii_digit()).count();
-    if digits_len == 0 {
-        return None;
-    }
-
-    let after_digits = first_digit + digits_len;
-    let separator = rest[after_digits..].chars().next()?;
-    if separator != ' ' {
-        return None;
-    }
-
-    let gutter_end = 1 + after_digits + separator.len_utf8();
-    Some(line.split_at(gutter_end))
+    render_diff_content_block(
+        renderer,
+        diff_content,
+        Some(tools::WRITE_FILE),
+        git_styles,
+        ls_styles,
+        MessageStyle::ToolDetail,
+        ToolOutputMode::Compact,
+        usize::MAX,
+    )
 }
 
 pub(super) fn colorize_diff_summary_line(line: &str, _supports_color: bool) -> Option<String> {
@@ -489,19 +443,6 @@ pub(super) fn colorize_diff_summary_line(line: &str, _supports_color: bool) -> O
     } else {
         None
     }
-}
-
-fn looks_like_diff_content(content: &str) -> bool {
-    content.lines().any(|line| {
-        let trimmed = line.trim_start();
-        trimmed.starts_with("diff --")
-            || trimmed.starts_with("index ")
-            || trimmed.starts_with("@@")
-            || trimmed.starts_with("---")
-            || trimmed.starts_with("+++")
-            || trimmed.starts_with("new file mode")
-            || trimmed.starts_with("deleted file mode")
-    })
 }
 
 #[cfg(test)]

@@ -16,8 +16,8 @@ use crate::ui::tui::session::Session;
 use crate::ui::tui::types::{DiffPreviewState, TrustMode};
 use crate::utils::diff::{DiffBundle, DiffLineKind, DiffOptions, compute_diff_with_theme};
 use crate::utils::diff_styles::{
-    DiffColorLevel, DiffColorPalette, DiffLineType, DiffTheme, style_gutter, style_line_bg,
-    style_sign,
+    DiffColorLevel, DiffColorPalette, DiffLineType, DiffTheme, diff_add_bg, diff_del_bg,
+    style_gutter, style_line_bg, style_sign,
 };
 
 pub fn render_diff_preview(session: &Session, frame: &mut Frame<'_>, area: Rect) {
@@ -204,14 +204,14 @@ fn render_diff_content(
             let line_bg = style_line_bg(line_type, diff_theme, color_level);
             let content_bg = match line_type {
                 DiffLineType::Context => None,
-                DiffLineType::Insert => Some(crate::utils::diff_styles::add_line_bg(
+                DiffLineType::Insert => Some(ratatui_color_from_ansi(diff_add_bg(
                     diff_theme,
                     color_level,
-                )),
-                DiffLineType::Delete => Some(crate::utils::diff_styles::del_line_bg(
+                ))),
+                DiffLineType::Delete => Some(ratatui_color_from_ansi(diff_del_bg(
                     diff_theme,
                     color_level,
-                )),
+                ))),
             };
 
             let prefix = match line_type {

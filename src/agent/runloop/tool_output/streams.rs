@@ -40,11 +40,13 @@
 //! with a notification displayed to the client.
 
 use std::borrow::Cow;
-use std::path::Path;
 
 use anstyle::{AnsiColor, Effects, Reset, Style as AnsiStyle};
 use anyhow::Result;
 use smallvec::SmallVec;
+use vtcode_commons::diff_paths::{
+    language_hint_from_path, parse_diff_git_path, parse_diff_marker_path,
+};
 use vtcode_core::config::ToolOutputMode;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::ui::markdown;
@@ -107,40 +109,6 @@ fn format_hidden_lines_summary(hidden: usize) -> String {
     } else {
         format!("… +{} lines", hidden)
     }
-}
-
-fn parse_diff_git_path(line: &str) -> Option<String> {
-    let mut parts = line.split_whitespace();
-    if parts.next()? != "diff" || parts.next()? != "--git" {
-        return None;
-    }
-    let _old = parts.next()?;
-    let new_path = parts.next()?;
-    Some(new_path.trim_start_matches("b/").to_string())
-}
-
-fn parse_diff_marker_path(line: &str) -> Option<String> {
-    let trimmed = line.trim_start();
-    if !(trimmed.starts_with("--- ") || trimmed.starts_with("+++ ")) {
-        return None;
-    }
-    let path = trimmed.split_whitespace().nth(1)?;
-    if path == "/dev/null" {
-        return None;
-    }
-    Some(
-        path.trim_start_matches("a/")
-            .trim_start_matches("b/")
-            .to_string(),
-    )
-}
-
-fn language_hint_from_path(path: &str) -> Option<String> {
-    Path::new(path)
-        .extension()
-        .and_then(|ext| ext.to_str())
-        .filter(|ext| !ext.is_empty())
-        .map(|ext| ext.to_ascii_lowercase())
 }
 
 fn split_numbered_diff_line(line: &str) -> Option<(char, &str, &str)> {
@@ -269,13 +237,11 @@ fn format_diff_line_with_gutter_and_syntax(
     out.push_str(&format!("{line_no:>line_number_width$} "));
     if let Some(highlighted) = highlight_diff_content(content, language_hint, bg) {
         out.push_str(&highlighted);
+    } else if let Some(style) = base_style {
+        out.push_str(&style.render().to_string());
+        out.push_str(content);
     } else {
-        if let Some(style) = base_style {
-            out.push_str(&style.render().to_string());
-            out.push_str(content);
-        } else {
-            out.push_str(content);
-        }
+        out.push_str(content);
     }
     out.push_str(&reset.to_string());
     out
@@ -363,6 +329,97 @@ async fn render_run_command_preview(
             fallback_style.style(),
             &prefixed_line,
         )?;
+    }
+
+    Ok(())
+}
+
+pub(crate) fn render_diff_content_block(
+    renderer: &mut AnsiRenderer,
+    diff_content: &str,
+    tool_name: Option<&str>,
+    git_styles: &GitStyles,
+    ls_styles: &LsStyles,
+    fallback_style: MessageStyle,
+    mode: ToolOutputMode,
+    tail_limit: usize,
+) -> Result<()> {
+    let diff_lines = format_diff_content_lines_with_numbers(diff_content);
+    let total = diff_lines.len();
+    let effective_limit =
+        if renderer.prefers_untruncated_output() || matches!(mode, ToolOutputMode::Full) {
+            tail_limit.max(1000)
+        } else {
+            tail_limit
+        };
+    let (lines_slice, truncated) = if total > effective_limit {
+        let start = total.saturating_sub(effective_limit);
+        (&diff_lines[start..], total > effective_limit)
+    } else {
+        (&diff_lines[..], false)
+    };
+
+    if truncated {
+        let hidden = total.saturating_sub(lines_slice.len());
+        if hidden > 0 {
+            renderer.line(
+                MessageStyle::ToolDetail,
+                &format!("[... {} lines truncated ...]", hidden),
+            )?;
+        }
+    }
+
+    let mut display_buffer = String::with_capacity(256);
+    let mut current_language_hint: Option<String> = None;
+    let line_number_width = numbered_diff_line_width(lines_slice);
+    for line in lines_slice {
+        if line.is_empty() {
+            continue;
+        }
+        if let Some(path) = parse_diff_git_path(line).or_else(|| parse_diff_marker_path(line)) {
+            current_language_hint = language_hint_from_path(&path);
+        }
+        display_buffer.clear();
+        if line.len() > MAX_LINE_LENGTH {
+            let truncated = truncate_text_safe(line, MAX_LINE_LENGTH);
+            display_buffer.push_str(truncated);
+            display_buffer.push_str("...");
+        } else {
+            display_buffer.push_str(line);
+        }
+
+        if let Some(summary_line) =
+            colorize_diff_summary_line(&display_buffer, renderer.capabilities().supports_color())
+        {
+            renderer.line_with_override_style(
+                fallback_style,
+                fallback_style.style(),
+                &summary_line,
+            )?;
+            continue;
+        }
+
+        let line_style = select_line_style(tool_name, &display_buffer, git_styles, ls_styles);
+        let rendered = format_diff_line_with_gutter_and_syntax(
+            &display_buffer,
+            line_style,
+            current_language_hint.as_deref(),
+            line_number_width,
+        );
+        if rendered != display_buffer {
+            let style = line_style.unwrap_or(fallback_style.style());
+            renderer.line_with_override_style(fallback_style, style, &rendered)?;
+            continue;
+        }
+        if let Some(style) = line_style {
+            renderer.line_with_override_style(fallback_style, style, &display_buffer)?;
+        } else {
+            renderer.line_with_override_style(
+                fallback_style,
+                fallback_style.style(),
+                &display_buffer,
+            )?;
+        }
     }
 
     Ok(())
@@ -538,92 +595,16 @@ pub(crate) async fn render_stream_section(
     }
 
     if is_diff_content {
-        let diff_lines = format_diff_content_lines_with_numbers(stripped_for_diff.as_ref());
-        let total = diff_lines.len();
-        let effective_limit =
-            if renderer.prefers_untruncated_output() || matches!(mode, ToolOutputMode::Full) {
-                tail_limit.max(1000)
-            } else {
-                tail_limit
-            };
-        let (lines_slice, truncated) = if total > effective_limit {
-            let start = total.saturating_sub(effective_limit);
-            (&diff_lines[start..], total > effective_limit)
-        } else {
-            (&diff_lines[..], false)
-        };
-
-        if truncated {
-            let hidden = total.saturating_sub(lines_slice.len());
-            if hidden > 0 {
-                if is_run_command {
-                    renderer.line(
-                        MessageStyle::ToolDetail,
-                        &format_hidden_lines_summary(hidden),
-                    )?;
-                } else {
-                    renderer.line(
-                        MessageStyle::ToolDetail,
-                        &format!("[... {} lines truncated ...]", hidden),
-                    )?;
-                }
-            }
-        }
-
-        let mut display_buffer = String::with_capacity(256);
-        let mut current_language_hint: Option<String> = None;
-        let line_number_width = numbered_diff_line_width(lines_slice);
-        for line in lines_slice {
-            if line.is_empty() {
-                continue;
-            }
-            if let Some(path) = parse_diff_git_path(line).or_else(|| parse_diff_marker_path(line)) {
-                current_language_hint = language_hint_from_path(&path);
-            }
-            display_buffer.clear();
-            if line.len() > MAX_LINE_LENGTH {
-                let truncated = truncate_text_safe(line, MAX_LINE_LENGTH);
-                display_buffer.push_str(truncated);
-                display_buffer.push_str("...");
-            } else {
-                display_buffer.push_str(line);
-            }
-
-            if let Some(summary_line) = colorize_diff_summary_line(
-                &display_buffer,
-                renderer.capabilities().supports_color(),
-            ) {
-                renderer.line_with_override_style(
-                    fallback_style,
-                    fallback_style.style(),
-                    &summary_line,
-                )?;
-                continue;
-            }
-
-            let line_style = select_line_style(tool_name, &display_buffer, git_styles, ls_styles);
-            let rendered = format_diff_line_with_gutter_and_syntax(
-                &display_buffer,
-                line_style,
-                current_language_hint.as_deref(),
-                line_number_width,
-            );
-            if rendered != display_buffer {
-                let style = line_style.unwrap_or(fallback_style.style());
-                renderer.line_with_override_style(fallback_style, style, &rendered)?;
-                continue;
-            }
-            if let Some(style) = line_style {
-                renderer.line_with_override_style(fallback_style, style, &display_buffer)?;
-            } else {
-                renderer.line_with_override_style(
-                    fallback_style,
-                    fallback_style.style(),
-                    &display_buffer,
-                )?;
-            }
-        }
-
+        render_diff_content_block(
+            renderer,
+            stripped_for_diff.as_ref(),
+            tool_name,
+            git_styles,
+            ls_styles,
+            fallback_style,
+            mode,
+            tail_limit,
+        )?;
         return Ok(());
     }
 

@@ -8,6 +8,11 @@ use pulldown_cmark::{CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, T
 use std::cmp::max;
 use syntect::util::LinesWithEndings;
 use unicode_width::UnicodeWidthStr;
+use vtcode_commons::diff_paths::{
+    format_start_only_hunk_header, is_diff_addition_line, is_diff_deletion_line,
+    is_diff_header_line, is_diff_new_file_marker_line, looks_like_diff_content,
+    parse_diff_git_path, parse_diff_marker_path,
+};
 
 use crate::utils::diff_styles::DiffColorPalette;
 
@@ -928,71 +933,6 @@ fn highlight_code_block(
     lines
 }
 
-fn format_start_only_hunk_header(line: &str) -> Option<String> {
-    let trimmed = line.trim_end();
-    if !trimmed.starts_with("@@ -") {
-        return None;
-    }
-
-    let rest = trimmed.strip_prefix("@@ -")?;
-    let mut parts = rest.split_whitespace();
-    let old_part = parts.next()?;
-    let new_part = parts.next()?;
-
-    if !new_part.starts_with('+') {
-        return None;
-    }
-
-    let old_start = old_part.split(',').next()?.parse::<usize>().ok()?;
-    let new_start = new_part
-        .trim_start_matches('+')
-        .split(',')
-        .next()?
-        .parse::<usize>()
-        .ok()?;
-
-    Some(format!("@@ -{} +{} @@", old_start, new_start))
-}
-
-fn parse_diff_git_path(line: &str) -> Option<String> {
-    let mut parts = line.split_whitespace();
-    if parts.next()? != "diff" {
-        return None;
-    }
-    if parts.next()? != "--git" {
-        return None;
-    }
-    let _old = parts.next()?;
-    let new_path = parts.next()?;
-    Some(new_path.trim_start_matches("b/").to_string())
-}
-
-fn parse_diff_marker_path(line: &str) -> Option<String> {
-    let trimmed = line.trim_start();
-    if !(trimmed.starts_with("--- ") || trimmed.starts_with("+++ ")) {
-        return None;
-    }
-    let path = trimmed.split_whitespace().nth(1)?;
-    if path == "/dev/null" {
-        return None;
-    }
-    Some(
-        path.trim_start_matches("a/")
-            .trim_start_matches("b/")
-            .to_string(),
-    )
-}
-
-fn is_addition_line(line: &str) -> bool {
-    let trimmed = line.trim_start();
-    trimmed.starts_with('+') && !trimmed.starts_with("+++")
-}
-
-fn is_deletion_line(line: &str) -> bool {
-    let trimmed = line.trim_start();
-    trimmed.starts_with('-') && !trimmed.starts_with("---")
-}
-
 fn normalize_diff_lines(code: &str) -> Vec<String> {
     #[derive(Default)]
     struct DiffBlock {
@@ -1024,9 +964,9 @@ fn normalize_diff_lines(code: &str) -> Vec<String> {
 
         let rewritten = format_start_only_hunk_header(line).unwrap_or_else(|| line.to_string());
         if let Some(block) = current.as_mut() {
-            if is_addition_line(line) {
+            if is_diff_addition_line(line.trim_start()) {
                 block.additions += 1;
-            } else if is_deletion_line(line) {
+            } else if is_diff_deletion_line(line.trim_start()) {
                 block.deletions += 1;
             }
             block.lines.push(rewritten);
@@ -1050,12 +990,12 @@ fn normalize_diff_lines(code: &str) -> Vec<String> {
             if fallback_path.is_none() {
                 fallback_path = parse_diff_marker_path(line);
             }
-            if summary_insert_index.is_none() && line.trim_start().starts_with("+++ ") {
+            if summary_insert_index.is_none() && is_diff_new_file_marker_line(line.trim_start()) {
                 summary_insert_index = Some(lines.len());
             }
-            if is_addition_line(line) {
+            if is_diff_addition_line(line.trim_start()) {
                 additions += 1;
-            } else if is_deletion_line(line) {
+            } else if is_diff_deletion_line(line.trim_start()) {
                 deletions += 1;
             }
             let rewritten = format_start_only_hunk_header(line).unwrap_or_else(|| line.to_string());
@@ -1126,9 +1066,9 @@ fn render_diff_code_block(
             context_style
         } else if is_diff_header_line(trimmed_start) {
             header_style
-        } else if trimmed_start.starts_with('+') && !trimmed_start.starts_with("+++") {
+        } else if is_diff_addition_line(trimmed_start) {
             added_style
-        } else if trimmed_start.starts_with('-') && !trimmed_start.starts_with("---") {
+        } else if is_diff_deletion_line(trimmed_start) {
             removed_style
         } else {
             context_style
@@ -1159,50 +1099,6 @@ fn parse_diff_summary_line(line: &str) -> Option<(&str, usize, usize)> {
     let additions = parts.next()?.strip_prefix('+')?.parse().ok()?;
     let deletions = parts.next()?.strip_prefix('-')?.parse().ok()?;
     Some((path, additions, deletions))
-}
-
-fn is_diff_header_line(trimmed: &str) -> bool {
-    trimmed.starts_with("diff --git ")
-        || trimmed.starts_with("@@")
-        || trimmed.starts_with("index ")
-        || trimmed.starts_with("new file mode ")
-        || trimmed.starts_with("deleted file mode ")
-        || trimmed.starts_with("rename from ")
-        || trimmed.starts_with("rename to ")
-        || trimmed.starts_with("copy from ")
-        || trimmed.starts_with("copy to ")
-        || trimmed.starts_with("similarity index ")
-        || trimmed.starts_with("dissimilarity index ")
-        || trimmed.starts_with("old mode ")
-        || trimmed.starts_with("new mode ")
-        || trimmed.starts_with("Binary files ")
-        || trimmed.starts_with("\\ No newline at end of file")
-        || trimmed.starts_with("+++ ")
-        || trimmed.starts_with("--- ")
-}
-
-fn looks_like_diff_content(code: &str) -> bool {
-    let mut has_added_line = false;
-    let mut has_removed_line = false;
-
-    for line in code.lines() {
-        let trimmed = line.trim_start();
-        if trimmed.is_empty() {
-            continue;
-        }
-        if is_diff_header_line(trimmed) {
-            return true;
-        }
-        if trimmed.starts_with('+') && !trimmed.starts_with("+++") {
-            has_added_line = true;
-            continue;
-        }
-        if trimmed.starts_with('-') && !trimmed.starts_with("---") {
-            has_removed_line = true;
-        }
-    }
-
-    has_added_line && has_removed_line
 }
 
 fn line_prefix_segments(

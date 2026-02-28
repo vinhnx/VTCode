@@ -6124,6 +6124,7 @@ dependencies = [
  "tracing-subscriber",
  "url",
  "vtcode-acp-client",
+ "vtcode-commons",
  "vtcode-config",
  "vtcode-core",
  "vtcode-tui",
