@@ -38,7 +38,9 @@ impl std::str::FromStr for ToolSearchAlgorithm {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ToolDefinition {
     /// The type of tool: "function", "apply_patch" (GPT-5.1), "shell" (GPT-5.1), or "custom" (GPT-5 freeform)
-    /// Also supports Anthropic tool search types: "tool_search_tool_regex_20251119", "tool_search_tool_bm25_20251119"
+    /// Also supports Anthropic tool types like:
+    /// - "tool_search_tool_regex_20251119", "tool_search_tool_bm25_20251119"
+    /// - "web_search_20260209" (and other web_search_* revisions)
     #[serde(rename = "type")]
     pub tool_type: String,
 
@@ -331,8 +333,9 @@ impl ToolDefinition {
             "tool_search_tool_regex_20251119" | "tool_search_tool_bm25_20251119" => {
                 self.validate_function()
             }
+            other if other.starts_with("web_search_") => Ok(()),
             other => Err(format!(
-                "Unsupported tool type: {}. Supported types: function, apply_patch, shell, custom, grammar, web_search, tool_search_tool_*",
+                "Unsupported tool type: {}. Supported types: function, apply_patch, shell, custom, grammar, web_search, tool_search_tool_*, web_search_*",
                 other
             )),
         }
@@ -344,6 +347,11 @@ impl ToolDefinition {
             self.tool_type.as_str(),
             "tool_search_tool_regex_20251119" | "tool_search_tool_bm25_20251119"
         )
+    }
+
+    /// Returns true when the tool is an Anthropic native web search tool revision.
+    pub fn is_anthropic_web_search(&self) -> bool {
+        self.tool_type.starts_with("web_search_")
     }
 
     fn validate_function(&self) -> Result<(), String> {

@@ -1,6 +1,7 @@
 use crate::llm::provider::LLMRequest;
 use crate::llm::providers::anthropic_types::{
-    AnthropicFunctionTool, AnthropicTool, AnthropicToolSearchTool, CacheControl, ThinkingConfig,
+    AnthropicFunctionTool, AnthropicTool, AnthropicToolSearchTool, AnthropicWebSearchTool,
+    CacheControl, ThinkingConfig,
 };
 use serde_json::{Value, json};
 
@@ -24,6 +25,13 @@ pub(crate) fn build_tools(
                 return Some(AnthropicTool::ToolSearch(AnthropicToolSearchTool {
                     tool_type: tool.tool_type.clone(),
                     name: func.name.clone(),
+                }));
+            }
+
+            if tool.is_anthropic_web_search() {
+                return Some(AnthropicTool::WebSearch(AnthropicWebSearchTool {
+                    tool_type: tool.tool_type.clone(),
+                    name: "web_search".to_string(),
                 }));
             }
 
