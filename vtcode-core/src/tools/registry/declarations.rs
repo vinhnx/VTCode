@@ -904,22 +904,22 @@ fn annotate_parameters(params: &mut Value, meta: &super::registration::ToolMetad
     };
 
     if let Some(permission) = meta.default_permission() {
-        map.insert(
+        insert_if_allowed(map, 
             "x-default-permission".to_string(),
             json!(permission_label(&permission)),
         );
     }
 
     if !meta.aliases().is_empty() {
-        map.insert("x-aliases".to_string(), json!(meta.aliases().to_vec()));
+        insert_if_allowed(map, "x-aliases".to_string(), json!(meta.aliases().to_vec()));
     }
 
     if let Some(schema) = meta.config_schema() {
-        map.insert("x-config-schema".to_string(), schema.clone());
+        insert_if_allowed(map, "x-config-schema".to_string(), schema.clone());
     }
 
     if let Some(schema) = meta.state_schema() {
-        map.insert("x-state-schema".to_string(), schema.clone());
+        insert_if_allowed(map, "x-state-schema".to_string(), schema.clone());
     }
 }
 
@@ -928,5 +928,11 @@ fn permission_label(permission: &ToolPolicy) -> &'static str {
         ToolPolicy::Allow => "allow",
         ToolPolicy::Deny => "deny",
         ToolPolicy::Prompt => "prompt",
+    }
+}
+
+fn insert_if_allowed(map: &mut serde_json::Map<String, Value>, key: String, value: Value) {
+    if !key.starts_with("x-") {
+        map.insert(key, value);
     }
 }

@@ -33,7 +33,7 @@ pub fn sanitize_function_parameters(parameters: Value) -> Value {
             let mut sanitized = Map::new();
             for (key, value) in map {
                 // Skip unsupported fields at this level
-                if UNSUPPORTED_FIELDS.contains(&key.as_str()) {
+                if UNSUPPORTED_FIELDS.contains(&key.as_str()) || key.starts_with("x-") {
                     continue;
                 }
                 // Recursively sanitize nested values
