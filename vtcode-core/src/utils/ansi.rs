@@ -27,6 +27,8 @@ pub struct AnsiRenderer {
     last_line_was_empty: bool,
     highlight_config: SyntaxHighlightingConfig,
     capabilities: AnsiCapabilities,
+    reasoning_visible: bool,
+    screen_reader_mode: bool,
 }
 
 impl AnsiRenderer {
@@ -47,6 +49,8 @@ impl AnsiRenderer {
             last_line_was_empty: false,
             highlight_config: SyntaxHighlightingConfig::default(),
             capabilities,
+            reasoning_visible: true,
+            screen_reader_mode: false,
         }
     }
 
@@ -93,6 +97,30 @@ impl AnsiRenderer {
 
     pub fn supports_inline_ui(&self) -> bool {
         self.sink.is_some()
+    }
+
+    pub fn set_reasoning_visible(&mut self, visible: bool) {
+        self.reasoning_visible = visible;
+    }
+
+    pub fn reasoning_visible(&self) -> bool {
+        self.reasoning_visible
+    }
+
+    pub fn set_screen_reader_mode(&mut self, enabled: bool) {
+        self.screen_reader_mode = enabled;
+    }
+
+    fn should_render_style(&self, style: MessageStyle) -> bool {
+        self.reasoning_visible || !matches!(style, MessageStyle::Reasoning)
+    }
+
+    fn indent_for_style(&self, style: MessageStyle) -> &'static str {
+        if self.screen_reader_mode && matches!(style, MessageStyle::Reasoning) {
+            "  [reasoning] "
+        } else {
+            style.indent()
+        }
     }
 
     /// Get the terminal's detected ANSI capabilities
@@ -163,8 +191,12 @@ impl AnsiRenderer {
 
     /// Flush the buffer with the given style
     pub fn flush(&mut self, style: MessageStyle) -> Result<()> {
+        if !self.should_render_style(style) {
+            self.buffer.clear();
+            return Ok(());
+        }
+        let indent = self.indent_for_style(style);
         if let Some(sink) = &mut self.sink {
-            let indent = style.indent();
             // Track if this line is empty
             self.last_line_was_empty = self.buffer.is_empty() && indent.is_empty();
             sink.write_line(
@@ -192,6 +224,9 @@ impl AnsiRenderer {
 
     /// Convenience for writing a single line
     pub fn line(&mut self, style: MessageStyle, text: &str) -> Result<()> {
+        if !self.should_render_style(style) {
+            return Ok(());
+        }
         if matches!(style, MessageStyle::Response | MessageStyle::Reasoning) {
             return self.render_markdown(style, text);
         }
@@ -260,6 +295,9 @@ impl AnsiRenderer {
 
     /// Write styled text without a trailing newline
     pub fn inline_with_style(&mut self, style: MessageStyle, text: &str) -> Result<()> {
+        if !self.should_render_style(style) {
+            return Ok(());
+        }
         if let Some(sink) = &mut self.sink {
             sink.write_inline(style.style(), text, Self::message_kind(style));
             return Ok(());
@@ -286,8 +324,11 @@ impl AnsiRenderer {
         style: Style,
         text: &str,
     ) -> Result<()> {
+        if !self.should_render_style(fallback) {
+            return Ok(());
+        }
         let kind = Self::message_kind(fallback);
-        let indent = fallback.indent();
+        let indent = self.indent_for_style(fallback);
         if let Some(sink) = &mut self.sink {
             sink.write_multiline(style, indent, text, kind)?;
             self.last_line_was_empty = text.trim().is_empty();
@@ -337,9 +378,12 @@ impl AnsiRenderer {
     }
 
     fn render_markdown(&mut self, style: MessageStyle, text: &str) -> Result<()> {
+        if !self.should_render_style(style) {
+            return Ok(());
+        }
         let styles = theme::active_styles();
         let base_style = style.style();
-        let indent = style.indent();
+        let indent = self.indent_for_style(style);
         let preserve_code_indentation = matches!(
             style,
             MessageStyle::Output
@@ -458,12 +502,16 @@ impl AnsiRenderer {
         lines: &[String],
         previous_line_count: &mut usize,
     ) -> Result<()> {
+        if !self.reasoning_visible {
+            *previous_line_count = 0;
+            return Ok(());
+        }
         if lines.is_empty() {
             return Ok(());
         }
 
         let style = MessageStyle::Reasoning;
-        let indent = style.indent();
+        let indent = self.indent_for_style(style);
         let kind = Self::message_kind(style);
         let base_style = style.style();
 
@@ -1274,6 +1322,8 @@ mod tests {
             last_line_was_empty: false,
             highlight_config: SyntaxHighlightingConfig::default(),
             capabilities: AnsiCapabilities::detect(),
+            reasoning_visible: true,
+            screen_reader_mode: false,
         };
 
         // This should not create an extra empty line after "line 2"

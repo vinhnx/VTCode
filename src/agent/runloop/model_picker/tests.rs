@@ -43,6 +43,7 @@ fn model_picker_lists_new_ollama_cloud_models() {
     let options = MODEL_OPTIONS.as_slice();
     assert!(has_model(options, ModelId::OllamaGptOss20b));
     assert!(has_model(options, ModelId::OllamaGptOss120bCloud));
+    assert!(has_model(options, ModelId::OllamaQwen3CoderNext));
     assert!(has_model(options, ModelId::OllamaDeepseekV32Cloud));
     assert!(has_model(options, ModelId::OllamaQwen3Next80bCloud));
     assert!(has_model(options, ModelId::OllamaMistralLarge3675bCloud));

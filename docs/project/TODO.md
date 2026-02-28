@@ -46,22 +46,6 @@ Keyboard-first navigation: Full UNIX keybinding support (Ctrl+A/E/W/U/K, Alt+arr
 
 ---
 
-Ctrl+X, Ctrl+E, Ctrl+G: Open your preferred terminal editor for composing longer prompts.
-
----
-
-Accessibility: Screen reader mode, configurable reasoning visibility, and responsive layout for narrow terminals.
-
----
-
-/Users/vinhnguyenxuan/Documents/vtcode-resources/color-commands.png
-
----
-
-The TUI picked up new convenience commands: /copy copies the latest complete assistant reply, while /clear and Ctrl-L clear the screen without losing thread context, with /clear also able to start a fresh chat. (#12444, #12520, #12613, #12628)
-
----
-
 https://github.com/openai/codex/releases/tag/rust-v0.105.0
 
 ---
@@ -83,3 +67,9 @@ now.
    spooled_bytes, duplicate id==session_id, null working_directory).
 3. Shorten high-frequency follow-up prompts for PTY and spool-chunk reads, and
    provide compact structured continuation args for chunked spool reads.
+
+---
+
+check external edtior (control+e) can not use normal mode (escape). This is because the escape key is currently hardcoded to trigger the rewind functionality, which conflicts with its expected behavior in normal mode. To resolve this, we need to implement a more context-aware handling of the escape key, allowing it to function as intended in normal mode while still providing the rewind functionality when appropriate. This may involve introducing a new keybinding for the rewind action or implementing a double-escape mechanism to differentiate between the two use cases. check crossterm event handling for escape key and implement the necessary logic to support both functionalities without conflict. vtcode support external editor config.
+
+expand external editor support to allow users to configure their preferred editor for the control+e shortcut. This would involve adding a configuration option in the settings where users can specify the command for their external editor (e.g., vim, nano, code). The system would then use this command to launch the specified editor when the control+e shortcut is pressed, providing a seamless and customizable editing experience for users who prefer to use an external editor over the built-in one. Also check to support VS Code, Zed, Text Edit, Sublime Text, TextMate, Emacs, and other popular editors, nvim...

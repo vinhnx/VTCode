@@ -90,7 +90,7 @@ pub use optimization::{
 pub use output_styles::{OutputStyle, OutputStyleConfig, OutputStyleManager};
 pub use root::{
     AskQuestionsConfig, ChatConfig, LayoutModeOverride, NotificationDeliveryMode, PtyConfig,
-    ToolOutputMode, UiConfig, UiDisplayMode, UiNotificationsConfig,
+    ReasoningDisplayMode, ToolOutputMode, UiConfig, UiDisplayMode, UiNotificationsConfig,
 };
 #[cfg(feature = "schema")]
 pub use schema::{vtcode_config_schema, vtcode_config_schema_json, vtcode_config_schema_pretty};

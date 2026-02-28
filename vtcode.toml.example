@@ -760,11 +760,25 @@ allow_tool_ansi = true
 # Number of rows to allocate for inline UI viewport
 inline_viewport_rows = 16
 
+# Override responsive layout mode: "auto", "compact", "standard", or "wide"
+layout_mode = "auto"
+
 # Reasoning display mode for chat UI: "always", "toggle", or "hidden"
 reasoning_display_mode = "toggle"
 
 # Default visibility for reasoning when display mode is "toggle"
 reasoning_visible_default = false
+
+# Screen reader mode: disable animation effects and use plain text indicators.
+# Can also be enabled via: VTCODE_SCREEN_READER=1
+screen_reader_mode = false
+
+# Reduce motion mode: minimize shimmer/flashing animations.
+# Can also be enabled via: VTCODE_REDUCE_MOTION=1
+reduce_motion_mode = false
+
+# Keep animated progress indicators while reduce_motion_mode is enabled.
+reduce_motion_keep_progress_animation = false
 
 # === Color Accessibility Configuration ===
 # Based on NO_COLOR standard (https://no-color.org/), Ghostty minimum-contrast feature,

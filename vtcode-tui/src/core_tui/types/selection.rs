@@ -12,6 +12,7 @@ pub enum InlineListSelection {
     CustomModel,
     Theme(String),
     Session(String),
+    ConfigAction(String),
     SlashCommand(String),
     ToolApproval(bool),
     ToolApprovalDenyOnce,

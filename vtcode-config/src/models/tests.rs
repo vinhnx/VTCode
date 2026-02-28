@@ -420,6 +420,7 @@ fn test_models_for_provider() {
     assert!(ollama_models.contains(&ModelId::OllamaGptOss20bCloud));
     assert!(ollama_models.contains(&ModelId::OllamaGptOss120bCloud));
     assert!(ollama_models.contains(&ModelId::OllamaQwen317b));
+    assert!(ollama_models.contains(&ModelId::OllamaQwen3CoderNext));
     assert!(ollama_models.contains(&ModelId::OllamaDeepseekV32Cloud));
     assert!(ollama_models.contains(&ModelId::OllamaQwen3Next80bCloud));
     assert!(ollama_models.contains(&ModelId::OllamaMistralLarge3675bCloud));
@@ -454,6 +455,10 @@ fn test_ollama_cloud_models() {
         (
             ModelId::OllamaDeepseekV32Cloud,
             models::ollama::DEEPSEEK_V32_CLOUD,
+        ),
+        (
+            ModelId::OllamaQwen3CoderNext,
+            models::ollama::QWEN3_CODER_NEXT,
         ),
         (
             ModelId::OllamaQwen3Coder480bCloud,

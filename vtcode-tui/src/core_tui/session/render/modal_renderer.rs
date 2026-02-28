@@ -37,12 +37,9 @@ pub fn render_modal(session: &mut Session, frame: &mut Frame<'_>, viewport: Rect
         }
         width_lines.extend(wizard.instruction_lines());
 
-        let list_state = wizard.steps.get(wizard.current_step).map(|step| &step.list);
-        let width_hint =
-            modal_content_width(&width_lines, list_state, None, wizard.search.as_ref());
         let text_lines = width_lines.len();
         let search_lines = wizard.search.as_ref().map(|_| 3).unwrap_or(0);
-        let area = compute_modal_area(viewport, width_hint, text_lines, 0, search_lines, true);
+        let area = compute_modal_area(viewport, text_lines, 0, search_lines, true);
 
         let block = Block::bordered()
             .title(Line::styled(wizard.title.clone(), styles.title))
@@ -75,17 +72,10 @@ pub fn render_modal(session: &mut Session, frame: &mut Frame<'_>, viewport: Rect
         return;
     };
 
-    let width_hint = modal_content_width(
-        &modal.lines,
-        modal.list.as_ref(),
-        modal.secure_prompt.as_ref(),
-        modal.search.as_ref(),
-    );
     let prompt_lines = if modal.secure_prompt.is_some() { 2 } else { 0 };
     let search_lines = modal.search.as_ref().map(|_| 3).unwrap_or(0);
     let area = compute_modal_area(
         viewport,
-        width_hint,
         modal.lines.len(),
         prompt_lines,
         search_lines,

@@ -37,6 +37,7 @@ impl ModelId {
             ModelId::OllamaGptOss20bCloud => "GPT-OSS 20B (cloud)",
             ModelId::OllamaGptOss120bCloud => "GPT-OSS 120B (cloud)",
             ModelId::OllamaQwen317b => "Qwen3 1.7B (local)",
+            ModelId::OllamaQwen3CoderNext => "Qwen3-Coder-Next (cloud)",
             ModelId::OllamaDeepseekV32Cloud => "DeepSeek V3.2 (cloud)",
             ModelId::OllamaQwen3Next80bCloud => "Qwen3 Next 80B (cloud)",
             ModelId::OllamaMistralLarge3675bCloud => "Mistral Large 3 675B (cloud)",

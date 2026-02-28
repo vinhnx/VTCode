@@ -126,6 +126,15 @@ pub(crate) async fn initialize_session_ui(
     transcript::set_inline_handle(Arc::new(handle.clone()));
     let mut ide_context_bridge = IdeContextBridge::from_env();
     let mut renderer = AnsiRenderer::with_inline_ui(handle.clone(), highlight_config);
+    if let Some(cfg) = vt_cfg {
+        let reasoning_visible = match cfg.ui.reasoning_display_mode {
+            vtcode_core::config::ReasoningDisplayMode::Always => true,
+            vtcode_core::config::ReasoningDisplayMode::Hidden => false,
+            vtcode_core::config::ReasoningDisplayMode::Toggle => cfg.ui.reasoning_visible_default,
+        };
+        renderer.set_reasoning_visible(reasoning_visible);
+        renderer.set_screen_reader_mode(cfg.ui.screen_reader_mode);
+    }
     let ui_redraw_batcher =
         crate::agent::runloop::unified::turn::utils::UIRedrawBatcher::with_auto_flush(
             handle.clone(),

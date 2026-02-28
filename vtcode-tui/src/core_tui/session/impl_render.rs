@@ -29,7 +29,7 @@ impl Session {
                 .input_status_right
                 .as_ref()
                 .is_some_and(|v| !v.trim().is_empty());
-        let mode = crate::ui::tui::widgets::LayoutMode::from_area(viewport);
+        let mode = self.resolved_layout_mode(viewport);
         let status_height = if viewport.width > 0 && has_status && !mode.show_footer() {
             1
         } else {

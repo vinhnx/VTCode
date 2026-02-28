@@ -412,7 +412,7 @@ impl SlashPalette {
             .collect();
 
         if scored.is_empty() {
-            return self.commands.clone();
+            return Vec::new();
         }
 
         scored.sort_by(|(a, name_pos_a, desc_pos_a), (b, name_pos_b, desc_pos_b)| {
@@ -592,6 +592,7 @@ mod tests {
 
         let update = palette.update(Some("zzz"), 10);
         assert!(matches!(update, SlashPaletteUpdate::Changed { .. }));
+        assert!(palette.items().is_empty());
 
         for item in palette.items() {
             assert!(

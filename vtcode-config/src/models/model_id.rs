@@ -99,6 +99,8 @@ pub enum ModelId {
     OllamaGptOss120bCloud,
     /// Qwen3 1.7B - Qwen3 1.7B model served via Ollama
     OllamaQwen317b,
+    /// Qwen3 Coder Next - Coding-optimized Qwen3 Next model served via Ollama locally
+    OllamaQwen3CoderNext,
     /// DeepSeek V3.2 Cloud - DeepSeek V3.2 reasoning deployment via Ollama Cloud
     OllamaDeepseekV32Cloud,
     /// Qwen3 Next 80B Cloud - Next-generation Qwen3 80B via Ollama Cloud

@@ -67,7 +67,6 @@ fn terminal_dimensions() -> Option<(u16, u16)> {
 
 pub fn compute_modal_area(
     viewport: Rect,
-    width_hint: u16,
     text_lines: usize,
     prompt_lines: usize,
     search_lines: usize,
@@ -98,10 +97,7 @@ pub fn compute_modal_area(
         base_min_height
     };
 
-    let mut width = width_hint
-        .saturating_add(ui::MODAL_CONTENT_HORIZONTAL_PADDING)
-        .max(min_width)
-        .max(ratio_width);
+    let mut width = ratio_width.max(min_width);
     width = width.min(max_width.max(min_width)).min(available_width);
 
     let total_lines = text_lines

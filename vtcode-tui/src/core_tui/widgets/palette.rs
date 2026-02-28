@@ -10,7 +10,6 @@ use crate::config::constants::ui;
 use crate::ui::tui::session::{
     Session, file_palette::FilePalette, modal::compute_modal_area, terminal_capabilities,
 };
-use crate::ui::tui::style::measure_text_width;
 
 /// Widget for rendering the file browser palette
 ///
@@ -63,23 +62,12 @@ impl<'a> Widget for FilePaletteWidget<'a> {
             return;
         }
 
-        // Calculate width hint
-        let mut width_hint = 40u16;
-        for (_, entry, _) in &items {
-            let display = if entry.is_dir {
-                format!("{}/ ", entry.display_name)
-            } else {
-                entry.display_name.clone()
-            };
-            width_hint = width_hint.max(measure_text_width(&display) + 4);
-        }
-
         let instructions = self.instructions();
         let modal_height = items.len()
             + instructions.len()
             + 2
             + if self.palette.has_more_items() { 1 } else { 0 };
-        let area = compute_modal_area(self.viewport, width_hint, modal_height, 0, 0, true);
+        let area = compute_modal_area(self.viewport, modal_height, 0, 0, true);
 
         Clear.render(area, buf);
         let block = Block::bordered()
@@ -183,9 +171,8 @@ impl<'a> Widget for FilePaletteWidget<'a> {
 
 impl<'a> FilePaletteWidget<'a> {
     fn render_loading(&self, buf: &mut Buffer) {
-        let width_hint = 40u16;
         let modal_height = 3;
-        let area = compute_modal_area(self.viewport, width_hint, modal_height, 0, 0, true);
+        let area = compute_modal_area(self.viewport, modal_height, 0, 0, true);
 
         Clear.render(area, buf);
         let block = Block::bordered()

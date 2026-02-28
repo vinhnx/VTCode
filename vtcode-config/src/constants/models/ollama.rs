@@ -4,6 +4,7 @@ pub const DEFAULT_MODEL: &str = DEFAULT_LOCAL_MODEL;
 pub const SUPPORTED_MODELS: &[&str] = &[
     DEFAULT_LOCAL_MODEL,
     QWEN3_1_7B,
+    QWEN3_CODER_NEXT,
     DEFAULT_CLOUD_MODEL,
     GPT_OSS_20B_CLOUD,
     DEEPSEEK_V32_CLOUD,
@@ -53,6 +54,7 @@ pub const GPT_OSS_20B: &str = DEFAULT_LOCAL_MODEL;
 pub const GPT_OSS_20B_CLOUD: &str = "gpt-oss:20b-cloud";
 pub const GPT_OSS_120B_CLOUD: &str = DEFAULT_CLOUD_MODEL;
 pub const QWEN3_1_7B: &str = "qwen3:1.7b";
+pub const QWEN3_CODER_NEXT: &str = "qwen3-coder-next:cloud";
 pub const DEEPSEEK_V32_CLOUD: &str = "deepseek-v3.2:cloud";
 pub const QWEN3_NEXT_80B_CLOUD: &str = "qwen3-next:80b-cloud";
 pub const MISTRAL_LARGE_3_675B_CLOUD: &str = "mistral-large-3:675b-cloud";

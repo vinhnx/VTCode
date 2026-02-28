@@ -68,6 +68,11 @@ pub fn handle_command(session: &mut Session, command: InlineCommand) {
             ensure_prompt_style_color(session);
             session.invalidate_transcript_cache();
         }
+        InlineCommand::SetAppearance { appearance } => {
+            session.appearance = appearance;
+            session.invalidate_transcript_cache();
+            session.invalidate_scroll_metrics();
+        }
         InlineCommand::SetQueuedInputs { entries } => {
             session.set_queued_inputs_entries(entries);
             mark_dirty(session);

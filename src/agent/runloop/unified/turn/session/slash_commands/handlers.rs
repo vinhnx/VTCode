@@ -17,6 +17,7 @@ use crate::hooks::lifecycle::SessionEndReason;
 use vtcode_core::agent_teams::{TeamRole, TeamStorage, TeamTaskStatus};
 
 use super::{SlashCommandContext, SlashCommandControl};
+use crate::agent::runloop::unified::palettes::{ActivePalette, show_config_palette};
 use crate::agent::runloop::unified::turn::config_modal::load_config_modal_content;
 #[path = "agents.rs"]
 mod agents;
@@ -100,6 +101,50 @@ pub(super) fn persist_mode_settings(
 }
 
 pub async fn handle_show_config(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
+    if ctx.renderer.supports_inline_ui() {
+        if ctx.model_picker_state.is_some() {
+            ctx.renderer.line(
+                MessageStyle::Error,
+                "Close the active model picker before viewing configuration.",
+            )?;
+            return Ok(SlashCommandControl::Continue);
+        }
+        if ctx.palette_state.is_some() {
+            ctx.renderer.line(
+                MessageStyle::Error,
+                "Another selection modal is already open. Press Esc to dismiss it before starting a new one.",
+            )?;
+            return Ok(SlashCommandControl::Continue);
+        }
+
+        let workspace_path = ctx.config.workspace.clone();
+        let vt_snapshot = ctx.vt_cfg.clone();
+        if show_config_palette(ctx.renderer, &workspace_path, &vt_snapshot, None)? {
+            *ctx.palette_state = Some(ActivePalette::Config {
+                workspace: workspace_path,
+                vt_snapshot,
+                selected: None,
+            });
+        }
+
+        return Ok(SlashCommandControl::Continue);
+    }
+
+    if ctx.model_picker_state.is_some() {
+        ctx.renderer.line(
+            MessageStyle::Error,
+            "Close the active model picker before viewing configuration.",
+        )?;
+        return Ok(SlashCommandControl::Continue);
+    }
+    if ctx.palette_state.is_some() {
+        ctx.renderer.line(
+            MessageStyle::Error,
+            "Another selection modal is already open. Press Esc to dismiss it before starting a new one.",
+        )?;
+        return Ok(SlashCommandControl::Continue);
+    }
+
     let workspace_path = ctx.config.workspace.clone();
     let vt_snapshot = ctx.vt_cfg.clone();
     match load_config_modal_content(workspace_path, vt_snapshot).await {

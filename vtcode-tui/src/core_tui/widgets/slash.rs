@@ -13,9 +13,7 @@ use crate::ui::tui::session::{
     slash_palette::{SlashPalette, SlashPaletteSuggestion},
     terminal_capabilities,
 };
-use crate::ui::tui::style::{
-    measure_text_width, ratatui_color_from_ansi, ratatui_style_from_inline,
-};
+use crate::ui::tui::style::{ratatui_color_from_ansi, ratatui_style_from_inline};
 use crate::ui::tui::types::InlineTextStyle;
 
 /// Widget for rendering the slash command palette
@@ -63,26 +61,9 @@ impl<'a> Widget for SlashWidget<'a> {
             return;
         }
 
-        // Calculate width hint based on the longest suggestion
-        let mut width_hint = measure_text_width(ui::SLASH_PALETTE_HINT_PRIMARY);
-        width_hint = width_hint.max(measure_text_width(ui::SLASH_PALETTE_HINT_SECONDARY));
-
-        for suggestion in suggestions.iter().take(ui::SLASH_SUGGESTION_LIMIT) {
-            let label = match suggestion {
-                SlashPaletteSuggestion::Static(cmd) => {
-                    if !cmd.description.is_empty() {
-                        format!("/{} {}", cmd.name, cmd.description)
-                    } else {
-                        format!("/ {}", cmd.name)
-                    }
-                }
-            };
-            width_hint = width_hint.max(measure_text_width(&label));
-        }
-
         let instructions = self.instructions();
         let modal_height = suggestions.len() + instructions.len() + 2;
-        let area = compute_modal_area(self.viewport, width_hint, modal_height, 0, 0, true);
+        let area = compute_modal_area(self.viewport, modal_height, 0, 0, true);
 
         // Clear the background
         Clear.render(area, buf);
