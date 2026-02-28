@@ -250,3 +250,79 @@ behavior: remove unnecessary history mutation in the
 recovery helper, and inline the empty-input turn
 gate (drop the extra helper/tests). I’m applying
 those now.
+
+---
+
+check minimax-m2.5 error
+
+```
+{
+  "metadata": {
+    "workspace_label": "vtcode",
+    "workspace_path": "/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode",
+    "model": "glm-5:cloud",
+    "provider": "ollama",
+    "theme": "ciapre-blue",
+    "reasoning_effort": "low",
+    "loaded_skills": []
+  },
+  "started_at": "2026-02-28T16:18:08.797078Z",
+  "ended_at": "2026-02-28T16:19:08.673133Z",
+  "total_messages": 6,
+  "distinct_tools": [
+    "run_pty_cmd"
+  ],
+  "transcript": [
+    "Theme selection cancelled.",
+    "Selected GPT-5 (gpt-5) from OpenAI.",
+    "Model picker cancelled.",
+    "Selected MiniMax-M2.5 (MiniMax-M2.5) from MiniMax.",
+    "Model set to MiniMax-M2.5 (MiniMax-M2.5) via MiniMax.",
+    "Reasoning effort remains 'low'.",
+    "hello",
+    "  <think>",
+    "  The user is saying hello. This is a simple greeting. According to my guidelines, I should be concise and direct. I should acknowledge the greeting and offer to help with their coding goals.",
+    "  I don't need to do any exploration or make any changes - this is just a greeting. I'll respond briefly and ask how I can help.",
+    "  </think>",
+    "  Hello! I'm ready to help with your coding tasks. What would you like to work on?",
+    "Worked for 5s",
+    "run cargo fmt",
+    "    ✓ run completed (exit code: 0)",
+    "continue",
+    "LLM request failed: Provider error: MiniMax HTTP 400 Bad Request: {\"type\":\"error\",\"error\":{\"type\":\"bad_request_error\",\"message\":\"invalid params, tool result's tool id() not found (2013)\",\"http_code\":\"400\"},\"request_id\":\"05f24873adc5ce5bf3243bcd19fa168d\"}",
+    "Interrupt received. Stopping task... (Press Ctrl+C again within 2s to exit)"
+  ],
+  "messages": [
+    {
+      "role": "User",
+      "content": "hello",
+      "tool_call_id": null
+    },
+    {
+      "role": "Assistant",
+      "content": "<think>\nThe user is saying hello. This is a simple greeting. According to my guidelines, I should be concise and direct. I should acknowledge the greeting and offer to help with their coding goals.\n\nI don't need to do any exploration or make any changes - this is just a greeting. I'll respond briefly and ask how I can help.\n</think>\n\nHello! I'm ready to help with your coding tasks. What would you like to work on?",
+      "tool_call_id": null
+    },
+    {
+      "role": "User",
+      "content": "run cargo fmt",
+      "tool_call_id": null
+    },
+    {
+      "role": "Assistant",
+      "content": "",
+      "tool_call_id": null
+    },
+    {
+      "role": "Tool",
+      "content": "{\"output\":\"\",\"is_exited\":true,\"session_id\":\"run-38e403fa\",\"command\":\"cargo fmt\",\"working_directory\":\".\",\"exit_code\":0}",
+      "tool_call_id": "direct_run_pty_cmd_3"
+    },
+    {
+      "role": "User",
+      "content": "continue",
+      "tool_call_id": null
+    }
+  ]
+}
+```

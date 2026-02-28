@@ -137,6 +137,9 @@ pub(crate) enum InteractionOutcome {
     Continue {
         input: String,
     },
+    /// A direct tool command (e.g. `!cmd` / `run ...`) was executed and rendered;
+    /// no LLM turn should be started for this loop iteration.
+    DirectToolHandled,
     Exit {
         reason: SessionEndReason,
     },

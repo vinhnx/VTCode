@@ -76,13 +76,6 @@ pub(crate) fn update_context_budget(
     state.context_remaining_tokens = Some(remaining);
 }
 
-pub(crate) fn clear_context_budget(state: &mut InputStatusState) {
-    state.context_utilization = None;
-    state.context_tokens = None;
-    state.context_limit_tokens = None;
-    state.context_remaining_tokens = None;
-}
-
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn update_input_status_if_changed(
     handle: &InlineHandle,
@@ -321,7 +314,7 @@ pub(crate) fn build_model_status_with_context_and_spooled(
     model: &str,
     reasoning: &str,
     context_utilization: Option<f64>,
-    total_tokens: Option<usize>,
+    _total_tokens: Option<usize>,
     is_cancelling: bool,
     spooled_files: Option<usize>,
     team_label: Option<&str>,
@@ -335,9 +328,7 @@ pub(crate) fn build_model_status_with_context_and_spooled(
 
     parts.push(model.to_string());
 
-    if total_tokens.is_some_and(|tokens| tokens > 0)
-        && let Some(util) = context_utilization
-    {
+    if let Some(util) = context_utilization {
         parts.push(format!("{:.0}% context left", util.clamp(0.0, 100.0)));
     }
 
@@ -413,22 +404,6 @@ mod tests {
 
         assert_eq!(high.as_deref(), Some("model | 100% context left"));
         assert_eq!(low.as_deref(), Some("model | 0% context left"));
-    }
-
-    #[test]
-    fn status_line_hides_context_left_when_total_tokens_zero() {
-        let status = build_model_status_with_context_and_spooled(
-            "model",
-            "low",
-            Some(100.0),
-            Some(0),
-            false,
-            None,
-            None,
-            false,
-        );
-
-        assert_eq!(status.as_deref(), Some("model | (low)"));
     }
 }
 

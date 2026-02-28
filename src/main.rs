@@ -106,7 +106,7 @@ async fn run() -> Result<()> {
 
     // Add note about slash commands - use static string directly
     cmd = cmd.after_help(
-        "\n\nSlash commands (type / in chat):\n  /init     - Reconfigure provider, model, and settings\n  /status   - Show current configuration\n  /doctor   - Diagnose setup issues\n  /plan     - Toggle read-only planning mode\n  /theme    - Switch UI theme\n  /help     - Show all slash commands",
+        "\n\nSlash commands (type / in chat):\n  /init     - Reconfigure provider, model, and settings\n  /status   - Show current configuration\n  /doctor   - Diagnose setup issues\n  /update   - Check for VT Code updates\n  /plan     - Toggle read-only planning mode\n  /theme    - Switch UI theme\n  /help     - Show all slash commands",
     );
 
     // Parse arguments using the augmented command
@@ -410,8 +410,11 @@ async fn run() -> Result<()> {
         Some(Commands::AnthropicApi { port, host }) => {
             cli::handle_anthropic_api_command(core_cfg.clone(), *port, host.clone()).await?;
         }
-        Some(Commands::SelfUpdate { check, force: _ }) => {
-            let options = cli::update::UpdateCommandOptions { check_only: *check };
+        Some(Commands::Update { check, force }) => {
+            let options = cli::update::UpdateCommandOptions {
+                check_only: *check,
+                force: *force,
+            };
             cli::update::handle_update_command(options).await?;
         }
         _ => {

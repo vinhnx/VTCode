@@ -120,9 +120,19 @@ fn extract_command_from_node(node: tree_sitter::Node, source: &str) -> Option<Ve
 
     // Extract arguments from command node
     for child in node.children(&mut cursor) {
+        if child.kind() == "command_name" {
+            if let Ok(arg) = child.utf8_text(source.as_bytes()) {
+                let trimmed = arg.trim();
+                if !trimmed.is_empty() {
+                    command.push(trimmed.to_string());
+                }
+            }
+            continue;
+        }
+
         if matches!(
             child.kind(),
-            "word" | "simple_expansion" | "variable_expansion"
+            "word" | "string" | "simple_expansion" | "variable_expansion"
         ) {
             let text = child.utf8_text(source.as_bytes());
             if let Ok(arg) = text {
@@ -345,6 +355,14 @@ mod tests {
         let script = r#"echo "hello \"world\"""#;
         let commands = parse_shell_commands(script).unwrap();
         assert!(!commands.is_empty());
+    }
+
+    #[test]
+    fn parse_tree_sitter_preserves_command_name_with_quoted_args() {
+        let script = r#"echo "fish and chips""#;
+        let commands = parse_shell_commands_tree_sitter(script).unwrap();
+        assert!(!commands.is_empty());
+        assert_eq!(commands[0][0], "echo");
     }
 
     #[test]

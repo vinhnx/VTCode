@@ -71,6 +71,11 @@ pub enum SlashCommandOutcome {
         action: McpCommandAction,
     },
     RunDoctor,
+    Update {
+        check_only: bool,
+        install: bool,
+        force: bool,
+    },
 
     ManageWorkspaceDirectories {
         command: WorkspaceDirectoryCommand,
@@ -341,6 +346,17 @@ pub async fn handle_slash_command(
             }
             Ok(SlashCommandOutcome::RunDoctor)
         }
+        "update" => match parse_update_args(args) {
+            Ok((check_only, install, force)) => Ok(SlashCommandOutcome::Update {
+                check_only,
+                install,
+                force,
+            }),
+            Err(message) => {
+                renderer.line(MessageStyle::Error, &message)?;
+                Ok(SlashCommandOutcome::Handled)
+            }
+        },
         "analyze" => {
             let scope = if args.trim().is_empty() {
                 "full"
@@ -481,4 +497,30 @@ pub async fn handle_slash_command(
             Ok(SlashCommandOutcome::Handled)
         }
     }
+}
+
+fn parse_update_args(args: &str) -> std::result::Result<(bool, bool, bool), String> {
+    let mut check_only = false;
+    let mut install = false;
+    let mut force = false;
+
+    for token in args.split_whitespace() {
+        match token.to_ascii_lowercase().as_str() {
+            "check" | "--check" => check_only = true,
+            "install" | "--install" => install = true,
+            "force" | "--force" => force = true,
+            "" => {}
+            _ => {
+                return Err(
+                    "Usage: /update [check|install] [--force]\nExamples: /update, /update check, /update install --force".to_string(),
+                );
+            }
+        }
+    }
+
+    if check_only && install {
+        return Err("Use either 'check' or 'install', not both.".to_string());
+    }
+
+    Ok((check_only, install, force))
 }

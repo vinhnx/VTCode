@@ -1,14 +1,62 @@
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use semver::Version;
 use std::env;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::time::Duration;
 use tracing::{debug, info};
 use vtcode_core::utils::file_utils::{ensure_dir_exists_sync, write_file_with_context_sync};
 
+const REPO_OWNER: &str = "vinhnx";
+const REPO_NAME: &str = "vtcode";
+const REPO_SLUG: &str = "vinhnx/vtcode";
+const CURL_INSTALL_COMMAND: &str =
+    "curl -fsSL https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.sh | bash";
+
 /// Auto-updater for VT Code binary from GitHub Releases
 pub struct Updater {
-    repo: String,
     current_version: Version,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum InstallSource {
+    Standalone,
+    Homebrew,
+    Cargo,
+    Npm,
+}
+
+impl InstallSource {
+    pub fn is_managed(self) -> bool {
+        !matches!(self, Self::Standalone)
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Standalone => "standalone",
+            Self::Homebrew => "homebrew",
+            Self::Cargo => "cargo",
+            Self::Npm => "npm",
+        }
+    }
+
+    pub fn update_command(self) -> &'static str {
+        match self {
+            Self::Standalone => CURL_INSTALL_COMMAND,
+            Self::Homebrew => "brew upgrade vinhnx/tap/vtcode",
+            Self::Cargo => "cargo install vtcode --force",
+            Self::Npm => "npm install -g vtcode@latest",
+        }
+    }
+}
+
+pub struct UpdateGuidance {
+    pub source: InstallSource,
+    pub command: String,
+}
+
+pub enum InstallOutcome {
+    Updated(String),
+    UpToDate(String),
 }
 
 impl Updater {
@@ -17,19 +65,19 @@ impl Updater {
         let current_version = Version::parse(current_version_str)
             .with_context(|| format!("Invalid version format: {}", current_version_str))?;
 
-        Ok(Self {
-            repo: "vinhnx/vtcode".to_string(),
-            current_version,
-        })
+        Ok(Self { current_version })
     }
 
-    /// Check for updates (non-blocking, respects rate limits)
-    pub async fn check_for_updates(&self) -> Result<Option<UpdateInfo>> {
-        if !Self::should_check_for_updates()? {
-            debug!("Skipping update check (checked recently)");
-            return Ok(None);
-        }
+    pub fn current_version(&self) -> &Version {
+        &self.current_version
+    }
 
+    pub fn release_url(version: &Version) -> String {
+        format!("https://github.com/{REPO_SLUG}/releases/tag/v{version}")
+    }
+
+    /// Check for updates without cache throttling.
+    pub async fn check_for_updates(&self) -> Result<Option<UpdateInfo>> {
         debug!("Checking for VT Code updates...");
 
         let latest = self.fetch_latest_release().await?;
@@ -46,9 +94,80 @@ impl Updater {
         }
     }
 
+    /// Check for updates with a cache cooldown.
+    pub async fn check_for_updates_cached(
+        &self,
+        min_interval: Duration,
+    ) -> Result<Option<UpdateInfo>> {
+        if !Self::is_check_due(min_interval)? {
+            debug!("Skipping update check (checked recently)");
+            return Ok(None);
+        }
+
+        let result = self.check_for_updates().await;
+        let _ = Self::record_update_check();
+        result
+    }
+
+    /// Install latest update from GitHub Releases.
+    pub async fn install_update(&self, force: bool) -> Result<InstallOutcome> {
+        let guidance = self.update_guidance();
+        if guidance.source.is_managed() {
+            bail!(
+                "VT Code was installed via {}. Update with: {}",
+                guidance.source.label(),
+                guidance.command
+            );
+        }
+
+        let current_version = self.current_version.to_string();
+        let target = Self::get_target_triple().context("Unsupported platform for auto-update")?;
+
+        let status = tokio::task::spawn_blocking(move || {
+            let mut builder = self_update::backends::github::Update::configure();
+            builder
+                .repo_owner(REPO_OWNER)
+                .repo_name(REPO_NAME)
+                .bin_name("vtcode")
+                .target(target)
+                .show_download_progress(true)
+                .no_confirm(true);
+
+            if force {
+                // Force path: treat current version as very old to trigger reinstall.
+                builder.current_version("0.0.0");
+            } else {
+                builder.current_version(&current_version);
+            }
+
+            let status = builder
+                .build()
+                .context("Failed to build self-update request")?
+                .update()
+                .context("Failed to apply self-update")?;
+
+            Ok::<self_update::Status, anyhow::Error>(status)
+        })
+        .await
+        .context("Update task join failed")??;
+
+        match status {
+            self_update::Status::Updated(version) => Ok(InstallOutcome::Updated(version)),
+            self_update::Status::UpToDate(version) => Ok(InstallOutcome::UpToDate(version)),
+        }
+    }
+
+    pub fn update_guidance(&self) -> UpdateGuidance {
+        let source = Self::detect_install_source();
+        UpdateGuidance {
+            source,
+            command: source.update_command().to_string(),
+        }
+    }
+
     /// Fetch latest release info from GitHub API
     async fn fetch_latest_release(&self) -> Result<UpdateInfo> {
-        let url = format!("https://api.github.com/repos/{}/releases/latest", self.repo);
+        let url = format!("https://api.github.com/repos/{REPO_SLUG}/releases/latest");
 
         let client = reqwest::Client::builder()
             .user_agent("vtcode-updater")
@@ -57,10 +176,12 @@ impl Updater {
 
         let response = client
             .get(&url)
-            .timeout(std::time::Duration::from_secs(10))
+            .timeout(Duration::from_secs(8))
             .send()
             .await
-            .context("Failed to fetch latest release from GitHub")?;
+            .context("Failed to fetch latest release from GitHub")?
+            .error_for_status()
+            .context("GitHub API returned non-success status")?;
 
         let json = response
             .json::<serde_json::Value>()
@@ -101,8 +222,7 @@ impl Updater {
         };
 
         Ok(format!(
-            "https://github.com/{}/releases/download/v{}/vtcode-v{}-{}.{}",
-            self.repo, version, version, target, file_ext
+            "https://github.com/{REPO_SLUG}/releases/download/v{version}/vtcode-v{version}-{target}.{file_ext}"
         ))
     }
 
@@ -111,14 +231,47 @@ impl Updater {
         match (env::consts::OS, env::consts::ARCH) {
             ("macos", "x86_64") => Some("x86_64-apple-darwin"),
             ("macos", "aarch64") => Some("aarch64-apple-darwin"),
-            ("linux", "x86_64") => Some("x86_64-unknown-linux-gnu"),
+            ("linux", "x86_64") => Some("x86_64-unknown-linux-musl"),
+            ("linux", "aarch64") => Some("aarch64-unknown-linux-gnu"),
             ("windows", "x86_64") => Some("x86_64-pc-windows-msvc"),
             _ => None,
         }
     }
 
+    fn detect_install_source() -> InstallSource {
+        let exe = match std::env::current_exe() {
+            Ok(path) => path,
+            Err(_) => return InstallSource::Standalone,
+        };
+
+        let canonical = std::fs::canonicalize(&exe).unwrap_or(exe);
+        Self::detect_install_source_from_path(&canonical)
+    }
+
+    fn detect_install_source_from_path(path: &Path) -> InstallSource {
+        let path_text = path.to_string_lossy().to_ascii_lowercase();
+
+        if path_text.contains("/cellar/")
+            || path_text.contains("/homebrew/")
+            || path_text.contains("/linuxbrew/")
+            || path_text.contains("/opt/homebrew/")
+        {
+            return InstallSource::Homebrew;
+        }
+
+        if path_text.contains("/.cargo/bin/") {
+            return InstallSource::Cargo;
+        }
+
+        if path_text.contains("/node_modules/") || path_text.contains("/npm/") {
+            return InstallSource::Npm;
+        }
+
+        InstallSource::Standalone
+    }
+
     /// Check if enough time has passed since last update check
-    fn should_check_for_updates() -> Result<bool> {
+    fn is_check_due(min_interval: Duration) -> Result<bool> {
         let cache_dir = Self::get_cache_dir()?;
         let last_check_file = cache_dir.join("last_update_check");
 
@@ -137,7 +290,7 @@ impl Updater {
             .duration_since(modified)
             .context("Failed to calculate elapsed time")?;
 
-        Ok(elapsed.as_secs() > 24 * 3600) // 24 hours
+        Ok(elapsed >= min_interval)
     }
 
     /// Record that we checked for updates
@@ -204,25 +357,41 @@ mod tests {
 
     #[test]
     fn test_version_parsing() {
-        let updater = Updater::new("0.58.4").unwrap();
-        assert_eq!(updater.current_version.major, 0);
-        assert_eq!(updater.current_version.minor, 58);
-        assert_eq!(updater.current_version.patch, 4);
+        let updater = Updater::new("0.58.4").expect("updater");
+        assert_eq!(updater.current_version().major, 0);
+        assert_eq!(updater.current_version().minor, 58);
+        assert_eq!(updater.current_version().patch, 4);
     }
 
     #[test]
-    fn test_target_triple_macos_intel() {
-        // We can't directly test platform detection without mocking,
-        // but we can verify the function exists and returns appropriate values
-        let triple = Updater::get_target_triple();
-        assert!(triple.is_some());
+    fn test_install_source_detection() {
+        assert_eq!(
+            Updater::detect_install_source_from_path(Path::new(
+                "/opt/homebrew/Cellar/vtcode/0.1/bin/vtcode"
+            )),
+            InstallSource::Homebrew
+        );
+        assert_eq!(
+            Updater::detect_install_source_from_path(Path::new("/Users/dev/.cargo/bin/vtcode")),
+            InstallSource::Cargo
+        );
+        assert_eq!(
+            Updater::detect_install_source_from_path(Path::new(
+                "/usr/local/lib/node_modules/vtcode/bin/vtcode"
+            )),
+            InstallSource::Npm
+        );
+        assert_eq!(
+            Updater::detect_install_source_from_path(Path::new("/usr/local/bin/vtcode")),
+            InstallSource::Standalone
+        );
     }
 
     #[test]
     fn test_update_info_major() {
-        let current = Version::parse("1.0.0").unwrap();
+        let current = Version::parse("1.0.0").expect("current");
         let update = UpdateInfo {
-            version: Version::parse("2.0.0").unwrap(),
+            version: Version::parse("2.0.0").expect("version"),
             tag: "v2.0.0".to_string(),
             download_url: "http://example.com".to_string(),
             release_notes: "".to_string(),
@@ -234,9 +403,9 @@ mod tests {
 
     #[test]
     fn test_update_info_minor() {
-        let current = Version::parse("1.0.0").unwrap();
+        let current = Version::parse("1.0.0").expect("current");
         let update = UpdateInfo {
-            version: Version::parse("1.1.0").unwrap(),
+            version: Version::parse("1.1.0").expect("version"),
             tag: "v1.1.0".to_string(),
             download_url: "http://example.com".to_string(),
             release_notes: "".to_string(),
@@ -248,9 +417,9 @@ mod tests {
 
     #[test]
     fn test_update_info_patch() {
-        let current = Version::parse("1.0.0").unwrap();
+        let current = Version::parse("1.0.0").expect("current");
         let update = UpdateInfo {
-            version: Version::parse("1.0.1").unwrap(),
+            version: Version::parse("1.0.1").expect("version"),
             tag: "v1.0.1".to_string(),
             download_url: "http://example.com".to_string(),
             release_notes: "".to_string(),
@@ -263,7 +432,7 @@ mod tests {
     #[test]
     fn test_prerelease_detection() {
         let update = UpdateInfo {
-            version: Version::parse("1.0.0-alpha.1").unwrap(),
+            version: Version::parse("1.0.0-alpha.1").expect("version"),
             tag: "v1.0.0-alpha.1".to_string(),
             download_url: "http://example.com".to_string(),
             release_notes: "".to_string(),

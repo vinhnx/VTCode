@@ -114,6 +114,7 @@ pub(crate) async fn handle_direct_tool_execution(
         }));
     }
 
-    let follow_up = format!("Ran `{}`. Next step?", tool_name_str);
-    Ok(Some(InteractionOutcome::Continue { input: follow_up }))
+    // Direct tool paths already executed and rendered output; skip creating an
+    // immediate LLM turn for this interaction loop iteration.
+    Ok(Some(InteractionOutcome::DirectToolHandled))
 }

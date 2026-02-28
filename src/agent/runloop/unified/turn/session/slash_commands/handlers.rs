@@ -39,6 +39,8 @@ mod skills;
 mod team;
 #[path = "ui.rs"]
 mod ui;
+#[path = "update.rs"]
+mod update;
 #[path = "workspace.rs"]
 mod workspace;
 pub use agents::handle_manage_agents;
@@ -54,6 +56,7 @@ pub use ui::{
     handle_start_file_browser, handle_start_model_selection, handle_start_sessions_palette,
     handle_start_theme_palette, handle_theme_changed,
 };
+pub use update::handle_update;
 pub use workspace::{
     handle_generate_agent_file, handle_initialize_workspace, handle_manage_workspace_directories,
 };
