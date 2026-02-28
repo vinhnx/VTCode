@@ -78,7 +78,7 @@ const SECTION_KEYS: Record<string, Record<string, KeyMetadata>> = {
             detail: "Terminal theme",
             documentation: "Controls the VT Code terminal interface theme.",
             insertText:
-                'theme = "${1|ciapre-dark,catppuccin-macchiato,kanagawa|}"',
+                'theme = "${1|ciapre,ciapre-dark,ciapre-blue,solarized-dark,solarized-light,solarized-dark-hc,gruvbox-dark,gruvbox-dark-hard,gruvbox-light,gruvbox-light-hard,gruvbox-material,gruvbox-material-dark,gruvbox-material-light,zenburn,tomorrow,tomorrow-night,tomorrow-night-blue,tomorrow-night-bright,tomorrow-night-burns,tomorrow-night-eighties,catppuccin-macchiato,kanagawa|}"',
         },
         todo_planning_mode: {
             detail: "Enable structured planning",

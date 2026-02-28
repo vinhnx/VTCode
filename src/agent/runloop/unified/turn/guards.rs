@@ -360,7 +360,7 @@ pub(crate) async fn handle_turn_balancer(
         ctx.renderer
             .line(
                 MessageStyle::Info,
-                "[!] Turn balancer: pausing due to repeated low-signal calls.",
+                "[!] Turn balancer: repeated low-signal calls detected; applying recovery path.",
             )
             .unwrap_or(()); // Best effort
         ctx.renderer
@@ -370,7 +370,7 @@ pub(crate) async fn handle_turn_balancer(
             )
             .unwrap_or(());
         ctx.working_history.push(uni::Message::system(
-            "Turn balancer recovery mode: repeated low-signal calls detected. Continue this turn, stop repeating the same tool/signature, summarize key findings, and execute one concrete next step (targeted edit or targeted command).".to_string(),
+            "Turn balancer recovery mode: repeated low-signal calls detected. Continue this turn automatically (do not ask for manual continue), stop repeating the same tool/signature, summarize key findings, and execute one concrete next step (targeted edit or targeted command).".to_string(),
         ));
         // Record in ledger
         {
