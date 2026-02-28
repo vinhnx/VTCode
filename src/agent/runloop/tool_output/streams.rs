@@ -40,14 +40,19 @@
 //! with a notification displayed to the client.
 
 use std::borrow::Cow;
+use std::path::Path;
 
+use anstyle::{AnsiColor, Effects, Reset, Style as AnsiStyle};
 use anyhow::Result;
 use smallvec::SmallVec;
 use vtcode_core::config::ToolOutputMode;
 use vtcode_core::config::loader::VTCodeConfig;
+use vtcode_core::ui::markdown;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
-use super::files::{colorize_diff_summary_line, format_diff_content_lines, truncate_text_safe};
+use super::files::{
+    colorize_diff_summary_line, format_diff_content_lines_with_numbers, truncate_text_safe,
+};
 use super::styles::{GitStyles, LsStyles, select_line_style};
 #[path = "streams_helpers.rs"]
 mod streams_helpers;
@@ -102,6 +107,147 @@ fn format_hidden_lines_summary(hidden: usize) -> String {
     } else {
         format!("… +{} lines", hidden)
     }
+}
+
+fn parse_diff_git_path(line: &str) -> Option<String> {
+    let mut parts = line.split_whitespace();
+    if parts.next()? != "diff" || parts.next()? != "--git" {
+        return None;
+    }
+    let _old = parts.next()?;
+    let new_path = parts.next()?;
+    Some(new_path.trim_start_matches("b/").to_string())
+}
+
+fn parse_diff_marker_path(line: &str) -> Option<String> {
+    let trimmed = line.trim_start();
+    if !(trimmed.starts_with("--- ") || trimmed.starts_with("+++ ")) {
+        return None;
+    }
+    let path = trimmed.split_whitespace().nth(1)?;
+    if path == "/dev/null" {
+        return None;
+    }
+    Some(
+        path.trim_start_matches("a/")
+            .trim_start_matches("b/")
+            .to_string(),
+    )
+}
+
+fn language_hint_from_path(path: &str) -> Option<String> {
+    Path::new(path)
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .filter(|ext| !ext.is_empty())
+        .map(|ext| ext.to_ascii_lowercase())
+}
+
+fn split_numbered_diff_line(line: &str) -> Option<(char, &str, &str)> {
+    let mut chars = line.char_indices();
+    let (_, marker) = chars.next()?;
+    if !matches!(marker, '+' | '-' | ' ') {
+        return None;
+    }
+
+    let rest = line.get(1..)?;
+    let first_digit = rest.find(|c: char| c.is_ascii_digit())?;
+    if first_digit == 0 || !rest[..first_digit].chars().all(|c| c == ' ') {
+        return None;
+    }
+
+    let digits = &rest[first_digit..];
+    let digits_len = digits.chars().take_while(|c| c.is_ascii_digit()).count();
+    if digits_len == 0 {
+        return None;
+    }
+
+    let after_digits = first_digit + digits_len;
+    let separator = rest[after_digits..].chars().next()?;
+    if separator != ' ' {
+        return None;
+    }
+
+    let split_at = 1 + after_digits + separator.len_utf8();
+    let line_no = rest[..after_digits].trim();
+    if line_no.is_empty() {
+        return None;
+    }
+    let content = line.get(split_at..)?;
+    Some((marker, line_no, content))
+}
+
+fn highlight_diff_content(
+    content: &str,
+    language_hint: Option<&str>,
+    bg: Option<anstyle::Color>,
+) -> Option<String> {
+    let leading_ws_len = content
+        .char_indices()
+        .find(|(_, ch)| !ch.is_whitespace())
+        .map(|(idx, _)| idx)
+        .unwrap_or(content.len());
+    let (leading_ws, code_content) = content.split_at(leading_ws_len);
+
+    let segments = markdown::highlight_line_for_diff(code_content, language_hint)?;
+    if segments.is_empty() {
+        return None;
+    }
+
+    let mut out = String::with_capacity(content.len() + 16);
+    if !leading_ws.is_empty() {
+        out.push_str(leading_ws);
+    }
+    for (style, text) in segments {
+        if text.is_empty() {
+            continue;
+        }
+        let mut token_style = style;
+        if token_style.get_bg_color().is_none() && bg.is_some() {
+            token_style = token_style.bg_color(bg);
+        }
+        out.push_str(&token_style.render().to_string());
+        out.push_str(&text);
+        out.push_str(&Reset.to_string());
+    }
+    if out.is_empty() { None } else { Some(out) }
+}
+
+fn numbered_diff_line_width(lines: &[String]) -> usize {
+    let max_digits = lines
+        .iter()
+        .filter_map(|line| split_numbered_diff_line(line).map(|(_, line_no, _)| line_no.len()))
+        .max()
+        .unwrap_or(4);
+    max_digits.clamp(4, 6)
+}
+
+fn format_diff_line_with_gutter_and_syntax(
+    line: &str,
+    base_style: Option<AnsiStyle>,
+    language_hint: Option<&str>,
+    line_number_width: usize,
+) -> String {
+    let Some((marker, line_no, content)) = split_numbered_diff_line(line) else {
+        return line.to_string();
+    };
+
+    let marker_text = match marker {
+        '+' => "+",
+        '-' => "-",
+        _ => " ",
+    };
+    let dimmed = AnsiStyle::new()
+        .fg_color(Some(anstyle::Color::Ansi(AnsiColor::BrightBlack)))
+        .effects(Effects::DIMMED);
+    let mut out = format!("{dimmed}{marker_text} {line_no:>line_number_width$} ");
+    let bg = base_style.and_then(|style| style.get_bg_color());
+    if let Some(highlighted) = highlight_diff_content(content, language_hint, bg) {
+        out.push_str(&highlighted);
+    } else {
+        out.push_str(content);
+    }
+    out
 }
 
 fn collect_run_command_preview(content: &str) -> (SmallVec<[&str; 32]>, usize, usize) {
@@ -361,7 +507,7 @@ pub(crate) async fn render_stream_section(
     }
 
     if is_diff_content {
-        let diff_lines = format_diff_content_lines(stripped_for_diff.as_ref());
+        let diff_lines = format_diff_content_lines_with_numbers(stripped_for_diff.as_ref());
         let total = diff_lines.len();
         let effective_limit =
             if renderer.prefers_untruncated_output() || matches!(mode, ToolOutputMode::Full) {
@@ -393,10 +539,15 @@ pub(crate) async fn render_stream_section(
             }
         }
 
-        let mut display_buffer = String::with_capacity(128);
+        let mut display_buffer = String::with_capacity(256);
+        let mut current_language_hint: Option<String> = None;
+        let line_number_width = numbered_diff_line_width(lines_slice);
         for line in lines_slice {
             if line.is_empty() {
                 continue;
+            }
+            if let Some(path) = parse_diff_git_path(line).or_else(|| parse_diff_marker_path(line)) {
+                current_language_hint = language_hint_from_path(&path);
             }
             display_buffer.clear();
             if line.len() > MAX_LINE_LENGTH {
@@ -419,9 +570,19 @@ pub(crate) async fn render_stream_section(
                 continue;
             }
 
-            if let Some(style) =
-                select_line_style(tool_name, &display_buffer, git_styles, ls_styles)
-            {
+            let line_style = select_line_style(tool_name, &display_buffer, git_styles, ls_styles);
+            let rendered = format_diff_line_with_gutter_and_syntax(
+                &display_buffer,
+                line_style,
+                current_language_hint.as_deref(),
+                line_number_width,
+            );
+            if rendered != display_buffer {
+                let style = line_style.unwrap_or(fallback_style.style());
+                renderer.line_with_override_style(fallback_style, style, &rendered)?;
+                continue;
+            }
+            if let Some(style) = line_style {
                 renderer.line_with_override_style(fallback_style, style, &display_buffer)?;
             } else {
                 renderer.line_with_override_style(
@@ -523,7 +684,12 @@ pub(crate) async fn render_stream_section(
 
 #[cfg(test)]
 mod tests {
-    use super::collect_run_command_preview;
+    use anstyle::AnsiColor;
+
+    use super::{
+        collect_run_command_preview, format_diff_line_with_gutter_and_syntax,
+        language_hint_from_path, numbered_diff_line_width, split_numbered_diff_line,
+    };
 
     #[test]
     fn run_command_preview_uses_head_tail_three_lines() {
@@ -541,5 +707,49 @@ mod tests {
         assert_eq!(total, 3);
         assert_eq!(hidden, 0);
         assert_eq!(preview.as_slice(), ["l1", "l2", "l3"]);
+    }
+
+    #[test]
+    fn split_numbered_diff_line_parses_gutter() {
+        let (marker, line_no, content) =
+            split_numbered_diff_line("+  1377 syntax_highlight::foo").expect("expected gutter");
+        assert_eq!(marker, '+');
+        assert_eq!(line_no, "1377");
+        assert_eq!(content, "syntax_highlight::foo");
+    }
+
+    #[test]
+    fn split_numbered_diff_line_preserves_code_indentation() {
+        let (_, _, content) =
+            split_numbered_diff_line("+  1384     line,").expect("expected gutter");
+        assert_eq!(content, "    line,");
+    }
+
+    #[test]
+    fn format_diff_line_adds_dimmed_gutter() {
+        let style = anstyle::Style::new().fg_color(Some(anstyle::Color::Ansi(AnsiColor::Green)));
+        let rendered =
+            format_diff_line_with_gutter_and_syntax("+  1377 let x = 1;", Some(style), None, 5);
+        assert!(rendered.contains("\u{1b}[2m"));
+        assert!(rendered.contains("+  1377 "));
+        assert!(rendered.contains("let x = 1;"));
+    }
+
+    #[test]
+    fn numbered_diff_line_width_uses_max_digits() {
+        let lines = vec![
+            "+    99 let a = 1;".to_string(),
+            "  10420 let b = 2;".to_string(),
+        ];
+        assert_eq!(numbered_diff_line_width(&lines), 5);
+    }
+
+    #[test]
+    fn language_hint_from_path_extracts_extension() {
+        assert_eq!(
+            language_hint_from_path("vtcode-tui/src/ui/markdown.rs").as_deref(),
+            Some("rs")
+        );
+        assert_eq!(language_hint_from_path("Makefile"), None);
     }
 }

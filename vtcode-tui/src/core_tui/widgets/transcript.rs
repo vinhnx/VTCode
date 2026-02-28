@@ -1,8 +1,8 @@
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
-    style::Style,
-    widgets::{Block, Clear, Paragraph, Widget, Wrap},
+    style::{Color, Style},
+    widgets::{Block, Clear, Paragraph, Widget},
 };
 
 use crate::config::constants::ui;
@@ -131,16 +131,36 @@ impl<'a> Widget for TranscriptWidget<'a> {
             cached_lines.to_vec()
         };
 
-        let paragraph = Paragraph::new(visible_lines)
-            .style(self.session.styles.default_style())
-            .wrap(Wrap { trim: true });
-
         // Only clear if content actually changed, not on viewport-only scroll
         // This is a significant optimization: avoids expensive Clear operation on most scrolls
         if self.session.transcript_content_changed {
             Clear.render(scroll_area, buf);
             self.session.transcript_content_changed = false;
         }
+        apply_full_width_line_backgrounds(buf, scroll_area, &visible_lines);
+        let paragraph = Paragraph::new(visible_lines).style(self.session.styles.default_style());
         paragraph.render(scroll_area, buf);
+    }
+}
+
+fn line_background(line: &ratatui::text::Line<'_>) -> Option<Color> {
+    line.spans.iter().find_map(|span| span.style.bg)
+}
+
+fn apply_full_width_line_backgrounds(
+    buf: &mut Buffer,
+    area: Rect,
+    lines: &[ratatui::text::Line<'_>],
+) {
+    if area.width == 0 || area.height == 0 {
+        return;
+    }
+
+    let max_rows = usize::from(area.height).min(lines.len());
+    for (row, line) in lines.iter().take(max_rows).enumerate() {
+        if let Some(bg) = line_background(line) {
+            let row_rect = Rect::new(area.x, area.y + row as u16, area.width, 1);
+            buf.set_style(row_rect, Style::default().bg(bg));
+        }
     }
 }

@@ -65,6 +65,8 @@ pub fn generate_tool_guidelines(
             "**Git Diff Requests**: When user asks to 'show diff', 'git diff', or 'view changes': \
              ALWAYS run `git diff -- <path>` via `unified_exec`. NEVER read file content and fabricate a diff - \
              reading a file shows current content, not what changed. \
+             After tool output renders the diff in TUI, DO NOT restate the same diff body again in prose. \
+             Keep follow-up to one concise line unless user explicitly asks for analysis. \
              Examples: `git diff` (all changes), `git diff -- src/main.rs` (specific file), \
              `git diff HEAD~1` (vs previous commit)."
                 .to_string(),

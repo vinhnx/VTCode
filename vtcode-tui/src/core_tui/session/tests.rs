@@ -1320,6 +1320,39 @@ fn pty_wrapped_lines_do_not_exceed_viewport_width() {
 }
 
 #[test]
+fn tool_diff_numbered_lines_keep_hanging_indent_when_wrapped() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.push_line(
+        InlineMessageKind::Tool,
+        vec![InlineSegment {
+            text:
+                "459 + let digits_len = digits.chars().take_while(|c| c.is_ascii_digit()).count();"
+                    .to_string(),
+            style: std::sync::Arc::new(InlineTextStyle::default()),
+        }],
+    );
+
+    let rendered = session.reflow_transcript_lines(40);
+    assert!(
+        rendered.len() >= 2,
+        "expected wrapped tool diff output, got {} line(s)",
+        rendered.len()
+    );
+
+    let first = line_text(&rendered[0]);
+    let second = line_text(&rendered[1]);
+
+    assert!(
+        first.contains("459 + "),
+        "first line should include diff gutter: {first:?}"
+    );
+    assert!(
+        second.starts_with("  │       "),
+        "wrapped line should keep hanging indent after tool prefix, got: {second:?}"
+    );
+}
+
+#[test]
 fn pty_lines_use_subdued_foreground() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
     session.push_line(

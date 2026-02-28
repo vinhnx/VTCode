@@ -220,9 +220,7 @@ fn render_transcript(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
         (*cached_lines).clone()
     };
 
-    let paragraph = Paragraph::new(visible_lines)
-        .style(default_style(session))
-        .wrap(Wrap { trim: false });
+    let paragraph = Paragraph::new(visible_lines).style(default_style(session));
 
     // Only clear if content actually changed, not on viewport-only scroll
     // This is a significant optimization: avoids expensive Clear operation on most scrolls

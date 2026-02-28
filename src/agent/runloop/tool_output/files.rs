@@ -1,3 +1,4 @@
+use anstyle::{Effects, Style as AnsiStyle};
 use anyhow::Result;
 use serde_json::Value;
 use vtcode_core::config::constants::tools;
@@ -6,7 +7,11 @@ use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use super::styles::{GitStyles, LsStyles, select_line_style};
 #[path = "files_diff.rs"]
 mod files_diff;
-pub(super) use files_diff::{format_condensed_edit_diff_lines, format_diff_content_lines};
+#[cfg(test)]
+pub(super) use files_diff::format_diff_content_lines;
+pub(super) use files_diff::{
+    format_condensed_edit_diff_lines, format_diff_content_lines_with_numbers,
+};
 
 /// Constants for line and content limits (compact display)
 const MAX_DIFF_LINE_LENGTH: usize = 100; // Reduced for compact view
@@ -399,20 +404,8 @@ fn render_diff_content(
     git_styles: &GitStyles,
     ls_styles: &LsStyles,
 ) -> Result<()> {
-    let lines_to_render = format_diff_content_lines(diff_content);
-
-    for line in lines_to_render {
-        let truncated = truncate_text_safe(&line, MAX_DIFF_LINE_LENGTH);
-        if let Some(style) =
-            select_line_style(Some(tools::WRITE_FILE), truncated, git_styles, ls_styles)
-        {
-            renderer.line_with_override_style(MessageStyle::ToolDetail, style, truncated)?;
-        } else {
-            renderer.line(MessageStyle::ToolDetail, truncated)?;
-        }
-    }
-
-    Ok(())
+    let lines_to_render = format_diff_content_lines_with_numbers(diff_content);
+    render_diff_lines(renderer, &lines_to_render, git_styles, ls_styles)
 }
 
 fn render_edit_diff_preview(
@@ -422,19 +415,65 @@ fn render_edit_diff_preview(
     ls_styles: &LsStyles,
 ) -> Result<()> {
     let lines_to_render = format_condensed_edit_diff_lines(diff_content);
+    render_diff_lines(renderer, &lines_to_render, git_styles, ls_styles)
+}
 
+fn render_diff_lines(
+    renderer: &mut AnsiRenderer,
+    lines_to_render: &[String],
+    git_styles: &GitStyles,
+    ls_styles: &LsStyles,
+) -> Result<()> {
     for line in lines_to_render {
         let truncated = truncate_text_safe(&line, MAX_DIFF_LINE_LENGTH);
         if let Some(style) =
             select_line_style(Some(tools::WRITE_FILE), truncated, git_styles, ls_styles)
         {
-            renderer.line_with_override_style(MessageStyle::ToolDetail, style, truncated)?;
+            let display_line = format_diff_line_for_display(truncated, style);
+            renderer.line_with_override_style(MessageStyle::ToolDetail, style, &display_line)?;
         } else {
             renderer.line(MessageStyle::ToolDetail, truncated)?;
         }
     }
 
     Ok(())
+}
+
+fn format_diff_line_for_display(line: &str, style: AnsiStyle) -> String {
+    if let Some((gutter, content)) = split_diff_gutter(line) {
+        let dimmed = AnsiStyle::new().effects(Effects::DIMMED);
+        return format!("{dimmed}{gutter}{style}{content}");
+    }
+    line.to_string()
+}
+
+fn split_diff_gutter(line: &str) -> Option<(&str, &str)> {
+    let mut chars = line.char_indices();
+    let (_, marker) = chars.next()?;
+    if !matches!(marker, '+' | '-' | ' ') {
+        return None;
+    }
+
+    let rest = line.get(1..)?;
+    let first_digit = rest.find(|c: char| c.is_ascii_digit())?;
+    if first_digit == 0 || !rest[..first_digit].chars().all(|c| c == ' ') {
+        return None;
+    }
+
+    let digits = &rest[first_digit..];
+    let digits_len = digits.chars().take_while(|c| c.is_ascii_digit()).count();
+    if digits_len == 0 {
+        return None;
+    }
+
+    let after_digits = first_digit + digits_len;
+    let separator = rest[after_digits..].chars().next()?;
+    if separator != ' ' {
+        return None;
+    }
+
+    let gutter_end = 1 + after_digits + separator.len_utf8();
+    Some(line.split_at(gutter_end))
 }
 
 pub(super) fn colorize_diff_summary_line(line: &str, _supports_color: bool) -> Option<String> {
