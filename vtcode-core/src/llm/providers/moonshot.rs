@@ -258,11 +258,20 @@ impl LLMProvider for MoonshotProvider {
                     if let Some(choices) = value.get("choices").and_then(|c| c.as_array())
                         && let Some(choice) = choices.first()
                     {
-                        if let Some(delta) = choice.get("delta")
-                            && let Some(content) = delta.get("content").and_then(|c| c.as_str())
-                        {
-                            for event in aggregator.handle_content(content) {
-                                let _ = tx.send(Ok(event));
+                        if let Some(delta) = choice.get("delta") {
+                            // Handle reasoning_content field (Kimi K2 Thinking models)
+                            if let Some(reasoning) =
+                                delta.get("reasoning_content").and_then(|c| c.as_str())
+                                && let Some(d) = aggregator.handle_reasoning(reasoning)
+                            {
+                                let _ = tx.send(Ok(LLMStreamEvent::Reasoning { delta: d }));
+                            }
+
+                            // Handle regular content
+                            if let Some(content) = delta.get("content").and_then(|c| c.as_str()) {
+                                for event in aggregator.handle_content(content) {
+                                    let _ = tx.send(Ok(event));
+                                }
                             }
                         }
 

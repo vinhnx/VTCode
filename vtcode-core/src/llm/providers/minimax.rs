@@ -7,6 +7,7 @@ use crate::llm::client::LLMClient;
 use crate::llm::error_display;
 use crate::llm::provider::{
     FinishReason, LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent,
+    MessageRole, ToolCall,
 };
 use crate::llm::types as llm_types;
 use async_stream::try_stream;
@@ -101,17 +102,90 @@ impl MinimaxProvider {
         }
 
         for message in &request.messages {
-            messages.push(serde_json::json!({
+            let mut message_obj = serde_json::json!({
                 "role": message.role.as_generic_str(),
                 "content": serialize_message_content_openai(&message.content)
-            }));
+            });
+
+            // Handle assistant messages with tool calls
+            if message.role == MessageRole::Assistant {
+                if let Some(tool_calls) = &message.tool_calls {
+                    if !tool_calls.is_empty() {
+                        let tool_calls_json: Vec<Value> = tool_calls
+                            .iter()
+                            .filter_map(|tc| {
+                                tc.function.as_ref().map(|func| {
+                                    serde_json::json!({
+                                        "id": tc.id,
+                                        "type": tc.call_type,
+                                        "function": {
+                                            "name": func.name,
+                                            "arguments": func.arguments
+                                        }
+                                    })
+                                })
+                            })
+                            .collect();
+
+                        if !tool_calls_json.is_empty() {
+                            message_obj["tool_calls"] = Value::Array(tool_calls_json);
+                        }
+                    }
+                }
+            }
+
+            // Handle tool result messages
+            if message.role == MessageRole::Tool {
+                if let Some(tool_call_id) = &message.tool_call_id {
+                    message_obj["tool_call_id"] = Value::String(tool_call_id.clone());
+                }
+            }
+
+            messages.push(message_obj);
         }
 
-        Ok(serde_json::json!({
+        let mut payload = serde_json::json!({
             "model": request.model,
             "messages": messages,
             "stream": stream
-        }))
+        });
+
+        // Add tools if present
+        if let Some(tools) = &request.tools {
+            let tools_json: Vec<Value> = tools
+                .iter()
+                .filter_map(|tool| {
+                    tool.function.as_ref().map(|func| {
+                        serde_json::json!({
+                            "type": "function",
+                            "function": {
+                                "name": func.name,
+                                "description": func.description,
+                                "parameters": func.parameters
+                            }
+                        })
+                    })
+                })
+                .collect();
+
+            if !tools_json.is_empty() {
+                payload["tools"] = Value::Array(tools_json);
+            }
+        }
+
+        // Add tool_choice if present
+        if let Some(tool_choice) = &request.tool_choice {
+            payload["tool_choice"] = tool_choice.to_provider_format("openai");
+        }
+
+        // Add parallel_tool_calls if present and not already set
+        if let Some(parallel) = request.parallel_tool_calls {
+            if payload.get("parallel_tool_calls").is_none() {
+                payload["parallel_tool_calls"] = Value::Bool(parallel);
+            }
+        }
+
+        Ok(payload)
     }
 }
 
@@ -146,10 +220,77 @@ fn normalize_openai_base_url(base_url: &str) -> String {
     format!("{trimmed}/v1")
 }
 
+impl MinimaxProvider {
+    fn parse_tool_calls_from_message(
+        &self,
+        message: &Value,
+    ) -> Result<Option<Vec<ToolCall>>, LLMError> {
+        let Some(tool_calls) = message.get("tool_calls").and_then(|v| v.as_array()) else {
+            return Ok(None);
+        };
+
+        if tool_calls.is_empty() {
+            return Ok(None);
+        }
+
+        let mut converted = Vec::new();
+        for tc in tool_calls {
+            let id = tc
+                .get("id")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string())
+                .unwrap_or_default();
+
+            let _call_type = tc
+                .get("type")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| "function".to_string());
+
+            if let Some(func) = tc.get("function") {
+                let name = func
+                    .get("name")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string())
+                    .unwrap_or_default();
+
+                let arguments = func
+                    .get("arguments")
+                    .map(|v| {
+                        if let Some(s) = v.as_str() {
+                            s.to_string()
+                        } else {
+                            v.to_string()
+                        }
+                    })
+                    .unwrap_or_default();
+
+                converted.push(ToolCall::function(id, name, arguments));
+            }
+        }
+
+        Ok(Some(converted))
+    }
+
+    fn parse_finish_reason(&self, finish_reason: Option<&str>) -> FinishReason {
+        match finish_reason {
+            Some("stop") | None => FinishReason::Stop,
+            Some("length") => FinishReason::Length,
+            Some("tool_calls") => FinishReason::ToolCalls,
+            Some("content_filter") => FinishReason::ContentFilter,
+            Some(other) => FinishReason::Error(other.to_string()),
+        }
+    }
+}
+
 #[async_trait]
 impl LLMProvider for MinimaxProvider {
     fn name(&self) -> &str {
         "minimax"
+    }
+
+    fn supports_tools(&self, _model: &str) -> bool {
+        true
     }
 
     fn supports_reasoning(&self, _model: &str) -> bool {
@@ -213,18 +354,67 @@ impl LLMProvider for MinimaxProvider {
             metadata: None,
         })?;
 
-        let content = message
+        // First, check for native reasoning_details field (OpenAI-compatible API format)
+        let native_reasoning = message
+            .get("reasoning_details")
+            .and_then(|rd| rd.as_array())
+            .map(|details| {
+                details
+                    .iter()
+                    .filter_map(|d| d.get("text").and_then(|t| t.as_str()))
+                    .collect::<Vec<_>>()
+                    .join("\n\n")
+            });
+
+        let content_text = message
             .get("content")
             .and_then(|c| c.as_str())
             .map(|s| s.to_string());
 
+        // Extract reasoning: prefer native field, fallback to <think></think> tags
+        let (reasoning, final_content) = if let Some(reasoning_str) = native_reasoning {
+            // Native reasoning_details found, use it
+            (Some(reasoning_str), content_text)
+        } else if let Some(ref content) = content_text {
+            // Fallback: extract from <think></think> tags in content
+            let (reasoning_parts, cleaned_content) =
+                crate::llm::utils::extract_reasoning_content(content);
+            if reasoning_parts.is_empty() {
+                (None, content_text)
+            } else {
+                (
+                    Some(reasoning_parts.join("\n\n")),
+                    cleaned_content.or(content_text),
+                )
+            }
+        } else {
+            (None, None)
+        };
+
+        let tool_calls = self.parse_tool_calls_from_message(message)?;
+
+        let finish_reason =
+            self.parse_finish_reason(choice.get("finish_reason").and_then(|v| v.as_str()));
+
+        let usage = json.get("usage").map(|u| crate::llm::provider::Usage {
+            prompt_tokens: u.get("prompt_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
+            completion_tokens: u
+                .get("completion_tokens")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0) as u32,
+            total_tokens: u.get("total_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
+            cached_prompt_tokens: None,
+            cache_creation_tokens: None,
+            cache_read_tokens: None,
+        });
+
         Ok(LLMResponse {
-            content,
-            tool_calls: None,
+            content: final_content,
+            tool_calls,
             model,
-            usage: None,
-            finish_reason: FinishReason::Stop,
-            reasoning: None,
+            usage,
+            finish_reason,
+            reasoning,
             reasoning_details: None,
             tool_references: Vec::new(),
             request_id: None,
@@ -279,15 +469,32 @@ impl LLMProvider for MinimaxProvider {
                             continue;
                         }
 
-                        if let Ok(payload) = serde_json::from_str::<Value>(trimmed)
-                            && let Some(choices) = payload.get("choices").and_then(|v| v.as_array())
-                                && let Some(choice) = choices.first()
-                                    && let Some(delta) = choice.get("delta")
-                                        && let Some(content) = delta.get("content").and_then(|v| v.as_str()) {
+                        if let Ok(payload) = serde_json::from_str::<Value>(trimmed) {
+                            if let Some(choices) = payload.get("choices").and_then(|v| v.as_array()) {
+                                if let Some(choice) = choices.first() {
+                                    if let Some(delta) = choice.get("delta") {
+                                        // Handle content through the aggregator's sanitizer to extract reasoning
+                                        if let Some(content) = delta.get("content").and_then(|v| v.as_str()) {
                                             for ev in aggregator.handle_content(content) {
                                                 yield ev;
                                             }
                                         }
+
+                                        // Handle tool calls
+                                        if let Some(tool_calls) = delta.get("tool_calls").and_then(|v| v.as_array()) {
+                                            aggregator.handle_tool_calls(tool_calls);
+                                        }
+
+                                        // Handle finish reason
+                                        if let Some(finish_reason) = choice.get("finish_reason").and_then(|v| v.as_str()) {
+                                            if finish_reason == "tool_calls" {
+                                                aggregator.set_finish_reason(FinishReason::ToolCalls);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }

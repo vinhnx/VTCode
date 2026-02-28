@@ -206,14 +206,24 @@ fn maybe_recover_after_post_tool_llm_failure(
         return Ok(false);
     }
 
-    let summary =
-        "Tool execution completed, but the model follow-up failed. Output above is valid.";
-    renderer.line(MessageStyle::Info, summary)?;
+    let err_cat = vtcode_commons::classify_anyhow_error(err);
+    let transient_hint = if err_cat.is_retryable() {
+        " (transient — may resolve on retry)"
+    } else {
+        ""
+    };
+    let summary = format!(
+        "Tool execution completed, but the model follow-up failed{}. Output above is valid.",
+        transient_hint,
+    );
+    renderer.line(MessageStyle::Info, &summary)?;
 
     tracing::warn!(
         error = %err,
         step = step_count,
         stage = failure_stage,
+        category = ?err_cat,
+        retryable = err_cat.is_retryable(),
         "Recovered turn after post-tool LLM phase failure"
     );
     Ok(true)
@@ -450,18 +460,106 @@ pub async fn run_turn_loop(
         ) {
             Ok(result) => result,
             Err(err) => {
-                if maybe_recover_after_post_tool_llm_failure(
-                    turn_processing_ctx.renderer,
-                    turn_processing_ctx.working_history,
-                    &err,
-                    step_count,
-                    turn_history_start_len,
-                    "process_llm_response",
-                )? {
-                    result = TurnLoopResult::Completed;
-                    break;
+                let err_cat = vtcode_commons::classify_anyhow_error(&err);
+                // For transient errors (overload, rate-limit), re-issue the LLM request
+                // once to get a fresh response. Non-transient parse errors fail immediately.
+                if err_cat.is_retryable() {
+                    tracing::warn!(
+                        error = %err,
+                        step = step_count,
+                        category = ?err_cat,
+                        "Response parse failed with transient error; retrying LLM request once"
+                    );
+                    match execute_llm_request(
+                        &mut turn_processing_ctx,
+                        step_count,
+                        &active_model,
+                        None,
+                        None,
+                    )
+                    .await
+                    {
+                        Ok((retry_response, _)) => {
+                            match process_llm_response(
+                                &retry_response,
+                                turn_processing_ctx.renderer,
+                                turn_processing_ctx.working_history.len(),
+                                turn_processing_ctx.session_stats.is_plan_mode(),
+                                allow_plan_interview,
+                                turn_config.request_user_input_enabled,
+                                Some(&validation_cache),
+                                Some(turn_processing_ctx.tool_registry),
+                            ) {
+                                Ok(result) => result,
+                                Err(retry_err) => {
+                                    // Both attempts failed; fall through to standard recovery
+                                    if let Ok(mut recovery) = ctx.error_recovery.write() {
+                                        recovery.record_error(
+                                            "llm_response_parse",
+                                            format!("{:#}", retry_err),
+                                            ErrorType::Other,
+                                        );
+                                    }
+                                    if maybe_recover_after_post_tool_llm_failure(
+                                        turn_processing_ctx.renderer,
+                                        turn_processing_ctx.working_history,
+                                        &retry_err,
+                                        step_count,
+                                        turn_history_start_len,
+                                        "process_llm_response_retry",
+                                    )? {
+                                        result = TurnLoopResult::Completed;
+                                        break;
+                                    }
+                                    return Err(retry_err);
+                                }
+                            }
+                        }
+                        Err(retry_err) => {
+                            // Retry request itself failed; fall through
+                            if let Ok(mut recovery) = ctx.error_recovery.write() {
+                                recovery.record_error(
+                                    "llm_response_parse_retry_request",
+                                    format!("{:#}", retry_err),
+                                    ErrorType::Other,
+                                );
+                            }
+                            if maybe_recover_after_post_tool_llm_failure(
+                                turn_processing_ctx.renderer,
+                                turn_processing_ctx.working_history,
+                                &retry_err,
+                                step_count,
+                                turn_history_start_len,
+                                "process_llm_response_retry",
+                            )? {
+                                result = TurnLoopResult::Completed;
+                                break;
+                            }
+                            return Err(retry_err);
+                        }
+                    }
+                } else {
+                    // Non-transient parse error — record and attempt standard recovery
+                    if let Ok(mut recovery) = ctx.error_recovery.write() {
+                        recovery.record_error(
+                            "llm_response_parse",
+                            format!("{:#}", err),
+                            ErrorType::Other,
+                        );
+                    }
+                    if maybe_recover_after_post_tool_llm_failure(
+                        turn_processing_ctx.renderer,
+                        turn_processing_ctx.working_history,
+                        &err,
+                        step_count,
+                        turn_history_start_len,
+                        "process_llm_response",
+                    )? {
+                        result = TurnLoopResult::Completed;
+                        break;
+                    }
+                    return Err(err);
                 }
-                return Err(err);
             }
         };
         if turn_processing_ctx.session_stats.is_plan_mode()
@@ -510,6 +608,14 @@ pub async fn run_turn_loop(
         let turn_outcome = match turn_outcome_result {
             Ok(outcome) => outcome,
             Err(err) => {
+                // Record result-handler errors for diagnostics (mirrors llm_request recording)
+                if let Ok(mut recovery) = ctx.error_recovery.write() {
+                    recovery.record_error(
+                        "turn_result_handler",
+                        format!("{:#}", err),
+                        ErrorType::ToolExecution,
+                    );
+                }
                 if maybe_recover_after_post_tool_llm_failure(
                     ctx.renderer,
                     &working_history,

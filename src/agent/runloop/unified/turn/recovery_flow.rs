@@ -455,6 +455,10 @@ fn build_error_summary(diagnostics: &RecoveryDiagnostics) -> String {
             ErrorType::PermissionDenied => "Permission Denied",
             ErrorType::InvalidArguments => "Invalid Arguments",
             ErrorType::ResourceNotFound => "Not Found",
+            ErrorType::ApiCall => "API Error",
+            ErrorType::FileSystem => "File System Error",
+            ErrorType::Network => "Network Error",
+            ErrorType::Validation => "Validation Error",
             ErrorType::Other => "Other",
         };
         summary.push_str(&format!(
