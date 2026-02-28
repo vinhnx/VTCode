@@ -22,6 +22,7 @@ pub async fn handle_theme_changed(
     let styles = theme::active_styles();
     ctx.handle.set_theme(inline_theme_from_core_styles(&styles));
     apply_prompt_style(ctx.handle);
+    ctx.handle.force_redraw();
     Ok(SlashCommandControl::Continue)
 }
 

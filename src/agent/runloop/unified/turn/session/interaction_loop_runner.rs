@@ -2,12 +2,14 @@ use anyhow::Result;
 use serde::Deserialize;
 use serde_json::Value;
 use vtcode_core::llm::provider as uni;
+use vtcode_core::ui::theme;
 use vtcode_core::utils::ansi::MessageStyle;
 use vtcode_core::utils::session_archive::find_session_by_identifier;
 
 use crate::agent::runloop::ResumeSession;
 use crate::agent::runloop::model_picker::ModelPickerProgress;
 use crate::agent::runloop::prompt::refine_and_enrich_prompt;
+use crate::agent::runloop::tui_compat::{inline_theme_from_core_styles, to_tui_appearance};
 use crate::agent::runloop::unified::display::display_user_message;
 use crate::agent::runloop::unified::inline_events::{
     InlineEventLoopResources, InlineInterruptCoordinator, InlineLoopAction, poll_inline_loop_action,
@@ -20,6 +22,7 @@ use crate::agent::runloop::unified::turn::session::{
     mcp_lifecycle, slash_command_handler, tool_dispatch,
 };
 use crate::hooks::lifecycle::SessionEndReason;
+use vtcode::config_watcher::SimpleConfigWatcher;
 
 use super::interaction_loop::{InteractionLoopContext, InteractionOutcome, InteractionState};
 use super::interaction_loop_team::{direct_message_target, handle_team_switch, poll_team_mailbox};
@@ -78,13 +81,71 @@ fn fallback_args_preview(args: &Value) -> String {
     preview
 }
 
+fn apply_live_theme_and_appearance(
+    handle: &vtcode_tui::InlineHandle,
+    cfg: &vtcode_core::config::loader::VTCodeConfig,
+) {
+    let color_config = theme::ColorAccessibilityConfig {
+        minimum_contrast: cfg.ui.minimum_contrast,
+        bold_is_bright: cfg.ui.bold_is_bright,
+        safe_colors_only: cfg.ui.safe_colors_only,
+    };
+    theme::set_color_accessibility_config(color_config);
+
+    let selected = cfg.agent.theme.trim();
+    let selected = if selected.is_empty() {
+        theme::DEFAULT_THEME_ID
+    } else {
+        selected
+    };
+    if let Err(err) = theme::set_active_theme(selected) {
+        tracing::warn!(
+            theme = selected,
+            error = %err,
+            "Failed to activate configured theme; falling back to default"
+        );
+        let _ = theme::set_active_theme(theme::DEFAULT_THEME_ID);
+    }
+
+    let styles = theme::active_styles();
+    handle.set_theme(inline_theme_from_core_styles(&styles));
+    handle.set_appearance(to_tui_appearance(cfg));
+    crate::agent::runloop::unified::palettes::apply_prompt_style(handle);
+    handle.force_redraw();
+}
+
 pub(super) async fn run_interaction_loop_impl(
     ctx: &mut InteractionLoopContext<'_>,
     state: &mut InteractionState<'_>,
 ) -> Result<InteractionOutcome> {
     const MCP_REFRESH_INTERVAL: std::time::Duration = std::time::Duration::from_secs(5);
+    let mut live_reload_watcher = SimpleConfigWatcher::new(ctx.config.workspace.clone());
+    live_reload_watcher.set_check_interval(1);
+    live_reload_watcher.set_debounce_duration(200);
 
     loop {
+        if live_reload_watcher.should_reload() {
+            if let Err(err) = crate::agent::runloop::unified::turn::workspace::refresh_vt_config(
+                &ctx.config.workspace,
+                ctx.config,
+                ctx.vt_cfg,
+            )
+            .await
+            {
+                tracing::warn!("Failed to live-reload workspace configuration: {}", err);
+            } else if let Some(cfg) = ctx.vt_cfg.as_ref() {
+                if let Err(err) =
+                    crate::agent::runloop::unified::turn::workspace::apply_workspace_config_to_registry(
+                        ctx.tool_registry,
+                        cfg,
+                    )
+                {
+                    tracing::warn!("Failed to apply live-reloaded workspace config: {}", err);
+                }
+                apply_live_theme_and_appearance(ctx.handle, cfg);
+            }
+        }
+
         let spooled_count = ctx.tool_registry.spooled_files_count().await;
         crate::agent::runloop::unified::status_line::update_spooled_files_count(
             state.input_status_state,

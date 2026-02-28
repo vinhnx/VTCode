@@ -73,8 +73,10 @@ impl Session {
                 self.needs_redraw = true;
             }
             InlineCommand::SetTheme { theme } => {
+                let previous_theme = self.theme.clone();
                 self.theme = theme.clone();
                 self.styles.set_theme(theme);
+                self.retint_lines_for_theme_change(&previous_theme);
                 self.ensure_prompt_style_color();
                 self.invalidate_transcript_cache();
             }

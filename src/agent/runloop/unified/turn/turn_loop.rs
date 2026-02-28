@@ -232,6 +232,9 @@ pub async fn run_turn_loop(
         validator.start_turn().await;
     }
 
+    // Loop detection warnings are scoped per turn; clear streak state here.
+    ctx.autonomous_executor.reset_turn_loop_detection();
+
     loop {
         if handle_steering_messages(&mut ctx, &mut working_history, &mut result).await? {
             break;

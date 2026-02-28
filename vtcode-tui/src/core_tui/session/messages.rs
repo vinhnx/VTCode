@@ -14,6 +14,66 @@ use super::{Session, message::MessageLine};
 const USER_PREFIX: &str = "";
 
 impl Session {
+    pub(super) fn retint_lines_for_theme_change(
+        &mut self,
+        previous_theme: &super::super::types::InlineTheme,
+    ) {
+        let previous_colors = [
+            previous_theme.foreground.as_ref(),
+            previous_theme.primary.as_ref(),
+            previous_theme.secondary.as_ref(),
+            previous_theme.tool_accent.as_ref(),
+            previous_theme.tool_body.as_ref(),
+            previous_theme.pty_body.as_ref(),
+        ];
+
+        let mut changed_indices = Vec::new();
+        for (line_index, line) in self.lines.iter_mut().enumerate() {
+            match line.kind {
+                InlineMessageKind::Tool | InlineMessageKind::Pty => continue,
+                InlineMessageKind::Agent
+                | InlineMessageKind::User
+                | InlineMessageKind::Policy
+                | InlineMessageKind::Error
+                | InlineMessageKind::Warning
+                | InlineMessageKind::Info => {}
+            }
+
+            let mut line_changed = false;
+            for segment in &mut line.segments {
+                let mut updated_style = (*segment.style).clone();
+                if let Some(color) = updated_style.color.as_ref()
+                    && previous_colors
+                        .iter()
+                        .flatten()
+                        .any(|candidate| *candidate == color)
+                {
+                    updated_style.color = None;
+                    line_changed = true;
+                }
+                if line_changed {
+                    segment.style = std::sync::Arc::new(updated_style);
+                }
+            }
+            if line_changed {
+                changed_indices.push(line_index);
+            }
+        }
+
+        for line_index in changed_indices.iter().copied() {
+            let revision = self.next_revision();
+            if let Some(line) = self.lines.get_mut(line_index) {
+                line.revision = revision;
+            }
+        }
+
+        if !changed_indices.is_empty() {
+            self.mark_line_dirty(0);
+            self.invalidate_transcript_cache();
+            self.invalidate_scroll_metrics();
+        }
+    }
+
     /// Get the prefix text for a message kind
     #[allow(dead_code)]
     pub(super) fn prefix_text(&self, kind: InlineMessageKind) -> Option<String> {

@@ -134,6 +134,15 @@ impl AutonomousExecutor {
         self.loop_detector.clone()
     }
 
+    /// Reset loop-detection streaks at the start of a new turn.
+    pub fn reset_turn_loop_detection(&self) {
+        if let Ok(mut detector) = self.loop_detector.write() {
+            detector.reset();
+        } else {
+            tracing::warn!("Failed to acquire loop detector lock for turn reset");
+        }
+    }
+
     /// Determine execution policy for a tool
     pub fn get_policy(&self, tool_name: &str, args: &Value) -> AutonomousPolicy {
         // Check for destructive patterns in arguments
@@ -656,6 +665,20 @@ mod tests {
             message.contains("alternative") || message.contains("blocked"),
             "unexpected loop warning message: {message}"
         );
+    }
+
+    #[test]
+    fn test_turn_reset_clears_loop_detection_state() {
+        let executor = AutonomousExecutor::new();
+        let args = json!({"path": "src/"});
+
+        executor.record_tool_call(tools::GREP_FILE, &args);
+        executor.record_tool_call(tools::GREP_FILE, &args);
+        executor.record_tool_call(tools::GREP_FILE, &args);
+        assert!(executor.should_block(tools::GREP_FILE, &args).is_some());
+
+        executor.reset_turn_loop_detection();
+        assert!(executor.should_block(tools::GREP_FILE, &args).is_none());
     }
 
     #[test]
