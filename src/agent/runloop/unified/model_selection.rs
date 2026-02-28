@@ -90,6 +90,7 @@ pub(crate) async fn finalize_model_selection(
                 model: Some(selection.model.clone()),
                 prompt_cache: Some(config.prompt_cache.clone()),
                 timeouts: None,
+                openai: vt_cfg.as_ref().map(|cfg| cfg.provider.openai.clone()),
                 anthropic: None,
                 model_behavior: config.model_behavior.clone(),
             },

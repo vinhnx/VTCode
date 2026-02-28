@@ -29,6 +29,71 @@ fn parse_responses_tool_call(item: &Value) -> Option<ToolCall> {
     ))
 }
 
+fn append_user_content_parts(content_parts: &mut Vec<Value>, message_content: &MessageContent) {
+    match message_content {
+        MessageContent::Text(text) => {
+            if !text.trim().is_empty() {
+                content_parts.push(json!({
+                    "type": "input_text",
+                    "text": text
+                }));
+            }
+        }
+        MessageContent::Parts(parts) => {
+            for part in parts {
+                match part {
+                    ContentPart::Text { text } => {
+                        if !text.trim().is_empty() {
+                            content_parts.push(json!({
+                                "type": "input_text",
+                                "text": text
+                            }));
+                        }
+                    }
+                    ContentPart::Image {
+                        data, mime_type, ..
+                    } => {
+                        content_parts.push(json!({
+                            "type": "input_image",
+                            "image_url": format!("data:{};base64,{}", mime_type, data)
+                        }));
+                    }
+                    ContentPart::File {
+                        filename,
+                        file_id,
+                        file_data,
+                        file_url,
+                        ..
+                    } => {
+                        if file_id.is_none() && file_data.is_none() && file_url.is_none() {
+                            continue;
+                        }
+
+                        let mut file_part = json!({
+                            "type": "input_file"
+                        });
+                        if let Value::Object(ref mut map) = file_part {
+                            if let Some(name) = filename {
+                                map.insert("filename".to_owned(), json!(name));
+                            }
+                            if let Some(id) = file_id {
+                                map.insert("file_id".to_owned(), json!(id));
+                            }
+                            if let Some(data) = file_data {
+                                map.insert("file_data".to_owned(), json!(data));
+                            }
+                            if let Some(url) = file_url {
+                                map.insert("file_url".to_owned(), json!(url));
+                            }
+                        }
+                        content_parts.push(file_part);
+                    }
+                }
+            }
+        }
+    }
+}
+
 pub fn parse_responses_payload(
     response_json: Value,
     model: String,
@@ -262,38 +327,7 @@ pub fn build_standard_responses_payload(
             }
             MessageRole::User => {
                 let mut content_parts: Vec<Value> = Vec::new();
-                match &msg.content {
-                    MessageContent::Text(text) => {
-                        if !text.trim().is_empty() {
-                            content_parts.push(json!({
-                                "type": "input_text",
-                                "text": text
-                            }));
-                        }
-                    }
-                    MessageContent::Parts(parts) => {
-                        for part in parts {
-                            match part {
-                                ContentPart::Text { text } => {
-                                    if !text.trim().is_empty() {
-                                        content_parts.push(json!({
-                                            "type": "input_text",
-                                            "text": text
-                                        }));
-                                    }
-                                }
-                                ContentPart::Image {
-                                    data, mime_type, ..
-                                } => {
-                                    content_parts.push(json!({
-                                        "type": "input_image",
-                                        "image_url": format!("data:{};base64,{}", mime_type, data)
-                                    }));
-                                }
-                            }
-                        }
-                    }
-                }
+                append_user_content_parts(&mut content_parts, &msg.content);
 
                 if !content_parts.is_empty() {
                     input.push(json!({
@@ -426,38 +460,7 @@ pub fn build_codex_responses_payload(
             }
             MessageRole::User => {
                 let mut content_parts: Vec<Value> = Vec::new();
-                match &msg.content {
-                    MessageContent::Text(text) => {
-                        if !text.trim().is_empty() {
-                            content_parts.push(json!({
-                                "type": "input_text",
-                                "text": text
-                            }));
-                        }
-                    }
-                    MessageContent::Parts(parts) => {
-                        for part in parts {
-                            match part {
-                                ContentPart::Text { text } => {
-                                    if !text.trim().is_empty() {
-                                        content_parts.push(json!({
-                                            "type": "input_text",
-                                            "text": text
-                                        }));
-                                    }
-                                }
-                                ContentPart::Image {
-                                    data, mime_type, ..
-                                } => {
-                                    content_parts.push(json!({
-                                        "type": "input_image",
-                                        "image_url": format!("data:{};base64,{}", mime_type, data)
-                                    }));
-                                }
-                            }
-                        }
-                    }
-                }
+                append_user_content_parts(&mut content_parts, &msg.content);
 
                 if !content_parts.is_empty() {
                     input.push(json!({

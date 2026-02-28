@@ -190,6 +190,19 @@ impl HuggingFaceProvider {
                                         }
                                     })
                                 }
+                                crate::llm::provider::ContentPart::File {
+                                    filename,
+                                    file_id,
+                                    file_url,
+                                    ..
+                                } => {
+                                    let fallback = filename
+                                        .clone()
+                                        .or_else(|| file_id.clone())
+                                        .or_else(|| file_url.clone())
+                                        .unwrap_or_else(|| "attached file".to_string());
+                                    json!({ "type": "text", "text": format!("[File input not directly supported: {}]", fallback) })
+                                }
                             })
                             .collect();
                         message_map.insert("content".to_owned(), Value::Array(parts_json));
@@ -369,6 +382,22 @@ impl HuggingFaceProvider {
                             json!({
                                 "type": "input_image",
                                 "image_url": format!("data:{};base64,{}", mime_type, data)
+                            })
+                        }
+                        crate::llm::provider::ContentPart::File {
+                            filename,
+                            file_id,
+                            file_url,
+                            ..
+                        } => {
+                            let fallback = filename
+                                .clone()
+                                .or_else(|| file_id.clone())
+                                .or_else(|| file_url.clone())
+                                .unwrap_or_else(|| "attached file".to_string());
+                            json!({
+                                "type": "input_text",
+                                "text": format!("[File input not directly supported: {}]", fallback)
                             })
                         }
                     })

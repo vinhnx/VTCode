@@ -119,6 +119,63 @@ fn responses_payload_uses_function_wrapper() {
 }
 
 #[test]
+fn responses_payload_serializes_user_input_file_by_id() {
+    let provider = OpenAIProvider::with_model(String::new(), models::openai::GPT_5.to_string());
+    let request = provider::LLMRequest {
+        messages: vec![provider::Message::user_with_parts(vec![
+            provider::ContentPart::text("Summarize this file".to_string()),
+            provider::ContentPart::file_from_id("file-abc123".to_string()),
+        ])],
+        model: models::openai::GPT_5.to_string(),
+        ..Default::default()
+    };
+
+    let payload = provider
+        .convert_to_openai_responses_format(&request)
+        .expect("conversion should succeed");
+
+    let input = payload
+        .get("input")
+        .and_then(Value::as_array)
+        .expect("responses input should exist");
+    let content = input[0]
+        .get("content")
+        .and_then(Value::as_array)
+        .expect("user content should be an array");
+
+    assert!(
+        content.iter().any(
+            |part| part.get("type").and_then(Value::as_str) == Some("input_file")
+                && part.get("file_id").and_then(Value::as_str) == Some("file-abc123")
+        ),
+        "expected input_file part with file_id"
+    );
+}
+
+#[test]
+fn chat_payload_rejects_file_url_content_parts() {
+    let provider =
+        OpenAIProvider::with_model(String::new(), models::openai::DEFAULT_MODEL.to_string());
+    let request = provider::LLMRequest {
+        messages: vec![provider::Message::user_with_parts(vec![
+            provider::ContentPart::file_from_url("https://example.com/doc.pdf".to_string()),
+        ])],
+        model: models::openai::DEFAULT_MODEL.to_string(),
+        ..Default::default()
+    };
+
+    let error = provider
+        .convert_to_openai_format(&request)
+        .expect_err("chat payload should reject file_url");
+    match error {
+        provider::LLMError::InvalidRequest { message, .. } => {
+            assert!(message.contains("does not support file_url"));
+        }
+        other => panic!("unexpected error variant: {other:?}"),
+    }
+}
+
+#[test]
 fn serialize_tools_dedupes_duplicate_names() {
     let duplicate = provider::ToolDefinition::function(
         "search_workspace".to_owned(),
@@ -209,6 +266,7 @@ fn responses_payload_includes_prompt_cache_retention() {
         None,
         None,
         None,
+        None,
     );
 
     let request = sample_request(models::openai::GPT_5_2);
@@ -229,6 +287,7 @@ fn responses_payload_includes_prompt_cache_key_for_native_openai() {
     let provider = OpenAIProvider::from_config(
         Some("key".to_owned()),
         Some(models::openai::GPT_5_2.to_string()),
+        None,
         None,
         None,
         None,
@@ -275,6 +334,7 @@ fn responses_payload_omits_prompt_cache_key_for_non_native_openai_base_url() {
         None,
         None,
         None,
+        None,
     );
 
     let mut request = sample_request(models::openai::GPT_5_2);
@@ -299,6 +359,7 @@ fn responses_payload_excludes_prompt_cache_retention_when_not_set() {
         None,
         None,
         None,
+        None,
     );
 
     let mut request = sample_request(models::openai::GPT_5_2);
@@ -320,6 +381,7 @@ fn responses_payload_includes_prompt_cache_retention_streaming() {
         Some(models::openai::GPT_5_2.to_string()),
         None,
         Some(pc),
+        None,
         None,
         None,
         None,
@@ -352,6 +414,7 @@ fn responses_payload_excludes_retention_for_non_responses_model() {
         None,
         None,
         None,
+        None,
     );
 
     let request = sample_request(models::openai::GPT_OSS_20B);
@@ -374,12 +437,31 @@ fn provider_from_config_respects_prompt_cache_retention() {
         None,
         None,
         None,
+        None,
     );
 
     assert_eq!(
         provider.prompt_cache_settings.prompt_cache_retention,
         Some("72h".to_owned())
     );
+}
+
+#[test]
+fn provider_from_config_respects_websocket_mode_opt_in() {
+    let provider = OpenAIProvider::from_config(
+        Some("key".to_string()),
+        Some(models::openai::GPT_5_2.to_string()),
+        None,
+        None,
+        None,
+        None,
+        Some(crate::config::core::OpenAIConfig {
+            websocket_mode: true,
+        }),
+        None,
+    );
+
+    assert!(provider.websocket_mode_enabled(models::openai::GPT_5_2));
 }
 
 #[test]
@@ -537,6 +619,7 @@ mod caching_tests {
             None,
             None,
             None,
+            None,
         );
 
         // Create a dummy request for a Responses API model
@@ -579,6 +662,7 @@ mod caching_tests {
             None,
             None,
             Some(config),
+            None,
             None,
             None,
             None,
@@ -670,6 +754,7 @@ mod exact_count_tests {
             Some("key".to_owned()),
             Some(models::openai::GPT_5_2.to_owned()),
             Some("https://example.local/v1".to_owned()),
+            None,
             None,
             None,
             None,

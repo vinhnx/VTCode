@@ -140,6 +140,7 @@ async fn run_ask_without_tools(
                 model: Some(config.model.clone()),
                 prompt_cache: Some(config.prompt_cache.clone()),
                 timeouts: None,
+                openai: None,
                 anthropic: None,
                 model_behavior: Some(config.model_behavior.clone()),
             },

@@ -283,6 +283,7 @@ fn create_provider_client(
             model: Some(config.model.clone()),
             prompt_cache: Some(config.prompt_cache.clone()),
             timeouts: None,
+            openai: vt_cfg.map(|cfg| cfg.provider.openai.clone()),
             anthropic: vt_cfg.map(|cfg| cfg.provider.anthropic.clone()),
             model_behavior: vt_cfg.map(|cfg| cfg.model.clone()),
         },

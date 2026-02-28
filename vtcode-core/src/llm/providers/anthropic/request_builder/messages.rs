@@ -239,6 +239,23 @@ fn content_blocks_from_message_content(
                             cache_control: None,
                         });
                     }
+                    ContentPart::File {
+                        filename,
+                        file_id,
+                        file_url,
+                        ..
+                    } => {
+                        let fallback = filename
+                            .clone()
+                            .or_else(|| file_id.clone())
+                            .or_else(|| file_url.clone())
+                            .unwrap_or_else(|| "attached file".to_string());
+                        blocks.push(AnthropicContentBlock::Text {
+                            text: format!("[File input not directly supported: {}]", fallback),
+                            citations: None,
+                            cache_control: None,
+                        });
+                    }
                 }
             }
         }

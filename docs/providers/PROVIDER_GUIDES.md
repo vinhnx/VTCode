@@ -12,6 +12,11 @@ This index collects provider-specific guides for configuring VT Code with differ
 -   Follow the [Getting Started guide](./user-guide/getting-started.md#configure-your-llm-provider) for API key setup.
 -   See [`vtcode-core/src/config/constants.rs`](../vtcode-core/src/config/constants.rs) for the latest supported models.
 -   GPT-5.2 reference: [Using GPT-5.2](./guides/gpt-5-2.md)
+-   File inputs are supported for OpenAI Responses API through `input_file` parts.
+-   Supported file input fields in VT Code message parts: `file_id`, `file_data`, `file_url`, `filename`.
+-   `file_url` is Responses API only; VT Code rejects `file_url` when a request uses Chat Completions.
+-   For large corpora, prefer File Search/Retrieval instead of sending full files inline.
+-   For spreadsheet-heavy analysis, use Hosted Shell workflows instead of large inline sheet prompts.
 
 ## Anthropic Claude
 

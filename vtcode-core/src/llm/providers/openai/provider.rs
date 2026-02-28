@@ -10,7 +10,7 @@
 use crate::config::TimeoutsConfig;
 use crate::config::constants::{env_vars, models, urls};
 use crate::config::core::{
-    AnthropicConfig, ModelConfig, OpenAIPromptCacheSettings, PromptCachingConfig,
+    AnthropicConfig, ModelConfig, OpenAIConfig, OpenAIPromptCacheSettings, PromptCachingConfig,
 };
 use crate::llm::error_display;
 use crate::llm::provider;
@@ -25,6 +25,7 @@ use std::sync::Mutex;
 use std::time::Duration;
 #[cfg(debug_assertions)]
 use std::time::Instant;
+use tokio::sync::Mutex as AsyncMutex;
 use tracing::debug;
 
 // Import from extracted modules
@@ -36,7 +37,9 @@ use super::types::{MAX_COMPLETION_TOKENS_FIELD, OpenAIResponsesPayload, Response
 
 mod generation;
 mod streaming;
+mod websocket;
 
+use self::websocket::OpenAIResponsesWebSocketSession;
 use super::super::{
     common::{
         extract_prompt_cache_settings, override_base_url, parse_client_prompt_common, resolve_model,
@@ -54,6 +57,8 @@ pub struct OpenAIProvider {
     prompt_cache_enabled: bool,
     prompt_cache_settings: OpenAIPromptCacheSettings,
     model_behavior: Option<ModelConfig>,
+    websocket_mode: bool,
+    websocket_session: AsyncMutex<Option<OpenAIResponsesWebSocketSession>>,
 }
 
 impl OpenAIProvider {
@@ -86,11 +91,12 @@ impl OpenAIProvider {
             None,
             None,
             None,
+            None,
         )
     }
 
     pub fn with_model(api_key: String, model: String) -> Self {
-        Self::with_model_internal(api_key, model, None, None, None)
+        Self::with_model_internal(api_key, model, None, None, None, None)
     }
 
     pub fn new_with_client(
@@ -113,6 +119,8 @@ impl OpenAIProvider {
             prompt_cache_settings: Default::default(),
             responses_api_modes: Mutex::new(HashMap::new()),
             model_behavior: None,
+            websocket_mode: false,
+            websocket_session: AsyncMutex::new(None),
         }
     }
 
@@ -123,6 +131,7 @@ impl OpenAIProvider {
         prompt_cache: Option<PromptCachingConfig>,
         _timeouts: Option<TimeoutsConfig>,
         _anthropic: Option<AnthropicConfig>,
+        openai: Option<OpenAIConfig>,
         model_behavior: Option<ModelConfig>,
     ) -> Self {
         let api_key_value = api_key.unwrap_or_default();
@@ -133,6 +142,7 @@ impl OpenAIProvider {
             model_value,
             prompt_cache,
             base_url,
+            openai,
             model_behavior,
         )
     }
@@ -142,6 +152,7 @@ impl OpenAIProvider {
         model: String,
         prompt_cache: Option<PromptCachingConfig>,
         base_url: Option<String>,
+        openai: Option<OpenAIConfig>,
         model_behavior: Option<ModelConfig>,
     ) -> Self {
         let (prompt_cache_enabled, prompt_cache_settings) = extract_prompt_cache_settings(
@@ -160,6 +171,7 @@ impl OpenAIProvider {
         let default_state = Self::default_responses_state(&model);
         let is_native_openai = resolved_base_url.contains("api.openai.com");
         let is_xai = resolved_base_url.contains("api.x.ai");
+        let websocket_mode = openai.map(|cfg| cfg.websocket_mode).unwrap_or(false);
 
         let initial_state = if is_xai || !is_native_openai {
             ResponsesApiState::Disabled
@@ -181,7 +193,15 @@ impl OpenAIProvider {
             prompt_cache_enabled,
             prompt_cache_settings,
             model_behavior,
+            websocket_mode,
+            websocket_session: AsyncMutex::new(None),
         }
+    }
+
+    fn websocket_mode_enabled(&self, model: &str) -> bool {
+        self.websocket_mode
+            && self.base_url.contains("api.openai.com")
+            && !matches!(self.responses_api_state(model), ResponsesApiState::Disabled)
     }
 
     fn authorize(&self, builder: reqwest::RequestBuilder) -> reqwest::RequestBuilder {

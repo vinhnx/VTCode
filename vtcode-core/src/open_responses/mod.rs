@@ -24,7 +24,7 @@ mod status;
 mod usage;
 
 pub use bridge::{DualEventEmitter, ResponseBuilder};
-pub use content::{ContentPart, ContentPartId};
+pub use content::{ContentPart, ContentPartId, ImageDetail, InputFileContent, InputImageContent};
 pub use error::{OpenResponseError, OpenResponseErrorCode, OpenResponseErrorType};
 pub use events::{ResponseStreamEvent, SequencedEvent, StreamEventEmitter, VecStreamEmitter};
 pub use integration::{

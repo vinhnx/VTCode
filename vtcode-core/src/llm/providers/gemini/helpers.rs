@@ -625,6 +625,22 @@ fn parts_from_message_content(content: &MessageContent) -> Vec<Part> {
                             },
                         });
                     }
+                    ContentPart::File {
+                        filename,
+                        file_id,
+                        file_url,
+                        ..
+                    } => {
+                        let fallback = filename
+                            .clone()
+                            .or_else(|| file_id.clone())
+                            .or_else(|| file_url.clone())
+                            .unwrap_or_else(|| "attached file".to_string());
+                        converted.push(Part::Text {
+                            text: format!("[File input not directly supported: {}]", fallback),
+                            thought_signature: None,
+                        });
+                    }
                 }
             }
             converted

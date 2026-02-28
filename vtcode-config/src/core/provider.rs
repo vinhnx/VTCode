@@ -1,5 +1,15 @@
 use serde::{Deserialize, Serialize};
 
+/// OpenAI-specific provider configuration
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+pub struct OpenAIConfig {
+    /// Enable Responses API WebSocket transport for non-streaming requests.
+    /// This is an opt-in path designed for long-running, tool-heavy workflows.
+    #[serde(default)]
+    pub websocket_mode: bool,
+}
+
 /// Anthropic-specific provider configuration
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -155,4 +165,22 @@ fn default_interleaved_thinking_type() -> String {
 #[inline]
 fn default_effort() -> String {
     "low".to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::OpenAIConfig;
+
+    #[test]
+    fn openai_config_defaults_to_websocket_mode_disabled() {
+        let config = OpenAIConfig::default();
+        assert!(!config.websocket_mode);
+    }
+
+    #[test]
+    fn openai_config_parses_websocket_mode_opt_in() {
+        let parsed: OpenAIConfig =
+            toml::from_str("websocket_mode = true").expect("config should parse");
+        assert!(parsed.websocket_mode);
+    }
 }

@@ -146,6 +146,7 @@ impl LmStudioProvider {
             prompt_cache,
             _timeouts,
             _anthropic,
+            None,
             model_behavior,
         )
     }

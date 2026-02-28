@@ -87,6 +87,7 @@ pub(crate) async fn refine_user_prompt_if_enabled(
             model: Some(refiner_model.clone()),
             prompt_cache: Some(cfg.prompt_cache.clone()),
             timeouts: None,
+            openai: None,
             anthropic: None,
             model_behavior: cfg.model_behavior.clone(),
         },

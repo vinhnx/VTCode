@@ -124,6 +124,7 @@ impl acp::Agent for ZedAgent {
                     model: Some(self.config.model.clone()),
                     prompt_cache: Some(self.config.prompt_cache.clone()),
                     timeouts: None,
+                    openai: None,
                     anthropic: None,
                     model_behavior: self.config.model_behavior.clone(),
                 },

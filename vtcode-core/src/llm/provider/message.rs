@@ -15,6 +15,18 @@ pub enum ContentPart {
         #[serde(rename = "type")]
         content_type: String, // "image"
     },
+    File {
+        #[serde(rename = "type")]
+        content_type: String, // "file" or "input_file"
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        filename: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        file_id: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        file_data: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        file_url: Option<String>,
+    },
 }
 
 impl ContentPart {
@@ -30,6 +42,26 @@ impl ContentPart {
         }
     }
 
+    pub fn file_from_id(file_id: String) -> Self {
+        ContentPart::File {
+            content_type: "file".to_owned(),
+            filename: None,
+            file_id: Some(file_id),
+            file_data: None,
+            file_url: None,
+        }
+    }
+
+    pub fn file_from_url(file_url: String) -> Self {
+        ContentPart::File {
+            content_type: "input_file".to_owned(),
+            filename: None,
+            file_id: None,
+            file_data: None,
+            file_url: Some(file_url),
+        }
+    }
+
     pub fn as_text(&self) -> Option<&str> {
         match self {
             ContentPart::Text { text } => Some(text),
@@ -39,6 +71,10 @@ impl ContentPart {
 
     pub fn is_image(&self) -> bool {
         matches!(self, ContentPart::Image { .. })
+    }
+
+    pub fn is_file(&self) -> bool {
+        matches!(self, ContentPart::File { .. })
     }
 }
 
@@ -158,7 +194,7 @@ impl MessageContent {
                 parts.is_empty()
                     || parts.iter().all(|part| match part {
                         ContentPart::Text { text } => text.is_empty(),
-                        _ => false,
+                        ContentPart::Image { .. } | ContentPart::File { .. } => false,
                     })
             }
         }
@@ -214,7 +250,7 @@ impl Message {
                         ContentPart::Text { text } => {
                             count += crate::llm::utils::estimate_token_count(text)
                         }
-                        ContentPart::Image { .. } => count += 1000, // Rough estimate for images
+                        ContentPart::Image { .. } | ContentPart::File { .. } => count += 1000, // Rough estimate for images/files
                     }
                 }
             }

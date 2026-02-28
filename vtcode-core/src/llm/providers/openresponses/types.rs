@@ -131,6 +131,8 @@ pub struct InputFileContent {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub filename: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub file_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub file_data: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub file_url: Option<String>,

@@ -41,6 +41,26 @@ pub(crate) fn build_chat_request(
     request: &provider::LLMRequest,
     ctx: &ChatRequestContext<'_>,
 ) -> Result<Value, provider::LLMError> {
+    for message in &request.messages {
+        if let provider::MessageContent::Parts(parts) = &message.content {
+            for part in parts {
+                if let provider::ContentPart::File {
+                    file_url: Some(_), ..
+                } = part
+                {
+                    let formatted_error = error_display::format_llm_error(
+                        "OpenAI",
+                        "Chat Completions does not support file_url inputs; use Responses API or file_id/file_data",
+                    );
+                    return Err(provider::LLMError::InvalidRequest {
+                        message: formatted_error,
+                        metadata: None,
+                    });
+                }
+            }
+        }
+    }
+
     let mut messages = Vec::with_capacity(request.messages.len() + 1);
     let mut active_tool_call_ids: HashSet<String> = HashSet::with_capacity(16);
 
