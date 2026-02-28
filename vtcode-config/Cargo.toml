@@ -1,6 +1,6 @@
 [package]
 name = "vtcode-config"
-version = "0.84.0"
+version = "0.84.1"
 edition = "2024"
 authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
 description = "Config loader components shared across VT Code and downstream adopters"
@@ -33,7 +33,7 @@ toml = "0.9.11"
 toml_edit = "0.24.0"
 tracing = "0.1"
 urlencoding = "2.1"
-vtcode-commons = { path = "../vtcode-commons", version = "0.84.0" }
+vtcode-commons = { path = "../vtcode-commons", version = "0.84.1" }
 dotenvy = "0.15"
 schemars = { workspace = true, optional = true, features = ["indexmap2"] }
 

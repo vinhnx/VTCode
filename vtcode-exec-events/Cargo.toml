@@ -1,6 +1,6 @@
 [package]
 name = "vtcode-exec-events"
-version = "0.84.0"
+version = "0.84.1"
 edition = "2024"
 description = "Structured execution telemetry event schema used across VT Code crates."
 license = "MIT OR Apache-2.0"
@@ -28,7 +28,7 @@ schemars = { workspace = true, optional = true, features = [
 ] }
 uuid = { version = "1.20", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
-vtcode-commons = { path = "../vtcode-commons", version = "0.84.0" }
+vtcode-commons = { path = "../vtcode-commons", version = "0.84.1" }
 
 [lints]
 workspace = true
