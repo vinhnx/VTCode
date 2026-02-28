@@ -87,6 +87,15 @@ let clean = strip_ansi("\x1b[31mError\x1b[0m");
 // clean == "Error"
 ```
 
+### In-place Redraw (Progress/Spinner)
+
+```rust
+use vtcode_core::utils::ansi_codes::{format_redraw_line, redraw_line_prefix};
+
+let prefix = redraw_line_prefix(); // "\r\x1b[2K"
+let frame = format_redraw_line("Building... 42%");
+```
+
 ### Detecting ANSI Sequences
 
 ```rust

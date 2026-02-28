@@ -6401,7 +6401,6 @@ dependencies = [
  "anstyle",
  "anstyle-git",
  "anstyle-ls",
- "anstyle-query",
  "anstyle-syntect",
  "anyhow",
  "base64",
@@ -6431,6 +6430,7 @@ dependencies = [
  "tui-shimmer",
  "unicode-segmentation",
  "unicode-width 0.2.0",
+ "vtcode-commons",
 ]
 
 [[package]]

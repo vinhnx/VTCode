@@ -220,7 +220,7 @@ Full configuration in `vtcode.toml`:
 
 ```toml
 [sandbox]
-enabled = true
+enabled = false # opt-in; set true to enforce sandboxing
 default_mode = "read_only"
 
 [sandbox.network]
@@ -278,4 +278,3 @@ Out of scope:
 - [Security Model](security/SECURITY_MODEL.md) - Overall security architecture
 - [Command Allowlist](environment/ALLOWED_COMMANDS_REFERENCE.md) - Permitted commands
 - [Process Hardening](development/PROCESS_HARDENING.md) - Pre-main security measures
-

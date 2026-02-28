@@ -27,6 +27,7 @@ impl AgentRunner {
         self.tool_registry.initialize_async().await?;
 
         self.tool_registry.apply_commands_config(&vt_cfg.commands);
+        self.tool_registry.apply_sandbox_config(&vt_cfg.sandbox);
 
         if let Err(err) = self
             .tool_registry

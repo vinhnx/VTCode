@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct SandboxConfig {
     /// Enable sandboxing for command execution
-    #[serde(default = "default_true")]
+    #[serde(default = "default_false")]
     pub enabled: bool,
 
     /// Default sandbox mode
@@ -44,7 +44,7 @@ pub struct SandboxConfig {
 impl Default for SandboxConfig {
     fn default() -> Self {
         Self {
-            enabled: default_true(),
+            enabled: default_false(),
             default_mode: SandboxMode::default(),
             network: NetworkConfig::default(),
             sensitive_paths: SensitivePathsConfig::default(),
@@ -343,6 +343,11 @@ impl Default for MicroVMSandboxConfig {
 }
 
 #[inline]
+const fn default_false() -> bool {
+    false
+}
+
+#[inline]
 const fn default_true() -> bool {
     true
 }
@@ -354,7 +359,7 @@ mod tests {
     #[test]
     fn test_sandbox_config_default() {
         let config = SandboxConfig::default();
-        assert!(config.enabled);
+        assert!(!config.enabled);
         assert_eq!(config.default_mode, SandboxMode::ReadOnly);
     }
 

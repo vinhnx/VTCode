@@ -91,6 +91,24 @@ pub(super) fn is_shell_program(program: &str) -> bool {
     )
 }
 
+pub(super) fn is_sandbox_wrapper_program(program: &str, args: &[String]) -> bool {
+    let name = Path::new(program)
+        .file_name()
+        .and_then(|value| value.to_str())
+        .unwrap_or(program)
+        .to_ascii_lowercase();
+    if name == "sandbox-exec" {
+        return true;
+    }
+
+    args.iter().any(|arg| {
+        matches!(
+            arg.as_str(),
+            "--sandbox-policy" | "--sandbox-policy-cwd" | "--seccomp-profile" | "--resource-limits"
+        )
+    })
+}
+
 // Note: resolve_fallback_shell moved to tools::shell module
 
 /// Resolve program path - if program doesn't exist in PATH, return None to signal shell fallback.
@@ -177,5 +195,18 @@ mod tests {
         assert!(is_long_running_command_string("bundle exec rake"));
         assert!(is_long_running_command_string("poetry install"));
         assert!(!is_long_running_command_string("rg \"fn main\" ."));
+    }
+
+    #[test]
+    fn test_is_sandbox_wrapper_program() {
+        assert!(is_sandbox_wrapper_program("sandbox-exec", &[]));
+        assert!(is_sandbox_wrapper_program(
+            "vtcode-linux-sandbox",
+            &["--sandbox-policy".to_string()]
+        ));
+        assert!(!is_sandbox_wrapper_program(
+            "bash",
+            &["-lc".to_string(), "ls".to_string()]
+        ));
     }
 }

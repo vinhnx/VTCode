@@ -27,6 +27,26 @@ For example:
 
 Any whitespaces between sequences and arguments should be ignored. They are present for improved readability.
 
+### VT100 Chapter 3 Parsing Semantics
+
+For parser behavior and recovery on malformed input, VT100 Chapter 3 is the reference:
+
+-   Control characters may appear inside control sequences and are executed immediately.
+-   `ESC` inside a control sequence aborts the current sequence and starts a new one.
+-   `CAN` (`0x18`) and `SUB` (`0x1A`) abort the current sequence.
+
+VT Code's shared ANSI stripper follows these rules to avoid over-consuming text when streams contain broken or partial escape sequences.
+
+### CSI Byte Classes (ECMA-48 / ANSI)
+
+For `CSI` (`ESC [`), VT Code follows the standard byte classes:
+
+- Parameter bytes: `0x30`–`0x3F`
+- Intermediate bytes: `0x20`–`0x2F`
+- Final byte: `0x40`–`0x7E`
+
+This mirrors ANSI/ECMA-48 behavior documented in the ANSI escape code article and helps keep parsing predictable on malformed streams.
+
 ## General ASCII Codes
 
 | Name  | decimal | octal | hex  | C-escape          | Ctrl-Key | Description                    |
@@ -351,14 +371,14 @@ The TUI uses ANSI sequences for:
 ### Common Patterns in VT Code
 
 ```rust
-// Strip ANSI codes from PTY output
-const ANSI_ESCAPE_REGEX: &str = r"\x1b\[[0-9;]*[a-zA-Z]";
+use vtcode_core::utils::ansi_parser::strip_ansi;
 
-// Common sequences used:
-// - ESC[2K: Clear line (used in progress updates)
-// - ESC[?25l/h: Hide/show cursor
-// - ESC[38;5;Nm: 256-color foreground
+let raw = "ok \x1b[32mgreen\x1b[0m \u{009b}31mred\u{009b}0m";
+let clean = strip_ansi(raw);
+assert_eq!(clean, "ok green red");
 ```
+
+The shared parser handles both 7-bit (`ESC` prefixed) and 8-bit C1 control forms (`CSI`/`OSC`/`DCS`), including `BEL`, `ESC \`, and C1 `ST` terminators.
 
 ## Resources
 

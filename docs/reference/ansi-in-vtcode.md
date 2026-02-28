@@ -6,26 +6,35 @@ VT Code extensively uses ANSI escape sequences for terminal control, PTY output 
 
 ## Key Modules
 
-### 1. ANSI Parser (`vtcode-core/src/utils/ansi_parser.rs`)
+### 1. ANSI Parser (`vtcode-commons/src/ansi.rs`)
 
 **Purpose**: Strip ANSI escape sequences from text
 
 ```rust
 pub fn strip_ansi(text: &str) -> String
+pub fn strip_ansi_bytes(input: &[u8]) -> Vec<u8>
 ```
 
 **Used in**:
 
 -   PTY output cleaning (`vtcode-core/src/tools/pty.rs:208`)
 -   Tool output formatting (`vtcode-core/src/tools/registry/executors.rs`)
--   TUI session rendering (`vtcode-core/src/ui/tui/session.rs`)
+-   TUI session rendering (`vtcode-tui/src/core_tui/session/text_utils.rs`)
 
 **Patterns Handled**:
 
--   CSI sequences: `ESC[...m` (colors, styles)
+-   CSI sequences: `ESC[...m` and C1 `CSI` (`0x9B`)
 -   Cursor control: `ESC[H`, `ESC[A/B/C/D`
 -   Erase functions: `ESC[J`, `ESC[K`
--   OSC sequences: `ESC]...BEL`
+-   OSC sequences: `ESC]...BEL/ST` and C1 `OSC` (`0x9D`)
+-   DCS/PM/APC/SOS strings with `ST` terminators (`ESC \` or C1 `ST` `0x9C`)
+-   VT100 recovery rules for malformed streams:
+    `ESC` aborts current control sequence; `CAN`/`SUB` abort sequence processing.
+-   XTerm-compatible control processing:
+    `strip_ansi()` operates on decoded text (`ESC`-prefixed control forms),
+    while `strip_ansi_bytes()` handles raw 8-bit C1 control bytes.
+
+`vtcode-core/src/utils/ansi_parser.rs` and `vtcode-tui/src/utils/ansi_parser.rs` both re-export this shared implementation.
 
 ### 2. ANSI Style Utilities (`vtcode-core/src/utils/anstyle_utils.rs`)
 
@@ -107,6 +116,20 @@ Update Progress Reporter
     ↓
 TUI Renders (clean text)
 ```
+
+### Practical CLI redraw pattern
+
+Many terminal apps (progress bars, spinners, interactive prompts) use this pattern:
+
+- `\r` (carriage return) to return to line start
+- `ESC[2K` to clear current line
+- rewritten content on the same line
+
+VT Code strips ANSI control sequences but preserves line-control characters like `\r`/`\n`/`\t`.
+
+### Important limitation
+
+`strip_ansi()` is a lexical stripper, not a terminal emulator. It removes control sequences but does not apply cursor movement effects (`CUU`/`CUD`/`CUF`/`CUB`) to reconstruct a final visual frame.
 
 ### Implementation
 

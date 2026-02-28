@@ -89,6 +89,9 @@ impl ToolRegistry {
             tool_call_counter: Arc::new(std::sync::atomic::AtomicU64::new(0)),
             pty_poll_counter: Arc::new(std::sync::atomic::AtomicU64::new(0)),
             shell_policy: Arc::new(RwLock::new(ShellPolicyChecker::new())),
+            runtime_sandbox_config: Arc::new(RwLock::new(
+                super::sandbox_facade::runtime_sandbox_config_default(),
+            )),
             agent_type: Arc::new(std::sync::RwLock::new(Cow::Borrowed("unknown"))),
             cached_available_tools: Arc::new(RwLock::new(None)),
             progress_callback: Arc::new(std::sync::RwLock::new(None)),

@@ -69,6 +69,7 @@ pub(crate) fn apply_workspace_config_to_registry(
     vt_cfg: &VTCodeConfig,
 ) -> Result<()> {
     tool_registry.apply_commands_config(&vt_cfg.commands);
+    tool_registry.apply_sandbox_config(&vt_cfg.sandbox);
     tool_registry.apply_timeout_policy(&vt_cfg.timeouts);
     Ok(())
 }
