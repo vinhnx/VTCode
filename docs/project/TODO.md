@@ -326,3 +326,7 @@ check minimax-m2.5 error
   ]
 }
 ```
+
+--
+
+rename /sessions command with /resume

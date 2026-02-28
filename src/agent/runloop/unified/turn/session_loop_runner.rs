@@ -3,6 +3,7 @@ use crate::agent::runloop::unified::plan_mode_state::render_plan_mode_next_step_
 use crate::agent::runloop::unified::run_loop_context::TurnPhase;
 
 const PLAN_MODE_MIN_TOOL_CALLS_PER_TURN: usize = 48;
+const DIRECT_TOOL_FOLLOW_UP_DIRECTIVE: &str = "For this direct shell command follow-up, keep the response concise and action-oriented: 1) one short line summarizing the command result, 2) one short line with the exact next action. Avoid extra explanation unless there is an error.";
 
 fn resolve_effective_turn_timeout_secs(
     configured_turn_timeout_secs: u64,
@@ -289,7 +290,21 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                     session_end_reason = SessionEndReason::Completed;
                     break;
                 }
-                InteractionOutcome::DirectToolHandled => continue,
+                InteractionOutcome::DirectToolHandled => {
+                    // Preserve interrupt behavior: when Ctrl+C cancellation is active,
+                    // stop after direct tool execution and wait for the next user input.
+                    if ctrl_c_state.is_cancel_requested() || ctrl_c_state.is_exit_requested() {
+                        continue;
+                    }
+                    conversation_history
+                        .push(vtcode_core::llm::provider::Message::system(
+                            DIRECT_TOOL_FOLLOW_UP_DIRECTIVE.to_string(),
+                        ));
+                    // A direct run/! command already updated history with user -> tool call ->
+                    // tool response. Start an immediate assistant turn so users receive
+                    // follow-up analysis without typing an extra "continue".
+                    "__direct_tool_follow_up__".to_string()
+                }
                 InteractionOutcome::Continue { input } => input,
                 InteractionOutcome::PlanApproved {
                     auto_accept,
