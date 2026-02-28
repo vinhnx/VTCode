@@ -821,3 +821,15 @@ REF:
  --resume=ce712ef0-6605-4cd4-82bf-fad39
  bd55bca
 ```
+
+---
+
+review any duplicated code in the codebase and refactor to remove duplication. For example, the logic for rendering the diff preview and the command output preview can be unified to use the same rendering logic and styling. This will make the codebase cleaner and easier to maintain. Additionally, any common utility functions that are duplicated across different modules can be extracted into a shared utility module. search across modules for similar code patterns and identify opportunities for refactoring to reduce duplication and improve code reuse.
+
+DRY and KISS
+
+---
+
+full diff aware with background
+
+/Users/vinhnguyenxuan/Desktop/diff.png

@@ -1,15 +1,11 @@
 //! Markdown rendering utilities for terminal output with syntax highlighting support.
 
 use crate::config::loader::SyntaxHighlightingConfig;
-use crate::ui::syntax_highlight::{find_syntax_by_token, load_theme, syntax_set};
+use crate::ui::syntax_highlight;
 use crate::ui::theme::{self, ThemeStyles};
 use anstyle::{Effects, Style};
-use anstyle_syntect::to_anstyle;
 use pulldown_cmark::{CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 use std::cmp::max;
-use syntect::easy::HighlightLines;
-use syntect::highlighting::Theme;
-use syntect::parsing::SyntaxReference;
 use syntect::util::LinesWithEndings;
 use unicode_width::UnicodeWidthStr;
 
@@ -62,6 +58,12 @@ impl MarkdownLine {
         prefixed.extend(segments.iter().cloned());
         prefixed.append(&mut self.segments);
         self.segments = prefixed;
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.segments
+            .iter()
+            .all(|segment| segment.text.trim().is_empty())
     }
 
     fn width(&self) -> usize {
@@ -1378,21 +1380,7 @@ fn normalize_code_indentation(
 /// Highlight a single line of code for diff preview.
 /// Returns a vector of (style, text) segments, or None if highlighting fails.
 pub fn highlight_line_for_diff(line: &str, language: Option<&str>) -> Option<Vec<(Style, String)>> {
-    let syntax = select_syntax(language);
-    let theme = get_theme("base16-ocean.dark", true);
-    let mut highlighter = HighlightLines::new(syntax, &theme);
-
-    let ranges = highlighter.highlight_line(line, syntax_set()).ok()?;
-    let mut segments = Vec::new();
-    for (style, part) in ranges {
-        if part.is_empty() {
-            continue;
-        }
-        let mut anstyle = to_anstyle(style);
-        anstyle = anstyle.bg_color(None);
-        segments.push((anstyle, part.to_owned()));
-    }
-    Some(segments)
+    syntax_highlight::highlight_line_to_anstyle_segments(line, language, "base16-ocean.dark", true)
 }
 
 fn try_highlight(
@@ -1415,44 +1403,14 @@ fn try_highlight(
         }
     }
 
-    let syntax = select_syntax(language);
-    let theme = get_theme(&config.theme, config.cache_themes);
-    let mut highlighter = HighlightLines::new(syntax, &theme);
-    let mut rendered = Vec::new();
-
-    let mut ends_with_newline = false;
-    for line in LinesWithEndings::from(code) {
-        ends_with_newline = line.ends_with('\n');
-        let trimmed = line.trim_end_matches('\n');
-        let ranges = highlighter.highlight_line(trimmed, syntax_set()).ok()?;
-        let mut segments = Vec::new();
-        for (style, part) in ranges {
-            if part.is_empty() {
-                continue;
-            }
-            let mut anstyle = to_anstyle(style);
-            // Strip background color to avoid filled backgrounds in terminal
-            anstyle = anstyle.bg_color(None);
-            segments.push((anstyle, part.to_owned()));
-        }
-        rendered.push(segments);
-    }
-
-    if ends_with_newline {
-        rendered.push(Vec::new());
-    }
+    let rendered = syntax_highlight::highlight_code_to_anstyle_line_segments(
+        code,
+        language,
+        &config.theme,
+        true,
+    );
 
     Some(rendered)
-}
-
-fn select_syntax(language: Option<&str>) -> &'static SyntaxReference {
-    language
-        .map(find_syntax_by_token)
-        .unwrap_or_else(|| syntax_set().find_syntax_plain_text())
-}
-
-fn get_theme(theme_name: &str, cache: bool) -> Theme {
-    load_theme(theme_name, cache)
 }
 
 /// A highlighted line segment with style and text.
@@ -1471,35 +1429,15 @@ pub fn highlight_code_to_segments(
     language: Option<&str>,
     theme_name: &str,
 ) -> Vec<Vec<HighlightedSegment>> {
-    let syntax = select_syntax(language);
-    let theme = get_theme(theme_name, true);
-    let mut highlighter = HighlightLines::new(syntax, &theme);
-    let mut result = Vec::new();
-
-    for line in LinesWithEndings::from(code) {
-        let trimmed = line.trim_end_matches('\n');
-        let segments = match highlighter.highlight_line(trimmed, syntax_set()) {
-            Ok(ranges) => ranges
+    syntax_highlight::highlight_code_to_anstyle_line_segments(code, language, theme_name, true)
+        .into_iter()
+        .map(|segments| {
+            segments
                 .into_iter()
-                .filter(|(_, text)| !text.is_empty())
-                .map(|(style, text)| {
-                    let mut anstyle = to_anstyle(style);
-                    anstyle = anstyle.bg_color(None);
-                    HighlightedSegment {
-                        style: anstyle,
-                        text: text.to_owned(),
-                    }
-                })
-                .collect(),
-            Err(_) => vec![HighlightedSegment {
-                style: Style::new(),
-                text: trimmed.to_owned(),
-            }],
-        };
-        result.push(segments);
-    }
-
-    result
+                .map(|(style, text)| HighlightedSegment { style, text })
+                .collect()
+        })
+        .collect()
 }
 
 /// Highlight a code string and return ANSI-formatted strings per line.

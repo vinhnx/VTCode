@@ -609,8 +609,13 @@ impl AnsiRenderer {
         mut line: MarkdownLine,
     ) -> Result<()> {
         if !indent.is_empty() && !line.segments.is_empty() {
-            line.segments
-                .insert(0, MarkdownSegment::new(style.style(), indent));
+            line.segments.insert(
+                0,
+                MarkdownSegment {
+                    style: style.style(),
+                    text: indent.to_string(),
+                },
+            );
         }
 
         if let Some(sink) = &mut self.sink {

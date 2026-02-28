@@ -626,7 +626,7 @@ fn handle_running_slash_command_block(session: &mut Session) -> bool {
     };
 
     let message = format!(
-        "'/{}' is disabled while a task is in progress.",
+        "'/{}' is disabled while a task is in progress. Please wait for the current task to complete before using this command.",
         command_name
     );
     session.push_line(
