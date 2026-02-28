@@ -67,7 +67,11 @@ impl ToolRegistry {
             "write_file" | "edit_file" | "apply_patch" | "unified_file" => {
                 &["read_file", "grep_file", "unified_search"]
             }
-            _ => &["unified_search", "grep_file", "read_file"],
+            // Task trackers require action-specific arguments; generic fallback names
+            // create low-signal retries.
+            "task_tracker" | "plan_task_tracker" => &[],
+            // Unknown tools: prefer no fallback over noisy generic suggestions.
+            _ => &[],
         };
 
         for candidate in candidates {

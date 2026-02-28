@@ -330,6 +330,25 @@ fn fallback_from_error(tool_name: &str, error_msg: &str) -> Option<(String, serd
         ));
     }
 
+    if matches!(
+        tool_name,
+        tool_names::TASK_TRACKER | tool_names::PLAN_TASK_TRACKER
+    ) {
+        let lower = error_msg.to_ascii_lowercase();
+        if lower.contains("required for 'update'")
+            || lower.contains("required for \"update\"")
+            || lower.contains("invalid task_tracker arguments")
+            || lower.contains("invalid plan_task_tracker arguments")
+        {
+            return Some((
+                tool_name.to_string(),
+                serde_json::json!({
+                    "action": "list"
+                }),
+            ));
+        }
+    }
+
     None
 }
 
@@ -913,6 +932,19 @@ mod tests {
                     "offset": 1,
                     "limit": 120
                 }),
+            ))
+        );
+    }
+
+    #[test]
+    fn fallback_from_error_uses_task_tracker_list_for_update_argument_errors() {
+        let error = "Tool 'task_tracker' execution failed: Tool execution failed: 'index' is required for 'update' (1-indexed)";
+        let fallback = fallback_from_error(tool_names::TASK_TRACKER, error);
+        assert_eq!(
+            fallback,
+            Some((
+                tool_names::TASK_TRACKER.to_string(),
+                serde_json::json!({"action": "list"}),
             ))
         );
     }

@@ -227,16 +227,35 @@ pub(crate) async fn render_tool_output(
 }
 
 fn render_tracker_view(renderer: &mut AnsiRenderer, val: &Value) -> Result<bool> {
-    let Some(view) = val.get("view").and_then(Value::as_object) else {
+    let view = val.get("view").and_then(Value::as_object);
+    let summary_lines = tracker_summary_lines(val);
+
+    let has_view_lines = view
+        .and_then(|obj| obj.get("lines"))
+        .and_then(Value::as_array)
+        .is_some_and(|lines| !lines.is_empty());
+    if !has_view_lines && summary_lines.is_empty() {
         return Ok(false);
-    };
+    }
+
     let title = view
-        .get("title")
+        .and_then(|obj| obj.get("title"))
         .and_then(Value::as_str)
-        .unwrap_or("Updated Plan");
+        .or_else(|| {
+            val.get("checklist")
+                .and_then(|c| c.get("title"))
+                .and_then(Value::as_str)
+        })
+        .unwrap_or("Task tracker");
 
     renderer.line(MessageStyle::ToolDetail, &format!("• {}", title))?;
-    if let Some(lines) = view.get("lines").and_then(Value::as_array) {
+    for line in summary_lines {
+        renderer.line(MessageStyle::ToolDetail, &line)?;
+    }
+    if let Some(lines) = view
+        .and_then(|obj| obj.get("lines"))
+        .and_then(Value::as_array)
+    {
         for line in lines {
             if let Some(display) = line.get("display").and_then(Value::as_str) {
                 renderer.line(MessageStyle::ToolDetail, display)?;
@@ -247,6 +266,99 @@ fn render_tracker_view(renderer: &mut AnsiRenderer, val: &Value) -> Result<bool>
     }
 
     Ok(true)
+}
+
+fn tracker_summary_lines(val: &Value) -> Vec<String> {
+    let mut lines = Vec::new();
+
+    if let Some(status) = val.get("status").and_then(Value::as_str)
+        && !status.trim().is_empty()
+    {
+        lines.push(format!("  Tracker status: {}", status));
+    }
+
+    let Some(checklist) = val.get("checklist").and_then(Value::as_object) else {
+        if let Some(message) = val.get("message").and_then(Value::as_str)
+            && !message.trim().is_empty()
+        {
+            lines.push(format!("  Update: {}", message));
+        }
+        return lines;
+    };
+
+    let total = checklist.get("total").and_then(Value::as_u64).unwrap_or(0);
+    let completed = checklist
+        .get("completed")
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
+    let in_progress = checklist
+        .get("in_progress")
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
+    let pending = checklist
+        .get("pending")
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
+    let blocked = checklist
+        .get("blocked")
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
+
+    if total > 0 {
+        let progress_percent = checklist
+            .get("progress_percent")
+            .and_then(Value::as_u64)
+            .unwrap_or_else(|| (completed * 100) / total.max(1));
+        lines.push(format!(
+            "  Progress: {}/{} complete ({}%)",
+            completed, total, progress_percent
+        ));
+        lines.push(format!(
+            "  Breakdown: {} in progress, {} pending, {} blocked",
+            in_progress, pending, blocked
+        ));
+    }
+
+    if let Some(items) = checklist.get("items").and_then(Value::as_array) {
+        let active_items = items
+            .iter()
+            .filter(|item| {
+                item.get("status")
+                    .and_then(Value::as_str)
+                    .is_some_and(|status| status == "in_progress")
+            })
+            .map(|item| {
+                let index = item.get("index").and_then(Value::as_u64).unwrap_or(0);
+                let description = item
+                    .get("description")
+                    .and_then(Value::as_str)
+                    .unwrap_or("Unnamed task");
+                if index > 0 {
+                    format!("#{} {}", index, description)
+                } else {
+                    description.to_string()
+                }
+            })
+            .collect::<Vec<_>>();
+
+        if !active_items.is_empty() {
+            lines.push("  Active items:".to_string());
+            for item in active_items.iter().take(3) {
+                lines.push(format!("    - {}", item));
+            }
+            if active_items.len() > 3 {
+                lines.push(format!("    - ... and {} more", active_items.len() - 3));
+            }
+        }
+    }
+
+    if let Some(message) = val.get("message").and_then(Value::as_str)
+        && !message.trim().is_empty()
+    {
+        lines.push(format!("  Update: {}", message));
+    }
+
+    lines
 }
 
 fn render_simple_tool_status(
@@ -373,7 +485,7 @@ fn render_error_details(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> 
 mod tests {
     use serde_json::json;
 
-    use super::should_render_unified_exec_terminal_panel;
+    use super::{should_render_unified_exec_terminal_panel, tracker_summary_lines};
 
     #[test]
     fn unified_exec_terminal_panel_detects_command_payload() {
@@ -400,5 +512,57 @@ mod tests {
             "success": true
         });
         assert!(!should_render_unified_exec_terminal_panel(&payload));
+    }
+
+    #[test]
+    fn tracker_summary_lines_include_progress_and_active_items() {
+        let payload = json!({
+            "status": "updated",
+            "message": "Item 2 status changed: pending -> in_progress",
+            "checklist": {
+                "total": 4,
+                "completed": 1,
+                "in_progress": 2,
+                "pending": 1,
+                "blocked": 0,
+                "progress_percent": 25,
+                "items": [
+                    { "index": 1, "description": "A", "status": "completed" },
+                    { "index": 2, "description": "B", "status": "in_progress" },
+                    { "index": 3, "description": "C", "status": "in_progress" },
+                    { "index": 4, "description": "D", "status": "pending" }
+                ]
+            }
+        });
+
+        let lines = tracker_summary_lines(&payload);
+        assert!(lines.iter().any(|line| line == "  Tracker status: updated"));
+        assert!(
+            lines
+                .iter()
+                .any(|line| line == "  Progress: 1/4 complete (25%)")
+        );
+        assert!(
+            lines
+                .iter()
+                .any(|line| line == "  Breakdown: 2 in progress, 1 pending, 0 blocked")
+        );
+        assert!(lines.iter().any(|line| line == "    - #2 B"));
+        assert!(lines.iter().any(|line| line == "    - #3 C"));
+    }
+
+    #[test]
+    fn tracker_summary_lines_still_show_message_without_checklist() {
+        let payload = json!({
+            "status": "empty",
+            "message": "No active checklist."
+        });
+        let lines = tracker_summary_lines(&payload);
+        assert!(lines.iter().any(|line| line == "  Tracker status: empty"));
+        assert!(
+            lines
+                .iter()
+                .any(|line| line == "  Update: No active checklist.")
+        );
     }
 }

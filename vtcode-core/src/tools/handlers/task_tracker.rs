@@ -16,7 +16,7 @@ use std::str::FromStr;
 
 use crate::config::constants::tools;
 use crate::tools::handlers::task_tracking::{
-    TaskCounts, TaskTrackingStatus, append_notes, parse_marked_status_prefix,
+    TaskCounts, TaskTrackingStatus, append_notes, parse_marked_status_prefix, parse_status_prefix,
 };
 use crate::utils::file_utils::{
     ensure_dir_exists, read_file_with_context, write_file_with_context,
@@ -34,7 +34,7 @@ use crate::tools::traits::Tool;
 pub type TaskStatus = TaskTrackingStatus;
 
 /// A single task item
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct TaskItem {
     pub index: usize,
     pub description: String,
@@ -42,7 +42,7 @@ pub struct TaskItem {
 }
 
 /// The full task checklist
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct TaskChecklist {
     pub title: String,
     pub items: Vec<TaskItem>,
@@ -107,10 +107,30 @@ impl TaskChecklist {
             .collect::<Vec<_>>();
 
         json!({
-            "title": "Updated Plan",
+            "title": self.title,
             "lines": lines,
         })
     }
+}
+
+fn parse_input_items(items: &[String]) -> Vec<TaskItem> {
+    items
+        .iter()
+        .filter_map(|item| {
+            let (status, description) = parse_status_prefix(item);
+            let description = description.trim().to_string();
+            if description.is_empty() {
+                return None;
+            }
+            Some((status, description))
+        })
+        .enumerate()
+        .map(|(idx, (status, description))| TaskItem {
+            index: idx + 1,
+            description,
+            status,
+        })
+        .collect()
 }
 
 /// Arguments for the task_tracker tool
@@ -247,26 +267,62 @@ impl TaskTrackerTool {
             );
         }
 
-        let items: Vec<TaskItem> = item_descs
-            .iter()
-            .enumerate()
-            .map(|(i, desc)| TaskItem {
-                index: i + 1,
-                description: desc.clone(),
-                status: TaskStatus::Pending,
-            })
-            .collect();
+        let items = parse_input_items(item_descs);
+        if items.is_empty() {
+            anyhow::bail!("No valid task items were provided for create.");
+        }
+        let notes = append_notes(None, args.notes.as_deref());
+        let requested = TaskChecklist {
+            title: title.clone(),
+            items: items.clone(),
+            notes: notes.clone(),
+        };
+
+        let mut guard = self.checklist.write().await;
+        if guard.is_none() {
+            *guard = self.load_checklist().await?;
+        }
+        if let Some(existing) = guard.as_ref() {
+            let same_structure = existing.title == title
+                && existing.items.len() == items.len()
+                && existing
+                    .items
+                    .iter()
+                    .zip(items.iter())
+                    .all(|(left, right)| left.description == right.description);
+            let requested_has_explicit_status =
+                items.iter().any(|item| item.status != TaskStatus::Pending);
+            if same_structure && !requested_has_explicit_status {
+                return Ok(json!({
+                    "status": "unchanged",
+                    "message": "Checklist already active; preserved current progress.",
+                    "task_file": self.task_file().display().to_string(),
+                    "checklist": existing.summary(),
+                    "view": existing.view()
+                }));
+            }
+
+            if existing == &requested {
+                return Ok(json!({
+                    "status": "unchanged",
+                    "message": "Requested checklist already matches current tracker state.",
+                    "task_file": self.task_file().display().to_string(),
+                    "checklist": existing.summary(),
+                    "view": existing.view()
+                }));
+            }
+        }
 
         let checklist = TaskChecklist {
             title,
             items,
-            notes: args.notes.clone(),
+            notes,
         };
 
         self.save_checklist(&checklist).await?;
         let summary = checklist.summary();
         let view = checklist.view();
-        *self.checklist.write().await = Some(checklist);
+        *guard = Some(checklist);
 
         Ok(json!({
             "status": "created",
@@ -282,17 +338,50 @@ impl TaskTrackerTool {
         if guard.is_none() {
             *guard = self.load_checklist().await?;
         }
+        if args.items.is_some() && (args.index.is_none() || args.status.is_none()) {
+            let input_items = args.items.as_deref().unwrap_or(&[]);
+            let items = parse_input_items(input_items);
+            if items.is_empty() {
+                anyhow::bail!("No valid items provided for checklist sync.");
+            }
+
+            let title = args
+                .title
+                .clone()
+                .or_else(|| guard.as_ref().map(|checklist| checklist.title.clone()))
+                .unwrap_or_else(|| "Task Checklist".to_string());
+
+            let checklist = guard.get_or_insert(TaskChecklist {
+                title: title.clone(),
+                items: Vec::new(),
+                notes: None,
+            });
+
+            checklist.title = title;
+            checklist.items = items;
+            checklist.notes = append_notes(checklist.notes.take(), args.notes.as_deref());
+
+            self.save_checklist(checklist).await?;
+            let summary = checklist.summary();
+            return Ok(json!({
+                "status": "updated",
+                "message": "Checklist synchronized from provided items.",
+                "checklist": summary,
+                "view": checklist.view()
+            }));
+        }
+
         let checklist = guard
             .as_mut()
             .context("No active checklist. Use action='create' first.")?;
 
-        let index = args
-            .index
-            .context("'index' is required for 'update' (1-indexed)")?;
+        let index = args.index.context(
+            "'index' is required for 'update' (1-indexed), or provide 'items' for bulk sync",
+        )?;
         let status_str = args
             .status
             .as_deref()
-            .context("'status' is required for 'update' (pending|in_progress|completed|blocked)")?;
+            .context("'status' is required for 'update' (pending|in_progress|completed|blocked), or provide 'items' for bulk sync")?;
 
         let new_status = TaskStatus::from_str(status_str)?;
 
@@ -417,16 +506,16 @@ impl Tool for TaskTrackerTool {
                 "items": {
                     "type": "array",
                     "items": { "type": "string" },
-                    "description": "List of task descriptions (used with 'create')."
+                    "description": "List of task descriptions (used with 'create'; also supports bulk 'update' sync with optional [x]/[~]/[!]/[ ] prefixes)."
                 },
                 "index": {
                     "type": "integer",
-                    "description": "1-indexed item number to update (used with 'update')."
+                    "description": "1-indexed item number to update (used with single-item 'update')."
                 },
                 "status": {
                     "type": "string",
                     "enum": ["pending", "in_progress", "completed", "blocked"],
-                    "description": "New status for the item (used with 'update')."
+                    "description": "New status for the item (used with single-item 'update')."
                 },
                 "description": {
                     "type": "string",
@@ -437,7 +526,39 @@ impl Tool for TaskTrackerTool {
                     "description": "Optional notes to append to the checklist."
                 }
             },
-            "required": ["action"]
+            "required": ["action"],
+            "allOf": [
+                {
+                    "if": {
+                        "properties": { "action": { "const": "create" } },
+                        "required": ["action"]
+                    },
+                    "then": {
+                        "required": ["items"]
+                    }
+                },
+                {
+                    "if": {
+                        "properties": { "action": { "const": "update" } },
+                        "required": ["action"]
+                    },
+                    "then": {
+                        "anyOf": [
+                            { "required": ["index", "status"] },
+                            { "required": ["items"] }
+                        ]
+                    }
+                },
+                {
+                    "if": {
+                        "properties": { "action": { "const": "add" } },
+                        "required": ["action"]
+                    },
+                    "then": {
+                        "required": ["description"]
+                    }
+                }
+            ]
         }))
     }
 
@@ -472,6 +593,7 @@ mod tests {
         assert_eq!(result["status"], "created");
         assert_eq!(result["checklist"]["total"], 3);
         assert_eq!(result["checklist"]["completed"], 0);
+        assert_eq!(result["view"]["title"], "Refactor Auth");
     }
 
     #[tokio::test]
@@ -524,6 +646,67 @@ mod tests {
 
         assert_eq!(result["status"], "added");
         assert_eq!(result["checklist"]["total"], 2);
+    }
+
+    #[tokio::test]
+    async fn test_create_is_idempotent_for_same_structure() {
+        let temp = TempDir::new().unwrap();
+        let tool = TaskTrackerTool::new(temp.path().to_path_buf());
+
+        tool.execute(json!({
+            "action": "create",
+            "title": "Clippy Warnings",
+            "items": ["Fix A", "Fix B"]
+        }))
+        .await
+        .unwrap();
+
+        tool.execute(json!({
+            "action": "update",
+            "index": 1,
+            "status": "completed"
+        }))
+        .await
+        .unwrap();
+
+        let duplicate = tool
+            .execute(json!({
+                "action": "create",
+                "title": "Clippy Warnings",
+                "items": ["Fix A", "Fix B"]
+            }))
+            .await
+            .unwrap();
+
+        assert_eq!(duplicate["status"], "unchanged");
+        assert_eq!(duplicate["checklist"]["completed"], 1);
+    }
+
+    #[tokio::test]
+    async fn test_update_supports_bulk_item_sync() {
+        let temp = TempDir::new().unwrap();
+        let tool = TaskTrackerTool::new(temp.path().to_path_buf());
+
+        tool.execute(json!({
+            "action": "create",
+            "title": "Sync Test",
+            "items": ["Step 1", "Step 2", "Step 3"]
+        }))
+        .await
+        .unwrap();
+
+        let updated = tool
+            .execute(json!({
+                "action": "update",
+                "items": ["[x] Step 1", "[~] Step 2", "[ ] Step 3"]
+            }))
+            .await
+            .unwrap();
+
+        assert_eq!(updated["status"], "updated");
+        assert_eq!(updated["checklist"]["completed"], 1);
+        assert_eq!(updated["checklist"]["in_progress"], 1);
+        assert_eq!(updated["checklist"]["pending"], 1);
     }
 
     #[tokio::test]

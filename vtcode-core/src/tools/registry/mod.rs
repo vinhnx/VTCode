@@ -454,6 +454,28 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn suggest_fallback_returns_none_for_task_tracker() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+
+        let fallback = registry.suggest_fallback_tool(tools::TASK_TRACKER).await;
+        assert!(fallback.is_none());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn suggest_fallback_returns_none_for_unknown_tool() -> Result<()> {
+        let temp_dir = TempDir::new()?;
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+
+        let fallback = registry.suggest_fallback_tool("not_a_real_tool").await;
+        assert!(fallback.is_none());
+
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn apply_patch_alias_executes_without_recursive_reentry() -> Result<()> {
         let temp_dir = TempDir::new()?;
         let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
