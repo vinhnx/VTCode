@@ -10,7 +10,8 @@ use editor_command::Editor;
 use ratatui::crossterm::ExecutableCommand;
 use ratatui::crossterm::event;
 use ratatui::crossterm::terminal::{
-    Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
+    Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode,
+    enable_raw_mode, is_raw_mode_enabled,
 };
 use tempfile::NamedTempFile;
 use tracing::debug;
@@ -247,38 +248,50 @@ impl TerminalAppLauncher {
     where
         F: FnOnce() -> Result<()>,
     {
-        // Leave alternate screen
-        io::stdout()
-            .execute(LeaveAlternateScreen)
-            .context("failed to leave alternate screen")?;
+        let was_raw_mode = match is_raw_mode_enabled() {
+            Ok(enabled) => enabled,
+            Err(error) => {
+                debug!(%error, "failed to query raw mode status; assuming non-raw terminal state");
+                false
+            }
+        };
 
-        // CRITICAL: Drain any pending crossterm events BEFORE disabling raw mode.
-        // This prevents the external app from receiving garbage input (like terminal
-        // capability responses or buffered keystrokes) that might have been sent to the TUI.
-        while event::poll(Duration::from_millis(0)).unwrap_or(false) {
-            let _ = event::read();
+        if was_raw_mode {
+            // Leave alternate screen
+            io::stdout()
+                .execute(LeaveAlternateScreen)
+                .context("failed to leave alternate screen")?;
+
+            // CRITICAL: Drain any pending crossterm events BEFORE disabling raw mode.
+            // This prevents the external app from receiving garbage input (like terminal
+            // capability responses or buffered keystrokes) that might have been sent to the TUI.
+            while event::poll(Duration::from_millis(0)).unwrap_or(false) {
+                let _ = event::read();
+            }
+
+            // Disable raw mode
+            disable_raw_mode().context("failed to disable raw mode")?;
         }
-
-        // Disable raw mode
-        disable_raw_mode().context("failed to disable raw mode")?;
 
         // Run the command
         let result = f();
 
-        // Re-enable raw mode
-        enable_raw_mode().context("failed to re-enable raw mode")?;
+        if was_raw_mode {
+            // Re-enable raw mode
+            enable_raw_mode().context("failed to re-enable raw mode")?;
 
-        // Re-enter alternate screen
-        io::stdout()
-            .execute(EnterAlternateScreen)
-            .context("failed to re-enter alternate screen")?;
+            // Re-enter alternate screen
+            io::stdout()
+                .execute(EnterAlternateScreen)
+                .context("failed to re-enter alternate screen")?;
 
-        // Clear terminal to remove artifacts
-        // This prevents ANSI escape codes from external apps' background color requests
-        // from appearing in the TUI.
-        io::stdout()
-            .execute(Clear(ClearType::All))
-            .context("failed to clear terminal")?;
+            // Clear terminal to remove artifacts
+            // This prevents ANSI escape codes from external apps' background color requests
+            // from appearing in the TUI.
+            io::stdout()
+                .execute(Clear(ClearType::All))
+                .context("failed to clear terminal")?;
+        }
 
         result
     }

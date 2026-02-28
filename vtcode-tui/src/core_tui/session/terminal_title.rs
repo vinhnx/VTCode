@@ -5,8 +5,8 @@
 ///
 /// ## Terminal Compatibility
 ///
-/// Uses standard OSC 2 escape sequence (`\x1b]2;title\x07`) which is
-/// universally supported across:
+/// Uses Crossterm `terminal::SetTitle`, which maps to standard terminal title
+/// sequences across:
 /// - iTerm2 (macOS)
 /// - Kitty (cross-platform)
 /// - Alacritty (cross-platform)
@@ -20,13 +20,9 @@
 /// References:
 /// - XTerm control sequences: OSC 2 sets window title
 /// - Crossterm SetTitle uses OSC 2 internally
-/// - OSC sequences terminated with BEL (\x07) for maximum compatibility
-use super::Session;
+use ratatui::crossterm::{execute, terminal::SetTitle};
 
-/// Standard OSC 2 sequence for setting window title
-/// Format: ESC ] 2 ; title BEL
-const OSC_TITLE_PREFIX: &str = "\x1b]2;";
-const OSC_TITLE_SUFFIX: &str = "\x07";
+use super::Session;
 
 /// Maximum length for terminal title to avoid truncation issues
 const MAX_TITLE_LENGTH: usize = 128;
@@ -204,20 +200,15 @@ impl Session {
         None
     }
 
-    /// Update the terminal title if it has changed
-    /// Uses OSC 2 escape sequence for maximum terminal compatibility
+    /// Update the terminal title if it has changed.
     pub fn update_terminal_title(&mut self) {
         let new_title = self.generate_terminal_title();
 
         // Only update if the title has changed to avoid redundant operations
         if self.last_terminal_title.as_ref() != Some(&new_title) {
-            // Use OSC 2 sequence directly for better cross-terminal compatibility
-            let osc_sequence = format!("{}{}{}", OSC_TITLE_PREFIX, new_title, OSC_TITLE_SUFFIX);
-
-            use std::io::Write;
-            let mut stderr = std::io::stderr();
-            let _ = stderr.write_all(osc_sequence.as_bytes());
-            let _ = stderr.flush();
+            if let Err(error) = execute!(std::io::stderr(), SetTitle(new_title.as_str())) {
+                tracing::debug!(%error, "failed to update terminal title");
+            }
 
             self.last_terminal_title = Some(new_title);
         }
@@ -225,12 +216,9 @@ impl Session {
 
     /// Clear terminal title (reset to default)
     pub fn clear_terminal_title(&mut self) {
-        let osc_sequence = format!("{}{}", OSC_TITLE_PREFIX, OSC_TITLE_SUFFIX);
-
-        use std::io::Write;
-        let mut stderr = std::io::stderr();
-        let _ = stderr.write_all(osc_sequence.as_bytes());
-        let _ = stderr.flush();
+        if let Err(error) = execute!(std::io::stderr(), SetTitle("")) {
+            tracing::debug!(%error, "failed to clear terminal title");
+        }
 
         self.last_terminal_title = None;
     }
