@@ -8,7 +8,7 @@ use crate::agent::runloop::unified::palettes::format_duration_label;
 
 use super::SlashCommandOutcome;
 
-pub(super) async fn handle_sessions_command(
+pub(super) async fn handle_resume_command(
     args: &str,
     renderer: &mut AnsiRenderer,
 ) -> Result<SlashCommandOutcome> {
@@ -20,7 +20,7 @@ pub(super) async fn handle_sessions_command(
         .unwrap_or(5);
 
     if renderer.supports_inline_ui() {
-        return Ok(SlashCommandOutcome::StartSessionsPalette { limit });
+        return Ok(SlashCommandOutcome::StartResumePalette { limit });
     }
 
     match session_archive::list_recent_sessions(limit).await {
