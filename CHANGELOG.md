@@ -2,6 +2,66 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.84.0 - 2026-02-28
+
+### Highlights
+#### Bug Fixes
+
+- Strip x-extension fields from tool schemas and handle empty safety blocks (7ff0b66f) 
+#### Features
+
+- Add terminal notifications for agent events and syntax highlighting for bash commands in TUI (d54ba169) 
+### Other Changes
+#### Other
+
+- Update badge links in README.md (b74377e3) (@vinhnx)
+- Merge pull request #607 from LiGoldragon/mentci-gemini-json-fix (db195063) (@vinhnx)
+- Refactor code for improved readability and performance; simplify conditionals and remove unnecessary clones (93989d58) 
+- Add notification system with configurable preferences and delivery modes (e3be6b6b) 
+- Remove deprecated tool aliases and clean up related code for user input handling (5a23ab29) 
+- Unify ModelId and Provider across vtcode-config and vtcode-core; add regression tests to prevent future drift (3bef6a4d) 
+- Remove deprecated model ID and provider configurations, streamline model handling and update references across the codebase. (ebd573ec) 
+- Improve (d8ec16e4) 
+- Refactor code for improved readability and maintainability; streamline model handling and enhance diff preview functionality. (58607c7b) 
+- Add Qwen3.5-397B-A17B model support and update related identifiers and descriptions (a9e62f9c) 
+- Add turn elapsed timer feature and configuration options (f6867385) 
+- Remove xlsx skill and related files; update turn outcome message format (c31af51e) 
+- Implement exact token counting for various LLM providers and enable token counting feature (136c1b1f) 
+- Remove unused question-related policies and enhance token usage logic in ContextManager (4e39398a) 
+- Remove xAI Grok models and related configurations from the codebase (7b069620) 
+- Enhance file reference extraction to handle npm scoped packages and improve path validation (00646152) 
+- Enhance UI styling for PTY output and improve color handling across components (36cc1ca0) 
+- Add sidebar, slash command palette, and transcript widgets; implement session options and host adapter traits (fdc70374) 
+- Add utilities for ANSI parsing, caching styles, and diff generation (a20742ed) 
+- Update configuration for agent provider and default model; adjust theme settings (465ed6e7) 
+- Enhance changelog generation with Highlights and Contributors sections (8e25479e) 
+- Enhance tool output handling and caching logic (8635f4a0) 
+- Refactor unified_exec tool to add inspect action and improve documentation (eac81276) 
+- Refactor guidance messages for clarity and conciseness; update tool output handling and error messages. (ae454f4b) 
+- Add 'continue' action to unified_exec tool; refactor related logic and documentation (b2102ff4) 
+- Refactor tool policies and enhance shell command parsing; add next_continue_args handling (327a2467) 
+- Add clear screen and copy latest assistant reply commands; update related documentation and tests (39b2d94a) 
+- Enhance command detection by normalizing natural language requests and adding support for various command patterns (bc2be0b9) 
+- Change terminal theme from 'ciapre-dark' to 'mono' (6b03347c) 
+- Add appearance configuration and improve modal handling (afd21755) 
+- Enhance external editor integration and rewind functionality (e5f722ce) 
+- Refactor code for improved readability and functionality; normalize unified search arguments; enhance validation error handling; update default model in configuration. (56adb18f) 
+- Refactor palette handling and LLM retry logic; improve error handling and tests (64f0f949) 
+- Enhance task tracker functionality and error handling (42781438) 
+- Remove XAI provider tests and related assertions from model validation (880ec280) 
+- Remove deprecated integration and workflow tests; clean up test module imports (3c9f5f42) 
+- Update model references from "gemini-3-pro-preview" to "gemini-3.1-pro-preview" across the codebase (468a0765) 
+- Refactor caching mechanisms to use Mutex instead of RwLock for improved concurrency (af7ebf32) 
+- Refactor sandbox configuration and enhance ANSI capabilities (cfb2f51a) 
+- Update default model to GPT-5.3 Codex and enhance terminal title management (9d3d7d38) 
+- Update default model to GPT-5.3 Codex, change provider to OpenAI, and enhance reasoning effort configuration (24d3af83) 
+- Remove xAI provider support and update default models in configuration files (ad6290aa) 
+- Refactor code for improved readability and consistency in function calls (91fdb43a) 
+#### Refactors
+
+- Streamline task tracking logic and introduce TaskTrackingStatus for improved status management (3be2c784) 
+### Contributors
+@vinhnx 
 ## 0.82.6 - 2026-02-25
 
 ### Documentation
