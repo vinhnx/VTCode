@@ -1,6 +1,6 @@
 [package]
 name = "vtcode-commons"
-version = "0.83.0"
+version = "0.84.0"
 edition = "2024"
 authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
 description = "Shared traits for paths, telemetry, and error reporting reused across VT Code component extractions"
