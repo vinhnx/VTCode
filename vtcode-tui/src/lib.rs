@@ -14,6 +14,7 @@ pub mod core_tui;
 pub mod host;
 mod session_options;
 
+pub use config::SyntaxHighlightingConfig as TuiSyntaxHighlightingConfig;
 pub use config::{KeyboardProtocolConfig, ReasoningEffortLevel, UiSurfacePreference};
 pub use core_tui::session::config::AppearanceConfig as SessionAppearanceConfig;
 pub use core_tui::*;

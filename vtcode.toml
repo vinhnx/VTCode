@@ -20,7 +20,7 @@ default_model = "glm-5:cloud"
 #   default_model = "zai-org/GLM-5:novita"
 
 # Visual theme for the terminal interface
-theme = "ciapre"
+theme = "catppuccin-mocha"
 
 # Temperature for main LLM responses (0.0-1.0)
 # Lower values = more deterministic, higher values = more creative
@@ -883,6 +883,9 @@ list_files = true
 
 [acp.zed.auth]
 default_method = "agent"
+
+[provider.openai]
+websocket_mode = false
 
 [model]
 skip_loop_detection = false
