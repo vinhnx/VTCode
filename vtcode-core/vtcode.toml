@@ -451,7 +451,7 @@ auto_clear_paths = [
 ]
 
 [sandbox]
-enabled = true
+enabled = false
 default_mode = "read_only"
 
 [sandbox.network]

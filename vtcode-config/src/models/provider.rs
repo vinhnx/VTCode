@@ -9,9 +9,9 @@ use super::{ModelId, ModelParseError};
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 pub enum Provider {
     /// Google Gemini models
-    #[default]
     Gemini,
     /// OpenAI GPT models
+    #[default]
     OpenAI,
     /// Anthropic Claude models
     Anthropic,

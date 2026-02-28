@@ -67,13 +67,17 @@ fn generate_default_config() -> String {
 
 [agent]
 # Default model to use
-default_model = "qwen/qwen3-4b-2507"
+default_model = "gpt-5.3-codex"
 # AI provider (gemini, openai, anthropic)
-provider = "gemini"
+provider = "openai"
+# Environment variable containing API key
+api_key_env = "OPENAI_API_KEY"
 # Maximum conversation turns
 max_conversation_turns = 150
 # Reasoning effort level for models that support it (low, medium, high)
 reasoning_effort = "medium"
+# Main model temperature
+temperature = 0.7
 
 [security]
 # Enable human-in-the-loop mode
