@@ -721,10 +721,31 @@ impl OllamaProvider {
             (None, None, None)
         };
 
+        // Fallback: Extract reasoning from content if not provided natively
+        // This handles MiniMax-M2.5 cloud models that use <think></think> tags
+        let (final_reasoning, final_content) = if reasoning.is_none() {
+            if let Some(ref content_str) = content {
+                let (reasoning_parts, cleaned_content) =
+                    crate::llm::utils::extract_reasoning_content(content_str);
+                if reasoning_parts.is_empty() {
+                    (None, content)
+                } else {
+                    (
+                        Some(reasoning_parts.join("\n\n")),
+                        cleaned_content.or(content),
+                    )
+                }
+            } else {
+                (None, content)
+            }
+        } else {
+            (reasoning, content)
+        };
+
         Ok(Self::build_response(
-            content,
+            final_content,
             tool_calls,
-            reasoning,
+            final_reasoning,
             model,
             parsed.done_reason.as_deref(),
             parsed.prompt_eval_count,

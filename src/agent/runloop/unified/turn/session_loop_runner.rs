@@ -338,6 +338,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
             if next_turn_input.trim().is_empty() {
                 continue;
             }
+            let is_direct_tool_follow_up = next_turn_input == "__direct_tool_follow_up__";
             let mut working_history = conversation_history.clone();
             let timeout_secs = resolve_effective_turn_timeout_secs(
                 resolve_timeout(
@@ -502,22 +503,49 @@ pub(super) async fn run_single_agent_loop_unified_impl(
             } {
                 Ok(outcome) => outcome,
                 Err(err) => {
-                    tracing::error!("Turn execution error: {}", err);
                     handle.set_input_status(None, None);
                     let _ = renderer.line_if_not_empty(MessageStyle::Output);
-                    let _ = renderer.line(MessageStyle::Error, &format!("Error: {}", err));
-                    TurnLoopOutcome {
-                        result: RunLoopTurnLoopResult::Aborted,
-                        working_history: history_backup
-                            .or_else(|| {
-                                if working_history.is_empty() {
-                                    None
-                                } else {
-                                    Some(working_history)
-                                }
-                            })
-                            .unwrap_or_else(|| conversation_history.clone()),
-                        turn_modified_files: std::collections::BTreeSet::new(),
+                    if is_direct_tool_follow_up {
+                        // The direct command already succeeded; the LLM follow-up is
+                        // optional analysis. Downgrade to a non-fatal warning so the
+                        // user sees the tool output as valid.
+                        tracing::warn!(
+                            "Direct-tool follow-up LLM turn failed (non-fatal): {}",
+                            err
+                        );
+                        let _ = renderer.line(
+                            MessageStyle::Info,
+                            "Command completed. Model follow-up unavailable; output above is valid.",
+                        );
+                        TurnLoopOutcome {
+                            result: RunLoopTurnLoopResult::Completed,
+                            working_history: history_backup
+                                .or_else(|| {
+                                    if working_history.is_empty() {
+                                        None
+                                    } else {
+                                        Some(working_history)
+                                    }
+                                })
+                                .unwrap_or_else(|| conversation_history.clone()),
+                            turn_modified_files: std::collections::BTreeSet::new(),
+                        }
+                    } else {
+                        tracing::error!("Turn execution error: {}", err);
+                        let _ = renderer.line(MessageStyle::Error, &format!("Error: {}", err));
+                        TurnLoopOutcome {
+                            result: RunLoopTurnLoopResult::Aborted,
+                            working_history: history_backup
+                                .or_else(|| {
+                                    if working_history.is_empty() {
+                                        None
+                                    } else {
+                                        Some(working_history)
+                                    }
+                                })
+                                .unwrap_or_else(|| conversation_history.clone()),
+                            turn_modified_files: std::collections::BTreeSet::new(),
+                        }
                     }
                 }
             };
