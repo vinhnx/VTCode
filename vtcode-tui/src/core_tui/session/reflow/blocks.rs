@@ -1,4 +1,5 @@
 use ratatui::prelude::*;
+use unicode_width::UnicodeWidthStr;
 
 use super::super::super::style::ratatui_style_from_inline;
 use super::super::super::types::InlineMessageKind;
@@ -7,6 +8,72 @@ use super::helpers::{is_tool_summary_line, split_tool_spans};
 use crate::config::constants::ui;
 
 impl Session {
+    fn wrapped_diff_continuation_prefix(line_text: &str) -> Option<String> {
+        let trimmed = line_text.trim_start();
+        if (trimmed.starts_with('-') && !trimmed.starts_with("---"))
+            || (trimmed.starts_with('+') && !trimmed.starts_with("+++"))
+        {
+            let marker_pos = line_text.find(['-', '+'])?;
+            let marker_end = marker_pos + 1;
+            let after = line_text.get(marker_end..)?;
+            let extra_space = after.chars().take_while(|c| *c == ' ').count();
+            let end = marker_end + extra_space;
+            return line_text.get(..end).map(ToOwned::to_owned);
+        }
+
+        // Numbered diff line: "<line_no><spaces><+|-><spaces><code>"
+        let mut idx = 0usize;
+        for ch in line_text.chars() {
+            if ch == ' ' {
+                idx += ch.len_utf8();
+            } else {
+                break;
+            }
+        }
+
+        let rest = line_text.get(idx..)?;
+        let digits_len = rest.chars().take_while(|c| c.is_ascii_digit()).count();
+        if digits_len == 0 {
+            return None;
+        }
+        let mut offset = idx
+            + rest
+                .chars()
+                .take(digits_len)
+                .map(char::len_utf8)
+                .sum::<usize>();
+        let after_digits = line_text.get(offset..)?;
+        let space_after_digits = after_digits.chars().take_while(|c| *c == ' ').count();
+        if space_after_digits == 0 {
+            return None;
+        }
+        offset += after_digits
+            .chars()
+            .take(space_after_digits)
+            .map(char::len_utf8)
+            .sum::<usize>();
+
+        let marker = line_text.get(offset..)?.chars().next()?;
+        if !matches!(marker, '+' | '-') {
+            return None;
+        }
+        offset += marker.len_utf8();
+
+        let after_marker = line_text.get(offset..)?;
+        let space_after_marker = after_marker.chars().take_while(|c| *c == ' ').count();
+        if space_after_marker == 0 {
+            return None;
+        }
+        offset += after_marker
+            .chars()
+            .take(space_after_marker)
+            .map(char::len_utf8)
+            .sum::<usize>();
+
+        let prefix_width = UnicodeWidthStr::width(line_text.get(..offset)?);
+        Some(" ".repeat(prefix_width))
+    }
+
     /// Wrap content with left and right borders
     #[allow(dead_code)]
     pub(super) fn wrap_block_lines(
@@ -87,39 +154,10 @@ impl Session {
             return vec![Line::from(spans)];
         }
 
-        // Check if content is a diff line (starts with - or +, excluding --- and +++ headers)
-        let is_diff_line = content
-            .first()
-            .map(|span| {
-                let text: &str = span.content.as_ref();
-                let trimmed = text.trim_start();
-                (trimmed.starts_with('-') && !trimmed.starts_with("---"))
-                    || (trimmed.starts_with('+') && !trimmed.starts_with("+++"))
-            })
-            .unwrap_or(false);
-
-        // Extract diff prefix if present (the '- ' or '+ ' part)
-        let diff_prefix: Option<String> = if is_diff_line {
-            content.first().and_then(|span| {
-                let text: &str = span.content.as_ref();
-                // Find the prefix (e.g., "- " or "+ ") including leading whitespace
-                if let Some(pos) = text.find(['-', '+']) {
-                    let prefix = &text[..=pos];
-                    // Include the space after the prefix if present
-                    let full_prefix =
-                        if text.len() > pos + 1 && text.chars().nth(pos + 1) == Some(' ') {
-                            &text[..=pos + 1]
-                        } else {
-                            prefix
-                        };
-                    Some(full_prefix.to_string())
-                } else {
-                    None
-                }
-            })
-        } else {
-            None
-        };
+        let diff_continuation_prefix = content.first().and_then(|span| {
+            let text: &str = span.content.as_ref();
+            Self::wrapped_diff_continuation_prefix(text)
+        });
 
         let mut wrapped = self.wrap_line(Line::from(content), content_width);
         if wrapped.is_empty() {
@@ -142,9 +180,9 @@ impl Session {
             };
             let mut new_spans = vec![Span::styled(active_prefix.to_owned(), border_style)];
 
-            // For diff lines, preserve the diff prefix on continuation lines
+            // For diff lines, preserve hanging indent/prefix on continuation lines.
             if idx > 0
-                && let Some(ref prefix) = diff_prefix
+                && let Some(ref prefix) = diff_continuation_prefix
             {
                 // Add the diff prefix with dimmed style to match diff appearance
                 let prefix_style = border_style.add_modifier(Modifier::DIM);

@@ -163,8 +163,7 @@ pub async fn render_tool_output_common(
     let inline_run_tool = renderer.supports_inline_ui() && is_run_pty_tool(name, args_val);
     let git_diff_payload = is_git_diff_payload(output);
 
-    if inline_run_tool && !git_diff_payload
-    {
+    if inline_run_tool && !git_diff_payload {
         if let Some(completion) = compact_run_completion_line(output, command_success) {
             renderer.line(MessageStyle::ToolDetail, &completion)?;
         }

@@ -1380,7 +1380,12 @@ fn normalize_code_indentation(
 /// Highlight a single line of code for diff preview.
 /// Returns a vector of (style, text) segments, or None if highlighting fails.
 pub fn highlight_line_for_diff(line: &str, language: Option<&str>) -> Option<Vec<(Style, String)>> {
-    syntax_highlight::highlight_line_to_anstyle_segments(line, language, "base16-ocean.dark", true)
+    syntax_highlight::highlight_line_to_anstyle_segments(
+        line,
+        language,
+        syntax_highlight::get_active_syntax_theme(),
+        false,
+    )
 }
 
 fn try_highlight(

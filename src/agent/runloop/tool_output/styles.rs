@@ -1,19 +1,66 @@
 use std::collections::HashMap;
 
-use anstyle::{AnsiColor, Color, Style as AnsiStyle};
+use anstyle::{Ansi256Color, AnsiColor, Color, Effects, RgbColor, Style as AnsiStyle};
 use anstyle_git;
 use vtcode_core::config::constants::tools;
+use vtcode_core::utils::ansi_capabilities::{
+    CAPABILITIES, ColorDepth, ColorScheme, detect_color_scheme,
+};
 use vtcode_core::utils::style_helpers::bold_color;
 
-fn strip_diff_background(style: AnsiStyle) -> AnsiStyle {
-    style.bg_color(None)
-}
-
-fn standard_diff_style(style: AnsiStyle, color: AnsiColor) -> AnsiStyle {
+fn standard_diff_style(style: AnsiStyle, color: Color, bg: Option<Color>) -> AnsiStyle {
     let effects = style.get_effects();
     AnsiStyle::new()
-        .fg_color(Some(Color::Ansi(color)))
+        .fg_color(Some(color))
+        .bg_color(bg)
         .effects(effects)
+}
+
+fn diff_line_bg_for(scheme: ColorScheme, depth: ColorDepth, is_addition: bool) -> Option<Color> {
+    match (scheme, depth, is_addition) {
+        // Light theme truecolor (GitHub-style tints).
+        (ColorScheme::Light, ColorDepth::TrueColor, true) => {
+            Some(Color::Rgb(RgbColor(218, 251, 225)))
+        }
+        (ColorScheme::Light, ColorDepth::TrueColor, false) => {
+            Some(Color::Rgb(RgbColor(255, 235, 233)))
+        }
+        // Dark theme truecolor.
+        (ColorScheme::Dark | ColorScheme::Unknown, ColorDepth::TrueColor, true) => {
+            Some(Color::Rgb(RgbColor(33, 58, 43)))
+        }
+        (ColorScheme::Dark | ColorScheme::Unknown, ColorDepth::TrueColor, false) => {
+            Some(Color::Rgb(RgbColor(74, 34, 29)))
+        }
+        // 256-color fallback.
+        (ColorScheme::Light, ColorDepth::Color256, true) => Some(Color::Ansi256(Ansi256Color(194))),
+        (ColorScheme::Light, ColorDepth::Color256, false) => {
+            Some(Color::Ansi256(Ansi256Color(224)))
+        }
+        (ColorScheme::Dark | ColorScheme::Unknown, ColorDepth::Color256, true) => {
+            Some(Color::Ansi256(Ansi256Color(22)))
+        }
+        (ColorScheme::Dark | ColorScheme::Unknown, ColorDepth::Color256, false) => {
+            Some(Color::Ansi256(Ansi256Color(52)))
+        }
+        // Basic 16-color fallback (still include BG so full-width extension can kick in).
+        (ColorScheme::Light, ColorDepth::Basic16, true) => {
+            Some(Color::Ansi(AnsiColor::BrightGreen))
+        }
+        (ColorScheme::Light, ColorDepth::Basic16, false) => Some(Color::Ansi(AnsiColor::BrightRed)),
+        (ColorScheme::Dark | ColorScheme::Unknown, ColorDepth::Basic16, true) => {
+            Some(Color::Ansi(AnsiColor::Green))
+        }
+        (ColorScheme::Dark | ColorScheme::Unknown, ColorDepth::Basic16, false) => {
+            Some(Color::Ansi(AnsiColor::Red))
+        }
+        // No color support.
+        (_, ColorDepth::None, _) => None,
+    }
+}
+
+fn diff_line_bg_color(is_addition: bool) -> Option<Color> {
+    diff_line_bg_for(detect_color_scheme(), CAPABILITIES.color_depth, is_addition)
 }
 
 pub(crate) struct GitStyles {
@@ -27,19 +74,26 @@ impl GitStyles {
         let parsed_added = anstyle_git::parse("new").unwrap_or_default();
         let parsed_removed = anstyle_git::parse("old").unwrap_or_default();
         let parsed_header = anstyle_git::parse("meta").unwrap_or_default();
+        let remove_effects = parsed_removed.get_effects() | Effects::DIMMED;
         Self {
-            add: Some(strip_diff_background(standard_diff_style(
+            add: Some(standard_diff_style(
                 parsed_added,
-                AnsiColor::Green,
-            ))),
-            remove: Some(strip_diff_background(standard_diff_style(
-                parsed_removed,
-                AnsiColor::Red,
-            ))),
-            header: Some(strip_diff_background(standard_diff_style(
+                Color::Ansi(AnsiColor::Green),
+                diff_line_bg_color(true),
+            )),
+            remove: Some(
+                standard_diff_style(
+                    parsed_removed,
+                    Color::Ansi(AnsiColor::Red),
+                    diff_line_bg_color(false),
+                )
+                .effects(remove_effects),
+            ),
+            header: Some(standard_diff_style(
                 parsed_header,
-                AnsiColor::Cyan,
-            ))),
+                Color::Ansi(AnsiColor::Cyan),
+                None,
+            )),
         }
     }
 }
@@ -201,6 +255,23 @@ mod tests {
         assert_eq!(removed, git.remove);
         let header = select_line_style(Some("run_pty_cmd"), "diff --git a/file b/file", &git, &ls);
         assert_eq!(header, git.header);
+    }
+
+    #[test]
+    fn theme_aware_diff_background_palette_is_selected() {
+        let light_add = diff_line_bg_for(ColorScheme::Light, ColorDepth::TrueColor, true);
+        let dark_del = diff_line_bg_for(ColorScheme::Dark, ColorDepth::TrueColor, false);
+        assert_eq!(light_add, Some(Color::Rgb(RgbColor(218, 251, 225))));
+        assert_eq!(dark_del, Some(Color::Rgb(RgbColor(74, 34, 29))));
+    }
+
+    #[test]
+    fn removed_diff_lines_are_dimmed_relative_to_additions() {
+        let git = GitStyles::new();
+        let remove_effects = git.remove.expect("remove style should exist").get_effects();
+        let add_effects = git.add.expect("add style should exist").get_effects();
+        assert!(remove_effects.contains(Effects::DIMMED));
+        assert!(!add_effects.contains(Effects::DIMMED));
     }
 
     #[test]

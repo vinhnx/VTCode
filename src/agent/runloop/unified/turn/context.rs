@@ -202,6 +202,11 @@ impl<'a> TurnProcessingContext<'a> {
         reasoning: Vec<ReasoningSegment>,
         response_streamed: bool,
     ) -> anyhow::Result<()> {
+        let mut text = text;
+        if should_suppress_redundant_diff_recap(self.working_history, &text) {
+            text.clear();
+        }
+
         if !response_streamed {
             use vtcode_core::utils::ansi::MessageStyle;
             if !text.trim().is_empty() {
@@ -531,6 +536,107 @@ fn is_interim_progress_update(text: &str) -> bool {
         .any(|marker| lower.contains(marker))
 }
 
+fn should_suppress_redundant_diff_recap(history: &[uni::Message], assistant_text: &str) -> bool {
+    if assistant_text.trim().is_empty() {
+        return false;
+    }
+    if !is_redundant_diff_recap_text(assistant_text) {
+        return false;
+    }
+    if !has_recent_git_diff_tool_output(history) {
+        return false;
+    }
+    if !last_user_requested_diff_view(history) {
+        return false;
+    }
+    if last_user_requested_diff_analysis(history) {
+        return false;
+    }
+    true
+}
+
+fn is_redundant_diff_recap_text(text: &str) -> bool {
+    let trimmed = text.trim();
+    let lower = trimmed.to_ascii_lowercase();
+    lower.starts_with("diff for ")
+        || lower.starts_with("the diff shows")
+        || lower.starts_with("changes in ")
+        || lower.starts_with("```diff")
+}
+
+fn has_recent_git_diff_tool_output(history: &[uni::Message]) -> bool {
+    history
+        .iter()
+        .rev()
+        .take(12)
+        .any(message_is_git_diff_tool_output)
+}
+
+fn message_is_git_diff_tool_output(message: &uni::Message) -> bool {
+    if message.role != uni::MessageRole::Tool {
+        return false;
+    }
+
+    let content = message.content.as_text();
+    if let Ok(value) = serde_json::from_str::<serde_json::Value>(content.as_ref()) {
+        if value
+            .get("content_type")
+            .and_then(serde_json::Value::as_str)
+            .is_some_and(|content_type| content_type == "git_diff")
+        {
+            return true;
+        }
+        if value
+            .get("command")
+            .and_then(serde_json::Value::as_str)
+            .is_some_and(|command| command.trim_start().starts_with("git diff"))
+        {
+            return true;
+        }
+        if value
+            .get("output")
+            .and_then(serde_json::Value::as_str)
+            .is_some_and(|output| output.contains("diff --git "))
+        {
+            return true;
+        }
+    }
+
+    content.contains("\"content_type\":\"git_diff\"") || content.contains("diff --git ")
+}
+
+fn last_user_message_text(history: &[uni::Message]) -> Option<String> {
+    history
+        .iter()
+        .rev()
+        .find(|message| message.role == uni::MessageRole::User)
+        .map(|message| message.content.as_text().to_ascii_lowercase())
+}
+
+fn last_user_requested_diff_view(history: &[uni::Message]) -> bool {
+    let Some(text) = last_user_message_text(history) else {
+        return false;
+    };
+    [
+        "show diff",
+        "git diff",
+        "view diff",
+        "show changes",
+        "what changed",
+    ]
+    .iter()
+    .any(|needle| text.contains(needle))
+}
+
+fn last_user_requested_diff_analysis(history: &[uni::Message]) -> bool {
+    let Some(text) = last_user_message_text(history) else {
+        return false;
+    };
+    ["analy", "explain", "summar", "review", "why", "interpret"]
+        .iter()
+        .any(|needle| text.contains(needle))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -629,6 +735,38 @@ mod tests {
             false,
             &history,
             "Now I need to update the function body to use settings.reasoning_effort and settings.verbosity:"
+        ));
+    }
+
+    #[test]
+    fn suppresses_redundant_diff_recap_after_git_diff_view_request() {
+        let history = vec![
+            uni::Message::user("show diff src/main.rs".to_string()),
+            uni::Message::tool_response(
+                "call_1".to_string(),
+                r#"{"content_type":"git_diff","command":"git diff -- src/main.rs","output":"diff --git a/src/main.rs b/src/main.rs"}"#.to_string(),
+            ),
+        ];
+
+        assert!(should_suppress_redundant_diff_recap(
+            &history,
+            "Diff for src/main.rs:\n```diff\n@@ -1 +1 @@\n```"
+        ));
+    }
+
+    #[test]
+    fn does_not_suppress_diff_recap_when_user_asked_for_analysis() {
+        let history = vec![
+            uni::Message::user("analyze this diff and explain".to_string()),
+            uni::Message::tool_response(
+                "call_1".to_string(),
+                r#"{"content_type":"git_diff","command":"git diff -- src/main.rs"}"#.to_string(),
+            ),
+        ];
+
+        assert!(!should_suppress_redundant_diff_recap(
+            &history,
+            "The diff shows one behavior change."
         ));
     }
 }

@@ -1,4 +1,5 @@
 use super::*;
+use anstyle::Style as AnsiStyle;
 
 #[test]
 fn formats_unified_diff_with_hunk_headers() {
@@ -32,6 +33,25 @@ fn formats_diff_without_git_header() {
     assert!(lines.iter().any(|line| line == "@@ -2 +2 @@"));
     // No "• Diff" summary line generated
     assert!(!lines.iter().any(|l| l.starts_with("• Diff ")));
+}
+
+#[test]
+fn formats_diff_with_numbered_hunk_lines() {
+    let diff = "\
+diff --git a/file1.txt b/file1.txt
+index 0000000..1111111 100644
+--- a/file1.txt
++++ b/file1.txt
+@@ -10,2 +10,2 @@
+-old
++new
+ context
+";
+    let lines = format_diff_content_lines_with_numbers(diff);
+    assert!(lines.iter().any(|line| line == "@@ -10 +10 @@"));
+    assert!(lines.iter().any(|line| line.starts_with("-   10 old")));
+    assert!(lines.iter().any(|line| line.starts_with("+   10 new")));
+    assert!(lines.iter().any(|line| line.starts_with("    11 context")));
 }
 
 #[test]
@@ -131,4 +151,28 @@ fn condensed_edit_preview_handles_diff_without_diff_git_header() {
     assert_eq!(lines[0], "• Edited file2.txt (+1 -1)");
     assert!(lines.iter().any(|line| line.contains("-   2")));
     assert!(lines.iter().any(|line| line.contains("+   2")));
+}
+
+#[test]
+fn split_diff_gutter_detects_numbered_lines() {
+    let (gutter, content) = split_diff_gutter("+   10 new value").expect("expected gutter split");
+    assert_eq!(gutter, "+   10 ");
+    assert_eq!(content, "new value");
+
+    assert!(split_diff_gutter("+++ b/file.rs").is_none());
+    assert!(split_diff_gutter("@@ -1 +1 @@").is_none());
+}
+
+#[test]
+fn split_diff_gutter_preserves_indented_code_content() {
+    let (gutter, content) = split_diff_gutter("+   10     line,").expect("expected gutter split");
+    assert_eq!(gutter, "+   10 ");
+    assert_eq!(content, "    line,");
+}
+
+#[test]
+fn format_diff_line_for_display_dims_numbered_gutter() {
+    let rendered = format_diff_line_for_display("-  120 old value", AnsiStyle::new());
+    assert!(rendered.contains("\u{1b}[2m"));
+    assert!(rendered.ends_with("old value"));
 }

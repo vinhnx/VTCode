@@ -870,3 +870,7 @@ improve agent's postamlbe summarization. reference and also suggest next actions
     to ciapre). I left it untouched.
     ``
 ```
+
+---
+
+for realtime theme preview live reload in /config and /theme, also apply and live change for all tui elements including messages.
