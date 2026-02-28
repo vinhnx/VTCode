@@ -71,11 +71,9 @@ pub fn render(session: &mut Session, frame: &mut Frame<'_>) {
         recalculate_transcript_rows(session);
     }
 
-    let status_height = if size.width > 0 && palettes::has_input_status(session) {
-        1
-    } else {
-        0
-    };
+    // Always reserve 1 row for the status line to prevent layout jumping
+    // when status content appears/disappears during agent execution.
+    let status_height = if size.width > 0 { 1 } else { 0 };
     let inner_width = size
         .width
         .saturating_sub(ui::INLINE_INPUT_PADDING_HORIZONTAL.saturating_mul(2));

@@ -821,18 +821,3 @@ REF:
  --resume=ce712ef0-6605-4cd4-82bf-fad39
  bd55bca
 ```
-
---
-
-ADD GRUVBOX THEME
-
-ADD SOLARIZED DARK / LIGHT THEME
-
----
-
-fix bottom bar error when agent is running (it collapsing randomly )
-'/Users/vinhnguyenxuan/Desktop/Screenshot 2026-02-28 at 11.52.07 AM.png'
-'/Users/vinhnguyenxuan/Desktop/Screenshot 2026-02-28 at 11.52.14 AM.png'
-
-==
-

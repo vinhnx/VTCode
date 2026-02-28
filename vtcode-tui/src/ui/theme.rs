@@ -371,6 +371,282 @@ static REGISTRY: Lazy<HashMap<&'static str, ThemeDefinition>> = Lazy::new(|| {
             },
         },
     );
+    map.insert(
+        "ciapre",
+        ThemeDefinition {
+            id: "ciapre",
+            label: "Ciapre",
+            palette: ThemePalette {
+                primary_accent: RgbColor(0xAE, 0xA4, 0x7F), // White (#AEA47F)
+                background: RgbColor(0x18, 0x18, 0x18),     // Black (#181818)
+                foreground: RgbColor(0xAE, 0xA4, 0x7F),     // White (#AEA47F)
+                secondary_accent: RgbColor(0xCC, 0x8A, 0x3E), // Yellow (#CC8A3E)
+                alert: RgbColor(0xAC, 0x38, 0x35),          // Bright Red (#AC3835)
+                logo_accent: RgbColor(0xCC, 0x8A, 0x3E),    // Yellow (#CC8A3E)
+            },
+        },
+    );
+    map.insert(
+        "solarized-dark",
+        ThemeDefinition {
+            id: "solarized-dark",
+            label: "Solarized Dark",
+            palette: ThemePalette {
+                primary_accent: RgbColor(0x83, 0x94, 0x96), // Base 0 (#839496)
+                background: RgbColor(0x00, 0x2B, 0x36),     // Base 03 (#002b36)
+                foreground: RgbColor(0x83, 0x94, 0x96),     // Base 0 (#839496)
+                secondary_accent: RgbColor(0x26, 0x8B, 0xD2), // Blue (#268bd2)
+                alert: RgbColor(0xDC, 0x32, 0x2F),          // Red (#dc322f)
+                logo_accent: RgbColor(0xB5, 0x89, 0x00),    // Yellow (#b58900)
+            },
+        },
+    );
+    map.insert(
+        "solarized-light",
+        ThemeDefinition {
+            id: "solarized-light",
+            label: "Solarized Light",
+            palette: ThemePalette {
+                primary_accent: RgbColor(0x58, 0x6E, 0x75), // Base 00 (#586e75)
+                background: RgbColor(0xFD, 0xF6, 0xE3),     // Base 3 (#fdf6e3)
+                foreground: RgbColor(0x58, 0x6E, 0x75),     // Base 00 (#586e75)
+                secondary_accent: RgbColor(0x26, 0x8B, 0xD2), // Blue (#268bd2)
+                alert: RgbColor(0xDC, 0x32, 0x2F),          // Red (#dc322f)
+                logo_accent: RgbColor(0xB5, 0x89, 0x00),    // Yellow (#b58900)
+            },
+        },
+    );
+    map.insert(
+        "solarized-dark-hc",
+        ThemeDefinition {
+            id: "solarized-dark-hc",
+            label: "Solarized Dark Higher Contrast",
+            palette: ThemePalette {
+                primary_accent: RgbColor(0x83, 0x94, 0x96), // Base 0 (#839496)
+                background: RgbColor(0x00, 0x28, 0x31),     // Base 03 (#002831)
+                foreground: RgbColor(0xE9, 0xE3, 0xCC),     // Base 1 (#e9e3cc)
+                secondary_accent: RgbColor(0x20, 0x76, 0xC7), // Blue (#2076c7)
+                alert: RgbColor(0xD1, 0x1C, 0x24),          // Red (#d11c24)
+                logo_accent: RgbColor(0xA5, 0x77, 0x06),    // Yellow (#a57706)
+            },
+        },
+    );
+
+    // Gruvbox themes
+    map.insert(
+        "gruvbox-dark",
+        ThemeDefinition {
+            id: "gruvbox-dark",
+            label: "Gruvbox Dark",
+            palette: ThemePalette {
+                primary_accent: RgbColor(0xA8, 0x99, 0x84), // Light gray (#a89984)
+                background: RgbColor(0x28, 0x28, 0x28),     // Dark background (#282828)
+                foreground: RgbColor(0xA8, 0x99, 0x84),     // Light gray (#a89984)
+                secondary_accent: RgbColor(0x45, 0x85, 0x88), // Cyan (#458588)
+                alert: RgbColor(0xCC, 0x24, 0x1D),          // Red (#cc241d)
+                logo_accent: RgbColor(0xD7, 0x99, 0x21),    // Yellow (#d79921)
+            },
+        },
+    );
+    map.insert(
+        "gruvbox-dark-hard",
+        ThemeDefinition {
+            id: "gruvbox-dark-hard",
+            label: "Gruvbox Dark Hard",
+            palette: ThemePalette {
+                primary_accent: RgbColor(0xA8, 0x99, 0x84), // Light gray (#a89984)
+                background: RgbColor(0x1D, 0x20, 0x21),     // Hard dark (#1d2021)
+                foreground: RgbColor(0xA8, 0x99, 0x84),     // Light gray (#a89984)
+                secondary_accent: RgbColor(0x45, 0x85, 0x88), // Cyan (#458588)
+                alert: RgbColor(0xCC, 0x24, 0x1D),          // Red (#cc241d)
+                logo_accent: RgbColor(0xD7, 0x99, 0x21),    // Yellow (#d79921)
+            },
+        },
+    );
+    map.insert(
+        "gruvbox-light",
+        ThemeDefinition {
+            id: "gruvbox-light",
+            label: "Gruvbox Light",
+            palette: ThemePalette {
+                primary_accent: RgbColor(0x7C, 0x6F, 0x64), // Dark gray (#7c6f64)
+                background: RgbColor(0xFB, 0xF4, 0xE8),     // Light background (#fbf4e8)
+                foreground: RgbColor(0x7C, 0x6F, 0x64),     // Dark gray (#7c6f64)
+                secondary_accent: RgbColor(0x45, 0x85, 0x88), // Cyan (#458588)
+                alert: RgbColor(0xCC, 0x24, 0x1D),          // Red (#cc241d)
+                logo_accent: RgbColor(0xD7, 0x99, 0x21),    // Yellow (#d79921)
+            },
+        },
+    );
+    map.insert(
+        "gruvbox-light-hard",
+        ThemeDefinition {
+            id: "gruvbox-light-hard",
+            label: "Gruvbox Light Hard",
+            palette: ThemePalette {
+                primary_accent: RgbColor(0x7C, 0x6F, 0x64), // Dark gray (#7c6f64)
+                background: RgbColor(0xF9, 0xF5, 0xD7),     // Hard light (#f9f5d7)
+                foreground: RgbColor(0x7C, 0x6F, 0x64),     // Dark gray (#7c6f64)
+                secondary_accent: RgbColor(0x45, 0x85, 0x88), // Cyan (#458588)
+                alert: RgbColor(0xCC, 0x24, 0x1D),          // Red (#cc241d)
+                logo_accent: RgbColor(0xD7, 0x99, 0x21),    // Yellow (#d79921)
+            },
+        },
+    );
+    map.insert(
+        "gruvbox-material",
+        ThemeDefinition {
+            id: "gruvbox-material",
+            label: "Gruvbox Material",
+            palette: ThemePalette {
+                primary_accent: RgbColor(0xFF, 0xFF, 0xFF), // White (#ffffff)
+                background: RgbColor(0x14, 0x16, 0x17),     // Dark background (#141617)
+                foreground: RgbColor(0xFF, 0xFF, 0xFF),     // White (#ffffff)
+                secondary_accent: RgbColor(0x6D, 0xA3, 0xED), // Blue (#6da3ed)
+                alert: RgbColor(0xEA, 0x69, 0x26),          // Orange (#ea6926)
+                logo_accent: RgbColor(0xEE, 0xCE, 0x5B),    // Yellow (#eece5b)
+            },
+        },
+    );
+    map.insert(
+        "gruvbox-material-dark",
+        ThemeDefinition {
+            id: "gruvbox-material-dark",
+            label: "Gruvbox Material Dark",
+            palette: ThemePalette {
+                primary_accent: RgbColor(0xD4, 0xBE, 0x98), // Light tan (#d4be98)
+                background: RgbColor(0x28, 0x28, 0x28),     // Dark background (#282828)
+                foreground: RgbColor(0xD4, 0xBE, 0x98),     // Light tan (#d4be98)
+                secondary_accent: RgbColor(0x7D, 0xAE, 0xA3), // Cyan (#7daea3)
+                alert: RgbColor(0xEA, 0x69, 0x62),          // Red (#ea6962)
+                logo_accent: RgbColor(0xD8, 0xA6, 0x57),    // Yellow (#d8a657)
+            },
+        },
+    );
+    map.insert(
+        "gruvbox-material-light",
+        ThemeDefinition {
+            id: "gruvbox-material-light",
+            label: "Gruvbox Material Light",
+            palette: ThemePalette {
+                primary_accent: RgbColor(0x65, 0x47, 0x35), // Dark brown (#654735)
+                background: RgbColor(0xFB, 0xF1, 0xC7),     // Light background (#fbf1c7)
+                foreground: RgbColor(0x65, 0x47, 0x35),     // Dark brown (#654735)
+                secondary_accent: RgbColor(0x45, 0x70, 0x7A), // Cyan (#45707a)
+                alert: RgbColor(0xC1, 0x4A, 0x4A),          // Red (#c14a4a)
+                logo_accent: RgbColor(0xB4, 0x71, 0x09),    // Yellow (#b47109)
+            },
+        },
+    );
+
+    // Zenburn theme
+    map.insert(
+        "zenburn",
+        ThemeDefinition {
+            id: "zenburn",
+            label: "Zenburn",
+            palette: ThemePalette {
+                primary_accent: RgbColor(0xDC, 0xDC, 0xCC), // White (#dcdccc)
+                background: RgbColor(0x4D, 0x4D, 0x4D),     // Dark background (#4d4d4d)
+                foreground: RgbColor(0xDC, 0xDC, 0xCC),     // White (#dcdccc)
+                secondary_accent: RgbColor(0x8C, 0xD0, 0xD3), // Cyan (#8cd0d3)
+                alert: RgbColor(0x70, 0x50, 0x50),          // Red (#705050)
+                logo_accent: RgbColor(0xF0, 0xDF, 0xAF),    // Yellow (#f0dfaf)
+            },
+        },
+    );
+
+    // Tomorrow themes
+    map.insert(
+        "tomorrow",
+        ThemeDefinition {
+            id: "tomorrow",
+            label: "Tomorrow",
+            palette: ThemePalette {
+                primary_accent: RgbColor(0x4D, 0x4D, 0x4D), // Dark gray (#4d4d4d)
+                background: RgbColor(0xFF, 0xFF, 0xFF),     // White (#ffffff)
+                foreground: RgbColor(0x4D, 0x4D, 0x4D),     // Dark gray (#4d4d4d)
+                secondary_accent: RgbColor(0x42, 0x71, 0xAE), // Blue (#4271ae)
+                alert: RgbColor(0xC8, 0x28, 0x29),          // Red (#c82829)
+                logo_accent: RgbColor(0xEA, 0xB7, 0x00),    // Yellow (#eab700)
+            },
+        },
+    );
+    map.insert(
+        "tomorrow-night",
+        ThemeDefinition {
+            id: "tomorrow-night",
+            label: "Tomorrow Night",
+            palette: ThemePalette {
+                primary_accent: RgbColor(0xDE, 0xDE, 0xDE), // Light gray (#dedede)
+                background: RgbColor(0x1D, 0x1F, 0x21),     // Dark (#1d1f21)
+                foreground: RgbColor(0xDE, 0xDE, 0xDE),     // Light gray (#dedede)
+                secondary_accent: RgbColor(0x81, 0xA2, 0xBE), // Blue (#81a2be)
+                alert: RgbColor(0xCC, 0x66, 0x66),          // Red (#cc6666)
+                logo_accent: RgbColor(0xF0, 0xC6, 0x74),    // Yellow (#f0c674)
+            },
+        },
+    );
+    map.insert(
+        "tomorrow-night-blue",
+        ThemeDefinition {
+            id: "tomorrow-night-blue",
+            label: "Tomorrow Night Blue",
+            palette: ThemePalette {
+                primary_accent: RgbColor(0xFF, 0xFF, 0xFF), // White (#ffffff)
+                background: RgbColor(0x00, 0x24, 0x51),     // Dark blue (#002451)
+                foreground: RgbColor(0xFF, 0xFF, 0xFF),     // White (#ffffff)
+                secondary_accent: RgbColor(0xBB, 0xDA, 0xFF), // Blue (#bbdaff)
+                alert: RgbColor(0xFF, 0x9D, 0xA4),          // Red (#ff9da4)
+                logo_accent: RgbColor(0xFF, 0xEE, 0xAD),    // Yellow (#ffeead)
+            },
+        },
+    );
+    map.insert(
+        "tomorrow-night-bright",
+        ThemeDefinition {
+            id: "tomorrow-night-bright",
+            label: "Tomorrow Night Bright",
+            palette: ThemePalette {
+                primary_accent: RgbColor(0xE0, 0xE0, 0xE0), // Light gray (#e0e0e0)
+                background: RgbColor(0x00, 0x00, 0x00),     // Black (#000000)
+                foreground: RgbColor(0xE0, 0xE0, 0xE0),     // Light gray (#e0e0e0)
+                secondary_accent: RgbColor(0x7A, 0xA6, 0xDA), // Blue (#7aa6da)
+                alert: RgbColor(0xD5, 0x4E, 0x53),          // Red (#d54e53)
+                logo_accent: RgbColor(0xE7, 0xC5, 0x47),    // Yellow (#e7c547)
+            },
+        },
+    );
+    map.insert(
+        "tomorrow-night-burns",
+        ThemeDefinition {
+            id: "tomorrow-night-burns",
+            label: "Tomorrow Night Burns",
+            palette: ThemePalette {
+                primary_accent: RgbColor(0xF5, 0xF5, 0xF5), // White (#f5f5f5)
+                background: RgbColor(0x25, 0x25, 0x25),     // Dark (#252525)
+                foreground: RgbColor(0xF5, 0xF5, 0xF5),     // White (#f5f5f5)
+                secondary_accent: RgbColor(0xFC, 0x59, 0x5F), // Red (#fc595f)
+                alert: RgbColor(0xFC, 0x59, 0x5F),          // Red (#fc595f)
+                logo_accent: RgbColor(0xE0, 0x93, 0x95),    // Light red (#e09395)
+            },
+        },
+    );
+    map.insert(
+        "tomorrow-night-eighties",
+        ThemeDefinition {
+            id: "tomorrow-night-eighties",
+            label: "Tomorrow Night Eighties",
+            palette: ThemePalette {
+                primary_accent: RgbColor(0xCC, 0xCC, 0xCC), // Light gray (#cccccc)
+                background: RgbColor(0x2D, 0x2D, 0x2D),     // Dark (#2d2d2d)
+                foreground: RgbColor(0xCC, 0xCC, 0xCC),     // Light gray (#cccccc)
+                secondary_accent: RgbColor(0x66, 0x99, 0xCC), // Blue (#6699cc)
+                alert: RgbColor(0xF2, 0x77, 0x7A),          // Red (#f2777a)
+                logo_accent: RgbColor(0xFF, 0xCC, 0x66),    // Yellow (#ffcc66)
+            },
+        },
+    );
 
     // Vitesse themes
     map.insert(

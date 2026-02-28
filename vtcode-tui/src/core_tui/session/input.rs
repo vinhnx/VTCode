@@ -59,13 +59,16 @@ impl Session {
         let mut status_area = None;
         let mut status_line = None;
 
-        if area.height >= 2
-            && let Some(line) = self.render_input_status_line(area.width)
-        {
+        // Always split the status row from the input area when there is enough
+        // height.  This prevents the input block from visually jumping when the
+        // status text appears/disappears during agent execution (the layout in
+        // impl_render.rs always reserves 1 row for the status line).
+        if area.height >= 2 {
             let block_height = area.height.saturating_sub(1).max(1);
             input_area.height = block_height;
-            status_area = Some(Rect::new(area.x, area.y + block_height, area.width, 1));
-            status_line = Some(line);
+            let status_rect = Rect::new(area.x, area.y + block_height, area.width, 1);
+            status_area = Some(status_rect);
+            status_line = self.render_input_status_line(area.width);
         }
 
         let background_style = self.styles.input_background_style();
@@ -98,11 +101,16 @@ impl Session {
             }
         }
 
-        if let (Some(status_rect), Some(line)) = (status_area, status_line) {
-            let paragraph = Paragraph::new(line)
-                .style(self.styles.default_style())
-                .wrap(Wrap { trim: false });
-            frame.render_widget(paragraph, status_rect);
+        if let Some(status_rect) = status_area {
+            if let Some(line) = status_line {
+                let paragraph = Paragraph::new(line)
+                    .style(self.styles.default_style())
+                    .wrap(Wrap { trim: false });
+                frame.render_widget(paragraph, status_rect);
+            } else {
+                // Clear the reserved status row to prevent stale artifacts
+                frame.render_widget(Clear, status_rect);
+            }
         }
     }
 
