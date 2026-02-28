@@ -20,7 +20,7 @@ default_model = "gpt-oss:20b-cloud"
 #   default_model = "zai-org/GLM-5:novita"
 
 # Visual theme for the terminal interface
-theme = "ciapre"
+theme = "homebrew"
 
 # Temperature for main LLM responses (0.0-1.0)
 # Lower values = more deterministic, higher values = more creative

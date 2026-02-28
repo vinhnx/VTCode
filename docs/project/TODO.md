@@ -873,4 +873,8 @@ improve agent's postamlbe summarization. reference and also suggest next actions
 
 ---
 
-for realtime theme preview live reload in /config and /theme, also apply and live change for all tui elements including messages.
+fix light themes, currently it showing blank screen when selected on dark terminal. This is a critical issue as it affects usability for users who prefer light themes, but current terminal style is black, maybe has a detection mechanism and show info in the TUI, vise versa for light terminals and dark themes. The fix should ensure that the themes render correctly and provide a good user experience. improve accessibility by ensuring that there is sufficient contrast between the text and background colors in all themes, especially for users with visual impairments. This may involve adjusting the color palette or providing options for high-contrast themes.
+
+---
+
+style (+/-) symbol label with red/green color to indicate additions and deletions in the diff preview matching the background diff colors. This will make it easier for users to quickly identify what has been added and what has been removed in the code changes, improving readability and user experience when reviewing diffs.

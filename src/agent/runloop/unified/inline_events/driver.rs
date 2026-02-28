@@ -1,4 +1,5 @@
 use std::collections::VecDeque;
+use std::time::Duration;
 
 use anyhow::Result;
 use tokio::sync::Notify;
@@ -74,6 +75,8 @@ impl<'a> InlineEventLoop<'a> {
         session: &mut InlineSession,
         ctrl_c_notify: &Notify,
     ) -> Result<InlineLoopAction> {
+        const INLINE_EVENT_POLL_TICK: Duration = Duration::from_millis(500);
+
         if let Some(action) = self.ensure_interrupt_notice()? {
             return Ok(action);
         }
@@ -86,6 +89,7 @@ impl<'a> InlineEventLoop<'a> {
             biased;
 
             _ = ctrl_c_notify.notified() => None,
+            _ = tokio::time::sleep(INLINE_EVENT_POLL_TICK) => None,
             event = session.next_event() => event,
         };
 

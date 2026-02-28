@@ -1126,9 +1126,9 @@ fn render_diff_code_block(
             context_style
         } else if is_diff_header_line(trimmed_start) {
             header_style
-        } else if trimmed.starts_with('+') && !trimmed.starts_with("+++") {
+        } else if trimmed_start.starts_with('+') && !trimmed_start.starts_with("+++") {
             added_style
-        } else if trimmed.starts_with('-') && !trimmed.starts_with("---") {
+        } else if trimmed_start.starts_with('-') && !trimmed_start.starts_with("---") {
             removed_style
         } else {
             context_style
@@ -1163,7 +1163,7 @@ fn parse_diff_summary_line(line: &str) -> Option<(&str, usize, usize)> {
 
 fn is_diff_header_line(trimmed: &str) -> bool {
     trimmed.starts_with("diff --git ")
-        || trimmed.starts_with("@@ ")
+        || trimmed.starts_with("@@")
         || trimmed.starts_with("index ")
         || trimmed.starts_with("new file mode ")
         || trimmed.starts_with("deleted file mode ")
@@ -1182,8 +1182,27 @@ fn is_diff_header_line(trimmed: &str) -> bool {
 }
 
 fn looks_like_diff_content(code: &str) -> bool {
-    code.lines()
-        .any(|line| is_diff_header_line(line.trim_start()))
+    let mut has_added_line = false;
+    let mut has_removed_line = false;
+
+    for line in code.lines() {
+        let trimmed = line.trim_start();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if is_diff_header_line(trimmed) {
+            return true;
+        }
+        if trimmed.starts_with('+') && !trimmed.starts_with("+++") {
+            has_added_line = true;
+            continue;
+        }
+        if trimmed.starts_with('-') && !trimmed.starts_with("---") {
+            has_removed_line = true;
+        }
+    }
+
+    has_added_line && has_removed_line
 }
 
 fn line_prefix_segments(
@@ -1762,15 +1781,60 @@ mod tests {
         let markdown = "```\n@@ -1 +1 @@\n- old\n+ new\n```\n";
         let lines =
             render_markdown_to_lines(markdown, Style::default(), &theme::active_styles(), None);
+        let expected_added_fg = DiffColorPalette::default().added_style().get_fg_color();
         let added_line = lines
             .iter()
             .find(|line| line.segments.iter().any(|seg| seg.text.contains("+ new")))
             .expect("added line exists");
+        let added_segment = added_line
+            .segments
+            .iter()
+            .find(|seg| seg.text.contains("+ new"))
+            .expect("added segment exists");
+        assert_eq!(added_segment.style.get_fg_color(), expected_added_fg);
         assert!(
             added_line
                 .segments
                 .iter()
                 .all(|seg| seg.style.get_bg_color().is_none())
+        );
+    }
+
+    #[test]
+    fn test_markdown_unlabeled_minimal_hunk_detects_diff() {
+        let markdown = "```\n@@\n pub fn demo() {\n  -    old();\n  +    new();\n }\n```\n";
+        let lines =
+            render_markdown_to_lines(markdown, Style::default(), &theme::active_styles(), None);
+        let palette = DiffColorPalette::default();
+
+        let header_segment = lines
+            .iter()
+            .flat_map(|line| line.segments.iter())
+            .find(|seg| seg.text.trim() == "@@")
+            .expect("hunk header exists");
+        assert_eq!(
+            header_segment.style.get_fg_color(),
+            palette.header_style().get_fg_color()
+        );
+
+        let removed_segment = lines
+            .iter()
+            .flat_map(|line| line.segments.iter())
+            .find(|seg| seg.text.contains("-    old();"))
+            .expect("removed segment exists");
+        assert_eq!(
+            removed_segment.style.get_fg_color(),
+            palette.removed_style().get_fg_color()
+        );
+
+        let added_segment = lines
+            .iter()
+            .flat_map(|line| line.segments.iter())
+            .find(|seg| seg.text.contains("+    new();"))
+            .expect("added segment exists");
+        assert_eq!(
+            added_segment.style.get_fg_color(),
+            palette.added_style().get_fg_color()
         );
     }
 

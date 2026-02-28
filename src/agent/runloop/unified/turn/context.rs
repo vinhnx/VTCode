@@ -562,6 +562,29 @@ fn is_redundant_diff_recap_text(text: &str) -> bool {
         || lower.starts_with("the diff shows")
         || lower.starts_with("changes in ")
         || lower.starts_with("```diff")
+        || lower.starts_with("diff preview changes")
+        || lower.contains("\n**diff preview changes**")
+        || (trimmed.contains("```") && is_diff_like_fenced_recap(trimmed))
+}
+
+fn is_diff_like_fenced_recap(text: &str) -> bool {
+    let mut has_fence = false;
+    let mut has_diff_marker = false;
+    for line in text.lines() {
+        let trimmed = line.trim_start();
+        if trimmed.starts_with("```") {
+            has_fence = true;
+            continue;
+        }
+        if trimmed.starts_with("diff --git")
+            || trimmed.starts_with("@@")
+            || (trimmed.starts_with('+') && !trimmed.starts_with("+++"))
+            || (trimmed.starts_with('-') && !trimmed.starts_with("---"))
+        {
+            has_diff_marker = true;
+        }
+    }
+    has_fence && has_diff_marker
 }
 
 fn has_recent_git_diff_tool_output(history: &[uni::Message]) -> bool {
@@ -767,6 +790,22 @@ mod tests {
         assert!(!should_suppress_redundant_diff_recap(
             &history,
             "The diff shows one behavior change."
+        ));
+    }
+
+    #[test]
+    fn suppresses_heading_style_diff_recap_after_view_request() {
+        let history = vec![
+            uni::Message::user("show diff on vtcode-tui/src/ui/markdown.rs".to_string()),
+            uni::Message::tool_response(
+                "call_1".to_string(),
+                r#"{"content_type":"git_diff","command":"git diff -- vtcode-tui/src/ui/markdown.rs","output":"diff --git a/vtcode-tui/src/ui/markdown.rs b/vtcode-tui/src/ui/markdown.rs\n@@ -1 +1 @@\n- old\n+ new"}"#.to_string(),
+            ),
+        ];
+
+        assert!(should_suppress_redundant_diff_recap(
+            &history,
+            "Implemented updated syntax highlighting for diff previews.\n\n**Diff preview changes**\n\n```\n@@\n- old\n+ new\n```\n"
         ));
     }
 }

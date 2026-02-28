@@ -1166,6 +1166,7 @@ pub(crate) async fn handle_palette_selection(
                             let styles = theme::active_styles();
                             handle.set_theme(inline_theme_from_core_styles(&styles));
                             apply_prompt_style(handle);
+                            handle.force_redraw();
                         }
                         Err(err) => {
                             renderer.line(
@@ -1294,6 +1295,7 @@ pub(crate) fn handle_palette_preview(
                             let styles = theme::active_styles();
                             handle.set_theme(inline_theme_from_core_styles(&styles));
                             apply_prompt_style(handle);
+                            handle.force_redraw();
                         }
                     }
                 }
@@ -1333,6 +1335,7 @@ pub(crate) fn handle_palette_cancel(
                 let styles = theme::active_styles();
                 handle.set_theme(inline_theme_from_core_styles(&styles));
                 apply_prompt_style(handle);
+                handle.force_redraw();
             }
             let message = match mode {
                 ThemePaletteMode::Select => "Theme selection cancelled.",

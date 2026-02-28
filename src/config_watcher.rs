@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -119,7 +120,8 @@ impl ConfigWatcher {
 /// Check if a file event is relevant to VT Code configuration
 fn is_relevant_config_event(event: &notify::Event, _workspace_path: &Path) -> bool {
     // Look for events on common config file names
-    let relevant_files = ["vtcode.toml", ".vtcode.toml", "config.toml"];
+    let relevant_files = ["vtcode.toml", ".vtcode.toml", "config.toml", "theme.toml"];
+    let relevant_dirs = ["config", "theme"];
 
     // Check the event kind (note: notify::Event has a single `kind` field, not `kinds`)
     match &event.kind {
@@ -129,7 +131,8 @@ fn is_relevant_config_event(event: &notify::Event, _workspace_path: &Path) -> bo
             for path in &event.paths {
                 if let Some(file_name) = path.file_name()
                     && let Some(file_name_str) = file_name.to_str()
-                    && relevant_files.contains(&file_name_str)
+                    && (relevant_files.contains(&file_name_str)
+                        || relevant_dirs.contains(&file_name_str))
                 {
                     return true;
                 }
@@ -145,11 +148,16 @@ fn is_relevant_config_event(event: &notify::Event, _workspace_path: &Path) -> bo
 fn get_config_file_paths(workspace_path: &Path) -> Vec<PathBuf> {
     let mut paths = Vec::new();
 
-    // Main config file
+    // Core config files
     paths.push(workspace_path.join("vtcode.toml"));
-
-    // Alternative config file
     paths.push(workspace_path.join(".vtcode.toml"));
+    paths.push(workspace_path.join(".vtcode").join("theme.toml"));
+
+    // Live-edit directories (workspace-level and dot-folder level)
+    paths.push(workspace_path.join("config"));
+    paths.push(workspace_path.join("theme"));
+    paths.push(workspace_path.join(".vtcode").join("config"));
+    paths.push(workspace_path.join(".vtcode").join("theme"));
 
     // Global config (if applicable)
     if let Some(home_dir) = home::home_dir() {
@@ -166,7 +174,7 @@ pub struct SimpleConfigWatcher {
     last_load_time: Instant,
     last_check_time: Instant,
     check_interval: Duration,
-    last_modified_time: Option<std::time::SystemTime>,
+    last_modified_times: HashMap<PathBuf, std::time::SystemTime>,
     debounce_duration: Duration,
     last_reload_attempt: Option<Instant>,
 }
@@ -178,7 +186,7 @@ impl SimpleConfigWatcher {
             last_load_time: Instant::now(),
             last_check_time: Instant::now(),
             check_interval: Duration::from_secs(10), // Reduced frequency from 5s to 10s
-            last_modified_time: None,
+            last_modified_times: HashMap::new(),
             debounce_duration: Duration::from_millis(1000), // 1 second debounce
             last_reload_attempt: None,
         }
@@ -191,47 +199,37 @@ impl SimpleConfigWatcher {
         if now.duration_since(self.last_check_time) >= self.check_interval {
             self.last_check_time = now;
 
-            // Check all potential config files
-            let config_files = get_config_file_paths(&self.workspace_path);
+            // Check all config/theme targets.
+            let watch_targets = get_config_file_paths(&self.workspace_path);
+            let mut saw_change = false;
 
-            for config_path in config_files {
-                // Check if file exists
-                if !config_path.exists() {
+            for target in &watch_targets {
+                // Check if path exists.
+                if !target.exists() {
                     continue;
                 }
 
-                if let Ok(metadata) = std::fs::metadata(&config_path)
-                    && let Ok(current_modified) = metadata.modified()
-                {
-                    // Get or initialize last modified time for this specific file
-                    let _file_key = config_path.to_string_lossy().to_string();
-
-                    // In a real implementation, we would track modified times per file
-                    // For simplicity, we'll use a single tracking approach
-                    // Store initial modified time if not set
-                    if self.last_modified_time.is_none() {
-                        self.last_modified_time = Some(current_modified);
-                        continue;
-                    }
-
-                    // Check if file has been modified
-                    if let Some(last_modified) = self.last_modified_time
+                if let Some(current_modified) = latest_modified(target) {
+                    let previous = self.last_modified_times.get(target).copied();
+                    self.last_modified_times
+                        .insert(target.clone(), current_modified);
+                    if let Some(last_modified) = previous
                         && current_modified > last_modified
                     {
-                        // File has been modified, check debounce period
-                        if let Some(last_attempt) = self.last_reload_attempt
-                            && now.duration_since(last_attempt) < self.debounce_duration
-                        {
-                            // Still in debounce period, don't reload yet
-                            continue;
-                        }
-
-                        // Update last modified time and record reload attempt
-                        self.last_modified_time = Some(current_modified);
-                        self.last_reload_attempt = Some(now);
-                        return true;
+                        saw_change = true;
                     }
                 }
+            }
+
+            if saw_change {
+                // Respect debounce period for burst edits while typing/saving.
+                if let Some(last_attempt) = self.last_reload_attempt
+                    && now.duration_since(last_attempt) < self.debounce_duration
+                {
+                    return false;
+                }
+                self.last_reload_attempt = Some(now);
+                return true;
             }
         }
 
@@ -245,12 +243,12 @@ impl SimpleConfigWatcher {
 
         self.last_load_time = Instant::now();
 
-        // Update last modified time after successful load
-        let config_path = self.workspace_path.join("vtcode.toml");
-        if let Ok(metadata) = std::fs::metadata(&config_path)
-            && let Ok(modified) = metadata.modified()
-        {
-            self.last_modified_time = Some(modified);
+        // Refresh modified-time baseline after successful load.
+        self.last_modified_times.clear();
+        for target in get_config_file_paths(&self.workspace_path) {
+            if let Some(modified) = latest_modified(&target) {
+                self.last_modified_times.insert(target, modified);
+            }
         }
 
         config
@@ -265,4 +263,35 @@ impl SimpleConfigWatcher {
     pub fn set_debounce_duration(&mut self, millis: u64) {
         self.debounce_duration = Duration::from_millis(millis);
     }
+}
+
+fn latest_modified(path: &Path) -> Option<std::time::SystemTime> {
+    if path.is_file() {
+        return std::fs::metadata(path).ok()?.modified().ok();
+    }
+
+    if !path.is_dir() {
+        return None;
+    }
+
+    let mut newest = None;
+    for entry in walkdir::WalkDir::new(path)
+        .into_iter()
+        .filter_map(|item| item.ok())
+    {
+        if !entry.file_type().is_file() {
+            continue;
+        }
+        let Ok(metadata) = entry.metadata() else {
+            continue;
+        };
+        let Ok(modified) = metadata.modified() else {
+            continue;
+        };
+        newest = match newest {
+            Some(current) if modified <= current => Some(current),
+            _ => Some(modified),
+        };
+    }
+    newest
 }

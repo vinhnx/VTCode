@@ -706,8 +706,14 @@ impl InlineSink {
         fallback: &InlineTextStyle,
     ) -> InlineTextStyle {
         let mut resolved = fallback.clone();
+        // Keep transcript segments theme-dynamic by default. Only persist a
+        // foreground color when ANSI parsing produced a color different from the
+        // logical fallback for this message kind.
+        resolved.color = None;
         if let Some(color) = style.fg.and_then(Self::ansi_from_ratatui_color) {
-            resolved.color = Some(color);
+            if Some(color) != fallback.color {
+                resolved.color = Some(color);
+            }
         }
 
         let added = style.add_modifier;
@@ -799,7 +805,10 @@ impl InlineSink {
                 }
                 let converted = convert_to_inline_style(segment.style);
                 let mut inline_style = fallback.clone();
-                if let Some(color) = converted.color {
+                inline_style.color = None;
+                if let Some(color) = converted.color
+                    && Some(color) != fallback.color
+                {
                     inline_style.color = Some(color);
                 }
                 if let Some(bg) = converted.bg_color {

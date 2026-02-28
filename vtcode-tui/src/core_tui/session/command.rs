@@ -64,7 +64,9 @@ pub fn handle_command(session: &mut Session, command: InlineCommand) {
             session.needs_redraw = true;
         }
         InlineCommand::SetTheme { theme } => {
+            let previous_theme = session.theme.clone();
             session.theme = theme;
+            session.retint_lines_for_theme_change(&previous_theme);
             ensure_prompt_style_color(session);
             session.invalidate_transcript_cache();
         }
