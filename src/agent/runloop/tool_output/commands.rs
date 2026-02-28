@@ -117,11 +117,10 @@ pub(crate) async fn render_terminal_command_panel(
     // Display session status header if this is a PTY session
     let mut command_prompt_rendered = false;
     if is_pty_session {
-        let status_symbol = if !is_completed { "▶" } else { "✓" };
         let status_badge = if !is_completed {
-            format!("{} RUN", status_symbol)
+            "▶ running".to_string()
         } else {
-            format!("{} OK", status_symbol)
+            "✓ completed".to_string()
         };
 
         // Compact header: status · command · session info
@@ -204,7 +203,9 @@ pub(crate) async fn render_terminal_command_panel(
         return Ok(());
     }
 
-    let inline_streaming = is_pty_session && renderer.prefers_untruncated_output();
+    // Keep inline streaming behavior only while the PTY is still running.
+    // Once completed, always render the final captured output.
+    let inline_streaming = is_pty_session && renderer.prefers_untruncated_output() && !is_completed;
 
     if stdout.trim().is_empty() && stderr.trim().is_empty() {
         if !inline_streaming && (!is_pty_session || is_completed) {
