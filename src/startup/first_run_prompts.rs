@@ -7,6 +7,7 @@ use anyhow::{Context, Result, anyhow};
 use vtcode_core::config::constants::{model_helpers, models};
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::models::{ModelId, Provider};
+use vtcode_core::config::types::ReasoningEffortLevel;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::dot_config::WorkspaceTrustLevel;
 
@@ -14,10 +15,13 @@ use crate::interactive_list::{SelectionEntry, SelectionInterrupted, run_interact
 
 pub(super) fn resolve_initial_provider(config: &VTCodeConfig) -> Provider {
     let configured = config.agent.provider.trim();
+    let fallback = Provider::from_str(vtcode_core::config::constants::defaults::DEFAULT_PROVIDER)
+        .unwrap_or(Provider::OpenAI);
+
     if configured.is_empty() {
-        Provider::OpenAI
+        fallback
     } else {
-        Provider::from_str(configured).unwrap_or(Provider::OpenAI)
+        Provider::from_str(configured).unwrap_or(fallback)
     }
 }
 
@@ -157,6 +161,116 @@ pub(super) fn prompt_model(
             )?;
             prompt_model_text(renderer, provider, default_model, &options)
         }
+    }
+}
+
+pub(super) fn prompt_reasoning_effort(
+    renderer: &mut AnsiRenderer,
+    default: ReasoningEffortLevel,
+) -> Result<ReasoningEffortLevel> {
+    renderer.line(
+        MessageStyle::Status,
+        "Choose reasoning effort level for models that support it:",
+    )?;
+
+    let levels = [
+        (
+            ReasoningEffortLevel::Low,
+            "Low – faster responses, less reasoning",
+        ),
+        (
+            ReasoningEffortLevel::Medium,
+            "Medium – balanced speed and reasoning (recommended)",
+        ),
+        (
+            ReasoningEffortLevel::High,
+            "High – deeper reasoning, slower responses",
+        ),
+    ];
+
+    match select_reasoning_with_ratatui(&levels, default) {
+        Ok(level) => Ok(level),
+        Err(error) => {
+            if error.is::<SetupInterrupted>() {
+                return Err(error);
+            }
+
+            renderer.line(
+                MessageStyle::Info,
+                &format!("Falling back to manual input ({error})."),
+            )?;
+            prompt_reasoning_effort_text(renderer, &levels, default)
+        }
+    }
+}
+
+fn select_reasoning_with_ratatui(
+    levels: &[(ReasoningEffortLevel, &str)],
+    default: ReasoningEffortLevel,
+) -> Result<ReasoningEffortLevel> {
+    let entries: Vec<SelectionEntry> = levels
+        .iter()
+        .enumerate()
+        .map(|(index, (_level, label))| {
+            SelectionEntry::new(format!("{:>2}. {}", index + 1, label), None)
+        })
+        .collect();
+
+    let default_index = levels
+        .iter()
+        .position(|(level, _)| *level == default)
+        .unwrap_or(1);
+
+    let instructions = format!(
+        "Default: {}. Use ↑/↓ or j/k to choose, Enter to confirm, Esc to keep the default.",
+        default.as_str()
+    );
+
+    let selection =
+        run_interactive_selection("Reasoning Effort", &instructions, &entries, default_index);
+    let selected_index = match selection {
+        Ok(Some(index)) => index,
+        Ok(None) => default_index.min(entries.len() - 1),
+        Err(err) => {
+            if err.is::<SelectionInterrupted>() {
+                return Err(SetupInterrupted.into());
+            }
+            return Err(err);
+        }
+    };
+    Ok(levels[selected_index].0)
+}
+
+fn prompt_reasoning_effort_text(
+    renderer: &mut AnsiRenderer,
+    levels: &[(ReasoningEffortLevel, &str)],
+    default: ReasoningEffortLevel,
+) -> Result<ReasoningEffortLevel> {
+    for (index, (_level, label)) in levels.iter().enumerate() {
+        renderer.line(MessageStyle::Info, &format!("  {}) {}", index + 1, label))?;
+    }
+
+    loop {
+        let input = prompt_with_placeholder(&format!("Reasoning effort [{}]", default.as_str()))?;
+        let trimmed = input.trim();
+        if trimmed.is_empty() {
+            return Ok(default);
+        }
+
+        if let Ok(index) = trimmed.parse::<usize>()
+            && let Some((level, _)) = levels.get(index - 1)
+        {
+            return Ok(*level);
+        }
+
+        if let Some(level) = ReasoningEffortLevel::parse(trimmed) {
+            return Ok(level);
+        }
+
+        renderer.line(
+            MessageStyle::Error,
+            "Please choose a valid reasoning effort level (low, medium, high).",
+        )?;
     }
 }
 

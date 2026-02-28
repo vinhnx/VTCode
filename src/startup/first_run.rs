@@ -3,7 +3,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result, anyhow};
 use vtcode_core::cli::args::{Cli, Commands};
+use vtcode_core::config::constants::{defaults, llm_generation};
 use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
+use vtcode_core::config::models::Provider;
 use vtcode_core::config::types::ReasoningEffortLevel;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::dot_config::{WorkspaceTrustLevel, WorkspaceTrustRecord, get_dot_manager};
@@ -93,11 +95,11 @@ async fn run_first_run_setup(
         MessageStyle::Info,
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
     )?;
-    let (provider, model, trust) = match mode {
+    let (provider, model, reasoning, trust) = match mode {
         SetupMode::Interactive => {
             renderer.line(
                 MessageStyle::Status,
-                "Let's configure your default provider, model, and workspace trust.",
+                "Let's configure your default provider, model, reasoning effort, and workspace trust.",
             )?;
             renderer.line(
                 MessageStyle::Status,
@@ -107,13 +109,14 @@ async fn run_first_run_setup(
 
             let provider = resolve_initial_provider(config);
             let provider = prompt_provider(&mut renderer, provider)?;
+            renderer.line(MessageStyle::Info, &api_key_hint(provider))?;
             renderer.line(MessageStyle::Info, "")?;
 
             let default_model = default_model_for_provider(provider);
             let model = prompt_model(&mut renderer, provider, default_model)?;
             renderer.line(MessageStyle::Info, "")?;
 
-            let reasoning = prompt_reasoning_effort(&mut renderer, ReasoningEffortLevel::Medium)?;
+            let reasoning = prompt_reasoning_effort(&mut renderer, config.agent.reasoning_effort)?;
             renderer.line(MessageStyle::Info, "")?;
 
             let trust = prompt_trust(&mut renderer, WorkspaceTrustLevel::ToolsPolicy)?;
@@ -131,6 +134,7 @@ async fn run_first_run_setup(
             let provider = resolve_initial_provider(config);
             let default_model = default_model_for_provider(provider);
             let model = default_model.to_owned();
+            let reasoning = config.agent.reasoning_effort;
             let trust = if full_auto {
                 WorkspaceTrustLevel::FullAuto
             } else {
@@ -144,11 +148,16 @@ async fn run_first_run_setup(
             renderer.line(MessageStyle::Info, &format!("Model: {}", model))?;
             renderer.line(
                 MessageStyle::Info,
+                &format!("Reasoning effort: {}", reasoning.as_str()),
+            )?;
+            renderer.line(MessageStyle::Info, &api_key_hint(provider))?;
+            renderer.line(
+                MessageStyle::Info,
                 &format!("Workspace trust: {}", trust_label(trust)),
             )?;
             renderer.line(MessageStyle::Info, "")?;
 
-            (provider, model, trust)
+            (provider, model, reasoning, trust)
         }
     };
 
@@ -161,7 +170,7 @@ async fn run_first_run_setup(
     let provider_key = provider.to_string();
     // Set API key environment name from provider defaults; do this once to avoid recomputing.
     config.agent.api_key_env = provider.default_api_key_env().to_owned();
-    apply_selection(config, &provider_key, &model);
+    apply_selection(config, &provider_key, &model, reasoning);
 
     let config_path = workspace.join("vtcode.toml");
     ConfigManager::save_config_to_path(&config_path, config).with_context(|| {
@@ -186,11 +195,16 @@ async fn run_first_run_setup(
     renderer.line(
         MessageStyle::Status,
         &format!(
-            "Setup complete. Provider: {} • Model: {} • Trust: {}",
+            "Setup complete. Provider: {} • Model: {} • Reasoning: {} • Trust: {}",
             provider.label(),
             model,
+            reasoning.as_str(),
             trust_label(trust)
         ),
+    )?;
+    renderer.line(
+        MessageStyle::Status,
+        &format!("Auth: {}", api_key_hint(provider)),
     )?;
     renderer.line(MessageStyle::Info, "")?;
     renderer.line(
@@ -202,9 +216,29 @@ async fn run_first_run_setup(
     Ok(())
 }
 
-fn apply_selection(config: &mut VTCodeConfig, provider_key: &str, model: &str) {
+fn apply_selection(
+    config: &mut VTCodeConfig,
+    provider_key: &str,
+    model: &str,
+    reasoning: ReasoningEffortLevel,
+) {
     config.agent.provider = provider_key.to_owned();
     config.agent.default_model = model.to_owned();
+    config.agent.reasoning_effort = reasoning;
+    config.agent.theme = defaults::DEFAULT_THEME.to_owned();
+    config.agent.max_conversation_turns = defaults::DEFAULT_MAX_CONVERSATION_TURNS;
+    config.agent.temperature = llm_generation::DEFAULT_TEMPERATURE;
+}
+
+fn api_key_hint(provider: Provider) -> String {
+    if provider.is_local() {
+        "No API key required for local provider.".to_string()
+    } else {
+        format!(
+            "Set {} in your environment.",
+            provider.default_api_key_env()
+        )
+    }
 }
 
 fn trust_label(level: WorkspaceTrustLevel) -> &'static str {

@@ -260,13 +260,13 @@ impl VTCodeConfig {
 # Core agent behavior; see docs/config/CONFIGURATION_PRECEDENCE.md.
 [agent]
 # Primary LLM provider to use (e.g., "openai", "gemini", "anthropic", "openrouter")
-provider = "anthropic"
+provider = "openai"
 
 # Environment variable containing the API key for the provider
-api_key_env = "ANTHROPIC_API_KEY"
+api_key_env = "OPENAI_API_KEY"
 
 # Default model to use when no specific model is specified
-default_model = "claude-sonnet-4-5"
+default_model = "gpt-5.3-codex"
 
 # Visual theme for the terminal interface
 theme = "ciapre-dark"
@@ -279,10 +279,13 @@ ui_surface = "auto"
 
 # Maximum number of conversation turns before rotating context (affects memory usage)
 # Lower values reduce memory footprint but may lose context; higher values preserve context but use more memory
-max_conversation_turns = 50
+max_conversation_turns = 150
 
 # Reasoning effort level ("low", "medium", "high") - affects model usage and response speed
-reasoning_effort = "low"
+reasoning_effort = "medium"
+
+# Temperature for main model responses (0.0-1.0)
+temperature = 0.7
 
 # Enable self-review loop to check and improve responses (increases API calls)
 enable_self_review = false
@@ -352,11 +355,6 @@ recommended_actions = [
     "Review the highlighted guidelines and share the task you want to tackle.",
     "Ask for a workspace tour if you need more context.",
 ]
-
-# Custom API keys for specific providers
-[agent.custom_api_keys]
-# Moonshot AI API key (for specific provider access)
-moonshot = "sk-sDj3JUXDbfARCYKNL4q7iGWRtWuhL1M4O6zzgtDpN3Yxt9EA"
 
 # Checkpointing configuration for session persistence
 [agent.checkpointing]
