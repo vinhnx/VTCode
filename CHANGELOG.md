@@ -2,6 +2,24 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.84.1 - 2026-02-28
+
+### Highlights
+### Other Changes
+#### Other
+
+- Update code structure for improved readability and maintainability (24d81c35) 
+- Refactor themes and improve UI handling (970dadf8) 
+- Add support for native web search tools in Anthropic API (84c50dfb) 
+- Add support for file content parts in message handling and OpenAI provider (4effd39c) 
+- Update theme to "ciapre" across configurations and add new themes to the theme registry (9c8d0c16) 
+- Refactor syntax highlighting implementation and improve theme handling (a9236cfc) 
+- Enhance tool routing and UI theme accessibility (0747f3d8) 
+- Enhance diff rendering and suppress redundant recap in TUI (0f3513b1) 
+- Fix light theme rendering issues and improve accessibility; enhance theme handling and live reload functionality (371a681b) 
+- Normalize unified search arguments and enhance argument extraction logic (a732a449) 
+- Fix light theme rendering issues and improve theme handling for better accessibility (ec131237) 
+### Contributors
 ## 0.84.0 - 2026-02-28
 
 ### Highlights
