@@ -400,16 +400,17 @@ impl ToolInventory {
 
         let now = Instant::now();
         let old_len = tools.len();
+        let frequently_used_snapshot = self
+            .frequently_used
+            .read()
+            .ok()
+            .map(|f| f.clone())
+            .unwrap_or_default();
 
         // Remove tools that haven't been used in a while and aren't frequently used
         tools.retain(|name, entry| {
             // Keep frequently used tools
-            if self
-                .frequently_used
-                .read()
-                .ok()
-                .is_some_and(|f| f.contains(name))
-            {
+            if frequently_used_snapshot.contains(name) {
                 return true;
             }
 
@@ -612,5 +613,45 @@ mod tests {
 
         assert!(inventory.registration_for("nonexistent").is_none());
         assert!(!inventory.has_tool("nonexistent"));
+    }
+
+    #[test]
+    fn test_cleanup_uses_frequently_used_snapshot() {
+        let inventory = make_test_inventory();
+        let stale = Instant::now() - Duration::from_secs(3601);
+
+        for idx in 0..1001 {
+            let name = format!("tool_{idx}");
+            let leaked_name: &'static str = Box::leak(name.into_boxed_str());
+            let registration =
+                ToolRegistration::new(leaked_name, CapabilityLevel::Basic, false, |_, _| {
+                    Box::pin(async { Ok(Value::Null) })
+                });
+            inventory.register_tool(registration).unwrap();
+        }
+
+        // Force all tools to look stale.
+        {
+            let tools = inventory.tools.read().unwrap();
+            for entry in tools.values() {
+                *entry.last_used.write().unwrap() = stale;
+            }
+        }
+
+        // Keep one stale tool by marking it frequently used.
+        {
+            let mut freq = inventory.frequently_used.write().unwrap();
+            freq.insert("tool_0".to_string());
+        }
+        {
+            let mut last_cleanup = inventory.last_cache_cleanup.write().unwrap();
+            *last_cleanup = Instant::now() - Duration::from_secs(301);
+        }
+
+        inventory.cleanup_cache_if_needed();
+
+        let tools = inventory.tools.read().unwrap();
+        assert!(tools.contains_key("tool_0"));
+        assert!(tools.len() < 1001);
     }
 }

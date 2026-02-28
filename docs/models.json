@@ -72,37 +72,6 @@
           "thinking": true
         }
       },
-      "gemini-3-pro-preview": {
-        "id": "gemini-3-pro-preview",
-        "name": "Gemini 3 Pro Preview",
-        "description": "Preview of next-generation Gemini 3 Pro model with advanced reasoning and capabilities",
-        "version": "preview",
-        "reasoning": true,
-        "tool_call": true,
-        "modalities": {
-          "input": [
-            "text",
-            "image",
-            "video",
-            "audio",
-            "pdf"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "context": 2097152,
-        "output_tokens": 65536,
-        "capabilities": {
-          "caching": true,
-          "code_execution": true,
-          "batch_api": true,
-          "structured_output": true,
-          "search_grounding": true,
-          "url_context": true,
-          "thinking": true
-        }
-      },
       "gemini-3-flash-preview": {
         "id": "gemini-3-flash-preview",
         "name": "Gemini 3 Flash",

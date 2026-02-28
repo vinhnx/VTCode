@@ -264,7 +264,7 @@ fn convert_to_gemini_request_includes_reasoning_config() {
     // Test High effort level for Gemini 3 Pro
     let request = LLMRequest {
         messages: vec![Message::user("test".to_string())],
-        model: models::google::GEMINI_3_PRO_PREVIEW.to_string(),
+        model: models::google::GEMINI_3_1_PRO_PREVIEW.to_string(),
         reasoning_effort: Some(ReasoningEffortLevel::High),
         ..Default::default()
     };
@@ -286,7 +286,7 @@ fn convert_to_gemini_request_includes_reasoning_config() {
     // Test Low effort level for Gemini 3 Pro
     let request_low = LLMRequest {
         messages: vec![Message::user("test".to_string())],
-        model: models::google::GEMINI_3_PRO_PREVIEW.to_string(),
+        model: models::google::GEMINI_3_1_PRO_PREVIEW.to_string(),
         reasoning_effort: Some(ReasoningEffortLevel::Low),
         ..Default::default()
     };
@@ -311,7 +311,7 @@ fn convert_to_gemini_request_includes_reasoning_config() {
     // Test that None effort results in low reasoning_config for Gemini (none is treated as low)
     let request_none = LLMRequest {
         messages: vec![Message::user("test".to_string())],
-        model: models::google::GEMINI_3_PRO_PREVIEW.to_string(),
+        model: models::google::GEMINI_3_1_PRO_PREVIEW.to_string(),
         reasoning_effort: Some(ReasoningEffortLevel::None),
         ..Default::default()
     };
@@ -391,7 +391,7 @@ fn thought_signature_preserved_in_function_call_response() {
 
     let llm_response = GeminiProvider::convert_from_gemini_response(
         response,
-        models::google::GEMINI_3_PRO_PREVIEW.to_string(),
+        models::google::GEMINI_3_1_PRO_PREVIEW.to_string(),
     )
     .expect("conversion should succeed");
 
@@ -431,7 +431,7 @@ fn thought_signature_roundtrip_in_request() {
                 origin_tool: None,
             },
         ],
-        model: models::google::GEMINI_3_PRO_PREVIEW.to_string(),
+        model: models::google::GEMINI_3_1_PRO_PREVIEW.to_string(),
         ..Default::default()
     };
 
@@ -492,7 +492,7 @@ fn parallel_function_calls_single_signature() {
 
     let llm_response = GeminiProvider::convert_from_gemini_response(
         response,
-        models::google::GEMINI_3_PRO_PREVIEW.to_string(),
+        models::google::GEMINI_3_1_PRO_PREVIEW.to_string(),
     )
     .expect("conversion should succeed");
 
@@ -570,13 +570,12 @@ fn gemini_provider_supports_reasoning_effort_for_gemini3() {
         Provider::Gemini
             .supports_reasoning_effort(models::google::GEMINI_3_1_PRO_PREVIEW_CUSTOMTOOLS)
     );
-    assert!(Provider::Gemini.supports_reasoning_effort(models::google::GEMINI_3_PRO_PREVIEW));
+    assert!(Provider::Gemini.supports_reasoning_effort(models::google::GEMINI_3_1_PRO_PREVIEW));
     assert!(Provider::Gemini.supports_reasoning_effort(models::google::GEMINI_3_FLASH_PREVIEW));
 
     // Test model IDs as well
     assert!(ModelId::Gemini31ProPreview.supports_reasoning_effort());
     assert!(ModelId::Gemini31ProPreviewCustomTools.supports_reasoning_effort());
-    assert!(ModelId::Gemini3ProPreview.supports_reasoning_effort());
     assert!(ModelId::Gemini3FlashPreview.supports_reasoning_effort());
 }
 
@@ -594,7 +593,7 @@ fn gemini3_flash_extended_thinking_levels() {
         models::google::GEMINI_3_1_PRO_PREVIEW
     ));
     assert!(!GeminiProvider::supports_extended_thinking(
-        models::google::GEMINI_3_PRO_PREVIEW
+        models::google::GEMINI_3_1_PRO_PREVIEW
     ));
 
     // Get supported levels for each model
@@ -607,7 +606,7 @@ fn gemini3_flash_extended_thinking_levels() {
     assert_eq!(pro31_levels, vec!["low", "high"]);
 
     let pro_levels =
-        GeminiProvider::supported_thinking_levels(models::google::GEMINI_3_PRO_PREVIEW);
+        GeminiProvider::supported_thinking_levels(models::google::GEMINI_3_1_PRO_PREVIEW);
     assert_eq!(pro_levels, vec!["low", "high"]);
 }
 
@@ -687,7 +686,7 @@ fn gemini3_pro_medium_thinking_fallback() {
     // Test Medium thinking level for Gemini 3 Pro (should fallback to high)
     let request = LLMRequest {
         messages: vec![Message::user("test".to_string())],
-        model: models::google::GEMINI_3_PRO_PREVIEW.to_string(),
+        model: models::google::GEMINI_3_1_PRO_PREVIEW.to_string(),
         reasoning_effort: Some(ReasoningEffortLevel::Medium),
         ..Default::default()
     };

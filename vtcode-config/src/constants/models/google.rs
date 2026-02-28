@@ -4,7 +4,6 @@ pub const DEFAULT_MODEL: &str = "gemini-3-flash-preview";
 pub const SUPPORTED_MODELS: &[&str] = &[
     "gemini-3.1-pro-preview",             // Latest Gemini 3.1 Pro flagship
     "gemini-3.1-pro-preview-customtools", // Optimized for custom tools & bash
-    "gemini-3-pro-preview",               // Latest flagship model with advanced reasoning
     "gemini-3-flash-preview",             // Fast version of Gemini 3 Pro with 3-level thinking
     "gemini-3-pro-image-preview",         // Image generation model with 4K resolution
     "gemini-1.5-pro",
@@ -18,7 +17,6 @@ pub const SUPPORTED_MODELS: &[&str] = &[
 pub const REASONING_MODELS: &[&str] = &[
     "gemini-3.1-pro-preview",
     "gemini-3.1-pro-preview-customtools",
-    "gemini-3-pro-preview",
     "gemini-3-flash-preview",
     "gemini-1.5-pro",
     "gemini-1.5-flash",
@@ -37,7 +35,6 @@ pub const IMAGE_GENERATION_MODELS: &[&str] = &["gemini-3-pro-image-preview"];
 pub const CACHING_MODELS: &[&str] = &[
     "gemini-3.1-pro-preview",
     "gemini-3.1-pro-preview-customtools",
-    "gemini-3-pro-preview",
     "gemini-3-flash-preview",
     "gemini-1.5-pro",
     "gemini-1.5-flash",
@@ -49,7 +46,6 @@ pub const CACHING_MODELS: &[&str] = &[
 pub const CODE_EXECUTION_MODELS: &[&str] = &[
     "gemini-3.1-pro-preview",
     "gemini-3.1-pro-preview-customtools",
-    "gemini-3-pro-preview",
     "gemini-3-flash-preview",
     "gemini-1.5-pro",
     "gemini-1.5-flash",
@@ -58,6 +54,5 @@ pub const CODE_EXECUTION_MODELS: &[&str] = &[
 // Convenience constants for commonly used models
 pub const GEMINI_3_1_PRO_PREVIEW: &str = "gemini-3.1-pro-preview";
 pub const GEMINI_3_1_PRO_PREVIEW_CUSTOMTOOLS: &str = "gemini-3.1-pro-preview-customtools";
-pub const GEMINI_3_PRO_PREVIEW: &str = "gemini-3-pro-preview";
 pub const GEMINI_3_FLASH_PREVIEW: &str = "gemini-3-flash-preview";
 pub const GEMINI_3_PRO_IMAGE_PREVIEW: &str = "gemini-3-pro-image-preview";

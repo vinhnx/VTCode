@@ -244,7 +244,7 @@ impl ManPageGenerator {
             .text([roman("Start basic chat session:")])
             .text([bold("  vtcode chat")])
             .text([roman("Start with specific model:")])
-            .text([bold("  vtcode --model gemini-3-pro-preview chat")])
+            .text([bold("  vtcode --model gemini-3.1-pro-preview chat")])
             .control("SH", ["SEE ALSO"])
             .text([bold("vtcode(1)"), roman(", "), bold("vtcode-ask(1)"), roman(", "), bold("vtcode-analyze(1)")])
             .render();
