@@ -527,6 +527,10 @@ inline_viewport_rows = 16
 # Show elapsed time divider after each completed turn
 show_turn_timer = true
 
+# Show warning/error/fatal diagnostic lines directly in transcript
+# Effective in debug/development builds only
+show_diagnostics_in_transcript = false
+
 # Show timeline navigation panel
 show_timeline_pane = false
 

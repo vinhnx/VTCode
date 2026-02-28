@@ -30,6 +30,7 @@ pub struct AnsiRenderer {
     capabilities: AnsiCapabilities,
     reasoning_visible: bool,
     screen_reader_mode: bool,
+    show_diagnostics_in_transcript: bool,
 }
 
 impl AnsiRenderer {
@@ -52,6 +53,7 @@ impl AnsiRenderer {
             capabilities,
             reasoning_visible: true,
             screen_reader_mode: false,
+            show_diagnostics_in_transcript: false,
         }
     }
 
@@ -110,6 +112,14 @@ impl AnsiRenderer {
 
     pub fn set_screen_reader_mode(&mut self, enabled: bool) {
         self.screen_reader_mode = enabled;
+    }
+
+    pub fn set_show_diagnostics_in_transcript(&mut self, enabled: bool) {
+        self.show_diagnostics_in_transcript = if cfg!(debug_assertions) {
+            enabled
+        } else {
+            false
+        };
     }
 
     fn should_render_style(&self, style: MessageStyle) -> bool {
@@ -244,7 +254,7 @@ impl AnsiRenderer {
         }
         if Self::is_diagnostic_error_style(style) {
             Self::log_transcript_error(text, style, self.sink.is_some());
-            if self.sink.is_some() {
+            if self.sink.is_some() && !self.show_diagnostics_in_transcript {
                 self.last_line_was_empty = text.trim().is_empty();
                 return Ok(());
             }
@@ -351,7 +361,7 @@ impl AnsiRenderer {
         }
         if Self::is_diagnostic_error_style(fallback) {
             Self::log_transcript_error(text, fallback, self.sink.is_some());
-            if self.sink.is_some() {
+            if self.sink.is_some() && !self.show_diagnostics_in_transcript {
                 self.last_line_was_empty = text.trim().is_empty();
                 return Ok(());
             }
@@ -1366,6 +1376,7 @@ mod tests {
             capabilities: AnsiCapabilities::detect(),
             reasoning_visible: true,
             screen_reader_mode: false,
+            show_diagnostics_in_transcript: false,
         };
 
         // This should not create an extra empty line after "line 2"
@@ -1378,12 +1389,13 @@ mod tests {
     }
 
     #[test]
-    fn inline_ui_suppresses_error_lines() {
+    fn inline_ui_suppresses_error_lines_when_disabled() {
         use crate::ui::InlineCommand;
 
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
         let mut renderer =
             AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
+        renderer.set_show_diagnostics_in_transcript(false);
 
         renderer
             .line(MessageStyle::Error, "fatal: test failure")
@@ -1395,5 +1407,26 @@ mod tests {
                 "error output should not be appended to TUI transcript"
             );
         }
+    }
+
+    #[test]
+    fn inline_ui_shows_error_lines_when_enabled() {
+        use crate::ui::InlineCommand;
+
+        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+        let mut renderer =
+            AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
+        renderer.set_show_diagnostics_in_transcript(true);
+        renderer
+            .line(MessageStyle::Error, "fatal: visible in transcript")
+            .unwrap();
+
+        let mut saw_append = false;
+        while let Ok(command) = receiver.try_recv() {
+            if matches!(command, InlineCommand::AppendLine { .. }) {
+                saw_append = true;
+            }
+        }
+        assert!(saw_append, "error output should be appended when enabled");
     }
 }

@@ -212,6 +212,13 @@ pub(crate) fn show_config_palette(
         "ui.show_turn_timer",
         config.ui.show_turn_timer,
     ));
+    if cfg!(debug_assertions) {
+        items.push(config_toggle_item(
+            "Show diagnostics in transcript",
+            "ui.show_diagnostics_in_transcript",
+            config.ui.show_diagnostics_in_transcript,
+        ));
+    }
     items.push(config_toggle_item(
         "Allow ANSI tool output",
         "ui.allow_tool_ansi",
@@ -564,6 +571,9 @@ fn config_key_aliases(key: &str) -> &'static str {
         "ui.dim_completed_todos" => "todo dim completed",
         "ui.message_block_spacing" => "spacing compact message",
         "ui.show_turn_timer" => "timer turn duration",
+        "ui.show_diagnostics_in_transcript" if cfg!(debug_assertions) => {
+            "diagnostics warnings errors fatal transcript"
+        }
         "ui.allow_tool_ansi" => "ansi color tools output",
         "ui.notifications.enabled" => "notifications alerts",
         "ui.notifications.suppress_when_focused" => "notifications focus suppress",
@@ -695,6 +705,15 @@ fn apply_config_action(action: &str) -> Result<Option<String>> {
         "ui.show_turn_timer:toggle" => {
             config.ui.show_turn_timer = !config.ui.show_turn_timer;
             updated_key = Some("ui.show_turn_timer".to_string());
+        }
+        "ui.show_diagnostics_in_transcript:toggle" => {
+            if cfg!(debug_assertions) {
+                config.ui.show_diagnostics_in_transcript =
+                    !config.ui.show_diagnostics_in_transcript;
+                updated_key = Some("ui.show_diagnostics_in_transcript".to_string());
+            } else {
+                config.ui.show_diagnostics_in_transcript = false;
+            }
         }
         "ui.allow_tool_ansi:toggle" => {
             config.ui.allow_tool_ansi = !config.ui.allow_tool_ansi;
@@ -1224,6 +1243,9 @@ pub(crate) async fn handle_palette_selection(
                 let runtime_config = runtime_manager.config().clone();
                 *vt_cfg = Some(runtime_config.clone());
                 config.reasoning_effort = runtime_config.agent.reasoning_effort;
+                renderer.set_show_diagnostics_in_transcript(
+                    runtime_config.ui.show_diagnostics_in_transcript,
+                );
 
                 let _ = theme::set_active_theme(&runtime_config.agent.theme);
                 let styles = theme::active_styles();
