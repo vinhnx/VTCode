@@ -209,8 +209,7 @@ async fn handle_config_provider(
     let mut config = manager.load_config().await?;
 
     match provider {
-        "openai" | "anthropic" | "gemini" | "openrouter" | "deepseek" | "ollama"
-        | "lmstudio" => {
+        "openai" | "anthropic" | "gemini" | "openrouter" | "deepseek" | "ollama" | "lmstudio" => {
             configure_standard_provider(&mut config, provider, api_key, base_url, model)?;
         }
         _ => return Err(anyhow!("Unsupported provider: {}", provider)),
