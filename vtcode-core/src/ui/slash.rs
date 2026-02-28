@@ -103,8 +103,8 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
         },
         // Session management
         SlashCommandInfo {
-            name: "sessions",
-            description: "List recent archived sessions (usage: /sessions [limit])",
+            name: "resume",
+            description: "List recent archived sessions (usage: /resume [limit])",
         },
         SlashCommandInfo {
             name: "clear",
