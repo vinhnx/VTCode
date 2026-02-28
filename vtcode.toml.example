@@ -32,7 +32,7 @@ api_key_env = "OPENAI_API_KEY"
 default_model = "gpt-5.3-codex"
 
 # Visual theme for the terminal interface
-theme = "ciapre-dark"
+theme = "ciapre"
 
 todo_planning_mode = true
 

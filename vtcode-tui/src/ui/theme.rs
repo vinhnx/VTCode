@@ -648,6 +648,429 @@ static REGISTRY: Lazy<HashMap<&'static str, ThemeDefinition>> = Lazy::new(|| {
         },
     );
 
+    // Ayu themes
+    map.insert(
+        "ayu",
+        ThemeDefinition {
+            id: "ayu",
+            label: "Ayu",
+            palette: ThemePalette {
+                primary_accent: RgbColor(0xC7, 0xC7, 0xC7), // Gray (#c7c7c7)
+                background: RgbColor(0x11, 0x15, 0x1C),     // Dark (#11151c)
+                foreground: RgbColor(0xC7, 0xC7, 0xC7),     // Gray (#c7c7c7)
+                secondary_accent: RgbColor(0x53, 0xBD, 0xFA), // Blue (#53bdfa)
+                alert: RgbColor(0xEA, 0x6C, 0x73),          // Red (#ea6c73)
+                logo_accent: RgbColor(0xF9, 0xAF, 0x4F),    // Orange (#f9af4f)
+            },
+        },
+    );
+    map.insert(
+        "ayu-mirage",
+        ThemeDefinition {
+            id: "ayu-mirage",
+            label: "Ayu Mirage",
+            palette: ThemePalette {
+                primary_accent: RgbColor(0xC7, 0xC7, 0xC7), // Gray (#c7c7c7)
+                background: RgbColor(0x17, 0x1B, 0x24),     // Dark blue (#171b24)
+                foreground: RgbColor(0xC7, 0xC7, 0xC7),     // Gray (#c7c7c7)
+                secondary_accent: RgbColor(0x6D, 0xCB, 0xFA), // Blue (#6dcbfa)
+                alert: RgbColor(0xED, 0x82, 0x74),          // Red (#ed8274)
+                logo_accent: RgbColor(0xFA, 0xCC, 0x6E),    // Orange (#facc6e)
+            },
+        },
+    );
+
+    // Material themes
+    map.insert(
+        "material-ocean",
+        ThemeDefinition {
+            id: "material-ocean",
+            label: "Material Ocean",
+            palette: ThemePalette {
+                primary_accent: RgbColor(0xFF, 0xFF, 0xFF), // White (#ffffff)
+                background: RgbColor(0x0F, 0x11, 0x1A),     // Dark blue (#0f111a)
+                foreground: RgbColor(0xFF, 0xFF, 0xFF),     // White (#ffffff)
+                secondary_accent: RgbColor(0x82, 0xAA, 0xFF), // Blue (#82aaff)
+                alert: RgbColor(0xFF, 0x53, 0x70),          // Red (#ff5370)
+                logo_accent: RgbColor(0xFF, 0xCB, 0x6B),    // Yellow (#ffcb6b)
+            },
+        },
+    );
+    map.insert(
+        "material-dark",
+        ThemeDefinition {
+            id: "material-dark",
+            label: "Material Dark",
+            palette: ThemePalette {
+                primary_accent: RgbColor(0xEF, 0xEF, 0xEF), // Light gray (#efefef)
+                background: RgbColor(0x21, 0x21, 0x21),     // Dark (#212121)
+                foreground: RgbColor(0xEF, 0xEF, 0xEF),     // Light gray (#efefef)
+                secondary_accent: RgbColor(0x13, 0x4E, 0xB2), // Blue (#134eb2)
+                alert: RgbColor(0xB7, 0x14, 0x1F),          // Red (#b7141f)
+                logo_accent: RgbColor(0xF6, 0x98, 0x1E),    // Yellow (#f6981e)
+            },
+        },
+    );
+    map.insert(
+        "material",
+        ThemeDefinition {
+            id: "material",
+            label: "Material",
+            palette: ThemePalette {
+                primary_accent: RgbColor(0xEF, 0xEF, 0xEF), // Light gray (#efefef)
+                background: RgbColor(0x21, 0x21, 0x21),     // Dark (#212121)
+                foreground: RgbColor(0xEF, 0xEF, 0xEF),     // Light gray (#efefef)
+                secondary_accent: RgbColor(0x14, 0x4E, 0xB2), // Blue (#144eb2)
+                alert: RgbColor(0xB7, 0x14, 0x1F),          // Red (#b7141f)
+                logo_accent: RgbColor(0xF6, 0x98, 0x1E),    // Yellow (#f6981e)
+            },
+        },
+    );
+
+    // GitHub themes
+    map.insert(
+        "github-dark",
+        ThemeDefinition {
+            id: "github-dark",
+            label: "GitHub Dark",
+            palette: ThemePalette {
+                primary_accent: RgbColor(0xFF, 0xFF, 0xFF), // White (#ffffff)
+                background: RgbColor(0x0D, 0x11, 0x17),     // Dark (#0d1117)
+                foreground: RgbColor(0xFF, 0xFF, 0xFF),     // White (#ffffff)
+                secondary_accent: RgbColor(0x6C, 0xA4, 0xF8), // Blue (#6ca4f8)
+                alert: RgbColor(0xF7, 0x81, 0x66),          // Red (#f78166)
+                logo_accent: RgbColor(0xE3, 0xB3, 0x41),    // Yellow (#e3b341)
+            },
+        },
+    );
+    map.insert(
+        "github",
+        ThemeDefinition {
+            id: "github",
+            label: "GitHub",
+            palette: ThemePalette {
+                primary_accent: RgbColor(0x3E, 0x3E, 0x3E), // Dark gray (#3e3e3e)
+                background: RgbColor(0xFF, 0xFF, 0xFF),     // White (#ffffff)
+                foreground: RgbColor(0x3E, 0x3E, 0x3E),     // Dark gray (#3e3e3e)
+                secondary_accent: RgbColor(0x00, 0x3E, 0x8A), // Blue (#003e8a)
+                alert: RgbColor(0x97, 0x0B, 0x16),          // Red (#970b16)
+                logo_accent: RgbColor(0xF8, 0xEE, 0xC7),    // Yellow (#f8eec7)
+            },
+        },
+    );
+
+    // Dracula theme
+    map.insert(
+        "dracula",
+        ThemeDefinition {
+            id: "dracula",
+            label: "Dracula",
+            palette: ThemePalette {
+                primary_accent: RgbColor(0xF8, 0xF8, 0xF2), // Light gray (#f8f8f2)
+                background: RgbColor(0x21, 0x22, 0x2C),     // Dark (#21222c)
+                foreground: RgbColor(0xF8, 0xF8, 0xF2),     // Light gray (#f8f8f2)
+                secondary_accent: RgbColor(0xBD, 0x93, 0xF9), // Purple (#bd93f9)
+                alert: RgbColor(0xFF, 0x55, 0x55),          // Red (#ff5555)
+                logo_accent: RgbColor(0xF1, 0xFA, 0x8C),    // Yellow (#f1fa8c)
+            },
+        },
+    );
+
+    // Monokai Classic theme
+    map.insert(
+        "monokai-classic",
+        ThemeDefinition {
+            id: "monokai-classic",
+            label: "Monokai Classic",
+            palette: ThemePalette {
+                primary_accent: RgbColor(0xF8, 0xF8, 0xF2), // Light gray (#f8f8f2)
+                background: RgbColor(0x27, 0x28, 0x22),     // Dark (#272822)
+                foreground: RgbColor(0xF8, 0xF8, 0xF2),     // Light gray (#f8f8f2)
+                secondary_accent: RgbColor(0x66, 0xD9, 0xEF), // Cyan (#66d9ef)
+                alert: RgbColor(0xF9, 0x26, 0x72),          // Red (#f92672)
+                logo_accent: RgbColor(0xE6, 0xDB, 0x74),    // Yellow (#e6db74)
+            },
+        },
+    );
+
+    // Night Owl theme
+    map.insert(
+        "night-owl",
+        ThemeDefinition {
+            id: "night-owl",
+            label: "Night Owl",
+            palette: ThemePalette {
+                primary_accent: RgbColor(0xFF, 0xFF, 0xFF), // White (#ffffff)
+                background: RgbColor(0x00, 0x16, 0x26),     // Dark blue (#001626)
+                foreground: RgbColor(0xFF, 0xFF, 0xFF),     // White (#ffffff)
+                secondary_accent: RgbColor(0x82, 0xAA, 0xFF), // Blue (#82aaff)
+                alert: RgbColor(0xEF, 0x53, 0x50),          // Red (#ef5350)
+                logo_accent: RgbColor(0xAD, 0xDB, 0x89),    // Yellow (#addd89)
+            },
+        },
+    );
+
+    // Spacegray themes
+    map.insert(
+        "spacegray",
+        ThemeDefinition {
+            id: "spacegray",
+            label: "Spacegray",
+            palette: ThemePalette {
+                primary_accent: RgbColor(0xB3, 0xB8, 0xC3), // Light gray (#b3b8c3)
+                background: RgbColor(0x00, 0x00, 0x00),     // Black (#000000)
+                foreground: RgbColor(0xB3, 0xB8, 0xC3),     // Light gray (#b3b8c3)
+                secondary_accent: RgbColor(0x7D, 0x8F, 0xA4), // Blue (#7d8fa4)
+                alert: RgbColor(0xB0, 0x4B, 0x57),          // Red (#b04b57)
+                logo_accent: RgbColor(0xE5, 0xC1, 0x79),    // Yellow (#e5c179)
+            },
+        },
+    );
+    map.insert(
+        "spacegray-bright",
+        ThemeDefinition {
+            id: "spacegray-bright",
+            label: "Spacegray Bright",
+            palette: ThemePalette {
+                primary_accent: RgbColor(0xD8, 0xD8, 0xD8), // Light gray (#d8d8d8)
+                background: RgbColor(0x08, 0x08, 0x08),     // Dark (#080808)
+                foreground: RgbColor(0xD8, 0xD8, 0xD8),     // Light gray (#d8d8d8)
+                secondary_accent: RgbColor(0x7B, 0xAE, 0xBC), // Blue (#7baebc)
+                alert: RgbColor(0xBD, 0x55, 0x53),          // Red (#bd5553)
+                logo_accent: RgbColor(0xF6, 0xC9, 0x73),    // Yellow (#f6c973)
+            },
+        },
+    );
+    map.insert(
+        "spacegray-eighties",
+        ThemeDefinition {
+            id: "spacegray-eighties",
+            label: "Spacegray Eighties",
+            palette: ThemePalette {
+                primary_accent: RgbColor(0xEF, 0xEC, 0xE7), // Light gray (#efec e7)
+                background: RgbColor(0x15, 0x17, 0x1D),     // Dark (#15171d)
+                foreground: RgbColor(0xEF, 0xEC, 0xE7),     // Light gray (#efec e7)
+                secondary_accent: RgbColor(0x54, 0x86, 0xC0), // Blue (#5486c0)
+                alert: RgbColor(0xEC, 0x5F, 0x67),          // Red (#ec5f67)
+                logo_accent: RgbColor(0xFE, 0xC2, 0x54),    // Yellow (#fec254)
+            },
+        },
+    );
+    map.insert(
+        "spacegray-eighties-dull",
+        ThemeDefinition {
+            id: "spacegray-eighties-dull",
+            label: "Spacegray Eighties Dull",
+            palette: ThemePalette {
+                primary_accent: RgbColor(0xB3, 0xB8, 0xBC), // Light gray (#b3b8bc)
+                background: RgbColor(0x15, 0x17, 0x1C),     // Dark (#15171c)
+                foreground: RgbColor(0xB3, 0xB8, 0xBC),     // Light gray (#b3b8bc)
+                secondary_accent: RgbColor(0x7C, 0x8F, 0x9E), // Blue (#7c8f9e)
+                alert: RgbColor(0xB2, 0x4A, 0x56),          // Red (#b24a56)
+                logo_accent: RgbColor(0xC6, 0x73, 0x44),    // Orange (#c67344)
+            },
+        },
+    );
+
+    // Atom themes
+    map.insert(
+        "atom",
+        ThemeDefinition {
+            id: "atom",
+            label: "Atom",
+            palette: ThemePalette {
+                primary_accent: RgbColor(0xE0, 0xE0, 0xE0), // Light gray (#e0e0e0)
+                background: RgbColor(0x00, 0x00, 0x00),     // Black (#000000)
+                foreground: RgbColor(0xE0, 0xE0, 0xE0),     // Light gray (#e0e0e0)
+                secondary_accent: RgbColor(0x85, 0xBE, 0xFE), // Blue (#85befe)
+                alert: RgbColor(0xFD, 0x5F, 0xF1),          // Magenta (#fd5ff1)
+                logo_accent: RgbColor(0xFF, 0xD7, 0xB1),    // Yellow (#ffd7b1)
+            },
+        },
+    );
+    map.insert(
+        "atom-one-dark",
+        ThemeDefinition {
+            id: "atom-one-dark",
+            label: "Atom One Dark",
+            palette: ThemePalette {
+                primary_accent: RgbColor(0xAB, 0xB2, 0xBF), // Light gray (#abb2bf)
+                background: RgbColor(0x21, 0x25, 0x2B),     // Dark (#21252b)
+                foreground: RgbColor(0xAB, 0xB2, 0xBF),     // Light gray (#abb2bf)
+                secondary_accent: RgbColor(0x61, 0xAF, 0xEF), // Blue (#61afef)
+                alert: RgbColor(0xE0, 0x6C, 0x75),          // Red (#e06c75)
+                logo_accent: RgbColor(0xE5, 0xC0, 0x7B),    // Yellow (#e5c07b)
+            },
+        },
+    );
+    map.insert(
+        "atom-one-light",
+        ThemeDefinition {
+            id: "atom-one-light",
+            label: "Atom One Light",
+            palette: ThemePalette {
+                primary_accent: RgbColor(0x3E, 0x3E, 0x3E), // Dark gray (#3e3e3e)
+                background: RgbColor(0xFF, 0xFF, 0xFF),     // White (#ffffff)
+                foreground: RgbColor(0x3E, 0x3E, 0x3E),     // Dark gray (#3e3e3e)
+                secondary_accent: RgbColor(0x2F, 0x5A, 0xF3), // Blue (#2f5af3)
+                alert: RgbColor(0xDE, 0x3E, 0x35),          // Red (#de3e35)
+                logo_accent: RgbColor(0xD2, 0xB6, 0x7C),    // Yellow (#d2b67c)
+            },
+        },
+    );
+
+    // Other popular themes
+    map.insert(
+        "man-page",
+        ThemeDefinition {
+            id: "man-page",
+            label: "Man Page",
+            palette: ThemePalette {
+                primary_accent: RgbColor(0xCC, 0xCC, 0xCC), // Light gray (#cccccc)
+                background: RgbColor(0xFF, 0xFF, 0xFF),     // White (#ffffff)
+                foreground: RgbColor(0xCC, 0xCC, 0xCC),     // Light gray (#cccccc)
+                secondary_accent: RgbColor(0x00, 0x00, 0xB2), // Blue (#0000b2)
+                alert: RgbColor(0xCC, 0x00, 0x00),          // Red (#cc0000)
+                logo_accent: RgbColor(0x99, 0x99, 0x00),    // Yellow (#999900)
+            },
+        },
+    );
+    map.insert(
+        "jetbrains-darcula",
+        ThemeDefinition {
+            id: "jetbrains-darcula",
+            label: "JetBrains Darcula",
+            palette: ThemePalette {
+                primary_accent: RgbColor(0xAD, 0xAD, 0xAD), // Gray (#adadad)
+                background: RgbColor(0x1E, 0x1E, 0x1E),     // Dark (#1e1e1e)
+                foreground: RgbColor(0xAD, 0xAD, 0xAD),     // Gray (#adadad)
+                secondary_accent: RgbColor(0x45, 0x82, 0xEB), // Blue (#4582eb)
+                alert: RgbColor(0xFB, 0x54, 0x54),          // Red (#fb5454)
+                logo_accent: RgbColor(0xC2, 0xC2, 0x00),    // Yellow (#c2c200)
+            },
+        },
+    );
+    map.insert(
+        "homebrew",
+        ThemeDefinition {
+            id: "homebrew",
+            label: "Homebrew",
+            palette: ThemePalette {
+                primary_accent: RgbColor(0xBF, 0xBF, 0xBF), // Light gray (#bfbfbf)
+                background: RgbColor(0x00, 0x00, 0x00),     // Black (#000000)
+                foreground: RgbColor(0xBF, 0xBF, 0xBF),     // Light gray (#bfbfbf)
+                secondary_accent: RgbColor(0x00, 0x00, 0xB2), // Blue (#0000b2)
+                alert: RgbColor(0x99, 0x00, 0x00),          // Red (#990000)
+                logo_accent: RgbColor(0x99, 0x99, 0x00),    // Yellow (#999900)
+            },
+        },
+    );
+    map.insert(
+        "framer",
+        ThemeDefinition {
+            id: "framer",
+            label: "Framer",
+            palette: ThemePalette {
+                primary_accent: RgbColor(0xCC, 0xCC, 0xCC), // Light gray (#cccccc)
+                background: RgbColor(0x14, 0x14, 0x14),     // Dark (#141414)
+                foreground: RgbColor(0xCC, 0xCC, 0xCC),     // Light gray (#cccccc)
+                secondary_accent: RgbColor(0x00, 0xAA, 0xFF), // Blue (#00aaff)
+                alert: RgbColor(0xFF, 0x55, 0x55),          // Red (#ff5555)
+                logo_accent: RgbColor(0xFF, 0xCC, 0x33),    // Yellow (#ffcc33)
+            },
+        },
+    );
+    map.insert(
+        "espresso",
+        ThemeDefinition {
+            id: "espresso",
+            label: "Espresso",
+            palette: ThemePalette {
+                primary_accent: RgbColor(0xEE, 0xEE, 0xEF), // Light gray (#eeeeef)
+                background: RgbColor(0x35, 0x35, 0x35),     // Dark (#353535)
+                foreground: RgbColor(0xEE, 0xEE, 0xEF),     // Light gray (#eeeeef)
+                secondary_accent: RgbColor(0x6C, 0x99, 0xBB), // Blue (#6c99bb)
+                alert: RgbColor(0xD2, 0x52, 0x52),          // Red (#d25252)
+                logo_accent: RgbColor(0xFF, 0xC6, 0x6D),    // Yellow (#ffc66d)
+            },
+        },
+    );
+    map.insert(
+        "adventure-time",
+        ThemeDefinition {
+            id: "adventure-time",
+            label: "Adventure Time",
+            palette: ThemePalette {
+                primary_accent: RgbColor(0xF8, 0xDC, 0xC0), // Light tan (#f8dcc0)
+                background: RgbColor(0x05, 0x04, 0x04),     // Dark (#050404)
+                foreground: RgbColor(0xF8, 0xDC, 0xC0),     // Light tan (#f8dcc0)
+                secondary_accent: RgbColor(0x0E, 0x49, 0xC6), // Blue (#0e49c6)
+                alert: RgbColor(0xBD, 0x00, 0x13),          // Red (#bd0013)
+                logo_accent: RgbColor(0xE8, 0x74, 0x1D),    // Orange (#e8741d)
+            },
+        },
+    );
+    map.insert(
+        "afterglow",
+        ThemeDefinition {
+            id: "afterglow",
+            label: "Afterglow",
+            palette: ThemePalette {
+                primary_accent: RgbColor(0xD0, 0xD0, 0xD0), // Light gray (#d0d0d0)
+                background: RgbColor(0x15, 0x15, 0x15),     // Dark (#151515)
+                foreground: RgbColor(0xD0, 0xD0, 0xD0),     // Light gray (#d0d0d0)
+                secondary_accent: RgbColor(0x6C, 0x99, 0xBB), // Blue (#6c99bb)
+                alert: RgbColor(0xAC, 0x41, 0x42),          // Red (#ac4142)
+                logo_accent: RgbColor(0xE5, 0xB5, 0x67),    // Yellow (#e5b567)
+            },
+        },
+    );
+    map.insert(
+        "apple-classic",
+        ThemeDefinition {
+            id: "apple-classic",
+            label: "Apple Classic",
+            palette: ThemePalette {
+                primary_accent: RgbColor(0xC7, 0xC7, 0xC7), // Light gray (#c7c7c7)
+                background: RgbColor(0x00, 0x00, 0x00),     // Black (#000000)
+                foreground: RgbColor(0xC7, 0xC7, 0xC7),     // Light gray (#c7c7c7)
+                secondary_accent: RgbColor(0x01, 0x25, 0xC8), // Blue (#0125c8)
+                alert: RgbColor(0xCA, 0x1B, 0x11),          // Red (#ca1b11)
+                logo_accent: RgbColor(0xC7, 0xC5, 0x00),    // Yellow (#c7c500)
+            },
+        },
+    );
+    map.insert(
+        "apple-system-colors",
+        ThemeDefinition {
+            id: "apple-system-colors",
+            label: "Apple System Colors",
+            palette: ThemePalette {
+                primary_accent: RgbColor(0x98, 0x98, 0x9D), // Gray (#98989d)
+                background: RgbColor(0x1A, 0x1A, 0x1A),     // Dark (#1a1a1a)
+                foreground: RgbColor(0x98, 0x98, 0x9D),     // Gray (#98989d)
+                secondary_accent: RgbColor(0x08, 0x69, 0xC9), // Blue (#0869c9)
+                alert: RgbColor(0xCC, 0x37, 0x2E),          // Red (#cc372e)
+                logo_accent: RgbColor(0xCD, 0xAB, 0x1E),    // Yellow (#cdab1e)
+            },
+        },
+    );
+    map.insert(
+        "apple-system-colors-light",
+        ThemeDefinition {
+            id: "apple-system-colors-light",
+            label: "Apple System Colors Light",
+            palette: ThemePalette {
+                primary_accent: RgbColor(0x1A, 0x1A, 0x1A), // Dark gray (#1a1a1a)
+                background: RgbColor(0xFF, 0xFF, 0xFF),     // White (#ffffff)
+                foreground: RgbColor(0x1A, 0x1A, 0x1A),     // Dark gray (#1a1a1a)
+                secondary_accent: RgbColor(0x2E, 0x68, 0xC5), // Blue (#2e68c5)
+                alert: RgbColor(0xBC, 0x44, 0x37),          // Red (#bc4437)
+                logo_accent: RgbColor(0xC8, 0xAD, 0x3A),    // Yellow (#c8ad3a)
+            },
+        },
+    );
+
     // Vitesse themes
     map.insert(
         "vitesse-black",
@@ -1117,6 +1540,108 @@ pub fn suggest_theme_for_terminal() -> &'static str {
         ColorScheme::Light => "vitesse-light",
         ColorScheme::Dark | ColorScheme::Unknown => DEFAULT_THEME_ID,
     }
+}
+
+/// Get the recommended syntax highlighting theme for a given UI theme.
+/// This ensures that code highlighting colors complement the UI theme's background.
+/// Based on: https://github.com/openai/codex/pull/11447, https://github.com/openai/codex/pull/12581
+///
+/// # Usage
+///
+/// For code blocks and syntax highlighting:
+/// ```rust
+/// use vtcode_tui::ui::theme::{get_syntax_theme_for_ui_theme, active_theme_id};
+/// let ui_theme = active_theme_id();
+/// let syntax_theme = get_syntax_theme_for_ui_theme(&ui_theme);
+/// // Use `syntax_theme` with syntect's ThemeSet
+/// ```
+///
+/// For PTY/shell output highlighting, the same mapping applies.
+/// The shell command highlighter should use the same color palette
+/// as the syntax highlighting theme for visual consistency.
+pub fn get_syntax_theme_for_ui_theme(ui_theme: &str) -> &'static str {
+    match ui_theme.to_lowercase().as_str() {
+        // Ayu themes - use matching syntect themes
+        "ayu" => "ayu-dark",
+        "ayu-mirage" => "ayu-mirage",
+
+        // Catppuccin themes - use matching syntect themes
+        "catppuccin-latte" => "catppuccin-latte",
+        "catppuccin-frappe" => "catppuccin-frappe",
+        "catppuccin-macchiato" => "catppuccin-macchiato",
+        "catppuccin-mocha" => "catppuccin-mocha",
+
+        // Solarized themes - exact TextMate theme names
+        "solarized-dark" | "solarized-dark-hc" => "Solarized (dark)",
+        "solarized-light" => "Solarized (light)",
+
+        // Gruvbox themes
+        "gruvbox-dark" | "gruvbox-dark-hard" => "gruvbox-dark",
+        "gruvbox-light" | "gruvbox-light-hard" => "gruvbox-light",
+        "gruvbox-material" | "gruvbox-material-dark" => "gruvbox-dark",
+        "gruvbox-material-light" => "gruvbox-light",
+
+        // Tomorrow themes - exact TextMate theme names
+        "tomorrow" => "Tomorrow",
+        "tomorrow-night" => "Tomorrow Night",
+        "tomorrow-night-blue" => "Tomorrow Night Blue",
+        "tomorrow-night-bright" => "Tomorrow Night Bright",
+        "tomorrow-night-eighties" => "Tomorrow Night Eighties",
+        "tomorrow-night-burns" => "Tomorrow Night",
+
+        // GitHub themes - exact TextMate theme names
+        "github-dark" => "GitHub Dark",
+        "github" => "GitHub",
+
+        // Atom themes - exact TextMate theme names
+        "atom-one-dark" => "OneDark",
+        "atom-one-light" => "OneLight",
+        "atom" => "base16-ocean.dark",
+
+        // Spacegray themes - use base16-ocean.dark as closest match
+        "spacegray" | "spacegray-bright" | "spacegray-eighties" | "spacegray-eighties-dull" => {
+            "base16-ocean.dark"
+        }
+
+        // Material themes - exact TextMate theme names
+        "material-ocean" | "material-dark" | "material" => "Material Dark",
+
+        // Other popular dark themes - exact TextMate theme names where available
+        "dracula" => "Dracula",
+        "monokai-classic" => "monokai-classic",
+        "night-owl" => "Night Owl",
+        "zenburn" => "Zenburn",
+
+        // Fallback themes - use base16-ocean as a good general-purpose dark theme
+        "jetbrains-darcula" => "base16-ocean.dark",
+        "man-page" => "base16-ocean.dark",
+        "homebrew" => "base16-ocean.dark",
+        "framer" => "base16-ocean.dark",
+        "espresso" => "base16-ocean.dark",
+        "adventure-time" => "base16-ocean.dark",
+        "afterglow" => "base16-ocean.dark",
+        "apple-classic" => "base16-ocean.dark",
+        "apple-system-colors" => "base16-ocean.dark",
+
+        // Light themes - use base16-ocean.light as fallback
+        "apple-system-colors-light" => "base16-ocean.light",
+        "vitesse-light" | "vitesse-light-soft" => "base16-ocean.light",
+
+        // Default dark themes
+        "ciapre" | "ciapre-dark" | "ciapre-blue" => "base16-ocean.dark",
+        "vitesse-black" | "vitesse-dark" | "vitesse-dark-soft" => "base16-ocean.dark",
+        "mono" => "base16-ocean.dark",
+        "ansi-classic" => "base16-ocean.dark",
+
+        // Fallback to dark theme for unknown themes
+        _ => "base16-ocean.dark",
+    }
+}
+
+/// Get the recommended syntax highlighting theme for the currently active UI theme.
+/// Convenience wrapper around `get_syntax_theme_for_ui_theme`.
+pub fn get_active_syntax_theme() -> &'static str {
+    get_syntax_theme_for_ui_theme(&active_theme_id())
 }
 
 #[cfg(test)]
