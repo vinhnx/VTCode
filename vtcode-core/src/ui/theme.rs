@@ -457,6 +457,23 @@ static REGISTRY: Lazy<HashMap<&'static str, ThemeDefinition>> = Lazy::new(|| {
         },
     );
 
+    map.insert(
+        "ansi-classic",
+        ThemeDefinition {
+            id: "ansi-classic",
+            label: "ANSI Classic",
+            palette: ThemePalette {
+                // Classic ANSI-inspired palette (IBM/VT-era feel): high contrast on black.
+                primary_accent: RgbColor(0xC0, 0xC0, 0xC0), // silver/white-ish
+                background: RgbColor(0x00, 0x00, 0x00),     // black
+                foreground: RgbColor(0xC0, 0xC0, 0xC0),     // silver
+                secondary_accent: RgbColor(0x00, 0xAA, 0xAA), // cyan
+                alert: RgbColor(0xAA, 0x00, 0x00),          // red
+                logo_accent: RgbColor(0xAA, 0xAA, 0x00),    // yellow
+            },
+        },
+    );
+
     register_catppuccin_themes(&mut map);
     map
 });
@@ -795,6 +812,13 @@ mod tests {
         assert!(result.errors.is_empty(), "Mono theme should have no errors");
         // Mono themes might have some warnings if grays are close, but pure black/white should be fine.
         assert!(result.is_valid);
+    }
+
+    #[test]
+    fn test_ansi_classic_theme_exists() {
+        let result = ensure_theme("ansi-classic");
+        assert!(result.is_ok(), "ANSI Classic theme should be registered");
+        assert_eq!(result.unwrap(), "ANSI Classic");
     }
 
     #[test]

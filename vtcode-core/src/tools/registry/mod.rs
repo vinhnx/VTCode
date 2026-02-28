@@ -43,6 +43,7 @@ mod registration_facade;
 mod resiliency;
 mod resiliency_facade;
 mod risk_scorer;
+mod sandbox_facade;
 mod shell_policy;
 mod shell_policy_facade;
 mod spooler_facade;
@@ -130,6 +131,7 @@ pub struct ToolRegistry {
     initialized: Arc<std::sync::atomic::AtomicBool>,
     // Security & Identity
     shell_policy: Arc<RwLock<ShellPolicyChecker>>,
+    runtime_sandbox_config: Arc<RwLock<vtcode_config::SandboxConfig>>,
     agent_type: Arc<std::sync::RwLock<Cow<'static, str>>>,
     // PTY Session Management
     active_pty_sessions: Arc<std::sync::RwLock<Option<Arc<std::sync::atomic::AtomicUsize>>>>,

@@ -15,7 +15,8 @@ use tracing::{debug, info, warn};
 use vt100::Parser;
 
 use super::command_utils::{
-    is_long_running_command, is_long_running_command_string, is_shell_program,
+    is_long_running_command, is_long_running_command_string, is_sandbox_wrapper_program,
+    is_shell_program,
 };
 use super::manager_utils::{clamp_timeout, exit_status_code, set_command_environment};
 use super::scrollback::PtyScrollback;
@@ -172,21 +173,22 @@ impl PtyManager {
                 // is properly initialized from their shell configuration files (~/.bashrc, ~/.zshrc, etc).
                 // However, we avoid double-wrapping if the command is already a shell invocation.
                 let (exec_program, exec_args, display_program, _use_shell_wrapper) =
-                    if is_shell_program(&program)
-&& args.iter().any(|arg| arg == "-c" || arg == "/C")
+                    if (is_shell_program(&program)
+                        && args.iter().any(|arg| arg == "-c" || arg == "/C"))
+                        || is_sandbox_wrapper_program(&program, &args)
                     {
-// Already a shell command, don't wrap again
-(program.clone(), args.clone(), program.clone(), false)
+                        // Already a shell command or sandbox wrapper, don't wrap again.
+                        (program.clone(), args.clone(), program.clone(), false)
                     } else {
-let shell = resolve_fallback_shell();
-let full_command =
-    join(std::iter::once(program.clone()).chain(args.iter().cloned()));
-(
-    shell.clone(),
-    vec!["-lc".to_owned(), full_command.clone()],
-    program.clone(),
-    true,
-)
+                        let shell = resolve_fallback_shell();
+                        let full_command =
+                            join(std::iter::once(program.clone()).chain(args.iter().cloned()));
+                        (
+                            shell.clone(),
+                            vec!["-lc".to_owned(), full_command.clone()],
+                            program.clone(),
+                            true,
+                        )
                     };
 
                 let mut builder = CommandBuilder::new(exec_program.clone());
@@ -505,8 +507,9 @@ if output.len() > max_tokens * 4 {
         // Use login shell for command execution to ensure user's PATH and environment
         // is properly initialized from their shell configuration files (~/.bashrc, ~/.zshrc, etc).
         // However, we avoid double-wrapping if the command is already a shell invocation.
-        let (exec_program, exec_args, display_program) = if is_shell_program(&program)
-            && args.iter().any(|arg| arg == "-c" || arg == "/C")
+        let (exec_program, exec_args, display_program) = if (is_shell_program(&program)
+            && args.iter().any(|arg| arg == "-c" || arg == "/C"))
+            || is_sandbox_wrapper_program(&program, &args)
         {
             // Already a shell command, don't wrap again
             (program.clone(), args.clone(), program.clone())

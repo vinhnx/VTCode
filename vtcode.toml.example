@@ -652,7 +652,7 @@ hitl_notification_bell = true
 # - Lifecycle: What survives between runs (session-scoped)
 [sandbox]
 # Enable sandboxing for command execution
-enabled = true
+enabled = false
 
 # Default sandbox mode: "read_only", "workspace_write", "danger_full_access", "external"
 default_mode = "read_only"

@@ -209,7 +209,7 @@ fn build_osc9_payload(body: &str) -> String {
 }
 
 #[cfg(test)]
-mod tests {
+mod redraw_tests {
     use super::*;
 
     #[test]
@@ -376,6 +376,22 @@ pub fn cursor_to(row: u16, col: u16) -> String {
     format!("\x1b[{};{}H", row, col)
 }
 
+/// Build a portable in-place redraw prefix (`CR` + `EL2`).
+///
+/// This is the common CLI pattern for one-line progress updates.
+#[inline]
+pub fn redraw_line_prefix() -> &'static str {
+    "\r\x1b[2K"
+}
+
+/// Format a one-line in-place update payload.
+///
+/// Equivalent to: `\\r\\x1b[2K{content}`.
+#[inline]
+pub fn format_redraw_line(content: &str) -> String {
+    format!("{}{}", redraw_line_prefix(), content)
+}
+
 #[inline]
 pub fn fg_256(color_id: u8) -> String {
     format!("\x1b[38;5;{}m", color_id)
@@ -516,4 +532,19 @@ pub fn format_styled_into(buffer: &mut String, text: &str, style: &str) {
     buffer.push_str(style);
     buffer.push_str(text);
     buffer.push_str(RESET);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn redraw_prefix_matches_cli_pattern() {
+        assert_eq!(redraw_line_prefix(), "\r\x1b[2K");
+    }
+
+    #[test]
+    fn redraw_line_formats_expected_sequence() {
+        assert_eq!(format_redraw_line("Done"), "\r\x1b[2KDone");
+    }
 }
