@@ -920,7 +920,7 @@ impl ToolRegistry {
     }
 
     pub(super) async fn execute_unified_search(&self, args: Value) -> Result<Value> {
-        let mut args = args;
+        let mut args = tool_intent::normalize_unified_search_args(&args);
 
         let action_str = tool_intent::unified_search_action(&args)
             .ok_or_else(|| missing_unified_search_action_error(&args))?;
