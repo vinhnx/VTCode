@@ -37,6 +37,7 @@ fn test_inline_segment_snapshot() {
 #[test]
 fn test_header_context_snapshot() {
     let context = InlineHeaderContext {
+        app_name: "VT Code".to_string(),
         provider: "openai".to_string(),
         model: "gpt-5".to_string(),
         reasoning: "creative".to_string(),

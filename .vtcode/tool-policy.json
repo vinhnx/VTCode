@@ -170,7 +170,7 @@
     "plan_manager": "prompt",
     "plan_task_tracker": "prompt",
     "plan_tasks": "prompt",
-    "task_tracker": "prompt",
+    "task_tracker": "allow",
     "track_tasks": "prompt",
     "/edit": "allow",
     "/plan": "prompt",

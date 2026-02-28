@@ -200,6 +200,16 @@ fn read_file_path_arg(args: &Value) -> Option<&str> {
     None
 }
 
+fn unified_file_destination_arg(args: &Value) -> Option<&str> {
+    let destination = args.get("destination").and_then(|v| v.as_str())?;
+    let trimmed = destination.trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed)
+    }
+}
+
 fn read_file_has_offset_arg(args: &Value) -> bool {
     ["offset", "offset_lines", "offset_bytes"]
         .iter()
@@ -478,6 +488,24 @@ fn loop_detection_tool_key(canonical_tool_name: &str, args: &serde_json::Value) 
                     "{canonical_tool_name}::{action}::{target}::{}",
                     patch_signature(patch_source)
                 );
+            }
+            if matches!(
+                action.as_str(),
+                "edit" | "write" | "delete" | "move" | "copy"
+            ) {
+                let source = read_file_path_arg(args).map(|path| compact_loop_key_part(path, 120));
+                let destination =
+                    unified_file_destination_arg(args).map(|path| compact_loop_key_part(path, 120));
+                return match (source, destination) {
+                    (Some(src), Some(dest)) => {
+                        format!("{canonical_tool_name}::{action}::{src}->{dest}")
+                    }
+                    (Some(src), None) => format!("{canonical_tool_name}::{action}::{src}"),
+                    (None, Some(dest)) => {
+                        format!("{canonical_tool_name}::{action}::destination={dest}")
+                    }
+                    (None, None) => format!("{canonical_tool_name}::{action}"),
+                };
             }
             format!("{canonical_tool_name}::{action}")
         }
@@ -1069,6 +1097,40 @@ mod tests {
         );
         assert!(key.contains("unified_file::read::"));
         assert!(key.contains("src/main.rs"));
+    }
+
+    #[test]
+    fn loop_key_for_unified_file_edit_includes_path() {
+        let key = loop_detection_tool_key(
+            tool_names::UNIFIED_FILE,
+            &json!({"action":"edit","path":"src/main.rs","old_str":"old","new_str":"new"}),
+        );
+        assert!(key.contains("unified_file::edit::"));
+        assert!(key.contains("src/main.rs"));
+    }
+
+    #[test]
+    fn loop_key_for_unified_file_edit_differs_by_target_path() {
+        let first = loop_detection_tool_key(
+            tool_names::UNIFIED_FILE,
+            &json!({"action":"edit","path":"src/main.rs","old_str":"a","new_str":"b"}),
+        );
+        let second = loop_detection_tool_key(
+            tool_names::UNIFIED_FILE,
+            &json!({"action":"edit","path":"src/lib.rs","old_str":"a","new_str":"b"}),
+        );
+        assert_ne!(first, second);
+    }
+
+    #[test]
+    fn loop_key_for_unified_file_move_includes_source_and_destination() {
+        let key = loop_detection_tool_key(
+            tool_names::UNIFIED_FILE,
+            &json!({"action":"move","path":"src/old.rs","destination":"src/new.rs"}),
+        );
+        assert!(key.contains("unified_file::move::"));
+        assert!(key.contains("src/old.rs"));
+        assert!(key.contains("src/new.rs"));
     }
 
     #[test]

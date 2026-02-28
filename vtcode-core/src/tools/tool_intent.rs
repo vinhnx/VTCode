@@ -205,9 +205,7 @@ fn unified_search_action_from_object(args: &serde_json::Map<String, Value>) -> O
 /// Determine the action for unified_search tool based on args.
 /// Returns the action string or None if no inference is possible.
 pub fn unified_search_action(args: &Value) -> Option<&str> {
-    let Some(args_obj) = args.as_object() else {
-        return None;
-    };
+    let args_obj = args.as_object()?;
     unified_search_action_from_object(args_obj)
 }
 

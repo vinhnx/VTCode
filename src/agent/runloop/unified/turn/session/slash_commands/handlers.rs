@@ -122,7 +122,7 @@ pub async fn handle_show_config(ctx: SlashCommandContext<'_>) -> Result<SlashCom
         if show_config_palette(ctx.renderer, &workspace_path, &vt_snapshot, None)? {
             *ctx.palette_state = Some(ActivePalette::Config {
                 workspace: workspace_path,
-                vt_snapshot,
+                vt_snapshot: Box::new(vt_snapshot),
                 selected: None,
             });
         }

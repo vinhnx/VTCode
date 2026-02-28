@@ -146,6 +146,7 @@ struct PaletteCoordinator<'a> {
 }
 
 impl<'a> PaletteCoordinator<'a> {
+    #[allow(clippy::too_many_arguments)]
     async fn handle_submit(
         &mut self,
         renderer: &mut AnsiRenderer,
