@@ -3,10 +3,10 @@ pub use crate::acp::permission_cache::ToolPermissionCache as PermissionCache;
 use crate::cache::{CacheKey, EvictionPolicy, UnifiedCache};
 use crate::tools::shell::ShellOutput;
 use once_cell::sync::Lazy;
-use parking_lot::RwLock;
+use parking_lot::Mutex;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use tokio::sync::{Mutex, oneshot};
+use tokio::sync::{Mutex as TokioMutex, oneshot};
 use vtcode_config::CommandCacheConfig;
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
@@ -22,8 +22,8 @@ impl CacheKey for CommandCacheKey {
 }
 
 struct CommandCache {
-    config: RwLock<CommandCacheConfig>,
-    cache: RwLock<UnifiedCache<CommandCacheKey, ShellOutput>>,
+    config: Mutex<CommandCacheConfig>,
+    cache: Mutex<UnifiedCache<CommandCacheKey, ShellOutput>>,
 }
 
 static COMMAND_CACHE: Lazy<CommandCache> =
@@ -38,8 +38,8 @@ pub enum InFlightState {
     Wait(oneshot::Receiver<InFlightResult>),
 }
 
-static IN_FLIGHT: Lazy<Mutex<HashMap<CommandCacheKey, Vec<oneshot::Sender<InFlightResult>>>>> =
-    Lazy::new(|| Mutex::new(HashMap::new()));
+static IN_FLIGHT: Lazy<TokioMutex<HashMap<CommandCacheKey, Vec<oneshot::Sender<InFlightResult>>>>> =
+    Lazy::new(|| TokioMutex::new(HashMap::new()));
 
 impl PermissionCache {
     pub fn get(&mut self, key: &str) -> Option<bool> {
@@ -64,8 +64,8 @@ impl CommandCache {
     fn new(config: CommandCacheConfig) -> Self {
         let cache = Self::build_cache(&config);
         Self {
-            config: RwLock::new(config),
-            cache: RwLock::new(cache),
+            config: Mutex::new(config),
+            cache: Mutex::new(cache),
         }
     }
 
@@ -78,12 +78,12 @@ impl CommandCache {
     }
 
     fn configure(&self, config: &CommandCacheConfig) {
-        *self.config.write() = config.clone();
-        *self.cache.write() = Self::build_cache(config);
+        *self.config.lock() = config.clone();
+        *self.cache.lock() = Self::build_cache(config);
     }
 
     fn allowlisted(&self, command: &str) -> bool {
-        let cfg = self.config.read();
+        let cfg = self.config.lock();
         if !cfg.enabled {
             return false;
         }
@@ -102,7 +102,7 @@ impl CommandCache {
             command: command.to_string(),
             cwd: cwd.to_path_buf(),
         };
-        self.cache.read().get_owned(&key)
+        self.cache.lock().get_owned(&key)
     }
 
     fn put(&self, command: &str, cwd: &Path, output: ShellOutput) {
@@ -114,7 +114,7 @@ impl CommandCache {
             cwd: cwd.to_path_buf(),
         };
         let size = (output.stdout.len() + output.stderr.len()) as u64;
-        self.cache.write().insert(key, output, size);
+        self.cache.lock().insert(key, output, size);
     }
 }
 

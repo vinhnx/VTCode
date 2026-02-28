@@ -291,6 +291,7 @@ cargo clippy && cargo fmt --check && cargo check && cargo nextest run
 8. **Don't skip tests** - add tests for new features and bug fixes
 9. **Don't overcomplicate** - prefer simple, clear solutions over clever ones
 10. **Don't forget to run quality checks** - always run `cargo clippy`, `cargo fmt`, `cargo check`, and `cargo nextest` before committing
+11. **Don't assume `RwLock` is faster** - for tiny cache/read paths, `Mutex` can outperform `RwLock` due to reader-counter atomic contention; benchmark under realistic concurrency before choosing
 
 ## Agent Execution Guidelines
 
