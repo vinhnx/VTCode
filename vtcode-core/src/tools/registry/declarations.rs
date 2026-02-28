@@ -928,7 +928,8 @@ fn annotate_parameters(params: &mut Value, meta: &super::registration::ToolMetad
     };
 
     if let Some(permission) = meta.default_permission() {
-        insert_if_allowed(map, 
+        insert_if_allowed(
+            map,
             "x-default-permission".to_string(),
             json!(permission_label(&permission)),
         );

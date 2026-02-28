@@ -156,7 +156,8 @@ fn test_unified_client_creation() {
         assert_eq!(client.name(), "gemini");
     }
 
-    let openai_client = create_provider_for_model("gpt-oss-20b", "test_key".to_string(), None, None);
+    let openai_client =
+        create_provider_for_model("gpt-oss-20b", "test_key".to_string(), None, None);
     assert!(openai_client.is_ok());
     if let Ok(client) = openai_client {
         assert_eq!(client.name(), "openai");

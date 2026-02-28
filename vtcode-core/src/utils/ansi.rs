@@ -1220,7 +1220,10 @@ mod tests {
     #[test]
     fn convert_plain_lines_preserves_ansi_styles() {
         let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
-        let sink = InlineSink::new(InlineHandle::new_for_tests(sender), SyntaxHighlightingConfig::default());
+        let sink = InlineSink::new(
+            InlineHandle::new_for_tests(sender),
+            SyntaxHighlightingConfig::default(),
+        );
         let fallback = InlineTextStyle {
             color: Some(AnsiColorEnum::Ansi(AnsiColor::Green)),
             bg_color: None,
@@ -1246,7 +1249,10 @@ mod tests {
     #[test]
     fn convert_plain_lines_retains_trailing_newline() {
         let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
-        let sink = InlineSink::new(InlineHandle::new_for_tests(sender), SyntaxHighlightingConfig::default());
+        let sink = InlineSink::new(
+            InlineHandle::new_for_tests(sender),
+            SyntaxHighlightingConfig::default(),
+        );
         let fallback = InlineTextStyle::default();
 
         let (converted, plain) = sink.convert_plain_lines("hello\n", &fallback);
@@ -1261,8 +1267,10 @@ mod tests {
     fn write_multiline_combines_tool_lines() {
         use crate::ui::InlineCommand;
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
-        let mut sink =
-            InlineSink::new(InlineHandle::new_for_tests(sender), SyntaxHighlightingConfig::default());
+        let mut sink = InlineSink::new(
+            InlineHandle::new_for_tests(sender),
+            SyntaxHighlightingConfig::default(),
+        );
         let style = InlineTextStyle::default();
         // Use Tool kind to verify that multiple lines are combined into a single AppendLine command
         let kind = InlineMessageKind::Tool;
