@@ -157,6 +157,8 @@ pub(crate) async fn handle_tool_call_batch<'a, 'b>(
     }
 
     // 3. Sequential Result Handling as each parallel call finishes.
+    let mut batch_tracker = crate::agent::runloop::unified::tool_pipeline::ToolBatchOutcome::new();
+
     while !execution_futures.is_empty() {
         let next_result = tokio::select! {
             _ = t_ctx.ctx.ctrl_c_notify.notified() => {
@@ -174,6 +176,10 @@ pub(crate) async fn handle_tool_call_batch<'a, 'b>(
         let Some((call_id, name, args, status, start_time)) = next_result else {
             break;
         };
+
+        // Record in the batch tracker before wrapping into ToolPipelineOutcome.
+        batch_tracker.record(&name, &call_id, &status);
+
         let outcome =
             crate::agent::runloop::unified::tool_pipeline::ToolPipelineOutcome::from_status(status);
 
@@ -192,6 +198,22 @@ pub(crate) async fn handle_tool_call_batch<'a, 'b>(
         {
             return Ok(Some(outcome));
         }
+    }
+
+    // Emit structured batch-level metrics when more than one tool was executed.
+    if batch_tracker.entries.len() > 1 {
+        let stats = batch_tracker.stats();
+        tracing::info!(
+            target: "vtcode.tool.batch",
+            total = stats.total,
+            succeeded = stats.succeeded,
+            failed = stats.failed,
+            timed_out = stats.timed_out,
+            cancelled = stats.cancelled,
+            partial_success = batch_tracker.is_partial_success(),
+            summary = %batch_tracker.summary_line(),
+            "tool batch outcome"
+        );
     }
 
     Ok(None)

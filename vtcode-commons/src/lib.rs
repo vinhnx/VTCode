@@ -16,6 +16,7 @@ pub mod at_pattern;
 pub mod colors;
 pub mod diff;
 pub mod diff_paths;
+pub mod error_category;
 pub mod errors;
 pub mod formatting;
 pub mod fs;
@@ -37,6 +38,10 @@ pub mod validation;
 pub mod vtcodegitignore;
 
 pub use colors::{blend_colors, color_from_hex, contrasting_color, is_light_color, style};
+pub use error_category::{
+    BackoffStrategy, ErrorCategory, Retryability, classify_anyhow_error, classify_error_message,
+    is_retryable_llm_error_message,
+};
 pub use errors::{DisplayErrorFormatter, ErrorFormatter, ErrorReporter, NoopErrorReporter};
 pub use paths::{
     PathResolver, PathScope, WorkspacePaths, file_name_from_path, is_safe_relative_path,

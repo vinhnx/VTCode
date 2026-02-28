@@ -198,6 +198,49 @@ impl McpConnectionPool {
         }
     }
 
+    /// Check the health of all active providers.
+    ///
+    /// Returns a map of provider name → `true` (healthy) / `false` (unhealthy).
+    pub async fn health_check(&self) -> HashMap<String, bool> {
+        let providers = self.providers.read().await;
+        let mut results = HashMap::with_capacity(providers.len());
+        for (name, provider) in providers.iter() {
+            results.insert(name.clone(), provider.is_healthy().await);
+        }
+        results
+    }
+
+    /// Attempt to reconnect any unhealthy providers.
+    ///
+    /// Returns the names of providers that were successfully reconnected.
+    pub async fn reconnect_unhealthy(
+        &self,
+        startup_timeout: Option<Duration>,
+        tool_timeout: Option<Duration>,
+        allowlist: &McpAllowListConfig,
+    ) -> Vec<String> {
+        let providers = self.providers.read().await;
+        let mut reconnected = Vec::new();
+        for (name, provider) in providers.iter() {
+            if !provider.is_healthy().await {
+                info!("Provider '{}' is unhealthy, attempting reconnect", name);
+                match provider
+                    .reconnect(startup_timeout, tool_timeout, allowlist)
+                    .await
+                {
+                    Ok(()) => {
+                        info!("Successfully reconnected MCP provider '{}'", name);
+                        reconnected.push(name.clone());
+                    }
+                    Err(err) => {
+                        error!("Failed to reconnect MCP provider '{}': {}", name, err);
+                    }
+                }
+            }
+        }
+        reconnected
+    }
+
     /// Resolve startup timeout based on provider configuration
     fn resolve_startup_timeout(&self, config: &McpProviderConfig) -> Option<Duration> {
         config.startup_timeout_ms.map(Duration::from_millis)

@@ -657,8 +657,17 @@ async fn handle_failure<'a>(
             .tool_registry
             .is_plan_mode_allowed(tool_name, args_val);
 
-    let error_msg = format!("Tool '{}' execution failed: {}", tool_name, error);
-    tracing::debug!(tool = %tool_name, error = %error, "Tool execution failed");
+    let (user_msg, hint) =
+        crate::agent::runloop::unified::turn::turn_helpers::format_tool_error_for_user(
+            tool_name, &error_str,
+        );
+    if let Some(h) = &hint {
+        // Append the recovery hint as the first line the LLM will see.
+        tracing::debug!(tool = %tool_name, error = %error, hint = %h, "Tool execution failed");
+    } else {
+        tracing::debug!(tool = %tool_name, error = %error, "Tool execution failed");
+    }
+    let error_msg = user_msg;
     if is_plan_mode_denial {
         emit_turn_metric_log(
             t_ctx.ctx,
@@ -722,7 +731,10 @@ async fn handle_timeout(
         );
     }
 
-    let error_msg = format!("Tool '{}' timed out: {}", tool_name, error.message);
+    let sanitized = crate::agent::runloop::unified::turn::turn_helpers::sanitize_error_for_display(
+        &error.message,
+    );
+    let error_msg = format!("Tool '{}' timed out: {}", tool_name, sanitized);
     tracing::debug!(tool = %tool_name, error = %error.message, "Tool timed out");
 
     push_tool_error_response(t_ctx, tool_call_id, tool_name, error_msg, "timeout").await;

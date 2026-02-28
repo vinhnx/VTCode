@@ -296,10 +296,9 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                     if ctrl_c_state.is_cancel_requested() || ctrl_c_state.is_exit_requested() {
                         continue;
                     }
-                    conversation_history
-                        .push(vtcode_core::llm::provider::Message::system(
-                            DIRECT_TOOL_FOLLOW_UP_DIRECTIVE.to_string(),
-                        ));
+                    conversation_history.push(vtcode_core::llm::provider::Message::system(
+                        DIRECT_TOOL_FOLLOW_UP_DIRECTIVE.to_string(),
+                    ));
                     // A direct run/! command already updated history with user -> tool call ->
                     // tool response. Start an immediate assistant turn so users receive
                     // follow-up analysis without typing an extra "continue".

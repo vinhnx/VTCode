@@ -2,6 +2,7 @@ use anyhow::Error;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::borrow::Cow;
+use vtcode_commons::ErrorCategory;
 
 use crate::config::constants::tools as tool_names;
 
@@ -93,196 +94,77 @@ impl ToolExecutionError {
     }
 }
 
+/// Classify an `anyhow::Error` into a `ToolErrorType`.
+///
+/// Delegates to the shared `ErrorCategory` classifier and converts the result
+/// to preserve backward compatibility with existing callers.
 pub fn classify_error(error: &Error) -> ToolErrorType {
-    let error_msg = error.to_string().to_ascii_lowercase();
-
-    let policy_markers = [
-        "policy violation",
-        "denied by policy",
-        "tool permission denied",
-        "safety validation failed",
-        "not allowed in plan mode",
-        "only available when plan mode is active",
-        "workspace boundary",
-        "blocked by policy",
-    ];
-    if contains_any(&error_msg, &policy_markers) {
-        return ToolErrorType::PolicyViolation;
-    }
-
-    let invalid_markers = [
-        "invalid argument",
-        "invalid parameters",
-        "malformed",
-        "missing required",
-        "schema validation",
-        "argument validation failed",
-        "unknown field",
-        "type mismatch",
-    ];
-    if contains_any(&error_msg, &invalid_markers) {
-        return ToolErrorType::InvalidParameters;
-    }
-
-    let tool_not_found_markers = [
-        "tool not found",
-        "unknown tool",
-        "unsupported tool",
-        "no such tool",
-    ];
-    if contains_any(&error_msg, &tool_not_found_markers) {
-        return ToolErrorType::ToolNotFound;
-    }
-
-    let resource_not_found_markers = [
-        "no such file",
-        "no such directory",
-        "file not found",
-        "directory not found",
-        "resource not found",
-        "path not found",
-        "enoent",
-    ];
-    if contains_any(&error_msg, &resource_not_found_markers) {
-        return ToolErrorType::ResourceNotFound;
-    }
-
-    let permission_markers = [
-        "permission denied",
-        "access denied",
-        "operation not permitted",
-        "eacces",
-        "eperm",
-    ];
-    if contains_any(&error_msg, &permission_markers) {
-        return ToolErrorType::PermissionDenied;
-    }
-
-    let timeout_markers = ["timeout", "timed out", "deadline exceeded"];
-    if contains_any(&error_msg, &timeout_markers) {
-        return ToolErrorType::Timeout;
-    }
-
-    let non_retryable_limit_markers = [
-        "weekly usage limit",
-        "daily usage limit",
-        "monthly spending limit",
-        "insufficient credits",
-        "quota exceeded",
-        "billing",
-        "payment required",
-    ];
-    if contains_any(&error_msg, &non_retryable_limit_markers) {
-        return ToolErrorType::ExecutionError;
-    }
-
-    let network_markers = [
-        "network",
-        "connection",
-        "connection reset",
-        "connection refused",
-        "broken pipe",
-        "dns",
-        "name resolution",
-        "temporary failure in name resolution",
-        "service unavailable",
-        "temporarily unavailable",
-        "internal server error",
-        "bad gateway",
-        "gateway timeout",
-        "rate limit",
-        "too many requests",
-        "429",
-        "500",
-        "502",
-        "503",
-        "504",
-        "upstream connect error",
-        "tls handshake",
-        "socket hang up",
-        "econnreset",
-        "etimedout",
-    ];
-    if contains_any(&error_msg, &network_markers) {
-        return ToolErrorType::NetworkError;
-    }
-
-    ToolErrorType::ExecutionError
+    let category = vtcode_commons::classify_anyhow_error(error);
+    ToolErrorType::from(category)
 }
 
-#[inline]
-fn contains_any(message: &str, markers: &[&str]) -> bool {
-    markers.iter().any(|marker| message.contains(marker))
+/// Get the unified `ErrorCategory` for an `anyhow::Error`.
+///
+/// Prefer this over `classify_error` when you need the richer category type
+/// with retryability and recovery suggestion support.
+pub fn classify_error_category(error: &Error) -> ErrorCategory {
+    vtcode_commons::classify_anyhow_error(error)
 }
 
-// Use static string slices to avoid allocations for recovery suggestions
+// Use static string slices to avoid allocations for recovery suggestions.
+// Delegates to the shared `ErrorCategory` recovery suggestions where possible.
 #[inline]
 fn generate_recovery_info(error_type: ToolErrorType) -> (bool, Vec<Cow<'static, str>>) {
-    match error_type {
-        ToolErrorType::InvalidParameters => (
-            true,
-            vec![
-                Cow::Borrowed("Check parameter names and types against the tool schema"),
-                Cow::Borrowed("Ensure required parameters are provided"),
-                Cow::Borrowed("Verify parameter values are within acceptable ranges"),
-            ],
-        ),
-        ToolErrorType::ToolNotFound => (
-            false,
-            vec![
-                Cow::Borrowed("Verify the tool name is spelled correctly"),
-                Cow::Borrowed("Check if the tool is available in the current context"),
-                Cow::Borrowed("Contact administrator if tool should be available"),
-            ],
-        ),
-        ToolErrorType::PermissionDenied => (
-            true,
-            vec![
-                Cow::Borrowed("Check file permissions and access rights"),
-                Cow::Borrowed("Ensure workspace boundaries are respected"),
-                Cow::Borrowed("Try running with appropriate permissions"),
-            ],
-        ),
-        ToolErrorType::ResourceNotFound => (
-            true,
-            vec![
-                Cow::Borrowed("Verify file paths and resource locations"),
-                Cow::Borrowed("Check if files exist and are accessible"),
-                Cow::Borrowed("Use list_dir to explore available resources"),
-            ],
-        ),
-        ToolErrorType::NetworkError => (
-            true,
-            vec![
-                Cow::Borrowed("Check network connectivity"),
-                Cow::Borrowed("Retry the operation after a brief delay"),
-                Cow::Borrowed("Verify external service availability"),
-            ],
-        ),
-        ToolErrorType::Timeout => (
-            true,
-            vec![
-                Cow::Borrowed("Increase timeout values if appropriate"),
-                Cow::Borrowed("Break large operations into smaller chunks"),
-                Cow::Borrowed("Check system resources and performance"),
-            ],
-        ),
-        ToolErrorType::ExecutionError => (
-            false,
-            vec![
-                Cow::Borrowed("Review error details for specific issues"),
-                Cow::Borrowed("Check tool documentation for known limitations"),
-                Cow::Borrowed("Report the issue if it appears to be a bug"),
-            ],
-        ),
-        ToolErrorType::PolicyViolation => (
-            false,
-            vec![
-                Cow::Borrowed("Review workspace policies and restrictions"),
-                Cow::Borrowed("Contact administrator for policy changes"),
-                Cow::Borrowed("Use alternative tools that comply with policies"),
-            ],
-        ),
+    let category = ErrorCategory::from(error_type);
+    let is_recoverable = category.is_retryable()
+        || matches!(
+            error_type,
+            ToolErrorType::InvalidParameters
+                | ToolErrorType::PermissionDenied
+                | ToolErrorType::ResourceNotFound
+        );
+    (is_recoverable, category.recovery_suggestions())
+}
+
+// === Bridge conversions between ErrorCategory and ToolErrorType ===
+
+impl From<ErrorCategory> for ToolErrorType {
+    fn from(cat: ErrorCategory) -> Self {
+        match cat {
+            ErrorCategory::InvalidParameters => ToolErrorType::InvalidParameters,
+            ErrorCategory::ToolNotFound => ToolErrorType::ToolNotFound,
+            ErrorCategory::ResourceNotFound => ToolErrorType::ResourceNotFound,
+            ErrorCategory::PermissionDenied => ToolErrorType::PermissionDenied,
+            ErrorCategory::Network | ErrorCategory::ServiceUnavailable => {
+                ToolErrorType::NetworkError
+            }
+            ErrorCategory::Timeout => ToolErrorType::Timeout,
+            ErrorCategory::PolicyViolation | ErrorCategory::PlanModeViolation => {
+                ToolErrorType::PolicyViolation
+            }
+            ErrorCategory::RateLimit => ToolErrorType::NetworkError,
+            ErrorCategory::CircuitOpen => ToolErrorType::ExecutionError,
+            ErrorCategory::Authentication => ToolErrorType::PermissionDenied,
+            ErrorCategory::SandboxFailure => ToolErrorType::PolicyViolation,
+            ErrorCategory::ResourceExhausted => ToolErrorType::ExecutionError,
+            ErrorCategory::Cancelled => ToolErrorType::ExecutionError,
+            ErrorCategory::ExecutionError => ToolErrorType::ExecutionError,
+        }
+    }
+}
+
+impl From<ToolErrorType> for ErrorCategory {
+    fn from(t: ToolErrorType) -> Self {
+        match t {
+            ToolErrorType::InvalidParameters => ErrorCategory::InvalidParameters,
+            ToolErrorType::ToolNotFound => ErrorCategory::ToolNotFound,
+            ToolErrorType::ResourceNotFound => ErrorCategory::ResourceNotFound,
+            ToolErrorType::PermissionDenied => ErrorCategory::PermissionDenied,
+            ToolErrorType::NetworkError => ErrorCategory::Network,
+            ToolErrorType::Timeout => ErrorCategory::Timeout,
+            ToolErrorType::PolicyViolation => ErrorCategory::PolicyViolation,
+            ToolErrorType::ExecutionError => ErrorCategory::ExecutionError,
+        }
     }
 }
 
