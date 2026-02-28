@@ -148,6 +148,26 @@ pub(crate) fn select_line_style(
     git: &GitStyles,
     ls: &LsStyles,
 ) -> Option<AnsiStyle> {
+    let trimmed = line.trim_start();
+    // Always detect and style diff lines, even when tool_name is not provided
+    // (e.g. git_diff payloads routed through generic rendering path).
+    if trimmed.starts_with("diff --")
+        || trimmed.starts_with("index ")
+        || trimmed.starts_with("@@")
+        || trimmed.starts_with("---")
+        || trimmed.starts_with("+++")
+        || trimmed.starts_with("new file mode")
+        || trimmed.starts_with("deleted file mode")
+    {
+        return git.header;
+    }
+    if trimmed.starts_with('+') && !trimmed.starts_with("+++") {
+        return git.add;
+    }
+    if trimmed.starts_with('-') && !trimmed.starts_with("---") {
+        return git.remove;
+    }
+
     if let Some(
         tools::UNIFIED_EXEC
         | tools::RUN_PTY_CMD
@@ -160,27 +180,6 @@ pub(crate) fn select_line_style(
         | tools::APPLY_PATCH,
     ) = tool_name
     {
-        let trimmed = line.trim_start();
-        // Improved diff header detection: covers diff markers, index lines, hunk headers, and file mode changes
-        if trimmed.starts_with("diff --")
-            || trimmed.starts_with("index ")
-            || trimmed.starts_with("@@")
-            || trimmed.starts_with("---")
-            || trimmed.starts_with("+++")
-            || trimmed.starts_with("new file mode")
-            || trimmed.starts_with("deleted file mode")
-        {
-            return git.header;
-        }
-
-        // Enhanced addition/removal detection: +++ and --- are headers (already handled above)
-        // Style remaining + and - prefixed lines as additions/removals
-        if trimmed.starts_with('+') && !trimmed.starts_with("+++") {
-            return git.add;
-        }
-        if trimmed.starts_with('-') && !trimmed.starts_with("---") {
-            return git.remove;
-        }
         if let Some(style) = ls.style_for_line(trimmed) {
             return Some(style);
         }
@@ -225,7 +224,17 @@ mod tests {
         let git = GitStyles::new();
         let ls = LsStyles::from_components(HashMap::new(), Vec::new());
         let styled = select_line_style(Some("context7"), "+added", &git, &ls);
-        assert!(styled.is_none());
+        assert_eq!(styled, git.add);
+    }
+
+    #[test]
+    fn diff_styling_works_without_tool_name() {
+        let git = GitStyles::new();
+        let ls = LsStyles::from_components(HashMap::new(), Vec::new());
+        let header = select_line_style(None, "diff --git a/file b/file", &git, &ls);
+        assert_eq!(header, git.header);
+        let added = select_line_style(None, "+added", &git, &ls);
+        assert_eq!(added, git.add);
     }
 
     #[test]

@@ -324,6 +324,7 @@ pub(super) async fn prompt_tool_permission<S: UiSession + ?Sized>(
             | InlineEvent::ScrollPageUp
             | InlineEvent::ScrollPageDown
             | InlineEvent::FileSelected(_)
+            | InlineEvent::ListModalSelectionChanged(_)
             | InlineEvent::BackgroundOperation
             | InlineEvent::LaunchEditor
             | InlineEvent::ToggleMode

@@ -90,6 +90,14 @@ pub(crate) fn push_tool_response(
     tool_call_id: String,
     content: String,
 ) {
+    if let Some(existing) = history
+        .iter_mut()
+        .rev()
+        .find(|message| message.tool_call_id.as_deref() == Some(tool_call_id.as_str()))
+    {
+        existing.content = uni::MessageContent::Text(content);
+        return;
+    }
     history.push(uni::Message::tool_response(tool_call_id, content));
 }
 
@@ -252,6 +260,26 @@ pub(crate) fn check_is_argument_error(error_str: &str) -> bool {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn push_tool_response_replaces_existing_tool_call_entry() {
+        let mut history = vec![uni::Message::tool_response(
+            "call_1".to_string(),
+            "{\"output\":\"first\"}".to_string(),
+        )];
+
+        push_tool_response(
+            &mut history,
+            "call_1".to_string(),
+            "{\"output\":\"latest\"}".to_string(),
+        );
+
+        assert_eq!(history.len(), 1);
+        assert_eq!(
+            history[0].content.as_text_borrowed(),
+            Some("{\"output\":\"latest\"}")
+        );
+    }
 
     #[test]
     fn repetition_tracker_counts_failures() {

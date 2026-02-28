@@ -120,20 +120,23 @@ fn highlight_line_with_bg(
         segments
             .into_iter()
             .map(|(anstyle, t)| {
-                let mut style = ratatui_style_from_ansi(anstyle);
-                if let Some(bg_color) = bg {
-                    style = style.bg(bg_color);
-                }
+                let style = apply_diff_bg_if_missing(ratatui_style_from_ansi(anstyle), bg);
                 Span::styled(t, style)
             })
             .collect()
     } else {
-        let mut style = Style::default();
-        if let Some(bg_color) = bg {
-            style = style.bg(bg_color);
-        }
+        let style = apply_diff_bg_if_missing(Style::default(), bg);
         vec![Span::styled(text.to_string(), style)]
     }
+}
+
+fn apply_diff_bg_if_missing(mut style: Style, bg: Option<Color>) -> Style {
+    if style.bg.is_none()
+        && let Some(bg_color) = bg
+    {
+        style = style.bg(bg_color);
+    }
+    style
 }
 
 fn count_diff_changes(diff_bundle: &DiffBundle) -> (usize, usize) {
@@ -304,4 +307,23 @@ fn render_controls(frame: &mut Frame<'_>, area: Rect, preview: &DiffPreviewState
         ),
         area,
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::apply_diff_bg_if_missing;
+    use ratatui::style::{Color, Style};
+
+    #[test]
+    fn apply_diff_bg_if_missing_adds_bg_when_none() {
+        let styled = apply_diff_bg_if_missing(Style::default(), Some(Color::Green));
+        assert_eq!(styled.bg, Some(Color::Green));
+    }
+
+    #[test]
+    fn apply_diff_bg_if_missing_preserves_existing_bg() {
+        let base = Style::default().bg(Color::Blue);
+        let styled = apply_diff_bg_if_missing(base, Some(Color::Green));
+        assert_eq!(styled.bg, Some(Color::Blue));
+    }
 }

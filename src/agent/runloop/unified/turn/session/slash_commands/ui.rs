@@ -44,7 +44,10 @@ pub async fn handle_start_theme_palette(
         return Ok(SlashCommandControl::Continue);
     }
     if show_theme_palette(ctx.renderer, mode)? {
-        *ctx.palette_state = Some(ActivePalette::Theme { mode });
+        *ctx.palette_state = Some(ActivePalette::Theme {
+            mode,
+            original_theme_id: theme::active_theme_id(),
+        });
     }
     Ok(SlashCommandControl::Continue)
 }

@@ -31,6 +31,8 @@ use super::display::persist_theme_preference;
 const THEME_PALETTE_TITLE: &str = "Theme picker";
 const THEME_ACTIVE_BADGE: &str = "Active";
 const THEME_SELECT_HINT: &str = "Use ↑/↓ to choose a theme, Enter to apply, Esc to cancel.";
+const THEME_SEARCH_LABEL: &str = "Search themes";
+const THEME_SEARCH_PLACEHOLDER: &str = "Filter themes (fuzzy)";
 const SESSIONS_PALETTE_TITLE: &str = "Archived sessions";
 const SESSIONS_HINT_PRIMARY: &str = "Use ↑/↓ to browse sessions.";
 const SESSIONS_HINT_SECONDARY: &str = "Enter to resume session • Esc to close.";
@@ -42,6 +44,7 @@ const CONFIG_HINT: &str = "↑/↓ select • ←/→ change <value> • Enter a
 pub(crate) enum ActivePalette {
     Theme {
         mode: ThemePaletteMode,
+        original_theme_id: String,
     },
     Sessions {
         listings: Vec<SessionListing>,
@@ -78,7 +81,7 @@ pub(crate) fn show_theme_palette(
             badge,
             indent: 0,
             selection: Some(InlineListSelection::Theme(id.to_string())),
-            search_value: None,
+            search_value: Some(theme_search_value(id, label)),
         });
     }
 
@@ -96,10 +99,17 @@ pub(crate) fn show_theme_palette(
         lines,
         items,
         Some(InlineListSelection::Theme(current_id)),
-        None,
+        Some(InlineListSearchConfig {
+            label: THEME_SEARCH_LABEL.to_string(),
+            placeholder: Some(THEME_SEARCH_PLACEHOLDER.to_string()),
+        }),
     );
 
     Ok(true)
+}
+
+fn theme_search_value(theme_id: &str, theme_label: &str) -> String {
+    format!("{theme_label} {theme_id} theme appearance colors")
 }
 
 #[allow(clippy::vec_init_then_push)]
@@ -1139,7 +1149,10 @@ pub(crate) async fn handle_palette_selection(
     full_auto: bool,
 ) -> Result<Option<ActivePalette>> {
     match palette {
-        ActivePalette::Theme { mode } => match selection {
+        ActivePalette::Theme {
+            mode,
+            original_theme_id,
+        } => match selection {
             InlineListSelection::Theme(theme_id) => match mode {
                 ThemePaletteMode::Select => {
                     match theme::set_active_theme(&theme_id) {
@@ -1164,7 +1177,10 @@ pub(crate) async fn handle_palette_selection(
                     Ok(None)
                 }
             },
-            _ => Ok(Some(ActivePalette::Theme { mode })),
+            _ => Ok(Some(ActivePalette::Theme {
+                mode,
+                original_theme_id,
+            })),
         },
         ActivePalette::Sessions { listings, limit } => {
             // Session selection is handled earlier in the modal handler
@@ -1255,6 +1271,42 @@ pub(crate) async fn handle_palette_selection(
     }
 }
 
+pub(crate) fn handle_palette_preview(
+    palette: ActivePalette,
+    selection: InlineListSelection,
+    renderer: &mut AnsiRenderer,
+    handle: &InlineHandle,
+) -> Result<Option<ActivePalette>> {
+    match palette {
+        ActivePalette::Theme {
+            mode,
+            original_theme_id,
+        } => {
+            if let InlineListSelection::Theme(theme_id) = selection {
+                match mode {
+                    ThemePaletteMode::Select => {
+                        if let Err(err) = theme::set_active_theme(&theme_id) {
+                            renderer.line(
+                                MessageStyle::Error,
+                                &format!("Theme '{}' not available: {}", theme_id, err),
+                            )?;
+                        } else {
+                            let styles = theme::active_styles();
+                            handle.set_theme(inline_theme_from_core_styles(&styles));
+                            apply_prompt_style(handle);
+                        }
+                    }
+                }
+            }
+            Ok(Some(ActivePalette::Theme {
+                mode,
+                original_theme_id,
+            }))
+        }
+        other => Ok(Some(other)),
+    }
+}
+
 fn normalize_config_selection(selection: InlineListSelection) -> Option<InlineListSelection> {
     match selection {
         InlineListSelection::ConfigAction(action) if action.ends_with(":cycle_prev") => {
@@ -1268,9 +1320,20 @@ fn normalize_config_selection(selection: InlineListSelection) -> Option<InlineLi
 pub(crate) fn handle_palette_cancel(
     palette: ActivePalette,
     renderer: &mut AnsiRenderer,
+    handle: &InlineHandle,
 ) -> Result<()> {
     match palette {
-        ActivePalette::Theme { mode } => {
+        ActivePalette::Theme {
+            mode,
+            original_theme_id,
+        } => {
+            if theme::active_theme_id() != original_theme_id
+                && theme::set_active_theme(&original_theme_id).is_ok()
+            {
+                let styles = theme::active_styles();
+                handle.set_theme(inline_theme_from_core_styles(&styles));
+                apply_prompt_style(handle);
+            }
             let message = match mode {
                 ThemePaletteMode::Select => "Theme selection cancelled.",
             };

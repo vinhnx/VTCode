@@ -11,7 +11,7 @@ use vtcode_tui::{InlineHandle, InlineListSelection};
 use crate::agent::runloop::model_picker::{ModelPickerProgress, ModelPickerState};
 use crate::agent::runloop::unified::model_selection::finalize_model_selection;
 use crate::agent::runloop::unified::palettes::{
-    ActivePalette, handle_palette_cancel, handle_palette_selection,
+    ActivePalette, handle_palette_cancel, handle_palette_preview, handle_palette_selection,
 };
 use crate::agent::runloop::welcome::SessionBootstrap;
 
@@ -138,6 +138,14 @@ impl<'a> InlineModalProcessor<'a> {
         self.palette.handle_cancel(renderer)?;
         Ok(InlineLoopAction::Continue)
     }
+
+    pub(crate) fn handle_preview(
+        &mut self,
+        renderer: &mut AnsiRenderer,
+        selection: InlineListSelection,
+    ) -> Result<InlineLoopAction> {
+        self.palette.handle_preview(renderer, selection)
+    }
 }
 
 struct PaletteCoordinator<'a> {
@@ -200,10 +208,25 @@ impl<'a> PaletteCoordinator<'a> {
 
     fn handle_cancel(&mut self, renderer: &mut AnsiRenderer) -> Result<()> {
         if let Some(active) = self.state.take() {
-            handle_palette_cancel(active, renderer)?;
+            handle_palette_cancel(active, renderer, self.handle)?;
         }
 
         Ok(())
+    }
+
+    fn handle_preview(
+        &mut self,
+        renderer: &mut AnsiRenderer,
+        selection: InlineListSelection,
+    ) -> Result<InlineLoopAction> {
+        if let Some(active) = self.state.take() {
+            let restore = handle_palette_preview(active, selection, renderer, self.handle)?;
+            if let Some(state) = restore {
+                *self.state = Some(state);
+            }
+        }
+
+        Ok(InlineLoopAction::Continue)
     }
 }
 

@@ -45,6 +45,7 @@ pub(crate) async fn render_tool_output(
     vt_config: Option<&VTCodeConfig>,
 ) -> Result<()> {
     let allow_tool_ansi = vt_config.map(|cfg| cfg.ui.allow_tool_ansi).unwrap_or(false);
+    let is_git_diff_output = is_git_diff_payload(val);
 
     match tool_name {
         Some(tools::WRITE_FILE) | Some(tools::CREATE_FILE) => {
@@ -81,7 +82,9 @@ pub(crate) async fn render_tool_output(
             )
             .await;
         }
-        Some(tools::UNIFIED_EXEC) if should_render_unified_exec_terminal_panel(val) => {
+        Some(tools::UNIFIED_EXEC)
+            if !is_git_diff_output && should_render_unified_exec_terminal_panel(val) =>
+        {
             let git_styles = GitStyles::new();
             let ls_styles = LsStyles::from_env();
             return render_terminal_command_panel(
@@ -173,6 +176,8 @@ pub(crate) async fn render_tool_output(
         .unwrap_or(false);
 
     // PTY tools use "output" field instead of "stdout"
+    let stream_tool_name = if is_git_diff_output { None } else { tool_name };
+
     if let Some(output) = val.get("output").and_then(Value::as_str) {
         render_stream_section(
             renderer,
@@ -180,7 +185,7 @@ pub(crate) async fn render_tool_output(
             output,
             output_mode,
             tail_limit,
-            tool_name,
+            stream_tool_name,
             &git_styles,
             &ls_styles,
             MessageStyle::ToolOutput,
@@ -196,7 +201,7 @@ pub(crate) async fn render_tool_output(
             stdout,
             output_mode,
             tail_limit,
-            tool_name,
+            stream_tool_name,
             &git_styles,
             &ls_styles,
             MessageStyle::ToolOutput,
@@ -224,6 +229,12 @@ pub(crate) async fn render_tool_output(
         .await?;
     }
     Ok(())
+}
+
+fn is_git_diff_payload(val: &Value) -> bool {
+    val.get("content_type")
+        .and_then(Value::as_str)
+        .is_some_and(|content_type| content_type == "git_diff")
 }
 
 fn render_tracker_view(renderer: &mut AnsiRenderer, val: &Value) -> Result<bool> {
@@ -400,7 +411,7 @@ fn should_render_unified_exec_terminal_panel(val: &Value) -> bool {
         .iter()
         .any(|key| val.get(*key).is_some());
 
-    has_command || has_terminal_stream || has_session_context
+    !is_git_diff_payload(val) && (has_command || has_terminal_stream || has_session_context)
 }
 
 fn render_error_details(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> {
@@ -484,8 +495,11 @@ fn render_error_details(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> 
 #[cfg(test)]
 mod tests {
     use serde_json::json;
+    use vtcode_core::utils::{ansi::AnsiRenderer, transcript};
 
-    use super::{should_render_unified_exec_terminal_panel, tracker_summary_lines};
+    use super::{
+        render_tool_output, should_render_unified_exec_terminal_panel, tracker_summary_lines,
+    };
 
     #[test]
     fn unified_exec_terminal_panel_detects_command_payload() {
@@ -512,6 +526,77 @@ mod tests {
             "success": true
         });
         assert!(!should_render_unified_exec_terminal_panel(&payload));
+    }
+
+    #[test]
+    fn unified_exec_terminal_panel_skips_git_diff_payload() {
+        let payload = json!({
+            "command": "git diff -- src/main.rs",
+            "output": "diff --git a/src/main.rs b/src/main.rs",
+            "content_type": "git_diff"
+        });
+        assert!(!should_render_unified_exec_terminal_panel(&payload));
+    }
+
+    #[tokio::test]
+    async fn render_tool_output_unified_exec_git_diff_renders_diff_not_command_preview() {
+        transcript::clear();
+
+        let mut renderer = AnsiRenderer::stdout();
+        let payload = json!({
+            "command": "git diff -- src/main.rs",
+            "output": "diff --git a/src/main.rs b/src/main.rs\n+added\n-removed\n",
+            "content_type": "git_diff",
+            "is_exited": true,
+            "exit_code": 0
+        });
+
+        render_tool_output(
+            &mut renderer,
+            Some(vtcode_core::config::constants::tools::UNIFIED_EXEC),
+            &payload,
+            None,
+        )
+        .await
+        .expect("git diff payload should render");
+
+        let transcript_dump = transcript::snapshot().join("\n");
+        assert!(transcript_dump.contains("diff --git a/src/main.rs b/src/main.rs"));
+        assert!(
+            !transcript_dump.contains("└ "),
+            "run-command preview prefix should not appear for git diff payload"
+        );
+    }
+
+    #[tokio::test]
+    async fn render_tool_output_unified_exec_git_diff_stdout_renders_diff_not_command_preview() {
+        transcript::clear();
+
+        let mut renderer = AnsiRenderer::stdout();
+        let payload = json!({
+            "command": "git diff -- src/lib.rs",
+            "stdout": "diff --git a/src/lib.rs b/src/lib.rs\n@@ -1 +1 @@\n-old\n+new\n",
+            "content_type": "git_diff",
+            "is_exited": true,
+            "exit_code": 0
+        });
+
+        render_tool_output(
+            &mut renderer,
+            Some(vtcode_core::config::constants::tools::UNIFIED_EXEC),
+            &payload,
+            None,
+        )
+        .await
+        .expect("git diff stdout payload should render");
+
+        let transcript_dump = transcript::snapshot().join("\n");
+        assert!(transcript_dump.contains("diff --git a/src/lib.rs b/src/lib.rs"));
+        assert!(transcript_dump.contains("+new"));
+        assert!(
+            !transcript_dump.contains("└ "),
+            "run-command preview prefix should not appear for git diff payload"
+        );
     }
 
     #[test]
