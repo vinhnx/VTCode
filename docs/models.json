@@ -266,8 +266,25 @@
           ]
         },
         "context": 131072
+      },
+      "gpt-5.3-codex": {
+        "id": "gpt-5.3-codex",
+        "name": "GPT-5.3 Codex",
+        "description": "GPT-5.3 Codex optimized for agentic coding with medium reasoning effort support",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 400000
       }
-    }
+    },
+    "default_model": "gpt-5.3-codex"
   },
   "huggingface": {
     "id": "huggingface",

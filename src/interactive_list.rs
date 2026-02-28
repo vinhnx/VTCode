@@ -4,11 +4,13 @@ use std::io::{self, Write};
 use anyhow::{Context, Result, anyhow};
 use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
-use ratatui::crossterm::cursor::Show;
+use ratatui::crossterm::cursor::{
+    MoveToColumn, RestorePosition, SavePosition, SetCursorStyle, Show,
+};
 use ratatui::crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
 use ratatui::crossterm::execute;
 use ratatui::crossterm::terminal::{
-    EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
+    Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
 };
 use ratatui::layout::{Constraint, Layout};
 use ratatui::style::{Modifier, Style};
@@ -83,6 +85,7 @@ pub fn run_interactive_selection(
 
     let mut stderr = io::stderr();
     let mut terminal_guard = TerminalModeGuard::new(title);
+    terminal_guard.save_cursor_position(&mut stderr);
     terminal_guard.enable_raw_mode()?;
     terminal_guard.enter_alternate_screen(&mut stderr)?;
 
@@ -287,6 +290,7 @@ struct TerminalModeGuard {
     raw_mode_enabled: bool,
     alternate_screen: bool,
     cursor_hidden: bool,
+    cursor_position_saved: bool,
 }
 
 impl TerminalModeGuard {
@@ -296,6 +300,18 @@ impl TerminalModeGuard {
             raw_mode_enabled: false,
             alternate_screen: false,
             cursor_hidden: false,
+            cursor_position_saved: false,
+        }
+    }
+
+    fn save_cursor_position(&mut self, stderr: &mut io::Stderr) {
+        match execute!(stderr, SavePosition) {
+            Ok(_) => {
+                self.cursor_position_saved = true;
+            }
+            Err(error) => {
+                tracing::debug!(%error, selector = %self.label, "failed to save cursor position");
+            }
         }
     }
 
@@ -335,7 +351,7 @@ impl TerminalModeGuard {
         }
 
         // Clear current line to remove artifacts like ^C from rapid presses
-        let _ = io::stderr().write_all(b"\r\x1b[K");
+        let _ = execute!(io::stderr(), MoveToColumn(0), Clear(ClearType::CurrentLine));
 
         // Proper order: Leave alternate screen FIRST, then disable raw mode LAST
         if self.alternate_screen {
@@ -362,6 +378,12 @@ impl TerminalModeGuard {
             self.cursor_hidden = false;
         }
 
+        let _ = execute!(terminal.backend_mut(), SetCursorStyle::DefaultUserShape);
+        if self.cursor_position_saved {
+            let _ = execute!(terminal.backend_mut(), RestorePosition);
+            self.cursor_position_saved = false;
+        }
+
         // Flush output to ensure all terminal commands are processed
         terminal.backend_mut().flush().ok();
         io::stderr().flush().ok();
@@ -377,7 +399,7 @@ impl Drop for TerminalModeGuard {
             let _ = event::read();
         }
 
-        let _ = io::stderr().write_all(b"\r\x1b[K");
+        let _ = execute!(io::stderr(), MoveToColumn(0), Clear(ClearType::CurrentLine));
 
         if self.alternate_screen {
             let mut stderr = io::stderr();
@@ -392,9 +414,16 @@ impl Drop for TerminalModeGuard {
 
         if self.cursor_hidden {
             let mut stderr = io::stderr();
-            let _ = execute!(stderr, Show);
+            let _ = execute!(stderr, SetCursorStyle::DefaultUserShape, Show);
             let _ = stderr.flush();
             self.cursor_hidden = false;
+        }
+
+        if self.cursor_position_saved {
+            let mut stderr = io::stderr();
+            let _ = execute!(stderr, RestorePosition);
+            let _ = stderr.flush();
+            self.cursor_position_saved = false;
         }
 
         // Ensure stderr is flushed to prevent escape codes from appearing

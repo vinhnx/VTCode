@@ -1,9 +1,15 @@
-/// Ollama model pull functionality with progress reporting.
-/// Adapted from OpenAI Codex's codex-ollama/src/pull.rs
+use ratatui::crossterm::{
+    cursor::MoveToColumn,
+    execute,
+    style::{PrintStyledContent, Stylize},
+    terminal::{Clear, ClearType},
+};
 use std::collections::HashMap;
 use std::io;
 use std::io::Write;
 
+/// Ollama model pull functionality with progress reporting.
+/// Adapted from OpenAI Codex's codex-ollama/src/pull.rs
 /// Events emitted while pulling a model from Ollama.
 #[derive(Debug, Clone)]
 pub enum OllamaPullEvent {
@@ -95,8 +101,8 @@ impl OllamaPullProgressReporter for CliPullProgressReporter {
                     if !self.printed_header {
                         let gb = (sum_total as f64) / (1024.0 * 1024.0 * 1024.0);
                         let header = format!("Downloading model: total {gb:.2} GB\n");
-                        out.write_all(b"\r\x1b[2K")?;
-                        out.write_all(header.as_bytes())?;
+                        execute!(out, MoveToColumn(0), Clear(ClearType::CurrentLine))?;
+                        execute!(out, PrintStyledContent(header.bold().cyan()))?;
                         self.printed_header = true;
                     }
                     let now = std::time::Instant::now();

@@ -1,9 +1,9 @@
 use super::{models, ui};
 
-pub const DEFAULT_MODEL: &str = models::anthropic::CLAUDE_SONNET_4_5;
-pub const DEFAULT_CLI_MODEL: &str = models::anthropic::CLAUDE_SONNET_4_5;
-pub const DEFAULT_PROVIDER: &str = "anthropic";
-pub const DEFAULT_API_KEY_ENV: &str = "ANTHROPIC_API_KEY";
+pub const DEFAULT_MODEL: &str = models::openai::GPT_5_3_CODEX;
+pub const DEFAULT_CLI_MODEL: &str = models::openai::GPT_5_3_CODEX;
+pub const DEFAULT_PROVIDER: &str = "openai";
+pub const DEFAULT_API_KEY_ENV: &str = "OPENAI_API_KEY";
 pub const DEFAULT_THEME: &str = "ciapre-dark";
 pub const DEFAULT_FULL_AUTO_MAX_TURNS: usize = 30;
 pub const DEFAULT_MAX_TOOL_LOOPS: usize = 20;

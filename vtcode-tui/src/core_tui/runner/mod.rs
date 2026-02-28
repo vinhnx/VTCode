@@ -1,8 +1,12 @@
-use std::io::{self, Write};
+use std::io;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
-use ratatui::crossterm::{execute, terminal::EnterAlternateScreen, terminal::LeaveAlternateScreen};
+use ratatui::crossterm::{
+    cursor::{MoveToColumn, RestorePosition, SavePosition},
+    execute,
+    terminal::{Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen, SetTitle},
+};
 use ratatui::{Terminal, backend::CrosstermBackend};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tokio_util::sync::CancellationToken;
@@ -78,12 +82,19 @@ pub async fn run_tui(
 
     let keyboard_flags = crate::config::keyboard_protocol_to_flags(&options.keyboard_protocol);
     let mut stderr = io::stderr();
+    let cursor_position_saved = match execute!(stderr, SavePosition) {
+        Ok(_) => true,
+        Err(error) => {
+            tracing::debug!(%error, "failed to save cursor position for inline session");
+            false
+        }
+    };
     let mode_state = enable_terminal_modes(&mut stderr, keyboard_flags)?;
     if surface.use_alternate() {
         execute!(stderr, EnterAlternateScreen).context(ALTERNATE_SCREEN_ERROR)?;
     }
 
-    // Set initial terminal title with project name using OSC 2 sequence
+    // Set initial terminal title with project name.
     let initial_title = options
         .workspace_root
         .as_ref()
@@ -94,10 +105,9 @@ pub async fn run_tui(
         })
         .unwrap_or_else(|| format!("> {}", options.app_name));
 
-    // Use OSC 2 sequence directly for cross-terminal compatibility
-    let osc_sequence = format!("\x1b]2;{}\x07", initial_title);
-    let _ = stderr.write_all(osc_sequence.as_bytes());
-    let _ = stderr.flush();
+    if let Err(error) = execute!(stderr, SetTitle(&initial_title)) {
+        tracing::debug!(%error, "failed to set initial terminal title");
+    }
 
     let backend = CrosstermBackend::new(stderr);
     let mut terminal = Terminal::new(backend).context("failed to initialize inline terminal")?;
@@ -148,7 +158,7 @@ pub async fn run_tui(
     drain_terminal_events();
 
     // Clear current line to remove any echoed characters (like ^C)
-    let _ = io::stderr().write_all(b"\r\x1b[K");
+    let _ = execute!(io::stderr(), MoveToColumn(0), Clear(ClearType::CurrentLine));
 
     let finalize_result = finalize_terminal(&mut terminal);
     let leave_alternate_result = if surface.use_alternate() {
@@ -169,8 +179,12 @@ pub async fn run_tui(
         tracing::warn!(%error, "failed to restore terminal modes");
     }
 
-    // Clear terminal title on exit using OSC 2 sequence
+    // Clear terminal title on exit.
     session.clear_terminal_title();
+
+    if cursor_position_saved && let Err(error) = execute!(io::stderr(), RestorePosition) {
+        tracing::debug!(%error, "failed to restore cursor position for inline session");
+    }
 
     drive_result?;
     finalize_result?;

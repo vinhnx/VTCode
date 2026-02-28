@@ -1,4 +1,5 @@
 use ratatui::buffer::Buffer;
+use ratatui::crossterm::{clipboard::CopyToClipboard, execute};
 use ratatui::layout::Rect;
 use std::io::Write;
 
@@ -162,16 +163,15 @@ impl MouseSelectionState {
         self.copied = true;
     }
 
-    /// Copy the selected text to the system clipboard via OSC 52.
-    pub fn copy_to_clipboard_osc52(text: &str) {
+    /// Copy the selected text to the system clipboard using crossterm clipboard commands.
+    pub fn copy_to_clipboard(text: &str) {
         if text.is_empty() {
             return;
         }
-        use base64::Engine;
-        let encoded = base64::engine::general_purpose::STANDARD.encode(text);
-        // OSC 52 ; c ; <base64> ST
-        let osc = format!("\x1b]52;c;{}\x07", encoded);
-        let _ = std::io::stderr().write_all(osc.as_bytes());
+        let _ = execute!(
+            std::io::stderr(),
+            CopyToClipboard::to_clipboard_from(text.as_bytes())
+        );
         let _ = std::io::stderr().flush();
     }
 }

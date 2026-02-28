@@ -9,12 +9,12 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use better_panic::{Settings as BetterPanicSettings, Verbosity as BetterPanicVerbosity};
 use ratatui::crossterm::{
-    cursor::Show,
+    cursor::{MoveToColumn, RestorePosition, SetCursorStyle, Show},
     event::{
         DisableBracketedPaste, DisableFocusChange, DisableMouseCapture, PopKeyboardEnhancementFlags,
     },
     execute,
-    terminal::{LeaveAlternateScreen, disable_raw_mode},
+    terminal::{Clear, ClearType, LeaveAlternateScreen, disable_raw_mode},
 };
 
 static TUI_INITIALIZED: AtomicBool = AtomicBool::new(false);
@@ -105,8 +105,7 @@ pub fn restore_tui() -> io::Result<()> {
     let mut stderr = io::stderr();
 
     // 2. Clear current line to remove any echoed ^C characters from rapid Ctrl+C presses
-    // \r returns to start of line, \x1b[K clears to end of line
-    let _ = stderr.write_all(b"\r\x1b[K");
+    let _ = execute!(stderr, MoveToColumn(0), Clear(ClearType::CurrentLine));
 
     // 3. Leave alternate screen FIRST (if we were in one)
     // This is the most critical operation for visual restoration
@@ -118,8 +117,13 @@ pub fn restore_tui() -> io::Result<()> {
     let _ = execute!(stderr, DisableMouseCapture);
     let _ = execute!(stderr, PopKeyboardEnhancementFlags);
 
-    // Ensure cursor is visible
-    let _ = execute!(stderr, Show);
+    // Ensure cursor state is restored
+    let _ = execute!(
+        stderr,
+        SetCursorStyle::DefaultUserShape,
+        Show,
+        RestorePosition
+    );
 
     // 5. Disable raw mode LAST to ensure all cleanup commands are sent properly
     let _ = disable_raw_mode();

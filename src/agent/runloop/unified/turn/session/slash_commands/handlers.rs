@@ -270,7 +270,7 @@ pub async fn handle_copy_latest_assistant_reply(
     });
 
     if let Some(reply) = latest_reply {
-        vtcode_tui::core_tui::session::mouse_selection::MouseSelectionState::copy_to_clipboard_osc52(
+        vtcode_tui::core_tui::session::mouse_selection::MouseSelectionState::copy_to_clipboard(
             &reply,
         );
         ctx.renderer.line(

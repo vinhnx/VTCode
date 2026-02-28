@@ -77,13 +77,13 @@ impl Session {
             self.mouse_selection
                 .apply_highlight(frame.buffer_mut(), viewport);
 
-            // Copy to clipboard via OSC 52 once when selection is finalized
+            // Copy to clipboard once when selection is finalized
             if self.mouse_selection.needs_copy() {
                 let text = self
                     .mouse_selection
                     .extract_text(frame.buffer_mut(), viewport);
                 if !text.is_empty() {
-                    super::mouse_selection::MouseSelectionState::copy_to_clipboard_osc52(&text);
+                    super::mouse_selection::MouseSelectionState::copy_to_clipboard(&text);
                 }
                 self.mouse_selection.mark_copied();
             }

@@ -3,10 +3,12 @@ use std::io::{self, Write};
 use crate::utils::tty::TtyExt;
 use anyhow::{Context, Result};
 use ratatui::crossterm::{
+    cursor::MoveToColumn,
     event::{DisableBracketedPaste, DisableFocusChange, EnableBracketedPaste, EnableFocusChange},
     execute,
     terminal::{
-        self, EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
+        self, Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode,
+        enable_raw_mode,
     },
 };
 
@@ -151,7 +153,7 @@ impl AlternateScreenSession {
         let mut stdout = io::stdout();
 
         // Clear current line to remove artifacts like ^C from rapid presses
-        let _ = stdout.write_all(b"\r\x1b[K");
+        let _ = execute!(stdout, MoveToColumn(0), Clear(ClearType::CurrentLine));
 
         let mut errors = Vec::new();
 
@@ -234,6 +236,10 @@ mod tests {
 
     #[test]
     fn test_enter_exit_cycle() {
+        if !std::io::stdout().is_tty_ext() {
+            return;
+        }
+
         // This test verifies that we can enter and exit alternate screen
         // without panicking. We can't easily verify the actual terminal state
         // in a unit test, but we can at least ensure the code doesn't crash.
@@ -248,6 +254,10 @@ mod tests {
 
     #[test]
     fn test_run_with_closure() {
+        if !std::io::stdout().is_tty_ext() {
+            return;
+        }
+
         let result = AlternateScreenSession::run(|| {
             // Simulate some work in alternate screen
             Ok(42)

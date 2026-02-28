@@ -1,4 +1,4 @@
-pub const DEFAULT_MODEL: &str = "gpt-5";
+pub const DEFAULT_MODEL: &str = "gpt-5.3-codex";
 pub const SUPPORTED_MODELS: &[&str] = &[
     "gpt-5",
     "gpt-5.2",

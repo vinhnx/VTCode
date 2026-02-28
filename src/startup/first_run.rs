@@ -4,14 +4,15 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use anyhow::{Context, Result, anyhow};
 use vtcode_core::cli::args::{Cli, Commands};
 use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
+use vtcode_core::config::types::ReasoningEffortLevel;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::dot_config::{WorkspaceTrustLevel, WorkspaceTrustRecord, get_dot_manager};
 use vtcode_core::utils::file_utils::ensure_dir_exists_sync;
 use vtcode_core::{initialize_dot_folder, update_model_preference};
 
 use super::first_run_prompts::{
-    default_model_for_provider, prompt_model, prompt_provider, prompt_trust,
-    resolve_initial_provider,
+    default_model_for_provider, prompt_model, prompt_provider, prompt_reasoning_effort,
+    prompt_trust, resolve_initial_provider,
 };
 
 /// Drive the first-run interactive setup wizard when a workspace lacks VT Code artifacts.
@@ -112,10 +113,13 @@ async fn run_first_run_setup(
             let model = prompt_model(&mut renderer, provider, default_model)?;
             renderer.line(MessageStyle::Info, "")?;
 
+            let reasoning = prompt_reasoning_effort(&mut renderer, ReasoningEffortLevel::Medium)?;
+            renderer.line(MessageStyle::Info, "")?;
+
             let trust = prompt_trust(&mut renderer, WorkspaceTrustLevel::ToolsPolicy)?;
             renderer.line(MessageStyle::Info, "")?;
 
-            (provider, model, trust)
+            (provider, model, reasoning, trust)
         }
         SetupMode::NonInteractive { full_auto } => {
             renderer.line(
