@@ -92,6 +92,7 @@ fn is_retryable_llm_error(message: &str) -> bool {
 
 fn supports_streaming_timeout_fallback(provider_name: &str) -> bool {
     provider_name.eq_ignore_ascii_case("huggingface")
+        || provider_name.eq_ignore_ascii_case("ollama")
 }
 
 fn is_stream_timeout_error(message: &str) -> bool {
@@ -116,6 +117,17 @@ fn llm_attempt_timeout_secs(turn_timeout_secs: u64, plan_mode: bool, provider_na
     };
     let plan_mode_budget = (turn_timeout_secs / 2).clamp(plan_mode_floor, 120);
     baseline.max(plan_mode_budget)
+}
+
+const DEFAULT_LLM_RETRY_ATTEMPTS: usize = 3;
+const MAX_LLM_RETRY_ATTEMPTS: usize = 6;
+
+fn llm_retry_attempts(configured_task_retries: Option<u32>) -> usize {
+    configured_task_retries
+        .and_then(|value| usize::try_from(value).ok())
+        .map(|value| value.saturating_add(1))
+        .unwrap_or(DEFAULT_LLM_RETRY_ATTEMPTS)
+        .clamp(1, MAX_LLM_RETRY_ATTEMPTS)
 }
 
 fn compact_error_message(message: &str, max_chars: usize) -> String {
@@ -413,7 +425,7 @@ pub(crate) async fn execute_llm_request(
     }
     let action_suggestion = extract_action_from_messages(ctx.working_history);
 
-    const MAX_RETRIES: usize = 3;
+    let max_retries = llm_retry_attempts(ctx.vt_cfg.map(|cfg| cfg.agent.max_task_retries));
     let mut llm_result = Err(anyhow::anyhow!("LLM request failed to execute"));
     let mut attempts_made = 0usize;
     let mut stream_fallback_used = false;
@@ -423,7 +435,7 @@ pub(crate) async fn execute_llm_request(
     #[cfg(debug_assertions)]
     let mut request_timer = Instant::now();
 
-    for attempt in 0..MAX_RETRIES {
+    for attempt in 0..max_retries {
         attempts_made = attempt + 1;
         if attempt > 0 {
             use crate::agent::runloop::unified::turn::turn_helpers::calculate_backoff;
@@ -435,7 +447,7 @@ pub(crate) async fn execute_llm_request(
                     "LLM request failed, retrying in {:.1}s... (attempt {}/{})",
                     delay_secs,
                     attempt + 1,
-                    MAX_RETRIES
+                    max_retries
                 ),
             )?;
             let cancel_notifier = ctx.ctrl_c_notify.notified();
@@ -460,9 +472,9 @@ pub(crate) async fn execute_llm_request(
         let spinner_msg = if attempt > 0 {
             let action = action_suggestion.clone();
             if action.is_empty() {
-                format!("Retrying request (attempt {}/{})", attempt + 1, MAX_RETRIES)
+                format!("Retrying request (attempt {}/{})", attempt + 1, max_retries)
             } else {
-                format!("{} (Retry {}/{})", action, attempt + 1, MAX_RETRIES)
+                format!("{} (Retry {}/{})", action, attempt + 1, max_retries)
             }
         } else {
             action_suggestion.clone()
@@ -631,7 +643,7 @@ pub(crate) async fn execute_llm_request(
                     break;
                 }
 
-                if is_retryable && attempt < MAX_RETRIES - 1 {
+                if is_retryable && attempt < max_retries - 1 {
                     if use_streaming
                         && supports_streaming_timeout_fallback(&provider_name)
                         && is_stream_timeout_error(&msg)
@@ -681,7 +693,7 @@ pub(crate) async fn execute_llm_request(
         active_model,
         plan_mode,
         attempts_made,
-        MAX_RETRIES,
+        max_retries,
         llm_result.is_ok(),
         stream_fallback_used,
         last_error_retryable,
@@ -778,10 +790,26 @@ mod tests {
     }
 
     #[test]
-    fn supports_streaming_timeout_fallback_is_huggingface_only() {
+    fn supports_streaming_timeout_fallback_covers_supported_providers() {
         assert!(supports_streaming_timeout_fallback("huggingface"));
+        assert!(supports_streaming_timeout_fallback("ollama"));
         assert!(supports_streaming_timeout_fallback("HUGGINGFACE"));
         assert!(!supports_streaming_timeout_fallback("openai"));
+    }
+
+    #[test]
+    fn llm_retry_attempts_uses_default_when_unset() {
+        assert_eq!(llm_retry_attempts(None), DEFAULT_LLM_RETRY_ATTEMPTS);
+    }
+
+    #[test]
+    fn llm_retry_attempts_uses_configured_retries_plus_initial_attempt() {
+        assert_eq!(llm_retry_attempts(Some(2)), 3);
+    }
+
+    #[test]
+    fn llm_retry_attempts_respects_upper_bound() {
+        assert_eq!(llm_retry_attempts(Some(16)), MAX_LLM_RETRY_ATTEMPTS);
     }
 
     #[test]

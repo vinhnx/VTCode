@@ -49,7 +49,7 @@ pub(crate) enum ActivePalette {
     },
     Config {
         workspace: PathBuf,
-        vt_snapshot: Option<VTCodeConfig>,
+        vt_snapshot: Box<Option<VTCodeConfig>>,
         selected: Option<InlineListSelection>,
     },
 }
@@ -102,6 +102,7 @@ pub(crate) fn show_theme_palette(
     Ok(true)
 }
 
+#[allow(clippy::vec_init_then_push)]
 pub(crate) fn show_config_palette(
     renderer: &mut AnsiRenderer,
     workspace: &Path,
@@ -585,7 +586,7 @@ fn config_key_aliases(key: &str) -> &'static str {
 }
 
 fn load_effective_config(
-    workspace: &PathBuf,
+    workspace: &Path,
     vt_snapshot: &Option<VTCodeConfig>,
 ) -> Result<(String, VTCodeConfig)> {
     let manager = ConfigManager::load()?;
@@ -1125,6 +1126,7 @@ pub(crate) fn show_sessions_palette(
     Ok(true)
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) async fn handle_palette_selection(
     palette: ActivePalette,
     selection: InlineListSelection,
@@ -1243,7 +1245,7 @@ pub(crate) async fn handle_palette_selection(
             if show_config_palette(renderer, &workspace, &vt_snapshot, selected_for_modal)? {
                 Ok(Some(ActivePalette::Config {
                     workspace,
-                    vt_snapshot,
+                    vt_snapshot: Box::new(*vt_snapshot),
                     selected: normalized_selection,
                 }))
             } else {

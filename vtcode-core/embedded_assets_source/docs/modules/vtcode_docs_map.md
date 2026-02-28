@@ -603,7 +603,8 @@ This document serves as an index of all VT Code documentation. When users ask qu
 
 - **File**: `docs/project/TODO.md`
   - **Content**: TODO.md
-  - **User Questions**: "What can you tell me about TODO.md?"
+  - **Topics**: the work is not being actively moritor and tracked in the task tracker, which is a crucial part of the workflow. The task tracker should be updated in real-time as the agent progresses through the tasks, allowing for better visibility and management of the work being done. This includes marking tasks as completed, updating the status of ongoing tasks, and adding any new tasks that may arise during the process. Ensuring that the task tracker is actively monitored and updated will help keep the workflow organized and efficient.
+  - **User Questions**: "What can you tell me about TODO.md?", "How does the work is not being actively moritor and tracked in the task tracker, which is a crucial part of the workflow. The task tracker should be updated in real-time as the agent progresses through the tasks, allowing for better visibility and management of the work being done. This includes marking tasks as completed, updating the status of ongoing tasks, and adding any new tasks that may arise during the process. Ensuring that the task tracker is actively monitored and updated will help keep the workflow organized and efficient. work?"
 
 - **File**: `docs/harness/TECH_DEBT_TRACKER.md`
   - **Content**: Tech Debt Tracker
