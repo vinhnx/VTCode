@@ -62,7 +62,6 @@ impl LLMClient for ProviderClientAdapter {
             "deepseek" => BackendKind::DeepSeek,
             "openrouter" => BackendKind::OpenRouter,
             "ollama" => BackendKind::Ollama,
-            "xai" => BackendKind::XAI,
             "zai" => BackendKind::ZAI,
             "moonshot" => BackendKind::Moonshot,
             _ => BackendKind::OpenAI, // Default fallback

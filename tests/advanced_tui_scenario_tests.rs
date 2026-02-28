@@ -102,7 +102,7 @@ fn test_tui_with_different_header_contexts() {
             "basic_context",
             InlineHeaderContext {
                 provider: "openai".to_string(),
-                model: "gpt-5".to_string(),
+                model: "gpt-oss-20b".to_string(),
                 mode: "interactive".to_string(),
                 version: "test-version".to_string(),
                 ..Default::default()

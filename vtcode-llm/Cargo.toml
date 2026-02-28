@@ -18,7 +18,6 @@ default = [
     "ollama",
     "openai",
     "openrouter",
-    "xai",
     "zai",
     "functions",
 ]
@@ -30,7 +29,6 @@ moonshot = []
 ollama = []
 openai = []
 openrouter = []
-xai = []
 zai = []
 functions = []
 telemetry = []

@@ -29,7 +29,7 @@ const DEFAULT_MODEL_CACHE_TTL: Duration = Duration::from_secs(300);
 const GEMINI_DEFAULT_MODEL: &str = "gemini-3-flash-preview";
 
 /// Default model for OpenAI provider
-const OPENAI_DEFAULT_MODEL: &str = "gpt-5";
+const OPENAI_DEFAULT_MODEL: &str = "gpt-5.3-codex";
 
 /// Default model for Anthropic provider
 const ANTHROPIC_DEFAULT_MODEL: &str = "claude-opus-4.5";
@@ -278,6 +278,7 @@ impl ModelsManager {
             Provider::Minimax => "MiniMax-M2.5".to_string(),
             Provider::OpenRouter => "deepseek/deepseek-chat".to_string(),
             Provider::Ollama => "gpt-oss:20b".to_string(),
+            Provider::LmStudio => "local-model".to_string(),
             Provider::Moonshot => "qwen3-coder-next".to_string(),
             Provider::HuggingFace => "deepseek-ai/DeepSeek-V3-0324".to_string(),
         }

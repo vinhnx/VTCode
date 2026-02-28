@@ -253,7 +253,7 @@ async fn test_visual_header_variations() {
             "openai_gpt5",
             InlineHeaderContext {
                 provider: "openai".to_string(),
-                model: "gpt-5".to_string(),
+                model: "gpt-oss-20b".to_string(),
                 mode: "interactive".to_string(),
                 reasoning: "creative".to_string(),
                 ..Default::default()

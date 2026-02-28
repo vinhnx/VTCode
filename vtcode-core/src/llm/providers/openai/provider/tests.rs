@@ -543,7 +543,7 @@ mod caching_tests {
         // Must use an exact model name from RESPONSES_API_MODELS
         let request = provider::LLMRequest {
             messages: vec![provider::Message::user("Hello".to_string())],
-            model: crate::config::constants::models::openai::GPT_5_2_CODEX.to_string(),
+            model: crate::config::constants::models::openai::GPT_5_3_CODEX.to_string(),
             ..Default::default()
         };
 

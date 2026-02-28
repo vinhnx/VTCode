@@ -39,7 +39,6 @@ pub struct ProviderConfigs {
     pub gemini: Option<ProviderConfig>,
     pub deepseek: Option<ProviderConfig>,
     pub openrouter: Option<ProviderConfig>,
-    pub xai: Option<ProviderConfig>,
     pub ollama: Option<ProviderConfig>,
     pub lmstudio: Option<ProviderConfig>,
     #[serde(skip_serializing_if = "Option::is_none")]

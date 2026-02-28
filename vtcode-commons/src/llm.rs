@@ -10,7 +10,6 @@ pub enum BackendKind {
     DeepSeek,
     OpenRouter,
     Ollama,
-    XAI,
     ZAI,
     Moonshot,
     HuggingFace,

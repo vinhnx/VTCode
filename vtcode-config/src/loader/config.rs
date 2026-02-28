@@ -726,10 +726,6 @@ report_savings = true
 [prompt_cache.providers.moonshot]
 enabled = true
 
-# Prompt cache configuration for xAI
-[prompt_cache.providers.xai]
-enabled = true
-
 # Prompt cache configuration for DeepSeek
 [prompt_cache.providers.deepseek]
 enabled = true

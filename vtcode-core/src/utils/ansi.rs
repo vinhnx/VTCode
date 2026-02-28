@@ -1220,7 +1220,7 @@ mod tests {
     #[test]
     fn convert_plain_lines_preserves_ansi_styles() {
         let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
-        let sink = InlineSink::new(InlineHandle { sender }, SyntaxHighlightingConfig::default());
+        let sink = InlineSink::new(InlineHandle::new_for_tests(sender), SyntaxHighlightingConfig::default());
         let fallback = InlineTextStyle {
             color: Some(AnsiColorEnum::Ansi(AnsiColor::Green)),
             bg_color: None,
@@ -1246,7 +1246,7 @@ mod tests {
     #[test]
     fn convert_plain_lines_retains_trailing_newline() {
         let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
-        let sink = InlineSink::new(InlineHandle { sender }, SyntaxHighlightingConfig::default());
+        let sink = InlineSink::new(InlineHandle::new_for_tests(sender), SyntaxHighlightingConfig::default());
         let fallback = InlineTextStyle::default();
 
         let (converted, plain) = sink.convert_plain_lines("hello\n", &fallback);
@@ -1262,7 +1262,7 @@ mod tests {
         use crate::ui::InlineCommand;
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
         let mut sink =
-            InlineSink::new(InlineHandle { sender }, SyntaxHighlightingConfig::default());
+            InlineSink::new(InlineHandle::new_for_tests(sender), SyntaxHighlightingConfig::default());
         let style = InlineTextStyle::default();
         // Use Tool kind to verify that multiple lines are combined into a single AppendLine command
         let kind = InlineMessageKind::Tool;
@@ -1286,7 +1286,7 @@ mod tests {
         let mut config = SyntaxHighlightingConfig::default();
         config.enabled = true;
         config.enabled_languages = vec!["rust".to_string()];
-        let sink = InlineSink::new(InlineHandle { sender }, config);
+        let sink = InlineSink::new(InlineHandle::new_for_tests(sender), config);
         let base_style = MessageStyle::Response.style();
         let markdown = "```rust\nlet value = 1;\n```";
 

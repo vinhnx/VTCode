@@ -21,6 +21,8 @@ pub enum Provider {
     OpenRouter,
     /// Local Ollama models
     Ollama,
+    /// LM Studio local models
+    LmStudio,
     /// Moonshot.ai models
     Moonshot,
     /// Z.AI GLM models
@@ -41,6 +43,7 @@ impl Provider {
             Provider::DeepSeek => "DEEPSEEK_API_KEY",
             Provider::OpenRouter => "OPENROUTER_API_KEY",
             Provider::Ollama => "OLLAMA_API_KEY",
+            Provider::LmStudio => "LMSTUDIO_API_KEY",
             Provider::Moonshot => "MOONSHOT_API_KEY",
             Provider::ZAI => "ZAI_API_KEY",
             Provider::Minimax => "MINIMAX_API_KEY",
@@ -59,6 +62,7 @@ impl Provider {
             Provider::HuggingFace,
             Provider::OpenRouter,
             Provider::Ollama,
+            Provider::LmStudio,
             Provider::Moonshot,
             Provider::ZAI,
         ]
@@ -73,6 +77,7 @@ impl Provider {
             Provider::DeepSeek => "DeepSeek",
             Provider::OpenRouter => "OpenRouter",
             Provider::Ollama => "Ollama",
+            Provider::LmStudio => "LM Studio",
             Provider::Moonshot => "Moonshot",
             Provider::ZAI => "Z.AI",
             Provider::Minimax => "MiniMax",
@@ -85,13 +90,16 @@ impl Provider {
     }
 
     pub fn is_local(&self) -> bool {
-        matches!(self, Provider::Ollama)
+        matches!(self, Provider::Ollama | Provider::LmStudio)
     }
 
     pub fn local_install_instructions(&self) -> Option<&'static str> {
         match self {
             Provider::Ollama => Some(
                 "Ollama server is not running. To start:\n  1. Install Ollama from https://ollama.com\n  2. Run 'ollama serve' in a terminal\n  3. Pull models using 'ollama pull <model-name>' (e.g., 'ollama pull gpt-oss:20b')",
+            ),
+            Provider::LmStudio => Some(
+                "LM Studio server is not running. To start:\n  1. Install LM Studio from https://lmstudio.ai\n  2. Open LM Studio and start the Local Server on port 1234\n  3. Load the model you want to use",
             ),
             _ => None,
         }
@@ -120,6 +128,7 @@ impl Provider {
                 models::openrouter::REASONING_MODELS.contains(&model)
             }
             Provider::Ollama => models::ollama::REASONING_LEVEL_MODELS.contains(&model),
+            Provider::LmStudio => models::lmstudio::REASONING_MODELS.contains(&model),
             Provider::Moonshot => models::moonshot::REASONING_MODELS.contains(&model),
             Provider::ZAI => models::zai::REASONING_MODELS.contains(&model),
             Provider::Minimax => {
@@ -139,6 +148,7 @@ impl fmt::Display for Provider {
             Provider::DeepSeek => write!(f, "deepseek"),
             Provider::OpenRouter => write!(f, "openrouter"),
             Provider::Ollama => write!(f, "ollama"),
+            Provider::LmStudio => write!(f, "lmstudio"),
             Provider::Moonshot => write!(f, "moonshot"),
             Provider::ZAI => write!(f, "zai"),
             Provider::Minimax => write!(f, "minimax"),
@@ -158,6 +168,7 @@ impl FromStr for Provider {
             "deepseek" => Ok(Provider::DeepSeek),
             "openrouter" => Ok(Provider::OpenRouter),
             "ollama" => Ok(Provider::Ollama),
+            "lmstudio" => Ok(Provider::LmStudio),
             "moonshot" => Ok(Provider::Moonshot),
             "zai" => Ok(Provider::ZAI),
             "minimax" => Ok(Provider::Minimax),

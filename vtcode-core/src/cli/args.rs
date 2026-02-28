@@ -82,7 +82,7 @@ pub struct Cli {
     #[arg(long, global = true)]
     pub model: Option<String>,
 
-    /// LLM Provider (gemini, openai, anthropic, deepseek, openrouter, xai, zai, moonshot, minimax, ollama, lmstudio)
+    /// LLM Provider (gemini, openai, anthropic, deepseek, openrouter, zai, moonshot, minimax, ollama, lmstudio)
     #[arg(long, global = true)]
     pub provider: Option<String>,
 
@@ -967,7 +967,6 @@ impl Cli {
                 "gemini" => "GEMINI_API_KEY".to_owned(),
                 "deepseek" => "DEEPSEEK_API_KEY".to_owned(),
                 "openrouter" => "OPENROUTER_API_KEY".to_owned(),
-                "xai" => "XAI_API_KEY".to_owned(),
                 "zai" => "ZAI_API_KEY".to_owned(),
                 "minimax" => "ANTHROPIC_API_KEY".to_owned(),
                 _ => crate::config::constants::defaults::DEFAULT_API_KEY_ENV.to_owned(),

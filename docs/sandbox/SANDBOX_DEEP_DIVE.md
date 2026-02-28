@@ -23,6 +23,7 @@ VT Code supports three main isolation levels (`SandboxPolicy`):
 - No file writes except `/dev/null`
 - No network access
 - Conservative resource limits (512MB memory, 64 PIDs)
+- Harness compatibility: mutating `run_pty_cmd` workflows are adaptively upgraded to `WorkspaceWrite` to avoid blocking normal agent edit/build loops.
 
 ### WorkspaceWrite (Auto mode)
 - Read files everywhere

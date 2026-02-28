@@ -17,11 +17,11 @@ use vtcode_core::{
 
 #[test]
 fn test_response_object_compliance() {
-    let mut response = Response::new("resp_test", "gpt-5");
+    let mut response = Response::new("resp_test", "gpt-oss-20b");
 
     // 1. Check mandatory fields
     assert_eq!(response.object, "response");
-    assert_eq!(response.model, "gpt-5");
+    assert_eq!(response.model, "gpt-oss-20b");
     assert_eq!(response.status, ResponseStatus::InProgress);
     assert!(response.created_at > 0);
 
@@ -59,7 +59,7 @@ fn test_item_state_machine_compliance() {
 
 #[test]
 fn test_streaming_event_sequence_compliance() {
-    let mut builder = ResponseBuilder::new("gpt-5");
+    let mut builder = ResponseBuilder::new("gpt-oss-20b");
     let mut emitter = VecStreamEmitter::new();
 
     // 1. Response Created
@@ -139,12 +139,12 @@ fn test_streaming_event_sequence_compliance() {
 
 #[test]
 fn test_request_object_compliance() {
-    let mut req = Request::from_message("gpt-5", "Hello");
+    let mut req = Request::from_message("gpt-oss-20b", "Hello");
     req.temperature = Some(0.7);
     req.stream = true;
 
     let json = serde_json::to_value(&req).unwrap();
-    assert_eq!(json["model"], "gpt-5");
+    assert_eq!(json["model"], "gpt-oss-20b");
     assert_eq!(json["temperature"], 0.7);
     assert_eq!(json["stream"], true);
     assert!(json["input"].is_array());
@@ -153,7 +153,7 @@ fn test_request_object_compliance() {
 
 #[test]
 fn test_incomplete_response_compliance() {
-    let mut response = Response::new("resp_inc", "gpt-5");
+    let mut response = Response::new("resp_inc", "gpt-oss-20b");
 
     response.incomplete(IncompleteReason::MaxOutputTokens);
 
@@ -191,7 +191,7 @@ fn test_error_object_compliance() {
 
 #[test]
 fn test_reasoning_item_compliance() {
-    let mut builder = ResponseBuilder::new("gpt-5");
+    let mut builder = ResponseBuilder::new("gpt-oss-20b");
     let mut emitter = VecStreamEmitter::new();
 
     let item = ThreadItem {
@@ -226,7 +226,7 @@ fn test_reasoning_item_compliance() {
 
 #[test]
 fn test_tool_call_compliance() {
-    let mut builder = ResponseBuilder::new("gpt-5");
+    let mut builder = ResponseBuilder::new("gpt-oss-20b");
     let mut emitter = VecStreamEmitter::new();
 
     let item = ThreadItem {

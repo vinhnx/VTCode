@@ -7,6 +7,7 @@ pub const SUPPORTED_MODELS: &[&str] = &[
     GEMMA_2_9B_IT,
     PHI_31_MINI_4K_INSTRUCT,
 ];
+pub const REASONING_MODELS: &[&str] = &[];
 
 pub const META_LLAMA_3_8B_INSTRUCT: &str = "lmstudio-community/meta-llama-3-8b-instruct";
 pub const META_LLAMA_31_8B_INSTRUCT: &str = "lmstudio-community/meta-llama-3.1-8b-instruct";

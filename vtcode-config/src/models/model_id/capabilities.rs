@@ -216,12 +216,17 @@ impl ModelId {
             ModelId::HuggingFaceQwen3CoderNextNovita
             | ModelId::OpenRouterQwen3CoderNext
             | ModelId::MoonshotQwen3CoderNext => "qwen3-coder-next",
-            _ => unreachable!(),
+            _ => "unknown",
         }
     }
 
     /// Determine if this model supports GPT-5.1+/5.2+/5.3+ shell tool type
     pub fn supports_shell_tool(&self) -> bool {
         matches!(self, ModelId::GPT52 | ModelId::GPT53Codex)
+    }
+
+    /// Determine if this model supports optimized apply_patch tool
+    pub fn supports_apply_patch_tool(&self) -> bool {
+        false // Placeholder for future optimization
     }
 }

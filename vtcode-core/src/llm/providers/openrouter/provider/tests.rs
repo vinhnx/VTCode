@@ -3,6 +3,7 @@ use super::*;
 use crate::llm::providers::openrouter::stream_decoder::parse_stream_payload;
 
 use crate::llm::FinishReason;
+use crate::llm::provider::LLMProvider;
 use crate::llm::provider::ToolDefinition;
 use crate::llm::providers::ReasoningBuffer;
 use crate::llm::providers::shared::NoopStreamTelemetry;

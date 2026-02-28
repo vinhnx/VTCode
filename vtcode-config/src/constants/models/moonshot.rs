@@ -1,4 +1,5 @@
 // Legacy Moonshot direct API models (kept for compatibility with tests)
+pub const DEFAULT_MODEL: &str = "kimi-latest";
 pub const SUPPORTED_MODELS: &[&str] = &[MINIMAX_M2_5, QWEN3_CODER_NEXT];
 pub const REASONING_MODELS: &[&str] = &[];
 

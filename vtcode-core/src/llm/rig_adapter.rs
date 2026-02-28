@@ -52,6 +52,9 @@ pub fn verify_model_with_rig(
         Provider::Ollama => {
             // Rig does not provide an Ollama integration; validation is skipped.
         }
+        Provider::LmStudio => {
+            // LM Studio provides an OpenAI-compatible API; rig has no direct client.
+        }
         Provider::Moonshot => {
             // Moonshot does not have a rig client integration yet.
         }
