@@ -14,6 +14,7 @@
 
 use std::fmt;
 use thiserror::Error;
+use vtcode_commons::ErrorCategory;
 
 /// Unified error severity levels
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -210,36 +211,58 @@ impl UnifiedToolError {
     }
 }
 
-/// Classify an anyhow::Error into a UnifiedErrorKind
+/// Classify an anyhow::Error into a UnifiedErrorKind.
+///
+/// Delegates to the shared `ErrorCategory` classifier for consistency,
+/// then converts the result to the `UnifiedErrorKind` type.
 pub fn classify_error(err: &anyhow::Error) -> UnifiedErrorKind {
-    let msg = err.to_string().to_lowercase();
+    let category = vtcode_commons::classify_anyhow_error(err);
+    UnifiedErrorKind::from(category)
+}
 
-    if msg.contains("timeout") || msg.contains("timed out") {
-        UnifiedErrorKind::Timeout
-    } else if msg.contains("network") || msg.contains("connection") || msg.contains("dns") {
-        UnifiedErrorKind::Network
-    } else if msg.contains("rate limit") || msg.contains("too many requests") || msg.contains("429")
-    {
-        UnifiedErrorKind::RateLimit
-    } else if msg.contains("permission") || msg.contains("denied") || msg.contains("forbidden") {
-        UnifiedErrorKind::PermissionDenied
-    } else if msg.contains("not found") || msg.contains("unknown tool") {
-        UnifiedErrorKind::ToolNotFound
-    } else if msg.contains("invalid")
-        || msg.contains("missing required")
-        || msg.contains("argument")
-    {
-        UnifiedErrorKind::ArgumentValidation
-    } else if msg.contains("sandbox") {
-        UnifiedErrorKind::SandboxFailure
-    } else if msg.contains("circuit") || msg.contains("breaker") {
-        UnifiedErrorKind::CircuitOpen
-    } else if msg.contains("cancelled") || msg.contains("interrupted") {
-        UnifiedErrorKind::Cancelled
-    } else if msg.contains("memory") || msg.contains("disk") || msg.contains("quota") {
-        UnifiedErrorKind::ResourceExhausted
-    } else {
-        UnifiedErrorKind::Unknown
+// === Bridge conversions between ErrorCategory and UnifiedErrorKind ===
+
+impl From<ErrorCategory> for UnifiedErrorKind {
+    fn from(cat: ErrorCategory) -> Self {
+        match cat {
+            ErrorCategory::Network | ErrorCategory::ServiceUnavailable => UnifiedErrorKind::Network,
+            ErrorCategory::Timeout => UnifiedErrorKind::Timeout,
+            ErrorCategory::RateLimit => UnifiedErrorKind::RateLimit,
+            ErrorCategory::CircuitOpen => UnifiedErrorKind::CircuitOpen,
+            ErrorCategory::Authentication => UnifiedErrorKind::PermissionDenied,
+            ErrorCategory::InvalidParameters => UnifiedErrorKind::ArgumentValidation,
+            ErrorCategory::ToolNotFound => UnifiedErrorKind::ToolNotFound,
+            ErrorCategory::ResourceNotFound => UnifiedErrorKind::ToolNotFound,
+            ErrorCategory::PermissionDenied => UnifiedErrorKind::PermissionDenied,
+            ErrorCategory::PolicyViolation => UnifiedErrorKind::PolicyViolation,
+            ErrorCategory::PlanModeViolation => UnifiedErrorKind::PlanModeViolation,
+            ErrorCategory::SandboxFailure => UnifiedErrorKind::SandboxFailure,
+            ErrorCategory::ResourceExhausted => UnifiedErrorKind::ResourceExhausted,
+            ErrorCategory::Cancelled => UnifiedErrorKind::Cancelled,
+            ErrorCategory::ExecutionError => UnifiedErrorKind::ExecutionFailed,
+        }
+    }
+}
+
+impl From<UnifiedErrorKind> for ErrorCategory {
+    fn from(kind: UnifiedErrorKind) -> Self {
+        match kind {
+            UnifiedErrorKind::Timeout => ErrorCategory::Timeout,
+            UnifiedErrorKind::Network => ErrorCategory::Network,
+            UnifiedErrorKind::RateLimit => ErrorCategory::RateLimit,
+            UnifiedErrorKind::ArgumentValidation => ErrorCategory::InvalidParameters,
+            UnifiedErrorKind::ToolNotFound => ErrorCategory::ToolNotFound,
+            UnifiedErrorKind::PermissionDenied => ErrorCategory::PermissionDenied,
+            UnifiedErrorKind::SandboxFailure => ErrorCategory::SandboxFailure,
+            UnifiedErrorKind::InternalError => ErrorCategory::ExecutionError,
+            UnifiedErrorKind::CircuitOpen => ErrorCategory::CircuitOpen,
+            UnifiedErrorKind::ResourceExhausted => ErrorCategory::ResourceExhausted,
+            UnifiedErrorKind::Cancelled => ErrorCategory::Cancelled,
+            UnifiedErrorKind::PolicyViolation => ErrorCategory::PolicyViolation,
+            UnifiedErrorKind::PlanModeViolation => ErrorCategory::PlanModeViolation,
+            UnifiedErrorKind::ExecutionFailed => ErrorCategory::ExecutionError,
+            UnifiedErrorKind::Unknown => ErrorCategory::ExecutionError,
+        }
     }
 }
 

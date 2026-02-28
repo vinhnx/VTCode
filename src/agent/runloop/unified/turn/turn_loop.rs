@@ -401,6 +401,18 @@ pub async fn run_turn_loop(
                 }
 
                 display_error(turn_processing_ctx.renderer, "LLM request failed", &err)?;
+                // Show recovery hints derived from the canonical error category
+                {
+                    let err_cat = vtcode_commons::classify_anyhow_error(&err);
+                    let suggestions = err_cat.recovery_suggestions();
+                    if !suggestions.is_empty() {
+                        let hint = suggestions.join("; ");
+                        turn_processing_ctx.renderer.line(
+                            vtcode_core::utils::ansi::MessageStyle::Info,
+                            &format!("Hint: {}", hint),
+                        )?;
+                    }
+                }
                 // Log error via tracing instead of polluting conversation history
                 // Adding error messages as assistant content can poison future turns
                 tracing::error!(error = %err, step = step_count, "LLM request failed");

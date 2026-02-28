@@ -91,6 +91,8 @@ pub struct AsyncMcpManager {
     initialization_mutex: Arc<Mutex<()>>,
     /// Event callback for MCP events
     event_callback: Arc<dyn Fn(McpEvent) + Send + Sync>,
+    /// Handle for the background initialization task, aborted on drop.
+    init_task: std::sync::Mutex<Option<tokio::task::JoinHandle<()>>>,
 }
 
 impl AsyncMcpManager {
@@ -113,6 +115,7 @@ impl AsyncMcpManager {
             status: Arc::new(RwLock::new(init_status)),
             initialization_mutex: Arc::new(Mutex::new(())),
             event_callback,
+            init_task: std::sync::Mutex::new(None),
         }
     }
 
@@ -132,9 +135,10 @@ impl AsyncMcpManager {
         let event_callback = Arc::clone(&self.event_callback);
         let hitl_notification_bell = self.hitl_notification_bell;
 
-        // Spawn the initialization task. We keep the JoinHandle to allow explicit waiting if needed,
-        // though initialization runs in the background. See: https://ratatui.rs/faq/
-        let _init_handle = tokio::spawn(async move {
+        // Spawn the initialization task. Store the JoinHandle so it can be
+        // aborted on drop — prevents an orphan task if the manager is dropped
+        // before initialization completes.
+        let init_handle = tokio::spawn(async move {
             // Acquire the mutex to prevent concurrent initializations
             let _guard = mutex.lock().await;
 
@@ -183,6 +187,9 @@ impl AsyncMcpManager {
                 }
             }
         });
+        if let Ok(mut guard) = self.init_task.lock() {
+            *guard = Some(init_handle);
+        }
 
         Ok(())
     }
@@ -289,6 +296,17 @@ impl AsyncMcpManager {
             _ => {
                 info!("MCP not initialized, no shutdown needed");
                 Ok(())
+            }
+        }
+    }
+}
+
+impl Drop for AsyncMcpManager {
+    fn drop(&mut self) {
+        // Abort the background init task so it doesn't outlive the manager.
+        if let Ok(mut guard) = self.init_task.lock() {
+            if let Some(task) = guard.take() {
+                task.abort();
             }
         }
     }

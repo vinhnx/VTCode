@@ -24,70 +24,16 @@ struct UnsafeSendContext {
 unsafe impl Send for UnsafeSendContext {}
 unsafe impl Sync for UnsafeSendContext {}
 
-fn contains_any(message: &str, markers: &[&str]) -> bool {
-    markers.iter().any(|marker| message.contains(marker))
+/// Delegate LLM retryability checks to the canonical [`vtcode_commons::ErrorCategory`] classifier.
+#[cfg(test)]
+fn is_retryable_llm_error(message: &str) -> bool {
+    vtcode_commons::is_retryable_llm_error_message(message)
 }
 
-fn is_retryable_llm_error(message: &str) -> bool {
-    let msg = message.to_ascii_lowercase();
-    let non_retryable = [
-        "invalid api key",
-        "authentication failed",
-        "unauthorized",
-        "forbidden",
-        "permission denied",
-        "usage limit",
-        "weekly usage limit",
-        "daily usage limit",
-        "monthly spending limit",
-        "insufficient credits",
-        "quota exceeded",
-        "billing",
-        "payment required",
-        "bad request",
-        "context length exceeded",
-        "maximum context length",
-        "token limit exceeded",
-        "invalid request",
-        "400",
-        "401",
-        "403",
-        "404",
-        "model not found",
-        "endpoint not found",
-    ];
-    if contains_any(&msg, &non_retryable) {
-        return false;
-    }
-
-    let retryable = [
-        "rate limit",
-        "too many requests",
-        "timeout",
-        "timed out",
-        "429",
-        "internal server error",
-        "500",
-        "502",
-        "503",
-        "504",
-        "bad gateway",
-        "gateway timeout",
-        "service unavailable",
-        "temporarily unavailable",
-        "overloaded",
-        "try again",
-        "retry later",
-        "connection reset",
-        "connection refused",
-        "connection",
-        "socket hang up",
-        "econnreset",
-        "etimedout",
-        "deadline exceeded",
-        "network",
-    ];
-    contains_any(&msg, &retryable)
+/// Classify an LLM error message into an [`vtcode_commons::ErrorCategory`] for
+/// structured logging and user-facing hints.
+fn classify_llm_error(message: &str) -> vtcode_commons::ErrorCategory {
+    vtcode_commons::classify_error_message(message)
 }
 
 fn supports_streaming_timeout_fallback(provider_name: &str) -> bool {
@@ -412,6 +358,7 @@ pub(crate) async fn execute_llm_request(
     let mut stream_fallback_used = false;
     let mut last_error_retryable: Option<bool> = None;
     let mut last_error_preview: Option<String> = None;
+    let mut last_error_category: Option<vtcode_commons::ErrorCategory> = None;
 
     #[cfg(debug_assertions)]
     let mut request_timer = Instant::now();
@@ -422,10 +369,15 @@ pub(crate) async fn execute_llm_request(
             use crate::agent::runloop::unified::turn::turn_helpers::calculate_backoff;
             let delay = calculate_backoff(attempt - 1, 500, 10_000);
             let delay_secs = delay.as_secs_f64();
+            let reason_hint = last_error_category
+                .as_ref()
+                .map(|cat| cat.user_label())
+                .unwrap_or("unknown error");
             crate::agent::runloop::unified::turn::turn_helpers::display_status(
                 ctx.renderer,
                 &format!(
-                    "LLM request failed, retrying in {:.1}s... (attempt {}/{})",
+                    "LLM request failed ({}), retrying in {:.1}s... (attempt {}/{})",
+                    reason_hint,
                     delay_secs,
                     attempt + 1,
                     max_retries
@@ -612,9 +564,21 @@ pub(crate) async fn execute_llm_request(
             }
             Err(err) => {
                 let msg = err.to_string();
-                let is_retryable = is_retryable_llm_error(&msg);
+                let category = classify_llm_error(&msg);
+                let is_retryable = category.is_retryable();
                 last_error_retryable = Some(is_retryable);
                 last_error_preview = Some(compact_error_message(&msg, 180));
+                last_error_category = Some(category);
+
+                tracing::warn!(
+                    target: "vtcode.llm.retry",
+                    error = %msg,
+                    category = %last_error_category.as_ref().unwrap().user_label(),
+                    retryable = is_retryable,
+                    attempt = attempt + 1,
+                    max_retries,
+                    "LLM request attempt failed"
+                );
 
                 if !crate::agent::runloop::unified::turn::turn_helpers::should_continue_operation(
                     ctx.ctrl_c_state,

@@ -26,7 +26,11 @@ pub struct McpProvider {
     pub(super) name: String,
     #[allow(dead_code)]
     pub(super) protocol_version: String,
-    client: Arc<RmcpClient>,
+    client: tokio::sync::RwLock<Arc<RmcpClient>>,
+    /// Stored config so we can reconnect after disconnection.
+    config: McpProviderConfig,
+    /// Stored elicitation handler for reconnection.
+    elicitation_handler: Option<Arc<dyn McpElicitationHandler>>,
     pub(crate) semaphore: Arc<Semaphore>,
     tools_cache: Mutex<Option<Vec<McpToolInfo>>>,
     resources_cache: Mutex<Option<Vec<McpResourceInfo>>>,
@@ -94,9 +98,11 @@ impl McpProvider {
         };
 
         Ok(Self {
-            name: config.name,
+            name: config.name.clone(),
             protocol_version,
-            client: Arc::new(client),
+            client: tokio::sync::RwLock::new(Arc::new(client)),
+            config,
+            elicitation_handler,
             semaphore: Arc::new(Semaphore::new(max_requests)),
             tools_cache: Mutex::new(None),
             resources_cache: Mutex::new(None),
@@ -124,7 +130,8 @@ impl McpProvider {
         tool_timeout: Option<Duration>,
         allowlist: &McpAllowListConfig,
     ) -> Result<()> {
-        let result = self.client.initialize(params, startup_timeout).await?;
+        let client = self.client.read().await.clone();
+        let result = client.initialize(params, startup_timeout).await?;
 
         let protocol_version_str = result.protocol_version.to_string();
         if !SUPPORTED_PROTOCOL_VERSIONS
@@ -160,7 +167,8 @@ impl McpProvider {
         allowlist: &McpAllowListConfig,
         timeout: Option<Duration>,
     ) -> Result<Vec<McpToolInfo>> {
-        let tools = self.client.list_all_tools(timeout).await?;
+        let client = self.client.read().await.clone();
+        let tools = client.list_all_tools(timeout).await?;
         let filtered = self.filter_tools(tools, allowlist);
         *self.tools_cache.lock().await = Some(filtered.clone());
         Ok(filtered)
@@ -212,7 +220,8 @@ impl McpProvider {
             meta: None,
             task: None,
         };
-        self.client.call_tool(params, timeout).await
+        let client = self.client.read().await.clone();
+        client.call_tool(params, timeout).await
     }
 
     async fn add_argument_defaults(
@@ -275,7 +284,8 @@ impl McpProvider {
         allowlist: &McpAllowListConfig,
         timeout: Option<Duration>,
     ) -> Result<Vec<McpResourceInfo>> {
-        let resources = self.client.list_all_resources(timeout).await?;
+        let client = self.client.read().await.clone();
+        let resources = client.list_all_resources(timeout).await?;
         let filtered = self.filter_resources(resources, allowlist);
         *self.resources_cache.lock().await = Some(filtered.clone());
         Ok(filtered)
@@ -315,7 +325,8 @@ impl McpProvider {
             uri: uri.to_string(),
             meta: None,
         };
-        let result = self.client.read_resource(params, timeout).await?;
+        let client = self.client.read().await.clone();
+        let result = client.read_resource(params, timeout).await?;
         Ok(McpResourceData {
             provider: self.name.clone(),
             uri: uri.to_string(),
@@ -341,7 +352,8 @@ impl McpProvider {
         allowlist: &McpAllowListConfig,
         timeout: Option<Duration>,
     ) -> Result<Vec<McpPromptInfo>> {
-        let prompts = self.client.list_all_prompts(timeout).await?;
+        let client = self.client.read().await.clone();
+        let prompts = client.list_all_prompts(timeout).await?;
         let filtered = self.filter_prompts(prompts, allowlist);
         *self.prompts_cache.lock().await = Some(filtered.clone());
         Ok(filtered)
@@ -389,7 +401,8 @@ impl McpProvider {
             arguments: Some(args_json),
             meta: None,
         };
-        let result = self.client.get_prompt(params, timeout).await?;
+        let client = self.client.read().await.clone();
+        let result = client.get_prompt(params, timeout).await?;
         Ok(McpPromptDetail {
             provider: self.name.clone(),
             name: prompt_name.to_string(),
@@ -404,7 +417,70 @@ impl McpProvider {
     }
 
     pub(super) async fn shutdown(&self) -> Result<()> {
-        self.client.shutdown().await
+        let client = self.client.read().await.clone();
+        client.shutdown().await
+    }
+
+    /// Returns `true` when the underlying transport is still connected and responsive.
+    pub(super) async fn is_healthy(&self) -> bool {
+        let client = self.client.read().await.clone();
+        client.is_healthy().await
+    }
+
+    /// Attempt to re-establish the MCP connection using the stored configuration.
+    ///
+    /// This replaces the inner [`RmcpClient`] with a freshly connected one, then
+    /// re-initialises the provider (tools/resources/prompts caches are invalidated).
+    pub(super) async fn reconnect(
+        &self,
+        startup_timeout: Option<Duration>,
+        tool_timeout: Option<Duration>,
+        allowlist: &McpAllowListConfig,
+    ) -> Result<()> {
+        tracing::info!(provider = self.name.as_str(), "Attempting MCP reconnection");
+
+        // Shut down the old client (best-effort).
+        {
+            let old = self.client.read().await.clone();
+            let _ = old.shutdown().await;
+        }
+
+        // Create a fresh client from the stored config.
+        let new_provider =
+            McpProvider::connect(self.config.clone(), self.elicitation_handler.clone())
+                .await
+                .with_context(|| format!("MCP reconnect failed for provider '{}'", self.name))?;
+
+        // Swap inner client.
+        {
+            let new_client = new_provider.client.read().await.clone();
+            *self.client.write().await = new_client;
+        }
+
+        // Invalidate all caches before re-initialisation.
+        self.invalidate_caches();
+
+        // Re-initialise (handshake + tool refresh).
+        let init_params = InitializeRequestParams {
+            meta: None,
+            capabilities: rmcp::model::ClientCapabilities::default(),
+            client_info: rmcp::model::Implementation {
+                name: "vtcode".to_owned(),
+                version: env!("CARGO_PKG_VERSION").to_string(),
+                title: None,
+                icons: None,
+                website_url: None,
+            },
+            protocol_version: rmcp::model::ProtocolVersion::V_2024_11_05,
+        };
+        self.initialize(init_params, startup_timeout, tool_timeout, allowlist)
+            .await
+            .with_context(|| {
+                format!("MCP re-initialization failed for provider '{}'", self.name)
+            })?;
+
+        tracing::info!(provider = self.name.as_str(), "MCP reconnection successful");
+        Ok(())
     }
 
     fn filter_tools(&self, tools: Vec<Tool>, allowlist: &McpAllowListConfig) -> Vec<McpToolInfo> {

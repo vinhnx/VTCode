@@ -35,6 +35,9 @@ pub(crate) struct RmcpClient {
     provider_name: String,
     state: Mutex<ClientState>,
     elicitation_handler: Option<Arc<dyn McpElicitationHandler>>,
+    /// Handle for the background stderr reader task (stdio transports only).
+    /// Stored so we can abort it when the client is shut down or replaced.
+    stderr_task: Option<tokio::task::JoinHandle<()>>,
 }
 
 enum ClientState {
@@ -44,6 +47,9 @@ enum ClientState {
     Ready {
         service: Arc<RunningService<RoleClient, LoggingClientHandler>>,
     },
+    /// The underlying transport has disconnected (server crash, network loss).
+    /// The client can potentially be replaced by a new one via `McpProvider::reconnect()`.
+    Disconnected,
     Stopped,
 }
 
@@ -68,10 +74,10 @@ impl RmcpClient {
             create_stdio_transport_with_stderr(&program, &args, working_dir.as_ref(), &env)?;
 
         // Spawn async task to log MCP server stderr
-        if let Some(stderr) = stderr {
+        let stderr_task = if let Some(stderr) = stderr {
             let program_name = program.to_string_lossy().into_owned();
             let provider_label = provider_name.clone();
-            tokio::spawn(async move {
+            Some(tokio::spawn(async move {
                 let mut reader = BufReader::new(stderr).lines();
                 loop {
                     match reader.next_line().await {
@@ -95,8 +101,10 @@ impl RmcpClient {
                         }
                     }
                 }
-            });
-        }
+            }))
+        } else {
+            None
+        };
 
         Ok(Self {
             provider_name,
@@ -104,6 +112,7 @@ impl RmcpClient {
                 transport: Some(PendingTransport::ChildProcess(transport)),
             }),
             elicitation_handler,
+            stderr_task,
         })
     }
 
@@ -143,6 +152,7 @@ impl RmcpClient {
                 transport: Some(PendingTransport::StreamableHttp(transport)),
             }),
             elicitation_handler,
+            stderr_task: None,
         })
     }
 
@@ -183,6 +193,12 @@ impl RmcpClient {
                     ));
                 }
                 ClientState::Stopped => return Err(anyhow!("MCP client has been shut down")),
+                ClientState::Disconnected => {
+                    return Err(anyhow!(
+                        "MCP client for {} is disconnected — use reconnect()",
+                        handler.provider_name()
+                    ));
+                }
             }
         };
 
@@ -294,16 +310,50 @@ impl RmcpClient {
                 drop(transport.take());
                 Ok(())
             }
-            ClientState::Stopped => Ok(()),
+            ClientState::Disconnected | ClientState::Stopped => Ok(()),
         }
     }
 
     async fn service(&self) -> Result<Arc<RunningService<RoleClient, LoggingClientHandler>>> {
-        let guard = self.state.lock().await;
+        let mut guard = self.state.lock().await;
         match &*guard {
-            ClientState::Ready { service } => Ok(service.clone()),
+            ClientState::Ready { service } => {
+                // Detect if the underlying transport has died (server crash / network loss).
+                if service.is_closed() {
+                    warn!(
+                        provider = self.provider_name.as_str(),
+                        "MCP service closed — marking disconnected"
+                    );
+                    *guard = ClientState::Disconnected;
+                    return Err(anyhow!(
+                        "MCP client for '{}' has disconnected",
+                        self.provider_name
+                    ));
+                }
+                Ok(service.clone())
+            }
             ClientState::Connecting { .. } => Err(anyhow!("MCP client not initialized")),
+            ClientState::Disconnected => Err(anyhow!(
+                "MCP client for '{}' has disconnected",
+                self.provider_name
+            )),
             ClientState::Stopped => Err(anyhow!("MCP client has been shut down")),
+        }
+    }
+
+    /// Returns `true` when the client is in the `Ready` state and the
+    /// underlying transport has not been closed.
+    pub(super) async fn is_healthy(&self) -> bool {
+        let guard = self.state.lock().await;
+        matches!(&*guard, ClientState::Ready { service } if !service.is_closed())
+    }
+}
+
+impl Drop for RmcpClient {
+    fn drop(&mut self) {
+        // Abort the background stderr reader task so it doesn't outlive the client.
+        if let Some(task) = self.stderr_task.take() {
+            task.abort();
         }
     }
 }
