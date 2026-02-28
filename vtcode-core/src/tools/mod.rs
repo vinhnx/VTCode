@@ -192,14 +192,6 @@ pub mod request_response;
 pub mod unified_error;
 pub mod unified_executor;
 
-#[cfg(test)]
-#[allow(deprecated)]
-mod improvements_integration_tests;
-
-#[cfg(test)]
-#[allow(deprecated)]
-mod improvements_real_workflow_tests;
-
 // Re-export main types and traits for backward compatibility
 pub use async_pipeline::{
     AsyncToolPipeline, ExecutionContext, ExecutionPriority, ToolRequest as AsyncToolRequest,

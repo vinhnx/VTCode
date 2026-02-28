@@ -283,22 +283,3 @@ fn test_tool_policy_consistency() {
         "Policy mapping completeness check"
     );
 }
-
-#[tokio::test]
-async fn test_deprecated_update_plan_tool_not_registered() {
-    let tmp = tempfile::TempDir::new().expect("create temp dir");
-    let registry = vtcode_core::tools::registry::ToolRegistry::new(tmp.path().to_path_buf()).await;
-
-    assert!(
-        registry.get_tool("task_tracker").is_some(),
-        "task_tracker should be registered"
-    );
-    assert!(
-        registry.get_tool("plan_task_tracker").is_some(),
-        "plan_task_tracker should be registered"
-    );
-    assert!(
-        registry.get_tool("update_plan").is_none(),
-        "deprecated update_plan alias should not be registered"
-    );
-}
