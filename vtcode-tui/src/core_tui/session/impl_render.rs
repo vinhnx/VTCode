@@ -21,16 +21,10 @@ impl Session {
             self.recalculate_transcript_rows();
         }
 
-        let has_status = self
-            .input_status_left
-            .as_ref()
-            .is_some_and(|v| !v.trim().is_empty())
-            || self
-                .input_status_right
-                .as_ref()
-                .is_some_and(|v| !v.trim().is_empty());
         let mode = self.resolved_layout_mode(viewport);
-        let status_height = if viewport.width > 0 && has_status && !mode.show_footer() {
+        // Always reserve 1 row for the inline status line to prevent layout
+        // jumping when status content appears/disappears during task execution.
+        let status_height = if viewport.width > 0 && !mode.show_footer() {
             1
         } else {
             0

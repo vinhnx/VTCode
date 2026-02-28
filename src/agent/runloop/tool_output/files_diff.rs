@@ -147,10 +147,10 @@ fn condense_hunk_lines(lines: &[PreviewLine], context_radius: usize) -> Vec<Stri
             continue;
         }
 
-        if let Some(previous) = last_kept {
-            if idx > previous + 1 {
-                condensed.push("⋮".to_string());
-            }
+        if let Some(previous) = last_kept
+            && idx > previous + 1
+        {
+            condensed.push("⋮".to_string());
         }
 
         condensed.push(format_preview_line(line));
@@ -223,10 +223,10 @@ fn parse_unified_diff_for_preview(diff_content: &str) -> Vec<ParsedFileDiff> {
                     path,
                     ..ParsedFileDiff::default()
                 });
-            } else if let Some(file) = current.as_mut() {
-                if file.path.is_empty() {
-                    file.path = path;
-                }
+            } else if let Some(file) = current.as_mut()
+                && file.path.is_empty()
+            {
+                file.path = path;
             }
         }
 

@@ -164,32 +164,102 @@ fn unified_exec_has_input(args: &Value) -> bool {
     args.get("input").is_some() || args.get("chars").is_some() || args.get("text").is_some()
 }
 
+fn get_field_case_insensitive<'a>(
+    args: &'a serde_json::Map<String, Value>,
+    key: &str,
+) -> Option<&'a Value> {
+    args.get(key).or_else(|| {
+        args.iter()
+            .find(|(name, _)| name.eq_ignore_ascii_case(key))
+            .map(|(_, value)| value)
+    })
+}
+
+fn unified_search_action_from_object(args: &serde_json::Map<String, Value>) -> Option<&str> {
+    get_field_case_insensitive(args, "action")
+        .and_then(|value| value.as_str())
+        .or_else(|| {
+            // Smart action inference based on parameters
+            if get_field_case_insensitive(args, "pattern").is_some()
+                || get_field_case_insensitive(args, "query").is_some()
+            {
+                Some("grep")
+            } else if get_field_case_insensitive(args, "keyword").is_some() {
+                Some("tools")
+            } else if get_field_case_insensitive(args, "url").is_some() {
+                Some("web")
+            } else if get_field_case_insensitive(args, "sub_action").is_some()
+                || get_field_case_insensitive(args, "name").is_some()
+            {
+                Some("skill")
+            } else if get_field_case_insensitive(args, "scope").is_some() {
+                Some("errors")
+            } else if get_field_case_insensitive(args, "path").is_some() {
+                Some("list")
+            } else {
+                None
+            }
+        })
+}
+
 /// Determine the action for unified_search tool based on args.
 /// Returns the action string or None if no inference is possible.
 pub fn unified_search_action(args: &Value) -> Option<&str> {
-    args.get("action").and_then(|v| v.as_str()).or_else(|| {
-        // Smart action inference based on parameters
-        if args.get("pattern").is_some() || args.get("query").is_some() {
-            Some("grep")
-        } else if args.get("keyword").is_some() {
-            Some("tools")
-        } else if args.get("url").is_some() {
-            Some("web")
-        } else if args.get("sub_action").is_some() || args.get("name").is_some() {
-            Some("skill")
-        } else if args.get("scope").is_some() {
-            Some("errors")
-        } else if args.get("path").is_some() {
-            Some("list")
+    let Some(args_obj) = args.as_object() else {
+        return None;
+    };
+    unified_search_action_from_object(args_obj)
+}
+
+/// Normalize unified_search args so case/shape variants still pass schema checks.
+pub fn normalize_unified_search_args(args: &Value) -> Value {
+    let Some(args_obj) = args.as_object() else {
+        return args.clone();
+    };
+
+    let mut normalized = serde_json::Map::with_capacity(args_obj.len() + 1);
+    for (key, value) in args_obj {
+        let canonical = if key.eq_ignore_ascii_case("action") {
+            "action"
+        } else if key.eq_ignore_ascii_case("pattern") {
+            "pattern"
+        } else if key.eq_ignore_ascii_case("query") {
+            "query"
+        } else if key.eq_ignore_ascii_case("path") {
+            "path"
+        } else if key.eq_ignore_ascii_case("keyword") {
+            "keyword"
+        } else if key.eq_ignore_ascii_case("url") {
+            "url"
+        } else if key.eq_ignore_ascii_case("scope") {
+            "scope"
+        } else if key.eq_ignore_ascii_case("sub_action") {
+            "sub_action"
+        } else if key.eq_ignore_ascii_case("name") {
+            "name"
         } else {
-            None
-        }
-    })
+            key
+        };
+        normalized
+            .entry(canonical.to_string())
+            .or_insert_with(|| value.clone());
+    }
+
+    if !normalized.contains_key("action")
+        && let Some(inferred_action) = unified_search_action_from_object(&normalized)
+    {
+        normalized.insert(
+            "action".to_string(),
+            Value::String(inferred_action.to_string()),
+        );
+    }
+
+    Value::Object(normalized)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{classify_tool_intent, unified_file_action};
+    use super::{classify_tool_intent, normalize_unified_search_args, unified_file_action};
     use crate::config::constants::tools;
     use serde_json::json;
 
@@ -324,5 +394,17 @@ mod tests {
         });
         let action = unified_file_action(&args);
         assert_eq!(action, None);
+    }
+
+    #[test]
+    fn normalize_unified_search_args_canonicalizes_case_and_infers_action() {
+        let normalized = normalize_unified_search_args(&json!({
+            "Pattern": "needle",
+            "Path": "."
+        }));
+
+        assert_eq!(normalized["pattern"], "needle");
+        assert_eq!(normalized["path"], ".");
+        assert_eq!(normalized["action"], "grep");
     }
 }

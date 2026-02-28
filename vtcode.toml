@@ -9,7 +9,7 @@ provider = "ollama"
 api_key_env = "OLLAMA_API_KEY"
 
 # Default model to use when no specific model is specified
-default_model = "qwen3-coder-next:cloud"
+default_model = "glm-5:cloud"
 
 # Personal/local overrides should live in user config, not workspace config:
 #   ~/.vtcode/vtcode.toml
@@ -182,6 +182,11 @@ use_oauth = false
 callback_port = 8484
 auto_refresh = true
 flow_timeout_secs = 300
+
+[tools.editor]
+enabled = true
+preferred_editor = ""
+suspend_tui = true
 #mode = "Command"
 #command = "./.vtcode/statusline/statusline.sh"
 #refresh_interval_ms = 1000

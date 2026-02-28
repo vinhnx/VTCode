@@ -239,19 +239,19 @@ impl ModalState {
                 ModalListKeyResult::Redraw
             }
             KeyCode::Left => {
-                if let Some(selection) = list.current_selection() {
-                    if let Some(adjusted) = map_config_selection_for_arrow(&selection, true) {
-                        return ModalListKeyResult::Submit(InlineEvent::ListModalSubmit(adjusted));
-                    }
+                if let Some(selection) = list.current_selection()
+                    && let Some(adjusted) = map_config_selection_for_arrow(&selection, true)
+                {
+                    return ModalListKeyResult::Submit(InlineEvent::ListModalSubmit(adjusted));
                 }
                 list.select_previous();
                 ModalListKeyResult::Redraw
             }
             KeyCode::Right => {
-                if let Some(selection) = list.current_selection() {
-                    if let Some(adjusted) = map_config_selection_for_arrow(&selection, false) {
-                        return ModalListKeyResult::Submit(InlineEvent::ListModalSubmit(adjusted));
-                    }
+                if let Some(selection) = list.current_selection()
+                    && let Some(adjusted) = map_config_selection_for_arrow(&selection, false)
+                {
+                    return ModalListKeyResult::Submit(InlineEvent::ListModalSubmit(adjusted));
                 }
                 list.select_next();
                 ModalListKeyResult::Redraw

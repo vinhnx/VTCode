@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use anyhow::Result;
@@ -104,7 +104,7 @@ pub(crate) fn show_theme_palette(
 
 pub(crate) fn show_config_palette(
     renderer: &mut AnsiRenderer,
-    workspace: &PathBuf,
+    workspace: &Path,
     vt_snapshot: &Option<VTCodeConfig>,
     selected: Option<InlineListSelection>,
 ) -> Result<bool> {
@@ -1181,13 +1181,13 @@ pub(crate) async fn handle_palette_selection(
             let normalized_selection = normalize_config_selection(selection.clone());
             let selected_for_modal = normalized_selection.clone().or(selected.clone());
 
-            if let InlineListSelection::ConfigAction(action) = selection {
-                if let Some(updated_key) = apply_config_action(&action)? {
-                    renderer.line(
-                        MessageStyle::Info,
-                        &format!("Saved {} to vtcode.toml", updated_key),
-                    )?;
-                }
+            if let InlineListSelection::ConfigAction(action) = selection
+                && let Some(updated_key) = apply_config_action(&action)?
+            {
+                renderer.line(
+                    MessageStyle::Info,
+                    &format!("Saved {} to vtcode.toml", updated_key),
+                )?;
             }
 
             if let Ok(runtime_manager) = ConfigManager::load() {

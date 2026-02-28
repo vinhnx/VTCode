@@ -199,24 +199,11 @@ fn schema_validation_args<'a>(
         return std::borrow::Cow::Borrowed(args);
     }
 
-    let Some(args_obj) = args.as_object() else {
-        return std::borrow::Cow::Borrowed(args);
-    };
-
-    if args_obj.get("action").is_some() {
+    let normalized = crate::tools::tool_intent::normalize_unified_search_args(args);
+    if normalized == *args {
         return std::borrow::Cow::Borrowed(args);
     }
-
-    let Some(inferred_action) = crate::tools::tool_intent::unified_search_action(args) else {
-        return std::borrow::Cow::Borrowed(args);
-    };
-
-    let mut normalized_args = args_obj.clone();
-    normalized_args.insert(
-        "action".to_string(),
-        Value::String(inferred_action.to_string()),
-    );
-    std::borrow::Cow::Owned(Value::Object(normalized_args))
+    std::borrow::Cow::Owned(normalized)
 }
 
 pub(super) fn preflight_validate_call(
@@ -448,5 +435,24 @@ mod tests {
 
         let normalized = schema_validation_args(tool_names::UNIFIED_SEARCH, &args);
         assert!(normalized.get("action").is_none());
+    }
+
+    #[test]
+    fn unified_search_schema_args_normalizes_case_variants() {
+        let args = json!({
+            "Pattern": "ReasoningStage",
+            "Path": "."
+        });
+
+        let normalized = schema_validation_args(tool_names::UNIFIED_SEARCH, &args);
+        assert_eq!(
+            normalized.get("pattern").and_then(|v| v.as_str()),
+            Some("ReasoningStage")
+        );
+        assert_eq!(normalized.get("path").and_then(|v| v.as_str()), Some("."));
+        assert_eq!(
+            normalized.get("action").and_then(|v| v.as_str()),
+            Some("grep")
+        );
     }
 }
