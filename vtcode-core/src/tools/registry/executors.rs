@@ -84,16 +84,15 @@ fn workspace_write_policy_from_runtime_config(
         resource_limits,
         seccomp_profile,
     );
-    if network_allow_all {
-        if let SandboxPolicy::WorkspaceWrite {
+    if network_allow_all
+        && let SandboxPolicy::WorkspaceWrite {
             network_access,
             network_allowlist,
             ..
         } = &mut policy
-        {
-            *network_access = true;
-            network_allowlist.clear();
-        }
+    {
+        *network_access = true;
+        network_allowlist.clear();
     }
     policy
 }

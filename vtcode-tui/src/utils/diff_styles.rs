@@ -1,274 +1,45 @@
-//! Unified message styles and their logical mappings
+//! Unified diff styles for TUI rendering
+//!
+//! Re-exports core diff styling from vtcode-commons and provides
+//! ratatui-specific style helpers for diff rendering.
 
-use anstyle::{AnsiColor, Color, Style};
-
-/// Standard color palette with semantic names
-#[derive(Debug, Clone, Copy)]
-pub struct ColorPalette {
-    pub success: Color, // Green
-    pub error: Color,   // Red
-    pub warning: Color, // Red
-    pub info: Color,    // Cyan
-    pub accent: Color,  // Magenta
-    pub primary: Color, // Cyan
-    pub muted: Color,   // Gray/Dim
-}
-
-impl Default for ColorPalette {
-    fn default() -> Self {
-        Self {
-            success: Color::Ansi(AnsiColor::Green),
-            error: Color::Ansi(AnsiColor::Red),
-            warning: Color::Ansi(AnsiColor::Red),
-            info: Color::Ansi(AnsiColor::Cyan),
-            accent: Color::Ansi(AnsiColor::Magenta),
-            primary: Color::Ansi(AnsiColor::Cyan),
-            muted: Color::Ansi(AnsiColor::BrightBlack),
-        }
-    }
-}
-
-/// Render text with a single color and optional effects
-pub fn render_styled(text: &str, color: Color, effects: Option<String>) -> String {
-    let mut style = Style::new().fg_color(Some(color));
-
-    if let Some(effects_str) = effects {
-        let mut ansi_effects = anstyle::Effects::new();
-
-        for effect in effects_str.split(',') {
-            let effect = effect.trim().to_lowercase();
-            match effect.as_str() {
-                "bold" => ansi_effects |= anstyle::Effects::BOLD,
-                "dim" | "dimmed" => ansi_effects |= anstyle::Effects::DIMMED,
-                "italic" => ansi_effects |= anstyle::Effects::ITALIC,
-                "underline" => ansi_effects |= anstyle::Effects::UNDERLINE,
-                "blink" => ansi_effects |= anstyle::Effects::BLINK,
-                "invert" | "reversed" => ansi_effects |= anstyle::Effects::INVERT,
-                "hidden" => ansi_effects |= anstyle::Effects::HIDDEN,
-                "strikethrough" => ansi_effects |= anstyle::Effects::STRIKETHROUGH,
-                _ => {}
-            }
-        }
-
-        style = style.effects(ansi_effects);
-    }
-
-    // Use static reset code
-    format!("{}{}{}", style, text, "\x1b[0m")
-}
-
-/// Build style from CSS/terminal color name
-pub fn style_from_color_name(name: &str) -> Style {
-    let (color_name, dimmed) = if let Some(idx) = name.find(':') {
-        let (color, modifier) = name.split_at(idx);
-        (color, modifier.strip_prefix(':').unwrap_or(""))
-    } else {
-        (name, "")
-    };
-
-    let color = match color_name.to_lowercase().as_str() {
-        "red" => Color::Ansi(AnsiColor::Red),
-        "green" => Color::Ansi(AnsiColor::Green),
-        "blue" => Color::Ansi(AnsiColor::Blue),
-        "yellow" => Color::Ansi(AnsiColor::Yellow),
-        "cyan" => Color::Ansi(AnsiColor::Cyan),
-        "magenta" | "purple" => Color::Ansi(AnsiColor::Magenta),
-        "white" => Color::Ansi(AnsiColor::White),
-        "black" => Color::Ansi(AnsiColor::Black),
-        _ => return Style::new(),
-    };
-
-    let mut style = Style::new().fg_color(Some(color));
-    if dimmed.eq_ignore_ascii_case("dimmed") {
-        style = style.dimmed();
-    }
-    style
-}
-
-/// Create a bold colored style from AnsiColor
-pub fn bold_color(color: AnsiColor) -> Style {
-    Style::new().bold().fg_color(Some(Color::Ansi(color)))
-}
-
-/// Create a dimmed colored style from AnsiColor
-pub fn dimmed_color(color: AnsiColor) -> Style {
-    Style::new().dimmed().fg_color(Some(Color::Ansi(color)))
-}
-
-/// Diff color palette for consistent git diff styling
-#[derive(Debug, Clone, Copy)]
-pub struct DiffColorPalette {
-    pub added_fg: Color,
-    pub added_bg: Color,
-    pub removed_fg: Color,
-    pub removed_bg: Color,
-    pub header_fg: Color,
-    pub header_bg: Color,
-}
-
-impl Default for DiffColorPalette {
-    fn default() -> Self {
-        Self {
-            added_fg: Color::Ansi(AnsiColor::Green),
-            added_bg: Color::Rgb(anstyle::RgbColor(10, 24, 10)),
-            removed_fg: Color::Ansi(AnsiColor::Red),
-            removed_bg: Color::Rgb(anstyle::RgbColor(24, 10, 10)),
-            header_fg: Color::Ansi(AnsiColor::Cyan),
-            header_bg: Color::Rgb(anstyle::RgbColor(10, 16, 20)),
-        }
-    }
-}
-
-impl DiffColorPalette {
-    pub fn added_style(&self) -> Style {
-        Style::new().fg_color(Some(self.added_fg))
-    }
-
-    pub fn removed_style(&self) -> Style {
-        Style::new().fg_color(Some(self.removed_fg))
-    }
-
-    pub fn header_style(&self) -> Style {
-        Style::new().fg_color(Some(self.header_fg))
-    }
-}
-
-// ── Theme-aware diff rendering ─────────────────────────────────────────────
-//
-// Extends the base DiffColorPalette with terminal-adaptive styling that
-// adjusts background tints and gutter styling based on:
-//   1. DiffTheme (Dark/Light) — detected from terminal background
-//   2. DiffColorLevel (TrueColor/Ansi256/Ansi16) — from terminal capability
-//
-// Inspired by github.com/openai/codex PR #12581.
+// Re-export core diff styling from vtcode-commons
+pub use vtcode_commons::styling::{
+    DiffColorLevel, DiffColorPalette, DiffTheme, diff_add_bg, diff_del_bg,
+    diff_gutter_bg_add_light, diff_gutter_bg_del_light, diff_gutter_fg_light,
+};
 
 use ratatui::style::{Color as RatatuiColor, Modifier, Style as RatatuiStyle};
 
-use super::ansi_capabilities::{CAPABILITIES, ColorDepth, ColorScheme, detect_color_scheme};
+// ── Conversion helpers ─────────────────────────────────────────────────────
 
-/// Terminal background theme for diff rendering.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum DiffTheme {
-    Dark,
-    Light,
-}
-
-impl DiffTheme {
-    /// Detect theme from the terminal environment.
-    pub fn detect() -> Self {
-        match detect_color_scheme() {
-            ColorScheme::Light => Self::Light,
-            ColorScheme::Dark | ColorScheme::Unknown => Self::Dark,
-        }
-    }
-
-    pub fn is_light(self) -> bool {
-        self == Self::Light
-    }
-}
-
-/// Terminal color capability level for palette selection.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum DiffColorLevel {
-    TrueColor,
-    Ansi256,
-    Ansi16,
-}
-
-impl DiffColorLevel {
-    /// Detect color level from terminal capabilities.
-    pub fn detect() -> Self {
-        match CAPABILITIES.color_depth {
-            ColorDepth::TrueColor => Self::TrueColor,
-            ColorDepth::Color256 => Self::Ansi256,
-            ColorDepth::Basic16 | ColorDepth::None => Self::Ansi16,
-        }
+/// Convert anstyle Color to ratatui Color
+fn ratatui_color_from_anstyle(color: anstyle::Color) -> RatatuiColor {
+    match color {
+        anstyle::Color::Ansi(c) => match c {
+            anstyle::AnsiColor::Black => RatatuiColor::Black,
+            anstyle::AnsiColor::Red => RatatuiColor::Red,
+            anstyle::AnsiColor::Green => RatatuiColor::Green,
+            anstyle::AnsiColor::Yellow => RatatuiColor::Yellow,
+            anstyle::AnsiColor::Blue => RatatuiColor::Blue,
+            anstyle::AnsiColor::Magenta => RatatuiColor::Magenta,
+            anstyle::AnsiColor::Cyan => RatatuiColor::Cyan,
+            anstyle::AnsiColor::White => RatatuiColor::White,
+            anstyle::AnsiColor::BrightBlack => RatatuiColor::DarkGray,
+            anstyle::AnsiColor::BrightRed => RatatuiColor::LightRed,
+            anstyle::AnsiColor::BrightGreen => RatatuiColor::LightGreen,
+            anstyle::AnsiColor::BrightYellow => RatatuiColor::LightYellow,
+            anstyle::AnsiColor::BrightBlue => RatatuiColor::LightBlue,
+            anstyle::AnsiColor::BrightMagenta => RatatuiColor::LightMagenta,
+            anstyle::AnsiColor::BrightCyan => RatatuiColor::LightCyan,
+            anstyle::AnsiColor::BrightWhite => RatatuiColor::White,
+        },
+        anstyle::Color::Ansi256(c) => RatatuiColor::Indexed(c.0),
+        anstyle::Color::Rgb(c) => RatatuiColor::Rgb(c.0, c.1, c.2),
     }
 }
 
-// ── Truecolor palette ──────────────────────────────────────────────────────
-
-const DARK_TC_ADD_LINE_BG: (u8, u8, u8) = (33, 58, 43); // #213A2B
-const DARK_TC_DEL_LINE_BG: (u8, u8, u8) = (74, 34, 29); // #4A221D
-
-const LIGHT_TC_ADD_LINE_BG: (u8, u8, u8) = (218, 251, 225); // #DAFBE1 (GitHub-style)
-const LIGHT_TC_DEL_LINE_BG: (u8, u8, u8) = (255, 235, 233); // #FFEBE9 (GitHub-style)
-const LIGHT_TC_ADD_NUM_BG: (u8, u8, u8) = (172, 238, 187); // #ACEEBB (gutter, saturated)
-const LIGHT_TC_DEL_NUM_BG: (u8, u8, u8) = (255, 206, 203); // #FFCECB (gutter, saturated)
-const LIGHT_TC_GUTTER_FG: (u8, u8, u8) = (31, 35, 40); // #1F2328 (near-black)
-
-// ── 256-color palette ──────────────────────────────────────────────────────
-
-const DARK_256_ADD_LINE_BG: u8 = 22; // DarkGreen
-const DARK_256_DEL_LINE_BG: u8 = 52; // DarkRed
-
-const LIGHT_256_ADD_LINE_BG: u8 = 194; // Honeydew2
-const LIGHT_256_DEL_LINE_BG: u8 = 224; // MistyRose1
-const LIGHT_256_ADD_NUM_BG: u8 = 157; // DarkSeaGreen2
-const LIGHT_256_DEL_NUM_BG: u8 = 217; // LightPink1
-const LIGHT_256_GUTTER_FG: u8 = 236; // Grey19
-
-// ── Background color selectors ─────────────────────────────────────────────
-
-fn rgb(t: (u8, u8, u8)) -> RatatuiColor {
-    RatatuiColor::Rgb(t.0, t.1, t.2)
-}
-
-fn indexed(i: u8) -> RatatuiColor {
-    RatatuiColor::Indexed(i)
-}
-
-/// Background color for addition lines.
-pub fn add_line_bg(theme: DiffTheme, level: DiffColorLevel) -> RatatuiColor {
-    match (theme, level) {
-        (DiffTheme::Dark, DiffColorLevel::TrueColor) => rgb(DARK_TC_ADD_LINE_BG),
-        (DiffTheme::Dark, DiffColorLevel::Ansi256) => indexed(DARK_256_ADD_LINE_BG),
-        (DiffTheme::Dark, DiffColorLevel::Ansi16) => RatatuiColor::Green,
-        (DiffTheme::Light, DiffColorLevel::TrueColor) => rgb(LIGHT_TC_ADD_LINE_BG),
-        (DiffTheme::Light, DiffColorLevel::Ansi256) => indexed(LIGHT_256_ADD_LINE_BG),
-        (DiffTheme::Light, DiffColorLevel::Ansi16) => RatatuiColor::LightGreen,
-    }
-}
-
-/// Background color for deletion lines.
-pub fn del_line_bg(theme: DiffTheme, level: DiffColorLevel) -> RatatuiColor {
-    match (theme, level) {
-        (DiffTheme::Dark, DiffColorLevel::TrueColor) => rgb(DARK_TC_DEL_LINE_BG),
-        (DiffTheme::Dark, DiffColorLevel::Ansi256) => indexed(DARK_256_DEL_LINE_BG),
-        (DiffTheme::Dark, DiffColorLevel::Ansi16) => RatatuiColor::Red,
-        (DiffTheme::Light, DiffColorLevel::TrueColor) => rgb(LIGHT_TC_DEL_LINE_BG),
-        (DiffTheme::Light, DiffColorLevel::Ansi256) => indexed(LIGHT_256_DEL_LINE_BG),
-        (DiffTheme::Light, DiffColorLevel::Ansi16) => RatatuiColor::LightRed,
-    }
-}
-
-// ── Gutter helpers (light theme) ───────────────────────────────────────────
-
-fn light_gutter_fg(level: DiffColorLevel) -> RatatuiColor {
-    match level {
-        DiffColorLevel::TrueColor => rgb(LIGHT_TC_GUTTER_FG),
-        DiffColorLevel::Ansi256 => indexed(LIGHT_256_GUTTER_FG),
-        DiffColorLevel::Ansi16 => RatatuiColor::Black,
-    }
-}
-
-fn light_add_num_bg(level: DiffColorLevel) -> RatatuiColor {
-    match level {
-        DiffColorLevel::TrueColor => rgb(LIGHT_TC_ADD_NUM_BG),
-        DiffColorLevel::Ansi256 => indexed(LIGHT_256_ADD_NUM_BG),
-        DiffColorLevel::Ansi16 => RatatuiColor::Green,
-    }
-}
-
-fn light_del_num_bg(level: DiffColorLevel) -> RatatuiColor {
-    match level {
-        DiffColorLevel::TrueColor => rgb(LIGHT_TC_DEL_NUM_BG),
-        DiffColorLevel::Ansi256 => indexed(LIGHT_256_DEL_NUM_BG),
-        DiffColorLevel::Ansi16 => RatatuiColor::Red,
-    }
-}
-
-// ── Composed style builders ────────────────────────────────────────────────
+// ── TUI-specific diff line styling ─────────────────────────────────────────
 
 /// Diff line type for style selection.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -281,67 +52,78 @@ pub enum DiffLineType {
 /// Full-width line background style. Context lines use terminal default.
 pub fn style_line_bg(kind: DiffLineType, theme: DiffTheme, level: DiffColorLevel) -> RatatuiStyle {
     match kind {
-        DiffLineType::Insert => RatatuiStyle::default().bg(add_line_bg(theme, level)),
-        DiffLineType::Delete => RatatuiStyle::default().bg(del_line_bg(theme, level)),
+        DiffLineType::Insert => {
+            RatatuiStyle::default().bg(ratatui_color_from_anstyle(diff_add_bg(theme, level)))
+        }
+        DiffLineType::Delete => {
+            RatatuiStyle::default().bg(ratatui_color_from_anstyle(diff_del_bg(theme, level)))
+        }
         DiffLineType::Context => RatatuiStyle::default(),
     }
 }
 
 /// Gutter (line number) style.
 ///
-/// Light: opaque tinted bg + near-black fg for readability.
-/// Dark: simple DIM modifier.
+/// Keep gutter signs/numbers dim and on standard ANSI red/green without bold.
 pub fn style_gutter(kind: DiffLineType, theme: DiffTheme, level: DiffColorLevel) -> RatatuiStyle {
-    match (theme, kind) {
-        (DiffTheme::Light, DiffLineType::Insert) => RatatuiStyle::default()
-            .fg(light_gutter_fg(level))
-            .bg(light_add_num_bg(level)),
-        (DiffTheme::Light, DiffLineType::Delete) => RatatuiStyle::default()
-            .fg(light_gutter_fg(level))
-            .bg(light_del_num_bg(level)),
-        _ => RatatuiStyle::default().add_modifier(Modifier::DIM),
+    let _ = (theme, level);
+    match kind {
+        DiffLineType::Insert => RatatuiStyle::default()
+            .fg(RatatuiColor::Green)
+            .add_modifier(Modifier::DIM)
+            .remove_modifier(Modifier::BOLD),
+        DiffLineType::Delete => RatatuiStyle::default()
+            .fg(RatatuiColor::Red)
+            .add_modifier(Modifier::DIM)
+            .remove_modifier(Modifier::BOLD),
+        DiffLineType::Context => RatatuiStyle::default().add_modifier(Modifier::DIM),
     }
 }
 
 /// Sign character (`+`/`-`) style.
-pub fn style_sign(kind: DiffLineType, theme: DiffTheme, level: DiffColorLevel) -> RatatuiStyle {
+/// Uses standard ANSI red/green without bold for consistency.
+pub fn style_sign(kind: DiffLineType, _theme: DiffTheme, _level: DiffColorLevel) -> RatatuiStyle {
     match kind {
-        DiffLineType::Insert => match theme {
-            DiffTheme::Light => RatatuiStyle::default().fg(RatatuiColor::Green),
-            DiffTheme::Dark => style_content(kind, theme, level),
-        },
-        DiffLineType::Delete => match theme {
-            DiffTheme::Light => RatatuiStyle::default().fg(RatatuiColor::Red),
-            DiffTheme::Dark => style_content(kind, theme, level),
-        },
+        DiffLineType::Insert => RatatuiStyle::default()
+            .fg(RatatuiColor::Green)
+            .add_modifier(Modifier::DIM)
+            .remove_modifier(Modifier::BOLD),
+        DiffLineType::Delete => RatatuiStyle::default()
+            .fg(RatatuiColor::Red)
+            .add_modifier(Modifier::DIM)
+            .remove_modifier(Modifier::BOLD),
         DiffLineType::Context => RatatuiStyle::default(),
     }
 }
 
 /// Content style for plain (non-syntax-highlighted) diff lines.
+///
+/// Dark + ANSI16: black fg on colored bg for contrast.
+/// Light: bg only, no fg override.
+/// Dark + TrueColor/256: colored fg + tinted bg.
 pub fn style_content(kind: DiffLineType, theme: DiffTheme, level: DiffColorLevel) -> RatatuiStyle {
     match (kind, theme, level) {
         // Dark + ANSI16: force Black fg on colored bg for contrast
         (DiffLineType::Insert, DiffTheme::Dark, DiffColorLevel::Ansi16) => RatatuiStyle::default()
             .fg(RatatuiColor::Black)
-            .bg(add_line_bg(theme, level)),
+            .bg(ratatui_color_from_anstyle(diff_add_bg(theme, level))),
         (DiffLineType::Delete, DiffTheme::Dark, DiffColorLevel::Ansi16) => RatatuiStyle::default()
             .fg(RatatuiColor::Black)
-            .bg(del_line_bg(theme, level)),
+            .bg(ratatui_color_from_anstyle(diff_del_bg(theme, level))),
         // Light: bg only, no fg override
         (DiffLineType::Insert, DiffTheme::Light, _) => {
-            RatatuiStyle::default().bg(add_line_bg(theme, level))
+            RatatuiStyle::default().bg(ratatui_color_from_anstyle(diff_add_bg(theme, level)))
         }
         (DiffLineType::Delete, DiffTheme::Light, _) => {
-            RatatuiStyle::default().bg(del_line_bg(theme, level))
+            RatatuiStyle::default().bg(ratatui_color_from_anstyle(diff_del_bg(theme, level)))
         }
         // Dark + TrueColor/256: colored fg + tinted bg
         (DiffLineType::Insert, DiffTheme::Dark, _) => RatatuiStyle::default()
             .fg(RatatuiColor::Green)
-            .bg(add_line_bg(theme, level)),
+            .bg(ratatui_color_from_anstyle(diff_add_bg(theme, level))),
         (DiffLineType::Delete, DiffTheme::Dark, _) => RatatuiStyle::default()
             .fg(RatatuiColor::Red)
-            .bg(del_line_bg(theme, level)),
+            .bg(ratatui_color_from_anstyle(diff_del_bg(theme, level))),
         // Context: terminal default
         (DiffLineType::Context, _, _) => RatatuiStyle::default(),
     }
@@ -353,42 +135,60 @@ mod tests {
 
     #[test]
     fn dark_truecolor_add_bg_is_rgb() {
-        let bg = add_line_bg(DiffTheme::Dark, DiffColorLevel::TrueColor);
-        assert!(matches!(bg, RatatuiColor::Rgb(33, 58, 43)));
+        let bg = diff_add_bg(DiffTheme::Dark, DiffColorLevel::TrueColor);
+        assert!(matches!(
+            bg,
+            anstyle::Color::Rgb(anstyle::RgbColor(20, 40, 20))
+        ));
     }
 
     #[test]
     fn dark_truecolor_del_bg_is_rgb() {
-        let bg = del_line_bg(DiffTheme::Dark, DiffColorLevel::TrueColor);
-        assert!(matches!(bg, RatatuiColor::Rgb(74, 34, 29)));
+        let bg = diff_del_bg(DiffTheme::Dark, DiffColorLevel::TrueColor);
+        assert!(matches!(
+            bg,
+            anstyle::Color::Rgb(anstyle::RgbColor(48, 16, 16))
+        ));
     }
 
     #[test]
-    fn light_truecolor_add_bg_is_github_style() {
-        let bg = add_line_bg(DiffTheme::Light, DiffColorLevel::TrueColor);
-        assert!(matches!(bg, RatatuiColor::Rgb(218, 251, 225)));
+    fn light_truecolor_add_bg_is_accessible() {
+        let bg = diff_add_bg(DiffTheme::Light, DiffColorLevel::TrueColor);
+        assert!(matches!(
+            bg,
+            anstyle::Color::Rgb(anstyle::RgbColor(220, 245, 220))
+        ));
     }
 
     #[test]
-    fn light_truecolor_del_bg_is_github_style() {
-        let bg = del_line_bg(DiffTheme::Light, DiffColorLevel::TrueColor);
-        assert!(matches!(bg, RatatuiColor::Rgb(255, 235, 233)));
+    fn light_truecolor_del_bg_is_accessible() {
+        let bg = diff_del_bg(DiffTheme::Light, DiffColorLevel::TrueColor);
+        assert!(matches!(
+            bg,
+            anstyle::Color::Rgb(anstyle::RgbColor(250, 220, 220))
+        ));
     }
 
     #[test]
     fn dark_256_uses_indexed_colors() {
-        let add = add_line_bg(DiffTheme::Dark, DiffColorLevel::Ansi256);
-        let del = del_line_bg(DiffTheme::Dark, DiffColorLevel::Ansi256);
-        assert!(matches!(add, RatatuiColor::Indexed(22)));
-        assert!(matches!(del, RatatuiColor::Indexed(52)));
+        let add = diff_add_bg(DiffTheme::Dark, DiffColorLevel::Ansi256);
+        let del = diff_del_bg(DiffTheme::Dark, DiffColorLevel::Ansi256);
+        assert!(matches!(
+            add,
+            anstyle::Color::Ansi256(anstyle::Ansi256Color(22))
+        ));
+        assert!(matches!(
+            del,
+            anstyle::Color::Ansi256(anstyle::Ansi256Color(52))
+        ));
     }
 
     #[test]
     fn dark_ansi16_uses_named_colors() {
-        let add = add_line_bg(DiffTheme::Dark, DiffColorLevel::Ansi16);
-        let del = del_line_bg(DiffTheme::Dark, DiffColorLevel::Ansi16);
-        assert_eq!(add, RatatuiColor::Green);
-        assert_eq!(del, RatatuiColor::Red);
+        let add = diff_add_bg(DiffTheme::Dark, DiffColorLevel::Ansi16);
+        let del = diff_del_bg(DiffTheme::Dark, DiffColorLevel::Ansi16);
+        assert_eq!(add, anstyle::Color::Ansi(anstyle::AnsiColor::Green));
+        assert_eq!(del, anstyle::Color::Ansi(anstyle::AnsiColor::Red));
     }
 
     #[test]
@@ -412,14 +212,15 @@ mod tests {
     }
 
     #[test]
-    fn light_gutter_has_opaque_bg() {
+    fn insert_gutter_is_dim_standard_green_no_bold() {
         let style = style_gutter(
             DiffLineType::Insert,
             DiffTheme::Light,
             DiffColorLevel::TrueColor,
         );
-        assert!(style.bg.is_some());
-        assert!(style.fg.is_some());
+        assert_eq!(style.fg, Some(RatatuiColor::Green));
+        assert!(style.add_modifier.contains(Modifier::DIM));
+        assert!(style.sub_modifier.contains(Modifier::BOLD));
     }
 
     #[test]
@@ -430,5 +231,25 @@ mod tests {
             DiffColorLevel::Ansi16,
         );
         assert_eq!(style.fg, Some(RatatuiColor::Black));
+    }
+
+    #[test]
+    fn sign_style_always_uses_standard_colors() {
+        let add_sign = style_sign(
+            DiffLineType::Insert,
+            DiffTheme::Dark,
+            DiffColorLevel::TrueColor,
+        );
+        let del_sign = style_sign(
+            DiffLineType::Delete,
+            DiffTheme::Light,
+            DiffColorLevel::Ansi16,
+        );
+        assert_eq!(add_sign.fg, Some(RatatuiColor::Green));
+        assert_eq!(del_sign.fg, Some(RatatuiColor::Red));
+        assert!(add_sign.add_modifier.contains(Modifier::DIM));
+        assert!(del_sign.add_modifier.contains(Modifier::DIM));
+        assert!(add_sign.sub_modifier.contains(Modifier::BOLD));
+        assert!(del_sign.sub_modifier.contains(Modifier::BOLD));
     }
 }

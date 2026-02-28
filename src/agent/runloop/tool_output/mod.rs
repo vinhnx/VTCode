@@ -30,7 +30,10 @@ use vtcode_core::config::mcp::McpRendererProfile;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use commands::render_terminal_command_panel;
-use files::{render_list_dir_output, render_read_file_output, render_write_file_preview};
+use files::{
+    format_diff_content_lines_with_numbers, render_list_dir_output, render_read_file_output,
+    render_write_file_preview,
+};
 use mcp::{
     render_context7_output, render_generic_output, render_sequential_output,
     resolve_renderer_profile,
@@ -229,6 +232,10 @@ pub(crate) async fn render_tool_output(
         .await?;
     }
     Ok(())
+}
+
+pub(crate) fn format_unified_diff_lines(diff_content: &str) -> Vec<String> {
+    format_diff_content_lines_with_numbers(diff_content)
 }
 
 fn is_git_diff_payload(val: &Value) -> bool {
@@ -592,7 +599,8 @@ mod tests {
 
         let transcript_dump = transcript::snapshot().join("\n");
         assert!(transcript_dump.contains("diff --git a/src/lib.rs b/src/lib.rs"));
-        assert!(transcript_dump.contains("+new"));
+        assert!(transcript_dump.contains("@@ -1 +1 @@"));
+        assert!(transcript_dump.contains("new"));
         assert!(
             !transcript_dump.contains("└ "),
             "run-command preview prefix should not appear for git diff payload"

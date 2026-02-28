@@ -11,6 +11,7 @@ use serde_json::{Value, json};
 use tokio::fs::File;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::sync::Semaphore;
+use vtcode_commons::diff_paths::looks_like_diff_content;
 
 use crate::tools::traits::Tool;
 use crate::utils::serde_helpers::{deserialize_maybe_quoted, deserialize_opt_maybe_quoted};
@@ -882,26 +883,8 @@ fn condense_for_batch(lines: &mut Vec<String>) -> (bool, usize) {
 }
 
 fn looks_like_diff_lines(lines: &[String]) -> bool {
-    lines.iter().any(|line| {
-        let trimmed = line.trim_start();
-        trimmed.starts_with("diff --git ")
-            || trimmed.starts_with("@@ ")
-            || trimmed.starts_with("+++ ")
-            || trimmed.starts_with("--- ")
-            || trimmed.starts_with("index ")
-            || trimmed.starts_with("new file mode ")
-            || trimmed.starts_with("deleted file mode ")
-            || trimmed.starts_with("rename from ")
-            || trimmed.starts_with("rename to ")
-            || trimmed.starts_with("copy from ")
-            || trimmed.starts_with("copy to ")
-            || trimmed.starts_with("similarity index ")
-            || trimmed.starts_with("dissimilarity index ")
-            || trimmed.starts_with("old mode ")
-            || trimmed.starts_with("new mode ")
-            || trimmed.starts_with("Binary files ")
-            || trimmed.starts_with("\\ No newline at end of file")
-    })
+    let joined = lines.join("\n");
+    looks_like_diff_content(&joined)
 }
 
 mod defaults {
@@ -1137,5 +1120,37 @@ mod tests {
         assert!(omitted > 0);
         assert!(lines.len() < 100);
         assert!(lines.iter().any(|l| l.contains("omitted")));
+    }
+
+    #[test]
+    fn condense_for_batch_does_not_treat_plus_minus_text_as_diff() {
+        let mut lines: Vec<String> = (1..=60)
+            .map(|i| {
+                if i % 2 == 0 {
+                    format!("+ normal status line {i}")
+                } else {
+                    format!("- normal status line {i}")
+                }
+            })
+            .collect();
+        let (condensed, omitted) = condense_for_batch(&mut lines);
+        assert!(condensed);
+        assert!(omitted > 0);
+    }
+
+    #[test]
+    fn condense_for_batch_preserves_actual_diff_output() {
+        let mut lines = vec![
+            "diff --git a/src/main.rs b/src/main.rs".to_string(),
+            "index 1111111..2222222 100644".to_string(),
+            "--- a/src/main.rs".to_string(),
+            "+++ b/src/main.rs".to_string(),
+            "@@ -1 +1 @@".to_string(),
+            "-old".to_string(),
+            "+new".to_string(),
+        ];
+        let (condensed, omitted) = condense_for_batch(&mut lines);
+        assert!(!condensed);
+        assert_eq!(omitted, 0);
     }
 }

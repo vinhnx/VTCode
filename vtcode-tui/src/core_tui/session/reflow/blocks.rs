@@ -1,5 +1,6 @@
 use ratatui::prelude::*;
 use unicode_width::UnicodeWidthStr;
+use vtcode_commons::diff_paths::{is_diff_addition_line, is_diff_deletion_line};
 
 use super::super::super::style::ratatui_style_from_inline;
 use super::super::super::types::InlineMessageKind;
@@ -10,9 +11,7 @@ use crate::config::constants::ui;
 impl Session {
     fn wrapped_diff_continuation_prefix(line_text: &str) -> Option<String> {
         let trimmed = line_text.trim_start();
-        if (trimmed.starts_with('-') && !trimmed.starts_with("---"))
-            || (trimmed.starts_with('+') && !trimmed.starts_with("+++"))
-        {
+        if is_diff_deletion_line(trimmed) || is_diff_addition_line(trimmed) {
             let marker_pos = line_text.find(['-', '+'])?;
             let marker_end = marker_pos + 1;
             let after = line_text.get(marker_end..)?;

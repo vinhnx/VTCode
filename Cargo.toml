@@ -122,6 +122,7 @@ unwrap_used = "deny"
 
 [dependencies]
 vtcode-acp-client = { path = "vtcode-acp-client", version = "0.84.1" }
+vtcode-commons = { path = "vtcode-commons", version = "0.84.1" }
 vtcode-config = { path = "vtcode-config", version = "0.84.1" }
 vtcode-core = { path = "vtcode-core", version = "0.84.1", default-features = false }
 vtcode-tui = { path = "vtcode-tui", version = "0.84.1" }

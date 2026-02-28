@@ -15,6 +15,7 @@ pub mod async_utils;
 pub mod at_pattern;
 pub mod colors;
 pub mod diff;
+pub mod diff_paths;
 pub mod errors;
 pub mod formatting;
 pub mod fs;

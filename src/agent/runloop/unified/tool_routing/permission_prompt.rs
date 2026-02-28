@@ -11,6 +11,7 @@ use vtcode_core::utils::ansi::AnsiRenderer;
 use vtcode_tui::InlineEvent;
 use vtcode_tui::InlineHandle;
 
+use crate::agent::runloop::tool_output::format_unified_diff_lines;
 use crate::agent::runloop::unified::state::{CtrlCSignal, CtrlCState};
 use crate::agent::runloop::unified::ui_interaction::PlaceholderGuard;
 
@@ -71,6 +72,100 @@ pub(super) fn shell_command_requires_prompt(command: &str) -> bool {
     vtcode_core::command_safety::command_might_be_dangerous(&tokens)
 }
 
+fn tool_args_diff_preview(tool_name: &str, tool_args: Option<&Value>) -> Option<Vec<String>> {
+    let args = tool_args?.as_object()?;
+    let (before, after) = match tool_name {
+        "edit_file" => {
+            let old_str = args
+                .get("old_str")
+                .or_else(|| args.get("old_string"))
+                .and_then(Value::as_str)?;
+            let new_str = args
+                .get("new_str")
+                .or_else(|| args.get("new_string"))
+                .and_then(Value::as_str)?;
+            (Some(old_str), new_str)
+        }
+        "write_file" | "create_file" => {
+            let content = args.get("content").and_then(Value::as_str)?;
+            (None, content)
+        }
+        "unified_file" => {
+            let action = args
+                .get("action")
+                .and_then(Value::as_str)
+                .or_else(|| {
+                    if args.get("old_str").is_some() || args.get("old_string").is_some() {
+                        Some("edit")
+                    } else if args.get("content").is_some() {
+                        Some("write")
+                    } else {
+                        None
+                    }
+                })
+                .unwrap_or("read");
+
+            match action {
+                "edit" => {
+                    let old_str = args
+                        .get("old_str")
+                        .or_else(|| args.get("old_string"))
+                        .and_then(Value::as_str)?;
+                    let new_str = args
+                        .get("new_str")
+                        .or_else(|| args.get("new_string"))
+                        .and_then(Value::as_str)?;
+                    (Some(old_str), new_str)
+                }
+                "write" | "create" => {
+                    let content = args.get("content").and_then(Value::as_str)?;
+                    (None, content)
+                }
+                _ => return None,
+            }
+        }
+        _ => return None,
+    };
+    let path = args
+        .get("path")
+        .or_else(|| args.get("file_path"))
+        .or_else(|| args.get("target_path"))
+        .and_then(Value::as_str)
+        .unwrap_or("(unknown file)");
+
+    let diff_preview = vtcode_core::tools::file_ops::build_diff_preview(path, before, after);
+    let skipped = diff_preview
+        .get("skipped")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    if skipped {
+        let reason = diff_preview
+            .get("reason")
+            .and_then(Value::as_str)
+            .unwrap_or("preview unavailable");
+        return Some(vec![format!("diff: {}", reason)]);
+    }
+
+    let content = diff_preview
+        .get("content")
+        .and_then(Value::as_str)
+        .unwrap_or("");
+    if content.is_empty() {
+        return Some(vec!["(no changes)".to_string()]);
+    }
+
+    let lines = format_unified_diff_lines(content);
+    if lines.len() <= 80 {
+        return Some(lines);
+    }
+
+    let mut preview = Vec::with_capacity(61);
+    preview.extend(lines.iter().take(40).cloned());
+    preview.push(format!("… +{} lines", lines.len().saturating_sub(60)));
+    preview.extend(lines.iter().skip(lines.len().saturating_sub(20)).cloned());
+    Some(preview)
+}
+
 pub(super) async fn prompt_tool_permission<S: UiSession + ?Sized>(
     display_name: &str,
     tool_name: &str,
@@ -95,22 +190,27 @@ pub(super) async fn prompt_tool_permission<S: UiSession + ?Sized>(
     if let Some(args) = tool_args
         && let Some(obj) = args.as_object()
     {
-        for (key, value) in obj.iter().take(3) {
-            if let Some(str_val) = value.as_str() {
-                let truncated = if str_val.len() > 60 {
-                    format!("{}...", &str_val[..57])
-                } else {
-                    str_val.to_string()
-                };
-                description_lines.push(format!("  {}: {}", key, truncated));
-            } else if let Some(bool_val) = value.as_bool() {
-                description_lines.push(format!("  {}: {}", key, bool_val));
-            } else if let Some(num_val) = value.as_number() {
-                description_lines.push(format!("  {}: {}", key, num_val));
+        if let Some(diff_lines) = tool_args_diff_preview(tool_name, tool_args) {
+            description_lines.push(String::new());
+            description_lines.extend(diff_lines);
+        } else {
+            for (key, value) in obj.iter().take(3) {
+                if let Some(str_val) = value.as_str() {
+                    let truncated = if str_val.len() > 60 {
+                        format!("{}...", &str_val[..57])
+                    } else {
+                        str_val.to_string()
+                    };
+                    description_lines.push(format!("  {}: {}", key, truncated));
+                } else if let Some(bool_val) = value.as_bool() {
+                    description_lines.push(format!("  {}: {}", key, bool_val));
+                } else if let Some(num_val) = value.as_number() {
+                    description_lines.push(format!("  {}: {}", key, num_val));
+                }
             }
-        }
-        if obj.len() > 3 {
-            description_lines.push(format!("  ... and {} more arguments", obj.len() - 3));
+            if obj.len() > 3 {
+                description_lines.push(format!("  ... and {} more arguments", obj.len() - 3));
+            }
         }
     }
 

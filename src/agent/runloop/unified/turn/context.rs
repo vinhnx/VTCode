@@ -9,6 +9,9 @@ use std::sync::Arc;
 use std::sync::RwLock;
 use std::time::{Duration, Instant};
 use tokio::sync::Notify;
+use vtcode_commons::diff_paths::{
+    is_diff_addition_line, is_diff_deletion_line, is_diff_header_line,
+};
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::core::agent::snapshots::SnapshotManager;
 use vtcode_core::core::agent::steering::SteeringMessage;
@@ -576,10 +579,9 @@ fn is_diff_like_fenced_recap(text: &str) -> bool {
             has_fence = true;
             continue;
         }
-        if trimmed.starts_with("diff --git")
-            || trimmed.starts_with("@@")
-            || (trimmed.starts_with('+') && !trimmed.starts_with("+++"))
-            || (trimmed.starts_with('-') && !trimmed.starts_with("---"))
+        if is_diff_header_line(trimmed)
+            || is_diff_addition_line(trimmed)
+            || is_diff_deletion_line(trimmed)
         {
             has_diff_marker = true;
         }
