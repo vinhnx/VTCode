@@ -193,6 +193,23 @@ pub(super) async fn determine_theme(args: &Cli, config: &VTCodeConfig) -> Result
         tracing::debug!(theme = %theme_selection, warning = %warning, "Theme contrast warning");
     }
 
+    if !ui_theme::theme_matches_terminal_scheme(&theme_selection) {
+        let scheme_kind = if ui_theme::is_light_theme(&theme_selection) {
+            "light"
+        } else {
+            "dark"
+        };
+        tracing::warn!(
+            theme = %theme_selection,
+            "Theme '{}' is {} but your terminal appears {}. \
+             The theme background is painted automatically for readability. \
+             Set ui.color_scheme_mode = \"auto\" in vtcode.toml or pick a matching theme.",
+            theme_selection,
+            scheme_kind,
+            if scheme_kind == "light" { "dark" } else { "light" },
+        );
+    }
+
     Ok(theme_selection)
 }
 

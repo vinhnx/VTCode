@@ -197,10 +197,4 @@ improve agent's postamlbe summarization. reference and also suggest next actions
     ``
 ```
 
----
-
-fix light themes, currently it showing blank screen when selected on dark terminal. This is a critical issue as it affects usability for users who prefer light themes, but current terminal style is black, maybe has a detection mechanism and show info in the TUI, vise versa for light terminals and dark themes. The fix should ensure that the themes render correctly and provide a good user experience. improve accessibility by ensuring that there is sufficient contrast between the text and background colors in all themes, especially for users with visual impairments. This may involve adjusting the color palette or providing options for high-contrast themes.
-
----
-
-style (+/-) symbol label with red/green color to indicate additions and deletions in the diff preview matching the background diff colors. This will make it easier for users to quickly identify what has been added and what has been removed in the code changes, improving readability and user experience when reviewing diffs.
+the goal is to provide users with a clear and concise summary of the agent's actions, including any relevant metrics such as API usage, time spent, and code changes. Additionally, the summary should suggest next steps for the user to take based on the outcome of the agent's actions. This could include options to resume the session, view detailed logs, or take specific actions based on the results of the agent's work. The postamble summarization should be designed to help users quickly understand the results of their interactions with the agent and guide them towards meaningful next steps. The tone should be informative and actionable, providing users with the information they need to make informed decisions about how to proceed after the agent has completed its tasks. Not too verbose, but comprehensive enough to cover the key outcomes and next steps. Not too blunt, but clear and concise.

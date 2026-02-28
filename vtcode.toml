@@ -20,7 +20,7 @@ default_model = "gpt-oss:20b-cloud"
 #   default_model = "zai-org/GLM-5:novita"
 
 # Visual theme for the terminal interface
-theme = "homebrew"
+theme = "ciapre-blue"
 
 # Temperature for main LLM responses (0.0-1.0)
 # Lower values = more deterministic, higher values = more creative
@@ -298,6 +298,7 @@ switch_plan_mode = "prompt"
 mode_plan = "prompt"
 planner_mode = "prompt"
 "/plan" = "prompt"
+git_diff = "allow"
 
 [security.gatekeeper]
 warn_on_quarantine = true
