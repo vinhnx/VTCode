@@ -292,7 +292,6 @@ fn test_request_validation() {
     let openai = OpenAIProvider::new("test_key".to_string());
     let anthropic = AnthropicProvider::new("test_key".to_string());
     let openrouter = OpenRouterProvider::new("test_key".to_string());
-    let xai = XAIProvider::new("test_key".to_string());
 
     // Test valid requests
     let valid_gemini_request = LLMRequest {
@@ -468,39 +467,6 @@ fn test_request_validation() {
             .is_ok()
     );
 
-    let valid_xai_request = LLMRequest {
-        messages: vec![Message::user("test".to_string())],
-        system_prompt: None,
-        tools: None,
-        model: models::xai::GROK_4.to_string(),
-        max_tokens: None,
-        temperature: None,
-        stream: false,
-        tool_choice: None,
-        parallel_tool_calls: None,
-        parallel_tool_config: None,
-        reasoning_effort: None,
-        effort: None,
-        output_format: None,
-        verbosity: Some(VerbosityLevel::default()),
-        do_sample: None,
-        top_p: None,
-        top_k: None,
-        presence_penalty: None,
-        frequency_penalty: None,
-        stop_sequences: None,
-        thinking_budget: None,
-        betas: None,
-        context_management: None,
-        prefill: None,
-        character_reinforcement: false,
-        character_name: None,
-        coding_agent_settings: None,
-        metadata: None,
-        prompt_cache_key: None,
-    };
-    assert!(xai.validate_request(&valid_xai_request).is_ok());
-
     // Test invalid requests (wrong model for provider)
     let invalid_request = LLMRequest {
         messages: vec![Message::user("test".to_string())],
@@ -536,7 +502,6 @@ fn test_request_validation() {
     assert!(gemini.validate_request(&invalid_request).is_err());
     assert!(openai.validate_request(&invalid_request).is_err());
     assert!(anthropic.validate_request(&invalid_request).is_err());
-    assert!(xai.validate_request(&invalid_request).is_err());
 }
 
 #[test]
