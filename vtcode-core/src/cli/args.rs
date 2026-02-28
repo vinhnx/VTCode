@@ -498,8 +498,8 @@ pub enum Commands {
     ListSkills {},
 
     /// Check for and install binary updates from GitHub Releases
-    #[command(name = "self-update")]
-    SelfUpdate {
+    #[command(name = "update")]
+    Update {
         /// Check for updates without installing
         #[arg(long)]
         check: bool,

@@ -92,6 +92,10 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
             name: "doctor",
             description: "Run installation and configuration diagnostics",
         },
+        SlashCommandInfo {
+            name: "update",
+            description: "Check for new VT Code releases and install updates (usage: /update [check|install] [--force])",
+        },
         // Integrations
         SlashCommandInfo {
             name: "mcp",

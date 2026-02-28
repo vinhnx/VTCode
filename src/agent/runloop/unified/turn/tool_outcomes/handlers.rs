@@ -5,7 +5,7 @@ use serde_json::{Value, json};
 use std::time::Duration;
 
 use vtcode_core::config::constants::defaults::{
-    DEFAULT_MAX_CONSECUTIVE_BLOCKED_TOOL_CALLS_PER_TURN,
+    DEFAULT_MAX_CONSECUTIVE_BLOCKED_TOOL_CALLS_PER_TURN, DEFAULT_MAX_REPEATED_TOOL_CALLS,
     DEFAULT_MAX_SEQUENTIAL_SPOOL_CHUNK_READS_PER_TURN,
 };
 use vtcode_core::config::constants::tools as tool_names;
@@ -107,8 +107,25 @@ fn build_tool_budget_warning_message(used: usize, max: usize, remaining: usize) 
 
 fn build_tool_budget_exhausted_reason(used: usize, max: usize) -> String {
     format!(
-        "Tool-call budget exhausted for this turn ({used}/{max}). Start a new turn with \"continue\" to proceed."
+        "Tool-call budget exhausted for this turn ({used}/{max}). Start a new turn with \"continue\" or provide a new instruction to proceed."
     )
+}
+
+fn record_tool_call_budget_usage(ctx: &mut TurnProcessingContext<'_>) {
+    ctx.harness_state.record_tool_call();
+    if ctx
+        .harness_state
+        .should_emit_tool_budget_warning(TOOL_BUDGET_WARNING_THRESHOLD)
+    {
+        let used = ctx.harness_state.tool_calls;
+        let max = ctx.harness_state.max_tool_calls;
+        let remaining = ctx.harness_state.remaining_tool_calls();
+        ctx.working_history
+            .push(uni::Message::system(build_tool_budget_warning_message(
+                used, max, remaining,
+            )));
+        ctx.harness_state.mark_tool_budget_warning_emitted();
+    }
 }
 
 fn max_consecutive_blocked_tool_calls_per_turn(ctx: &TurnProcessingContext<'_>) -> usize {
@@ -244,6 +261,96 @@ fn read_file_limit_value(args: &Value) -> Option<usize> {
                 .and_then(|n| usize::try_from(n).ok())
                 .or_else(|| value.as_str().and_then(|s| s.parse::<usize>().ok()))
         })
+}
+
+fn command_value_to_signature_string(value: &Value) -> Option<String> {
+    if let Some(command) = value.as_str() {
+        let normalized = command.split_whitespace().collect::<Vec<_>>().join(" ");
+        if normalized.is_empty() {
+            None
+        } else {
+            Some(normalized)
+        }
+    } else if let Some(parts) = value.as_array() {
+        let joined = parts
+            .iter()
+            .filter_map(Value::as_str)
+            .map(str::trim)
+            .filter(|part| !part.is_empty())
+            .collect::<Vec<_>>()
+            .join(" ");
+        if joined.is_empty() {
+            None
+        } else {
+            Some(joined)
+        }
+    } else {
+        None
+    }
+}
+
+fn extract_command_args_suffix(args: &Value) -> Option<String> {
+    let arg_values = args.get("args")?.as_array()?;
+    let suffix = arg_values
+        .iter()
+        .filter_map(Value::as_str)
+        .map(str::trim)
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ");
+    if suffix.is_empty() {
+        None
+    } else {
+        Some(suffix)
+    }
+}
+
+fn shell_run_signature(canonical_tool_name: &str, args: &Value) -> Option<String> {
+    let command_value = match canonical_tool_name {
+        tool_names::RUN_PTY_CMD | tool_names::SHELL => {
+            args.get("command").or_else(|| args.get("raw_command"))
+        }
+        tool_names::UNIFIED_EXEC | tool_names::EXEC_PTY_CMD | tool_names::EXEC => {
+            if tool_intent::unified_exec_action(args).unwrap_or("run") == "run" {
+                args.get("command")
+                    .or_else(|| args.get("cmd"))
+                    .or_else(|| args.get("raw_command"))
+            } else {
+                None
+            }
+        }
+        _ => None,
+    }?;
+
+    let command = command_value_to_signature_string(command_value)?;
+    let command_with_args = match extract_command_args_suffix(args) {
+        Some(suffix) => format!("{command} {suffix}"),
+        None => command,
+    };
+    Some(format!(
+        "{canonical_tool_name}::{}",
+        compact_loop_key_part(&command_with_args, 200)
+    ))
+}
+
+fn max_consecutive_identical_shell_command_runs_per_turn(ctx: &TurnProcessingContext<'_>) -> usize {
+    ctx.vt_cfg
+        .map(|cfg| cfg.tools.max_repeated_tool_calls)
+        .filter(|value| *value > 0)
+        .unwrap_or(DEFAULT_MAX_REPEATED_TOOL_CALLS)
+}
+
+fn build_repeated_shell_run_error_content(max_repeated_runs: usize) -> String {
+    super::execution_result::build_error_content(
+        format!(
+            "Repeated identical shell command runs exceeded per-turn cap ({}). Reuse prior output or change command before retrying.",
+            max_repeated_runs
+        ),
+        None,
+        None,
+        "repeated_shell_run",
+    )
+    .to_string()
 }
 
 fn looks_like_tool_output_spool_path(path: &str) -> bool {
@@ -412,6 +519,35 @@ fn enforce_duplicate_task_tracker_create_guard<'a>(
         "Blocked duplicate task_tracker.create in the same turn. Continue with task_tracker.update/list."
             .to_string(),
     ));
+    Some(ValidationResult::Blocked)
+}
+
+fn enforce_repeated_shell_run_guard(
+    ctx: &mut TurnProcessingContext<'_>,
+    tool_call_id: &str,
+    canonical_tool_name: &str,
+    args: &Value,
+) -> Option<ValidationResult> {
+    let Some(signature) = shell_run_signature(canonical_tool_name, args) else {
+        ctx.harness_state.reset_shell_command_run_streak();
+        return None;
+    };
+
+    let max_repeated_runs = max_consecutive_identical_shell_command_runs_per_turn(ctx);
+    let streak = ctx.harness_state.record_shell_command_run(signature);
+    if streak <= max_repeated_runs {
+        return None;
+    }
+
+    let display_tool = tool_action_label(canonical_tool_name, args);
+    push_tool_response(
+        ctx.working_history,
+        tool_call_id.to_string(),
+        build_repeated_shell_run_error_content(max_repeated_runs),
+    );
+    ctx.working_history.push(uni::Message::system(format!(
+        "Blocked repeated shell command call '{display_tool}' in this turn. Reuse prior output or change the command before retrying."
+    )));
     Some(ValidationResult::Blocked)
 }
 
@@ -787,20 +923,10 @@ pub(crate) async fn validate_tool_call<'a>(
         return Ok(outcome);
     }
 
-    // Charge tool-call budget only after preflight succeeds.
-    ctx.harness_state.record_tool_call();
-    if ctx
-        .harness_state
-        .should_emit_tool_budget_warning(TOOL_BUDGET_WARNING_THRESHOLD)
+    if let Some(outcome) =
+        enforce_repeated_shell_run_guard(ctx, tool_call_id, &canonical_tool_name, &effective_args)
     {
-        let used = ctx.harness_state.tool_calls;
-        let max = ctx.harness_state.max_tool_calls;
-        let remaining = ctx.harness_state.remaining_tool_calls();
-        ctx.working_history
-            .push(uni::Message::system(build_tool_budget_warning_message(
-                used, max, remaining,
-            )));
-        ctx.harness_state.mark_tool_budget_warning_emitted();
+        return Ok(outcome);
     }
 
     if let Some(outcome) =
@@ -1053,11 +1179,15 @@ pub(crate) async fn validate_tool_call<'a>(
     )
     .await
     {
-        Ok(ToolPermissionFlow::Approved) => Ok(ValidationResult::Proceed(PreparedToolCall {
-            canonical_name: canonical_tool_name,
-            readonly_classification: preflight.readonly_classification,
-            effective_args,
-        })),
+        Ok(ToolPermissionFlow::Approved) => {
+            // Count budget only for calls that pass all validation/permission gates.
+            record_tool_call_budget_usage(ctx);
+            Ok(ValidationResult::Proceed(PreparedToolCall {
+                canonical_name: canonical_tool_name,
+                readonly_classification: preflight.readonly_classification,
+                effective_args,
+            }))
+        }
         Ok(ToolPermissionFlow::Denied) => {
             let denial = ToolExecutionError::new(
                 canonical_tool_name,
@@ -1163,12 +1293,91 @@ async fn acquire_adaptive_rate_limit_slot<'a>(
 #[cfg(test)]
 mod tests {
     use super::{
-        build_validation_error_content_with_fallback, loop_detection_tool_key,
-        preflight_validation_fallback, spool_chunk_read_path, task_tracker_create_signature,
+        ToolOutcomeContext, build_tool_budget_exhausted_reason,
+        build_validation_error_content_with_fallback, handle_single_tool_call,
+        loop_detection_tool_key, preflight_validation_fallback, shell_run_signature,
+        spool_chunk_read_path, task_tracker_create_signature,
     };
+    use crate::agent::runloop::mcp_events::McpPanelState;
+    use crate::agent::runloop::unified::context_manager::ContextManager;
+    use crate::agent::runloop::unified::run_loop_context::{HarnessTurnState, TurnId, TurnRunId};
+    use crate::agent::runloop::unified::state::{CtrlCState, SessionStats};
+    use crate::agent::runloop::unified::status_line::InputStatusState;
+    use crate::agent::runloop::unified::tool_call_safety::ToolCallSafetyValidator;
+    use crate::agent::runloop::unified::tool_catalog::ToolCatalogState;
+    use crate::agent::runloop::unified::turn::context::{
+        TurnHandlerOutcome, TurnLoopResult, TurnProcessingContext,
+    };
+    use crate::agent::runloop::unified::turn::tool_outcomes::helpers::LoopTracker;
     use anyhow::anyhow;
     use serde_json::json;
+    use std::collections::{BTreeMap, BTreeSet, HashMap};
+    use std::sync::{Arc, RwLock as StdRwLock};
+    use std::time::Instant;
+    use tokio::sync::{Notify, RwLock};
+    use vtcode_config::core::PromptCachingConfig;
+    use vtcode_core::acp::{PermissionGrant, ToolPermissionCache};
     use vtcode_core::config::constants::tools as tool_names;
+    use vtcode_core::config::types::{
+        AgentConfig, ModelSelectionSource, ReasoningEffortLevel, UiSurfacePreference,
+    };
+    use vtcode_core::core::decision_tracker::DecisionTracker;
+    use vtcode_core::core::trajectory::TrajectoryLogger;
+    use vtcode_core::llm::provider as uni;
+    use vtcode_core::tools::adaptive_rate_limiter::AdaptiveRateLimiter;
+    use vtcode_core::tools::circuit_breaker::CircuitBreaker;
+    use vtcode_core::tools::health::ToolHealthTracker;
+    use vtcode_core::tools::{ApprovalRecorder, ToolResultCache};
+    use vtcode_tui::{InlineHandle, InlineSession};
+
+    #[derive(Clone)]
+    struct NoopProvider;
+
+    #[async_trait::async_trait]
+    impl uni::LLMProvider for NoopProvider {
+        fn name(&self) -> &str {
+            "noop-provider"
+        }
+
+        fn supports_streaming(&self) -> bool {
+            false
+        }
+
+        async fn generate(
+            &self,
+            _request: uni::LLMRequest,
+        ) -> Result<uni::LLMResponse, uni::LLMError> {
+            Ok(uni::LLMResponse {
+                content: Some(String::new()),
+                model: "noop-model".to_string(),
+                tool_calls: None,
+                usage: None,
+                finish_reason: uni::FinishReason::Stop,
+                reasoning: None,
+                reasoning_details: None,
+                organization_id: None,
+                request_id: None,
+                tool_references: Vec::new(),
+            })
+        }
+
+        fn supported_models(&self) -> Vec<String> {
+            vec!["noop-model".to_string()]
+        }
+
+        fn validate_request(&self, _request: &uni::LLMRequest) -> Result<(), uni::LLMError> {
+            Ok(())
+        }
+    }
+
+    fn create_headless_session() -> InlineSession {
+        let (command_tx, _command_rx) = tokio::sync::mpsc::unbounded_channel();
+        let (_event_tx, event_rx) = tokio::sync::mpsc::unbounded_channel();
+        InlineSession {
+            handle: InlineHandle::new_for_tests(command_tx),
+            events: event_rx,
+        }
+    }
 
     #[test]
     fn loop_key_for_unified_file_read_includes_path() {
@@ -1339,5 +1548,235 @@ mod tests {
         });
         let sig = task_tracker_create_signature(tool_names::TASK_TRACKER, &args);
         assert!(sig.is_none());
+    }
+
+    #[test]
+    fn shell_run_signature_normalizes_run_pty_command_and_args() {
+        let args = json!({
+            "command": "  cargo   check  ",
+            "args": ["-p", "vtcode-core"]
+        });
+        let signature = shell_run_signature(tool_names::RUN_PTY_CMD, &args);
+        assert_eq!(
+            signature,
+            Some("run_pty_cmd::cargo check -p vtcode-core".to_string())
+        );
+    }
+
+    #[test]
+    fn shell_run_signature_handles_unified_exec_run_action() {
+        let args = json!({
+            "action": "run",
+            "command": ["cargo", "check", "-p", "vtcode-core"]
+        });
+        let signature = shell_run_signature(tool_names::UNIFIED_EXEC, &args);
+        assert_eq!(
+            signature,
+            Some("unified_exec::cargo check -p vtcode-core".to_string())
+        );
+    }
+
+    #[test]
+    fn shell_run_signature_ignores_non_run_unified_exec_action() {
+        let args = json!({
+            "action": "poll",
+            "session_id": "run-123"
+        });
+        let signature = shell_run_signature(tool_names::UNIFIED_EXEC, &args);
+        assert!(signature.is_none());
+    }
+
+    #[test]
+    fn tool_budget_exhausted_reason_mentions_new_instruction_option() {
+        let reason = build_tool_budget_exhausted_reason(32, 32);
+        assert!(reason.contains("\"continue\" or provide a new instruction"));
+    }
+
+    #[tokio::test]
+    async fn end_to_end_blocked_calls_do_not_burn_budget_before_valid_call() {
+        let temp = tempfile::TempDir::new().expect("temp workspace");
+        let workspace = temp.path().to_path_buf();
+        let valid_file = workspace.join("sample.txt");
+        std::fs::write(&valid_file, "hello\n").expect("write sample file");
+
+        let mut tool_registry = vtcode_core::tools::ToolRegistry::new(workspace.clone()).await;
+        let tools = Arc::new(RwLock::new(Vec::new()));
+        let tool_result_cache = Arc::new(RwLock::new(ToolResultCache::new(8)));
+        let tool_permission_cache = Arc::new(RwLock::new(ToolPermissionCache::new()));
+        {
+            let mut cache = tool_permission_cache.write().await;
+            cache.cache_grant(
+                tool_names::READ_FILE.to_string(),
+                PermissionGrant::Permanent,
+            );
+        }
+
+        let decision_ledger = Arc::new(RwLock::new(DecisionTracker::new()));
+        let approval_recorder = Arc::new(ApprovalRecorder::new(workspace.clone()));
+        let mut session_stats = SessionStats::default();
+        let mut mcp_panel_state = McpPanelState::default();
+        let loaded_skills = Arc::new(RwLock::new(HashMap::new()));
+        let mut context_manager = ContextManager::new(String::new(), (), loaded_skills, None);
+        let mut last_forced_redraw = Instant::now();
+        let mut input_status_state = InputStatusState::default();
+        let mut session = create_headless_session();
+        session.set_skip_confirmations(true);
+        let handle = session.clone_inline_handle();
+        let mut renderer = vtcode_core::utils::ansi::AnsiRenderer::with_inline_ui(
+            handle.clone(),
+            Default::default(),
+        );
+        let ctrl_c_state = Arc::new(CtrlCState::new());
+        let ctrl_c_notify = Arc::new(Notify::new());
+        let safety_validator = Arc::new(RwLock::new(ToolCallSafetyValidator::new()));
+        safety_validator.write().await.start_turn().await;
+        let circuit_breaker = Arc::new(CircuitBreaker::default());
+        let tool_health_tracker = Arc::new(ToolHealthTracker::new(3));
+        let rate_limiter = Arc::new(AdaptiveRateLimiter::default());
+        let telemetry = Arc::new(vtcode_core::core::telemetry::TelemetryManager::new());
+        let autonomous_executor =
+            Arc::new(vtcode_core::tools::autonomous_executor::AutonomousExecutor::new());
+        let error_recovery = Arc::new(StdRwLock::new(
+            vtcode_core::core::agent::error_recovery::ErrorRecoveryState::default(),
+        ));
+        let mut harness_state = HarnessTurnState::new(
+            TurnRunId("run-test".to_string()),
+            TurnId("turn-test".to_string()),
+            1,
+            60,
+            0,
+        );
+        let mut auto_exit_plan_mode_attempted = false;
+        let mut working_history: Vec<uni::Message> = Vec::new();
+        let tool_catalog = Arc::new(ToolCatalogState::new());
+        let default_placeholder: Option<String> = None;
+        let mut steering_receiver = None;
+
+        let mut config = AgentConfig {
+            model: "noop-model".to_string(),
+            api_key: "test-key".to_string(),
+            provider: "openai".to_string(),
+            api_key_env: "OPENAI_API_KEY".to_string(),
+            workspace: workspace.clone(),
+            verbose: false,
+            quiet: false,
+            theme: "default".to_string(),
+            reasoning_effort: ReasoningEffortLevel::Medium,
+            ui_surface: UiSurfacePreference::Inline,
+            prompt_cache: PromptCachingConfig::default(),
+            model_source: ModelSelectionSource::WorkspaceConfig,
+            custom_api_keys: BTreeMap::new(),
+            checkpointing_enabled: false,
+            checkpointing_storage_dir: None,
+            checkpointing_max_snapshots: 10,
+            checkpointing_max_age_days: None,
+            max_conversation_turns: 16,
+            model_behavior: None,
+        };
+        let mut provider_client: Box<dyn uni::LLMProvider> = Box::new(NoopProvider);
+        let traj = TrajectoryLogger::disabled();
+        let mut turn_modified_files: BTreeSet<std::path::PathBuf> = BTreeSet::new();
+        let mut repeated_tool_attempts = LoopTracker::new();
+
+        let mut tp_ctx = TurnProcessingContext {
+            renderer: &mut renderer,
+            handle: &handle,
+            session_stats: &mut session_stats,
+            auto_exit_plan_mode_attempted: &mut auto_exit_plan_mode_attempted,
+            mcp_panel_state: &mut mcp_panel_state,
+            tool_result_cache: &tool_result_cache,
+            approval_recorder: &approval_recorder,
+            decision_ledger: &decision_ledger,
+            working_history: &mut working_history,
+            tool_registry: &mut tool_registry,
+            tools: &tools,
+            tool_catalog: &tool_catalog,
+            ctrl_c_state: &ctrl_c_state,
+            ctrl_c_notify: &ctrl_c_notify,
+            vt_cfg: None,
+            context_manager: &mut context_manager,
+            last_forced_redraw: &mut last_forced_redraw,
+            input_status_state: &mut input_status_state,
+            session: &mut session,
+            lifecycle_hooks: None,
+            default_placeholder: &default_placeholder,
+            tool_permission_cache: &tool_permission_cache,
+            safety_validator: &safety_validator,
+            provider_client: &mut provider_client,
+            config: &mut config,
+            traj: &traj,
+            full_auto: false,
+            circuit_breaker: &circuit_breaker,
+            tool_health_tracker: &tool_health_tracker,
+            rate_limiter: &rate_limiter,
+            telemetry: &telemetry,
+            autonomous_executor: &autonomous_executor,
+            error_recovery: &error_recovery,
+            harness_state: &mut harness_state,
+            harness_emitter: None,
+            steering_receiver: &mut steering_receiver,
+        };
+
+        let mut outcome_ctx = ToolOutcomeContext {
+            ctx: &mut tp_ctx,
+            repeated_tool_attempts: &mut repeated_tool_attempts,
+            turn_modified_files: &mut turn_modified_files,
+        };
+
+        let blocked_args = json!({"path":"/var/db/shadow"});
+        let first = handle_single_tool_call(
+            &mut outcome_ctx,
+            "blocked_1".to_string(),
+            tool_names::READ_FILE,
+            blocked_args.clone(),
+        )
+        .await
+        .expect("first blocked call should not fail hard");
+        assert!(first.is_none());
+
+        let second = handle_single_tool_call(
+            &mut outcome_ctx,
+            "blocked_2".to_string(),
+            tool_names::READ_FILE,
+            blocked_args,
+        )
+        .await
+        .expect("second blocked call should not fail hard");
+        assert!(second.is_none());
+        assert_eq!(outcome_ctx.ctx.harness_state.tool_calls, 0);
+        assert!(!outcome_ctx.ctx.harness_state.tool_budget_exhausted());
+
+        let valid_args = json!({"path": valid_file.to_string_lossy()});
+        let third = handle_single_tool_call(
+            &mut outcome_ctx,
+            "valid_1".to_string(),
+            tool_names::READ_FILE,
+            valid_args.clone(),
+        )
+        .await
+        .expect("valid call should execute");
+        assert!(third.is_none());
+        assert_eq!(outcome_ctx.ctx.harness_state.tool_calls, 1);
+        assert!(outcome_ctx.ctx.harness_state.tool_budget_exhausted());
+
+        let exhausted = handle_single_tool_call(
+            &mut outcome_ctx,
+            "exhausted".to_string(),
+            tool_names::READ_FILE,
+            valid_args,
+        )
+        .await
+        .expect("exhausted-budget call should return structured outcome");
+        assert!(matches!(
+            exhausted,
+            Some(TurnHandlerOutcome::Break(TurnLoopResult::Blocked { .. }))
+        ));
+        assert!(outcome_ctx.ctx.working_history.iter().any(|message| {
+            message.role == uni::MessageRole::System
+                && message
+                    .content
+                    .as_text()
+                    .contains("\"continue\" or provide a new instruction")
+        }));
     }
 }

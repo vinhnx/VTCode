@@ -502,11 +502,43 @@ fn render_error_details(renderer: &mut AnsiRenderer, val: &Value) -> Result<()> 
 #[cfg(test)]
 mod tests {
     use serde_json::json;
-    use vtcode_core::utils::{ansi::AnsiRenderer, transcript};
+    use tokio::sync::mpsc::UnboundedReceiver;
+    use vtcode_core::ui::{InlineCommand, InlineHandle};
+    use vtcode_core::utils::ansi::AnsiRenderer;
 
     use super::{
         render_tool_output, should_render_unified_exec_terminal_panel, tracker_summary_lines,
     };
+
+    fn collect_inline_output(receiver: &mut UnboundedReceiver<InlineCommand>) -> String {
+        let mut lines: Vec<String> = Vec::new();
+        while let Ok(command) = receiver.try_recv() {
+            match command {
+                InlineCommand::AppendLine { segments, .. } => {
+                    lines.push(
+                        segments
+                            .into_iter()
+                            .map(|segment| segment.text)
+                            .collect::<String>(),
+                    );
+                }
+                InlineCommand::ReplaceLast {
+                    lines: replacement_lines,
+                    ..
+                } => {
+                    for line in replacement_lines {
+                        lines.push(
+                            line.into_iter()
+                                .map(|segment| segment.text)
+                                .collect::<String>(),
+                        );
+                    }
+                }
+                _ => {}
+            }
+        }
+        lines.join("\n")
+    }
 
     #[test]
     fn unified_exec_terminal_panel_detects_command_payload() {
@@ -547,9 +579,9 @@ mod tests {
 
     #[tokio::test]
     async fn render_tool_output_unified_exec_git_diff_renders_diff_not_command_preview() {
-        transcript::clear();
-
-        let mut renderer = AnsiRenderer::stdout();
+        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+        let mut renderer =
+            AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
         let payload = json!({
             "command": "git diff -- src/main.rs",
             "output": "diff --git a/src/main.rs b/src/main.rs\n+added\n-removed\n",
@@ -567,19 +599,19 @@ mod tests {
         .await
         .expect("git diff payload should render");
 
-        let transcript_dump = transcript::snapshot().join("\n");
-        assert!(transcript_dump.contains("diff --git a/src/main.rs b/src/main.rs"));
+        let inline_output = collect_inline_output(&mut receiver);
+        assert!(inline_output.contains("diff --git a/src/main.rs b/src/main.rs"));
         assert!(
-            !transcript_dump.contains("└ "),
+            !inline_output.contains("└ "),
             "run-command preview prefix should not appear for git diff payload"
         );
     }
 
     #[tokio::test]
     async fn render_tool_output_unified_exec_git_diff_stdout_renders_diff_not_command_preview() {
-        transcript::clear();
-
-        let mut renderer = AnsiRenderer::stdout();
+        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+        let mut renderer =
+            AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
         let payload = json!({
             "command": "git diff -- src/lib.rs",
             "stdout": "diff --git a/src/lib.rs b/src/lib.rs\n@@ -1 +1 @@\n-old\n+new\n",
@@ -597,12 +629,12 @@ mod tests {
         .await
         .expect("git diff stdout payload should render");
 
-        let transcript_dump = transcript::snapshot().join("\n");
-        assert!(transcript_dump.contains("diff --git a/src/lib.rs b/src/lib.rs"));
-        assert!(transcript_dump.contains("@@ -1 +1 @@"));
-        assert!(transcript_dump.contains("new"));
+        let inline_output = collect_inline_output(&mut receiver);
+        assert!(inline_output.contains("diff --git a/src/lib.rs b/src/lib.rs"));
+        assert!(inline_output.contains("@@ -1 +1 @@"));
+        assert!(inline_output.contains("new"));
         assert!(
-            !transcript_dump.contains("└ "),
+            !inline_output.contains("└ "),
             "run-command preview prefix should not appear for git diff payload"
         );
     }

@@ -16,6 +16,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::RwLock as StdRwLock;
+use std::time::Duration as StdDuration;
 use tokio::sync::RwLock;
 use tokio::time::Duration;
 use tracing::{debug, error, info, warn};
@@ -30,10 +31,14 @@ use vtcode_core::llm::{
     provider as uni,
 };
 
+use vtcode::updater::Updater;
 use vtcode_core::models::ModelId;
 use vtcode_core::tools::build_function_declarations_cached;
 use vtcode_core::tools::{ApprovalRecorder, SearchMetrics, ToolRegistry, ToolResultCache};
 use vtcode_core::{apply_global_notification_config_from_vtcode, init_global_notification_manager};
+use vtcode_tui::InlineHeaderHighlight;
+
+const STARTUP_UPDATE_CHECK_COOLDOWN: StdDuration = StdDuration::from_secs(15 * 60);
 
 #[allow(clippy::unnecessary_cast)]
 fn vtcode_config_circuit_breaker_to_core(
@@ -87,7 +92,8 @@ pub(crate) async fn initialize_session(
     let async_mcp_manager = create_async_mcp_manager(vt_cfg);
     let mcp_error = determine_mcp_bootstrap_error(async_mcp_manager.as_ref()).await;
 
-    let session_bootstrap = prepare_session_bootstrap(config, vt_cfg, mcp_error).await;
+    let mut session_bootstrap = prepare_session_bootstrap(config, vt_cfg, mcp_error).await;
+    append_update_highlight(&mut session_bootstrap).await;
     let provider_client = create_provider_client(config, vt_cfg)?;
     let mut full_auto_allowlist = None;
 
@@ -226,6 +232,58 @@ pub(crate) async fn initialize_session(
             vtcode_core::core::agent::error_recovery::ErrorRecoveryState::new(),
         )),
     })
+}
+
+async fn append_update_highlight(
+    session_bootstrap: &mut crate::agent::runloop::welcome::SessionBootstrap,
+) {
+    let updater = match Updater::new(env!("CARGO_PKG_VERSION")) {
+        Ok(updater) => updater,
+        Err(err) => {
+            debug!("Failed to initialize updater for startup check: {}", err);
+            return;
+        }
+    };
+
+    let update = match updater
+        .check_for_updates_cached(STARTUP_UPDATE_CHECK_COOLDOWN)
+        .await
+    {
+        Ok(update) => update,
+        Err(err) => {
+            debug!("Startup update check failed: {}", err);
+            return;
+        }
+    };
+
+    let Some(update) = update else {
+        return;
+    };
+
+    let guidance = updater.update_guidance();
+    let mut lines = vec![
+        format!(
+            "New version available: v{} (current: v{})",
+            update.version,
+            updater.current_version()
+        ),
+        format!("Update with: {}", guidance.command),
+        "Release notes: https://github.com/vinhnx/vtcode/releases".to_string(),
+    ];
+
+    if guidance.source.is_managed() {
+        lines.insert(
+            1,
+            format!("Detected install source: {}", guidance.source.label()),
+        );
+    }
+
+    session_bootstrap
+        .header_highlights
+        .push(InlineHeaderHighlight {
+            title: "Update Available".to_string(),
+            lines,
+        });
 }
 
 fn create_async_mcp_manager(vt_cfg: Option<&VTCodeConfig>) -> Option<Arc<AsyncMcpManager>> {

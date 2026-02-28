@@ -15,10 +15,7 @@ use futures::StreamExt;
 use reqwest::Client as HttpClient;
 use serde_json::Value;
 
-use super::common::{
-    execute_token_count_request, override_base_url, parse_prompt_tokens_from_count_response,
-    resolve_model, serialize_message_content_openai, strip_generation_controls_for_token_count,
-};
+use super::common::{override_base_url, resolve_model, serialize_message_content_openai};
 use super::error_handling::{format_network_error, format_parse_error};
 
 pub struct MinimaxProvider {
@@ -167,35 +164,6 @@ impl LLMProvider for MinimaxProvider {
             .as_ref()
             .and_then(|b| b.model_supports_reasoning_effort)
             .unwrap_or(false)
-    }
-
-    async fn count_prompt_tokens_exact(
-        &self,
-        request: &LLMRequest,
-    ) -> Result<Option<u32>, LLMError> {
-        let mut request = request.clone();
-        if request.model.is_empty() {
-            request.model = self.model.clone();
-        }
-        let mut payload = self.build_payload(&request, false)?;
-        strip_generation_controls_for_token_count(&mut payload);
-
-        let url = format!(
-            "{}/responses/input_tokens",
-            self.base_url.trim_end_matches('/')
-        );
-        let value = execute_token_count_request(
-            self.http_client.post(url).bearer_auth(&self.api_key),
-            &payload,
-            "MiniMax",
-        )
-        .await?;
-
-        let Some(value) = value else {
-            return Ok(None);
-        };
-
-        Ok(parse_prompt_tokens_from_count_response(&value))
     }
 
     async fn generate(&self, mut request: LLMRequest) -> Result<LLMResponse, LLMError> {
@@ -370,13 +338,7 @@ impl LLMClient for MinimaxProvider {
 
 #[cfg(test)]
 mod tests {
-    use super::MinimaxProvider;
     use super::normalize_openai_base_url;
-    use crate::config::TimeoutsConfig;
-    use crate::config::constants::models;
-    use crate::llm::provider::{LLMProvider, LLMRequest, Message};
-    use wiremock::matchers::{method, path};
-    use wiremock::{Mock, MockServer, ResponseTemplate};
 
     #[test]
     fn normalize_minimax_anthropic_base_to_openai_v1() {
@@ -400,98 +362,5 @@ mod tests {
             normalize_openai_base_url("https://api.minimax.io/v1"),
             "https://api.minimax.io/v1"
         );
-    }
-
-    fn sample_request(model: &str) -> LLMRequest {
-        LLMRequest {
-            model: model.to_string(),
-            messages: vec![Message::user("hello".to_string())],
-            ..Default::default()
-        }
-    }
-
-    #[tokio::test]
-    async fn exact_count_uses_minimax_input_tokens_endpoint() {
-        let server = MockServer::start().await;
-        Mock::given(method("POST"))
-            .and(path("/v1/responses/input_tokens"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                "input_tokens": 123
-            })))
-            .mount(&server)
-            .await;
-
-        let provider = MinimaxProvider::new_with_client(
-            "test-key".to_string(),
-            models::minimax::DEFAULT_MODEL.to_string(),
-            reqwest::Client::new(),
-            format!("{}/v1", server.uri()),
-            TimeoutsConfig::default(),
-        );
-
-        let count = <MinimaxProvider as LLMProvider>::count_prompt_tokens_exact(
-            &provider,
-            &sample_request(models::minimax::DEFAULT_MODEL),
-        )
-        .await
-        .expect("count should succeed");
-
-        assert_eq!(count, Some(123));
-    }
-
-    #[tokio::test]
-    async fn exact_count_accepts_prompt_tokens_shape() {
-        let server = MockServer::start().await;
-        Mock::given(method("POST"))
-            .and(path("/v1/responses/input_tokens"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                "prompt_tokens": 55
-            })))
-            .mount(&server)
-            .await;
-
-        let provider = MinimaxProvider::new_with_client(
-            "test-key".to_string(),
-            models::minimax::DEFAULT_MODEL.to_string(),
-            reqwest::Client::new(),
-            format!("{}/v1", server.uri()),
-            TimeoutsConfig::default(),
-        );
-
-        let count = <MinimaxProvider as LLMProvider>::count_prompt_tokens_exact(
-            &provider,
-            &sample_request(models::minimax::DEFAULT_MODEL),
-        )
-        .await
-        .expect("count should succeed");
-
-        assert_eq!(count, Some(55));
-    }
-
-    #[tokio::test]
-    async fn exact_count_returns_none_when_unavailable() {
-        let server = MockServer::start().await;
-        Mock::given(method("POST"))
-            .and(path("/v1/responses/input_tokens"))
-            .respond_with(ResponseTemplate::new(404))
-            .mount(&server)
-            .await;
-
-        let provider = MinimaxProvider::new_with_client(
-            "test-key".to_string(),
-            models::minimax::DEFAULT_MODEL.to_string(),
-            reqwest::Client::new(),
-            format!("{}/v1", server.uri()),
-            TimeoutsConfig::default(),
-        );
-
-        let count = <MinimaxProvider as LLMProvider>::count_prompt_tokens_exact(
-            &provider,
-            &sample_request(models::minimax::DEFAULT_MODEL),
-        )
-        .await
-        .expect("count should succeed");
-
-        assert_eq!(count, None);
     }
 }

@@ -426,10 +426,13 @@ impl Tool for ReadFileHandler {
         let args: ReadFileArgs =
             serde_json::from_value(args).context("failed to parse read_file arguments")?;
 
+        let file_path = args.file_path.clone();
         let content = self.handle(args).await?;
 
         Ok(json!({
             "content": content,
+            "file_path": file_path,
+            "path": file_path,
             "success": true,
             "no_spool": true
         }))

@@ -16,10 +16,7 @@ use futures::StreamExt;
 use reqwest::Client as HttpClient;
 use serde_json::{Value, json};
 
-use super::super::common::{
-    execute_token_count_request, override_base_url, parse_prompt_tokens_from_count_response,
-    resolve_model, strip_generation_controls_for_token_count,
-};
+use super::super::common::{override_base_url, resolve_model};
 use super::super::error_handling::{format_network_error, format_parse_error};
 
 pub struct OpenResponsesProvider {
@@ -504,35 +501,6 @@ impl LLMProvider for OpenResponsesProvider {
         Ok(())
     }
 
-    async fn count_prompt_tokens_exact(
-        &self,
-        request: &LLMRequest,
-    ) -> Result<Option<u32>, LLMError> {
-        let mut request = request.clone();
-        if request.model.is_empty() {
-            request.model = self.model.clone();
-        }
-
-        let mut payload = self.build_native_payload(&request, false)?;
-        strip_generation_controls_for_token_count(&mut payload);
-        if let Some(object) = payload.as_object_mut() {
-            object.insert("max_output_tokens".to_string(), json!(1));
-        }
-        let url = format!("{}/responses", self.base_url.trim_end_matches('/'));
-        let value = execute_token_count_request(
-            self.http_client.post(url).bearer_auth(&self.api_key),
-            &payload,
-            "OpenResponses",
-        )
-        .await?;
-
-        let Some(value) = value else {
-            return Ok(None);
-        };
-
-        Ok(parse_prompt_tokens_from_count_response(&value))
-    }
-
     async fn generate(&self, mut request: LLMRequest) -> Result<LLMResponse, LLMError> {
         if request.model.is_empty() {
             request.model = self.model.clone();
@@ -749,105 +717,5 @@ impl LLMProvider for OpenResponsesProvider {
         };
 
         Ok(Box::pin(stream))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::OpenResponsesProvider;
-    use crate::config::TimeoutsConfig;
-    use crate::config::constants::models;
-    use crate::llm::provider::{LLMProvider, LLMRequest, Message};
-    use wiremock::matchers::{method, path};
-    use wiremock::{Mock, MockServer, ResponseTemplate};
-
-    fn sample_request(model: &str) -> LLMRequest {
-        LLMRequest {
-            model: model.to_string(),
-            messages: vec![Message::user("hello".to_string())],
-            ..Default::default()
-        }
-    }
-
-    #[tokio::test]
-    async fn exact_count_uses_openresponses_responses_endpoint() {
-        let server = MockServer::start().await;
-        Mock::given(method("POST"))
-            .and(path("/v1/responses"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                "usage": { "input_tokens": 141 }
-            })))
-            .mount(&server)
-            .await;
-
-        let provider = OpenResponsesProvider::new_with_client(
-            "test-key".to_string(),
-            models::openresponses::DEFAULT_MODEL.to_string(),
-            reqwest::Client::new(),
-            format!("{}/v1", server.uri()),
-            TimeoutsConfig::default(),
-        );
-
-        let count = <OpenResponsesProvider as LLMProvider>::count_prompt_tokens_exact(
-            &provider,
-            &sample_request(models::openresponses::DEFAULT_MODEL),
-        )
-        .await
-        .expect("count should succeed");
-        assert_eq!(count, Some(141));
-    }
-
-    #[tokio::test]
-    async fn exact_count_accepts_usage_shape() {
-        let server = MockServer::start().await;
-        Mock::given(method("POST"))
-            .and(path("/v1/responses"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                "usage": { "prompt_tokens": 84 }
-            })))
-            .mount(&server)
-            .await;
-
-        let provider = OpenResponsesProvider::new_with_client(
-            "test-key".to_string(),
-            models::openresponses::DEFAULT_MODEL.to_string(),
-            reqwest::Client::new(),
-            format!("{}/v1", server.uri()),
-            TimeoutsConfig::default(),
-        );
-
-        let count = <OpenResponsesProvider as LLMProvider>::count_prompt_tokens_exact(
-            &provider,
-            &sample_request(models::openresponses::DEFAULT_MODEL),
-        )
-        .await
-        .expect("count should succeed");
-        assert_eq!(count, Some(84));
-    }
-
-    #[tokio::test]
-    async fn exact_count_returns_none_when_unavailable() {
-        let server = MockServer::start().await;
-        Mock::given(method("POST"))
-            .and(path("/v1/responses"))
-            .respond_with(ResponseTemplate::new(404))
-            .mount(&server)
-            .await;
-
-        let provider = OpenResponsesProvider::new_with_client(
-            "test-key".to_string(),
-            models::openresponses::DEFAULT_MODEL.to_string(),
-            reqwest::Client::new(),
-            format!("{}/v1", server.uri()),
-            TimeoutsConfig::default(),
-        );
-
-        let count = <OpenResponsesProvider as LLMProvider>::count_prompt_tokens_exact(
-            &provider,
-            &sample_request(models::openresponses::DEFAULT_MODEL),
-        )
-        .await
-        .expect("count should succeed");
-        assert_eq!(count, None);
     }
 }

@@ -279,7 +279,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                 ).await?
             };
             use crate::agent::runloop::unified::turn::session::interaction_loop::InteractionOutcome;
-            let _input = match interaction_outcome {
+            let next_turn_input = match interaction_outcome {
                 InteractionOutcome::Exit { reason } => {
                     session_end_reason = reason;
                     break;
@@ -289,6 +289,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                     session_end_reason = SessionEndReason::Completed;
                     break;
                 }
+                InteractionOutcome::DirectToolHandled => continue,
                 InteractionOutcome::Continue { input } => input,
                 InteractionOutcome::PlanApproved {
                     auto_accept,
@@ -320,6 +321,9 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                     continue;
                 }
             };
+            if next_turn_input.trim().is_empty() {
+                continue;
+            }
             let mut working_history = conversation_history.clone();
             let timeout_secs = resolve_effective_turn_timeout_secs(
                 resolve_timeout(

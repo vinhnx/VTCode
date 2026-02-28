@@ -113,6 +113,11 @@ pub async fn handle_outcome(
         SlashCommandOutcome::ManageMcp { action } => handlers::handle_manage_mcp(ctx, action).await,
 
         SlashCommandOutcome::RunDoctor => handlers::handle_run_doctor(ctx).await,
+        SlashCommandOutcome::Update {
+            check_only,
+            install,
+            force,
+        } => handlers::handle_update(ctx, check_only, install, force).await,
         SlashCommandOutcome::StartTerminalSetup => handlers::handle_start_terminal_setup(ctx).await,
         SlashCommandOutcome::ManageWorkspaceDirectories { command } => {
             handlers::handle_manage_workspace_directories(ctx, command).await

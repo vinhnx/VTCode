@@ -3,10 +3,6 @@ use crate::config::constants::models;
 use crate::llm::client::LLMClient;
 use crate::llm::error_display;
 use crate::llm::provider;
-use crate::llm::providers::common::{
-    execute_token_count_request, parse_prompt_tokens_from_count_response,
-    strip_generation_controls_for_token_count,
-};
 use crate::llm::types as llm_types;
 use async_trait::async_trait;
 
@@ -86,39 +82,6 @@ impl provider::LLMProvider for OpenAIProvider {
         request: provider::LLMRequest,
     ) -> Result<provider::LLMResponse, provider::LLMError> {
         self.generate_request(request).await
-    }
-
-    async fn count_prompt_tokens_exact(
-        &self,
-        request: &provider::LLMRequest,
-    ) -> Result<Option<u32>, provider::LLMError> {
-        if !self.base_url.contains("api.openai.com") {
-            return Ok(None);
-        }
-
-        let mut payload = self.convert_to_openai_responses_format(request)?;
-        strip_generation_controls_for_token_count(&mut payload);
-
-        let count_url = format!(
-            "{}/responses/input_tokens",
-            self.base_url.trim_end_matches('/')
-        );
-        let value = execute_token_count_request(
-            self.authorize(
-                self.http_client
-                    .post(&count_url)
-                    .header("Content-Type", "application/json"),
-            ),
-            &payload,
-            "OpenAI",
-        )
-        .await?;
-
-        let Some(value) = value else {
-            return Ok(None);
-        };
-
-        Ok(parse_prompt_tokens_from_count_response(&value))
     }
 
     fn supported_models(&self) -> Vec<String> {

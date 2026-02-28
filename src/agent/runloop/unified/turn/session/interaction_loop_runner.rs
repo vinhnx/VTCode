@@ -154,17 +154,12 @@ pub(super) async fn run_interaction_loop_impl(
         let context_limit_tokens = ctx
             .provider_client
             .effective_context_size(&ctx.config.model);
-        if let Some(context_used_tokens) = ctx.context_manager.current_exact_token_usage() {
-            crate::agent::runloop::unified::status_line::update_context_budget(
-                state.input_status_state,
-                context_used_tokens,
-                context_limit_tokens,
-            );
-        } else {
-            crate::agent::runloop::unified::status_line::clear_context_budget(
-                state.input_status_state,
-            );
-        }
+        let context_used_tokens = ctx.context_manager.current_token_usage();
+        crate::agent::runloop::unified::status_line::update_context_budget(
+            state.input_status_state,
+            context_used_tokens,
+            context_limit_tokens,
+        );
         crate::agent::runloop::unified::status_line::update_team_status(
             state.input_status_state,
             ctx.session_stats,
