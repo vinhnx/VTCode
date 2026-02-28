@@ -7,27 +7,27 @@
 use anstyle::Style as AnsiStyle;
 use anyhow::{Context, Result};
 use std::collections::HashMap;
-use std::sync::RwLock;
+use std::sync::Mutex;
 
 /// Thread-safe cached parser for Git and LS_COLORS style strings
 pub struct CachedStyleParser {
-    git_cache: RwLock<HashMap<String, AnsiStyle>>,
-    ls_colors_cache: RwLock<HashMap<String, AnsiStyle>>,
+    git_cache: Mutex<HashMap<String, AnsiStyle>>,
+    ls_colors_cache: Mutex<HashMap<String, AnsiStyle>>,
 }
 
 impl CachedStyleParser {
     /// Create a new cached style parser
     pub fn new() -> Self {
         Self {
-            git_cache: RwLock::new(HashMap::new()),
-            ls_colors_cache: RwLock::new(HashMap::new()),
+            git_cache: Mutex::new(HashMap::new()),
+            ls_colors_cache: Mutex::new(HashMap::new()),
         }
     }
 
     /// Parse and cache a Git-style color string (e.g., "bold red blue")
     pub fn parse_git_style(&self, input: &str) -> Result<AnsiStyle> {
         // Check cache first
-        if let Ok(cache) = self.git_cache.read()
+        if let Ok(cache) = self.git_cache.lock()
             && let Some(cached) = cache.get(input)
         {
             return Ok(*cached);
@@ -37,7 +37,7 @@ impl CachedStyleParser {
         let result = anstyle_git::parse(input)
             .map_err(|e| anyhow::anyhow!("Failed to parse Git style '{}': {:?}", input, e))?;
 
-        if let Ok(mut cache) = self.git_cache.write() {
+        if let Ok(mut cache) = self.git_cache.lock() {
             cache.insert(input.to_string(), result);
         }
 
@@ -47,7 +47,7 @@ impl CachedStyleParser {
     /// Parse and cache an LS_COLORS-style string (e.g., "01;34")
     pub fn parse_ls_colors(&self, input: &str) -> Result<AnsiStyle> {
         // Check cache first
-        if let Ok(cache) = self.ls_colors_cache.read()
+        if let Ok(cache) = self.ls_colors_cache.lock()
             && let Some(cached) = cache.get(input)
         {
             return Ok(*cached);
@@ -57,7 +57,7 @@ impl CachedStyleParser {
         let result = anstyle_ls::parse(input)
             .ok_or_else(|| anyhow::anyhow!("Failed to parse LS_COLORS '{}'", input))?;
 
-        if let Ok(mut cache) = self.ls_colors_cache.write() {
+        if let Ok(mut cache) = self.ls_colors_cache.lock() {
             cache.insert(input.to_string(), result);
         }
 
@@ -79,20 +79,20 @@ impl CachedStyleParser {
 
     /// Clear all cached styles
     pub fn clear_cache(&self) {
-        if let Ok(mut git_cache) = self.git_cache.write() {
+        if let Ok(mut git_cache) = self.git_cache.lock() {
             git_cache.clear();
         }
-        if let Ok(mut ls_colors_cache) = self.ls_colors_cache.write() {
+        if let Ok(mut ls_colors_cache) = self.ls_colors_cache.lock() {
             ls_colors_cache.clear();
         }
     }
 
     /// Get cache statistics
     pub fn cache_stats(&self) -> (usize, usize) {
-        let git_count = self.git_cache.read().ok().map(|c| c.len()).unwrap_or(0);
+        let git_count = self.git_cache.lock().ok().map(|c| c.len()).unwrap_or(0);
         let ls_colors_count = self
             .ls_colors_cache
-            .read()
+            .lock()
             .ok()
             .map(|c| c.len())
             .unwrap_or(0);

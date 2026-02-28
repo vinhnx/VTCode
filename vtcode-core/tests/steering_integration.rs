@@ -22,7 +22,7 @@ async fn test_agent_steering_stop() -> Result<()> {
     // If we need a real model, we might need to mock the provider.
     // However, since we want to test steering *interruption*, we can try to send the stop signal immediately.
 
-    let model_id = ModelId::Gemini3ProPreview;
+    let model_id = ModelId::Gemini31ProPreview;
     let api_key = "dummy-key".to_string();
     let session_id = "test-session".to_string();
 

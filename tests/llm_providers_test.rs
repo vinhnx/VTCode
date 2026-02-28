@@ -66,7 +66,7 @@ fn test_provider_auto_detection() {
         Some("gemini".to_string())
     );
     assert_eq!(
-        factory.provider_from_model("gemini-3-pro-preview"),
+        factory.provider_from_model("gemini-3.1-pro-preview"),
         Some("gemini".to_string())
     );
 
@@ -230,7 +230,7 @@ fn test_provider_supported_models() {
     let gemini = GeminiProvider::new("test_key".to_string());
     let gemini_models = gemini.supported_models();
     assert!(gemini_models.contains(&"gemini-3-flash-preview".to_string()));
-    assert!(gemini_models.contains(&"gemini-3-pro-preview".to_string()));
+    assert!(gemini_models.contains(&"gemini-3.1-pro-preview".to_string()));
     assert!(gemini_models.len() >= 2);
 
     let openai = OpenAIProvider::new("test_key".to_string());

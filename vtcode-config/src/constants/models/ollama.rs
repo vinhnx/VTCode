@@ -12,7 +12,7 @@ pub const SUPPORTED_MODELS: &[&str] = &[
     MISTRAL_LARGE_3_675B_CLOUD,
     QWEN3_CODER_480B_CLOUD,
     GLM_5_CLOUD,
-    GEMINI_3_PRO_PREVIEW_LATEST_CLOUD,
+    GEMINI_3_1_PRO_PREVIEW_LATEST_CLOUD,
     GEMINI_3_FLASH_PREVIEW_CLOUD,
     DEVSTRAL_2_123B_CLOUD,
     MINIMAX_M2_CLOUD,
@@ -31,7 +31,7 @@ pub const REASONING_MODELS: &[&str] = &[
     MISTRAL_LARGE_3_675B_CLOUD,
     QWEN3_CODER_480B_CLOUD,
     GLM_5_CLOUD,
-    GEMINI_3_PRO_PREVIEW_LATEST_CLOUD,
+    GEMINI_3_1_PRO_PREVIEW_LATEST_CLOUD,
     GEMINI_3_FLASH_PREVIEW_CLOUD,
     DEVSTRAL_2_123B_CLOUD,
     MINIMAX_M2_CLOUD,
@@ -60,7 +60,7 @@ pub const QWEN3_NEXT_80B_CLOUD: &str = "qwen3-next:80b-cloud";
 pub const MISTRAL_LARGE_3_675B_CLOUD: &str = "mistral-large-3:675b-cloud";
 pub const QWEN3_CODER_480B_CLOUD: &str = "qwen3-coder:480b-cloud";
 pub const GLM_5_CLOUD: &str = "glm-5:cloud";
-pub const GEMINI_3_PRO_PREVIEW_LATEST_CLOUD: &str = "gemini-3-pro-preview:latest";
+pub const GEMINI_3_1_PRO_PREVIEW_LATEST_CLOUD: &str = "gemini-3.1-pro-preview:latest";
 pub const GEMINI_3_FLASH_PREVIEW_CLOUD: &str = "gemini-3-flash-preview:cloud";
 pub const DEVSTRAL_2_123B_CLOUD: &str = "devstral-2:123b-cloud";
 pub const MINIMAX_M2_CLOUD: &str = "minimax-m2:cloud";

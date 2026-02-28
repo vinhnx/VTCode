@@ -240,7 +240,7 @@ struct CacheEntry {
     note = "Use async_middleware::AsyncCachingMiddleware instead"
 )]
 pub struct CachingMiddleware {
-    cache: Arc<std::sync::RwLock<std::collections::HashMap<String, CacheEntry>>>,
+    cache: Arc<std::sync::Mutex<std::collections::HashMap<String, CacheEntry>>>,
     /// Maximum age of cache entries in seconds (default: 300 = 5 minutes)
     max_age_secs: u64,
     /// Maximum number of entries to retain (evict oldest when exceeded)
@@ -252,7 +252,7 @@ pub struct CachingMiddleware {
 impl CachingMiddleware {
     pub fn new() -> Self {
         Self {
-            cache: Arc::new(std::sync::RwLock::new(std::collections::HashMap::new())),
+            cache: Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
             max_age_secs: 300, // 5 minutes default
             max_entries: 256,
             max_value_bytes: 512 * 1024, // 512KB default guardrail to avoid caching huge outputs
@@ -306,26 +306,23 @@ impl Middleware for CachingMiddleware {
     ) -> MiddlewareResult {
         let key = Self::cache_key(&request.tool_name, &request.arguments);
 
-        // Opportunistically drop stale entries and keep cache bounded
-        if let Ok(mut cache) = self.cache.write() {
+        // Opportunistically drop stale entries and perform lookup in one critical section.
+        if let Ok(mut cache) = self.cache.lock() {
             cache.retain(|_, entry| !self.is_stale(entry));
-        }
-
-        // Check cache and staleness
-        if let Ok(cache) = self.cache.read()
-            && let Some(entry) = cache.get(&key)
-            && !self.is_stale(entry)
-        {
-            return MiddlewareResult {
-                success: true,
-                result: Some((*entry.value).clone()),
-                error: None,
-                metadata: ExecutionMetadata {
-                    from_cache: true,
-                    layers_executed: vec![LAYER_CACHING.into()],
-                    ..Default::default()
-                },
-            };
+            if let Some(entry) = cache.get(&key)
+                && !self.is_stale(entry)
+            {
+                return MiddlewareResult {
+                    success: true,
+                    result: Some((*entry.value).clone()),
+                    error: None,
+                    metadata: ExecutionMetadata {
+                        from_cache: true,
+                        layers_executed: vec![LAYER_CACHING.into()],
+                        ..Default::default()
+                    },
+                };
+            }
         }
 
         // Execute and cache result
@@ -334,7 +331,7 @@ impl Middleware for CachingMiddleware {
         if result.success
             && let Some(ref output) = result.result
             && output.len() <= self.max_value_bytes
-            && let Ok(mut cache) = self.cache.write()
+            && let Ok(mut cache) = self.cache.lock()
         {
             cache.insert(
                 key,

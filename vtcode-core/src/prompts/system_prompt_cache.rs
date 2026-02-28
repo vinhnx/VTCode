@@ -1,6 +1,6 @@
 use lru::LruCache;
 use std::num::NonZeroUsize;
-use std::sync::{LazyLock, RwLock};
+use std::sync::{LazyLock, Mutex};
 
 /// Maximum cache size (increased from 32 to 128 for multi-project workflows)
 const MAX_CACHE_SIZE: usize = 128;
@@ -22,7 +22,7 @@ pub trait PromptProvider {
 /// Simple in-memory prompt cache keyed by provider + task type.
 /// Uses LRU eviction to manage memory in multi-project workflows.
 pub struct SystemPromptCache {
-    entries: RwLock<LruCache<String, String>>,
+    entries: Mutex<LruCache<String, String>>,
 }
 
 impl Default for SystemPromptCache {
@@ -34,7 +34,7 @@ impl Default for SystemPromptCache {
 impl SystemPromptCache {
     pub fn new() -> Self {
         Self {
-            entries: RwLock::new(LruCache::new(NonZeroUsize::new(MAX_CACHE_SIZE).unwrap())),
+            entries: Mutex::new(LruCache::new(NonZeroUsize::new(MAX_CACHE_SIZE).unwrap())),
         }
     }
 
@@ -46,7 +46,7 @@ impl SystemPromptCache {
     {
         // Check if already cached (LruCache.get() requires mutable access for LRU update)
         {
-            let mut store = self.entries.write().unwrap_or_else(|p| p.into_inner());
+            let mut store = self.entries.lock().unwrap_or_else(|p| p.into_inner());
             if let Some(value) = store.get(key) {
                 return value.clone();
             }
@@ -57,7 +57,7 @@ impl SystemPromptCache {
 
         // Insert into cache
         {
-            let mut store = self.entries.write().unwrap_or_else(|p| p.into_inner());
+            let mut store = self.entries.lock().unwrap_or_else(|p| p.into_inner());
             store.put(key.to_string(), value.clone());
             // LRU cache automatically evicts least recently used entry when full
         }
@@ -67,19 +67,19 @@ impl SystemPromptCache {
 
     /// Get cached value, returning None on miss (for async callers that want to build outside the lock)
     pub fn get(&self, key: &str) -> Option<String> {
-        let mut store = self.entries.write().unwrap_or_else(|p| p.into_inner());
+        let mut store = self.entries.lock().unwrap_or_else(|p| p.into_inner());
         store.get(key).cloned()
     }
 
     /// Insert a value into the cache
     pub fn insert(&self, key: String, value: String) {
-        let mut store = self.entries.write().unwrap_or_else(|p| p.into_inner());
+        let mut store = self.entries.lock().unwrap_or_else(|p| p.into_inner());
         store.put(key, value);
         // LRU cache automatically evicts least recently used entry when full
     }
 
     pub fn clear(&self) {
-        if let Ok(mut store) = self.entries.write() {
+        if let Ok(mut store) = self.entries.lock() {
             store.clear();
         }
     }

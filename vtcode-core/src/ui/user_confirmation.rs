@@ -44,7 +44,7 @@ impl UserConfirmation {
         println!("Current model: {}", style(current_model).cyan());
         println!(
             "Requested model: {}",
-            style(models::google::GEMINI_3_PRO_PREVIEW).cyan().bold()
+            style(models::google::GEMINI_3_1_PRO_PREVIEW).cyan().bold()
         );
         println!();
         println!("The Gemini 3 Pro model is the most capable but also:");

@@ -9,8 +9,8 @@ fn test_model_string_conversion() {
         models::google::GEMINI_3_FLASH_PREVIEW
     );
     assert_eq!(
-        ModelId::Gemini3ProPreview.as_str(),
-        models::google::GEMINI_3_PRO_PREVIEW
+        ModelId::Gemini31ProPreview.as_str(),
+        models::google::GEMINI_3_1_PRO_PREVIEW
     );
     // OpenAI models
     assert_eq!(ModelId::GPT5.as_str(), models::GPT_5);
@@ -51,10 +51,10 @@ fn test_model_from_string() {
         ModelId::Gemini3FlashPreview
     );
     assert_eq!(
-        models::google::GEMINI_3_PRO_PREVIEW
+        models::google::GEMINI_3_1_PRO_PREVIEW
             .parse::<ModelId>()
             .unwrap(),
-        ModelId::Gemini3ProPreview
+        ModelId::Gemini31ProPreview
     );
     // OpenAI models
     assert_eq!(models::GPT_5.parse::<ModelId>().unwrap(), ModelId::GPT5);
@@ -168,7 +168,7 @@ fn test_model_providers() {
 fn test_provider_defaults() {
     assert_eq!(
         ModelId::default_orchestrator_for_provider(Provider::Gemini),
-        ModelId::Gemini3ProPreview
+        ModelId::Gemini31ProPreview
     );
     assert_eq!(
         ModelId::default_orchestrator_for_provider(Provider::OpenAI),
@@ -233,7 +233,7 @@ fn test_provider_defaults() {
 #[test]
 fn test_model_defaults() {
     assert_eq!(ModelId::default(), ModelId::Gemini3FlashPreview);
-    assert_eq!(ModelId::default_orchestrator(), ModelId::Gemini3ProPreview);
+    assert_eq!(ModelId::default_orchestrator(), ModelId::Gemini31ProPreview);
     assert_eq!(ModelId::default_subagent(), ModelId::Gemini3FlashPreview);
 }
 

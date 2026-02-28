@@ -773,15 +773,6 @@ improve readfile code rendering, it should preserve newlines and indentation, an
 
 ---
 
-PSA: We're retiring Gemini 3 Pro Preview on the Gemini API & AI Studio on March 9, 2026.
-
-- Mar 6: `gemini-pro-latest` alias moves to 3.1 Pro
-- Mar 9: Gemini 3 Pro Preview is shut down
-
-Please upgrade to gemini-3.1-pro-preview to avoid disruption.
-
----
-
 Compaction is an important technique for efficiently running agents. As conversations grow lengthy, the context window fills up. Codex uses a compaction strategy: once the conversation exceeds a certain token count, it calls a special Responses API endpoint, which generates a smaller representation of the conversation history. This smaller version replaces the old input and avoids quadratic inference costs.
 
 ---

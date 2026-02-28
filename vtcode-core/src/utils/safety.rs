@@ -130,7 +130,7 @@ impl SafetyValidator {
                 println!("• Reasonable cost");
                 println!("• Fast response times");
             }
-            s if s == models::google::GEMINI_3_PRO_PREVIEW => {
+            s if s == models::google::GEMINI_3_1_PRO_PREVIEW => {
                 println!("{}", style("Using most capable model:").cyan());
                 println!("• Highest quality responses");
                 println!("• Higher cost per token");
@@ -164,7 +164,7 @@ impl SafetyValidator {
         let mut warnings = Vec::new();
 
         // Check for expensive model usage
-        if model == models::google::GEMINI_3_PRO_PREVIEW {
+        if model == models::google::GEMINI_3_1_PRO_PREVIEW {
             warnings.push("Using most expensive model (Gemini 3 Pro)");
         }
 
