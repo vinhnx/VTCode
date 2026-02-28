@@ -72,6 +72,7 @@ pub enum ModalListKeyResult {
     NotHandled,
     HandledNoRedraw,
     Redraw,
+    Emit(InlineEvent),
     Submit(InlineEvent),
     Cancel(InlineEvent),
 }
@@ -159,27 +160,43 @@ impl ModalState {
         if let Some(search) = self.search.as_mut() {
             match key.code {
                 KeyCode::Char(ch) if !modifiers.control && !modifiers.alt && !modifiers.command => {
+                    let previous = list.current_selection();
                     search.push_char(ch);
                     list.apply_search(&search.query);
+                    if let Some(event) = selection_change_event(list, previous) {
+                        return ModalListKeyResult::Emit(event);
+                    }
                     return ModalListKeyResult::Redraw;
                 }
                 KeyCode::Backspace => {
                     if search.backspace() {
+                        let previous = list.current_selection();
                         list.apply_search(&search.query);
+                        if let Some(event) = selection_change_event(list, previous) {
+                            return ModalListKeyResult::Emit(event);
+                        }
                         return ModalListKeyResult::Redraw;
                     }
                     return ModalListKeyResult::HandledNoRedraw;
                 }
                 KeyCode::Delete => {
                     if search.clear() {
+                        let previous = list.current_selection();
                         list.apply_search(&search.query);
+                        if let Some(event) = selection_change_event(list, previous) {
+                            return ModalListKeyResult::Emit(event);
+                        }
                         return ModalListKeyResult::Redraw;
                     }
                     return ModalListKeyResult::HandledNoRedraw;
                 }
                 KeyCode::Esc => {
                     if search.clear() {
+                        let previous = list.current_selection();
                         list.apply_search(&search.query);
+                        if let Some(event) = selection_change_event(list, previous) {
+                            return ModalListKeyResult::Emit(event);
+                        }
                         return ModalListKeyResult::Redraw;
                     }
                 }
@@ -187,6 +204,7 @@ impl ModalState {
             }
         }
 
+        let previous_selection = list.current_selection();
         match key.code {
             KeyCode::Char('d') | KeyCode::Char('D') if modifiers.alt => {
                 list.toggle_row_density();
@@ -198,7 +216,11 @@ impl ModalState {
                 } else {
                     list.select_previous();
                 }
-                ModalListKeyResult::Redraw
+                if let Some(event) = selection_change_event(list, previous_selection) {
+                    ModalListKeyResult::Emit(event)
+                } else {
+                    ModalListKeyResult::Redraw
+                }
             }
             KeyCode::Down => {
                 if modifiers.command {
@@ -206,23 +228,43 @@ impl ModalState {
                 } else {
                     list.select_next();
                 }
-                ModalListKeyResult::Redraw
+                if let Some(event) = selection_change_event(list, previous_selection) {
+                    ModalListKeyResult::Emit(event)
+                } else {
+                    ModalListKeyResult::Redraw
+                }
             }
             KeyCode::PageUp => {
                 list.page_up();
-                ModalListKeyResult::Redraw
+                if let Some(event) = selection_change_event(list, previous_selection) {
+                    ModalListKeyResult::Emit(event)
+                } else {
+                    ModalListKeyResult::Redraw
+                }
             }
             KeyCode::PageDown => {
                 list.page_down();
-                ModalListKeyResult::Redraw
+                if let Some(event) = selection_change_event(list, previous_selection) {
+                    ModalListKeyResult::Emit(event)
+                } else {
+                    ModalListKeyResult::Redraw
+                }
             }
             KeyCode::Home => {
                 list.select_first();
-                ModalListKeyResult::Redraw
+                if let Some(event) = selection_change_event(list, previous_selection) {
+                    ModalListKeyResult::Emit(event)
+                } else {
+                    ModalListKeyResult::Redraw
+                }
             }
             KeyCode::End => {
                 list.select_last();
-                ModalListKeyResult::Redraw
+                if let Some(event) = selection_change_event(list, previous_selection) {
+                    ModalListKeyResult::Emit(event)
+                } else {
+                    ModalListKeyResult::Redraw
+                }
             }
             KeyCode::Tab => {
                 // With no search active, Tab moves to first item for autocomplete behavior
@@ -232,11 +274,19 @@ impl ModalState {
                 } else {
                     list.select_next();
                 }
-                ModalListKeyResult::Redraw
+                if let Some(event) = selection_change_event(list, previous_selection) {
+                    ModalListKeyResult::Emit(event)
+                } else {
+                    ModalListKeyResult::Redraw
+                }
             }
             KeyCode::BackTab => {
                 list.select_previous();
-                ModalListKeyResult::Redraw
+                if let Some(event) = selection_change_event(list, previous_selection) {
+                    ModalListKeyResult::Emit(event)
+                } else {
+                    ModalListKeyResult::Redraw
+                }
             }
             KeyCode::Left => {
                 if let Some(selection) = list.current_selection()
@@ -245,7 +295,11 @@ impl ModalState {
                     return ModalListKeyResult::Submit(InlineEvent::ListModalSubmit(adjusted));
                 }
                 list.select_previous();
-                ModalListKeyResult::Redraw
+                if let Some(event) = selection_change_event(list, previous_selection) {
+                    ModalListKeyResult::Emit(event)
+                } else {
+                    ModalListKeyResult::Redraw
+                }
             }
             KeyCode::Right => {
                 if let Some(selection) = list.current_selection()
@@ -254,7 +308,11 @@ impl ModalState {
                     return ModalListKeyResult::Submit(InlineEvent::ListModalSubmit(adjusted));
                 }
                 list.select_next();
-                ModalListKeyResult::Redraw
+                if let Some(event) = selection_change_event(list, previous_selection) {
+                    ModalListKeyResult::Emit(event)
+                } else {
+                    ModalListKeyResult::Redraw
+                }
             }
             KeyCode::Enter => {
                 if let Some(selection) = list.current_selection() {
@@ -267,17 +325,36 @@ impl ModalState {
             KeyCode::Char(ch) if modifiers.control || modifiers.alt => match ch {
                 'n' | 'N' | 'j' | 'J' => {
                     list.select_next();
-                    ModalListKeyResult::Redraw
+                    if let Some(event) = selection_change_event(list, previous_selection) {
+                        ModalListKeyResult::Emit(event)
+                    } else {
+                        ModalListKeyResult::Redraw
+                    }
                 }
                 'p' | 'P' | 'k' | 'K' => {
                     list.select_previous();
-                    ModalListKeyResult::Redraw
+                    if let Some(event) = selection_change_event(list, previous_selection) {
+                        ModalListKeyResult::Emit(event)
+                    } else {
+                        ModalListKeyResult::Redraw
+                    }
                 }
                 _ => ModalListKeyResult::NotHandled,
             },
             _ => ModalListKeyResult::NotHandled,
         }
     }
+}
+
+fn selection_change_event(
+    list: &ModalListState,
+    previous: Option<InlineListSelection>,
+) -> Option<InlineEvent> {
+    let current = list.current_selection();
+    if current == previous {
+        return None;
+    }
+    current.map(InlineEvent::ListModalSelectionChanged)
 }
 
 fn map_config_selection_for_arrow(

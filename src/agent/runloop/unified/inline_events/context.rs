@@ -78,6 +78,9 @@ impl<'a> InlineEventContext<'a> {
                     .handle_submit(self.state.renderer(), selection)
                     .await?
             }
+            InlineEvent::ListModalSelectionChanged(selection) => self
+                .modal
+                .handle_preview(self.state.renderer(), selection)?,
             InlineEvent::ListModalCancel => {
                 self.state.reset_interrupt_state();
                 self.modal.handle_cancel(self.state.renderer())?

@@ -144,6 +144,13 @@ fn compact_run_completion_line(
     None
 }
 
+fn is_git_diff_payload(output: &serde_json::Value) -> bool {
+    output
+        .get("content_type")
+        .and_then(serde_json::Value::as_str)
+        .is_some_and(|content_type| content_type == "git_diff")
+}
+
 /// Common logic for rendering tool output with error handling
 pub async fn render_tool_output_common(
     renderer: &mut AnsiRenderer,
@@ -153,23 +160,31 @@ pub async fn render_tool_output_common(
     command_success: bool,
     vt_config: Option<&VTCodeConfig>,
 ) -> Result<()> {
-    if renderer.supports_inline_ui() && is_run_pty_tool(name, args_val) {
+    let inline_run_tool = renderer.supports_inline_ui() && is_run_pty_tool(name, args_val);
+    let git_diff_payload = is_git_diff_payload(output);
+
+    if inline_run_tool && !git_diff_payload
+    {
         if let Some(completion) = compact_run_completion_line(output, command_success) {
             renderer.line(MessageStyle::ToolDetail, &completion)?;
         }
         return Ok(());
     }
 
-    let stream_label = crate::agent::runloop::unified::tool_summary::stream_label_from_output(
-        output,
-        command_success,
-    );
-    crate::agent::runloop::unified::tool_summary::render_tool_call_summary(
-        renderer,
-        name,
-        args_val,
-        stream_label,
-    )?;
+    // Inline PTY streaming already renders a "• Ran <command>" header. Avoid duplicating
+    // it for git_diff payloads in post-tool summary rendering.
+    if !(inline_run_tool && git_diff_payload) {
+        let stream_label = crate::agent::runloop::unified::tool_summary::stream_label_from_output(
+            output,
+            command_success,
+        );
+        crate::agent::runloop::unified::tool_summary::render_tool_call_summary(
+            renderer,
+            name,
+            args_val,
+            stream_label,
+        )?;
+    }
 
     crate::agent::runloop::tool_output::render_tool_output(renderer, Some(name), output, vt_config)
         .await
@@ -185,6 +200,29 @@ pub fn render_error_common(
     let err_msg = format!("Tool '{}' {}: {}", name, error_type, error);
     renderer.line(vtcode_core::utils::ansi::MessageStyle::Error, &err_msg)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_git_diff_payload;
+
+    #[test]
+    fn detects_git_diff_payload() {
+        let output = serde_json::json!({
+            "output": "diff --git a/src/main.rs b/src/main.rs",
+            "content_type": "git_diff"
+        });
+        assert!(is_git_diff_payload(&output));
+    }
+
+    #[test]
+    fn ignores_non_git_diff_payload() {
+        let output = serde_json::json!({
+            "output": "Checking crate",
+            "content_type": "exec_inspect"
+        });
+        assert!(!is_git_diff_payload(&output));
+    }
 }
 
 /// Common logic for handling tool success

@@ -129,6 +129,10 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                 session.mark_dirty();
                 return None;
             }
+            ModalListKeyResult::Emit(event) => {
+                session.mark_dirty();
+                return Some(event);
+            }
             ModalListKeyResult::HandledNoRedraw => {
                 return None;
             }
@@ -154,6 +158,10 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
             ModalListKeyResult::Redraw => {
                 session.mark_dirty();
                 return None;
+            }
+            ModalListKeyResult::Emit(event) => {
+                session.mark_dirty();
+                return Some(event);
             }
             ModalListKeyResult::HandledNoRedraw => {
                 return None;

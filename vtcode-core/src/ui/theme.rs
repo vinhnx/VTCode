@@ -12,6 +12,9 @@ pub const DEFAULT_THEME_ID: &str = defaults::DEFAULT_THEME;
 
 /// Default minimum contrast ratio (WCAG AA standard)
 const DEFAULT_MIN_CONTRAST: f64 = ui::THEME_MIN_CONTRAST_RATIO;
+const MAX_DARK_BG_TEXT_LUMINANCE: f64 = 0.92;
+const MIN_DARK_BG_TEXT_LUMINANCE: f64 = 0.20;
+const MAX_LIGHT_BG_TEXT_LUMINANCE: f64 = 0.68;
 
 /// Runtime configuration for color accessibility settings.
 /// These can be updated from vtcode.toml [ui] section.
@@ -94,6 +97,7 @@ impl ThemePalette {
         let primary = self.primary_accent;
         let background = self.background;
         let secondary = self.secondary_accent;
+        let logo_accent = self.logo_accent;
 
         let fallback_light = RgbColor(
             ui::THEME_COLOR_WHITE_RED,
@@ -111,6 +115,8 @@ impl ThemePalette {
                 fallback_light,
             ],
         );
+        let text_color = balance_text_luminance(text_color, background, min_contrast);
+
         let info_color = ensure_contrast(
             secondary,
             background,
@@ -121,6 +127,8 @@ impl ThemePalette {
                 fallback_light,
             ],
         );
+        let info_color = balance_text_luminance(info_color, background, min_contrast);
+
         // Light gray for tool output derived from theme colors
         let light_tool_color = lighten(text_color, ui::THEME_MIX_RATIO); // Lighter version of the text color
         let tool_color = ensure_contrast(
@@ -155,6 +163,8 @@ impl ThemePalette {
                 fallback_light,
             ],
         );
+        let response_color = balance_text_luminance(response_color, background, min_contrast);
+
         // Reasoning color: Use text color with dimmed effect for placeholder-like appearance
         let reasoning_color = ensure_contrast(
             lighten(text_color, 0.25), // Lighter for placeholder-like appearance
@@ -162,10 +172,12 @@ impl ThemePalette {
             min_contrast,
             &[lighten(text_color, 0.15), text_color, fallback_light],
         );
+        let reasoning_color = balance_text_luminance(reasoning_color, background, min_contrast);
         // Reasoning style: Dimmed and italic for placeholder-like thinking output
         let reasoning_style =
             Self::style_from(reasoning_color, false).effects(Effects::DIMMED | Effects::ITALIC);
         // Make user messages more distinct using secondary accent color
+
         let user_color = ensure_contrast(
             lighten(secondary, ui::THEME_USER_COLOR_LIGHTEN_RATIO),
             background,
@@ -176,6 +188,8 @@ impl ThemePalette {
                 text_color,
             ],
         );
+        let user_color = balance_text_luminance(user_color, background, min_contrast);
+
         let alert_color = ensure_contrast(
             self.alert,
             background,
@@ -186,6 +200,8 @@ impl ThemePalette {
                 text_color,
             ],
         );
+
+        let alert_color = balance_text_luminance(alert_color, background, min_contrast);
 
         // Tool output style: use default terminal styling (no color/bold/dim effects)
         let tool_output_style = Style::new();
@@ -206,6 +222,32 @@ impl ThemePalette {
         );
         let pty_output_style = Style::new().fg_color(Some(Color::Rgb(pty_output_color)));
 
+        let primary_style_color = balance_text_luminance(
+            ensure_contrast(primary, background, min_contrast, &[text_color]),
+            background,
+            min_contrast,
+        );
+        let secondary_style_color = balance_text_luminance(
+            ensure_contrast(
+                secondary,
+                background,
+                min_contrast,
+                &[info_color, text_color],
+            ),
+            background,
+            min_contrast,
+        );
+        let logo_style_color = balance_text_luminance(
+            ensure_contrast(
+                logo_accent,
+                background,
+                min_contrast,
+                &[secondary_style_color, text_color],
+            ),
+            background,
+            min_contrast,
+        );
+
         ThemeStyles {
             info: Self::style_from(info_color, true),
             error: Self::style_from(alert_color, true),
@@ -218,11 +260,14 @@ impl ThemePalette {
             pty_output: pty_output_style,
             status: Self::style_from(
                 ensure_contrast(
-                    lighten(primary, ui::THEME_PRIMARY_STATUS_LIGHTEN_RATIO),
+                    lighten(primary_style_color, ui::THEME_PRIMARY_STATUS_LIGHTEN_RATIO),
                     background,
                     min_contrast,
                     &[
-                        lighten(primary, ui::THEME_PRIMARY_STATUS_SECONDARY_LIGHTEN_RATIO),
+                        lighten(
+                            primary_style_color,
+                            ui::THEME_PRIMARY_STATUS_SECONDARY_LIGHTEN_RATIO,
+                        ),
                         info_color,
                         text_color,
                     ],
@@ -231,11 +276,11 @@ impl ThemePalette {
             ),
             mcp: Self::style_from(
                 ensure_contrast(
-                    lighten(self.logo_accent, ui::THEME_SECONDARY_LIGHTEN_RATIO),
+                    lighten(logo_style_color, ui::THEME_SECONDARY_LIGHTEN_RATIO),
                     background,
                     min_contrast,
                     &[
-                        lighten(self.logo_accent, ui::THEME_LOGO_ACCENT_BANNER_LIGHTEN_RATIO),
+                        lighten(logo_style_color, ui::THEME_LOGO_ACCENT_BANNER_LIGHTEN_RATIO),
                         info_color,
                         fallback_light,
                     ],
@@ -243,8 +288,8 @@ impl ThemePalette {
                 true,
             ),
             user: Self::style_from(user_color, false),
-            primary: Self::style_from(primary, false),
-            secondary: Self::style_from(secondary, false),
+            primary: Self::style_from(primary_style_color, false),
+            secondary: Self::style_from(secondary_style_color, false),
             background: Color::Rgb(background),
             foreground: Color::Rgb(text_color),
         }
@@ -1323,6 +1368,46 @@ fn contrast_ratio(foreground: RgbColor, background: RgbColor) -> f64 {
     (lighter + ui::THEME_CONTRAST_RATIO_OFFSET) / (darker + ui::THEME_CONTRAST_RATIO_OFFSET)
 }
 
+fn darken(color: RgbColor, ratio: f64) -> RgbColor {
+    mix(color, RgbColor(0, 0, 0), ratio)
+}
+
+fn adjust_luminance_to_target(color: RgbColor, target: f64) -> RgbColor {
+    let current = relative_luminance(color);
+    if (current - target).abs() < 1e-3 {
+        return color;
+    }
+
+    if current < target {
+        // Raise luminance by blending toward white.
+        let denom = (1.0 - current).max(1e-6);
+        let ratio = ((target - current) / denom).clamp(0.0, 1.0);
+        lighten(color, ratio)
+    } else {
+        // Lower luminance by blending toward black.
+        let denom = current.max(1e-6);
+        let ratio = ((current - target) / denom).clamp(0.0, 1.0);
+        darken(color, ratio)
+    }
+}
+
+fn balance_text_luminance(color: RgbColor, background: RgbColor, min_contrast: f64) -> RgbColor {
+    let bg_luminance = relative_luminance(background);
+    let mut candidate = color;
+    let current = relative_luminance(candidate);
+    if bg_luminance < 0.5 {
+        if current < MIN_DARK_BG_TEXT_LUMINANCE {
+            candidate = adjust_luminance_to_target(candidate, MIN_DARK_BG_TEXT_LUMINANCE);
+        } else if current > MAX_DARK_BG_TEXT_LUMINANCE {
+            candidate = adjust_luminance_to_target(candidate, MAX_DARK_BG_TEXT_LUMINANCE);
+        }
+    } else if current > MAX_LIGHT_BG_TEXT_LUMINANCE {
+        candidate = adjust_luminance_to_target(candidate, MAX_LIGHT_BG_TEXT_LUMINANCE);
+    }
+
+    ensure_contrast(candidate, background, min_contrast, &[color])
+}
+
 fn ensure_contrast(
     candidate: RgbColor,
     background: RgbColor,
@@ -1337,7 +1422,15 @@ fn ensure_contrast(
             return fallback;
         }
     }
-    candidate
+
+    // Final accessibility fallback: choose the higher-contrast endpoint.
+    let black = RgbColor(0, 0, 0);
+    let white = RgbColor(255, 255, 255);
+    if contrast_ratio(black, background) >= contrast_ratio(white, background) {
+        black
+    } else {
+        white
+    }
 }
 
 pub(crate) fn mix(color: RgbColor, target: RgbColor, ratio: f64) -> RgbColor {
@@ -1628,6 +1721,62 @@ mod tests {
                 "Theme {} should be resolvable",
                 id
             );
+        }
+    }
+
+    #[test]
+    fn test_all_themes_have_readable_foreground_and_accents() {
+        let min_contrast = get_minimum_contrast();
+        for definition in REGISTRY.values() {
+            let styles = definition.palette.build_styles_with_contrast(min_contrast);
+            let bg = definition.palette.background;
+
+            for (name, color) in [
+                ("foreground", style_rgb(styles.output)),
+                ("primary", style_rgb(styles.primary)),
+                ("secondary", style_rgb(styles.secondary)),
+                ("user", style_rgb(styles.user)),
+                ("response", style_rgb(styles.response)),
+            ] {
+                let color = color
+                    .unwrap_or_else(|| panic!("{} missing fg color for {}", name, definition.id));
+                let ratio = contrast_ratio(color, bg);
+                assert!(
+                    ratio >= min_contrast,
+                    "theme={} style={} contrast {:.2} < {:.1}",
+                    definition.id,
+                    name,
+                    ratio,
+                    min_contrast
+                );
+
+                let luminance = relative_luminance(color);
+                if relative_luminance(bg) < 0.5 {
+                    assert!(
+                        (MIN_DARK_BG_TEXT_LUMINANCE..=MAX_DARK_BG_TEXT_LUMINANCE)
+                            .contains(&luminance),
+                        "theme={} style={} luminance {:.3} outside dark-theme readability bounds",
+                        definition.id,
+                        name,
+                        luminance
+                    );
+                } else {
+                    assert!(
+                        luminance <= MAX_LIGHT_BG_TEXT_LUMINANCE,
+                        "theme={} style={} luminance {:.3} too bright for light theme",
+                        definition.id,
+                        name,
+                        luminance
+                    );
+                }
+            }
+        }
+    }
+
+    fn style_rgb(style: Style) -> Option<RgbColor> {
+        match style.get_fg_color() {
+            Some(Color::Rgb(rgb)) => Some(rgb),
+            _ => None,
         }
     }
 

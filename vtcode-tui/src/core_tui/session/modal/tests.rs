@@ -509,7 +509,12 @@ fn list_modal_tab_moves_forward() {
     let key = KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE);
     let result = modal.handle_list_key_event(&key, ModalKeyModifiers::default());
 
-    assert!(matches!(result, ModalListKeyResult::Redraw));
+    assert!(matches!(
+        result,
+        ModalListKeyResult::Emit(InlineEvent::ListModalSelectionChanged(
+            InlineListSelection::Model(1)
+        ))
+    ));
     let selection = modal
         .list
         .as_ref()
@@ -526,7 +531,12 @@ fn list_modal_backtab_moves_backward() {
     let key = KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT);
     let result = modal.handle_list_key_event(&key, ModalKeyModifiers::default());
 
-    assert!(matches!(result, ModalListKeyResult::Redraw));
+    assert!(matches!(
+        result,
+        ModalListKeyResult::Emit(InlineEvent::ListModalSelectionChanged(
+            InlineListSelection::Model(0)
+        ))
+    ));
     let selection = modal
         .list
         .as_ref()
@@ -550,7 +560,12 @@ fn list_modal_control_navigation_moves_selection() {
         },
     );
 
-    assert!(matches!(result, ModalListKeyResult::Redraw));
+    assert!(matches!(
+        result,
+        ModalListKeyResult::Emit(InlineEvent::ListModalSelectionChanged(
+            InlineListSelection::Model(0)
+        ))
+    ));
     let selection = modal
         .list
         .as_ref()
@@ -592,7 +607,12 @@ fn list_modal_page_navigation_respects_viewport() {
 
     let page_down = KeyEvent::new(KeyCode::PageDown, KeyModifiers::NONE);
     let result = modal.handle_list_key_event(&page_down, ModalKeyModifiers::default());
-    assert!(matches!(result, ModalListKeyResult::Redraw));
+    assert!(matches!(
+        result,
+        ModalListKeyResult::Emit(InlineEvent::ListModalSelectionChanged(
+            InlineListSelection::Model(3)
+        ))
+    ));
 
     let selection = modal
         .list
@@ -602,7 +622,12 @@ fn list_modal_page_navigation_respects_viewport() {
 
     let page_up = KeyEvent::new(KeyCode::PageUp, KeyModifiers::NONE);
     let result = modal.handle_list_key_event(&page_up, ModalKeyModifiers::default());
-    assert!(matches!(result, ModalListKeyResult::Redraw));
+    assert!(matches!(
+        result,
+        ModalListKeyResult::Emit(InlineEvent::ListModalSelectionChanged(
+            InlineListSelection::Model(0)
+        ))
+    ));
 
     let selection = modal
         .list

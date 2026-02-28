@@ -833,3 +833,40 @@ DRY and KISS
 full diff aware with background
 
 /Users/vinhnguyenxuan/Desktop/diff.png
+
+---
+
+improve agent's postamlbe summarization. reference and also suggest next actions based on the summary. This will help users quickly understand the outcome of the agent's actions and what they can do next. And for the agent itself.
+
+```
+• Implemented. I tightened theme color distribution and readability logic across
+  both vtcode-tui and vtcode-core.
+
+  - Added luminance balancing for rendered text/accent styles (foreground,
+    primary, secondary, user, response, reasoning, alert) relative to background:
+      - vtcode-tui/src/ui/theme.rs:118:118
+      - vtcode-core/src/ui/theme.rs:118:118
+  - Added explicit luminance adjustment helpers:
+      - vtcode-tui/src/ui/theme.rs:1414:1414
+      - vtcode-core/src/ui/theme.rs:1373:1373
+  - Strengthened ensure_contrast with final black/white high-contrast fallback so
+    accessibility floor is always met:
+      - vtcode-tui/src/ui/theme.rs:1450:1450
+      - vtcode-core/src/ui/theme.rs:1409:1409
+  - Added full-theme regression tests to enforce contrast + readability bounds
+    across all registered themes:
+      - vtcode-tui/src/ui/theme.rs:1781:1781
+      - vtcode-core/src/ui/theme.rs:1726:1726
+
+  Validation run:
+  - cargo check -p vtcode-core passed
+  - cargo test -p vtcode-tui
+    ui::theme::tests::test_all_themes_have_readable_foreground_and_accents --
+    --nocapture passed
+
+  Note:
+
+  - I also noticed an unrelated local config change in vtcode.toml (theme changed
+    to ciapre). I left it untouched.
+    ``
+```

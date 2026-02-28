@@ -3,13 +3,16 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
-use anstyle::{AnsiColor, Color as AnsiColorEnum, Effects, Style as AnsiStyle};
-use tokio::sync::mpsc;
-use tokio::task::JoinHandle;
-use vtcode_core::command_safety::shell_parser::parse_shell_commands_tree_sitter;
+use anstyle::{
+    Ansi256Color, AnsiColor, Color as AnsiColorEnum, Effects, RgbColor, Style as AnsiStyle,
+};
+use tokio::{sync::mpsc, task::JoinHandle};
 use vtcode_core::tools::registry::ToolProgressCallback;
 use vtcode_core::ui::theme;
-use vtcode_tui::{InlineHandle, InlineMessageKind, InlineSegment, InlineTextStyle, convert_style};
+use vtcode_tui::{
+    InlineHandle, InlineMessageKind, InlineSegment, InlineTextStyle, convert_style,
+    ui::syntax_highlight,
+};
 
 use crate::agent::runloop::unified::progress::ProgressReporter;
 
@@ -32,7 +35,7 @@ struct PtyLineStyles {
 impl PtyLineStyles {
     fn new() -> Self {
         let theme_styles = theme::active_styles();
-        let output = Arc::new(InlineTextStyle::default());
+        let output = Arc::new(convert_style(theme_styles.tool_detail.dimmed()));
         let glyph = Arc::new(convert_style(theme_styles.tool_detail.dimmed()));
         let verb = Arc::new(convert_style(
             AnsiStyle::new()
@@ -209,10 +212,258 @@ fn bash_segments(text: &str, styles: &PtyLineStyles, expect_command: bool) -> Ve
     segments
 }
 
-fn is_valid_bash_grammar(command: &str) -> bool {
-    parse_shell_commands_tree_sitter(command)
-        .map(|commands| !commands.is_empty())
-        .unwrap_or(false)
+fn shell_syntax_segments(
+    text: &str,
+    styles: &PtyLineStyles,
+    expect_command: bool,
+) -> Vec<InlineSegment> {
+    let semantic = bash_segments(text, styles, expect_command);
+    let Some(highlighted) = syntax_highlight::highlight_line_to_anstyle_segments(
+        text,
+        Some("bash"),
+        syntax_highlight::get_active_syntax_theme(),
+        true,
+    ) else {
+        return semantic;
+    };
+
+    if highlighted.is_empty() {
+        return semantic;
+    }
+
+    let converted = highlighted
+        .into_iter()
+        .map(|(style, text)| InlineSegment {
+            text,
+            style: Arc::new(convert_style(style).merge_color(styles.args.color)),
+        })
+        .collect::<Vec<_>>();
+
+    let converted_text = converted
+        .iter()
+        .map(|segment| segment.text.as_str())
+        .collect::<String>();
+    if converted_text != text {
+        return semantic;
+    }
+
+    let non_ws_count = semantic
+        .iter()
+        .filter(|segment| !segment.text.trim().is_empty())
+        .count();
+    if non_ws_count > 1 {
+        let mut first: Option<&InlineTextStyle> = None;
+        let mut has_distinct = false;
+        for style in converted
+            .iter()
+            .filter(|segment| !segment.text.trim().is_empty())
+            .map(|segment| segment.style.as_ref())
+        {
+            if let Some(seed) = first {
+                if style != seed {
+                    has_distinct = true;
+                    break;
+                }
+            } else {
+                first = Some(style);
+            }
+        }
+        if !has_distinct {
+            return semantic;
+        }
+    }
+
+    converted
+}
+
+fn ansi_color_from_ansi_code(code: u16) -> Option<AnsiColorEnum> {
+    let color = match code {
+        30 | 90 => AnsiColor::Black,
+        31 | 91 => AnsiColor::Red,
+        32 | 92 => AnsiColor::Green,
+        33 | 93 => AnsiColor::Yellow,
+        34 | 94 => AnsiColor::Blue,
+        35 | 95 => AnsiColor::Magenta,
+        36 | 96 => AnsiColor::Cyan,
+        37 | 97 => AnsiColor::White,
+        _ => return None,
+    };
+    Some(AnsiColorEnum::Ansi(color))
+}
+
+fn clear_sgr_effects(effects: &mut Effects, code: u16) {
+    match code {
+        22 => {
+            let _ = effects.remove(Effects::BOLD);
+            let _ = effects.remove(Effects::DIMMED);
+        }
+        23 => {
+            let _ = effects.remove(Effects::ITALIC);
+        }
+        24 => {
+            let _ = effects.remove(Effects::UNDERLINE);
+        }
+        _ => {}
+    }
+}
+
+fn apply_sgr_codes(sequence: &str, current: &mut InlineTextStyle, fallback: &InlineTextStyle) {
+    let params: Vec<u16> = if sequence.trim().is_empty() {
+        vec![0]
+    } else {
+        sequence
+            .split(';')
+            .map(|value| value.parse::<u16>().unwrap_or(0))
+            .collect()
+    };
+
+    let mut index = 0usize;
+    while index < params.len() {
+        let code = params[index];
+        match code {
+            0 => *current = fallback.clone(),
+            1 => current.effects |= Effects::BOLD,
+            2 => current.effects |= Effects::DIMMED,
+            3 => current.effects |= Effects::ITALIC,
+            4 => current.effects |= Effects::UNDERLINE,
+            22 | 23 | 24 => clear_sgr_effects(&mut current.effects, code),
+            30..=37 | 90..=97 => current.color = ansi_color_from_ansi_code(code),
+            39 => current.color = fallback.color,
+            40..=47 | 100..=107 => {
+                let fg_code = code - 10;
+                current.bg_color = ansi_color_from_ansi_code(fg_code);
+            }
+            49 => current.bg_color = fallback.bg_color,
+            38 | 48 => {
+                let is_fg = code == 38;
+                if let Some(mode) = params.get(index + 1).copied() {
+                    match mode {
+                        5 => {
+                            if let Some(value) = params.get(index + 2).copied() {
+                                let color = AnsiColorEnum::Ansi256(Ansi256Color(value as u8));
+                                if is_fg {
+                                    current.color = Some(color);
+                                } else {
+                                    current.bg_color = Some(color);
+                                }
+                                index += 2;
+                            }
+                        }
+                        2 => {
+                            if index + 4 < params.len() {
+                                let r = params[index + 2] as u8;
+                                let g = params[index + 3] as u8;
+                                let b = params[index + 4] as u8;
+                                let color = AnsiColorEnum::Rgb(RgbColor(r, g, b));
+                                if is_fg {
+                                    current.color = Some(color);
+                                } else {
+                                    current.bg_color = Some(color);
+                                }
+                                index += 4;
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            _ => {}
+        }
+        index += 1;
+    }
+}
+
+fn sgr_payload(sequence: &str) -> Option<&str> {
+    if sequence.starts_with("\u{1b}[") && sequence.ends_with('m') {
+        Some(&sequence[2..sequence.len().saturating_sub(1)])
+    } else {
+        None
+    }
+}
+
+fn ansi_output_segments(text: &str, styles: &PtyLineStyles) -> Option<Vec<InlineSegment>> {
+    if !text.contains('\u{1b}') {
+        return None;
+    }
+
+    let mut segments = Vec::new();
+    let mut current = styles.output.as_ref().clone();
+    let fallback = styles.output.as_ref().clone();
+    let mut index = 0usize;
+    let mut text_buffer = String::new();
+
+    while index < text.len() {
+        let Some(remaining) = text.get(index..) else {
+            break;
+        };
+        let Some(first) = remaining.as_bytes().first() else {
+            break;
+        };
+
+        if *first == 0x1b {
+            if !text_buffer.is_empty() {
+                segments.push(InlineSegment {
+                    text: std::mem::take(&mut text_buffer),
+                    style: Arc::new(current.clone()),
+                });
+            }
+
+            if let Some(len) = vtcode_core::utils::ansi_parser::parse_ansi_sequence(remaining) {
+                if let Some(sequence) = remaining.get(..len)
+                    && let Some(payload) = sgr_payload(sequence)
+                {
+                    apply_sgr_codes(payload, &mut current, &fallback);
+                }
+                index += len;
+                continue;
+            }
+
+            // Incomplete ANSI sequence: preserve remaining text as-is.
+            text_buffer.push_str(remaining);
+            index = text.len();
+            continue;
+        }
+
+        let mut chars = remaining.chars();
+        if let Some(ch) = chars.next() {
+            text_buffer.push(ch);
+            index += ch.len_utf8();
+        } else {
+            break;
+        }
+    }
+
+    if !text_buffer.is_empty() {
+        segments.push(InlineSegment {
+            text: text_buffer,
+            style: Arc::new(current),
+        });
+    }
+
+    if segments.is_empty() {
+        return None;
+    }
+    Some(
+        segments
+            .into_iter()
+            .filter(|segment| !segment.text.is_empty())
+            .collect(),
+    )
+}
+
+fn append_output_segments_with_ansi(
+    segments: &mut Vec<InlineSegment>,
+    text: &str,
+    styles: &PtyLineStyles,
+) {
+    if let Some(mut ansi_segments) = ansi_output_segments(text, styles) {
+        segments.append(&mut ansi_segments);
+    } else {
+        segments.push(InlineSegment {
+            text: text.to_string(),
+            style: Arc::clone(&styles.output),
+        });
+    }
 }
 
 fn line_to_segments(line: &str, styles: &PtyLineStyles) -> Vec<InlineSegment> {
@@ -231,14 +482,7 @@ fn line_to_segments(line: &str, styles: &PtyLineStyles) -> Vec<InlineSegment> {
                 style: Arc::clone(&styles.output),
             },
         ];
-        if is_valid_bash_grammar(command_text) {
-            segments.extend(bash_segments(command_text, styles, true));
-        } else {
-            segments.push(InlineSegment {
-                text: command_text.to_string(),
-                style: Arc::clone(&styles.args),
-            });
-        }
+        segments.extend(shell_syntax_segments(command_text, styles, true));
         return segments;
     }
 
@@ -257,19 +501,12 @@ fn line_to_segments(line: &str, styles: &PtyLineStyles) -> Vec<InlineSegment> {
                 style: Arc::clone(&styles.output),
             },
         ];
-        if is_valid_bash_grammar(text) {
-            segments.extend(bash_segments(text, styles, false));
-        } else {
-            segments.push(InlineSegment {
-                text: text.to_string(),
-                style: Arc::clone(&styles.args),
-            });
-        }
+        segments.extend(shell_syntax_segments(text, styles, false));
         return segments;
     }
 
     if let Some(text) = line.strip_prefix("  └ ") {
-        return vec![
+        let mut segments = vec![
             InlineSegment {
                 text: "  ".to_string(),
                 style: Arc::clone(&styles.output),
@@ -279,10 +516,12 @@ fn line_to_segments(line: &str, styles: &PtyLineStyles) -> Vec<InlineSegment> {
                 style: Arc::clone(&styles.glyph),
             },
             InlineSegment {
-                text: format!(" {}", text),
+                text: " ".to_string(),
                 style: Arc::clone(&styles.output),
             },
         ];
+        append_output_segments_with_ansi(&mut segments, text, styles);
+        return segments;
     }
 
     if line.trim_start().starts_with('…') {
@@ -293,16 +532,12 @@ fn line_to_segments(line: &str, styles: &PtyLineStyles) -> Vec<InlineSegment> {
     }
 
     if let Some(text) = line.strip_prefix("    ") {
-        return vec![
-            InlineSegment {
-                text: "    ".to_string(),
-                style: Arc::clone(&styles.output),
-            },
-            InlineSegment {
-                text: text.to_string(),
-                style: Arc::clone(&styles.output),
-            },
-        ];
+        let mut segments = vec![InlineSegment {
+            text: "    ".to_string(),
+            style: Arc::clone(&styles.output),
+        }];
+        append_output_segments_with_ansi(&mut segments, text, styles);
+        return segments;
     }
 
     vec![InlineSegment {
@@ -610,19 +845,22 @@ impl PtyStreamRuntime {
                     continue;
                 }
 
-                let cleaned_output = vtcode_core::utils::ansi_parser::strip_ansi(&output);
-                if cleaned_output.is_empty() {
+                let visible_output = vtcode_core::utils::ansi_parser::strip_ansi(&output);
+                if visible_output.trim().is_empty() {
                     continue;
                 }
 
                 let (replace_count, segments, last_line) =
-                    state.render_segments(&cleaned_output, effective_tail_limit);
+                    state.render_segments(&output, effective_tail_limit);
                 if !segments.is_empty() && worker_active.load(Ordering::Relaxed) {
                     handle.replace_last(replace_count, InlineMessageKind::Pty, segments);
                 }
 
                 if let Some(last_line) = last_line {
-                    progress_reporter.set_message(last_line).await;
+                    let cleaned_last_line = vtcode_core::utils::ansi_parser::strip_ansi(&last_line);
+                    if !cleaned_last_line.trim().is_empty() {
+                        progress_reporter.set_message(cleaned_last_line).await;
+                    }
                 }
             }
         });
@@ -815,28 +1053,71 @@ mod tests {
     fn line_to_segments_distinguishes_command_and_args_styles() {
         let styles = PtyLineStyles::new();
         let segments = line_to_segments("• Ran cargo fmt", &styles);
-        let cargo_style = segments
-            .iter()
-            .find(|segment| segment.text == "cargo")
-            .map(|segment| Arc::clone(&segment.style))
-            .expect("cargo token should be present");
-        let fmt_style = segments
-            .iter()
-            .find(|segment| segment.text == "fmt")
-            .map(|segment| Arc::clone(&segment.style))
-            .expect("fmt token should be present");
-        assert_ne!(*cargo_style, *fmt_style);
+        assert_eq!(flatten_text(&segments), "• Ran cargo fmt");
+        assert!(
+            segments
+                .iter()
+                .any(|segment| !segment.text.trim().is_empty() && segment.style.color.is_some()),
+            "expected syntax-highlighted command segments"
+        );
     }
 
     #[test]
-    fn line_to_segments_skips_highlighting_for_invalid_bash_grammar() {
+    fn line_to_segments_handles_invalid_bash_input_without_dropping_text() {
         let styles = PtyLineStyles::new();
         let segments = line_to_segments("• Ran )(", &styles);
-        let invalid_style = segments
+        assert_eq!(flatten_text(&segments), "• Ran )(");
+    }
+
+    #[test]
+    fn line_to_segments_preserves_stdout_ansi_styles() {
+        let styles = PtyLineStyles::new();
+        let segments = line_to_segments("  └ \u{1b}[31mERR\u{1b}[0m done", &styles);
+        assert_eq!(flatten_text(&segments), "  └ ERR done");
+
+        let err_segment = segments
             .iter()
-            .find(|segment| segment.text == ")(")
-            .map(|segment| Arc::clone(&segment.style))
-            .expect("invalid token should be present");
-        assert_eq!(*invalid_style, *styles.args);
+            .find(|segment| segment.text.contains("ERR"))
+            .expect("colored text segment should be present");
+        assert_eq!(
+            err_segment.style.color,
+            Some(AnsiColorEnum::Ansi(AnsiColor::Red))
+        );
+    }
+
+    #[test]
+    fn line_to_segments_ignores_non_sgr_ansi_sequences_without_dropping_text() {
+        let styles = PtyLineStyles::new();
+        let segments = line_to_segments("  └ \u{1b}[2Kclean", &styles);
+        assert_eq!(flatten_text(&segments), "  └ clean");
+        let clean_segment = segments
+            .iter()
+            .find(|segment| segment.text.contains("clean"))
+            .expect("text segment should be present");
+        assert_eq!(*clean_segment.style, *styles.output);
+    }
+
+    #[test]
+    fn line_to_segments_stdout_defaults_to_dimmed_style() {
+        let styles = PtyLineStyles::new();
+        let segments = line_to_segments("  └ cargo check done", &styles);
+        let output_segment = segments
+            .iter()
+            .find(|segment| segment.text.contains("cargo check done"))
+            .expect("stdout segment should be present");
+        assert!(output_segment.style.effects.contains(Effects::DIMMED));
+    }
+
+    #[test]
+    fn line_to_segments_continuation_line_keeps_first_token_as_arg_style() {
+        let styles = PtyLineStyles::new();
+        let segments = line_to_segments("  │ --flag value", &styles);
+        assert_eq!(flatten_text(&segments), "  │ --flag value");
+        assert!(
+            segments
+                .iter()
+                .any(|segment| !segment.text.trim().is_empty() && segment.style.color.is_some()),
+            "expected syntax-highlighted continuation segments"
+        );
     }
 }

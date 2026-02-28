@@ -132,6 +132,7 @@ pub enum InlineEvent {
     /// Edit the newest queued input (pop into input buffer)
     EditQueue,
     ListModalSubmit(InlineListSelection),
+    ListModalSelectionChanged(InlineListSelection),
     ListModalCancel,
     WizardModalSubmit(Vec<InlineListSelection>),
     WizardModalStepComplete {
