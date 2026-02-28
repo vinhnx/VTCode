@@ -24,7 +24,7 @@ body = """
 #### {{ group | upper_first }}
 
 {% for commit in commits %}\
-        - {{ commit.message | split(pat="\n") | first | upper_first }} ({% if commit.id %}{{ commit.id | truncate(length=8, end="") }}{% else %}unknown{% endif %}) {% if commit.remote.username %}(@{{ commit.remote.username }}){% endif %}
+    - {{ commit.message | split(pat="\n") | first | upper_first }} ({% if commit.id %}{{ commit.id | truncate(length=8, end="") }}{% else %}unknown{% endif %}) {% if commit.remote.username %}(@{{ commit.remote.username }}){% endif %}
 {% endfor %}\
 {% endif %}\
 {% endfor %}\
@@ -36,7 +36,7 @@ body = """
 #### {{ group | upper_first }}
 
 {% for commit in commits %}\
-        - {{ commit.message | split(pat="\n") | first | upper_first }} ({% if commit.id %}{{ commit.id | truncate(length=8, end="") }}{% else %}unknown{% endif %}) {% if commit.remote.username %}(@{{ commit.remote.username }}){% endif %}
+    - {{ commit.message | split(pat="\n") | first | upper_first }} ({% if commit.id %}{{ commit.id | truncate(length=8, end="") }}{% else %}unknown{% endif %}) {% if commit.remote.username %}(@{{ commit.remote.username }}){% endif %}
 {% endfor %}\
 {% endif %}\
 {% endfor %}\
@@ -90,7 +90,7 @@ commit_parsers = [
     { message = "^[a-zA-Z]+: update changelog for", skip = true },
     { message = "update changelog for", skip = true },
     { message = "\\[skip ci\\]", skip = true },
-    
+
     # Skip release and version bump commits (be specific to avoid false positives)
     { message = "^chore\\(release\\):", skip = true },
     { message = "^chore: Release$", skip = true },
@@ -98,6 +98,10 @@ commit_parsers = [
     { message = "bump version.*to", skip = true },
     { message = "update version.*number", skip = true },
     { message = "version bump", skip = true },
+
+    # Skip merge commits - show original commits with their actual authors instead
+    { message = "^Merge pull request", skip = true },
+    { message = "^Merge branch", skip = true },
     
     # Features
     { message = "^feat", group = "Features", skip = false },
@@ -147,7 +151,7 @@ commit_parsers = [
     { message = "^Update commit$", skip = true },
     { message = "^Remove codes$", skip = true },
     { message = "^Implement code changes", skip = true },
-    
+
     # Catch-all for other commits (not skipped, grouped as Other)
     { message = ".*", group = "Other", skip = false },
 ]
@@ -181,6 +185,7 @@ exclude_patterns = [
     "update changelog for",
     "\\[skip ci\\]",
     "Merge branch",
+    # Exclude merge commits - we want to show the original commits with their actual authors
     "Merge pull request",
 ]
 
