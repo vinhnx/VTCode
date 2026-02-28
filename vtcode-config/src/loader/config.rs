@@ -8,8 +8,8 @@ use crate::agent_teams::AgentTeamsConfig;
 use crate::context::ContextFeaturesConfig;
 use crate::core::{
     AgentConfig, AnthropicConfig, AuthConfig, AutomationConfig, CommandsConfig,
-    DotfileProtectionConfig, ModelConfig, PermissionsConfig, PromptCachingConfig, SandboxConfig,
-    SecurityConfig, SkillsConfig, ToolsConfig,
+    DotfileProtectionConfig, ModelConfig, OpenAIConfig, PermissionsConfig, PromptCachingConfig,
+    SandboxConfig, SecurityConfig, SkillsConfig, ToolsConfig,
 };
 use crate::debug::DebugConfig;
 use crate::defaults::{self, ConfigDefaultsProvider};
@@ -28,6 +28,10 @@ use crate::loader::syntax_highlighting::SyntaxHighlightingConfig;
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct ProviderConfig {
+    /// OpenAI provider configuration
+    #[serde(default)]
+    pub openai: OpenAIConfig,
+
     /// Anthropic provider configuration
     #[serde(default)]
     pub anthropic: AnthropicConfig,

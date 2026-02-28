@@ -93,7 +93,10 @@ impl OpenResponsesProvider {
     }
 
     fn build_native_payload(&self, request: &LLMRequest, stream: bool) -> Result<Value, LLMError> {
-        use crate::open_responses::{ContentPart, MessageRole, OutputItem, Request};
+        use crate::open_responses::{
+            ContentPart, ImageDetail, InputFileContent, InputImageContent, MessageRole, OutputItem,
+            Request,
+        };
 
         let mut input = Vec::new();
 
@@ -114,7 +117,50 @@ impl OpenResponsesProvider {
             };
 
             let id = format!("msg_{i}");
-            let content = vec![ContentPart::input_text(message.content.as_text())];
+            let mut content = Vec::new();
+            match &message.content {
+                crate::llm::provider::MessageContent::Text(text) => {
+                    if !text.trim().is_empty() {
+                        content.push(ContentPart::input_text(text.as_str()));
+                    }
+                }
+                crate::llm::provider::MessageContent::Parts(parts) => {
+                    for part in parts {
+                        match part {
+                            crate::llm::provider::ContentPart::Text { text } => {
+                                if !text.trim().is_empty() {
+                                    content.push(ContentPart::input_text(text.as_str()));
+                                }
+                            }
+                            crate::llm::provider::ContentPart::Image {
+                                data, mime_type, ..
+                            } => {
+                                content.push(ContentPart::InputImage(InputImageContent {
+                                    image_url: format!("data:{};base64,{}", mime_type, data),
+                                    detail: ImageDetail::Auto,
+                                }));
+                            }
+                            crate::llm::provider::ContentPart::File {
+                                filename,
+                                file_id,
+                                file_data,
+                                file_url,
+                                ..
+                            } => {
+                                content.push(ContentPart::InputFile(InputFileContent {
+                                    filename: filename.clone(),
+                                    file_id: file_id.clone(),
+                                    file_data: file_data.clone(),
+                                    file_url: file_url.clone(),
+                                }));
+                            }
+                        }
+                    }
+                }
+            }
+            if content.is_empty() {
+                content.push(ContentPart::input_text(message.content.as_text()));
+            }
 
             input.push(OutputItem::completed_message(id, role, content));
 

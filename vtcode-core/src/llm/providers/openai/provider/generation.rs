@@ -59,6 +59,21 @@ impl OpenAIProvider {
         }
 
         if attempt_responses {
+            if self.websocket_mode_enabled(&request.model) {
+                match self.generate_via_responses_websocket(&request).await {
+                    Ok(response) => return Ok(response),
+                    Err(err) => {
+                        #[cfg(debug_assertions)]
+                        debug!(
+                            target = "vtcode::llm::openai",
+                            model = %request.model,
+                            error = %err,
+                            "WebSocket mode failed; falling back to HTTP Responses API"
+                        );
+                    }
+                }
+            }
+
             let openai_request = self.convert_to_openai_responses_format(&request)?;
             let url = format!("{}/responses", self.base_url);
 

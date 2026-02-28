@@ -63,7 +63,7 @@ pub fn serialize_message_content_openai(content: &MessageContent) -> Value {
                 return Value::String(String::new());
             }
 
-            let mut has_image = false;
+            let mut has_non_text = false;
             let mut serialized_parts = Vec::with_capacity(parts.len());
             let mut text_only = String::new();
 
@@ -79,7 +79,7 @@ pub fn serialize_message_content_openai(content: &MessageContent) -> Value {
                     ContentPart::Image {
                         data, mime_type, ..
                     } => {
-                        has_image = true;
+                        has_non_text = true;
                         serialized_parts.push(json!({
                             "type": "image_url",
                             "image_url": {
@@ -87,10 +87,45 @@ pub fn serialize_message_content_openai(content: &MessageContent) -> Value {
                             }
                         }));
                     }
+                    ContentPart::File {
+                        filename,
+                        file_id,
+                        file_data,
+                        file_url,
+                        ..
+                    } => {
+                        if file_id.is_some() || file_data.is_some() {
+                            has_non_text = true;
+                            let mut file_payload = serde_json::Map::new();
+                            if let Some(id) = file_id {
+                                file_payload
+                                    .insert("file_id".to_owned(), Value::String(id.clone()));
+                            }
+                            if let Some(name) = filename {
+                                file_payload
+                                    .insert("filename".to_owned(), Value::String(name.clone()));
+                            }
+                            if let Some(data) = file_data {
+                                file_payload
+                                    .insert("file_data".to_owned(), Value::String(data.clone()));
+                            }
+                            serialized_parts.push(json!({
+                                "type": "file",
+                                "file": Value::Object(file_payload)
+                            }));
+                        } else if let Some(url) = file_url {
+                            // Chat Completions does not accept file_url; preserve URL as text fallback.
+                            text_only.push_str(url);
+                            serialized_parts.push(json!({
+                                "type": "text",
+                                "text": url
+                            }));
+                        }
+                    }
                 }
             }
 
-            if has_image {
+            if has_non_text {
                 Value::Array(serialized_parts)
             } else {
                 Value::String(text_only)

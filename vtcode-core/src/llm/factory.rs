@@ -4,7 +4,7 @@ use super::providers::{
     OpenRouterProvider, ZAIProvider,
 };
 use crate::config::TimeoutsConfig;
-use crate::config::core::{AnthropicConfig, ModelConfig, PromptCachingConfig};
+use crate::config::core::{AnthropicConfig, ModelConfig, OpenAIConfig, PromptCachingConfig};
 use crate::config::models::{ModelId, Provider};
 use crate::ctx_err;
 use crate::llm::provider::{LLMError, LLMProvider};
@@ -25,6 +25,7 @@ pub struct ProviderConfig {
     pub model: Option<String>,
     pub prompt_cache: Option<PromptCachingConfig>,
     pub timeouts: Option<TimeoutsConfig>,
+    pub openai: Option<OpenAIConfig>,
     pub anthropic: Option<AnthropicConfig>,
     pub model_behavior: Option<ModelConfig>,
 }
@@ -265,6 +266,7 @@ pub fn create_provider_for_model(
             model: Some(model.to_string()),
             prompt_cache,
             timeouts: None,
+            openai: None,
             anthropic: None,
             model_behavior,
         },
@@ -296,6 +298,7 @@ macro_rules! impl_builtin_provider {
                         model,
                         prompt_cache,
                         timeouts,
+                        openai: _,
                         anthropic,
                         model_behavior,
                     } = config;
@@ -324,6 +327,7 @@ impl BuiltinProvider for AnthropicProvider {
             model,
             prompt_cache,
             timeouts,
+            openai: _,
             anthropic,
             model_behavior,
         } = config;
@@ -340,10 +344,35 @@ impl BuiltinProvider for AnthropicProvider {
     }
 }
 
+impl BuiltinProvider for OpenAIProvider {
+    fn build_from_config(config: ProviderConfig) -> Box<dyn LLMProvider> {
+        let ProviderConfig {
+            api_key,
+            base_url,
+            model,
+            prompt_cache,
+            timeouts,
+            openai,
+            anthropic,
+            model_behavior,
+        } = config;
+
+        Box::new(OpenAIProvider::from_config(
+            api_key,
+            model,
+            base_url,
+            prompt_cache,
+            timeouts,
+            anthropic,
+            openai,
+            model_behavior,
+        ))
+    }
+}
+
 // Implement BuiltinProvider for all standard providers using the macro
 impl_builtin_provider!(
     GeminiProvider,
-    OpenAIProvider,
     HuggingFaceProvider,
     // AnthropicProvider is manually implemented above
     MinimaxProvider,

@@ -109,6 +109,10 @@ pub struct InputFileContent {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub filename: Option<String>,
 
+    /// File ID returned by the Files API.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub file_id: Option<String>,
+
     /// Base64-encoded file data.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub file_data: Option<String>,
