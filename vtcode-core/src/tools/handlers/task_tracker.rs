@@ -254,6 +254,22 @@ impl TaskTrackerTool {
         }))
     }
 
+    async fn ensure_checklist_loaded(&self) -> Result<()> {
+        {
+            let guard = self.checklist.read().await;
+            if guard.is_some() {
+                return Ok(());
+            }
+        }
+
+        let loaded = self.load_checklist().await?;
+        let mut guard = self.checklist.write().await;
+        if guard.is_none() {
+            *guard = loaded;
+        }
+        Ok(())
+    }
+
     async fn handle_create(&self, args: &TaskTrackerArgs) -> Result<Value> {
         let title = args
             .title
@@ -278,10 +294,8 @@ impl TaskTrackerTool {
             notes: notes.clone(),
         };
 
-        let mut guard = self.checklist.write().await;
-        if guard.is_none() {
-            *guard = self.load_checklist().await?;
-        }
+        self.ensure_checklist_loaded().await?;
+        let guard = self.checklist.write().await;
         if let Some(existing) = guard.as_ref() {
             let same_structure = existing.title == title
                 && existing.items.len() == items.len()
@@ -319,9 +333,11 @@ impl TaskTrackerTool {
             notes,
         };
 
+        drop(guard);
         self.save_checklist(&checklist).await?;
         let summary = checklist.summary();
         let view = checklist.view();
+        let mut guard = self.checklist.write().await;
         *guard = Some(checklist);
 
         Ok(json!({
@@ -334,10 +350,8 @@ impl TaskTrackerTool {
     }
 
     async fn handle_update(&self, args: &TaskTrackerArgs) -> Result<Value> {
+        self.ensure_checklist_loaded().await?;
         let mut guard = self.checklist.write().await;
-        if guard.is_none() {
-            *guard = self.load_checklist().await?;
-        }
         if args.items.is_some() && (args.index.is_none() || args.status.is_none()) {
             let input_items = args.items.as_deref().unwrap_or(&[]);
             let items = parse_input_items(input_items);
@@ -360,14 +374,16 @@ impl TaskTrackerTool {
             checklist.title = title;
             checklist.items = items;
             checklist.notes = append_notes(checklist.notes.take(), args.notes.as_deref());
-
-            self.save_checklist(checklist).await?;
-            let summary = checklist.summary();
+            let snapshot = checklist.clone();
+            let summary = snapshot.summary();
+            let view = snapshot.view();
+            drop(guard);
+            self.save_checklist(&snapshot).await?;
             return Ok(json!({
                 "status": "updated",
                 "message": "Checklist synchronized from provided items.",
                 "checklist": summary,
-                "view": checklist.view()
+                "view": view
             }));
         }
 
@@ -398,23 +414,23 @@ impl TaskTrackerTool {
         let old_status = checklist.items[pos].status.to_string();
         checklist.items[pos].status = new_status;
         let new_status_str = checklist.items[pos].status.to_string();
-
-        self.save_checklist(checklist).await?;
-        let summary = checklist.summary();
+        let snapshot = checklist.clone();
+        let summary = snapshot.summary();
+        let view = snapshot.view();
+        drop(guard);
+        self.save_checklist(&snapshot).await?;
 
         Ok(json!({
             "status": "updated",
             "message": format!("Item {} status changed: {} → {}", index, old_status, new_status_str),
             "checklist": summary,
-            "view": checklist.view()
+            "view": view
         }))
     }
 
     async fn handle_list(&self) -> Result<Value> {
-        let mut guard = self.checklist.write().await;
-        if guard.is_none() {
-            *guard = self.load_checklist().await?;
-        }
+        self.ensure_checklist_loaded().await?;
+        let guard = self.checklist.read().await;
 
         match guard.as_ref() {
             Some(checklist) => Ok(json!({
@@ -430,10 +446,8 @@ impl TaskTrackerTool {
     }
 
     async fn handle_add(&self, args: &TaskTrackerArgs) -> Result<Value> {
+        self.ensure_checklist_loaded().await?;
         let mut guard = self.checklist.write().await;
-        if guard.is_none() {
-            *guard = self.load_checklist().await?;
-        }
         let checklist = guard
             .as_mut()
             .context("No active checklist. Use action='create' first.")?;
@@ -451,15 +465,17 @@ impl TaskTrackerTool {
         });
 
         checklist.notes = append_notes(checklist.notes.take(), args.notes.as_deref());
-
-        self.save_checklist(checklist).await?;
-        let summary = checklist.summary();
+        let snapshot = checklist.clone();
+        let summary = snapshot.summary();
+        let view = snapshot.view();
+        drop(guard);
+        self.save_checklist(&snapshot).await?;
 
         Ok(json!({
             "status": "added",
             "message": format!("Added item {}: {}", new_index, desc),
             "checklist": summary,
-            "view": checklist.view()
+            "view": view
         }))
     }
 }
