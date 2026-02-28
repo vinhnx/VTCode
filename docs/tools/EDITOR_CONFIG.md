@@ -16,7 +16,8 @@ Editor settings are configured in the `[tools.editor]` section of `vtcode.toml`:
 enabled = true
 
 # Leave empty to use automatic detection based on environment variables
-# Examples: "vim", "nvim", "emacs", "nano", "code", "gedit"
+# Supports command arguments (example: "code --wait")
+# Examples: "vim", "nvim", "emacs", "nano", "code", "code --wait", "zed", "subl -w"
 preferred_editor = ""
 
 # Suspend TUI event loop while editor is running
@@ -118,12 +119,14 @@ The crate automatically detects these editors:
 **GUI Editors:**
 
 -   `code` (Visual Studio Code)
+-   `zed`
 -   `gedit` (GNOME)
 -   `geany`
 -   `code-oss`
 -   `subl` (Sublime Text)
 -   `atom`
 -   `mate` (TextMate)
+-   `open -a TextEdit` (macOS)
 
 ## Terminal State Management
 

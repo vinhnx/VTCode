@@ -94,25 +94,9 @@ pub(super) fn handle_rewind_command(
     let tokens: Vec<&str> = args.split_whitespace().collect();
 
     if tokens.is_empty() {
-        // Show available snapshots when no arguments provided
-        renderer.line(MessageStyle::Info, "Available rewind options:")?;
-        renderer.line(
-            MessageStyle::Info,
-            "  /rewind <turn_number> - Rewind to specific turn",
-        )?;
-        renderer.line(
-            MessageStyle::Info,
-            "  /rewind conversation - Rewind conversation only",
-        )?;
-        renderer.line(
-            MessageStyle::Info,
-            "  /rewind code - Rewind code changes only",
-        )?;
-        renderer.line(
-            MessageStyle::Info,
-            "  /rewind both - Rewind both conversation and code",
-        )?;
-        return Ok(SlashCommandOutcome::Handled);
+        return Ok(SlashCommandOutcome::RewindLatest {
+            scope: vtcode_core::core::agent::snapshots::RevertScope::Both,
+        });
     }
 
     // Parse the arguments
@@ -156,16 +140,8 @@ pub(super) fn handle_rewind_command(
         // Return a command to handle the revert with specific turn and scope
         Ok(SlashCommandOutcome::RewindToTurn { turn, scope })
     } else {
-        // If no turn number, show available snapshots
-        renderer.line(
-            MessageStyle::Info,
-            "Please specify a turn number to rewind to.",
-        )?;
-        renderer.line(
-            MessageStyle::Info,
-            "Use /snapshots to see available checkpoints.",
-        )?;
-        Ok(SlashCommandOutcome::Handled)
+        // With no turn number, rewind to the latest checkpoint for the requested scope.
+        Ok(SlashCommandOutcome::RewindLatest { scope })
     }
 }
 

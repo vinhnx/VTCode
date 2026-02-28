@@ -41,9 +41,22 @@ pub async fn handle_launch_editor(
     file: Option<String>,
 ) -> Result<SlashCommandControl> {
     use std::path::PathBuf;
-    use vtcode_core::tools::terminal_app::TerminalAppLauncher;
+    use vtcode_core::tools::terminal_app::{EditorLaunchConfig, TerminalAppLauncher};
 
     let launcher = TerminalAppLauncher::new(ctx.config.workspace.clone());
+    let editor_config = ctx
+        .vt_cfg
+        .as_ref()
+        .map(|config| config.tools.editor.clone())
+        .unwrap_or_default();
+    if !editor_config.enabled {
+        ctx.renderer.line(
+            MessageStyle::Warning,
+            "External editor is disabled (`tools.editor.enabled = false`).",
+        )?;
+        ctx.renderer.line_if_not_empty(MessageStyle::Output)?;
+        return Ok(SlashCommandControl::Continue);
+    }
 
     ctx.renderer.line(
         MessageStyle::Info,
@@ -63,13 +76,25 @@ pub async fn handle_launch_editor(
         }
     });
 
-    // Pause event loop to prevent it from reading input while editor is running.
-    // This prevents stdin conflicts between the TUI event loop and the external editor.
-    ctx.handle.suspend_event_loop();
-    // Wait for pause to take effect
-    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    let launch_config = EditorLaunchConfig {
+        preferred_editor: if editor_config.preferred_editor.trim().is_empty() {
+            None
+        } else {
+            Some(editor_config.preferred_editor.clone())
+        },
+    };
 
-    match launcher.launch_editor(file_path) {
+    if editor_config.suspend_tui {
+        // Pause event loop to prevent it from reading input while editor is running.
+        // This prevents stdin conflicts between the TUI event loop and the external editor.
+        ctx.handle.suspend_event_loop();
+        // Wait for pause to take effect
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        // Drain any queued key events before editor launch.
+        ctx.handle.clear_input_queue();
+    }
+
+    match launcher.launch_editor_with_config(file_path, launch_config) {
         Ok(Some(edited_content)) => {
             // User edited temp file, replace input with edited content
             ctx.handle.set_input(edited_content);
@@ -93,8 +118,12 @@ pub async fn handle_launch_editor(
         }
     }
 
-    // Resume event loop to process input again
-    ctx.handle.resume_event_loop();
+    if editor_config.suspend_tui {
+        // Clear any stale terminal events that might have been buffered around editor exit.
+        ctx.handle.clear_input_queue();
+        // Resume event loop to process input again
+        ctx.handle.resume_event_loop();
+    }
 
     ctx.renderer.line_if_not_empty(MessageStyle::Output)?;
     Ok(SlashCommandControl::Continue)

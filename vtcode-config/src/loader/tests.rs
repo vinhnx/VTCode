@@ -255,6 +255,29 @@ prompt_cache_key_mode = "off"
 }
 
 #[test]
+fn loader_loads_tools_editor_config_from_toml() {
+    use std::fs::File;
+    use std::io::Write;
+
+    let temp = tempfile::tempdir().unwrap();
+    let path = temp.path().join("vtcode.toml");
+    let mut file = File::create(&path).unwrap();
+    let contents = r#"
+[tools.editor]
+enabled = true
+preferred_editor = "code --wait"
+suspend_tui = false
+"#;
+    file.write_all(contents.as_bytes()).unwrap();
+
+    let manager = ConfigManager::load_from_file(&path).unwrap();
+    let config = manager.config();
+    assert!(config.tools.editor.enabled);
+    assert_eq!(config.tools.editor.preferred_editor, "code --wait");
+    assert!(!config.tools.editor.suspend_tui);
+}
+
+#[test]
 fn save_config_preserves_comments() {
     use std::io::Write;
 

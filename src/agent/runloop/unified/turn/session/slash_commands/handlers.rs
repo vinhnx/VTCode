@@ -287,6 +287,38 @@ pub async fn handle_copy_latest_assistant_reply(
     Ok(SlashCommandControl::Continue)
 }
 
+pub async fn handle_rewind_latest(
+    ctx: SlashCommandContext<'_>,
+    scope: vtcode_core::core::agent::snapshots::RevertScope,
+) -> Result<SlashCommandControl> {
+    let Some(manager) = ctx.checkpoint_manager else {
+        ctx.renderer.line(
+            MessageStyle::Info,
+            "In-chat rewind requires access to the checkpoint manager.",
+        )?;
+        return Ok(SlashCommandControl::Continue);
+    };
+
+    let snapshots = match manager.list_snapshots().await {
+        Ok(snapshots) => snapshots,
+        Err(err) => {
+            ctx.renderer.line(
+                MessageStyle::Error,
+                &format!("Failed to list checkpoints: {}", err),
+            )?;
+            return Ok(SlashCommandControl::Continue);
+        }
+    };
+
+    let Some(latest) = snapshots.first() else {
+        ctx.renderer
+            .line(MessageStyle::Warning, "No checkpoints available to rewind.")?;
+        return Ok(SlashCommandControl::Continue);
+    };
+
+    handle_rewind_to_turn(ctx, latest.turn_number, scope).await
+}
+
 pub async fn handle_rewind_to_turn(
     ctx: SlashCommandContext<'_>,
     turn: usize,

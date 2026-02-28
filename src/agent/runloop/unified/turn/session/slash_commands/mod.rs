@@ -138,6 +138,9 @@ pub async fn handle_outcome(
         SlashCommandOutcome::RewindToTurn { turn, scope } => {
             handlers::handle_rewind_to_turn(ctx, turn, scope).await
         }
+        SlashCommandOutcome::RewindLatest { scope } => {
+            handlers::handle_rewind_latest(ctx, scope).await
+        }
         SlashCommandOutcome::TogglePlanMode { enable, prompt } => {
             let control = handlers::handle_toggle_plan_mode(ctx, enable).await?;
             if matches!(control, SlashCommandControl::Continue)

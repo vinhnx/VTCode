@@ -73,3 +73,674 @@ now.
 check external edtior (control+e) can not use normal mode (escape). This is because the escape key is currently hardcoded to trigger the rewind functionality, which conflicts with its expected behavior in normal mode. To resolve this, we need to implement a more context-aware handling of the escape key, allowing it to function as intended in normal mode while still providing the rewind functionality when appropriate. This may involve introducing a new keybinding for the rewind action or implementing a double-escape mechanism to differentiate between the two use cases. check crossterm event handling for escape key and implement the necessary logic to support both functionalities without conflict. vtcode support external editor config.
 
 expand external editor support to allow users to configure their preferred editor for the control+e shortcut. This would involve adding a configuration option in the settings where users can specify the command for their external editor (e.g., vim, nano, code). The system would then use this command to launch the specified editor when the control+e shortcut is pressed, providing a seamless and customizable editing experience for users who prefer to use an external editor over the built-in one. Also check to support VS Code, Zed, Text Edit, Sublime Text, TextMate, Emacs, and other popular editors, nvim...
+
+--
+
+the agent is having trouble with "Search text" grep_file tool..
+
+````
+Consecutive blocked tool calls reached per-turn cap (8). Last blocked call: 'Search text'. Stopping │
+│ turn to prevent retry churn.
+╭> App (0.83.0)─────────────────────────────────────────────────────────────────────────────────────────╮
+│Ollama qwen3-coder-next:cloud low | Accept edits | Session: Standard | Tools: 75 | main* | /help ·     │
+╰───────────────────────────────────────────────────────────────────────────────────────────────────────╯
+LLMStreamEvent is matched without handling ReasoningStage:
+
+╭─ Info ──────────────────────────────────────────────────────────────────────────────────────────────╮
+│ ─ Worked for 1m 11s ─                                                                               │
+╰─────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────
+continue
+
+╭─ Info ──────────────────────────────────────────────────────────────────────────────────────────────╮
+│ Consecutive blocked tool calls reached per-turn cap (8). Last blocked call: 'Search text'. Stopping │
+│ turn to prevent retry churn.                                                                        │
+│ Repeated follow-up after stalled turn detected; enforcing autonomous recovery and conclusion.       │
+╰─────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────
+Continue autonomously from the last stalled turn. Stall reason: Consecutive blocked tool calls reached pe
+r-turn cap (8). Last blocked call: 'Search text'. Stopping turn to prevent retry churn.. Keep working unt
+il you can provide a concrete conclusion and final review.
+
+•   Let me grep for the actual match statements using grep_file instead:
+
+╭─ Info ──────────────────────────────────────────────────────────────────────────────────────────────╮
+│ Consecutive blocked tool calls reached per-turn cap (8). Last blocked call: 'Search text'. Stopping │
+│ turn to prevent retry churn.                                                                        │
+╰─────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────
+continue
+
+•   Let me use grep_file directly to search for the issue:
+
+╭─ Info ──────────────────────────────────────────────────────────────────────────────────────────────╮
+│ Consecutive blocked tool calls reached per-turn cap (8). Last blocked call: 'Search text'. Stopping │
+│ turn to prevent retry churn.                                                                        │
+╰─────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+
+
+
+
+
+ Continue, or @files, /commands, Shift+Tab: cycle modes, Control+C: cancel task, tab: queue messages
+
+Processing (Press Ctrl+C to cancel)         qwen3-coder-next:cloud | 87% context left | 1 spooled | (low)╭> App (0.83.0)─────────────────────────────────────────────────────────────────────────────────────────╮
+│Ollama qwen3-coder-next:cloud low | Accept edits | Session: Standard | Tools: 75 | main* | /help ·     │
+╰───────────────────────────────────────────────────────────────────────────────────────────────────────╯
+│       pub enum LLMStreamEvent {
+
+•   Let me check where the ReasoningStage match is missing and fix both errors.
+Let me search for the match statement that's missing the ReasoningStage arm:
+
+• Search text Use Unified search
+└ Action: grep
+└ Pattern: LLMStreamEvent::
+└ Path: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode
+• Read file /Users/vinhnguyenxuan/Develope…src/acp/zed/agent/handlers.rs
+└ Offset lines: 210
+└ Limit: 50
+│
+│       while let Some(event) = stream.next().await {
+│       let event = event.map_err(acp::Error::into_internal_error)?;
+│       if session.cancel_flag.get() {
+│       stop_reason = acp::StopReason::Cancelled;
+
+•   I see the match already has ReasoningStage handled. Let me check the clippy error location more prec
+isely:
+
+• Search text Use Unified search
+└ Action: grep
+└ Pattern: LLMStreamEvent::ReasoningStage
+└ Path: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode
+
+•   Let me check the controller.rs file where the match occurs:
+
+• Read file /Users/vinhnguyenxuan/Develope…e/agent/session/controller.rs
+└ Offset lines: 180
+└ Limit: 40
+│
+│       // Follow-up input is added to state, ensuring next turn handles it.
+│       self.state.add_user_message(input);
+│       }
+│       _ => {}
+
+╭─ Info ──────────────────────────────────────────────────────────────────────────────────────────────╮
+│ Reached maximum tool loops (20)                                                                     │
+│ Tool loop limit increased to 60 (+40, cap 60)                                                       │
+╰─────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+•   The match in controller.rs looks complete. Let me check the clippy error more carefully - it says li
+ne 459 in response.rs. Let me read that file:
+
+ Continue, or @files, /commands, Shift+Tab: cycle modes, Control+C: cancel task, tab: queue messages
+
+Processing (Press Ctrl+C to cancel)         qwen3-coder-next:cloud | 87% context left | 1 spooled | (low)
+
+{
+  "metadata": {
+    "workspace_label": "vtcode",
+    "workspace_path": "/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode",
+    "model": "qwen3-coder-next:cloud",
+    "provider": "ollama",
+    "theme": "mono",
+    "reasoning_effort": "low",
+    "loaded_skills": []
+  },
+  "started_at": "2026-02-28T00:58:18.982733Z",
+  "ended_at": "2026-02-28T01:07:17.766642Z",
+  "total_messages": 80,
+  "distinct_tools": [
+    "run_pty_cmd",
+    "unified_file",
+    "unified_search"
+  ],
+  "transcript": [
+    "Selected Qwen3-Coder-Next (cloud) (qwen3-coder-next:cloud) from Ollama.",
+    "Model set to Qwen3-Coder-Next (cloud) (qwen3-coder-next:cloud) via Ollama.",
+    "hello",
+    "  Hello! How can I help you today?",
+    "─ Worked for 2s ─",
+    "tell me about this project",
+    "  This is VT Code - an AI coding agent system built in Rust. Here's the overview:",
+    "  Architecture",
+    "  11-member workspace:",
+    "  • vtcode/ - Binary entrypoint (Ratatui TUI, PTY, slash commands)",
+    "  • vtcode-core/ - Core library (LLM, tools, config, MCP)",
+    "  • vtcode-config/ - Configuration loader & schema",
+    "  • vtcode-commons/ - Shared utilities",
+    "  • vtcode-llm/ - LLM provider abstractions (10+ providers)",
+    "  • vtcode-tools/ - Tool implementations (54+ handlers)",
+    "  • vtcode-bash-runner/ - Shell execution engine",
+    "  • vtcode-markdown-store/ - Document storage",
+    "  • vtcode-indexer/ - Code indexing (Tree-sitter)",
+    "  • vtcode-exec-events/ - Event definitions",
+    "  • vtcode-acp-client/ - Agent Client Protocol (Zed IDE)",
+    "  • vtcode-process-hardening/ - Security hardening",
+    "  Key Features",
+    "  • Multi-provider LLM: OpenAI, Anthropic, Gemini, xAI, DeepSeek, OpenRouter, Ollama, Z.AI, Moonshot AI, MiniMax",
+    "  • Protocol integrations: ACP (Zed), A2A (Agent2Agent), MCP (Model Context Protocol)",
+    "  • Subagent system: Specialized agents (explore, plan, general, code-reviewer, debugger)",
+    "  • Process hardening: Security measures for ptrace, core dumps, env vars",
+    "  Tech Stack",
+    "  • Rust (workspace with 11 crates)",
+    "  • Ratatui for TUI",
+    "  • Tree-sitter for code analysis",
+    "  • tokio for async",
+    "  Build/Test",
+    "    1  cargo build                    # Build",
+    "    2  cargo nextest run            # Tests (faster)",
+    "    3  cargo clippy && cargo fmt    # Quality check",
+    "    4  ",
+    "  What would you like to explore or work on?",
+    "─ Worked for 6s ─",
+    "run cargo fmt",
+    "    ✓ run completed (exit code: 0)",
+    "  Done. No formatting changes needed.",
+    "─ Worked for 1s ─",
+    "run cargo clippy check for whole codebase",
+    "    ✗ run error, exit code: 1",
+    "    ✗ run error, exit code: 101",
+    "  Clippy found 2 errors and 2 warnings:",
+    "  Errors:",
+    "  1. vtcode-core/src/llm/provider/response.rs:459 - Missing match arm for ReasoningStage variant",
+    "  2. vtcode-core/src/anthropic_api/server.rs:633 - Missing fields do_sample and prompt_cache_key in LLMRequest initialization",
+    "  Warnings:",
+    "  • Unused variables stream and tx in vtcode-core/src/anthropic_api/server.rs",
+    "  Should I fix these errors?",
+    "─ Worked for 50s ─",
+    "continue",
+    "  I'll fix these clippy errors.",
+    "• Read file vtcode-core/src/llm/provider/response.rs",
+    "      use std::pin::Pin;",
+    "      pub use vtcode_commons::llm::{FinishReason, LLMError, LLMResponse, Usage};",
+    "      #[derive(Debug, Clone)]",
+    "      pub enum LLMStreamEvent {",
+    "  Let me check where the ReasoningStage match is missing and fix both errors.",
+    "  Let me search for the match statement that's missing the ReasoningStage arm:",
+    "• Search text Use Unified search",
+    "  └ Action: grep",
+    "  └ Pattern: LLMStreamEvent::",
+    "  └ Path: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode",
+    "• Read file /Users/vinhnguyenxuan/Develope…src/acp/zed/agent/handlers.rs",
+    "  └ Offset lines: 210",
+    "  └ Limit: 50",
+    "      while let Some(event) = stream.next().await {",
+    "      let event = event.map_err(acp::Error::into_internal_error)?;",
+    "      if session.cancel_flag.get() {",
+    "      stop_reason = acp::StopReason::Cancelled;",
+    "  I see the match already has ReasoningStage handled. Let me check the clippy error location more precisely:",
+    "• Search text Use Unified search",
+    "  └ Action: grep",
+    "  └ Pattern: LLMStreamEvent::ReasoningStage",
+    "  └ Path: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode",
+    "  Let me check the controller.rs file where the match occurs:",
+    "• Read file /Users/vinhnguyenxuan/Develope…e/agent/session/controller.rs",
+    "  └ Offset lines: 180",
+    "  └ Limit: 40",
+    "      // Follow-up input is added to state, ensuring next turn handles it.",
+    "      self.state.add_user_message(input);",
+    "      }",
+    "      _ => {}",
+    "Reached maximum tool loops (20)",
+    "Tool loop limit increased to 60 (+40, cap 60)",
+    "  The match in controller.rs looks complete. Let me check the clippy error more carefully - it says line 459 in response.rs. Let me read that file:",
+    "• Read file /Users/vinhnguyenxuan/Develope…/src/llm/provider/response.rs",
+    "      use std::pin::Pin;",
+    "      pub use vtcode_commons::llm::{FinishReason, LLMError, LLMResponse, Usage};",
+    "      #[derive(Debug, Clone)]",
+    "      pub enum LLMStreamEvent {",
+    "  The response.rs file looks fine. The error might be at a different location. Let me search for where LLMStreamEvent is matched without handling ReasoningStage:",
+    "─ Worked for 1m 11s ─",
+    "continue",
+    "Consecutive blocked tool calls reached per-turn cap (8). Last blocked call: 'Search text'. Stopping turn to prevent retry churn.",
+    "Repeated follow-up after stalled turn detected; enforcing autonomous recovery and conclusion.",
+    "Continue autonomously from the last stalled turn. Stall reason: Consecutive blocked tool calls reached per-turn cap (8). Last blocked call: 'Search text'. Stopping turn to prevent retry churn.. Keep working until you can provide a concrete conclusion and final review.",
+    "  Let me grep for the actual match statements using grep_file instead:",
+    "Consecutive blocked tool calls reached per-turn cap (8). Last blocked call: 'Search text'. Stopping turn to prevent retry churn.",
+    "continue",
+    "  Let me use grep_file directly to search for the issue:",
+    "Consecutive blocked tool calls reached per-turn cap (8). Last blocked call: 'Search text'. Stopping turn to prevent retry churn.",
+    "Interrupt received. Stopping task... (Press Ctrl+C again within 2s to exit)"
+  ],
+  "messages": [
+    {
+      "role": "User",
+      "content": "hello",
+      "tool_call_id": null
+    },
+    {
+      "role": "Assistant",
+      "content": "Hello! How can I help you today?",
+      "tool_call_id": null
+    },
+    {
+      "role": "User",
+      "content": "tell me about this project",
+      "tool_call_id": null
+    },
+    {
+      "role": "Assistant",
+      "content": "This is **VT Code** - an AI coding agent system built in Rust. Here's the overview:\n\n## Architecture\n\n**11-member workspace**:\n\n- `vtcode/` - Binary entrypoint (Ratatui TUI, PTY, slash commands)\n- `vtcode-core/` - Core library (LLM, tools, config, MCP)\n- `vtcode-config/` - Configuration loader & schema\n- `vtcode-commons/` - Shared utilities\n- `vtcode-llm/` - LLM provider abstractions (10+ providers)\n- `vtcode-tools/` - Tool implementations (54+ handlers)\n- `vtcode-bash-runner/` - Shell execution engine\n- `vtcode-markdown-store/` - Document storage\n- `vtcode-indexer/` - Code indexing (Tree-sitter)\n- `vtcode-exec-events/` - Event definitions\n- `vtcode-acp-client/` - Agent Client Protocol (Zed IDE)\n- `vtcode-process-hardening/` - Security hardening\n\n## Key Features\n\n- **Multi-provider LLM**: OpenAI, Anthropic, Gemini, xAI, DeepSeek, OpenRouter, Ollama, Z.AI, Moonshot AI, MiniMax\n- **Protocol integrations**: ACP (Zed), A2A (Agent2Agent), MCP (Model Context Protocol)\n- **Subagent system**: Specialized agents (explore, plan, general, code-reviewer, debugger)\n- **Process hardening**: Security measures for ptrace, core dumps, env vars\n\n## Tech Stack\n\n- Rust (workspace with 11 crates)\n- Ratatui for TUI\n- Tree-sitter for code analysis\n- tokio for async\n\n## Build/Test\n\n```bash\ncargo build                    # Build\ncargo nextest run            # Tests (faster)\ncargo clippy && cargo fmt    # Quality check\n```\n\nWhat would you like to explore or work on?",
+      "tool_call_id": null
+    },
+    {
+      "role": "User",
+      "content": "run cargo fmt",
+      "tool_call_id": null
+    },
+    {
+      "role": "Assistant",
+      "content": "",
+      "tool_call_id": null
+    },
+    {
+      "role": "Tool",
+      "content": "{\"output\":\"\",\"is_exited\":true,\"session_id\":\"run-b257e50a\",\"command\":\"cargo fmt\",\"working_directory\":\".\",\"exit_code\":0}",
+      "tool_call_id": "direct_run_pty_cmd_5"
+    },
+    {
+      "role": "Assistant",
+      "content": "Done. No formatting changes needed.",
+      "tool_call_id": null
+    },
+    {
+      "role": "User",
+      "content": "run cargo clippy check for whole codebase",
+      "tool_call_id": null
+    },
+    {
+      "role": "Assistant",
+      "content": "",
+      "tool_call_id": null
+    },
+    {
+      "role": "Tool",
+      "content": "{\"output\":\"error: unexpected argument 'check' found\\n\\nUsage: cargo check [OPTIONS]\\n\\nFor more information, try '--help'.\\n\",\"is_exited\":true,\"session_id\":\"run-886be7d9\",\"command\":\"cargo clippy check for whole codebase\",\"working_directory\":\".\",\"exit_code\":1}",
+      "tool_call_id": "direct_run_pty_cmd_9"
+    },
+    {
+      "role": "Tool",
+      "content": "{\"output\":\"… [14939 bytes omitted — showing tail preview] …\\nnote: `llm::provider::response::LLMStreamEvent` defined here\\n   --> vtcode-core/src/llm/provider/response.rs:6:10\\n    |\\n  6 | pub enum LLMStreamEvent {\\n    |          ^^^^^^^^^^^^^^\\n...\\n  9 |     ReasoningStage { stage: String },\\n    |     -------------- not covered\\n    = note: the matched value is of type `llm::provider::response::LLMStreamEvent`\\nhelp: ensure that all possible cases are being handled by adding a match arm with a wildcard pattern or an explicit pattern as shown\\n    |\\n459 ~                             },\\n460 +                             llm::provider::response::LLMStreamEvent::ReasoningStage { .. } => todo!()\\n    |\\n\\nerror[E0063]: missing fields `do_sample` and `prompt_cache_key` in initializer of `llm::provider::request::LLMRequest`\\n   --> vtcode-core/src/anthropic_api/server.rs:633:8\\n    |\\n633 |     Ok(LLMRequest {\\n    |        ^^^^^^^^^^ missing `do_sample` and `prompt_cache_key`\\n\\nwarning: unused variable: `stream`\\n   --> vtcode-core/src/anthropic_api/server.rs:261:13\\n    |\\n261 |         let stream = match state.provider.stream(llm_request).await {\\n    |             ^^^^^^ help: if this is intentional, prefix it with an underscore: `_stream`\\n    |\\n    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default\\n\\nwarning: unused variable: `tx`\\n   --> vtcode-core/src/anthropic_api/server.rs:269:14\\n    |\\n269 |         let (tx, rx) = tokio::sync::mpsc::channel(100);\\n    |              ^^ help: if this is intentional, prefix it with an underscore: `_tx`\\n\\nSome errors have detailed explanations: E0004, E0063.\\nFor more information about an error, try `rustc --explain E0004`.\\nwarning: `vtcode-core` (lib) generated 2 warnings\\nerror: could not compile `vtcode-core` (lib) due to 2 previous errors; 2 warnings emitted\\n\",\"is_exited\":true,\"session_id\":\"run-936760d2\",\"command\":\"cargo clippy --all-targets --all-features\",\"working_directory\":\".\",\"spool_path\":\".vtcode/context/tool_outputs/unified_exec_1772240393062499.txt\",\"exit_code\":101}",
+      "tool_call_id": "tool_call_0"
+    },
+    {
+      "role": "Assistant",
+      "content": "Clippy found 2 errors and 2 warnings:\n\n**Errors:**\n1. `vtcode-core/src/llm/provider/response.rs:459` - Missing match arm for `ReasoningStage` variant\n2. `vtcode-core/src/anthropic_api/server.rs:633` - Missing fields `do_sample` and `prompt_cache_key` in `LLMRequest` initialization\n\n**Warnings:**\n- Unused variables `stream` and `tx` in `vtcode-core/src/anthropic_api/server.rs`\n\nShould I fix these errors?",
+      "tool_call_id": null
+    },
+    {
+      "role": "User",
+      "content": "continue",
+      "tool_call_id": null
+    },
+    {
+      "role": "Assistant",
+      "content": "I'll fix these clippy errors.",
+      "tool_call_id": null
+    },
+    {
+      "role": "Tool",
+      "content": "{\"content\":\"use std::pin::Pin;\\n\\npub use vtcode_commons::llm::{FinishReason, LLMError, LLMResponse, Usage};\\n\\n#[derive(Debug, Clone)]\\npub enum LLMStreamEvent {\\n    Token { delta: String },\\n    Reasoning { delta: String },\\n    ReasoningStage { stage: String },\\n    Completed { response: Box<LLMResponse> },\\n}\\n\\npub type LLMStream = Pin<Box<dyn futures::Stream<Item = Result<LLMStreamEvent, LLMError>> + Send>>;\",\"path\":\"vtcode-core/src/llm/provider/response.rs\"}",
+      "tool_call_id": "tool_call_0"
+    },
+    {
+      "role": "Tool",
+      "content": "{\"loop_detected\":true,\"reused_recent_result\":true,\"loop_detected_note\":\"Loop detected on repeated read-only call; reusing recent output. Use `grep_file` or summarize before another read.\",\"content\":\"use std::pin::Pin;\\n\\npub use vtcode_commons::llm::{FinishReason, LLMError, LLMResponse, Usage};\\n\\n#[derive(Debug, Clone)]\\npub enum LLMStreamEvent {\\n    Token { delta: String },\\n    Reasoning { delta: String },\\n    ReasoningStage { stage: String },\\n    Completed { response: Box<LLMResponse> },\\n}\\n\\npub type LLMStream = Pin<Box<dyn futures::Stream<Item = Result<LLMStreamEvent, LLMError>> + Send>>;\",\"path\":\"vtcode-core/src/llm/provider/response.rs\"}",
+      "tool_call_id": "tool_call_0"
+    },
+    {
+      "role": "Assistant",
+      "content": "Let me check where the `ReasoningStage` match is missing and fix both errors.",
+      "tool_call_id": null
+    },
+    {
+      "role": "Tool",
+      "content": "{\"error\":\"Tool preflight validation failed: Invalid arguments for tool 'unified_search': \\\"action\\\" is a required property\",\"failure_kind\":\"validation\",\"validation_stage\":\"preflight\",\"retryable\":false}",
+      "tool_call_id": "tool_call_0"
+    },
+    {
+      "role": "Tool",
+      "content": "{\"error\":\"Tool 'unified_file' execution failed: Tool execution failed: Error: File not found: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode. Tried paths: .\",\"failure_kind\":\"execution\",\"error_class\":\"execution_failure\",\"is_recoverable\":true,\"next_action\":\"Try an alternative tool or narrower scope.\",\"fallback_tool\":\"read_file\"}",
+      "tool_call_id": "tool_call_0"
+    },
+    {
+      "role": "Tool",
+      "content": "{\"error\":\"Tool preflight validation failed: Invalid arguments for tool 'unified_search': \\\"action\\\" is a required property\",\"failure_kind\":\"validation\",\"validation_stage\":\"preflight\",\"retryable\":false}",
+      "tool_call_id": "tool_call_0"
+    },
+    {
+      "role": "Assistant",
+      "content": "Let me search for the match statement that's missing the `ReasoningStage` arm:",
+      "tool_call_id": null
+    },
+    {
+      "role": "Tool",
+      "content": "{\"error\":\"Tool preflight validation failed: Invalid arguments for tool 'unified_search': \\\"action\\\" is a required property\",\"failure_kind\":\"validation\",\"validation_stage\":\"preflight\",\"retryable\":false}",
+      "tool_call_id": "tool_call_0"
+    },
+    {
+      "role": "Tool",
+      "content": "{\"error\":\"Tool preflight validation failed: Invalid arguments for tool 'unified_search': \\\"action\\\" is a required property\",\"failure_kind\":\"validation\",\"validation_stage\":\"preflight\",\"retryable\":false}",
+      "tool_call_id": "tool_call_0"
+    },
+    {
+      "role": "Tool",
+      "content": "{\"error\":\"Tool preflight validation failed: Invalid arguments for tool 'unified_search': \\\"action\\\" is a required property\",\"failure_kind\":\"validation\",\"validation_stage\":\"preflight\",\"retryable\":false}",
+      "tool_call_id": "tool_call_0"
+    },
+    {
+      "role": "Tool",
+      "content": "{\"error\":\"Tool preflight validation failed: Invalid arguments for tool 'unified_search': \\\"action\\\" is a required property\",\"failure_kind\":\"validation\",\"validation_stage\":\"preflight\",\"retryable\":false}",
+      "tool_call_id": "tool_call_0"
+    },
+    {
+      "role": "Tool",
+      "content": "{\"error\":\"Tool preflight validation failed: Invalid arguments for tool 'unified_search': \\\"action\\\" is a required property\",\"failure_kind\":\"validation\",\"validation_stage\":\"preflight\",\"retryable\":false}",
+      "tool_call_id": "tool_call_0"
+    },
+    {
+      "role": "Tool",
+      "content": "{\"error\":\"Tool preflight validation failed: Invalid arguments for tool 'unified_search': \\\"action\\\" is a required property\",\"failure_kind\":\"validation\",\"validation_stage\":\"preflight\",\"retryable\":false}",
+      "tool_call_id": "tool_call_0"
+    },
+    {
+      "role": "Tool",
+      "content": "{\"error\":\"Tool preflight validation failed: Invalid arguments for tool 'unified_search': \\\"action\\\" is a required property\",\"failure_kind\":\"validation\",\"validation_stage\":\"preflight\",\"retryable\":false}",
+      "tool_call_id": "tool_call_0"
+    },
+    {
+      "role": "Tool",
+      "content": "{\"query\":\"LLMStreamEvent::\",\"matches\":[{\"type\":\"begin\",\"data\":{\"path\":{\"text\":\"/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/src/acp/zed/agent/handlers.rs\"}}},{\"type\":\"match\",\"data\":{\"path\":{\"text\":\"/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/src/acp/zed/agent/handlers.rs\"},\"lines\":{\"text\":\"                    LLMStreamEvent::Token { delta } => {\\n\"},\"line_number\":219,\"absolute_offset\":8362,\"submatches\":[{\"match\":{\"text\":\"LLMStreamEvent::\"},\"start\":20,\"end\":36}]}},{\"type\":\"match\",\"data\":{\"path\":{\"text\":\"/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/src/acp/zed/agent/handlers.rs\"},\"lines\":{\"text\":\"                    LLMStreamEvent::Reasoning { delta } => {\\n\"},\"line_number\":230,\"absolute_offset\":8878,\"submatches\":[{\"match\":{\"text\":\"LLMStreamEvent::\"},\"start\":20,\"end\":36}]}},{\"type\":\"match\",\"data\":{\"path\":{\"text\":\"/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/src/acp/zed/agent/handlers.rs\"},\"lines\":{\"text\":\"                    LLMStreamEvent::ReasoningStage { .. } => {\\n\"},\"line_number\":240,\"absolute_offset\":9334,\"submatches\":[{\"match\":{\"text\":\"LLMStreamEvent::\"},\"start\":20,\"end\":36}]}},{\"type\":\"match\",\"data\":{\"path\":{\"text\":\"/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/src/acp/zed/agent/handlers.rs\"},\"lines\":{\"text\":\"                    LLMStreamEvent::Completed { response } => {\\n\"},\"line_number\":243,\"absolute_offset\":9511,\"submatches\":[{\"match\":{\"text\":\"LLMStreamEvent::\"},\"start\":20,\"end\":36}]}}],\"truncated\":true}",
+      "tool_call_id": "tool_call_0"
+    },
+    {
+      "role": "Tool",
+      "content": "{\"content\":\"            while let Some(event) = stream.next().await {\\n                let event = event.map_err(acp::Error::into_internal_error)?;\\n\\n                if session.cancel_flag.get() {\\n                    stop_reason = acp::StopReason::Cancelled;\\n                    break;\\n                }\\n\\n                match event {\\n                    LLMStreamEvent::Token { delta } => {\\n                        if !delta.is_empty() {\\n                            assistant_message.push_str(&delta);\\n                            let chunk = text_chunk(delta);\\n                            self.send_update(\\n                                &args.session_id,\\n                                acp::SessionUpdate::AgentMessageChunk(chunk),\\n                            )\\n                            .await?;\\n                        }\\n                    }\\n… [+170 lines omitted; use read_file with offset/limit (1-indexed line numbers) for full content]\\n    ) -> Result<acp::SetSessionModeResponse, acp::Error> {\\n        let Some(session) = self.session_handle(&args.session_id) else {\\n            return Err(acp::Error::invalid_params().data(json!({ \\\"reason\\\": \\\"unknown_session\\\" })));\\n        };\\n\\n        let valid_modes: HashSet<Arc<str>> = [\\n            Arc::from(MODE_ID_ASK),\\n            Arc::from(MODE_ID_ARCHITECT),\\n            Arc::from(MODE_ID_CODE),\\n        ]\",\"path\":\"src/acp/zed/agent/handlers.rs\"}",
+      "tool_call_id": "tool_call_0"
+    },
+    {
+      "role": "Assistant",
+      "content": "I see the match already has `ReasoningStage` handled. Let me check the clippy error location more precisely:",
+      "tool_call_id": null
+    },
+    {
+      "role": "Tool",
+      "content": "{\"error\":\"Tool preflight validation failed: Invalid arguments for tool 'unified_search': \\\"action\\\" is a required property\",\"failure_kind\":\"validation\",\"validation_stage\":\"preflight\",\"retryable\":false}",
+      "tool_call_id": "tool_call_0"
+    },
+    {
+      "role": "Tool",
+      "content": "{\"error\":\"Tool preflight validation failed: Invalid arguments for tool 'unified_search': \\\"action\\\" is a required property\",\"failure_kind\":\"validation\",\"validation_stage\":\"preflight\",\"retryable\":false}",
+      "tool_call_id": "tool_call_0"
+    },
+    {
+      "role": "Tool",
+      "content": "{\"error\":\"Tool preflight validation failed: Invalid arguments for tool 'unified_search': \\\"action\\\" is a required property\",\"failure_kind\":\"validation\",\"validation_stage\":\"preflight\",\"retryable\":false}",
+      "tool_call_id": "tool_call_0"
+    },
+    {
+      "role": "Tool",
+      "content": "{\"query\":\"LLMStreamEvent::ReasoningStage\",\"matches\":[{\"type\":\"begin\",\"data\":{\"path\":{\"text\":\"/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-core/src/core/agent/session/controller.rs\"}}},{\"type\":\"match\",\"data\":{\"path\":{\"text\":\"/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-core/src/core/agent/session/controller.rs\"},\"lines\":{\"text\":\"                LLMStreamEvent::ReasoningStage { stage } => {\\n\"},\"line_number\":196,\"absolute_offset\":7506,\"submatches\":[{\"match\":{\"text\":\"LLMStreamEvent::ReasoningStage\"},\"start\":16,\"end\":46}]}},{\"type\":\"end\",\"data\":{\"path\":{\"text\":\"/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-core/src/core/agent/session/controller.rs\"},\"binary_offset\":null,\"stats\":{\"elapsed\":{\"secs\":0,\"nanos\":22667,\"human\":\"0.000023s\"},\"searches\":1,\"searches_with_match\":1,\"bytes_searched\":17734,\"bytes_printed\":505,\"matched_lines\":1,\"matches\":1}}},{\"type\":\"begin\",\"data\":{\"path\":{\"text\":\"/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-core/src/llm/providers/shared/tag_sanitizer.rs\"}}},{\"type\":\"match\",\"data\":{\"path\":{\"text\":\"/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-core/src/llm/providers/shared/tag_sanitizer.rs\"},\"lines\":{\"text\":\"                events.push(LLMStreamEvent::ReasoningStage { stage });\\n\"},\"line_number\":106,\"absolute_offset\":4365,\"submatches\":[{\"match\":{\"text\":\"LLMStreamEvent::ReasoningStage\"},\"start\":28,\"end\":58}]}}],\"truncated\":true}",
+      "tool_call_id": "tool_call_0"
+    },
+    {
+      "role": "Assistant",
+      "content": "Let me check the controller.rs file where the match occurs:",
+      "tool_call_id": null
+    },
+    {
+      "role": "Tool",
+      "content": "{\"content\":\"                        // Follow-up input is added to state, ensuring next turn handles it.\\n                        self.state.add_user_message(input);\\n                    }\\n                    _ => {}\\n                }\\n            }\\n\\n            match event_result? {\\n                LLMStreamEvent::Token { delta } => {\\n                    full_text.push_str(&delta);\\n                    self.emit(AgentEvent::OutputDelta { delta });\\n                }\\n                LLMStreamEvent::Reasoning { delta } => {\\n                    full_reasoning.push_str(&delta);\\n                    self.emit(AgentEvent::ThinkingDelta { delta });\\n                }\\n                LLMStreamEvent::ReasoningStage { stage } => {\\n                    self.state.current_stage = Some(stage.clone());\\n                    self.emit(AgentEvent::ThinkingStage { stage });\\n                }\\n… [+170 lines omitted; use read_file with offset/limit (1-indexed line numbers) for full content]\\n            model: \\\"test-model\\\".to_string(),\\n            finish_reason: crate::llm::provider::FinishReason::Stop,\\n            reasoning: Some(\\\"**why** this works\\\".to_string()),\\n            ..Default::default()\\n        };\\n        let provider = CompletedOnlyStreamProvider {\\n            response: response.clone(),\\n        };\\n        let state = AgentSessionState::new(\\\"session\\\".to_string(), 16, 4, 128_000);\\n        let mut controller = AgentSessionController::new(state, None, None);\",\"path\":\"vtcode-core/src/core/agent/session/controller.rs\"}",
+      "tool_call_id": "tool_call_0"
+    },
+    {
+      "role": "Assistant",
+      "content": "The match in controller.rs looks complete. Let me check the clippy error more carefully - it says line 459 in response.rs. Let me read that file:",
+      "tool_call_id": null
+    },
+    {
+      "role": "Tool",
+      "content": "{\"content\":\"use std::pin::Pin;\\n\\npub use vtcode_commons::llm::{FinishReason, LLMError, LLMResponse, Usage};\\n\\n#[derive(Debug, Clone)]\\npub enum LLMStreamEvent {\\n    Token { delta: String },\\n    Reasoning { delta: String },\\n    ReasoningStage { stage: String },\\n    Completed { response: Box<LLMResponse> },\\n}\\n\\npub type LLMStream = Pin<Box<dyn futures::Stream<Item = Result<LLMStreamEvent, LLMError>> + Send>>;\",\"path\":\"vtcode-core/src/llm/provider/response.rs\"}",
+      "tool_call_id": "tool_call_0"
+    },
+    {
+      "role": "Assistant",
+      "content": "The response.rs file looks fine. The error might be at a different location. Let me search for where `LLMStreamEvent` is matched without handling `ReasoningStage`:",
+      "tool_call_id": null
+    },
+    {
+      "role": "User",
+      "content": "continue",
+      "tool_call_id": null
+    },
+    {
+      "role": "Tool",
+      "content": "{\"error\":\"Tool preflight validation failed: Invalid arguments for tool 'unified_search': \\\"action\\\" is a required property\",\"failure_kind\":\"validation\",\"validation_stage\":\"preflight\",\"retryable\":false}",
+      "tool_call_id": "tool_call_0"
+    },
+    {
+      "role": "Tool",
+      "content": "{\"error\":\"Tool preflight validation failed: Invalid arguments for tool 'unified_search': \\\"action\\\" is a required property\",\"failure_kind\":\"validation\",\"validation_stage\":\"preflight\",\"retryable\":false}",
+      "tool_call_id": "tool_call_0"
+    },
+    {
+      "role": "Tool",
+      "content": "{\"error\":\"Tool preflight validation failed: Invalid arguments for tool 'unified_search': \\\"action\\\" is a required property\",\"failure_kind\":\"validation\",\"validation_stage\":\"preflight\",\"retryable\":false}",
+      "tool_call_id": "tool_call_0"
+    },
+    {
+      "role": "Tool",
+      "content": "{\"error\":\"Tool preflight validation failed: Invalid arguments for tool 'unified_search': \\\"action\\\" is a required property\",\"failure_kind\":\"validation\",\"validation_stage\":\"preflight\",\"retryable\":false}",
+      "tool_call_id": "tool_call_0"
+    },
+    {
+      "role": "Tool",
+      "content": "{\"error\":\"Tool preflight validation failed: Invalid arguments for tool 'unified_search': \\\"action\\\" is a required property\",\"failure_kind\":\"validation\",\"validation_stage\":\"preflight\",\"retryable\":false}",
+      "tool_call_id": "tool_call_0"
+    },
+    {
+      "role": "Tool",
+      "content": "{\"error\":\"Tool preflight validation failed: Invalid arguments for tool 'unified_search': \\\"action\\\" is a required property\",\"failure_kind\":\"validation\",\"validation_stage\":\"preflight\",\"retryable\":false}",
+      "tool_call_id": "tool_call_0"
+    },
+    {
+      "role": "Tool",
+      "content": "{\"error\":\"Tool preflight validation failed: Invalid arguments for tool 'unified_search': \\\"action\\\" is a required property\",\"failure_kind\":\"validation\",\"validation_stage\":\"preflight\",\"retryable\":false}",
+      "tool_call_id": "tool_call_0"
+    },
+    {
+      "role": "Tool",
+      "content": "{\"error\":\"Tool preflight validation failed: Invalid arguments for tool 'unified_search': \\\"action\\\" is a required property\",\"failure_kind\":\"validation\",\"validation_stage\":\"preflight\",\"retryable\":false}",
+      "tool_call_id": "tool_call_0"
+    },
+    {
+      "role": "Tool",
+      "content": "{\"error\":\"Tool preflight validation failed: Invalid arguments for tool 'unified_search': \\\"action\\\" is a required property\",\"failure_kind\":\"validation\",\"validation_stage\":\"preflight\",\"retryable\":false}",
+      "tool_call_id": "tool_call_0"
+    },
+    {
+      "role": "Tool",
+      "content": "{\"error\":\"Consecutive blocked tool calls exceeded cap (8) for this turn.\",\"failure_kind\":\"blocked_streak\",\"error_class\":\"execution_failure\",\"is_recoverable\":true,\"next_action\":\"Try an alternative tool or narrower scope.\"}",
+      "tool_call_id": "tool_call_0"
+    },
+    {
+      "role": "System",
+      "content": "Consecutive blocked tool calls reached per-turn cap (8). Last blocked call: 'Search text'. Stopping turn to prevent retry churn.",
+      "tool_call_id": null
+    },
+    {
+      "role": "System",
+      "content": "Previous turn stalled or aborted and the user asked to continue repeatedly. Recover autonomously without asking for more user prompts: identify the likely root cause from recent errors, execute one adjusted strategy, and then provide either a completion summary or a final blocker review with specific next action. Do not repeat a failing tool call when the error already provides the next tool to use.",
+      "tool_call_id": null
+    },
+    {
+      "role": "User",
+      "content": "Continue autonomously from the last stalled turn. Stall reason: Consecutive blocked tool calls reached per-turn cap (8). Last blocked call: 'Search text'. Stopping turn to prevent retry churn.. Keep working until you can provide a concrete conclusion and final review.",
+      "tool_call_id": null
+    },
+    {
+      "role": "Assistant",
+      "content": "Let me grep for the actual match statements using `grep_file` instead:",
+      "tool_call_id": null
+    },
+    {
+      "role": "Tool",
+      "content": "{\"error\":\"Tool preflight validation failed: Invalid arguments for tool 'unified_search': \\\"action\\\" is a required property\",\"failure_kind\":\"validation\",\"validation_stage\":\"preflight\",\"retryable\":false}",
+      "tool_call_id": "tool_call_0"
+    },
+    {
+      "role": "Tool",
+      "content": "{\"error\":\"Tool preflight validation failed: Invalid arguments for tool 'unified_search': \\\"action\\\" is a required property\",\"failure_kind\":\"validation\",\"validation_stage\":\"preflight\",\"retryable\":false}",
+      "tool_call_id": "tool_call_0"
+    },
+    {
+      "role": "Tool",
+      "content": "{\"error\":\"Tool preflight validation failed: Invalid arguments for tool 'unified_search': \\\"action\\\" is a required property\",\"failure_kind\":\"validation\",\"validation_stage\":\"preflight\",\"retryable\":false}",
+      "tool_call_id": "tool_call_0"
+    },
+    {
+      "role": "Tool",
+      "content": "{\"error\":\"Tool preflight validation failed: Invalid arguments for tool 'unified_search': \\\"action\\\" is a required property\",\"failure_kind\":\"validation\",\"validation_stage\":\"preflight\",\"retryable\":false}",
+      "tool_call_id": "tool_call_0"
+    },
+    {
+      "role": "Tool",
+      "content": "{\"error\":\"Tool preflight validation failed: Invalid arguments for tool 'unified_search': \\\"action\\\" is a required property\",\"failure_kind\":\"validation\",\"validation_stage\":\"preflight\",\"retryable\":false}",
+      "tool_call_id": "tool_call_0"
+    },
+    {
+      "role": "Tool",
+      "content": "{\"error\":\"Tool preflight validation failed: Invalid arguments for tool 'unified_search': \\\"action\\\" is a required property\",\"failure_kind\":\"validation\",\"validation_stage\":\"preflight\",\"retryable\":false}",
+      "tool_call_id": "tool_call_0"
+    },
+    {
+      "role": "Tool",
+      "content": "{\"error\":\"Tool preflight validation failed: Invalid arguments for tool 'unified_search': \\\"action\\\" is a required property\",\"failure_kind\":\"validation\",\"validation_stage\":\"preflight\",\"retryable\":false}",
+      "tool_call_id": "tool_call_0"
+    },
+    {
+      "role": "Tool",
+      "content": "{\"error\":\"Tool preflight validation failed: Invalid arguments for tool 'unified_search': \\\"action\\\" is a required property\",\"failure_kind\":\"validation\",\"validation_stage\":\"preflight\",\"retryable\":false}",
+      "tool_call_id": "tool_call_0"
+    },
+    {
+      "role": "Tool",
+      "content": "{\"error\":\"Tool preflight validation failed: Invalid arguments for tool 'unified_search': \\\"action\\\" is a required property\",\"failure_kind\":\"validation\",\"validation_stage\":\"preflight\",\"retryable\":false}",
+      "tool_call_id": "tool_call_0"
+    },
+    {
+      "role": "Tool",
+      "content": "{\"error\":\"Consecutive blocked tool calls exceeded cap (8) for this turn.\",\"failure_kind\":\"blocked_streak\",\"error_class\":\"execution_failure\",\"is_recoverable\":true,\"next_action\":\"Try an alternative tool or narrower scope.\"}",
+      "tool_call_id": "tool_call_0"
+    },
+    {
+      "role": "System",
+      "content": "Consecutive blocked tool calls reached per-turn cap (8). Last blocked call: 'Search text'. Stopping turn to prevent retry churn.",
+      "tool_call_id": null
+    },
+    {
+      "role": "User",
+      "content": "continue",
+      "tool_call_id": null
+    },
+    {
+      "role": "Tool",
+      "content": "{\"error\":\"Tool preflight validation failed: Invalid arguments for tool 'unified_search': \\\"action\\\" is a required property\",\"failure_kind\":\"validation\",\"validation_stage\":\"preflight\",\"retryable\":false}",
+      "tool_call_id": "tool_call_0"
+    },
+    {
+      "role": "Assistant",
+      "content": "Let me use `grep_file` directly to search for the issue:",
+      "tool_call_id": null
+    },
+    {
+      "role": "Tool",
+      "content": "{\"error\":\"Tool preflight validation failed: Invalid arguments for tool 'unified_search': \\\"action\\\" is a required property\",\"failure_kind\":\"validation\",\"validation_stage\":\"preflight\",\"retryable\":false}",
+      "tool_call_id": "tool_call_0"
+    },
+    {
+      "role": "Tool",
+      "content": "{\"error\":\"Tool preflight validation failed: Invalid arguments for tool 'unified_search': \\\"action\\\" is a required property\",\"failure_kind\":\"validation\",\"validation_stage\":\"preflight\",\"retryable\":false}",
+      "tool_call_id": "tool_call_0"
+    },
+    {
+      "role": "Tool",
+      "content": "{\"error\":\"Tool preflight validation failed: Invalid arguments for tool 'unified_search': \\\"action\\\" is a required property\",\"failure_kind\":\"validation\",\"validation_stage\":\"preflight\",\"retryable\":false}",
+      "tool_call_id": "tool_call_0"
+    },
+    {
+      "role": "Tool",
+      "content": "{\"error\":\"Tool preflight validation failed: Invalid arguments for tool 'unified_search': \\\"action\\\" is a required property\",\"failure_kind\":\"validation\",\"validation_stage\":\"preflight\",\"retryable\":false}",
+      "tool_call_id": "tool_call_0"
+    },
+    {
+      "role": "Tool",
+      "content": "{\"error\":\"Tool preflight validation failed: Invalid arguments for tool 'unified_search': \\\"action\\\" is a required property\",\"failure_kind\":\"validation\",\"validation_stage\":\"preflight\",\"retryable\":false}",
+      "tool_call_id": "tool_call_0"
+    },
+    {
+      "role": "Tool",
+      "content": "{\"error\":\"Tool preflight validation failed: Invalid arguments for tool 'unified_search': \\\"action\\\" is a required property\",\"failure_kind\":\"validation\",\"validation_stage\":\"preflight\",\"retryable\":false}",
+      "tool_call_id": "tool_call_0"
+    },
+    {
+      "role": "Tool",
+      "content": "{\"error\":\"Tool preflight validation failed: Invalid arguments for tool 'unified_search': \\\"action\\\" is a required property\",\"failure_kind\":\"validation\",\"validation_stage\":\"preflight\",\"retryable\":false}",
+      "tool_call_id": "tool_call_0"
+    },
+    {
+      "role": "Tool",
+      "content": "{\"error\":\"Tool preflight validation failed: Invalid arguments for tool 'unified_search': \\\"action\\\" is a required property\",\"failure_kind\":\"validation\",\"validation_stage\":\"preflight\",\"retryable\":false}",
+      "tool_call_id": "tool_call_0"
+    },
+    {
+      "role": "Tool",
+      "content": "{\"error\":\"Consecutive blocked tool calls exceeded cap (8) for this turn.\",\"failure_kind\":\"blocked_streak\",\"error_class\":\"execution_failure\",\"is_recoverable\":true,\"next_action\":\"Try an alternative tool or narrower scope.\"}",
+      "tool_call_id": "tool_call_0"
+    },
+    {
+      "role": "System",
+      "content": "Consecutive blocked tool calls reached per-turn cap (8). Last blocked call: 'Search text'. Stopping turn to prevent retry churn.",
+      "tool_call_id": null
+    }
+  ]
+}
+````
+
+---
+
+implement realtime status line config, also add /statusline command to show it
+
+```
+Configure Status Line
+  Select which items to display in the status lin
+
+  Type to search
+  >
+› [x] current-dir           Current working dire…
+  [x] git-branch            Current Git branch (…
+  [ ] model-name            Current model name
+  [ ] model-with-reasoning  Current model name w…
+  [ ] project-root          Project root directo…
+  [ ] context-remaining     Percentage of contex…
+  [ ] context-used          Percentage of contex…
+  [ ] five-hour-limit       Remaining usage on 5…
+
+  ~/project/path · feat/awesome-feature
+  Use ↑↓ to navigate, ←→ to move, space to select,
+```
+
+---
+
+FIx Header Info show "App"
+
+╭> App (0.83.0)─────────────────────────────────────────────────────╮
+│Ollama qwen3-coder-next:cloud low | Accept edits | Session: │
+╰───────────────────────────────────────────────────────────────────

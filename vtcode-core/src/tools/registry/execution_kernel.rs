@@ -191,6 +191,34 @@ fn tool_name_candidates(name: &str) -> Vec<String> {
     candidates
 }
 
+fn schema_validation_args<'a>(
+    normalized_tool_name: &str,
+    args: &'a Value,
+) -> std::borrow::Cow<'a, Value> {
+    if normalized_tool_name != tool_names::UNIFIED_SEARCH {
+        return std::borrow::Cow::Borrowed(args);
+    }
+
+    let Some(args_obj) = args.as_object() else {
+        return std::borrow::Cow::Borrowed(args);
+    };
+
+    if args_obj.get("action").is_some() {
+        return std::borrow::Cow::Borrowed(args);
+    }
+
+    let Some(inferred_action) = crate::tools::tool_intent::unified_search_action(args) else {
+        return std::borrow::Cow::Borrowed(args);
+    };
+
+    let mut normalized_args = args_obj.clone();
+    normalized_args.insert(
+        "action".to_string(),
+        Value::String(inferred_action.to_string()),
+    );
+    std::borrow::Cow::Owned(Value::Object(normalized_args))
+}
+
 pub(super) fn preflight_validate_call(
     registry: &ToolRegistry,
     name: &str,
@@ -250,9 +278,10 @@ pub(super) fn preflight_validate_call(
         ));
     }
 
+    let validation_args = schema_validation_args(&normalized_tool_name, args);
     if let Some(registration) = registry.inventory.registration_for(&normalized_tool_name)
         && let Some(schema) = registration.parameter_schema()
-        && let Err(errors) = jsonschema::validate(schema, args)
+        && let Err(errors) = jsonschema::validate(schema, validation_args.as_ref())
     {
         return Err(anyhow!(
             "Invalid arguments for tool '{}': {}",
@@ -278,7 +307,8 @@ pub(super) fn preflight_validate_call(
 mod tests {
     use super::{
         configured_unified_file_max_payload_bytes, enforce_unified_file_payload_limit,
-        is_missing_required_arg, parse_unified_file_max_payload_bytes, tool_name_candidates,
+        is_missing_required_arg, parse_unified_file_max_payload_bytes, schema_validation_args,
+        tool_name_candidates,
     };
     use crate::config::constants::tools as tool_names;
     use serde_json::json;
@@ -394,5 +424,29 @@ mod tests {
     fn tool_name_candidates_normalize_humanized_name() {
         let candidates = tool_name_candidates("Read file");
         assert!(candidates.iter().any(|c| c == "read_file"));
+    }
+
+    #[test]
+    fn unified_search_schema_args_infers_action_from_pattern() {
+        let args = json!({
+            "pattern": "LLMStreamEvent::",
+            "path": "."
+        });
+
+        let normalized = schema_validation_args(tool_names::UNIFIED_SEARCH, &args);
+        assert_eq!(
+            normalized.get("action").and_then(|v| v.as_str()),
+            Some("grep")
+        );
+    }
+
+    #[test]
+    fn unified_search_schema_args_preserves_non_inferable_payload() {
+        let args = json!({
+            "max_results": 10
+        });
+
+        let normalized = schema_validation_args(tool_names::UNIFIED_SEARCH, &args);
+        assert!(normalized.get("action").is_none());
     }
 }

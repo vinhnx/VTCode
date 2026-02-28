@@ -14,11 +14,12 @@ The VT Code terminal UI includes an interactive mode that combines keyboard-firs
 | `Ctrl+D` | Exit VT Code interactive mode. | Sends EOF to the shell integration. |
 | `Ctrl+L` | Clear the terminal screen while keeping the conversation history. | Useful for refreshing when output is cluttered. |
 | `Ctrl+O` | Toggle verbose tool output and diagnostics. | Reveals detailed tool invocation logs. |
+| `Ctrl+E` | Open external editor (`/edit`) for quick input/file editing. | Uses `tools.editor` config, then `VISUAL`/`EDITOR`. |
 | `Ctrl+R` | Reverse search the command history. | Matches previous prompts and bash commands. |
 | `Ctrl+V` (macOS/Linux) or `Alt+V` (Windows) | Paste an image from the clipboard. | Works with image-enabled sessions. |
 | `Up/Down arrows` | Navigate through command history. | Recall previous prompts or commands. |
 | `Shift+Up/Down arrows` | Cycle active teammate (lead only). | Requires agent teams. |
-| `Esc` + `Esc` | Rewind the conversation and code to the previous checkpoint. | Restores an earlier snapshot. |
+| `Esc` + `Esc` | Rewind the conversation and code to the latest checkpoint. | Idle context only (while no task/PTY is running). |
 | `Tab` | Toggle extended thinking (analysis) mode on and off. | Switch between shorter and more verbose reasoning. |
 | `Shift+Tab` or `Alt+M` | Cycle permission modes. | Switches Auto-Accept Mode, Plan Mode, and normal mode (delegate mode when teams are active). |
 

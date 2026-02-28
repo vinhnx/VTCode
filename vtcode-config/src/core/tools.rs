@@ -57,11 +57,32 @@ pub struct ToolsConfig {
     #[serde(default)]
     pub plugins: PluginRuntimeConfig,
 
+    /// External editor integration settings used by `/edit` and keyboard shortcuts
+    #[serde(default)]
+    pub editor: EditorToolConfig,
+
     /// Tool-specific loop thresholds (Adaptive Loop Detection)
     /// Allows setting higher loop limits for read-only tools (e.g., ls, grep)
     /// and lower limits for mutating tools.
     #[serde(default)]
     pub loop_thresholds: IndexMap<String, usize>,
+}
+
+/// External editor integration configuration
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct EditorToolConfig {
+    /// Enable external editor support for `/edit` and keyboard shortcuts
+    #[serde(default = "default_editor_enabled")]
+    pub enabled: bool,
+
+    /// Preferred editor command override (supports arguments, e.g. "code --wait")
+    #[serde(default)]
+    pub preferred_editor: String,
+
+    /// Suspend the TUI event loop while editor is running
+    #[serde(default = "default_editor_suspend_tui")]
+    pub suspend_tui: bool,
 }
 
 /// Web Fetch tool security configuration
@@ -130,6 +151,7 @@ impl Default for ToolsConfig {
             max_sequential_spool_chunk_reads: default_max_sequential_spool_chunk_reads(),
             web_fetch: WebFetchConfig::default(),
             plugins: PluginRuntimeConfig::default(),
+            editor: EditorToolConfig::default(),
             loop_thresholds: IndexMap::new(),
         }
     }
@@ -153,6 +175,16 @@ impl Default for WebFetchConfig {
             enable_audit_logging: false,
             audit_log_path: DEFAULT_AUDIT_LOG_PATH.into(),
             strict_https_only: true,
+        }
+    }
+}
+
+impl Default for EditorToolConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_editor_enabled(),
+            preferred_editor: String::new(),
+            suspend_tui: default_editor_suspend_tui(),
         }
     }
 }
@@ -209,6 +241,16 @@ fn default_strict_https() -> bool {
     true
 }
 
+#[inline]
+const fn default_editor_enabled() -> bool {
+    true
+}
+
+#[inline]
+const fn default_editor_suspend_tui() -> bool {
+    true
+}
+
 const DEFAULT_TOOL_POLICIES: &[(&str, ToolPolicy)] = &[
     // File operations (non-destructive)
     (tools::LIST_FILES, ToolPolicy::Allow),
@@ -239,3 +281,35 @@ const DEFAULT_TOOL_POLICIES: &[(&str, ToolPolicy)] = &[
     // Web operations (requires confirmation)
     (tools::WEB_FETCH, ToolPolicy::Prompt),
 ];
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn editor_config_defaults_are_enabled() {
+        let config = ToolsConfig::default();
+        assert!(config.editor.enabled);
+        assert!(config.editor.preferred_editor.is_empty());
+        assert!(config.editor.suspend_tui);
+    }
+
+    #[test]
+    fn editor_config_deserializes_from_toml() {
+        let config: ToolsConfig = toml::from_str(
+            r#"
+default_policy = "prompt"
+
+[editor]
+enabled = false
+preferred_editor = "code --wait"
+suspend_tui = false
+"#,
+        )
+        .expect("tools config should parse");
+
+        assert!(!config.editor.enabled);
+        assert_eq!(config.editor.preferred_editor, "code --wait");
+        assert!(!config.editor.suspend_tui);
+    }
+}

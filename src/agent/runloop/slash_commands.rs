@@ -99,6 +99,9 @@ pub enum SlashCommandOutcome {
         turn: usize,
         scope: vtcode_core::core::agent::snapshots::RevertScope,
     },
+    RewindLatest {
+        scope: vtcode_core::core::agent::snapshots::RevertScope,
+    },
     TogglePlanMode {
         enable: Option<bool>,
         prompt: Option<String>,

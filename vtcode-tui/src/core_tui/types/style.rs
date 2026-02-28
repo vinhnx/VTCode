@@ -32,6 +32,7 @@ impl EditingMode {
 
 #[derive(Clone, Debug)]
 pub struct InlineHeaderContext {
+    pub app_name: String,
     pub provider: String,
     pub model: String,
     pub version: String,
@@ -79,6 +80,7 @@ impl Default for InlineHeaderContext {
         );
 
         Self {
+            app_name: ui::HEADER_VERSION_PREFIX.to_string(),
             provider: format!(
                 "{}{}",
                 ui::HEADER_PROVIDER_PREFIX,
