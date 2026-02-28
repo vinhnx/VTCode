@@ -219,8 +219,8 @@ Hooks can append strings to the model context in two ways:
 the JSON response.
 
 Messages emitted via stderr or interpreted fields are captured for diagnostics.
-Fatal/error diagnostics are written to tracing logs for debugging and are not
-rendered in the TUI transcript.
+Fatal/error diagnostics are always written to tracing logs for debugging; TUI
+transcript visibility is controlled by `ui.show_diagnostics_in_transcript`.
 
 ## Best Practices
 

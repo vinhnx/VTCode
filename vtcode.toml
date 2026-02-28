@@ -148,6 +148,8 @@ bold_is_bright = false
 safe_colors_only = false
 color_scheme_mode = "auto"
 show_turn_timer = true
+# Effective in debug/development builds only
+show_diagnostics_in_transcript = true
 screen_reader_mode = false
 reduce_motion_mode = false
 reduce_motion_keep_progress_animation = false

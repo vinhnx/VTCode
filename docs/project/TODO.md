@@ -201,312 +201,6 @@ the goal is to provide users with a clear and concise summary of the agent's act
 
 ---
 
-check Tool-call budget exhausted for this turn (32/32).│
-│ Start a new turn with "continue" to proceed.
-
-```
-{
-  "metadata": {
-    "workspace_label": "vtcode",
-    "workspace_path": "/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode",
-    "model": "glm-5:cloud",
-    "provider": "ollama",
-    "theme": "ciapre-blue",
-    "reasoning_effort": "low",
-    "loaded_skills": []
-  },
-  "started_at": "2026-02-28T13:41:53.430225Z",
-  "ended_at": "2026-02-28T13:49:12.870328Z",
-  "total_messages": 10,
-  "distinct_tools": [
-    "run_pty_cmd",
-    "unified_file",
-    "unified_search"
-  ],
-  "transcript": [
-    "run cargo clippy and fix",
-    "  Running cargo clippy to identify issues.",
-    "    ✓ run completed (exit code: 0)",
-    "  Found 3 clippy warnings. Let me fix them.",
-    "• Read file src/agent/runloop/tool_output/styles.rs",
-    "  └ Offset lines: 165",
-    "  └ Limit: 35",
-    "      if is_diff_addition_line(trimmed) {",
-    "      return git.add;",
-    "      }",
-    "      if is_diff_deletion_line(trimmed) {",
-    "• Read file src/agent/runloop/tool_output/styles.rs",
-    "      use std::collections::HashMap;",
-    "      use anstyle::{AnsiColor, Color, Effects, Style as AnsiStyle};",
-    "      use vtcode_commons::diff_paths::{",
-    "      is_diff_addition_line, is_diff_deletion_line, is_diff_header_line,",
-    "• Read file src/agent/runloop/tool_output/styles.rs",
-    "  └ Limit: 50",
-    "      use std::collections::HashMap;",
-    "      use anstyle::{AnsiColor, Color, Effects, Style as AnsiStyle};",
-    "      use vtcode_commons::diff_paths::{",
-    "      is_diff_addition_line, is_diff_deletion_line, is_diff_header_line,",
-    "• Read file src/agent/runloop/tool_output/styles.rs",
-    "  └ Offset lines: 1",
-    "  └ Limit: 30",
-    "      use std::collections::HashMap;",
-    "      use anstyle::{AnsiColor, Color, Effects, Style as AnsiStyle};",
-    "      use vtcode_commons::diff_paths::{",
-    "      is_diff_addition_line, is_diff_deletion_line, is_diff_header_line,",
-    "❋ Editing src/agent/runloop/tool_output/styles.rs...",
-    "• Edit file src/agent/runloop/tool_output/styles.rs",
-    "  └ Action: edit",
-    "    --- a/src/agent/runloop/tool_output/styles.rs",
-    "    +++ b/src/agent/runloop/tool_output/styles.rs",
-    "    @@ -1,11 +1,8 @@",
-    "     use std::collections::HashMap; ",
-    "     use anstyle::{AnsiColor, Color, Effects, Style as AnsiStyle}; ",
-    "    -use vtcode_commons::diff_paths::{ ",
-    "    -    is_diff_addition_line, is_diff_deletion_line, is_diff_header_line, ",
-    "    -}; ",
-    "    -use vtcode_core::config::constants::tools; ",
-    "    -use vtcode_core::utils::diff_styles::{DiffColorLevel, DiffTheme, diff_add_bg, diff_del_bg}; ",
-    "    +use vtcode_commons::diff_paths::{is_diff_addition_line, is_diff_deletion_line}; ",
-    "    +use vtcode_core::utils::diff_styles::{DiffTheme, diff_add_bg, diff_del_bg}; ",
-    "     use vtcode_core::utils::style_helpers::bold_color; ",
-    "     /// Get background color for diff lines based on detected theme and color level. ",
-    "    ✗ run error, exit code: 101",
-    "  Let me read the files that need fixes.",
-    "• Read file src/agent/runloop/tool_output/styles.rs",
-    "  └ Limit: 50",
-    "      use std::collections::HashMap;",
-    "      use anstyle::{AnsiColor, Color, Effects, Style as AnsiStyle};",
-    "      use vtcode_commons::diff_paths::{is_diff_addition_line, is_diff_deletion_line};",
-    "      use vtcode_core::utils::diff_styles::{DiffTheme, diff_add_bg, diff_del_bg};",
-    "• Read file src/agent/runloop/tool_output/styles.rs",
-    "  └ Offset lines: 1",
-    "  └ Limit: 50",
-    "      use std::collections::HashMap;",
-    "      use anstyle::{AnsiColor, Color, Effects, Style as AnsiStyle};",
-    "      use vtcode_commons::diff_paths::{is_diff_addition_line, is_diff_deletion_line};",
-    "      use vtcode_core::utils::diff_styles::{DiffTheme, diff_add_bg, diff_del_bg};",
-    "• Read file src/agent/runloop/tool_output/styles.rs",
-    "  └ Limit: 50",
-    "      use std::collections::HashMap;",
-    "      use anstyle::{AnsiColor, Color, Effects, Style as AnsiStyle};",
-    "      use vtcode_commons::diff_paths::{is_diff_addition_line, is_diff_deletion_line};",
-    "      use vtcode_core::utils::diff_styles::{DiffTheme, diff_add_bg, diff_del_bg};",
-    "• Read file src/agent/runloop/tool_output/styles.rs",
-    "  └ Offset: 30",
-    "  └ Limit: 15",
-    "      let remove_effects = Effects::DIMMED;",
-    "      Self {",
-    "      add: Some(",
-    "      AnsiStyle::new()",
-    "• Read file src/agent/runloop/tool_output/styles.rs",
-    "  └ Offset: 1",
-    "  └ Limit: 100",
-    "      use std::collections::HashMap;",
-    "      use anstyle::{AnsiColor, Color, Effects, Style as AnsiStyle};",
-    "      use vtcode_commons::diff_paths::{is_diff_addition_line, is_diff_deletion_line};",
-    "      use vtcode_core::utils::diff_styles::{DiffTheme, diff_add_bg, diff_del_bg};",
-    "  Let me fix the unused imports directly.",
-    "❋ Editing src/agent/runloop/tool_output/styles.rs...",
-    "• Edit file src/agent/runloop/tool_output/styles.rs",
-    "    --- a/src/agent/runloop/tool_output/styles.rs",
-    "    +++ b/src/agent/runloop/tool_output/styles.rs",
-    "    @@ -1,6 +1,4 @@",
-    "    -use std::collections::HashMap; ",
-    "    - ",
-    "    -use anstyle::{AnsiColor, Color, Effects, Style as AnsiStyle}; ",
-    "    +use anstyle::Color; ",
-    "     use vtcode_commons::diff_paths::{is_diff_addition_line, is_diff_deletion_line}; ",
-    "     use vtcode_core::utils::diff_styles::{DiffTheme, diff_add_bg, diff_del_bg}; ",
-    "     use vtcode_core::utils::style_helpers::bold_color; ",
-    "Reached maximum tool loops (20)",
-    "Tool loop limit increased to 60 (+40, cap 60)",
-    "• Read file src/agent/runloop/tool_output/styles.rs",
-    "  └ Limit: 20",
-    "      use anstyle::Color;",
-    "      use vtcode_commons::diff_paths::{is_diff_addition_line, is_diff_deletion_line};",
-    "      use vtcode_core::utils::diff_styles::{DiffTheme, diff_add_bg, diff_del_bg};",
-    "      use vtcode_core::utils::style_helpers::bold_color;",
-    "❋ Editing src/agent/runloop/tool_output/styles.rs...",
-    "• Edit file src/agent/runloop/tool_output/styles.rs",
-    "    --- a/src/agent/runloop/tool_output/styles.rs",
-    "    +++ b/src/agent/runloop/tool_output/styles.rs",
-    "    @@ -1,5 +1,4 @@",
-    "     use anstyle::Color; ",
-    "    -use vtcode_commons::diff_paths::{is_diff_addition_line, is_diff_deletion_line}; ",
-    "     use vtcode_core::utils::diff_styles::{DiffTheme, diff_add_bg, diff_del_bg}; ",
-    "     use vtcode_core::utils::style_helpers::bold_color; ",
-    "  The first issue was already fixed. Now fixing the unused imports in vtcode-core/src/subagents/mod.rs.",
-    "• Read file vtcode-core/src/subagents/mod.rs",
-    "  └ Limit: 30",
-    "      //! Subagent system for VT Code",
-    "      //!",
-    "      //! Provides specialized AI subagents that can be delegated tasks with:",
-    "      //! - Isolated context (separate conversation)",
-    "• Read file vtcode-core/src/subagents/mod.rs",
-    "  └ Limit: 50",
-    "      //! Subagent system for VT Code",
-    "      //!",
-    "      //! Provides specialized AI subagents that can be delegated tasks with:",
-    "      //! - Isolated context (separate conversation)",
-    "❋ Editing vtcode-core/src/subagents/mod.rs...",
-    "• Read file vtcode-core/src/subagents/mod.rs",
-    "  └ Limit: 30",
-    "      //! Subagent system for VT Code",
-    "      //!",
-    "      //! Provides specialized AI subagents that can be delegated tasks with:",
-    "      //! - Isolated context (separate conversation)",
-    "• Read file vtcode-core/src/subagents/mod.rs",
-    "  └ Action: read",
-    "  └ Limit: 50",
-    "      //! Subagent system for VT Code",
-    "      //!",
-    "      //! Provides specialized AI subagents that can be delegated tasks with:",
-    "      //! - Isolated context (separate conversation)",
-    "    ✗ run error, exit code: 101",
-    "• Read file vtcode-core/src/subagents/mod.rs",
-    "      //! Subagent system for VT Code",
-    "      //!",
-    "      //! Provides specialized AI subagents that can be delegated tasks with:",
-    "      //! - Isolated context (separate conversation)",
-    "• Read file vtcode-core/src/subagents/mod.rs",
-    "  └ Offset lines: 1",
-    "  └ Limit: 50",
-    "      //! Subagent system for VT Code",
-    "      //!",
-    "      //! Provides specialized AI subagents that can be delegated tasks with:",
-    "      //! - Isolated context (separate conversation)",
-    "  Let me use grep to find the unused imports.",
-    "• Search text Use Unified search",
-    "  └ Pattern: ^use ",
-    "  └ Path: vtcode-core/src/subagents/mod.rs",
-    "  └ Context lines: 0",
-    "    ✗ run error, exit code: 101",
-    "Tool-call budget exhausted for this turn (32/32). Start a new turn with \"continue\" to proceed.",
-    "show diff on src/agent/runloop/tool_output/files.rs",
-    "LLM request failed: Network error: Ollama Network error: error sending request for url (https://ollama.com/api/chat)",
-    "Interrupt received. Stopping task... (Press Ctrl+C again within 2s to exit)"
-  ],
-  "messages": [
-    {
-      "role": "User",
-      "content": "run cargo clippy and fix",
-      "tool_call_id": null
-    },
-    {
-      "role": "Assistant",
-      "content": "Running `cargo clippy` to identify issues.",
-      "tool_call_id": null
-    },
-    {
-      "role": "Tool",
-      "content": "{\"error\":\"Policy violation: exceeded max tool calls per turn (32)\",\"failure_kind\":\"policy\",\"error_class\":\"policy_blocked\",\"is_recoverable\":false,\"next_action\":\"Switch to an allowed tool or mode.\"}",
-      "tool_call_id": "tool_call_0"
-    },
-    {
-      "role": "Assistant",
-      "content": "Found 3 clippy warnings. Let me fix them.",
-      "tool_call_id": null
-    },
-    {
-      "role": "System",
-      "content": "Loop detector blocked repeated read-only calls. Use `grep_file` or adjust `offset`/`limit` before retrying.",
-      "tool_call_id": null
-    },
-    {
-      "role": "Assistant",
-      "content": "The first issue was already fixed. Now fixing the unused imports in `vtcode-core/src/subagents/mod.rs`.",
-      "tool_call_id": null
-    },
-    {
-      "role": "System",
-      "content": "Tool-call budget warning: 24/32 used; 8 remaining for this turn. Use targeted extraction/batching before additional tool calls.",
-      "tool_call_id": null
-    },
-    {
-      "role": "Assistant",
-      "content": "Let me use grep to find the unused imports.",
-      "tool_call_id": null
-    },
-    {
-      "role": "System",
-      "content": "Tool-call budget exhausted for this turn (32/32). Start a new turn with \"continue\" to proceed.",
-      "tool_call_id": null
-    },
-    {
-      "role": "User",
-      "content": "show diff on src/agent/runloop/tool_output/files.rs",
-      "tool_call_id": null
-    }
-  ]
-}
-```
-
----
-
-fix repeated tool calls for agent.
-
-```
-{
-  "metadata": {
-    "workspace_label": "vtcode",
-    "workspace_path": "/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode",
-    "model": "glm-5:cloud",
-    "provider": "ollama",
-    "theme": "ciapre-blue",
-    "reasoning_effort": "low",
-    "loaded_skills": []
-  },
-  "started_at": "2026-02-28T13:57:18.817399Z",
-  "ended_at": "2026-02-28T14:06:22.120996Z",
-  "total_messages": 5,
-  "distinct_tools": [
-    "run_pty_cmd"
-  ],
-  "transcript": [
-    "run cargo check and fix issues",
-    "  Running cargo check to identify issues.",
-    "    ✓ run completed (exit code: 0)",
-    "  cargo check passed with no issues. Build completed successfully.",
-    "Worked for 1m 19s",
-    "run cargo clippy and fix small isues",
-    "    ✓ run completed (exit code: 0)",
-    "  Running cargo clippy --fix to auto-fix issues, then I'll handle remaining ones manually.",
-    "    ✓ run completed (exit code: 0)",
-    "LLM request failed, retrying in 0.5s... (attempt 2/3)",
-    "    ✓ run completed (exit code: 0)",
-    "Tool 'Run command (PTY)' execution cancelled",
-    "Interrupted current task. Press Ctrl+C again to exit."
-  ],
-  "messages": [
-    {
-      "role": "User",
-      "content": "run cargo check and fix issues",
-      "tool_call_id": null
-    },
-    {
-      "role": "Assistant",
-      "content": "Running `cargo check` to identify issues.",
-      "tool_call_id": null
-    },
-    {
-      "role": "Tool",
-      "content": "{\"output\":\"   Compiling ring v0.17.14\\n    Building [======================>  ] 766/806: ring(build)                 \\n    Building [======================>  ] 766/806: ring(build)                 \\n   Compiling rustls v0.23.35\\n   Compiling vtcode-config v0.84.1 (/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-config)\\n    Building [======================>  ] 767/806: ring, ring, vtcode-config(b…\\n    Building [======================>  ] 768/806: ring, ring, vtcode-config(b…\\n    Building [======================>  ] 769/806: ring, ring, vtcode-config(b…\\n    Building [======================>  ] 770/806: ring, ring                  \\n    Building [======================>  ] 767/806: ring, ring, vtcode-config(b…\\n    Building [======================>  ] 768/806: ring, ring, vtcode-config(b…\\n    Building [======================>  ] 769/806: ring, ring, vtcode-config(b…\\n    Building [======================>  ] 770/806: ring, ring                  \\n    Checking rustls-webpki v0.103.8\\n    Building [======================>  ] 771/806: ring, rustls-webpki         \\n    Building [======================>  ] 771/806: rustls-webpki, ring, rustls…\\n    Building [======================>  ] 772/806: rustls-webpki, ring, rustls \\n    Building [======================>  ] 772/806: rustls-webpki, ring, rustls…\\n    Building [======================>  ] 773/806: rustls-webpki, rustls, rust…\\n    Building [=======================> ] 774/806: rustls, rustls              \\n    Building [======================>  ] 771/806: ring, rustls-webpki         \\n    Building [======================>  ] 771/806: rustls-webpki, ring, rustls…\\n    Building [======================>  ] 772/806: rustls-webpki, ring, rustls \\n    Building [======================>  ] 772/806: rustls-webpki, ring, rustls…\\n    Building [======================>  ] 773/806: rustls-webpki, rustls, rust…\\n    Building [=======================> ] 774/806: rustls, rustls              \\n    Checking tokio-rustls v0.26.4\\n    Checking rustls-platform-verifier v0.6.2\\n    Checking tungstenite v0.28.0\\n    Building [=======================> ] 775/806: tokio-rustls, tungstenite, …\\n    Building [=======================> ] 776/806: tokio-rustls, tungstenite, …\\n    Building [=======================> ] 775/806: tokio-rustls, tungstenite, …\\n    Building [=======================> ] 776/806: tokio-rustls, tungstenite, …\\n    Checking hyper-rustls v0.27.7\\n    Building [=======================> ] 777/806: hyper-rustls, tungstenite, …\\n    Building [=======================> ] 777/806: hyper-rustls, tungstenite, …\\n    Checking reqwest v0.12.28\\n    Checking reqwest v0.13.1\\n    Building [=======================> ] 778/806: reqwest, reqwest, tungsteni…\\n    Checking tokio-tungstenite v0.28.0\\n    Building [=======================> ] 779/806: reqwest, reqwest, rustls, t…\\n    Building [=======================> ] 780/806: reqwest, reqwest, rustls, t…\\n    Building [=======================> ] 781/806: reqwest, reqwest, rustls, h…\\n    Building [=======================> ] 779/806: reqwest, reqwest, rustls, t…\\n    Building [=======================> ] 780/806: reqwest, reqwest, rustls, t…\\n    Building [=======================> ] 781/806: reqwest, reqwest, rustls, h…\\n    Checking vtcode-commons v0.84.1 (/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-commons)\\n    Building [=======================> ] 782/806: reqwest, vtcode-commons, ru…\\n    Building [=======================> ] 782/806: reqwest, vtcode-commons, ru…\\n    Building [=======================> ] 783/806: reqwest, vtcode-commons, ru…\\n    Checking jsonschema v0.40.2\\n    Checking rmcp v0.14.0\\n    Building [=======================> ] 783/806: reqwest, vtcode-commons, rm…\\n    Checking rig-core v0.23.1\\n    Building [=======================> ] 783/806: reqwest, rig-core, vtcode-c…\\n    Checking vtcode-acp-client v0.84.1 (/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-acp-client)\\n    Building [=======================> ] 784/806: reqwest, rig-core, vtcode-c…\\n    Building [=======================> ] 784/806: reqwest, rig-core, vtcode-c…\\n    Checking openai-harmony v0.0.8\\n    Building [=======================> ] 784/806: openai-harmony, reqwest, ri…\\n    Building [=======================> ] 784/806: openai-harmony, reqwest, ri…\\n    Checking self_update v0.42.0\\n    Building [=======================> ] 784/806: openai-harmony, self_update…\\n    Building [=======================> ] 785/806: openai-harmony, reqwest, ri…\\n    Building [=======================> ] 784/806: openai-harmony, self_update…\\n    Building [=======================> ] 785/806: openai-harmony, reqwest, ri…\\n    Building [=======================> ] 786/806: reqwest, rig-core, vtcode-c…\\n    Checking vtcode-bash-runner v0.84.1 (/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-bash-runner)\\n    Building [=======================> ] 787/806: vtcode-bash-runner, reqwest…\\n    Building [=======================> ] 787/806: vtcode-bash-runner, reqwest…\\n    Checking vtcode-exec-events v0.84.1 (/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-exec-events)\\n    Building [=======================> ] 788/806: reqwest, rig-core, rmcp, ru…\\n    Building [=======================> ] 789/806: vtcode-commons, reqwest, ri…\\n    Building [=======================> ] 788/806: reqwest, rig-core, rmcp, ru…\\n    Building [=======================> ] 789/806: vtcode-commons, reqwest, ri…\\n    Checking vtcode-indexer v0.84.1 (/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-indexer)\\n    Building [=======================> ] 790/806: vtcode-commons, reqwest, ri…\\n    Building [=======================> ] 790/806: vtcode-commons, reqwest, ri…\\n    Checking vtcode-tui v0.84.1 (/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-tui)\\n    Building [=======================> ] 791/806: vtcode-commons, reqwest, ri…\\n    Building [=======================> ] 791/806: vtcode-commons, reqwest, ri…\\n    Checking vtcode-file-search v0.84.1 (/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-file-search)\\n    Building [=======================> ] 792/806: vtcode-file-search, vtcode-…\\n    Building [=======================> ] 793/806: vtcode-commons, vtcode-conf…\\n    Building [=======================> ] 794/806: vtcode-commons, vtcode-conf…\\n    Building [=======================> ] 795/806: vtcode-commons, vtcode-conf…\\n    Building [=======================> ] 796/806: vtcode-commons, reqwest, ri…\\n    Building [=======================> ] 797/806: vtcode-commons, reqwest, ri…\\n    Building [=======================> ] 798/806: vtcode-commons, rig-core, v…\\n    Building [=======================> ] 799/806: rig-core, vtcode-config     \\n    Building [=======================> ] 800/806: vtcode-config               \\n    Building [=======================> ] 792/806: vtcode-file-search, vtcode-…\\n    Building [=======================> ] 793/806: vtcode-commons, vtcode-conf…\\n    Building [=======================> ] 794/806: vtcode-commons, vtcode-conf…\\n    Building [=======================> ] 795/806: vtcode-commons, vtcode-conf…\\n    Building [=======================> ] 796/806: vtcode-commons, reqwest, ri…\\n    Building [=======================> ] 797/806: vtcode-commons, reqwest, ri…\\n    Building [=======================> ] 798/806: vtcode-commons, rig-core, v…\\n    Building [=======================> ] 799/806: rig-core, vtcode-config     \\n    Building [=======================> ] 800/806: vtcode-config               \\n   Compiling vtcode-core v0.84.1 (/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-core)\\n    Building [=======================> ] 801/806: vtcode-core(build.rs)       \\n    Building [=======================> ] 802/806: vtcode-core(build)          \\n    Building [=======================> ] 803/806: vtcode-core                 \\n    Building [=======================> ] 801/806: vtcode-core(build.rs)       \\n    Building [=======================> ] 802/806: vtcode-core(build)          \\n    Building [=======================> ] 803/806: vtcode-core                 \\n    Checking vtcode v0.84.1 (/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode)\\n    Building [=======================> ] 804/806: vtcode                      \\n    Building [=======================> ] 805/806: vtcode(bin)                 \\n    Building [=======================> ] 804/806: vtcode                      \\n    Building [=======================> ] 805/806: vtcode(bin)                 \\n    Finished `dev` profile [unoptimized] target(s) in 39.06s\\n\",\"is_exited\":true,\"session_id\":\"run-5e4d7a90\",\"command\":\"cargo check\",\"working_directory\":\".\",\"exit_code\":0}",
-      "tool_call_id": "tool_call_0"
-    },
-    {
-      "role": "Assistant",
-      "content": "`cargo check` passed with no issues. Build completed successfully.",
-      "tool_call_id": null
-    },
-    {
-      "role": "User",
-      "content": "run cargo clippy and fix small isues",
-      "tool_call_id": null
-    }
-  ]
-}
-```
-
 ---
 
 improve file brower selection -> user input, it should show @file alias but full path context for agent. the agent should not confusedd by the @file alias and should be able to understand the full path context. This will help the agent to accurately identify the file and perform the necessary actions on it. Additionally, the UI can display the @file alias for better readability and user experience, while still providing the full path context in the background for the agent's processing.
@@ -517,3 +211,42 @@ show fatal and errors in tracing session log for
 debug purpose. but don't show them in tui transcript.
 
 for example: notification can catch error, fatal, but in the final sessions log, it doesn't record (/Users/vinhnguyenxuan/.vtcode/sessions/session-vtcode-20260228T141549Z_228471-31761.json) any error or fatal, which makes it hard to debug when something goes wrong. We should make sure that any errors or fatals that occur during the session are properly logged in the session log for debugging purposes, even if they are not shown in the TUI transcript. This way, we can have a complete record of what happened during the session and can investigate any issues that arise more effectively.
+
+---
+
+add syntect syntax CODE highlighting to read file preview tool
+'/Users/vinhnguyenxuan/Desktop/Screenshot 2026-02-28 at 9.49.53 PM.png'
+
+---
+
+Conduct a comprehensive review and enhancement of error handling and recovery mechanisms within the agent loop, with particular emphasis on tool call operations. Implement a multi-layered error handling strategy that includes retry logic with exponential backoff for transient failures such as network timeouts, rate limiting, and temporary service unavailability while implementing fail-fast behavior for non-recoverable errors including authentication failures, invalid parameters, and permission denied scenarios. Develop and integrate a robust state management system that ensures the agent can maintain consistent internal state during and after error occurrences, including proper rollback mechanisms for partial operations and transaction-like semantics where appropriate. Create a comprehensive error categorization system that distinguishes between retryable and non-retryable errors and implements appropriate handling strategies for each category. Enhance user-facing error messages to be clear, actionable, and informative while avoiding technical jargon that may confuse end users. Implement proper logging at multiple levels including debug, info, warning, and error levels to facilitate troubleshooting and monitoring. Conduct a thorough audit of existing error handling implementations to identify gaps, inconsistencies, and potential failure points. Refactor the error handling code to improve modularity, testability, and maintainability while ensuring comprehensive test coverage for error scenarios including edge cases and unexpected inputs. Add appropriate circuit breaker patterns for external service calls to prevent cascading failures and enable graceful degradation when dependent services are unavailable. Implement proper resource cleanup and resource leak prevention throughout the agent loop.
+
+---
+
+review and improve error handling and recovery in the agent loop, especially around tool calls. The goal is to make the agent more robust and resilient to errors, so that it can recover gracefully from failures and continue to operate effectively. This may involve implementing retry logic for certain types of errors, providing more informative error messages to the user, and ensuring that the agent can maintain a consistent state even when errors occur. Additionally, we should review the existing error handling code to identify any gaps or weaknesses, and refactor it as needed to improve its effectiveness.
+Findings
+
+- High: A successful direct command (run ... / !cmd)
+  still triggered a fresh LLM turn, so network/
+  provider flakiness could fake a task failure
+  afterward. Fixed in tool_dispatch.rs:117 and gate
+  in session_loop_runner.rs:320.
+- High: Post-tool LLM failures still aborted turns
+  in multiple stages. Now handled centrally with one
+  recovery helper in turn_loop.rs:195, applied at
+  request/parse/result-handler points.
+- Medium: Earlier recovery logic was too coupled
+  (extra state checks + history mutation).
+  Simplified to one condition: “tool response exists
+  I found the core inconsistency causing the unstable
+  state: shared token-count APIs were partially
+  removed but still referenced across providers and
+  runloop. I’m restoring those APIs in the canonical
+  trait/common modules first, then re-checking end-to-
+  end.
+
+• I see two places to simplify further without losing
+behavior: remove unnecessary history mutation in the
+recovery helper, and inline the empty-input turn
+gate (drop the extra helper/tests). I’m applying
+those now.

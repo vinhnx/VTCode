@@ -134,6 +134,7 @@ pub(crate) async fn initialize_session_ui(
         };
         renderer.set_reasoning_visible(reasoning_visible);
         renderer.set_screen_reader_mode(cfg.ui.screen_reader_mode);
+        renderer.set_show_diagnostics_in_transcript(cfg.ui.show_diagnostics_in_transcript);
     }
     let ui_redraw_batcher =
         crate::agent::runloop::unified::turn::utils::UIRedrawBatcher::with_auto_flush(
