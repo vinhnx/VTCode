@@ -358,6 +358,63 @@ fn try_recover_preflight_for_unified_search(
     }
 }
 
+fn task_tracker_create_signature(tool_name: &str, args: &Value) -> Option<String> {
+    if tool_name != tool_names::TASK_TRACKER {
+        return None;
+    }
+
+    let action = args.get("action").and_then(Value::as_str)?;
+    if action != "create" {
+        return None;
+    }
+
+    let mut normalized = serde_json::Map::new();
+    normalized.insert("action".to_string(), Value::String("create".to_string()));
+    if let Some(title) = args.get("title").and_then(Value::as_str) {
+        normalized.insert("title".to_string(), Value::String(title.to_string()));
+    }
+    if let Some(items) = args.get("items").and_then(Value::as_array) {
+        normalized.insert("items".to_string(), Value::Array(items.clone()));
+    }
+    if let Some(notes) = args.get("notes") {
+        normalized.insert("notes".to_string(), notes.clone());
+    }
+
+    let serialized = serde_json::to_string(&Value::Object(normalized)).ok()?;
+    Some(format!("task_tracker::create::{serialized}"))
+}
+
+fn enforce_duplicate_task_tracker_create_guard<'a>(
+    ctx: &mut TurnProcessingContext<'a>,
+    tool_call_id: &str,
+    canonical_tool_name: &str,
+    effective_args: &Value,
+) -> Option<ValidationResult> {
+    let signature = task_tracker_create_signature(canonical_tool_name, effective_args)?;
+
+    if ctx
+        .harness_state
+        .record_task_tracker_create_signature(signature)
+    {
+        return None;
+    }
+
+    let content = super::execution_result::build_error_content(
+        "Duplicate task_tracker.create detected in this turn. Use task_tracker.update/list to continue tracking progress."
+            .to_string(),
+        Some(tool_names::TASK_TRACKER.to_string()),
+        Some(serde_json::json!({ "action": "list" })),
+        "duplicate_task_tracker_create",
+    )
+    .to_string();
+    push_tool_response(ctx.working_history, tool_call_id.to_string(), content);
+    ctx.working_history.push(uni::Message::system(
+        "Blocked duplicate task_tracker.create in the same turn. Continue with task_tracker.update/list."
+            .to_string(),
+    ));
+    Some(ValidationResult::Blocked)
+}
+
 fn spool_chunk_read_path<'a>(canonical_tool_name: &str, args: &'a Value) -> Option<&'a str> {
     if !is_read_file_style_call(canonical_tool_name, args) {
         return None;
@@ -721,6 +778,15 @@ pub(crate) async fn validate_tool_call<'a>(
         &preflight_args,
     );
 
+    if let Some(outcome) = enforce_duplicate_task_tracker_create_guard(
+        ctx,
+        tool_call_id,
+        &canonical_tool_name,
+        &effective_args,
+    ) {
+        return Ok(outcome);
+    }
+
     // Charge tool-call budget only after preflight succeeds.
     ctx.harness_state.record_tool_call();
     if ctx
@@ -834,15 +900,30 @@ pub(crate) async fn validate_tool_call<'a>(
                 )
             {
                 if let Some(obj) = reused.as_object_mut() {
+                    // Drop bulky payload fields for repeated read-only reuse to avoid
+                    // flooding context with duplicate content.
+                    obj.remove("output");
+                    obj.remove("content");
+                    obj.remove("stdout");
+                    obj.remove("stderr");
+                    obj.remove("stderr_preview");
                     obj.insert(
                         "reused_recent_result".to_string(),
                         serde_json::Value::Bool(true),
                     );
+                    obj.insert("result_ref_only".to_string(), serde_json::Value::Bool(true));
                     obj.insert("loop_detected".to_string(), serde_json::Value::Bool(true));
                     obj.insert(
                         "loop_detected_note".to_string(),
                         serde_json::Value::String(
                             "Loop detected on repeated read-only call; reusing recent output. Use `grep_file` or summarize before another read."
+                                .to_string(),
+                        ),
+                    );
+                    obj.insert(
+                        "next_action".to_string(),
+                        serde_json::Value::String(
+                            "Use grep_file or adjust offset/limit before retrying this read."
                                 .to_string(),
                         ),
                     );
@@ -1083,7 +1164,7 @@ async fn acquire_adaptive_rate_limit_slot<'a>(
 mod tests {
     use super::{
         build_validation_error_content_with_fallback, loop_detection_tool_key,
-        preflight_validation_fallback, spool_chunk_read_path,
+        preflight_validation_fallback, spool_chunk_read_path, task_tracker_create_signature,
     };
     use anyhow::anyhow;
     use serde_json::json;
@@ -1228,5 +1309,35 @@ mod tests {
         assert_eq!(parsed["is_recoverable"], true);
         assert_eq!(parsed["fallback_tool"], tool_names::UNIFIED_SEARCH);
         assert_eq!(parsed["fallback_tool_args"]["action"], "grep");
+    }
+
+    #[test]
+    fn task_tracker_create_signature_matches_identical_payloads() {
+        let first = json!({
+            "action": "create",
+            "title": "Fix clippy warnings",
+            "items": ["A", "B"],
+            "notes": "n"
+        });
+        let second = json!({
+            "action": "create",
+            "title": "Fix clippy warnings",
+            "items": ["A", "B"],
+            "notes": "n"
+        });
+        let sig1 = task_tracker_create_signature(tool_names::TASK_TRACKER, &first);
+        let sig2 = task_tracker_create_signature(tool_names::TASK_TRACKER, &second);
+        assert_eq!(sig1, sig2);
+    }
+
+    #[test]
+    fn task_tracker_create_signature_ignores_non_create_calls() {
+        let args = json!({
+            "action": "update",
+            "index": 1,
+            "status": "completed"
+        });
+        let sig = task_tracker_create_signature(tool_names::TASK_TRACKER, &args);
+        assert!(sig.is_none());
     }
 }

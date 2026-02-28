@@ -231,7 +231,13 @@ pub(crate) fn serialize_output(output: &serde_json::Value) -> String {
 pub(crate) fn check_is_argument_error(error_str: &str) -> bool {
     error_str.contains("Missing required")
         || error_str.contains("Invalid arguments")
+        || error_str.contains("Tool argument validation failed")
         || error_str.contains("required path parameter")
+        || error_str.contains("is required for '")
+        || error_str.contains("is required for \"")
+        || error_str.contains("'index' is required")
+        || error_str.contains("'index_path' is required")
+        || error_str.contains("'status' is required")
         || error_str.contains("expected ")
         || error_str.contains("Expected:")
 }
@@ -463,5 +469,12 @@ mod tests {
         );
         assert_eq!(tracker.consecutive_mutations, 1);
         assert_eq!(tracker.consecutive_navigations, 0);
+    }
+
+    #[test]
+    fn argument_error_detection_includes_required_update_fields() {
+        assert!(check_is_argument_error(
+            "Tool execution failed: 'index' is required for 'update' (1-indexed)"
+        ));
     }
 }

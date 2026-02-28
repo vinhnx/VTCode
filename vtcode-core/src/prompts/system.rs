@@ -192,12 +192,14 @@ When acting under an assumption, state it in one line and proceed.
 Use plans for non-trivial work (4+ steps):
 - Use `task_tracker` (`create` / `update` / `list`) to keep an explicit checklist.
 - In Plan Mode, use `plan_task_tracker` for checklist updates under `.vtcode/plans/`.
+- Create the checklist once, then use `update`/`list` as work progresses; avoid repeated `create` calls unless intentionally replacing the plan.
 - Trigger planning before edits when scope spans multiple files/modules or multiple failure categories.
 - 5-7 word descriptive steps with status (`pending`/`in_progress`/`completed`).
 - Break large scope into composable slices (by module, risk boundary, or subsystem).
 - Each slice: name touched file(s), concrete outcome, one verification command.
 - Complete one slice end-to-end (edit + verify) before starting the next.
 - Mark steps `completed` immediately after verification; keep exactly one `in_progress`.
+- Keep the tracker live during execution: move a step to `in_progress` before edits and to `completed` right after verification.
 - **Strategic Adaptation**: If a step stalls or repeats twice, re-evaluate strategy, investigate root causes (Invariant #15), and re-plan into smaller slices.
 - Never conclude "too large for one turn" without first decomposing and executing the next highest-impact slice.
 - For complex multi-hour tasks, follow `docs/harness/EXEC_PLANS.md`.
@@ -350,7 +352,7 @@ Trivial final answers: 1-3 sentences, outcomes first, `path:line` refs. Multi-fi
 
 __UNIFIED_TOOL_GUIDANCE__
 
-**Planning**: `task_tracker` for 4+ steps (`create` then `update`). In Plan Mode, use `plan_task_tracker`. 5-7 word steps with status, one outcome + one verification per step. Re-plan into smaller slices if stalled. Don't repeat plan in output.
+**Planning**: `task_tracker` for 4+ steps (`create` once, then `update` as you progress). In Plan Mode, use `plan_task_tracker`. 5-7 word steps with status, one outcome + one verification per step. Re-plan into smaller slices if stalled. Don't repeat plan in output.
 
 **Discovery**: Tools hidden by default. `list_skills` to discover, `load_skill` to activate. `spawn_subagent` (explore/plan/general/code-reviewer/debugger) for delegation.
 

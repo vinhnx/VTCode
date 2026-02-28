@@ -1,5 +1,6 @@
 use crate::agent::runloop::unified::state::SessionStats;
 use crate::agent::runloop::unified::tool_call_safety::ToolCallSafetyValidator;
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
@@ -42,6 +43,7 @@ pub struct HarnessTurnState {
     pub blocked_tool_calls: usize,
     pub consecutive_blocked_tool_calls: usize,
     pub consecutive_spool_chunk_reads: usize,
+    pub seen_task_tracker_create_signatures: HashSet<String>,
     pub tool_budget_warning_emitted: bool,
     pub tool_budget_exhausted_emitted: bool,
     pub max_tool_calls: usize,
@@ -66,6 +68,7 @@ impl HarnessTurnState {
             blocked_tool_calls: 0,
             consecutive_blocked_tool_calls: 0,
             consecutive_spool_chunk_reads: 0,
+            seen_task_tracker_create_signatures: HashSet::new(),
             tool_budget_warning_emitted: false,
             tool_budget_exhausted_emitted: false,
             max_tool_calls,
@@ -127,6 +130,10 @@ impl HarnessTurnState {
 
     pub fn reset_spool_chunk_read_streak(&mut self) {
         self.consecutive_spool_chunk_reads = 0;
+    }
+
+    pub fn record_task_tracker_create_signature(&mut self, signature: String) -> bool {
+        self.seen_task_tracker_create_signatures.insert(signature)
     }
 
     pub fn set_phase(&mut self, phase: TurnPhase) {
@@ -262,5 +269,26 @@ mod tests {
         assert_eq!(state.blocked_tool_calls, 2);
         state.reset_blocked_tool_call_streak();
         assert_eq!(state.consecutive_blocked_tool_calls, 0);
+    }
+
+    #[test]
+    fn harness_state_tracks_task_tracker_create_signatures() {
+        let mut state = HarnessTurnState::new(
+            TurnRunId("run-1".to_string()),
+            TurnId("turn-1".to_string()),
+            4,
+            10,
+            1,
+        );
+
+        assert!(state.record_task_tracker_create_signature(
+            "task_tracker::create::{\"title\":\"A\",\"items\":[\"x\"]}".to_string()
+        ));
+        assert!(!state.record_task_tracker_create_signature(
+            "task_tracker::create::{\"title\":\"A\",\"items\":[\"x\"]}".to_string()
+        ));
+        assert!(state.record_task_tracker_create_signature(
+            "task_tracker::create::{\"title\":\"A\",\"items\":[\"y\"]}".to_string()
+        ));
     }
 }

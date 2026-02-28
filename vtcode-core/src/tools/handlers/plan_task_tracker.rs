@@ -667,7 +667,36 @@ impl Tool for PlanTaskTrackerTool {
                     "description": "Optional notes to append."
                 }
             },
-            "required": ["action"]
+            "required": ["action"],
+            "allOf": [
+                {
+                    "if": {
+                        "properties": { "action": { "const": "create" } },
+                        "required": ["action"]
+                    },
+                    "then": {
+                        "required": ["items"]
+                    }
+                },
+                {
+                    "if": {
+                        "properties": { "action": { "const": "update" } },
+                        "required": ["action"]
+                    },
+                    "then": {
+                        "required": ["index_path", "status"]
+                    }
+                },
+                {
+                    "if": {
+                        "properties": { "action": { "const": "add" } },
+                        "required": ["action"]
+                    },
+                    "then": {
+                        "required": ["description"]
+                    }
+                }
+            ]
         }))
     }
 
