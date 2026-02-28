@@ -24,6 +24,13 @@ pub struct TerminalAppResult {
     pub success: bool,
 }
 
+/// Runtime configuration for launching an external editor.
+#[derive(Debug, Clone, Default)]
+pub struct EditorLaunchConfig {
+    /// Preferred editor command override (supports args, e.g. `code --wait`)
+    pub preferred_editor: Option<String>,
+}
+
 /// Manages launching terminal applications
 pub struct TerminalAppLauncher {
     workspace_root: PathBuf,
@@ -48,6 +55,17 @@ impl TerminalAppLauncher {
     ///
     /// Returns an error if the editor fails to launch or if file operations fail.
     pub fn launch_editor(&self, file: Option<PathBuf>) -> Result<Option<String>> {
+        self.launch_editor_with_config(file, EditorLaunchConfig::default())
+    }
+
+    /// Launch user's preferred editor with explicit launch configuration.
+    ///
+    /// `preferred_editor`, when set, takes precedence over VISUAL/EDITOR env vars.
+    pub fn launch_editor_with_config(
+        &self,
+        file: Option<PathBuf>,
+        config: EditorLaunchConfig,
+    ) -> Result<Option<String>> {
         let (file_path, is_temp) = if let Some(path) = file {
             (path, false)
         } else {
@@ -58,21 +76,39 @@ impl TerminalAppLauncher {
             let (_, path) = temp.keep().context("failed to persist temporary file")?;
             (path, true)
         };
+        let preferred_editor = config
+            .preferred_editor
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(ToOwned::to_owned);
 
         // Use unified terminal suspension logic
         self.suspend_terminal_for_command(|| {
             debug!("launching editor with file: {:?}", file_path);
 
-            // Try to build editor command from VISUAL/EDITOR environment variables first
-            let mut cmd = match Editor::new() {
-                Ok(editor) => editor.open(&file_path),
-                Err(_) => {
-                    // If EDITOR/VISUAL not set, search for available editors in PATH
-                    debug!("EDITOR/VISUAL not set, searching for available editors");
-                    Self::try_common_editors(&file_path).context(
-                        "failed to detect editor: set EDITOR or VISUAL environment variable, \
-                             or install vim, nano, or your preferred editor",
-                    )?
+            // Prefer explicit config override, then VISUAL/EDITOR, then fallback probes.
+            let mut cmd = if let Some(preferred) = preferred_editor.as_deref() {
+                debug!("using configured preferred editor command: {}", preferred);
+                Self::build_editor_command_from_string(preferred, &file_path).with_context(
+                    || {
+                        format!(
+                            "failed to parse tools.editor.preferred_editor '{}'",
+                            preferred
+                        )
+                    },
+                )?
+            } else {
+                match Editor::new() {
+                    Ok(editor) => editor.open(&file_path),
+                    Err(_) => {
+                        // If EDITOR/VISUAL not set, search for available editors in PATH
+                        debug!("EDITOR/VISUAL not set, searching for available editors");
+                        Self::try_common_editors(&file_path).context(
+                            "failed to detect editor: set tools.editor.preferred_editor, \
+                             or set EDITOR/VISUAL, or install an editor in PATH",
+                        )?
+                    }
                 }
             };
 
@@ -104,25 +140,86 @@ impl TerminalAppLauncher {
         Ok(content)
     }
 
+    fn build_editor_command_from_string(
+        command: &str,
+        file_path: &Path,
+    ) -> Result<std::process::Command> {
+        let tokens = shell_words::split(command)
+            .with_context(|| format!("invalid editor command: {}", command))?;
+        let (program, args) = tokens
+            .split_first()
+            .ok_or_else(|| anyhow!("editor command cannot be empty"))?;
+        let mut cmd = std::process::Command::new(program);
+        cmd.args(args);
+        cmd.arg(file_path);
+        Ok(cmd)
+    }
+
     /// Try common editors in priority order as fallback when EDITOR/VISUAL not set
     fn try_common_editors(file_path: &Path) -> Result<std::process::Command> {
-        let editors = if cfg!(target_os = "windows") {
-            vec!["code", "notepad++", "notepad"]
+        let candidates = if cfg!(target_os = "windows") {
+            vec![
+                "code --wait",
+                "code",
+                "zed --wait",
+                "zed",
+                "subl -w",
+                "subl",
+                "notepad++",
+                "notepad",
+            ]
+        } else if cfg!(target_os = "macos") {
+            vec![
+                "code --wait",
+                "code",
+                "zed --wait",
+                "zed",
+                "subl -w",
+                "subl",
+                "mate -w",
+                "mate",
+                "open -a TextEdit",
+                "nvim",
+                "vim",
+                "vi",
+                "nano",
+                "emacs",
+            ]
         } else {
-            vec!["nvim", "vim", "vi", "nano", "emacs"]
+            vec![
+                "code --wait",
+                "code",
+                "zed --wait",
+                "zed",
+                "subl -w",
+                "subl",
+                "mate -w",
+                "mate",
+                "nvim",
+                "vim",
+                "vi",
+                "nano",
+                "emacs",
+            ]
         };
 
-        for editor in editors {
-            if which::which(editor).is_ok() {
-                let mut cmd = std::process::Command::new(editor);
-                cmd.arg(file_path.to_string_lossy().into_owned());
-                debug!("found fallback editor: {}", editor);
-                return Ok(cmd);
+        for candidate in candidates {
+            let tokens = match shell_words::split(candidate) {
+                Ok(tokens) => tokens,
+                Err(_) => continue,
+            };
+            let Some(program) = tokens.first() else {
+                continue;
+            };
+            if which::which(program).is_ok() {
+                debug!("found fallback editor: {}", candidate);
+                return Self::build_editor_command_from_string(candidate, file_path);
             }
         }
 
         Err(anyhow!(
-            "no editor found in PATH. Install vim, nano, or set EDITOR environment variable"
+            "no editor found in PATH. Install an editor (e.g. nvim, code, zed, emacs), \
+             or configure tools.editor.preferred_editor"
         ))
     }
 
@@ -223,11 +320,35 @@ impl TerminalAppLauncher {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::ffi::OsStr;
 
     #[test]
     fn test_launcher_creation() {
         let launcher = TerminalAppLauncher::new(PathBuf::from("/tmp"));
         // Just verify it can be created without panicking
         assert_eq!(launcher.workspace_root, PathBuf::from("/tmp"));
+    }
+
+    #[test]
+    fn test_build_editor_command_supports_arguments() {
+        let command = TerminalAppLauncher::build_editor_command_from_string(
+            "code --wait",
+            Path::new("/tmp/test.rs"),
+        )
+        .expect("command should parse");
+        let args: Vec<String> = command
+            .get_args()
+            .map(|value| value.to_string_lossy().to_string())
+            .collect();
+
+        assert_eq!(command.get_program(), OsStr::new("code"));
+        assert_eq!(args, vec!["--wait".to_string(), "/tmp/test.rs".to_string()]);
+    }
+
+    #[test]
+    fn test_build_editor_command_rejects_empty_string() {
+        let result =
+            TerminalAppLauncher::build_editor_command_from_string("   ", Path::new("/tmp/test.rs"));
+        assert!(result.is_err());
     }
 }

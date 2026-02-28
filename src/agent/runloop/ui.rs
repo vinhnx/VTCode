@@ -280,6 +280,7 @@ pub(crate) async fn build_inline_header_context(
     };
 
     Ok(InlineHeaderContext {
+        app_name: vtcode_core::config::constants::app::DISPLAY_NAME.to_string(),
         provider: provider_value,
         model: model_value,
         version,

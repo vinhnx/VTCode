@@ -35,4 +35,4 @@ pub use sandbox::{
 };
 pub use security::{GatekeeperConfig, SecurityConfig};
 pub use skills::{PromptFormat, SkillsConfig, SkillsRenderMode};
-pub use tools::{ToolPolicy, ToolsConfig, WebFetchConfig};
+pub use tools::{EditorToolConfig, ToolPolicy, ToolsConfig, WebFetchConfig};

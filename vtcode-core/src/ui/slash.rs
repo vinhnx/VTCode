@@ -49,7 +49,7 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
         },
         SlashCommandInfo {
             name: "edit",
-            description: "Open file in preferred editor from EDITOR/VISUAL env vars (usage: /edit [file])",
+            description: "Open file in external editor (tools.editor config, then VISUAL/EDITOR) (usage: /edit [file])",
         },
         SlashCommandInfo {
             name: "git",
@@ -116,7 +116,7 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
         },
         SlashCommandInfo {
             name: "rewind",
-            description: "Rewind to a previous checkpoint (usage: /rewind [turn] or /rewind [conversation|code|both])",
+            description: "Rewind to latest or specific checkpoint (usage: /rewind [turn] [conversation|code|both])",
         },
         SlashCommandInfo {
             name: "plan",

@@ -392,13 +392,13 @@ fn double_escape_interrupts_when_running_activity() {
 }
 
 #[test]
-fn double_escape_does_not_submit_rewind_when_idle() {
+fn double_escape_submits_rewind_when_idle() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
 
     let _ = session.process_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     let second = session.process_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
 
-    assert!(!matches!(second, Some(InlineEvent::Submit(value)) if value == "/rewind"));
+    assert!(matches!(second, Some(InlineEvent::Submit(value)) if value == "/rewind"));
 }
 
 #[test]
@@ -557,13 +557,25 @@ fn super_e_moves_cursor_to_end() {
 }
 
 #[test]
-fn control_e_does_not_launch_editor() {
+fn control_e_launches_editor() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
 
     let event = KeyEvent::new(KeyCode::Char('e'), KeyModifiers::CONTROL);
     let result = session.process_key(event);
 
-    // Control+E keybinding has been removed - use /edit command instead
+    assert!(matches!(result, Some(InlineEvent::LaunchEditor)));
+}
+
+#[test]
+fn control_alt_e_does_not_launch_editor() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+
+    let event = KeyEvent::new(
+        KeyCode::Char('e'),
+        KeyModifiers::CONTROL | KeyModifiers::ALT,
+    );
+    let result = session.process_key(event);
+
     assert!(!matches!(result, Some(InlineEvent::LaunchEditor)));
 }
 

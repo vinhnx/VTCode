@@ -56,13 +56,13 @@ pub use api_keys::ApiKeySources;
 pub use context::{ContextFeaturesConfig, DynamicContextConfig, LedgerConfig};
 pub use core::{
     AgentConfig, AgentOnboardingConfig, AuthConfig, AutomationConfig, CommandsConfig,
-    DockerSandboxConfig, ExternalSandboxConfig, ExternalSandboxType, FullAutoConfig,
-    GatekeeperConfig, MicroVMSandboxConfig, ModelConfig, NetworkAllowlistEntryConfig,
-    NetworkConfig, OpenResponsesConfig, OpenRouterAuthConfig, PluginRuntimeConfig,
-    PluginTrustLevel, PromptCachingConfig, ProviderPromptCachingConfig, ResourceLimitsConfig,
-    ResourceLimitsPreset, SandboxConfig, SandboxMode, SeccompConfig, SeccompProfilePreset,
-    SecurityConfig, SensitivePathsConfig, SkillsConfig, SkillsRenderMode, ToolPolicy, ToolsConfig,
-    WebFetchConfig,
+    DockerSandboxConfig, EditorToolConfig, ExternalSandboxConfig, ExternalSandboxType,
+    FullAutoConfig, GatekeeperConfig, MicroVMSandboxConfig, ModelConfig,
+    NetworkAllowlistEntryConfig, NetworkConfig, OpenResponsesConfig, OpenRouterAuthConfig,
+    PluginRuntimeConfig, PluginTrustLevel, PromptCachingConfig, ProviderPromptCachingConfig,
+    ResourceLimitsConfig, ResourceLimitsPreset, SandboxConfig, SandboxMode, SeccompConfig,
+    SeccompProfilePreset, SecurityConfig, SensitivePathsConfig, SkillsConfig, SkillsRenderMode,
+    ToolPolicy, ToolsConfig, WebFetchConfig,
 };
 pub use debug::{DebugConfig, TraceLevel};
 pub use defaults::{

@@ -297,7 +297,10 @@ planner_mode = "prompt"
 [security.gatekeeper]
 warn_on_quarantine = true
 auto_clear_quarantine = false
-auto_clear_paths = [".vtcode/bin", "~/.vtcode/bin"]
+auto_clear_paths = [
+    ".vtcode/bin",
+    "~/.vtcode/bin",
+]
 
 [sandbox]
 enabled = true
@@ -711,7 +714,11 @@ cache_size = 100
 [automation.full_auto]
 enabled = true
 max_turns = 30
-allowed_tools = ["read_file", "list_files", "grep_file"]
+allowed_tools = [
+    "read_file",
+    "list_files",
+    "grep_file",
+]
 require_profile_ack = true
 
 [optimization.llm_client]
@@ -735,7 +742,12 @@ max_entries = 128
 enabled = true
 ttl_ms = 2000
 max_entries = 128
-allowlist = ["rg", "ls", "git status", "git diff --stat"]
+allowlist = [
+    "rg",
+    "ls",
+    "git status",
+    "git diff --stat",
+]
 
 [prompt_cache]
 enabled = false

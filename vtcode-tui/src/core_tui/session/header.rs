@@ -121,11 +121,12 @@ impl Session {
             self.header_context.version.clone()
         };
 
-        let prompt = format!(
-            "{}{} ",
-            ui::HEADER_VERSION_PROMPT,
+        let app_name = if self.header_context.app_name.trim().is_empty() {
             ui::HEADER_VERSION_PREFIX
-        );
+        } else {
+            self.header_context.app_name.trim()
+        };
+        let prompt = format!("{}{} ", ui::HEADER_VERSION_PROMPT, app_name);
         let version_text = format!(
             "{}{}{}",
             ui::HEADER_VERSION_LEFT_DELIMITER,

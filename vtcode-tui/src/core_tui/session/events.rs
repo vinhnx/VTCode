@@ -299,11 +299,10 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
             session.mark_dirty();
             Some(InlineEvent::ToggleMode)
         }
-        // External editor launch disabled - use /edit command instead
-        // KeyCode::Char('e') | KeyCode::Char('E') if has_control && !has_command => {
-        //     session.mark_dirty();
-        //     Some(InlineEvent::LaunchEditor)
-        // }
+        KeyCode::Char('e') | KeyCode::Char('E') if has_control && !has_command && !has_alt => {
+            session.mark_dirty();
+            Some(InlineEvent::LaunchEditor)
+        }
         KeyCode::Esc => {
             if session.modal.is_some() {
                 session.close_modal();
@@ -325,6 +324,10 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                     // Single escape with active PTY sessions: force cancel them
                     session.mark_dirty();
                     Some(InlineEvent::ForceCancelPtySession)
+                } else if is_double_escape && !has_running_activity {
+                    // Double-escape while idle rewinds to the latest checkpoint.
+                    session.mark_dirty();
+                    Some(InlineEvent::Submit("/rewind".to_string()))
                 } else if !session.input_manager.content().is_empty() {
                     // Single escape with content: clear input
                     crate::ui::tui::session::command::clear_input(session);
