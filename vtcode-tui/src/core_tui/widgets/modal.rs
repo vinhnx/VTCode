@@ -122,57 +122,21 @@ impl<'a> ModalWidget<'a> {
 
     /// Calculate the modal area based on content
     fn calculate_modal_area(&self) -> Rect {
-        let (width_hint, text_lines, prompt_lines, search_lines, has_list) = match &self.modal_type
-        {
-            ModalType::Text { lines } => {
-                let width = lines
-                    .iter()
-                    .map(|line| crate::ui::tui::style::measure_text_width(line))
-                    .max()
-                    .unwrap_or(40);
-                (width, lines.len(), 0, 0, false)
-            }
-            ModalType::List { lines, list_state } => {
-                let width = crate::ui::tui::session::modal::modal_content_width(
-                    lines,
-                    Some(list_state),
-                    None,
-                    None,
-                );
-                (width, lines.len(), 0, 0, true)
-            }
+        let (text_lines, prompt_lines, search_lines, has_list) = match &self.modal_type {
+            ModalType::Text { lines } => (lines.len(), 0, 0, false),
+            ModalType::List { lines, .. } => (lines.len(), 0, 0, true),
             ModalType::Wizard { wizard_state: _ } => {
-                let width = 60; // Default width for wizard modals
                 let height = 10; // Default height for wizard modals
-                (width, height, 0, 0, true)
+                (height, 0, 0, true)
             }
             ModalType::Search {
-                lines,
-                search_state,
-                list_state,
-            } => {
-                let width = crate::ui::tui::session::modal::modal_content_width(
-                    lines,
-                    list_state.as_ref().map(|s| &**s),
-                    None,
-                    Some(search_state),
-                );
-                (width, lines.len(), 0, 3, list_state.is_some())
-            }
-            ModalType::SecurePrompt { lines, .. } => {
-                let width = lines
-                    .iter()
-                    .map(|line| crate::ui::tui::style::measure_text_width(line))
-                    .max()
-                    .unwrap_or(40)
-                    .max(ui::MODAL_MIN_WIDTH);
-                (width, lines.len(), 2, 0, false)
-            }
+                lines, list_state, ..
+            } => (lines.len(), 0, 3, list_state.is_some()),
+            ModalType::SecurePrompt { lines, .. } => (lines.len(), 2, 0, false),
         };
 
         compute_modal_area(
             self.viewport,
-            width_hint,
             text_lines,
             prompt_lines,
             search_lines,
@@ -483,7 +447,8 @@ impl<'a> ModalWidget<'a> {
             return;
         }
 
-        let items = modal_list_items(list_state, &self.styles);
+        let content_width = area.width.saturating_sub(4) as usize;
+        let items = modal_list_items(list_state, &self.styles, content_width);
         let widget = List::new(items)
             .highlight_style(self.styles.highlight)
             .highlight_symbol(ui::MODAL_LIST_HIGHLIGHT_FULL)

@@ -38,6 +38,34 @@ pub enum UiMode {
     Focused,
 }
 
+/// Layout mode override for responsive UI
+#[derive(Debug, Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum LayoutModeOverride {
+    /// Auto-detect based on terminal size
+    #[default]
+    Auto,
+    /// Force compact mode (no borders)
+    Compact,
+    /// Force standard mode (borders, no sidebar/footer)
+    Standard,
+    /// Force wide mode (sidebar + footer behavior)
+    Wide,
+}
+
+/// Reasoning visibility behavior in the transcript
+#[derive(Debug, Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ReasoningDisplayMode {
+    /// Always show reasoning output
+    Always,
+    /// Allow reasoning visibility to be toggled (uses default below at startup)
+    #[default]
+    Toggle,
+    /// Never show reasoning output
+    Hidden,
+}
+
 /// UI appearance configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppearanceConfig {
@@ -68,6 +96,30 @@ pub struct AppearanceConfig {
     /// Number of blank lines between message blocks (0-2)
     pub message_block_spacing: u8,
 
+    /// Override responsive layout mode
+    #[serde(default)]
+    pub layout_mode: LayoutModeOverride,
+
+    /// Reasoning visibility mode
+    #[serde(default)]
+    pub reasoning_display_mode: ReasoningDisplayMode,
+
+    /// Default reasoning visibility when mode is "toggle"
+    #[serde(default)]
+    pub reasoning_visible_default: bool,
+
+    /// Screen reader mode (disables animation-heavy rendering paths)
+    #[serde(default)]
+    pub screen_reader_mode: bool,
+
+    /// Reduce motion mode (disables shimmer/flashing animations)
+    #[serde(default)]
+    pub reduce_motion_mode: bool,
+
+    /// Keep progress animation while reduce motion mode is enabled
+    #[serde(default)]
+    pub reduce_motion_keep_progress_animation: bool,
+
     /// Customization settings
     pub customization: CustomizationConfig,
 }
@@ -84,6 +136,12 @@ impl Default for AppearanceConfig {
             transcript_bottom_padding: 0,
             dim_completed_todos: true,
             message_block_spacing: 0,
+            layout_mode: LayoutModeOverride::Auto,
+            reasoning_display_mode: ReasoningDisplayMode::Toggle,
+            reasoning_visible_default: false,
+            screen_reader_mode: false,
+            reduce_motion_mode: false,
+            reduce_motion_keep_progress_animation: false,
             customization: CustomizationConfig::default(),
         }
     }
@@ -96,6 +154,23 @@ impl AppearanceConfig {
             UiMode::Full => self.show_sidebar,
             UiMode::Minimal | UiMode::Focused => false,
         }
+    }
+
+    pub fn reasoning_visible(&self) -> bool {
+        match self.reasoning_display_mode {
+            ReasoningDisplayMode::Always => true,
+            ReasoningDisplayMode::Hidden => false,
+            ReasoningDisplayMode::Toggle => self.reasoning_visible_default,
+        }
+    }
+
+    pub fn motion_reduced(&self) -> bool {
+        self.screen_reader_mode || self.reduce_motion_mode
+    }
+
+    pub fn should_animate_progress_status(&self) -> bool {
+        !self.screen_reader_mode
+            && (!self.reduce_motion_mode || self.reduce_motion_keep_progress_animation)
     }
 
     /// Check if footer should be shown based on ui_mode

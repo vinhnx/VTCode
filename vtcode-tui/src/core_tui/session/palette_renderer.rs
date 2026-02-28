@@ -73,9 +73,8 @@ pub fn render_palette_loading(
         return;
     }
 
-    let width_hint = 40u16;
     let modal_height = 3;
-    let area = compute_modal_area(viewport, width_hint, modal_height, 0, 0, true);
+    let area = compute_modal_area(viewport, modal_height, 0, 0, true);
 
     frame.render_widget(Clear, area);
     let block = Block::bordered()

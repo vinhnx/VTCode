@@ -85,6 +85,7 @@ pub struct ModalListState {
     pub filter_terms: Vec<String>,
     pub filter_query: Option<String>,
     pub viewport_rows: Option<u16>,
+    pub compact_rows: bool,
 }
 
 #[derive(Clone)]
@@ -187,6 +188,10 @@ impl ModalState {
         }
 
         match key.code {
+            KeyCode::Char('d') | KeyCode::Char('D') if modifiers.alt => {
+                list.toggle_row_density();
+                ModalListKeyResult::Redraw
+            }
             KeyCode::Up => {
                 if modifiers.command {
                     list.select_first();
@@ -233,7 +238,21 @@ impl ModalState {
                 list.select_previous();
                 ModalListKeyResult::Redraw
             }
+            KeyCode::Left => {
+                if let Some(selection) = list.current_selection() {
+                    if let Some(adjusted) = map_config_selection_for_arrow(&selection, true) {
+                        return ModalListKeyResult::Submit(InlineEvent::ListModalSubmit(adjusted));
+                    }
+                }
+                list.select_previous();
+                ModalListKeyResult::Redraw
+            }
             KeyCode::Right => {
+                if let Some(selection) = list.current_selection() {
+                    if let Some(adjusted) = map_config_selection_for_arrow(&selection, false) {
+                        return ModalListKeyResult::Submit(InlineEvent::ListModalSubmit(adjusted));
+                    }
+                }
                 list.select_next();
                 ModalListKeyResult::Redraw
             }
@@ -259,6 +278,49 @@ impl ModalState {
             _ => ModalListKeyResult::NotHandled,
         }
     }
+}
+
+fn map_config_selection_for_arrow(
+    selection: &InlineListSelection,
+    is_left: bool,
+) -> Option<InlineListSelection> {
+    let InlineListSelection::ConfigAction(action) = selection else {
+        return None;
+    };
+
+    if action.ends_with(":cycle") {
+        if is_left {
+            let key = action.trim_end_matches(":cycle");
+            return Some(InlineListSelection::ConfigAction(format!(
+                "{}:cycle_prev",
+                key
+            )));
+        }
+        return Some(selection.clone());
+    }
+
+    if action.ends_with(":inc") {
+        if is_left {
+            let key = action.trim_end_matches(":inc");
+            return Some(InlineListSelection::ConfigAction(format!("{}:dec", key)));
+        }
+        return Some(selection.clone());
+    }
+
+    if action.ends_with(":dec") {
+        if is_left {
+            return Some(selection.clone());
+        }
+        let key = action.trim_end_matches(":dec");
+        return Some(InlineListSelection::ConfigAction(format!("{}:inc", key)));
+    }
+
+    if action.ends_with(":toggle") {
+        let _ = is_left;
+        return Some(selection.clone());
+    }
+
+    None
 }
 
 impl ModalListItem {
@@ -330,6 +392,7 @@ impl ModalListState {
             filter_terms: Vec::new(),
             filter_query: None,
             viewport_rows: None,
+            compact_rows: false,
         };
         modal_state.select_initial(selected);
         modal_state
@@ -641,6 +704,14 @@ impl ModalListState {
 
     pub(super) fn total_selectable(&self) -> usize {
         self.total_selectable
+    }
+
+    pub(super) fn compact_rows(&self) -> bool {
+        self.compact_rows
+    }
+
+    pub fn toggle_row_density(&mut self) {
+        self.compact_rows = !self.compact_rows;
     }
 
     fn page_step(&self) -> usize {

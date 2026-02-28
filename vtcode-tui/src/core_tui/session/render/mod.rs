@@ -7,7 +7,7 @@ use ratatui::{
 };
 use unicode_width::UnicodeWidthStr;
 
-use super::super::style::{measure_text_width, ratatui_style_from_inline};
+use super::super::style::ratatui_style_from_inline;
 use super::super::types::{InlineMessageKind, InlineTextStyle};
 use super::terminal_capabilities;
 use super::{
@@ -16,7 +16,7 @@ use super::{
     message::MessageLine,
     modal::{
         ModalBodyContext, ModalListLayout, ModalRenderStyles, compute_modal_area,
-        modal_content_width, render_modal_body, render_wizard_modal_body,
+        render_modal_body, render_wizard_modal_body,
     },
     text_utils,
 };

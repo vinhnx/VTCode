@@ -113,7 +113,8 @@ pub fn render_modal_list(
     let viewport_rows = area.height.saturating_sub(2);
     list.set_viewport_rows(viewport_rows);
     list.ensure_visible(viewport_rows);
-    let items = modal_list_items(list, styles);
+    let content_width = area.width.saturating_sub(4) as usize;
+    let items = modal_list_items(list, styles, content_width);
     let widget = List::new(items)
         .block(modal_list_block(list, styles, footer_hint))
         .highlight_style(styles.highlight)
@@ -304,7 +305,16 @@ fn modal_list_summary_line(
     footer_hint: Option<&str>,
 ) -> Option<Line<'static>> {
     if !list.filter_active() {
-        return footer_hint.map(|hint| Line::from(Span::styled(hint.to_string(), styles.hint)));
+        let density = if list.compact_rows() {
+            "Density: Compact"
+        } else {
+            "Density: Comfortable"
+        };
+        let message = match footer_hint {
+            Some(hint) if !hint.is_empty() => format!("{} • Alt+D {}", hint, density),
+            _ => format!("Alt+D {}", density),
+        };
+        return Some(Line::from(Span::styled(message, styles.hint)));
     }
 
     let mut spans = Vec::new();
@@ -722,11 +732,14 @@ pub(super) fn highlight_segments(
 pub fn modal_list_items(
     list: &ModalListState,
     styles: &ModalRenderStyles,
+    content_width: usize,
 ) -> Vec<ListItem<'static>> {
     list.visible_indices
         .iter()
         .enumerate()
-        .map(|(visible_index, &index)| modal_list_item(list, visible_index, index, styles))
+        .map(|(visible_index, &index)| {
+            modal_list_item(list, visible_index, index, styles, content_width)
+        })
         .collect()
 }
 
@@ -735,6 +748,7 @@ fn modal_list_item(
     _visible_index: usize,
     item_index: usize,
     styles: &ModalRenderStyles,
+    content_width: usize,
 ) -> ListItem<'static> {
     let item = match list.items.get(item_index) {
         Some(i) => i,
@@ -785,21 +799,29 @@ fn modal_list_item(
     let mut lines = vec![Line::from(primary_spans)];
 
     if let Some(subtitle) = &item.subtitle {
-        let mut secondary_spans = Vec::new();
-        if !indent.is_empty() {
-            secondary_spans.push(Span::raw(indent.clone()));
+        let indent_width = item.indent as usize * 2;
+        let wrapped_width = content_width.saturating_sub(indent_width).max(1);
+        let wrapped_lines = wrap_line_to_width(subtitle.as_str(), wrapped_width);
+
+        for wrapped in wrapped_lines {
+            let mut secondary_spans = Vec::new();
+            if !indent.is_empty() {
+                secondary_spans.push(Span::raw(indent.clone()));
+            }
+            let subtitle_spans = highlight_segments(
+                wrapped.as_str(),
+                styles.detail,
+                styles.search_match,
+                list.highlight_terms(),
+            );
+            secondary_spans.extend(subtitle_spans);
+            lines.push(Line::from(secondary_spans));
         }
-        let subtitle_spans = highlight_segments(
-            subtitle,
-            styles.detail,
-            styles.search_match,
-            list.highlight_terms(),
-        );
-        secondary_spans.extend(subtitle_spans);
-        lines.push(Line::from(secondary_spans));
     }
 
-    lines.push(Line::default());
+    if !list.compact_rows() && item.selection.is_some() {
+        lines.push(Line::default());
+    }
     ListItem::new(lines)
 }
 

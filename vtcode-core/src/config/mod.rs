@@ -56,7 +56,8 @@ pub use types::{
 pub use validation::{ValidationResult, validate_config, validate_model_exists};
 pub use validator::{ConfigValidator, ModelsDatabase, ValidationResult as ConfigValidationResult};
 pub use vtcode_config::root::{
-    KeyboardProtocolConfig, PtyConfig, ToolOutputMode, UiConfig, UiDisplayMode,
+    KeyboardProtocolConfig, LayoutModeOverride, PtyConfig, ReasoningDisplayMode, ToolOutputMode,
+    UiConfig, UiDisplayMode,
 };
 pub use vtcode_config::status_line::{StatusLineConfig, StatusLineMode};
 pub use vtcode_config::{TimeoutsConfig, resolve_timeout};

@@ -78,6 +78,11 @@ impl Session {
                 self.ensure_prompt_style_color();
                 self.invalidate_transcript_cache();
             }
+            InlineCommand::SetAppearance { appearance } => {
+                self.appearance = appearance;
+                self.invalidate_transcript_cache();
+                self.invalidate_scroll_metrics();
+            }
             InlineCommand::SetQueuedInputs { entries } => {
                 self.set_queued_inputs_entries(entries);
                 self.mark_dirty();

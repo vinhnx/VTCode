@@ -9,6 +9,7 @@ use super::selection::{
     WizardModalMode, WizardStep,
 };
 use super::style::{EditingMode, InlineHeaderContext, InlineSegment, InlineTextStyle, InlineTheme};
+use crate::core_tui::session::config::AppearanceConfig;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum InlineMessageKind {
@@ -62,6 +63,9 @@ pub enum InlineCommand {
     },
     SetTheme {
         theme: InlineTheme,
+    },
+    SetAppearance {
+        appearance: AppearanceConfig,
     },
     SetQueuedInputs {
         entries: Vec<String>,
@@ -251,6 +255,10 @@ impl InlineHandle {
 
     pub fn set_theme(&self, theme: InlineTheme) {
         self.send_command(InlineCommand::SetTheme { theme });
+    }
+
+    pub fn set_appearance(&self, appearance: AppearanceConfig) {
+        self.send_command(InlineCommand::SetAppearance { appearance });
     }
 
     pub fn set_queued_inputs(&self, entries: Vec<String>) {

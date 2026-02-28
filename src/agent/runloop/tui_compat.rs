@@ -114,6 +114,35 @@ pub(crate) fn to_tui_appearance(config: &CoreVTCodeConfig) -> SessionAppearanceC
         } else {
             0
         },
+        layout_mode: match config.ui.layout_mode {
+            vtcode_core::config::LayoutModeOverride::Auto => {
+                vtcode_tui::core_tui::session::config::LayoutModeOverride::Auto
+            }
+            vtcode_core::config::LayoutModeOverride::Compact => {
+                vtcode_tui::core_tui::session::config::LayoutModeOverride::Compact
+            }
+            vtcode_core::config::LayoutModeOverride::Standard => {
+                vtcode_tui::core_tui::session::config::LayoutModeOverride::Standard
+            }
+            vtcode_core::config::LayoutModeOverride::Wide => {
+                vtcode_tui::core_tui::session::config::LayoutModeOverride::Wide
+            }
+        },
+        reasoning_display_mode: match config.ui.reasoning_display_mode {
+            vtcode_core::config::ReasoningDisplayMode::Always => {
+                vtcode_tui::core_tui::session::config::ReasoningDisplayMode::Always
+            }
+            vtcode_core::config::ReasoningDisplayMode::Toggle => {
+                vtcode_tui::core_tui::session::config::ReasoningDisplayMode::Toggle
+            }
+            vtcode_core::config::ReasoningDisplayMode::Hidden => {
+                vtcode_tui::core_tui::session::config::ReasoningDisplayMode::Hidden
+            }
+        },
+        reasoning_visible_default: config.ui.reasoning_visible_default,
+        screen_reader_mode: config.ui.screen_reader_mode,
+        reduce_motion_mode: config.ui.reduce_motion_mode,
+        reduce_motion_keep_progress_animation: config.ui.reduce_motion_keep_progress_animation,
         customization: Default::default(),
     }
 }

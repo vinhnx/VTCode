@@ -58,6 +58,8 @@ impl FromStr for ModelId {
             s if s == models::ollama::GPT_OSS_20B_CLOUD => Ok(ModelId::OllamaGptOss20bCloud),
             s if s == models::ollama::GPT_OSS_120B_CLOUD => Ok(ModelId::OllamaGptOss120bCloud),
             s if s == models::ollama::QWEN3_1_7B => Ok(ModelId::OllamaQwen317b),
+            s if s == models::ollama::QWEN3_CODER_NEXT => Ok(ModelId::OllamaQwen3CoderNext),
+            "qwen3-coder-next" => Ok(ModelId::OllamaQwen3CoderNext),
             s if s == models::ollama::DEEPSEEK_V32_CLOUD => Ok(ModelId::OllamaDeepseekV32Cloud),
             s if s == models::ollama::QWEN3_NEXT_80B_CLOUD => Ok(ModelId::OllamaQwen3Next80bCloud),
             s if s == models::ollama::MISTRAL_LARGE_3_675B_CLOUD => {

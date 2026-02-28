@@ -45,6 +45,7 @@ impl ModelId {
             ModelId::OllamaGptOss20bCloud,
             ModelId::OllamaGptOss120bCloud,
             ModelId::OllamaQwen317b,
+            ModelId::OllamaQwen3CoderNext,
             ModelId::OllamaDeepseekV32Cloud,
             ModelId::OllamaQwen3Next80bCloud,
             ModelId::OllamaMistralLarge3675bCloud,

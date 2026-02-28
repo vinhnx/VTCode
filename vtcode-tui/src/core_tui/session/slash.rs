@@ -10,7 +10,7 @@ use crate::ui::search::fuzzy_score;
 
 use super::super::types::InlineTextStyle;
 use super::{
-    Session, measure_text_width,
+    Session,
     modal::{ModalListLayout, compute_modal_area},
     ratatui_color_from_ansi, ratatui_style_from_inline,
     slash_palette::{self, SlashPaletteUpdate, command_prefix, command_range},
@@ -27,23 +27,8 @@ pub fn render_slash_palette(session: &mut Session, frame: &mut Frame<'_>, viewpo
         return;
     }
 
-    let mut width_hint = measure_text_width(ui::SLASH_PALETTE_HINT_PRIMARY);
-    width_hint = width_hint.max(measure_text_width(ui::SLASH_PALETTE_HINT_SECONDARY));
-    for suggestion in suggestions.iter().take(ui::SLASH_SUGGESTION_LIMIT) {
-        let label = match suggestion {
-            slash_palette::SlashPaletteSuggestion::Static(cmd) => {
-                if !cmd.description.is_empty() {
-                    format!("/{} {}", cmd.name, cmd.description)
-                } else {
-                    format!("/{}", cmd.name)
-                }
-            }
-        };
-        width_hint = width_hint.max(measure_text_width(&label));
-    }
-
     let instructions = slash_palette_instructions(session);
-    let area = compute_modal_area(viewport, width_hint, instructions.len(), 0, 0, true);
+    let area = compute_modal_area(viewport, instructions.len(), 0, 0, true);
 
     frame.render_widget(Clear, area);
     let block = Block::bordered()
@@ -386,7 +371,20 @@ pub(super) fn try_handle_slash_navigation(
         KeyCode::PageDown => page_down_slash_suggestion(session),
         KeyCode::Tab => autocomplete_slash_suggestion(session),
         KeyCode::BackTab => move_slash_selection_up(session),
-        KeyCode::Enter => apply_selected_slash_suggestion(session),
+        KeyCode::Enter => {
+            let applied = apply_selected_slash_suggestion(session);
+            if !applied {
+                return false;
+            }
+
+            let should_submit_now = should_submit_immediately_from_palette(session);
+
+            if should_submit_now {
+                return false;
+            }
+
+            true
+        }
         _ => return false,
     };
 
@@ -395,6 +393,61 @@ pub(super) fn try_handle_slash_navigation(
     }
 
     handled
+}
+
+fn should_submit_immediately_from_palette(session: &Session) -> bool {
+    let Some(command) = session
+        .input_manager
+        .content()
+        .trim_start()
+        .split_whitespace()
+        .next()
+    else {
+        return false;
+    };
+
+    matches!(
+        command,
+        "/files"
+            | "/status"
+            | "/doctor"
+            | "/model"
+            | "/new"
+            | "/git"
+            | "/docs"
+            | "/copy"
+            | "/config"
+            | "/settings"
+            | "/help"
+            | "/clear"
+            | "/exit"
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ui::tui::InlineTheme;
+
+    #[test]
+    fn immediate_submit_matcher_accepts_immediate_commands() {
+        let mut session = Session::new(InlineTheme::default(), None, 20);
+        session.set_input("/files".to_string());
+        assert!(should_submit_immediately_from_palette(&session));
+
+        session.set_input("   /status   ".to_string());
+        assert!(should_submit_immediately_from_palette(&session));
+    }
+
+    #[test]
+    fn immediate_submit_matcher_rejects_argument_driven_commands() {
+        let mut session = Session::new(InlineTheme::default(), None, 20);
+        session.set_input("/command echo hello".to_string());
+        assert!(!should_submit_immediately_from_palette(&session));
+
+        session.set_input("/add-dir ~/tmp".to_string());
+        assert!(!should_submit_immediately_from_palette(&session));
+    }
 }
 
 fn slash_list_items(session: &Session) -> Vec<ListItem<'static>> {

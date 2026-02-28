@@ -77,6 +77,9 @@ impl ModelId {
             ModelId::OllamaQwen317b => {
                 "Qwen3 1.7B served locally through Ollama without external API requirements"
             }
+            ModelId::OllamaQwen3CoderNext => {
+                "Qwen3-Coder-Next served via Ollama Cloud with 256K context, strong coding/tool-use performance, and non-thinking mode responses"
+            }
             ModelId::OllamaDeepseekV32Cloud => {
                 "DeepSeek V3.2 cloud deployment via Ollama with enhanced reasoning and instruction following"
             }

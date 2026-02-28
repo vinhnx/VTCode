@@ -85,11 +85,16 @@ impl Session {
 
     /// Advance animation state on tick and request redraw when a frame changes.
     pub fn handle_tick(&mut self) {
+        let motion_reduced = self.appearance.motion_reduced();
         let mut animation_updated = false;
-        if self.thinking_spinner.is_active && self.thinking_spinner.update() {
+        if !motion_reduced && self.thinking_spinner.is_active && self.thinking_spinner.update() {
             animation_updated = true;
         }
-        let shimmer_active = self.is_shimmer_active();
+        let shimmer_active = if self.appearance.should_animate_progress_status() {
+            self.is_shimmer_active()
+        } else {
+            false
+        };
         if shimmer_active && self.shimmer_state.update() {
             animation_updated = true;
         }
@@ -110,10 +115,11 @@ impl Session {
 
     pub(crate) fn is_running_activity(&self) -> bool {
         let left = self.input_status_left.as_deref().unwrap_or("");
-        let running_status = left.contains("Running command:")
-            || left.contains("Running tool:")
-            || left.contains("Running:")
-            || status_requires_shimmer(left);
+        let running_status = self.appearance.should_animate_progress_status()
+            && (left.contains("Running command:")
+                || left.contains("Running tool:")
+                || left.contains("Running:")
+                || status_requires_shimmer(left));
         let active_pty = self
             .active_pty_sessions
             .as_ref()
@@ -123,6 +129,9 @@ impl Session {
     }
 
     pub(crate) fn has_status_spinner(&self) -> bool {
+        if !self.appearance.should_animate_progress_status() {
+            return false;
+        }
         let Some(left) = self.input_status_left.as_deref() else {
             return false;
         };
@@ -134,7 +143,11 @@ impl Session {
     }
 
     pub(crate) fn use_steady_cursor(&self) -> bool {
-        self.is_shimmer_active() || self.scroll_cursor_steady_until.is_some()
+        if !self.appearance.should_animate_progress_status() {
+            self.scroll_cursor_steady_until.is_some()
+        } else {
+            self.is_shimmer_active() || self.scroll_cursor_steady_until.is_some()
+        }
     }
 
     pub(super) fn mark_scrolling(&mut self) {

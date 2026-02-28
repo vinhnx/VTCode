@@ -314,7 +314,7 @@ pub async fn handle_slash_command(
                 prompt: prompt_text.to_string(),
             })
         }
-        "config" | "settings" => Ok(SlashCommandOutcome::ShowConfig),
+        "config" | "settings" | "setttings" => Ok(SlashCommandOutcome::ShowConfig),
         "clear" => match args {
             "" => Ok(SlashCommandOutcome::ClearScreen),
             "new" | "--new" | "fresh" | "--fresh" => Ok(SlashCommandOutcome::ClearConversation),
@@ -338,8 +338,33 @@ pub async fn handle_slash_command(
             }
             Ok(SlashCommandOutcome::RunDoctor)
         }
+        "analyze" => {
+            let scope = if args.trim().is_empty() {
+                "full"
+            } else {
+                args.trim()
+            };
+            let prompt = format!(
+                "Perform a comprehensive {} codebase analysis for this workspace. Include key findings, risks, and prioritized next actions.",
+                scope
+            );
+            Ok(SlashCommandOutcome::SubmitPrompt { prompt })
+        }
         "mcp" => handle_mcp_command(args, renderer),
         "model" => Ok(SlashCommandOutcome::StartModelSelection),
+        "command" | "comman" => {
+            if args.trim().is_empty() {
+                renderer.line(MessageStyle::Error, "Usage: /command <program> [args...]")?;
+                return Ok(SlashCommandOutcome::Handled);
+            }
+
+            let command = args.trim();
+            let prompt = format!(
+                "Run this terminal command in the current workspace and show the result: {}",
+                command
+            );
+            Ok(SlashCommandOutcome::SubmitPrompt { prompt })
+        }
         "files" => {
             let initial_filter = if args.trim().is_empty() {
                 None

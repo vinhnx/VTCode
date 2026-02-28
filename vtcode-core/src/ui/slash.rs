@@ -56,10 +56,6 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
             description: "Launch git interface (lazygit or interactive git)",
         },
         SlashCommandInfo {
-            name: "debug",
-            description: "Analyze and debug code issues in the workspace (usage: /debug [file|directory|problem])",
-        },
-        SlashCommandInfo {
             name: "analyze",
             description: "Perform comprehensive codebase analysis and generate reports (usage: /analyze [full|security|performance])",
         },

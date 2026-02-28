@@ -3,7 +3,7 @@ use crate::config::constants::ui;
 use crate::ui::tui::style::ratatui_style_from_inline;
 use crate::ui::tui::{
     InlineListItem, InlineListSelection, InlineSegment, InlineTextStyle, InlineTheme,
-    WizardModalMode, WizardStep,
+    SlashCommandItem, WizardModalMode, WizardStep,
 };
 use ratatui::crossterm::event::{Event as CrosstermEvent, KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
@@ -43,6 +43,23 @@ fn session_with_input(input: &str, cursor: usize) -> Session {
     session.set_input(input.to_string());
     session.set_cursor(cursor);
     session
+}
+
+fn session_with_slash_palette_commands() -> Session {
+    Session::new_with_logs(
+        InlineTheme::default(),
+        None,
+        VIEW_ROWS,
+        true,
+        None,
+        vec![
+            SlashCommandItem::new("new", "Start a new session"),
+            SlashCommandItem::new("doctor", "Run diagnostics"),
+            SlashCommandItem::new("command", "Run a terminal command"),
+            SlashCommandItem::new("files", "Browse files"),
+        ],
+        "Agent TUI".to_string(),
+    )
 }
 
 fn visible_transcript(session: &mut Session) -> Vec<String> {
@@ -352,6 +369,80 @@ fn tab_queues_submission() {
 
     let queued = session.process_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
     assert!(matches!(queued, Some(InlineEvent::QueueSubmit(value)) if value == "queued"));
+}
+
+#[test]
+fn double_escape_interrupts_when_running_activity() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.handle_command(InlineCommand::SetInputStatus {
+        left: Some("Running command: test".to_string()),
+        right: None,
+    });
+
+    let first = session.process_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    assert!(
+        matches!(
+            first,
+            Some(InlineEvent::Cancel) | Some(InlineEvent::ForceCancelPtySession)
+        ) || first.is_none()
+    );
+
+    let second = session.process_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    assert!(matches!(second, Some(InlineEvent::Interrupt)));
+}
+
+#[test]
+fn double_escape_does_not_submit_rewind_when_idle() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+
+    let _ = session.process_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    let second = session.process_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+
+    assert!(!matches!(second, Some(InlineEvent::Submit(value)) if value == "/rewind"));
+}
+
+#[test]
+fn slash_palette_enter_submits_immediate_command() {
+    let mut session = session_with_slash_palette_commands();
+
+    for key in [
+        KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE),
+        KeyEvent::new(KeyCode::Char('n'), KeyModifiers::NONE),
+        KeyEvent::new(KeyCode::Char('e'), KeyModifiers::NONE),
+        KeyEvent::new(KeyCode::Char('w'), KeyModifiers::NONE),
+    ] {
+        let event = session.process_key(key);
+        assert!(event.is_none());
+    }
+
+    let submit = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    assert!(matches!(submit, Some(InlineEvent::Submit(value)) if value.trim() == "/new"));
+}
+
+#[test]
+fn slash_palette_hides_entries_for_unmatched_keyword() {
+    let mut session = session_with_slash_palette_commands();
+
+    let _ = session.process_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
+    assert!(
+        !session.slash_palette.suggestions().is_empty(),
+        "slash palette should show entries after typing '/'"
+    );
+
+    for key in [
+        KeyEvent::new(KeyCode::Char('z'), KeyModifiers::NONE),
+        KeyEvent::new(KeyCode::Char('z'), KeyModifiers::NONE),
+        KeyEvent::new(KeyCode::Char('z'), KeyModifiers::NONE),
+        KeyEvent::new(KeyCode::Char('z'), KeyModifiers::NONE),
+    ] {
+        let event = session.process_key(key);
+        assert!(event.is_none());
+    }
+
+    assert!(
+        session.slash_palette.suggestions().is_empty(),
+        "slash palette should hide entries for unmatched /zzzz"
+    );
 }
 
 #[test]

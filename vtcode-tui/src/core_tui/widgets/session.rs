@@ -186,7 +186,7 @@ impl Widget for &mut SessionWidget<'_> {
         // Determine layout mode from viewport or override
         let mode = self
             .layout_mode
-            .unwrap_or_else(|| LayoutMode::from_area(area));
+            .unwrap_or_else(|| self.session.resolved_layout_mode(area));
 
         // Reserve input height so transcript/header never render under input
         let layout_height = area.height.saturating_sub(self.session.input_height);

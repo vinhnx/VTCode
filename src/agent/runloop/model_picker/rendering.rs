@@ -26,6 +26,7 @@ pub(super) const CUSTOM_PROVIDER_TITLE: &str = "Custom provider + model";
 pub(super) const CUSTOM_PROVIDER_SUBTITLE: &str =
     "Provide the provider name and model identifier manually.";
 const CUSTOM_PROVIDER_BADGE: &str = "Manual";
+const PROVIDER_BADGE: &str = "Provider";
 const REASONING_BADGE: &str = "Reasoning";
 const REASONING_OFF_BADGE: &str = "No reasoning";
 const CURRENT_BADGE: &str = "Current";
@@ -39,7 +40,6 @@ pub(super) fn render_step_one_inline(
     dynamic_models: &DynamicModelRegistry,
 ) -> Result<()> {
     let mut items = Vec::new();
-    let mut first_section = true;
     for provider in picker_provider_order() {
         let provider_models: Vec<(usize, &ModelOption)> = options
             .iter()
@@ -54,39 +54,14 @@ pub(super) fn render_step_one_inline(
             continue;
         }
 
-        if !first_section {
-            items.push(provider_group_divider_item());
-        }
-        first_section = false;
         items.push(InlineListItem {
             title: provider.label().to_string(),
             subtitle: None,
-            badge: None,
+            badge: Some(PROVIDER_BADGE.to_string()),
             indent: 0,
             selection: None,
             search_value: Some(provider.label().to_string()),
         });
-
-        if provider == Provider::HuggingFace {
-            items.push(InlineListItem {
-                title: "Hugging Face Inference Providers".to_string(),
-                subtitle: Some("OpenAI-compatible router. Docs: https://huggingface.co/docs/inference-providers".to_string()),
-                badge: Some("Docs".to_string()),
-                indent: 2,
-                selection: None,
-                search_value: Some("huggingface inference providers".to_string()),
-            });
-            items.push(InlineListItem {
-                title: "Custom Hugging Face model".to_string(),
-                subtitle: Some(
-                    "Enter any HF model id (e.g., huggingface <org>/<model>)".to_string(),
-                ),
-                badge: Some("Custom".to_string()),
-                indent: 2,
-                selection: Some(InlineListSelection::CustomModel),
-                search_value: Some("huggingface custom".to_string()),
-            });
-        }
 
         for (idx, option) in &provider_models {
             let badge = option
@@ -96,7 +71,7 @@ pub(super) fn render_step_one_inline(
                 title: option.display.to_string(),
                 subtitle: Some(option.description.to_string()),
                 badge,
-                indent: 2,
+                indent: 1,
                 selection: Some(InlineListSelection::Model(*idx)),
                 search_value: Some(format!("{} {}", provider.label(), option.display)),
             });
@@ -118,7 +93,7 @@ pub(super) fn render_step_one_inline(
                         } else {
                             None
                         },
-                        indent: 2,
+                        indent: 1,
                         selection: Some(InlineListSelection::DynamicModel(*entry_index)),
                         search_value: Some(format!(
                             "{} {}",
@@ -134,7 +109,7 @@ pub(super) fn render_step_one_inline(
                     title: format!("{} cache notice", provider.label()),
                     subtitle: Some(warning.to_string()),
                     badge: Some("Info".to_string()),
-                    indent: 2,
+                    indent: 1,
                     selection: Some(InlineListSelection::RefreshDynamicModels),
                     search_value: Some(format!("{} cache", provider.label())),
                 });
@@ -148,7 +123,7 @@ pub(super) fn render_step_one_inline(
                     title: format!("{} server unreachable", provider.label()),
                     subtitle: Some(format!("{error}\n{instructions}")),
                     badge: Some("Info".to_string()),
-                    indent: 2,
+                    indent: 1,
                     selection: Some(InlineListSelection::CustomModel),
                     search_value: Some(format!("{} setup", provider.label().to_ascii_lowercase())),
                 });
@@ -161,7 +136,7 @@ pub(super) fn render_step_one_inline(
                         .to_string(),
                 ),
                 badge: Some("Docs".to_string()),
-                indent: 2,
+                indent: 1,
                 selection: None,
                 search_value: Some("huggingface docs".to_string()),
             });
@@ -169,9 +144,19 @@ pub(super) fn render_step_one_inline(
                 title: "Set HF_TOKEN in environment".to_string(),
                 subtitle: Some("Required for Hugging Face router authentication".to_string()),
                 badge: Some("Tip".to_string()),
-                indent: 2,
+                indent: 1,
                 selection: None,
                 search_value: Some("huggingface hf_token".to_string()),
+            });
+            items.push(InlineListItem {
+                title: "Custom Hugging Face model".to_string(),
+                subtitle: Some(
+                    "Enter any HF model id (e.g., huggingface <org>/<model>)".to_string(),
+                ),
+                badge: Some("Custom".to_string()),
+                indent: 1,
+                selection: Some(InlineListSelection::CustomModel),
+                search_value: Some("huggingface custom".to_string()),
             });
         }
     }
@@ -200,7 +185,7 @@ pub(super) fn render_step_one_inline(
 
     let search = InlineListSearchConfig {
         label: "Search models or providers".to_string(),
-        placeholder: Some("Type to filter models".to_string()),
+        placeholder: Some("Filter models/providers".to_string()),
     };
     renderer.show_list_modal(STEP_ONE_TITLE, lines, items, None, Some(search));
 
@@ -338,17 +323,6 @@ pub(super) fn render_step_one_plain(
     }
 
     Ok(())
-}
-
-fn provider_group_divider_item() -> InlineListItem {
-    InlineListItem {
-        title: provider_group_divider_line(),
-        subtitle: None,
-        badge: None,
-        indent: 0,
-        selection: None,
-        search_value: None,
-    }
 }
 
 fn provider_group_divider_line() -> String {

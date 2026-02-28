@@ -111,7 +111,17 @@ impl<'a> InlineModalProcessor<'a> {
         match self.model_picker.handle_submit(renderer, selection).await? {
             ModelPickerOutcome::SkipPalette => Ok(InlineLoopAction::Continue),
             ModelPickerOutcome::ForwardToPalette(selection) => {
-                self.palette.handle_submit(renderer, selection).await
+                self.palette
+                    .handle_submit(
+                        renderer,
+                        selection,
+                        self.model_picker.config,
+                        self.model_picker.vt_cfg,
+                        self.model_picker.provider_client.as_ref(),
+                        self.model_picker.session_bootstrap,
+                        self.model_picker.full_auto,
+                    )
+                    .await
             }
             ModelPickerOutcome::Continue => Ok(InlineLoopAction::Continue),
         }
@@ -140,6 +150,11 @@ impl<'a> PaletteCoordinator<'a> {
         &mut self,
         renderer: &mut AnsiRenderer,
         selection: InlineListSelection,
+        config: &mut CoreAgentConfig,
+        vt_cfg: &mut Option<VTCodeConfig>,
+        provider_client: &dyn uni::LLMProvider,
+        session_bootstrap: &SessionBootstrap,
+        full_auto: bool,
     ) -> Result<InlineLoopAction> {
         if let Some(active) = self.state.take() {
             // Check if this is a session selection - if so, return the ResumeSession action
@@ -151,8 +166,18 @@ impl<'a> PaletteCoordinator<'a> {
                 return Ok(InlineLoopAction::ResumeSession(session_id.clone()));
             }
 
-            let restore =
-                handle_palette_selection(active, selection, renderer, self.handle).await?;
+            let restore = handle_palette_selection(
+                active,
+                selection,
+                renderer,
+                self.handle,
+                config,
+                vt_cfg,
+                provider_client,
+                session_bootstrap,
+                full_auto,
+            )
+            .await?;
             if let Some(state) = restore {
                 *self.state = Some(state);
             }

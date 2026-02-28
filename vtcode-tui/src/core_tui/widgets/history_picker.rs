@@ -13,13 +13,12 @@ use crate::config::constants::ui;
 use crate::ui::tui::session::{
     Session, history_picker::HistoryPickerState, modal::compute_modal_area, terminal_capabilities,
 };
-use crate::ui::tui::style::{measure_text_width, ratatui_color_from_ansi};
+use crate::ui::tui::style::ratatui_color_from_ansi;
 
 /// Constants for the history picker UI
 const HISTORY_PICKER_TITLE: &str = "History (Ctrl+R)";
 const HISTORY_PICKER_HINT: &str = "Tab Navigate · Enter Accept · Esc Cancel";
 const HISTORY_PICKER_MAX_VISIBLE: usize = 10;
-const HISTORY_PICKER_MIN_WIDTH: u16 = 45;
 
 /// Widget for rendering the history picker overlay
 pub struct HistoryPickerWidget<'a> {
@@ -48,25 +47,12 @@ impl<'a> HistoryPickerWidget<'a> {
         let matches = &self.picker.matches;
         let visible_count = matches.len().min(HISTORY_PICKER_MAX_VISIBLE);
 
-        // Calculate width based on content
-        let mut width_hint = HISTORY_PICKER_MIN_WIDTH;
-        width_hint = width_hint.max(measure_text_width(HISTORY_PICKER_HINT) + 4);
-
-        for m in matches.iter().take(visible_count) {
-            // Truncate long entries for width calculation
-            let display_len = m.content.chars().take(60).count() as u16 + 6;
-            width_hint = width_hint.max(display_len);
-        }
-
-        // Cap width to viewport
-        width_hint = width_hint.min(self.viewport.width.saturating_sub(4));
-
         // Calculate height: hint + items + border (more compact)
         let hint_height = 1;
         let content_height = if matches.is_empty() { 1 } else { visible_count };
         let modal_height = hint_height + content_height + 2;
 
-        let area = compute_modal_area(self.viewport, width_hint, modal_height, 0, 0, true);
+        let area = compute_modal_area(self.viewport, modal_height, 0, 0, true);
 
         // Clear the background
         Clear.render(area, buf);

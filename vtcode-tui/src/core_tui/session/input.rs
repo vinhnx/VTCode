@@ -401,7 +401,9 @@ impl Session {
 
         // Add left content (git status or shimmered activity)
         if let Some(left_value) = left.as_ref() {
-            if status_requires_shimmer(left_value) {
+            if status_requires_shimmer(left_value)
+                && self.appearance.should_animate_progress_status()
+            {
                 spans.extend(shimmer_spans_with_style_at_phase(
                     left_value,
                     dim_style,

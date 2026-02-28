@@ -221,6 +221,21 @@ pub struct UiConfig {
     /// Notification preferences for attention events.
     #[serde(default)]
     pub notifications: UiNotificationsConfig,
+
+    /// Screen reader mode: disables animations, uses plain text indicators,
+    /// and optimizes output for assistive technology compatibility.
+    /// Can also be enabled via VTCODE_SCREEN_READER=1 environment variable.
+    #[serde(default = "default_screen_reader_mode")]
+    pub screen_reader_mode: bool,
+
+    /// Reduce motion mode: minimizes shimmer/flashing animations.
+    /// Can also be enabled via VTCODE_REDUCE_MOTION=1 environment variable.
+    #[serde(default = "default_reduce_motion_mode")]
+    pub reduce_motion_mode: bool,
+
+    /// Keep animated progress indicators while reduce_motion_mode is enabled.
+    #[serde(default = "default_reduce_motion_keep_progress_animation")]
+    pub reduce_motion_keep_progress_animation: bool,
 }
 
 /// Color scheme mode for theme selection
@@ -297,6 +312,29 @@ fn default_notifications_tool_success() -> bool {
     false
 }
 
+fn env_bool_var(name: &str) -> Option<bool> {
+    std::env::var(name).ok().and_then(|v| {
+        let normalized = v.trim().to_ascii_lowercase();
+        match normalized.as_str() {
+            "1" | "true" | "yes" | "on" => Some(true),
+            "0" | "false" | "no" | "off" => Some(false),
+            _ => None,
+        }
+    })
+}
+
+fn default_screen_reader_mode() -> bool {
+    env_bool_var("VTCODE_SCREEN_READER").unwrap_or(false)
+}
+
+fn default_reduce_motion_mode() -> bool {
+    env_bool_var("VTCODE_REDUCE_MOTION").unwrap_or(false)
+}
+
+fn default_reduce_motion_keep_progress_animation() -> bool {
+    false
+}
+
 fn default_ask_questions_enabled() -> bool {
     true
 }
@@ -326,6 +364,9 @@ impl Default for UiConfig {
             safe_colors_only: default_safe_colors_only(),
             color_scheme_mode: default_color_scheme_mode(),
             notifications: UiNotificationsConfig::default(),
+            screen_reader_mode: default_screen_reader_mode(),
+            reduce_motion_mode: default_reduce_motion_mode(),
+            reduce_motion_keep_progress_animation: default_reduce_motion_keep_progress_animation(),
         }
     }
 }

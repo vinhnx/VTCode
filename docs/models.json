@@ -2211,6 +2211,22 @@
         },
         "context": 32768
       },
+      "qwen3-coder-next:cloud": {
+        "id": "qwen3-coder-next:cloud",
+        "name": "Qwen3-Coder-Next (cloud)",
+        "description": "Agentically-trained coding model built on Qwen3-Next-80B-A3B-Base with hybrid attention + MoE, optimized for efficient tool-use and non-thinking responses.",
+        "reasoning": false,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 262144
+      },
       "deepseek-v3.1:671b-cloud": {
         "id": "deepseek-v3.1:671b-cloud",
         "name": "DeepSeek V3.1 671B (cloud)",

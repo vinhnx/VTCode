@@ -494,6 +494,7 @@ pub(crate) async fn stream_and_render_response_with_options_impl(
         && aggregated.trim().is_empty()
         && !has_renderable_content
         && !rendered_reasoning_before
+        && renderer.reasoning_visible()
         && let Some(reasoning) = response.reasoning.as_deref()
     {
         let reasoning_trimmed = clean_reasoning_text(reasoning.trim());

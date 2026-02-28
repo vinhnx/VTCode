@@ -315,11 +315,12 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                     .as_ref()
                     .map(|s| s.load(std::sync::atomic::Ordering::Relaxed))
                     .unwrap_or(0);
+                let has_running_activity = session.is_running_activity();
 
-                if is_double_escape {
-                    // Double-escape: trigger rewind functionality
+                if is_double_escape && (has_running_activity || active_pty_count > 0) {
+                    // Double-escape while busy: interrupt current work (Ctrl+C equivalent)
                     session.mark_dirty();
-                    Some(InlineEvent::Submit("/rewind".to_string()))
+                    Some(InlineEvent::Interrupt)
                 } else if active_pty_count > 0 {
                     // Single escape with active PTY sessions: force cancel them
                     session.mark_dirty();

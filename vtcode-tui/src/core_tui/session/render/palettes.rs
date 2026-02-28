@@ -30,15 +30,9 @@ fn render_palette_generic<F>(
         return;
     }
 
-    // Calculate width hint
-    let mut width_hint = 40u16;
-    for (_, display_text, _) in &params.items {
-        width_hint = width_hint.max(measure_text_width(display_text) + 4);
-    }
-
     let modal_height =
         params.items.len() + params.instructions.len() + 2 + if params.has_more { 1 } else { 0 };
-    let area = compute_modal_area(viewport, width_hint, modal_height, 0, 0, true);
+    let area = compute_modal_area(viewport, modal_height, 0, 0, true);
 
     frame.render_widget(Clear, area);
     let block = Block::bordered()
@@ -176,9 +170,8 @@ pub fn render_file_palette(session: &mut Session, frame: &mut Frame<'_>, viewpor
 }
 
 fn render_file_palette_loading(session: &Session, frame: &mut Frame<'_>, viewport: Rect) {
-    let width_hint = 40u16;
     let modal_height = 3;
-    let area = compute_modal_area(viewport, width_hint, modal_height, 0, 0, true);
+    let area = compute_modal_area(viewport, modal_height, 0, 0, true);
 
     frame.render_widget(Clear, area);
     let block = Block::bordered()
