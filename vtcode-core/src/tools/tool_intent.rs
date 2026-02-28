@@ -202,6 +202,59 @@ fn unified_search_action_from_object(args: &serde_json::Map<String, Value>) -> O
         })
 }
 
+fn is_unified_search_arg_key(key: &str) -> bool {
+    matches!(
+        key.to_ascii_lowercase().as_str(),
+        "action"
+            | "pattern"
+            | "query"
+            | "path"
+            | "keyword"
+            | "url"
+            | "scope"
+            | "sub_action"
+            | "name"
+    )
+}
+
+fn object_has_unified_search_signal(args: &serde_json::Map<String, Value>) -> bool {
+    args.keys().any(|key| is_unified_search_arg_key(key))
+}
+
+fn parse_object_json_string(payload: &str) -> Option<serde_json::Map<String, Value>> {
+    let parsed = serde_json::from_str::<Value>(payload).ok()?;
+    parsed.as_object().cloned()
+}
+
+fn extract_unified_search_args_object(args: &Value) -> Option<serde_json::Map<String, Value>> {
+    match args {
+        Value::Object(args_obj) => {
+            if object_has_unified_search_signal(args_obj) {
+                return Some(args_obj.clone());
+            }
+
+            for wrapper in ["arguments", "args"] {
+                let Some(candidate) = get_field_case_insensitive(args_obj, wrapper) else {
+                    continue;
+                };
+                match candidate {
+                    Value::Object(inner_obj) => return Some(inner_obj.clone()),
+                    Value::String(inner_str) => {
+                        if let Some(parsed_obj) = parse_object_json_string(inner_str) {
+                            return Some(parsed_obj);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+
+            Some(args_obj.clone())
+        }
+        Value::String(raw) => parse_object_json_string(raw),
+        _ => None,
+    }
+}
+
 /// Determine the action for unified_search tool based on args.
 /// Returns the action string or None if no inference is possible.
 pub fn unified_search_action(args: &Value) -> Option<&str> {
@@ -211,12 +264,12 @@ pub fn unified_search_action(args: &Value) -> Option<&str> {
 
 /// Normalize unified_search args so case/shape variants still pass schema checks.
 pub fn normalize_unified_search_args(args: &Value) -> Value {
-    let Some(args_obj) = args.as_object() else {
+    let Some(args_obj) = extract_unified_search_args_object(args) else {
         return args.clone();
     };
 
     let mut normalized = serde_json::Map::with_capacity(args_obj.len() + 1);
-    for (key, value) in args_obj {
+    for (key, value) in &args_obj {
         let canonical = if key.eq_ignore_ascii_case("action") {
             "action"
         } else if key.eq_ignore_ascii_case("pattern") {
@@ -399,6 +452,31 @@ mod tests {
         let normalized = normalize_unified_search_args(&json!({
             "Pattern": "needle",
             "Path": "."
+        }));
+
+        assert_eq!(normalized["pattern"], "needle");
+        assert_eq!(normalized["path"], ".");
+        assert_eq!(normalized["action"], "grep");
+    }
+
+    #[test]
+    fn normalize_unified_search_args_unwraps_arguments_object() {
+        let normalized = normalize_unified_search_args(&json!({
+            "arguments": {
+                "Pattern": "needle",
+                "Path": "."
+            }
+        }));
+
+        assert_eq!(normalized["pattern"], "needle");
+        assert_eq!(normalized["path"], ".");
+        assert_eq!(normalized["action"], "grep");
+    }
+
+    #[test]
+    fn normalize_unified_search_args_parses_arguments_json_string() {
+        let normalized = normalize_unified_search_args(&json!({
+            "args": "{\"Pattern\":\"needle\",\"Path\":\".\"}"
         }));
 
         assert_eq!(normalized["pattern"], "needle");
