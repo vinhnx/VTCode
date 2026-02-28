@@ -7,7 +7,7 @@
 //!
 //! ## Highlights
 //!
-//! - **Multi-provider agent**: integrations for OpenAI, Anthropic, xAI,
+//! - **Multi-provider agent**: integrations for OpenAI, Anthropic,
 //!   DeepSeek, Gemini, OpenRouter, and Ollama (local) with automatic failover and spend guards.
 //! - **Semantic code understanding**: LLM-native code analysis and navigation (Rust, Python,
 //!   JavaScript, TypeScript, Go, Java, and more) without the need for local grammar libraries.
@@ -45,8 +45,8 @@
 //!
 //! ```toml
 //! [agent]
-//! provider = "anthropic"
-//! default_model = "claude-sonnet-4-5"
+//! provider = "openai"
+//! default_model = "gpt-5.3-codex"
 //! ```
 //!
 //! The configuration loader resolves aliases through

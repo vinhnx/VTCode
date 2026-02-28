@@ -46,6 +46,7 @@ impl ModelId {
             Provider::Moonshot => ModelId::Gemini31ProPreview,
             Provider::OpenRouter => ModelId::OpenRouterQwen3Coder,
             Provider::Ollama => ModelId::OllamaGptOss20b,
+            Provider::LmStudio => ModelId::GPT5,
             Provider::ZAI => ModelId::ZaiGlm5,
         }
     }
@@ -62,6 +63,7 @@ impl ModelId {
             Provider::Moonshot => ModelId::Gemini3FlashPreview,
             Provider::OpenRouter => ModelId::OpenRouterQwen3Coder,
             Provider::Ollama => ModelId::OllamaQwen317b,
+            Provider::LmStudio => ModelId::GPT5Mini,
             Provider::ZAI => ModelId::OllamaGlm5Cloud,
         }
     }
@@ -78,6 +80,7 @@ impl ModelId {
             Provider::Moonshot => ModelId::Gemini3FlashPreview,
             Provider::OpenRouter => ModelId::OpenRouterQwen3Coder,
             Provider::Ollama => ModelId::OllamaGptOss20b,
+            Provider::LmStudio => ModelId::GPT5,
             Provider::ZAI => ModelId::ZaiGlm5,
         }
     }

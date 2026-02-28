@@ -1,6 +1,4 @@
-use crate::agent::runloop::unified::turn::context::{
-    TurnHandlerOutcome, TurnLoopResult, TurnProcessingContext,
-};
+use crate::agent::runloop::unified::turn::context::{TurnHandlerOutcome, TurnProcessingContext};
 use anyhow::Result;
 use serde_json::Value;
 use std::borrow::Cow;
@@ -365,31 +363,50 @@ pub(crate) async fn handle_turn_balancer(
                 "[!] Turn balancer: pausing due to repeated low-signal calls.",
             )
             .unwrap_or(()); // Best effort
+        ctx.renderer
+            .line(
+                MessageStyle::Info,
+                "[!] Turn balancer: recovery mode engaged; continuing this turn.",
+            )
+            .unwrap_or(());
         ctx.working_history.push(uni::Message::system(
-            "Turn balancer paused after repeated low-signal calls.".to_string(),
+            "Turn balancer recovery mode: repeated low-signal calls detected. Continue this turn, stop repeating the same tool/signature, summarize key findings, and execute one concrete next step (targeted edit or targeted command).".to_string(),
         ));
         // Record in ledger
         {
             let mut ledger = ctx.decision_ledger.write().await;
             ledger.record_decision(
-                "Turn balancer: Churn detected".to_string(),
+                "Turn balancer: Recovery intervention".to_string(),
                 vtcode_core::core::decision_tracker::Action::Response {
-                    content: "Turn balancer triggered.".to_string(),
+                    content: "Low-signal churn detected; strategy reset and turn continues."
+                        .to_string(),
                     response_type:
                         vtcode_core::core::decision_tracker::ResponseType::ContextSummary,
                 },
                 None,
             );
         }
-        return TurnHandlerOutcome::Break(TurnLoopResult::Completed);
+        return apply_balancer_recovery(repeated_tool_attempts);
     }
 
     TurnHandlerOutcome::Continue
 }
 
+fn apply_balancer_recovery(
+    repeated_tool_attempts: &mut crate::agent::runloop::unified::turn::tool_outcomes::helpers::LoopTracker,
+) -> TurnHandlerOutcome {
+    repeated_tool_attempts.reset_after_balancer_recovery();
+    TurnHandlerOutcome::Continue
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{is_readonly_signature, navigation_loop_guidance, validate_tool_args_security};
+    use super::{
+        apply_balancer_recovery, is_readonly_signature, navigation_loop_guidance,
+        validate_tool_args_security,
+    };
+    use crate::agent::runloop::unified::turn::context::TurnHandlerOutcome;
+    use crate::agent::runloop::unified::turn::tool_outcomes::helpers::LoopTracker;
     use serde_json::json;
     use vtcode_core::config::constants::tools as tool_names;
 
@@ -445,5 +462,23 @@ mod tests {
         let guidance = navigation_loop_guidance(false);
         assert!(guidance.contains("read/search"));
         assert!(!guidance.contains("plan_task_tracker"));
+    }
+
+    #[test]
+    fn balancer_recovery_continues_and_resets_tracker() {
+        let mut tracker = LoopTracker::new();
+        let sig = r#"unified_exec:{"action":"run","command":"cargo test"}"#.to_string();
+        tracker.record(sig.clone());
+        tracker.record(sig.clone());
+        tracker.record(sig);
+        tracker.consecutive_mutations = 3;
+        tracker.consecutive_navigations = 5;
+
+        let outcome = apply_balancer_recovery(&mut tracker);
+
+        assert!(matches!(outcome, TurnHandlerOutcome::Continue));
+        assert_eq!(tracker.max_count_filtered(|_| false), 0);
+        assert_eq!(tracker.consecutive_mutations, 0);
+        assert_eq!(tracker.consecutive_navigations, 0);
     }
 }

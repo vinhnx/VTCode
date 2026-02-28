@@ -13,8 +13,8 @@
 # ================
 # Configure which AI provider and model to use
 [agent]
-provider = "anthropic"        # Available: openai, anthropic, google, together, fireworks, ollama
-default_model = "claude-sonnet-4-5"   # Model to use by default
+provider = "openai"        # Available: openai, anthropic, google, together, fireworks, ollama
+default_model = "gpt-5.3-codex"   # Model to use by default
 
 # Provider-specific settings for different AI services
 [agent.provider_settings.openai]

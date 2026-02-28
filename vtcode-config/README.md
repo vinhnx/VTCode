@@ -66,7 +66,7 @@ For more information about AgentSkills implementation in VT Code, see [Agent Ski
 
 ### Supported Providers
 
-VT Code works with OpenAI, Anthropic, Google Gemini, xAI, DeepSeek, OpenRouter, Z.AI, Moonshot AI, MiniMax, HuggingFace Inference Providers, Ollama (local & cloud), and LM Studio (local).
+VT Code works with OpenAI, Anthropic, Google Gemini, DeepSeek, OpenRouter, Z.AI, Moonshot AI, MiniMax, HuggingFace Inference Providers, Ollama (local & cloud), and LM Studio (local).
 
 Set the corresponding environment variable for your provider (see [Installation Guide](./docs/installation/#supported-ai-providers) for all options).
 
@@ -146,7 +146,7 @@ VT Code follows the [Command Line Interface Guidelines](https://clig.dev/) and s
 ### Key Features
 
 - **Security First**: Multi-layered security model with tree-sitter-bash command validation, execution policy, and sandbox isolation
-- **Multi-Provider AI**: OpenAI, Anthropic, xAI, DeepSeek, Gemini, Z.AI, Moonshot AI, OpenRouter, MiniMax, Ollama (local)
+- **Multi-Provider AI**: OpenAI, Anthropic, DeepSeek, Gemini, Z.AI, Moonshot AI, OpenRouter, MiniMax, Ollama (local)
 - **Semantic Code Understanding**: LLM-native code analysis and navigation (Rust, Python, JavaScript/TypeScript, Go, Java, and more)
 - **Smart Tools**: Built-in code analysis, file operations, terminal commands, and refactoring
 - **Agent Skills**: Comprehensive skills location system with multi-location support and precedence handling, aligned with the [open Agent Skills standard](http://agentskills.io/) ([docs](./docs/skills/skills/SKILLS_GUIDE.md))

@@ -82,9 +82,6 @@ pub struct ProviderPromptCachingConfig {
     #[serde(default = "MoonshotPromptCacheSettings::default")]
     pub moonshot: MoonshotPromptCacheSettings,
 
-    #[serde(default = "XAIPromptCacheSettings::default")]
-    pub xai: XAIPromptCacheSettings,
-
     #[serde(default = "DeepSeekPromptCacheSettings::default")]
     pub deepseek: DeepSeekPromptCacheSettings,
 
@@ -301,22 +298,6 @@ impl Default for MoonshotPromptCacheSettings {
     fn default() -> Self {
         Self {
             enabled: default_moonshot_enabled(),
-        }
-    }
-}
-
-/// xAI prompt caching configuration (automatic platform-level cache)
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct XAIPromptCacheSettings {
-    #[serde(default = "default_true")]
-    pub enabled: bool,
-}
-
-impl Default for XAIPromptCacheSettings {
-    fn default() -> Self {
-        Self {
-            enabled: default_true(),
         }
     }
 }

@@ -25,7 +25,7 @@ pub use prompt_cache::{
     AnthropicPromptCacheSettings, DeepSeekPromptCacheSettings, GeminiPromptCacheMode,
     GeminiPromptCacheSettings, MoonshotPromptCacheSettings, OpenAIPromptCacheKeyMode,
     OpenAIPromptCacheSettings, OpenRouterPromptCacheSettings, PromptCachingConfig,
-    ProviderPromptCachingConfig, XAIPromptCacheSettings, ZaiPromptCacheSettings,
+    ProviderPromptCachingConfig, ZaiPromptCacheSettings,
 };
 pub use provider::{AnthropicConfig, ToolSearchConfig};
 pub use sandbox::{

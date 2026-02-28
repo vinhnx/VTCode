@@ -84,7 +84,7 @@ fn test_header_context_rendering() {
     let context = InlineHeaderContext {
         app_name: "VT Code".to_string(),
         provider: "openai".to_string(),
-        model: "gpt-5".to_string(),
+        model: "gpt-oss-20b".to_string(),
         version: "0.37.1".to_string(),
         git: "main branch".to_string(),
         mode: "interactive".to_string(),

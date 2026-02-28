@@ -14,7 +14,7 @@ const DEFAULT_MAX_AGE_DAYS: u64 = 30;
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct AgentConfig {
-    /// AI provider for single agent mode (gemini, openai, anthropic, openrouter, xai, zai)
+    /// AI provider for single agent mode (gemini, openai, anthropic, openrouter, zai)
     #[serde(default = "default_provider")]
     pub provider: String,
 

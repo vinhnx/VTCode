@@ -177,10 +177,6 @@ fn test_model_providers() {
     assert_eq!(ModelId::OllamaGptOss120bCloud.provider(), Provider::Ollama);
     assert_eq!(ModelId::OllamaQwen317b.provider(), Provider::Ollama);
     assert_eq!(
-        ModelId::OpenRouterGrokCodeFast1.provider(),
-        Provider::OpenRouter
-    );
-    assert_eq!(
         ModelId::OpenRouterAnthropicClaudeSonnet45.provider(),
         Provider::OpenRouter
     );
@@ -214,7 +210,7 @@ fn test_provider_defaults() {
     );
     assert_eq!(
         ModelId::default_orchestrator_for_provider(Provider::OpenRouter),
-        ModelId::OpenRouterGrokCodeFast1
+        ModelId::OpenRouterQwen3Coder
     );
     assert_eq!(
         ModelId::default_orchestrator_for_provider(Provider::Ollama),
@@ -243,7 +239,7 @@ fn test_provider_defaults() {
     );
     assert_eq!(
         ModelId::default_subagent_for_provider(Provider::OpenRouter),
-        ModelId::OpenRouterGrokCodeFast1
+        ModelId::OpenRouterQwen3Coder
     );
     assert_eq!(
         ModelId::default_subagent_for_provider(Provider::Ollama),
@@ -443,7 +439,6 @@ fn test_fallback_models() {
     assert!(fallbacks.contains(&ModelId::ClaudeSonnet45));
     assert!(fallbacks.contains(&ModelId::DeepSeekReasoner));
     assert!(fallbacks.contains(&ModelId::ZaiGlm5));
-    assert!(fallbacks.contains(&ModelId::OpenRouterGrokCodeFast1));
 }
 
 #[test]

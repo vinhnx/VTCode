@@ -45,54 +45,75 @@ fn sandbox_policy_from_runtime_config(
                 sandbox_config.external.sandbox_type
             ),
         }),
-        RuntimeSandboxMode::WorkspaceWrite => {
-            let network_blocked = sandbox_config.network.block_all;
-            let network_allow_all = !network_blocked && sandbox_config.network.allow_all;
-            let network_allowlist = if network_blocked || sandbox_config.network.allow_all {
-                Vec::new()
-            } else {
-                sandbox_config
-                    .network
-                    .allowlist
-                    .iter()
-                    .filter_map(|entry| {
-                        let domain = entry.domain.trim();
-                        (!domain.is_empty()).then(|| {
-                            NetworkAllowlistEntry::with_port(domain.to_string(), entry.port)
-                        })
-                    })
-                    .collect::<Vec<_>>()
-            };
-            let network_enabled = network_allow_all || !network_allowlist.is_empty();
-            let sensitive_paths =
-                sensitive_paths_from_runtime_config(&sandbox_config.sensitive_paths);
-            let resource_limits =
-                resource_limits_from_runtime_config(&sandbox_config.resource_limits);
-            let seccomp_profile =
-                seccomp_profile_from_runtime_config(sandbox_config, network_enabled);
+        RuntimeSandboxMode::WorkspaceWrite => Ok(workspace_write_policy_from_runtime_config(
+            sandbox_config,
+            workspace_root,
+        )),
+    }
+}
 
-            let mut policy = SandboxPolicy::workspace_write_full(
-                vec![workspace_root.to_path_buf()],
-                network_allowlist,
-                Some(sensitive_paths),
-                resource_limits,
-                seccomp_profile,
-            );
-            if network_allow_all {
-                if let SandboxPolicy::WorkspaceWrite {
-                    network_access,
-                    network_allowlist,
-                    ..
-                } = &mut policy
-                {
-                    *network_access = true;
-                    network_allowlist.clear();
-                }
-            }
+fn workspace_write_policy_from_runtime_config(
+    sandbox_config: &vtcode_config::SandboxConfig,
+    workspace_root: &Path,
+) -> SandboxPolicy {
+    let network_blocked = sandbox_config.network.block_all;
+    let network_allow_all = !network_blocked && sandbox_config.network.allow_all;
+    let network_allowlist = if network_blocked || sandbox_config.network.allow_all {
+        Vec::new()
+    } else {
+        sandbox_config
+            .network
+            .allowlist
+            .iter()
+            .filter_map(|entry| {
+                let domain = entry.domain.trim();
+                (!domain.is_empty())
+                    .then(|| NetworkAllowlistEntry::with_port(domain.to_string(), entry.port))
+            })
+            .collect::<Vec<_>>()
+    };
+    let network_enabled = network_allow_all || !network_allowlist.is_empty();
+    let sensitive_paths = sensitive_paths_from_runtime_config(&sandbox_config.sensitive_paths);
+    let resource_limits = resource_limits_from_runtime_config(&sandbox_config.resource_limits);
+    let seccomp_profile = seccomp_profile_from_runtime_config(sandbox_config, network_enabled);
 
-            Ok(policy)
+    let mut policy = SandboxPolicy::workspace_write_full(
+        vec![workspace_root.to_path_buf()],
+        network_allowlist,
+        Some(sensitive_paths),
+        resource_limits,
+        seccomp_profile,
+    );
+    if network_allow_all {
+        if let SandboxPolicy::WorkspaceWrite {
+            network_access,
+            network_allowlist,
+            ..
+        } = &mut policy
+        {
+            *network_access = true;
+            network_allowlist.clear();
         }
     }
+    policy
+}
+
+fn sandbox_policy_for_command(
+    sandbox_config: &vtcode_config::SandboxConfig,
+    workspace_root: &Path,
+    requested_command: &[String],
+) -> Result<SandboxPolicy> {
+    let mut policy = sandbox_policy_from_runtime_config(sandbox_config, workspace_root)?;
+
+    // Keep sandboxing enabled, but avoid blocking normal agent edit/build loops when
+    // read-only mode is accidentally configured for mutating commands.
+    if matches!(policy, SandboxPolicy::ReadOnly)
+        && command_likely_writes_workspace(requested_command)
+    {
+        policy = workspace_write_policy_from_runtime_config(sandbox_config, workspace_root);
+    }
+
+    Ok(policy)
 }
 
 fn resource_limits_from_runtime_config(
@@ -204,7 +225,7 @@ fn apply_runtime_sandbox_to_command(
         return Ok(command);
     }
 
-    let policy = sandbox_policy_from_runtime_config(sandbox_config, workspace_root)?;
+    let policy = sandbox_policy_for_command(sandbox_config, workspace_root, requested_command)?;
     if matches!(policy, SandboxPolicy::DangerFullAccess) {
         return Ok(command);
     }
@@ -359,6 +380,96 @@ fn command_likely_needs_network(command: &[String]) -> bool {
             )
         });
     }
+    false
+}
+
+fn command_likely_writes_workspace(command: &[String]) -> bool {
+    let Some(program) = command.first() else {
+        return false;
+    };
+    let name = Path::new(program)
+        .file_name()
+        .and_then(|value| value.to_str())
+        .unwrap_or(program.as_str())
+        .to_ascii_lowercase();
+
+    if matches!(
+        name.as_str(),
+        "touch"
+            | "mkdir"
+            | "rm"
+            | "rmdir"
+            | "mv"
+            | "cp"
+            | "chmod"
+            | "chown"
+            | "ln"
+            | "install"
+            | "truncate"
+            | "rustfmt"
+            | "gofmt"
+    ) {
+        return true;
+    }
+
+    if name == "sed" {
+        return command
+            .iter()
+            .skip(1)
+            .any(|arg| arg == "-i" || arg.starts_with("-i"));
+    }
+
+    if name == "perl" {
+        return command
+            .iter()
+            .skip(1)
+            .any(|arg| arg == "-i" || arg.starts_with("-i"));
+    }
+
+    if name == "cargo" {
+        return command.iter().skip(1).any(|arg| {
+            matches!(
+                arg.as_str(),
+                "fmt" | "fix" | "build" | "check" | "clippy" | "test" | "nextest" | "clean"
+            )
+        });
+    }
+
+    if matches!(name.as_str(), "npm" | "pnpm" | "yarn" | "bun") {
+        return command
+            .iter()
+            .skip(1)
+            .any(|arg| matches!(arg.as_str(), "install" | "ci" | "add" | "update"));
+    }
+
+    if name == "go" {
+        return command
+            .iter()
+            .skip(1)
+            .any(|arg| matches!(arg.as_str(), "fmt" | "test" | "build" | "mod"));
+    }
+
+    if name == "git" {
+        return command.iter().skip(1).any(|arg| {
+            matches!(
+                arg.as_str(),
+                "add"
+                    | "apply"
+                    | "checkout"
+                    | "switch"
+                    | "merge"
+                    | "rebase"
+                    | "cherry-pick"
+                    | "commit"
+                    | "stash"
+                    | "reset"
+                    | "restore"
+                    | "rm"
+                    | "mv"
+            )
+        });
+    }
+
     false
 }
 
@@ -2339,7 +2450,7 @@ mod unified_action_error_tests {
 mod sandbox_runtime_tests {
     use super::{
         apply_runtime_sandbox_to_command, enforce_sandbox_preflight_guards,
-        sandbox_policy_from_runtime_config,
+        sandbox_policy_for_command, sandbox_policy_from_runtime_config,
     };
     use crate::sandboxing::{SandboxPolicy, SensitivePath};
     use std::path::PathBuf;
@@ -2368,6 +2479,32 @@ mod sandbox_runtime_tests {
         assert!(!policy.is_network_allowed("example.com", 443));
         assert!(!policy.is_path_readable(&PathBuf::from("/tmp/secret/token")));
         assert_eq!(policy.resource_limits().max_memory_mb, 2048);
+    }
+
+    #[test]
+    fn read_only_policy_adapts_to_workspace_write_for_mutating_commands() {
+        let mut config = vtcode_config::SandboxConfig::default();
+        config.enabled = true;
+        config.default_mode = vtcode_config::SandboxMode::ReadOnly;
+
+        let command = vec!["cargo".to_string(), "fmt".to_string()];
+        let policy =
+            sandbox_policy_for_command(&config, PathBuf::from("/tmp/ws").as_path(), &command)
+                .unwrap();
+        assert!(matches!(policy, SandboxPolicy::WorkspaceWrite { .. }));
+    }
+
+    #[test]
+    fn read_only_policy_stays_read_only_for_non_mutating_commands() {
+        let mut config = vtcode_config::SandboxConfig::default();
+        config.enabled = true;
+        config.default_mode = vtcode_config::SandboxMode::ReadOnly;
+
+        let command = vec!["ls".to_string(), "-la".to_string()];
+        let policy =
+            sandbox_policy_for_command(&config, PathBuf::from("/tmp/ws").as_path(), &command)
+                .unwrap();
+        assert!(matches!(policy, SandboxPolicy::ReadOnly));
     }
 
     #[test]

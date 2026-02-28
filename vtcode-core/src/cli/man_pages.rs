@@ -40,7 +40,7 @@ impl ManPageGenerator {
             .text([
                 roman("VT Code is an advanced coding agent with single-agent architecture and Decision Ledger that provides"),
                 roman(" intelligent code generation, analysis, and modification capabilities. It supports"),
-                roman(" multiple LLM providers including Gemini, OpenAI, Anthropic, DeepSeek, xAI, Z.AI,"),
+                roman(" multiple LLM providers including Gemini, OpenAI, Anthropic, DeepSeek, Z.AI,"),
                 roman(" Moonshot AI, OpenRouter, and Ollama, and includes LLM-native semantic code understanding."),
                 roman(" Rust, Python, JavaScript, TypeScript, Go, and Java."),
             ])
@@ -52,7 +52,7 @@ impl ManPageGenerator {
             .text([bold("-p"), roman(", "), bold("--provider"), roman(" "), italic("PROVIDER")])
             .text([
                 roman(
-                    "Specify the LLM provider (gemini, openai, anthropic, deepseek, xai, zai, moonshot, openrouter, ollama, lmstudio)",
+                    "Specify the LLM provider (gemini, openai, anthropic, deepseek, zai, moonshot, openrouter, ollama, lmstudio)",
                 ),
             ])
             .control("TP", [])

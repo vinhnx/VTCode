@@ -67,7 +67,7 @@ python3 scripts/generate_config_field_reference.py
 | `agent.open_responses.include_reasoning` | `boolean` | no | `true` | Include reasoning items in Open Responses output When true, model reasoning/thinking is exposed as reasoning items |
 | `agent.open_responses.map_tool_calls` | `boolean` | no | `true` | Map internal tool calls to Open Responses function_call items When true, command executions and MCP tool calls are represented as function_call items |
 | `agent.project_doc_max_bytes` | `integer` | no | `16384` | Maximum bytes of AGENTS.md content to load from project hierarchy |
-| `agent.provider` | `string` | no | `"anthropic"` | AI provider for single agent mode (gemini, openai, anthropic, openrouter, xai, zai) |
+| `agent.provider` | `string` | no | `"anthropic"` | AI provider for single agent mode (gemini, openai, anthropic, openrouter, zai) |
 | `agent.reasoning_effort` | `string` | no | `"medium"` | Reasoning effort level for models that support it (none, low, medium, high) Applies to: Claude, GPT-5, GPT-5.1, Gemini, Qwen3, DeepSeek with reasoning capability |
 | `agent.refine_prompts_enabled` | `boolean` | no | `false` | Enable prompt refinement pass before sending to LLM |
 | `agent.refine_prompts_max_passes` | `integer` | no | `1` | Max refinement passes for prompt writing |

@@ -529,6 +529,19 @@ pub fn create_provider_unified(
             }
             Ok(builder.build())
         }
+        Provider::LmStudio => {
+            let mut builder = create_provider_builder!(LmStudioProviderConfig);
+            if let Some(m) = model {
+                builder = builder.model(m);
+            }
+            if let Some(url) = base_url {
+                builder = builder.base_url(url);
+            }
+            if let Some(t) = timeouts {
+                builder = builder.timeouts(t);
+            }
+            Ok(builder.build())
+        }
         Provider::Minimax => {
             let mut builder = create_provider_builder!(MinimaxProviderConfig);
             if let Some(key) = api_key {

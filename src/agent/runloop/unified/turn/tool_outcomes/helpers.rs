@@ -77,6 +77,12 @@ impl LoopTracker {
             .max()
             .unwrap_or(0)
     }
+
+    pub(crate) fn reset_after_balancer_recovery(&mut self) {
+        self.attempts.clear();
+        self.consecutive_mutations = 0;
+        self.consecutive_navigations = 0;
+    }
 }
 
 pub(crate) fn push_tool_response(
@@ -277,6 +283,21 @@ mod tests {
         );
 
         assert_eq!(tracker.max_count_filtered(|_| false), 0);
+    }
+
+    #[test]
+    fn reset_after_balancer_recovery_clears_attempts_and_counters() {
+        let mut tracker = LoopTracker::new();
+        tracker.record("unified_search:{\"action\":\"grep\"}".to_string());
+        tracker.record("unified_search:{\"action\":\"grep\"}".to_string());
+        tracker.consecutive_mutations = 2;
+        tracker.consecutive_navigations = 4;
+
+        tracker.reset_after_balancer_recovery();
+
+        assert_eq!(tracker.max_count_filtered(|_| false), 0);
+        assert_eq!(tracker.consecutive_mutations, 0);
+        assert_eq!(tracker.consecutive_navigations, 0);
     }
 
     #[test]

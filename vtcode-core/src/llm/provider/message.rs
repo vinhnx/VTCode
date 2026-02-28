@@ -604,7 +604,7 @@ impl MessageRole {
             (MessageRole::Tool, provider)
                 if matches!(
                     provider,
-                    "openai" | "openrouter" | "xai" | "deepseek" | "zai"
+                    "openai" | "openrouter" | "deepseek" | "zai"
                 ) && !has_tool_call_id =>
             {
                 Err(format!("{} tool messages must have tool_call_id", provider))

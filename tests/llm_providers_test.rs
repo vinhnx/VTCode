@@ -29,7 +29,7 @@ fn test_provider_factory_creation() {
     assert!(providers.contains(&"ollama".to_string()));
     assert!(providers.contains(&"lmstudio".to_string()));
     assert!(providers.contains(&"minimax".to_string()));
-    assert_eq!(providers.len(), 13);
+    assert_eq!(providers.len(), 12);
 }
 
 #[test]
@@ -38,7 +38,7 @@ fn test_provider_auto_detection() {
 
     // Test OpenAI models
     assert_eq!(
-        factory.provider_from_model("gpt-5"),
+        factory.provider_from_model("gpt-oss-20b"),
         Some("openai".to_string())
     );
     assert_eq!(
@@ -115,7 +115,7 @@ fn test_provider_creation() {
         create_provider_for_model("gemini-3-flash-preview", "test_key".to_string(), None, None);
     assert!(gemini.is_ok());
 
-    let openai = create_provider_for_model(models::GPT_5, "test_key".to_string(), None, None);
+    let openai = create_provider_for_model(models::GPT_OSS_20B, "test_key".to_string(), None, None);
     assert!(openai.is_ok());
 
     let anthropic = create_provider_for_model(
@@ -156,7 +156,7 @@ fn test_unified_client_creation() {
         assert_eq!(client.name(), "gemini");
     }
 
-    let openai_client = create_provider_for_model("gpt-5", "test_key".to_string(), None, None);
+    let openai_client = create_provider_for_model("gpt-oss-20b", "test_key".to_string(), None, None);
     assert!(openai_client.is_ok());
     if let Ok(client) = openai_client {
         assert_eq!(client.name(), "openai");
@@ -235,7 +235,7 @@ fn test_provider_supported_models() {
 
     let openai = OpenAIProvider::new("test_key".to_string());
     let openai_models = openai.supported_models();
-    assert!(openai_models.contains(&"gpt-5".to_string()));
+    assert!(openai_models.contains(&"gpt-oss-20b".to_string()));
     assert!(openai_models.contains(&"gpt-5-mini".to_string()));
     assert!(openai_models.len() >= 2);
 
@@ -331,7 +331,7 @@ fn test_request_validation() {
         messages: vec![Message::user("test".to_string())],
         system_prompt: None,
         tools: None,
-        model: "gpt-5".to_string(),
+        model: "gpt-oss-20b".to_string(),
         max_tokens: None,
         temperature: None,
         stream: false,
@@ -427,43 +427,6 @@ fn test_request_validation() {
     assert!(
         anthropic
             .validate_request(&legacy_anthropic_request)
-            .is_ok()
-    );
-
-    let valid_openrouter_request = LLMRequest {
-        messages: vec![Message::user("test".to_string())],
-        system_prompt: None,
-        tools: None,
-        model: models::OPENROUTER_X_AI_GROK_CODE_FAST_1.to_string(),
-        max_tokens: None,
-        temperature: None,
-        stream: false,
-        tool_choice: None,
-        parallel_tool_calls: None,
-        parallel_tool_config: None,
-        reasoning_effort: None,
-        effort: None,
-        output_format: None,
-        verbosity: Some(VerbosityLevel::default()),
-        do_sample: None,
-        top_p: None,
-        top_k: None,
-        presence_penalty: None,
-        frequency_penalty: None,
-        stop_sequences: None,
-        thinking_budget: None,
-        betas: None,
-        context_management: None,
-        prefill: None,
-        character_reinforcement: false,
-        character_name: None,
-        coding_agent_settings: None,
-        metadata: None,
-        prompt_cache_key: None,
-    };
-    assert!(
-        openrouter
-            .validate_request(&valid_openrouter_request)
             .is_ok()
     );
 

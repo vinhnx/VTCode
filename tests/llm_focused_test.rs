@@ -34,7 +34,7 @@ fn test_provider_auto_detection() {
     let factory = LLMFactory::new();
 
     assert_eq!(
-        factory.provider_from_model("gpt-5"),
+        factory.provider_from_model("gpt-oss-20b"),
         Some("openai".to_string())
     );
     assert_eq!(
@@ -71,7 +71,7 @@ fn test_unified_client_creation() {
         create_provider_for_model("gemini-3-flash-preview", "test_key".to_string(), None, None);
     assert!(gemini.is_ok());
 
-    let openai = create_provider_for_model(models::GPT_5, "test_key".to_string(), None, None);
+    let openai = create_provider_for_model(models::GPT_OSS_20B, "test_key".to_string(), None, None);
     assert!(openai.is_ok());
 
     let anthropic = create_provider_for_model(

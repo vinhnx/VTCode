@@ -202,7 +202,6 @@ impl ToolChoice {
         "deepseek",
         "huggingface",
         "openrouter",
-        "xai",
         "zai",
         "moonshot",
         "lmstudio",

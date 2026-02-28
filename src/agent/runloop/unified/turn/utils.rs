@@ -243,7 +243,9 @@ pub(crate) fn should_trigger_turn_balancer(
     repeated: usize,
     repeat_limit: usize,
 ) -> bool {
-    step_count > max_tool_loops / 2 && repeated >= repeat_limit
+    let step_threshold = max_tool_loops.saturating_mul(3) / 4;
+    let effective_repeat_limit = repeat_limit.max(3);
+    step_count > step_threshold && repeated >= effective_repeat_limit
 }
 
 #[cfg(test)]
@@ -251,10 +253,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn balancer_triggers_only_after_halfway_and_repeats() {
-        assert!(should_trigger_turn_balancer(11, 20, 3, 3));
-        assert!(!should_trigger_turn_balancer(9, 20, 3, 3));
-        assert!(!should_trigger_turn_balancer(12, 20, 2, 3));
+    fn balancer_triggers_after_three_quarters_and_effective_repeat_limit() {
+        assert!(should_trigger_turn_balancer(16, 20, 3, 3));
+        assert!(!should_trigger_turn_balancer(15, 20, 3, 3));
+        assert!(!should_trigger_turn_balancer(16, 20, 2, 3));
+        assert!(!should_trigger_turn_balancer(16, 20, 2, 2));
     }
 
     #[test]

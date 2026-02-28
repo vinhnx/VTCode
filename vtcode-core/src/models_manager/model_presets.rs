@@ -158,6 +158,9 @@ pub fn builtin_model_presets() -> Vec<ModelPreset> {
     // Z.AI presets
     presets.extend(zai_presets());
 
+    // LM Studio presets
+    presets.extend(lmstudio_presets());
+
     // MiniMax presets
     presets.extend(minimax_presets());
 
@@ -175,6 +178,7 @@ pub fn presets_for_provider(provider: Provider) -> Vec<ModelPreset> {
         Provider::Minimax => minimax_presets(),
         Provider::OpenRouter => openrouter_presets(),
         Provider::Ollama => ollama_presets(),
+        Provider::LmStudio => lmstudio_presets(),
         Provider::Moonshot => moonshot_presets(),
         Provider::HuggingFace => huggingface_presets(),
     }
@@ -261,7 +265,7 @@ fn openai_presets() -> Vec<ModelPreset> {
                     description: "Deep".to_string(),
                 },
             ],
-            is_default: true,
+            is_default: false,
             upgrade: None,
             show_in_picker: true,
             supported_in_api: true,
@@ -310,7 +314,7 @@ fn openai_presets() -> Vec<ModelPreset> {
                     description: "Maximum reasoning".to_string(),
                 },
             ],
-            is_default: false,
+            is_default: true,
             upgrade: None,
             show_in_picker: true,
             supported_in_api: true,
@@ -610,6 +614,26 @@ fn ollama_presets() -> Vec<ModelPreset> {
         show_in_picker: true,
         supported_in_api: true,
         context_window: Some(96_000),
+    }]
+}
+
+fn lmstudio_presets() -> Vec<ModelPreset> {
+    vec![ModelPreset {
+        id: "lmstudio/local-model".to_string(),
+        model: "local-model".to_string(),
+        display_name: "Local Model (LM Studio)".to_string(),
+        description: "LM Studio local inference server".to_string(),
+        provider: Provider::LmStudio,
+        default_reasoning_effort: ReasoningEffortLevel::Medium,
+        supported_reasoning_efforts: vec![ReasoningEffortPreset {
+            effort: ReasoningEffortLevel::Medium,
+            description: "Balanced".to_string(),
+        }],
+        is_default: true,
+        upgrade: None,
+        show_in_picker: true,
+        supported_in_api: true,
+        context_window: Some(32_000),
     }]
 }
 

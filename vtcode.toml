@@ -3,13 +3,13 @@
 
 [agent]
 # Primary LLM provider to use (e.g., "openai", "gemini", "anthropic", "openrouter")
-provider = "ollama"
+provider = "openai"
 
 # Environment variable containing the API key for the provider
-api_key_env = "OLLAMA_API_KEY"
+api_key_env = "OPENAI_API_KEY"
 
 # Default model to use when no specific model is specified
-default_model = "glm-5:cloud"
+default_model = "gpt-5.3-codex"
 
 # Personal/local overrides should live in user config, not workspace config:
 #   ~/.vtcode/vtcode.toml
@@ -308,7 +308,7 @@ auto_clear_paths = [
 ]
 
 [sandbox]
-enabled = true
+enabled = false
 default_mode = "read_only"
 
 [tools.web_fetch]
@@ -815,9 +815,6 @@ report_savings = true
 [prompt_cache.providers.moonshot]
 enabled = true
 
-[prompt_cache.providers.xai]
-enabled = true
-
 [prompt_cache.providers.deepseek]
 enabled = true
 surface_metrics = true
@@ -938,7 +935,7 @@ active_style = "default"
 [subagents]
 enabled = true
 # Personal subagent model override should live in ~/.vtcode/vtcode.toml
-# default_model = "minimax-m2.5:cloud"
+# default_model = "gpt-5.3-codex"
 max_concurrent = 3
 default_timeout_seconds = 300
 additional_agent_dirs = []
