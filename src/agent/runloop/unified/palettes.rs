@@ -74,10 +74,21 @@ pub(crate) fn show_theme_palette(
 
     for id in theme::available_themes() {
         let label = theme::theme_label(id).unwrap_or(id);
-        let badge = (id == current_id).then(|| THEME_ACTIVE_BADGE.to_string());
+        let badge = if id == current_id {
+            Some(THEME_ACTIVE_BADGE.to_string())
+        } else if !theme::theme_matches_terminal_scheme(id) {
+            Some("⚠ mismatch".to_string())
+        } else {
+            None
+        };
+        let scheme_hint = if theme::is_light_theme(id) {
+            "light"
+        } else {
+            "dark"
+        };
         items.push(InlineListItem {
             title: label.to_string(),
-            subtitle: Some(format!("ID: {}", id)),
+            subtitle: Some(format!("ID: {} ({})", id, scheme_hint)),
             badge,
             indent: 0,
             selection: Some(InlineListSelection::Theme(id.to_string())),

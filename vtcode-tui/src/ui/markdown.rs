@@ -1403,7 +1403,7 @@ pub fn highlight_line_for_diff(line: &str, language: Option<&str>) -> Option<Vec
         line,
         language,
         syntax_highlight::get_active_syntax_theme(),
-        false,
+        true,
     )
 }
 
@@ -1835,6 +1835,17 @@ mod tests {
         assert_eq!(
             added_segment.style.get_fg_color(),
             palette.added_style().get_fg_color()
+        );
+    }
+
+    #[test]
+    fn test_highlight_line_for_diff_strips_background_colors() {
+        let segments = highlight_line_for_diff("let changed = true;", Some("rust"))
+            .expect("highlighting should return segments");
+        assert!(
+            segments
+                .iter()
+                .all(|(style, _)| style.get_bg_color().is_none())
         );
     }
 

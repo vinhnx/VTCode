@@ -137,9 +137,10 @@ impl<'a> Widget for TranscriptWidget<'a> {
             Clear.render(scroll_area, buf);
             self.session.transcript_content_changed = false;
         }
-        apply_full_width_line_backgrounds(buf, scroll_area, &visible_lines);
-        let paragraph = Paragraph::new(visible_lines).style(self.session.styles.default_style());
+        let paragraph =
+            Paragraph::new(visible_lines.clone()).style(self.session.styles.default_style());
         paragraph.render(scroll_area, buf);
+        apply_full_width_line_backgrounds(buf, scroll_area, &visible_lines);
     }
 }
 

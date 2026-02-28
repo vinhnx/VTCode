@@ -237,16 +237,47 @@ fn format_diff_line_with_gutter_and_syntax(
         '-' => "-",
         _ => " ",
     };
-    let dimmed = AnsiStyle::new()
-        .fg_color(Some(anstyle::Color::Ansi(AnsiColor::BrightBlack)))
-        .effects(Effects::DIMMED);
-    let mut out = format!("{dimmed}{marker_text} {line_no:>line_number_width$} ");
     let bg = base_style.and_then(|style| style.get_bg_color());
+    let marker_style = match marker {
+        '+' => AnsiStyle::new()
+            .fg_color(Some(anstyle::Color::Ansi(AnsiColor::BrightGreen)))
+            .bg_color(bg)
+            .effects(Effects::BOLD),
+        '-' => AnsiStyle::new()
+            .fg_color(Some(anstyle::Color::Ansi(AnsiColor::BrightRed)))
+            .bg_color(bg)
+            .effects(Effects::BOLD),
+        _ => AnsiStyle::new()
+            .fg_color(Some(anstyle::Color::Ansi(AnsiColor::BrightBlack)))
+            .effects(Effects::DIMMED),
+    };
+    let gutter_style = match marker {
+        '+' | '-' => AnsiStyle::new()
+            .fg_color(Some(anstyle::Color::Ansi(AnsiColor::BrightBlack)))
+            .bg_color(bg)
+            .effects(Effects::BOLD),
+        _ => AnsiStyle::new()
+            .fg_color(Some(anstyle::Color::Ansi(AnsiColor::BrightBlack)))
+            .effects(Effects::DIMMED),
+    };
+    let reset = anstyle::Reset;
+    let mut out = String::with_capacity(line.len() + 32);
+    out.push_str(&marker_style.render().to_string());
+    out.push_str(marker_text);
+    out.push(' ');
+    out.push_str(&gutter_style.render().to_string());
+    out.push_str(&format!("{line_no:>line_number_width$} "));
     if let Some(highlighted) = highlight_diff_content(content, language_hint, bg) {
         out.push_str(&highlighted);
     } else {
-        out.push_str(content);
+        if let Some(style) = base_style {
+            out.push_str(&style.render().to_string());
+            out.push_str(content);
+        } else {
+            out.push_str(content);
+        }
     }
+    out.push_str(&reset.to_string());
     out
 }
 
@@ -689,6 +720,7 @@ mod tests {
     use super::{
         collect_run_command_preview, format_diff_line_with_gutter_and_syntax,
         language_hint_from_path, numbered_diff_line_width, split_numbered_diff_line,
+        strip_ansi_codes,
     };
 
     #[test]
@@ -726,13 +758,14 @@ mod tests {
     }
 
     #[test]
-    fn format_diff_line_adds_dimmed_gutter() {
+    fn format_diff_line_styles_gutter_for_additions() {
         let style = anstyle::Style::new().fg_color(Some(anstyle::Color::Ansi(AnsiColor::Green)));
         let rendered =
             format_diff_line_with_gutter_and_syntax("+  1377 let x = 1;", Some(style), None, 5);
-        assert!(rendered.contains("\u{1b}[2m"));
-        assert!(rendered.contains("+  1377 "));
-        assert!(rendered.contains("let x = 1;"));
+        assert!(rendered.contains("\u{1b}["));
+        let stripped = strip_ansi_codes(&rendered);
+        assert!(stripped.contains("+  1377 "));
+        assert!(stripped.contains("let x = 1;"));
     }
 
     #[test]
