@@ -434,4 +434,36 @@ mod request_builder_tests {
         assert!(payload["messages"][0]["content"][0]["cache_control"].is_object());
         assert!(payload["messages"][1]["content"][0]["cache_control"].is_object());
     }
+
+    #[test]
+    fn test_convert_to_anthropic_format_includes_native_web_search_tool() {
+        let request = LLMRequest {
+            model: models::CLAUDE_OPUS_4_6.to_string(),
+            messages: vec![Message::user("find latest rust release notes".to_string())],
+            tools: Some(Arc::new(vec![ToolDefinition {
+                tool_type: "web_search_20260209".to_string(),
+                function: None,
+                web_search: None,
+                shell: None,
+                grammar: None,
+                strict: None,
+                defer_loading: None,
+            }])),
+            ..Default::default()
+        };
+        let cache_settings = AnthropicPromptCacheSettings::default();
+        let anthropic_config = AnthropicConfig::default();
+        let ctx = RequestBuilderContext {
+            prompt_cache_enabled: false,
+            prompt_cache_settings: &cache_settings,
+            anthropic_config: &anthropic_config,
+            model: models::anthropic::DEFAULT_MODEL,
+        };
+
+        let payload = convert_to_anthropic_format(&request, &ctx).expect("payload conversion");
+
+        assert_eq!(payload["tools"][0]["type"], "web_search_20260209");
+        assert_eq!(payload["tools"][0]["name"], "web_search");
+        assert!(payload["tools"][0]["input_schema"].is_null());
+    }
 }

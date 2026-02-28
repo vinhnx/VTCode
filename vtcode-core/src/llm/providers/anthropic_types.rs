@@ -187,6 +187,8 @@ pub struct CacheControl {
 pub enum AnthropicTool {
     /// Tool search tool (regex or bm25)
     ToolSearch(AnthropicToolSearchTool),
+    /// Native Anthropic web search tool revision
+    WebSearch(AnthropicWebSearchTool),
     /// Regular function tool
     Function(AnthropicFunctionTool),
 }
@@ -211,6 +213,16 @@ pub struct AnthropicToolSearchTool {
     #[serde(rename = "type")]
     pub tool_type: String,
     /// Tool name (e.g., "tool_search_tool_regex" or "tool_search_tool_bm25")
+    pub name: String,
+}
+
+/// Native web search tool definition for Anthropic API (PTC-enabled search revisions)
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AnthropicWebSearchTool {
+    /// Versioned web search type (e.g., "web_search_20260209")
+    #[serde(rename = "type")]
+    pub tool_type: String,
+    /// Tool name (typically "web_search")
     pub name: String,
 }
 

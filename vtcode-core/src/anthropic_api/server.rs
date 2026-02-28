@@ -130,10 +130,18 @@ pub enum AnthropicSystemPrompt {
 
 /// Anthropic Tool Definition
 #[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct AnthropicTool {
-    pub name: String,
-    pub description: Option<String>,
-    pub input_schema: Value,
+#[serde(untagged)]
+pub enum AnthropicTool {
+    Function {
+        name: String,
+        description: Option<String>,
+        input_schema: Value,
+    },
+    Native {
+        #[serde(rename = "type")]
+        tool_type: String,
+        name: String,
+    },
 }
 
 /// Anthropic Messages API response
@@ -618,14 +626,35 @@ fn convert_anthropic_to_llm_request(request: AnthropicMessagesRequest) -> Result
     let tools = if let Some(anthropic_tools) = request.tools {
         let mut converted_tools = Vec::new();
         for tool in anthropic_tools {
-            let tool_def = ToolDefinition::function(
-                tool.name,
-                tool.description.unwrap_or_default(),
-                tool.input_schema,
-            );
+            let tool_def = match tool {
+                AnthropicTool::Function {
+                    name,
+                    description,
+                    input_schema,
+                } => ToolDefinition::function(name, description.unwrap_or_default(), input_schema),
+                AnthropicTool::Native { tool_type, .. } => {
+                    if tool_type.starts_with("web_search_") {
+                        ToolDefinition {
+                            tool_type,
+                            function: None,
+                            web_search: None,
+                            shell: None,
+                            grammar: None,
+                            strict: None,
+                            defer_loading: None,
+                        }
+                    } else {
+                        continue;
+                    }
+                }
+            };
             converted_tools.push(tool_def);
         }
-        Some(Arc::new(converted_tools))
+        if converted_tools.is_empty() {
+            None
+        } else {
+            Some(Arc::new(converted_tools))
+        }
     } else {
         None
     };
