@@ -83,7 +83,7 @@ python3 scripts/generate_config_field_reference.py
 | `agent.system_prompt_mode` | `string` | no | `"default"` | System prompt mode controlling verbosity and token overhead Options: minimal (~500-800 tokens), lightweight (~1-2k), default (~6-7k), specialized (~7-8k) Inspired by pi-coding-agent: modern models often perform well with minimal prompts |
 | `agent.temperature` | `number` | no | `0.699999988079071` | Temperature for main LLM responses (0.0-1.0) Lower values = more deterministic, higher values = more creative Recommended: 0.7 for balanced creativity and consistency Range: 0.0 (deterministic) to 1.0 (maximum randomness) |
 | `agent.temporal_context_use_utc` | `boolean` | no | `false` | Use UTC instead of local time for temporal context in system prompts |
-| `agent.theme` | `string` | no | `"ciapre-dark"` | UI theme identifier controlling ANSI styling |
+| `agent.theme` | `string` | no | `"ciapre"` | UI theme identifier controlling ANSI styling |
 | `agent.todo_planning_mode` | `boolean` | no | `true` | Enable TODO planning helper mode for structured task management |
 | `agent.tool_documentation_mode` | `string` | no | `"full"` | Tool documentation mode controlling token overhead for tool definitions Options: minimal (~800 tokens), progressive (~1.2k), full (~3k current) Progressive: signatures upfront, detailed docs on-demand (recommended) Minimal: signatures only, pi-coding-agent style (power users) Full: all documentation upfront (current behavior, default) |
 | `agent.ui_surface` | `string` | no | `"auto"` | Preferred rendering surface for the interactive chat UI (auto, alternate, inline) |

@@ -132,7 +132,8 @@ VT Code includes light and dark themes:
 
 | Theme                | Mode  | Description              |
 | -------------------- | ----- | ------------------------ |
-| ciapre-dark          | Dark  | Default warm amber theme |
+| ciapre               | Dark  | Default warm amber theme |
+| ciapre-dark          | Dark  | Alternative warm amber theme |
 | ciapre-blue          | Dark  | Blue variant of Ciapre   |
 | ansi-classic         | Dark  | Classic ANSI palette     |
 | vitesse-black        | Dark  | Pure black background    |
