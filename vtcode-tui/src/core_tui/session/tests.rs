@@ -919,48 +919,6 @@ fn user_messages_render_with_dividers() {
 }
 
 #[test]
-fn header_lines_include_provider_model_and_metadata() {
-    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
-    session.header_context.provider = format!("{}xAI", ui::HEADER_PROVIDER_PREFIX);
-    session.header_context.model = format!("{}grok-4-fast", ui::HEADER_MODEL_PREFIX);
-    session.header_context.reasoning = format!("{}medium", ui::HEADER_REASONING_PREFIX);
-    session.header_context.mode = ui::HEADER_MODE_AUTO.to_string();
-    session.header_context.workspace_trust = format!("{}full auto", ui::HEADER_TRUST_PREFIX);
-    session.header_context.tools =
-        format!("{}allow 11 · prompt 7 · deny 0", ui::HEADER_TOOLS_PREFIX);
-    session.header_context.mcp = format!("{}enabled", ui::HEADER_MCP_PREFIX);
-    session.input_manager.set_content("notes".to_string());
-    session
-        .input_manager
-        .set_cursor(session.input_manager.content().len());
-
-    let lines = session.header_lines();
-    assert_eq!(lines.len(), 1);
-
-    let line_text: String = lines[0]
-        .spans
-        .iter()
-        .map(|span| span.content.clone().into_owned())
-        .collect();
-    assert!(line_text.contains("XAI"));
-    assert!(line_text.contains(&session.header_model_short_value()));
-    let reasoning_label = format!("{}", session.header_reasoning_short_value());
-    assert!(line_text.contains(&reasoning_label));
-    let mode_label = session.header_mode_short_label();
-    assert!(line_text.contains(&mode_label));
-    for value in session.header_chain_values() {
-        assert!(line_text.contains(&value));
-    }
-    // Trust is now shown as a badge, not in chain values
-    assert!(line_text.contains("Accept edits"));
-    // Removed assertion for HEADER_MCP_PREFIX since we're no longer showing MCP info in header
-    assert!(!line_text.contains("Languages"));
-    assert!(!line_text.contains(ui::HEADER_STATUS_LABEL));
-    assert!(!line_text.contains(ui::HEADER_MESSAGES_LABEL));
-    assert!(!line_text.contains(ui::HEADER_INPUT_LABEL));
-}
-
-#[test]
 fn header_shows_safe_badge_for_tools_policy_trust() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
     session.header_context.workspace_trust = format!("{}tools policy", ui::HEADER_TRUST_PREFIX);

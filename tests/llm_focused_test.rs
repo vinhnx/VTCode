@@ -127,9 +127,6 @@ fn test_provider_names() {
     let openrouter = OpenRouterProvider::new("test_key".to_string());
     assert_eq!(openrouter.name(), "openrouter");
 
-    let xai = XAIProvider::new("test_key".to_string());
-    assert_eq!(xai.name(), "xai");
-
     let moonshot = MoonshotProvider::new("test_key".to_string());
     assert_eq!(moonshot.name(), "moonshot");
 
