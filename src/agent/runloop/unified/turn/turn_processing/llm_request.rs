@@ -2,9 +2,7 @@ use anyhow::Result;
 use std::fmt::Write as _;
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::time::Duration;
-#[cfg(debug_assertions)]
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use tokio::task;
 #[cfg(debug_assertions)]
 use tracing::debug;
@@ -499,6 +497,7 @@ pub(crate) async fn execute_llm_request(
             _spinner.set_defer_restore(true);
         }
         task::yield_now().await;
+        let attempt_started_at = Instant::now();
 
         #[cfg(debug_assertions)]
         {
@@ -617,6 +616,20 @@ pub(crate) async fn execute_llm_request(
                 Err(err) => Err(err),
             }
         };
+        let attempt_elapsed = attempt_started_at.elapsed();
+        match &step_result {
+            Ok((response, _)) => {
+                ctx.telemetry.record_llm_request(
+                    active_model,
+                    attempt_elapsed,
+                    response.usage.as_ref(),
+                );
+            }
+            Err(_) => {
+                ctx.telemetry
+                    .record_llm_request(active_model, attempt_elapsed, None);
+            }
+        }
 
         #[cfg(debug_assertions)]
         {

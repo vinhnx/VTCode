@@ -224,10 +224,10 @@ async fn run() -> Result<()> {
         return Ok(());
     }
 
-    if let Some(_resume_mode) = &startup.session_resume {
+    if let Some(resume_mode) = startup.session_resume.clone() {
         cli::handle_resume_session_command(
             core_cfg,
-            None, // resume session ID - we're using custom_session_id instead
+            resume_mode,
             startup.custom_session_id.clone(),
             skip_confirmations,
         )

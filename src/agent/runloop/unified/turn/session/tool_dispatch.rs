@@ -211,10 +211,7 @@ mod tests {
     fn rejects_invalid_bang_command_with_diagnosis() {
         let parsed = parse_direct_tool_input("! )(").expect("invalid command should be handled");
         match parsed {
-            DirectToolInput::InvalidBang {
-                command,
-                diagnosis,
-            } => {
+            DirectToolInput::InvalidBang { command, diagnosis } => {
                 assert_eq!(command, ")(");
                 assert!(!diagnosis.trim().is_empty());
             }
