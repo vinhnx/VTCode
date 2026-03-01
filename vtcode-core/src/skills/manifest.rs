@@ -262,9 +262,7 @@ fn infer_description_from_instructions(instructions: &str) -> Option<String> {
 fn normalize_allowed_tools(field: AllowedToolsField) -> anyhow::Result<String> {
     match field {
         AllowedToolsField::List(tools) => {
-            if !tools.is_empty()
-                && !ALLOWED_TOOLS_ARRAY_WARNED.swap(true, Ordering::Relaxed)
-            {
+            if !tools.is_empty() && !ALLOWED_TOOLS_ARRAY_WARNED.swap(true, Ordering::Relaxed) {
                 tracing::warn!(
                     "allowed-tools uses deprecated array format, please use a string instead"
                 );
