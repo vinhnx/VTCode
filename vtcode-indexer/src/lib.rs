@@ -6,7 +6,7 @@
 //! so changes remain easy to audit in git.
 
 use anyhow::Result;
-use ignore::WalkBuilder;
+use ignore::{Walk, WalkBuilder};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -58,25 +58,12 @@ impl IndexStorage for MarkdownIndexStorage {
     fn persist(&self, index_dir: &Path, entry: &FileIndex) -> Result<()> {
         let file_name = format!("{}.md", calculate_hash(&entry.path));
         let index_path = index_dir.join(file_name);
-
-        let markdown = format!(
-            "# File Index: {}\n\n\
-            - **Path**: {}\n\
-            - **Hash**: {}\n\
-            - **Modified**: {}\n\
-            - **Size**: {} bytes\n\
-            - **Language**: {}\n\
-            - **Tags**: {}\n\n",
-            entry.path,
-            entry.path,
-            entry.hash,
-            entry.modified,
-            entry.size,
-            entry.language,
-            entry.tags.join(", ")
-        );
-
-        fs::write(index_path, markdown)?;
+        let file = fs::File::create(index_path)?;
+        let mut writer = BufWriter::new(file);
+        writeln!(writer, "# File Index: {}", entry.path)?;
+        writeln!(writer)?;
+        write_markdown_fields(&mut writer, entry)?;
+        writer.flush()?;
         Ok(())
     }
 
@@ -97,6 +84,7 @@ impl IndexStorage for MarkdownIndexStorage {
 
         writer.flush()?;
         fs::rename(temp_path, final_path)?;
+        cleanup_legacy_markdown_entries(index_dir)?;
         Ok(())
     }
 }
@@ -341,14 +329,7 @@ impl SimpleIndexer {
     /// Respects .gitignore, .ignore, and other ignore files.
     /// SECURITY: Always skips hidden files and sensitive data (.env, .git, etc.)
     pub fn index_directory(&mut self, dir_path: &Path) -> Result<()> {
-        let walker = WalkBuilder::new(dir_path)
-            .hidden(self.config.ignore_hidden) // Skip hidden files by default, configurable.
-            .git_ignore(true) // Respect .gitignore
-            .git_global(true) // Respect global gitignore
-            .git_exclude(true) // Respect .git/info/exclude
-            .ignore(true) // Respect .ignore files
-            .parents(true) // Check parent directories for ignore files
-            .build();
+        let walker = self.build_walker(dir_path);
 
         let mut entries = Vec::new();
 
@@ -357,14 +338,7 @@ impl SimpleIndexer {
 
             // Only index files, not directories
             if entry.file_type().is_some_and(|ft| ft.is_file()) {
-                // Additional check: skip if in excluded dirs
-                let should_skip = self
-                    .config
-                    .excluded_dirs
-                    .iter()
-                    .any(|excluded| path.starts_with(excluded));
-
-                if !should_skip
+                if !self.is_excluded_path(path)
                     && let Some(index) = self.build_file_index(path)?
                 {
                     self.index_cache.insert(index.path.clone(), index.clone());
@@ -373,6 +347,7 @@ impl SimpleIndexer {
             }
         }
 
+        entries.sort_unstable_by(|left, right| left.path.cmp(&right.path));
         self.storage.persist_batch(self.config.index_dir(), &entries)?;
 
         Ok(())
@@ -381,14 +356,7 @@ impl SimpleIndexer {
     /// Discover all files in directory recursively without indexing them.
     /// This is much faster than `index_directory` as it avoids hashing and persistence.
     pub fn discover_files(&self, dir_path: &Path) -> Vec<String> {
-        let walker = WalkBuilder::new(dir_path)
-            .hidden(self.config.ignore_hidden)
-            .git_ignore(true)
-            .git_global(true)
-            .git_exclude(true)
-            .ignore(true)
-            .parents(true)
-            .build();
+        let walker = self.build_walker(dir_path);
 
         walker
             .filter_map(|e| e.ok())
@@ -397,13 +365,8 @@ impl SimpleIndexer {
                     return false;
                 }
                 let path = e.path();
-                let should_skip = self
-                    .config
-                    .excluded_dirs
-                    .iter()
-                    .any(|excluded| path.starts_with(excluded));
 
-                !should_skip && self.filter.should_index_file(path, &self.config)
+                !self.is_excluded_path(path) && self.should_index_file_path(path)
             })
             .map(|e| e.path().to_string_lossy().into_owned())
             .collect()
@@ -608,7 +571,7 @@ impl SimpleIndexer {
     }
 
     fn build_file_index(&self, file_path: &Path) -> Result<Option<FileIndex>> {
-        if !file_path.exists() || !self.filter.should_index_file(file_path, &self.config) {
+        if !self.should_index_file_path(file_path) {
             return Ok(None);
         }
 
@@ -632,6 +595,30 @@ impl SimpleIndexer {
         };
 
         Ok(Some(index))
+    }
+
+    #[inline]
+    fn is_excluded_path(&self, path: &Path) -> bool {
+        self.config
+            .excluded_dirs
+            .iter()
+            .any(|excluded| path.starts_with(excluded))
+    }
+
+    #[inline]
+    fn should_index_file_path(&self, path: &Path) -> bool {
+        path.exists() && self.filter.should_index_file(path, &self.config)
+    }
+
+    fn build_walker(&self, dir_path: &Path) -> Walk {
+        WalkBuilder::new(dir_path)
+            .hidden(self.config.ignore_hidden)
+            .git_ignore(true)
+            .git_global(true)
+            .git_exclude(true)
+            .ignore(true)
+            .parents(true)
+            .build()
     }
 }
 
@@ -683,14 +670,39 @@ fn calculate_hash(content: &str) -> String {
 fn write_markdown_entry(writer: &mut impl Write, entry: &FileIndex) -> std::io::Result<()> {
     writeln!(writer, "## {}", entry.path)?;
     writeln!(writer)?;
+    write_markdown_fields(writer, entry)?;
+    writeln!(writer)?;
+    Ok(())
+}
+
+fn write_markdown_fields(writer: &mut impl Write, entry: &FileIndex) -> std::io::Result<()> {
     writeln!(writer, "- **Path**: {}", entry.path)?;
     writeln!(writer, "- **Hash**: {}", entry.hash)?;
     writeln!(writer, "- **Modified**: {}", entry.modified)?;
     writeln!(writer, "- **Size**: {} bytes", entry.size)?;
     writeln!(writer, "- **Language**: {}", entry.language)?;
     writeln!(writer, "- **Tags**: {}", entry.tags.join(", "))?;
-    writeln!(writer)?;
     Ok(())
+}
+
+fn cleanup_legacy_markdown_entries(index_dir: &Path) -> Result<()> {
+    for entry in fs::read_dir(index_dir)? {
+        let entry = entry?;
+        let file_name = entry.file_name();
+        let file_name = file_name.to_string_lossy();
+        if is_legacy_markdown_entry_name(file_name.as_ref()) {
+            fs::remove_file(entry.path())?;
+        }
+    }
+    Ok(())
+}
+
+#[inline]
+fn is_legacy_markdown_entry_name(file_name: &str) -> bool {
+    let Some(hash_part) = file_name.strip_suffix(".md") else {
+        return false;
+    };
+    hash_part.len() == 64 && hash_part.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 
 #[cfg(test)]
@@ -851,6 +863,35 @@ mod tests {
         let index_content = fs::read_to_string(index_dir.join("index.md"))?;
         assert!(index_content.contains(workspace.join("lib.rs").to_string_lossy().as_ref()));
         assert!(index_content.contains(workspace.join("README.md").to_string_lossy().as_ref()));
+
+        Ok(())
+    }
+
+    #[test]
+    fn batch_indexing_removes_legacy_hashed_entries() -> Result<()> {
+        let temp = tempdir()?;
+        let workspace = temp.path();
+        fs::write(workspace.join("lib.rs"), "fn main() {}")?;
+
+        let mut indexer = SimpleIndexer::new(workspace.to_path_buf());
+        indexer.init()?;
+
+        let legacy_file_name = format!("{}.md", calculate_hash("legacy-path"));
+        let legacy_file_path = workspace
+            .join(".vtcode")
+            .join("index")
+            .join(&legacy_file_name);
+        fs::write(&legacy_file_path, "# legacy")?;
+        assert!(legacy_file_path.exists());
+
+        indexer.index_directory(workspace)?;
+
+        assert!(!legacy_file_path.exists());
+        let files = fs::read_dir(workspace.join(".vtcode").join("index"))?
+            .filter_map(|entry| entry.ok())
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .collect::<Vec<_>>();
+        assert_eq!(files, vec!["index.md".to_string()]);
 
         Ok(())
     }

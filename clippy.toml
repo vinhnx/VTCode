@@ -12,7 +12,7 @@ too-many-arguments-threshold = 9
 
 # Disallow specific methods that should be avoided
 disallowed-methods = [
-    { path = "std::panic", reason = "Use anyhow/thiserror for error handling instead" },
+    { path = "std::panic::panic_any", reason = "Use anyhow/thiserror for error handling instead" },
 ]
 
 # Allow absolute paths from specific crates (for project structure)

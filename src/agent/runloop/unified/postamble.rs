@@ -1,4 +1,3 @@
-use crate::agent::runloop::git::CodeChangeDelta;
 use std::time::Duration;
 use vtcode_core::config::constants::ui;
 use vtcode_core::core::telemetry::{ModelUsageStats, TelemetryStats};
@@ -9,6 +8,8 @@ const ANSI_BOLD: &str = "\x1b[1m";
 const ANSI_DIM: &str = "\x1b[2m";
 const ANSI_CYAN: &str = "\x1b[36m";
 const ANSI_GREEN: &str = "\x1b[32m";
+const ANSI_MAGENTA: &str = "\x1b[35m";
+const ANSI_YELLOW: &str = "\x1b[33m";
 
 pub(crate) struct ExitSummaryData {
     pub total_session_time: Duration,
@@ -36,18 +37,24 @@ pub(crate) fn print_exit_summary(data: ExitSummaryData) {
         .map(|s| s.completion_tokens)
         .sum();
 
+    let total_diff = data
+        .code_changes
+        .as_ref()
+        .map(|d| d.additions + d.deletions)
+        .unwrap_or(0);
+
     let mut lines = Vec::new();
     if let Some(context) = data.header_context.as_ref() {
         lines.push(build_compact_header(context));
     }
     lines.push(format!(
-        "Session {} | API {} | {} in/{} out",
+        "Session {} | API {} | {} in/{} out | {} diff",
         format_long_duration(data.total_session_time),
         format_short_duration(data.telemetry.api_time_spent),
         format_token_count(total_prompt_tokens),
-        format_token_count(total_completion_tokens)
+        format_token_count(total_completion_tokens),
+        total_diff
     ));
-    lines.push(format!("Code {}", format_code_changes(data.code_changes)));
     if let Some(top_model_line) = build_top_model_line(&model_rows) {
         lines.push(top_model_line);
     }
@@ -57,9 +64,8 @@ pub(crate) fn print_exit_summary(data: ExitSummaryData) {
     let rendered_lines = render_terminal_window(&title, &lines, 110);
     println!("{}", style_terminal_window_lines(&rendered_lines));
     if let Some(session_id) = data.resume_identifier {
-        println!();
         println!(
-            "{ANSI_DIM}Resume:{ANSI_RESET} {ANSI_BOLD}{ANSI_GREEN}vtcode --resume {}{ANSI_RESET}",
+            "{ANSI_DIM}Resume:{ANSI_RESET} {ANSI_DIM}{ANSI_GREEN}vtcode --resume {}{ANSI_RESET}",
             session_id
         );
     }
@@ -113,13 +119,6 @@ fn build_top_model_line(model_rows: &[(&String, &ModelUsageStats)]) -> Option<St
         format_token_count(stats.prompt_tokens + stats.cached_prompt_tokens),
         format_token_count(stats.completion_tokens)
     ))
-}
-
-fn format_code_changes(delta: Option<CodeChangeDelta>) -> String {
-    match delta {
-        Some(delta) => format!("+{} -{}", delta.additions, delta.deletions),
-        None => "n/a".to_string(),
-    }
 }
 
 fn format_long_duration(duration: Duration) -> String {
@@ -207,7 +206,7 @@ fn style_terminal_window_lines(lines: &[String]) -> String {
         let line_render = if index == 0 {
             style_title_line(line)
         } else {
-            line.clone()
+            style_dim_line(line)
         };
 
         styled.push_str(&line_render);
@@ -221,6 +220,10 @@ fn style_terminal_window_lines(lines: &[String]) -> String {
 
 fn style_title_line(line: &str) -> String {
     format!("{ANSI_BOLD}{ANSI_CYAN}{line}{ANSI_RESET}")
+}
+
+fn style_dim_line(line: &str) -> String {
+    format!("{ANSI_DIM}{line}{ANSI_RESET}")
 }
 
 #[cfg(test)]
@@ -248,9 +251,13 @@ mod tests {
 
     #[test]
     fn terminal_window_returns_title_and_lines() {
-        let rows = vec!["Session 1m | API 2.0s | 10k in/5k out".to_string()];
+        let rows = vec![
+            "Ollama gpt-oss | Accept edits".to_string(),
+            "Session 1m | API 4s | 28k in/239 out".to_string(),
+            "Model: gpt-oss 4s | 28k in/239 out".to_string(),
+        ];
         let rendered = render_terminal_window("> VT Code (0.85.1)", &rows, 110);
         assert_eq!(rendered[0], "> VT Code (0.85.1)");
-        assert_eq!(rendered[1], "Session 1m | API 2.0s | 10k in/5k out");
+        assert_eq!(rendered.len(), 4);
     }
 }
