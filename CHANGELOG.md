@@ -2,6 +2,41 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.85.1 - 2026-03-01
+
+### Highlights
+### Other Changes
+#### Other
+
+- Enhance skill authoring and routing logic; add response chaining support (121a8ece) 
+- Add `thiserror` integration for improved error handling across multiple modules (b5081d89) 
+- Add websocket connection limit error handling and update API versioning (6f76cfb7) 
+- Add installation scripts to release artifacts and update installation documentation (816c6d41) 
+- Refactor error log collector to use a bounded buffer and enhance link rendering in markdown (c7ef605b) 
+- Refactor line truncation logic and introduce utility module for consistent ellipsis handling (69742626) 
+- Refactor websocket header insertion and update apply_patch handler to use Arc for session and turn context (13e4b403) 
+- Add error log buffer size limit and refactor tool context for constrained policies (f8b71916) 
+- Refactor tool routing and permission handling; improve URL-aware text wrapping (564fdad7) 
+- Refactor tool permission caching and enhance error handling; improve text wrapping utilities (ed68b7fd) 
+- Add support for zsh exec wrapper and enhance PTY configuration (9d992fed) 
+- Add data-oriented design plan and optimization phases for vtcode (98175726) 
+- Enhance status line configuration and improve token extraction logic for file references (68bb39d4) 
+- Document applied default status line items pattern and outline data-oriented design plan for vtcode (db98b328) 
+- Add tests for PtyConfig validation and refactor session creation methods (8cd350ef) 
+- Refactor TODO.md to improve formatting and clarify implementation instructions (265c835a) 
+- Enhance file palette key handling to manage selection and normal submit behavior (309e8b22) 
+- Refactor process group termination logic for robust child process cleanup (bb1ab07f) 
+- Refactor WebSocket session handling and enhance incremental input validation (e874c269) 
+- Refactor sandbox permissions and enhance tool execution handling (f997edb2) 
+- Implement fine-grained rejection controls for approval prompts and update related logic (3b9a7775) 
+- Refactor caching mechanisms to use inner struct with RwLock for improved concurrency (46102de4) 
+- Refactor session initialization to encapsulate execution and metadata contexts (ef3d1020) 
+- Enhance TurnProcessingContext with new as_turn_processing_context method for improved context management (c0b47e4d) 
+- Refactor RunLoopContext and TurnProcessingContext to use constructor methods for improved clarity and maintainability (cd9d63a5) 
+- Refactor TurnProcessingContext to use parts for better modularity and readability (b133ff3d) 
+- Refactor code for improved readability and consistency in multiple files (2565bbdb) 
+### Contributors
+@vinhnx
 ## 0.85.0 - 2026-03-01
 
 ### Highlights
