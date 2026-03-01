@@ -345,6 +345,38 @@ fn input_compact_preview_for_image_path_with_text() {
 }
 
 #[test]
+fn bang_prefix_input_shows_shell_mode_status_hint() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.set_input("!echo hello".to_string());
+
+    let spans = session
+        .build_input_status_widget_data(VIEW_WIDTH)
+        .expect("expected shell mode status hint");
+    let rendered: String = spans
+        .iter()
+        .map(|span| span.content.clone().into_owned())
+        .collect();
+
+    assert!(rendered.contains("Shell mode (!):"));
+}
+
+#[test]
+fn bang_prefix_input_enables_shell_mode_border_title() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.set_input("   !ls -la".to_string());
+
+    assert_eq!(session.shell_mode_border_title(), Some(" ! Shell mode "));
+}
+
+#[test]
+fn non_bang_input_has_no_shell_mode_border_title() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.set_input("run ls -la".to_string());
+
+    assert_eq!(session.shell_mode_border_title(), None);
+}
+
+#[test]
 fn control_enter_queues_submission() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
 
@@ -567,6 +599,61 @@ fn control_e_launches_editor() {
 }
 
 #[test]
+fn control_a_moves_cursor_to_start() {
+    let text = "hello world";
+    let mut session = session_with_input(text, text.len());
+
+    let result = session.process_key(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::CONTROL));
+
+    assert!(result.is_none());
+    assert_eq!(session.cursor(), 0);
+}
+
+#[test]
+fn control_e_moves_cursor_to_end_when_input_has_content() {
+    let text = "hello world";
+    let mut session = session_with_input(text, 0);
+
+    let result = session.process_key(KeyEvent::new(KeyCode::Char('e'), KeyModifiers::CONTROL));
+
+    assert!(result.is_none());
+    assert_eq!(session.cursor(), text.len());
+}
+
+#[test]
+fn control_w_deletes_previous_word() {
+    let mut session = session_with_input("hello world", "hello world".len());
+
+    let result = session.process_key(KeyEvent::new(KeyCode::Char('w'), KeyModifiers::CONTROL));
+
+    assert!(result.is_none());
+    assert_eq!(session.input_manager.content(), "hello ");
+    assert_eq!(session.cursor(), "hello ".len());
+}
+
+#[test]
+fn control_u_deletes_to_start_of_line() {
+    let mut session = session_with_input("hello world", 5);
+
+    let result = session.process_key(KeyEvent::new(KeyCode::Char('u'), KeyModifiers::CONTROL));
+
+    assert!(result.is_none());
+    assert_eq!(session.input_manager.content(), " world");
+    assert_eq!(session.cursor(), 0);
+}
+
+#[test]
+fn control_k_deletes_to_end_of_line() {
+    let mut session = session_with_input("hello world", 5);
+
+    let result = session.process_key(KeyEvent::new(KeyCode::Char('k'), KeyModifiers::CONTROL));
+
+    assert!(result.is_none());
+    assert_eq!(session.input_manager.content(), "hello");
+    assert_eq!(session.cursor(), 5);
+}
+
+#[test]
 fn control_alt_e_does_not_launch_editor() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
 
@@ -647,6 +734,35 @@ fn arrow_keys_never_launch_editor() {
             key_code
         );
     }
+}
+
+#[test]
+fn question_mark_opens_help_overlay_when_input_is_empty() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+
+    let result = session.process_key(KeyEvent::new(KeyCode::Char('?'), KeyModifiers::NONE));
+
+    assert!(result.is_none());
+    let modal = session.modal.as_ref().expect("help modal should open");
+    assert_eq!(modal.title, "Keyboard Shortcuts");
+    assert!(
+        modal
+            .lines
+            .iter()
+            .any(|line| line.contains("Ctrl+A / Ctrl+E"))
+    );
+}
+
+#[test]
+fn question_mark_inserts_character_when_input_has_content() {
+    let mut session = session_with_input("why", 3);
+
+    let result = session.process_key(KeyEvent::new(KeyCode::Char('?'), KeyModifiers::NONE));
+
+    assert!(result.is_none());
+    assert_eq!(session.input_manager.content(), "why?");
+    assert_eq!(session.cursor(), 4);
+    assert!(session.modal.is_none());
 }
 
 fn request_user_input_step(question_id: &str, label: &str) -> WizardStep {

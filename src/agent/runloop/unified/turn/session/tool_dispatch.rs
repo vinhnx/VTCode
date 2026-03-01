@@ -23,24 +23,10 @@ pub(crate) async fn handle_direct_tool_execution(
     input: &str,
     ctx: &mut DirectToolContext<'_, '_>,
 ) -> Result<Option<InteractionOutcome>> {
-    // Check for bash mode with '!' prefix or explicit 'run' command
-    let (tool_name_str, args, input_str) = if input.starts_with('!') {
-        let bash_command = input.trim_start_matches('!').trim();
-        if bash_command.is_empty() {
-            return Ok(None);
-        }
-        (
-            "bash".to_string(),
-            serde_json::json!({"command": bash_command}),
-            input,
-        )
-    } else if let Some((name, tool_args)) =
-        crate::agent::runloop::unified::shell::detect_explicit_run_command(input)
-    {
-        (name.to_string(), tool_args, input)
-    } else {
+    let Some((tool_name_str, args)) = parse_direct_tool_input(input) else {
         return Ok(None);
     };
+    let is_bang_prefix = input.trim_start().starts_with('!');
 
     // Construct HarnessTurnState (simplified for direct execution)
     let mut harness_state = HarnessTurnState::new(
@@ -71,11 +57,17 @@ pub(crate) async fn handle_direct_tool_execution(
     };
 
     // 1. Display user message and push to history
-    display_user_message(t_ctx.ctx.renderer, input_str)?;
+    if is_bang_prefix {
+        t_ctx.ctx.renderer.line(
+            vtcode_core::utils::ansi::MessageStyle::Info,
+            "Shell mode (!): executing command directly.",
+        )?;
+    }
+    display_user_message(t_ctx.ctx.renderer, input)?;
     t_ctx
         .ctx
         .working_history
-        .push(uni::Message::user(input_str.to_string()));
+        .push(uni::Message::user(input.to_string()));
 
     // 2. Inject assistant message with tool call to keep history valid for LLM
     let tool_call_id = format!(
@@ -117,4 +109,38 @@ pub(crate) async fn handle_direct_tool_execution(
     // Direct tool paths already executed and rendered output; skip creating an
     // immediate LLM turn for this interaction loop iteration.
     Ok(Some(InteractionOutcome::DirectToolHandled))
+}
+
+fn parse_direct_tool_input(input: &str) -> Option<(String, serde_json::Value)> {
+    // Check for bash mode with '!' prefix or explicit 'run' command
+    let trimmed = input.trim_start();
+    if let Some(rest) = trimmed.strip_prefix('!') {
+        let bash_command = rest.trim();
+        if bash_command.is_empty() {
+            return None;
+        }
+        return Some((
+            "bash".to_string(),
+            serde_json::json!({ "command": bash_command }),
+        ));
+    }
+
+    crate::agent::runloop::unified::shell::detect_explicit_run_command(input)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_direct_tool_input;
+
+    #[test]
+    fn parses_bang_prefix_with_leading_whitespace() {
+        let (tool, args) = parse_direct_tool_input("   !echo hello").expect("direct tool");
+        assert_eq!(tool, "bash");
+        assert_eq!(args["command"], "echo hello");
+    }
+
+    #[test]
+    fn rejects_empty_bang_command() {
+        assert!(parse_direct_tool_input("!   ").is_none());
+    }
 }

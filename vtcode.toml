@@ -9,7 +9,7 @@ provider = "ollama"
 api_key_env = "OLLAMA_API_KEY"
 
 # Default model to use when no specific model is specified
-default_model = "glm-5:cloud"
+default_model = "gpt-oss:20b-cloud"
 
 # Personal/local overrides should live in user config, not workspace config:
 #   ~/.vtcode/vtcode.toml
@@ -147,7 +147,7 @@ minimum_contrast = 4.5
 bold_is_bright = false
 safe_colors_only = false
 color_scheme_mode = "auto"
-show_turn_timer = true
+show_turn_timer = false
 # Show warning/error/fatal diagnostic lines in the TUI transcript and log panel.
 # Also controls whether ERROR-level tracing logs appear in the TUI session log.
 # Errors are always captured in the session archive JSON regardless of this setting.

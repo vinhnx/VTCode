@@ -292,6 +292,49 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
             session.mark_dirty();
             Some(InlineEvent::BackgroundOperation)
         }
+        KeyCode::Char('a') | KeyCode::Char('A') if has_control && !has_command && !has_alt => {
+            if session.input_enabled {
+                session.move_to_start();
+                session.mark_dirty();
+            }
+            None
+        }
+        KeyCode::Char('e') | KeyCode::Char('E') if has_control && !has_command && !has_alt => {
+            if !session.input_enabled {
+                None
+            } else if session.input_manager.content().is_empty() {
+                session.mark_dirty();
+                Some(InlineEvent::LaunchEditor)
+            } else {
+                session.move_to_end();
+                session.mark_dirty();
+                None
+            }
+        }
+        KeyCode::Char('w') | KeyCode::Char('W') if has_control && !has_command && !has_alt => {
+            if session.input_enabled {
+                session.delete_word_backward();
+                session.check_file_reference_trigger();
+                session.mark_dirty();
+            }
+            None
+        }
+        KeyCode::Char('u') | KeyCode::Char('U') if has_control && !has_command && !has_alt => {
+            if session.input_enabled {
+                session.delete_to_start_of_line();
+                session.check_file_reference_trigger();
+                session.mark_dirty();
+            }
+            None
+        }
+        KeyCode::Char('k') | KeyCode::Char('K') if has_control && !has_command && !has_alt => {
+            if session.input_enabled {
+                session.delete_to_end_of_line();
+                session.check_file_reference_trigger();
+                session.mark_dirty();
+            }
+            None
+        }
         KeyCode::Char('j') if has_control => {
             // Ctrl+J is a line feed character, insert newline for multiline input
             session.insert_char('\n');
@@ -306,10 +349,6 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
             // Shift+Tab: Toggle editing mode (delegate mode when teams are active)
             session.mark_dirty();
             Some(InlineEvent::ToggleMode)
-        }
-        KeyCode::Char('e') | KeyCode::Char('E') if has_control && !has_command && !has_alt => {
-            session.mark_dirty();
-            Some(InlineEvent::LaunchEditor)
         }
         KeyCode::Esc => {
             if session.modal.is_some() {
@@ -563,6 +602,16 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                 return None;
             }
 
+            if ch == '?'
+                && !has_control
+                && !has_alt
+                && !has_command
+                && session.input_manager.content().is_empty()
+            {
+                session.show_modal("Keyboard Shortcuts".to_string(), quick_help_lines(), None);
+                return None;
+            }
+
             if ch == '\t' {
                 let submitted = session.input_manager.content().to_owned();
                 let submitted_entry = session.input_manager.current_history_entry();
@@ -622,6 +671,17 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
         }
         _ => None,
     }
+}
+
+fn quick_help_lines() -> Vec<String> {
+    vec![
+        "Ctrl+A / Ctrl+E: Move to start/end of line.".to_string(),
+        "Ctrl+W: Delete previous word.".to_string(),
+        "Ctrl+U / Ctrl+K: Delete to start/end of line.".to_string(),
+        "Alt+Left / Alt+Right: Move by word.".to_string(),
+        "Ctrl+Z (Unix): Suspend VT Code; use `fg` to resume.".to_string(),
+        "Esc: Close this overlay.".to_string(),
+    ]
 }
 
 fn handle_running_slash_command_block(session: &mut Session) -> bool {

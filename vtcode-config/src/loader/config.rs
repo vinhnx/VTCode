@@ -525,7 +525,7 @@ allow_tool_ansi = false
 inline_viewport_rows = 16
 
 # Show elapsed time divider after each completed turn
-show_turn_timer = true
+show_turn_timer = false
 
 # Show warning/error/fatal diagnostic lines directly in transcript
 # Effective in debug/development builds only

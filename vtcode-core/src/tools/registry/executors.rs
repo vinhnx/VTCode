@@ -9,6 +9,7 @@ use crate::tools::file_tracker::FileTracker;
 use crate::tools::registry::declarations::{
     UnifiedExecAction, UnifiedFileAction, UnifiedSearchAction,
 };
+use crate::tools::shell::resolve_fallback_shell;
 use crate::tools::tool_intent;
 use crate::tools::traits::Tool;
 use crate::tools::types::VTCodePtySession;
@@ -2065,12 +2066,18 @@ fn is_git_diff_command(parts: &[String]) -> bool {
 }
 
 fn resolve_shell_preference(pref: Option<&str>, config: &crate::config::PtyConfig) -> String {
-    pref.map(|s| s.to_string()).unwrap_or_else(|| {
-        config
-            .preferred_shell
-            .clone()
-            .unwrap_or_else(|| "sh".to_string())
-    })
+    pref.map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+        .or_else(|| {
+            config
+                .preferred_shell
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(ToOwned::to_owned)
+        })
+        .unwrap_or_else(resolve_fallback_shell)
 }
 
 fn normalized_shell_name(shell: &str) -> String {
@@ -2084,6 +2091,56 @@ fn normalized_shell_name(shell: &str) -> String {
 fn build_shell_command_string(raw: Option<&str>, parts: &[String], _shell: &str) -> String {
     raw.map(|s| s.to_string())
         .unwrap_or_else(|| shell_words::join(parts.iter().map(|s| s.as_str())))
+}
+
+#[cfg(test)]
+mod shell_preference_tests {
+    use super::resolve_shell_preference;
+    use crate::config::PtyConfig;
+    use crate::tools::shell::resolve_fallback_shell;
+
+    #[test]
+    fn explicit_shell_overrides_config_preference() {
+        let mut config = PtyConfig::default();
+        config.preferred_shell = Some("/bin/bash".to_string());
+
+        let resolved = resolve_shell_preference(Some(" /bin/zsh "), &config);
+        assert_eq!(resolved, "/bin/zsh");
+    }
+
+    #[test]
+    fn config_preferred_shell_used_when_explicit_missing() {
+        let mut config = PtyConfig::default();
+        config.preferred_shell = Some("zsh".to_string());
+
+        let resolved = resolve_shell_preference(None, &config);
+        assert_eq!(resolved, "zsh");
+    }
+
+    #[test]
+    fn blank_explicit_shell_falls_back_to_config_preference() {
+        let mut config = PtyConfig::default();
+        config.preferred_shell = Some("bash".to_string());
+
+        let resolved = resolve_shell_preference(Some("   "), &config);
+        assert_eq!(resolved, "bash");
+    }
+
+    #[test]
+    fn blank_config_shell_falls_back_to_default_resolver() {
+        let mut config = PtyConfig::default();
+        config.preferred_shell = Some("   ".to_string());
+
+        let resolved = resolve_shell_preference(None, &config);
+        assert_eq!(resolved, resolve_fallback_shell());
+    }
+
+    #[test]
+    fn missing_preferences_fall_back_to_default_resolver() {
+        let config = PtyConfig::default();
+        let resolved = resolve_shell_preference(None, &config);
+        assert_eq!(resolved, resolve_fallback_shell());
+    }
 }
 
 /// Check if a command is a file display command that should have limited output.

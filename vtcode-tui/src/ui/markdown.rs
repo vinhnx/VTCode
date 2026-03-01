@@ -1321,14 +1321,30 @@ pub fn highlight_line_for_diff(line: &str, language: Option<&str>) -> Option<Vec
                         anstyle::Color::Ansi(ansi) => {
                             // Map dark ANSI to bright ANSI
                             match ansi {
-                                anstyle::AnsiColor::Black => anstyle::Color::Ansi(anstyle::AnsiColor::BrightWhite),
-                                anstyle::AnsiColor::Red => anstyle::Color::Ansi(anstyle::AnsiColor::BrightRed),
-                                anstyle::AnsiColor::Green => anstyle::Color::Ansi(anstyle::AnsiColor::BrightGreen),
-                                anstyle::AnsiColor::Yellow => anstyle::Color::Ansi(anstyle::AnsiColor::BrightYellow),
-                                anstyle::AnsiColor::Blue => anstyle::Color::Ansi(anstyle::AnsiColor::BrightBlue),
-                                anstyle::AnsiColor::Magenta => anstyle::Color::Ansi(anstyle::AnsiColor::BrightMagenta),
-                                anstyle::AnsiColor::Cyan => anstyle::Color::Ansi(anstyle::AnsiColor::BrightCyan),
-                                anstyle::AnsiColor::White => anstyle::Color::Ansi(anstyle::AnsiColor::BrightWhite),
+                                anstyle::AnsiColor::Black => {
+                                    anstyle::Color::Ansi(anstyle::AnsiColor::BrightWhite)
+                                }
+                                anstyle::AnsiColor::Red => {
+                                    anstyle::Color::Ansi(anstyle::AnsiColor::BrightRed)
+                                }
+                                anstyle::AnsiColor::Green => {
+                                    anstyle::Color::Ansi(anstyle::AnsiColor::BrightGreen)
+                                }
+                                anstyle::AnsiColor::Yellow => {
+                                    anstyle::Color::Ansi(anstyle::AnsiColor::BrightYellow)
+                                }
+                                anstyle::AnsiColor::Blue => {
+                                    anstyle::Color::Ansi(anstyle::AnsiColor::BrightBlue)
+                                }
+                                anstyle::AnsiColor::Magenta => {
+                                    anstyle::Color::Ansi(anstyle::AnsiColor::BrightMagenta)
+                                }
+                                anstyle::AnsiColor::Cyan => {
+                                    anstyle::Color::Ansi(anstyle::AnsiColor::BrightCyan)
+                                }
+                                anstyle::AnsiColor::White => {
+                                    anstyle::Color::Ansi(anstyle::AnsiColor::BrightWhite)
+                                }
                                 other => anstyle::Color::Ansi(other),
                             }
                         }
