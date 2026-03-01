@@ -135,6 +135,7 @@ cargo clippy --workspace --all-targets -- -D warnings && cargo fmt --check && ca
 - **Complete autonomously**: Resolve fully before yielding; no intermediate confirmations
 - **Root cause fixes**: Fix at the source, not surface-level
 - **Verify yourself**: Run `cargo check`, `cargo nextest`, `cargo clippy` after changes
+- **Safety gate**: No `unsafe` code (including tests) and enforce `cargo clippy --workspace --all-targets -- -D warnings`
 - **Precision over ambition**: Surgical changes respecting existing style
 - **Stay in scope**: Don't fix unrelated issues (mention in final message)
 - **Iterate proactively**: Fix errors without asking; know when "done" is sufficient

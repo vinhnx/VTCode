@@ -216,15 +216,8 @@ impl WorkspaceState {
     fn parse_relative_expression(&self, expression: &str) -> Option<RelativeOp> {
         let expr_lower = expression.to_lowercase();
 
-        if expr_lower.contains("half") || expr_lower.contains("by 2") {
-            return Some(RelativeOp::Half);
-        }
-
-        if expr_lower.contains("double") || expr_lower.contains("twice") {
-            return Some(RelativeOp::Double);
-        }
-
-        // Try to extract percentage
+        // Try to extract percentage first so "increase by 20%" doesn't
+        // accidentally match "by 2" from the half shortcut.
         if let Some(pct) = self.extract_percentage(&expr_lower) {
             if expr_lower.contains("increase") {
                 return Some(RelativeOp::Increase(pct));
@@ -232,6 +225,14 @@ impl WorkspaceState {
             if expr_lower.contains("decrease") || expr_lower.contains("reduce") {
                 return Some(RelativeOp::Decrease(pct));
             }
+        }
+
+        if expr_lower.contains("half") || expr_lower.contains("by 2") {
+            return Some(RelativeOp::Half);
+        }
+
+        if expr_lower.contains("double") || expr_lower.contains("twice") {
+            return Some(RelativeOp::Double);
         }
 
         None

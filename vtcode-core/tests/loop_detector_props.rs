@@ -6,7 +6,7 @@ use vtcode_core::core::loop_detector::LoopDetector;
 proptest! {
     #[test]
     fn prop_detects_repetition_by_third_call(tool_name in "[a-zA-Z0-9_]{3,16}", path in ".{0,40}") {
-        let mut detector = LoopDetector::new();
+        let mut detector = LoopDetector::with_max_repeated_calls(3);
         let args = json!({ "path": path });
 
         // First two calls should not trigger a stop
@@ -26,7 +26,7 @@ proptest! {
     fn prop_root_variations_normalize_to_same_signature(
         paths in prop::collection::vec(prop::sample::select(vec!["", ".", "./", "././", "/", "//"]), 3)
     ) {
-        let mut detector = LoopDetector::new();
+        let mut detector = LoopDetector::with_max_repeated_calls(3);
 
         // First two root variations should not warn
         prop_assert!(

@@ -162,32 +162,54 @@ impl ConversationMemory {
     fn extract_nouns_and_identifiers(&self, text: &str) -> Vec<String> {
         let mut entities = Vec::new();
 
+        const ENTITY_STOPWORDS: &[&str] = &[
+            "update",
+            "fix",
+            "test",
+            "look",
+            "add",
+            "remove",
+            "create",
+            "delete",
+            "refactor",
+            "implement",
+            "check",
+            "review",
+        ];
+
         // Simple extraction: capitalize words, camelCase, PascalCase
         for word in text.split_whitespace() {
-            let cleaned = word.trim_matches(|c: char| !c.is_alphanumeric());
+            let cleaned = word.trim_matches(|c: char| !c.is_alphanumeric() && c != '.');
+            let candidate = cleaned.split('.').next().unwrap_or(cleaned);
+            let candidate_lower = candidate.to_ascii_lowercase();
 
             // Skip empty and short words
-            if cleaned.len() < 3 {
+            if candidate.len() < 3 {
+                continue;
+            }
+
+            // Skip common action words that are not entities.
+            if ENTITY_STOPWORDS.contains(&candidate_lower.as_str()) {
                 continue;
             }
 
             // Capitalized words (likely proper nouns)
-            if cleaned
+            if candidate
                 .chars()
                 .next()
                 .map(|c| c.is_uppercase())
                 .unwrap_or(false)
             {
-                entities.push(cleaned.to_string());
+                entities.push(candidate.to_string());
                 continue;
             }
 
             // camelCase or PascalCase (likely identifiers)
-            let has_mixed_case = cleaned.chars().any(|c| c.is_uppercase())
-                && cleaned.chars().any(|c| c.is_lowercase());
+            let has_mixed_case = candidate.chars().any(|c| c.is_uppercase())
+                && candidate.chars().any(|c| c.is_lowercase());
 
             if has_mixed_case {
-                entities.push(cleaned.to_string());
+                entities.push(candidate.to_string());
             }
         }
 

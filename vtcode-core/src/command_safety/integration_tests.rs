@@ -358,7 +358,7 @@ mod tests {
         let result1 = evaluator.evaluate(&cmd1).await.unwrap();
         assert!(result1.allowed);
 
-        let cmd2 = vec!["cargo".to_string(), "test".to_string()];
+        let cmd2 = vec!["cargo".to_string(), "check".to_string()];
         let result2 = evaluator.evaluate(&cmd2).await.unwrap();
         assert!(result2.allowed);
 

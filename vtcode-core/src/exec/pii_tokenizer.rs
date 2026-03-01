@@ -179,11 +179,14 @@ impl PiiTokenizer {
 
     /// Tokenize PII in a string, returning modified text and token map.
     pub fn tokenize_string(&self, text: &str) -> Result<(String, HashMap<String, PiiToken>)> {
-        let detected = self.detect_pii(text)?;
+        let mut detected = self.detect_pii(text)?;
 
         if detected.is_empty() {
             return Ok((text.to_string(), HashMap::new()));
         }
+
+        // Ensure deterministic right-to-left replacement order by source offsets.
+        detected.sort_by_key(|d| d.start);
 
         let mut result = text.to_string();
         let mut new_tokens = HashMap::new();

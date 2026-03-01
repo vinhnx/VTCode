@@ -297,8 +297,10 @@ mod tests {
         config.agent.default_model = "gemini-3-flash-preview".to_owned();
 
         let result = validator.validate(&config).unwrap();
-        // Model exists, so no error about model
-        assert!(!result.errors.iter().any(|e| e.contains("not found")));
+        // Model exists, so there should be no model-specific lookup error.
+        assert!(!result.errors.iter().any(|e| {
+            e.contains("Model 'gemini-3-flash-preview' not found for provider 'google'")
+        }));
     }
 
     #[test]

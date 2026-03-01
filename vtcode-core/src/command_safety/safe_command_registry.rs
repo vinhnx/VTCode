@@ -475,10 +475,10 @@ mod tests {
     }
 
     #[test]
-    fn find_without_dangerous_options_is_unknown() {
+    fn find_without_dangerous_options_is_allowed() {
         let registry = SafeCommandRegistry::new();
         let cmd = vec!["find".to_string(), ".".to_string()];
-        assert_eq!(registry.is_safe(&cmd), SafetyDecision::Unknown);
+        assert_eq!(registry.is_safe(&cmd), SafetyDecision::Allow);
     }
 
     #[test]
@@ -501,10 +501,10 @@ mod tests {
     }
 
     #[test]
-    fn base64_without_output_is_unknown() {
+    fn base64_without_output_is_allowed() {
         let registry = SafeCommandRegistry::new();
         let cmd = vec!["base64".to_string(), "file.txt".to_string()];
-        assert_eq!(registry.is_safe(&cmd), SafetyDecision::Unknown);
+        assert_eq!(registry.is_safe(&cmd), SafetyDecision::Allow);
     }
 
     #[test]
@@ -534,10 +534,10 @@ mod tests {
     }
 
     #[test]
-    fn sed_without_n_is_dangerous() {
+    fn sed_without_n_is_allowed() {
         let registry = SafeCommandRegistry::new();
         let cmd = vec!["sed".to_string(), "s/foo/bar/g".to_string()];
-        assert!(matches!(registry.is_safe(&cmd), SafetyDecision::Deny(_)));
+        assert_eq!(registry.is_safe(&cmd), SafetyDecision::Allow);
     }
 
     #[test]

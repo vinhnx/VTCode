@@ -199,14 +199,7 @@ fn parse_with_basic_tokenization(script: &str) -> Result<Vec<Vec<String>>, Strin
 /// Splits a command string into arguments
 /// Respects quoted strings and escapes
 fn tokenize_command(cmd: &str) -> Result<Vec<String>, String> {
-    // Use shlex for proper shell-like tokenization
-    // Note: This matches the implementation in `shlex::split` but handles some edge cases differently.
-    // Future improvement: use a full shell parser or tree-sitter for non-trivial cases.
-    Ok(cmd
-        .split_whitespace()
-        .map(|s| s.trim_matches('"').trim_matches('\'').to_string())
-        .filter(|s| !s.is_empty())
-        .collect())
+    shell_words::split(cmd).map_err(|err| format!("failed to tokenize command: {err}"))
 }
 
 /// Parses `bash -lc "script"` style invocations
