@@ -448,3 +448,38 @@ When answering questions about VT Code itself, consult `docs/modules/vtcode_docs
 - **Configuration**: See [docs/config/CONFIGURATION_PRECEDENCE.md](docs/config/CONFIGURATION_PRECEDENCE.md)
 - **Provider Setup**: See [docs/providers/PROVIDER_GUIDES.md](docs/providers/PROVIDER_GUIDES.md)
 - **Testing Guide**: See [docs/development/testing.md](docs/development/testing.md)
+
+## Final Note
+
+- Follow the principles of autonomy, precision, and momentum in all tasks.
+- Follow DRY principles and code style conventions to maintain consistency.
+- KISS (Keep It Simple, Stupid) - prefer straightforward solutions over complex ones.
+- Principle of Least Astonishment - write code that behaves in a way that least surprises other developers.
+- Use the documentation as your primary source of truth for architecture and design questions.
+- When in doubt, prioritize completing the task fully and correctly over asking for clarification or permission to proceed.
+- Always run quality checks before finalizing your work.
+- Remember that the user is working on the same machine and has access to all files and tools you do—no need for hand-holding or restating information they can access directly.
+- When making changes, consider the impact on the overall system and aim for solutions that integrate well with existing patterns and practices.
+
+## Hickey's Core: Simple > Easy
+
+Simple = one concern, not complected. Easy = familiar/convenient. Never conflate.
+
+**Complecting** = interleaving concerns that should be separate. The root cause of most architectural debt.
+
+**Rules:**
+
+- Separate what changes from what doesn't
+- Data over objects — plain maps/lists compose; encapsulated state doesn't
+- Values over mutation — identity, time, and value are distinct concepts
+- No temporal coupling — share data, not calls
+- Decomplect first, optimize later; you cannot simplify by adding abstraction
+
+**Applied:**
+
+- Prefer pure functions + immutable data
+- Interfaces as data shapes, not method contracts
+- Queues/events over direct service calls
+- Validate meaning (spec/contracts), not just shape (types)
+
+**Test:** Can you reason about this part without loading the whole system in your head? If no — it's complected.
