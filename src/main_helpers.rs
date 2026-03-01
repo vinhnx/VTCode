@@ -1,10 +1,156 @@
 use anyhow::{Context, Result};
+use std::fs;
 use std::io::{self, Read};
+use std::path::{Path, PathBuf};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use vtcode_core::cli::args::AgentClientProtocolTarget;
 use vtcode_core::cli::args::Cli;
+use vtcode_core::utils::dot_config::DotManager;
+use vtcode_core::utils::error_log_collector::ErrorLogCollectorLayer;
+use vtcode_core::utils::session_archive::SESSION_DIR_ENV;
 use vtcode_core::utils::tty::TtyExt;
 use vtcode_tui::log::make_tui_log_layer;
+
+const DEBUG_LOG_FILE_NAME: &str = "vtcode-debug.log";
+const DEBUG_LOG_ROTATED_PREFIX: &str = "vtcode-debug-";
+const DEFAULT_MAX_DEBUG_LOG_SIZE_MB: u64 = 50;
+const DEFAULT_MAX_DEBUG_LOG_AGE_DAYS: u32 = 7;
+const DEBUG_BYTES_PER_MB: u64 = 1024 * 1024;
+const SECONDS_PER_DAY: u64 = 24 * 60 * 60;
+
+fn default_debug_log_dir() -> PathBuf {
+    if let Some(custom) = std::env::var_os(SESSION_DIR_ENV) {
+        return PathBuf::from(custom);
+    }
+    if let Ok(manager) = DotManager::new() {
+        return manager.sessions_dir();
+    }
+    PathBuf::from(".vtcode/sessions")
+}
+
+fn is_debug_log_file(path: &Path) -> bool {
+    let Some(name) = path.file_name().and_then(|value| value.to_str()) else {
+        return false;
+    };
+    name == DEBUG_LOG_FILE_NAME
+        || (name.starts_with(DEBUG_LOG_ROTATED_PREFIX) && name.ends_with(".log"))
+}
+
+fn prune_expired_debug_logs(log_dir: &Path, max_age_days: u32) -> Result<()> {
+    let cutoff = if max_age_days == 0 {
+        SystemTime::now()
+    } else {
+        SystemTime::now()
+            .checked_sub(Duration::from_secs(
+                u64::from(max_age_days).saturating_mul(SECONDS_PER_DAY),
+            ))
+            .unwrap_or(UNIX_EPOCH)
+    };
+
+    for entry in fs::read_dir(log_dir)
+        .with_context(|| format!("Failed to read debug log directory {}", log_dir.display()))?
+    {
+        let entry = match entry {
+            Ok(value) => value,
+            Err(err) => {
+                eprintln!(
+                    "warning: failed to read a debug log entry in {}: {}",
+                    log_dir.display(),
+                    err
+                );
+                continue;
+            }
+        };
+        let path = entry.path();
+        if !is_debug_log_file(&path) {
+            continue;
+        }
+        let metadata = match entry.metadata() {
+            Ok(value) => value,
+            Err(err) => {
+                eprintln!(
+                    "warning: failed to read debug log metadata {}: {}",
+                    path.display(),
+                    err
+                );
+                continue;
+            }
+        };
+        if !metadata.is_file() {
+            continue;
+        }
+        if metadata.modified().unwrap_or(UNIX_EPOCH) <= cutoff
+            && let Err(err) = fs::remove_file(&path)
+        {
+            eprintln!(
+                "warning: failed to remove expired debug log {}: {}",
+                path.display(),
+                err
+            );
+        }
+    }
+
+    Ok(())
+}
+
+fn rotate_debug_log_if_needed(log_file: &Path, max_size_mb: u64) -> Result<()> {
+    if max_size_mb == 0 {
+        return Ok(());
+    }
+
+    let max_bytes = max_size_mb.saturating_mul(DEBUG_BYTES_PER_MB);
+    let metadata = match fs::metadata(log_file) {
+        Ok(value) => value,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(err) => {
+            return Err(err)
+                .with_context(|| format!("Failed to inspect debug log {}", log_file.display()));
+        }
+    };
+
+    if metadata.len() < max_bytes {
+        return Ok(());
+    }
+
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis();
+    let rotated_name = format!(
+        "{}{}-{}.log",
+        DEBUG_LOG_ROTATED_PREFIX,
+        timestamp,
+        std::process::id()
+    );
+    let rotated_path = log_file
+        .parent()
+        .unwrap_or_else(|| Path::new("."))
+        .join(rotated_name);
+
+    fs::rename(log_file, &rotated_path).with_context(|| {
+        format!(
+            "Failed to rotate debug log {} -> {}",
+            log_file.display(),
+            rotated_path.display()
+        )
+    })?;
+    Ok(())
+}
+
+fn prepare_debug_log_file(
+    configured_dir: Option<PathBuf>,
+    max_size_mb: u64,
+    max_age_days: u32,
+) -> Result<PathBuf> {
+    let log_dir = configured_dir.unwrap_or_else(default_debug_log_dir);
+    fs::create_dir_all(&log_dir)
+        .with_context(|| format!("Failed to create debug log directory {}", log_dir.display()))?;
+    prune_expired_debug_logs(&log_dir, max_age_days)?;
+    let log_file = log_dir.join(DEBUG_LOG_FILE_NAME);
+    rotate_debug_log_if_needed(&log_file, max_size_mb)?;
+    Ok(log_file)
+}
 
 /// Detect available IDE for automatic connection when --ide flag is used.
 pub(crate) fn detect_available_ide() -> Result<Option<AgentClientProtocolTarget>> {
@@ -93,7 +239,11 @@ pub(crate) async fn initialize_tracing(args: &Cli) -> Result<bool> {
 
         if is_interactive_tui {
             // Redirect logs to a file instead of stderr to avoid TUI corruption
-            let log_file = std::path::PathBuf::from("/tmp/vtcode-debug.log");
+            let log_file = prepare_debug_log_file(
+                None,
+                DEFAULT_MAX_DEBUG_LOG_SIZE_MB,
+                DEFAULT_MAX_DEBUG_LOG_AGE_DAYS,
+            )?;
             let file = std::fs::OpenOptions::new()
                 .create(true)
                 .append(true)
@@ -109,6 +259,7 @@ pub(crate) async fn initialize_tracing(args: &Cli) -> Result<bool> {
                 .with(env_filter)
                 .with(fmt_layer)
                 .with(make_tui_log_layer())
+                .with(ErrorLogCollectorLayer)
                 .try_init();
 
             if let Err(err) = init_result {
@@ -121,6 +272,7 @@ pub(crate) async fn initialize_tracing(args: &Cli) -> Result<bool> {
                 .with(env_filter)
                 .with(fmt_layer)
                 .with(make_tui_log_layer())
+                .with(ErrorLogCollectorLayer)
                 .try_init();
 
             if let Err(err) = init_result {
@@ -134,6 +286,26 @@ pub(crate) async fn initialize_tracing(args: &Cli) -> Result<bool> {
     // when DebugConfig is loaded. This function just ensures RUST_LOG is respected.
 
     Ok(false)
+}
+
+/// Initialize a minimal tracing subscriber that only collects ERROR-level logs
+/// into the session archive. Used when neither `RUST_LOG` nor config-based
+/// tracing is enabled.
+pub(crate) fn initialize_default_error_tracing() -> Result<()> {
+    use tracing_subscriber::prelude::*;
+
+    let env_filter = tracing_subscriber::EnvFilter::new("error");
+
+    let init_result = tracing_subscriber::registry()
+        .with(env_filter)
+        .with(ErrorLogCollectorLayer)
+        .try_init();
+
+    if let Err(err) = init_result {
+        tracing::warn!(error = %err, "tracing already initialized; skipping default error tracing setup");
+    }
+
+    Ok(())
 }
 
 pub(crate) fn initialize_tracing_from_config(
@@ -154,7 +326,15 @@ pub(crate) fn initialize_tracing_from_config(
         .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new(&filter_str));
 
     // Always redirect config-based tracing to a file to avoid TUI corruption
-    let log_file = std::path::PathBuf::from("/tmp/vtcode-debug.log");
+    let configured_dir = debug_cfg
+        .debug_log_dir
+        .as_ref()
+        .map(|_| debug_cfg.debug_log_path());
+    let log_file = prepare_debug_log_file(
+        configured_dir,
+        debug_cfg.max_debug_log_size_mb,
+        debug_cfg.max_debug_log_age_days,
+    )?;
     let file = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
@@ -170,6 +350,7 @@ pub(crate) fn initialize_tracing_from_config(
         .with(env_filter)
         .with(fmt_layer)
         .with(make_tui_log_layer())
+        .with(ErrorLogCollectorLayer)
         .try_init();
 
     match init_result {

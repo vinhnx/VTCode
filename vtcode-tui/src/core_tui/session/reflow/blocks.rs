@@ -257,7 +257,7 @@ impl Session {
 
         let content = render::render_tool_segments(self, line);
         let split_lines = split_tool_spans(content);
-        let summary_prefix = format!("  {} ", ui::INLINE_BLOCK_BODY_LEFT);
+        let summary_prefix = "    ".to_string();
         let detail_prefix = summary_prefix.clone();
         let detail_border_style = border_style.add_modifier(Modifier::DIM);
 
@@ -407,7 +407,8 @@ impl Session {
         let mut body_spans = Vec::new();
         for segment in &line.segments {
             let stripped_text = render::strip_ansi_codes(&segment.text);
-            let style = ratatui_style_from_inline(&segment.style, pty_fallback);
+            let style =
+                ratatui_style_from_inline(&segment.style, pty_fallback).add_modifier(Modifier::DIM);
             body_spans.push(Span::styled(stripped_text.into_owned(), style));
         }
 

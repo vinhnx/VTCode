@@ -201,6 +201,7 @@ pub fn extract_event_type(line: &str) -> Option<String> {
 pub struct StreamAccumulator {
     pub text_content: String,
     pub reasoning_content: String,
+    pub reasoning_summary: String,
     pub function_calls: Vec<AccumulatedFunctionCall>,
     pub current_function_call: Option<AccumulatingFunctionCall>,
     pub output_items: Vec<Value>,
@@ -257,11 +258,13 @@ impl StreamAccumulator {
                 }
             }
             "response.reasoning_summary_text.delta" => {
+                // Summary reasoning (sanitized version)
                 if let StreamEventData::TextDelta(data) = &event.data {
-                    self.reasoning_content.push_str(&data.delta);
+                    self.reasoning_summary.push_str(&data.delta);
                 }
             }
             "response.reasoning_content.delta" => {
+                // Raw reasoning traces (preferred over summary)
                 if let StreamEventData::ReasoningContentDelta(data) = &event.data {
                     self.reasoning_content.push_str(&data.delta);
                 }

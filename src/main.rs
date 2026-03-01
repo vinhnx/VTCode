@@ -22,7 +22,8 @@ mod main_helpers;
 mod workspace_trust;
 
 use main_helpers::{
-    build_print_prompt, detect_available_ide, initialize_tracing, initialize_tracing_from_config,
+    build_print_prompt, detect_available_ide, initialize_default_error_tracing, initialize_tracing,
+    initialize_tracing_from_config,
 };
 
 fn main() -> std::process::ExitCode {
@@ -170,7 +171,15 @@ async fn run() -> Result<()> {
         && let Err(err) = initialize_tracing_from_config(&startup.config)
     {
         tracing::warn!(error = %err, "failed to initialize tracing from config");
+    } else if !env_tracing_initialized && !startup.config.debug.enable_tracing {
+        // Always collect ERROR-level logs into the session archive for post-mortem debugging
+        if let Err(err) = initialize_default_error_tracing() {
+            eprintln!("warning: failed to initialize default error tracing: {err}");
+        }
     }
+
+    // Sync global diagnostics flag so TuiLogLayer respects ui.show_diagnostics_in_transcript
+    panic_hook::set_show_diagnostics(startup.config.ui.show_diagnostics_in_transcript);
 
     let cfg = &startup.config;
     let core_cfg = &startup.agent_config;

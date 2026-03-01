@@ -2,8 +2,8 @@
 use crate::config::core::{PromptCachingConfig, ProviderPromptCachingConfig};
 use crate::llm::error_display;
 use crate::llm::provider::{
-    ContentPart, FinishReason, LLMError, LLMRequest, Message, MessageContent, ToolCall,
-    ToolDefinition,
+    ContentPart, FinishReason, LLMError, LLMRequest, Message, MessageContent, MessageRole,
+    ToolCall, ToolDefinition,
 };
 use crate::llm::types as llm_types;
 use crate::llm::utils::extract_reasoning_content;
@@ -131,6 +131,21 @@ pub fn serialize_message_content_openai(content: &MessageContent) -> Value {
                 Value::String(text_only)
             }
         }
+    }
+}
+
+/// Serialize message content for OpenAI-compatible payloads and normalize tool
+/// response content to plain text where required.
+#[inline]
+pub fn serialize_message_content_openai_for_role(
+    role: &MessageRole,
+    content: &MessageContent,
+) -> Value {
+    let serialized = serialize_message_content_openai(content);
+    if role == &MessageRole::Tool && !serialized.is_string() {
+        Value::String(content.as_text().into_owned())
+    } else {
+        serialized
     }
 }
 
@@ -456,10 +471,10 @@ pub fn serialize_messages_openai_format(
             KEY_ROLE.to_owned(),
             Value::String(message.role.as_generic_str().to_owned()),
         );
-        message_map.insert(
-            KEY_CONTENT.to_owned(),
-            serialize_message_content_openai(&message.content),
-        );
+
+        let content_value =
+            serialize_message_content_openai_for_role(&message.role, &message.content);
+        message_map.insert(KEY_CONTENT.to_owned(), content_value);
 
         if let Some(tool_calls) = &message.tool_calls {
             // Optimize: Use references to avoid cloning
@@ -481,7 +496,25 @@ pub fn serialize_messages_openai_format(
             message_map.insert(KEY_TOOL_CALLS.to_owned(), Value::Array(serialized_calls));
         }
 
-        if let Some(tool_call_id) = &message.tool_call_id {
+        if message.role == crate::llm::provider::MessageRole::Tool {
+            match &message.tool_call_id {
+                Some(tool_call_id) => {
+                    message_map.insert(
+                        KEY_TOOL_CALL_ID.to_owned(),
+                        Value::String(tool_call_id.clone()),
+                    );
+                }
+                None => {
+                    return Err(LLMError::InvalidRequest {
+                        message: format!(
+                            "Tool response message missing required tool_call_id (provider: {})",
+                            provider_key
+                        ),
+                        metadata: None,
+                    });
+                }
+            }
+        } else if let Some(tool_call_id) = &message.tool_call_id {
             message_map.insert(
                 KEY_TOOL_CALL_ID.to_owned(),
                 Value::String(tool_call_id.clone()),

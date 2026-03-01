@@ -1313,13 +1313,24 @@ fn try_highlight(
         return None;
     }
 
+    // When enabled_languages is non-empty, use it as an allowlist;
+    // otherwise highlight any language syntect recognises (~250 grammars).
     if let Some(lang) = language {
-        let enabled = config
-            .enabled_languages
-            .iter()
-            .any(|entry| entry.eq_ignore_ascii_case(lang));
-        if !enabled {
-            return None;
+        if !config.enabled_languages.is_empty() {
+            let direct_match = config
+                .enabled_languages
+                .iter()
+                .any(|entry| entry.eq_ignore_ascii_case(lang));
+            if !direct_match {
+                let syntax_ref = syntax_highlight::find_syntax_by_token(lang);
+                let resolved_match = config
+                    .enabled_languages
+                    .iter()
+                    .any(|entry| entry.eq_ignore_ascii_case(&syntax_ref.name));
+                if !resolved_match {
+                    return None;
+                }
+            }
         }
     }
 

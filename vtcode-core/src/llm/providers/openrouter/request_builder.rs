@@ -3,7 +3,7 @@ use serde_json::{Value, json};
 use crate::config::models::Provider;
 use crate::llm::error_display;
 use crate::llm::provider::{LLMError, LLMProvider, LLMRequest, MessageRole};
-use crate::llm::providers::common::serialize_message_content_openai;
+use crate::llm::providers::common::serialize_message_content_openai_for_role;
 use crate::llm::rig_adapter::reasoning_parameters_for;
 
 use super::OpenRouterProvider;
@@ -25,9 +25,11 @@ impl OpenRouterProvider {
 
         for msg in &request.messages {
             let role = msg.role.as_openai_str();
+            let content_value = serialize_message_content_openai_for_role(&msg.role, &msg.content);
+
             let mut message = json!({
                 "role": role,
-                "content": serialize_message_content_openai(&msg.content)
+                "content": content_value
             });
 
             if msg.role == MessageRole::Assistant {
@@ -59,10 +61,22 @@ impl OpenRouterProvider {
                 }
             }
 
-            if msg.role == MessageRole::Tool
-                && let Some(tool_call_id) = &msg.tool_call_id
-            {
-                message["tool_call_id"] = Value::String(tool_call_id.clone());
+            if msg.role == MessageRole::Tool {
+                match &msg.tool_call_id {
+                    Some(tool_call_id) => {
+                        message["tool_call_id"] = Value::String(tool_call_id.clone());
+                    }
+                    None => {
+                        let formatted_error = error_display::format_llm_error(
+                            "OpenRouter",
+                            "Tool response message missing required tool_call_id",
+                        );
+                        return Err(LLMError::InvalidRequest {
+                            message: formatted_error,
+                            metadata: None,
+                        });
+                    }
+                }
             }
 
             messages.push(message);

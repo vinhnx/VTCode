@@ -1365,3 +1365,32 @@ loop_detection_interactive = true
 # Manually enable reasoning effort support for models that are not natively recognized.
 # Note: Setting this to false will NOT disable reasoning effort for known models.
 # model_supports_reasoning_effort = true
+
+# Debug and tracing configuration
+# ERROR-level logs are always captured in the session archive JSON for post-mortem debugging.
+# To also display them in the TUI, enable ui.show_diagnostics_in_transcript above.
+[debug]
+# Enable structured logging for development and troubleshooting
+# Default: false
+enable_tracing = false
+
+# Trace level (error, warn, info, debug, trace)
+# Default: "info"
+trace_level = "info"
+
+# List of tracing targets to enable
+# Examples: "vtcode_core::agent", "vtcode_core::tools", "vtcode::*"
+# Default: []
+trace_targets = []
+
+# Directory for debug logs
+# Default: session archive directory ("~/.vtcode/sessions", or VT_SESSION_DIR when set)
+# debug_log_dir = "~/.vtcode/sessions"
+
+# Maximum size of debug logs before rotating (in MB)
+# Default: 50
+max_debug_log_size_mb = 50
+
+# Maximum age of debug logs to keep (in days)
+# Default: 7
+max_debug_log_age_days = 7

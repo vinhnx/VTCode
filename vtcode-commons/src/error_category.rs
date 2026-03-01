@@ -426,7 +426,26 @@ pub fn classify_error_message(msg: &str) -> ErrorCategory {
         return ErrorCategory::Timeout;
     }
 
-    // --- Priority 14: Network / Service unavailable ---
+    // --- Priority 14: Provider transient response-shape failures ---
+    if contains_any(
+        &msg,
+        &[
+            "invalid response format: missing choices",
+            "invalid response format: missing message",
+            "missing choices in response",
+            "missing message in choice",
+            "no choices in response",
+            "invalid response from ",
+            "empty response body",
+            "response did not contain",
+            "unexpected response format",
+            "failed to parse response",
+        ],
+    ) {
+        return ErrorCategory::ServiceUnavailable;
+    }
+
+    // --- Priority 15: Network / Service unavailable ---
     if contains_any(
         &msg,
         &[
@@ -458,7 +477,7 @@ pub fn classify_error_message(msg: &str) -> ErrorCategory {
         return ErrorCategory::Network;
     }
 
-    // --- Priority 15: Resource exhausted (memory, disk) ---
+    // --- Priority 16: Resource exhausted (memory, disk) ---
     if contains_any(&msg, &["out of memory", "disk full", "no space left"]) {
         return ErrorCategory::ResourceExhausted;
     }
@@ -494,19 +513,19 @@ impl From<&crate::llm::LLMError> for ErrorCategory {
             crate::llm::LLMError::Network { .. } => ErrorCategory::Network,
             crate::llm::LLMError::Provider { message, metadata } => {
                 // Check metadata status code first for precise classification
-                if let Some(meta) = metadata {
-                    if let Some(status) = meta.status {
-                        return match status {
-                            401 => ErrorCategory::Authentication,
-                            403 => ErrorCategory::PermissionDenied,
-                            404 => ErrorCategory::ResourceNotFound,
-                            429 => ErrorCategory::RateLimit,
-                            400 => ErrorCategory::InvalidParameters,
-                            500 | 502 | 503 | 504 => ErrorCategory::ServiceUnavailable,
-                            408 => ErrorCategory::Timeout,
-                            _ => classify_error_message(message),
-                        };
-                    }
+                if let Some(meta) = metadata
+                    && let Some(status) = meta.status
+                {
+                    return match status {
+                        401 => ErrorCategory::Authentication,
+                        403 => ErrorCategory::PermissionDenied,
+                        404 => ErrorCategory::ResourceNotFound,
+                        429 => ErrorCategory::RateLimit,
+                        400 => ErrorCategory::InvalidParameters,
+                        500 | 502 | 503 | 504 => ErrorCategory::ServiceUnavailable,
+                        408 => ErrorCategory::Timeout,
+                        _ => classify_error_message(message),
+                    };
                 }
                 // Fall back to message-based classification
                 classify_error_message(message)
@@ -738,6 +757,18 @@ mod tests {
             )),
         };
         assert_eq!(ErrorCategory::from(&err), ErrorCategory::ServiceUnavailable);
+    }
+
+    #[test]
+    fn minimax_invalid_response_is_service_unavailable() {
+        assert_eq!(
+            classify_error_message("Invalid response from MiniMax: missing choices"),
+            ErrorCategory::ServiceUnavailable
+        );
+        assert_eq!(
+            classify_error_message("Invalid response format: missing message"),
+            ErrorCategory::ServiceUnavailable
+        );
     }
 
     // --- is_retryable_llm_error_message ---
