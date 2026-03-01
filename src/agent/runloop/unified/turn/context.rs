@@ -83,6 +83,51 @@ pub struct TurnOutcomeContext<'a> {
     pub show_turn_timer: bool,
 }
 
+#[allow(dead_code)]
+pub(crate) struct ToolContext<'a> {
+    pub tool_result_cache: &'a Arc<tokio::sync::RwLock<vtcode_core::tools::ToolResultCache>>,
+    pub approval_recorder: &'a Arc<vtcode_core::tools::ApprovalRecorder>,
+    pub tool_registry: &'a mut vtcode_core::tools::registry::ToolRegistry,
+    pub tools: &'a Arc<tokio::sync::RwLock<Vec<uni::ToolDefinition>>>,
+    pub tool_catalog: &'a Arc<ToolCatalogState>,
+    pub tool_permission_cache: &'a Arc<tokio::sync::RwLock<vtcode_core::acp::ToolPermissionCache>>,
+    pub safety_validator: &'a Arc<
+        tokio::sync::RwLock<
+            crate::agent::runloop::unified::tool_call_safety::ToolCallSafetyValidator,
+        >,
+    >,
+    pub circuit_breaker: &'a Arc<vtcode_core::tools::circuit_breaker::CircuitBreaker>,
+    pub tool_health_tracker: &'a Arc<vtcode_core::tools::health::ToolHealthTracker>,
+    pub rate_limiter: &'a Arc<vtcode_core::tools::adaptive_rate_limiter::AdaptiveRateLimiter>,
+    pub autonomous_executor: &'a Arc<vtcode_core::tools::autonomous_executor::AutonomousExecutor>,
+    pub error_recovery:
+        &'a Arc<RwLock<vtcode_core::core::agent::error_recovery::ErrorRecoveryState>>,
+}
+
+#[allow(dead_code)]
+pub(crate) struct LLMContext<'a> {
+    pub provider_client: &'a mut Box<dyn uni::LLMProvider>,
+    pub config: &'a mut vtcode_core::config::types::AgentConfig,
+    pub vt_cfg: Option<&'a VTCodeConfig>,
+    pub context_manager: &'a mut crate::agent::runloop::unified::context_manager::ContextManager,
+    pub decision_ledger:
+        &'a Arc<tokio::sync::RwLock<vtcode_core::core::decision_tracker::DecisionTracker>>,
+    pub traj: &'a vtcode_core::core::trajectory::TrajectoryLogger,
+}
+
+#[allow(dead_code)]
+pub(crate) struct UIContext<'a> {
+    pub renderer: &'a mut AnsiRenderer,
+    pub handle: &'a InlineHandle,
+    pub session: &'a mut vtcode_tui::InlineSession,
+    pub ctrl_c_state: &'a Arc<CtrlCState>,
+    pub ctrl_c_notify: &'a Arc<Notify>,
+    pub lifecycle_hooks: Option<&'a crate::hooks::lifecycle::LifecycleHookEngine>,
+    pub default_placeholder: &'a Option<String>,
+    pub last_forced_redraw: &'a mut Instant,
+    pub input_status_state: &'a mut crate::agent::runloop::unified::status_line::InputStatusState,
+}
+
 /// Context for turn processing operations
 pub(crate) struct TurnProcessingContext<'a> {
     pub renderer: &'a mut AnsiRenderer,
@@ -132,6 +177,51 @@ pub(crate) struct TurnProcessingContext<'a> {
 }
 
 impl<'a> TurnProcessingContext<'a> {
+    #[allow(dead_code)]
+    pub fn tool_context(&mut self) -> ToolContext<'_> {
+        ToolContext {
+            tool_result_cache: self.tool_result_cache,
+            approval_recorder: self.approval_recorder,
+            tool_registry: self.tool_registry,
+            tools: self.tools,
+            tool_catalog: self.tool_catalog,
+            tool_permission_cache: self.tool_permission_cache,
+            safety_validator: self.safety_validator,
+            circuit_breaker: self.circuit_breaker,
+            tool_health_tracker: self.tool_health_tracker,
+            rate_limiter: self.rate_limiter,
+            autonomous_executor: self.autonomous_executor,
+            error_recovery: self.error_recovery,
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn llm_context(&mut self) -> LLMContext<'_> {
+        LLMContext {
+            provider_client: self.provider_client,
+            config: self.config,
+            vt_cfg: self.vt_cfg,
+            context_manager: self.context_manager,
+            decision_ledger: self.decision_ledger,
+            traj: self.traj,
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn ui_context(&mut self) -> UIContext<'_> {
+        UIContext {
+            renderer: self.renderer,
+            handle: self.handle,
+            session: self.session,
+            ctrl_c_state: self.ctrl_c_state,
+            ctrl_c_notify: self.ctrl_c_notify,
+            lifecycle_hooks: self.lifecycle_hooks,
+            default_placeholder: self.default_placeholder,
+            last_forced_redraw: self.last_forced_redraw,
+            input_status_state: self.input_status_state,
+        }
+    }
+
     /// Creates a TurnLoopContext from this TurnProcessingContext.
     /// This is used when calling handle_tool_execution_result which requires TurnLoopContext.
     pub fn as_turn_loop_context(

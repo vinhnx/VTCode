@@ -328,23 +328,26 @@ pub(super) async fn run_single_agent_loop_unified_impl(
             tools,
             tool_catalog,
             mut conversation_history,
-            decision_ledger,
-            trajectory: traj,
+            execution,
+            metadata,
             async_mcp_manager,
             mut mcp_panel_state,
-            tool_result_cache,
-            tool_permission_cache,
-            approval_recorder,
             loaded_skills,
-            safety_validator,
-            circuit_breaker,
-            tool_health_tracker,
-            rate_limiter,
-            validation_cache,
-            telemetry,
-            autonomous_executor,
             ..
         } = session_state;
+        let decision_ledger = metadata.decision_ledger;
+        let traj = metadata.trajectory;
+        let telemetry = metadata.telemetry;
+        let error_recovery = metadata.error_recovery;
+        let tool_result_cache = execution.tool_result_cache;
+        let tool_permission_cache = execution.tool_permission_cache;
+        let approval_recorder = execution.approval_recorder;
+        let safety_validator = execution.safety_validator;
+        let circuit_breaker = execution.circuit_breaker;
+        let tool_health_tracker = execution.tool_health_tracker;
+        let rate_limiter = execution.rate_limiter;
+        let validation_cache = execution.validation_cache;
+        let autonomous_executor = execution.autonomous_executor;
         let cancel_token = CancellationToken::new();
         let _cancel_guard = CancelGuard(cancel_token.clone());
         let _signal_handler = spawn_signal_handler(
@@ -412,7 +415,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                     rate_limiter: &rate_limiter,
                     telemetry: &telemetry,
                     autonomous_executor: &autonomous_executor,
-                    error_recovery: &session_state.error_recovery,
+                    error_recovery: &error_recovery,
                     last_forced_redraw: &mut last_forced_redraw,
                     harness_config: harness_config.clone(),
                     steering_receiver,
@@ -551,7 +554,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                     &rate_limiter,
                     &telemetry,
                     &autonomous_executor,
-                    &session_state.error_recovery,
+                    &error_recovery,
                     &mut harness_state,
                     harness_emitter.as_ref(),
                     &mut config,

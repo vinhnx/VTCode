@@ -20,6 +20,25 @@ use vtcode_core::utils::ansi::AnsiRenderer;
 use vtcode_core::utils::session_archive::SessionArchive;
 use vtcode_tui::{InlineHandle, InlineSession};
 
+pub(crate) struct ToolExecutionContext {
+    pub tool_result_cache: Arc<RwLock<ToolResultCache>>,
+    pub tool_permission_cache: Arc<RwLock<ToolPermissionCache>>,
+    pub approval_recorder: Arc<ApprovalRecorder>,
+    pub safety_validator: Arc<RwLock<ToolCallSafetyValidator>>,
+    pub circuit_breaker: Arc<vtcode_core::tools::circuit_breaker::CircuitBreaker>,
+    pub tool_health_tracker: Arc<vtcode_core::tools::health::ToolHealthTracker>,
+    pub rate_limiter: Arc<vtcode_core::tools::adaptive_rate_limiter::AdaptiveRateLimiter>,
+    pub validation_cache: Arc<vtcode_core::tools::validation_cache::ValidationCache>,
+    pub autonomous_executor: Arc<vtcode_core::tools::autonomous_executor::AutonomousExecutor>,
+}
+
+pub(crate) struct SessionMetadataContext {
+    pub decision_ledger: Arc<RwLock<DecisionTracker>>,
+    pub trajectory: TrajectoryLogger,
+    pub telemetry: Arc<vtcode_core::core::telemetry::TelemetryManager>,
+    pub error_recovery: Arc<RwLock<vtcode_core::core::agent::error_recovery::ErrorRecoveryState>>,
+}
+
 pub(crate) struct SessionState {
     pub session_bootstrap: SessionBootstrap,
     pub provider_client: Box<dyn uni::LLMProvider>,
@@ -27,26 +46,15 @@ pub(crate) struct SessionState {
     pub tools: Arc<RwLock<Vec<uni::ToolDefinition>>>,
     pub tool_catalog: Arc<ToolCatalogState>,
     pub conversation_history: Vec<uni::Message>,
-    pub decision_ledger: Arc<RwLock<DecisionTracker>>,
-    pub trajectory: TrajectoryLogger,
+    pub execution: ToolExecutionContext,
+    pub metadata: SessionMetadataContext,
     pub base_system_prompt: String,
     pub full_auto_allowlist: Option<Vec<String>>,
     pub async_mcp_manager: Option<Arc<AsyncMcpManager>>,
     pub mcp_panel_state: mcp_events::McpPanelState,
-    pub tool_result_cache: Arc<RwLock<ToolResultCache>>,
-    pub tool_permission_cache: Arc<RwLock<ToolPermissionCache>>,
     #[allow(dead_code)]
     pub search_metrics: Arc<RwLock<SearchMetrics>>,
     pub loaded_skills: Arc<RwLock<HashMap<String, vtcode_core::skills::types::Skill>>>,
-    pub approval_recorder: Arc<ApprovalRecorder>,
-    pub safety_validator: Arc<RwLock<ToolCallSafetyValidator>>,
-    pub circuit_breaker: Arc<vtcode_core::tools::circuit_breaker::CircuitBreaker>,
-    pub tool_health_tracker: Arc<vtcode_core::tools::health::ToolHealthTracker>,
-    pub rate_limiter: Arc<vtcode_core::tools::adaptive_rate_limiter::AdaptiveRateLimiter>,
-    pub validation_cache: Arc<vtcode_core::tools::validation_cache::ValidationCache>,
-    pub telemetry: Arc<vtcode_core::core::telemetry::TelemetryManager>,
-    pub autonomous_executor: Arc<vtcode_core::tools::autonomous_executor::AutonomousExecutor>,
-    pub error_recovery: Arc<RwLock<vtcode_core::core::agent::error_recovery::ErrorRecoveryState>>,
 }
 
 #[allow(dead_code)]

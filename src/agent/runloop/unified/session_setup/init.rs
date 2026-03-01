@@ -1,6 +1,9 @@
 use super::mcp_tools::build_mcp_tool_definitions;
 use super::skill_setup::{discover_skills, register_skill_and_subagent_tools};
-use super::types::{SessionState, build_conversation_history_from_resume};
+use super::types::{
+    SessionMetadataContext, SessionState, ToolExecutionContext,
+    build_conversation_history_from_resume,
+};
 use crate::agent::runloop::ResumeSession;
 use crate::agent::runloop::mcp_events;
 use crate::agent::runloop::telemetry::build_trajectory_logger;
@@ -194,43 +197,47 @@ pub(crate) async fn initialize_session(
         tools,
         tool_catalog,
         conversation_history,
-        decision_ledger,
-        trajectory,
+        execution: ToolExecutionContext {
+            tool_result_cache,
+            tool_permission_cache,
+            approval_recorder,
+            safety_validator: Arc::new(RwLock::new(ToolCallSafetyValidator::new())),
+            circuit_breaker: circuit_breaker.clone(),
+            tool_health_tracker: Arc::new(vtcode_core::tools::health::ToolHealthTracker::new(50)),
+            rate_limiter: Arc::new(
+                vtcode_core::tools::adaptive_rate_limiter::AdaptiveRateLimiter::default(),
+            ),
+            validation_cache: Arc::new(
+                vtcode_core::tools::validation_cache::ValidationCache::default(),
+            ),
+            autonomous_executor: {
+                let executor = vtcode_core::tools::autonomous_executor::AutonomousExecutor::new();
+                if let Some(cfg) = vt_cfg {
+                    let loop_limits: HashMap<_, _> = cfg
+                        .tools
+                        .loop_thresholds
+                        .iter()
+                        .map(|(k, v)| (k.clone(), *v))
+                        .collect();
+                    executor.configure_loop_limits(&loop_limits).await;
+                }
+                Arc::new(executor)
+            },
+        },
+        metadata: SessionMetadataContext {
+            decision_ledger,
+            trajectory,
+            telemetry: Arc::new(vtcode_core::core::telemetry::TelemetryManager::new()),
+            error_recovery: Arc::new(RwLock::new(
+                vtcode_core::core::agent::error_recovery::ErrorRecoveryState::new(),
+            )),
+        },
         base_system_prompt,
         full_auto_allowlist,
         async_mcp_manager,
         mcp_panel_state,
-        tool_result_cache,
-        tool_permission_cache,
         search_metrics,
         loaded_skills: skill_setup.active_skills_map,
-        approval_recorder,
-        safety_validator: Arc::new(RwLock::new(ToolCallSafetyValidator::new())),
-        circuit_breaker,
-        tool_health_tracker: Arc::new(vtcode_core::tools::health::ToolHealthTracker::new(50)),
-        rate_limiter: Arc::new(
-            vtcode_core::tools::adaptive_rate_limiter::AdaptiveRateLimiter::default(),
-        ),
-        validation_cache: Arc::new(
-            vtcode_core::tools::validation_cache::ValidationCache::default(),
-        ),
-        telemetry: Arc::new(vtcode_core::core::telemetry::TelemetryManager::new()),
-        autonomous_executor: {
-            let executor = vtcode_core::tools::autonomous_executor::AutonomousExecutor::new();
-            if let Some(cfg) = vt_cfg {
-                let loop_limits: HashMap<_, _> = cfg
-                    .tools
-                    .loop_thresholds
-                    .iter()
-                    .map(|(k, v)| (k.clone(), *v))
-                    .collect();
-                executor.configure_loop_limits(&loop_limits).await;
-            }
-            Arc::new(executor)
-        },
-        error_recovery: Arc::new(RwLock::new(
-            vtcode_core::core::agent::error_recovery::ErrorRecoveryState::new(),
-        )),
     })
 }
 
