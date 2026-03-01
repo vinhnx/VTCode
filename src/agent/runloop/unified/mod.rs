@@ -16,6 +16,7 @@ pub(crate) mod palettes;
 pub(crate) mod plan_blocks;
 mod plan_confirmation;
 mod plan_mode_state;
+mod postamble;
 mod progress;
 mod prompts;
 mod request_user_input;

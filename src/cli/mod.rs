@@ -27,6 +27,7 @@ pub use vtcode_core::cli::args::AskCommandOptions;
 pub use benchmark::BenchmarkCommandOptions;
 pub use exec::ExecCommandOptions;
 
+mod sessions;
 mod snapshots;
 
 // Re-export the handle_acp_command from acp module
@@ -176,14 +177,13 @@ pub async fn handle_man_command(_command: Option<String>, _output: Option<PathBu
 }
 
 pub async fn handle_resume_session_command(
-    _core_cfg: &vtcode_core::config::types::AgentConfig,
-    _resume_session: Option<String>,
-    _custom_session_id: Option<String>,
-    _skip_confirmations: bool,
+    core_cfg: &vtcode_core::config::types::AgentConfig,
+    mode: vtcode::startup::SessionResumeMode,
+    custom_session_id: Option<String>,
+    skip_confirmations: bool,
 ) -> Result<()> {
-    Err(anyhow::anyhow!(
-        "Resume session command not implemented in this stub"
-    ))
+    sessions::handle_resume_session_command(core_cfg, mode, custom_session_id, skip_confirmations)
+        .await
 }
 
 pub async fn handle_skills_list(skills_options: &SkillsCommandOptions) -> Result<()> {
@@ -320,4 +320,66 @@ pub async fn handle_anthropic_api_command(
     Err(anyhow::anyhow!(
         "Anthropic API server is not enabled. Recompile with --features anthropic-api"
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::handle_resume_session_command;
+    use std::collections::BTreeMap;
+    use std::time::{SystemTime, UNIX_EPOCH};
+    use vtcode::startup::SessionResumeMode;
+    use vtcode_core::config::core::PromptCachingConfig;
+    use vtcode_core::config::models::Provider;
+    use vtcode_core::config::types::{
+        AgentConfig as CoreAgentConfig, ModelSelectionSource, ReasoningEffortLevel,
+        UiSurfacePreference,
+    };
+    use vtcode_core::core::agent::snapshots::{
+        DEFAULT_CHECKPOINTS_ENABLED, DEFAULT_MAX_AGE_DAYS, DEFAULT_MAX_SNAPSHOTS,
+    };
+
+    fn runtime_config() -> CoreAgentConfig {
+        CoreAgentConfig {
+            model: vtcode_core::config::constants::models::google::GEMINI_3_FLASH_PREVIEW
+                .to_string(),
+            api_key: "test-key".to_string(),
+            provider: "gemini".to_string(),
+            api_key_env: Provider::Gemini.default_api_key_env().to_string(),
+            workspace: std::env::current_dir().expect("current_dir"),
+            verbose: false,
+            quiet: false,
+            theme: vtcode_core::ui::theme::DEFAULT_THEME_ID.to_string(),
+            reasoning_effort: ReasoningEffortLevel::default(),
+            ui_surface: UiSurfacePreference::default(),
+            prompt_cache: PromptCachingConfig::default(),
+            model_source: ModelSelectionSource::WorkspaceConfig,
+            custom_api_keys: BTreeMap::new(),
+            checkpointing_enabled: DEFAULT_CHECKPOINTS_ENABLED,
+            checkpointing_storage_dir: None,
+            checkpointing_max_snapshots: DEFAULT_MAX_SNAPSHOTS,
+            checkpointing_max_age_days: Some(DEFAULT_MAX_AGE_DAYS),
+            max_conversation_turns: 1000,
+            model_behavior: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn resume_session_command_is_wired_to_sessions_handler() {
+        let cfg = runtime_config();
+        let unique_suffix = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("unix time")
+            .as_nanos();
+        let fake_id = format!("nonexistent-session-{unique_suffix}");
+
+        let result =
+            handle_resume_session_command(&cfg, SessionResumeMode::Specific(fake_id), None, true)
+                .await;
+
+        let err = result.expect_err("expected missing session error");
+        assert!(
+            err.to_string().contains("No session with identifier"),
+            "unexpected error: {err:#}"
+        );
+    }
 }

@@ -55,29 +55,6 @@ Perform a comprehensive analysis of the codebase to identify and eliminate all i
 
 ---
 
-IMPLEMENT POSTAMBLE vtcode EXIT SUMMARIAZATION with proper metric calculation, keep it lightweight but informative
-
-REF:
-
-```
- > VT Code session summary:
-
- API time spent:         14m 55s
- Total session time:     1h 13m 43s
- Total code changes:     +137 -13
- Breakdown by AI model:
-  gpt-5.3-codex           10.0m in,
-  40.1k out, 8.9m cached
-
- Resume this session with
-
- vtcode --resume=ce712ef0-6605-4cd4-82bf-fad39 bd55bca
-```
-
-since we use ratatui's alternative screen crossterm, we can implement a custom exit handler that triggers when the user exits the application. This handler can gather relevant metrics such as total API time spent, total session time, code changes made during the session, and a breakdown of usage by AI model. The summary should be concise yet informative, providing users with a clear overview of their session's activity and outcomes. Additionally, the summary can include actionable next steps, such as how to resume the session or view detailed logs. The implementation should ensure that the exit handler does not introduce significant overhead or delay when exiting the application. and show in the terminal after the user exits VTCode, providing a seamless and informative user experience. keep the exit summary UI clean and simple, while delivering valuable insights to the user about their session. like a peseudo terminal bounding box.
-
----
-
 review any duplicated code in the codebase and refactor to remove duplication. For example, the logic for rendering the diff preview and the command output preview can be unified to use the same rendering logic and styling. This will make the codebase cleaner and easier to maintain. Additionally, any common utility functions that are duplicated across different modules can be extracted into a shared utility module. search across modules for similar code patterns and identify opportunities for refactoring to reduce duplication and improve code reuse.
 
 DRY and KISS
@@ -132,3 +109,56 @@ check src/agent/runloop/unified/turn module Analyze the agent harness codebase f
 ---
 
 use private relay signup codex
+
+---
+
+improve and restore full TUI styling for session resume
+
+```
+╭> VT Code (0.84.1)──────────────────────────────────────────────────────────────╮
+│Ollama gpt-oss:20b-cloud low | Accept edits | Session: Standard | Tools: 66 |   │
+╰────────────────────────────────────────────────────────────────────────────────╯
+  │ 301T052918Z_019690-71140.json                                                │
+  │ Conversation history:                                                        │
+  ╰──────────────────────────────────────────────────────────────────────────────╯
+
+
+──────────────────────────────────────────────────────────────────────────────────
+  [1] You:
+
+  run cargo fmt
+
+
+
+ •   [2] Assistant:
+
+
+
+        [3] Tool [tool_call_id: direct_run_pty_cmd_1]:
+        {"output":"","is_exited":true,"session_id":"run-6b1df108","command":"c
+      argo fmt","working_directory":".","exit_code":0}
+
+  ╭─ Info ───────────────────────────────────────────────────────────────────────╮
+  │   [4] System:                                                                │
+  │   For this direct shell command follow-up, keep the response concise and acti│
+  │ on-oriented: 1) one short line summarizing the command result, 2) one short l│
+  │ ine with the exact next action. Avoid extra explanation unless there is an er│
+  │ ror.                                                                         │
+  ╰──────────────────────────────────────────────────────────────────────────────╯
+
+ •   [5] Assistant:
+     cargo fmt completed successfully.
+
+     Next: run cargo clippy && cargo nextest run to verify build and tests.
+
+
+
+
+
+
+ Type your message, or @files, /commands, Shift+Tab: cycle modes, Control+C:
+
+Ghostty main*                        gpt-oss:20b-cloud | 100% context left | (low)
+```
+
+currently the messages displayed when resuming a session are not styled with the full VTCode TUI styling, which can make it harder to read and navigate the conversation history. The goal is to restore the full TUI styling for session resume so that users have a consistent and visually appealing experience when resuming sessions. This includes ensuring that all messages, system prompts, tool calls, and other elements are displayed with the appropriate colors, fonts, and layout as defined by the VTCode theme. The implementation should also ensure that any interactive elements such as buttons or links are properly styled and functional upon session resume. Overall, this improvement will enhance the usability and aesthetics of the VTCode interface during session resumption.

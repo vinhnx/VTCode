@@ -79,7 +79,12 @@ impl<'a> Widget for InputWidget<'a> {
             block = block
                 .title(title)
                 .border_type(crate::ui::tui::session::terminal_capabilities::get_border_type())
-                .border_style(self.session.styles.accent_style().add_modifier(Modifier::BOLD));
+                .border_style(
+                    self.session
+                        .styles
+                        .accent_style()
+                        .add_modifier(Modifier::BOLD),
+                );
         }
         let inner = block.inner(input_area);
         let input_data = self

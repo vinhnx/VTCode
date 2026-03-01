@@ -494,11 +494,13 @@ impl Session {
     }
 
     pub(crate) fn shell_mode_border_title(&self) -> Option<&'static str> {
-        self.input_uses_shell_prefix().then_some(SHELL_MODE_BORDER_TITLE)
+        self.input_uses_shell_prefix()
+            .then_some(SHELL_MODE_BORDER_TITLE)
     }
 
     fn shell_mode_status_hint(&self) -> Option<&'static str> {
-        self.input_uses_shell_prefix().then_some(SHELL_MODE_STATUS_HINT)
+        self.input_uses_shell_prefix()
+            .then_some(SHELL_MODE_STATUS_HINT)
     }
 
     /// Build scroll indicator string with percentage

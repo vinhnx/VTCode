@@ -1,6 +1,8 @@
 use anyhow::{Context, Result};
+use std::collections::{HashMap, HashSet};
 use std::io::{self, Write};
 use std::path::Path;
+use std::path::PathBuf;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct GitStatusSummary {
@@ -8,14 +10,119 @@ pub(crate) struct GitStatusSummary {
     pub dirty: bool,
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) struct FileStat {
+    pub additions: u64,
+    pub deletions: u64,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) struct CodeChangeDelta {
+    pub additions: u64,
+    pub deletions: u64,
+}
+
 fn is_git_repo() -> bool {
-    std::process::Command::new("git")
-        .args(["rev-parse", "--git-dir"])
-        .stdout(std::process::Stdio::null())
+    git_repo_check(None)
+}
+
+fn is_git_repo_at(workspace: &Path) -> bool {
+    git_repo_check(Some(workspace))
+}
+
+fn git_repo_check(workspace: Option<&Path>) -> bool {
+    let mut cmd = std::process::Command::new("git");
+    cmd.args(["rev-parse", "--git-dir"]);
+    if let Some(workspace) = workspace {
+        cmd.current_dir(workspace);
+    }
+    cmd.stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .status()
         .map(|status| status.success())
         .unwrap_or(false)
+}
+
+pub(crate) fn git_working_tree_numstat_snapshot(
+    workspace: &Path,
+) -> Result<Option<HashMap<PathBuf, FileStat>>> {
+    if !is_git_repo_at(workspace) {
+        return Ok(None);
+    }
+
+    let output = std::process::Command::new("git")
+        .args([
+            "-c",
+            "core.quotepath=off",
+            "diff",
+            "--numstat",
+            "HEAD",
+            "--",
+        ])
+        .current_dir(workspace)
+        .output()
+        .with_context(|| {
+            format!(
+                "Failed to read git working tree numstat for {}",
+                workspace.display()
+            )
+        })?;
+
+    if !output.status.success() {
+        return Ok(None);
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut snapshot = HashMap::new();
+
+    for line in stdout.lines().filter(|line| !line.trim().is_empty()) {
+        let mut parts = line.splitn(3, '\t');
+        let additions_raw = parts.next().unwrap_or_default();
+        let deletions_raw = parts.next().unwrap_or_default();
+        let path_raw = parts.next().unwrap_or_default();
+        if path_raw.is_empty() {
+            continue;
+        }
+
+        let additions = additions_raw.parse::<u64>().unwrap_or(0);
+        let deletions = deletions_raw.parse::<u64>().unwrap_or(0);
+        snapshot.insert(
+            PathBuf::from(path_raw),
+            FileStat {
+                additions,
+                deletions,
+            },
+        );
+    }
+
+    Ok(Some(snapshot))
+}
+
+pub(crate) fn compute_session_code_change_delta(
+    start: Option<&HashMap<PathBuf, FileStat>>,
+    end: Option<&HashMap<PathBuf, FileStat>>,
+) -> Option<CodeChangeDelta> {
+    let (Some(start), Some(end)) = (start, end) else {
+        return None;
+    };
+
+    let mut keys = HashSet::new();
+    keys.extend(start.keys().cloned());
+    keys.extend(end.keys().cloned());
+
+    let mut delta = CodeChangeDelta::default();
+    for key in keys {
+        let start_stat = start.get(&key).copied().unwrap_or_default();
+        let end_stat = end.get(&key).copied().unwrap_or_default();
+        delta.additions = delta
+            .additions
+            .saturating_add(end_stat.additions.saturating_sub(start_stat.additions));
+        delta.deletions = delta
+            .deletions
+            .saturating_add(end_stat.deletions.saturating_sub(start_stat.deletions));
+    }
+
+    Some(delta)
 }
 
 pub(crate) fn git_status_summary(workspace: &Path) -> Result<Option<GitStatusSummary>> {
@@ -115,4 +222,83 @@ pub(crate) async fn confirm_changes_with_git_diff(
         }
     }
     Ok(true)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{CodeChangeDelta, FileStat, compute_session_code_change_delta};
+    use std::collections::HashMap;
+    use std::path::PathBuf;
+
+    #[test]
+    fn session_code_change_delta_is_net_positive_only() {
+        let mut start = HashMap::new();
+        start.insert(
+            PathBuf::from("src/a.rs"),
+            FileStat {
+                additions: 10,
+                deletions: 5,
+            },
+        );
+
+        let mut end = HashMap::new();
+        end.insert(
+            PathBuf::from("src/a.rs"),
+            FileStat {
+                additions: 12,
+                deletions: 8,
+            },
+        );
+
+        let delta = compute_session_code_change_delta(Some(&start), Some(&end));
+        assert_eq!(
+            delta,
+            Some(CodeChangeDelta {
+                additions: 2,
+                deletions: 3
+            })
+        );
+    }
+
+    #[test]
+    fn session_code_change_delta_handles_new_and_reduced_files() {
+        let mut start = HashMap::new();
+        start.insert(
+            PathBuf::from("src/preexisting.rs"),
+            FileStat {
+                additions: 20,
+                deletions: 10,
+            },
+        );
+
+        let mut end = HashMap::new();
+        end.insert(
+            PathBuf::from("src/preexisting.rs"),
+            FileStat {
+                additions: 5,
+                deletions: 2,
+            },
+        );
+        end.insert(
+            PathBuf::from("src/new.rs"),
+            FileStat {
+                additions: 7,
+                deletions: 1,
+            },
+        );
+
+        let delta = compute_session_code_change_delta(Some(&start), Some(&end));
+        assert_eq!(
+            delta,
+            Some(CodeChangeDelta {
+                additions: 7,
+                deletions: 1
+            })
+        );
+    }
+
+    #[test]
+    fn session_code_change_delta_requires_both_snapshots() {
+        assert_eq!(compute_session_code_change_delta(None, None), None);
+    }
 }

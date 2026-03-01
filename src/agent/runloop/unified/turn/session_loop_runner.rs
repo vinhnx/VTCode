@@ -1,9 +1,15 @@
 use super::*;
+use crate::agent::runloop::git::{
+    compute_session_code_change_delta, git_working_tree_numstat_snapshot,
+};
 use crate::agent::runloop::unified::plan_mode_state::render_plan_mode_next_step_hint;
+use crate::agent::runloop::unified::postamble::{ExitSummaryData, print_exit_summary};
 use crate::agent::runloop::unified::run_loop_context::TurnPhase;
 use crate::agent::runloop::unified::turn::turn_loop::TurnLoopOutcome;
+use crate::agent::runloop::welcome::SessionBootstrap;
 
 const PLAN_MODE_MIN_TOOL_CALLS_PER_TURN: usize = 48;
+const CODE_CHANGE_SNAPSHOT_TIMEOUT_MS: u64 = 120;
 const DIRECT_TOOL_FOLLOW_UP_DIRECTIVE: &str = "For this direct shell command follow-up, keep the response concise and action-oriented: 1) one short line summarizing the command result, 2) one short line with the exact next action. Avoid extra explanation unless there is an error.";
 
 fn resolve_effective_turn_timeout_secs(
@@ -118,6 +124,106 @@ fn emit_turn_execution_metrics(turn_metrics: TurnExecutionMetrics) {
     );
 }
 
+async fn capture_code_change_snapshot(
+    workspace: &std::path::Path,
+    phase: &str,
+) -> Option<std::collections::HashMap<std::path::PathBuf, crate::agent::runloop::git::FileStat>> {
+    let workspace_path = workspace.to_path_buf();
+    let phase_label = phase.to_string();
+    match tokio::time::timeout(
+        Duration::from_millis(CODE_CHANGE_SNAPSHOT_TIMEOUT_MS),
+        tokio::task::spawn_blocking(move || git_working_tree_numstat_snapshot(&workspace_path)),
+    )
+    .await
+    {
+        Ok(Ok(Ok(snapshot))) => snapshot,
+        Ok(Ok(Err(err))) => {
+            tracing::warn!(
+                "Failed to capture {} code-change snapshot: {}",
+                phase_label,
+                err
+            );
+            None
+        }
+        Ok(Err(err)) => {
+            tracing::warn!(
+                "Failed to capture {} code-change snapshot (join error): {}",
+                phase_label,
+                err
+            );
+            None
+        }
+        Err(_) => {
+            tracing::debug!(
+                "Skipping {} code-change snapshot after {}ms timeout",
+                phase_label,
+                CODE_CHANGE_SNAPSHOT_TIMEOUT_MS
+            );
+            None
+        }
+    }
+}
+
+fn build_exit_header_context_fast(
+    config: &CoreAgentConfig,
+    session_bootstrap: &SessionBootstrap,
+    reasoning_label: String,
+    mode_label: String,
+    tools_count: usize,
+    plan_mode: bool,
+    autonomous_mode: bool,
+    full_auto: bool,
+    provider_name: &str,
+) -> vtcode_tui::InlineHeaderContext {
+    use vtcode_core::config::constants::ui;
+
+    let provider_label = if config.provider.trim().is_empty() {
+        provider_name
+    } else {
+        config.provider.as_str()
+    };
+
+    let trust_label = match session_bootstrap.acp_workspace_trust {
+        Some(vtcode_core::config::AgentClientProtocolZedWorkspaceTrustMode::FullAuto) => {
+            "full_auto"
+        }
+        Some(vtcode_core::config::AgentClientProtocolZedWorkspaceTrustMode::ToolsPolicy) => {
+            "tools_policy"
+        }
+        None if full_auto || autonomous_mode => "full auto",
+        None => "tools policy",
+    };
+
+    vtcode_tui::InlineHeaderContext {
+        app_name: vtcode_core::config::constants::app::DISPLAY_NAME.to_string(),
+        provider: format!("{}{}", ui::HEADER_PROVIDER_PREFIX, provider_label),
+        model: format!("{}{}", ui::HEADER_MODEL_PREFIX, config.model),
+        version: env!("CARGO_PKG_VERSION").to_string(),
+        git: format!(
+            "{}{}",
+            ui::HEADER_GIT_PREFIX,
+            ui::HEADER_UNKNOWN_PLACEHOLDER
+        ),
+        mode: mode_label,
+        reasoning: format!("{}{}", ui::HEADER_REASONING_PREFIX, reasoning_label),
+        reasoning_stage: None,
+        workspace_trust: format!("{}{}", ui::HEADER_TRUST_PREFIX, trust_label),
+        tools: format!("{}{}", ui::HEADER_TOOLS_PREFIX, tools_count),
+        mcp: format!(
+            "{}{}",
+            ui::HEADER_MCP_PREFIX,
+            ui::HEADER_UNKNOWN_PLACEHOLDER
+        ),
+        highlights: Vec::new(),
+        editing_mode: if plan_mode {
+            vtcode_tui::EditingMode::Plan
+        } else {
+            vtcode_tui::EditingMode::Edit
+        },
+        autonomous_mode,
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 pub(super) async fn run_single_agent_loop_unified_impl(
     config: &CoreAgentConfig,
@@ -142,6 +248,8 @@ pub(super) async fn run_single_agent_loop_unified_impl(
     let mut idle_config = extract_idle_config(vt_cfg.as_ref());
 
     loop {
+        let session_started_at = Instant::now();
+        let start_code_changes = capture_code_change_snapshot(&config.workspace, "start").await;
         let resume_request = resume_state.take();
         let resume_ref = resume_request.as_ref();
 
@@ -695,7 +803,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
         if let Some(emitter) = harness_emitter.as_ref() {
             emitter.finish_open_responses();
         }
-        if let Err(err) = finalize_session(
+        let finalization_output = match finalize_session(
             &mut renderer,
             lifecycle_hooks.as_ref(),
             session_end_reason,
@@ -708,14 +816,18 @@ pub(super) async fn run_single_agent_loop_unified_impl(
         )
         .await
         {
-            tracing::error!("Failed to finalize session: {}", err);
-            renderer
-                .line(
-                    MessageStyle::Error,
-                    &format!("Failed to finalize session: {}", err),
-                )
-                .ok();
-        }
+            Ok(output) => Some(output),
+            Err(err) => {
+                tracing::error!("Failed to finalize session: {}", err);
+                renderer
+                    .line(
+                        MessageStyle::Error,
+                        &format!("Failed to finalize session: {}", err),
+                    )
+                    .ok();
+                None
+            }
+        };
         if resume_state.is_some() {
             continue;
         }
@@ -753,6 +865,66 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                 _consecutive_idle_cycles = 0;
             }
         }
+
+        let end_code_changes = capture_code_change_snapshot(&config.workspace, "end").await;
+        let code_change_delta = compute_session_code_change_delta(
+            start_code_changes.as_ref(),
+            end_code_changes.as_ref(),
+        );
+        let telemetry_snapshot = match telemetry.get_snapshot() {
+            Ok(snapshot) => snapshot,
+            Err(err) => {
+                tracing::warn!(
+                    "Failed to capture telemetry snapshot for postamble: {}",
+                    err
+                );
+                vtcode_core::core::telemetry::TelemetryStats::default()
+            }
+        };
+        let finalization_succeeded = finalization_output.is_some();
+        let resume_identifier = finalization_output
+            .and_then(|output| output.archive_path)
+            .and_then(|path| {
+                path.file_stem()
+                    .and_then(|stem| stem.to_str())
+                    .map(|stem| stem.to_string())
+            });
+        let provider_name = provider_client.name().to_string();
+        let reasoning_label = vt_cfg
+            .as_ref()
+            .map(|cfg| cfg.agent.reasoning_effort.as_str().to_string())
+            .unwrap_or_else(|| config.reasoning_effort.as_str().to_string());
+        let mode_label = match (config.ui_surface, full_auto) {
+            (vtcode_core::config::types::UiSurfacePreference::Inline, true) => "auto".to_string(),
+            (vtcode_core::config::types::UiSurfacePreference::Inline, false) => {
+                "inline".to_string()
+            }
+            (vtcode_core::config::types::UiSurfacePreference::Alternate, _) => "alt".to_string(),
+            (vtcode_core::config::types::UiSurfacePreference::Auto, true) => "auto".to_string(),
+            (vtcode_core::config::types::UiSurfacePreference::Auto, false) => "std".to_string(),
+        };
+        let tools_count = tools.read().await.len();
+        let header_context = Some(build_exit_header_context_fast(
+            &config,
+            &session_bootstrap,
+            reasoning_label,
+            mode_label,
+            tools_count,
+            session_stats.is_plan_mode(),
+            session_stats.is_autonomous_mode(),
+            full_auto,
+            &provider_name,
+        ));
+        if !finalization_succeeded {
+            let _ = vtcode_tui::panic_hook::restore_tui();
+        }
+        print_exit_summary(ExitSummaryData {
+            total_session_time: session_started_at.elapsed(),
+            code_changes: code_change_delta,
+            telemetry: telemetry_snapshot,
+            header_context,
+            resume_identifier,
+        });
         break;
     }
     Ok(())
