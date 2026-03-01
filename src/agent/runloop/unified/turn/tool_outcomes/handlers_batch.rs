@@ -13,6 +13,11 @@ use crate::agent::runloop::unified::turn::tool_outcomes::helpers::{
     push_tool_response, resolve_max_tool_retries, update_repetition_tracker,
 };
 
+pub(crate) struct ParsedToolCall<'a> {
+    pub tool_call: &'a uni::ToolCall,
+    pub args: serde_json::Value,
+}
+
 fn can_parallelize_batch_tool_call(prepared: &PreparedToolCall) -> bool {
     if matches!(
         prepared.canonical_name.as_str(),
@@ -29,23 +34,17 @@ fn can_parallelize_batch_tool_call(prepared: &PreparedToolCall) -> bool {
     prepared.readonly_classification
 }
 
+#[allow(dead_code)]
 pub(crate) async fn handle_tool_call_batch<'a, 'b>(
     t_ctx: &mut ToolOutcomeContext<'a, 'b>,
     tool_calls: &[&uni::ToolCall],
 ) -> Result<Option<TurnHandlerOutcome>> {
-    use crate::agent::runloop::unified::run_loop_context::TurnPhase;
-    t_ctx.ctx.harness_state.set_phase(TurnPhase::ExecutingTools);
-
-    let mut validated_calls = Vec::new();
-
-    // 1. Validate all calls sequentially (safety first)
+    let mut parsed_calls = Vec::with_capacity(tool_calls.len());
     for tool_call in tool_calls {
-        let func = match tool_call.function.as_ref() {
-            Some(f) => f,
-            None => continue, // Skip non-function calls
+        let Some(func) = tool_call.function.as_ref() else {
+            continue;
         };
-        let tool_name = func.name.as_str();
-        let args_val: serde_json::Value = match tool_call.parsed_arguments() {
+        let args = match tool_call.parsed_arguments() {
             Ok(args) => args,
             Err(err) => {
                 push_tool_response(
@@ -54,7 +53,7 @@ pub(crate) async fn handle_tool_call_batch<'a, 'b>(
                     serde_json::json!({
                         "error": format!(
                             "Invalid tool arguments for '{}': {}",
-                            tool_name,
+                            func.name,
                             err
                         )
                     })
@@ -63,13 +62,37 @@ pub(crate) async fn handle_tool_call_batch<'a, 'b>(
                 continue;
             }
         };
+        parsed_calls.push(ParsedToolCall { tool_call, args });
+    }
 
-        match validate_tool_call(t_ctx.ctx, &tool_call.id, tool_name, &args_val).await? {
+    handle_tool_call_batch_parsed(t_ctx, parsed_calls).await
+}
+
+pub(crate) async fn handle_tool_call_batch_parsed<'a, 'b>(
+    t_ctx: &mut ToolOutcomeContext<'a, 'b>,
+    tool_calls: Vec<ParsedToolCall<'_>>,
+) -> Result<Option<TurnHandlerOutcome>> {
+    use crate::agent::runloop::unified::run_loop_context::TurnPhase;
+    t_ctx.ctx.harness_state.set_phase(TurnPhase::ExecutingTools);
+
+    let mut validated_calls = Vec::new();
+
+    // 1. Validate all calls sequentially (safety first)
+    for parsed_call in tool_calls {
+        let func = match parsed_call.tool_call.function.as_ref() {
+            Some(f) => f,
+            None => continue, // Skip non-function calls
+        };
+        let tool_name = func.name.as_str();
+        let args_val = parsed_call.args;
+
+        match validate_tool_call(t_ctx.ctx, &parsed_call.tool_call.id, tool_name, &args_val).await?
+        {
             ValidationResult::Outcome(outcome) => return Ok(Some(outcome)),
             ValidationResult::Blocked => {
                 if let Some(outcome) = super::enforce_blocked_tool_call_guard(
                     t_ctx.ctx,
-                    &tool_call.id,
+                    &parsed_call.tool_call.id,
                     tool_name,
                     &args_val,
                 ) {
@@ -79,7 +102,7 @@ pub(crate) async fn handle_tool_call_batch<'a, 'b>(
             }
             ValidationResult::Proceed(prepared) => {
                 t_ctx.ctx.harness_state.reset_blocked_tool_call_streak();
-                validated_calls.push((tool_call, prepared));
+                validated_calls.push((parsed_call.tool_call, prepared));
             }
         }
     }

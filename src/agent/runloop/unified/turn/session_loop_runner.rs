@@ -339,7 +339,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                 continue;
             }
             let is_direct_tool_follow_up = next_turn_input == "__direct_tool_follow_up__";
-            let mut working_history = conversation_history.clone();
+            let mut working_history = std::mem::take(&mut conversation_history);
             let timeout_secs = resolve_effective_turn_timeout_secs(
                 resolve_timeout(
                     vt_cfg
@@ -366,6 +366,9 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                     harness_config.max_tool_retries,
                 );
                 let history_for_turn = if attempts == 0 {
+                    if history_backup.is_none() {
+                        history_backup = Some(working_history.clone());
+                    }
                     std::mem::take(&mut working_history)
                 } else {
                     history_backup
@@ -441,15 +444,22 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                                 RunLoopTurnLoopResult::Cancelled
                             };
                             let recovered_history = history_backup
-                                .clone()
+                                .take()
                                 .or_else(|| {
                                     if working_history.is_empty() {
                                         None
                                     } else {
-                                        Some(working_history.clone())
+                                        Some(std::mem::take(&mut working_history))
                                     }
                                 })
-                                .unwrap_or_else(|| conversation_history.clone());
+                                .or_else(|| {
+                                    if conversation_history.is_empty() {
+                                        None
+                                    } else {
+                                        Some(std::mem::take(&mut conversation_history))
+                                    }
+                                })
+                                .unwrap_or_default();
                             break Ok(TurnLoopOutcome {
                                 result: interrupted_result,
                                 working_history: recovered_history,
@@ -457,9 +467,6 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                             });
                         }
 
-                        if history_backup.is_none() {
-                            history_backup = Some(conversation_history.clone());
-                        }
                         let had_tool_activity = execution_history_len_after_attempt
                             > execution_history_len_before_attempt
                             || active_pty_sessions_before_cancel > 0
@@ -527,7 +534,14 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                                         Some(working_history)
                                     }
                                 })
-                                .unwrap_or_else(|| conversation_history.clone()),
+                                .or_else(|| {
+                                    if conversation_history.is_empty() {
+                                        None
+                                    } else {
+                                        Some(std::mem::take(&mut conversation_history))
+                                    }
+                                })
+                                .unwrap_or_default(),
                             turn_modified_files: std::collections::BTreeSet::new(),
                         }
                     } else {
@@ -543,19 +557,27 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                                         Some(working_history)
                                     }
                                 })
-                                .unwrap_or_else(|| conversation_history.clone()),
+                                .or_else(|| {
+                                    if conversation_history.is_empty() {
+                                        None
+                                    } else {
+                                        Some(std::mem::take(&mut conversation_history))
+                                    }
+                                })
+                                .unwrap_or_default(),
                             turn_modified_files: std::collections::BTreeSet::new(),
                         }
                     }
                 }
             };
+            let outcome_result = outcome.result.clone();
             let turn_elapsed = turn_started_at.elapsed();
             let show_turn_timer = vt_cfg
                 .as_ref()
                 .map(|cfg| cfg.ui.show_turn_timer)
                 .unwrap_or(true);
             if let Err(err) = crate::agent::runloop::unified::turn::apply_turn_outcome(
-                &outcome,
+                outcome,
                 crate::agent::runloop::unified::turn::TurnOutcomeContext {
                     conversation_history: &mut conversation_history,
                     renderer: &mut renderer,
@@ -626,7 +648,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                     tracing::warn!("Failed to persist session progress: {}", err);
                 }
             }
-            match &outcome.result {
+            match &outcome_result {
                 RunLoopTurnLoopResult::Aborted => {
                     session_stats.mark_turn_stalled(
                         true,

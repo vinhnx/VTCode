@@ -6,9 +6,9 @@ use crate::agent::runloop::unified::plan_mode_state::transition_to_edit_mode;
 use crate::agent::runloop::unified::state::SessionStats;
 use crate::agent::runloop::unified::tool_catalog::ToolCatalogState;
 use std::sync::Arc;
-use std::sync::RwLock;
 use std::time::{Duration, Instant};
 use tokio::sync::Notify;
+use tokio::sync::RwLock;
 use vtcode_commons::diff_paths::{
     is_diff_addition_line, is_diff_deletion_line, is_diff_header_line,
 };
@@ -29,6 +29,7 @@ use crate::agent::runloop::unified::state::CtrlCState;
 
 const AUTONOMOUS_CONTINUE_DIRECTIVE: &str = "Do not stop with intent-only updates. Execute the next concrete action now, then report completion or blocker.";
 
+#[derive(Clone, Debug)]
 pub enum TurnLoopResult {
     Completed,
     Aborted,
