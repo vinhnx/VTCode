@@ -97,13 +97,45 @@ pub fn parse_response(response_json: Value, model: String) -> Result<LLMResponse
         cache_read_tokens: None,
     });
 
+    // Extract reasoning: prefer native reasoning_details field, fallback to tags in content
+    // OpenRouter exposes reasoning via reasoning_details for models like MiniMax-M2.5
+    let native_reasoning = message
+        .get("reasoning_details")
+        .and_then(|rd| rd.as_array())
+        .map(|details| {
+            details
+                .iter()
+                .filter_map(|d| d.get("text").and_then(|t| t.as_str()))
+                .collect::<Vec<_>>()
+                .join("\n\n")
+        });
+
+    let (reasoning, final_content) = if let Some(reasoning_str) = native_reasoning {
+        // Native reasoning_details found (OpenRouter format for reasoning models)
+        (Some(reasoning_str), content)
+    } else if let Some(ref content_str) = content {
+        // Fallback: extract from <think></think> tags in content
+        let (reasoning_parts, cleaned_content) =
+            crate::llm::utils::extract_reasoning_content(content_str);
+        if reasoning_parts.is_empty() {
+            (None, content.clone())
+        } else {
+            (
+                Some(reasoning_parts.join("\n\n")),
+                cleaned_content.or(Some(content_str.clone())),
+            )
+        }
+    } else {
+        (None, None)
+    };
+
     Ok(LLMResponse {
-        content,
+        content: final_content,
         tool_calls,
         model,
         usage,
         finish_reason,
-        reasoning: None,
+        reasoning,
         reasoning_details: None,
         tool_references: Vec::new(),
         request_id: None,

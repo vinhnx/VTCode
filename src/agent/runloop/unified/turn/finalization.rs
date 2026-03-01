@@ -1,6 +1,7 @@
 #![allow(clippy::too_many_arguments)]
 use anyhow::Result;
 use std::io;
+use std::path::PathBuf;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::session_archive::{SessionArchive, SessionMessage};
@@ -13,6 +14,10 @@ use crate::agent::runloop::unified::workspace_links::{LinkedDirectory, remove_di
 use crate::hooks::lifecycle::{LifecycleHookEngine, SessionEndReason};
 
 use super::utils::render_hook_messages;
+
+pub(super) struct FinalizationOutput {
+    pub archive_path: Option<PathBuf>,
+}
 
 /// Restore terminal to a clean state after session exit
 /// This ensures that raw mode is disabled and the terminal is left in a usable state
@@ -33,8 +38,9 @@ pub(super) async fn finalize_session(
     linked_directories: Vec<LinkedDirectory>,
     async_mcp_manager: Option<&AsyncMcpManager>,
     handle: &InlineHandle,
-) -> Result<()> {
+) -> Result<FinalizationOutput> {
     let transcript_lines = transcript::snapshot();
+    let mut archive_path: Option<PathBuf> = None;
 
     if let Some(archive) = session_archive.take() {
         let distinct_tools = session_stats.sorted_tools();
@@ -51,6 +57,7 @@ pub(super) async fn finalize_session(
             session_messages,
         ) {
             Ok(path) => {
+                archive_path = Some(path.clone());
                 if let Some(hooks) = lifecycle_hooks {
                     hooks.update_transcript_path(Some(path.clone())).await;
                 }
@@ -163,5 +170,5 @@ pub(super) async fn finalize_session(
         renderer.line_if_not_empty(MessageStyle::Output)?;
     }
 
-    Ok(())
+    Ok(FinalizationOutput { archive_path })
 }

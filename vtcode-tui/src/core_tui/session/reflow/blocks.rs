@@ -1,5 +1,6 @@
 use ratatui::prelude::*;
 use unicode_width::UnicodeWidthStr;
+use vtcode_commons::diff_paths::{is_diff_addition_line, is_diff_deletion_line};
 
 use super::super::super::style::ratatui_style_from_inline;
 use super::super::super::types::InlineMessageKind;
@@ -10,9 +11,7 @@ use crate::config::constants::ui;
 impl Session {
     fn wrapped_diff_continuation_prefix(line_text: &str) -> Option<String> {
         let trimmed = line_text.trim_start();
-        if (trimmed.starts_with('-') && !trimmed.starts_with("---"))
-            || (trimmed.starts_with('+') && !trimmed.starts_with("+++"))
-        {
+        if is_diff_deletion_line(trimmed) || is_diff_addition_line(trimmed) {
             let marker_pos = line_text.find(['-', '+'])?;
             let marker_end = marker_pos + 1;
             let after = line_text.get(marker_end..)?;
@@ -258,7 +257,7 @@ impl Session {
 
         let content = render::render_tool_segments(self, line);
         let split_lines = split_tool_spans(content);
-        let summary_prefix = format!("  {} ", ui::INLINE_BLOCK_BODY_LEFT);
+        let summary_prefix = "    ".to_string();
         let detail_prefix = summary_prefix.clone();
         let detail_border_style = border_style.add_modifier(Modifier::DIM);
 
@@ -408,7 +407,8 @@ impl Session {
         let mut body_spans = Vec::new();
         for segment in &line.segments {
             let stripped_text = render::strip_ansi_codes(&segment.text);
-            let style = ratatui_style_from_inline(&segment.style, pty_fallback);
+            let style =
+                ratatui_style_from_inline(&segment.style, pty_fallback).add_modifier(Modifier::DIM);
             body_spans.push(Span::styled(stripped_text.into_owned(), style));
         }
 

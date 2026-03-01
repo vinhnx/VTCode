@@ -1,6 +1,6 @@
 //! Unified message styles and their logical mappings
 
-use anstyle::{AnsiColor, Color, Style};
+use anstyle::{AnsiColor, Color, Effects, RgbColor, Style};
 
 /// Standard color palette with semantic names
 #[derive(Debug, Clone, Copy)]
@@ -33,19 +33,19 @@ pub fn render_styled(text: &str, color: Color, effects: Option<String>) -> Strin
     let mut style = Style::new().fg_color(Some(color));
 
     if let Some(effects_str) = effects {
-        let mut ansi_effects = anstyle::Effects::new();
+        let mut ansi_effects = Effects::new();
 
         for effect in effects_str.split(',') {
             let effect = effect.trim().to_lowercase();
             match effect.as_str() {
-                "bold" => ansi_effects |= anstyle::Effects::BOLD,
-                "dim" | "dimmed" => ansi_effects |= anstyle::Effects::DIMMED,
-                "italic" => ansi_effects |= anstyle::Effects::ITALIC,
-                "underline" => ansi_effects |= anstyle::Effects::UNDERLINE,
-                "blink" => ansi_effects |= anstyle::Effects::BLINK,
-                "invert" | "reversed" => ansi_effects |= anstyle::Effects::INVERT,
-                "hidden" => ansi_effects |= anstyle::Effects::HIDDEN,
-                "strikethrough" => ansi_effects |= anstyle::Effects::STRIKETHROUGH,
+                "bold" => ansi_effects |= Effects::BOLD,
+                "dim" | "dimmed" => ansi_effects |= Effects::DIMMED,
+                "italic" => ansi_effects |= Effects::ITALIC,
+                "underline" => ansi_effects |= Effects::UNDERLINE,
+                "blink" => ansi_effects |= Effects::BLINK,
+                "invert" | "reversed" => ansi_effects |= Effects::INVERT,
+                "hidden" => ansi_effects |= Effects::HIDDEN,
+                "strikethrough" => ansi_effects |= Effects::STRIKETHROUGH,
                 _ => {}
             }
         }
@@ -96,6 +96,7 @@ pub fn dimmed_color(color: AnsiColor) -> Style {
 }
 
 /// Diff color palette for consistent git diff styling
+/// Uses standard ANSI colors without bold for accessibility and consistency.
 #[derive(Debug, Clone, Copy)]
 pub struct DiffColorPalette {
     pub added_fg: Color,
@@ -110,11 +111,11 @@ impl Default for DiffColorPalette {
     fn default() -> Self {
         Self {
             added_fg: Color::Ansi(AnsiColor::Green),
-            added_bg: Color::Rgb(anstyle::RgbColor(10, 24, 10)),
+            added_bg: Color::Rgb(RgbColor(10, 24, 10)),
             removed_fg: Color::Ansi(AnsiColor::Red),
-            removed_bg: Color::Rgb(anstyle::RgbColor(24, 10, 10)),
+            removed_bg: Color::Rgb(RgbColor(24, 10, 10)),
             header_fg: Color::Ansi(AnsiColor::Cyan),
-            header_bg: Color::Rgb(anstyle::RgbColor(10, 16, 20)),
+            header_bg: Color::Rgb(RgbColor(10, 16, 20)),
         }
     }
 }
@@ -132,3 +133,9 @@ impl DiffColorPalette {
         Style::new().fg_color(Some(self.header_fg))
     }
 }
+
+// Re-export diff theme configuration
+pub use crate::diff_theme::{
+    DiffColorLevel, DiffTheme, diff_add_bg, diff_del_bg, diff_gutter_bg_add_light,
+    diff_gutter_bg_del_light, diff_gutter_fg_light,
+};

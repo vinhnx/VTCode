@@ -42,9 +42,12 @@ body = """
 {% endfor %}\
 
 ### Contributors
-{% for contributor in commits | map(attribute="remote.username") | unique %}\
-{% if contributor %}@{{ contributor }} {% endif %}\
-{% endfor %}\
+{% set contributors = commits | map(attribute="remote.username") | unique | filter %}\
+{% if contributors | length > 0 %}\
+{% for contributor in contributors %}@{{ contributor }} {% endfor %}\
+{% else %}\
+@vinhnx
+{% endif %}\
 """
 
 footer = ""

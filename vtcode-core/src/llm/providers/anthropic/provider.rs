@@ -351,52 +351,6 @@ impl LLMProvider for AnthropicProvider {
         capabilities::supports_vision(model, &self.model)
     }
 
-    async fn count_prompt_tokens_exact(
-        &self,
-        request: &LLMRequest,
-    ) -> Result<Option<u32>, LLMError> {
-        if !self.anthropic_config.count_tokens_enabled {
-            return Ok(None);
-        }
-        if models::minimax::SUPPORTED_MODELS.contains(&request.model.as_str()) {
-            return Ok(None);
-        }
-
-        let anthropic_request = self.convert_to_anthropic_format(request)?;
-        let mut payload = serde_json::Map::new();
-        payload.insert(
-            "model".to_string(),
-            serde_json::Value::String(request.model.clone()),
-        );
-        for key in ["system", "messages", "tools", "thinking"] {
-            if let Some(value) = anthropic_request.get(key).cloned() {
-                payload.insert(key.to_string(), value);
-            }
-        }
-
-        let url = format!("{}/messages/count_tokens", self.base_url);
-        let response = self
-            .http_client
-            .post(&url)
-            .header("x-api-key", &self.api_key)
-            .header("anthropic-version", urls::ANTHROPIC_API_VERSION)
-            .json(&serde_json::Value::Object(payload))
-            .send()
-            .await
-            .map_err(|e| format_network_error("Anthropic", &e))?;
-
-        if !response.status().is_success() {
-            return Ok(None);
-        }
-
-        let body: crate::llm::providers::anthropic_types::CountTokensResponse = response
-            .json()
-            .await
-            .map_err(|e| format_parse_error("Anthropic", &e))?;
-
-        Ok(Some(body.input_tokens))
-    }
-
     async fn generate(&self, request: LLMRequest) -> Result<LLMResponse, LLMError> {
         let include_tool_search = self.requires_tool_search_beta(&request);
         let anthropic_request = self.convert_to_anthropic_format(&request)?;

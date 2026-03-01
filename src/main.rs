@@ -22,7 +22,8 @@ mod main_helpers;
 mod workspace_trust;
 
 use main_helpers::{
-    build_print_prompt, detect_available_ide, initialize_tracing, initialize_tracing_from_config,
+    build_print_prompt, detect_available_ide, initialize_default_error_tracing, initialize_tracing,
+    initialize_tracing_from_config,
 };
 
 fn main() -> std::process::ExitCode {
@@ -106,7 +107,7 @@ async fn run() -> Result<()> {
 
     // Add note about slash commands - use static string directly
     cmd = cmd.after_help(
-        "\n\nSlash commands (type / in chat):\n  /init     - Reconfigure provider, model, and settings\n  /status   - Show current configuration\n  /doctor   - Diagnose setup issues\n  /plan     - Toggle read-only planning mode\n  /theme    - Switch UI theme\n  /help     - Show all slash commands",
+        "\n\nSlash commands (type / in chat):\n  /init     - Reconfigure provider, model, and settings\n  /status   - Show current configuration\n  /doctor   - Diagnose setup issues\n  /update   - Check for VT Code updates\n  /plan     - Toggle read-only planning mode\n  /theme    - Switch UI theme\n  /help     - Show all slash commands",
     );
 
     // Parse arguments using the augmented command
@@ -170,7 +171,15 @@ async fn run() -> Result<()> {
         && let Err(err) = initialize_tracing_from_config(&startup.config)
     {
         tracing::warn!(error = %err, "failed to initialize tracing from config");
+    } else if !env_tracing_initialized && !startup.config.debug.enable_tracing {
+        // Always collect ERROR-level logs into the session archive for post-mortem debugging
+        if let Err(err) = initialize_default_error_tracing() {
+            eprintln!("warning: failed to initialize default error tracing: {err}");
+        }
     }
+
+    // Sync global diagnostics flag so TuiLogLayer respects ui.show_diagnostics_in_transcript
+    panic_hook::set_show_diagnostics(startup.config.ui.show_diagnostics_in_transcript);
 
     let cfg = &startup.config;
     let core_cfg = &startup.agent_config;
@@ -215,10 +224,10 @@ async fn run() -> Result<()> {
         return Ok(());
     }
 
-    if let Some(_resume_mode) = &startup.session_resume {
+    if let Some(resume_mode) = startup.session_resume.clone() {
         cli::handle_resume_session_command(
             core_cfg,
-            None, // resume session ID - we're using custom_session_id instead
+            resume_mode,
             startup.custom_session_id.clone(),
             skip_confirmations,
         )
@@ -410,8 +419,11 @@ async fn run() -> Result<()> {
         Some(Commands::AnthropicApi { port, host }) => {
             cli::handle_anthropic_api_command(core_cfg.clone(), *port, host.clone()).await?;
         }
-        Some(Commands::SelfUpdate { check, force: _ }) => {
-            let options = cli::update::UpdateCommandOptions { check_only: *check };
+        Some(Commands::Update { check, force }) => {
+            let options = cli::update::UpdateCommandOptions {
+                check_only: *check,
+                force: *force,
+            };
             cli::update::handle_update_command(options).await?;
         }
         _ => {

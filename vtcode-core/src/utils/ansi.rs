@@ -17,6 +17,7 @@ use anyhow::{Result, anyhow};
 use ratatui::style::{Color as RatColor, Modifier as RatModifier, Style as RatatuiStyle};
 use std::io::{self, Write};
 use std::sync::Arc;
+use vtcode_commons::diff_paths::looks_like_diff_content;
 
 /// Renderer with deferred output buffering
 pub struct AnsiRenderer {
@@ -29,6 +30,7 @@ pub struct AnsiRenderer {
     capabilities: AnsiCapabilities,
     reasoning_visible: bool,
     screen_reader_mode: bool,
+    show_diagnostics_in_transcript: bool,
 }
 
 impl AnsiRenderer {
@@ -51,6 +53,7 @@ impl AnsiRenderer {
             capabilities,
             reasoning_visible: true,
             screen_reader_mode: false,
+            show_diagnostics_in_transcript: false,
         }
     }
 
@@ -111,8 +114,30 @@ impl AnsiRenderer {
         self.screen_reader_mode = enabled;
     }
 
+    pub fn set_show_diagnostics_in_transcript(&mut self, enabled: bool) {
+        self.show_diagnostics_in_transcript = if cfg!(debug_assertions) {
+            enabled
+        } else {
+            false
+        };
+    }
+
     fn should_render_style(&self, style: MessageStyle) -> bool {
         self.reasoning_visible || !matches!(style, MessageStyle::Reasoning)
+    }
+
+    fn is_diagnostic_error_style(style: MessageStyle) -> bool {
+        matches!(style, MessageStyle::Error | MessageStyle::ToolError)
+    }
+
+    fn log_transcript_error(text: &str, style: MessageStyle, suppressed_in_tui: bool) {
+        tracing::error!(
+            target: "vtcode_transcript",
+            style = ?style,
+            suppressed_in_tui,
+            message = %text,
+            "diagnostic error output"
+        );
     }
 
     fn indent_for_style(&self, style: MessageStyle) -> &'static str {
@@ -227,6 +252,13 @@ impl AnsiRenderer {
         if !self.should_render_style(style) {
             return Ok(());
         }
+        if Self::is_diagnostic_error_style(style) {
+            Self::log_transcript_error(text, style, self.sink.is_some());
+            if self.sink.is_some() && !self.show_diagnostics_in_transcript {
+                self.last_line_was_empty = text.trim().is_empty();
+                return Ok(());
+            }
+        }
         if matches!(style, MessageStyle::Response | MessageStyle::Reasoning) {
             return self.render_markdown(style, text);
         }
@@ -326,6 +358,13 @@ impl AnsiRenderer {
     ) -> Result<()> {
         if !self.should_render_style(fallback) {
             return Ok(());
+        }
+        if Self::is_diagnostic_error_style(fallback) {
+            Self::log_transcript_error(text, fallback, self.sink.is_some());
+            if self.sink.is_some() && !self.show_diagnostics_in_transcript {
+                self.last_line_was_empty = text.trim().is_empty();
+                return Ok(());
+            }
         }
         let kind = Self::message_kind(fallback);
         let indent = self.indent_for_style(fallback);
@@ -655,16 +694,7 @@ fn contains_markdown_fence(text: &str) -> bool {
 }
 
 fn looks_like_diff(text: &str) -> bool {
-    text.lines().any(|line| {
-        let trimmed = line.trim_start();
-        trimmed.starts_with("diff --git ")
-            || trimmed.starts_with("@@ ")
-            || trimmed.starts_with("+++ ")
-            || trimmed.starts_with("--- ")
-            || trimmed.starts_with("index ")
-            || trimmed.starts_with("new file mode ")
-            || trimmed.starts_with("deleted file mode ")
-    })
+    looks_like_diff_content(text)
 }
 
 struct InlineSink {
@@ -710,10 +740,10 @@ impl InlineSink {
         // foreground color when ANSI parsing produced a color different from the
         // logical fallback for this message kind.
         resolved.color = None;
-        if let Some(color) = style.fg.and_then(Self::ansi_from_ratatui_color) {
-            if Some(color) != fallback.color {
-                resolved.color = Some(color);
-            }
+        if let Some(color) = style.fg.and_then(Self::ansi_from_ratatui_color)
+            && Some(color) != fallback.color
+        {
+            resolved.color = Some(color);
         }
 
         let added = style.add_modifier;
@@ -1346,6 +1376,7 @@ mod tests {
             capabilities: AnsiCapabilities::detect(),
             reasoning_visible: true,
             screen_reader_mode: false,
+            show_diagnostics_in_transcript: false,
         };
 
         // This should not create an extra empty line after "line 2"
@@ -1355,5 +1386,47 @@ mod tests {
 
         // Previously, this would have added an extra empty line due to the trailing \n
         // With our fix, it should only process the actual content lines
+    }
+
+    #[test]
+    fn inline_ui_suppresses_error_lines_when_disabled() {
+        use crate::ui::InlineCommand;
+
+        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+        let mut renderer =
+            AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
+        renderer.set_show_diagnostics_in_transcript(false);
+
+        renderer
+            .line(MessageStyle::Error, "fatal: test failure")
+            .unwrap();
+
+        while let Ok(command) = receiver.try_recv() {
+            assert!(
+                !matches!(command, InlineCommand::AppendLine { .. }),
+                "error output should not be appended to TUI transcript"
+            );
+        }
+    }
+
+    #[test]
+    fn inline_ui_shows_error_lines_when_enabled() {
+        use crate::ui::InlineCommand;
+
+        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+        let mut renderer =
+            AnsiRenderer::with_inline_ui(InlineHandle::new_for_tests(sender), Default::default());
+        renderer.set_show_diagnostics_in_transcript(true);
+        renderer
+            .line(MessageStyle::Error, "fatal: visible in transcript")
+            .unwrap();
+
+        let mut saw_append = false;
+        while let Ok(command) = receiver.try_recv() {
+            if matches!(command, InlineCommand::AppendLine { .. }) {
+                saw_append = true;
+            }
+        }
+        assert!(saw_append, "error output should be appended when enabled");
     }
 }

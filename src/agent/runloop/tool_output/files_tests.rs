@@ -1,5 +1,4 @@
 use super::*;
-use anstyle::Style as AnsiStyle;
 
 #[test]
 fn formats_unified_diff_with_hunk_headers() {
@@ -12,7 +11,7 @@ index 0000000..1111111 100644
 -old
 +new
 ";
-    let lines = format_diff_content_lines(diff);
+    let lines = format_diff_content_lines_with_numbers(diff);
     assert_eq!(lines[0], "diff --git a/file1.txt b/file1.txt");
     assert!(lines.iter().any(|line| line == "@@ -1 +1 @@"));
     // No "• Diff" summary line generated
@@ -28,7 +27,7 @@ fn formats_diff_without_git_header() {
 -before
 +after
 ";
-    let lines = format_diff_content_lines(diff);
+    let lines = format_diff_content_lines_with_numbers(diff);
     assert!(lines.iter().any(|line| line.starts_with("+++ ")));
     assert!(lines.iter().any(|line| line == "@@ -2 +2 @@"));
     // No "• Diff" summary line generated
@@ -93,7 +92,7 @@ index 0000000..1111111 100644
          let mut best_score = (0usize, 0u8);
          for block in blocks {
 ";
-    let lines = format_diff_content_lines(diff);
+    let lines = format_diff_content_lines_with_numbers(diff);
 
     // No "• Diff" summary line generated
     assert!(!lines.iter().any(|l| l.starts_with("• Diff ")));
@@ -102,7 +101,7 @@ index 0000000..1111111 100644
 }
 
 #[test]
-fn formats_condensed_edit_preview_with_summary_and_small_context() {
+fn edit_preview_uses_standard_numbered_diff_formatting() {
     let diff = "\
 diff --git a/vtcode-config/src/loader/config.rs b/vtcode-config/src/loader/config.rs
 index 0000000..1111111 100644
@@ -119,26 +118,43 @@ index 0000000..1111111 100644
 +tool_success = false
  ";
 
-    let lines = format_condensed_edit_diff_lines(diff);
+    let lines = format_diff_content_lines_with_numbers(diff);
     assert_eq!(
         lines[0],
-        "• Edited vtcode-config/src/loader/config.rs (+2 -2)"
+        "diff --git a/vtcode-config/src/loader/config.rs b/vtcode-config/src/loader/config.rs"
     );
-    assert!(lines.iter().any(|line| line.contains("- 537")));
-    assert!(lines.iter().any(|line| line.contains("+ 537")));
-    assert!(lines.iter().any(|line| line.contains("- 546")));
-    assert!(lines.iter().any(|line| line.contains("+ 546")));
-    assert!(lines.iter().any(|line| line.contains("⋮")));
+    assert!(lines.iter().any(|line| line == "@@ -536 +536 @@"));
+    assert!(lines.iter().any(|line| line == "@@ -545 +545 @@"));
+    assert!(
+        lines
+            .iter()
+            .any(|line| line.starts_with("-  537 suppress_when_focused = false"))
+    );
+    assert!(
+        lines
+            .iter()
+            .any(|line| line.starts_with("+  537 suppress_when_focused = true"))
+    );
+    assert!(
+        lines
+            .iter()
+            .any(|line| line.starts_with("-  546 tool_success = true"))
+    );
+    assert!(
+        lines
+            .iter()
+            .any(|line| line.starts_with("+  546 tool_success = false"))
+    );
 }
 
 #[test]
-fn condensed_edit_preview_falls_back_for_non_diff() {
-    let lines = format_condensed_edit_diff_lines("plain text output");
+fn standard_diff_formatter_preserves_non_diff_lines() {
+    let lines = format_diff_content_lines_with_numbers("plain text output");
     assert_eq!(lines, vec!["plain text output".to_string()]);
 }
 
 #[test]
-fn condensed_edit_preview_handles_diff_without_diff_git_header() {
+fn standard_diff_formatter_handles_diff_without_diff_git_header() {
     let diff = "\
 --- a/file2.txt
 +++ b/file2.txt
@@ -147,32 +163,9 @@ fn condensed_edit_preview_handles_diff_without_diff_git_header() {
 +after
 ";
 
-    let lines = format_condensed_edit_diff_lines(diff);
-    assert_eq!(lines[0], "• Edited file2.txt (+1 -1)");
-    assert!(lines.iter().any(|line| line.contains("-   2")));
-    assert!(lines.iter().any(|line| line.contains("+   2")));
-}
-
-#[test]
-fn split_diff_gutter_detects_numbered_lines() {
-    let (gutter, content) = split_diff_gutter("+   10 new value").expect("expected gutter split");
-    assert_eq!(gutter, "+   10 ");
-    assert_eq!(content, "new value");
-
-    assert!(split_diff_gutter("+++ b/file.rs").is_none());
-    assert!(split_diff_gutter("@@ -1 +1 @@").is_none());
-}
-
-#[test]
-fn split_diff_gutter_preserves_indented_code_content() {
-    let (gutter, content) = split_diff_gutter("+   10     line,").expect("expected gutter split");
-    assert_eq!(gutter, "+   10 ");
-    assert_eq!(content, "    line,");
-}
-
-#[test]
-fn format_diff_line_for_display_dims_numbered_gutter() {
-    let rendered = format_diff_line_for_display("-  120 old value", AnsiStyle::new());
-    assert!(rendered.contains("\u{1b}[2m"));
-    assert!(rendered.ends_with("old value"));
+    let lines = format_diff_content_lines_with_numbers(diff);
+    assert_eq!(lines[0], "--- a/file2.txt");
+    assert_eq!(lines[1], "+++ b/file2.txt");
+    assert!(lines.iter().any(|line| line.starts_with("-    2 before")));
+    assert!(lines.iter().any(|line| line.starts_with("+    2 after")));
 }

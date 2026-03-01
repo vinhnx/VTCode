@@ -3,6 +3,18 @@ use shell_words::split as shell_split;
 use vtcode_core::command_safety::shell_parser::parse_shell_commands_tree_sitter;
 use vtcode_core::config::constants::tools;
 
+const RUN_COMMAND_PREFIX_WRAPPERS: [&str; 9] = [
+    "unix command ",
+    "shell command ",
+    "command ",
+    "cmd ",
+    "please ",
+    "kindly ",
+    "just ",
+    "quickly ",
+    "quick ",
+];
+
 /// Detect if user input is an explicit "run <command>" request.
 /// Returns Some((tool_name, args)) if the input matches the pattern.
 ///
@@ -14,6 +26,15 @@ use vtcode_core::config::constants::tools;
 /// And converts them directly to run_pty_cmd tool calls, bypassing LLM interpretation.
 pub(crate) fn detect_explicit_run_command(input: &str) -> Option<(String, serde_json::Value)> {
     let trimmed = input.trim();
+
+    if let Some(command) = detect_show_diff_command(trimmed) {
+        return Some((
+            tools::RUN_PTY_CMD.to_string(),
+            json!({
+                "command": command
+            }),
+        ));
+    }
 
     // Check for "run " prefix (case-insensitive)
     let lower = trimmed.to_lowercase();
@@ -51,14 +72,71 @@ pub(crate) fn detect_explicit_run_command(input: &str) -> Option<(String, serde_
     Some((tools::RUN_PTY_CMD.to_string(), args))
 }
 
+fn detect_show_diff_command(input: &str) -> Option<String> {
+    let trimmed = input.trim();
+    let lower = trimmed.to_ascii_lowercase();
+    if !lower.starts_with("show diff ") {
+        return None;
+    }
+
+    let target = trimmed[10..].trim();
+    if target.is_empty() {
+        return None;
+    }
+
+    let target = normalize_show_diff_target(target);
+    if target.is_empty() {
+        return None;
+    }
+
+    // Use -- to force path interpretation and avoid accidental rev parsing.
+    Some(format!("git diff -- {}", target))
+}
+
+fn normalize_show_diff_target(target: &str) -> &str {
+    let mut normalized = target.trim();
+    loop {
+        let previous = normalized;
+        normalized = normalized.trim();
+        normalized = normalized.strip_prefix('"').unwrap_or(normalized);
+        normalized = normalized.strip_suffix('"').unwrap_or(normalized);
+        normalized = normalized.strip_prefix('\'').unwrap_or(normalized);
+        normalized = normalized.strip_suffix('\'').unwrap_or(normalized);
+        normalized = normalized
+            .trim_end_matches(['.', ',', ';', '!', '?'])
+            .trim();
+        if normalized == previous {
+            return normalized;
+        }
+    }
+}
+
 fn normalize_natural_language_command(command_part: &str) -> String {
     let extracted = extract_inline_backtick_command(command_part).unwrap_or(command_part);
-    let cleaned = strip_command_wrappers(strip_leading_polite_prefixes(extracted));
+    let cleaned = strip_run_command_prefixes(extracted);
     normalize_cargo_phrase(cleaned)
         .or_else(|| normalize_node_package_manager_phrase(cleaned))
         .or_else(|| normalize_pytest_phrase(cleaned))
         .or_else(|| normalize_unix_phrase(cleaned))
         .unwrap_or_else(|| cleaned.to_string())
+}
+
+pub(crate) fn strip_run_command_prefixes(command_part: &str) -> &str {
+    let mut input = command_part.trim_start();
+    loop {
+        let lowered = input.to_ascii_lowercase();
+        let stripped = RUN_COMMAND_PREFIX_WRAPPERS.iter().find_map(|prefix| {
+            if lowered.starts_with(prefix) {
+                input.get(prefix.len()..)
+            } else {
+                None
+            }
+        });
+        let Some(rest) = stripped else {
+            return input;
+        };
+        input = rest.trim_start();
+    }
 }
 
 fn normalize_cargo_phrase(command_part: &str) -> Option<String> {
@@ -319,59 +397,11 @@ fn looks_like_natural_language_request(command_part: &str) -> bool {
 fn looks_like_shell_command(command_part: &str) -> bool {
     parse_shell_commands_tree_sitter(command_part)
         .map(|commands| !commands.is_empty())
-        .unwrap_or(false)
-}
-
-fn strip_leading_polite_prefixes(command_part: &str) -> &str {
-    let mut input = command_part.trim();
-    loop {
-        let lowered = input.to_ascii_lowercase();
-        let stripped = if lowered.starts_with("please ") || lowered.starts_with("kindly ") {
-            input.get(7..)
-        } else if lowered.starts_with("just ") {
-            input.get(5..)
-        } else if lowered.starts_with("quickly ") {
-            input.get(8..)
-        } else if lowered.starts_with("quick ") {
-            input.get(6..)
-        } else if lowered.starts_with("a quick ") {
-            input.get(8..)
-        } else if lowered.starts_with("an quick ") {
-            input.get(9..)
-        } else {
-            None
-        };
-
-        if let Some(rest) = stripped {
-            input = rest.trim_start();
-            continue;
-        }
-        return input;
-    }
-}
-
-fn strip_command_wrappers(command_part: &str) -> &str {
-    let mut input = command_part.trim();
-    loop {
-        let lowered = input.to_ascii_lowercase();
-        let stripped = if lowered.starts_with("command ") {
-            input.get(8..)
-        } else if lowered.starts_with("unix command ") {
-            input.get(13..)
-        } else if lowered.starts_with("shell command ") {
-            input.get(14..)
-        } else if lowered.starts_with("cmd ") {
-            input.get(4..)
-        } else {
-            None
-        };
-
-        if let Some(rest) = stripped {
-            input = rest.trim_start();
-            continue;
-        }
-        return input;
-    }
+        .unwrap_or_else(|_| {
+            shell_split(command_part)
+                .map(|tokens| !tokens.is_empty())
+                .unwrap_or(false)
+        })
 }
 
 fn extract_inline_backtick_command(command_part: &str) -> Option<&str> {
@@ -390,12 +420,9 @@ fn trim_token(token: &str) -> &str {
 }
 
 fn contains_chained_instruction(command_part: &str) -> bool {
-    let tokens = shell_split(command_part).unwrap_or_else(|_| {
-        command_part
-            .split_whitespace()
-            .map(|s| s.to_string())
-            .collect()
-    });
+    let Ok(tokens) = shell_split(command_part) else {
+        return false;
+    };
     if tokens.len() < 2 {
         return false;
     }
@@ -482,6 +509,31 @@ mod tests {
     }
 
     #[test]
+    fn test_detect_show_diff_direct_command() {
+        let result = detect_explicit_run_command("show diff src/main.rs");
+        assert!(result.is_some());
+        let (tool_name, args) = result.expect("direct command expected");
+        assert_eq!(tool_name, "run_pty_cmd");
+        assert_eq!(args["command"], "git diff -- src/main.rs");
+    }
+
+    #[test]
+    fn test_detect_show_diff_trims_quotes_and_punctuation() {
+        let result = detect_explicit_run_command("show diff \"src/main.rs\".");
+        assert!(result.is_some());
+        let (_, args) = result.expect("direct command expected");
+        assert_eq!(args["command"], "git diff -- src/main.rs");
+    }
+
+    #[test]
+    fn test_detect_show_diff_allows_dot_prefixed_paths() {
+        let result = detect_explicit_run_command("show diff .vtcode/tool-policy.json");
+        assert!(result.is_some());
+        let (_, args) = result.expect("direct command expected");
+        assert_eq!(args["command"], "git diff -- .vtcode/tool-policy.json");
+    }
+
+    #[test]
     fn test_detect_explicit_run_command_empty() {
         assert!(detect_explicit_run_command("run").is_none());
         assert!(detect_explicit_run_command("run ").is_none());
@@ -520,6 +572,14 @@ mod tests {
     #[test]
     fn test_detect_explicit_run_command_strips_polite_prefixes() {
         let result = detect_explicit_run_command("run please cargo check");
+        assert!(result.is_some());
+        let (_, args) = result.expect("normalized command expected");
+        assert_eq!(args["command"], "cargo check");
+    }
+
+    #[test]
+    fn test_detect_explicit_run_command_strips_mixed_wrappers() {
+        let result = detect_explicit_run_command("run command please cargo check");
         assert!(result.is_some());
         let (_, args) = result.expect("normalized command expected");
         assert_eq!(args["command"], "cargo check");

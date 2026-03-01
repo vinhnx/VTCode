@@ -68,7 +68,7 @@ pub(crate) struct InteractionLoopContext<'a> {
     pub telemetry: &'a Arc<vtcode_core::core::telemetry::TelemetryManager>,
     pub autonomous_executor: &'a Arc<vtcode_core::tools::autonomous_executor::AutonomousExecutor>,
     pub error_recovery:
-        &'a Arc<std::sync::RwLock<vtcode_core::core::agent::error_recovery::ErrorRecoveryState>>,
+        &'a Arc<tokio::sync::RwLock<vtcode_core::core::agent::error_recovery::ErrorRecoveryState>>,
     pub last_forced_redraw: &'a mut std::time::Instant,
     pub harness_config: vtcode_config::core::agent::AgentHarnessConfig,
     pub steering_receiver: &'a mut Option<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>,
@@ -137,6 +137,9 @@ pub(crate) enum InteractionOutcome {
     Continue {
         input: String,
     },
+    /// A direct tool command (e.g. `!cmd` / `run ...`) was executed and rendered;
+    /// no LLM turn should be started for this loop iteration.
+    DirectToolHandled,
     Exit {
         reason: SessionEndReason,
     },

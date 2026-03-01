@@ -299,17 +299,12 @@ pub(crate) fn show_plan_confirmation_modal(
 ) {
     use crate::ui::tui::types::{InlineListItem, InlineListSelection};
 
-    let context_usage = match extract_context_usage(session.input_status_right.as_deref()) {
-        Some(ContextUsageSummary {
-            percent,
-            is_left: true,
-        }) => format!("{percent}% left"),
-        Some(ContextUsageSummary {
-            percent,
-            is_left: false,
-        }) => format!("{percent}% used"),
-        None => "--".to_string(),
-    };
+    let context_usage = format!(
+        "{} used",
+        extract_context_usage_percent(session.input_status_right.as_deref())
+            .map(|value| format!("{value}%"))
+            .unwrap_or_else(|| "--".to_string())
+    );
 
     let mut lines: Vec<String> = plan
         .raw_content
@@ -389,20 +384,14 @@ pub(crate) fn show_plan_confirmation_modal(
     mark_dirty(session);
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct ContextUsageSummary {
-    percent: u8,
-    is_left: bool,
-}
-
-fn extract_context_usage(status_line: Option<&str>) -> Option<ContextUsageSummary> {
+fn extract_context_usage_percent(status_line: Option<&str>) -> Option<u8> {
     let status_line = status_line?;
     let words: Vec<&str> = status_line.split_whitespace().collect();
     if words.len() < 2 {
         return None;
     }
 
-    for (index, pair) in words.windows(2).enumerate() {
+    for pair in words.windows(2) {
         let candidate = pair[0].trim_end_matches('%');
         let next = pair[1].trim_matches(|ch: char| ch == ',' || ch == '.');
         if !next.eq_ignore_ascii_case("context") {
@@ -410,48 +399,11 @@ fn extract_context_usage(status_line: Option<&str>) -> Option<ContextUsageSummar
         }
 
         if let Ok(percent) = candidate.parse::<u8>() {
-            let is_left = words.get(index + 2).is_some_and(|value| {
-                value
-                    .trim_matches(|ch: char| ch == ',' || ch == '.')
-                    .eq_ignore_ascii_case("left")
-            });
-            return Some(ContextUsageSummary {
-                percent: percent.min(100),
-                is_left,
-            });
+            return Some(percent.min(100));
         }
     }
 
     None
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{ContextUsageSummary, extract_context_usage};
-
-    #[test]
-    fn parses_legacy_context_usage_percent() {
-        let usage = extract_context_usage(Some("model | 25% context | (low)"));
-        assert_eq!(
-            usage,
-            Some(ContextUsageSummary {
-                percent: 25,
-                is_left: false,
-            })
-        );
-    }
-
-    #[test]
-    fn parses_context_left_percent() {
-        let usage = extract_context_usage(Some("model | 17% context left | (low)"));
-        assert_eq!(
-            usage,
-            Some(ContextUsageSummary {
-                percent: 17,
-                is_left: true,
-            })
-        );
-    }
 }
 
 #[allow(dead_code)]

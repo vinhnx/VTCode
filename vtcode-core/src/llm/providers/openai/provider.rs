@@ -124,6 +124,7 @@ impl OpenAIProvider {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn from_config(
         api_key: Option<String>,
         model: Option<String>,

@@ -326,7 +326,7 @@ fn apply_sgr_codes(sequence: &str, current: &mut InlineTextStyle, fallback: &Inl
             2 => current.effects |= Effects::DIMMED,
             3 => current.effects |= Effects::ITALIC,
             4 => current.effects |= Effects::UNDERLINE,
-            22 | 23 | 24 => clear_sgr_effects(&mut current.effects, code),
+            22..=24 => clear_sgr_effects(&mut current.effects, code),
             30..=37 | 90..=97 => current.color = ansi_color_from_ansi_code(code),
             39 => current.color = fallback.color,
             40..=47 | 100..=107 => {

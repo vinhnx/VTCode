@@ -218,8 +218,9 @@ Hooks can append strings to the model context in two ways:
 2. Provide `hookSpecificOutput.additionalContext` as a JSON array or string in
 the JSON response.
 
-Messages emitted via stderr or interpreted fields are surfaced inside VT Code's
-UI so you can monitor hook activity.
+Messages emitted via stderr or interpreted fields are captured for diagnostics.
+Fatal/error diagnostics are always written to tracing logs for debugging; TUI
+transcript visibility is controlled by `ui.show_diagnostics_in_transcript`.
 
 ## Best Practices
 

@@ -186,6 +186,12 @@ pub struct UiConfig {
     #[serde(default = "default_show_turn_timer")]
     pub show_turn_timer: bool,
 
+    /// Show warning/error/fatal diagnostic lines in the TUI transcript and log panel.
+    /// Also controls whether ERROR-level tracing logs appear in the TUI session log.
+    /// Errors are always captured in the session archive JSON regardless of this setting.
+    #[serde(default = "default_show_diagnostics_in_transcript")]
+    pub show_diagnostics_in_transcript: bool,
+
     // === Color Accessibility Configuration ===
     // Based on NO_COLOR standard, Ghostty minimum-contrast, and terminal color portability research
     // See: https://no-color.org/, https://ghostty.org/docs/config/reference#minimum-contrast
@@ -281,7 +287,11 @@ fn default_message_block_spacing() -> bool {
 }
 
 fn default_show_turn_timer() -> bool {
-    true
+    false
+}
+
+fn default_show_diagnostics_in_transcript() -> bool {
+    false
 }
 
 fn default_notifications_enabled() -> bool {
@@ -358,6 +368,7 @@ impl Default for UiConfig {
             dim_completed_todos: default_dim_completed_todos(),
             message_block_spacing: default_message_block_spacing(),
             show_turn_timer: default_show_turn_timer(),
+            show_diagnostics_in_transcript: default_show_diagnostics_in_transcript(),
             // Color accessibility defaults
             minimum_contrast: default_minimum_contrast(),
             bold_is_bright: default_bold_is_bright(),

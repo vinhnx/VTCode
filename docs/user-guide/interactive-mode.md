@@ -4,7 +4,7 @@ The VT Code terminal UI includes an interactive mode that combines keyboard-firs
 
 ## Keyboard Shortcuts
 
-> Keyboard shortcuts may vary slightly by platform and terminal emulator. Press `?` while VT Code is running to see the bindings detected for your environment.
+> Keyboard shortcuts may vary slightly by platform and terminal emulator. Press `?` on an empty input line while VT Code is running to open a quick shortcut overlay.
 
 ### General Controls
 
@@ -14,9 +14,15 @@ The VT Code terminal UI includes an interactive mode that combines keyboard-firs
 | `Ctrl+D` | Exit VT Code interactive mode. | Sends EOF to the shell integration. |
 | `Ctrl+L` | Clear the terminal screen while keeping the conversation history. | Useful for refreshing when output is cluttered. |
 | `Ctrl+O` | Toggle verbose tool output and diagnostics. | Reveals detailed tool invocation logs. |
-| `Ctrl+E` | Open external editor (`/edit`) for quick input/file editing. | Uses `tools.editor` config, then `VISUAL`/`EDITOR`. |
+| `Ctrl+A` | Move cursor to start of input line. | UNIX/readline-style editing. |
+| `Ctrl+E` | Move cursor to end of input line (or open external editor when input is empty). | Uses `tools.editor` config, then `VISUAL`/`EDITOR`. |
+| `Ctrl+W` | Delete the previous word. | UNIX/readline-style editing. |
+| `Ctrl+U` | Delete from cursor to line start. | UNIX/readline-style editing. |
+| `Ctrl+K` | Delete from cursor to line end. | UNIX/readline-style editing. |
+| `Alt+Left/Right` | Move cursor by word. | UNIX/readline-style navigation. |
 | `Ctrl+R` | Reverse search the command history. | Matches previous prompts and bash commands. |
 | `Ctrl+V` (macOS/Linux) or `Alt+V` (Windows) | Paste an image from the clipboard. | Works with image-enabled sessions. |
+| `Ctrl+Z` (Unix) | Suspend VT Code to the shell; run `fg` to resume. | Job-control support for terminal workflows. |
 | `Up/Down arrows` | Navigate through command history. | Recall previous prompts or commands. |
 | `Shift+Up/Down arrows` | Cycle active teammate (lead only). | Requires agent teams. |
 | `Esc` + `Esc` | Rewind the conversation and code to the latest checkpoint. | Idle context only (while no task/PTY is running). |

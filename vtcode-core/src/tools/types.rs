@@ -248,7 +248,7 @@ pub struct VTCodePtySession {
 }
 // Default value functions
 fn default_max_items() -> usize {
-    5 // AGENTS.md requires max 5 items for context-limited operations to reduce token waste
+    20 // Better discovery defaults while still bounded for context efficiency
 }
 
 fn default_list_path() -> String {

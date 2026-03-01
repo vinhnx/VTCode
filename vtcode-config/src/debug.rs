@@ -126,8 +126,8 @@ impl DebugConfig {
             })
             .unwrap_or_else(|| {
                 dirs::home_dir()
-                    .map(|home| home.join(".vtcode/debug"))
-                    .unwrap_or_else(|| PathBuf::from(".vtcode/debug"))
+                    .map(|home| home.join(".vtcode/sessions"))
+                    .unwrap_or_else(|| PathBuf::from(".vtcode/sessions"))
             })
     }
 }
@@ -154,5 +154,12 @@ mod tests {
         assert!(cfg.trace_targets.is_empty());
         assert_eq!(cfg.max_debug_log_size_mb, 50);
         assert_eq!(cfg.max_debug_log_age_days, 7);
+    }
+
+    #[test]
+    fn test_debug_log_path_defaults_to_sessions_dir() {
+        let cfg = DebugConfig::default();
+        let path = cfg.debug_log_path().to_string_lossy().replace('\\', "/");
+        assert!(path.ends_with(".vtcode/sessions"));
     }
 }

@@ -53,7 +53,7 @@ pub async fn handle_start_theme_palette(
     Ok(SlashCommandControl::Continue)
 }
 
-pub async fn handle_start_sessions_palette(
+pub async fn handle_start_resume_palette(
     ctx: SlashCommandContext<'_>,
     limit: usize,
 ) -> Result<SlashCommandControl> {

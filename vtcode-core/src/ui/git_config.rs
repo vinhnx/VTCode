@@ -145,6 +145,8 @@ impl GitColorConfig {
     /// Extract a single Git color setting from config content
     ///
     /// Looks for patterns like: [color "section"] key = value
+    /// Note: This parses the color name but ignores bold/dim effects to ensure
+    /// consistent diff styling without theme-dependent formatting.
     fn extract_git_color(content: &str, section: &str, key: &str) -> Option<Style> {
         // Pattern: [color "section"]
         let section_pattern = format!(r#"\[color "{}"\]"#, regex::escape(section));
@@ -171,8 +173,30 @@ impl GitColorConfig {
 
         let value = key_re.captures(section_content)?.get(1)?.as_str().trim();
 
-        // Try to parse with anstyle_git directly
-        anstyle_git::parse(value).ok()
+        // Parse color name but ignore effects (bold, dim, etc.) for consistent styling
+        // Extract just the color name, ignoring any effects like "bold", "dim", etc.
+        let color_name = value
+            .split_whitespace()
+            .find(|word| {
+                matches!(
+                    word.to_lowercase().as_str(),
+                    "normal"
+                        | "black"
+                        | "red"
+                        | "green"
+                        | "yellow"
+                        | "blue"
+                        | "magenta"
+                        | "purple"
+                        | "cyan"
+                        | "white"
+                )
+            })
+            .unwrap_or("normal");
+
+        Some(crate::utils::style_helpers::style_from_color_name(
+            color_name,
+        ))
     }
 }
 

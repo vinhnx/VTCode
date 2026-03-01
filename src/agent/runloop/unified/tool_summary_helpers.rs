@@ -208,10 +208,18 @@ pub(super) fn collect_param_details(args: &Value, keys: &HashSet<String>) -> Vec
     };
     let include_all = keys.is_empty();
     for (key, value) in map {
-        // Skip command-related keys and edit_file content keys (too verbose)
+        // Skip command-related and raw content keys (too verbose in summaries)
         if matches!(
             key.as_str(),
-            "command" | "raw_command" | "bash_command" | "cmd" | "old_str" | "new_str"
+            "command"
+                | "raw_command"
+                | "bash_command"
+                | "cmd"
+                | "old_str"
+                | "new_str"
+                | "content"
+                | "new_content"
+                | "text"
         ) {
             continue;
         }

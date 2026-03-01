@@ -18,6 +18,9 @@ pub struct ExecutionError {
 }
 
 /// Type of error that can occur
+///
+/// Canonical error type used across both the global error recovery manager
+/// and agent-specific error state tracking. Superset of all error categories.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Eq, Hash, PartialEq)]
 pub enum ErrorType {
     ToolExecution,
@@ -25,7 +28,12 @@ pub enum ErrorType {
     FileSystem,
     Network,
     Validation,
-    Unknown,
+    CircuitBreaker,
+    Timeout,
+    PermissionDenied,
+    InvalidArguments,
+    ResourceNotFound,
+    Other,
 }
 
 /// Context information about where and why the error occurred
@@ -88,7 +96,7 @@ impl ErrorRecoveryManager {
     pub fn new() -> Self {
         // Pre-allocate with known capacity
         let mut recovery_strategies = IndexMap::with_capacity(2);
-        let mut operation_type_mapping = IndexMap::with_capacity(6);
+        let mut operation_type_mapping = IndexMap::with_capacity(11);
 
         // Define recovery strategies for different error types
         recovery_strategies.insert(
@@ -124,7 +132,12 @@ impl ErrorRecoveryManager {
         operation_type_mapping.insert(ErrorType::Network, OperationType::NetworkRequest);
         operation_type_mapping.insert(ErrorType::FileSystem, OperationType::FileOperation);
         operation_type_mapping.insert(ErrorType::Validation, OperationType::Processing);
-        operation_type_mapping.insert(ErrorType::Unknown, OperationType::Processing);
+        operation_type_mapping.insert(ErrorType::CircuitBreaker, OperationType::ToolExecution);
+        operation_type_mapping.insert(ErrorType::Timeout, OperationType::Processing);
+        operation_type_mapping.insert(ErrorType::PermissionDenied, OperationType::Processing);
+        operation_type_mapping.insert(ErrorType::InvalidArguments, OperationType::Processing);
+        operation_type_mapping.insert(ErrorType::ResourceNotFound, OperationType::FileOperation);
+        operation_type_mapping.insert(ErrorType::Other, OperationType::Processing);
 
         Self {
             errors: Vec::with_capacity(16), // Pre-allocate for typical session

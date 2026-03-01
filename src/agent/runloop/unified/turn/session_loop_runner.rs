@@ -1,8 +1,16 @@
 use super::*;
+use crate::agent::runloop::git::{
+    compute_session_code_change_delta, git_working_tree_numstat_snapshot,
+};
 use crate::agent::runloop::unified::plan_mode_state::render_plan_mode_next_step_hint;
+use crate::agent::runloop::unified::postamble::{ExitSummaryData, print_exit_summary};
 use crate::agent::runloop::unified::run_loop_context::TurnPhase;
+use crate::agent::runloop::unified::turn::turn_loop::TurnLoopOutcome;
+use crate::agent::runloop::welcome::SessionBootstrap;
 
 const PLAN_MODE_MIN_TOOL_CALLS_PER_TURN: usize = 48;
+const CODE_CHANGE_SNAPSHOT_TIMEOUT_MS: u64 = 120;
+const DIRECT_TOOL_FOLLOW_UP_DIRECTIVE: &str = "For this direct shell command follow-up, keep the response concise and action-oriented: 1) one short line summarizing the command result, 2) one short line with the exact next action. Avoid extra explanation unless there is an error.";
 
 fn resolve_effective_turn_timeout_secs(
     configured_turn_timeout_secs: u64,
@@ -69,6 +77,153 @@ fn build_partial_timeout_messages(
     (renderer_message, error_message)
 }
 
+struct TurnExecutionMetrics {
+    attempts_made: usize,
+    retry_count: usize,
+    history_snapshot_bytes: usize,
+    timeout_secs: u64,
+    elapsed_ms: u128,
+    outcome: &'static str,
+}
+
+fn estimate_history_bytes(history: &[vtcode_core::llm::provider::Message]) -> usize {
+    use vtcode_core::llm::provider::{ContentPart, MessageContent};
+
+    history
+        .iter()
+        .map(|message| {
+            let content_bytes = match &message.content {
+                MessageContent::Text(text) => text.len(),
+                MessageContent::Parts(parts) => parts
+                    .iter()
+                    .map(|part| match part {
+                        ContentPart::Text { text } => text.len(),
+                        ContentPart::Image { .. } | ContentPart::File { .. } => 128,
+                    })
+                    .sum::<usize>(),
+            };
+            let reasoning_bytes = message.reasoning.as_ref().map_or(0, String::len);
+            let tool_call_id_bytes = message.tool_call_id.as_ref().map_or(0, String::len);
+            let origin_tool_bytes = message.origin_tool.as_ref().map_or(0, String::len);
+            content_bytes + reasoning_bytes + tool_call_id_bytes + origin_tool_bytes + 32
+        })
+        .sum()
+}
+
+fn emit_turn_execution_metrics(turn_metrics: TurnExecutionMetrics) {
+    tracing::info!(
+        target: "vtcode.turn.metrics",
+        metric = "turn_execution",
+        attempts_made = turn_metrics.attempts_made,
+        retry_count = turn_metrics.retry_count,
+        history_snapshot_bytes = turn_metrics.history_snapshot_bytes,
+        timeout_secs = turn_metrics.timeout_secs,
+        elapsed_ms = turn_metrics.elapsed_ms,
+        outcome = turn_metrics.outcome,
+        "turn metric"
+    );
+}
+
+async fn capture_code_change_snapshot(
+    workspace: &std::path::Path,
+    phase: &str,
+) -> Option<std::collections::HashMap<std::path::PathBuf, crate::agent::runloop::git::FileStat>> {
+    let workspace_path = workspace.to_path_buf();
+    let phase_label = phase.to_string();
+    match tokio::time::timeout(
+        Duration::from_millis(CODE_CHANGE_SNAPSHOT_TIMEOUT_MS),
+        tokio::task::spawn_blocking(move || git_working_tree_numstat_snapshot(&workspace_path)),
+    )
+    .await
+    {
+        Ok(Ok(Ok(snapshot))) => snapshot,
+        Ok(Ok(Err(err))) => {
+            tracing::warn!(
+                "Failed to capture {} code-change snapshot: {}",
+                phase_label,
+                err
+            );
+            None
+        }
+        Ok(Err(err)) => {
+            tracing::warn!(
+                "Failed to capture {} code-change snapshot (join error): {}",
+                phase_label,
+                err
+            );
+            None
+        }
+        Err(_) => {
+            tracing::debug!(
+                "Skipping {} code-change snapshot after {}ms timeout",
+                phase_label,
+                CODE_CHANGE_SNAPSHOT_TIMEOUT_MS
+            );
+            None
+        }
+    }
+}
+
+fn build_exit_header_context_fast(
+    config: &CoreAgentConfig,
+    session_bootstrap: &SessionBootstrap,
+    reasoning_label: String,
+    mode_label: String,
+    tools_count: usize,
+    plan_mode: bool,
+    autonomous_mode: bool,
+    full_auto: bool,
+    provider_name: &str,
+) -> vtcode_tui::InlineHeaderContext {
+    use vtcode_core::config::constants::ui;
+
+    let provider_label = if config.provider.trim().is_empty() {
+        provider_name
+    } else {
+        config.provider.as_str()
+    };
+
+    let trust_label = match session_bootstrap.acp_workspace_trust {
+        Some(vtcode_core::config::AgentClientProtocolZedWorkspaceTrustMode::FullAuto) => {
+            "full_auto"
+        }
+        Some(vtcode_core::config::AgentClientProtocolZedWorkspaceTrustMode::ToolsPolicy) => {
+            "tools_policy"
+        }
+        None if full_auto || autonomous_mode => "full auto",
+        None => "tools policy",
+    };
+
+    vtcode_tui::InlineHeaderContext {
+        app_name: vtcode_core::config::constants::app::DISPLAY_NAME.to_string(),
+        provider: format!("{}{}", ui::HEADER_PROVIDER_PREFIX, provider_label),
+        model: format!("{}{}", ui::HEADER_MODEL_PREFIX, config.model),
+        version: env!("CARGO_PKG_VERSION").to_string(),
+        git: format!(
+            "{}{}",
+            ui::HEADER_GIT_PREFIX,
+            ui::HEADER_UNKNOWN_PLACEHOLDER
+        ),
+        mode: mode_label,
+        reasoning: format!("{}{}", ui::HEADER_REASONING_PREFIX, reasoning_label),
+        reasoning_stage: None,
+        workspace_trust: format!("{}{}", ui::HEADER_TRUST_PREFIX, trust_label),
+        tools: format!("{}{}", ui::HEADER_TOOLS_PREFIX, tools_count),
+        mcp: format!(
+            "{}{}",
+            ui::HEADER_MCP_PREFIX,
+            ui::HEADER_UNKNOWN_PLACEHOLDER
+        ),
+        highlights: Vec::new(),
+        editing_mode: if plan_mode {
+            vtcode_tui::EditingMode::Plan
+        } else {
+            vtcode_tui::EditingMode::Edit
+        },
+        autonomous_mode,
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 pub(super) async fn run_single_agent_loop_unified_impl(
     config: &CoreAgentConfig,
@@ -93,6 +248,8 @@ pub(super) async fn run_single_agent_loop_unified_impl(
     let mut idle_config = extract_idle_config(vt_cfg.as_ref());
 
     loop {
+        let session_started_at = Instant::now();
+        let start_code_changes = capture_code_change_snapshot(&config.workspace, "start").await;
         let resume_request = resume_state.take();
         let resume_ref = resume_request.as_ref();
 
@@ -279,7 +436,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                 ).await?
             };
             use crate::agent::runloop::unified::turn::session::interaction_loop::InteractionOutcome;
-            let _input = match interaction_outcome {
+            let next_turn_input = match interaction_outcome {
                 InteractionOutcome::Exit { reason } => {
                     session_end_reason = reason;
                     break;
@@ -288,6 +445,20 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                     resume_state = Some(*resume_session);
                     session_end_reason = SessionEndReason::Completed;
                     break;
+                }
+                InteractionOutcome::DirectToolHandled => {
+                    // Preserve interrupt behavior: when Ctrl+C cancellation is active,
+                    // stop after direct tool execution and wait for the next user input.
+                    if ctrl_c_state.is_cancel_requested() || ctrl_c_state.is_exit_requested() {
+                        continue;
+                    }
+                    conversation_history.push(vtcode_core::llm::provider::Message::system(
+                        DIRECT_TOOL_FOLLOW_UP_DIRECTIVE.to_string(),
+                    ));
+                    // A direct run/! command already updated history with user -> tool call ->
+                    // tool response. Start an immediate assistant turn so users receive
+                    // follow-up analysis without typing an extra "continue".
+                    "__direct_tool_follow_up__".to_string()
                 }
                 InteractionOutcome::Continue { input } => input,
                 InteractionOutcome::PlanApproved {
@@ -320,7 +491,11 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                     continue;
                 }
             };
-            let mut working_history = conversation_history.clone();
+            if next_turn_input.trim().is_empty() {
+                continue;
+            }
+            let is_direct_tool_follow_up = next_turn_input == "__direct_tool_follow_up__";
+            let mut working_history = std::mem::take(&mut conversation_history);
             let timeout_secs = resolve_effective_turn_timeout_secs(
                 resolve_timeout(
                     vt_cfg
@@ -330,8 +505,10 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                 harness_config.max_tool_wall_clock_secs,
             );
             let turn_started_at = Instant::now();
-            let mut attempts = 0;
-            let mut history_backup: Option<Vec<vtcode_core::llm::provider::Message>> = None;
+            let mut attempts: usize = 0;
+            let history_snapshot_bytes = estimate_history_bytes(&working_history);
+            let mut turn_history_checkpoint: Option<Vec<vtcode_core::llm::provider::Message>> =
+                Some(working_history.clone());
             let outcome = match loop {
                 let mut auto_exit_plan_mode_attempted = false;
                 let plan_mode_active = session_stats.is_plan_mode();
@@ -346,13 +523,6 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                     harness_config.max_tool_wall_clock_secs,
                     harness_config.max_tool_retries,
                 );
-                let history_for_turn = if attempts == 0 {
-                    std::mem::take(&mut working_history)
-                } else {
-                    history_backup
-                        .take()
-                        .expect("history_backup must be set after first attempt")
-                };
                 let execution_history_len_before_attempt = tool_registry.execution_history_len();
                 let turn_loop_ctx = crate::agent::runloop::unified::turn::TurnLoopContext::new(
                     &mut renderer,
@@ -395,7 +565,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                 let result = timeout(
                     Duration::from_secs(timeout_secs),
                     crate::agent::runloop::unified::turn::run_turn_loop(
-                        history_for_turn,
+                        &mut working_history,
                         turn_loop_ctx,
                         &mut session_end_reason,
                     ),
@@ -421,26 +591,15 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                             } else {
                                 RunLoopTurnLoopResult::Cancelled
                             };
-                            let recovered_history = history_backup
-                                .clone()
-                                .or_else(|| {
-                                    if working_history.is_empty() {
-                                        None
-                                    } else {
-                                        Some(working_history.clone())
-                                    }
-                                })
-                                .unwrap_or_else(|| conversation_history.clone());
+                            if let Some(snapshot) = turn_history_checkpoint.take() {
+                                working_history = snapshot;
+                            }
                             break Ok(TurnLoopOutcome {
                                 result: interrupted_result,
-                                working_history: recovered_history,
                                 turn_modified_files: std::collections::BTreeSet::new(),
                             });
                         }
 
-                        if history_backup.is_none() {
-                            history_backup = Some(conversation_history.clone());
-                        }
                         let had_tool_activity = execution_history_len_after_attempt
                             > execution_history_len_before_attempt
                             || active_pty_sessions_before_cancel > 0
@@ -472,6 +631,14 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                                 timeout_secs
                             ));
                         }
+                        let Some(snapshot) = turn_history_checkpoint.take() else {
+                            let checkpoint_error =
+                                "Turn timeout retry checkpoint unavailable; stopping turn."
+                                    .to_string();
+                            renderer.line(MessageStyle::Error, &checkpoint_error)?;
+                            break Err(anyhow::anyhow!(checkpoint_error));
+                        };
+                        working_history = snapshot;
                         renderer.line(
                             MessageStyle::Error,
                             &format!(
@@ -484,32 +651,43 @@ pub(super) async fn run_single_agent_loop_unified_impl(
             } {
                 Ok(outcome) => outcome,
                 Err(err) => {
-                    tracing::error!("Turn execution error: {}", err);
                     handle.set_input_status(None, None);
                     let _ = renderer.line_if_not_empty(MessageStyle::Output);
-                    let _ = renderer.line(MessageStyle::Error, &format!("Error: {}", err));
-                    TurnLoopOutcome {
-                        result: RunLoopTurnLoopResult::Aborted,
-                        working_history: history_backup
-                            .or_else(|| {
-                                if working_history.is_empty() {
-                                    None
-                                } else {
-                                    Some(working_history)
-                                }
-                            })
-                            .unwrap_or_else(|| conversation_history.clone()),
-                        turn_modified_files: std::collections::BTreeSet::new(),
+                    if is_direct_tool_follow_up {
+                        // The direct command already succeeded; the LLM follow-up is
+                        // optional analysis. Downgrade to a non-fatal warning so the
+                        // user sees the tool output as valid.
+                        tracing::warn!(
+                            "Direct-tool follow-up LLM turn failed (non-fatal): {}",
+                            err
+                        );
+                        let _ = renderer.line(
+                            MessageStyle::Info,
+                            "Command completed. Model follow-up unavailable; output above is valid.",
+                        );
+                        TurnLoopOutcome {
+                            result: RunLoopTurnLoopResult::Completed,
+                            turn_modified_files: std::collections::BTreeSet::new(),
+                        }
+                    } else {
+                        tracing::error!("Turn execution error: {}", err);
+                        let _ = renderer.line(MessageStyle::Error, &format!("Error: {}", err));
+                        TurnLoopOutcome {
+                            result: RunLoopTurnLoopResult::Aborted,
+                            turn_modified_files: std::collections::BTreeSet::new(),
+                        }
                     }
                 }
             };
+            conversation_history = working_history;
+            let outcome_result = outcome.result.clone();
             let turn_elapsed = turn_started_at.elapsed();
             let show_turn_timer = vt_cfg
                 .as_ref()
                 .map(|cfg| cfg.ui.show_turn_timer)
                 .unwrap_or(true);
             if let Err(err) = crate::agent::runloop::unified::turn::apply_turn_outcome(
-                &outcome,
+                outcome,
                 crate::agent::runloop::unified::turn::TurnOutcomeContext {
                     conversation_history: &mut conversation_history,
                     renderer: &mut renderer,
@@ -533,6 +711,20 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                     )
                     .ok();
             }
+            emit_turn_execution_metrics(TurnExecutionMetrics {
+                attempts_made: attempts.saturating_add(1),
+                retry_count: attempts,
+                history_snapshot_bytes,
+                timeout_secs,
+                elapsed_ms: turn_elapsed.as_millis(),
+                outcome: match &outcome_result {
+                    RunLoopTurnLoopResult::Completed => "completed",
+                    RunLoopTurnLoopResult::Aborted => "aborted",
+                    RunLoopTurnLoopResult::Cancelled => "cancelled",
+                    RunLoopTurnLoopResult::Exit => "exit",
+                    RunLoopTurnLoopResult::Blocked { .. } => "blocked",
+                },
+            });
 
             if session_stats.take_context_clear_request() {
                 conversation_history.clear();
@@ -580,7 +772,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                     tracing::warn!("Failed to persist session progress: {}", err);
                 }
             }
-            match &outcome.result {
+            match &outcome_result {
                 RunLoopTurnLoopResult::Aborted => {
                     session_stats.mark_turn_stalled(
                         true,
@@ -611,7 +803,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
         if let Some(emitter) = harness_emitter.as_ref() {
             emitter.finish_open_responses();
         }
-        if let Err(err) = finalize_session(
+        let finalization_output = match finalize_session(
             &mut renderer,
             lifecycle_hooks.as_ref(),
             session_end_reason,
@@ -624,14 +816,18 @@ pub(super) async fn run_single_agent_loop_unified_impl(
         )
         .await
         {
-            tracing::error!("Failed to finalize session: {}", err);
-            renderer
-                .line(
-                    MessageStyle::Error,
-                    &format!("Failed to finalize session: {}", err),
-                )
-                .ok();
-        }
+            Ok(output) => Some(output),
+            Err(err) => {
+                tracing::error!("Failed to finalize session: {}", err);
+                renderer
+                    .line(
+                        MessageStyle::Error,
+                        &format!("Failed to finalize session: {}", err),
+                    )
+                    .ok();
+                None
+            }
+        };
         if resume_state.is_some() {
             continue;
         }
@@ -669,6 +865,66 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                 _consecutive_idle_cycles = 0;
             }
         }
+
+        let end_code_changes = capture_code_change_snapshot(&config.workspace, "end").await;
+        let code_change_delta = compute_session_code_change_delta(
+            start_code_changes.as_ref(),
+            end_code_changes.as_ref(),
+        );
+        let telemetry_snapshot = match telemetry.get_snapshot() {
+            Ok(snapshot) => snapshot,
+            Err(err) => {
+                tracing::warn!(
+                    "Failed to capture telemetry snapshot for postamble: {}",
+                    err
+                );
+                vtcode_core::core::telemetry::TelemetryStats::default()
+            }
+        };
+        let finalization_succeeded = finalization_output.is_some();
+        let resume_identifier = finalization_output
+            .and_then(|output| output.archive_path)
+            .and_then(|path| {
+                path.file_stem()
+                    .and_then(|stem| stem.to_str())
+                    .map(|stem| stem.to_string())
+            });
+        let provider_name = provider_client.name().to_string();
+        let reasoning_label = vt_cfg
+            .as_ref()
+            .map(|cfg| cfg.agent.reasoning_effort.as_str().to_string())
+            .unwrap_or_else(|| config.reasoning_effort.as_str().to_string());
+        let mode_label = match (config.ui_surface, full_auto) {
+            (vtcode_core::config::types::UiSurfacePreference::Inline, true) => "auto".to_string(),
+            (vtcode_core::config::types::UiSurfacePreference::Inline, false) => {
+                "inline".to_string()
+            }
+            (vtcode_core::config::types::UiSurfacePreference::Alternate, _) => "alt".to_string(),
+            (vtcode_core::config::types::UiSurfacePreference::Auto, true) => "auto".to_string(),
+            (vtcode_core::config::types::UiSurfacePreference::Auto, false) => "std".to_string(),
+        };
+        let tools_count = tools.read().await.len();
+        let header_context = Some(build_exit_header_context_fast(
+            &config,
+            &session_bootstrap,
+            reasoning_label,
+            mode_label,
+            tools_count,
+            session_stats.is_plan_mode(),
+            session_stats.is_autonomous_mode(),
+            full_auto,
+            &provider_name,
+        ));
+        if !finalization_succeeded {
+            let _ = vtcode_tui::panic_hook::restore_tui();
+        }
+        print_exit_summary(ExitSummaryData {
+            total_session_time: session_started_at.elapsed(),
+            code_changes: code_change_delta,
+            telemetry: telemetry_snapshot,
+            header_context,
+            resume_identifier,
+        });
         break;
     }
     Ok(())

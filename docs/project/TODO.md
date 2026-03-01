@@ -1,12 +1,16 @@
-scan to improve panic and exception handling like force unwrap and expect.
+NOTE: use private relay signup codex free
 
 ---
 
-implement self update logic for vtcode.
+Analyze the codebase to identify and improve panic-prone code patterns including force unwraps (!), force try, expect() calls, implicitly unwrapped optionals, and fatalError usages. For each occurrence, assess whether it can be replaced with safer alternatives such as guard statements, optional binding, custom error handling, Result types, or default values. Provide refactored code examples for each improvement, explain the potential runtime failures being prevented, and suggest coding standards to minimize future unsafe patterns. Include analysis of any custom panic handlers or recovery mechanisms that could be implemented.
 
 ---
 
-Perform a comprehensive review and optimization of the vtcode agent harness, prioritizing execution speed, computational efficiency, and token economy. Refactor the tool call architecture to minimize overhead and latency, while implementing robust error handling strategies to significantly reduce the agent's error rate and ensure reliable, effective performance.
+Perform a comprehensive review and optimization of the vtcode agent harness, prioritizing execution speed, computational efficiency, context and token economy. Refactor the tool call architecture to minimize overhead and latency, while implementing robust error handling strategies to significantly reduce the agent's error rate and ensure reliable, effective performance.
+
+---
+
+Conduct a thorough, end-to-end performance audit and systematic optimization of the vtcode agent harness framework with explicit focus on maximizing execution velocity, achieving superior computational efficiency, and implementing aggressive token and context conservation strategies throughout all operational layers. Execute comprehensive refactoring of the tool invocation and agent communication architecture to eliminate redundant processing, minimize inter-process communication latency, and optimize resource utilization at every stage. Design and implement multilayered error handling protocols including predictive failure detection, graceful degradation mechanisms, automatic recovery procedures, and comprehensive logging to drive error occurrence to near-zero levels. Deliver measurable improvements in reliability, throughput, and operational stability while preserving all existing functionality and maintaining backward compatibility with current integration points.
 
 ---
 
@@ -14,37 +18,13 @@ extract and open source more components from vtcode-core
 
 ---
 
-Shell integration: respects $SHELL environment variable and supports the ! prefix for direct shell execution.
+Review the unified_exec implementation and vtcode's tool ecosystem to identify token efficiency gaps. Analyze which components waste tokens through redundancy, verbosity, or inefficient patterns, and which are already optimized. Develop optimizations for inefficient tools and propose new tools that consolidate multiple operations into single calls to reduce token consumption in recurring workflows.
 
----
+Specifically examine these known issues: command payloads for non-diff unified_exec still contain duplicated text (output and stdout fields), which wastes tokens across all command-like tool calls. Address this by ensuring unified_exec normalizes all tool calls to eliminate redundant information.
 
-Keyboard-first navigation: Full UNIX keybinding support (Ctrl+A/E/W/U/K, Alt+arrows), suspend/resume with Ctrl+Z, and a quick help overlay with ?.
+Identify and address these additional token waste patterns: remove duplicated spool guidance that reaches the model both through spool_hint fields and separate system prompts; trim repeated or unused metadata from model-facing tool payloads such as redundant spool_hint fields, spooled_bytes data, duplicate id==session_id entries, and null working_directory values; shorten high-frequency follow-up prompts for PTY and spool-chunk read operations, and implement compact structured continuation arguments for chunked spool reads.
 
----
-
-review potential gap in unified_exec, and vtcode's tools and identify which wastes tokens broadly, and which are more efficient. optimize the inefficient ones, and consider adding new tools that can help reduce token usage in common scenarios.
-for example, if there are tools that require multiple calls to achieve a common task, consider consolidating them into a single tool that can perform the entire task in one call, thus reducing the number of interactions and tokens used. Additionally, review the prompts and responses for each tool to ensure they are concise and effective, minimizing unnecessary verbosity that can lead to increased token consumption.
-or
-• I found a concrete gap affecting non-diff unified_exec: command payloads still
-often carry duplicated text (output + stdout), which wastes tokens broadly. I’m
-patching normalization and fallback handling so all command-like tool calls
-benefit, not only git diff. => should be fixed by the new unified_exec refactor, which normalizes all tool calls to have a consistent structure and eliminates redundant information in the payload, thus optimizing token usage across all tools that utilize the unified_exec interface.
-
-• I identified three additional broad token waste points and I’m patching them
-now.
-
-1. Remove duplicated spool guidance reaching the model twice (spool_hint field
-   plus extra system nudge).
-2. Trim repeated/unused metadata in model-facing tool payloads (spool_hint,
-   spooled_bytes, duplicate id==session_id, null working_directory).
-3. Shorten high-frequency follow-up prompts for PTY and spool-chunk reads, and
-   provide compact structured continuation args for chunked spool reads.
-
----
-
-check external edtior (control+e) can not use normal mode (escape). This is because the escape key is currently hardcoded to trigger the rewind functionality, which conflicts with its expected behavior in normal mode. To resolve this, we need to implement a more context-aware handling of the escape key, allowing it to function as intended in normal mode while still providing the rewind functionality when appropriate. This may involve introducing a new keybinding for the rewind action or implementing a double-escape mechanism to differentiate between the two use cases. check crossterm event handling for escape key and implement the necessary logic to support both functionalities without conflict. vtcode support external editor config.
-
-expand external editor support to allow users to configure their preferred editor for the control+e shortcut. This would involve adding a configuration option in the settings where users can specify the command for their external editor (e.g., vim, nano, code). The system would then use this command to launch the specified editor when the control+e shortcut is pressed, providing a seamless and customizable editing experience for users who prefer to use an external editor over the built-in one. Also check to support VS Code, Zed, Text Edit, Sublime Text, TextMate, Emacs, and other popular editors, nvim...
+Review each tool's prompt and response structure to ensure conciseness while maintaining effectiveness, eliminating unnecessary verbosity that increases token usage without adding functional value.
 
 ---
 
@@ -71,88 +51,11 @@ Configure Status Line
 
 ---
 
-fix missing sysntax higlight and theme aware diff rendering
-/Users/vinhnguyenxuan/Documents/vtcode-resources/diff.png
+Implement a comprehensive solution to resolve the escape key conflict in external editor functionality and expand configurable editor support. First, modify the crossterm event handling system to implement context-aware escape key detection that distinguishes between escape key presses intended for normal mode navigation and those that should trigger rewind functionality. Consider implementing either a configurable double-escape mechanism where a single press exits external editor mode while a double-press triggers rewind, or introduce an alternative keybinding such as Ctrl+Shift+R or F5 for rewind that does not conflict with escape behavior. Ensure VTCode/ANSI escape sequence parsing correctly identifies the source of escape key events. Second, expand the external editor configuration system to include a user-customizable editor preference setting stored in the application configuration. This setting should accept any valid shell command or path to an executable, and the system should parse this command to launch the specified editor when Ctrl+E is triggered. Implement support for launching common editors including Visual Studio Code (code command), Zed (zed command), TextEdit (open command on macOS), Sublime Text (subl command), TextMate (mate command), Emacs (emacsclient or emacs command), Neovim (nvim or vim command), Nano (nano command), and any other editor specified via custom command. The implementation should handle platform-specific editor detection, manage editor process spawning and termination, capture editor output, and properly restore focus to the main application after the external editor session completes. Include error handling for cases where the specified editor is not installed or the command fails to execute.
 
 ---
 
-improve shell command pty output ansi styling
-/Users/vinhnguyenxuan/Documents/vtcode-resources/command.png
-
-1. dimmed line numbers
-2. better handling of line wrapping (currently it breaks the ANSI styling)
-3. theme-aware colors (currently it uses hardcoded colors that may not look good in all
-4. aligned the command output, currently the first line has padding to the left but the rest of the lines don't, it would look better if all lines are aligned
-5. if possible add simple syntax highlighting for code snippets in the command output, for example if the output contains Rust code, it would be great to have basic syntax highlighting for it
-6. add an option to toggle the ANSI styling on and off, some users may prefer to see the raw output without any styling
-7. unify diff preview edit with command output preview, currently they look quite different but they can share the same styling and rendering logic to make it more consistent. DRY
-
----
-
-improve readfile code rendering, it should preserve newlines and indentation, and use a monospace font in the UI and code syntax highlighting if possible. This will make it easier to read and understand the code snippets, especially for languages like Rust where indentation is important.
-
-```
-
-• Read file /Users/vinhnguyenxuan/Develope…core/src/tools/tool_intent.rs
-└ Offset lines: 200
-└ Limit: 30
-│
-│       None
-│       }
-│       })
-│       }
-```
-
----
-
-Compaction is an important technique for efficiently running agents. As conversations grow lengthy, the context window fills up. Codex uses a compaction strategy: once the conversation exceeds a certain token count, it calls a special Responses API endpoint, which generates a smaller representation of the conversation history. This smaller version replaces the old input and avoids quadratic inference costs.
-
----
-
-https://newsletter.pragmaticengineer.com/p/how-codex-is-built?publication_id=458709&post_id=188285137&isFreemail=true&r=1nha8&triedRedirect=true
-
----
-
-How Codex works
-
-The core loop is a state machine, and the agent loop is the core logic in the Codex CLI. This loop orchestrates the interaction between the user, the model, and the tools the model uses. This “agent loop” is something every AI agent uses, not just Codex, and below is how Codex implements it, at a high level:
-How Codex works, at a high level
-
-    Prompt assembly: the agent takes user input and prepares the prompt to pass to the model. On top of user input, the prompt includes system instructions (coding standards, rules), a list of available tools (including MCP servers), and the actual input: text, images, files, AGENTS.md contents, and local environment info.
-
-    Inference: the prompt is converted to tokens and fed to the model, which streams back output events: reasoning steps, tool calls, or a response.
-
-    Response:
-
-        Stream the response to the user by showing it on the terminal.
-
-        If the model decides to use a tool, make this tool call: e.g. read a file, run a bash command, write code. If a command fails, the error message goes back to the model, the model attempts to diagnose the issue, and may decide to retry.
-
-    Tool response (optional): if a tool was invoked, return the response to the model. Repeat steps 3 and 4 for as long as more tool calls are needed.
-
-    Assistant message: the “final message” intended for the user which closes one step in the loop. The loop then starts again with a new user message.
-
----
-
-IMPLEMENT POSTAMBLE CROSSTERM EXIT SUMMARIAZATION
-
-REF:
-
-```
- Total usage est:        5 Premium
- requests
- API time spent:         14m 55s
- Total session time:     1h 13m 43s
- Total code changes:     +137 -13
- Breakdown by AI model:
-  gpt-5.3-codex           10.0m in,
-  40.1k out, 8.9m cached (Est. 5
-  Premium requests)
-
- Resume this session with copilot
- --resume=ce712ef0-6605-4cd4-82bf-fad39
- bd55bca
-```
+Perform a comprehensive analysis of the codebase to identify and eliminate all instances of duplicated code, following the DRY (Don't Repeat Yourself) and KISS (Keep It Simple, Stupid) principles. Conduct a systematic search across all modules, classes, and files to find similar code patterns, duplicate logic, redundant implementations, and opportunities for abstraction. Specifically examine rendering-related code such as diff previews and command output previews to determine if they can share unified rendering logic, styling, and common components. Audit all utility functions scattered throughout different modules and extract them into a centralized shared utility module with proper organization and documentation. Create a detailed report identifying each duplication found, the proposed refactoring strategy, and the expected benefits in terms of maintainability, reduced code complexity, and improved consistency. Ensure all refactored code maintains existing functionality while simplifying the overall architecture. Prioritize changes that provide the greatest reduction in duplication with minimal risk to existing functionality.
 
 ---
 
@@ -198,3 +101,11 @@ improve agent's postamlbe summarization. reference and also suggest next actions
 ```
 
 the goal is to provide users with a clear and concise summary of the agent's actions, including any relevant metrics such as API usage, time spent, and code changes. Additionally, the summary should suggest next steps for the user to take based on the outcome of the agent's actions. This could include options to resume the session, view detailed logs, or take specific actions based on the results of the agent's work. The postamble summarization should be designed to help users quickly understand the results of their interactions with the agent and guide them towards meaningful next steps. The tone should be informative and actionable, providing users with the information they need to make informed decisions about how to proceed after the agent has completed its tasks. Not too verbose, but comprehensive enough to cover the key outcomes and next steps. Not too blunt, but clear and concise.
+
+---
+
+Conduct a comprehensive review and enhancement of error handling and recovery mechanisms within the agent loop, with particular emphasis on tool call operations. Implement a multi-layered error handling strategy that includes retry logic with exponential backoff for transient failures such as network timeouts, rate limiting, and temporary service unavailability while implementing fail-fast behavior for non-recoverable errors including authentication failures, invalid parameters, and permission denied scenarios. Develop and integrate a robust state management system that ensures the agent can maintain consistent internal state during and after error occurrences, including proper rollback mechanisms for partial operations and transaction-like semantics where appropriate. Create a comprehensive error categorization system that distinguishes between retryable and non-retryable errors and implements appropriate handling strategies for each category. Enhance user-facing error messages to be clear, actionable, and informative while avoiding technical jargon that may confuse end users. Implement proper logging at multiple levels including debug, info, warning, and error levels to facilitate troubleshooting and monitoring. Conduct a thorough audit of existing error handling implementations to identify gaps, inconsistencies, and potential failure points. Refactor the error handling code to improve modularity, testability, and maintainability while ensuring comprehensive test coverage for error scenarios including edge cases and unexpected inputs. Add appropriate circuit breaker patterns for external service calls to prevent cascading failures and enable graceful degradation when dependent services are unavailable. Implement proper resource cleanup and resource leak prevention throughout the agent loop.
+
+---
+
+check src/agent/runloop/unified/turn module Analyze the agent harness codebase focusing on the runloop, unified, turn, and tool_outcomes components to identify performance bottlenecks, inefficiencies, and optimization opportunities. Perform a comprehensive review of data flow and control flow through these components, examining how tool calls are executed, how outcomes are processed, and how turn execution manages state and sequencing. Evaluate whether the current implementation maximizes parallelism where possible, minimizes blocking operations, and maintains efficient memory usage patterns. Identify any redundant computational steps, unnecessary data transformations, or algorithmic inefficiencies that degrade performance. Assess the current error handling mechanisms for robustness, examining exception propagation paths, retry logic, and failure recovery procedures to ensure they do not introduce excessive latency or create cascading failure scenarios. Examine the design of core data structures used throughout these components for optimal access patterns, memory efficiency, and scalability characteristics. Provide specific, actionable recommendations for refactoring code to reduce complexity, implementing caching where appropriate to avoid redundant computation, optimizing hot path execution, and improving the overall responsiveness and throughput of the agent harness. Your analysis should include concrete code-level suggestions with estimated impact on performance metrics and potential tradeoffs to consider when implementing optimizations.
