@@ -116,6 +116,7 @@ https://zed.dev/blog/split-diffs
 
 ---
 
+```
 ## Applied: Default Status Line Items Pattern (Codex PR #12015)
 
 The Codex PR demonstrates enabling default status line items when config is unset:
@@ -207,7 +208,6 @@ The work is organized into 4 phases, prioritized by impact and risk.
 - Chose `ArcSwap` over `RwLock` for McpProvider client: the read-heavy/write-rare pattern is textbook `ArcSwap` — readers are wait-free, only reconnect swaps. Requires adding `arc-swap` as a dependency.
 - Chose sub-struct grouping (AoS with co-access locality) over full SoA for `SessionState`/`TurnProcessingContext`: SoA doesn't apply here because different fields of the same "row" are accessed together in context, unlike the pure iterate-one-field-at-a-time SoA pattern
 - Deferred `ProgressState` consolidation (Phase 4) — updates are infrequent enough that the 4-mutex overhead is negligible
-
----
+```
 
 review the overrall plan and start implement carefully. can you do better? KISS and DRY. then start implement
