@@ -2,7 +2,7 @@ use super::OpenAIProvider;
 use crate::llm::error_display;
 use crate::llm::provider::{LLMError, LLMRequest, LLMResponse};
 use futures::{SinkExt, StreamExt};
-use serde_json::{Value, json};
+use serde_json::{Map, Value, json};
 use tokio_tungstenite::MaybeTlsStream;
 use tokio_tungstenite::WebSocketStream;
 use tokio_tungstenite::connect_async;
@@ -47,7 +47,7 @@ impl OpenAIResponsesWebSocketSession {
         }
     }
 
-    fn can_continue_from(&self, payload: &Value) -> bool {
+    fn can_continue_from(&self, payload: &Value, allow_empty_delta: bool) -> bool {
         let Some(previous_response_id) = self.last_response_id.as_ref() else {
             return false;
         };
@@ -78,10 +78,11 @@ impl OpenAIResponsesWebSocketSession {
         let Some(current_input) = payload.get("input").and_then(Value::as_array) else {
             return false;
         };
-        if current_input.len() <= self.last_input.len() {
-            return false;
-        }
-        current_input.starts_with(self.last_input.as_slice())
+        input_is_incremental(
+            self.last_input.as_slice(),
+            current_input.as_slice(),
+            allow_empty_delta,
+        )
     }
 
     fn clear_chain(&mut self) {
@@ -105,52 +106,54 @@ impl OpenAIProvider {
         &self,
         request: &LLMRequest,
     ) -> Result<LLMResponse, LLMError> {
+        let allow_empty_delta = true;
         let mut session_guard = self.websocket_session.lock().await;
         let session = self
             .ensure_websocket_session(&mut session_guard, request)
             .await?;
 
         let payload = self.convert_to_openai_responses_format(request)?;
-        let prepared = prepare_websocket_event(payload, session)?;
+        let needs_warmup = session
+            .last_response_id
+            .as_deref()
+            .map(str::is_empty)
+            .unwrap_or(true);
+        if needs_warmup {
+            let warmup_prepared = prepare_websocket_event(payload.clone(), session, true, false)?;
+            match send_websocket_event(session, &warmup_prepared.event).await {
+                Ok(response_json) => {
+                    update_session_from_response(
+                        session,
+                        &response_json,
+                        request,
+                        &warmup_prepared,
+                        &self.model,
+                    );
+                }
+                Err(err) => {
+                    session.clear_chain();
+                    *session_guard = None;
+                    return Err(err);
+                }
+            }
+        }
+
+        let prepared = prepare_websocket_event(payload, session, false, allow_empty_delta)?;
         let sent_with_previous = prepared.used_previous_response_id;
 
-        session
-            .socket
-            .send(Message::Text(prepared.event.to_string().into()))
-            .await
-            .map_err(|err| {
-                format_network_error(format!("Failed to send OpenAI WebSocket payload: {err}"))
-            })?;
-
-        match read_websocket_response(session).await {
+        match send_websocket_event(session, &prepared.event).await {
             Ok(response_json) => {
                 let parsed = self.parse_openai_responses_response(
                     response_json.clone(),
                     request.model.clone(),
                 )?;
-                session.last_response_id = response_json
-                    .get("id")
-                    .and_then(Value::as_str)
-                    .map(str::to_owned);
-                session.last_input = prepared.full_input;
-                session.last_model = request
-                    .model
-                    .trim()
-                    .is_empty()
-                    .then_some(self.model.to_string())
-                    .or_else(|| Some(request.model.clone()));
-                session.last_instructions = response_json
-                    .get("instructions")
-                    .and_then(Value::as_str)
-                    .map(str::to_owned)
-                    .or_else(|| {
-                        prepared
-                            .event
-                            .get("instructions")
-                            .and_then(Value::as_str)
-                            .map(str::to_owned)
-                    });
-                session.last_tools = prepared.event.get("tools").cloned();
+                update_session_from_response(
+                    session,
+                    &response_json,
+                    request,
+                    &prepared,
+                    &self.model,
+                );
                 Ok(parsed)
             }
             Err(err) => {
@@ -203,9 +206,65 @@ impl OpenAIProvider {
     }
 }
 
+fn update_session_from_response(
+    session: &mut OpenAIResponsesWebSocketSession,
+    response_json: &Value,
+    request: &LLMRequest,
+    prepared: &PreparedWebSocketEvent,
+    fallback_model: &str,
+) {
+    session.last_response_id = response_json
+        .get("id")
+        .and_then(Value::as_str)
+        .map(str::to_owned);
+    session.last_input = prepared.full_input.clone();
+    session.last_model = request
+        .model
+        .trim()
+        .is_empty()
+        .then(|| fallback_model.to_string())
+        .or_else(|| Some(request.model.clone()));
+    session.last_instructions = response_json
+        .get("instructions")
+        .and_then(Value::as_str)
+        .map(str::to_owned)
+        .or_else(|| {
+            prepared
+                .event
+                .get("instructions")
+                .and_then(Value::as_str)
+                .map(str::to_owned)
+        });
+    session.last_tools = prepared.event.get("tools").cloned();
+}
+
+fn input_is_incremental(
+    last_input: &[Value],
+    current_input: &[Value],
+    allow_empty_delta: bool,
+) -> bool {
+    if current_input.len() < last_input.len() {
+        return false;
+    }
+    if !allow_empty_delta && current_input.len() == last_input.len() {
+        return false;
+    }
+    current_input.starts_with(last_input)
+}
+
+fn apply_generate_mode(request_obj: &mut Map<String, Value>, warmup: bool) {
+    if warmup {
+        request_obj.insert("generate".to_string(), Value::Bool(false));
+    } else {
+        request_obj.remove("generate");
+    }
+}
+
 fn prepare_websocket_event(
     payload: Value,
     session: &OpenAIResponsesWebSocketSession,
+    warmup: bool,
+    allow_empty_delta: bool,
 ) -> Result<PreparedWebSocketEvent, LLMError> {
     let mut request_obj = payload
         .as_object()
@@ -217,6 +276,7 @@ fn prepare_websocket_event(
     request_obj
         .entry("store".to_string())
         .or_insert(Value::Bool(false));
+    apply_generate_mode(&mut request_obj, warmup);
 
     let full_input = request_obj
         .get("input")
@@ -225,7 +285,7 @@ fn prepare_websocket_event(
         .ok_or_else(|| format_provider_error("Responses payload missing input".to_string()))?;
 
     let mut used_previous_response_id = false;
-    if session.can_continue_from(&Value::Object(request_obj.clone())) {
+    if session.can_continue_from(&Value::Object(request_obj.clone()), allow_empty_delta) {
         if let Some(previous_response_id) = session.last_response_id.clone() {
             request_obj.insert(
                 "previous_response_id".to_string(),
@@ -253,6 +313,20 @@ fn prepare_websocket_event(
         full_input,
         used_previous_response_id,
     })
+}
+
+async fn send_websocket_event(
+    session: &mut OpenAIResponsesWebSocketSession,
+    event: &Value,
+) -> Result<Value, LLMError> {
+    session
+        .socket
+        .send(Message::Text(event.to_string().into()))
+        .await
+        .map_err(|err| {
+            format_network_error(format!("Failed to send OpenAI WebSocket payload: {err}"))
+        })?;
+    read_websocket_response(session).await
 }
 
 async fn read_websocket_response(
@@ -377,9 +451,11 @@ fn format_network_error(message: String) -> LLMError {
 mod tests {
     use super::{
         OPENAI_BETA_RESPONSES_WEBSOCKET_V2, WEBSOCKET_CONNECTION_LIMIT_REACHED_CODE,
-        is_websocket_connection_limit_error, responses_websocket_url,
+        apply_generate_mode, input_is_incremental, is_websocket_connection_limit_error,
+        responses_websocket_url,
     };
     use crate::llm::provider::LLMError;
+    use serde_json::{Map, Value};
 
     #[test]
     fn websocket_url_is_derived_from_http_base() {
@@ -411,5 +487,39 @@ mod tests {
             metadata: None,
         };
         assert!(!is_websocket_connection_limit_error(&err));
+    }
+
+    #[test]
+    fn websocket_incremental_input_disallows_empty_delta_by_default() {
+        let input = vec![Value::String("a".to_string())];
+        assert!(!input_is_incremental(&input, &input, false));
+    }
+
+    #[test]
+    fn websocket_incremental_input_allows_empty_delta_when_enabled() {
+        let input = vec![Value::String("a".to_string())];
+        assert!(input_is_incremental(&input, &input, true));
+    }
+
+    #[test]
+    fn websocket_incremental_input_requires_prefix_match() {
+        let previous = vec![Value::String("a".to_string())];
+        let current = vec![Value::String("b".to_string())];
+        assert!(!input_is_incremental(&previous, &current, true));
+    }
+
+    #[test]
+    fn websocket_warmup_sets_generate_false() {
+        let mut obj = Map::new();
+        apply_generate_mode(&mut obj, true);
+        assert_eq!(obj.get("generate"), Some(&Value::Bool(false)));
+    }
+
+    #[test]
+    fn websocket_non_warmup_removes_generate_flag() {
+        let mut obj = Map::new();
+        obj.insert("generate".to_string(), Value::Bool(false));
+        apply_generate_mode(&mut obj, false);
+        assert!(obj.get("generate").is_none());
     }
 }
