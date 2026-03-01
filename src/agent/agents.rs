@@ -4,7 +4,7 @@ use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
 use vtcode_core::config::types::{AgentConfig as CoreAgentConfig, ModelSelectionSource};
 use vtcode_core::core::interfaces::turn::{TurnDriver, TurnDriverParams};
 use vtcode_core::llm::provider::Message as ProviderMessage;
-use vtcode_core::utils::session_archive::SessionSnapshot;
+use vtcode_core::utils::session_archive::{SessionListing, SessionSnapshot};
 
 #[derive(Clone, Debug)]
 pub struct ResumeSession {
@@ -18,6 +18,26 @@ pub struct ResumeSession {
 impl ResumeSession {
     pub fn message_count(&self) -> usize {
         self.history.len()
+    }
+
+    pub fn from_listing(listing: &SessionListing, is_fork: bool) -> Self {
+        let history_source = if !listing.snapshot.messages.is_empty() {
+            listing.snapshot.messages.iter()
+        } else if let Some(progress) = &listing.snapshot.progress {
+            progress.recent_messages.iter()
+        } else {
+            [].iter()
+        };
+
+        let history = history_source.map(ProviderMessage::from).collect();
+
+        Self {
+            identifier: listing.identifier(),
+            snapshot: listing.snapshot.clone(),
+            history,
+            path: listing.path.clone(),
+            is_fork,
+        }
     }
 }
 

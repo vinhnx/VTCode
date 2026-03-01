@@ -1,5 +1,5 @@
 use crate::config::constants::{defaults, tools as tool_names};
-use crate::llm::provider::{Message, MessageContent, MessageRole};
+use crate::llm::provider::{Message, MessageContent, MessageRole, ToolCall};
 use crate::telemetry::perf::PerfSpan;
 use crate::utils::dot_config::DotManager;
 use crate::utils::error_log_collector::ErrorLogEntry;
@@ -68,15 +68,23 @@ impl SessionArchiveMetadata {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SessionMessage {
     pub role: MessageRole,
     pub content: MessageContent,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reasoning: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reasoning_details: Option<Vec<serde_json::Value>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_calls: Option<Vec<ToolCall>>,
     #[serde(default)]
     pub tool_call_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub origin_tool: Option<String>,
 }
+
+impl Eq for SessionMessage {}
 
 impl SessionMessage {
     pub fn new(role: MessageRole, content: impl Into<String>) -> Self {
@@ -84,7 +92,10 @@ impl SessionMessage {
             role,
             content: MessageContent::Text(content.into()),
             reasoning: None,
+            reasoning_details: None,
+            tool_calls: None,
             tool_call_id: None,
+            origin_tool: None,
         }
     }
 
@@ -93,7 +104,10 @@ impl SessionMessage {
             role,
             content,
             reasoning: None,
+            reasoning_details: None,
+            tool_calls: None,
             tool_call_id: None,
+            origin_tool: None,
         }
     }
 
@@ -114,7 +128,10 @@ impl SessionMessage {
             role,
             content,
             reasoning: None,
+            reasoning_details: None,
+            tool_calls: None,
             tool_call_id,
+            origin_tool: None,
         }
     }
 }
@@ -125,7 +142,10 @@ impl From<&Message> for SessionMessage {
             role: message.role.clone(),
             content: message.content.clone(),
             reasoning: message.reasoning.clone(),
+            reasoning_details: message.reasoning_details.clone(),
+            tool_calls: message.tool_calls.clone(),
             tool_call_id: message.tool_call_id.clone(),
+            origin_tool: message.origin_tool.clone(),
         }
     }
 }
@@ -136,10 +156,10 @@ impl From<&SessionMessage> for Message {
             role: message.role.clone(),
             content: message.content.clone(),
             reasoning: message.reasoning.clone(),
-            reasoning_details: None,
-            tool_calls: None,
+            reasoning_details: message.reasoning_details.clone(),
+            tool_calls: message.tool_calls.clone(),
             tool_call_id: message.tool_call_id.clone(),
-            origin_tool: None,
+            origin_tool: message.origin_tool.clone(),
         }
     }
 }
@@ -987,7 +1007,7 @@ fn is_session_file(path: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::llm::provider::ContentPart;
+    use crate::llm::provider::{ContentPart, ToolCall};
     use anyhow::anyhow;
     use chrono::{TimeZone, Timelike};
     use std::time::Duration;
@@ -1071,6 +1091,30 @@ mod tests {
         assert_eq!(original.reasoning, stored.reasoning);
         assert_eq!(original.reasoning, restored.reasoning);
         assert_eq!(original.tool_call_id, restored.tool_call_id);
+    }
+
+    #[test]
+    fn session_message_preserves_tool_calls_reasoning_details_and_origin_tool() {
+        let mut original = Message::assistant("Calling a tool".to_owned());
+        original.reasoning_details = Some(vec![serde_json::json!({
+            "summary": "tool call planning"
+        })]);
+        original.tool_calls = Some(vec![ToolCall::function(
+            "call_1".to_string(),
+            "unified_exec".to_string(),
+            "{\"cmd\":\"cargo fmt\"}".to_string(),
+        )]);
+        original.origin_tool = Some("unified_exec".to_string());
+
+        let stored = SessionMessage::from(&original);
+        let restored = Message::from(&stored);
+
+        assert_eq!(stored.reasoning_details, original.reasoning_details);
+        assert_eq!(stored.tool_calls, original.tool_calls);
+        assert_eq!(stored.origin_tool, original.origin_tool);
+        assert_eq!(restored.reasoning_details, original.reasoning_details);
+        assert_eq!(restored.tool_calls, original.tool_calls);
+        assert_eq!(restored.origin_tool, original.origin_tool);
     }
 
     #[test]
