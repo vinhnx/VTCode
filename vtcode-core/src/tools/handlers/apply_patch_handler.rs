@@ -26,8 +26,8 @@ use crate::tools::editing::{Patch, PatchOperation};
 pub struct InterceptApplyPatchContext<'a> {
     pub cwd: &'a Path,
     pub timeout_ms: Option<u64>,
-    pub session: &'a dyn super::tool_handler::ToolSession,
-    pub turn: &'a super::tool_handler::TurnContext,
+    pub session: Arc<dyn super::tool_handler::ToolSession>,
+    pub turn: Arc<super::tool_handler::TurnContext>,
     pub tracker: Option<&'a Arc<tokio::sync::Mutex<super::tool_handler::DiffTracker>>>,
     pub call_id: &'a str,
     pub tool_name: &'a str,
@@ -97,7 +97,7 @@ impl ToolRuntime<ApplyPatchRequest, ExecToolCallOutput> for ApplyPatchRuntime {
         &mut self,
         req: &ApplyPatchRequest,
         _attempt: &SandboxAttempt<'_>,
-        _ctx: &ToolCtx<'_>,
+        _ctx: &ToolCtx,
     ) -> Result<ExecToolCallOutput, ToolError> {
         // Parse and apply the patch
         let patch = Patch::parse(&req.patch)
@@ -191,8 +191,8 @@ impl ToolHandler for ApplyPatchHandler {
         let mut orchestrator = ToolOrchestrator::new();
         let mut runtime = ApplyPatchRuntime::new();
         let tool_ctx = ToolCtx {
-            session: session.as_ref(),
-            turn: turn.as_ref(),
+            session: session.clone(),
+            turn: turn.clone(),
             call_id: call_id.clone(),
             tool_name: tool_name.clone(),
         };
@@ -347,7 +347,12 @@ pub async fn intercept_apply_patch(
 
     // Create emitter
     let emitter = ToolEmitter::apply_patch(changes.clone(), true);
-    let event_ctx = ToolEventCtx::new(ctx.session, ctx.turn, ctx.call_id, ctx.tracker);
+    let event_ctx = ToolEventCtx::new(
+        ctx.session.as_ref(),
+        ctx.turn.as_ref(),
+        ctx.call_id,
+        ctx.tracker,
+    );
     emitter.begin(event_ctx).await;
 
     // Execute
@@ -361,8 +366,8 @@ pub async fn intercept_apply_patch(
     let mut orchestrator = ToolOrchestrator::new();
     let mut runtime = ApplyPatchRuntime::new();
     let tool_ctx = ToolCtx {
-        session: ctx.session,
-        turn: ctx.turn,
+        session: ctx.session.clone(),
+        turn: ctx.turn.clone(),
         call_id: ctx.call_id.to_string(),
         tool_name: ctx.tool_name.to_string(),
     };
@@ -372,12 +377,17 @@ pub async fn intercept_apply_patch(
             &mut runtime,
             &req,
             &tool_ctx,
-            ctx.turn,
+            ctx.turn.as_ref(),
             ctx.turn.approval_policy,
         )
         .await;
 
-    let event_ctx = ToolEventCtx::new(ctx.session, ctx.turn, ctx.call_id, ctx.tracker);
+    let event_ctx = ToolEventCtx::new(
+        ctx.session.as_ref(),
+        ctx.turn.as_ref(),
+        ctx.call_id,
+        ctx.tracker,
+    );
     let content = emitter.finish(event_ctx, result).await?;
 
     Ok(Some(ToolOutput::Function {

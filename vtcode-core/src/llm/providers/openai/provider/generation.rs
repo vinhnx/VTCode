@@ -4,8 +4,8 @@ use super::super::errors::{
 };
 use super::super::headers;
 use super::super::types::ResponsesApiState;
-use super::websocket::is_websocket_connection_limit_error;
 use super::OpenAIProvider;
+use super::websocket::is_websocket_connection_limit_error;
 use crate::llm::error_display;
 use crate::llm::provider;
 use crate::llm::provider::LLMProvider;

@@ -180,12 +180,10 @@ impl OpenAIProvider {
                     format_provider_error(format!("Invalid OpenAI authorization header: {err}"))
                 })?,
             );
-            ws_request
-                .headers_mut()
-                .insert(
-                    "OpenAI-Beta",
-                    HeaderValue::from_static(OPENAI_BETA_RESPONSES_WEBSOCKET_V2),
-                );
+            ws_request.headers_mut().insert(
+                "OpenAI-Beta",
+                HeaderValue::from_static(OPENAI_BETA_RESPONSES_WEBSOCKET_V2),
+            );
             if let Some(metadata) = &request.metadata
                 && let Ok(metadata_str) = serde_json::to_string(metadata)
                 && let Ok(value) = HeaderValue::from_str(&metadata_str)
