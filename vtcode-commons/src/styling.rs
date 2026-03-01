@@ -194,8 +194,8 @@ impl DiffColorLevel {
 // ── Truecolor palette (WCAG AA compliant) ──────────────────────────────────
 
 // Dark theme: darker backgrounds with sufficient contrast for white/light text
-const DARK_TC_ADD_LINE_BG: (u8, u8, u8) = (20, 40, 20); // #142814 - Dark green
-const DARK_TC_DEL_LINE_BG: (u8, u8, u8) = (48, 16, 16); // #301010 - Dark red
+const DARK_TC_ADD_LINE_BG: (u8, u8, u8) = (34, 58, 43); // #223a2b - Dark green
+const DARK_TC_DEL_LINE_BG: (u8, u8, u8) = (166, 51, 51); // #A63333 - Dark red
 
 // Light theme: light backgrounds with sufficient contrast for dark text
 // GitHub-inspired but adjusted for better contrast
