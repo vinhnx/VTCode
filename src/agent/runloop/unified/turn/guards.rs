@@ -215,6 +215,18 @@ pub(crate) async fn run_proactive_guards(
 /// Check if a tool signature represents a read-only operation
 /// Signature format: "tool_name:args_json" where args_json is serialized Value
 fn is_readonly_signature(signature: &str) -> bool {
+    if let Some(first_colon) = signature.find(':')
+        && let Some(second_colon_rel) = signature[first_colon + 1..].find(':')
+    {
+        let tag_start = first_colon + 1;
+        let tag_end = tag_start + second_colon_rel;
+        match &signature[tag_start..tag_end] {
+            "ro" => return true,
+            "rw" => return false,
+            _ => {}
+        }
+    }
+
     // Prefer `:{` / `:[` separators so tool names containing `::` don't break parsing.
     let colon_pos = signature
         .find(":{")
@@ -426,6 +438,16 @@ mod tests {
         assert!(!is_readonly_signature(
             r#"unified_exec:{"action":"run","command":"cargo check"}"#
         ));
+    }
+
+    #[test]
+    fn readonly_signature_fast_path_accepts_ro_tag() {
+        assert!(is_readonly_signature("unified_search:ro:len42-fnv1234abcd"));
+    }
+
+    #[test]
+    fn readonly_signature_fast_path_rejects_rw_tag() {
+        assert!(!is_readonly_signature("unified_file:rw:len42-fnv1234abcd"));
     }
 
     #[test]

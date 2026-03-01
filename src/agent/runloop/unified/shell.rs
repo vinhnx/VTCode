@@ -27,6 +27,15 @@ const RUN_COMMAND_PREFIX_WRAPPERS: [&str; 9] = [
 pub(crate) fn detect_explicit_run_command(input: &str) -> Option<(String, serde_json::Value)> {
     let trimmed = input.trim();
 
+    if let Some(command) = detect_show_diff_command(trimmed) {
+        return Some((
+            tools::RUN_PTY_CMD.to_string(),
+            json!({
+                "command": command
+            }),
+        ));
+    }
+
     // Check for "run " prefix (case-insensitive)
     let lower = trimmed.to_lowercase();
     if !lower.starts_with("run ") {
@@ -61,6 +70,45 @@ pub(crate) fn detect_explicit_run_command(input: &str) -> Option<(String, serde_
     });
 
     Some((tools::RUN_PTY_CMD.to_string(), args))
+}
+
+fn detect_show_diff_command(input: &str) -> Option<String> {
+    let trimmed = input.trim();
+    let lower = trimmed.to_ascii_lowercase();
+    if !lower.starts_with("show diff ") {
+        return None;
+    }
+
+    let target = trimmed[10..].trim();
+    if target.is_empty() {
+        return None;
+    }
+
+    let target = normalize_show_diff_target(target);
+    if target.is_empty() {
+        return None;
+    }
+
+    // Use -- to force path interpretation and avoid accidental rev parsing.
+    Some(format!("git diff -- {}", target))
+}
+
+fn normalize_show_diff_target(target: &str) -> &str {
+    let mut normalized = target.trim();
+    loop {
+        let previous = normalized;
+        normalized = normalized.trim();
+        normalized = normalized.strip_prefix('"').unwrap_or(normalized);
+        normalized = normalized.strip_suffix('"').unwrap_or(normalized);
+        normalized = normalized.strip_prefix('\'').unwrap_or(normalized);
+        normalized = normalized.strip_suffix('\'').unwrap_or(normalized);
+        normalized = normalized
+            .trim_end_matches(['.', ',', ';', '!', '?'])
+            .trim();
+        if normalized == previous {
+            return normalized;
+        }
+    }
 }
 
 fn normalize_natural_language_command(command_part: &str) -> String {
@@ -458,6 +506,31 @@ mod tests {
         assert!(detect_explicit_run_command("ls -a").is_none());
         assert!(detect_explicit_run_command("please run ls").is_none());
         assert!(detect_explicit_run_command("can you run git status").is_none());
+    }
+
+    #[test]
+    fn test_detect_show_diff_direct_command() {
+        let result = detect_explicit_run_command("show diff src/main.rs");
+        assert!(result.is_some());
+        let (tool_name, args) = result.expect("direct command expected");
+        assert_eq!(tool_name, "run_pty_cmd");
+        assert_eq!(args["command"], "git diff -- src/main.rs");
+    }
+
+    #[test]
+    fn test_detect_show_diff_trims_quotes_and_punctuation() {
+        let result = detect_explicit_run_command("show diff \"src/main.rs\".");
+        assert!(result.is_some());
+        let (_, args) = result.expect("direct command expected");
+        assert_eq!(args["command"], "git diff -- src/main.rs");
+    }
+
+    #[test]
+    fn test_detect_show_diff_allows_dot_prefixed_paths() {
+        let result = detect_explicit_run_command("show diff .vtcode/tool-policy.json");
+        assert!(result.is_some());
+        let (_, args) = result.expect("direct command expected");
+        assert_eq!(args["command"], "git diff -- .vtcode/tool-policy.json");
     }
 
     #[test]

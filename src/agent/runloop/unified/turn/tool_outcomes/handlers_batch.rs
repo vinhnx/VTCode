@@ -1,5 +1,6 @@
 use anyhow::Result;
 use futures::stream::{FuturesUnordered, StreamExt};
+use std::sync::Arc;
 use vtcode_core::config::constants::tools;
 use vtcode_core::llm::provider as uni;
 
@@ -15,7 +16,7 @@ use crate::agent::runloop::unified::turn::tool_outcomes::helpers::{
 
 pub(crate) struct ParsedToolCall<'a> {
     pub tool_call: &'a uni::ToolCall,
-    pub args: serde_json::Value,
+    pub args: Arc<serde_json::Value>,
 }
 
 fn can_parallelize_batch_tool_call(prepared: &PreparedToolCall) -> bool {
@@ -62,7 +63,10 @@ pub(crate) async fn handle_tool_call_batch<'a, 'b>(
                 continue;
             }
         };
-        parsed_calls.push(ParsedToolCall { tool_call, args });
+        parsed_calls.push(ParsedToolCall {
+            tool_call,
+            args: Arc::new(args),
+        });
     }
 
     handle_tool_call_batch_parsed(t_ctx, parsed_calls).await

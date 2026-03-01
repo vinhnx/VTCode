@@ -121,6 +121,12 @@ pub(crate) fn signature_key_for(name: &str, args: &serde_json::Value) -> String 
     // allocating full JSON payloads for large tool arguments.
     let mut hash: u64 = 0xcbf29ce484222325;
     let mut input_len = 0usize;
+    let mutability_tag =
+        if vtcode_core::tools::tool_intent::classify_tool_intent(name, args).mutating {
+            "rw"
+        } else {
+            "ro"
+        };
 
     if serde_json::to_writer(HashingWriter::new(&mut hash, &mut input_len), args).is_err() {
         for byte in b"{}" {
@@ -130,7 +136,7 @@ pub(crate) fn signature_key_for(name: &str, args: &serde_json::Value) -> String 
         }
     }
 
-    format!("{name}:len{input_len}-fnv{hash:016x}")
+    format!("{name}:{mutability_tag}:len{input_len}-fnv{hash:016x}")
 }
 
 struct HashingWriter<'a> {

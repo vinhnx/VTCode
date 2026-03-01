@@ -3,6 +3,7 @@ use anyhow::Result;
 use call::{handle_preparsed_tool_call, handle_tool_call, push_invalid_tool_args_response};
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Instant;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::tools::parallel_executor::ParallelExecutionPlanner;
 
@@ -16,12 +17,13 @@ pub(crate) async fn handle_tool_calls<'a, 'b>(
         return Ok(None);
     }
 
-    let mut calls_by_id: HashMap<String, (&uni::ToolCall, String, serde_json::Value)> =
+    let mut calls_by_id: HashMap<String, (&uni::ToolCall, String, Arc<serde_json::Value>)> =
         HashMap::with_capacity(tool_calls.len());
 
     // HP-4: Use ParallelExecutionPlanner to group independent tool calls
     let planner = ParallelExecutionPlanner::new();
     let mut planner_calls = Vec::with_capacity(tool_calls.len());
+    let planning_started = Instant::now();
     for tc in tool_calls {
         let Some(function) = tc.function.as_ref() else {
             continue;
@@ -39,8 +41,9 @@ pub(crate) async fn handle_tool_calls<'a, 'b>(
                 continue;
             }
         };
+        let parsed_args = Arc::new(parsed_args);
 
-        planner_calls.push((name.clone(), Arc::new(parsed_args.clone()), tc.id.clone()));
+        planner_calls.push((name.clone(), Arc::clone(&parsed_args), tc.id.clone()));
         calls_by_id.insert(tc.id.clone(), (tc, name, parsed_args));
     }
 
@@ -49,6 +52,19 @@ pub(crate) async fn handle_tool_calls<'a, 'b>(
     }
 
     let groups = planner.plan(&planner_calls);
+    let total_grouped_calls: usize = groups.iter().map(|group| group.len()).sum();
+    let max_group_size = groups.iter().map(|group| group.len()).max().unwrap_or(0);
+    let parallel_group_count = groups.iter().filter(|group| group.len() > 1).count();
+    tracing::debug!(
+        target: "vtcode.turn.metrics",
+        metric = "tool_dispatch_plan",
+        groups = groups.len(),
+        total_calls = total_grouped_calls,
+        max_group_size,
+        parallel_groups = parallel_group_count,
+        planning_ms = planning_started.elapsed().as_millis(),
+        "turn metric"
+    );
 
     for group in groups {
         let is_parallel = group.len() > 1 && t_ctx.ctx.full_auto;
@@ -59,8 +75,13 @@ pub(crate) async fn handle_tool_calls<'a, 'b>(
             if !all_parallel_safe {
                 for (_, _, call_id) in &group.tool_calls {
                     if let Some((tc, name, args)) = calls_by_id.remove(call_id) {
-                        let outcome =
-                            handle_preparsed_tool_call(t_ctx, tc.id.clone(), &name, args).await?;
+                        let outcome = handle_preparsed_tool_call(
+                            t_ctx,
+                            tc.id.clone(),
+                            &name,
+                            (*args).clone(),
+                        )
+                        .await?;
                         if let Some(o) = outcome {
                             return Ok(Some(o));
                         }
@@ -89,7 +110,8 @@ pub(crate) async fn handle_tool_calls<'a, 'b>(
             for (_, _, call_id) in &group.tool_calls {
                 if let Some((tc, name, args)) = calls_by_id.remove(call_id) {
                     let outcome =
-                        handle_preparsed_tool_call(t_ctx, tc.id.clone(), &name, args).await?;
+                        handle_preparsed_tool_call(t_ctx, tc.id.clone(), &name, (*args).clone())
+                            .await?;
                     if let Some(o) = outcome {
                         return Ok(Some(o));
                     }

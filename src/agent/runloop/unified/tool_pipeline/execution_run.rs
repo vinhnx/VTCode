@@ -6,6 +6,7 @@ use tokio::sync::Notify;
 use vtcode_core::config::constants::tools;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::exec::events::CommandExecutionStatus;
+use vtcode_core::tools::ToolInvocationId;
 
 use crate::agent::runloop::git::confirm_changes_with_git_diff;
 use crate::agent::runloop::unified::inline_events::harness::{
@@ -118,9 +119,17 @@ pub(crate) async fn run_tool_call_with_args(
         }
 
         if let Some(safety_validator) = ctx.safety_validator {
+            let safety_invocation_id =
+                ToolInvocationId::parse(&tool_item_id).unwrap_or_else(|_| ToolInvocationId::new());
             let validation = {
                 let mut validator = safety_validator.write().await;
-                validator.validate_call(&canonical_name, args_val).await
+                validator
+                    .validate_call_with_invocation_id(
+                        &canonical_name,
+                        args_val,
+                        safety_invocation_id,
+                    )
+                    .await
             };
             if let Err(err) = validation {
                 return Ok(ToolPipelineOutcome::from_status(
