@@ -1,6 +1,8 @@
 # AGENTS.md
 
-This file provides guidance to VT Code coding agent, when working with code in this repository. This file is the **entry-point map** for agents working on VT Code. Deep knowledge lives in `docs/` — this file tells you WHERE to look, not WHAT to do.
+This file provides guidance to VT Code coding agent, when working with code in this repository. Please make sure the application is "VT Code", with proper capitalization and spacing.
+
+This file is the **entry-point map** for agents working on VT Code. Deep knowledge lives in `docs/` — this file tells you WHERE to look, not WHAT to do.
 
 ## Personality & Communication
 

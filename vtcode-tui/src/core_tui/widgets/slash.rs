@@ -188,6 +188,7 @@ mod tests {
     use super::*;
     use crate::ui::tui::InlineTheme;
     use crate::ui::tui::types::SlashCommandItem;
+    use insta::assert_snapshot;
     use ratatui::Terminal;
     use ratatui::backend::TestBackend;
 
@@ -235,8 +236,7 @@ mod tests {
             })
             .unwrap();
 
-        // Should render without panicking even with empty palette
-        assert!(true);
+        assert_snapshot!(terminal.backend());
     }
 
     #[test]
@@ -259,7 +259,6 @@ mod tests {
             })
             .unwrap();
 
-        // Should render without panicking with suggestions
-        assert!(true);
+        assert_snapshot!(terminal.backend());
     }
 }
