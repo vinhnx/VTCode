@@ -139,8 +139,8 @@ mod tests {
         let evaluator = UnifiedCommandEvaluator::new();
         let safe_commands = vec![
             vec!["cargo", "build"],
-            vec!["cargo", "test"],
             vec!["cargo", "check"],
+            vec!["cargo", "clippy"],
         ];
 
         for cmd in safe_commands {
@@ -158,7 +158,7 @@ mod tests {
         let cmd = vec![
             "bash".to_string(),
             "-lc".to_string(),
-            "git status && cargo test".to_string(),
+            "git status && cargo check".to_string(),
         ];
         let result = evaluator.evaluate(&cmd).await.unwrap();
         assert!(
@@ -407,7 +407,7 @@ mod tests {
         let cmd = vec![
             "bash".to_string(),
             "-lc".to_string(),
-            "git status && cargo test".to_string(),
+            "git status && cargo check".to_string(),
         ];
 
         // Simulate policy that allows (safe commands should pass)
@@ -462,7 +462,7 @@ mod tests {
             vec!["git", "status"],
             vec!["git", "log"],
             vec!["cargo", "build"],
-            vec!["cargo", "test"],
+            vec!["cargo", "check"],
             vec!["ls"],
             vec!["find", "."],
         ];

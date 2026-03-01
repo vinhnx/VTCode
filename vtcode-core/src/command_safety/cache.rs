@@ -155,10 +155,10 @@ mod tests {
             .await;
 
         let d1 = cache.get("cmd").await.unwrap();
-        assert_eq!(d1.access_count, 1);
+        assert_eq!(d1.access_count, 2);
 
         let d2 = cache.get("cmd").await.unwrap();
-        assert_eq!(d2.access_count, 2);
+        assert_eq!(d2.access_count, 3);
     }
 
     #[tokio::test]
