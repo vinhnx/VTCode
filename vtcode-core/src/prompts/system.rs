@@ -1009,7 +1009,7 @@ mod tests {
             "Specialized should have substantial content"
         );
         // The word "specialized" may not appear in the prompt text
-        assert!(result.len() > 0, "Should produce non-empty prompt");
+        assert!(!result.is_empty(), "Should produce non-empty prompt");
     }
 
     #[test]

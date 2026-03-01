@@ -1200,8 +1200,8 @@ impl LLMClient for OllamaProvider {
 mod tests {
     use super::*;
     use crate::llm::provider::{ContentPart, Message, MessageContent};
-    use wiremock::matchers::{method, path};
-    use wiremock::{Mock, MockServer, ResponseTemplate};
+    
+    
 
     fn test_provider() -> OllamaProvider {
         OllamaProvider::from_config(

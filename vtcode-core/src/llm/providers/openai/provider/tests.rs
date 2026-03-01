@@ -21,7 +21,7 @@ fn sample_tool() -> provider::ToolDefinition {
 fn sample_request(model: &str) -> provider::LLMRequest {
     provider::LLMRequest {
         messages: vec![provider::Message::user("Hello".to_owned())],
-        tools: Some(std::sync::Arc::new(vec![sample_tool()])),
+        tools: Some(Arc::new(vec![sample_tool()])),
         model: model.to_string(),
         ..Default::default()
     }
@@ -214,7 +214,7 @@ fn responses_tools_dedupes_apply_patch_and_function() {
 fn responses_payload_sets_instructions_from_system_prompt() {
     let provider = OpenAIProvider::with_model(String::new(), models::openai::GPT_5.to_string());
     let mut request = sample_request(models::openai::GPT_5);
-    request.system_prompt = Some(std::sync::Arc::new(
+    request.system_prompt = Some(Arc::new(
         "You are a helpful assistant.".to_owned(),
     ));
 
@@ -487,7 +487,7 @@ fn provider_from_config_respects_websocket_mode_opt_in() {
         None,
         None,
         None,
-        Some(crate::config::core::OpenAIConfig {
+        Some(OpenAIConfig {
             websocket_mode: true,
         }),
         None,
@@ -619,9 +619,8 @@ mod streaming_tests {
 
         for &model in &test_models {
             let provider = OpenAIProvider::with_model("test-key".to_owned(), model.to_owned());
-            assert_eq!(
-                provider.supports_streaming(),
-                false,
+            assert!(
+                !provider.supports_streaming(),
                 "Model {} should not support streaming",
                 model
             );
@@ -658,7 +657,7 @@ mod caching_tests {
         // Must use an exact model name from RESPONSES_API_MODELS
         let request = provider::LLMRequest {
             messages: vec![provider::Message::user("Hello".to_string())],
-            model: crate::config::constants::models::openai::GPT_5_3_CODEX.to_string(),
+            model: models::openai::GPT_5_3_CODEX.to_string(),
             ..Default::default()
         };
 

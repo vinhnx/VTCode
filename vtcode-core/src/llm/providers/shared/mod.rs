@@ -533,7 +533,7 @@ mod tests {
 
     #[test]
     fn append_text_with_reasoning_tracks_segments() {
-        let telemetry = NoopStreamTelemetry::default();
+        let telemetry = NoopStreamTelemetry;
         let mut aggregated = String::new();
         let mut reasoning = ReasoningBuffer::default();
         let mut delta = StreamDelta::default();
@@ -553,7 +553,7 @@ mod tests {
 
     #[test]
     fn apply_tool_call_delta_updates_builder() {
-        let telemetry = NoopStreamTelemetry::default();
+        let telemetry = NoopStreamTelemetry;
         let mut builders = Vec::new();
         let container = json!({
             "index": 0,
@@ -573,7 +573,7 @@ mod tests {
 
     #[test]
     fn apply_tool_call_delta_uses_outer_index_for_nested_delta() {
-        let telemetry = NoopStreamTelemetry::default();
+        let telemetry = NoopStreamTelemetry;
         let mut builders = Vec::new();
         let container = json!({
             "delta": {

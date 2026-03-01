@@ -362,7 +362,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_spawn_process_echo() -> anyhow::Result<()> {
+    async fn test_spawn_process_echo() -> Result<()> {
         let Some((program, mut base_args)) = find_echo_command() else {
             return Ok(());
         };

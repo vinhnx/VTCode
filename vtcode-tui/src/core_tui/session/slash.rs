@@ -418,32 +418,6 @@ fn should_submit_immediately_from_palette(session: &Session) -> bool {
     )
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::ui::tui::InlineTheme;
-
-    #[test]
-    fn immediate_submit_matcher_accepts_immediate_commands() {
-        let mut session = Session::new(InlineTheme::default(), None, 20);
-        session.set_input("/files".to_string());
-        assert!(should_submit_immediately_from_palette(&session));
-
-        session.set_input("   /status   ".to_string());
-        assert!(should_submit_immediately_from_palette(&session));
-    }
-
-    #[test]
-    fn immediate_submit_matcher_rejects_argument_driven_commands() {
-        let mut session = Session::new(InlineTheme::default(), None, 20);
-        session.set_input("/command echo hello".to_string());
-        assert!(!should_submit_immediately_from_palette(&session));
-
-        session.set_input("/add-dir ~/tmp".to_string());
-        assert!(!should_submit_immediately_from_palette(&session));
-    }
-}
-
 fn slash_list_items(session: &Session) -> Vec<ListItem<'static>> {
     session
         .slash_palette
@@ -481,4 +455,30 @@ fn slash_name_style(session: &Session) -> Style {
 
 fn slash_description_style(session: &Session) -> Style {
     session.styles.default_style().add_modifier(Modifier::DIM)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ui::tui::InlineTheme;
+
+    #[test]
+    fn immediate_submit_matcher_accepts_immediate_commands() {
+        let mut session = Session::new(InlineTheme::default(), None, 20);
+        session.set_input("/files".to_string());
+        assert!(should_submit_immediately_from_palette(&session));
+
+        session.set_input("   /status   ".to_string());
+        assert!(should_submit_immediately_from_palette(&session));
+    }
+
+    #[test]
+    fn immediate_submit_matcher_rejects_argument_driven_commands() {
+        let mut session = Session::new(InlineTheme::default(), None, 20);
+        session.set_input("/command echo hello".to_string());
+        assert!(!should_submit_immediately_from_palette(&session));
+
+        session.set_input("/add-dir ~/tmp".to_string());
+        assert!(!should_submit_immediately_from_palette(&session));
+    }
 }

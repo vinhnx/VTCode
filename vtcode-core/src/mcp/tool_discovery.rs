@@ -290,20 +290,20 @@ mod tests {
 
     #[test]
     fn fuzzy_score_exact_match() {
-        let discovery = ToolDiscovery::new(Arc::new(MockMcpClient::default()));
+        let discovery = ToolDiscovery::new(Arc::new(MockMcpClient));
         assert_eq!(discovery.fuzzy_score("read_file", "read_file"), 1.0);
     }
 
     #[test]
     fn fuzzy_score_partial_match() {
-        let discovery = ToolDiscovery::new(Arc::new(MockMcpClient::default()));
+        let discovery = ToolDiscovery::new(Arc::new(MockMcpClient));
         let score = discovery.fuzzy_score("read_file_contents", "read");
         assert!(score > 0.5 && score <= 1.0);
     }
 
     #[test]
     fn fuzzy_score_no_match() {
-        let discovery = ToolDiscovery::new(Arc::new(MockMcpClient::default()));
+        let discovery = ToolDiscovery::new(Arc::new(MockMcpClient));
         assert_eq!(discovery.fuzzy_score("read_file", "xyz"), 0.0);
     }
 

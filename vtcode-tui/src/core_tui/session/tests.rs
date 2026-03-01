@@ -24,7 +24,7 @@ const EXTRA_SEGMENT: &str = "\nextra-line";
 fn make_segment(text: &str) -> InlineSegment {
     InlineSegment {
         text: text.to_string(),
-        style: std::sync::Arc::new(InlineTextStyle::default()),
+        style: Arc::new(InlineTextStyle::default()),
     }
 }
 
@@ -712,7 +712,7 @@ fn control_g_launches_editor_from_plan_confirmation_modal() {
         "## Plan of Work\n- Step 1",
         Some(".vtcode/plans/test-plan.md".to_string()),
     );
-    crate::ui::tui::session::command::show_plan_confirmation_modal(&mut session, plan);
+    command::show_plan_confirmation_modal(&mut session, plan);
 
     let event = KeyEvent::new(KeyCode::Char('g'), KeyModifiers::CONTROL);
     let result = session.process_key(event);
@@ -1036,7 +1036,7 @@ fn scroll_end_displays_full_final_paragraph() {
         "expected final paragraph tail `{expected_tail}` to appear, got {view:?}"
     );
     assert!(
-        view.last().map_or(false, |line| !line.is_empty()),
+        view.last().is_some_and(|line| !line.is_empty()),
         "expected transcript to end with content, got {view:?}"
     );
 }
@@ -1359,7 +1359,7 @@ fn tool_code_fence_markers_are_skipped() {
         InlineMessageKind::Tool,
         InlineSegment {
             text: "```rust\nfn demo() {}\n```".to_string(),
-            style: std::sync::Arc::new(InlineTextStyle::default()),
+            style: Arc::new(InlineTextStyle::default()),
         },
     );
 
@@ -1401,7 +1401,7 @@ fn pty_block_hides_until_output_available() {
         InlineMessageKind::Pty,
         vec![InlineSegment {
             text: "first output".to_string(),
-            style: std::sync::Arc::new(InlineTextStyle::default()),
+            style: Arc::new(InlineTextStyle::default()),
         }],
     );
 
@@ -1431,7 +1431,7 @@ fn pty_wrapped_lines_keep_hanging_left_padding() {
         InlineMessageKind::Pty,
         vec![InlineSegment {
             text: "  └ this PTY output line wraps on narrow widths".to_string(),
-            style: std::sync::Arc::new(InlineTextStyle::default()),
+            style: Arc::new(InlineTextStyle::default()),
         }],
     );
 
@@ -1459,7 +1459,7 @@ fn pty_wrapped_lines_do_not_exceed_viewport_width() {
         InlineMessageKind::Pty,
         vec![InlineSegment {
             text: "  └ this PTY output line wraps on narrow widths".to_string(),
-            style: std::sync::Arc::new(InlineTextStyle::default()),
+            style: Arc::new(InlineTextStyle::default()),
         }],
     );
 
@@ -1483,7 +1483,7 @@ fn tool_diff_numbered_lines_keep_hanging_indent_when_wrapped() {
             text:
                 "459 + let digits_len = digits.chars().take_while(|c| c.is_ascii_digit()).count();"
                     .to_string(),
-            style: std::sync::Arc::new(InlineTextStyle::default()),
+            style: Arc::new(InlineTextStyle::default()),
         }],
     );
 
@@ -1514,7 +1514,7 @@ fn pty_lines_use_subdued_foreground() {
         InlineMessageKind::Pty,
         vec![InlineSegment {
             text: "plain pty output".to_string(),
-            style: std::sync::Arc::new(InlineTextStyle::default()),
+            style: Arc::new(InlineTextStyle::default()),
         }],
     );
 
@@ -1562,7 +1562,7 @@ fn pty_scroll_preserves_order() {
             InlineMessageKind::Pty,
             vec![InlineSegment {
                 text: label,
-                style: std::sync::Arc::new(InlineTextStyle::default()),
+                style: Arc::new(InlineTextStyle::default()),
             }],
         );
     }
@@ -1726,7 +1726,7 @@ fn tool_detail_renders_with_border_and_body_style() {
         InlineMessageKind::Tool,
         vec![InlineSegment {
             text: "    result line".to_string(),
-            style: std::sync::Arc::new(detail_style),
+            style: Arc::new(detail_style),
         }],
     );
 
@@ -1762,7 +1762,7 @@ fn streaming_state_set_on_agent_append_line() {
         kind: InlineMessageKind::Agent,
         segments: vec![InlineSegment {
             text: "Hello".to_string(),
-            style: std::sync::Arc::new(InlineTextStyle::default()),
+            style: Arc::new(InlineTextStyle::default()),
         }],
     });
 
@@ -1778,7 +1778,7 @@ fn streaming_state_set_on_agent_inline() {
         kind: InlineMessageKind::Agent,
         segment: InlineSegment {
             text: "Hello".to_string(),
-            style: std::sync::Arc::new(InlineTextStyle::default()),
+            style: Arc::new(InlineTextStyle::default()),
         },
     });
 
@@ -1794,7 +1794,7 @@ fn streaming_state_cleared_on_turn_completion() {
         kind: InlineMessageKind::Agent,
         segments: vec![InlineSegment {
             text: "Hello".to_string(),
-            style: std::sync::Arc::new(InlineTextStyle::default()),
+            style: Arc::new(InlineTextStyle::default()),
         }],
     });
     assert!(session.is_streaming_final_answer);
@@ -1817,7 +1817,7 @@ fn streaming_state_not_cleared_on_status_update_with_content() {
         kind: InlineMessageKind::Agent,
         segments: vec![InlineSegment {
             text: "Hello".to_string(),
-            style: std::sync::Arc::new(InlineTextStyle::default()),
+            style: Arc::new(InlineTextStyle::default()),
         }],
     });
     assert!(session.is_streaming_final_answer);
@@ -1839,7 +1839,7 @@ fn non_agent_messages_dont_trigger_streaming_state() {
         kind: InlineMessageKind::User,
         segments: vec![InlineSegment {
             text: "Hello".to_string(),
-            style: std::sync::Arc::new(InlineTextStyle::default()),
+            style: Arc::new(InlineTextStyle::default()),
         }],
     });
 

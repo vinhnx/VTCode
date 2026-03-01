@@ -333,7 +333,7 @@ mod tests {
     async fn rejects_non_directory_workspace() {
         let temp_dir = tempfile::tempdir().expect("temp dir");
         let file_path = temp_dir.path().join("not_dir");
-        std::fs::write(&file_path, "not a dir").expect("write file");
+        fs::write(&file_path, "not a dir").expect("write file");
 
         let agent_config = AgentConfig {
             workspace: file_path.clone(),
@@ -344,7 +344,7 @@ mod tests {
         assert!(result.is_err(), "expected workspace validation to fail");
     }
 
-    fn sample_config(workspace: &std::path::Path) -> AgentConfig {
+    fn sample_config(workspace: &Path) -> AgentConfig {
         AgentConfig {
             model: models::google::GEMINI_3_FLASH_PREVIEW.to_string(),
             api_key: "test-api-key".to_owned(),

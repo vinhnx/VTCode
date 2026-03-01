@@ -384,7 +384,7 @@ mod tests {
             meta: None,
         };
 
-        let converted: rmcp::model::InitializeRequestParams =
+        let converted: InitializeRequestParams =
             convert_to_rmcp(params.clone()).unwrap();
         // Verify the conversion succeeded by checking the name
         assert_eq!(converted.client_info.name, "vtcode");

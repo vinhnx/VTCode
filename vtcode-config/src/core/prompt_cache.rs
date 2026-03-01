@@ -578,15 +578,15 @@ mod tests {
     fn parse_retention_duration_valid_and_invalid() {
         assert_eq!(
             parse_retention_duration("24h").unwrap(),
-            std::time::Duration::from_secs(86400)
+            Duration::from_secs(86400)
         );
         assert_eq!(
             parse_retention_duration("5m").unwrap(),
-            std::time::Duration::from_secs(300)
+            Duration::from_secs(300)
         );
         assert_eq!(
             parse_retention_duration("1s").unwrap(),
-            std::time::Duration::from_secs(1)
+            Duration::from_secs(1)
         );
         assert!(parse_retention_duration("0s").is_err());
         assert!(parse_retention_duration("31d").is_err());

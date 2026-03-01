@@ -645,7 +645,7 @@ mod tests {
     use tempfile::TempDir;
 
     #[test]
-    fn test_validate_skill_name() -> anyhow::Result<()> {
+    fn test_validate_skill_name() -> Result<()> {
         let tmp = TempDir::new().map_err(|e| {
             // Convert TempDir error into a test failure with context
             eprintln!("Failed to create TempDir: {e}");
@@ -693,7 +693,7 @@ mod tests {
     }
 
     #[test]
-    fn test_title_case_skill_name() -> anyhow::Result<()> {
+    fn test_title_case_skill_name() -> Result<()> {
         let tmp = TempDir::new().map_err(|e| {
             eprintln!("Failed to create TempDir: {e}");
             e
@@ -708,7 +708,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_create_skill() -> anyhow::Result<()> {
+    async fn test_create_skill() -> Result<()> {
         let tmp = TempDir::new().map_err(|e| {
             // Provide context on TempDir failure
             eprintln!("Failed to create TempDir: {e}");

@@ -750,7 +750,7 @@ mod tests {
     #[tokio::test]
     async fn test_parse_raw_narrow_no_break_space_image_path() {
         let temp_dir = TempDir::new().unwrap();
-        let image_path = temp_dir.path().join(format!("narrow\u{202F}space.png"));
+        let image_path = temp_dir.path().join("narrow\u{202F}space.png".to_string());
 
         let mut temp_file = std::io::BufWriter::new(std::fs::File::create(&image_path).unwrap());
         temp_file
@@ -857,11 +857,8 @@ mod tests {
 
         // For URL tests, we expect the result to be text (since mock server isn't available)
         // In real usage with a valid URL, it would return multi-part content with image
-        match result {
-            MessageContent::Text(text) => {
-                assert!(text.contains("@https://example.com/image.png"));
-            }
-            _ => {}
+        if let MessageContent::Text(text) = result {
+            assert!(text.contains("@https://example.com/image.png"));
         }
     }
 

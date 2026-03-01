@@ -12,30 +12,26 @@ fn main() {
 
     // Test bold styles
     println!(
-        "{}{}{}",
+        "{}This is bold text{}",
         Styles::bold().render(),
-        "This is bold text",
         Styles::bold().render_reset()
     );
     println!(
-        "{}{}{}",
+        "{}This is bold error text{}",
         Styles::bold_error().render(),
-        "This is bold error text",
         Styles::bold_error().render_reset()
     );
     println!(
-        "{}{}{}",
+        "{}This is bold success text{}",
         Styles::bold_success().render(),
-        "This is bold success text",
         Styles::bold_success().render_reset()
     );
 
     // Test custom styling
     let custom_style = Styles::header();
     println!(
-        "{}{}{}",
+        "{}This is custom styled text{}",
         custom_style.render(),
-        "This is custom styled text",
         custom_style.render_reset()
     );
 

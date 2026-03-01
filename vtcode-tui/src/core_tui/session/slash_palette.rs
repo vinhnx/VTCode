@@ -574,7 +574,7 @@ mod tests {
             .find(|item| {
                 item.command
                     .as_ref()
-                    .map_or(false, |cmd| cmd.name == "command")
+                    .is_some_and(|cmd| cmd.name == "command")
             })
             .expect("command suggestion available");
 

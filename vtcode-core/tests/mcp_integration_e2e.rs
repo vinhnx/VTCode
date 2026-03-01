@@ -15,6 +15,63 @@ use vtcode_core::config::mcp::{
 use vtcode_core::mcp::McpClient;
 use vtcode_core::tools::registry::ToolRegistry;
 
+/// Check if the time MCP server is available for testing
+async fn is_time_server_available() -> bool {
+    match Command::new("uvx").arg("--help").output().await {
+        Ok(_) => {
+            // Try to check if mcp-server-time is available
+            match Command::new("uvx")
+                .arg("mcp-server-time")
+                .arg("--help")
+                .output()
+                .await
+            {
+                Ok(output) => output.status.success(),
+                Err(_) => false,
+            }
+        }
+        Err(_) => false,
+    }
+}
+
+async fn is_python_available() -> bool {
+    match Command::new("python3").arg("--version").output().await {
+        Ok(output) => output.status.success(),
+        Err(_) => false,
+    }
+}
+
+fn mock_mcp_server_path() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("fixtures")
+        .join("mock_mcp_server.py")
+}
+
+fn build_mock_mcp_config(script_path: &std::path::Path) -> McpClientConfig {
+    let mut mcp_config = McpClientConfig {
+        enabled: true,
+        startup_timeout_seconds: Some(5),
+        tool_timeout_seconds: Some(5),
+        ..Default::default()
+    };
+
+    mcp_config.providers = vec![McpProviderConfig {
+        name: "mock".to_string(),
+        transport: McpTransportConfig::Stdio(McpStdioServerConfig {
+            command: "python3".to_string(),
+            args: vec![script_path.to_string_lossy().to_string()],
+            working_directory: None,
+        }),
+        env: HashMap::new(),
+        enabled: true,
+        max_concurrent_requests: 1,
+        startup_timeout_ms: Some(5_000),
+    }];
+
+    mcp_config
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -463,61 +520,4 @@ max_concurrent_requests = 1
         assert_eq!(compact_config.max_events, 25);
         assert_eq!(full_config.max_events, 100);
     }
-}
-
-/// Check if the time MCP server is available for testing
-async fn is_time_server_available() -> bool {
-    match Command::new("uvx").arg("--help").output().await {
-        Ok(_) => {
-            // Try to check if mcp-server-time is available
-            match Command::new("uvx")
-                .arg("mcp-server-time")
-                .arg("--help")
-                .output()
-                .await
-            {
-                Ok(output) => output.status.success(),
-                Err(_) => false,
-            }
-        }
-        Err(_) => false,
-    }
-}
-
-async fn is_python_available() -> bool {
-    match Command::new("python3").arg("--version").output().await {
-        Ok(output) => output.status.success(),
-        Err(_) => false,
-    }
-}
-
-fn mock_mcp_server_path() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("tests")
-        .join("fixtures")
-        .join("mock_mcp_server.py")
-}
-
-fn build_mock_mcp_config(script_path: &std::path::Path) -> McpClientConfig {
-    let mut mcp_config = McpClientConfig {
-        enabled: true,
-        startup_timeout_seconds: Some(5),
-        tool_timeout_seconds: Some(5),
-        ..Default::default()
-    };
-
-    mcp_config.providers = vec![McpProviderConfig {
-        name: "mock".to_string(),
-        transport: McpTransportConfig::Stdio(McpStdioServerConfig {
-            command: "python3".to_string(),
-            args: vec![script_path.to_string_lossy().to_string()],
-            working_directory: None,
-        }),
-        env: HashMap::new(),
-        enabled: true,
-        max_concurrent_requests: 1,
-        startup_timeout_ms: Some(5_000),
-    }];
-
-    mcp_config
 }

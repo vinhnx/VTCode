@@ -335,18 +335,16 @@ mod tests {
 
         {
             let _guard = TuiPanicGuard::new();
-            assert_eq!(
+            assert!(
                 TUI_INITIALIZED.load(Ordering::SeqCst),
-                true,
                 "TUI should be marked as initialized"
             );
 
             // Drop happens automatically when leaving scope
         }
 
-        assert_eq!(
-            TUI_INITIALIZED.load(Ordering::SeqCst),
-            false,
+        assert!(
+            !TUI_INITIALIZED.load(Ordering::SeqCst),
             "TUI should be marked as deinitialized after guard drops"
         );
     }
@@ -369,16 +367,14 @@ mod tests {
         // Create guard in a separate scope to test drop behavior
         {
             let _guard = TuiPanicGuard::new();
-            assert_eq!(
+            assert!(
                 TUI_INITIALIZED.load(Ordering::SeqCst),
-                true,
                 "Guard should mark TUI as initialized"
             );
         }
 
-        assert_eq!(
-            TUI_INITIALIZED.load(Ordering::SeqCst),
-            false,
+        assert!(
+            !TUI_INITIALIZED.load(Ordering::SeqCst),
             "Drop should mark TUI as deinitialized"
         );
     }

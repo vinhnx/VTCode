@@ -979,6 +979,12 @@ fn permission_label(permission: &ToolPolicy) -> &'static str {
     }
 }
 
+fn insert_if_allowed(map: &mut Map<String, Value>, key: String, value: Value) {
+    if !key.starts_with("x-") {
+        map.insert(key, value);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{base_function_declarations, build_function_declarations_with_mode};
@@ -1056,11 +1062,5 @@ mod tests {
                 .iter()
                 .any(|value| value.as_str() == Some("intelligence"))
         );
-    }
-}
-
-fn insert_if_allowed(map: &mut Map<String, Value>, key: String, value: Value) {
-    if !key.starts_with("x-") {
-        map.insert(key, value);
     }
 }

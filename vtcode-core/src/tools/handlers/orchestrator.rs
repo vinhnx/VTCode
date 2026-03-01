@@ -666,7 +666,7 @@ mod tests {
                 &(),
                 &ctx,
                 turn.as_ref(),
-                crate::tools::handlers::tool_handler::ApprovalPolicy::Never,
+                ApprovalPolicy::Never,
             )
             .await
             .expect("expected successful escalated run");
@@ -699,7 +699,7 @@ mod tests {
                 &(),
                 &ctx,
                 turn.as_ref(),
-                crate::tools::handlers::tool_handler::ApprovalPolicy::Never,
+                ApprovalPolicy::Never,
             )
             .await
             .expect_err("expected sandbox denial without escalation");
@@ -792,7 +792,7 @@ mod tests {
                 &(),
                 &ctx,
                 turn.as_ref(),
-                crate::tools::handlers::tool_handler::ApprovalPolicy::Never,
+                ApprovalPolicy::Never,
             )
             .await
             .expect("expected successful run");
@@ -825,7 +825,7 @@ mod tests {
                 &(),
                 &ctx,
                 turn.as_ref(),
-                crate::tools::handlers::tool_handler::ApprovalPolicy::Never,
+                ApprovalPolicy::Never,
             )
             .await
             .expect("expected successful run");
@@ -861,7 +861,7 @@ mod tests {
                 &(),
                 &ctx,
                 turn.as_ref(),
-                crate::tools::handlers::tool_handler::ApprovalPolicy::Never,
+                ApprovalPolicy::Never,
             )
             .await
             .expect("expected successful run");

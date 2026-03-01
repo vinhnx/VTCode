@@ -704,7 +704,7 @@ mod read_tests {
             .collect::<Vec<_>>()
             .join("\n")
             + "\n";
-        std::fs::write(&test_file, test_content).unwrap();
+        fs::write(&test_file, test_content).unwrap();
 
         let grep_manager = std::sync::Arc::new(GrepSearchManager::new(workspace_root.clone()));
         let file_ops = FileOpsTool::new(workspace_root, grep_manager);
@@ -788,13 +788,13 @@ mod read_tests {
         let temp_dir = TempDir::new().unwrap();
         let workspace_root = temp_dir.path().to_path_buf();
         let spool_dir = workspace_root.join(".vtcode/context/tool_outputs");
-        std::fs::create_dir_all(&spool_dir).unwrap();
+        fs::create_dir_all(&spool_dir).unwrap();
         let spool_file = spool_dir.join("unified_exec_123.txt");
         let spool_content = (1..=120)
             .map(|i| format!("line{i}"))
             .collect::<Vec<_>>()
             .join("\n");
-        std::fs::write(&spool_file, spool_content).unwrap();
+        fs::write(&spool_file, spool_content).unwrap();
 
         let grep_manager = std::sync::Arc::new(GrepSearchManager::new(workspace_root.clone()));
         let file_ops = FileOpsTool::new(workspace_root, grep_manager);

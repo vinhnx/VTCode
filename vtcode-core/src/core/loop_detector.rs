@@ -581,13 +581,11 @@ mod tests {
         let mut detector = LoopDetector::new();
 
         // All these should be treated as identical
-        let paths = vec![
-            json!({"path": "."}),
+        let paths = [json!({"path": "."}),
             json!({"path": ""}),
             json!({"path": "././"}),
             json!({"path": "//"}),
-            json!({}),
-        ];
+            json!({})];
 
         for path in &paths[..2] {
             assert!(detector.record_call(tools::LIST_FILES, path).is_none());

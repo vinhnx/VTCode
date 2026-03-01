@@ -628,7 +628,7 @@ mod tests {
         let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
 
         registry
-            .enable_full_auto_mode(&vec![tools::READ_FILE.to_string()])
+            .enable_full_auto_mode(&[tools::READ_FILE.to_string()])
             .await;
 
         assert!(registry.preflight_tool_permission(tools::READ_FILE).await?);

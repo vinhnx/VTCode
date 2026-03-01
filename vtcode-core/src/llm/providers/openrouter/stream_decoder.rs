@@ -61,10 +61,10 @@ pub(crate) fn parse_stream_payload(
 
     let mut delta = StreamDelta::default();
 
-    if let Some(event_type) = payload.get("type").and_then(|value| value.as_str()) {
-        if event_type == "response.delta" {
-            if let Some(delta_value) = payload.get("delta") {
-                if let Some(delta_type) = delta_value.get("type").and_then(|value| value.as_str()) {
+    if let Some(event_type) = payload.get("type").and_then(|value| value.as_str())
+        && event_type == "response.delta"
+            && let Some(delta_value) = payload.get("delta")
+                && let Some(delta_type) = delta_value.get("type").and_then(|value| value.as_str()) {
                     match delta_type {
                         "output_text_delta" | "output_text" | "text_delta" => {
                             if let Some(text) =
@@ -78,22 +78,17 @@ pub(crate) fn parse_stream_payload(
                         "reasoning_text_delta" | "reasoning_summary_text_delta" => {
                             if let Some(text) =
                                 delta_value.get("text").and_then(|value| value.as_str())
-                            {
-                                if let Some(reasoning_delta) = reasoning.push(text) {
+                                && let Some(reasoning_delta) = reasoning.push(text) {
                                     telemetry.on_reasoning_delta(&reasoning_delta);
                                     delta.push_reasoning(&reasoning_delta);
                                 }
-                            }
                         }
                         _ => {}
                     }
                 }
-            }
-        }
-    }
 
-    if let Some(choices) = payload.get("choices").and_then(|value| value.as_array()) {
-        if let Some(choice) = choices.first() {
+    if let Some(choices) = payload.get("choices").and_then(|value| value.as_array())
+        && let Some(choice) = choices.first() {
             if let Some(delta_value) = choice.get("delta") {
                 if let Some(content_value) = delta_value.get("content") {
                     match content_value {
@@ -120,12 +115,10 @@ pub(crate) fn parse_stream_payload(
                 if let Some(reasoning_value) = delta_value
                     .get("reasoning_content")
                     .and_then(|value| value.as_str())
-                {
-                    if let Some(reasoning_delta) = reasoning.push(reasoning_value) {
+                    && let Some(reasoning_delta) = reasoning.push(reasoning_value) {
                         telemetry.on_reasoning_delta(&reasoning_delta);
                         delta.push_reasoning(&reasoning_delta);
                     }
-                }
 
                 if let Some(tool_calls) = delta_value
                     .get("tool_calls")
@@ -151,7 +144,6 @@ pub(crate) fn parse_stream_payload(
                 };
             }
         }
-    }
 
     if delta.is_empty() { None } else { Some(delta) }
 }

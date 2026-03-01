@@ -915,13 +915,13 @@ mod tests {
         let has_call_1_output = state
             .conversation_messages
             .iter()
-            .any(|msg| msg.tool_call_id.as_ref().map_or(false, |id| id == "call_1"));
+            .any(|msg| msg.tool_call_id.as_ref().is_some_and(|id| id == "call_1"));
         assert!(has_call_1_output, "Valid output should be retained");
 
         let has_orphan = state.conversation_messages.iter().any(|msg| {
             msg.tool_call_id
                 .as_ref()
-                .map_or(false, |id| id == "orphan_call")
+                .is_some_and(|id| id == "orphan_call")
         });
         assert!(!has_orphan, "Orphan output should be removed");
 
@@ -983,7 +983,7 @@ mod tests {
         let call_1_has_output = state
             .conversation_messages
             .iter()
-            .any(|msg| msg.tool_call_id.as_ref().map_or(false, |id| id == "call_1"));
+            .any(|msg| msg.tool_call_id.as_ref().is_some_and(|id| id == "call_1"));
         assert!(
             call_1_has_output,
             "call_1 should have synthetic output after normalization"
@@ -993,7 +993,7 @@ mod tests {
         let has_orphan = state
             .conversation_messages
             .iter()
-            .any(|msg| msg.tool_call_id.as_ref().map_or(false, |id| id == "orphan"));
+            .any(|msg| msg.tool_call_id.as_ref().is_some_and(|id| id == "orphan"));
         assert!(!has_orphan, "Orphan should be removed after normalization");
     }
 
@@ -1031,7 +1031,7 @@ mod tests {
         let has_recovered_call = state.conversation_messages.iter().any(|msg| {
             msg.tool_call_id
                 .as_ref()
-                .map_or(false, |id| id == "crashed_call")
+                .is_some_and(|id| id == "crashed_call")
         });
         assert!(
             has_recovered_call,
@@ -1042,7 +1042,7 @@ mod tests {
         let has_orphan = state.conversation_messages.iter().any(|msg| {
             msg.tool_call_id
                 .as_ref()
-                .map_or(false, |id| id == "old_call")
+                .is_some_and(|id| id == "old_call")
         });
         assert!(
             !has_orphan,

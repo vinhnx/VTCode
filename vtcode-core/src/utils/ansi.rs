@@ -1367,7 +1367,7 @@ mod tests {
         // Create a renderer that doesn't output to stdout
         let choice = ColorChoice::Never;
         let mut renderer = AnsiRenderer {
-            writer: AutoStream::new(std::io::stdout(), choice),
+            writer: AutoStream::new(io::stdout(), choice),
             buffer: String::new(),
             color: false,
             sink: None,

@@ -142,23 +142,22 @@ mod tests {
                     Err(error) => {
                         let valid_up_to = error.valid_up_to();
                         if valid_up_to > 0 {
-                            if let Ok(valid) = str::from_utf8(&buffer[..valid_up_to]) {
-                                if !valid.is_empty() {
+                            if let Ok(valid) = str::from_utf8(&buffer[..valid_up_to])
+                                && !valid.is_empty() {
                                     result.push_str(valid);
                                 }
-                            }
                             buffer.drain(..valid_up_to);
                             continue;
                         }
 
                         if let Some(error_len) = error.error_len() {
-                            result.push_str("\u{FFFD}"); // Replacement character
+                            result.push('\u{FFFD}'); // Replacement character
                             buffer.drain(..error_len);
                             continue;
                         }
 
                         if eof && !buffer.is_empty() {
-                            result.push_str("\u{FFFD}");
+                            result.push('\u{FFFD}');
                             buffer.clear();
                         }
 

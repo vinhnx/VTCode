@@ -1172,7 +1172,7 @@ mod tests {
 
         // Add new tool
         let new_tools = vec!["tool1".to_owned(), "tool2".to_owned()];
-        let current_tools: std::collections::HashSet<_> =
+        let current_tools: HashSet<_> =
             loaded_config.available_tools.iter().collect();
 
         for tool in &new_tools {

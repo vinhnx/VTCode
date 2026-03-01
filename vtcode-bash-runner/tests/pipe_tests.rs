@@ -156,10 +156,7 @@ async fn test_process_handle_terminate() -> anyhow::Result<()> {
 #[cfg(unix)]
 #[tokio::test]
 async fn test_pipe_process_detaches_from_parent_session() -> anyhow::Result<()> {
-    let parent_sid = unsafe { libc::getsid(0) };
-    if parent_sid == -1 {
-        anyhow::bail!("failed to read parent session id");
-    }
+    let parent_sid = nix::unistd::getsid(None)?.as_raw();
 
     let env: HashMap<String, String> = std::env::vars().collect();
     let (program, args) = shell_command("echo $$; sleep 0.2");
@@ -175,11 +172,13 @@ async fn test_pipe_process_detaches_from_parent_session() -> anyhow::Result<()> 
         .ok_or_else(|| anyhow::anyhow!("missing child pid output: {pid_text:?}"))?
         .parse()?;
 
-    let child_sid = unsafe { libc::getsid(child_pid) };
-    if child_sid == -1 {
-        // Process may have already exited, which is fine
-        return Ok(());
-    }
+    let child_sid = match nix::unistd::getsid(Some(nix::unistd::Pid::from_raw(child_pid))) {
+        Ok(pid) => pid.as_raw(),
+        Err(_) => {
+            // Process may have already exited, which is fine
+            return Ok(());
+        }
+    };
 
     // Child should be in its own session or process group
     assert_ne!(

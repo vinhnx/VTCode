@@ -211,7 +211,7 @@ mod tests {
     fn test_slash_widget_creation() {
         let session = create_test_session();
         let palette = create_test_palette();
-        let viewport = ratatui::layout::Rect::new(0, 0, 80, 24);
+        let viewport = Rect::new(0, 0, 80, 24);
 
         let _widget = SlashWidget::new(&session, &palette, viewport);
 
@@ -224,7 +224,7 @@ mod tests {
     fn test_slash_widget_render_empty() {
         let session = create_test_session();
         let palette = SlashPalette::new(); // Empty palette
-        let viewport = ratatui::layout::Rect::new(0, 0, 80, 24);
+        let viewport = Rect::new(0, 0, 80, 24);
 
         let backend = TestBackend::new(80, 24);
         let mut terminal = Terminal::new(backend).unwrap();
@@ -247,7 +247,7 @@ mod tests {
             SlashCommandItem::new("hello", "Demo command"),
         ]);
         palette.update(Some(""), 5); // This should populate with some default suggestions
-        let viewport = ratatui::layout::Rect::new(0, 0, 80, 24);
+        let viewport = Rect::new(0, 0, 80, 24);
 
         let backend = TestBackend::new(80, 24);
         let mut terminal = Terminal::new(backend).unwrap();

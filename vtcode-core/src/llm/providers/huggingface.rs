@@ -1114,8 +1114,8 @@ impl LLMClient for HuggingFaceProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use wiremock::matchers::{method, path};
-    use wiremock::{Mock, MockServer, ResponseTemplate};
+    
+    
 
     fn sample_request(model: &str) -> LLMRequest {
         LLMRequest {
