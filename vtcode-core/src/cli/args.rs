@@ -646,6 +646,9 @@ pub enum SkillsSubcommand {
     Validate {
         /// Path to skill directory or SKILL.md file
         path: PathBuf,
+        /// Enable strict validation (warnings become errors for routing quality checks)
+        #[arg(long)]
+        strict: bool,
     },
 
     /// Validate all skills for container skills compatibility

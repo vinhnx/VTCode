@@ -8,8 +8,11 @@
 
 use anyhow::Result;
 use std::path::PathBuf;
+use vtcode_core::config::loader::ConfigManager;
 use vtcode_core::skills::authoring::SkillAuthor;
-use vtcode_core::skills::loader::{EnhancedSkillLoader, detect_skill_mentions};
+use vtcode_core::skills::loader::{
+    EnhancedSkillLoader, SkillMentionDetectionOptions, detect_skill_mentions_with_options,
+};
 use vtcode_core::skills::types::{Skill, SkillManifest};
 
 use super::skills_commands_parser::parse_skill_command as parse_skill_command_impl;
@@ -334,7 +337,7 @@ pub async fn detect_mentioned_skills(
     user_input: &str,
     workspace: PathBuf,
 ) -> Result<Vec<(String, Skill)>> {
-    let mut loader = EnhancedSkillLoader::new(workspace);
+    let mut loader = EnhancedSkillLoader::new(workspace.clone());
 
     // Discover available skills
     let discovery_result = loader.discover_all_skills().await?;
@@ -344,8 +347,20 @@ pub async fn detect_mentioned_skills(
         .map(|s| s.manifest().clone())
         .collect();
 
-    // Detect mentions using the same logic as vtcode-core
-    let mentioned_names = detect_skill_mentions(user_input, &manifests);
+    // Detect mentions with workspace-aware routing config.
+    let detection_options = ConfigManager::load_from_workspace(&workspace)
+        .ok()
+        .map(|manager| {
+            let skills = &manager.config().skills;
+            SkillMentionDetectionOptions {
+                enable_auto_trigger: skills.enable_auto_trigger,
+                enable_description_matching: skills.enable_description_matching,
+                min_keyword_matches: skills.min_keyword_matches,
+            }
+        })
+        .unwrap_or_default();
+    let mentioned_names =
+        detect_skill_mentions_with_options(user_input, &manifests, &detection_options);
 
     // Load the mentioned skills
     let mut skills = Vec::new();

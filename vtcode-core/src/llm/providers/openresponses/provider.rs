@@ -188,6 +188,25 @@ impl OpenResponsesProvider {
         req.stream = stream;
         req.temperature = request.temperature.map(|t| t as f64);
         req.max_output_tokens = request.max_tokens.map(|t| t as u64);
+        req.previous_response_id = request
+            .previous_response_id
+            .as_ref()
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty());
+        req.store = request.response_store;
+        req.include = request.responses_include.as_ref().and_then(|fields| {
+            let values: Vec<String> = fields
+                .iter()
+                .map(|field| field.trim())
+                .filter(|field| !field.is_empty())
+                .map(ToOwned::to_owned)
+                .collect();
+            if values.is_empty() {
+                None
+            } else {
+                Some(values)
+            }
+        });
 
         if let Some(tools) = &request.tools {
             req.tools = Some((**tools).clone());
@@ -744,5 +763,46 @@ impl LLMProvider for OpenResponsesProvider {
         };
 
         Ok(Box::pin(stream))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn native_payload_includes_responses_continuity_fields() {
+        let provider = OpenResponsesProvider::with_model(String::new(), "gpt-5".to_string());
+        let mut request = LLMRequest {
+            model: "gpt-5".to_string(),
+            messages: vec![crate::llm::provider::Message::user("hello".to_string())],
+            ..Default::default()
+        };
+        request.previous_response_id = Some("resp_prev_1".to_string());
+        request.response_store = Some(false);
+        request.responses_include = Some(vec![
+            "reasoning.encrypted_content".to_string(),
+            "output_text.annotations".to_string(),
+        ]);
+
+        let payload = provider
+            .build_native_payload(&request, false)
+            .expect("native payload should serialize");
+
+        assert_eq!(
+            payload
+                .get("previous_response_id")
+                .and_then(serde_json::Value::as_str),
+            Some("resp_prev_1")
+        );
+        assert_eq!(
+            payload.get("store").and_then(serde_json::Value::as_bool),
+            Some(false)
+        );
+        let include = payload
+            .get("include")
+            .and_then(serde_json::Value::as_array)
+            .expect("include must exist");
+        assert_eq!(include.len(), 2);
     }
 }

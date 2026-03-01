@@ -79,6 +79,18 @@ pub struct LLMRequest {
     /// This is sent as X-Turn-Metadata header to providers that support it
     pub metadata: Option<serde_json::Value>,
 
+    /// Optional Responses API continuity pointer for server-side context chaining.
+    /// Used by providers that support stateful response continuation.
+    pub previous_response_id: Option<String>,
+
+    /// Optional Responses API storage flag.
+    /// When set, providers that support `store` pass this through directly.
+    pub response_store: Option<bool>,
+
+    /// Optional Responses API include fields (e.g. reasoning encrypted content).
+    /// Passed through only for providers/APIs that support include selectors.
+    pub responses_include: Option<Vec<String>>,
+
     /// Optional provider routing hint for prompt cache stickiness.
     /// OpenAI uses this value to improve routing locality for repeated prefixes.
     pub prompt_cache_key: Option<String>,

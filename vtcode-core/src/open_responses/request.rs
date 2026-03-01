@@ -91,6 +91,14 @@ pub struct Request {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub store: Option<bool>,
 
+    /// Optional ID of the previous response for server-side continuity.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub previous_response_id: Option<String>,
+
+    /// Optional response fields to include.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub include: Option<Vec<String>>,
+
     /// Metadata for the request.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub metadata: Option<Value>,
@@ -138,6 +146,8 @@ impl Request {
             service_tier: None,
             reasoning: None,
             store: None,
+            previous_response_id: None,
+            include: None,
             metadata: None,
         }
     }

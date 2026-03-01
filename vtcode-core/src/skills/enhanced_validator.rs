@@ -363,6 +363,88 @@ impl ComprehensiveSkillValidator {
                     .to_string(),
             );
         }
+
+        // Routing quality checks (warn by default, fail in strict mode)
+        if manifest
+            .when_to_use
+            .as_ref()
+            .map(|value| value.trim().is_empty())
+            .unwrap_or(true)
+        {
+            self.report_routing_quality_issue(
+                report,
+                "when-to-use",
+                "Missing when-to-use guidance reduces skill trigger precision",
+                "Add concrete use triggers (inputs, keywords, expected outputs).",
+            );
+        }
+
+        if manifest
+            .when_not_to_use
+            .as_ref()
+            .map(|value| value.trim().is_empty())
+            .unwrap_or(true)
+        {
+            self.report_routing_quality_issue(
+                report,
+                "when-not-to-use",
+                "Missing when-not-to-use guidance increases false-positive skill triggers",
+                "Add explicit avoid cases and edge conditions.",
+            );
+        }
+
+        if !self.description_has_routing_signals(&manifest.description) {
+            self.report_routing_quality_issue(
+                report,
+                "description",
+                "Description lacks concrete routing signals (inputs/triggers/outputs)",
+                "Rewrite description as routing logic: when to use, when not to use, expected result.",
+            );
+        }
+    }
+
+    fn report_routing_quality_issue(
+        &self,
+        report: &mut SkillValidationReport,
+        field: &str,
+        message: &str,
+        remediation: &str,
+    ) {
+        if self.strict_mode {
+            report.add_error(
+                Some(field.to_string()),
+                message.to_string(),
+                Some(remediation.to_string()),
+            );
+        } else {
+            report.add_warning(
+                Some(field.to_string()),
+                message.to_string(),
+                Some(remediation.to_string()),
+            );
+        }
+    }
+
+    fn description_has_routing_signals(&self, description: &str) -> bool {
+        let text = description.to_lowercase();
+        let has_trigger_hint = text.contains("when")
+            || text.contains("if ")
+            || text.contains("for ")
+            || text.contains("trigger");
+        let has_output_hint = text.contains("output")
+            || text.contains("returns")
+            || text.contains("result")
+            || text.contains("generat")
+            || text.contains("produ");
+        let has_action_hint = text.contains("analy")
+            || text.contains("extract")
+            || text.contains("transform")
+            || text.contains("validate")
+            || text.contains("summar")
+            || text.contains("convert")
+            || text.contains("clean");
+
+        has_action_hint && (has_trigger_hint || has_output_hint)
     }
 
     /// Validate instructions length (suggest keeping under 500 lines)

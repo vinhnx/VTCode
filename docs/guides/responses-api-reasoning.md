@@ -22,7 +22,9 @@ VT Code already routes GPT-5.1 (Codex) and other reasoning-focused models throug
 
 3. **Preserve reasoning items across API calls**: When VT Code issues function calls, the Responses API automatically keeps the `output` payload (which includes reasoning items), and we append it back into the context before reissuing the request. This mirrors the guidance to pass `previous_response_id` or to reinsert reasoning components so that subsequent calls continue where the model left off.
 
-4. **Use encrypted reasoning for ZDR-style compliance**: If you are restricted from storing model state, add the following flags when calling OpenAI via `vtcode.toml` overrides or CLI hacks:
+4. **Prefer server-side continuity before local compaction**: VT Code now attempts Responses-style continuity (`previous_response_id`) first for providers that support it (OpenAI/OpenResponses paths), then falls back to local history compaction when needed. This keeps long tool loops coherent while preserving a safe fallback path.
+
+5. **Use encrypted reasoning for ZDR-style compliance**: If you are restricted from storing model state, add the following flags when calling OpenAI via `vtcode.toml` overrides or CLI hacks:
 
     ```json
     "include": ["reasoning.encrypted_content"],
@@ -31,7 +33,7 @@ VT Code already routes GPT-5.1 (Codex) and other reasoning-focused models throug
 
     The Responses API will return an encrypted chain of thought inside each reasoning item, and VT Code will replay that token whenever the next turn is dispatched. No reasoning data is stored on disk, yet each step still benefits from the prior reasoning trace.
 
-5. **Cache-friendly prompts**: The Responses API differentiates cached and uncached tokens. Longer prompts (>= 1,024 tokens) benefit from returning everything—including reasoning items—so the cache can match on both the request and internal context. Higher cache hit ratios reduce costs and latency for `o4-mini`, `o3`, and GPT-5-series models.
+6. **Cache-friendly prompts**: The Responses API differentiates cached and uncached tokens. Longer prompts (>= 1,024 tokens) benefit from returning everything—including reasoning items—so the cache can match on both the request and internal context. Higher cache hit ratios reduce costs and latency for `o4-mini`, `o3`, and GPT-5-series models.
 
     Tip: VT Code now sends a stable OpenAI routing key per conversation by default via `prompt_cache_key_mode = "session"` under `[prompt_cache.providers.openai]`. Keep this at `session` for better cache locality; set `off` only when you explicitly want to disable key-based routing. You can also instruct the Responses API to retain cached prefixes for longer by setting `prompt_cache_retention` on the request. VT Code exposes this setting as `# prompt_cache_retention = "24h"` (commented out by default). Using a longer retention can reduce costs and latency for frequently repeated prompts in GPT-5.1 if set. The value must be in the format `<number>[s|m|h|d]` (e.g., `24h`) and is restricted to a minimum of `1s` and a maximum of `30d`.
 
@@ -47,9 +49,9 @@ VT Code already routes GPT-5.1 (Codex) and other reasoning-focused models throug
     vtcode models list --provider openai
     ```
 
-6. **Function calling etiquette**: Ensure any VT Code tool definitions expose their JSON schema via the `function` payload. The Responses API requires each tool message to include a `tool_call_id`, and VT Code already handles this when serializing `ToolDefinition`s. Reinjecting reasoning summaries into `context` keeps every tool loop consistent with the `responses` guidance.
+7. **Function calling etiquette**: Ensure any VT Code tool definitions expose their JSON schema via the `function` payload. The Responses API requires each tool message to include a `tool_call_id`, and VT Code already handles this when serializing `ToolDefinition`s. Reinjecting reasoning summaries into `context` keeps every tool loop consistent with the `responses` guidance.
 
-7. **Reasoning visibility**: When troubleshooting, inspect `.vtcode/logs/trajectory.jsonl` for `reasoning` or `reasoning_summary` entries. The agent’s telemetry also logs `reasoning_effort` (see the inline status line guide) so you can correlate agent decisions with expectation-aligned reasoning levels.
+8. **Reasoning visibility**: When troubleshooting, inspect `.vtcode/logs/trajectory.jsonl` for `reasoning` or `reasoning_summary` entries. The agent’s telemetry also logs `reasoning_effort` (see the inline status line guide) so you can correlate agent decisions with expectation-aligned reasoning levels.
 
 ## Example workflow
 

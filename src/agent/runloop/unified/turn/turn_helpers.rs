@@ -40,6 +40,12 @@ pub fn display_status(renderer: &mut AnsiRenderer, message: &str) -> Result<()> 
     renderer.line(MessageStyle::Info, message)
 }
 
+/// Providers that support Responses-style server-side continuity chaining.
+pub(crate) fn supports_responses_chaining(provider_name: &str) -> bool {
+    provider_name.eq_ignore_ascii_case("openai")
+        || provider_name.eq_ignore_ascii_case("openresponses")
+}
+
 /// Check if operation should continue based on ctrl-c state
 pub fn should_continue_operation(ctrl_c_state: &CtrlCState) -> bool {
     !ctrl_c_state.is_cancel_requested() && !ctrl_c_state.is_exit_requested()

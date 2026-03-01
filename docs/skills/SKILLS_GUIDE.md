@@ -139,6 +139,18 @@ author: Your Name
 - `agent` - Subagent type when `context = "fork"`
 - `hooks` - Skill-scoped hook configuration
 
+### Routing Quality Recommendations
+
+For reliable triggering, treat skill metadata as routing rules:
+
+- `description`: what the skill does and the artifact/outcome it produces
+- `when-to-use`: concrete "use when" triggers (inputs, keywords, task shape)
+- `when-not-to-use`: explicit negative examples and edge cases
+
+When running deterministic production workflows, explicitly instruct:
+
+`Use the <skill-name> skill.`
+
 ### Compliance with Agent Skills Standard
 
 VT Code's skill system fully complies with the [open Agent Skills standard](http://agentskills.io/specification). Your skills are:

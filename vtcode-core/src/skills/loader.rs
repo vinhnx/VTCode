@@ -540,36 +540,86 @@ impl EnhancedSkillLoader {
     }
 }
 
-/// Detect skill mentions in user input using patterns and keywords
+#[derive(Debug, Clone, Copy)]
+pub struct SkillMentionDetectionOptions {
+    pub enable_auto_trigger: bool,
+    pub enable_description_matching: bool,
+    pub min_keyword_matches: usize,
+}
+
+impl Default for SkillMentionDetectionOptions {
+    fn default() -> Self {
+        Self {
+            enable_auto_trigger: true,
+            enable_description_matching: true,
+            min_keyword_matches: 2,
+        }
+    }
+}
+
+/// Detect skill mentions using default routing options.
 pub fn detect_skill_mentions(user_input: &str, available_skills: &[SkillManifest]) -> Vec<String> {
+    detect_skill_mentions_with_options(
+        user_input,
+        available_skills,
+        &SkillMentionDetectionOptions::default(),
+    )
+}
+
+/// Detect skill mentions using explicit routing options.
+///
+/// Routing policy:
+/// - Explicit `$skill-name` mentions always win.
+/// - Description/when-to-use keywords provide positive signal.
+/// - when-not-to-use keywords provide negative signal and can veto weak matches.
+pub fn detect_skill_mentions_with_options(
+    user_input: &str,
+    available_skills: &[SkillManifest],
+    options: &SkillMentionDetectionOptions,
+) -> Vec<String> {
+    if !options.enable_auto_trigger {
+        return Vec::new();
+    }
+
     let mut mentions = Vec::new();
     let input_lower = user_input.to_lowercase();
+    let input_keywords = extract_keywords(user_input);
+    let min_matches = options.min_keyword_matches.max(1);
 
     for skill in available_skills {
         let skill_name_lower = skill.name.to_lowercase();
-
-        // 1. Explicit $skill-name mention (case-insensitive)
-        let trigger = format!("${}", skill_name_lower);
-        if input_lower.contains(&trigger) {
+        let explicit_trigger = format!("${skill_name_lower}");
+        if input_lower.contains(&explicit_trigger) {
             mentions.push(skill.name.clone());
             continue;
         }
 
-        // 2. Description keyword matching (requires 2+ matches of significant words)
-        let keywords: Vec<&str> = skill
-            .description
-            .split(|c: char| !c.is_alphanumeric())
-            .filter(|s| s.len() > 3)
-            .collect();
-
-        let mut matches = 0;
-        for kw in keywords {
-            if input_lower.contains(&kw.to_lowercase()) {
-                matches += 1;
-            }
+        if !options.enable_description_matching {
+            continue;
         }
 
-        if matches >= 2 {
+        let description_keywords = extract_keywords(&skill.description);
+        let when_to_use_keywords = skill
+            .when_to_use
+            .as_deref()
+            .map(extract_keywords)
+            .unwrap_or_default();
+        let when_not_to_use_keywords = skill
+            .when_not_to_use
+            .as_deref()
+            .map(extract_keywords)
+            .unwrap_or_default();
+
+        let description_matches = overlap_count(&input_keywords, &description_keywords);
+        let use_matches = overlap_count(&input_keywords, &when_to_use_keywords);
+        let avoid_matches = overlap_count(&input_keywords, &when_not_to_use_keywords);
+        let positive_matches = description_matches + use_matches;
+
+        if avoid_matches > 0 && use_matches == 0 && description_matches <= avoid_matches {
+            continue;
+        }
+
+        if positive_matches >= min_matches {
             mentions.push(skill.name.clone());
         }
     }
@@ -577,4 +627,86 @@ pub fn detect_skill_mentions(user_input: &str, available_skills: &[SkillManifest
     mentions.sort();
     mentions.dedup();
     mentions
+}
+
+fn overlap_count(input_keywords: &HashSet<String>, skill_keywords: &HashSet<String>) -> usize {
+    input_keywords.intersection(skill_keywords).count()
+}
+
+fn extract_keywords(text: &str) -> HashSet<String> {
+    const STOPWORDS: &[&str] = &[
+        "the", "and", "with", "from", "that", "this", "when", "where", "what", "your", "for",
+        "into", "onto", "than", "then", "also", "only", "should", "would", "could", "have", "has",
+        "had", "use", "using", "task", "tasks", "help", "need", "want",
+    ];
+
+    text.split(|c: char| !c.is_alphanumeric())
+        .map(|part| part.trim().to_lowercase())
+        .filter(|part| part.len() > 2)
+        .filter(|part| !STOPWORDS.contains(&part.as_str()))
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn manifest(
+        name: &str,
+        description: &str,
+        when_to_use: Option<&str>,
+        when_not_to_use: Option<&str>,
+    ) -> SkillManifest {
+        SkillManifest {
+            name: name.to_string(),
+            description: description.to_string(),
+            when_to_use: when_to_use.map(ToOwned::to_owned),
+            when_not_to_use: when_not_to_use.map(ToOwned::to_owned),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn detects_explicit_skill_mentions() {
+        let skills = vec![manifest(
+            "pdf-analyzer",
+            "Analyze PDF files and extract tables",
+            None,
+            None,
+        )];
+        let mentions = detect_skill_mentions("Use $pdf-analyzer for this file", &skills);
+        assert_eq!(mentions, vec!["pdf-analyzer".to_string()]);
+    }
+
+    #[test]
+    fn negative_signal_blocks_weak_keyword_match() {
+        let skills = vec![manifest(
+            "api-fetcher",
+            "Fetch data from API endpoints and summarize responses",
+            Some("Use for batch API analytics and endpoint inventories"),
+            Some("Do not use for local file edits or static markdown updates"),
+        )];
+
+        let mentions = detect_skill_mentions(
+            "Please update this local markdown file and fix headings",
+            &skills,
+        );
+        assert!(mentions.is_empty());
+    }
+
+    #[test]
+    fn auto_trigger_can_be_disabled() {
+        let skills = vec![manifest(
+            "sql-checker",
+            "Validate SQL migration scripts for safety",
+            None,
+            None,
+        )];
+        let options = SkillMentionDetectionOptions {
+            enable_auto_trigger: false,
+            ..Default::default()
+        };
+        let mentions = detect_skill_mentions_with_options("Use $sql-checker", &skills, &options);
+        assert!(mentions.is_empty());
+    }
 }

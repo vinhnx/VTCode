@@ -76,6 +76,9 @@ fn test_openai_tool_call_format() {
         coding_agent_settings: None,
         metadata: None,
         prompt_cache_key: None,
+        previous_response_id: None,
+        response_store: None,
+        responses_include: None,
     };
 
     // Only validate shape via provider API; internal conversion details are private
@@ -146,6 +149,9 @@ fn test_anthropic_tool_call_format() {
         coding_agent_settings: None,
         metadata: None,
         prompt_cache_key: None,
+        previous_response_id: None,
+        response_store: None,
+        responses_include: None,
     };
 
     // Only validate shape via provider API; internal conversion details are private
@@ -216,6 +222,9 @@ fn test_gemini_tool_call_format() {
         coding_agent_settings: None,
         metadata: None,
         prompt_cache_key: None,
+        previous_response_id: None,
+        response_store: None,
+        responses_include: None,
     };
 
     assert!(provider.validate_request(&request).is_ok());
@@ -267,6 +276,9 @@ fn test_all_providers_tool_validation() {
         coding_agent_settings: None,
         metadata: None,
         prompt_cache_key: None,
+        previous_response_id: None,
+        response_store: None,
+        responses_include: None,
     };
 
     let openai_request = LLMRequest {
@@ -299,6 +311,9 @@ fn test_all_providers_tool_validation() {
         coding_agent_settings: None,
         metadata: None,
         prompt_cache_key: None,
+        previous_response_id: None,
+        response_store: None,
+        responses_include: None,
     };
 
     let anthropic_request = LLMRequest {
@@ -331,6 +346,9 @@ fn test_all_providers_tool_validation() {
         coding_agent_settings: None,
         metadata: None,
         prompt_cache_key: None,
+        previous_response_id: None,
+        response_store: None,
+        responses_include: None,
     };
 
     let openrouter_request = LLMRequest {
@@ -363,6 +381,9 @@ fn test_all_providers_tool_validation() {
         coding_agent_settings: None,
         metadata: None,
         prompt_cache_key: None,
+        previous_response_id: None,
+        response_store: None,
+        responses_include: None,
     };
 
     assert!(gemini.validate_request(&gemini_request).is_ok());
@@ -400,6 +421,9 @@ fn test_all_providers_tool_validation() {
         coding_agent_settings: None,
         metadata: None,
         prompt_cache_key: None,
+        previous_response_id: None,
+        response_store: None,
+        responses_include: None,
     };
 
     assert!(lmstudio.validate_request(&lmstudio_request).is_ok());
@@ -434,6 +458,9 @@ fn test_all_providers_tool_validation() {
         coding_agent_settings: None,
         metadata: None,
         prompt_cache_key: None,
+        previous_response_id: None,
+        response_store: None,
+        responses_include: None,
     };
 
     assert!(
@@ -503,6 +530,9 @@ fn test_openrouter_tool_call_format() {
         coding_agent_settings: None,
         metadata: None,
         prompt_cache_key: None,
+        previous_response_id: None,
+        response_store: None,
+        responses_include: None,
     };
 
     assert!(provider.validate_request(&request).is_ok());

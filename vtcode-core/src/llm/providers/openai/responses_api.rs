@@ -296,7 +296,16 @@ pub fn parse_responses_payload(
         reasoning,
         reasoning_details,
         tool_references: Vec::new(),
-        request_id: None,
+        request_id: response_json
+            .get("id")
+            .and_then(|value| value.as_str())
+            .map(ToOwned::to_owned)
+            .or_else(|| {
+                response_json
+                    .get("request_id")
+                    .and_then(|value| value.as_str())
+                    .map(ToOwned::to_owned)
+            }),
         organization_id: None,
     })
 }

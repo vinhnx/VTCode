@@ -15,6 +15,7 @@ use vtcode_core::turn_metadata;
 
 use crate::agent::runloop::unified::extract_action_from_messages;
 use crate::agent::runloop::unified::turn::context::TurnProcessingContext;
+use crate::agent::runloop::unified::turn::turn_helpers::supports_responses_chaining;
 
 struct UnsafeSendContext {
     handle: usize,
@@ -403,6 +404,12 @@ pub(crate) async fn execute_llm_request(
     } else {
         None
     };
+    let previous_response_id = if supports_responses_chaining(&provider_name) {
+        ctx.session_stats
+            .previous_response_id_for(&provider_name, active_model)
+    } else {
+        None
+    };
 
     let mut request = uni::LLMRequest {
         messages: ctx.working_history.to_vec(),
@@ -415,6 +422,7 @@ pub(crate) async fn execute_llm_request(
         parallel_tool_config: parallel_config,
         reasoning_effort,
         metadata,
+        previous_response_id,
         prompt_cache_key,
         ..Default::default()
     };
@@ -429,6 +437,7 @@ pub(crate) async fn execute_llm_request(
     let mut attempts_made = 0usize;
     let mut stream_fallback_used = false;
     let mut compacted_tool_retry_used = false;
+    let mut dropped_previous_response_id_for_retry = false;
     let mut last_error_retryable: Option<bool> = None;
     let mut last_error_preview: Option<String> = None;
     let mut last_error_category: Option<vtcode_commons::ErrorCategory> = None;
@@ -646,8 +655,17 @@ pub(crate) async fn execute_llm_request(
         }
 
         match step_result {
-            Ok(val) => {
-                llm_result = Ok(val);
+            Ok((response, response_streamed)) => {
+                if supports_responses_chaining(&provider_name) {
+                    ctx.session_stats.set_previous_response_chain(
+                        &provider_name,
+                        active_model,
+                        response.request_id.as_deref(),
+                    );
+                } else {
+                    ctx.session_stats.clear_previous_response_chain();
+                }
+                llm_result = Ok((response, response_streamed));
                 _spinner.finish();
                 break;
             }
@@ -678,6 +696,17 @@ pub(crate) async fn execute_llm_request(
                 }
 
                 if is_retryable && attempt < max_retries - 1 {
+                    if request.previous_response_id.is_some()
+                        && !dropped_previous_response_id_for_retry
+                    {
+                        request.previous_response_id = None;
+                        dropped_previous_response_id_for_retry = true;
+                        ctx.session_stats.clear_previous_response_chain();
+                        crate::agent::runloop::unified::turn::turn_helpers::display_status(
+                            ctx.renderer,
+                            "Retrying without previous response chain after provider error.",
+                        )?;
+                    }
                     if use_streaming
                         && supports_streaming_timeout_fallback(&provider_name)
                         && is_stream_timeout_error(&msg)

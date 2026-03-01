@@ -146,34 +146,9 @@ fn test_anthropic_tool_message_handling() {
 
     let request = LLMRequest {
         messages: vec![tool_message],
-        system_prompt: None,
-        tools: None,
         model: models::CLAUDE_SONNET_4_5.to_string(),
-        max_tokens: None,
-        temperature: None,
-        stream: false,
-        tool_choice: None,
-        parallel_tool_calls: None,
-        parallel_tool_config: None,
-        reasoning_effort: None,
-        effort: None,
-        output_format: None,
         verbosity: Some(VerbosityLevel::default()),
-        do_sample: None,
-        top_p: None,
-        top_k: None,
-        presence_penalty: None,
-        frequency_penalty: None,
-        stop_sequences: None,
-        thinking_budget: None,
-        betas: None,
-        context_management: None,
-        prefill: None,
-        character_reinforcement: false,
-        character_name: None,
-        coding_agent_settings: None,
-        metadata: None,
-        prompt_cache_key: None,
+        ..Default::default()
     };
 
     // Validate request shape instead of internal conversion

@@ -214,10 +214,10 @@ pub async fn handle_skills_create(path: &Path) -> Result<()> {
     actual_handler(path).await
 }
 
-pub async fn handle_skills_validate(path: &Path) -> Result<()> {
+pub async fn handle_skills_validate(path: &Path, strict: bool) -> Result<()> {
     // Import and delegate to the actual implementation in the skills module
     use crate::cli::skills::handle_skills_validate as actual_handler;
-    actual_handler(path).await
+    actual_handler(path, strict).await
 }
 
 pub async fn handle_skills_validate_all(skills_options: &SkillsCommandOptions) -> Result<()> {

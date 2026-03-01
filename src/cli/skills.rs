@@ -368,7 +368,7 @@ pub async fn handle_skills_create(skill_path: &Path) -> Result<()> {
 }
 
 /// Validate SKILL.md
-pub async fn handle_skills_validate(skill_path: &Path) -> Result<()> {
+pub async fn handle_skills_validate(skill_path: &Path, strict: bool) -> Result<()> {
     use vtcode_core::skills::enhanced_validator::ComprehensiveSkillValidator;
     use vtcode_core::skills::manifest::parse_skill_file;
 
@@ -380,7 +380,11 @@ pub async fn handle_skills_validate(skill_path: &Path) -> Result<()> {
     manifest.validate()?;
 
     // Run comprehensive validation with detailed report
-    let validator = ComprehensiveSkillValidator::new();
+    let validator = if strict {
+        ComprehensiveSkillValidator::strict()
+    } else {
+        ComprehensiveSkillValidator::new()
+    };
     let mut report = validator.validate_manifest(&manifest, skill_path);
 
     // Also validate file references if we have instructions
@@ -483,7 +487,7 @@ Test instructions
 
         std::fs::write(skill_path.join("SKILL.md"), skill_content).unwrap();
 
-        let result = handle_skills_validate(&skill_path).await;
+        let result = handle_skills_validate(&skill_path, false).await;
         assert!(result.is_ok());
     }
 }

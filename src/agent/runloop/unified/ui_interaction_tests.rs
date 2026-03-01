@@ -116,34 +116,9 @@ impl uni::LLMProvider for ReasoningThenContentProvider {
 fn build_request() -> uni::LLMRequest {
     uni::LLMRequest {
         messages: Vec::new(),
-        system_prompt: None,
-        tools: None,
         model: "test-model".to_string(),
-        max_tokens: None,
-        temperature: None,
         stream: true,
-        output_format: None,
-        tool_choice: None,
-        parallel_tool_calls: None,
-        parallel_tool_config: None,
-        reasoning_effort: None,
-        effort: None,
-        verbosity: None,
-        do_sample: None,
-        top_p: None,
-        top_k: None,
-        presence_penalty: None,
-        frequency_penalty: None,
-        stop_sequences: None,
-        thinking_budget: None,
-        betas: None,
-        context_management: None,
-        prefill: None,
-        character_reinforcement: false,
-        character_name: None,
-        coding_agent_settings: None,
-        metadata: None,
-        prompt_cache_key: None,
+        ..Default::default()
     }
 }
 

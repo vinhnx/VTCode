@@ -73,6 +73,10 @@ pub(crate) struct SessionStats {
     turn_stall_reason: Option<String>,
     /// Whether context clear was requested after plan approval
     pending_context_clear: bool,
+    /// Provider-scoped previous response ID for Responses-style server-side chaining.
+    previous_response_id: Option<String>,
+    previous_response_provider: Option<String>,
+    previous_response_model: Option<String>,
 }
 
 impl SessionStats {
@@ -128,6 +132,7 @@ impl SessionStats {
             self.plan_mode_interview_pending = false;
             self.plan_mode_turns = 0;
             self.tools.clear();
+            self.clear_previous_response_chain();
         }
     }
 
@@ -279,10 +284,42 @@ impl SessionStats {
 
     pub(crate) fn request_context_clear(&mut self) {
         self.pending_context_clear = true;
+        self.clear_previous_response_chain();
     }
 
     pub(crate) fn take_context_clear_request(&mut self) -> bool {
         std::mem::take(&mut self.pending_context_clear)
+    }
+
+    pub(crate) fn previous_response_id_for(&self, provider: &str, model: &str) -> Option<String> {
+        if self.previous_response_provider.as_deref() == Some(provider)
+            && self.previous_response_model.as_deref() == Some(model)
+        {
+            return self.previous_response_id.clone();
+        }
+        None
+    }
+
+    pub(crate) fn set_previous_response_chain(
+        &mut self,
+        provider: &str,
+        model: &str,
+        response_id: Option<&str>,
+    ) {
+        let Some(response_id) = response_id.map(str::trim).filter(|value| !value.is_empty()) else {
+            self.clear_previous_response_chain();
+            return;
+        };
+
+        self.previous_response_provider = Some(provider.to_string());
+        self.previous_response_model = Some(model.to_string());
+        self.previous_response_id = Some(response_id.to_string());
+    }
+
+    pub(crate) fn clear_previous_response_chain(&mut self) {
+        self.previous_response_provider = None;
+        self.previous_response_model = None;
+        self.previous_response_id = None;
     }
 }
 

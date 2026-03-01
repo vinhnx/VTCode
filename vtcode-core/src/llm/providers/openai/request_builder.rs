@@ -223,6 +223,29 @@ pub(crate) fn build_responses_request(
         openai_request["instructions"] = json!(instructions);
     }
 
+    if let Some(previous_response_id) = request.previous_response_id.as_deref() {
+        let trimmed = previous_response_id.trim();
+        if !trimmed.is_empty() {
+            openai_request["previous_response_id"] = json!(trimmed);
+        }
+    }
+
+    if let Some(store) = request.response_store {
+        openai_request["store"] = json!(store);
+    }
+
+    if let Some(include_fields) = &request.responses_include {
+        let include_values: Vec<String> = include_fields
+            .iter()
+            .map(|field| field.trim())
+            .filter(|field| !field.is_empty())
+            .map(ToOwned::to_owned)
+            .collect();
+        if !include_values.is_empty() {
+            openai_request["include"] = json!(include_values);
+        }
+    }
+
     let mut sampling_parameters = json!({});
     let mut has_sampling = false;
 

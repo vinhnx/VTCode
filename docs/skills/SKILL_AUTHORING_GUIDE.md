@@ -175,6 +175,20 @@ description: Helps with documents
 -   When to use it (triggers: file types, keywords, scenarios)
 -   Specific capabilities (tables, forms, charts)
 
+### 1.1 Add Routing Boundaries (Use vs Don't Use)
+
+Treat `description`, `when-to-use`, and `when-not-to-use` as routing logic:
+
+-   `when-to-use`: concrete triggers, expected inputs, expected outputs
+-   `when-not-to-use`: explicit negative examples and edge cases that should route elsewhere
+
+Example:
+
+```yaml
+when-to-use: Use for batch API data collection and summarized endpoint reports.
+when-not-to-use: Do not use for local file edits, static markdown rewrites, or one-line shell commands.
+```
+
 ### 2. Keep SKILL.md Concise
 
 -   Target <500 lines for SKILL.md body

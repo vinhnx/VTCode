@@ -67,6 +67,11 @@ enum SandboxPolicy {
 
 Following the field guide: "Default-deny outbound network, then allowlist."
 
+Operational recommendation:
+- Keep an org-level/domain baseline allowlist small and stable.
+- Narrow each task/request to the minimum subset of domains needed.
+- Treat "skills + network" as high risk and require explicit, minimal allowlists for workflow runs.
+
 ```toml
 [sandbox.network]
 allow_all = false

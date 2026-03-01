@@ -242,6 +242,38 @@ fn responses_payload_sets_instructions_from_system_prompt() {
 }
 
 #[test]
+fn responses_payload_includes_previous_response_and_optional_fields() {
+    let provider = OpenAIProvider::with_model(String::new(), models::openai::GPT_5.to_string());
+    let mut request = sample_request(models::openai::GPT_5);
+    request.previous_response_id = Some("resp_previous_123".to_string());
+    request.response_store = Some(false);
+    request.responses_include = Some(vec![
+        "reasoning.encrypted_content".to_string(),
+        "output_text.annotations".to_string(),
+    ]);
+
+    let payload = provider
+        .convert_to_openai_responses_format(&request)
+        .expect("conversion should succeed");
+
+    assert_eq!(
+        payload.get("previous_response_id").and_then(Value::as_str),
+        Some("resp_previous_123")
+    );
+    assert_eq!(payload.get("store").and_then(Value::as_bool), Some(false));
+
+    let include = payload
+        .get("include")
+        .and_then(Value::as_array)
+        .expect("include should be present");
+    assert_eq!(include.len(), 2);
+    assert_eq!(
+        include.first().and_then(Value::as_str),
+        Some("reasoning.encrypted_content")
+    );
+}
+
+#[test]
 fn harmony_detection_handles_common_variants() {
     assert!(OpenAIProvider::uses_harmony("gpt-oss-20b"));
     assert!(OpenAIProvider::uses_harmony("openai/gpt-oss-20b"));
