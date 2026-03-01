@@ -81,12 +81,9 @@ impl Session {
         } else {
             Block::new()
         };
-        block = block.style(background_style).padding(Padding::new(
-            ui::INLINE_INPUT_PADDING_HORIZONTAL,
-            ui::INLINE_INPUT_PADDING_HORIZONTAL,
-            ui::INLINE_INPUT_PADDING_VERTICAL,
-            ui::INLINE_INPUT_PADDING_VERTICAL,
-        ));
+        block = block
+            .style(background_style)
+            .padding(self.input_block_padding());
         if let Some(title) = shell_mode_title {
             block = block
                 .title(title)
@@ -481,6 +478,19 @@ impl Session {
 
     pub(crate) fn input_uses_shell_prefix(&self) -> bool {
         self.input_manager.content().trim_start().starts_with('!')
+    }
+
+    pub(crate) fn input_block_padding(&self) -> Padding {
+        if self.input_uses_shell_prefix() {
+            Padding::new(0, 0, 0, 0)
+        } else {
+            Padding::new(
+                ui::INLINE_INPUT_PADDING_HORIZONTAL,
+                ui::INLINE_INPUT_PADDING_HORIZONTAL,
+                ui::INLINE_INPUT_PADDING_VERTICAL,
+                ui::INLINE_INPUT_PADDING_VERTICAL,
+            )
+        }
     }
 
     pub(crate) fn shell_mode_border_title(&self) -> Option<&'static str> {

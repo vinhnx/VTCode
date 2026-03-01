@@ -6,7 +6,6 @@ use ratatui::{
     widgets::{Clear, Paragraph, Widget, Wrap},
 };
 
-use crate::config::constants::ui;
 use crate::ui::tui::session::Session;
 
 /// Widget for rendering the input area with user text entry
@@ -73,12 +72,9 @@ impl<'a> Widget for InputWidget<'a> {
         } else {
             ratatui::widgets::Block::new()
         };
-        block = block.style(temp_data.background_style).padding(ratatui::widgets::Padding::new(
-            ui::INLINE_INPUT_PADDING_HORIZONTAL,
-            ui::INLINE_INPUT_PADDING_HORIZONTAL,
-            ui::INLINE_INPUT_PADDING_VERTICAL,
-            ui::INLINE_INPUT_PADDING_VERTICAL,
-        ));
+        block = block
+            .style(temp_data.background_style)
+            .padding(self.session.input_block_padding());
         if let Some(title) = shell_mode_title {
             block = block
                 .title(title)
