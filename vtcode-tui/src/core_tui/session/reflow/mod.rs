@@ -315,9 +315,12 @@ impl Session {
         lines
     }
 
-    /// Wrap a line of text to fit within a maximum width
+    /// Wrap a line of text to fit within a maximum width.
+    ///
+    /// Uses URL-aware wrapping to preserve URL clickability across all views.
+    /// URLs are treated as atomic units and never split across lines.
     pub(super) fn wrap_line(&self, line: Line<'static>, max_width: usize) -> Vec<Line<'static>> {
-        text_utils::wrap_line(line, max_width)
+        wrapping::adaptive_wrap_line(line, max_width)
     }
 
     fn reflow_agent_message_lines(

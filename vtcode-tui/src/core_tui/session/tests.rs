@@ -1324,14 +1324,16 @@ fn wrap_line_keeps_explicit_blank_rows() {
 fn wrap_line_preserves_characters_wider_than_viewport() {
     let session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
     let style = session.default_style();
+    // Test with a wide character (Chinese character takes 2 columns)
     let line = Line::from(vec![Span::styled(
-        "hi".to_string(),
+        "你".to_string(),
         ratatui_style_from_inline(&style, None),
     )]);
 
     let wrapped = session.wrap_line(line, 1);
     let rendered: Vec<String> = wrapped.iter().map(line_text).collect();
 
+    // Wide characters should be preserved even when wider than viewport
     assert_eq!(rendered, vec!["你".to_string()]);
 }
 

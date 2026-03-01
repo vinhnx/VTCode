@@ -11,7 +11,7 @@ use vtcode_core::config::constants::defaults::{
 use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::tools::registry::labels::tool_action_label;
-use vtcode_core::tools::registry::{ToolErrorType, ToolExecutionError};
+use vtcode_core::tools::registry::{ToolExecutionError};
 use vtcode_core::tools::tool_intent;
 use vtcode_core::utils::ansi::MessageStyle;
 
@@ -1206,9 +1206,8 @@ pub(crate) async fn validate_tool_call<'a>(
             }))
         }
         Ok(ToolPermissionFlow::Denied) => {
-            let denial = ToolExecutionError::new(
+            let denial = ToolExecutionError::policy_violation(
                 canonical_tool_name,
-                ToolErrorType::PolicyViolation,
                 format!(
                     "Tool '{}' execution denied by policy",
                     preflight.normalized_tool_name

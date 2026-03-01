@@ -10,6 +10,7 @@
 //! 3. **Mixed lines (URL + prose):** Prose wraps naturally while URLs remain unsplit
 
 use ratatui::prelude::*;
+use ratatui::widgets::Paragraph;
 use regex::Regex;
 use std::sync::LazyLock;
 use unicode_width::UnicodeWidthStr;
@@ -24,22 +25,21 @@ use unicode_width::UnicodeWidthStr;
 ///
 /// IPv6 URLs are intentionally not matched in v1 due to complexity.
 static URL_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(
-        r"(?x)
-        # Full URL with scheme
-        [a-zA-Z][a-zA-Z0-9+.-]*://[^\s<>\[\]{}|\\^`\"']
+    // Pattern breakdown:
+    // 1. Full URLs with scheme (http://, https://, etc.)
+    // 2. Bare domains (example.com, github.com/path)
+    // 3. Localhost with port (localhost:8080)
+    // 4. IPv4 addresses with optional port (192.168.1.1:8080)
+    let pattern = r"(?x)
+        [a-zA-Z][a-zA-Z0-9+.-]*://[^\s<>\[\]{}|^]+
         |
-        # Bare domain (e.g., example.com/path)
-        [a-zA-Z0-9][-a-zA-Z0-9]*\.[a-zA-Z]{2,}(/[^\s<>\[\]{}|\\^`\"']*)?
+        [a-zA-Z0-9][-a-zA-Z0-9]*\.[a-zA-Z]{2,}(/[^\s<>\[\]{}|^]*)?
         |
-        # Localhost with port
         localhost:\d+
         |
-        # IPv4 with optional port
         \d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d+)?
-    ",
-    )
-    .unwrap()
+    ";
+    Regex::new(pattern).unwrap()
 });
 
 /// Detect if a string looks like a URL.
@@ -228,7 +228,7 @@ fn adaptive_wrap_mixed_line(
 
         if url_overlaps.is_empty() {
             // No URL overlap - wrap normally
-            wrap_and_push_text(&mut current_spans, &mut current_width, &style, &content, max_width);
+            wrap_and_push_text(&mut current_spans, &mut current_width, &style, &content, max_width, &mut rows);
         } else {
             // Has URL overlap - need to preserve URL integrity
             let mut pos = 0usize;
@@ -242,6 +242,7 @@ fn adaptive_wrap_mixed_line(
                         &style,
                         before,
                         max_width,
+                        &mut rows,
                     );
                 }
 
@@ -257,6 +258,7 @@ fn adaptive_wrap_mixed_line(
                         &style,
                         url_text,
                         max_width,
+                        &mut rows,
                     );
                 } else {
                     // URL fits - emit as atomic unit
@@ -280,6 +282,7 @@ fn adaptive_wrap_mixed_line(
                     &style,
                     after,
                     max_width,
+                    &mut rows,
                 );
             }
         }
@@ -295,12 +298,15 @@ fn adaptive_wrap_mixed_line(
 }
 
 /// Helper to wrap text and push to current spans, handling line breaks.
+///
+/// This function wraps text at grapheme boundaries and flushes lines when they exceed max_width.
 fn wrap_and_push_text(
     current_spans: &mut Vec<Span<'static>>,
     current_width: &mut usize,
     style: &Style,
     text: &str,
     max_width: usize,
+    rows: &mut Vec<Line<'static>>,
 ) {
     use unicode_segmentation::UnicodeSegmentation;
 
@@ -315,9 +321,12 @@ fn wrap_and_push_text(
             continue;
         }
 
+        // Check if adding this grapheme would exceed the width
         if *current_width + width > max_width && *current_width > 0 {
-            let flushed = std::mem::take(current_spans);
-            current_spans.push(Span::styled("\n", *style));
+            // Flush current line
+            if !current_spans.is_empty() {
+                rows.push(Line::from(std::mem::take(current_spans)));
+            }
             *current_width = 0;
         }
 

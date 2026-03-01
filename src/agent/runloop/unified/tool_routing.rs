@@ -271,7 +271,7 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
             // Cache permission grant for this session
             if let Some(cache) = tool_permission_cache {
                 let mut perm_cache = cache.write().await;
-                perm_cache.cache_grant(tool_name.to_string(), PermissionGrant::Once);
+                perm_cache.cache_grant(cache_key.clone(), PermissionGrant::Once);
             }
 
             // Record approval decision for pattern learning (fire-and-forget to avoid UI stalls)
@@ -296,7 +296,7 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
             // Cache permission grant for this session
             if let Some(cache) = tool_permission_cache {
                 let mut perm_cache = cache.write().await;
-                perm_cache.cache_grant(tool_name.to_string(), PermissionGrant::Session);
+                perm_cache.cache_grant(cache_key.clone(), PermissionGrant::Session);
             }
 
             // Record approval decision for pattern learning (fire-and-forget)

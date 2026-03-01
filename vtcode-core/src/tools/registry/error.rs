@@ -80,6 +80,10 @@ impl ToolExecutionError {
         error
     }
 
+    pub fn policy_violation(tool_name: String, message: impl Into<String>) -> Self {
+        Self::new(tool_name, ToolErrorType::PolicyViolation, message.into())
+    }
+
     pub fn to_json_value(&self) -> Value {
         json!({
             "error": {
