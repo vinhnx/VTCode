@@ -55,7 +55,7 @@ Perform a comprehensive analysis of the codebase to identify and eliminate all i
 
 ---
 
-IMPLEMENT POSTAMBLE CROSSTERM EXIT SUMMARIAZATION with proper metric calculation, keep it lightweight but informative
+IMPLEMENT POSTAMBLE vtcode EXIT SUMMARIAZATION with proper metric calculation, keep it lightweight but informative
 
 REF:
 
@@ -73,6 +73,8 @@ REF:
 
  vtcode --resume=ce712ef0-6605-4cd4-82bf-fad39 bd55bca
 ```
+
+since we use ratatui's alternative screen crossterm, we can implement a custom exit handler that triggers when the user exits the application. This handler can gather relevant metrics such as total API time spent, total session time, code changes made during the session, and a breakdown of usage by AI model. The summary should be concise yet informative, providing users with a clear overview of their session's activity and outcomes. Additionally, the summary can include actionable next steps, such as how to resume the session or view detailed logs. The implementation should ensure that the exit handler does not introduce significant overhead or delay when exiting the application. and show in the terminal after the user exits VTCode, providing a seamless and informative user experience. keep the exit summary UI clean and simple, while delivering valuable insights to the user about their session. like a peseudo terminal bounding box.
 
 ---
 

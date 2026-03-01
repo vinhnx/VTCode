@@ -1103,14 +1103,19 @@ fn parse_diff_summary_line(line: &str) -> Option<(&str, usize, usize)> {
 
 fn line_prefix_segments(
     prefix_segments: &[MarkdownSegment],
-    _theme_styles: &ThemeStyles,
+    theme_styles: &ThemeStyles,
     base_style: Style,
     line_number: usize,
     width: usize,
 ) -> Vec<MarkdownSegment> {
     let mut segments = prefix_segments.to_vec();
     let number_text = format!("{:>width$}  ", line_number, width = width);
-    segments.push(MarkdownSegment::new(base_style.dimmed(), number_text));
+    let number_style = if base_style == theme_styles.tool_output {
+        theme_styles.tool_detail.dimmed()
+    } else {
+        base_style.dimmed()
+    };
+    segments.push(MarkdownSegment::new(number_style, number_text));
     segments
 }
 
