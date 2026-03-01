@@ -41,437 +41,145 @@ vtcode/                          # Binary entrypoint (src/main.rs)
 
 ## Architecture Highlights
 
-Understanding these patterns requires reading multiple files across the codebase:
+### Core Systems
 
-### Multi-Provider LLM System
+**LLM** (`vtcode-llm/`, `vtcode-core/src/llm/`): Factory pattern, 10 providers, failover, caching, token budgets.
 
-- **Location**: `vtcode-llm/`, `vtcode-core/src/llm/`
-- **Pattern**: Factory pattern with provider-specific request shaping
-- **Providers**: OpenAI, Anthropic, Gemini, xAI, DeepSeek, OpenRouter, Ollama, Z.AI, Moonshot AI, MiniMax
-- **Features**: Automatic failover, prompt caching, token budget tracking
+**Tools** (`vtcode-tools/`, `vtcode-core/src/tools/`): Trait-driven (`Tool`, `ModeTool`, `CacheableTool`). Unified: `unified_exec`, `unified_file`, `unified_search`.
 
-### Trait-Based Tool System
+**Config**: Env vars → `vtcode.toml` → constants. Never hardcode.
 
-- **Location**: `vtcode-tools/`, `vtcode-core/src/tools/`
-- **Pattern**: Trait-driven composition (`Tool`, `ModeTool`, `CacheableTool`)
-- **Key**: Single source of truth for content search (grep_file) and file operations
-- **Tools**: 54+ specialized handlers with workspace-scoped isolation
-- **Unified Tools**: `unified_exec` (shell), `unified_file` (file ops), `unified_search` (discovery) provide a minimal, high-efficiency interface for agents.
+**PTY** (`vtcode-core/src/exec/`, `vtcode-bash-runner/`): Interactive shell sessions, streaming output.
 
-### Configuration Precedence
+**Tree-Sitter** (`vtcode-core/src/tree_sitter/`, `vtcode-indexer/`): Rust, Python, JS/TS, Go, Java, Bash. Incremental AST with caching.
 
-**Critical**: Configuration flows in this order:
+**Code Intelligence** (`vtcode-core/src/tools/code_intelligence.rs`): `goto_definition`, `find_references`, `hover`, `document_symbol`, `workspace_symbol`.
 
-1. Environment variables (API keys, overrides)
-2. `vtcode.toml` (runtime configuration)
-3. `vtcode-core/src/config/constants.rs` (code constants)
+### Protocols
 
-### PTY Session Management
+**ACP** (`vtcode-acp-client/`): Zed IDE integration.
 
-- **Location**: `vtcode-core/src/exec/`, `vtcode-bash-runner/`
-- **Pattern**: Interactive shell sessions with streaming output
-- **Use**: Long-running commands, interactive workflows, real-time feedback
+**A2A**: Agent Card at `/.well-known/agent-card.json`. Task states, SSE, JSON-RPC 2.0. See `docs/a2a/a2a-protocol.md`.
 
-### Tree-Sitter Integration
+**MCP** (`vtcode-core/src/mcp/`): Extensible tooling via `rmcp`. Config: `.mcp.json` (project) + `vtcode.toml`. Transports: stdio, HTTP, child-process. See `docs/mcp/`.
 
-- **Location**: `vtcode-core/src/tree_sitter/`, `vtcode-indexer/`
-- **Languages**: Rust, Python, JavaScript/TypeScript, Go, Java, Bash (+ optional Swift)
-- **Pattern**: Incremental AST building with caching for semantic code analysis
+### Extensions
 
-### Code Intelligence Tool
+**Skills** (`.vtcode/skills/` → `~/.vtcode/skills/` → embedded): agentskills.io standard. See `docs/skills/`.
 
-- **Location**: `vtcode-core/src/tools/code_intelligence.rs`
-- **Purpose**: Code navigation using tree-sitter
-- **Operations**: `goto_definition`, `find_references`, `hover`, `document_symbol`, `workspace_symbol`
-- **Usage**: `{"operation": "goto_definition", "file_path": "src/main.rs", "line": 42, "character": 15}`
+**Subagents** (`vtcode-core/src/subagents/`): `spawn_subagent` tool. Built-in: `explore`, `plan`, `general`, `code-reviewer`, `debugger`. Custom: `.vtcode/agents/`. See `docs/subagents/SUBAGENTS.md`.
 
-### Protocol Integrations
-
-**ACP** (Agent Client Protocol):
-
-- **Location**: `vtcode-acp-client/` - Zed IDE integration
-- **Purpose**: Enable VT Code to run as agent within Zed editor
-
-**A2A** (Agent2Agent Protocol):
-
-- **Discovery**: Agent Card at `/.well-known/agent-card.json`
-- **Features**: Task lifecycle states (`submitted`/`working`/`completed`/`failed`), SSE streaming, JSON-RPC 2.0 over HTTP, push notifications
-- **Documentation**: `docs/a2a/a2a-protocol.md`
-
-**MCP** (Model Context Protocol):
-
-- **Location**: `vtcode-core/src/mcp/` (9 modules) - Extensible tooling via `rmcp`
-- **Key Components**:
-    - `McpClient`: Main high-level client managing multiple providers
-    - `McpProvider`: Individual provider connection and lifecycle
-    - `McpToolExecutor`: Trait interface for tool registry integration
-    - `rmcp_transport.rs`: Supports stdio, HTTP, and child-process transports
-- **Configuration**:
-    - Project: `.mcp.json` (checked into source control)
-    - Runtime: `vtcode.toml` with `[mcp]` section
-- **Features**:
-    - Tool discovery and execution with allowlist enforcement
-    - Resource and prompt management from MCP providers
-    - Security validation (argument size, path traversal, schema)
-    - OAuth 2.0 authentication support
-    - Event notifications (logging, progress, resource updates)
-    - Per-provider concurrency control with semaphores
-    - Timeout management (startup and per-tool)
-- **Transports**:
-    - **Stdio**: Local tool execution (development, CLI tools)
-    - **HTTP**: Remote server integration (requires `experimental_use_rmcp_client = true`)
-    - **Child Process**: Managed stdio with lifecycle control
-- **Documentation**:
-    - Integration guide: `docs/mcp/MCP_INTEGRATION_GUIDE.md`
-    - Implementation roadmap: `docs/mcp/MCP_ROADMAP.md`
-
-### Agent Skills
-
-- **Pattern**: Multi-location discovery with precedence — project `.vtcode/skills/` → user `~/.vtcode/skills/` → embedded resources
-- **Standard**: Compliant with the [agentskills.io](http://agentskills.io/) open standard for interoperability
-- **Documentation**: `docs/skills/SKILLS_GUIDE.md`, `docs/skills/AGENT_SKILLS_SPEC_IMPLEMENTATION.md`
-
-### Subagent System
-
-- **Location**: `vtcode-core/src/subagents/`, `vtcode-config/src/subagent.rs`
-- **Purpose**: Delegate tasks to specialized agents with isolated context
-- **Built-in**: `explore` (haiku, read-only), `plan` (sonnet, research), `general` (sonnet, full), `code-reviewer`, `debugger`
-- **Tool**: `spawn_subagent` - params: `prompt`, `subagent_type`, `resume`, `thoroughness`, `parent_context`
-- **Custom Agents**: Define in `.vtcode/agents/` (project) or `~/.vtcode/agents/` (user) as Markdown with YAML frontmatter
-- **Documentation**: `docs/subagents/SUBAGENTS.md`
-
-### Process Hardening
-
-- **Location**: `vtcode-process-hardening/` (dedicated crate)
-- **Purpose**: Apply security hardening measures before the main binary executes
-- **Pattern**: Pre-main execution using `#[ctor::ctor]` constructor decorator
-- **Features**:
-    - **Linux/Android**: `PR_SET_DUMPABLE` (ptrace disable), `RLIMIT_CORE` (disable core dumps), `LD_*` env var removal
-    - **macOS**: `PT_DENY_ATTACH` (debugger prevention), `RLIMIT_CORE`, `DYLD_*` env var removal
-    - **BSD**: `RLIMIT_CORE`, `LD_*` env var removal
-    - **Windows**: Placeholder for future mitigation policies
-- **Key Detail**: Uses `std::env::vars_os()` to handle non-UTF-8 environment variables correctly
-- **Exit Codes**: 5 (prctl), 6 (ptrace), 7 (setrlimit) indicate hardening failures
-- **Documentation**: `docs/development/PROCESS_HARDENING.md`
-- **Integration**: Called via `#[ctor::ctor]` in `src/main.rs:init()`
-
-**Working Directory Context**:
-
-- Explicit workspace path in system prompt
-- Configuration: `agent.include_working_directory = true` (default)
-- Overhead: ~10 tokens
-
-**Implementation**: System prompt composition happens in `vtcode-core/src/prompts/system.rs` with PromptContext built in `src/agent/runloop/unified/prompts.rs`. See unit tests in `vtcode-core/src/prompts/system.rs` (tests module) for usage examples.
+**Process Hardening** (`vtcode-process-hardening/`): Pre-main security (ptrace disable, core dump disable, env var removal). Exit codes: 5/6/7. See `docs/development/PROCESS_HARDENING.md`.
 
 ## Code Style & Conventions
 
-### Critical Standards from .github/copilot-instructions.md
+### Code Style
 
-**Error Handling**:
+**Errors**: `anyhow::Result<T>` with `.with_context()`. Never `unwrap()`.
 
-```rust
-// ALWAYS use anyhow::Result<T> with context
-use anyhow::{Context, Result};
+**Config**: Never hardcode. Use `vtcode_core::config::constants`, `vtcode.toml`, or `docs/models.json`.
 
-pub async fn read_config(path: &str) -> Result<Config> {
-    tokio::fs::read_to_string(path)
-        .await
-        .with_context(|| format!("Failed to read config at {}", path))?;
-    // Process...
-}
+**Naming**: `snake_case` functions/vars, `PascalCase` types. Descriptive names, early returns, 4-space indent.
 
-// NEVER use unwrap()
-// ❌ let data = result.unwrap();
-// ✅ let data = result.with_context(|| "Description")?;
-```
-
-**Constants & Configuration**:
-
-```rust
-// NEVER hardcode values (especially model IDs)
-// ❌ let model = "gpt-4";
-// ❌ let timeout = 30;
-
-// ✅ Use constants from vtcode-core/src/config/constants.rs
-use vtcode_core::config::constants::DEFAULT_TIMEOUT;
-
-// ✅ Read from vtcode.toml at runtime
-let config = Config::load("vtcode.toml")?;
-
-// ✅ Model metadata in docs/models.json
-```
-
-**Naming Conventions**:
-
-- `snake_case` for functions and variables
-- `PascalCase` for types and structs
-- Descriptive names, early returns
-- 4-space indentation
-
-**Documentation**:
-
-- All `.md` files go in `./docs/` directory (NOT in root)
-- `README.md` is the only exception (stays in root)
-- Use `docs/models.json` for latest LLM model metadata
-
-### Documents Orgranization
-
-- `docs/ARCHITECTURE.md`: High-level architecture overview
-- `docs/security/SECURITY_MODEL.md`: Security design and threat model
-- `docs/config/CONFIGURATION_PRECEDENCE.md`: Configuration loading order and best practices
-- `docs/providers/PROVIDER_GUIDES.md`: Setup guides for LLM providers
-- `docs/development/testing.md`: Testing strategy and infrastructure
-- All docs should be in a respective subdirectory under `docs/` for organization and discoverability.
+**Docs**: `.md` in `./docs/` only (`README.md` exception).
 
 ## Testing
 
-### Test Organization
-
-- **Unit tests**: Inline `#[cfg(test)]` modules
-- **Integration tests**: `tests/` directory
-- **Benchmarks**: `benches/` directory
-- **Snapshots**: [`insta`](https://insta.rs) for golden-file testing
-
-### Commands
+**Organization**: Unit tests inline (`#[cfg(test)]`), integration in `tests/`, benchmarks in `benches/`, snapshots via [`insta`](https://insta.rs).
 
 ```bash
-# Build
-cargo build          # Full build
-cargo check          # Fast compile check
+# Build & check
+cargo build
+cargo check
 
 # Test (nextest is 3-5x faster)
 cargo nextest run              # All tests
 cargo nextest run -p vtcode-core  # Single package
-cargo nextest run --test integration_tests  # Integration only
-cargo nextest run -- --nocapture  # Show output
+cargo nextest run --test integration_tests
+cargo nextest run -- --nocapture
 
-# Quick profiles
-cargo t   # Alias: nextest run
-cargo tq  # Quick (no retries)
-cargo ts  # Fallback if nextest unavailable
+# Quick profiles (aliases)
+cargo t   # nextest run
+cargo tq  # no retries
+cargo ts  # fallback
+
+# Snapshots (insta)
+cargo insta test    # Run + review
+cargo insta review  # Interactive
+cargo insta accept  # Accept all
 
 # Benchmarks
 cargo bench
-cargo bench -- search_benchmark
 
-# Snapshot testing (insta)
-cargo insta test    # Run with snapshot review
-cargo insta review  # Interactive accept/reject
-cargo insta accept  # Accept all pending
-
-# Quality gate (before commit)
+# Quality gate
 cargo clippy && cargo fmt --check && cargo check && cargo nextest run
 ```
 
-## Important Development Notes
+## Development Notes
 
-### Security & Safety
+**Security**: Validate paths (workspace boundaries), command allowlists, tool policies in `vtcode.toml`, human-in-the-loop approval.
 
-- Validate all file paths (workspace boundary enforcement)
-- Command allowlist with per-argument validation
-- Tool policies (allow/deny/prompt) in `vtcode.toml`
-- Human-in-the-loop approval system
+**Performance**: Single codegen unit, strict Clippy, no `expect_used`/`unwrap_used`.
 
-### Memory & Performance
-
-- Single codegen unit for better optimization
-- Strict Clippy linting rules (see `Cargo.toml` workspace.lints)
-- No `expect_used`, `unwrap_used`, or manual implementations when stdlib has them
-
-### Key Files Never to Hardcode
-
-- **Model IDs**: Use `docs/models.json`
-- **Constants**: Use `vtcode-core/src/config/constants.rs`
-- **Config values**: Read from `vtcode.toml`
-
-### Common Pitfalls
-
-1. **Don't hardcode model names** - use `docs/models.json` or constants
-2. **Don't use `unwrap()`** - use `.with_context()` for error context
-3. **Don't create .md files in root** - they belong in `./docs/`
-4. **Don't modify constants directly** - use `vtcode.toml` when possible
-5. **Don't ignore Clippy warnings** - fix or explain in comments
-6. **Don't assume workspace paths** - validate and sanitize
-7. **Don't skip quality checks** - run before committing
-8. **Don't assume `RwLock` is faster** - benchmark; `Mutex` often wins for small paths
+**Pitfalls**:
+1. Don't assume paths — validate boundaries
+2. Don't skip quality gate
+3. Don't assume `RwLock` is faster — benchmark; `Mutex` often wins
 
 ## Agent Execution Guidelines
 
-### Task Execution Philosophy
+### Task Execution
 
 - **Complete autonomously**: Resolve fully before yielding; no intermediate confirmations
 - **Root cause fixes**: Fix at the source, not surface-level
 - **Verify yourself**: Run `cargo check`, `cargo nextest`, `cargo clippy` after changes
 - **Precision over ambition**: Surgical changes respecting existing style
-- **Stay in scope**: Don't fix unrelated issues (mention in final message if needed)
+- **Stay in scope**: Don't fix unrelated issues (mention in final message)
+- **Iterate proactively**: Fix errors without asking; know when "done" is sufficient
 
-### Responsiveness & Momentum
+### Responsiveness
 
-**Preamble Messages** (before tool calls):
+**Preambles** (before tool calls): 1-2 sentences showing progress. Group related actions. Skip for trivial reads.
 
-Concise, action-oriented notes that show progress and build momentum:
+> "Explored repo structure; checking LLM provider factory."  
+> "Config loads. Patching tool registry and tests."
 
-- **Length**: 1–2 sentences max (8–12 words ideal for quick updates)
-- **Grouping**: Logically group related actions—don't send a note for every individual command
-- **Context building**: Show what you've done so far and what's next (creates continuity)
-- **Tone**: Friendly and collaborative; add small touches of personality
-- **Exception**: Skip preambles for trivial single-file reads unless part of larger work
-
-Examples:
-
-- "I've explored the repo structure; now checking the LLM provider factory."
-- "Config loads correctly. Next, patching the tool registry and related tests."
-- "Spotted the issue in the cache layer; now hunting where it gets used."
-
-**Progress Updates** (for longer tasks):
-
-For work spanning multiple tool calls or complex planning, send brief progress updates (1–2 sentences, 8–10 words) at reasonable intervals:
-
-- "Finished analyzing tool trait definitions; implementing new code_intelligence operation."
-- "Tests passing for core logic; now verifying integration points."
+**Progress updates** for longer tasks: "Finished tool trait analysis; implementing code_intelligence op."
 
 ### Final Answers
 
-**Structure and Format**:
+**Format**: Lead with outcomes. ≤10 lines. Use bullets (4-6 per section). Monospace for commands/paths.
 
-- **Lead with outcomes**: State what was accomplished before describing how
-- **Assume accessibility**: User has direct access to your changes—no need to repeat full file contents
-- **Brevity first**: Aim for 10 lines or fewer; expand only when critical for understanding
-- **Let content speak**: Avoid unnecessary explanations or summaries
+**Don't**: No inline citations, no repeating plans, no nested bullets, no cramming unrelated items.
 
-**Formatting Guidelines**:
+### Planning
 
-- **Headers**: Use only when they improve clarity (1–3 words, Title Case). Leave no blank line before first bullet.
-- **Bullets**: Use `-` prefix; keep one-line where possible; group related items; order by importance (4–6 bullets max per section)
-- **Monospace**: Wrap commands, file paths, env vars, code identifiers in backticks (`` ` ``)
-- **File references**: Include paths with optional line numbers (e.g., `src/main.rs:42`, `vtcode-core/src/llm/mod.rs:10`); no ranges or URIs
-- **Tone**: Natural and conversational—like a teammate handing off completed work
+Use `update_plan` for 4+ step tasks. 5-7 word steps. Mark `in_progress`/`completed`. Update if scope changes.
 
-**Don't**:
+### Tool Use
 
-- Don't output inline citations (broken in CLI rendering)
-- Don't repeat the plan after calling `update_plan` (already displayed)
-- Don't use nested bullets or deep hierarchies
-- Don't cram unrelated keywords into single bullets—split for clarity
+**Search**: `unified_search` with `action="grep"` | `list` | `intelligence` | `tools` | `errors` | `agent`. Read files once.
 
-### Planning (update_plan tool)
+**Edit**: `unified_file` with `edit` | `write` | `create`. `unified_exec` for shell/PTY. Don't re-read to verify.
 
-Use plans for non-trivial, multi-step work:
-
-- **When to use**: Tasks requiring 4+ steps, logical dependencies, ambiguity that benefits from outlining
-- **When to skip**: Simple queries, single-step changes, or anything you can resolve immediately
-- **Quality**: Avoid filler steps; don't state the obvious; structure as 5–7 word descriptive steps
-- **During execution**: Mark steps `completed` as you finish them; keep exactly one step `in_progress`
-- **Updates**: If scope changes mid-task, call `update_plan` with rationale explaining why
-- **Final step**: Once complete, mark all steps as `completed` and do not repeat the plan in your output
-
-High-quality plan example:
-
-1. Read existing tool trait definitions
-2. Add new operation to code_intelligence
-3. Update tool registry and tests
-4. Verify with end-to-end test
-5. Update docs/ARCHITECTURE.md
-
-### Work Completion
-
-- **Autonomy**: Complete tasks fully before yielding; do not ask for confirmation on intermediate steps
-- **Iteration**: If feedback or errors arise, fix them proactively and iterate up to reasonable limits
-- **Scope boundary**: Don't overstep into unrelated work, but do resolve all aspects of the requested task
-- **Timeboxing**: For ambiguous or open-ended tasks, use judgment to decide when "done" is sufficient
-- **User context**: The user is working on the same machine—no need for setup instructions or file content restatement
-
-### Tool Use Guidelines
-
-**Search and File Exploration**:
-
-- Prefer `unified_search` with `action="grep"` for fast, focused searches
-- Use `unified_search` with `action="list"` for directory exploration
-- Use `unified_search` with `action="intelligence"` for code navigation (definitions, references)
-- Use `unified_search` with `action="tools"` to discover available tools and skills
-- Use `unified_search` with `action="errors"` for diagnostic information
-- Use `unified_search` with `action="agent"` for system state and available tools
-- When reading files, read the complete file once; don't re-invoke `Read` on the same file
-
-**Code Modification**:
-
-- Use `unified_file` with `action="edit"` for surgical changes to existing code
-- Use `unified_file` with `action="write"` to replace entire file contents
-- Use `unified_file` with `action="create"` for new files
-- Use `unified_exec` for shell commands and interactive PTY sessions
-- After applying patches or creating files, don't re-read to verify—the tool will fail if it didn't work
-- Never use `git commit` or `git push` unless explicitly requested
-- Use `git log` and `git blame` for code history when additional context is needed
-
-**Testing**:
-
-- Run specific tests first (`cargo nextest run <filter>`), then broaden
-- Use test infrastructure proactively; don't ask user to run tests
-- Non-interactive mode: run tests yourself before yielding
-- Interactive mode: suggest what to validate next
-- No existing tests? Don't add tests to codebases without test patterns
-- Run `cargo clippy` after changes; fix warnings in scope
-
-## Development Workflow
-
-### Before Committing
-
-```bash
-cargo clippy && cargo fmt --check && cargo check && cargo nextest run
-```
-
-### Adding Features
-
-1. Read existing patterns
-2. Use `vtcode.toml` config when possible
-3. Add constants to `vtcode-core/src/config/constants.rs` if needed
-4. Write tests (unit + integration)
-5. Update docs in `./docs/`
+**Test**: Specific → broad. Run proactively. No tests in codebase? Don't add. Run `cargo clippy` after changes.
 
 ## Self-Documentation
 
-When answering questions about VT Code itself, consult `docs/modules/vtcode_docs_map.md` first to locate canonical references before answering.
+Answering questions about VT Code? Check `docs/modules/vtcode_docs_map.md` first.
 
-## Additional Resources
+## Resources
 
-- **Architecture**: See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
-- **Security**: See [docs/security/SECURITY_MODEL.md](docs/security/SECURITY_MODEL.md)
-- **Contributing**: See [CONTRIBUTING.md](docs/CONTRIBUTING.md)
-- **Configuration**: See [docs/config/CONFIGURATION_PRECEDENCE.md](docs/config/CONFIGURATION_PRECEDENCE.md)
-- **Provider Setup**: See [docs/providers/PROVIDER_GUIDES.md](docs/providers/PROVIDER_GUIDES.md)
-- **Testing Guide**: See [docs/development/testing.md](docs/development/testing.md)
-
-## Final Note
-
-- Follow the principles of autonomy, precision, and momentum in all tasks.
-- Follow DRY principles and code style conventions to maintain consistency.
-- KISS (Keep It Simple, Stupid) - prefer straightforward solutions over complex ones.
-- Principle of Least Astonishment - write code that behaves in a way that least surprises other developers.
-- Use the documentation as your primary source of truth for architecture and design questions.
-- When in doubt, prioritize completing the task fully and correctly over asking for clarification or permission to proceed.
-- Always run quality checks before finalizing your work.
-- Remember that the user is working on the same machine and has access to all files and tools you do—no need for hand-holding or restating information they can access directly.
-- When making changes, consider the impact on the overall system and aim for solutions that integrate well with existing patterns and practices.
+- `docs/ARCHITECTURE.md` — High-level architecture
+- `docs/security/SECURITY_MODEL.md` — Security design
+- `docs/config/CONFIGURATION_PRECEDENCE.md` — Config loading order
+- `docs/providers/PROVIDER_GUIDES.md` — LLM provider setup
+- `docs/development/testing.md` — Testing strategy
 
 ## Hickey's Core: Simple > Easy
 
-Simple = one concern, not complected. Easy = familiar/convenient. Never conflate.
+**Simple** = one concern, not complected. **Easy** = familiar/convenient. Never conflate.
 
-**Complecting** = interleaving concerns that should be separate. The root cause of most architectural debt.
+**Rules**: Separate what changes from what doesn't. Data over objects. Values over mutation. No temporal coupling. Decomplect first.
 
-**Rules:**
-
-- Separate what changes from what doesn't
-- Data over objects — plain maps/lists compose; encapsulated state doesn't
-- Values over mutation — identity, time, and value are distinct concepts
-- No temporal coupling — share data, not calls
-- Decomplect first, optimize later; you cannot simplify by adding abstraction
-
-**Applied:**
-
-- Prefer pure functions + immutable data
-- Interfaces as data shapes, not method contracts
-- Queues/events over direct service calls
-- Validate meaning (spec/contracts), not just shape (types)
-
-**Test:** Can you reason about this part without loading the whole system in your head? If no — it's complected.
+**Test**: Can you reason about this without loading the whole system? If no — it's complected.
