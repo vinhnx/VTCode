@@ -1,14 +1,26 @@
 use anyhow::{Context, Result};
 use std::fmt::{self, Display};
-use std::sync::Arc;
+use std::sync::{Arc, RwLock as StdRwLock};
 use tokio::sync::{Mutex, RwLock};
 use tokio::time::{Duration, timeout};
 use tracing::{error, info, warn};
 use vtcode_core::config::mcp::McpClientConfig;
-use vtcode_core::exec_policy::AskForApproval;
+use vtcode_core::exec_policy::{AskForApproval, RejectConfig};
 use vtcode_core::mcp::{McpClient, McpClientStatus};
 
 use crate::agent::runloop::mcp_events::McpEvent;
+
+pub(crate) fn approval_policy_from_human_in_the_loop(human_in_the_loop: bool) -> AskForApproval {
+    if human_in_the_loop {
+        AskForApproval::OnRequest
+    } else {
+        AskForApproval::Reject(RejectConfig {
+            sandbox_approval: true,
+            rules: true,
+            mcp_elicitations: true,
+        })
+    }
+}
 
 /// Represents the initialization status of MCP components
 #[derive(Clone)]
@@ -87,7 +99,7 @@ pub struct AsyncMcpManager {
     /// Whether to ring terminal bell for HITL prompts
     hitl_notification_bell: bool,
     /// Approval policy used by MCP elicitation handling.
-    approval_policy: AskForApproval,
+    approval_policy: Arc<StdRwLock<AskForApproval>>,
     /// Current initialization status
     status: Arc<RwLock<McpInitStatus>>,
     /// Mutex to prevent multiple concurrent initializations
@@ -116,7 +128,7 @@ impl AsyncMcpManager {
         Self {
             config,
             hitl_notification_bell,
-            approval_policy,
+            approval_policy: Arc::new(StdRwLock::new(approval_policy)),
             status: Arc::new(RwLock::new(init_status)),
             initialization_mutex: Arc::new(Mutex::new(())),
             event_callback,
@@ -139,7 +151,7 @@ impl AsyncMcpManager {
         let mutex = Arc::clone(&self.initialization_mutex);
         let event_callback = Arc::clone(&self.event_callback);
         let hitl_notification_bell = self.hitl_notification_bell;
-        let approval_policy = self.approval_policy;
+        let approval_policy = Arc::clone(&self.approval_policy);
 
         // Spawn the initialization task. Store the JoinHandle so it can be
         // aborted on drop — prevents an orphan task if the manager is dropped
@@ -209,7 +221,7 @@ impl AsyncMcpManager {
     async fn initialize_mcp_client(
         config: McpClientConfig,
         hitl_notification_bell: bool,
-        approval_policy: AskForApproval,
+        approval_policy: Arc<StdRwLock<AskForApproval>>,
         event_callback: Arc<dyn Fn(McpEvent) + Send + Sync>,
     ) -> Result<McpClient> {
         info!(
@@ -268,6 +280,27 @@ impl AsyncMcpManager {
         self.status.read().await.clone()
     }
 
+    pub fn approval_policy(&self) -> AskForApproval {
+        match self.approval_policy.read() {
+            Ok(policy) => *policy,
+            Err(poisoned) => {
+                warn!("MCP approval policy lock was poisoned; continuing with last known value");
+                *poisoned.into_inner()
+            }
+        }
+    }
+
+    pub fn set_approval_policy(&self, approval_policy: AskForApproval) {
+        let mut policy_guard = match self.approval_policy.write() {
+            Ok(policy) => policy,
+            Err(poisoned) => {
+                warn!("MCP approval policy lock was poisoned during update; recovering");
+                poisoned.into_inner()
+            }
+        };
+        *policy_guard = approval_policy;
+    }
+
     /// Get current status reference
     #[allow(dead_code)]
     pub fn get_status_arc(&self) -> Arc<RwLock<McpInitStatus>> {
@@ -318,10 +351,10 @@ impl AsyncMcpManager {
 impl Drop for AsyncMcpManager {
     fn drop(&mut self) {
         // Abort the background init task so it doesn't outlive the manager.
-        if let Ok(mut guard) = self.init_task.lock() {
-            if let Some(task) = guard.take() {
-                task.abort();
-            }
+        if let Ok(mut guard) = self.init_task.lock()
+            && let Some(task) = guard.take()
+        {
+            task.abort();
         }
     }
 }
@@ -330,6 +363,7 @@ impl Drop for AsyncMcpManager {
 mod tests {
     use super::*;
     use vtcode_core::config::mcp::McpClientConfig;
+    use vtcode_core::exec_policy::RejectConfig;
 
     #[tokio::test]
     async fn test_async_mcp_manager_creation() {
@@ -381,5 +415,33 @@ mod tests {
         };
         assert!(initializing_status.is_initializing());
         assert!(!initializing_status.is_ready());
+    }
+
+    #[test]
+    fn test_approval_policy_mapping_from_hitl() {
+        assert_eq!(
+            approval_policy_from_human_in_the_loop(true),
+            AskForApproval::OnRequest
+        );
+        assert_eq!(
+            approval_policy_from_human_in_the_loop(false),
+            AskForApproval::Reject(RejectConfig {
+                sandbox_approval: true,
+                rules: true,
+                mcp_elicitations: true,
+            })
+        );
+    }
+
+    #[test]
+    fn test_set_approval_policy_updates_policy() {
+        let config = McpClientConfig::default();
+        let event_callback: Arc<dyn Fn(McpEvent) + Send + Sync> = Arc::new(|_event| {});
+
+        let manager = AsyncMcpManager::new(config, true, AskForApproval::OnRequest, event_callback);
+        assert_eq!(manager.approval_policy(), AskForApproval::OnRequest);
+
+        manager.set_approval_policy(AskForApproval::Never);
+        assert_eq!(manager.approval_policy(), AskForApproval::Never);
     }
 }
