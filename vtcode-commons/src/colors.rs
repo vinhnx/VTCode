@@ -41,24 +41,24 @@ pub fn color_to_rgb(color: &Color) -> Option<RgbColor> {
 }
 
 /// Convert an ANSI color to RGB approximation
-fn ansi_to_rgb(ansi_color: anstyle::AnsiColor) -> Option<RgbColor> {
+fn ansi_to_rgb(ansi_color: AnsiColor) -> Option<RgbColor> {
     match ansi_color {
-        anstyle::AnsiColor::Black => Some(RgbColor(0, 0, 0)),
-        anstyle::AnsiColor::Red => Some(RgbColor(170, 0, 0)),
-        anstyle::AnsiColor::Green => Some(RgbColor(0, 170, 0)),
-        anstyle::AnsiColor::Yellow => Some(RgbColor(170, 85, 0)),
-        anstyle::AnsiColor::Blue => Some(RgbColor(0, 0, 170)),
-        anstyle::AnsiColor::Magenta => Some(RgbColor(170, 0, 170)),
-        anstyle::AnsiColor::Cyan => Some(RgbColor(0, 170, 170)),
-        anstyle::AnsiColor::White => Some(RgbColor(170, 170, 170)),
-        anstyle::AnsiColor::BrightBlack => Some(RgbColor(85, 85, 85)),
-        anstyle::AnsiColor::BrightRed => Some(RgbColor(255, 85, 85)),
-        anstyle::AnsiColor::BrightGreen => Some(RgbColor(85, 255, 85)),
-        anstyle::AnsiColor::BrightYellow => Some(RgbColor(255, 255, 85)),
-        anstyle::AnsiColor::BrightBlue => Some(RgbColor(85, 85, 255)),
-        anstyle::AnsiColor::BrightMagenta => Some(RgbColor(255, 85, 255)),
-        anstyle::AnsiColor::BrightCyan => Some(RgbColor(85, 255, 255)),
-        anstyle::AnsiColor::BrightWhite => Some(RgbColor(255, 255, 255)),
+        AnsiColor::Black => Some(RgbColor(0, 0, 0)),
+        AnsiColor::Red => Some(RgbColor(170, 0, 0)),
+        AnsiColor::Green => Some(RgbColor(0, 170, 0)),
+        AnsiColor::Yellow => Some(RgbColor(170, 85, 0)),
+        AnsiColor::Blue => Some(RgbColor(0, 0, 170)),
+        AnsiColor::Magenta => Some(RgbColor(170, 0, 170)),
+        AnsiColor::Cyan => Some(RgbColor(0, 170, 170)),
+        AnsiColor::White => Some(RgbColor(170, 170, 170)),
+        AnsiColor::BrightBlack => Some(RgbColor(85, 85, 85)),
+        AnsiColor::BrightRed => Some(RgbColor(255, 85, 85)),
+        AnsiColor::BrightGreen => Some(RgbColor(85, 255, 85)),
+        AnsiColor::BrightYellow => Some(RgbColor(255, 255, 85)),
+        AnsiColor::BrightBlue => Some(RgbColor(85, 85, 255)),
+        AnsiColor::BrightMagenta => Some(RgbColor(255, 85, 255)),
+        AnsiColor::BrightCyan => Some(RgbColor(85, 255, 255)),
+        AnsiColor::BrightWhite => Some(RgbColor(255, 255, 255)),
     }
 }
 
@@ -112,9 +112,9 @@ pub fn is_light_color(color: &Color) -> bool {
 /// Get a contrasting color (black or white) for better readability
 pub fn contrasting_color(color: &Color) -> Color {
     if is_light_color(color) {
-        Color::Ansi(anstyle::AnsiColor::Black)
+        Color::Ansi(AnsiColor::Black)
     } else {
-        Color::Ansi(anstyle::AnsiColor::White)
+        Color::Ansi(AnsiColor::White)
     }
 }
 

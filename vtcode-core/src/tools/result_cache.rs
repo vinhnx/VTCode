@@ -49,7 +49,7 @@ impl ToolCacheKey {
     /// Create a cache key directly from a JSON `serde_json::Value` to avoid
     /// serializing into an owned `String` when building a key for caches.
     #[inline]
-    pub fn from_json(tool: &str, params: &serde_json::Value, target_path: &str) -> Self {
+    pub fn from_json(tool: &str, params: &Value, target_path: &str) -> Self {
         let mut hasher = DefaultHasher::new();
         // Try serializing to a stable byte representation, falling back to
         // `to_string()` when serialization fails (unlikely).
@@ -153,14 +153,14 @@ impl ToolResultCache {
 
     /// Insert a result into the cache
     pub fn insert(&mut self, key: ToolCacheKey, output: String) {
-        let size_bytes = std::mem::size_of_val(&output) as u64;
+        let size_bytes = size_of_val(&output) as u64;
         self.inner.insert(key, output, size_bytes);
     }
 
     /// Insert an Arc-wrapped result into the cache to avoid cloning when the caller
     /// already has an Arc<String> available.
     pub fn insert_arc(&mut self, key: ToolCacheKey, output: Arc<String>) {
-        let size_bytes = std::mem::size_of_val(&**output) as u64;
+        let size_bytes = size_of_val(&**output) as u64;
         self.inner.insert(key, (*output).clone(), size_bytes);
     }
 

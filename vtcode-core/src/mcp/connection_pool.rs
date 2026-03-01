@@ -314,8 +314,8 @@ impl PooledMcpManager {
         provider_name: &str,
         tool_name: &str,
         arguments: serde_json::Value,
-        allowlist: &crate::config::mcp::McpAllowListConfig,
-        tool_timeout: Option<std::time::Duration>,
+        allowlist: &McpAllowListConfig,
+        tool_timeout: Option<Duration>,
     ) -> Result<serde_json::Value, McpPoolError> {
         let provider = self
             .pool

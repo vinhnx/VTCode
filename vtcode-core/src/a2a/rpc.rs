@@ -336,7 +336,7 @@ pub struct ListTasksParams {
     pub include_artifacts: Option<bool>,
     /// Filter by metadata
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub metadata: Option<serde_json::Value>,
+    pub metadata: Option<Value>,
 }
 
 /// Result for tasks/list method

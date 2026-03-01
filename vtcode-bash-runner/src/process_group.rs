@@ -19,6 +19,8 @@
 //!
 //! Inspired by codex-rs/utils/pty process group management patterns.
 
+#![allow(unsafe_code)]
+
 use std::io;
 
 #[cfg(unix)]

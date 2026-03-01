@@ -239,41 +239,21 @@ fn capitalize_first_letter(value: &str) -> String {
     }
 }
 
-fn render_terminal_window(title: &str, lines: &[String], max_content_width: usize) -> Vec<String> {
-    const MIN_CONTENT_WIDTH: usize = 56;
-    let title_len = title.chars().count();
-    let body_len = lines
-        .iter()
-        .map(|line| line.chars().count())
-        .max()
-        .unwrap_or(0);
-    let content_width = title_len
-        .max(body_len)
-        .clamp(MIN_CONTENT_WIDTH, max_content_width.max(MIN_CONTENT_WIDTH));
-    let clipped_title = clip_to_width(title, content_width);
-    let title_padding = content_width.saturating_sub(clipped_title.chars().count());
-
-    let mut out = Vec::with_capacity(lines.len() + 2);
-    out.push(format!("╭{}{}╮", clipped_title, "─".repeat(title_padding)));
+fn render_terminal_window(title: &str, lines: &[String], _max_content_width: usize) -> Vec<String> {
+    let mut out = Vec::with_capacity(lines.len() + 1);
+    out.push(title.to_string());
     for line in lines {
-        out.push(render_row(line, content_width));
-    }
-    out.push(format!("╰{}╯", "─".repeat(content_width)));
-    out
-}
-
-fn clip_to_width(value: &str, width: usize) -> String {
-    let mut out = String::new();
-    for ch in value.chars().take(width) {
-        out.push(ch);
+        out.push(line.clone());
     }
     out
 }
 
-fn render_row(content: &str, content_width: usize) -> String {
-    let clipped = clip_to_width(content, content_width);
-    let pad = content_width.saturating_sub(clipped.chars().count());
-    format!("│{}{}│", clipped, " ".repeat(pad))
+fn clip_to_width(_value: &str, _width: usize) -> String {
+    String::new()
+}
+
+fn render_row(_content: &str, _content_width: usize) -> String {
+    String::new()
 }
 
 fn style_terminal_window_lines(lines: &[String]) -> String {
@@ -282,19 +262,9 @@ fn style_terminal_window_lines(lines: &[String]) -> String {
 
     for (index, line) in lines.iter().enumerate() {
         let line_render = if index == 0 {
-            style_top_line(line)
-        } else if index == last {
-            color(line, &[ANSI_DIM, ANSI_CYAN])
-        } else if line.contains("Session:") && line.contains("Tools:") {
-            style_bordered_line(line, &[ANSI_BOLD, ANSI_CYAN])
-        } else if line.contains("API ") && line.contains("Changes ") {
-            style_bordered_line(line, &[ANSI_BOLD])
-        } else if line.contains("Top model:") {
-            style_bordered_line(line, &[ANSI_GREEN])
-        } else if line.contains("Metrics: dropped") {
-            style_bordered_line(line, &[ANSI_DIM])
+            style_title_line(line)
         } else {
-            style_bordered_line(line, &[])
+            line.clone()
         };
 
         styled.push_str(&line_render);
@@ -306,56 +276,8 @@ fn style_terminal_window_lines(lines: &[String]) -> String {
     styled
 }
 
-fn style_top_line(line: &str) -> String {
-    let Some(body) = line
-        .strip_prefix('╭')
-        .and_then(|value| value.strip_suffix('╮'))
-    else {
-        return color(line, &[ANSI_DIM, ANSI_CYAN]);
-    };
-    let split_index = body.find('─').unwrap_or(body.len());
-    let (title, tail) = body.split_at(split_index);
-
-    format!(
-        "{ANSI_DIM}{ANSI_CYAN}╭{ANSI_RESET}{ANSI_BOLD}{ANSI_CYAN}{title}{ANSI_RESET}{ANSI_DIM}{ANSI_CYAN}{tail}╮{ANSI_RESET}"
-    )
-}
-
-fn color(value: &str, styles: &[&str]) -> String {
-    let mut out = String::new();
-    for style in styles {
-        out.push_str(style);
-    }
-    out.push_str(value);
-    out.push_str(ANSI_RESET);
-    out
-}
-
-fn style_bordered_line(line: &str, content_styles: &[&str]) -> String {
-    let Some(inner) = line
-        .strip_prefix('│')
-        .and_then(|value| value.strip_suffix('│'))
-    else {
-        return color(line, &[ANSI_DIM, ANSI_CYAN]);
-    };
-
-    let mut out = String::new();
-    out.push_str(ANSI_DIM);
-    out.push_str(ANSI_CYAN);
-    out.push('│');
-    out.push_str(ANSI_RESET);
-
-    for style in content_styles {
-        out.push_str(style);
-    }
-    out.push_str(inner);
-    out.push_str(ANSI_RESET);
-
-    out.push_str(ANSI_DIM);
-    out.push_str(ANSI_CYAN);
-    out.push('│');
-    out.push_str(ANSI_RESET);
-    out
+fn style_title_line(line: &str) -> String {
+    format!("{ANSI_BOLD}{ANSI_CYAN}{line}{ANSI_RESET}")
 }
 
 #[cfg(test)]
@@ -404,6 +326,7 @@ mod tests {
     fn terminal_window_uses_vtcode_title_prefix() {
         let rows = vec!["API 2.0s | Session 39s | Changes +1 -0".to_string()];
         let rendered = render_terminal_window("> VT Code (0.84.1)", &rows, 96);
-        assert!(rendered[0].starts_with("╭> VT Code (0.84.1)"));
+        assert_eq!(rendered[0], "> VT Code (0.84.1)");
+        assert_eq!(rendered[1], "API 2.0s | Session 39s | Changes +1 -0");
     }
 }

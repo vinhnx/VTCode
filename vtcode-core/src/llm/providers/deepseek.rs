@@ -431,7 +431,7 @@ impl LLMProvider for DeepSeekProvider {
 
 #[async_trait]
 impl LLMClient for DeepSeekProvider {
-    async fn generate(&mut self, prompt: &str) -> Result<llm_types::LLMResponse, LLMError> {
+    async fn generate(&mut self, prompt: &str) -> Result<LLMResponse, LLMError> {
         let request = super::common::make_default_request(prompt, &self.model);
         Ok(LLMProvider::generate(self, request).await?)
     }

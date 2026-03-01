@@ -136,6 +136,7 @@ impl PipeSpawnOptions {
 }
 
 /// Spawn a process using regular pipes, with configurable options.
+#[allow(unsafe_code)]
 async fn spawn_process_internal(opts: PipeSpawnOptions) -> Result<SpawnedProcess> {
     if opts.program.is_empty() {
         anyhow::bail!("missing program for pipe spawn");

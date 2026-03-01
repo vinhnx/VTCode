@@ -463,7 +463,7 @@ impl McpProvider {
             .await
             .context("Failed to acquire MCP request slot")?;
         // Convert HashMap<String, String> to JsonObject (BTreeMap<String, Value>)
-        let args_json: serde_json::Map<String, Value> = arguments
+        let args_json: Map<String, Value> = arguments
             .into_iter()
             .map(|(k, v)| (k, Value::String(v)))
             .collect();

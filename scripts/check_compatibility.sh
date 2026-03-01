@@ -86,7 +86,7 @@ if [[ "$RUN_MSRV" == true ]]; then
     echo -e "${BLUE}Current Rust:${NC} $RUST_VERSION"
     
     # Check MSRV in Cargo.toml files
-    echo -e "${BLUE}Expected MSRV:${NC} 1.85 (Rust 2024 Edition)"
+    echo -e "${BLUE}Expected MSRV:${NC} 1.88 (Rust 2024 Edition)"
     echo ""
     
     # Verify all crates have rust-version set
@@ -133,23 +133,23 @@ if [[ "$RUN_TARGETS" == true ]]; then
     echo ""
     
     # Define targets to check
-    declare -A TARGETS=(
-        ["x86_64-unknown-linux-gnu"]="Linux x64"
-        ["aarch64-apple-darwin"]="macOS ARM64"
-        ["x86_64-apple-darwin"]="macOS x64"
-        ["x86_64-pc-windows-msvc"]="Windows MSVC"
-        ["x86_64-pc-windows-gnu"]="Windows GNU"
-    )
+    TARGETS_LINUX="x86_64-unknown-linux-gnu:Linux x64"
+    TARGETS_MACOS_ARM="aarch64-apple-darwin:macOS ARM64"
+    TARGETS_MACOS_X64="x86_64-apple-darwin:macOS x64"
+    TARGETS_WINDOWS_MSVC="x86_64-pc-windows-msvc:Windows MSVC"
+    TARGETS_WINDOWS_GNU="x86_64-pc-windows-gnu:Windows GNU"
     
     # Check which targets are installed
     echo -e "${BLUE}Checking installed targets...${NC}"
     INSTALLED_TARGETS=$(rustup target list --installed)
     
-    for target in "${!TARGETS[@]}"; do
+    for target_info in "$TARGETS_LINUX" "$TARGETS_MACOS_ARM" "$TARGETS_MACOS_X64" "$TARGETS_WINDOWS_MSVC" "$TARGETS_WINDOWS_GNU"; do
+        target="${target_info%%:*}"
+        name="${target_info##*:}"
         if echo "$INSTALLED_TARGETS" | grep -q "$target"; then
-            echo -e "${GREEN}✓${NC} ${TARGETS[$target]} ($target)"
+            echo -e "${GREEN}✓${NC} $name ($target)"
         else
-            echo -e "${YELLOW}⚠${NC} ${TARGETS[$target]} ($target) - not installed"
+            echo -e "${YELLOW}⚠${NC} $name ($target) - not installed"
             echo "   Install with: rustup target add $target"
         fi
     done

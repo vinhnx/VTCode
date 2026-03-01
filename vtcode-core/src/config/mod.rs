@@ -65,7 +65,7 @@ pub use vtcode_config::{TimeoutsConfig, resolve_timeout};
 /// Convert KeyboardProtocolConfig to KeyboardEnhancementFlags
 pub fn keyboard_protocol_to_flags(
     config: &KeyboardProtocolConfig,
-) -> ratatui::crossterm::event::KeyboardEnhancementFlags {
+) -> crossterm::event::KeyboardEnhancementFlags {
     use ratatui::crossterm::event::KeyboardEnhancementFlags;
 
     if !config.enabled {

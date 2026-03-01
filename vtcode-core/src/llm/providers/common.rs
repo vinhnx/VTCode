@@ -496,7 +496,7 @@ pub fn serialize_messages_openai_format(
             message_map.insert(KEY_TOOL_CALLS.to_owned(), Value::Array(serialized_calls));
         }
 
-        if message.role == crate::llm::provider::MessageRole::Tool {
+        if message.role == MessageRole::Tool {
             match &message.tool_call_id {
                 Some(tool_call_id) => {
                     message_map.insert(
@@ -522,7 +522,7 @@ pub fn serialize_messages_openai_format(
         }
 
         if provider_key == "zai"
-            && message.role == crate::llm::provider::MessageRole::Assistant
+            && message.role == MessageRole::Assistant
             && let Some(reasoning) = &message.reasoning
         {
             message_map.insert(
@@ -895,7 +895,7 @@ where
 #[inline]
 pub fn make_anthropic_thinking_config(
     config: &crate::config::core::AnthropicConfig,
-) -> serde_json::Value {
+) -> Value {
     serde_json::json!({
         "thinking": {
             "type": config.interleaved_thinking_type_enabled,

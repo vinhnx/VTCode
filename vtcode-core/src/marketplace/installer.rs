@@ -86,7 +86,7 @@ impl PluginInstaller {
             self.download_from_http(manifest, plugin_dir).await?;
         } else if manifest.source.starts_with("file://") {
             self.download_from_file(manifest, plugin_dir).await?;
-        } else if std::path::Path::new(&manifest.source).exists() {
+        } else if Path::new(&manifest.source).exists() {
             // Local path
             self.download_from_local(manifest, plugin_dir).await?;
         } else {
@@ -124,7 +124,7 @@ impl PluginInstaller {
         }
 
         // Copy the file from source to destination
-        tokio::fs::copy(&source_path, &dest_path)
+        fs::copy(&source_path, &dest_path)
             .await
             .with_context(|| {
                 format!(
@@ -153,7 +153,7 @@ impl PluginInstaller {
         }
 
         // Copy the file from source to destination
-        tokio::fs::copy(&source_path, &dest_path)
+        fs::copy(&source_path, &dest_path)
             .await
             .with_context(|| {
                 format!(

@@ -361,7 +361,7 @@ pub enum Commands {
     Trajectory {
         /// Optional path to trajectory JSONL file
         #[arg(long)]
-        file: Option<std::path::PathBuf>,
+        file: Option<PathBuf>,
         /// Number of top entries to show
         #[arg(long, default_value_t = 10)]
         top: usize,
@@ -440,7 +440,7 @@ pub enum Commands {
     Config {
         /// Output file path
         #[arg(long)]
-        output: Option<std::path::PathBuf>,
+        output: Option<PathBuf>,
         /// Create in user home directory (~/.vtcode/vtcode.toml)
         #[arg(long)]
         global: bool,
@@ -482,7 +482,7 @@ pub enum Commands {
         command: Option<String>,
         /// Output file path to save man page
         #[arg(short, long)]
-        output: Option<std::path::PathBuf>,
+        output: Option<PathBuf>,
     },
 
     /// Display token budget information
@@ -945,7 +945,7 @@ impl Cli {
     }
 
     /// Get the effective workspace path
-    pub fn get_workspace(&self) -> std::path::PathBuf {
+    pub fn get_workspace(&self) -> PathBuf {
         self.workspace
             .clone()
             .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")))

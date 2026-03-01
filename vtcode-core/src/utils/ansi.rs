@@ -44,7 +44,7 @@ impl AnsiRenderer {
             ColorChoice::Never
         };
         Self {
-            writer: AutoStream::new(std::io::stdout(), choice),
+            writer: AutoStream::new(io::stdout(), choice),
             buffer: String::with_capacity(1024),
             color,
             sink: None,
@@ -603,7 +603,7 @@ impl AnsiRenderer {
                     } else {
                         sink.handle.append_line(kind, segments.clone());
                     }
-                    crate::utils::transcript::append(plain_line);
+                    transcript::append(plain_line);
                 }
             } else {
                 sink.replace_inline_lines(
@@ -887,7 +887,7 @@ impl InlineSink {
                 self.handle.append_line(kind, segments);
             }
             if record_transcript {
-                crate::utils::transcript::append(line);
+                transcript::append(line);
             }
         }
         Ok(last_empty)
@@ -902,7 +902,7 @@ impl InlineSink {
     ) {
         self.handle.replace_last(count, kind, lines);
         if Self::should_record_transcript(kind) {
-            crate::utils::transcript::replace_last(count, plain);
+            transcript::replace_last(count, plain);
         }
     }
 
@@ -1124,7 +1124,7 @@ impl InlineSink {
 
             self.handle.append_line(kind, combined_segments);
             if record_transcript {
-                crate::utils::transcript::append(&combined_plain);
+                transcript::append(&combined_plain);
             }
         } else {
             let fallback_arc_opt = if !indent.is_empty() {
@@ -1154,7 +1154,7 @@ impl InlineSink {
                     self.handle.append_line(kind, segments);
                 }
                 if record_transcript {
-                    crate::utils::transcript::append(&plain);
+                    transcript::append(&plain);
                 }
             }
         }
@@ -1217,7 +1217,7 @@ impl InlineSink {
             .collect::<String>();
         self.handle.append_line(kind, converted);
         if Self::should_record_transcript(kind) {
-            crate::utils::transcript::append(&plain);
+            transcript::append(&plain);
         }
         Ok(())
     }

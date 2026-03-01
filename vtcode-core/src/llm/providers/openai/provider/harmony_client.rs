@@ -341,7 +341,7 @@ impl OpenAIProvider {
             content,
             model: request.model.clone(),
             tool_calls,
-            usage: Some(crate::llm::provider::Usage {
+            usage: Some(provider::Usage {
                 prompt_tokens: prompt_tokens.len().try_into().unwrap_or(u32::MAX),
                 completion_tokens: completion_tokens.len().try_into().unwrap_or(u32::MAX),
                 total_tokens: (prompt_tokens.len() + completion_tokens.len())
@@ -351,7 +351,7 @@ impl OpenAIProvider {
                 cache_creation_tokens: None,
                 cache_read_tokens: None,
             }),
-            finish_reason: crate::llm::provider::FinishReason::Stop,
+            finish_reason: provider::FinishReason::Stop,
             reasoning: None,
             reasoning_details: None,
             tool_references: Vec::new(),
@@ -545,7 +545,7 @@ impl OpenAIProvider {
     /// Parse harmony tool call from raw text content
     pub(crate) fn parse_harmony_tool_call_from_text(
         text: &str,
-    ) -> Option<(String, serde_json::Value)> {
+    ) -> Option<(String, Value)> {
         harmony::parse_harmony_tool_call_from_text(text)
     }
 }

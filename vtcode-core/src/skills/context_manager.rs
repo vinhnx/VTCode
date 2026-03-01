@@ -237,7 +237,7 @@ impl ContextManager {
                 total_loaded_duration: std::time::Duration::ZERO,
                 token_cost: self.config.metadata_token_cost,
             },
-            memory_size: std::mem::size_of::<SkillContextEntry>()
+            memory_size: size_of::<SkillContextEntry>()
                 + name.len()
                 + manifest.description.len(),
         };
@@ -337,7 +337,7 @@ impl ContextManager {
                 total_loaded_duration: std::time::Duration::ZERO,
                 token_cost: incremental_cost,
             },
-            memory_size: std::mem::size_of::<Skill>() + name.len() * 2,
+            memory_size: size_of::<Skill>() + name.len() * 2,
         };
 
         // Update usage

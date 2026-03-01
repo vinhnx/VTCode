@@ -2,7 +2,7 @@
 name = "vtcode-acp-client"
 version = "0.85.1"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.88"
 authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
 description = "ACP client implementation for inter-agent communication and orchestration"
 license = "MIT"

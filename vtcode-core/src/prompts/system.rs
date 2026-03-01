@@ -424,7 +424,7 @@ pub async fn generate_system_instruction(_config: &SystemPromptConfig) -> Conten
     let instruction = default_system_prompt().to_string();
 
     // Apply output style if possible (using current directory as project root)
-    if let Ok(current_dir) = std::env::current_dir() {
+    if let Ok(current_dir) = env::current_dir() {
         let styled_instruction = apply_output_style(instruction, None, &current_dir).await;
         Content::system_text(styled_instruction)
     } else {

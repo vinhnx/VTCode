@@ -174,7 +174,7 @@ fn is_hidden_path(path: &str) -> bool {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GrepSearchResult {
     pub query: String,
-    pub matches: Vec<serde_json::Value>,
+    pub matches: Vec<Value>,
     pub truncated: bool,
 }
 
@@ -274,7 +274,7 @@ impl GrepSearchManager {
         let cache = self.cache.clone();
         // Run debounce and search spawn on a blocking thread to avoid
         // blocking the async runtime or reader threads.
-        tokio::task::spawn_blocking(move || {
+        spawn_blocking(move || {
             // Always do a minimum debounce, but then poll until the
             // `active_search` is cleared.
             thread::sleep(SEARCH_DEBOUNCE);
@@ -675,7 +675,7 @@ impl GrepSearchManager {
         cache: Option<Arc<GrepSearchCache>>,
     ) {
         // Spawn grep worker on a blocking thread — searching and ripgrep are blocking.
-        tokio::task::spawn_blocking(move || {
+        spawn_blocking(move || {
             // Check if cancelled before starting
             if cancellation_token.load(Ordering::Relaxed) {
                 // Reset the active search state

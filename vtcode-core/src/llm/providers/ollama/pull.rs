@@ -62,7 +62,7 @@ impl CliPullProgressReporter {
 
 impl OllamaPullProgressReporter for CliPullProgressReporter {
     fn on_event(&mut self, event: &OllamaPullEvent) -> io::Result<()> {
-        let mut out = std::io::stderr();
+        let mut out = io::stderr();
         match event {
             OllamaPullEvent::Status(status) => {
                 // Avoid noisy manifest messages; otherwise show status inline.

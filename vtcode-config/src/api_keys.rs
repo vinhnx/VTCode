@@ -94,7 +94,7 @@ pub fn load_dotenv() -> Result<()> {
     match dotenvy::dotenv() {
         Ok(path) => {
             // Only print in verbose mode to avoid polluting stdout/stderr in scripts
-            if std::env::var("VTCODE_VERBOSE").is_ok() || std::env::var("RUST_LOG").is_ok() {
+            if env::var("VTCODE_VERBOSE").is_ok() || env::var("RUST_LOG").is_ok() {
                 tracing::info!("Loaded environment variables from: {}", path.display());
             }
             Ok(())

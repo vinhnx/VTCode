@@ -352,7 +352,7 @@ impl LLMProvider for MoonshotProvider {
 
 #[async_trait]
 impl LLMClient for MoonshotProvider {
-    async fn generate(&mut self, prompt: &str) -> Result<llm_types::LLMResponse, LLMError> {
+    async fn generate(&mut self, prompt: &str) -> Result<LLMResponse, LLMError> {
         let request = LLMRequest {
             messages: vec![crate::llm::provider::Message::user(prompt.to_string())],
             model: self.model.clone(),

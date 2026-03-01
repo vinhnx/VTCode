@@ -181,7 +181,7 @@ impl ZAIProvider {
         if let Some(choice) = &request.tool_choice {
             let tool_choice_value = match choice {
                 crate::llm::provider::ToolChoice::Auto => choice.to_provider_format(PROVIDER_KEY),
-                _ => serde_json::Value::String("auto".to_string()),
+                _ => Value::String("auto".to_string()),
             };
             payload.insert("tool_choice".to_string(), tool_choice_value);
         } else if request
@@ -191,7 +191,7 @@ impl ZAIProvider {
         {
             payload.insert(
                 "tool_choice".to_string(),
-                serde_json::Value::String("auto".to_string()),
+                Value::String("auto".to_string()),
             );
         }
 
@@ -478,7 +478,7 @@ fn resolve_zai_base_url(base_url: Option<String>) -> String {
 
 #[async_trait]
 impl LLMClient for ZAIProvider {
-    async fn generate(&mut self, prompt: &str) -> Result<llm_types::LLMResponse, LLMError> {
+    async fn generate(&mut self, prompt: &str) -> Result<LLMResponse, LLMError> {
         let request = LLMRequest {
             messages: vec![crate::llm::provider::Message::user(prompt.to_string())],
             model: self.model.clone(),

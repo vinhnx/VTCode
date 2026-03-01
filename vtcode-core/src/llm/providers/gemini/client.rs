@@ -2,7 +2,7 @@ use super::*;
 
 #[async_trait]
 impl LLMClient for GeminiProvider {
-    async fn generate(&mut self, prompt: &str) -> Result<llm_types::LLMResponse, LLMError> {
+    async fn generate(&mut self, prompt: &str) -> Result<LLMResponse, LLMError> {
         let request = LLMRequest {
             messages: vec![Message::user(prompt.to_string())],
             model: self.model.to_string(),

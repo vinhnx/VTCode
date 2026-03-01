@@ -113,10 +113,10 @@ pub struct ToolRegistry {
     inventory: ToolInventory,
     policy_gateway: Arc<tokio::sync::RwLock<ToolPolicyGateway>>,
     pty_sessions: PtySessionManager,
-    mcp_client: Arc<std::sync::RwLock<Option<Arc<McpClient>>>>,
+    mcp_client: Arc<RwLock<Option<Arc<McpClient>>>>,
     mcp_tool_index: Arc<tokio::sync::RwLock<FxHashMap<String, Vec<String>>>>,
     mcp_reverse_index: Arc<tokio::sync::RwLock<FxHashMap<String, String>>>,
-    timeout_policy: Arc<std::sync::RwLock<ToolTimeoutPolicy>>,
+    timeout_policy: Arc<RwLock<ToolTimeoutPolicy>>,
     execution_history: ToolExecutionHistory,
     harness_context: HarnessContext,
 
@@ -127,19 +127,19 @@ pub struct ToolRegistry {
     mcp_circuit_breaker: Arc<circuit_breaker::McpCircuitBreaker>,
     /// Shared per-tool circuit breaker state used by the runloop.
     shared_circuit_breaker:
-        Arc<std::sync::RwLock<Option<Arc<crate::tools::circuit_breaker::CircuitBreaker>>>>,
+        Arc<RwLock<Option<Arc<crate::tools::circuit_breaker::CircuitBreaker>>>>,
     initialized: Arc<std::sync::atomic::AtomicBool>,
     // Security & Identity
     shell_policy: Arc<RwLock<ShellPolicyChecker>>,
     runtime_sandbox_config: Arc<RwLock<vtcode_config::SandboxConfig>>,
-    agent_type: Arc<std::sync::RwLock<Cow<'static, str>>>,
+    agent_type: Arc<RwLock<Cow<'static, str>>>,
     // PTY Session Management
-    active_pty_sessions: Arc<std::sync::RwLock<Option<Arc<std::sync::atomic::AtomicUsize>>>>,
+    active_pty_sessions: Arc<RwLock<Option<Arc<std::sync::atomic::AtomicUsize>>>>,
 
     // Caching
     cached_available_tools: Arc<RwLock<Option<Vec<String>>>>,
     /// Callback for streaming tool output and progress
-    progress_callback: Arc<std::sync::RwLock<Option<ToolProgressCallback>>>,
+    progress_callback: Arc<RwLock<Option<ToolProgressCallback>>>,
     // Performance Observability
     /// Total tool calls made in current session
     pub(crate) tool_call_counter: Arc<std::sync::atomic::AtomicU64>,

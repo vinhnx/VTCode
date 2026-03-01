@@ -165,18 +165,18 @@ where
         let level = *event.metadata().level();
 
         // Always filter out TRACE level
-        if level == tracing::Level::TRACE {
+        if level == Level::TRACE {
             return;
         }
 
         // Only show DEBUG level logs when in debug mode
-        if level == tracing::Level::DEBUG && !crate::ui::tui::panic_hook::is_debug_mode() {
+        if level == Level::DEBUG && !crate::ui::tui::panic_hook::is_debug_mode() {
             return;
         }
 
         // Only show ERROR level logs in TUI when explicitly allowed via
         // ui.show_diagnostics_in_transcript config
-        if level == tracing::Level::ERROR && !crate::ui::tui::panic_hook::show_diagnostics() {
+        if level == Level::ERROR && !crate::ui::tui::panic_hook::show_diagnostics() {
             return;
         }
 

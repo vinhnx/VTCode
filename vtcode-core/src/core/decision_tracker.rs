@@ -257,7 +257,7 @@ impl DecisionTracker {
             let line = match &d.action {
                 Action::ToolCall { name, args, .. } => {
                     let arg_preview = match args {
-                        serde_json::Value::String(s) => s.clone(),
+                        Value::String(s) => s.clone(),
                         _ => {
                             let s = args.to_string();
                             if s.len() > 120 {

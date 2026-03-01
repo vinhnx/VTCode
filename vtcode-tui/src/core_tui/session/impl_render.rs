@@ -83,7 +83,7 @@ impl Session {
                     .mouse_selection
                     .extract_text(frame.buffer_mut(), viewport);
                 if !text.is_empty() {
-                    super::mouse_selection::MouseSelectionState::copy_to_clipboard(&text);
+                    MouseSelectionState::copy_to_clipboard(&text);
                 }
                 self.mouse_selection.mark_copied();
             }

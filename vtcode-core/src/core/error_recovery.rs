@@ -320,7 +320,7 @@ impl ErrorRecoveryManager {
     ) -> Result<T, anyhow::Error>
     where
         F: Fn() -> Fut,
-        Fut: std::future::Future<Output = Result<T, anyhow::Error>>,
+        Fut: Future<Output = Result<T, anyhow::Error>>,
     {
         let operation_type = self.get_operation_type(&error_type);
 

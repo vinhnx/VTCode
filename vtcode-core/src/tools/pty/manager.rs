@@ -128,7 +128,7 @@ impl PtyManager {
         let size = request.size;
         let start = Instant::now();
 
-        let mut tags = std::collections::HashMap::new();
+        let mut tags = HashMap::new();
         tags.insert("subsystem".to_string(), "pty".to_string());
         tags.insert("program".to_string(), program.clone());
         perf::record_value("vtcode.perf.spawn_count", 1.0, tags);
@@ -315,7 +315,7 @@ match wait_thread.join() {
 // Try to join reader thread (may take a moment for PTY to close)
 // Use a thread-local timeout via a parking_lot based approach
 // For simplicity, just drop the handle if it doesn't complete quickly
-let reader_handle = std::thread::spawn(move || reader_thread.join());
+let reader_handle = thread::spawn(move || reader_thread.join());
 match reader_handle.join() {
     Ok(Ok(Ok(_))) => {}
     Ok(Ok(Err(e))) => {
@@ -351,8 +351,8 @@ return Err(anyhow!(
 let grace_period = Duration::from_millis(THREAD_JOIN_GRACE_PERIOD_MS);
 
 // Spawn wrapper thread to allow timeout on join
-let wait_wrapper = std::thread::spawn(move || wait_thread.join());
-std::thread::sleep(grace_period);
+let wait_wrapper = thread::spawn(move || wait_thread.join());
+thread::sleep(grace_period);
 if wait_wrapper.is_finished() {
     match wait_wrapper.join() {
         Ok(Ok(result)) => {

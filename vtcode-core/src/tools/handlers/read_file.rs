@@ -552,7 +552,7 @@ impl Tool for ReadFileHandler {
 mod slice {
     use super::*;
 
-    pub async fn read(path: &std::path::Path, offset: usize, limit: usize) -> Result<Vec<String>> {
+    pub async fn read(path: &Path, offset: usize, limit: usize) -> Result<Vec<String>> {
         let file = File::open(path)
             .await
             .context(format!("failed to open file: {}", path.display()))?;
@@ -607,7 +607,7 @@ mod indentation {
     use super::*;
 
     pub async fn read_block(
-        path: &std::path::Path,
+        path: &Path,
         offset: usize,
         limit: usize,
         options: IndentationArgs,
@@ -726,7 +726,7 @@ mod indentation {
             .collect())
     }
 
-    async fn collect_file_lines(path: &std::path::Path) -> Result<Vec<LineRecord>> {
+    async fn collect_file_lines(path: &Path) -> Result<Vec<LineRecord>> {
         let file = File::open(path)
             .await
             .context(format!("failed to open file: {}", path.display()))?;

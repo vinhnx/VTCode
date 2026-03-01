@@ -38,7 +38,7 @@ impl Session {
                         self.mark_dirty();
                     }
                 }
-                MouseEventKind::Down(ratatui::crossterm::event::MouseButton::Left) => {
+                MouseEventKind::Down(crossterm::event::MouseButton::Left) => {
                     // Start mouse text selection
                     self.mouse_selection
                         .start_selection(mouse_event.column, mouse_event.row);
@@ -47,12 +47,12 @@ impl Session {
                         self.handle_transcript_click(mouse_event);
                     }
                 }
-                MouseEventKind::Drag(ratatui::crossterm::event::MouseButton::Left) => {
+                MouseEventKind::Drag(crossterm::event::MouseButton::Left) => {
                     self.mouse_selection
                         .update_selection(mouse_event.column, mouse_event.row);
                     self.mark_dirty();
                 }
-                MouseEventKind::Up(ratatui::crossterm::event::MouseButton::Left) => {
+                MouseEventKind::Up(crossterm::event::MouseButton::Left) => {
                     self.mouse_selection
                         .finish_selection(mouse_event.column, mouse_event.row);
                     self.mark_dirty();
@@ -88,7 +88,7 @@ impl Session {
     pub(crate) fn handle_transcript_click(&mut self, mouse_event: MouseEvent) -> bool {
         if !matches!(
             mouse_event.kind,
-            MouseEventKind::Down(ratatui::crossterm::event::MouseButton::Left)
+            MouseEventKind::Down(crossterm::event::MouseButton::Left)
         ) {
             return false;
         }
@@ -134,7 +134,7 @@ impl Session {
     pub(crate) fn handle_input_click(&mut self, mouse_event: MouseEvent) -> bool {
         if !matches!(
             mouse_event.kind,
-            MouseEventKind::Down(ratatui::crossterm::event::MouseButton::Left)
+            MouseEventKind::Down(crossterm::event::MouseButton::Left)
         ) {
             return false;
         }

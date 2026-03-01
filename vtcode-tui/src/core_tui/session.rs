@@ -186,7 +186,7 @@ pub struct Session {
     pub(crate) shimmer_state: ShimmerState,
 
     // --- Reverse Search ---
-    pub(crate) reverse_search_state: crate::ui::tui::session::reverse_search::ReverseSearchState,
+    pub(crate) reverse_search_state: reverse_search::ReverseSearchState,
 
     // --- History Picker (Ctrl+R fuzzy search) ---
     pub(crate) history_picker_state: HistoryPickerState,

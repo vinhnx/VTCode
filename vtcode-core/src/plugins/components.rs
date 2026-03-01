@@ -224,7 +224,7 @@ pub struct PluginComponentsHandler;
 
 impl PluginComponentsHandler {
     /// Process all components for a plugin
-    pub async fn process_all_components<P: AsRef<std::path::Path>>(
+    pub async fn process_all_components<P: AsRef<Path>>(
         plugin_path: P,
         manifest: &PluginManifest,
     ) -> Result<PluginComponents> {

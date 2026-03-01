@@ -494,7 +494,7 @@ pub async fn with_cached_approval<K, F, Fut, T>(
 where
     K: std::hash::Hash + Eq + Clone + Send + Sync,
     F: FnOnce() -> Fut,
-    Fut: std::future::Future<Output = Result<T, ToolCallError>>,
+    Fut: Future<Output = Result<T, ToolCallError>>,
 {
     // Check cache first
     if cache.is_approved(&key) {

@@ -516,7 +516,7 @@ pub fn truncate_to_width(text: &str, max_width: usize, ellipsis: &str) -> String
 }
 
 #[inline]
-pub fn write_styled<W: std::io::Write>(
+pub fn write_styled<W: Write>(
     writer: &mut W,
     text: &str,
     style: &str,

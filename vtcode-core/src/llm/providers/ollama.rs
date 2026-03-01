@@ -1087,9 +1087,9 @@ impl LLMProvider for OllamaProvider {
                         }
 
                         if let Some(tool_calls) = message.tool_calls {
-                            let tool_calls_json: Vec<serde_json::Value> = tool_calls
+                            let tool_calls_json: Vec<Value> = tool_calls
                                 .into_iter()
-                                .map(|tc| serde_json::to_value(tc).unwrap_or(serde_json::Value::Null))
+                                .map(|tc| serde_json::to_value(tc).unwrap_or(Value::Null))
                                 .filter(|v| !v.is_null())
                                 .collect();
                             aggregator.handle_tool_calls(&tool_calls_json);
@@ -1179,7 +1179,7 @@ impl LLMProvider for OllamaProvider {
 
 #[async_trait]
 impl LLMClient for OllamaProvider {
-    async fn generate(&mut self, prompt: &str) -> Result<llm_types::LLMResponse, LLMError> {
+    async fn generate(&mut self, prompt: &str) -> Result<LLMResponse, LLMError> {
         let mut request = self.parse_client_prompt(prompt);
         if request.model.is_empty() {
             request.model = self.model.clone();

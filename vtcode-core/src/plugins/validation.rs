@@ -226,7 +226,7 @@ impl PluginDebugger {
 }
 
 /// Plugin validation CLI command handler
-pub async fn handle_plugin_validate(path: &std::path::Path) -> Result<()> {
+pub async fn handle_plugin_validate(path: &Path) -> Result<()> {
     // Check if path exists
     if !path.exists() {
         anyhow::bail!("Plugin path does not exist: {}", path.display());

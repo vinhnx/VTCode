@@ -542,7 +542,7 @@ impl LLMProvider for MinimaxProvider {
 
 #[async_trait]
 impl LLMClient for MinimaxProvider {
-    async fn generate(&mut self, prompt: &str) -> Result<llm_types::LLMResponse, LLMError> {
+    async fn generate(&mut self, prompt: &str) -> Result<LLMResponse, LLMError> {
         let request = LLMRequest {
             messages: vec![crate::llm::provider::Message::user(prompt.to_string())],
             model: self.model.clone(),

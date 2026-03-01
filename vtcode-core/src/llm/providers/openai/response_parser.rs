@@ -87,13 +87,13 @@ pub(crate) fn parse_chat_response(
         .get("finish_reason")
         .and_then(|fr| fr.as_str())
         .map(|fr| match fr {
-            "stop" => crate::llm::provider::FinishReason::Stop,
-            "length" => crate::llm::provider::FinishReason::Length,
-            "tool_calls" => crate::llm::provider::FinishReason::ToolCalls,
-            "content_filter" => crate::llm::provider::FinishReason::ContentFilter,
-            other => crate::llm::provider::FinishReason::Error(other.to_string()),
+            "stop" => provider::FinishReason::Stop,
+            "length" => provider::FinishReason::Length,
+            "tool_calls" => provider::FinishReason::ToolCalls,
+            "content_filter" => provider::FinishReason::ContentFilter,
+            other => provider::FinishReason::Error(other.to_string()),
         })
-        .unwrap_or(crate::llm::provider::FinishReason::Stop);
+        .unwrap_or(provider::FinishReason::Stop);
 
     Ok(provider::LLMResponse {
         content,

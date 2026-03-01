@@ -11,15 +11,7 @@ use std::{
 const EMBEDDED_OPENROUTER_MODELS: &str = include_str!("build_data/openrouter_models.json");
 
 fn main() {
-    // Suppress macOS malloc stack logging warnings by unsetting environment variables
-    unsafe {
-        std::env::remove_var("MallocStackLogging");
-        std::env::remove_var("MallocStackLoggingDirectory");
-        std::env::remove_var("MallocScribble");
-        std::env::remove_var("MallocGuardEdges");
-    }
-
-    let is_docsrs = std::env::var_os("DOCS_RS").is_some();
+    let is_docsrs = env::var_os("DOCS_RS").is_some();
 
     if is_docsrs {
         // When building on docs.rs, generate empty placeholder files to prevent compilation errors
@@ -34,21 +26,21 @@ fn main() {
 fn generate_placeholder_artifacts() {
     use std::path::PathBuf;
 
-    let out_dir = PathBuf::from(std::env::var("OUT_DIR").unwrap());
+    let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
 
     // Write empty files to prevent "file not found" errors during docs.rs build
-    std::fs::write(
+    fs::write(
         out_dir.join("openrouter_model_variants.rs"),
         "// Placeholder for docs.rs build\n",
     )
     .unwrap();
-    std::fs::write(out_dir.join("openrouter_constants.rs"), "    // Placeholder for docs.rs build\n    pub const DEFAULT_MODEL: &str = \"openrouter/auto\";\n    pub const SUPPORTED_MODELS: &[&str] = &[];\n    pub const REASONING_MODELS: &[&str] = &[];\n    pub const TOOL_UNAVAILABLE_MODELS: &[&str] = &[];\n    pub mod vendor {\n        pub mod openrouter {\n            pub const MODELS: &[&str] = &[];\n        }\n    }\n").unwrap();
-    std::fs::write(
+    fs::write(out_dir.join("openrouter_constants.rs"), "    // Placeholder for docs.rs build\n    pub const DEFAULT_MODEL: &str = \"openrouter/auto\";\n    pub const SUPPORTED_MODELS: &[&str] = &[];\n    pub const REASONING_MODELS: &[&str] = &[];\n    pub const TOOL_UNAVAILABLE_MODELS: &[&str] = &[];\n    pub mod vendor {\n        pub mod openrouter {\n            pub const MODELS: &[&str] = &[];\n        }\n    }\n").unwrap();
+    fs::write(
         out_dir.join("openrouter_aliases.rs"),
         "// Placeholder for docs.rs build\n",
     )
     .unwrap();
-    std::fs::write(out_dir.join("openrouter_metadata.rs"), "// Placeholder for docs.rs build\n#[derive(Clone, Copy)]\npub struct Entry {\n    pub variant: super::ModelId,\n    pub id: &'static str,\n    pub vendor: &'static str,\n    pub display: &'static str,\n    pub description: &'static str,\n    pub efficient: bool,\n    pub top_tier: bool,\n    pub generation: &'static str,\n    pub reasoning: bool,\n    pub tool_call: bool,\n}\n\npub const ENTRIES: &[Entry] = &[];\n\n#[derive(Clone, Copy)]\npub struct VendorModels {\n    pub vendor: &'static str,\n    pub models: &'static [super::ModelId],\n}\n\npub const VENDOR_MODELS: &[VendorModels] = &[];\n\npub fn metadata_for(_model: super::ModelId) -> Option<super::OpenRouterMetadata> { None }\n\npub fn parse_model(_value: &str) -> Option<super::ModelId> { None }\n\npub fn vendor_groups() -> &'static [VendorModels] { VENDOR_MODELS }\n").unwrap();
+    fs::write(out_dir.join("openrouter_metadata.rs"), "// Placeholder for docs.rs build\n#[derive(Clone, Copy)]\npub struct Entry {\n    pub variant: super::ModelId,\n    pub id: &'static str,\n    pub vendor: &'static str,\n    pub display: &'static str,\n    pub description: &'static str,\n    pub efficient: bool,\n    pub top_tier: bool,\n    pub generation: &'static str,\n    pub reasoning: bool,\n    pub tool_call: bool,\n}\n\npub const ENTRIES: &[Entry] = &[];\n\n#[derive(Clone, Copy)]\npub struct VendorModels {\n    pub vendor: &'static str,\n    pub models: &'static [super::ModelId],\n}\n\npub const VENDOR_MODELS: &[VendorModels] = &[];\n\npub fn metadata_for(_model: super::ModelId) -> Option<super::OpenRouterMetadata> { None }\n\npub fn parse_model(_value: &str) -> Option<super::ModelId> { None }\n\npub fn vendor_groups() -> &'static [VendorModels] { VENDOR_MODELS }\n").unwrap();
 }
 
 fn generate_artifacts() -> Result<()> {

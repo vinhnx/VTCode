@@ -94,7 +94,7 @@ impl RetryManager {
     ) -> Result<T>
     where
         F: Fn(ModelId) -> Fut,
-        Fut: std::future::Future<Output = Result<T>>,
+        Fut: Future<Output = Result<T>>,
         T: Clone,
     {
         let start_time = Instant::now();

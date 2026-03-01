@@ -44,15 +44,15 @@ pub(super) fn handle_event(
                     session.mark_dirty();
                 }
             }
-            MouseEventKind::Down(ratatui::crossterm::event::MouseButton::Left) => {
+            MouseEventKind::Down(crossterm::event::MouseButton::Left) => {
                 session.mouse_selection.start_selection(column, row);
                 session.mark_dirty();
             }
-            MouseEventKind::Drag(ratatui::crossterm::event::MouseButton::Left) => {
+            MouseEventKind::Drag(crossterm::event::MouseButton::Left) => {
                 session.mouse_selection.update_selection(column, row);
                 session.mark_dirty();
             }
-            MouseEventKind::Up(ratatui::crossterm::event::MouseButton::Left) => {
+            MouseEventKind::Up(crossterm::event::MouseButton::Left) => {
                 session.mouse_selection.finish_selection(column, row);
                 session.mark_dirty();
             }
@@ -81,7 +81,7 @@ pub(super) fn handle_event(
             }
         }
         CrosstermEvent::Resize(_, rows) => {
-            crate::ui::tui::session::render::apply_view_rows(session, rows);
+            render::apply_view_rows(session, rows);
             session.mark_dirty();
         }
         CrosstermEvent::FocusGained => {
@@ -191,7 +191,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
         return None;
     }
 
-    if crate::ui::tui::session::slash::try_handle_slash_navigation(
+    if slash::try_handle_slash_navigation(
         session,
         &key,
         has_control,
@@ -233,7 +233,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
             .iter()
             .map(|entry| (entry.content().to_string(), entry.attachment_elements()))
             .collect();
-        let handled = crate::ui::tui::session::history_picker::handle_history_picker_key(
+        let handled = history_picker::handle_history_picker_key(
             &key,
             &mut session.history_picker_state,
             &mut session.input_manager,
@@ -262,7 +262,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
     if session.reverse_search_state.active {
         // Get history first to avoid borrow conflicts
         let history = session.input_manager.history_texts();
-        let handled = crate::ui::tui::session::reverse_search::handle_reverse_search_key(
+        let handled = reverse_search::handle_reverse_search_key(
             &key,
             &mut session.reverse_search_state,
             &mut session.input_manager,
@@ -377,7 +377,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                     Some(InlineEvent::Submit("/rewind".to_string()))
                 } else if !session.input_manager.content().is_empty() {
                     // Single escape with content: clear input
-                    crate::ui::tui::session::command::clear_input(session);
+                    command::clear_input(session);
                     session.mark_dirty();
                     None
                 } else {
@@ -408,7 +408,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                     session.input_manager.set_content(latest);
                     session.input_compact_mode = session.input_compact_placeholder().is_some();
                     session.scroll_manager.set_offset(0);
-                    crate::ui::tui::session::slash::update_slash_suggestions(session);
+                    slash::update_slash_suggestions(session);
                 }
                 session.mark_dirty();
                 Some(InlineEvent::EditQueue)
@@ -478,7 +478,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
             session.input_manager.clear();
             session.input_compact_mode = false;
             session.scroll_manager.set_offset(0);
-            crate::ui::tui::session::slash::update_slash_suggestions(session);
+            slash::update_slash_suggestions(session);
 
             if submitted.trim().is_empty() {
                 session.mark_dirty();
@@ -519,7 +519,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
             session.input_manager.clear();
             session.input_compact_mode = false;
             session.scroll_manager.set_offset(0);
-            crate::ui::tui::session::slash::update_slash_suggestions(session);
+            slash::update_slash_suggestions(session);
 
             if submitted.trim().is_empty() {
                 session.mark_dirty();
@@ -624,7 +624,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                 session.input_manager.clear();
                 session.input_compact_mode = false;
                 session.scroll_manager.set_offset(0);
-                crate::ui::tui::session::slash::update_slash_suggestions(session);
+                slash::update_slash_suggestions(session);
 
                 if submitted.trim().is_empty() {
                     session.mark_dirty();
@@ -869,15 +869,15 @@ pub(super) fn handle_file_palette_key(session: &mut Session, key: &KeyEvent) -> 
             true
         }
         KeyCode::Esc => {
-            crate::ui::tui::session::command::close_file_palette(session);
+            command::close_file_palette(session);
             session.mark_dirty();
             true
         }
         KeyCode::Tab => {
             if let Some(entry) = palette.get_selected() {
                 let path = entry.relative_path.clone();
-                crate::ui::tui::session::command::insert_file_reference(session, &path);
-                crate::ui::tui::session::command::close_file_palette(session);
+                command::insert_file_reference(session, &path);
+                command::close_file_palette(session);
                 session.mark_dirty();
             }
             true
@@ -885,8 +885,8 @@ pub(super) fn handle_file_palette_key(session: &mut Session, key: &KeyEvent) -> 
         KeyCode::Enter => {
             if let Some(entry) = palette.get_selected() {
                 let path = entry.relative_path.clone();
-                crate::ui::tui::session::command::insert_file_reference(session, &path);
-                crate::ui::tui::session::command::close_file_palette(session);
+                command::insert_file_reference(session, &path);
+                command::close_file_palette(session);
                 session.mark_dirty();
             }
             true

@@ -432,7 +432,7 @@ impl ClientHandler for LoggingClientHandler {
         &self,
         request: CreateElicitationRequestParams,
         _context: RequestContext<RoleClient>,
-    ) -> impl std::future::Future<
+    ) -> impl Future<
         Output = Result<rmcp::model::CreateElicitationResult, rmcp::ErrorData>,
     > + Send
     + '_ {
@@ -539,7 +539,7 @@ impl ClientHandler for LoggingClientHandler {
     fn list_roots(
         &self,
         _context: RequestContext<RoleClient>,
-    ) -> impl std::future::Future<Output = Result<ListRootsResult, rmcp::ErrorData>> + Send + '_
+    ) -> impl Future<Output = Result<ListRootsResult, rmcp::ErrorData>> + Send + '_
     {
         let provider = self.provider.clone();
         async move {
@@ -576,7 +576,7 @@ impl ClientHandler for LoggingClientHandler {
         &self,
         params: CancelledNotificationParam,
         _context: NotificationContext<RoleClient>,
-    ) -> impl std::future::Future<Output = ()> + Send + '_ {
+    ) -> impl Future<Output = ()> + Send + '_ {
         debug!(
             provider = self.provider.as_str(),
             request_id = %params.request_id,
@@ -590,7 +590,7 @@ impl ClientHandler for LoggingClientHandler {
         &self,
         params: ProgressNotificationParam,
         _context: NotificationContext<RoleClient>,
-    ) -> impl std::future::Future<Output = ()> + Send + '_ {
+    ) -> impl Future<Output = ()> + Send + '_ {
         info!(
             provider = self.provider.as_str(),
             progress_token = ?params.progress_token,
@@ -606,7 +606,7 @@ impl ClientHandler for LoggingClientHandler {
         &self,
         params: LoggingMessageNotificationParam,
         _context: NotificationContext<RoleClient>,
-    ) -> impl std::future::Future<Output = ()> + Send + '_ {
+    ) -> impl Future<Output = ()> + Send + '_ {
         self.handle_logging(params);
         async move {}
     }
@@ -615,7 +615,7 @@ impl ClientHandler for LoggingClientHandler {
         &self,
         params: ResourceUpdatedNotificationParam,
         _context: NotificationContext<RoleClient>,
-    ) -> impl std::future::Future<Output = ()> + Send + '_ {
+    ) -> impl Future<Output = ()> + Send + '_ {
         info!(
             provider = self.provider.as_str(),
             uri = params.uri.as_str(),
@@ -627,7 +627,7 @@ impl ClientHandler for LoggingClientHandler {
     fn on_resource_list_changed(
         &self,
         _context: NotificationContext<RoleClient>,
-    ) -> impl std::future::Future<Output = ()> + Send + '_ {
+    ) -> impl Future<Output = ()> + Send + '_ {
         info!(
             provider = self.provider.as_str(),
             "MCP provider reported resource list change"
@@ -638,7 +638,7 @@ impl ClientHandler for LoggingClientHandler {
     fn on_tool_list_changed(
         &self,
         _context: NotificationContext<RoleClient>,
-    ) -> impl std::future::Future<Output = ()> + Send + '_ {
+    ) -> impl Future<Output = ()> + Send + '_ {
         info!(
             provider = self.provider.as_str(),
             "MCP provider reported tool list change"
@@ -649,7 +649,7 @@ impl ClientHandler for LoggingClientHandler {
     fn on_prompt_list_changed(
         &self,
         _context: NotificationContext<RoleClient>,
-    ) -> impl std::future::Future<Output = ()> + Send + '_ {
+    ) -> impl Future<Output = ()> + Send + '_ {
         info!(
             provider = self.provider.as_str(),
             "MCP provider reported prompt list change"
@@ -733,7 +733,7 @@ pub(crate) fn directory_to_file_uri(path: &Path) -> Option<String> {
 
 async fn run_with_timeout<F, T>(fut: F, timeout: Option<Duration>, label: &str) -> Result<T>
 where
-    F: std::future::Future<Output = Result<T, rmcp::service::ServiceError>>,
+    F: Future<Output = Result<T, service::ServiceError>>,
 {
     if let Some(duration) = timeout {
         let result = time::timeout(duration, fut)

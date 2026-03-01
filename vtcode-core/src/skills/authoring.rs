@@ -491,7 +491,7 @@ impl SkillAuthor {
     }
 }
 
-fn add_directory_to_zip<W: std::io::Write + std::io::Seek>(
+fn add_directory_to_zip<W: Write + std::io::Seek>(
     zip: &mut zip::ZipWriter<W>,
     dir: &Path,
     base: &Path,

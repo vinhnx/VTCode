@@ -23,7 +23,7 @@ fn has_active_navigation_ui(session: &Session) -> bool {
 }
 
 #[cfg(unix)]
-fn is_suspend_shortcut(event: &ratatui::crossterm::event::Event) -> bool {
+fn is_suspend_shortcut(event: &crossterm::event::Event) -> bool {
     use ratatui::crossterm::event::{Event as CrosstermEvent, KeyCode, KeyEventKind, KeyModifiers};
 
     matches!(
@@ -42,7 +42,7 @@ fn suspend_to_shell<B: Backend>(
     inputs: &mut EventListener,
     event_channels: &EventChannels,
     use_alternate_screen: bool,
-    keyboard_flags: ratatui::crossterm::event::KeyboardEnhancementFlags,
+    keyboard_flags: crossterm::event::KeyboardEnhancementFlags,
 ) -> Result<()> {
     use ratatui::crossterm::{
         event::{
@@ -151,7 +151,7 @@ pub(super) async fn drive_terminal<B: Backend>(
     event_channels: EventChannels,
     event_callback: Option<InlineEventCallback>,
     use_alternate_screen: bool,
-    keyboard_flags: ratatui::crossterm::event::KeyboardEnhancementFlags,
+    keyboard_flags: crossterm::event::KeyboardEnhancementFlags,
 ) -> Result<()> {
     #[cfg(not(unix))]
     let _ = (use_alternate_screen, keyboard_flags);

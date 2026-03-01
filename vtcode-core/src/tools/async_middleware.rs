@@ -185,7 +185,7 @@ impl AsyncMiddleware for AsyncLoggingMiddleware {
             dyn Fn(
                     ToolRequest,
                 )
-                    -> std::pin::Pin<Box<dyn std::future::Future<Output = ToolResult> + Send>>
+                    -> Pin<Box<dyn std::future::Future<Output = ToolResult> + Send>>
                 + Send
                 + Sync
                 + 'a,
@@ -344,7 +344,7 @@ impl AsyncMiddleware for AsyncCachingMiddleware {
             dyn Fn(
                     ToolRequest,
                 )
-                    -> std::pin::Pin<Box<dyn std::future::Future<Output = ToolResult> + Send>>
+                    -> Pin<Box<dyn std::future::Future<Output = ToolResult> + Send>>
                 + Send
                 + Sync
                 + 'a,
@@ -431,7 +431,7 @@ impl AsyncMiddleware for AsyncRetryMiddleware {
             dyn Fn(
                     ToolRequest,
                 )
-                    -> std::pin::Pin<Box<dyn std::future::Future<Output = ToolResult> + Send>>
+                    -> Pin<Box<dyn std::future::Future<Output = ToolResult> + Send>>
                 + Send
                 + Sync
                 + 'a,

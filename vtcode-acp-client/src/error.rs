@@ -1,7 +1,7 @@
 //! Error types for ACP operations
 
 /// Result type for ACP operations
-pub type AcpResult<T> = std::result::Result<T, AcpError>;
+pub type AcpResult<T> = Result<T, AcpError>;
 
 /// Errors that can occur during ACP communication
 #[derive(Debug, thiserror::Error)]

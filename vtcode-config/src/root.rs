@@ -651,7 +651,7 @@ impl Default for KeyboardProtocolConfig {
 }
 
 impl KeyboardProtocolConfig {
-    pub fn validate(&self) -> anyhow::Result<()> {
+    pub fn validate(&self) -> Result<()> {
         match self.mode.as_str() {
             "default" | "full" | "minimal" | "custom" => Ok(()),
             _ => anyhow::bail!(

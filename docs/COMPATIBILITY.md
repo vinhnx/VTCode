@@ -22,28 +22,28 @@ Inspired by [caniuse.rs](https://caniuse.rs), this document tracks feature avail
 
 ## Minimum Supported Rust Version (MSRV)
 
-**Current MSRV: Rust 1.85**
+**Current MSRV: Rust 1.88**
 
-All VT Code crates require Rust 1.85 or later, as they use Rust 2024 edition features.
+All VT Code crates require Rust 1.88 or later due to dependencies (ratatui 0.30, darling 0.23, sysinfo 0.37, zip 8.1).
 
 ### Crate Version Matrix
 
 | Crate | Version | MSRV | Edition | Stable Since |
 |-------|---------|------|---------|--------------|
-| vtcode | 0.85.1 | 1.85 | 2024 | Initial release |
-| vtcode-core | 0.85.1 | 1.85 | 2024 | Initial release |
-| vtcode-tui | 0.85.1 | 1.85 | 2024 | Initial release |
-| vtcode-config | 0.85.1 | 1.85 | 2024 | Initial release |
-| vtcode-commons | 0.85.1 | 1.85 | 2024 | Initial release |
-| vtcode-llm | 0.85.1 | 1.85 | 2024 | Initial release |
-| vtcode-lmstudio | 0.85.1 | 1.85 | 2024 | Initial release |
-| vtcode-markdown-store | 0.85.1 | 1.85 | 2024 | Initial release |
-| vtcode-indexer | 0.85.1 | 1.85 | 2024 | Initial release |
-| vtcode-tools | 0.85.1 | 1.85 | 2024 | Initial release |
-| vtcode-bash-runner | 0.85.1 | 1.85 | 2024 | Initial release |
-| vtcode-exec-events | 0.85.1 | 1.85 | 2024 | Initial release |
-| vtcode-file-search | 0.85.1 | 1.85 | 2024 | Initial release |
-| vtcode-acp-client | 0.85.1 | 1.85 | 2024 | Initial release |
+| vtcode | 0.85.1 | 1.88 | 2024 | Initial release |
+| vtcode-core | 0.85.1 | 1.88 | 2024 | Initial release |
+| vtcode-tui | 0.85.1 | 1.88 | 2024 | Initial release |
+| vtcode-config | 0.85.1 | 1.88 | 2024 | Initial release |
+| vtcode-commons | 0.85.1 | 1.88 | 2024 | Initial release |
+| vtcode-llm | 0.85.1 | 1.88 | 2024 | Initial release |
+| vtcode-lmstudio | 0.85.1 | 1.88 | 2024 | Initial release |
+| vtcode-markdown-store | 0.85.1 | 1.88 | 2024 | Initial release |
+| vtcode-indexer | 0.85.1 | 1.88 | 2024 | Initial release |
+| vtcode-tools | 0.85.1 | 1.88 | 2024 | Initial release |
+| vtcode-bash-runner | 0.85.1 | 1.88 | 2024 | Initial release |
+| vtcode-exec-events | 0.85.1 | 1.88 | 2024 | Initial release |
+| vtcode-file-search | 0.85.1 | 1.88 | 2024 | Initial release |
+| vtcode-acp-client | 0.85.1 | 1.88 | 2024 | Initial release |
 
 ---
 

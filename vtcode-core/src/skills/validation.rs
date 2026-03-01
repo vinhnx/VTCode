@@ -418,11 +418,11 @@ impl SkillValidator {
                     let mut details = serde_json::Map::new();
                     details.insert(
                         "name".to_string(),
-                        serde_json::Value::String(manifest.name.clone()),
+                        Value::String(manifest.name.clone()),
                     );
                     details.insert(
                         "description".to_string(),
-                        serde_json::Value::String(manifest.description.clone()),
+                        Value::String(manifest.description.clone()),
                     );
                     details.insert(
                         "version".to_string(),
@@ -432,7 +432,7 @@ impl SkillValidator {
                         name: "skill_file_valid".to_string(),
                         status: CheckStatus::Failed,
                         message: format!("SKILL.md validation failed: {}", err),
-                        details: Some(serde_json::Value::Object(details)),
+                        details: Some(Value::Object(details)),
                         execution_time_ms: start_time.elapsed().as_millis() as u64,
                     };
                 }
@@ -471,11 +471,11 @@ impl SkillValidator {
                 let mut details = serde_json::Map::new();
                 details.insert(
                     "name".to_string(),
-                    serde_json::Value::String(manifest.name.clone()),
+                    Value::String(manifest.name.clone()),
                 );
                 details.insert(
                     "description".to_string(),
-                    serde_json::Value::String(manifest.description.clone()),
+                    Value::String(manifest.description.clone()),
                 );
                 details.insert(
                     "version".to_string(),
@@ -490,7 +490,7 @@ impl SkillValidator {
                     name: "skill_file_valid".to_string(),
                     status,
                     message,
-                    details: Some(serde_json::Value::Object(details)),
+                    details: Some(Value::Object(details)),
                     execution_time_ms: start_time.elapsed().as_millis() as u64,
                 }
             }

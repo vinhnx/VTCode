@@ -89,7 +89,7 @@ pub fn spawn_session_with_prompts_and_options(
     keyboard_protocol: crate::config::KeyboardProtocolConfig,
     workspace_root: Option<std::path::PathBuf>,
     slash_commands: Vec<SlashCommandItem>,
-    appearance: Option<crate::core_tui::session::config::AppearanceConfig>,
+    appearance: Option<session::config::AppearanceConfig>,
     app_name: String,
     non_interactive_hint: Option<String>,
 ) -> Result<InlineSession> {
@@ -114,7 +114,7 @@ pub fn spawn_session_with_prompts_and_options(
                 placeholder,
                 surface_preference,
                 inline_rows,
-                show_logs: crate::ui::tui::log::is_tui_log_capture_enabled(),
+                show_logs: log::is_tui_log_capture_enabled(),
                 log_theme: None,
                 event_callback,
                 active_pty_sessions,

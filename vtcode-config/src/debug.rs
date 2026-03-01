@@ -46,7 +46,7 @@ impl std::fmt::Display for TraceLevel {
     }
 }
 
-impl<'de> serde::Deserialize<'de> for TraceLevel {
+impl<'de> Deserialize<'de> for TraceLevel {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,

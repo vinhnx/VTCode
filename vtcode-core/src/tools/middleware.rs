@@ -640,12 +640,12 @@ impl MiddlewareChain {
     where
         F: Fn(ToolRequest) -> MiddlewareResult + Send + Sync + 'static,
     {
-        let executor = std::sync::Arc::new(executor);
+        let executor = Arc::new(executor);
 
         // Factory for creating the tail of the chain (executor)
-        let mut factory: std::sync::Arc<
+        let mut factory: Arc<
             dyn Fn() -> Box<dyn Fn(ToolRequest) -> MiddlewareResult + Send + Sync> + Send + Sync,
-        > = std::sync::Arc::new(move || {
+        > = Arc::new(move || {
             let executor = executor.clone();
             Box::new(move |req| executor(req))
         });
@@ -655,7 +655,7 @@ impl MiddlewareChain {
             let mw = middleware.clone();
             let next_factory = factory.clone();
 
-            factory = std::sync::Arc::new(move || {
+            factory = Arc::new(move || {
                 let mw = mw.clone();
                 let next_factory = next_factory.clone();
                 Box::new(move |req| {

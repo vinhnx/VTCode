@@ -278,7 +278,7 @@ impl LLMProvider for LmStudioProvider {
 
 #[async_trait]
 impl LLMClient for LmStudioProvider {
-    async fn generate(&mut self, prompt: &str) -> Result<llm_types::LLMResponse, LLMError> {
+    async fn generate(&mut self, prompt: &str) -> Result<LLMResponse, LLMError> {
         LLMClient::generate(&mut self.inner, prompt).await
     }
 

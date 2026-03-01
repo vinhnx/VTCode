@@ -237,8 +237,8 @@ pub fn restore_tui() -> io::Result<()> {
 
     // 1. Drain any pending crossterm events to prevent them from leaking to the shell
     // This is a best-effort drain with a zero timeout
-    while let Ok(true) = ratatui::crossterm::event::poll(std::time::Duration::from_millis(0)) {
-        let _ = ratatui::crossterm::event::read();
+    while let Ok(true) = crossterm::event::poll(std::time::Duration::from_millis(0)) {
+        let _ = crossterm::event::read();
     }
 
     // Get stderr for executing terminal commands

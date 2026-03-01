@@ -338,7 +338,7 @@ impl TimeoutDetector {
     ) -> Result<T, anyhow::Error>
     where
         F: FnMut() -> Fut,
-        Fut: std::future::Future<Output = Result<T, anyhow::Error>>,
+        Fut: Future<Output = Result<T, anyhow::Error>>,
     {
         let config = self.get_config(&operation_type).await;
         let mut attempt = 0;

@@ -50,7 +50,7 @@ impl ToolRegistry {
 
         tool
     }
-    pub fn workspace_root(&self) -> &std::path::PathBuf {
+    pub fn workspace_root(&self) -> &PathBuf {
         self.inventory.workspace_root()
     }
 

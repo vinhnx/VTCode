@@ -183,17 +183,17 @@ pub fn fg_bg_colors(fg: anstyle::Color, bg: anstyle::Color) -> Style {
 }
 
 /// Create a ratatui Style with effects/modifiers
-pub fn with_effects(effects: anstyle::Effects) -> Style {
+pub fn with_effects(effects: Effects) -> Style {
     anstyle_to_ratatui(AnsiStyle::new().effects(effects))
 }
 
 /// Create a ratatui Style with foreground color and effects
-pub fn colored_with_effects(color: anstyle::Color, effects: anstyle::Effects) -> Style {
+pub fn colored_with_effects(color: anstyle::Color, effects: Effects) -> Style {
     anstyle_to_ratatui(AnsiStyle::new().fg_color(Some(color)).effects(effects))
 }
 
 /// Create a ratatui Style with background color and effects
-pub fn bg_colored_with_effects(color: anstyle::Color, effects: anstyle::Effects) -> Style {
+pub fn bg_colored_with_effects(color: anstyle::Color, effects: Effects) -> Style {
     anstyle_to_ratatui(AnsiStyle::new().bg_color(Some(color)).effects(effects))
 }
 
@@ -201,7 +201,7 @@ pub fn bg_colored_with_effects(color: anstyle::Color, effects: anstyle::Effects)
 pub fn full_style(
     fg: Option<anstyle::Color>,
     bg: Option<anstyle::Color>,
-    effects: anstyle::Effects,
+    effects: Effects,
 ) -> Style {
     let mut astyle = AnsiStyle::new();
     if let Some(c) = fg {

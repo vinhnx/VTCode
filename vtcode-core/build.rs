@@ -10,28 +10,6 @@ const EMBEDDED_ASSETS: &[(&str, &str)] =
     &[("docs/modules/vtcode_docs_map.md", "docs/vtcode_docs_map.md")];
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Suppress macOS malloc warnings in build output
-    // IMPORTANT: Only remove vars, never set them to "0" as that triggers
-    // "can't turn off malloc stack logging" warnings from xcrun
-    #[cfg(target_os = "macos")]
-    {
-        // Unset all malloc-related environment variables that might cause warnings
-        unsafe {
-            std::env::remove_var("MallocStackLogging");
-            std::env::remove_var("MallocStackLoggingDirectory");
-            std::env::remove_var("MallocScribble");
-            std::env::remove_var("MallocGuardEdges");
-            std::env::remove_var("MallocCheckHeapStart");
-            std::env::remove_var("MallocCheckHeapEach");
-            std::env::remove_var("MallocCheckHeapAbort");
-            std::env::remove_var("MallocCheckHeapSleep");
-            std::env::remove_var("MallocErrorAbort");
-            std::env::remove_var("MallocCorruptionAbort");
-            std::env::remove_var("MallocHelpOptions");
-            std::env::remove_var("MallocStackLoggingNoCompact");
-        }
-    }
-
     let is_docsrs = env::var_os("DOCS_RS").is_some();
 
     if is_docsrs {
@@ -39,7 +17,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("cargo:warning=docs.rs build detected, generating placeholder files");
         let out_dir = PathBuf::from(env::var("OUT_DIR")?);
         let assets_out_dir = out_dir.join("embedded_assets");
-        std::fs::create_dir_all(&assets_out_dir)?;
+        fs::create_dir_all(&assets_out_dir)?;
 
         // Generate a minimal metadata file for docs.rs builds
         let placeholder_metadata = r#"#[derive(Clone, Copy)]
@@ -72,7 +50,7 @@ pub fn parse_model(_value: &str) -> Option<super::ModelId> { None }
 
 pub fn vendor_groups() -> &'static [VendorModels] { VENDOR_MODELS }
 "#;
-        std::fs::write(out_dir.join("openrouter_metadata.rs"), placeholder_metadata)?;
+        fs::write(out_dir.join("openrouter_metadata.rs"), placeholder_metadata)?;
         return Ok(());
     }
 

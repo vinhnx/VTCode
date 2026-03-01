@@ -41,7 +41,7 @@ fn get_bash_parser() -> &'static Mutex<tree_sitter::Parser> {
 ///
 /// # Fallback
 /// If tree-sitter parsing fails, falls back to simple tokenization
-pub fn parse_shell_commands(script: &str) -> std::result::Result<Vec<Vec<String>>, String> {
+pub fn parse_shell_commands(script: &str) -> Result<Vec<Vec<String>>, String> {
     // Try tree-sitter parsing first
     match parse_with_tree_sitter(script) {
         Ok(commands) if !commands.is_empty() => return Ok(commands),
@@ -63,12 +63,12 @@ pub fn parse_shell_commands(script: &str) -> std::result::Result<Vec<Vec<String>
 /// Use this when caller behavior must be strictly gated on bash grammar validity.
 pub fn parse_shell_commands_tree_sitter(
     script: &str,
-) -> std::result::Result<Vec<Vec<String>>, String> {
+) -> Result<Vec<Vec<String>>, String> {
     parse_with_tree_sitter(script)
 }
 
 /// Parses shell script using tree-sitter bash grammar
-fn parse_with_tree_sitter(script: &str) -> std::result::Result<Vec<Vec<String>>, String> {
+fn parse_with_tree_sitter(script: &str) -> Result<Vec<Vec<String>>, String> {
     let parser_guard = get_bash_parser();
     let mut parser = parser_guard
         .lock()
@@ -152,7 +152,7 @@ fn extract_command_from_node(node: tree_sitter::Node, source: &str) -> Option<Ve
 }
 
 /// Fallback: Parses shell script with simple tokenization
-fn parse_with_basic_tokenization(script: &str) -> std::result::Result<Vec<Vec<String>>, String> {
+fn parse_with_basic_tokenization(script: &str) -> Result<Vec<Vec<String>>, String> {
     let mut commands = Vec::new();
     let mut current_command = String::new();
     let mut in_quotes = false;
@@ -200,7 +200,7 @@ fn parse_with_basic_tokenization(script: &str) -> std::result::Result<Vec<Vec<St
 
 /// Splits a command string into arguments
 /// Respects quoted strings and escapes
-fn tokenize_command(cmd: &str) -> std::result::Result<Vec<String>, String> {
+fn tokenize_command(cmd: &str) -> Result<Vec<String>, String> {
     // Use shlex for proper shell-like tokenization
     // Note: This matches the implementation in `shlex::split` but handles some edge cases differently.
     // Future improvement: use a full shell parser or tree-sitter for non-trivial cases.

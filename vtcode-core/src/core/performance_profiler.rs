@@ -425,7 +425,7 @@ impl BenchmarkUtils {
     ) -> Result<BenchmarkResults>
     where
         F: FnMut() -> Fut,
-        Fut: std::future::Future<Output = R>,
+        Fut: Future<Output = R>,
     {
         profiler.start_benchmark(name).await?;
 

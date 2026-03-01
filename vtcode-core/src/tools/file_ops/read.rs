@@ -68,7 +68,7 @@ fn looks_like_patch_payload(args: &Value) -> bool {
         || args.as_str().is_some_and(looks_like_patch_text)
 }
 
-fn build_read_handler_args(args: &Value, canonical_path: &std::path::Path) -> Value {
+fn build_read_handler_args(args: &Value, canonical_path: &Path) -> Value {
     let mut handler_args_json = args.clone();
     if let Some(obj) = handler_args_json.as_object_mut() {
         obj.insert(

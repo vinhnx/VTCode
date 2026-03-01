@@ -226,7 +226,7 @@ fn validate_context_window(config: &VTCodeConfig, result: &mut ValidationResult)
 }
 
 fn validate_checkpointing_dir(storage_dir: &str, workspace: &Path, result: &mut ValidationResult) {
-    let path = if std::path::Path::new(storage_dir).is_absolute() {
+    let path = if Path::new(storage_dir).is_absolute() {
         std::path::PathBuf::from(storage_dir)
     } else {
         workspace.join(storage_dir)
@@ -251,7 +251,7 @@ fn validate_full_auto_config(
 ) {
     if full_auto_cfg.require_profile_ack {
         if let Some(profile_path) = &full_auto_cfg.profile_path {
-            let resolved = if std::path::Path::new(profile_path).is_absolute() {
+            let resolved = if Path::new(profile_path).is_absolute() {
                 std::path::PathBuf::from(profile_path)
             } else {
                 workspace.join(profile_path)

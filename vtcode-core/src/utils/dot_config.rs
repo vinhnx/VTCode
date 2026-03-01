@@ -344,7 +344,7 @@ impl DotManager {
         fn calculate_recursive<'a>(
             path: &'a Path,
             current_size: &'a mut u64,
-        ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), DotError>> + Send + 'a>>
+        ) -> std::pin::Pin<Box<dyn Future<Output = Result<(), DotError>> + Send + 'a>>
         {
             Box::pin(async move {
                 let metadata = fs::metadata(path).await.map_err(DotError::Io)?;

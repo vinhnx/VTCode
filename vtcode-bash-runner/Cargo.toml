@@ -2,7 +2,7 @@
 name = "vtcode-bash-runner"
 version = "0.85.1"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.88"
 description = "Cross-platform shell execution helpers extracted from VT Code"
 license = "MIT"
 readme = "README.md"

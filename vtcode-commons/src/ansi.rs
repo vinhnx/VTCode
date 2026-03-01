@@ -198,7 +198,7 @@ pub fn strip_ansi(text: &str) -> String {
         }
     }
 
-    unsafe { String::from_utf8_unchecked(output) }
+    String::from_utf8_lossy(&output).into_owned()
 }
 
 /// Strip ANSI escape codes from arbitrary bytes, preserving non-control bytes.

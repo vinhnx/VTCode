@@ -99,6 +99,7 @@ fn probe_terminal_colors(timeout: Duration) -> Result<ProbeResult> {
 }
 
 #[cfg(unix)]
+#[allow(unsafe_code)]
 fn read_until_da1(tty: &mut File, timeout: Duration) -> Result<Vec<u8>> {
     let fd = tty.as_raw_fd();
     let deadline = Instant::now() + timeout;
@@ -210,6 +211,7 @@ struct RawModeGuard {
 
 #[cfg(unix)]
 impl RawModeGuard {
+    #[allow(unsafe_code)]
     fn activate(tty: &File) -> Result<Self> {
         let fd = tty.as_raw_fd();
         let mut original = std::mem::MaybeUninit::<libc::termios>::uninit();
@@ -233,6 +235,7 @@ impl RawModeGuard {
 
 #[cfg(unix)]
 impl Drop for RawModeGuard {
+    #[allow(unsafe_code)]
     fn drop(&mut self) {
         unsafe {
             libc::tcsetattr(self.fd, libc::TCSANOW, &self.original);

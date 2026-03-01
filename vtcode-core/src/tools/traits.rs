@@ -166,7 +166,7 @@ pub trait Tool: Send + Sync {
         &self,
         workspace_root: &std::path::Path,
         path: &str,
-    ) -> anyhow::Result<std::path::PathBuf> {
+    ) -> Result<PathBuf> {
         crate::tools::validation::unified_path::validate_and_resolve_path(workspace_root, path)
             .await
     }

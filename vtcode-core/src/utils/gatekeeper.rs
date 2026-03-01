@@ -196,60 +196,16 @@ fn resolve_path(raw: &str, workspace_root: Option<&Path>) -> Option<PathBuf> {
 
 #[cfg(target_os = "macos")]
 fn read_quarantine_xattr(path: &Path) -> std::io::Result<Option<Vec<u8>>> {
-    use std::ffi::CString;
-    use std::os::unix::ffi::OsStrExt;
-
-    let c_path = CString::new(path.as_os_str().as_bytes())?;
-    let name = CString::new("com.apple.quarantine")?;
-
-    unsafe {
-        let size = libc::getxattr(
-            c_path.as_ptr(),
-            name.as_ptr(),
-            std::ptr::null_mut(),
-            0,
-            0,
-            0,
-        );
-        if size < 0 {
-            let err = std::io::Error::last_os_error();
-            if err.raw_os_error() == Some(libc::ENOATTR) {
-                return Ok(None);
-            }
-            return Err(err);
-        }
-        let mut buffer = vec![0u8; size as usize];
-        let read = libc::getxattr(
-            c_path.as_ptr(),
-            name.as_ptr(),
-            buffer.as_mut_ptr() as *mut _,
-            buffer.len(),
-            0,
-            0,
-        );
-        if read < 0 {
-            return Err(std::io::Error::last_os_error());
-        }
-        buffer.truncate(read as usize);
-        Ok(Some(buffer))
-    }
+    xattr::get(path, "com.apple.quarantine")
 }
 
 #[cfg(target_os = "macos")]
 fn clear_quarantine_xattr(path: &Path) -> std::io::Result<()> {
-    use std::ffi::CString;
-    use std::os::unix::ffi::OsStrExt;
-
-    let c_path = CString::new(path.as_os_str().as_bytes())?;
-    let name = CString::new("com.apple.quarantine")?;
-
-    unsafe {
-        let result = libc::removexattr(c_path.as_ptr(), name.as_ptr(), 0);
-        if result != 0 {
-            return Err(std::io::Error::last_os_error());
-        }
+    match xattr::remove(path, "com.apple.quarantine") {
+        Ok(()) => Ok(()),
+        Err(err) if err.raw_os_error() == Some(libc::ENOATTR) => Ok(()),
+        Err(err) => Err(err),
     }
-    Ok(())
 }
 
 #[cfg(test)]

@@ -2,7 +2,7 @@
 name = "vtcode-config"
 version = "0.85.1"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.88"
 authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
 description = "Config loader components shared across VT Code and downstream adopters"
 license = "MIT"

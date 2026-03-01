@@ -77,7 +77,7 @@ pub struct LLMRequest {
 
     /// Optional turn metadata for git context (remote URLs, commit hash, etc.)
     /// This is sent as X-Turn-Metadata header to providers that support it
-    pub metadata: Option<serde_json::Value>,
+    pub metadata: Option<Value>,
 
     /// Optional Responses API continuity pointer for server-side context chaining.
     /// Used by providers that support stateful response continuation.

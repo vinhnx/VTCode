@@ -500,12 +500,12 @@ impl LLMProvider for AnthropicProvider {
 
 #[async_trait]
 impl LLMClient for AnthropicProvider {
-    async fn generate(&mut self, prompt: &str) -> Result<llm_types::LLMResponse, LLMError> {
+    async fn generate(&mut self, prompt: &str) -> Result<LLMResponse, LLMError> {
         let request = crate::llm::providers::common::make_default_request(prompt, &self.model);
         let request_model = request.model.clone();
         let response = LLMProvider::generate(self, request).await?;
 
-        Ok(llm_types::LLMResponse {
+        Ok(LLMResponse {
             content: Some(response.content.unwrap_or_default()),
             model: request_model,
             usage: response

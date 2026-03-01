@@ -1146,13 +1146,13 @@ impl ToolRegistry {
                 if let Some(obj) = payload.get_mut("error").and_then(|v| v.as_object_mut()) {
                     obj.insert(
                         "timeout_category".into(),
-                        serde_json::Value::String(timeout_category.label().to_string()),
+                        Value::String(timeout_category.label().to_string()),
                     );
                     obj.insert(
                         "timeout_ms".into(),
-                        serde_json::Value::from(effective_timeout_ms.unwrap_or(0)),
+                        Value::from(effective_timeout_ms.unwrap_or(0)),
                     );
-                    obj.insert("circuit_breaker".into(), serde_json::Value::Bool(tripped));
+                    obj.insert("circuit_breaker".into(), Value::Bool(tripped));
                 }
 
                 record_failure(

@@ -76,10 +76,10 @@ impl ToolRegistry {
             inventory,
             policy_gateway: Arc::new(tokio::sync::RwLock::new(policy_gateway)),
             pty_sessions,
-            mcp_client: Arc::new(std::sync::RwLock::new(None)),
+            mcp_client: Arc::new(RwLock::new(None)),
             mcp_tool_index: Arc::new(tokio::sync::RwLock::new(rustc_hash::FxHashMap::default())),
             mcp_reverse_index: Arc::new(tokio::sync::RwLock::new(rustc_hash::FxHashMap::default())),
-            timeout_policy: Arc::new(std::sync::RwLock::new(ToolTimeoutPolicy::default())),
+            timeout_policy: Arc::new(RwLock::new(ToolTimeoutPolicy::default())),
             execution_history: ToolExecutionHistory::new(100),
             harness_context: HarnessContext::default(),
             resiliency: Arc::new(Mutex::new(ResiliencyContext::default())),
@@ -92,10 +92,10 @@ impl ToolRegistry {
             runtime_sandbox_config: Arc::new(RwLock::new(
                 super::sandbox_facade::runtime_sandbox_config_default(),
             )),
-            agent_type: Arc::new(std::sync::RwLock::new(Cow::Borrowed("unknown"))),
+            agent_type: Arc::new(RwLock::new(Cow::Borrowed("unknown"))),
             cached_available_tools: Arc::new(RwLock::new(None)),
-            progress_callback: Arc::new(std::sync::RwLock::new(None)),
-            active_pty_sessions: Arc::new(std::sync::RwLock::new(None)),
+            progress_callback: Arc::new(RwLock::new(None)),
+            active_pty_sessions: Arc::new(RwLock::new(None)),
 
             memory_pool: Arc::new(MemoryPool::from_config(&optimization_config.memory_pool)),
             hot_tool_cache: Arc::new(parking_lot::RwLock::new(lru::LruCache::new(

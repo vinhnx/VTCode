@@ -541,8 +541,8 @@ where
                     .as_secs();
 
                 // Recency factor: recent entries get higher score
-                let recency_factor = std::cmp::max(1, 3600 / (age_secs + 1));
-                let usefulness_score = entry.access_count * recency_factor as u64;
+                let recency_factor = std::cmp::max(1_u64, 3600 / (age_secs + 1));
+                let usefulness_score = entry.access_count * recency_factor;
 
                 (k.clone(), entry.clone(), usefulness_score)
             })
@@ -617,7 +617,7 @@ where
                 results.push((*value).clone());
             } else if let Some(value) = process_fn(key) {
                 // Cache the result for future use
-                let size = std::mem::size_of_val(&value) as u64;
+                let size = size_of_val(&value) as u64;
                 self.inner.insert(key.clone(), value.clone(), size);
                 results.push(value);
             }

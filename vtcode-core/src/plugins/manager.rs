@@ -111,13 +111,13 @@ impl PluginManager {
         &self,
         plugin_id: &str,
         source_path: &std::path::Path,
-    ) -> PluginResult<std::path::PathBuf> {
+    ) -> PluginResult<PathBuf> {
         let mut cache = self.cache.write().await;
         cache.cache_plugin(plugin_id, source_path).await
     }
 
     /// Get cached plugin path
-    pub async fn get_cached_plugin(&self, plugin_id: &str) -> Option<std::path::PathBuf> {
+    pub async fn get_cached_plugin(&self, plugin_id: &str) -> Option<PathBuf> {
         let cache = self.cache.read().await;
         cache.get_cached_plugin(plugin_id).cloned()
     }

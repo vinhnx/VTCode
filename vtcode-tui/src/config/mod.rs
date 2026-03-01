@@ -345,7 +345,7 @@ impl Default for PtyConfig {
 /// Convert KeyboardProtocolConfig to crossterm keyboard enhancement flags.
 pub fn keyboard_protocol_to_flags(
     config: &KeyboardProtocolConfig,
-) -> ratatui::crossterm::event::KeyboardEnhancementFlags {
+) -> crossterm::event::KeyboardEnhancementFlags {
     use ratatui::crossterm::event::KeyboardEnhancementFlags;
 
     if !config.enabled {

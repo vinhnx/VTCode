@@ -128,7 +128,7 @@ impl McpCircuitBreaker {
                 // If it's in the past and within reasonable bounds (e.g. not older than a year and not in future)
                 if epoch <= now {
                     *breaker.last_failure_time.lock() =
-                        Some(std::time::UNIX_EPOCH + std::time::Duration::from_secs(epoch));
+                        Some(std::time::UNIX_EPOCH + Duration::from_secs(epoch));
                 }
             }
         }

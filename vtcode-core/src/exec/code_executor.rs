@@ -69,7 +69,7 @@ impl Language {
     pub fn detect_python_interpreter(workspace_root: &std::path::Path) -> String {
         // 1. Check for activated venv
         if let Ok(venv_python) = std::env::var("VIRTUAL_ENV") {
-            let venv_bin = std::path::PathBuf::from(venv_python)
+            let venv_bin = PathBuf::from(venv_python)
                 .join("bin")
                 .join("python");
             if venv_bin.exists() {

@@ -63,7 +63,7 @@ impl AsyncProcessRunner {
             return Err(anyhow!("program cannot be empty"));
         }
 
-        let mut tags = std::collections::HashMap::new();
+        let mut tags = HashMap::new();
         tags.insert("subsystem".to_string(), "async_command".to_string());
         tags.insert("program".to_string(), options.program.clone());
         perf::record_value("vtcode.perf.spawn_count", 1.0, tags);

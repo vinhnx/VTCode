@@ -74,7 +74,7 @@ impl GrepSearchCache {
     /// Cache a search result
     pub fn put(&self, input: &GrepSearchInput, result: GrepSearchResult) {
         let key = SearchCacheKey::from(input);
-        let size_bytes = std::mem::size_of::<GrepSearchResult>() as u64
+        let size_bytes = size_of::<GrepSearchResult>() as u64
             + result.query.len() as u64
             + result.matches.iter().map(estimate_json_size).sum::<u64>();
         self.cache.insert(key, result, size_bytes);

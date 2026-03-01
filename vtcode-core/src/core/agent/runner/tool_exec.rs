@@ -163,7 +163,7 @@ impl AgentRunner {
                         warn!(agent = %agent_prefix, "Paused by steering signal. Waiting for Resume...");
                         // Wait for resume
                         loop {
-                            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+                            tokio::time::sleep(Duration::from_millis(100)).await;
                             if let Some(SteeringMessage::Resume) = self.check_steering() {
                                 if !self.quiet {
                                     info!(agent = %agent_prefix, "Resumed by steering signal");

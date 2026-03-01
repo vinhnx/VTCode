@@ -2,7 +2,7 @@
 name = "vtcode-lmstudio"
 version.workspace = true
 edition.workspace = true
-rust-version = "1.85"
+rust-version = "1.88"
 license.workspace = true
 description = "LM Studio OSS provider integration for VT Code"
 publish = false

@@ -2,7 +2,7 @@
 name = "vtcode-core"
 version = "0.85.1"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.88"
 authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
 description = "Core library for VT Code - a Rust-based terminal coding agent"
 license = "MIT"
@@ -180,6 +180,7 @@ libc = "0.2"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 libc = "0.2"
+xattr = "1.6"
 
 [[example]]
 name = "anstyle_test"

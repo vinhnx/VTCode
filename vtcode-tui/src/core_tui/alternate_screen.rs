@@ -146,8 +146,8 @@ impl AlternateScreenSession {
 
         // Drain any pending crossterm events BEFORE leaving alternate screen and disabling raw mode
         // to prevent them from leaking to the shell.
-        while let Ok(true) = ratatui::crossterm::event::poll(std::time::Duration::from_millis(0)) {
-            let _ = ratatui::crossterm::event::read();
+        while let Ok(true) = crossterm::event::poll(std::time::Duration::from_millis(0)) {
+            let _ = crossterm::event::read();
         }
 
         let mut stdout = io::stdout();
@@ -221,7 +221,7 @@ impl Drop for AlternateScreenSession {
 ///
 /// This is useful when you want to clear the screen before running a terminal app.
 pub fn clear_screen() -> Result<()> {
-    execute!(io::stdout(), terminal::Clear(terminal::ClearType::All))
+    execute!(io::stdout(), Clear(ClearType::All))
         .context("failed to clear alternate screen")
 }
 

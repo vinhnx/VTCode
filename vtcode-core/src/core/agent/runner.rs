@@ -92,22 +92,22 @@ pub struct AgentRunner {
     /// Maximum number of autonomous turns before halting
     max_turns: usize,
     /// Loop detector to prevent infinite exploration
-    loop_detector: parking_lot::Mutex<LoopDetector>,
+    loop_detector: Mutex<LoopDetector>,
     /// Cached shell policy patterns to avoid recompilation
 
     /// API failure tracking for exponential backoff
-    failure_tracker: parking_lot::Mutex<ApiFailureTracker>,
+    failure_tracker: Mutex<ApiFailureTracker>,
     /// Context optimizer for token budget management
     context_optimizer: tokio::sync::Mutex<ContextOptimizer>,
     /// Tracks recent streaming failures to avoid repeated double-requests
-    streaming_failures: parking_lot::Mutex<u8>,
+    streaming_failures: Mutex<u8>,
     /// Records when streaming last failed for cooldown-based re-enablement
-    streaming_last_failure: parking_lot::Mutex<Option<Instant>>,
+    streaming_last_failure: Mutex<Option<Instant>>,
     /// Tracks the latest reasoning stage name for the current turn
-    last_reasoning_stage: parking_lot::Mutex<Option<String>>,
+    last_reasoning_stage: Mutex<Option<String>>,
     /// Receiver for steering messages (e.g., stop, pause)
     steering_receiver:
-        parking_lot::Mutex<Option<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>>,
+        Mutex<Option<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>>,
 }
 
 impl AgentRunner {
@@ -180,13 +180,13 @@ impl AgentRunner {
             quiet: false,
             event_sink: None,
             max_turns: defaults::DEFAULT_FULL_AUTO_MAX_TURNS,
-            loop_detector: parking_lot::Mutex::new(loop_detector),
-            failure_tracker: parking_lot::Mutex::new(ApiFailureTracker::new()),
+            loop_detector: Mutex::new(loop_detector),
+            failure_tracker: Mutex::new(ApiFailureTracker::new()),
             context_optimizer: tokio::sync::Mutex::new(ContextOptimizer::new()),
-            streaming_failures: parking_lot::Mutex::new(0),
-            streaming_last_failure: parking_lot::Mutex::new(None),
-            last_reasoning_stage: parking_lot::Mutex::new(None),
-            steering_receiver: parking_lot::Mutex::new(steering_receiver),
+            streaming_failures: Mutex::new(0),
+            streaming_last_failure: Mutex::new(None),
+            last_reasoning_stage: Mutex::new(None),
+            steering_receiver: Mutex::new(steering_receiver),
         })
     }
 

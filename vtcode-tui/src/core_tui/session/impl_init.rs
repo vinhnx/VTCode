@@ -150,11 +150,11 @@ impl Session {
             shimmer_state: ShimmerState::new(),
 
             // --- Reverse Search ---
-            reverse_search_state: crate::ui::tui::session::reverse_search::ReverseSearchState::new(
+            reverse_search_state: reverse_search::ReverseSearchState::new(
             ),
 
             // --- History Picker (Ctrl+R fuzzy search) ---
-            history_picker_state: crate::ui::tui::session::history_picker::HistoryPickerState::new(
+            history_picker_state: HistoryPickerState::new(
             ),
 
             // --- PTY Session Management ---
@@ -164,7 +164,7 @@ impl Session {
             clipboard: String::new(),
 
             // --- Mouse Text Selection ---
-            mouse_selection: crate::ui::tui::session::mouse_selection::MouseSelectionState::new(),
+            mouse_selection: MouseSelectionState::new(),
 
             // --- Diff Preview Modal ---
             diff_preview: None,

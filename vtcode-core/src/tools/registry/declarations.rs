@@ -853,7 +853,7 @@ fn compact_tool_description(
     name: &str,
     original: &str,
     mode: ToolDocumentationMode,
-    signatures: &std::collections::HashMap<&str, super::ToolSignature>,
+    signatures: &HashMap<&str, super::ToolSignature>,
 ) -> String {
     if let Some(sig) = signatures.get(name) {
         return sig.brief.to_string();
@@ -1059,7 +1059,7 @@ mod tests {
     }
 }
 
-fn insert_if_allowed(map: &mut serde_json::Map<String, Value>, key: String, value: Value) {
+fn insert_if_allowed(map: &mut Map<String, Value>, key: String, value: Value) {
     if !key.starts_with("x-") {
         map.insert(key, value);
     }

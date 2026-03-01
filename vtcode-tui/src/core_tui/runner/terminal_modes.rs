@@ -49,7 +49,7 @@ impl Default for TerminalModeState {
 
 pub(super) fn enable_terminal_modes(
     stderr: &mut io::Stderr,
-    keyboard_flags: ratatui::crossterm::event::KeyboardEnhancementFlags,
+    keyboard_flags: crossterm::event::KeyboardEnhancementFlags,
 ) -> Result<TerminalModeState> {
     use ratatui::crossterm::event::PushKeyboardEnhancementFlags;
 

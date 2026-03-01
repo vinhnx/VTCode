@@ -275,7 +275,7 @@ impl SkillManager {
     /// This implements dynamic context discovery: agents can read the index
     /// to discover available skills, then load specific skills as needed.
     /// This is more token-efficient than loading all skill definitions.
-    pub async fn generate_index(&self) -> Result<std::path::PathBuf> {
+    pub async fn generate_index(&self) -> Result<PathBuf> {
         let skills = self.list_skills_with_origin().await?;
 
         let mut content = String::new();
@@ -356,7 +356,7 @@ impl SkillManager {
     }
 
     /// Get the path to the INDEX.md file
-    pub fn index_path(&self) -> std::path::PathBuf {
+    pub fn index_path(&self) -> PathBuf {
         self.skills_dir.join("INDEX.md")
     }
 

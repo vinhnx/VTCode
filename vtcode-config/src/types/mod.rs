@@ -463,7 +463,7 @@ pub struct AgentConfig {
     pub api_key: String,
     pub provider: String,
     pub api_key_env: String,
-    pub workspace: std::path::PathBuf,
+    pub workspace: PathBuf,
     pub verbose: bool,
     pub quiet: bool,
     pub theme: String,

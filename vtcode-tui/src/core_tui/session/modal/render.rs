@@ -53,7 +53,7 @@ fn wrap_line_to_width(line: &str, width: usize) -> Vec<String> {
             .unwrap_or(0)
             .max(1);
         if current_width + ch_width > width && !current.is_empty() {
-            rows.push(std::mem::take(&mut current));
+            rows.push(mem::take(&mut current));
             current_width = 0;
             if ch.is_whitespace() {
                 continue;

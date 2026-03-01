@@ -144,20 +144,20 @@ impl TerminalAppLauncher {
     fn build_editor_command_from_string(
         command: &str,
         file_path: &Path,
-    ) -> Result<std::process::Command> {
+    ) -> Result<Command> {
         let tokens = shell_words::split(command)
             .with_context(|| format!("invalid editor command: {}", command))?;
         let (program, args) = tokens
             .split_first()
             .ok_or_else(|| anyhow!("editor command cannot be empty"))?;
-        let mut cmd = std::process::Command::new(program);
+        let mut cmd = Command::new(program);
         cmd.args(args);
         cmd.arg(file_path);
         Ok(cmd)
     }
 
     /// Try common editors in priority order as fallback when EDITOR/VISUAL not set
-    fn try_common_editors(file_path: &Path) -> Result<std::process::Command> {
+    fn try_common_editors(file_path: &Path) -> Result<Command> {
         let candidates = if cfg!(target_os = "windows") {
             vec![
                 "code --wait",
