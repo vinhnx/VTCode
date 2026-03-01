@@ -182,6 +182,50 @@ impl<'a> TurnLoopContext<'a> {
             harness_emitter: self.harness_emitter,
         }
     }
+
+    pub fn as_turn_processing_context<'b>(
+        &'b mut self,
+        working_history: &'b mut Vec<uni::Message>,
+    ) -> crate::agent::runloop::unified::turn::context::TurnProcessingContext<'b> {
+        crate::agent::runloop::unified::turn::context::TurnProcessingContext {
+            renderer: self.renderer,
+            handle: self.handle,
+            session_stats: self.session_stats,
+            auto_exit_plan_mode_attempted: self.auto_exit_plan_mode_attempted,
+            mcp_panel_state: self.mcp_panel_state,
+            tool_result_cache: self.tool_result_cache,
+            approval_recorder: self.approval_recorder,
+            decision_ledger: self.decision_ledger,
+            working_history,
+            tool_registry: self.tool_registry,
+            tools: self.tools,
+            tool_catalog: self.tool_catalog,
+            ctrl_c_state: self.ctrl_c_state,
+            ctrl_c_notify: self.ctrl_c_notify,
+            vt_cfg: self.vt_cfg,
+            context_manager: self.context_manager,
+            last_forced_redraw: self.last_forced_redraw,
+            input_status_state: self.input_status_state,
+            session: self.session,
+            lifecycle_hooks: self.lifecycle_hooks,
+            default_placeholder: self.default_placeholder,
+            tool_permission_cache: self.tool_permission_cache,
+            safety_validator: self.safety_validator,
+            provider_client: self.provider_client,
+            config: self.config,
+            traj: self.traj,
+            full_auto: self.full_auto,
+            circuit_breaker: self.circuit_breaker,
+            tool_health_tracker: self.tool_health_tracker,
+            rate_limiter: self.rate_limiter,
+            telemetry: self.telemetry,
+            autonomous_executor: self.autonomous_executor,
+            error_recovery: self.error_recovery,
+            harness_state: self.harness_state,
+            harness_emitter: self.harness_emitter,
+            steering_receiver: self.steering_receiver,
+        }
+    }
 }
 
 fn has_tool_response_since(messages: &[uni::Message], baseline_len: usize) -> bool {
@@ -245,7 +289,7 @@ pub async fn run_turn_loop(
     session_end_reason: &mut crate::hooks::lifecycle::SessionEndReason,
 ) -> Result<TurnLoopOutcome> {
     use crate::agent::runloop::unified::turn::context::{
-        TurnHandlerOutcome, TurnProcessingContext, TurnProcessingResult,
+        TurnHandlerOutcome, TurnProcessingResult,
     };
     use crate::agent::runloop::unified::turn::guards::run_proactive_guards;
     use crate::agent::runloop::unified::turn::turn_processing::{
@@ -324,44 +368,7 @@ pub async fn run_turn_loop(
         let restore_status_right = ctx.input_status_state.right.clone();
 
         // Prepare turn processing context
-        let mut turn_processing_ctx = TurnProcessingContext {
-            renderer: ctx.renderer,
-            handle: ctx.handle,
-            session_stats: ctx.session_stats,
-            auto_exit_plan_mode_attempted: ctx.auto_exit_plan_mode_attempted,
-            mcp_panel_state: ctx.mcp_panel_state,
-            tool_result_cache: ctx.tool_result_cache,
-            approval_recorder: ctx.approval_recorder,
-            decision_ledger: ctx.decision_ledger,
-            working_history,
-            tool_registry: ctx.tool_registry,
-            tools: ctx.tools,
-            tool_catalog: ctx.tool_catalog,
-            ctrl_c_state: ctx.ctrl_c_state,
-            ctrl_c_notify: ctx.ctrl_c_notify,
-            vt_cfg: ctx.vt_cfg,
-            context_manager: ctx.context_manager,
-            last_forced_redraw: ctx.last_forced_redraw,
-            input_status_state: ctx.input_status_state,
-            session: ctx.session,
-            lifecycle_hooks: ctx.lifecycle_hooks,
-            default_placeholder: ctx.default_placeholder,
-            tool_permission_cache: ctx.tool_permission_cache,
-            safety_validator: ctx.safety_validator,
-            provider_client: ctx.provider_client,
-            config: ctx.config,
-            traj: ctx.traj,
-            full_auto: ctx.full_auto,
-            circuit_breaker: ctx.circuit_breaker,
-            tool_health_tracker: ctx.tool_health_tracker,
-            rate_limiter: ctx.rate_limiter,
-            telemetry: ctx.telemetry,
-            autonomous_executor: ctx.autonomous_executor,
-            error_recovery: ctx.error_recovery,
-            harness_state: ctx.harness_state,
-            harness_emitter: ctx.harness_emitter,
-            steering_receiver: ctx.steering_receiver,
-        };
+        let mut turn_processing_ctx = ctx.as_turn_processing_context(working_history);
 
         // === PROACTIVE GUARDS (HP-2: Pre-request checks) ===
         run_proactive_guards(&mut turn_processing_ctx, step_count).await?;
@@ -383,7 +390,7 @@ pub async fn run_turn_loop(
             Ok(val) => val,
             Err(err) => {
                 // Record the error in the recovery state for diagnostics
-                let mut recovery = ctx.error_recovery.write().await;
+                let mut recovery = turn_processing_ctx.error_recovery.write().await;
                 recovery.record_error("llm_request", format!("{:#}", err), ErrorType::Other);
 
                 // execute_llm_request already performs retry/backoff for retryable provider errors.
@@ -467,7 +474,7 @@ pub async fn run_turn_loop(
                     );
                 }
 
-                let mut recovery = ctx.error_recovery.write().await;
+                let mut recovery = turn_processing_ctx.error_recovery.write().await;
                 recovery.record_error("llm_response_parse", format!("{:#}", err), ErrorType::Other);
                 if maybe_recover_after_post_tool_llm_failure(
                     turn_processing_ctx.renderer,
@@ -499,7 +506,8 @@ pub async fn run_turn_loop(
         let has_tool_calls = matches!(processing_result, TurnProcessingResult::ToolCalls { .. });
         if !has_tool_calls {
             // Restore the input status bar to its original state
-            ctx.handle
+            turn_processing_ctx
+                .handle
                 .set_input_status(restore_status_left, restore_status_right);
         }
 

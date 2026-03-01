@@ -83,7 +83,6 @@ pub struct TurnOutcomeContext<'a> {
     pub show_turn_timer: bool,
 }
 
-#[allow(dead_code)]
 pub(crate) struct ToolContext<'a> {
     pub tool_result_cache: &'a Arc<tokio::sync::RwLock<vtcode_core::tools::ToolResultCache>>,
     pub approval_recorder: &'a Arc<vtcode_core::tools::ApprovalRecorder>,
@@ -99,12 +98,12 @@ pub(crate) struct ToolContext<'a> {
     pub circuit_breaker: &'a Arc<vtcode_core::tools::circuit_breaker::CircuitBreaker>,
     pub tool_health_tracker: &'a Arc<vtcode_core::tools::health::ToolHealthTracker>,
     pub rate_limiter: &'a Arc<vtcode_core::tools::adaptive_rate_limiter::AdaptiveRateLimiter>,
+    pub telemetry: &'a Arc<vtcode_core::core::telemetry::TelemetryManager>,
     pub autonomous_executor: &'a Arc<vtcode_core::tools::autonomous_executor::AutonomousExecutor>,
     pub error_recovery:
         &'a Arc<RwLock<vtcode_core::core::agent::error_recovery::ErrorRecoveryState>>,
 }
 
-#[allow(dead_code)]
 pub(crate) struct LLMContext<'a> {
     pub provider_client: &'a mut Box<dyn uni::LLMProvider>,
     pub config: &'a mut vtcode_core::config::types::AgentConfig,
@@ -115,7 +114,6 @@ pub(crate) struct LLMContext<'a> {
     pub traj: &'a vtcode_core::core::trajectory::TrajectoryLogger,
 }
 
-#[allow(dead_code)]
 pub(crate) struct UIContext<'a> {
     pub renderer: &'a mut AnsiRenderer,
     pub handle: &'a InlineHandle,
@@ -177,76 +175,17 @@ pub(crate) struct TurnProcessingContext<'a> {
 }
 
 impl<'a> TurnProcessingContext<'a> {
-    #[allow(dead_code)]
-    pub fn tool_context(&mut self) -> ToolContext<'_> {
-        ToolContext {
-            tool_result_cache: self.tool_result_cache,
-            approval_recorder: self.approval_recorder,
-            tool_registry: self.tool_registry,
-            tools: self.tools,
-            tool_catalog: self.tool_catalog,
-            tool_permission_cache: self.tool_permission_cache,
-            safety_validator: self.safety_validator,
-            circuit_breaker: self.circuit_breaker,
-            tool_health_tracker: self.tool_health_tracker,
-            rate_limiter: self.rate_limiter,
-            autonomous_executor: self.autonomous_executor,
-            error_recovery: self.error_recovery,
-        }
-    }
-
-    #[allow(dead_code)]
-    pub fn llm_context(&mut self) -> LLMContext<'_> {
-        LLMContext {
-            provider_client: self.provider_client,
-            config: self.config,
-            vt_cfg: self.vt_cfg,
-            context_manager: self.context_manager,
-            decision_ledger: self.decision_ledger,
-            traj: self.traj,
-        }
-    }
-
-    #[allow(dead_code)]
-    pub fn ui_context(&mut self) -> UIContext<'_> {
-        UIContext {
-            renderer: self.renderer,
-            handle: self.handle,
-            session: self.session,
-            ctrl_c_state: self.ctrl_c_state,
-            ctrl_c_notify: self.ctrl_c_notify,
-            lifecycle_hooks: self.lifecycle_hooks,
-            default_placeholder: self.default_placeholder,
-            last_forced_redraw: self.last_forced_redraw,
-            input_status_state: self.input_status_state,
-        }
-    }
-
     /// Creates a TurnLoopContext from this TurnProcessingContext.
     /// This is used when calling handle_tool_execution_result which requires TurnLoopContext.
     pub fn as_turn_loop_context(
         &mut self,
     ) -> crate::agent::runloop::unified::turn::turn_loop::TurnLoopContext<'_> {
-        crate::agent::runloop::unified::turn::turn_loop::TurnLoopContext {
-            renderer: self.renderer,
-            handle: self.handle,
-            session: self.session,
-            session_stats: self.session_stats,
-            auto_exit_plan_mode_attempted: self.auto_exit_plan_mode_attempted,
-            mcp_panel_state: self.mcp_panel_state,
+        let tool_ctx = ToolContext {
             tool_result_cache: self.tool_result_cache,
             approval_recorder: self.approval_recorder,
-            decision_ledger: self.decision_ledger,
             tool_registry: self.tool_registry,
             tools: self.tools,
             tool_catalog: self.tool_catalog,
-            ctrl_c_state: self.ctrl_c_state,
-            ctrl_c_notify: self.ctrl_c_notify,
-            context_manager: self.context_manager,
-            last_forced_redraw: self.last_forced_redraw,
-            input_status_state: self.input_status_state,
-            lifecycle_hooks: self.lifecycle_hooks,
-            default_placeholder: self.default_placeholder,
             tool_permission_cache: self.tool_permission_cache,
             safety_validator: self.safety_validator,
             circuit_breaker: self.circuit_breaker,
@@ -255,12 +194,61 @@ impl<'a> TurnProcessingContext<'a> {
             telemetry: self.telemetry,
             autonomous_executor: self.autonomous_executor,
             error_recovery: self.error_recovery,
-            harness_state: self.harness_state,
-            harness_emitter: self.harness_emitter,
+        };
+        let llm_ctx = LLMContext {
+            provider_client: self.provider_client,
             config: self.config,
             vt_cfg: self.vt_cfg,
-            provider_client: self.provider_client,
+            context_manager: self.context_manager,
+            decision_ledger: self.decision_ledger,
             traj: self.traj,
+        };
+        let ui_ctx = UIContext {
+            renderer: self.renderer,
+            handle: self.handle,
+            session: self.session,
+            ctrl_c_state: self.ctrl_c_state,
+            ctrl_c_notify: self.ctrl_c_notify,
+            lifecycle_hooks: self.lifecycle_hooks,
+            default_placeholder: self.default_placeholder,
+            last_forced_redraw: self.last_forced_redraw,
+            input_status_state: self.input_status_state,
+        };
+
+        crate::agent::runloop::unified::turn::turn_loop::TurnLoopContext {
+            renderer: ui_ctx.renderer,
+            handle: ui_ctx.handle,
+            session: ui_ctx.session,
+            session_stats: self.session_stats,
+            auto_exit_plan_mode_attempted: self.auto_exit_plan_mode_attempted,
+            mcp_panel_state: self.mcp_panel_state,
+            tool_result_cache: tool_ctx.tool_result_cache,
+            approval_recorder: tool_ctx.approval_recorder,
+            decision_ledger: llm_ctx.decision_ledger,
+            tool_registry: tool_ctx.tool_registry,
+            tools: tool_ctx.tools,
+            tool_catalog: tool_ctx.tool_catalog,
+            ctrl_c_state: ui_ctx.ctrl_c_state,
+            ctrl_c_notify: ui_ctx.ctrl_c_notify,
+            context_manager: llm_ctx.context_manager,
+            last_forced_redraw: ui_ctx.last_forced_redraw,
+            input_status_state: ui_ctx.input_status_state,
+            lifecycle_hooks: ui_ctx.lifecycle_hooks,
+            default_placeholder: ui_ctx.default_placeholder,
+            tool_permission_cache: tool_ctx.tool_permission_cache,
+            safety_validator: tool_ctx.safety_validator,
+            circuit_breaker: tool_ctx.circuit_breaker,
+            tool_health_tracker: tool_ctx.tool_health_tracker,
+            rate_limiter: tool_ctx.rate_limiter,
+            telemetry: tool_ctx.telemetry,
+            autonomous_executor: tool_ctx.autonomous_executor,
+            error_recovery: tool_ctx.error_recovery,
+            harness_state: self.harness_state,
+            harness_emitter: self.harness_emitter,
+            config: llm_ctx.config,
+            vt_cfg: llm_ctx.vt_cfg,
+            provider_client: llm_ctx.provider_client,
+            traj: llm_ctx.traj,
             full_auto: self.full_auto,
             steering_receiver: self.steering_receiver,
         }
@@ -271,20 +259,55 @@ impl<'a> TurnProcessingContext<'a> {
     pub fn as_run_loop_context(
         &mut self,
     ) -> crate::agent::runloop::unified::run_loop_context::RunLoopContext<'_> {
-        crate::agent::runloop::unified::run_loop_context::RunLoopContext {
-            renderer: self.renderer,
-            handle: self.handle,
+        let tool_ctx = ToolContext {
+            tool_result_cache: self.tool_result_cache,
+            approval_recorder: self.approval_recorder,
             tool_registry: self.tool_registry,
             tools: self.tools,
-            tool_result_cache: self.tool_result_cache,
+            tool_catalog: self.tool_catalog,
             tool_permission_cache: self.tool_permission_cache,
+            safety_validator: self.safety_validator,
+            circuit_breaker: self.circuit_breaker,
+            tool_health_tracker: self.tool_health_tracker,
+            rate_limiter: self.rate_limiter,
+            telemetry: self.telemetry,
+            autonomous_executor: self.autonomous_executor,
+            error_recovery: self.error_recovery,
+        };
+        let llm_ctx = LLMContext {
+            provider_client: self.provider_client,
+            config: self.config,
+            vt_cfg: self.vt_cfg,
+            context_manager: self.context_manager,
             decision_ledger: self.decision_ledger,
+            traj: self.traj,
+        };
+        let ui_ctx = UIContext {
+            renderer: self.renderer,
+            handle: self.handle,
+            session: self.session,
+            ctrl_c_state: self.ctrl_c_state,
+            ctrl_c_notify: self.ctrl_c_notify,
+            lifecycle_hooks: self.lifecycle_hooks,
+            default_placeholder: self.default_placeholder,
+            last_forced_redraw: self.last_forced_redraw,
+            input_status_state: self.input_status_state,
+        };
+
+        crate::agent::runloop::unified::run_loop_context::RunLoopContext {
+            renderer: ui_ctx.renderer,
+            handle: ui_ctx.handle,
+            tool_registry: tool_ctx.tool_registry,
+            tools: tool_ctx.tools,
+            tool_result_cache: tool_ctx.tool_result_cache,
+            tool_permission_cache: tool_ctx.tool_permission_cache,
+            decision_ledger: llm_ctx.decision_ledger,
             session_stats: self.session_stats,
             mcp_panel_state: self.mcp_panel_state,
-            approval_recorder: self.approval_recorder,
-            session: self.session,
-            safety_validator: Some(self.safety_validator),
-            traj: self.traj,
+            approval_recorder: tool_ctx.approval_recorder,
+            session: ui_ctx.session,
+            safety_validator: Some(tool_ctx.safety_validator),
+            traj: llm_ctx.traj,
             harness_state: self.harness_state,
             harness_emitter: self.harness_emitter,
         }
