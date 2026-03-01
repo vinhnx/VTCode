@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use super::orchestrator::{ExecToolCallOutput, ToolError};
+use super::sandboxing::{ExecToolCallOutput, ToolError};
 use super::tool_handler::{
     DiffTracker, FileChange, PatchApplyBeginEvent, PatchApplyEndEvent, ToolCallError, ToolEvent,
     ToolEventBegin, ToolEventFailure, ToolEventSuccess, ToolSession, TurnContext,
@@ -188,13 +188,8 @@ impl ToolEmitter {
 
             // Apply patch success
             (Self::ApplyPatch { changes: _, .. }, ToolEventStage::Success(output)) => {
-                self.emit_patch_end(
-                    ctx,
-                    output.stdout.text.clone(),
-                    output.stderr.text.clone(),
-                    true,
-                )
-                .await;
+                self.emit_patch_end(ctx, output.stdout.clone(), output.stderr.clone(), true)
+                    .await;
             }
 
             // Apply patch failure
@@ -202,13 +197,8 @@ impl ToolEmitter {
                 Self::ApplyPatch { .. },
                 ToolEventStage::Failure(ToolEventFailureKind::Output(output)),
             ) => {
-                self.emit_patch_end(
-                    ctx,
-                    output.stdout.text.clone(),
-                    output.stderr.text.clone(),
-                    false,
-                )
-                .await;
+                self.emit_patch_end(ctx, output.stdout.clone(), output.stderr.clone(), false)
+                    .await;
             }
 
             (
@@ -337,15 +327,15 @@ impl ToolEmitter {
     fn format_output_for_model(&self, output: &ExecToolCallOutput) -> String {
         let mut result = String::new();
 
-        if !output.stdout.text.is_empty() {
-            result.push_str(&output.stdout.text);
+        if !output.stdout.is_empty() {
+            result.push_str(&output.stdout);
         }
 
-        if !output.stderr.text.is_empty() {
+        if !output.stderr.is_empty() {
             if !result.is_empty() {
                 result.push_str("\n\n[stderr]\n");
             }
-            result.push_str(&output.stderr.text);
+            result.push_str(&output.stderr);
         }
 
         if output.exit_code != 0 {
@@ -480,24 +470,16 @@ mod tests {
 
         // Success with output
         let output = ExecToolCallOutput {
-            stdout: super::super::orchestrator::OutputText {
-                text: "Hello, world!".to_string(),
-            },
-            stderr: super::super::orchestrator::OutputText {
-                text: String::new(),
-            },
+            stdout: "Hello, world!".to_string(),
+            stderr: String::new(),
             exit_code: 0,
         };
         assert_eq!(emitter.format_output_for_model(&output), "Hello, world!");
 
         // Failure with stderr
         let output = ExecToolCallOutput {
-            stdout: super::super::orchestrator::OutputText {
-                text: String::new(),
-            },
-            stderr: super::super::orchestrator::OutputText {
-                text: "Error!".to_string(),
-            },
+            stdout: String::new(),
+            stderr: "Error!".to_string(),
             exit_code: 1,
         };
         assert_eq!(

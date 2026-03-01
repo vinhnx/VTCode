@@ -11,8 +11,8 @@ use async_trait::async_trait;
 use serde_json::Value;
 
 use super::tool_handler::{
-    ApprovalPolicy, ShellEnvironmentPolicy, ToolCallError, ToolEvent, ToolHandler, ToolInvocation,
-    ToolKind, ToolOutput, ToolPayload, ToolSession, ToolSpec, TurnContext,
+    ApprovalPolicy, Constrained, ShellEnvironmentPolicy, ToolCallError, ToolEvent, ToolHandler,
+    ToolInvocation, ToolKind, ToolOutput, ToolPayload, ToolSession, ToolSpec, TurnContext,
 };
 use crate::tool_policy::ToolPolicy;
 use crate::tools::result::ToolResult as SplitToolResult;
@@ -53,9 +53,9 @@ impl<H: ToolHandler + 'static> HandlerToToolAdapter<H> {
             turn_id: uuid::Uuid::new_v4().to_string(),
             sub_id: None,
             shell_environment_policy: ShellEnvironmentPolicy::Inherit,
-            approval_policy: ApprovalPolicy::Never, // Approval handled by existing system
+            approval_policy: Constrained::allow_any(ApprovalPolicy::Never), // Approval handled by existing system
             codex_linux_sandbox_exe: None,
-            sandbox_policy: Default::default(),
+            sandbox_policy: Constrained::allow_any(Default::default()),
         });
 
         ToolInvocation {

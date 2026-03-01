@@ -12,7 +12,7 @@ use tracing::{Event, Level, Subscriber, field::Visit};
 use tracing_subscriber::layer::{Context, Layer};
 use tracing_subscriber::registry::LookupSpan;
 
-use crate::config::constants::output_limits::ERROR_LOG_PARTITION_SIZE_LIMIT_BYTES;
+use crate::config::constants::output_limits::ERROR_LOG_BUFFER_SIZE_LIMIT_BYTES;
 
 /// A single captured error log entry persisted to the session archive.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -35,6 +35,16 @@ static ERROR_LOG_BUFFER: Mutex<ErrorLogBuffer> = Mutex::new(ErrorLogBuffer {
     total_estimated_bytes: 0,
 });
 
+fn with_error_log_buffer<R>(f: impl FnOnce(&mut ErrorLogBuffer) -> R) -> R {
+    match ERROR_LOG_BUFFER.lock() {
+        Ok(mut buffer) => f(&mut buffer),
+        Err(poisoned) => {
+            let mut buffer = poisoned.into_inner();
+            f(&mut buffer)
+        }
+    }
+}
+
 fn estimate_entry_bytes(entry: &ErrorLogEntry) -> usize {
     entry.level.len() + entry.target.len() + entry.message.len()
 }
@@ -44,6 +54,9 @@ fn push_entry_with_limit(buffer: &mut ErrorLogBuffer, entry: ErrorLogEntry, limi
         .total_estimated_bytes
         .saturating_add(estimate_entry_bytes(&entry));
     buffer.entries.push_back(entry);
+    if buffer.total_estimated_bytes <= limit_bytes {
+        return;
+    }
 
     while buffer.total_estimated_bytes > limit_bytes {
         let Some(removed) = buffer.entries.pop_front() else {
@@ -64,13 +77,7 @@ fn take_buffer_entries(buffer: &mut ErrorLogBuffer) -> Vec<ErrorLogEntry> {
 
 /// Drain all collected error log entries, clearing the buffer.
 pub fn drain_error_logs() -> Vec<ErrorLogEntry> {
-    match ERROR_LOG_BUFFER.lock() {
-        Ok(mut buffer) => take_buffer_entries(&mut buffer),
-        Err(poisoned) => {
-            let mut buffer = poisoned.into_inner();
-            take_buffer_entries(&mut buffer)
-        }
-    }
+    with_error_log_buffer(take_buffer_entries)
 }
 
 /// A tracing layer that silently collects ERROR-level events into the global buffer.
@@ -117,23 +124,9 @@ where
                 .unwrap_or_else(|| "(no message)".to_string()),
         };
 
-        match ERROR_LOG_BUFFER.lock() {
-            Ok(mut buffer) => {
-                push_entry_with_limit(
-                    &mut buffer,
-                    entry,
-                    ERROR_LOG_PARTITION_SIZE_LIMIT_BYTES,
-                );
-            }
-            Err(poisoned) => {
-                let mut buffer = poisoned.into_inner();
-                push_entry_with_limit(
-                    &mut buffer,
-                    entry,
-                    ERROR_LOG_PARTITION_SIZE_LIMIT_BYTES,
-                );
-            }
-        }
+        with_error_log_buffer(|buffer| {
+            push_entry_with_limit(buffer, entry, ERROR_LOG_BUFFER_SIZE_LIMIT_BYTES);
+        });
     }
 }
 

@@ -147,8 +147,8 @@ pub use task_tracker::TaskTrackerTool;
 
 // Core tool handler types
 pub use tool_handler::{
-    AdditionalProperties, ApprovalPolicy, ConfiguredToolSpec, ContentItem, DiffTracker,
-    FreeformTool, FreeformToolFormat, JsonSchema, McpToolResult, PatchApplyBeginEvent,
+    AdditionalProperties, ApprovalPolicy, ConfiguredToolSpec, Constrained, ContentItem,
+    DiffTracker, FreeformTool, FreeformToolFormat, JsonSchema, McpToolResult, PatchApplyBeginEvent,
     PatchApplyEndEvent, ResponsesApiTool, SandboxPermissions, SharedDiffTracker,
     ShellEnvironmentPolicy, ShellToolCallParams, ToolCallError, ToolEvent, ToolEventBegin,
     ToolEventFailure, ToolEventSuccess, ToolHandler, ToolInvocation, ToolKind, ToolOutput,

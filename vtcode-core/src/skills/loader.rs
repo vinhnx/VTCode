@@ -28,48 +28,53 @@ pub struct SkillRoot {
 }
 
 pub fn load_skills(config: &SkillLoaderConfig) -> SkillLoadOutcome {
-    let mut outcome = SkillLoadOutcome::default();
-    let roots = skill_roots(config);
-
-    for root in roots {
-        discover_skills_under_root(&root, &mut outcome);
-    }
-
-    // Auto-discover system CLI tools if needed (or we can skip this if we only want explicit paths)
-    // vtcode's existing logic auto-discovers system tools.
-    // We can add them as "System" scope skills.
-    if let Ok(system_tools) = discover_cli_tools() {
-        for tool in system_tools {
-            if let Ok(skill) = tool_config_to_metadata(&tool, SkillScope::System) {
-                outcome.skills.push(skill);
-            }
-        }
-    }
-
-    // Deduplicate by name
-    let mut seen: HashSet<String> = HashSet::new();
-    outcome
-        .skills
-        .retain(|skill| seen.insert(skill.name.clone()));
-
-    // Sort
-    outcome.skills.sort_by(|a, b| a.name.cmp(&b.name));
-
-    outcome
+    load_skills_with_home_dir(config, Some(&config.codex_home))
 }
 
 /// Lightweight metadata discovery that avoids parsing SKILL.md files.
 /// Returns skill stubs with only name, description, and path (no manifest parsing).
 /// This is much faster for listing available skills.
 pub fn discover_skill_metadata_lightweight(config: &SkillLoaderConfig) -> SkillLoadOutcome {
+    discover_skill_metadata_lightweight_with_home_dir(config, Some(&config.codex_home))
+}
+
+/// Internal helper that allows specifying an explicit home directory.
+/// This is useful for testing to avoid picking up real user skills from ~/.agents/skills.
+fn load_skills_with_home_dir(
+    config: &SkillLoaderConfig,
+    home_dir: Option<&Path>,
+) -> SkillLoadOutcome {
     let mut outcome = SkillLoadOutcome::default();
-    let roots = skill_roots(config);
+    let roots = skill_roots_with_home_dir(config, home_dir);
+
+    for root in roots {
+        discover_skills_under_root(&root, &mut outcome);
+    }
+
+    add_system_cli_tools(&mut outcome);
+    dedup_and_sort(&mut outcome);
+    outcome
+}
+
+/// Internal helper for lightweight discovery with explicit home directory.
+/// Useful for hermetic tests.
+fn discover_skill_metadata_lightweight_with_home_dir(
+    config: &SkillLoaderConfig,
+    home_dir: Option<&Path>,
+) -> SkillLoadOutcome {
+    let mut outcome = SkillLoadOutcome::default();
+    let roots = skill_roots_with_home_dir(config, home_dir);
 
     for root in roots {
         discover_metadata_under_root(&root, &mut outcome);
     }
 
-    // Optionally discover system CLI tools
+    add_system_cli_tools(&mut outcome);
+    dedup_and_sort(&mut outcome);
+    outcome
+}
+
+fn add_system_cli_tools(outcome: &mut SkillLoadOutcome) {
     if let Ok(system_tools) = discover_cli_tools() {
         for tool in system_tools {
             if let Ok(skill) = tool_config_to_metadata(&tool, SkillScope::System) {
@@ -77,20 +82,20 @@ pub fn discover_skill_metadata_lightweight(config: &SkillLoaderConfig) -> SkillL
             }
         }
     }
+}
 
-    // Deduplicate by name
+fn dedup_and_sort(outcome: &mut SkillLoadOutcome) {
     let mut seen: HashSet<String> = HashSet::new();
     outcome
         .skills
         .retain(|skill| seen.insert(skill.name.clone()));
-
-    // Sort
     outcome.skills.sort_by(|a, b| a.name.cmp(&b.name));
-
-    outcome
 }
 
-fn skill_roots(config: &SkillLoaderConfig) -> Vec<SkillRoot> {
+fn skill_roots_with_home_dir(
+    config: &SkillLoaderConfig,
+    home_dir: Option<&Path>,
+) -> Vec<SkillRoot> {
     let mut roots = Vec::new();
 
     // 1. Repo/Project roots (highest priority)
@@ -131,17 +136,19 @@ fn skill_roots(config: &SkillLoaderConfig) -> Vec<SkillRoot> {
         });
     }
 
-    // 2. User roots
-    roots.push(SkillRoot {
-        path: config.codex_home.join("skills"),
-        scope: SkillScope::User,
-        is_tool_root: false,
-    });
-    roots.push(SkillRoot {
-        path: config.codex_home.join("tools"),
-        scope: SkillScope::User,
-        is_tool_root: true,
-    });
+    // 2. User roots (only if home_dir is provided)
+    if let Some(home) = home_dir {
+        roots.push(SkillRoot {
+            path: home.join("skills"),
+            scope: SkillScope::User,
+            is_tool_root: false,
+        });
+        roots.push(SkillRoot {
+            path: home.join("tools"),
+            scope: SkillScope::User,
+            is_tool_root: true,
+        });
+    }
 
     // 3. System roots
     roots.push(SkillRoot {
@@ -645,6 +652,21 @@ fn extract_keywords(text: &str) -> HashSet<String> {
         .filter(|part| part.len() > 2)
         .filter(|part| !STOPWORDS.contains(&part.as_str()))
         .collect()
+}
+
+/// Test helper for hermetic skill loading that does not pick up user skills.
+/// Use this in tests to avoid failures when ~/.agents/skills contains skills.
+#[cfg(test)]
+pub fn load_skills_hermetic(config: &SkillLoaderConfig) -> SkillLoadOutcome {
+    load_skills_with_home_dir(config, None)
+}
+
+/// Test helper for hermetic lightweight skill discovery.
+#[cfg(test)]
+pub fn discover_skill_metadata_lightweight_hermetic(
+    config: &SkillLoaderConfig,
+) -> SkillLoadOutcome {
+    discover_skill_metadata_lightweight_with_home_dir(config, None)
 }
 
 #[cfg(test)]

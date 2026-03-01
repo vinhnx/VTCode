@@ -198,15 +198,8 @@ pub struct SandboxConfig {
 // Re-export from sandboxing module (canonical definition)
 pub use super::sandboxing::SandboxTransformError;
 
-/// Tool execution context for runtimes
-pub struct ToolCtx<'a> {
-    pub session: &'a dyn ToolSession,
-    pub turn: &'a TurnContext,
-    pub call_id: String,
-    pub tool_name: String,
-}
-
-// Re-export from sandboxing module (canonical definition)
+// Re-export from sandboxing module (canonical definitions)
+pub use super::sandboxing::ToolCtx;
 pub use super::sandboxing::ToolError;
 
 /// Trait for tool runtimes (from Codex)
@@ -224,7 +217,7 @@ where
         &mut self,
         req: &Req,
         attempt: &SandboxAttempt<'_>,
-        ctx: &ToolCtx<'_>,
+        ctx: &ToolCtx,
     ) -> Result<Out, ToolError>;
 }
 
@@ -284,7 +277,7 @@ impl ToolOrchestrator {
         &mut self,
         runtime: &mut R,
         req: &Req,
-        ctx: &ToolCtx<'_>,
+        ctx: &ToolCtx,
         turn: &TurnContext,
         _approval_policy: ApprovalPolicy,
     ) -> Result<Out, ToolError>
@@ -293,7 +286,7 @@ impl ToolOrchestrator {
         Req: Send + Sync,
         Out: Send + Sync,
     {
-        let policy = SandboxPolicy::from_turn_policy(&turn.sandbox_policy)
+        let policy = SandboxPolicy::from_turn_policy(turn.sandbox_policy.get())
             .with_preference(runtime.sandbox_preference());
 
         // First attempt with sandbox (if applicable)
@@ -520,7 +513,7 @@ mod tests {
     use async_trait::async_trait;
     use std::path::PathBuf;
 
-    use crate::tools::handlers::tool_handler::{ShellEnvironmentPolicy, ToolEvent};
+    use crate::tools::handlers::tool_handler::{Constrained, ShellEnvironmentPolicy, ToolEvent};
 
     struct TestSession {
         cwd: PathBuf,
@@ -578,7 +571,7 @@ mod tests {
             &mut self,
             _req: &(),
             attempt: &SandboxAttempt<'_>,
-            _ctx: &ToolCtx<'_>,
+            _ctx: &ToolCtx,
         ) -> Result<&'static str, ToolError> {
             self.calls += 1;
             if attempt.is_escalated {
@@ -615,7 +608,7 @@ mod tests {
             &mut self,
             _req: &(),
             attempt: &SandboxAttempt<'_>,
-            _ctx: &ToolCtx<'_>,
+            _ctx: &ToolCtx,
         ) -> Result<&'static str, ToolError> {
             if self.first_is_escalated.is_none() {
                 self.first_is_escalated = Some(attempt.is_escalated);
@@ -633,9 +626,9 @@ mod tests {
             turn_id: "turn-1".to_string(),
             sub_id: None,
             shell_environment_policy: ShellEnvironmentPolicy::Inherit,
-            approval_policy: ApprovalPolicy::Never,
+            approval_policy: Constrained::allow_any(ApprovalPolicy::Never),
             codex_linux_sandbox_exe: None,
-            sandbox_policy,
+            sandbox_policy: Constrained::allow_any(sandbox_policy),
         }
     }
 
@@ -652,11 +645,14 @@ mod tests {
     #[tokio::test]
     async fn test_orchestrator_escalates_on_sandbox_denied() {
         let cwd = PathBuf::from(".");
-        let session = TestSession::new(cwd.clone());
-        let turn = test_turn_context(cwd, super::super::sandboxing::SandboxPolicy::default());
+        let session = Arc::new(TestSession::new(cwd.clone()));
+        let turn = Arc::new(test_turn_context(
+            cwd,
+            super::super::sandboxing::SandboxPolicy::default(),
+        ));
         let ctx = ToolCtx {
-            session: &session,
-            turn: &turn,
+            session: session.clone(),
+            turn: turn.clone(),
             call_id: "call-1".to_string(),
             tool_name: "test".to_string(),
         };
@@ -669,7 +665,7 @@ mod tests {
                 &mut runtime,
                 &(),
                 &ctx,
-                &turn,
+                turn.as_ref(),
                 crate::tools::handlers::tool_handler::ApprovalPolicy::Never,
             )
             .await
@@ -682,11 +678,14 @@ mod tests {
     #[tokio::test]
     async fn test_orchestrator_does_not_escalate_when_disabled() {
         let cwd = PathBuf::from(".");
-        let session = TestSession::new(cwd.clone());
-        let turn = test_turn_context(cwd, super::super::sandboxing::SandboxPolicy::default());
+        let session = Arc::new(TestSession::new(cwd.clone()));
+        let turn = Arc::new(test_turn_context(
+            cwd,
+            super::super::sandboxing::SandboxPolicy::default(),
+        ));
         let ctx = ToolCtx {
-            session: &session,
-            turn: &turn,
+            session: session.clone(),
+            turn: turn.clone(),
             call_id: "call-2".to_string(),
             tool_name: "test".to_string(),
         };
@@ -699,7 +698,7 @@ mod tests {
                 &mut runtime,
                 &(),
                 &ctx,
-                &turn,
+                turn.as_ref(),
                 crate::tools::handlers::tool_handler::ApprovalPolicy::Never,
             )
             .await
@@ -769,17 +768,17 @@ mod tests {
     #[tokio::test]
     async fn test_orchestrator_uses_turn_sandbox_policy_for_initial_attempt() {
         let cwd = PathBuf::from(".");
-        let session = TestSession::new(cwd.clone());
-        let turn = test_turn_context(
+        let session = Arc::new(TestSession::new(cwd.clone()));
+        let turn = Arc::new(test_turn_context(
             cwd,
             super::super::sandboxing::SandboxPolicy {
                 mode: super::super::sandboxing::SandboxMode::DangerFullAccess,
                 network_access: super::super::sandboxing::NetworkAccess::Full,
             },
-        );
+        ));
         let ctx = ToolCtx {
-            session: &session,
-            turn: &turn,
+            session: session.clone(),
+            turn: turn.clone(),
             call_id: "call-3".to_string(),
             tool_name: "test".to_string(),
         };
@@ -792,7 +791,7 @@ mod tests {
                 &mut runtime,
                 &(),
                 &ctx,
-                &turn,
+                turn.as_ref(),
                 crate::tools::handlers::tool_handler::ApprovalPolicy::Never,
             )
             .await
@@ -805,11 +804,14 @@ mod tests {
     #[tokio::test]
     async fn test_orchestrator_respects_forbid_preference() {
         let cwd = PathBuf::from(".");
-        let session = TestSession::new(cwd.clone());
-        let turn = test_turn_context(cwd, super::super::sandboxing::SandboxPolicy::default());
+        let session = Arc::new(TestSession::new(cwd.clone()));
+        let turn = Arc::new(test_turn_context(
+            cwd,
+            super::super::sandboxing::SandboxPolicy::default(),
+        ));
         let ctx = ToolCtx {
-            session: &session,
-            turn: &turn,
+            session: session.clone(),
+            turn: turn.clone(),
             call_id: "call-4".to_string(),
             tool_name: "test".to_string(),
         };
@@ -822,7 +824,7 @@ mod tests {
                 &mut runtime,
                 &(),
                 &ctx,
-                &turn,
+                turn.as_ref(),
                 crate::tools::handlers::tool_handler::ApprovalPolicy::Never,
             )
             .await
@@ -835,17 +837,17 @@ mod tests {
     #[tokio::test]
     async fn test_orchestrator_respects_require_preference() {
         let cwd = PathBuf::from(".");
-        let session = TestSession::new(cwd.clone());
-        let turn = test_turn_context(
+        let session = Arc::new(TestSession::new(cwd.clone()));
+        let turn = Arc::new(test_turn_context(
             cwd,
             super::super::sandboxing::SandboxPolicy {
                 mode: super::super::sandboxing::SandboxMode::DangerFullAccess,
                 network_access: super::super::sandboxing::NetworkAccess::Full,
             },
-        );
+        ));
         let ctx = ToolCtx {
-            session: &session,
-            turn: &turn,
+            session: session.clone(),
+            turn: turn.clone(),
             call_id: "call-5".to_string(),
             tool_name: "test".to_string(),
         };
@@ -858,7 +860,7 @@ mod tests {
                 &mut runtime,
                 &(),
                 &ctx,
-                &turn,
+                turn.as_ref(),
                 crate::tools::handlers::tool_handler::ApprovalPolicy::Never,
             )
             .await

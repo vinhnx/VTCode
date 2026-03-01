@@ -12,14 +12,16 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
 use super::events::{ToolEmitter, ToolEventCtx};
-use super::orchestrator::{
-    Approvable, ExecToolCallOutput, SandboxAttempt, Sandboxable, SandboxablePreference, ToolCtx,
-    ToolError, ToolOrchestrator, ToolRuntime,
+use super::sandboxing::{
+    Approvable, ApprovalCtx, AskForApproval, BoxFuture, ExecApprovalRequirement,
+    ExecToolCallOutput, ReviewDecision, SandboxAttempt, Sandboxable, SandboxablePreference,
+    ToolCtx, ToolError, ToolRuntime,
 };
 use super::tool_handler::{
-    FileChange, FreeformTool, FreeformToolFormat, JsonSchema, ResponsesApiTool, ToolCallError,
-    ToolHandler, ToolInvocation, ToolKind, ToolOutput, ToolPayload, ToolSpec,
+    ApprovalPolicy, FileChange, FreeformTool, FreeformToolFormat, JsonSchema, ResponsesApiTool,
+    ToolCallError, ToolHandler, ToolInvocation, ToolKind, ToolOutput, ToolPayload, ToolSpec,
 };
+use super::tool_orchestrator::ToolOrchestrator;
 use crate::tools::editing::{Patch, PatchOperation};
 
 /// Context for intercepting apply_patch commands
@@ -89,6 +91,26 @@ impl Approvable<ApplyPatchRequest> for ApplyPatchRuntime {
             cwd: req.cwd.clone(),
         }
     }
+
+    fn exec_approval_requirement(
+        &self,
+        _req: &ApplyPatchRequest,
+    ) -> Option<ExecApprovalRequirement> {
+        // Preserve existing behavior from the legacy orchestrator path:
+        // apply_patch is executed without additional approval prompts here.
+        Some(ExecApprovalRequirement::Skip {
+            bypass_sandbox: false,
+            proposed_execpolicy_amendment: None,
+        })
+    }
+
+    fn start_approval_async<'a>(
+        &'a mut self,
+        _req: &'a ApplyPatchRequest,
+        _ctx: ApprovalCtx<'a>,
+    ) -> BoxFuture<'a, ReviewDecision> {
+        Box::pin(async { ReviewDecision::Approved })
+    }
 }
 
 #[async_trait]
@@ -104,21 +126,28 @@ impl ToolRuntime<ApplyPatchRequest, ExecToolCallOutput> for ApplyPatchRuntime {
             .map_err(|e| ToolError::Rejected(format!("Failed to parse patch: {}", e)))?;
 
         if patch.is_empty() {
-            return Ok(ExecToolCallOutput::success_with_stdout(
-                "Patch is empty, no changes applied",
-            ));
+            return Ok(ExecToolCallOutput {
+                stdout: "Patch is empty, no changes applied".to_string(),
+                stderr: String::new(),
+                exit_code: 0,
+            });
         }
 
         // Apply the patch
         match patch.apply(&req.cwd).await {
             Ok(results) => {
                 let output = results.join("\n");
-                Ok(ExecToolCallOutput::success_with_stdout(output))
+                Ok(ExecToolCallOutput {
+                    stdout: output,
+                    stderr: String::new(),
+                    exit_code: 0,
+                })
             }
-            Err(e) => Ok(ExecToolCallOutput::failure_with_stderr(format!(
-                "Patch application failed: {}",
-                e
-            ))),
+            Err(e) => Ok(ExecToolCallOutput {
+                stdout: String::new(),
+                stderr: format!("Patch application failed: {}", e),
+                exit_code: 1,
+            }),
         }
     }
 }
@@ -203,7 +232,7 @@ impl ToolHandler for ApplyPatchHandler {
                 &req,
                 &tool_ctx,
                 turn.as_ref(),
-                turn.approval_policy,
+                map_approval_policy(turn.approval_policy.value()),
             )
             .await;
 
@@ -378,7 +407,7 @@ pub async fn intercept_apply_patch(
             &req,
             &tool_ctx,
             ctx.turn.as_ref(),
-            ctx.turn.approval_policy,
+            map_approval_policy(ctx.turn.approval_policy.value()),
         )
         .await;
 
@@ -395,6 +424,14 @@ pub async fn intercept_apply_patch(
         content_items: None,
         success: Some(true),
     }))
+}
+
+fn map_approval_policy(policy: ApprovalPolicy) -> AskForApproval {
+    match policy {
+        ApprovalPolicy::Never => AskForApproval::Never,
+        ApprovalPolicy::OnMutation => AskForApproval::OnRequest,
+        ApprovalPolicy::Always => AskForApproval::UnlessTrusted,
+    }
 }
 
 /// Parse a shell command to check if it's an apply_patch invocation

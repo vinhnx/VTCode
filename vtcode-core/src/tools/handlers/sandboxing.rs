@@ -292,9 +292,9 @@ pub fn default_exec_approval_requirement(
 // ============================================================================
 
 /// Tool execution context for runtimes (from Codex)
-pub struct ToolCtx<'a> {
-    pub session: &'a dyn ToolSession,
-    pub turn: &'a TurnContext,
+pub struct ToolCtx {
+    pub session: Arc<dyn ToolSession>,
+    pub turn: Arc<TurnContext>,
     pub call_id: String,
     pub tool_name: String,
 }
@@ -409,7 +409,7 @@ where
         &mut self,
         req: &Req,
         attempt: &SandboxAttempt<'_>,
-        ctx: &ToolCtx<'_>,
+        ctx: &ToolCtx,
     ) -> Result<Out, ToolError>;
 }
 

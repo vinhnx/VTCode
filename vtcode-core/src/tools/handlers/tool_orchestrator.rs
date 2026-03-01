@@ -46,7 +46,7 @@ impl ToolOrchestrator {
         &mut self,
         tool: &mut T,
         req: &Req,
-        tool_ctx: &ToolCtx<'_>,
+        tool_ctx: &ToolCtx,
         turn_ctx: &TurnContext,
         approval_policy: AskForApproval,
     ) -> Result<Out, ToolError>
@@ -59,7 +59,7 @@ impl ToolOrchestrator {
         let mut already_approved = false;
 
         let requirement = tool.exec_approval_requirement(req).unwrap_or_else(|| {
-            default_exec_approval_requirement(approval_policy, &turn_ctx.sandbox_policy)
+            default_exec_approval_requirement(approval_policy, turn_ctx.sandbox_policy.get())
         });
 
         match &requirement {
@@ -73,8 +73,8 @@ impl ToolOrchestrator {
             ExecApprovalRequirement::NeedsApproval { reason, .. } => {
                 // Request approval
                 let approval_ctx = ApprovalCtx {
-                    session: tool_ctx.session,
-                    turn: tool_ctx.turn,
+                    session: tool_ctx.session.as_ref(),
+                    turn: tool_ctx.turn.as_ref(),
                     call_id: &tool_ctx.call_id,
                     retry_reason: reason.clone(),
                 };
@@ -99,13 +99,13 @@ impl ToolOrchestrator {
             SandboxOverride::BypassSandboxFirstAttempt => SandboxType::None,
             SandboxOverride::NoOverride => self
                 .sandbox
-                .select_initial(&turn_ctx.sandbox_policy, tool.sandbox_preference()),
+                .select_initial(turn_ctx.sandbox_policy.get(), tool.sandbox_preference()),
         };
 
         // 3) First attempt
         let initial_attempt = SandboxAttempt {
             sandbox: initial_sandbox,
-            policy: &turn_ctx.sandbox_policy,
+            policy: turn_ctx.sandbox_policy.get(),
             sandbox_cwd: &turn_ctx.cwd,
             codex_linux_sandbox_exe: turn_ctx.codex_linux_sandbox_exe.as_ref(),
         };
@@ -129,8 +129,8 @@ impl ToolOrchestrator {
                 if !tool.should_bypass_approval(approval_policy, already_approved) {
                     let reason_msg = build_denial_reason_from_output(Some(&output));
                     let approval_ctx = ApprovalCtx {
-                        session: tool_ctx.session,
-                        turn: tool_ctx.turn,
+                        session: tool_ctx.session.as_ref(),
+                        turn: tool_ctx.turn.as_ref(),
                         call_id: &tool_ctx.call_id,
                         retry_reason: Some(reason_msg),
                     };
@@ -150,7 +150,7 @@ impl ToolOrchestrator {
                 // 5) Second attempt without sandbox
                 let escalated_attempt = SandboxAttempt {
                     sandbox: SandboxType::None,
-                    policy: &turn_ctx.sandbox_policy,
+                    policy: turn_ctx.sandbox_policy.get(),
                     sandbox_cwd: &turn_ctx.cwd,
                     codex_linux_sandbox_exe: None,
                 };

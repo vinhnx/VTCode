@@ -8,6 +8,9 @@ pub const MAX_AGENT_MESSAGES_SIZE: usize = 4 * 1024 * 1024;
 /// Maximum size for entire message history payloads (bytes) - 24 MB.
 pub const MAX_ALL_MESSAGES_SIZE: usize = 24 * 1024 * 1024;
 
+/// Maximum retained error-log payload bytes in the in-memory collector (10 MiB).
+pub const ERROR_LOG_BUFFER_SIZE_LIMIT_BYTES: usize = 10 * 1024 * 1024;
+
 /// Maximum size per line (bytes) - 256 KB.
 /// Prevents OOM on malformed output with very long lines.
 pub const MAX_LINE_LENGTH: usize = 256 * 1024;
