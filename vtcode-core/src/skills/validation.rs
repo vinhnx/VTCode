@@ -416,10 +416,7 @@ impl SkillValidator {
             Ok((manifest, _instructions)) => {
                 if let Err(err) = manifest.validate() {
                     let mut details = serde_json::Map::new();
-                    details.insert(
-                        "name".to_string(),
-                        Value::String(manifest.name.clone()),
-                    );
+                    details.insert("name".to_string(), Value::String(manifest.name.clone()));
                     details.insert(
                         "description".to_string(),
                         Value::String(manifest.description.clone()),
@@ -469,10 +466,7 @@ impl SkillValidator {
                 };
 
                 let mut details = serde_json::Map::new();
-                details.insert(
-                    "name".to_string(),
-                    Value::String(manifest.name.clone()),
-                );
+                details.insert("name".to_string(), Value::String(manifest.name.clone()));
                 details.insert(
                     "description".to_string(),
                     Value::String(manifest.description.clone()),

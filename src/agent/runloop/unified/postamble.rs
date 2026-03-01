@@ -23,6 +23,19 @@ pub(crate) fn print_exit_summary(data: ExitSummaryData) {
         data.telemetry.model_usage.iter().collect();
     model_rows.sort_by(|a, b| b.1.api_time.cmp(&a.1.api_time).then_with(|| a.0.cmp(b.0)));
 
+    let total_prompt_tokens: u64 = data
+        .telemetry
+        .model_usage
+        .values()
+        .map(|s| s.prompt_tokens + s.cached_prompt_tokens)
+        .sum();
+    let total_completion_tokens: u64 = data
+        .telemetry
+        .model_usage
+        .values()
+        .map(|s| s.completion_tokens)
+        .sum();
+
     let mut lines = Vec::new();
     if let Some(context) = data.header_context.as_ref() {
         lines.push(build_compact_header(context));
@@ -31,9 +44,10 @@ pub(crate) fn print_exit_summary(data: ExitSummaryData) {
         "Session {} | API {} | {} in/{} out",
         format_long_duration(data.total_session_time),
         format_short_duration(data.telemetry.api_time_spent),
-        format_token_count(data.telemetry.total_prompt_tokens),
-        format_token_count(data.telemetry.total_completion_tokens)
+        format_token_count(total_prompt_tokens),
+        format_token_count(total_completion_tokens)
     ));
+    lines.push(format!("Code {}", format_code_changes(data.code_changes)));
     if let Some(top_model_line) = build_top_model_line(&model_rows) {
         lines.push(top_model_line);
     }
@@ -64,53 +78,40 @@ fn build_window_title(header_context: Option<&InlineHeaderContext>) -> String {
     format!("> {} ({})", app_name, version)
 }
 
-fn build_header_info_line(context: &InlineHeaderContext) -> String {
+fn build_compact_header(context: &InlineHeaderContext) -> String {
     let provider = capitalize_first_letter(strip_known_prefix(
         &context.provider,
         ui::HEADER_PROVIDER_PREFIX,
     ));
-    let model = strip_known_prefix(&context.model, ui::HEADER_MODEL_PREFIX).to_string();
-    let reasoning = strip_known_prefix(&context.reasoning, ui::HEADER_REASONING_PREFIX).to_string();
+    let model = strip_known_prefix(&context.model, ui::HEADER_MODEL_PREFIX);
+    let reasoning = strip_known_prefix(&context.reasoning, ui::HEADER_REASONING_PREFIX);
     let trust = format_trust_badge(&context.workspace_trust);
-    let session = format_session_label(&context.mode);
-    let tools = format_tools_summary(&context.tools);
 
-    let mut first_segment_parts = Vec::new();
+    let mut parts = Vec::new();
     if !is_unavailable(&provider) {
-        first_segment_parts.push(provider);
+        parts.push(provider);
     }
-    if !is_unavailable(&model) {
-        first_segment_parts.push(model);
+    if !is_unavailable(model) {
+        parts.push(model.to_string());
     }
-    if !is_unavailable(&reasoning) {
-        first_segment_parts.push(reasoning);
+    if !is_unavailable(reasoning) {
+        parts.push(reasoning.to_string());
     }
-    let first_segment = if first_segment_parts.is_empty() {
-        "Unknown".to_string()
-    } else {
-        first_segment_parts.join(" ")
-    };
+    if parts.is_empty() {
+        parts.push("Unknown".to_string());
+    }
 
-    format!("{} | {} | {} | {}", first_segment, trust, session, tools)
+    format!("{} | {}", parts.join(" "), trust)
 }
 
 fn build_top_model_line(model_rows: &[(&String, &ModelUsageStats)]) -> Option<String> {
     let (model, stats) = model_rows.first()?;
-    let overflow_count = model_rows.len().saturating_sub(1);
-    let overflow_suffix = if overflow_count > 0 {
-        format!(" | +{} more", overflow_count)
-    } else {
-        String::new()
-    };
-
     Some(format!(
-        "Top model: {} {} | {} in | {} out | {} cached{}",
+        "Model: {} | {} | {} in/{} out",
         model,
         format_short_duration(stats.api_time),
-        format_token_count(stats.prompt_tokens),
-        format_token_count(stats.completion_tokens),
-        format_token_count(stats.cached_prompt_tokens),
-        overflow_suffix
+        format_token_count(stats.prompt_tokens + stats.cached_prompt_tokens),
+        format_token_count(stats.completion_tokens)
     ))
 }
 
@@ -181,50 +182,6 @@ fn format_trust_badge(trust_value: &str) -> String {
     }
 }
 
-fn format_session_label(mode: &str) -> String {
-    let normalized = mode.trim().to_ascii_lowercase();
-    match normalized.as_str() {
-        "std" => "Session: Standard".to_string(),
-        "inline" | "inline session" => "Session: Inline".to_string(),
-        "auto" | "auto session" => "Session: Auto".to_string(),
-        "alt" | "alternate session" => "Session: Alternate".to_string(),
-        "" | "unavailable" => "Session: n/a".to_string(),
-        _ => {
-            if mode.trim().starts_with("Session:") {
-                mode.trim().to_string()
-            } else {
-                format!("Session: {}", mode.trim())
-            }
-        }
-    }
-}
-
-fn format_tools_summary(value: &str) -> String {
-    let body = strip_known_prefix(value, ui::HEADER_TOOLS_PREFIX);
-    if is_unavailable(body) {
-        return "Tools: n/a".to_string();
-    }
-
-    if let Some(allow_count) = parse_allow_count(body) {
-        format!("Tools: {}", allow_count)
-    } else {
-        format!("Tools: {}", body)
-    }
-}
-
-fn parse_allow_count(value: &str) -> Option<usize> {
-    for part in value.split('·') {
-        let trimmed = part.trim();
-        if let Some(rest) = trimmed.strip_prefix("allow ")
-            && let Some(count) = rest.split_whitespace().next()
-            && let Ok(parsed) = count.parse::<usize>()
-        {
-            return Some(parsed);
-        }
-    }
-    None
-}
-
 fn capitalize_first_letter(value: &str) -> String {
     let mut chars = value.chars();
     match chars.next() {
@@ -268,10 +225,7 @@ fn style_title_line(line: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        format_long_duration, format_session_label, format_short_duration, format_token_count,
-        parse_allow_count, render_terminal_window,
-    };
+    use super::{format_long_duration, format_short_duration, format_token_count, render_terminal_window};
     use std::time::Duration;
 
     #[test]
@@ -293,26 +247,10 @@ mod tests {
     }
 
     #[test]
-    fn mode_labels_are_compact_and_readable() {
-        assert_eq!(format_session_label("std"), "Session: Standard");
-        assert_eq!(format_session_label("inline"), "Session: Inline");
-        assert_eq!(
-            format_session_label("alternate session"),
-            "Session: Alternate"
-        );
-    }
-
-    #[test]
-    fn allow_count_parser_reads_tools_summary() {
-        assert_eq!(parse_allow_count("allow 66 · prompt 1 · deny 0"), Some(66));
-        assert_eq!(parse_allow_count("prompt 1 · deny 0"), None);
-    }
-
-    #[test]
-    fn terminal_window_uses_vtcode_title_prefix() {
-        let rows = vec!["API 2.0s | Session 39s | Changes +1 -0".to_string()];
-        let rendered = render_terminal_window("> VT Code (0.84.1)", &rows, 96);
-        assert_eq!(rendered[0], "> VT Code (0.84.1)");
-        assert_eq!(rendered[1], "API 2.0s | Session 39s | Changes +1 -0");
+    fn terminal_window_returns_title_and_lines() {
+        let rows = vec!["Session 1m | API 2.0s | 10k in/5k out".to_string()];
+        let rendered = render_terminal_window("> VT Code (0.85.1)", &rows, 110);
+        assert_eq!(rendered[0], "> VT Code (0.85.1)");
+        assert_eq!(rendered[1], "Session 1m | API 2.0s | 10k in/5k out");
     }
 }

@@ -11,7 +11,7 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
-use std::io::ErrorKind;
+use std::io::{BufWriter, ErrorKind, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::SystemTime;
@@ -23,6 +23,17 @@ pub trait IndexStorage: Send + Sync {
 
     /// Persist an indexed file entry.
     fn persist(&self, index_dir: &Path, entry: &FileIndex) -> Result<()>;
+
+    /// Persist a batch of indexed file entries.
+    ///
+    /// Defaults to calling [`IndexStorage::persist`] for each entry, keeping
+    /// existing custom storage backends compatible.
+    fn persist_batch(&self, index_dir: &Path, entries: &[FileIndex]) -> Result<()> {
+        for entry in entries {
+            self.persist(index_dir, entry)?;
+        }
+        Ok(())
+    }
 }
 
 /// Directory traversal filter hook for [`SimpleIndexer`].
@@ -66,6 +77,26 @@ impl IndexStorage for MarkdownIndexStorage {
         );
 
         fs::write(index_path, markdown)?;
+        Ok(())
+    }
+
+    fn persist_batch(&self, index_dir: &Path, entries: &[FileIndex]) -> Result<()> {
+        let temp_path = index_dir.join(".index.md.tmp");
+        let final_path = index_dir.join("index.md");
+        let file = fs::File::create(&temp_path)?;
+        let mut writer = BufWriter::new(file);
+
+        writeln!(writer, "# Workspace File Index")?;
+        writeln!(writer)?;
+        writeln!(writer, "- **Entries**: {}", entries.len())?;
+        writeln!(writer)?;
+
+        for entry in entries {
+            write_markdown_entry(&mut writer, entry)?;
+        }
+
+        writer.flush()?;
+        fs::rename(temp_path, final_path)?;
         Ok(())
     }
 }
@@ -298,37 +329,10 @@ impl SimpleIndexer {
 
     /// Index a single file.
     pub fn index_file(&mut self, file_path: &Path) -> Result<()> {
-        if !file_path.exists() || !self.filter.should_index_file(file_path, &self.config) {
-            return Ok(());
+        if let Some(index) = self.build_file_index(file_path)? {
+            self.index_cache.insert(index.path.clone(), index.clone());
+            self.storage.persist(self.config.index_dir(), &index)?;
         }
-
-        let content = match fs::read_to_string(file_path) {
-            Ok(text) => text,
-            Err(err) => {
-                if err.kind() == ErrorKind::InvalidData {
-                    return Ok(());
-                }
-                return Err(err.into());
-            }
-        };
-        let hash = calculate_hash(&content);
-        let modified = self.get_modified_time(file_path)?;
-        let size = content.len() as u64;
-        let language = self.detect_language(file_path);
-
-        let index = FileIndex {
-            path: file_path.to_string_lossy().into_owned(),
-            hash,
-            modified,
-            size,
-            language,
-            tags: vec![],
-        };
-
-        self.index_cache
-            .insert(file_path.to_string_lossy().into_owned(), index.clone());
-
-        self.storage.persist(self.config.index_dir(), &index)?;
 
         Ok(())
     }
@@ -338,13 +342,15 @@ impl SimpleIndexer {
     /// SECURITY: Always skips hidden files and sensitive data (.env, .git, etc.)
     pub fn index_directory(&mut self, dir_path: &Path) -> Result<()> {
         let walker = WalkBuilder::new(dir_path)
-            .hidden(true) // CRITICAL: Skip hidden files (.env, .git, etc.)
+            .hidden(self.config.ignore_hidden) // Skip hidden files by default, configurable.
             .git_ignore(true) // Respect .gitignore
             .git_global(true) // Respect global gitignore
             .git_exclude(true) // Respect .git/info/exclude
             .ignore(true) // Respect .ignore files
             .parents(true) // Check parent directories for ignore files
             .build();
+
+        let mut entries = Vec::new();
 
         for entry in walker.filter_map(|e| e.ok()) {
             let path = entry.path();
@@ -358,11 +364,16 @@ impl SimpleIndexer {
                     .iter()
                     .any(|excluded| path.starts_with(excluded));
 
-                if !should_skip && self.filter.should_index_file(path, &self.config) {
-                    self.index_file(path)?;
+                if !should_skip
+                    && let Some(index) = self.build_file_index(path)?
+                {
+                    self.index_cache.insert(index.path.clone(), index.clone());
+                    entries.push(index);
                 }
             }
         }
+
+        self.storage.persist_batch(self.config.index_dir(), &entries)?;
 
         Ok(())
     }
@@ -371,7 +382,7 @@ impl SimpleIndexer {
     /// This is much faster than `index_directory` as it avoids hashing and persistence.
     pub fn discover_files(&self, dir_path: &Path) -> Vec<String> {
         let walker = WalkBuilder::new(dir_path)
-            .hidden(true)
+            .hidden(self.config.ignore_hidden)
             .git_ignore(true)
             .git_global(true)
             .git_exclude(true)
@@ -595,6 +606,33 @@ impl SimpleIndexer {
             .unwrap_or("unknown")
             .to_string()
     }
+
+    fn build_file_index(&self, file_path: &Path) -> Result<Option<FileIndex>> {
+        if !file_path.exists() || !self.filter.should_index_file(file_path, &self.config) {
+            return Ok(None);
+        }
+
+        let content = match fs::read_to_string(file_path) {
+            Ok(text) => text,
+            Err(err) => {
+                if err.kind() == ErrorKind::InvalidData {
+                    return Ok(None);
+                }
+                return Err(err.into());
+            }
+        };
+
+        let index = FileIndex {
+            path: file_path.to_string_lossy().into_owned(),
+            hash: calculate_hash(&content),
+            modified: self.get_modified_time(file_path)?,
+            size: content.len() as u64,
+            language: self.detect_language(file_path),
+            tags: vec![],
+        };
+
+        Ok(Some(index))
+    }
 }
 
 impl Clone for SimpleIndexer {
@@ -640,6 +678,19 @@ fn should_skip_dir(path: &Path, config: &SimpleIndexerConfig) -> bool {
 #[inline]
 fn calculate_hash(content: &str) -> String {
     vtcode_commons::utils::calculate_sha256(content.as_bytes())
+}
+
+fn write_markdown_entry(writer: &mut impl Write, entry: &FileIndex) -> std::io::Result<()> {
+    writeln!(writer, "## {}", entry.path)?;
+    writeln!(writer)?;
+    writeln!(writer, "- **Path**: {}", entry.path)?;
+    writeln!(writer, "- **Hash**: {}", entry.hash)?;
+    writeln!(writer, "- **Modified**: {}", entry.modified)?;
+    writeln!(writer, "- **Size**: {} bytes", entry.size)?;
+    writeln!(writer, "- **Language**: {}", entry.language)?;
+    writeln!(writer, "- **Tags**: {}", entry.tags.join(", "))?;
+    writeln!(writer)?;
+    Ok(())
 }
 
 #[cfg(test)]
@@ -775,6 +826,31 @@ mod tests {
 
         assert!(indexer.find_files("lib\\.rs$")?.is_empty());
         assert!(!indexer.find_files("README\\.md$")?.is_empty());
+
+        Ok(())
+    }
+
+    #[test]
+    fn batch_indexing_writes_single_markdown_file() -> Result<()> {
+        let temp = tempdir()?;
+        let workspace = temp.path();
+        fs::write(workspace.join("lib.rs"), "fn main() {}")?;
+        fs::write(workspace.join("README.md"), "# Notes")?;
+
+        let mut indexer = SimpleIndexer::new(workspace.to_path_buf());
+        indexer.init()?;
+        indexer.index_directory(workspace)?;
+
+        let index_dir = workspace.join(".vtcode").join("index");
+        let files = fs::read_dir(&index_dir)?
+            .filter_map(|entry| entry.ok())
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .collect::<Vec<_>>();
+        assert_eq!(files, vec!["index.md".to_string()]);
+
+        let index_content = fs::read_to_string(index_dir.join("index.md"))?;
+        assert!(index_content.contains(workspace.join("lib.rs").to_string_lossy().as_ref()));
+        assert!(index_content.contains(workspace.join("README.md").to_string_lossy().as_ref()));
 
         Ok(())
     }

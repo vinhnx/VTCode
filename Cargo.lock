@@ -6315,6 +6315,7 @@ dependencies = [
  "assert_fs",
  "libc",
  "lru",
+ "nix 0.31.2",
  "parking_lot",
  "path-clean",
  "serde",

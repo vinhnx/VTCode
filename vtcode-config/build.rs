@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::{Context as _, Result};
 use indexmap::IndexMap;
 use serde::Deserialize;
 use serde_json::Value;

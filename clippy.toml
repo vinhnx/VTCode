@@ -2,7 +2,7 @@
 # Based on best practices from https://rust-lang.github.io/rust-clippy/master/index.html
 
 # Minimum supported Rust version
-msrv = "1.70.0"
+msrv = "1.88"
 
 # Cognitive complexity threshold for functions
 cognitive-complexity-threshold = 75
@@ -41,7 +41,7 @@ arithmetic-side-effects-allowed = [
 ]
 
 # Allow specific types that may have interior mutability
-interior-mutable-allow-list = [
+ignore-interior-mutability = [
     "std::sync::atomic::AtomicBool",
     "std::sync::atomic::AtomicUsize",
     "std::cell::RefCell",

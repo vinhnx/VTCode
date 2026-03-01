@@ -191,13 +191,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
         return None;
     }
 
-    if slash::try_handle_slash_navigation(
-        session,
-        &key,
-        has_control,
-        has_alt,
-        has_command,
-    ) {
+    if slash::try_handle_slash_navigation(session, &key, has_control, has_alt, has_command) {
         return None;
     }
 

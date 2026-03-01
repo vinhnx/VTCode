@@ -103,7 +103,7 @@ roff = "1.0"
 unicode-segmentation = "1.11"
 unicode-width = { workspace = true }
 crossterm = { workspace = true, features = ["event-stream"] }
-nix = { version = "0.31", features = ["user", "signal"] }
+nix = { version = "0.31", features = ["user", "signal", "poll", "term"] }
 ratatui = { version = "0.30", default-features = false, features = [
     "crossterm",
     "unstable-rendered-line-info",

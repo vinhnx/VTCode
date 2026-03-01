@@ -124,15 +124,13 @@ impl PluginInstaller {
         }
 
         // Copy the file from source to destination
-        fs::copy(&source_path, &dest_path)
-            .await
-            .with_context(|| {
-                format!(
-                    "Failed to copy plugin from {} to {}",
-                    source_path.display(),
-                    dest_path.display()
-                )
-            })?;
+        fs::copy(&source_path, &dest_path).await.with_context(|| {
+            format!(
+                "Failed to copy plugin from {} to {}",
+                source_path.display(),
+                dest_path.display()
+            )
+        })?;
 
         println!("Local file copy completed for plugin: {}", manifest.id);
         Ok(())
@@ -153,15 +151,13 @@ impl PluginInstaller {
         }
 
         // Copy the file from source to destination
-        fs::copy(&source_path, &dest_path)
-            .await
-            .with_context(|| {
-                format!(
-                    "Failed to copy plugin from {} to {}",
-                    source_path.display(),
-                    dest_path.display()
-                )
-            })?;
+        fs::copy(&source_path, &dest_path).await.with_context(|| {
+            format!(
+                "Failed to copy plugin from {} to {}",
+                source_path.display(),
+                dest_path.display()
+            )
+        })?;
 
         println!("Local path copy completed for plugin: {}", manifest.id);
         Ok(())

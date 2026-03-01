@@ -432,10 +432,8 @@ impl ClientHandler for LoggingClientHandler {
         &self,
         request: CreateElicitationRequestParams,
         _context: RequestContext<RoleClient>,
-    ) -> impl Future<
-        Output = Result<rmcp::model::CreateElicitationResult, rmcp::ErrorData>,
-    > + Send
-    + '_ {
+    ) -> impl Future<Output = Result<rmcp::model::CreateElicitationResult, rmcp::ErrorData>> + Send + '_
+    {
         let provider = self.provider.clone();
         let handler = self.elicitation_handler.clone();
         async move {
@@ -539,8 +537,7 @@ impl ClientHandler for LoggingClientHandler {
     fn list_roots(
         &self,
         _context: RequestContext<RoleClient>,
-    ) -> impl Future<Output = Result<ListRootsResult, rmcp::ErrorData>> + Send + '_
-    {
+    ) -> impl Future<Output = Result<ListRootsResult, rmcp::ErrorData>> + Send + '_ {
         let provider = self.provider.clone();
         async move {
             let mut roots = Vec::new();

@@ -141,10 +141,7 @@ impl TerminalAppLauncher {
         Ok(content)
     }
 
-    fn build_editor_command_from_string(
-        command: &str,
-        file_path: &Path,
-    ) -> Result<Command> {
+    fn build_editor_command_from_string(command: &str, file_path: &Path) -> Result<Command> {
         let tokens = shell_words::split(command)
             .with_context(|| format!("invalid editor command: {}", command))?;
         let (program, args) = tokens

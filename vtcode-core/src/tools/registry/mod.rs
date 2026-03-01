@@ -126,8 +126,7 @@ pub struct ToolRegistry {
     /// MP-3: Circuit breaker for MCP client failures
     mcp_circuit_breaker: Arc<circuit_breaker::McpCircuitBreaker>,
     /// Shared per-tool circuit breaker state used by the runloop.
-    shared_circuit_breaker:
-        Arc<RwLock<Option<Arc<crate::tools::circuit_breaker::CircuitBreaker>>>>,
+    shared_circuit_breaker: Arc<RwLock<Option<Arc<crate::tools::circuit_breaker::CircuitBreaker>>>>,
     initialized: Arc<std::sync::atomic::AtomicBool>,
     // Security & Identity
     shell_policy: Arc<RwLock<ShellPolicyChecker>>,

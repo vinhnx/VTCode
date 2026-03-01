@@ -150,12 +150,10 @@ impl Session {
             shimmer_state: ShimmerState::new(),
 
             // --- Reverse Search ---
-            reverse_search_state: reverse_search::ReverseSearchState::new(
-            ),
+            reverse_search_state: reverse_search::ReverseSearchState::new(),
 
             // --- History Picker (Ctrl+R fuzzy search) ---
-            history_picker_state: HistoryPickerState::new(
-            ),
+            history_picker_state: HistoryPickerState::new(),
 
             // --- PTY Session Management ---
             active_pty_sessions: None,

@@ -4,9 +4,7 @@ use crate::ui::tui::widgets::LayoutMode;
 impl Session {
     pub(crate) fn resolved_layout_mode(&self, area: Rect) -> LayoutMode {
         match self.appearance.layout_mode {
-            config::LayoutModeOverride::Auto => {
-                LayoutMode::from_area(area)
-            }
+            config::LayoutModeOverride::Auto => LayoutMode::from_area(area),
             config::LayoutModeOverride::Compact => LayoutMode::Compact,
             config::LayoutModeOverride::Standard => LayoutMode::Standard,
             config::LayoutModeOverride::Wide => LayoutMode::Wide,
