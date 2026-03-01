@@ -1,0 +1,1 @@
+bash -lc "cat Cargo.toml | head -n 20"

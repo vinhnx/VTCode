@@ -1,0 +1,3 @@
+0allow: cargo build
+prompt: git push
+forbidden: rm -rf

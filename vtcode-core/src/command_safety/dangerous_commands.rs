@@ -277,7 +277,8 @@ fn is_dangerous_to_call_with_exec(command: &[String]) -> bool {
         ),
 
         // ──── Destructive system commands ────
-        "mkfs" | "dd" | "shutdown" | "reboot" | "init" => true,
+        _ if base_cmd == "mkfs" || base_cmd.starts_with("mkfs.") => true,
+        "dd" | "shutdown" | "reboot" | "init" => true,
 
         // ──── Fork bomb ────
         _ if base_cmd.ends_with(':') && command.len() >= 2 => command[1] == "(){:|:&};:",
@@ -357,6 +358,12 @@ mod tests {
     #[test]
     fn mkfs_is_dangerous() {
         let cmd = vec!["mkfs".to_string()];
+        assert!(is_dangerous_to_call_with_exec(&cmd));
+    }
+
+    #[test]
+    fn mkfs_variants_are_dangerous() {
+        let cmd = vec!["mkfs.ext4".to_string(), "/dev/sda1".to_string()];
         assert!(is_dangerous_to_call_with_exec(&cmd));
     }
 

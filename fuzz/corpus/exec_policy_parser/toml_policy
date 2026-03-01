@@ -1,0 +1,9 @@
+1version = 1
+
+[[rules]]
+pattern = "cargo test"
+decision = "allow"
+
+[[rules]]
+pattern = "git push"
+decision = "prompt"

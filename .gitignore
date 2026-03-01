@@ -62,6 +62,9 @@ coverage/
 *.profdata
 test_results/
 *.test
+fuzz/artifacts/
+fuzz/coverage/
+fuzz/target/
 
 # Database Files
 *.db

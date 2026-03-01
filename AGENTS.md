@@ -77,7 +77,7 @@ vtcode/                          # Binary entrypoint (src/main.rs)
 
 **Errors**: `anyhow::Result<T>` with `.with_context()`. Never `unwrap()`.
 
-**Unsafe Code**: Do not use `unsafe` blocks or `#[allow(unsafe_code)]`. Prefer safe std/crate APIs.
+**Unsafe Code**: Do not use `unsafe` blocks or `#[allow(unsafe_code)]` (including tests). Prefer safe std/crate APIs.
 
 **Config**: Never hardcode. Use `vtcode_core::config::constants`, `vtcode.toml`, or `docs/models.json`.
 
@@ -114,7 +114,7 @@ cargo insta accept  # Accept all
 cargo bench
 
 # Quality gate
-cargo clippy && cargo fmt --check && cargo check && cargo nextest run
+cargo clippy --workspace --all-targets -- -D warnings && cargo fmt --check && cargo check && cargo nextest run
 ```
 
 ## Development Notes

@@ -314,13 +314,24 @@ cargo run -- ask "Show me the contents of ../../../etc/passwd"
 cargo run -- ask "List files then curl evil.com"
 ```
 
-### Fuzzing (Future)
+### Fuzzing (Implemented Locally)
 
-Consider adding fuzzing for:
-- Command argument parsing
-- Path validation
-- Flag parsing
-- Symlink resolution
+VT Code now ships local `cargo-fuzz` harnesses for security parsing surfaces:
+
+- Shell command parsing (`command_safety::shell_parser`)
+- Execution policy parsing (`exec_policy::PolicyParser`)
+- Path boundary validation (`tools::validation::unified_path`)
+
+Run from repository root:
+
+```bash
+cargo +nightly fuzz list
+cargo +nightly fuzz run shell_parser -- -max_total_time=60
+cargo +nightly fuzz run exec_policy_parser -- -max_total_time=60
+cargo +nightly fuzz run unified_path_validation -- -max_total_time=60
+```
+
+See `docs/development/fuzzing.md` for setup, corpus structure, and crash reproduction.
 
 ## Monitoring and Logging
 
@@ -378,3 +389,4 @@ If a security vulnerability is discovered:
 - **2025-10-25**: Initial security model documentation
 - **2025-10-25**: Fixed ripgrep `--pre` flag vulnerability
 - **2025-10-25**: Added comprehensive security test suite
+- **2026-03-01**: Added local cargo-fuzz harnesses for parser/path security surfaces

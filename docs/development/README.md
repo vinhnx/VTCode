@@ -9,6 +9,7 @@ This section contains information for developers who want to contribute to, modi
 - **[Environment Setup](./setup.md)** - Setting up your development environment
 - **[Building from Source](./building.md)** - How to build vtcode from source
 - **[Running Tests](./testing.md)** - Testing strategies and procedures
+- **[Fuzzing Guide](./fuzzing.md)** - Local security parser fuzzing with cargo-fuzz
 - **[Code Style](./code-style.md)** - Code formatting and style guidelines
 
 ## **Understanding the Codebase**

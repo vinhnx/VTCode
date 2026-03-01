@@ -487,7 +487,7 @@ mod tests {
                 let cmd = if i % 2 == 0 {
                     vec!["git".to_string(), "status".to_string()]
                 } else {
-                    vec!["cargo".to_string(), "test".to_string()]
+                    vec!["cargo".to_string(), "check".to_string()]
                 };
                 let result = eval.evaluate(&cmd).await.unwrap();
                 assert!(result.allowed);

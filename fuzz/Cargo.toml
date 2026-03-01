@@ -1,0 +1,38 @@
+[package]
+name = "vtcode-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+tempfile = "3.25"
+tokio = { version = "1.49", features = ["rt-multi-thread", "fs"] }
+vtcode-core = { path = "../vtcode-core", default-features = false }
+
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "shell_parser"
+path = "fuzz_targets/shell_parser.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "exec_policy_parser"
+path = "fuzz_targets/exec_policy_parser.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "unified_path_validation"
+path = "fuzz_targets/unified_path_validation.rs"
+test = false
+doc = false
+bench = false

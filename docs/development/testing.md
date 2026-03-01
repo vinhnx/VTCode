@@ -53,6 +53,19 @@ cargo bench -p vtcode-core --bench tool_pipeline
 cargo bench -p vtcode-tools --bench cache_bench
 ```
 
+### Fuzz Testing (cargo-fuzz)
+
+```bash
+# List fuzz targets
+cargo +nightly fuzz list
+
+# Build and run a target for 60 seconds
+cargo +nightly fuzz build shell_parser
+cargo +nightly fuzz run shell_parser -- -max_total_time=60
+```
+
+See [Fuzzing Guide](./fuzzing.md) for target details, corpus layout, and crash reproduction.
+
 ## **Test Structure**
 
 ```

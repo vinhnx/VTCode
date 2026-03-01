@@ -1,0 +1,7 @@
+2{
+  "version": 1,
+  "rules": [
+    { "pattern": "ls -la", "decision": "allow" },
+    { "pattern": "curl https://example.com", "decision": "prompt" }
+  ]
+}
