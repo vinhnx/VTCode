@@ -4,34 +4,50 @@ pub fn extract_file_reference(input: &str, cursor: usize) -> Option<(usize, usiz
     }
 
     let bytes = input.as_bytes();
-    let mut start = cursor;
-
-    while start > 0 && bytes[start - 1] != b'@' && !bytes[start - 1].is_ascii_whitespace() {
-        start -= 1;
+    
+    // Find the start of the whitespace-delimited token containing the cursor
+    let mut token_start = cursor;
+    while token_start > 0 && !bytes[token_start - 1].is_ascii_whitespace() {
+        token_start -= 1;
     }
-
-    if start == 0 || bytes[start - 1] != b'@' {
+    
+    // Find the end of the token
+    let mut token_end = cursor;
+    while token_end < bytes.len() && !bytes[token_end].is_ascii_whitespace() {
+        token_end += 1;
+    }
+    
+    let token = &input[token_start..token_end];
+    
+    // Check if token starts with @
+    if !token.starts_with('@') {
+        // Token doesn't start with @, but cursor might be on a nested @
+        // e.g., @scope/pkg@version - cursor on the second @
+        // In this case, we should NOT trigger file picker for nested @
         return None;
     }
-
-    start -= 1;
-
-    // Check context: if @ is preceded by command-like text, skip it
-    let is_npm_context = is_npm_command_context(input, start);
-
-    let mut end = cursor;
-    while end < bytes.len() && !bytes[end].is_ascii_whitespace() {
-        end += 1;
+    
+    // @ must be at a whitespace boundary (token_start) or at start of input
+    // This prevents mid-word @ like foo@bar from triggering
+    let prefix_starts_token = token_start == 0 
+        || input[..token_start].chars().next_back().is_none_or(char::is_whitespace);
+    
+    if !prefix_starts_token {
+        return None;
     }
-
-    let reference = &input[start + 1..end];
-
+    
+    // Check context: if @ is preceded by package manager commands, skip it
+    let is_npm_context = is_npm_command_context(input, token_start);
+    
+    // Extract reference (without the leading @)
+    let reference = &token[1..];
+    
     // Ensure the extracted reference looks like a file path, not a package specifier
     if !looks_like_file_path(reference, is_npm_context) {
         return None;
     }
-
-    Some((start, end, reference.to_owned()))
+    
+    Some((token_start, token_end, reference.to_owned()))
 }
 
 /// Check if @ is used in npm command context (e.g., @scope/package)
@@ -83,13 +99,38 @@ fn looks_like_file_path(reference: &str, is_npm_context: bool) -> bool {
         return true;
     }
 
-    // Reject anything that contains @ (scoped packages or version specs like @scope/pkg@1.0.0)
-    if reference.contains('@') {
-        return false;
-    }
-
     let has_separator = reference.contains('/') || reference.contains('\\');
     let has_extension = reference.contains('.');
+    
+    // Check if reference contains @ (for handling cases like icon@2x.png)
+    let has_at = reference.contains('@');
+    
+    // If reference contains @, check if it looks like a file with @ in the name
+    // vs a npm package specifier
+    if has_at {
+        // In npm context, reject anything that looks like a package
+        if is_npm_context {
+            return false;
+        }
+        
+        // File paths with @ must have a proper file extension
+        // Check if the part after the last @ has a valid file extension
+        if let Some(last_at_idx) = reference.rfind('@') {
+            let after_at = &reference[last_at_idx + 1..];
+            // Check if after @ looks like a filename with extension (e.g., "2x.png")
+            // vs a version number (e.g., "1.0.0")
+            // Version numbers are typically just numbers and dots
+            // File names have letters before the extension
+            if after_at.contains(|c: char| c.is_ascii_alphabetic()) {
+                // Has letters, likely a file name like "2x.png"
+                return after_at.contains('.');
+            } else {
+                // No letters, likely a version number like "1.0.0"
+                return false;
+            }
+        }
+        return has_extension;
+    }
 
     // Relative paths with dot prefix: ./path, ../path
     if reference.starts_with("./") || reference.starts_with("../") {

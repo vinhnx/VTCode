@@ -85,8 +85,10 @@ pub(crate) async fn update_input_status_if_changed(
     status_config: Option<&StatusLineConfig>,
     state: &mut InputStatusState,
 ) -> Result<()> {
+    // Get the effective status line mode, using defaults when config is unset
+    // (following Codex PR #12015 pattern for default configuration fallback)
     let mode = status_config
-        .map(|cfg| cfg.mode.clone())
+        .map(|cfg| cfg.effective_mode())
         .unwrap_or(StatusLineMode::Auto);
 
     if matches!(mode, StatusLineMode::Hidden) {

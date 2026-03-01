@@ -462,3 +462,71 @@ fn test_filtering_maintains_directory_priority() {
         );
     }
 }
+
+#[test]
+fn test_current_at_token_tracks_tokens_with_second_at() {
+    // Test that scoped npm packages don't trigger file picker
+    let input = "npx -y @kaeawc/auto-mobile@latest";
+    let token_start = input.find("@kaeawc").expect("scoped npm package present");
+    let version_at = input
+        .rfind("@latest")
+        .expect("version suffix present in scoped npm package");
+    let test_cases = vec![
+        (token_start, "Cursor at leading @"),
+        (token_start + 8, "Cursor inside scoped package name"),
+        (version_at, "Cursor at version @"),
+        (input.len(), "Cursor at end of token"),
+    ];
+
+    for (cursor_pos, description) in test_cases {
+        let result = extract_file_reference(input, cursor_pos);
+        assert_eq!(
+            result,
+            None,
+            "Failed for case: {description} - input: '{input}', cursor: {cursor_pos}"
+        );
+    }
+}
+
+#[test]
+fn test_current_at_token_allows_file_queries_with_second_at() {
+    // Test that file paths with @ in them still work
+    let input = "@icons/icon@2x.png";
+    let version_at = input
+        .rfind("@2x")
+        .expect("second @ in file token should be present");
+    let test_cases = vec![
+        (0, "Cursor at leading @"),
+        (8, "Cursor before second @"),
+        (version_at, "Cursor at second @"),
+        (input.len(), "Cursor at end of token"),
+    ];
+
+    for (cursor_pos, description) in test_cases {
+        let result = extract_file_reference(input, cursor_pos);
+        assert!(
+            result.is_some(),
+            "Failed for case: {description} - input: '{input}', cursor: {cursor_pos}"
+        );
+    }
+}
+
+#[test]
+fn test_current_at_token_ignores_mid_word_at() {
+    // Test that mid-word @ like foo@bar doesn't trigger
+    let input = "foo@bar";
+    let at_pos = input.find('@').expect("@ present");
+    let test_cases = vec![
+        (at_pos, "Cursor at mid-word @"),
+        (input.len(), "Cursor at end of word containing @"),
+    ];
+
+    for (cursor_pos, description) in test_cases {
+        let result = extract_file_reference(input, cursor_pos);
+        assert_eq!(
+            result,
+            None,
+            "Failed for case: {description} - input: '{input}', cursor: {cursor_pos}"
+        );
+    }
+}

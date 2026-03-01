@@ -195,10 +195,12 @@ impl SandboxManager {
                 ));
 
                 // Network access: allowlist-based or legacy boolean
-                if !network_allowlist.is_empty() {
-                    // Always allow local unix sockets
+                let has_network_allowlist = !network_allowlist.is_empty();
+                if has_network_allowlist || !(*network_access) {
+                    // Keep local unix sockets available even when outbound network is restricted.
                     profile.push_str("(allow network* (local unix))\n");
-
+                }
+                if has_network_allowlist {
                     // Add allowlisted network destinations
                     // Note: Seatbelt's network filtering is limited; we use remote-ip filters
                     // For domain-based filtering, we rely on the application layer
@@ -217,9 +219,6 @@ impl SandboxManager {
                 } else if *network_access {
                     // Legacy: full network access
                     profile.push_str("(allow network*)\n");
-                } else {
-                    // No network access except local unix sockets
-                    profile.push_str("(allow network* (local unix))\n");
                 }
             }
             _ => {}

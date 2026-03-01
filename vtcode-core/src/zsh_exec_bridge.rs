@@ -54,14 +54,14 @@ mod unix_impl {
 
     const ACCEPT_POLL_INTERVAL: Duration = Duration::from_millis(20);
 
-    pub(crate) struct ZshExecBridgeSession {
+    pub struct ZshExecBridgeSession {
         socket_path: PathBuf,
         stop: Arc<AtomicBool>,
         worker: Mutex<Option<JoinHandle<()>>>,
     }
 
     impl ZshExecBridgeSession {
-        pub(crate) fn spawn(allow_confirmed_dangerous: bool) -> Result<Self> {
+        pub fn spawn(allow_confirmed_dangerous: bool) -> Result<Self> {
             let socket_path = std::env::temp_dir().join(format!(
                 "vtcode-zsh-exec-bridge-{}.sock",
                 Uuid::new_v4()
@@ -347,7 +347,7 @@ mod unix_impl {
 }
 
 #[cfg(unix)]
-pub(crate) use unix_impl::ZshExecBridgeSession;
+pub use unix_impl::ZshExecBridgeSession;
 
 #[cfg(unix)]
 pub fn maybe_run_zsh_exec_wrapper_mode() -> Result<bool> {
@@ -355,17 +355,17 @@ pub fn maybe_run_zsh_exec_wrapper_mode() -> Result<bool> {
 }
 
 #[cfg(not(unix))]
-pub(crate) struct ZshExecBridgeSession;
+pub struct ZshExecBridgeSession;
 
 #[cfg(not(unix))]
 impl ZshExecBridgeSession {
-    pub(crate) fn spawn(_allow_confirmed_dangerous: bool) -> Result<Self> {
+    pub fn spawn(_allow_confirmed_dangerous: bool) -> Result<Self> {
         Err(anyhow!(
             "zsh exec bridge is only supported on Unix platforms"
         ))
     }
 
-    pub(crate) fn env_vars(&self, _wrapper_executable: &Path) -> HashMap<String, String> {
+    pub fn env_vars(&self, _wrapper_executable: &Path) -> HashMap<String, String> {
         HashMap::new()
     }
 }

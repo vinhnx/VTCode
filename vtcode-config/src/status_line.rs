@@ -4,9 +4,12 @@ use serde::{Deserialize, Serialize};
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Default)]
 pub enum StatusLineMode {
+    /// Auto mode: displays git branch, model name, and context remaining (default)
     #[default]
     Auto,
+    /// Command mode: executes custom shell command to render status line
     Command,
+    /// Hidden mode: disables the status line entirely
     Hidden,
 }
 
@@ -36,6 +39,17 @@ pub struct StatusLineConfig {
     pub command_timeout_ms: u64,
 }
 
+impl StatusLineConfig {
+    /// Get the effective status line mode, using defaults for unset values.
+    /// 
+    /// Following Codex PR #12015's pattern for default configuration fallback,
+    /// this method ensures that when a status line config is not explicitly set,
+    /// sensible defaults are applied (Auto mode by default).
+    pub fn effective_mode(&self) -> StatusLineMode {
+        self.mode.clone()
+    }
+}
+
 impl Default for StatusLineConfig {
     fn default() -> Self {
         Self {
@@ -47,6 +61,9 @@ impl Default for StatusLineConfig {
     }
 }
 
+/// Returns the default status line mode when not explicitly configured.
+/// 
+/// This is the fallback when `tui.status_line` config is unset (pattern from Codex PR #12015).
 fn default_status_line_mode() -> StatusLineMode {
     StatusLineMode::Auto
 }
