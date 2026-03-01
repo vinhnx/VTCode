@@ -183,13 +183,15 @@ impl PtySessionHandle {
             return;
         }
 
-        // Use unified cross-platform graceful termination (SIGTERM -> SIGKILL)
+        // Kill the process group and the direct child process handle.
+        // vtcode_bash_runner::graceful_kill_process_group_default now handles
+        // the robust 'more kills' pattern which ensures descendants do not survive.
         if let Some(pid) = self.child_pid {
             vtcode_bash_runner::graceful_kill_process_group_default(pid);
+        } else {
+            let _ = child.kill();
         }
 
-        // Fallback: use portable-pty's kill for any remaining cleanup
-        let _ = child.kill();
         let _ = child.wait();
     }
 }
@@ -208,18 +210,17 @@ impl Drop for PtySessionHandle {
             }
         }
 
-        // Kill child process and its process group using graceful termination
-        // This uses SIGTERM first, then SIGKILL after a grace period
+        // Kill child process and its process group using graceful termination.
+        // Match the robust termination behavior from codex-rs/utils/pty PR 12688
+        // which ensures descendants from interactive shells/REPLs do not survive.
         {
             let mut child = self.child.lock();
             if let Ok(None) = child.try_wait() {
-                // Use unified cross-platform graceful termination
                 if let Some(pid) = self.child_pid {
                     vtcode_bash_runner::graceful_kill_process_group_default(pid);
+                } else {
+                    let _ = child.kill();
                 }
-
-                // Fallback: use portable-pty's kill for any remaining cleanup
-                let _ = child.kill();
             }
         }
 

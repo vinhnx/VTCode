@@ -135,22 +135,38 @@ pub fn kill_process_group_by_pid(pid: u32) -> io::Result<()> {
 pub fn kill_process_group_by_pid_with_signal(pid: u32, signal: KillSignal) -> io::Result<()> {
     use std::io::ErrorKind;
 
-    let pid = pid as libc::pid_t;
-    let pgid = unsafe { libc::getpgid(pid) };
-    if pgid == -1 {
-        let err = io::Error::last_os_error();
-        if err.kind() != ErrorKind::NotFound {
-            return Err(err);
+    let pid_raw = pid as libc::pid_t;
+    let pgid = unsafe { libc::getpgid(pid_raw) };
+    let mut pgid_err = None;
+
+    if pgid != -1 {
+        let result = unsafe { libc::killpg(pgid, signal.as_libc_signal()) };
+        if result == -1 {
+            let err = io::Error::last_os_error();
+            if err.kind() != ErrorKind::NotFound {
+                pgid_err = Some(err);
+            }
         }
-        return Ok(());
+    } else {
+        pgid_err = Some(io::Error::last_os_error());
     }
 
-    let result = unsafe { libc::killpg(pgid, signal.as_libc_signal()) };
+    // Always attempt to kill the direct child process handle as a fallback.
+    // This ensures termination even if the cached PGID was stale or
+    // the process group kill had issues.
+    let result = unsafe { libc::kill(pid_raw, signal.as_libc_signal()) };
     if result == -1 {
         let err = io::Error::last_os_error();
-        if err.kind() != ErrorKind::NotFound {
-            return Err(err);
+        if err.kind() == ErrorKind::NotFound {
+            // If direct kill says not found, we're done regardless of pgid result
+            return Ok(());
         }
+        // If we have a pgid error and a direct kill error, prefer the pgid one
+        // if the direct one is also just a "not found" equivalent (ESRCH handled above)
+        if let Some(e) = pgid_err {
+            return Err(e);
+        }
+        return Err(err);
     }
 
     Ok(())
@@ -353,8 +369,12 @@ pub fn graceful_kill_process_group(
         std::thread::sleep(poll_interval);
     }
 
-    // Still running - force kill
-    if unsafe { libc::killpg(pgid, libc::SIGKILL) } == -1 {
+    // Still running - force kill.
+    // Use the robust termination behavior from codex-rs/utils/pty PR 12688
+    // by attempting both a pgid kill and a direct pid kill.
+    let _ = unsafe { libc::killpg(pgid, libc::SIGKILL) };
+    let result = unsafe { libc::kill(pid as libc::pid_t, libc::SIGKILL) };
+    if result == -1 {
         let err = io::Error::last_os_error();
         if err.raw_os_error() == Some(libc::ESRCH) {
             // Exited between check and kill

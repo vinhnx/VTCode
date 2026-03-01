@@ -259,23 +259,13 @@ match reader.read(&mut buffer) {
 anyhow!("PTY command wait thread panicked: {:?}", panic)
                     })?,
                     Err(mpsc::RecvTimeoutError::Timeout) => {
-                        // Kill the process group first (including background children).
-                        // If that fails, fallback to killing the direct process handle.
-                        let mut should_fallback_kill = true;
+                        // Kill the process group and the direct child process handle.
+                        // vtcode_bash_runner::graceful_kill_process_group_default now handles
+                        // the robust 'more kills' pattern which ensures descendants do not survive.
                         if let Some(pid) = child_pid {
-                            let result = vtcode_bash_runner::graceful_kill_process_group_default(pid);
-                            should_fallback_kill =
-                                matches!(result, vtcode_bash_runner::GracefulTerminationResult::Error);
-                        }
-
-                        if should_fallback_kill {
-                            if let Err(e) = killer.kill() {
-                                warn!(
-                                    target: "vtcode.pty.timeout",
-                                    error = %e,
-                                    "Failed to kill PTY command after timeout"
-                                );
-                            }
+                            let _ = vtcode_bash_runner::graceful_kill_process_group_default(pid);
+                        } else {
+                            let _ = killer.kill();
                         }
 
 // Wait with a grace period - don't hang forever

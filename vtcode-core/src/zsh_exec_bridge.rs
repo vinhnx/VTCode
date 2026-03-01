@@ -58,14 +58,14 @@ mod unix_impl {
 
     const ACCEPT_POLL_INTERVAL: Duration = Duration::from_millis(20);
 
-    pub struct ZshExecBridgeSession {
+    pub(crate) struct ZshExecBridgeSession {
         socket_path: PathBuf,
         stop: Arc<AtomicBool>,
         worker: Mutex<Option<JoinHandle<()>>>,
     }
 
     impl ZshExecBridgeSession {
-        pub fn spawn(allow_confirmed_dangerous: bool) -> Result<Self> {
+        pub(crate) fn spawn(allow_confirmed_dangerous: bool) -> Result<Self> {
             let socket_path = std::env::temp_dir().join(format!(
                 "vtcode-zsh-exec-bridge-{}.sock",
                 Uuid::new_v4()

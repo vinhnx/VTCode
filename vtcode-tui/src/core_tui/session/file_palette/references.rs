@@ -52,43 +52,15 @@ pub fn extract_file_reference(input: &str, cursor: usize) -> Option<(usize, usiz
 
 /// Check if @ is used in npm command context (e.g., @scope/package)
 fn is_npm_command_context(input: &str, at_pos: usize) -> bool {
-    // Check if preceded by package manager commands: npm, npx, yarn, pnpm, bun
-    let before_at = input[..at_pos].trim_end();
+    let before_at = &input[..at_pos];
     let cmd_names = ["npm", "npx", "yarn", "pnpm", "bun"];
 
-    // Check if any command appears in the command line
-    for cmd in &cmd_names {
-        // Look for the command at word boundaries
-        // e.g., "npm install @scope/pkg" or "npm i @scope/pkg"
-        let bytes = before_at.as_bytes();
-        let cmd_bytes = cmd.as_bytes();
-
-        // Check if it starts with the command
-        if bytes.len() >= cmd_bytes.len() {
-            // Check beginning
-            if &bytes[..cmd_bytes.len()] == cmd_bytes {
-                // Verify it's a word boundary (followed by space or end of string)
-                if cmd_bytes.len() == bytes.len() || bytes[cmd_bytes.len()].is_ascii_whitespace() {
-                    return true;
-                }
-            }
-        }
-
-        // Also check after spaces (in case of leading whitespace)
-        if let Some(pos) = before_at.find(cmd) {
-            // Check if preceded by space or start
-            let is_word_start = pos == 0 || before_at.as_bytes()[pos - 1].is_ascii_whitespace();
-            // Check if followed by space or end
-            let is_word_end = pos + cmd.len() == before_at.len()
-                || before_at.as_bytes()[pos + cmd.len()].is_ascii_whitespace();
-
-            if is_word_start && is_word_end {
-                return true;
-            }
-        }
-    }
-
-    false
+    // Check if any package manager command appears as a whole word before @
+    cmd_names.iter().any(|&cmd| {
+        before_at
+            .split_whitespace()
+            .any(|word| word == cmd)
+    })
 }
 
 /// Check if the reference looks like a file path vs package specifier
@@ -99,79 +71,39 @@ fn looks_like_file_path(reference: &str, is_npm_context: bool) -> bool {
         return true;
     }
 
-    let has_separator = reference.contains('/') || reference.contains('\\');
     let has_extension = reference.contains('.');
-    
-    // Check if reference contains @ (for handling cases like icon@2x.png)
-    let has_at = reference.contains('@');
-    
+
     // If reference contains @, check if it looks like a file with @ in the name
-    // vs a npm package specifier
-    if has_at {
-        // In npm context, reject anything that looks like a package
+    // vs a npm package specifier (e.g., icon@2x.png vs pkg@1.0.0)
+    if reference.contains('@') {
         if is_npm_context {
             return false;
         }
-        
-        // File paths with @ must have a proper file extension
-        // Check if the part after the last @ has a valid file extension
-        if let Some(last_at_idx) = reference.rfind('@') {
-            let after_at = &reference[last_at_idx + 1..];
-            // Check if after @ looks like a filename with extension (e.g., "2x.png")
-            // vs a version number (e.g., "1.0.0")
-            // Version numbers are typically just numbers and dots
-            // File names have letters before the extension
-            if after_at.contains(|c: char| c.is_ascii_alphabetic()) {
-                // Has letters, likely a file name like "2x.png"
-                return after_at.contains('.');
-            } else {
-                // No letters, likely a version number like "1.0.0"
-                return false;
-            }
-        }
-        return has_extension;
+        // Check if part after last @ looks like a filename (has letters) vs version (numbers only)
+        return reference
+            .rsplit_once('@')
+            .is_some_and(|(_, after)| after.contains(|c: char| c.is_ascii_alphabetic()) && after.contains('.'));
     }
 
-    // Relative paths with dot prefix: ./path, ../path
-    if reference.starts_with("./") || reference.starts_with("../") {
+    // Path patterns: ./path, ../path, /path, ~/path, C:\path
+    if reference.starts_with("./")
+        || reference.starts_with("../")
+        || reference.starts_with('/')
+        || reference.starts_with("~/")
+        || (reference.len() > 2 && reference.as_bytes()[1] == b':' && matches!(reference.as_bytes()[2], b'\\' | b'/'))
+    {
         return true;
     }
 
-    // Absolute paths: /path, ~/path
-    if reference.starts_with('/') || reference.starts_with("~/") {
+    // File with extension (with or without separator)
+    if has_extension {
         return true;
     }
 
-    // Windows absolute paths: C:\path, C:/path
-    if reference.len() > 2 && reference.as_bytes()[1] == b':' {
-        let sep = reference.as_bytes()[2];
-        if sep == b'\\' || sep == b'/' {
-            return true;
-        }
-    }
-
-    // Paths with separators AND extensions: src/main.rs, foo/bar/file.ts
-    // This distinguishes from packages like @scope/package (no extension)
-    if has_separator && has_extension {
-        return true;
-    }
-
-    // Simple filename with extension: main.rs, index.ts, image.png
-    if !has_separator && has_extension {
-        return true;
-    }
-
-    // In npm command context, reject bare identifiers (likely package names)
-    // e.g., "npm i @types" where "types" is a package scope
+    // npm context rejects bare identifiers; normal context allows them
     if is_npm_context {
         return false;
     }
 
-    // In normal conversation context, allow bare identifiers for file picker
-    // e.g., "choose @files" or "edit @config"
-    if !has_separator && !has_extension {
-        return true;
-    }
-
-    false
+    true
 }
