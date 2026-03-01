@@ -31,23 +31,23 @@ async fn test_run_tool_call_unknown_tool_failure() {
     let tools = Arc::new(tokio::sync::RwLock::new(Vec::new()));
 
     let mut harness_state = build_harness_state();
-    let mut ctx = crate::agent::runloop::unified::run_loop_context::RunLoopContext {
-        renderer: &mut test_ctx.renderer,
-        handle: &test_ctx.handle,
-        tool_registry: &mut registry,
-        tools: &tools,
-        tool_result_cache: &result_cache,
-        tool_permission_cache: &permission_cache_arc,
-        decision_ledger: &decision_ledger,
-        session_stats: &mut session_stats,
-        mcp_panel_state: &mut mcp_panel,
-        approval_recorder: &approval_recorder,
-        session: &mut test_ctx.session,
-        safety_validator: None,
-        traj: &traj,
-        harness_state: &mut harness_state,
-        harness_emitter: None,
-    };
+    let mut ctx = crate::agent::runloop::unified::run_loop_context::RunLoopContext::new(
+        &mut test_ctx.renderer,
+        &test_ctx.handle,
+        &mut registry,
+        &tools,
+        &result_cache,
+        &permission_cache_arc,
+        &decision_ledger,
+        &mut session_stats,
+        &mut mcp_panel,
+        &approval_recorder,
+        &mut test_ctx.session,
+        None,
+        &traj,
+        &mut harness_state,
+        None,
+    );
 
     let call = vtcode_core::llm::provider::ToolCall::function(
         "call_1".to_string(),
@@ -95,23 +95,23 @@ async fn test_run_tool_call_respects_max_tool_calls_budget() {
 
     let mut harness_state = build_harness_state_with(1);
     harness_state.record_tool_call(); // Exhaust the budget (1/1)
-    let mut ctx = crate::agent::runloop::unified::run_loop_context::RunLoopContext {
-        renderer: &mut test_ctx.renderer,
-        handle: &test_ctx.handle,
-        tool_registry: &mut registry,
-        tools: &tools,
-        tool_result_cache: &result_cache,
-        tool_permission_cache: &permission_cache_arc,
-        decision_ledger: &decision_ledger,
-        session_stats: &mut session_stats,
-        mcp_panel_state: &mut mcp_panel,
-        approval_recorder: &approval_recorder,
-        session: &mut test_ctx.session,
-        safety_validator: None,
-        traj: &traj,
-        harness_state: &mut harness_state,
-        harness_emitter: None,
-    };
+    let mut ctx = crate::agent::runloop::unified::run_loop_context::RunLoopContext::new(
+        &mut test_ctx.renderer,
+        &test_ctx.handle,
+        &mut registry,
+        &tools,
+        &result_cache,
+        &permission_cache_arc,
+        &decision_ledger,
+        &mut session_stats,
+        &mut mcp_panel,
+        &approval_recorder,
+        &mut test_ctx.session,
+        None,
+        &traj,
+        &mut harness_state,
+        None,
+    );
 
     let call = vtcode_core::llm::provider::ToolCall::function(
         "call_budget".to_string(),
@@ -175,23 +175,23 @@ async fn test_run_tool_call_prevalidated_blocks_mutation_in_plan_mode() {
     session_stats.switch_to_planner();
 
     let mut harness_state = build_harness_state();
-    let mut ctx = crate::agent::runloop::unified::run_loop_context::RunLoopContext {
-        renderer: &mut test_ctx.renderer,
-        handle: &test_ctx.handle,
-        tool_registry: &mut registry,
-        tools: &tools,
-        tool_result_cache: &result_cache,
-        tool_permission_cache: &permission_cache_arc,
-        decision_ledger: &decision_ledger,
-        session_stats: &mut session_stats,
-        mcp_panel_state: &mut mcp_panel,
-        approval_recorder: &approval_recorder,
-        session: &mut test_ctx.session,
-        safety_validator: None,
-        traj: &traj,
-        harness_state: &mut harness_state,
-        harness_emitter: None,
-    };
+    let mut ctx = crate::agent::runloop::unified::run_loop_context::RunLoopContext::new(
+        &mut test_ctx.renderer,
+        &test_ctx.handle,
+        &mut registry,
+        &tools,
+        &result_cache,
+        &permission_cache_arc,
+        &decision_ledger,
+        &mut session_stats,
+        &mut mcp_panel,
+        &approval_recorder,
+        &mut test_ctx.session,
+        None,
+        &traj,
+        &mut harness_state,
+        None,
+    );
 
     let payload = serde_json::to_string(&json!({
         "path": "notes.txt",
@@ -253,23 +253,23 @@ async fn test_run_tool_call_prevalidated_blocks_task_tracker_in_plan_mode() {
     session_stats.switch_to_planner();
 
     let mut harness_state = build_harness_state();
-    let mut ctx = crate::agent::runloop::unified::run_loop_context::RunLoopContext {
-        renderer: &mut test_ctx.renderer,
-        handle: &test_ctx.handle,
-        tool_registry: &mut registry,
-        tools: &tools,
-        tool_result_cache: &result_cache,
-        tool_permission_cache: &permission_cache_arc,
-        decision_ledger: &decision_ledger,
-        session_stats: &mut session_stats,
-        mcp_panel_state: &mut mcp_panel,
-        approval_recorder: &approval_recorder,
-        session: &mut test_ctx.session,
-        safety_validator: None,
-        traj: &traj,
-        harness_state: &mut harness_state,
-        harness_emitter: None,
-    };
+    let mut ctx = crate::agent::runloop::unified::run_loop_context::RunLoopContext::new(
+        &mut test_ctx.renderer,
+        &test_ctx.handle,
+        &mut registry,
+        &tools,
+        &result_cache,
+        &permission_cache_arc,
+        &decision_ledger,
+        &mut session_stats,
+        &mut mcp_panel,
+        &approval_recorder,
+        &mut test_ctx.session,
+        None,
+        &traj,
+        &mut harness_state,
+        None,
+    );
 
     let call = vtcode_core::llm::provider::ToolCall::function(
         "call_plan_task_tracker".to_string(),
@@ -331,23 +331,23 @@ async fn test_run_tool_call_non_prevalidated_blocks_task_tracker_in_plan_mode_wi
     session_stats.switch_to_planner();
 
     let mut harness_state = build_harness_state_with(2);
-    let mut ctx = crate::agent::runloop::unified::run_loop_context::RunLoopContext {
-        renderer: &mut test_ctx.renderer,
-        handle: &test_ctx.handle,
-        tool_registry: &mut registry,
-        tools: &tools,
-        tool_result_cache: &result_cache,
-        tool_permission_cache: &permission_cache_arc,
-        decision_ledger: &decision_ledger,
-        session_stats: &mut session_stats,
-        mcp_panel_state: &mut mcp_panel,
-        approval_recorder: &approval_recorder,
-        session: &mut test_ctx.session,
-        safety_validator: None,
-        traj: &traj,
-        harness_state: &mut harness_state,
-        harness_emitter: None,
-    };
+    let mut ctx = crate::agent::runloop::unified::run_loop_context::RunLoopContext::new(
+        &mut test_ctx.renderer,
+        &test_ctx.handle,
+        &mut registry,
+        &tools,
+        &result_cache,
+        &permission_cache_arc,
+        &decision_ledger,
+        &mut session_stats,
+        &mut mcp_panel,
+        &approval_recorder,
+        &mut test_ctx.session,
+        None,
+        &traj,
+        &mut harness_state,
+        None,
+    );
 
     let call = vtcode_core::llm::provider::ToolCall::function(
         "call_plan_task_tracker_non_prevalidated".to_string(),
@@ -420,23 +420,23 @@ async fn test_run_tool_call_prevalidated_allows_plan_task_tracker_in_plan_mode()
         .await;
 
     let mut harness_state = build_harness_state();
-    let mut ctx = crate::agent::runloop::unified::run_loop_context::RunLoopContext {
-        renderer: &mut test_ctx.renderer,
-        handle: &test_ctx.handle,
-        tool_registry: &mut registry,
-        tools: &tools,
-        tool_result_cache: &result_cache,
-        tool_permission_cache: &permission_cache_arc,
-        decision_ledger: &decision_ledger,
-        session_stats: &mut session_stats,
-        mcp_panel_state: &mut mcp_panel,
-        approval_recorder: &approval_recorder,
-        session: &mut test_ctx.session,
-        safety_validator: None,
-        traj: &traj,
-        harness_state: &mut harness_state,
-        harness_emitter: None,
-    };
+    let mut ctx = crate::agent::runloop::unified::run_loop_context::RunLoopContext::new(
+        &mut test_ctx.renderer,
+        &test_ctx.handle,
+        &mut registry,
+        &tools,
+        &result_cache,
+        &permission_cache_arc,
+        &decision_ledger,
+        &mut session_stats,
+        &mut mcp_panel,
+        &approval_recorder,
+        &mut test_ctx.session,
+        None,
+        &traj,
+        &mut harness_state,
+        None,
+    );
 
     let call = vtcode_core::llm::provider::ToolCall::function(
         "call_plan_task_tracker_allowed".to_string(),
@@ -486,23 +486,23 @@ async fn test_run_tool_call_non_prevalidated_blocks_plan_task_tracker_outside_pl
     let tools = Arc::new(tokio::sync::RwLock::new(Vec::new()));
 
     let mut harness_state = build_harness_state_with(2);
-    let mut ctx = crate::agent::runloop::unified::run_loop_context::RunLoopContext {
-        renderer: &mut test_ctx.renderer,
-        handle: &test_ctx.handle,
-        tool_registry: &mut registry,
-        tools: &tools,
-        tool_result_cache: &result_cache,
-        tool_permission_cache: &permission_cache_arc,
-        decision_ledger: &decision_ledger,
-        session_stats: &mut session_stats,
-        mcp_panel_state: &mut mcp_panel,
-        approval_recorder: &approval_recorder,
-        session: &mut test_ctx.session,
-        safety_validator: None,
-        traj: &traj,
-        harness_state: &mut harness_state,
-        harness_emitter: None,
-    };
+    let mut ctx = crate::agent::runloop::unified::run_loop_context::RunLoopContext::new(
+        &mut test_ctx.renderer,
+        &test_ctx.handle,
+        &mut registry,
+        &tools,
+        &result_cache,
+        &permission_cache_arc,
+        &decision_ledger,
+        &mut session_stats,
+        &mut mcp_panel,
+        &approval_recorder,
+        &mut test_ctx.session,
+        None,
+        &traj,
+        &mut harness_state,
+        None,
+    );
 
     let call = vtcode_core::llm::provider::ToolCall::function(
         "call_plan_task_tracker_blocked".to_string(),
@@ -553,23 +553,23 @@ async fn test_run_tool_call_invalid_preflight_does_not_consume_budget() {
     let tools = Arc::new(tokio::sync::RwLock::new(Vec::new()));
 
     let mut harness_state = build_harness_state_with(1);
-    let mut ctx = crate::agent::runloop::unified::run_loop_context::RunLoopContext {
-        renderer: &mut test_ctx.renderer,
-        handle: &test_ctx.handle,
-        tool_registry: &mut registry,
-        tools: &tools,
-        tool_result_cache: &result_cache,
-        tool_permission_cache: &permission_cache_arc,
-        decision_ledger: &decision_ledger,
-        session_stats: &mut session_stats,
-        mcp_panel_state: &mut mcp_panel,
-        approval_recorder: &approval_recorder,
-        session: &mut test_ctx.session,
-        safety_validator: None,
-        traj: &traj,
-        harness_state: &mut harness_state,
-        harness_emitter: None,
-    };
+    let mut ctx = crate::agent::runloop::unified::run_loop_context::RunLoopContext::new(
+        &mut test_ctx.renderer,
+        &test_ctx.handle,
+        &mut registry,
+        &tools,
+        &result_cache,
+        &permission_cache_arc,
+        &decision_ledger,
+        &mut session_stats,
+        &mut mcp_panel,
+        &approval_recorder,
+        &mut test_ctx.session,
+        None,
+        &traj,
+        &mut harness_state,
+        None,
+    );
 
     let call = vtcode_core::llm::provider::ToolCall::function(
         "call_invalid_preflight".to_string(),
@@ -645,23 +645,23 @@ async fn test_run_tool_call_unified_exec_git_diff_uses_cache_on_repeat() {
     let tools = Arc::new(tokio::sync::RwLock::new(Vec::new()));
 
     let mut harness_state = build_harness_state();
-    let mut ctx = crate::agent::runloop::unified::run_loop_context::RunLoopContext {
-        renderer: &mut test_ctx.renderer,
-        handle: &test_ctx.handle,
-        tool_registry: &mut registry,
-        tools: &tools,
-        tool_result_cache: &result_cache,
-        tool_permission_cache: &permission_cache_arc,
-        decision_ledger: &decision_ledger,
-        session_stats: &mut session_stats,
-        mcp_panel_state: &mut mcp_panel,
-        approval_recorder: &approval_recorder,
-        session: &mut test_ctx.session,
-        safety_validator: None,
-        traj: &traj,
-        harness_state: &mut harness_state,
-        harness_emitter: None,
-    };
+    let mut ctx = crate::agent::runloop::unified::run_loop_context::RunLoopContext::new(
+        &mut test_ctx.renderer,
+        &test_ctx.handle,
+        &mut registry,
+        &tools,
+        &result_cache,
+        &permission_cache_arc,
+        &decision_ledger,
+        &mut session_stats,
+        &mut mcp_panel,
+        &approval_recorder,
+        &mut test_ctx.session,
+        None,
+        &traj,
+        &mut harness_state,
+        None,
+    );
 
     let args = serde_json::to_string(&json!({
         "action": "run",

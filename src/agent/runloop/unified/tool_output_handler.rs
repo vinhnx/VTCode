@@ -363,23 +363,23 @@ mod tests {
         let tools = Arc::new(RwLock::new(Vec::new()));
 
         let mut harness_state = build_harness_state();
-        let mut ctx = RunLoopContext {
-            renderer: &mut renderer,
-            handle: &handle,
-            tool_registry: &mut registry,
-            tools: &tools,
-            tool_result_cache: &cache,
-            tool_permission_cache: &permission_cache_arc,
-            decision_ledger: &decision_ledger,
-            session_stats: &mut session_stats,
-            mcp_panel_state: &mut mcp_panel,
-            approval_recorder: &approval_recorder,
-            session: &mut session,
-            safety_validator: None,
-            traj: &traj,
-            harness_state: &mut harness_state,
-            harness_emitter: None,
-        };
+        let mut ctx = RunLoopContext::new(
+            &mut renderer,
+            &handle,
+            &mut registry,
+            &tools,
+            &cache,
+            &permission_cache_arc,
+            &decision_ledger,
+            &mut session_stats,
+            &mut mcp_panel,
+            &approval_recorder,
+            &mut session,
+            None,
+            &traj,
+            &mut harness_state,
+            None,
+        );
 
         let outcome = ToolPipelineOutcome::from_status(ToolExecutionStatus::Success {
             output: serde_json::json!({"ok": true}),
@@ -447,23 +447,23 @@ mod tests {
         let tools = Arc::new(RwLock::new(Vec::new()));
 
         let mut harness_state = build_harness_state();
-        let mut ctx = RunLoopContext {
-            renderer: &mut renderer,
-            handle: &handle,
-            tool_registry: &mut registry,
-            tools: &tools,
-            tool_result_cache: &cache,
-            tool_permission_cache: &permission_cache_arc,
-            decision_ledger: &decision_ledger,
-            session_stats: &mut session_stats,
-            mcp_panel_state: &mut mcp_panel,
-            approval_recorder: &approval_recorder,
-            session: &mut session,
-            safety_validator: None,
-            traj: &traj,
-            harness_state: &mut harness_state,
-            harness_emitter: None,
-        };
+        let mut ctx = RunLoopContext::new(
+            &mut renderer,
+            &handle,
+            &mut registry,
+            &tools,
+            &cache,
+            &permission_cache_arc,
+            &decision_ledger,
+            &mut session_stats,
+            &mut mcp_panel,
+            &approval_recorder,
+            &mut session,
+            None,
+            &traj,
+            &mut harness_state,
+            None,
+        );
 
         let outcome = ToolPipelineOutcome::from_status(ToolExecutionStatus::Success {
             output: serde_json::json!({"exit_code": 0}),

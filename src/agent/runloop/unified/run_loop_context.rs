@@ -181,6 +181,45 @@ pub(crate) struct RunLoopContext<'a> {
     pub harness_emitter: Option<&'a HarnessEventEmitter>,
 }
 
+impl<'a> RunLoopContext<'a> {
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        renderer: &'a mut AnsiRenderer,
+        handle: &'a InlineHandle,
+        tool_registry: &'a mut ToolRegistry,
+        tools: &'a Arc<RwLock<Vec<uni::ToolDefinition>>>,
+        tool_result_cache: &'a Arc<RwLock<ToolResultCache>>,
+        tool_permission_cache: &'a Arc<RwLock<ToolPermissionCache>>,
+        decision_ledger: &'a Arc<RwLock<DecisionTracker>>,
+        session_stats: &'a mut SessionStats,
+        mcp_panel_state: &'a mut McpPanelState,
+        approval_recorder: &'a ApprovalRecorder,
+        session: &'a mut InlineSession,
+        safety_validator: Option<&'a Arc<RwLock<ToolCallSafetyValidator>>>,
+        traj: &'a TrajectoryLogger,
+        harness_state: &'a mut HarnessTurnState,
+        harness_emitter: Option<&'a HarnessEventEmitter>,
+    ) -> Self {
+        Self {
+            renderer,
+            handle,
+            tool_registry,
+            tools,
+            tool_result_cache,
+            tool_permission_cache,
+            decision_ledger,
+            session_stats,
+            mcp_panel_state,
+            approval_recorder,
+            session,
+            safety_validator,
+            traj,
+            harness_state,
+            harness_emitter,
+        }
+    }
+}
+
 // Lightweight adapter that provides a smaller context for per-turn operations.
 #[allow(dead_code)]
 pub(crate) struct TurnExecutionContext<'a> {
