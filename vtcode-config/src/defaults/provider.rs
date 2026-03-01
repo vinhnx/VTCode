@@ -410,7 +410,10 @@ mod tests {
         let key = "VTCODE_CONFIG";
         let initial = std::env::var_os(key);
         with_env_var(key, Some("/tmp/vtcode-config-test"), || {
-            assert_eq!(std::env::var_os(key), Some(OsString::from("/tmp/vtcode-config-test")));
+            assert_eq!(
+                std::env::var_os(key),
+                Some(OsString::from("/tmp/vtcode-config-test"))
+            );
         });
         assert_eq!(std::env::var_os(key), initial);
     }

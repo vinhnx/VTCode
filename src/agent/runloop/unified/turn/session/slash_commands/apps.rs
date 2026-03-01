@@ -141,6 +141,8 @@ pub async fn handle_launch_git(ctx: SlashCommandContext<'_>) -> Result<SlashComm
     ctx.handle.suspend_event_loop();
     // Give a small moment for the suspend command to propagate to the TUI thread
     tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    // Drain any queued key events before launching external UI.
+    ctx.handle.clear_input_queue();
 
     match launcher.launch_git_interface() {
         Ok(_) => {
@@ -157,6 +159,8 @@ pub async fn handle_launch_git(ctx: SlashCommandContext<'_>) -> Result<SlashComm
         }
     }
 
+    // Clear any stale terminal events buffered during process exit.
+    ctx.handle.clear_input_queue();
     // Resume TUI event loop
     ctx.handle.resume_event_loop();
 

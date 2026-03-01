@@ -277,20 +277,32 @@ impl TerminalAppLauncher {
         let result = f();
 
         if was_raw_mode {
-            // Re-enable raw mode
-            enable_raw_mode().context("failed to re-enable raw mode")?;
+            // Always attempt every restore step so we minimize the chance of leaving the terminal
+            // in a partially restored state.
+            let mut restore_errors = Vec::new();
 
-            // Re-enter alternate screen
-            io::stdout()
-                .execute(EnterAlternateScreen)
-                .context("failed to re-enter alternate screen")?;
+            if let Err(error) = enable_raw_mode() {
+                restore_errors.push(format!("failed to re-enable raw mode: {}", error));
+            }
 
-            // Clear terminal to remove artifacts
+            if let Err(error) = io::stdout().execute(EnterAlternateScreen) {
+                restore_errors.push(format!("failed to re-enter alternate screen: {}", error));
+            }
+
             // This prevents ANSI escape codes from external apps' background color requests
             // from appearing in the TUI.
-            io::stdout()
-                .execute(Clear(ClearType::All))
-                .context("failed to clear terminal")?;
+            if let Err(error) = io::stdout().execute(Clear(ClearType::All)) {
+                restore_errors.push(format!("failed to clear terminal: {}", error));
+            }
+
+            if !restore_errors.is_empty() {
+                let restore_summary = restore_errors.join("; ");
+                return match result {
+                    Ok(()) => Err(anyhow!("terminal restore failed: {}", restore_summary)),
+                    Err(command_error) => Err(command_error
+                        .context(format!("terminal restore also failed: {}", restore_summary))),
+                };
+            }
         }
 
         result

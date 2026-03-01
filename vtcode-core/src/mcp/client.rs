@@ -6,9 +6,7 @@ use anyhow::{Context, Result, anyhow, bail};
 use async_trait::async_trait;
 use chrono::Utc;
 use parking_lot::RwLock;
-use rmcp::model::{
-    CallToolResult, ClientCapabilities, InitializeRequestParams, RootsCapabilities,
-};
+use rmcp::model::{CallToolResult, ClientCapabilities, InitializeRequestParams, RootsCapabilities};
 use rustc_hash::FxHashMap;
 use serde_json::{Map, Value, json};
 use std::path::{Path, PathBuf};

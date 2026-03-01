@@ -466,9 +466,7 @@ impl ClientHandler for LoggingClientHandler {
                         (message.clone(), schema_value)
                     }
                     CreateElicitationRequestParams::UrlElicitationParams {
-                        message,
-                        url,
-                        ..
+                        message, url, ..
                     } => {
                         // For URL-based elicitation, create a simple schema with the URL
                         let schema_value = json!({

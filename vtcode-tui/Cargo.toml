@@ -24,6 +24,7 @@ chrono = { version = "0.4", features = ["serde"] }
 crossterm = { workspace = true, features = ["event-stream", "osc52"] }
 futures = "0.3"
 humantime = "2.1"
+human-panic = "2.0"
 line-clipping = "0.3"
 nucleo-matcher = "0.3"
 once_cell = "1.19"

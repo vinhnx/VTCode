@@ -8,6 +8,7 @@ use std::sync::Once;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use better_panic::{Settings as BetterPanicSettings, Verbosity as BetterPanicVerbosity};
+use human_panic::{Metadata as HumanPanicMetadata, handle_dump as human_panic_dump, print_msg};
 use ratatui::crossterm::{
     cursor::{MoveToColumn, RestorePosition, SetCursorStyle, Show},
     event::{
@@ -21,6 +22,26 @@ static TUI_INITIALIZED: AtomicBool = AtomicBool::new(false);
 static DEBUG_MODE: AtomicBool = AtomicBool::new(cfg!(debug_assertions));
 static SHOW_DIAGNOSTICS: AtomicBool = AtomicBool::new(false);
 static PANIC_HOOK_ONCE: Once = Once::new();
+static APP_METADATA: std::sync::OnceLock<AppMetadata> = std::sync::OnceLock::new();
+
+#[derive(Clone, Debug)]
+struct AppMetadata {
+    name: &'static str,
+    version: &'static str,
+    authors: &'static str,
+    repository: Option<&'static str>,
+}
+
+impl AppMetadata {
+    fn default_for_tui_crate() -> Self {
+        Self {
+            name: env!("CARGO_PKG_NAME"),
+            version: env!("CARGO_PKG_VERSION"),
+            authors: env!("CARGO_PKG_AUTHORS"),
+            repository: Some(env!("CARGO_PKG_REPOSITORY")).filter(|value| !value.is_empty()),
+        }
+    }
+}
 
 /// Set whether the application is in debug mode
 ///
@@ -45,12 +66,36 @@ pub fn show_diagnostics() -> bool {
     SHOW_DIAGNOSTICS.load(Ordering::SeqCst)
 }
 
+/// Set application metadata used by release panic reports.
+///
+/// If this is not set, metadata from the `vtcode-tui` crate is used.
+pub fn set_app_metadata(
+    name: &'static str,
+    version: &'static str,
+    authors: &'static str,
+    repository: Option<&'static str>,
+) {
+    let _ = APP_METADATA.set(AppMetadata {
+        name,
+        version,
+        authors,
+        repository: repository.filter(|value| !value.is_empty()),
+    });
+}
+
+fn app_metadata() -> AppMetadata {
+    APP_METADATA
+        .get()
+        .cloned()
+        .unwrap_or_else(AppMetadata::default_for_tui_crate)
+}
+
 /// Initialize the panic hook to restore terminal state on panic and provide better formatting
 ///
 /// This function should be called very early in the application lifecycle,
 /// before any TUI operations begin.
 ///
-/// Follows Ratatui recipe: https://ratatui.rs/recipes/apps/panic-hooks/
+/// Follows Ratatui recipe: https://ratatui.rs/recipes/apps/better-panic/
 pub fn init_panic_hook() {
     PANIC_HOOK_ONCE.call_once(|| {
         // Keep original hook for concise non-debug panic output.
@@ -76,10 +121,21 @@ pub fn init_panic_hook() {
             if is_debug {
                 better_panic_hook(panic_info);
             } else {
-                eprintln!("\nVTCode encountered a critical error and needs to shut down.");
-                eprintln!("If this keeps happening, please report it with a backtrace.");
-                eprintln!("Hint: run with --debug and set RUST_BACKTRACE=1.\n");
-                original_hook(panic_info);
+                let metadata = app_metadata();
+                let mut report_metadata = HumanPanicMetadata::new(metadata.name, metadata.version)
+                    .authors(format!("authored by {}", metadata.authors));
+
+                if let Some(repository) = metadata.repository {
+                    report_metadata = report_metadata
+                        .support(format!("Open a support request at {}", repository));
+                }
+
+                let file_path = human_panic_dump(&report_metadata, panic_info);
+                if let Err(error) = print_msg(file_path, &report_metadata) {
+                    eprintln!("\nVTCode encountered a critical error and needs to shut down.");
+                    eprintln!("Failed to print crash report details: {}", error);
+                    original_hook(panic_info);
+                }
             }
 
             // Keep current behavior: terminate process after unrecoverable panic.

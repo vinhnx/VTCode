@@ -11,7 +11,7 @@ use std::env;
 use tracing::{debug, warn};
 
 /// Build the standard Implementation struct for vtcode MCP client.
-/// 
+///
 /// This ensures consistent client identification across all MCP connections.
 pub fn build_client_implementation() -> Implementation {
     Implementation {

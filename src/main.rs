@@ -85,6 +85,12 @@ async fn run() -> Result<()> {
         }
     }
 
+    panic_hook::set_app_metadata(
+        env!("CARGO_PKG_NAME"),
+        env!("CARGO_PKG_VERSION"),
+        env!("CARGO_PKG_AUTHORS"),
+        Some(env!("CARGO_PKG_REPOSITORY")),
+    );
     panic_hook::init_panic_hook();
 
     if vtcode_core::maybe_run_zsh_exec_wrapper_mode()? {
