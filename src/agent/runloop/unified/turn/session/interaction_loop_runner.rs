@@ -1,6 +1,8 @@
 use anyhow::Result;
 use serde::Deserialize;
 use serde_json::Value;
+use std::collections::BTreeMap;
+use std::path::Path;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::ui::theme;
 use vtcode_core::utils::ansi::MessageStyle;
@@ -79,6 +81,64 @@ fn fallback_args_preview(args: &Value) -> String {
         preview.push_str("...");
     }
     preview
+}
+
+fn append_file_reference_metadata(
+    content: uni::MessageContent,
+    input: &str,
+    workspace: &Path,
+) -> uni::MessageContent {
+    let Some(metadata) = build_file_reference_metadata(input, workspace) else {
+        return content;
+    };
+
+    match content {
+        uni::MessageContent::Text(text) => uni::MessageContent::text(format!("{text}{metadata}")),
+        uni::MessageContent::Parts(mut parts) => {
+            parts.push(uni::ContentPart::text(metadata));
+            uni::MessageContent::parts(parts)
+        }
+    }
+}
+
+fn build_file_reference_metadata(input: &str, workspace: &Path) -> Option<String> {
+    let mut alias_to_full_path = BTreeMap::new();
+    for at_match in vtcode_commons::at_pattern::find_at_patterns(input) {
+        let alias = at_match.path.trim();
+        if alias.is_empty() {
+            continue;
+        }
+        if let Some(full_path) = resolve_full_path_for_alias(alias, workspace) {
+            alias_to_full_path.insert(format!("@{alias}"), full_path);
+        }
+    }
+
+    if alias_to_full_path.is_empty() {
+        return None;
+    }
+
+    let mut metadata = String::from("\n\n[file_reference_metadata]\n");
+    for (alias, full_path) in alias_to_full_path {
+        metadata.push_str(&format!("{}={}\n", alias, full_path));
+    }
+
+    Some(metadata)
+}
+
+fn resolve_full_path_for_alias(alias: &str, workspace: &Path) -> Option<String> {
+    let trimmed = alias.trim();
+    if trimmed.is_empty()
+        || trimmed.starts_with("http://")
+        || trimmed.starts_with("https://")
+        || trimmed.starts_with("data:")
+        || !vtcode_commons::paths::is_safe_relative_path(trimmed)
+    {
+        return None;
+    }
+
+    let resolved =
+        vtcode_commons::paths::resolve_workspace_path(workspace, Path::new(trimmed)).ok()?;
+    Some(resolved.to_string_lossy().to_string())
 }
 
 fn apply_live_theme_and_appearance(
@@ -598,6 +658,8 @@ pub(super) async fn run_interaction_loop_impl(
                 uni::MessageContent::parts(refined_parts)
             }
         };
+        let refined_content =
+            append_file_reference_metadata(refined_content, input, &ctx.config.workspace);
 
         display_user_message(ctx.renderer, input)?;
 
@@ -615,7 +677,12 @@ pub(super) async fn run_interaction_loop_impl(
 
 #[cfg(test)]
 mod tests {
-    use super::{extract_recent_fallback_hint, fallback_args_preview};
+    use super::{
+        append_file_reference_metadata, build_file_reference_metadata,
+        extract_recent_fallback_hint, fallback_args_preview,
+    };
+    use std::fs;
+    use tempfile::TempDir;
     use vtcode_core::llm::provider as uni;
 
     #[test]
@@ -709,5 +776,55 @@ mod tests {
         let preview = fallback_args_preview(&args);
         assert!(preview.ends_with("..."));
         assert!(preview.len() <= 243);
+    }
+
+    #[test]
+    fn build_file_reference_metadata_maps_aliases_to_full_paths() {
+        let temp_dir = TempDir::new().expect("temp dir");
+        let file_path = temp_dir.path().join("src").join("main.rs");
+        fs::create_dir_all(file_path.parent().expect("parent")).expect("mkdir");
+        fs::write(&file_path, "fn main() {}\n").expect("write file");
+
+        let metadata =
+            build_file_reference_metadata("check @src/main.rs and continue", temp_dir.path())
+                .expect("metadata");
+
+        assert!(metadata.contains("@src/main.rs="));
+        assert!(metadata.contains("src/main.rs"));
+    }
+
+    #[test]
+    fn append_file_reference_metadata_keeps_ui_alias_but_adds_full_path_context() {
+        let temp_dir = TempDir::new().expect("temp dir");
+        let file_path = temp_dir.path().join("README.md");
+        fs::write(&file_path, "# test\n").expect("write file");
+
+        let content = uni::MessageContent::text("check @README.md".to_string());
+        let augmented =
+            append_file_reference_metadata(content, "check @README.md", temp_dir.path());
+
+        match augmented {
+            uni::MessageContent::Text(text) => {
+                assert!(text.contains("check @README.md"));
+                assert!(text.contains("[file_reference_metadata]"));
+                assert!(text.contains("@README.md="));
+                assert!(text.contains("README.md"));
+            }
+            uni::MessageContent::Parts(_) => panic!("expected text content"),
+        }
+    }
+
+    #[test]
+    fn build_file_reference_metadata_ignores_non_file_aliases() {
+        let temp_dir = TempDir::new().expect("temp dir");
+        let metadata = build_file_reference_metadata("npm i @types/node", temp_dir.path());
+        assert!(metadata.is_none());
+    }
+
+    #[test]
+    fn build_file_reference_metadata_ignores_absolute_paths() {
+        let temp_dir = TempDir::new().expect("temp dir");
+        let metadata = build_file_reference_metadata("check @/tmp/example.rs", temp_dir.path());
+        assert!(metadata.is_none());
     }
 }
