@@ -274,8 +274,11 @@ async fn try_cache_hit(
 
     let workspace_path = registry.workspace_root().to_string_lossy().to_string();
     let cache_key = create_enhanced_cache_key(name, args_val, cache_target, &workspace_path);
-    let mut cache = tool_result_cache.write().await;
-    if let Some(cached_output) = cache.get(&cache_key) {
+    let cached_output = {
+        let cache = tool_result_cache.read().await;
+        cache.get(&cache_key)
+    };
+    if let Some(cached_output) = cached_output {
         match parse_cached_output(&cached_output) {
             Ok(cached_json) => {
                 tracing::debug!(
@@ -299,6 +302,7 @@ async fn try_cache_hit(
                     error = %error,
                     "Discarding malformed cached output"
                 );
+                let mut cache = tool_result_cache.write().await;
                 cache.invalidate_for_path(cache_target);
             }
         }
@@ -322,8 +326,11 @@ async fn try_loop_detection_cache_hit(
 ) -> Option<ToolExecutionStatus> {
     let workspace_path = registry.workspace_root().to_string_lossy().to_string();
     let cache_key = create_enhanced_cache_key(name, args_val, cache_target, &workspace_path);
-    let mut cache = tool_result_cache.write().await;
-    if let Some(cached_output) = cache.get(&cache_key) {
+    let cached_output = {
+        let cache = tool_result_cache.read().await;
+        cache.get(&cache_key)
+    };
+    if let Some(cached_output) = cached_output {
         match parse_cached_output(&cached_output) {
             Ok(cached_json) => {
                 return Some(ToolExecutionStatus::Success {
@@ -341,6 +348,7 @@ async fn try_loop_detection_cache_hit(
                     error = %error,
                     "Discarding malformed cached output after loop detection"
                 );
+                let mut cache = tool_result_cache.write().await;
                 cache.invalidate_for_path(cache_target);
             }
         }

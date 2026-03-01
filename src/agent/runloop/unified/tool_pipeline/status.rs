@@ -16,6 +16,7 @@ pub(crate) enum ToolExecutionStatus {
         /// Whether the command was successful
         command_success: bool,
         /// Whether there are more results available
+        #[allow(dead_code)]
         has_more: bool,
     },
     /// Tool execution failed
@@ -50,38 +51,45 @@ impl ToolExecutionStatus {
 /// Outcome produced by a tool pipeline run - returns a success/failure wrapper along with stdout and modified files
 pub(crate) struct ToolPipelineOutcome {
     pub status: ToolExecutionStatus,
-    pub modified_files: Vec<String>,
     pub command_success: bool,
 }
 
 impl ToolPipelineOutcome {
     pub(crate) fn from_status(status: ToolExecutionStatus) -> Self {
-        match status {
+        let command_success = match &status {
             ToolExecutionStatus::Success {
-                output,
-                stdout,
-                modified_files,
-                command_success,
-                has_more,
-            } => {
-                let modified_files_copy = modified_files.clone();
-                ToolPipelineOutcome {
-                    status: ToolExecutionStatus::Success {
-                        output,
-                        stdout,
-                        modified_files,
-                        command_success,
-                        has_more,
-                    },
-                    modified_files: modified_files_copy,
-                    command_success,
-                }
-            }
-            other => ToolPipelineOutcome {
-                status: other,
-                modified_files: vec![],
-                command_success: false,
-            },
+                command_success, ..
+            } => *command_success,
+            _ => false,
+        };
+        ToolPipelineOutcome {
+            status,
+            command_success,
+        }
+    }
+
+    pub(crate) fn modified_files(&self) -> &[String] {
+        match &self.status {
+            ToolExecutionStatus::Success { modified_files, .. } => modified_files,
+            _ => &[],
+        }
+    }
+
+    pub(crate) fn modified_files_mut(&mut self) -> Option<&mut Vec<String>> {
+        match &mut self.status {
+            ToolExecutionStatus::Success { modified_files, .. } => Some(modified_files),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn set_command_success(&mut self, command_success: bool) {
+        self.command_success = command_success;
+        if let ToolExecutionStatus::Success {
+            command_success: status_success,
+            ..
+        } = &mut self.status
+        {
+            *status_success = command_success;
         }
     }
 }
@@ -105,6 +113,7 @@ pub(crate) struct ToolBatchEntry {
     /// Tool name (e.g. `"read_file"`, `"mcp_github_create_issue"`)
     pub tool_name: String,
     /// The provider-assigned call id.
+    #[allow(dead_code)]
     pub call_id: String,
     /// High-level result category.
     pub result: ToolBatchResult,

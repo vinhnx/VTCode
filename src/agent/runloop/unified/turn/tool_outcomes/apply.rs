@@ -24,10 +24,10 @@ fn format_turn_elapsed_label(duration: Duration) -> String {
 }
 
 pub async fn apply_turn_outcome(
-    outcome: &TurnLoopOutcome,
+    outcome: TurnLoopOutcome,
     ctx: TurnOutcomeContext<'_>,
 ) -> Result<()> {
-    match &outcome.result {
+    match outcome.result {
         TurnLoopResult::Cancelled => {
             if ctx.ctrl_c_state.is_exit_requested() {
                 *ctx.session_end_reason = crate::hooks::lifecycle::SessionEndReason::Exit;
@@ -61,7 +61,7 @@ pub async fn apply_turn_outcome(
             Ok(())
         }
         TurnLoopResult::Blocked { reason } => {
-            *ctx.conversation_history = outcome.working_history.clone();
+            *ctx.conversation_history = outcome.working_history;
             if let Some(reason) = reason.as_deref() {
                 let _ = ctx.renderer.line(MessageStyle::Info, reason);
             }
@@ -71,16 +71,16 @@ pub async fn apply_turn_outcome(
             Ok(())
         }
         TurnLoopResult::Completed => {
-            *ctx.conversation_history = outcome.working_history.clone();
+            *ctx.conversation_history = outcome.working_history;
             if let Some(manager) = ctx.checkpoint_manager {
-                let conversation_snapshot: Vec<SessionMessage> = outcome
-                    .working_history
+                let conversation_snapshot: Vec<SessionMessage> = ctx
+                    .conversation_history
                     .iter()
                     .map(SessionMessage::from)
                     .collect();
                 let turn_number = *ctx.next_checkpoint_turn;
-                let description = outcome
-                    .working_history
+                let description = ctx
+                    .conversation_history
                     .last()
                     .map(|msg| msg.content.as_text())
                     .unwrap_or_default()
@@ -176,7 +176,7 @@ mod tests {
         };
 
         apply_turn_outcome(
-            &outcome,
+            outcome,
             TurnOutcomeContext {
                 conversation_history: &mut conversation_history,
                 renderer: &mut renderer,
@@ -212,7 +212,7 @@ mod tests {
         };
 
         apply_turn_outcome(
-            &outcome,
+            outcome,
             TurnOutcomeContext {
                 conversation_history: &mut conversation_history,
                 renderer: &mut renderer,
@@ -248,7 +248,7 @@ mod tests {
         };
 
         apply_turn_outcome(
-            &outcome,
+            outcome,
             TurnOutcomeContext {
                 conversation_history: &mut conversation_history,
                 renderer: &mut renderer,

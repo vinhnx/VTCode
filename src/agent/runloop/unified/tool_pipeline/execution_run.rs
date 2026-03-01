@@ -361,8 +361,8 @@ async fn apply_post_execution_side_effects(
     tool_started_emitted: bool,
     pipeline_outcome: &mut ToolPipelineOutcome,
 ) -> Result<(), anyhow::Error> {
-    if !pipeline_outcome.modified_files.is_empty() {
-        let modified_files = pipeline_outcome.modified_files.clone();
+    if !pipeline_outcome.modified_files().is_empty() {
+        let modified_files = pipeline_outcome.modified_files().to_vec();
         let keep_changes =
             match confirm_changes_with_git_diff(&modified_files, skip_confirmations).await {
                 Ok(value) => value,
@@ -383,13 +383,15 @@ async fn apply_post_execution_side_effects(
                 .log_tool_call(turn_index, name, args_val, pipeline_outcome.command_success);
             if pipeline_outcome.command_success {
                 let mut cache = ctx.tool_result_cache.write().await;
-                for path in &pipeline_outcome.modified_files {
+                for path in pipeline_outcome.modified_files() {
                     cache.invalidate_for_path(path);
                 }
             }
         } else {
-            pipeline_outcome.modified_files.clear();
-            pipeline_outcome.command_success = false;
+            if let Some(files) = pipeline_outcome.modified_files_mut() {
+                files.clear();
+            }
+            pipeline_outcome.set_command_success(false);
         }
     } else {
         ctx.traj

@@ -2,7 +2,6 @@ use anyhow::Result;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::sync::RwLock as StdRwLock;
 use std::time::Instant;
 use tokio::sync::RwLock;
 
@@ -72,7 +71,7 @@ pub struct TurnLoopContext<'a> {
     pub telemetry: &'a Arc<vtcode_core::core::telemetry::TelemetryManager>,
     pub autonomous_executor: &'a Arc<vtcode_core::tools::autonomous_executor::AutonomousExecutor>,
     pub error_recovery:
-        &'a Arc<StdRwLock<vtcode_core::core::agent::error_recovery::ErrorRecoveryState>>,
+        &'a Arc<RwLock<vtcode_core::core::agent::error_recovery::ErrorRecoveryState>>,
     pub harness_state: &'a mut HarnessTurnState,
     pub harness_emitter: Option<&'a HarnessEventEmitter>,
     pub config: &'a mut AgentConfig,
@@ -113,7 +112,7 @@ impl<'a> TurnLoopContext<'a> {
         telemetry: &'a Arc<vtcode_core::core::telemetry::TelemetryManager>,
         autonomous_executor: &'a Arc<vtcode_core::tools::autonomous_executor::AutonomousExecutor>,
         error_recovery: &'a Arc<
-            StdRwLock<vtcode_core::core::agent::error_recovery::ErrorRecoveryState>,
+            RwLock<vtcode_core::core::agent::error_recovery::ErrorRecoveryState>,
         >,
         harness_state: &'a mut HarnessTurnState,
         harness_emitter: Option<&'a HarnessEventEmitter>,
@@ -395,9 +394,8 @@ pub async fn run_turn_loop(
             Ok(val) => val,
             Err(err) => {
                 // Record the error in the recovery state for diagnostics
-                if let Ok(mut recovery) = ctx.error_recovery.write() {
-                    recovery.record_error("llm_request", format!("{:#}", err), ErrorType::Other);
-                }
+                let mut recovery = ctx.error_recovery.write().await;
+                recovery.record_error("llm_request", format!("{:#}", err), ErrorType::Other);
 
                 // execute_llm_request already performs retry/backoff for retryable provider errors.
                 // Avoid a second retry layer here, which can consume turn budget and cause timeouts.
@@ -471,105 +469,29 @@ pub async fn run_turn_loop(
             Ok(result) => result,
             Err(err) => {
                 let err_cat = vtcode_commons::classify_anyhow_error(&err);
-                // For transient errors (overload, rate-limit), re-issue the LLM request
-                // once to get a fresh response. Non-transient parse errors fail immediately.
                 if err_cat.is_retryable() {
                     tracing::warn!(
                         error = %err,
                         step = step_count,
                         category = ?err_cat,
-                        "Response parse failed with transient error; retrying LLM request once"
+                        "Response parse failed with transient error; skipping extra request retry"
                     );
-                    match execute_llm_request(
-                        &mut turn_processing_ctx,
-                        step_count,
-                        &active_model,
-                        None,
-                        None,
-                    )
-                    .await
-                    {
-                        Ok((retry_response, _)) => {
-                            match process_llm_response(
-                                &retry_response,
-                                turn_processing_ctx.renderer,
-                                turn_processing_ctx.working_history.len(),
-                                turn_processing_ctx.session_stats.is_plan_mode(),
-                                allow_plan_interview,
-                                turn_config.request_user_input_enabled,
-                                Some(&validation_cache),
-                                Some(turn_processing_ctx.tool_registry),
-                            ) {
-                                Ok(result) => result,
-                                Err(retry_err) => {
-                                    // Both attempts failed; fall through to standard recovery
-                                    if let Ok(mut recovery) = ctx.error_recovery.write() {
-                                        recovery.record_error(
-                                            "llm_response_parse",
-                                            format!("{:#}", retry_err),
-                                            ErrorType::Other,
-                                        );
-                                    }
-                                    if maybe_recover_after_post_tool_llm_failure(
-                                        turn_processing_ctx.renderer,
-                                        turn_processing_ctx.working_history,
-                                        &retry_err,
-                                        step_count,
-                                        turn_history_start_len,
-                                        "process_llm_response_retry",
-                                    )? {
-                                        result = TurnLoopResult::Completed;
-                                        break;
-                                    }
-                                    return Err(retry_err);
-                                }
-                            }
-                        }
-                        Err(retry_err) => {
-                            // Retry request itself failed; fall through
-                            if let Ok(mut recovery) = ctx.error_recovery.write() {
-                                recovery.record_error(
-                                    "llm_response_parse_retry_request",
-                                    format!("{:#}", retry_err),
-                                    ErrorType::Other,
-                                );
-                            }
-                            if maybe_recover_after_post_tool_llm_failure(
-                                turn_processing_ctx.renderer,
-                                turn_processing_ctx.working_history,
-                                &retry_err,
-                                step_count,
-                                turn_history_start_len,
-                                "process_llm_response_retry",
-                            )? {
-                                result = TurnLoopResult::Completed;
-                                break;
-                            }
-                            return Err(retry_err);
-                        }
-                    }
-                } else {
-                    // Non-transient parse error — record and attempt standard recovery
-                    if let Ok(mut recovery) = ctx.error_recovery.write() {
-                        recovery.record_error(
-                            "llm_response_parse",
-                            format!("{:#}", err),
-                            ErrorType::Other,
-                        );
-                    }
-                    if maybe_recover_after_post_tool_llm_failure(
-                        turn_processing_ctx.renderer,
-                        turn_processing_ctx.working_history,
-                        &err,
-                        step_count,
-                        turn_history_start_len,
-                        "process_llm_response",
-                    )? {
-                        result = TurnLoopResult::Completed;
-                        break;
-                    }
-                    return Err(err);
                 }
+
+                let mut recovery = ctx.error_recovery.write().await;
+                recovery.record_error("llm_response_parse", format!("{:#}", err), ErrorType::Other);
+                if maybe_recover_after_post_tool_llm_failure(
+                    turn_processing_ctx.renderer,
+                    turn_processing_ctx.working_history,
+                    &err,
+                    step_count,
+                    turn_history_start_len,
+                    "process_llm_response",
+                )? {
+                    result = TurnLoopResult::Completed;
+                    break;
+                }
+                return Err(err);
             }
         };
         if turn_processing_ctx.session_stats.is_plan_mode()
@@ -619,13 +541,12 @@ pub async fn run_turn_loop(
             Ok(outcome) => outcome,
             Err(err) => {
                 // Record result-handler errors for diagnostics (mirrors llm_request recording)
-                if let Ok(mut recovery) = ctx.error_recovery.write() {
-                    recovery.record_error(
-                        "turn_result_handler",
-                        format!("{:#}", err),
-                        ErrorType::ToolExecution,
-                    );
-                }
+                let mut recovery = ctx.error_recovery.write().await;
+                recovery.record_error(
+                    "turn_result_handler",
+                    format!("{:#}", err),
+                    ErrorType::ToolExecution,
+                );
                 if maybe_recover_after_post_tool_llm_failure(
                     ctx.renderer,
                     &working_history,

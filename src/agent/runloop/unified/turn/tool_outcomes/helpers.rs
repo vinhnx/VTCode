@@ -117,12 +117,46 @@ pub(crate) fn build_step_exit_plan_mode_call_id(step_count: usize) -> String {
 
 /// Generate a tool signature key with predictable structure for loop tracking.
 pub(crate) fn signature_key_for(name: &str, args: &serde_json::Value) -> String {
-    let args_str = serde_json::to_string(args).unwrap_or_else(|_| "{}".to_string());
-    let mut key = String::with_capacity(name.len() + args_str.len() + 1);
-    key.push_str(name);
-    key.push(':');
-    key.push_str(&args_str);
-    key
+    // Keep keys compact on hot paths: hash bounded argument bytes instead of
+    // allocating full JSON payloads for large tool arguments.
+    let mut hash: u64 = 0xcbf29ce484222325;
+    let mut input_len = 0usize;
+
+    if serde_json::to_writer(HashingWriter::new(&mut hash, &mut input_len), args).is_err() {
+        for byte in b"{}" {
+            hash ^= u64::from(*byte);
+            hash = hash.wrapping_mul(0x100000001b3);
+            input_len = input_len.saturating_add(1);
+        }
+    }
+
+    format!("{name}:len{input_len}-fnv{hash:016x}")
+}
+
+struct HashingWriter<'a> {
+    hash: &'a mut u64,
+    input_len: &'a mut usize,
+}
+
+impl<'a> HashingWriter<'a> {
+    fn new(hash: &'a mut u64, input_len: &'a mut usize) -> Self {
+        Self { hash, input_len }
+    }
+}
+
+impl std::io::Write for HashingWriter<'_> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        for byte in buf {
+            *self.hash ^= u64::from(*byte);
+            *self.hash = self.hash.wrapping_mul(0x100000001b3);
+            *self.input_len = self.input_len.saturating_add(1);
+        }
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
 }
 
 pub(crate) fn resolve_max_tool_retries(

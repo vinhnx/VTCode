@@ -27,7 +27,9 @@ use super::helpers::push_tool_response;
 use crate::agent::runloop::unified::tool_routing::ToolPermissionFlow;
 #[path = "handlers_batch.rs"]
 mod handlers_batch;
-pub(crate) use handlers_batch::{execute_and_handle_tool_call, handle_tool_call_batch};
+pub(crate) use handlers_batch::{
+    ParsedToolCall, execute_and_handle_tool_call, handle_tool_call_batch_parsed,
+};
 
 /// Result of a tool call validation phase.
 pub(crate) enum ValidationResult {
@@ -962,7 +964,10 @@ pub(crate) async fn validate_tool_call<'a>(
             ctx.working_history,
             tool_call_id.to_string(),
             build_failure_error_content(
-                format!("Tool '{}' is temporarily disabled due to high failure rate (Circuit Breaker OPEN).", canonical_tool_name),
+                format!(
+                    "Tool '{}' is temporarily disabled due to high failure rate (Circuit Breaker OPEN).",
+                    canonical_tool_name
+                ),
                 "circuit_breaker",
             ),
         );
@@ -1324,7 +1329,7 @@ mod tests {
     use anyhow::anyhow;
     use serde_json::json;
     use std::collections::{BTreeMap, BTreeSet, HashMap};
-    use std::sync::{Arc, RwLock as StdRwLock};
+    use std::sync::Arc;
     use std::time::Instant;
     use tokio::sync::{Notify, RwLock};
     use vtcode_config::core::PromptCachingConfig;
@@ -1648,7 +1653,7 @@ mod tests {
         let telemetry = Arc::new(vtcode_core::core::telemetry::TelemetryManager::new());
         let autonomous_executor =
             Arc::new(vtcode_core::tools::autonomous_executor::AutonomousExecutor::new());
-        let error_recovery = Arc::new(StdRwLock::new(
+        let error_recovery = Arc::new(RwLock::new(
             vtcode_core::core::agent::error_recovery::ErrorRecoveryState::default(),
         ));
         let mut harness_state = HarnessTurnState::new(

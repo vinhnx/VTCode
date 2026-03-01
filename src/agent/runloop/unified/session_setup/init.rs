@@ -15,7 +15,6 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
-use std::sync::RwLock as StdRwLock;
 use std::time::Duration as StdDuration;
 use tokio::sync::RwLock;
 use tokio::time::Duration;
@@ -228,7 +227,7 @@ pub(crate) async fn initialize_session(
             }
             Arc::new(executor)
         },
-        error_recovery: Arc::new(StdRwLock::new(
+        error_recovery: Arc::new(RwLock::new(
             vtcode_core::core::agent::error_recovery::ErrorRecoveryState::new(),
         )),
     })

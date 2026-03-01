@@ -9,7 +9,6 @@ use crate::agent::runloop::welcome::SessionBootstrap;
 use crate::hooks::lifecycle::LifecycleHookEngine;
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::sync::RwLock as StdRwLock;
 use tokio::sync::{Notify, RwLock};
 use vtcode_core::acp::ToolPermissionCache;
 use vtcode_core::core::decision_tracker::DecisionTracker;
@@ -47,8 +46,7 @@ pub(crate) struct SessionState {
     pub validation_cache: Arc<vtcode_core::tools::validation_cache::ValidationCache>,
     pub telemetry: Arc<vtcode_core::core::telemetry::TelemetryManager>,
     pub autonomous_executor: Arc<vtcode_core::tools::autonomous_executor::AutonomousExecutor>,
-    pub error_recovery:
-        Arc<StdRwLock<vtcode_core::core::agent::error_recovery::ErrorRecoveryState>>,
+    pub error_recovery: Arc<RwLock<vtcode_core::core::agent::error_recovery::ErrorRecoveryState>>,
 }
 
 #[allow(dead_code)]
