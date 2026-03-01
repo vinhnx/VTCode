@@ -129,7 +129,10 @@ where
 pub fn get_config_dir() -> Option<PathBuf> {
     // Allow custom config directory via environment variable
     if let Ok(custom_dir) = std::env::var("VTCODE_CONFIG") {
-        return Some(PathBuf::from(custom_dir));
+        let trimmed = custom_dir.trim();
+        if !trimmed.is_empty() {
+            return Some(PathBuf::from(trimmed));
+        }
     }
 
     // Use XDG-compliant directories (e.g., ~/.config/vtcode on Linux)
@@ -152,7 +155,10 @@ pub fn get_config_dir() -> Option<PathBuf> {
 pub fn get_data_dir() -> Option<PathBuf> {
     // Allow custom data directory via environment variable
     if let Ok(custom_dir) = std::env::var("VTCODE_DATA") {
-        return Some(PathBuf::from(custom_dir));
+        let trimmed = custom_dir.trim();
+        if !trimmed.is_empty() {
+            return Some(PathBuf::from(trimmed));
+        }
     }
 
     // Use XDG-compliant directories (e.g., ~/.local/share/vtcode on Linux)
@@ -323,5 +329,89 @@ where
 
     fn telemetry_dir(&self) -> Option<PathBuf> {
         self.inner.telemetry_dir()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{get_config_dir, get_data_dir};
+    use serial_test::serial;
+    use std::ffi::OsString;
+    use std::path::PathBuf;
+
+    fn with_env_var<F>(key: &str, value: Option<&str>, f: F)
+    where
+        F: FnOnce(),
+    {
+        let previous = std::env::var_os(key);
+        unsafe {
+            if let Some(value) = value {
+                std::env::set_var(key, value);
+            } else {
+                std::env::remove_var(key);
+            }
+        }
+
+        f();
+
+        unsafe {
+            if let Some(previous) = previous {
+                std::env::set_var(key, previous);
+            } else {
+                std::env::remove_var(key);
+            }
+        }
+    }
+
+    #[test]
+    #[serial]
+    fn get_config_dir_uses_env_override() {
+        with_env_var("VTCODE_CONFIG", Some("/tmp/vtcode-config-test"), || {
+            assert_eq!(
+                get_config_dir(),
+                Some(PathBuf::from("/tmp/vtcode-config-test"))
+            );
+        });
+    }
+
+    #[test]
+    #[serial]
+    fn get_data_dir_uses_env_override() {
+        with_env_var("VTCODE_DATA", Some("/tmp/vtcode-data-test"), || {
+            assert_eq!(get_data_dir(), Some(PathBuf::from("/tmp/vtcode-data-test")));
+        });
+    }
+
+    #[test]
+    #[serial]
+    fn get_config_dir_ignores_blank_env_override() {
+        with_env_var("VTCODE_CONFIG", Some("   "), || {
+            let resolved = get_config_dir();
+            assert!(resolved.is_some());
+            assert_ne!(resolved, Some(PathBuf::from("   ")));
+            assert_ne!(resolved, Some(PathBuf::new()));
+        });
+    }
+
+    #[test]
+    #[serial]
+    fn get_data_dir_ignores_blank_env_override() {
+        with_env_var("VTCODE_DATA", Some("   "), || {
+            let resolved = get_data_dir();
+            assert!(resolved.is_some());
+            assert_ne!(resolved, Some(PathBuf::from("   ")));
+            assert_ne!(resolved, Some(PathBuf::new()));
+        });
+    }
+
+    #[test]
+    #[serial]
+    fn env_guard_restores_original_value() {
+        let key = "VTCODE_CONFIG";
+        let initial = std::env::var_os(key);
+        with_env_var(key, Some("/tmp/vtcode-config-test"), || {
+            assert_eq!(std::env::var_os(key), Some(OsString::from("/tmp/vtcode-config-test")));
+        });
+        assert_eq!(std::env::var_os(key), initial);
     }
 }
