@@ -560,9 +560,11 @@ mod tests {
 
     async fn create_test_guardian() -> (DotfileGuardian, tempfile::TempDir) {
         let dir = tempdir().unwrap();
-        let mut config = DotfileProtectionConfig::default();
-        config.audit_log_path = dir.path().join("audit.log").to_string_lossy().into_owned();
-        config.backup_directory = dir.path().join("backups").to_string_lossy().into_owned();
+        let config = DotfileProtectionConfig {
+            audit_log_path: dir.path().join("audit.log").to_string_lossy().into_owned(),
+            backup_directory: dir.path().join("backups").to_string_lossy().into_owned(),
+            ..Default::default()
+        };
 
         (DotfileGuardian::new(config).await.unwrap(), dir)
     }
@@ -649,10 +651,12 @@ mod tests {
     #[tokio::test]
     async fn test_disabled_protection() {
         let dir = tempdir().unwrap();
-        let mut config = DotfileProtectionConfig::default();
-        config.enabled = false;
-        config.audit_log_path = dir.path().join("audit.log").to_string_lossy().into_owned();
-        config.backup_directory = dir.path().join("backups").to_string_lossy().into_owned();
+        let config = DotfileProtectionConfig {
+            enabled: false,
+            audit_log_path: dir.path().join("audit.log").to_string_lossy().into_owned(),
+            backup_directory: dir.path().join("backups").to_string_lossy().into_owned(),
+            ..Default::default()
+        };
 
         let guardian = DotfileGuardian::new(config).await.unwrap();
 

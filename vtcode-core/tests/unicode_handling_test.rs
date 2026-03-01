@@ -143,9 +143,10 @@ mod tests {
                         let valid_up_to = error.valid_up_to();
                         if valid_up_to > 0 {
                             if let Ok(valid) = str::from_utf8(&buffer[..valid_up_to])
-                                && !valid.is_empty() {
-                                    result.push_str(valid);
-                                }
+                                && !valid.is_empty()
+                            {
+                                result.push_str(valid);
+                            }
                             buffer.drain(..valid_up_to);
                             continue;
                         }

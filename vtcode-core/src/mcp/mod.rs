@@ -276,6 +276,7 @@ mod tests {
     use crate::mcp::rmcp_client::{
         build_elicitation_validator, directory_to_file_uri, validate_elicitation_payload,
     };
+    use crate::mcp::utils::{clear_test_env_override, set_test_env_override};
     use serde_json::{Map, Value, json};
 
     // Re-export rmcp types for tests
@@ -285,38 +286,18 @@ mod tests {
 
     struct EnvGuard {
         key: &'static str,
-        original: Option<String>,
     }
 
     impl EnvGuard {
         fn set(key: &'static str, value: &str) -> Self {
-            let original = std::env::var(key).ok();
-            // SAFETY: Tests provide well-formed UTF-8 values and restore the
-            // original value (if any) before dropping the guard, matching the
-            // documented requirements for manipulating the process
-            // environment.
-            unsafe {
-                std::env::set_var(key, value);
-            }
-            Self { key, original }
+            set_test_env_override(key, Some(value));
+            Self { key }
         }
     }
 
     impl Drop for EnvGuard {
         fn drop(&mut self) {
-            if let Some(ref original) = self.original {
-                // SAFETY: Restores the previous UTF-8 environment value that
-                // existed when the guard was created.
-                unsafe {
-                    std::env::set_var(self.key, original);
-                }
-            } else {
-                // SAFETY: Removing the variable is safe because the guard is
-                // the only code path mutating it during the test's lifetime.
-                unsafe {
-                    std::env::remove_var(self.key);
-                }
-            }
+            clear_test_env_override(self.key);
         }
     }
 
@@ -384,8 +365,7 @@ mod tests {
             meta: None,
         };
 
-        let converted: InitializeRequestParams =
-            convert_to_rmcp(params.clone()).unwrap();
+        let converted: InitializeRequestParams = convert_to_rmcp(params.clone()).unwrap();
         // Verify the conversion succeeded by checking the name
         assert_eq!(converted.client_info.name, "vtcode");
         assert_eq!(converted.client_info.version, "1.0");

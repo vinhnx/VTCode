@@ -1039,11 +1039,10 @@ mod tests {
         );
 
         // Verify orphan was removed
-        let has_orphan = state.conversation_messages.iter().any(|msg| {
-            msg.tool_call_id
-                .as_ref()
-                .is_some_and(|id| id == "old_call")
-        });
+        let has_orphan = state
+            .conversation_messages
+            .iter()
+            .any(|msg| msg.tool_call_id.as_ref().is_some_and(|id| id == "old_call"));
         assert!(
             !has_orphan,
             "Orphan output should be removed during recovery"

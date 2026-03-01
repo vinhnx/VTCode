@@ -616,8 +616,10 @@ mod tests {
     #[tokio::test]
     async fn test_should_spool_large_value() {
         let temp = tempdir().unwrap();
-        let mut config = SpoolerConfig::default();
-        config.threshold_bytes = 100; // Low threshold for testing
+        let config = SpoolerConfig {
+            threshold_bytes: 100,
+            ..Default::default()
+        }; // Low threshold for testing
         let spooler = ToolOutputSpooler::with_config(temp.path(), config);
 
         let large_content = "x".repeat(200);
@@ -628,8 +630,10 @@ mod tests {
     #[tokio::test]
     async fn test_should_not_spool_when_disabled() {
         let temp = tempdir().unwrap();
-        let mut config = SpoolerConfig::default();
-        config.threshold_bytes = 100; // Low threshold for testing
+        let config = SpoolerConfig {
+            threshold_bytes: 100,
+            ..Default::default()
+        }; // Low threshold for testing
         let spooler = ToolOutputSpooler::with_config(temp.path(), config);
 
         let large_content = "x".repeat(200);
@@ -640,8 +644,10 @@ mod tests {
     #[tokio::test]
     async fn test_spool_output() {
         let temp = tempdir().unwrap();
-        let mut config = SpoolerConfig::default();
-        config.threshold_bytes = 50;
+        let config = SpoolerConfig {
+            threshold_bytes: 50,
+            ..Default::default()
+        };
         let spooler = ToolOutputSpooler::with_config(temp.path(), config);
 
         let content = "Line 1\nLine 2\nLine 3\n".repeat(10);
@@ -678,8 +684,10 @@ mod tests {
     #[tokio::test]
     async fn test_process_output_large() {
         let temp = tempdir().unwrap();
-        let mut config = SpoolerConfig::default();
-        config.threshold_bytes = 50;
+        let config = SpoolerConfig {
+            threshold_bytes: 50,
+            ..Default::default()
+        };
         let spooler = ToolOutputSpooler::with_config(temp.path(), config);
 
         let large_value = json!({"content": "x".repeat(200)});
@@ -706,8 +714,10 @@ mod tests {
     #[tokio::test]
     async fn test_read_file_spools_raw_content() {
         let temp = tempdir().unwrap();
-        let mut config = SpoolerConfig::default();
-        config.threshold_bytes = 50;
+        let config = SpoolerConfig {
+            threshold_bytes: 50,
+            ..Default::default()
+        };
         let spooler = ToolOutputSpooler::with_config(temp.path(), config);
 
         let file_content = "fn main() {\n    println!(\"Hello, world!\");\n}\n// More code here...";
@@ -741,8 +751,10 @@ mod tests {
     #[tokio::test]
     async fn test_run_pty_cmd_spools_raw_output() {
         let temp = tempdir().unwrap();
-        let mut config = SpoolerConfig::default();
-        config.threshold_bytes = 50;
+        let config = SpoolerConfig {
+            threshold_bytes: 50,
+            ..Default::default()
+        };
         let spooler = ToolOutputSpooler::with_config(temp.path(), config);
 
         let command_output = "   Compiling vtcode-core v0.68.1\n   Checking vtcode-core v0.68.1\n    Finished dev [unoptimized + debuginfo] target(s)";
@@ -774,8 +786,10 @@ mod tests {
     #[tokio::test]
     async fn test_pty_tools_spool_raw_output() {
         let temp = tempdir().unwrap();
-        let mut config = SpoolerConfig::default();
-        config.threshold_bytes = 50;
+        let config = SpoolerConfig {
+            threshold_bytes: 50,
+            ..Default::default()
+        };
         let spooler = ToolOutputSpooler::with_config(temp.path(), config);
 
         let command_output = "Some command output text\nwith multiple lines\nfor testing";
@@ -817,8 +831,10 @@ mod tests {
     #[tokio::test]
     async fn test_forced_pty_spool_preserves_follow_up_metadata() {
         let temp = tempdir().unwrap();
-        let mut config = SpoolerConfig::default();
-        config.threshold_bytes = 999_999; // ensure only force triggers
+        let config = SpoolerConfig {
+            threshold_bytes: 999_999,
+            ..Default::default()
+        }; // ensure only force triggers
         let spooler = ToolOutputSpooler::with_config(temp.path(), config);
 
         let output = "x".repeat(10_000);
@@ -864,8 +880,10 @@ mod tests {
     #[tokio::test]
     async fn test_unified_exec_spools_raw_output() {
         let temp = tempdir().unwrap();
-        let mut config = SpoolerConfig::default();
-        config.threshold_bytes = 50;
+        let config = SpoolerConfig {
+            threshold_bytes: 50,
+            ..Default::default()
+        };
         let spooler = ToolOutputSpooler::with_config(temp.path(), config);
 
         let command_output =
@@ -895,8 +913,10 @@ mod tests {
     #[tokio::test]
     async fn test_double_serialized_pty_output() {
         let temp = tempdir().unwrap();
-        let mut config = SpoolerConfig::default();
-        config.threshold_bytes = 50;
+        let config = SpoolerConfig {
+            threshold_bytes: 50,
+            ..Default::default()
+        };
         let spooler = ToolOutputSpooler::with_config(temp.path(), config);
 
         let command_output =
@@ -926,8 +946,10 @@ mod tests {
     #[tokio::test]
     async fn test_bash_and_shell_spool_raw_output() {
         let temp = tempdir().unwrap();
-        let mut config = SpoolerConfig::default();
-        config.threshold_bytes = 50;
+        let config = SpoolerConfig {
+            threshold_bytes: 50,
+            ..Default::default()
+        };
         let spooler = ToolOutputSpooler::with_config(temp.path(), config);
 
         let command_output = "total 32\ndrwxr-xr-x  10 user  staff   320 Jan  1 12:00 .";

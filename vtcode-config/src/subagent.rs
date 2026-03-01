@@ -450,7 +450,6 @@ pub fn discover_subagents_in_dir(
 #[cfg(test)]
 mod tests {
     use super::*;
-    
 
     #[test]
     fn test_parse_subagent_markdown() {

@@ -306,11 +306,12 @@ async fn pty_terminate_kills_background_children_in_same_process_group() -> Resu
     for _ in 0..20 {
         if let Ok(Some(output)) = manager.read_session_output(&session_id, false)
             && let Some(line) = output.lines().find(|l| l.contains("bg_pid:"))
-                && let Some(pid_str) = line.split(':').next_back()
-                    && let Ok(pid) = pid_str.trim().parse::<i32>() {
-                        bg_pid = Some(pid);
-                        break;
-                    }
+            && let Some(pid_str) = line.split(':').next_back()
+            && let Ok(pid) = pid_str.trim().parse::<i32>()
+        {
+            bg_pid = Some(pid);
+            break;
+        }
         std::thread::sleep(Duration::from_millis(100));
     }
 

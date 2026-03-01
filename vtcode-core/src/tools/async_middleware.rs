@@ -477,10 +477,10 @@ mod tests {
     use std::future::Future;
     use std::pin::Pin;
 
-    fn make_executor(
-        output: &'static str,
-    ) -> Box<dyn Fn(ToolRequest) -> Pin<Box<dyn Future<Output = ToolResult> + Send>> + Send + Sync>
-    {
+    type BoxedToolFuture = Pin<Box<dyn Future<Output = ToolResult> + Send>>;
+    type BoxedExecutor = Box<dyn Fn(ToolRequest) -> BoxedToolFuture + Send + Sync>;
+
+    fn make_executor(output: &'static str) -> BoxedExecutor {
         Box::new(move |_req: ToolRequest| {
             Box::pin(async move {
                 ToolResult {

@@ -89,6 +89,11 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: Supported Models, Configuration, How It Works, Token Budget, Interleaved Thinking
   - **User Questions**: "What can you tell me about Extended Thinking for Anthropic Models?", "How does Supported Models work?", "How does Configuration work?"
 
+- **File**: `docs/development/fuzzing.md`
+  - **Content**: Fuzzing Guide
+  - **Topics**: Scope, Basic Commands, Corpus and Artifacts, Reproducing a Crash, Coverage (Optional)
+  - **User Questions**: "What can you tell me about Fuzzing Guide?", "How does Scope work?", "How does Basic Commands work?"
+
 - **File**: `docs/development/GIT_CLIFF_QUICK_REF.md`
   - **Content**: Git-cliff Quick Reference
   - **Topics**: Common Commands, Release Workflow, Configuration, Commit Types, Troubleshooting

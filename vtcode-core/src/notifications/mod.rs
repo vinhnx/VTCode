@@ -589,8 +589,10 @@ mod tests {
         assert!(config.terminal_notifications_enabled);
 
         // Test with notifications disabled
-        let mut config = NotificationConfig::default();
-        config.terminal_notifications_enabled = false;
+        let config = NotificationConfig {
+            terminal_notifications_enabled: false,
+            ..Default::default()
+        };
         let manager = NotificationManager::with_config(config);
         let event = NotificationEvent::CommandFailure {
             command: "test".to_string(),

@@ -656,11 +656,13 @@ mod tests {
 
     #[test]
     fn timeout_policy_derives_from_config() {
-        let mut config = TimeoutsConfig::default();
-        config.default_ceiling_seconds = 0;
-        config.pty_ceiling_seconds = 600;
-        config.mcp_ceiling_seconds = 90;
-        config.warning_threshold_percent = 75;
+        let config = TimeoutsConfig {
+            default_ceiling_seconds: 0,
+            pty_ceiling_seconds: 600,
+            mcp_ceiling_seconds: 90,
+            warning_threshold_percent: 75,
+            ..Default::default()
+        };
 
         let policy = ToolTimeoutPolicy::from_config(&config);
         assert_eq!(policy.ceiling_for(ToolTimeoutCategory::Default), None);

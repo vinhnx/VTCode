@@ -351,7 +351,8 @@ impl SimpleIndexer {
         }
 
         entries.sort_unstable_by(|left, right| left.path.cmp(&right.path));
-        self.storage.persist_batch(self.config.index_dir(), &entries)?;
+        self.storage
+            .persist_batch(self.config.index_dir(), &entries)?;
 
         Ok(())
     }

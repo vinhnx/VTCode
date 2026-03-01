@@ -4,8 +4,8 @@
 //! tool calls with observability and error recovery.
 
 use async_trait::async_trait;
-use std::sync::Arc;
 use std::ops::Add;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use vtcode_core::tools::{ToolCallRequest, ToolCallResponse};
 
@@ -54,7 +54,7 @@ impl MiddlewareChain {
     }
 
     /// Add middleware to chain.
-    pub fn add(mut self, mw: Arc<dyn Middleware>) -> Self {
+    pub fn push(mut self, mw: Arc<dyn Middleware>) -> Self {
         self.middlewares.push(mw);
         self
     }
@@ -89,7 +89,7 @@ impl Add<Arc<dyn Middleware>> for MiddlewareChain {
     type Output = Self;
 
     fn add(self, rhs: Arc<dyn Middleware>) -> Self::Output {
-        MiddlewareChain::add(self, rhs)
+        self.push(rhs)
     }
 }
 
@@ -218,8 +218,8 @@ mod tests {
     #[tokio::test]
     async fn test_chain_execution() {
         let chain = MiddlewareChain::new()
-            .add(LoggingMiddleware::new("test"))
-            .add(MetricsMiddleware::new());
+            .push(LoggingMiddleware::new("test"))
+            .push(MetricsMiddleware::new());
 
         let req = ToolRequest {
             id: "req-1".to_string(),
@@ -245,7 +245,7 @@ mod tests {
     #[tokio::test]
     async fn test_metrics_tracking() {
         let metrics = MetricsMiddleware::new();
-        let chain = MiddlewareChain::new().add(metrics.clone());
+        let chain = MiddlewareChain::new().push(metrics.clone());
 
         let req = ToolRequest {
             id: "req-2".to_string(),

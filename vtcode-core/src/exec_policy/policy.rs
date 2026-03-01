@@ -219,8 +219,10 @@ mod tests {
             .add_prefix_rule(&["rm".to_string()], Decision::Forbidden)
             .unwrap();
 
-        let commands = [vec!["echo".to_string(), "hello".to_string()],
-            vec!["rm".to_string(), "-rf".to_string()]];
+        let commands = [
+            vec!["echo".to_string(), "hello".to_string()],
+            vec!["rm".to_string(), "-rf".to_string()],
+        ];
 
         let evaluation = policy.check_multiple(commands.iter(), &|_| Decision::Prompt);
 
