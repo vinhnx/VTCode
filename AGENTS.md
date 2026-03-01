@@ -223,40 +223,43 @@ let config = Config::load("vtcode.toml")?;
 - `docs/development/testing.md`: Testing strategy and infrastructure
 - All docs should be in a respective subdirectory under `docs/` for organization and discoverability.
 
-## Testing Infrastructure
+## Testing
 
 ### Test Organization
 
-- **Unit tests**: Inline with source in `#[cfg(test)]` modules
-- **Integration tests**: `tests/` directory (20+ test files)
+- **Unit tests**: Inline `#[cfg(test)]` modules
+- **Integration tests**: `tests/` directory
 - **Benchmarks**: `benches/` directory
-- **Mock data**: `tests/mock_data.rs` for realistic scenarios
+- **Snapshots**: [`insta`](https://insta.rs) for golden-file testing
 
-### Build & Test Commands
+### Commands
 
 ```bash
 # Build
-cargo build                         # Full build
-cargo check                         # Fast compile check (no codegen)
+cargo build          # Full build
+cargo check          # Fast compile check
 
-# Testing (preferred: cargo-nextest is 3-5x faster)
-cargo nextest run                   # All tests
-cargo nextest run -p vtcode-core    # Single package
-cargo t                             # Alias for nextest run
-cargo tq                            # Quick profile (no retries)
-cargo ts                            # Fallback if nextest unavailable
+# Test (nextest is 3-5x faster)
+cargo nextest run              # All tests
+cargo nextest run -p vtcode-core  # Single package
+cargo nextest run --test integration_tests  # Integration only
+cargo nextest run -- --nocapture  # Show output
 
-# Integration tests
-cargo nextest run --test integration_tests
+# Quick profiles
+cargo t   # Alias: nextest run
+cargo tq  # Quick (no retries)
+cargo ts  # Fallback if nextest unavailable
 
 # Benchmarks
 cargo bench
 cargo bench -- search_benchmark
 
-# With output
-cargo nextest run -- --nocapture
+# Snapshot testing (insta)
+cargo insta test    # Run with snapshot review
+cargo insta review  # Interactive accept/reject
+cargo insta accept  # Accept all pending
 
-# Quality gate (run before committing)
+# Quality gate (before commit)
 cargo clippy && cargo fmt --check && cargo check && cargo nextest run
 ```
 
@@ -283,30 +286,24 @@ cargo clippy && cargo fmt --check && cargo check && cargo nextest run
 
 ### Common Pitfalls
 
-1. **Don't hardcode model names** - they change frequently, use constants
+1. **Don't hardcode model names** - use `docs/models.json` or constants
 2. **Don't use `unwrap()`** - use `.with_context()` for error context
 3. **Don't create .md files in root** - they belong in `./docs/`
-4. **Don't modify constants directly** - consider if it should be in `vtcode.toml` instead
-5. **Don't ignore Clippy warnings** - fix them or explain why in code comments
-6. **Don't repeat yourself** - extract common logic into functions or modules
-7. **Don't assume workspace paths** - always validate and sanitize file paths
-8. **Don't skip tests** - add tests for new features and bug fixes
-9. **Don't overcomplicate** - prefer simple, clear solutions over clever ones
-10. **Don't forget to run quality checks** - always run `cargo clippy`, `cargo fmt`, `cargo check`, and `cargo nextest` before committing
-11. **Don't assume `RwLock` is faster** - for tiny cache/read paths, `Mutex` can outperform `RwLock` due to reader-counter atomic contention; benchmark under realistic concurrency before choosing
+4. **Don't modify constants directly** - use `vtcode.toml` when possible
+5. **Don't ignore Clippy warnings** - fix or explain in comments
+6. **Don't assume workspace paths** - validate and sanitize
+7. **Don't skip quality checks** - run before committing
+8. **Don't assume `RwLock` is faster** - benchmark; `Mutex` often wins for small paths
 
 ## Agent Execution Guidelines
 
 ### Task Execution Philosophy
 
-When working on VT Code features:
-
-- **Complete autonomously**: Resolve tasks fully before yielding back to user—do not ask for confirmation on intermediate steps
-- **Root cause fixes**: Fix problems at their source rather than applying surface-level patches
-- **Verification responsibility**: Run `cargo check`, `cargo nexttest`, `cargo clippy` after making changes—don't ask the user to run these
-- **Precision over ambition**: In existing codebases, make surgical changes that respect surrounding code style; avoid unnecessary refactoring
-- **Avoid unrelated fixes**: Do not fix bugs or test failures outside your task scope (you may mention them in final output)
-- **Keep working**: Do not terminate or ask permission to continue on valid tasks. Proactively resolve issues within constraints.
+- **Complete autonomously**: Resolve fully before yielding; no intermediate confirmations
+- **Root cause fixes**: Fix at the source, not surface-level
+- **Verify yourself**: Run `cargo check`, `cargo nextest`, `cargo clippy` after changes
+- **Precision over ambition**: Surgical changes respecting existing style
+- **Stay in scope**: Don't fix unrelated issues (mention in final message if needed)
 
 ### Responsiveness & Momentum
 
@@ -406,37 +403,30 @@ High-quality plan example:
 - Never use `git commit` or `git push` unless explicitly requested
 - Use `git log` and `git blame` for code history when additional context is needed
 
-**Testing and Validation**:
+**Testing**:
 
-- Run specific tests first (`cargo nexttest function_name`), then broaden to related suites
-- When test infrastructure exists, use it proactively; don't ask the user to run tests
-- For non-interactive modes (approval never), run tests and validation yourself before yielding
-- For interactive modes, suggest what to validate next rather than running lengthy test suites proactively
-
-### Validation & Testing
-
-- **Test strategy**: Start specific to code you changed, then broaden to related tests
-- **When test infrastructure exists**: Use it proactively to verify your work
-- **When no tests exist**: Don't add tests to codebases with no test patterns
-- **Formatting**: If codebase has a formatter, use it; if issues persist after 3 iterations, present the correct solution and note formatting in final message
-- **Linting**: Run `cargo clippy` after changes; address warnings in scope of your task
+- Run specific tests first (`cargo nextest run <filter>`), then broaden
+- Use test infrastructure proactively; don't ask user to run tests
+- Non-interactive mode: run tests yourself before yielding
+- Interactive mode: suggest what to validate next
+- No existing tests? Don't add tests to codebases without test patterns
+- Run `cargo clippy` after changes; fix warnings in scope
 
 ## Development Workflow
 
 ### Before Committing
 
 ```bash
-# Run all quality checks
-cargo clippy && cargo fmt --check && cargo check && cargo nexttest
+cargo clippy && cargo fmt --check && cargo check && cargo nextest run
 ```
 
-### Adding New Features
+### Adding Features
 
-1. Read existing code patterns first
-2. Use configuration from `vtcode.toml` when possible
+1. Read existing patterns
+2. Use `vtcode.toml` config when possible
 3. Add constants to `vtcode-core/src/config/constants.rs` if needed
 4. Write tests (unit + integration)
-5. Update documentation in `./docs/` if needed
+5. Update docs in `./docs/`
 
 ## Self-Documentation
 
