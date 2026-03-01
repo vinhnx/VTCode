@@ -148,7 +148,9 @@ bold_is_bright = false
 safe_colors_only = false
 color_scheme_mode = "auto"
 show_turn_timer = true
-# Effective in debug/development builds only
+# Show warning/error/fatal diagnostic lines in the TUI transcript and log panel.
+# Also controls whether ERROR-level tracing logs appear in the TUI session log.
+# Errors are always captured in the session archive JSON regardless of this setting.
 show_diagnostics_in_transcript = true
 screen_reader_mode = false
 reduce_motion_mode = false
@@ -305,10 +307,7 @@ git_diff = "allow"
 [security.gatekeeper]
 warn_on_quarantine = true
 auto_clear_quarantine = false
-auto_clear_paths = [
-    ".vtcode/bin",
-    "~/.vtcode/bin",
-]
+auto_clear_paths = [".vtcode/bin", "~/.vtcode/bin"]
 
 [sandbox]
 enabled = false
@@ -722,11 +721,7 @@ cache_size = 100
 [automation.full_auto]
 enabled = true
 max_turns = 30
-allowed_tools = [
-    "read_file",
-    "list_files",
-    "grep_file",
-]
+allowed_tools = ["read_file", "list_files", "grep_file"]
 require_profile_ack = true
 
 [optimization.llm_client]
@@ -750,12 +745,7 @@ max_entries = 128
 enabled = true
 ttl_ms = 2000
 max_entries = 128
-allowlist = [
-    "rg",
-    "ls",
-    "git status",
-    "git diff --stat",
-]
+allowlist = ["rg", "ls", "git status", "git diff --stat"]
 
 [prompt_cache]
 enabled = false
@@ -1057,3 +1047,20 @@ require_secondary_auth_for_whitelist = true
 #     ]
 #   }
 # ]
+
+# Debug and tracing configuration
+# ERROR-level logs are always captured in the session archive JSON for post-mortem debugging.
+# To also display them in the TUI, enable ui.show_diagnostics_in_transcript above.
+[debug]
+# Enable structured logging for development and troubleshooting
+enable_tracing = true
+# Trace level (error, warn, info, debug, trace)
+trace_level = "info"
+# List of tracing targets to enable (e.g., "vtcode_core::agent", "vtcode_core::tools")
+trace_targets = []
+# Directory for debug logs (default: session archive directory ~/.vtcode/sessions; honors VT_SESSION_DIR)
+# debug_log_dir = "~/.vtcode/sessions"
+# Maximum size of debug logs before rotating (in MB)
+max_debug_log_size_mb = 50
+# Maximum age of debug logs to keep (in days)
+max_debug_log_age_days = 7

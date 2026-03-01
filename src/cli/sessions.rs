@@ -297,6 +297,7 @@ mod tests {
                 max_context_tokens: Some(128),
                 loaded_skills: Vec::new(),
             }),
+            error_logs: Vec::new(),
         };
 
         let listing = SessionListing {

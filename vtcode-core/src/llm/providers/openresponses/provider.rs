@@ -595,6 +595,23 @@ impl LLMProvider for OpenResponsesProvider {
             }
         }
 
+        // Fallback: Extract reasoning from content tags if not provided natively
+        // Handles <think></think>, <thought></thought>, <reasoning></reasoning>, <analysis></analysis>
+        let (final_reasoning, final_content) = if reasoning.is_none() && !content.is_empty() {
+            let (reasoning_parts, cleaned_content) =
+                crate::llm::utils::extract_reasoning_content(&content);
+            if reasoning_parts.is_empty() {
+                (None, Some(content))
+            } else {
+                (
+                    Some(reasoning_parts.join("\n\n")),
+                    cleaned_content.or(Some(content)),
+                )
+            }
+        } else {
+            (reasoning, Some(content))
+        };
+
         let finish_reason = match json.get("status").and_then(|s| s.as_str()) {
             Some("completed") => FinishReason::Stop,
             Some("incomplete") => FinishReason::Length,
@@ -602,11 +619,7 @@ impl LLMProvider for OpenResponsesProvider {
         };
 
         Ok(LLMResponse {
-            content: if content.is_empty() {
-                None
-            } else {
-                Some(content)
-            },
+            content: final_content.filter(|c| !c.is_empty()),
             tool_calls: if tool_calls.is_empty() {
                 None
             } else {
@@ -615,7 +628,7 @@ impl LLMProvider for OpenResponsesProvider {
             model,
             usage: None,
             finish_reason,
-            reasoning,
+            reasoning: final_reasoning,
             reasoning_details: None,
             tool_references: Vec::new(),
             request_id: json
@@ -686,6 +699,7 @@ impl LLMProvider for OpenResponsesProvider {
                             match event_type {
                                 "response.output_text.delta" => {
                                     if let Some(delta) = event.get("delta").and_then(|v| v.as_str()) {
+                                        // Use aggregator's sanitizer to extract reasoning tags from content
                                         for ev in aggregator.handle_content(delta) {
                                             yield ev;
                                         }
@@ -702,6 +716,19 @@ impl LLMProvider for OpenResponsesProvider {
                                     }
                                 }
                                 "response.reasoning.delta" => {
+                                    // Legacy/simple reasoning event
+                                    if let Some(delta) = event.get("delta").and_then(|v| v.as_str()) {
+                                        yield LLMStreamEvent::Reasoning { delta: delta.to_string() };
+                                    }
+                                }
+                                "response.reasoning_content.delta" => {
+                                    // Raw reasoning traces (preferred)
+                                    if let Some(delta) = event.get("delta").and_then(|v| v.as_str()) {
+                                        yield LLMStreamEvent::Reasoning { delta: delta.to_string() };
+                                    }
+                                }
+                                "response.reasoning_summary_text.delta" => {
+                                    // Summary reasoning (fallback when raw not available)
                                     if let Some(delta) = event.get("delta").and_then(|v| v.as_str()) {
                                         yield LLMStreamEvent::Reasoning { delta: delta.to_string() };
                                     }

@@ -24,10 +24,6 @@ fn infer_pty_completion(payload: &Value, session_id: Option<&str>, exit_code: Op
         .unwrap_or_else(|| exit_code.is_some() || session_id.is_none())
 }
 
-fn should_render_command_prompt(is_pty_session: bool, command: &str) -> bool {
-    is_pty_session && !command.trim().is_empty() && command != "unknown"
-}
-
 pub(crate) async fn render_terminal_command_panel(
     renderer: &mut AnsiRenderer,
     payload: &Value,
@@ -86,17 +82,6 @@ pub(crate) async fn render_terminal_command_panel(
             .unwrap_or("unknown")
             .to_string()
     };
-    let working_dir = unwrapped_payload
-        .get("working_directory")
-        .and_then(Value::as_str);
-    let rows = unwrapped_payload
-        .get("rows")
-        .and_then(Value::as_u64)
-        .unwrap_or(24);
-    let cols = unwrapped_payload
-        .get("cols")
-        .and_then(Value::as_u64)
-        .unwrap_or(80);
 
     // If there's an 'output' field, this is likely a PTY session result
     let is_pty_session = session_id.is_some()
@@ -114,55 +99,12 @@ pub(crate) async fn render_terminal_command_panel(
         .unwrap_or(ToolOutputMode::Compact);
     let tail_limit = resolve_stdout_tail_limit(vt_config);
 
-    // Display session status header if this is a PTY session
-    let mut command_prompt_rendered = false;
-    if is_pty_session {
-        let status_badge = if !is_completed {
-            "▶ running".to_string()
-        } else {
-            "✓ completed".to_string()
-        };
-
-        // Compact header: status · command · session info
-        let header = if working_dir.is_some() {
-            format!(
-                "{} · {} · {}x{}",
-                status_badge,
-                if command.len() > 40 {
-                    format!("{}…", &command[..37])
-                } else {
-                    command.clone()
-                },
-                cols,
-                rows
-            )
-        } else {
-            format!(
-                "{} · {}",
-                status_badge,
-                if command.len() > 50 {
-                    format!("{}…", &command[..47])
-                } else {
-                    command.clone()
-                }
-            )
-        };
-
-        renderer.line(MessageStyle::Tool, &header)?;
-
-        if should_render_command_prompt(is_pty_session, &command) {
-            renderer.line(MessageStyle::ToolDetail, &format!("$ {}", command))?;
-            command_prompt_rendered = true;
-        }
-    }
-
-    // Render stdin if available (user input to the terminal) - simulating command prompt
+    // Render stdin if available and different from command (avoid repeating the "• Ran" header)
     if let Some(stdin) = unwrapped_payload.get("stdin").and_then(Value::as_str)
         && !stdin.trim().is_empty()
     {
         let stdin_trimmed = stdin.trim();
-        if !command_prompt_rendered || stdin_trimmed != command.trim() {
-            // Show the input as if it came from a command prompt
+        if stdin_trimmed != command.trim() {
             let prompt = format!("$ {}", stdin_trimmed);
             renderer.line(MessageStyle::ToolDetail, &prompt)?;
         }
@@ -229,7 +171,7 @@ pub(crate) async fn render_terminal_command_panel(
             Some(tools::RUN_PTY_CMD),
             git_styles,
             ls_styles,
-            MessageStyle::ToolOutput, // Dimmed, non-italic style for tool output
+            MessageStyle::ToolOutput, // Tool output (dimmed in TUI reflow)
             allow_ansi,
             disable_spool,
             vt_config,
@@ -302,7 +244,7 @@ pub(crate) async fn render_terminal_command_panel(
 
 #[cfg(test)]
 mod tests {
-    use super::{infer_pty_completion, resolve_pty_session_id, should_render_command_prompt};
+    use super::{infer_pty_completion, resolve_pty_session_id};
     use serde_json::json;
 
     #[test]
@@ -327,12 +269,5 @@ mod tests {
     fn infers_completed_state_from_exit_code() {
         let payload = json!({ "id": "run-1", "exit_code": 0 });
         assert!(infer_pty_completion(&payload, Some("run-1"), Some(0)));
-    }
-
-    #[test]
-    fn command_prompt_only_for_known_pty_command() {
-        assert!(should_render_command_prompt(true, "cargo check"));
-        assert!(!should_render_command_prompt(false, "cargo check"));
-        assert!(!should_render_command_prompt(true, "unknown"));
     }
 }

@@ -16,7 +16,7 @@ use futures::StreamExt;
 use reqwest::Client as HttpClient;
 use serde_json::Value;
 
-use super::common::{override_base_url, resolve_model, serialize_message_content_openai};
+use super::common::{override_base_url, resolve_model, serialize_message_content_openai_for_role};
 use super::error_handling::{format_network_error, format_parse_error};
 
 pub struct MinimaxProvider {
@@ -104,41 +104,45 @@ impl MinimaxProvider {
         for message in &request.messages {
             let mut message_obj = serde_json::json!({
                 "role": message.role.as_generic_str(),
-                "content": serialize_message_content_openai(&message.content)
+                "content": serialize_message_content_openai_for_role(&message.role, &message.content)
             });
 
-            // Handle assistant messages with tool calls
-            if message.role == MessageRole::Assistant {
-                if let Some(tool_calls) = &message.tool_calls {
-                    if !tool_calls.is_empty() {
-                        let tool_calls_json: Vec<Value> = tool_calls
-                            .iter()
-                            .filter_map(|tc| {
-                                tc.function.as_ref().map(|func| {
-                                    serde_json::json!({
-                                        "id": tc.id,
-                                        "type": tc.call_type,
-                                        "function": {
-                                            "name": func.name,
-                                            "arguments": func.arguments
-                                        }
-                                    })
-                                })
+            if message.role == MessageRole::Assistant
+                && let Some(tool_calls) = &message.tool_calls
+                && !tool_calls.is_empty()
+            {
+                let tool_calls_json: Vec<Value> = tool_calls
+                    .iter()
+                    .filter_map(|tc| {
+                        tc.function.as_ref().map(|func| {
+                            serde_json::json!({
+                                "id": tc.id,
+                                "type": tc.call_type,
+                                "function": {
+                                    "name": func.name,
+                                    "arguments": func.arguments
+                                }
                             })
-                            .collect();
+                        })
+                    })
+                    .collect();
 
-                        if !tool_calls_json.is_empty() {
-                            message_obj["tool_calls"] = Value::Array(tool_calls_json);
-                        }
-                    }
+                if !tool_calls_json.is_empty() {
+                    message_obj["tool_calls"] = Value::Array(tool_calls_json);
                 }
             }
 
-            // Handle tool result messages
             if message.role == MessageRole::Tool {
-                if let Some(tool_call_id) = &message.tool_call_id {
-                    message_obj["tool_call_id"] = Value::String(tool_call_id.clone());
-                }
+                let tool_call_id =
+                    message
+                        .tool_call_id
+                        .as_ref()
+                        .ok_or_else(|| LLMError::InvalidRequest {
+                            message: "Tool response message missing required tool_call_id"
+                                .to_string(),
+                            metadata: None,
+                        })?;
+                message_obj["tool_call_id"] = Value::String(tool_call_id.clone());
             }
 
             messages.push(message_obj);
@@ -150,7 +154,6 @@ impl MinimaxProvider {
             "stream": stream
         });
 
-        // Add tools if present
         if let Some(tools) = &request.tools {
             let tools_json: Vec<Value> = tools
                 .iter()
@@ -173,16 +176,14 @@ impl MinimaxProvider {
             }
         }
 
-        // Add tool_choice if present
         if let Some(tool_choice) = &request.tool_choice {
             payload["tool_choice"] = tool_choice.to_provider_format("openai");
         }
 
-        // Add parallel_tool_calls if present and not already set
-        if let Some(parallel) = request.parallel_tool_calls {
-            if payload.get("parallel_tool_calls").is_none() {
-                payload["parallel_tool_calls"] = Value::Bool(parallel);
-            }
+        if let Some(parallel) = request.parallel_tool_calls
+            && payload.get("parallel_tool_calls").is_none()
+        {
+            payload["parallel_tool_calls"] = Value::Bool(parallel);
         }
 
         Ok(payload)
@@ -327,6 +328,15 @@ impl LLMProvider for MinimaxProvider {
         if !response.status().is_success() {
             let status = response.status();
             let body = response.text().await.unwrap_or_default();
+            tracing::warn!(
+                provider = "minimax",
+                model = %request.model,
+                status = %status,
+                has_tools = request.tools.as_ref().is_some_and(|t| !t.is_empty()),
+                message_count = request.messages.len(),
+                body = %body,
+                "MiniMax request failed"
+            );
             let formatted_error =
                 error_display::format_llm_error("MiniMax", &format!("HTTP {}: {}", status, body));
             return Err(LLMError::Provider {
@@ -442,6 +452,15 @@ impl LLMProvider for MinimaxProvider {
         if !response.status().is_success() {
             let status = response.status();
             let body = response.text().await.unwrap_or_default();
+            tracing::warn!(
+                provider = "minimax",
+                model = %request.model,
+                status = %status,
+                has_tools = request.tools.as_ref().is_some_and(|t| !t.is_empty()),
+                message_count = request.messages.len(),
+                body = %body,
+                "MiniMax stream request failed"
+            );
             let formatted_error =
                 error_display::format_llm_error("MiniMax", &format!("HTTP {}: {}", status, body));
             return Err(LLMError::Provider {
@@ -469,30 +488,28 @@ impl LLMProvider for MinimaxProvider {
                             continue;
                         }
 
-                        if let Ok(payload) = serde_json::from_str::<Value>(trimmed) {
-                            if let Some(choices) = payload.get("choices").and_then(|v| v.as_array()) {
-                                if let Some(choice) = choices.first() {
-                                    if let Some(delta) = choice.get("delta") {
-                                        // Handle content through the aggregator's sanitizer to extract reasoning
-                                        if let Some(content) = delta.get("content").and_then(|v| v.as_str()) {
-                                            for ev in aggregator.handle_content(content) {
-                                                yield ev;
-                                            }
-                                        }
-
-                                        // Handle tool calls
-                                        if let Some(tool_calls) = delta.get("tool_calls").and_then(|v| v.as_array()) {
-                                            aggregator.handle_tool_calls(tool_calls);
-                                        }
-
-                                        // Handle finish reason
-                                        if let Some(finish_reason) = choice.get("finish_reason").and_then(|v| v.as_str()) {
-                                            if finish_reason == "tool_calls" {
-                                                aggregator.set_finish_reason(FinishReason::ToolCalls);
-                                            }
-                                        }
-                                    }
+                        if let Ok(payload) = serde_json::from_str::<Value>(trimmed)
+                            && let Some(choices) = payload.get("choices").and_then(|v| v.as_array())
+                            && let Some(choice) = choices.first()
+                            && let Some(delta) = choice.get("delta")
+                        {
+                            // Handle content through the aggregator's sanitizer to extract reasoning
+                            if let Some(content) = delta.get("content").and_then(|v| v.as_str()) {
+                                for ev in aggregator.handle_content(content) {
+                                    yield ev;
                                 }
+                            }
+
+                            // Handle tool calls
+                            if let Some(tool_calls) = delta.get("tool_calls").and_then(|v| v.as_array()) {
+                                aggregator.handle_tool_calls(tool_calls);
+                            }
+
+                            // Handle finish reason
+                            if let Some(finish_reason) = choice.get("finish_reason").and_then(|v| v.as_str())
+                                && finish_reason == "tool_calls"
+                            {
+                                aggregator.set_finish_reason(FinishReason::ToolCalls);
                             }
                         }
                     }

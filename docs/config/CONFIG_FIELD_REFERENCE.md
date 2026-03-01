@@ -151,7 +151,7 @@ python3 scripts/generate_config_field_reference.py
 | `context.max_context_tokens` | `integer` | no | `90000` | Maximum tokens to keep in context (affects model cost and performance) Higher values preserve more context but cost more and may hit token limits This field is maintained for compatibility but no longer used for trimming |
 | `context.preserve_recent_turns` | `integer` | no | `10` | Preserve recent turns during context management This field is maintained for compatibility but no longer used for trimming |
 | `context.trim_to_percent` | `integer` | no | `60` | Percentage to trim context to when it gets too large This field is maintained for compatibility but no longer used for trimming |
-| `debug.debug_log_dir` | `null \| string` | no | `null` | Directory for debug logs |
+| `debug.debug_log_dir` | `null \| string` | no | `null` | Directory for debug logs (defaults to session archive directory `~/.vtcode/sessions`, or `VT_SESSION_DIR` when set) |
 | `debug.enable_tracing` | `boolean` | no | `false` | Enable structured logging for development and troubleshooting |
 | `debug.max_debug_log_age_days` | `integer` | no | `7` | Maximum age of debug logs to keep (in days) |
 | `debug.max_debug_log_size_mb` | `integer` | no | `50` | Maximum size of debug logs before rotating (in MB) |
@@ -518,7 +518,7 @@ python3 scripts/generate_config_field_reference.py
 | `ui.reduce_motion_mode` | `boolean` | no | `false` | Reduce motion mode: minimizes shimmer/flashing animations. Can also be enabled via `VTCODE_REDUCE_MOTION=1`. |
 | `ui.reduce_motion_keep_progress_animation` | `boolean` | no | `false` | Keep animated progress indicators while `ui.reduce_motion_mode` is enabled. |
 | `ui.screen_reader_mode` | `boolean` | no | `false` | Screen reader mode: disables animations, uses plain text indicators, and optimizes output for assistive technology compatibility. Can also be enabled via `VTCODE_SCREEN_READER=1`. |
-| `ui.show_diagnostics_in_transcript` | `boolean` | no | `false` | Show warning/error/fatal diagnostic lines in the TUI transcript. Disable to keep diagnostics only in tracing logs. Effective in debug/development builds only. |
+| `ui.show_diagnostics_in_transcript` | `boolean` | no | `false` | Show warning/error/fatal diagnostic lines in the TUI transcript and log panel. Also controls whether ERROR-level tracing logs appear in the TUI session log. Errors are always captured in the session archive JSON regardless of this setting. |
 | `ui.safe_colors_only` | `boolean` | no | `false` | Restrict color palette to the 11 "safe" ANSI colors portable across common themes. Safe colors: red, green, yellow, blue, magenta, cyan + brred, brgreen, brmagenta, brcyan Problematic colors avoided: brblack (invisible in Solarized Dark), bryellow (light themes), white/brwhite (light themes), brblue (Basic Dark). See: https://blog.xoria.org/terminal-colors/ |
 | `ui.show_sidebar` | `boolean` | no | `true` | Show the right sidebar (queue, context, tools) |
 | `ui.status_line.command` | `null \| string` | no | `null` | - |

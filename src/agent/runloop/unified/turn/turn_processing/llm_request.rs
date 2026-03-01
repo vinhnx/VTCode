@@ -36,9 +36,24 @@ fn classify_llm_error(message: &str) -> vtcode_commons::ErrorCategory {
     vtcode_commons::classify_error_message(message)
 }
 
+const STREAM_TIMEOUT_FALLBACK_PROVIDERS: &[&str] = &[
+    "huggingface",
+    "ollama",
+    "minimax",
+    "deepseek",
+    "moonshot",
+    "zai",
+    "openrouter",
+    "lmstudio",
+];
+
+const RECENT_TOOL_RESPONSE_WINDOW: usize = 10;
+const TOOL_RETRY_MAX_CHARS: usize = 1200;
+
 fn supports_streaming_timeout_fallback(provider_name: &str) -> bool {
-    provider_name.eq_ignore_ascii_case("huggingface")
-        || provider_name.eq_ignore_ascii_case("ollama")
+    STREAM_TIMEOUT_FALLBACK_PROVIDERS
+        .iter()
+        .any(|provider| provider_name.eq_ignore_ascii_case(provider))
 }
 
 fn is_stream_timeout_error(message: &str) -> bool {
@@ -46,6 +61,65 @@ fn is_stream_timeout_error(message: &str) -> bool {
     msg.contains("stream request timed out")
         || msg.contains("streaming request timed out")
         || msg.contains("llm request timed out after")
+}
+
+fn has_recent_tool_responses(messages: &[uni::Message]) -> bool {
+    messages
+        .iter()
+        .rev()
+        .take(RECENT_TOOL_RESPONSE_WINDOW)
+        .any(|message| message.role == uni::MessageRole::Tool)
+}
+
+fn compact_tool_messages_for_retry(messages: &[uni::Message]) -> Vec<uni::Message> {
+    let mut tool_seen = 0usize;
+    let mut keep_start: Option<usize> = None;
+    for (index, message) in messages.iter().enumerate().rev() {
+        if message.role == uni::MessageRole::Tool {
+            tool_seen += 1;
+            if tool_seen == 2 {
+                keep_start = Some(index);
+                break;
+            }
+        }
+    }
+
+    let mut compacted = Vec::with_capacity(messages.len());
+    for (index, message) in messages.iter().enumerate() {
+        if message.role != uni::MessageRole::Tool {
+            compacted.push(message.clone());
+            continue;
+        }
+
+        if let Some(start_index) = keep_start
+            && index < start_index
+        {
+            continue;
+        }
+
+        let mut cloned = message.clone();
+        let text = message.content.as_text();
+        let mut truncated = String::new();
+        let mut chars = text.chars();
+        for _ in 0..TOOL_RETRY_MAX_CHARS {
+            if let Some(ch) = chars.next() {
+                truncated.push(ch);
+            } else {
+                break;
+            }
+        }
+        if chars.next().is_some() {
+            truncated.push_str("\n... [tool output truncated for retry]");
+        }
+        cloned.content = uni::MessageContent::text(truncated);
+        compacted.push(cloned);
+    }
+
+    if compacted.is_empty() {
+        messages.to_vec()
+    } else {
+        compacted
+    }
 }
 
 fn llm_attempt_timeout_secs(turn_timeout_secs: u64, plan_mode: bool, provider_name: &str) -> u64 {
@@ -356,6 +430,7 @@ pub(crate) async fn execute_llm_request(
     let mut llm_result = Err(anyhow::anyhow!("LLM request failed to execute"));
     let mut attempts_made = 0usize;
     let mut stream_fallback_used = false;
+    let mut compacted_tool_retry_used = false;
     let mut last_error_retryable: Option<bool> = None;
     let mut last_error_preview: Option<String> = None;
     let mut last_error_category: Option<vtcode_commons::ErrorCategory> = None;
@@ -442,6 +517,7 @@ pub(crate) async fn execute_llm_request(
         }
 
         request.stream = use_streaming;
+        let has_post_tool_context = has_recent_tool_responses(&request.messages);
 
         let step_result = if use_streaming {
             let state = ::vtcode_core::core::agent::session::AgentSessionState::new(
@@ -604,6 +680,40 @@ pub(crate) async fn execute_llm_request(
                     continue;
                 }
 
+                // Universal post-tool recovery: when a provider fails after
+                // receiving tool results, try non-streaming first, then compact
+                // the tool messages. Works for all providers, not just MiniMax.
+                if has_post_tool_context && attempt < max_retries - 1 {
+                    if use_streaming {
+                        use_streaming = false;
+                        stream_fallback_used = true;
+                        crate::agent::runloop::unified::turn::turn_helpers::display_status(
+                            ctx.renderer,
+                            &format!(
+                                "{} post-tool follow-up failed; retrying with non-streaming.",
+                                provider_name
+                            ),
+                        )?;
+                        _spinner.finish();
+                        continue;
+                    }
+
+                    if !compacted_tool_retry_used {
+                        let compacted = compact_tool_messages_for_retry(&request.messages);
+                        request.messages = compacted;
+                        compacted_tool_retry_used = true;
+                        crate::agent::runloop::unified::turn::turn_helpers::display_status(
+                            ctx.renderer,
+                            &format!(
+                                "{} follow-up still failed; retrying with compacted tool context.",
+                                provider_name
+                            ),
+                        )?;
+                        _spinner.finish();
+                        continue;
+                    }
+                }
+
                 llm_result = Err(err);
                 _spinner.finish();
                 break;
@@ -738,8 +848,29 @@ mod tests {
     fn supports_streaming_timeout_fallback_covers_supported_providers() {
         assert!(supports_streaming_timeout_fallback("huggingface"));
         assert!(supports_streaming_timeout_fallback("ollama"));
+        assert!(supports_streaming_timeout_fallback("minimax"));
         assert!(supports_streaming_timeout_fallback("HUGGINGFACE"));
         assert!(!supports_streaming_timeout_fallback("openai"));
+    }
+
+    #[test]
+    fn compact_tool_messages_for_retry_keeps_recent_tool_outputs_only() {
+        let messages = vec![
+            uni::Message::user("u1".to_string()),
+            uni::Message::tool_response("call_1".to_string(), "old tool".to_string()),
+            uni::Message::assistant("a1".to_string()),
+            uni::Message::tool_response("call_2".to_string(), "new tool".to_string()),
+        ];
+
+        let compacted = compact_tool_messages_for_retry(&messages);
+        assert_eq!(
+            compacted
+                .iter()
+                .filter(|message| message.role == uni::MessageRole::Tool)
+                .count(),
+            2
+        );
+        assert_eq!(compacted.len(), 4);
     }
 
     #[test]

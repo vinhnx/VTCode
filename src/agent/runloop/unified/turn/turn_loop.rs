@@ -217,6 +217,16 @@ fn maybe_recover_after_post_tool_llm_failure(
         transient_hint,
     );
     renderer.line(MessageStyle::Info, &summary)?;
+    renderer.line(
+        MessageStyle::Info,
+        &format!("Follow-up error category: {}", err_cat.user_label()),
+    )?;
+    if !err_cat.is_retryable() {
+        renderer.line(
+            MessageStyle::Info,
+            "Tip: rerun with a narrower prompt or switch provider/model for the follow-up.",
+        )?;
+    }
 
     tracing::warn!(
         error = %err,

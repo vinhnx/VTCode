@@ -133,6 +133,20 @@ impl MoonshotProvider {
             payload.insert("stream".to_string(), Value::Bool(true));
         }
 
+        // Add tools if present (was previously missing — Moonshot supports function calling)
+        if let Some(tools) = &request.tools
+            && let Some(serialized_tools) = super::common::serialize_tools_openai_format(tools)
+        {
+            payload.insert("tools".to_string(), Value::Array(serialized_tools));
+        }
+
+        if let Some(choice) = &request.tool_choice {
+            payload.insert(
+                "tool_choice".to_string(),
+                choice.to_provider_format(PROVIDER_KEY),
+            );
+        }
+
         Ok(Value::Object(payload))
     }
 }

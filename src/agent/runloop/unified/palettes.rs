@@ -1246,6 +1246,9 @@ pub(crate) async fn handle_palette_selection(
                 renderer.set_show_diagnostics_in_transcript(
                     runtime_config.ui.show_diagnostics_in_transcript,
                 );
+                vtcode_tui::panic_hook::set_show_diagnostics(
+                    runtime_config.ui.show_diagnostics_in_transcript,
+                );
 
                 let _ = theme::set_active_theme(&runtime_config.agent.theme);
                 let styles = theme::active_styles();

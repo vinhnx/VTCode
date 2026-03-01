@@ -128,7 +128,9 @@ fn record_tool_call_budget_usage(ctx: &mut TurnProcessingContext<'_>) {
     }
 }
 
-fn max_consecutive_blocked_tool_calls_per_turn(ctx: &TurnProcessingContext<'_>) -> usize {
+pub(super) fn max_consecutive_blocked_tool_calls_per_turn(
+    ctx: &TurnProcessingContext<'_>,
+) -> usize {
     ctx.vt_cfg
         .map(|cfg| cfg.tools.max_consecutive_blocked_tool_calls_per_turn)
         .filter(|value| *value > 0)
@@ -515,11 +517,15 @@ fn enforce_duplicate_task_tracker_create_guard<'a>(
     )
     .to_string();
     push_tool_response(ctx.working_history, tool_call_id.to_string(), content);
-    ctx.working_history.push(uni::Message::system(
+    let block_reason =
         "Blocked duplicate task_tracker.create in the same turn. Continue with task_tracker.update/list."
-            .to_string(),
-    ));
-    Some(ValidationResult::Blocked)
+            .to_string();
+
+    Some(ValidationResult::Outcome(TurnHandlerOutcome::Break(
+        TurnLoopResult::Blocked {
+            reason: Some(block_reason),
+        },
+    )))
 }
 
 fn enforce_repeated_shell_run_guard(
@@ -540,15 +546,21 @@ fn enforce_repeated_shell_run_guard(
     }
 
     let display_tool = tool_action_label(canonical_tool_name, args);
+    let block_reason = format!(
+        "Repeated shell command guard stopped '{}' after {} identical runs (max {}). Reuse prior output or change the command.",
+        display_tool, streak, max_repeated_runs
+    );
     push_tool_response(
         ctx.working_history,
         tool_call_id.to_string(),
         build_repeated_shell_run_error_content(max_repeated_runs),
     );
-    ctx.working_history.push(uni::Message::system(format!(
-        "Blocked repeated shell command call '{display_tool}' in this turn. Reuse prior output or change the command before retrying."
-    )));
-    Some(ValidationResult::Blocked)
+
+    Some(ValidationResult::Outcome(TurnHandlerOutcome::Break(
+        TurnLoopResult::Blocked {
+            reason: Some(block_reason),
+        },
+    )))
 }
 
 fn spool_chunk_read_path<'a>(canonical_tool_name: &str, args: &'a Value) -> Option<&'a str> {
@@ -940,17 +952,25 @@ pub(crate) async fn validate_tool_call<'a>(
         .circuit_breaker
         .allow_request_for_tool(&canonical_tool_name)
     {
-        let error_msg = format!(
-            "Tool '{}' is temporarily disabled due to high failure rate (Circuit Breaker OPEN).",
-            canonical_tool_name
+        let display_tool = tool_action_label(&canonical_tool_name, args_val);
+        let block_reason = format!(
+            "Circuit breaker stopped '{}' due to high failure rate. Wait before retrying or use a different tool.",
+            display_tool
         );
         tracing::warn!(tool = %canonical_tool_name, "Circuit breaker open, tool disabled");
         push_tool_response(
             ctx.working_history,
             tool_call_id.to_string(),
-            build_failure_error_content(error_msg, "circuit_breaker"),
+            build_failure_error_content(
+                format!("Tool '{}' is temporarily disabled due to high failure rate (Circuit Breaker OPEN).", canonical_tool_name),
+                "circuit_breaker",
+            ),
         );
-        return Ok(ValidationResult::Blocked);
+        return Ok(ValidationResult::Outcome(TurnHandlerOutcome::Break(
+            TurnLoopResult::Blocked {
+                reason: Some(block_reason),
+            },
+        )));
     }
 
     // Phase 4 Check: Adaptive Rate Limiter
@@ -1071,14 +1091,6 @@ pub(crate) async fn validate_tool_call<'a>(
                 tool_call_id.to_string(),
                 build_failure_error_content(error_msg, "loop_detection"),
             );
-
-            if preflight.readonly_classification {
-                ctx.working_history.push(uni::Message::system(
-                    "Loop detector blocked repeated read-only calls. Use `grep_file` or adjust `offset`/`limit` before retrying."
-                        .to_string(),
-                ));
-                return Ok(ValidationResult::Blocked);
-            }
 
             return Ok(ValidationResult::Outcome(TurnHandlerOutcome::Break(
                 TurnLoopResult::Blocked {

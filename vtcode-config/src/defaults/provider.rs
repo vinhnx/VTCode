@@ -9,40 +9,9 @@ const DEFAULT_CONFIG_FILE_NAME: &str = "vtcode.toml";
 const DEFAULT_CONFIG_DIR_NAME: &str = ".vtcode";
 const DEFAULT_SYNTAX_THEME: &str = "base16-ocean.dark";
 
-static DEFAULT_SYNTAX_LANGUAGES: Lazy<Vec<String>> = Lazy::new(|| {
-    vec![
-        "rust",
-        "python",
-        "javascript",
-        "typescript",
-        "go",
-        "java",
-        "cpp",
-        "c",
-        "php",
-        "html",
-        "css",
-        "sql",
-        "csharp",
-        "bash",
-        "sh",
-        "shell",
-        "zsh",
-        "swift",
-        "diff",
-        "patch",
-        "udiff",
-        "git",
-        "json",
-        "yaml",
-        "toml",
-        "markdown",
-        "md",
-    ]
-    .into_iter()
-    .map(String::from)
-    .collect()
-});
+/// Empty by default — all ~250 syntect grammars are enabled.
+/// Users can set `enabled_languages` in vtcode.toml to restrict to a subset.
+static DEFAULT_SYNTAX_LANGUAGES: Lazy<Vec<String>> = Lazy::new(Vec::new);
 
 static CONFIG_DEFAULTS: Lazy<RwLock<Arc<dyn ConfigDefaultsProvider>>> =
     Lazy::new(|| RwLock::new(Arc::new(DefaultConfigDefaults)));

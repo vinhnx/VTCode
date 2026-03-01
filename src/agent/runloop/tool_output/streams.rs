@@ -317,11 +317,7 @@ async fn render_run_command_preview(
         }
 
         prefixed_line.clear();
-        if idx == 0 {
-            prefixed_line.push_str("└ ");
-        } else {
-            prefixed_line.push_str("  ");
-        }
+        prefixed_line.push_str("  ");
         prefixed_line.push_str(&display_buffer);
 
         renderer.line_with_override_style(

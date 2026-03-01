@@ -103,14 +103,6 @@ pub fn classify_error(error: &Error) -> ToolErrorType {
     ToolErrorType::from(category)
 }
 
-/// Get the unified `ErrorCategory` for an `anyhow::Error`.
-///
-/// Prefer this over `classify_error` when you need the richer category type
-/// with retryability and recovery suggestion support.
-pub fn classify_error_category(error: &Error) -> ErrorCategory {
-    vtcode_commons::classify_anyhow_error(error)
-}
-
 // Use static string slices to avoid allocations for recovery suggestions.
 // Delegates to the shared `ErrorCategory` recovery suggestions where possible.
 #[inline]

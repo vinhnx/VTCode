@@ -186,9 +186,9 @@ pub struct UiConfig {
     #[serde(default = "default_show_turn_timer")]
     pub show_turn_timer: bool,
 
-    /// Show warning/error/fatal diagnostic lines in the TUI transcript.
-    /// Disable to keep diagnostics only in tracing logs.
-    /// This setting is only effective in debug/development builds.
+    /// Show warning/error/fatal diagnostic lines in the TUI transcript and log panel.
+    /// Also controls whether ERROR-level tracing logs appear in the TUI session log.
+    /// Errors are always captured in the session archive JSON regardless of this setting.
     #[serde(default = "default_show_diagnostics_in_transcript")]
     pub show_diagnostics_in_transcript: bool,
 
