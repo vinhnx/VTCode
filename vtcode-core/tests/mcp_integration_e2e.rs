@@ -89,10 +89,6 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let workspace = temp_dir.path().to_path_buf();
 
-        // Create MCP configuration for time server
-        let mut mcp_config = McpClientConfig::default();
-        mcp_config.enabled = true;
-
         let time_provider = McpProviderConfig {
             name: "time".to_string(),
             transport: McpTransportConfig::Stdio(McpStdioServerConfig {
@@ -106,7 +102,12 @@ mod tests {
             startup_timeout_ms: None,
         };
 
-        mcp_config.providers = vec![time_provider];
+        // Create MCP configuration for time server
+        let mcp_config = McpClientConfig {
+            enabled: true,
+            providers: vec![time_provider],
+            ..Default::default()
+        };
 
         // Create MCP client
         let mut mcp_client = McpClient::new(mcp_config);
@@ -403,31 +404,28 @@ max_concurrent_requests = 1
 
     #[tokio::test]
     async fn test_http_provider_missing_api_key_env_is_not_initialized() {
-        // SAFETY: This test sets and clears a process env var for its own scope.
-        unsafe {
-            std::env::remove_var("MCP_TEST_MISSING_API_KEY");
-        }
+        const MISSING_API_KEY_ENV: &str = "MCP_TEST_MISSING_API_KEY_9A3F65";
+        assert!(std::env::var(MISSING_API_KEY_ENV).is_err());
 
-        let mut mcp_config = McpClientConfig {
+        let mcp_config = McpClientConfig {
             enabled: true,
             experimental_use_rmcp_client: true,
+            providers: vec![McpProviderConfig {
+                name: "http-auth".to_string(),
+                transport: McpTransportConfig::Http(McpHttpServerConfig {
+                    endpoint: "https://example.invalid/mcp".to_string(),
+                    api_key_env: Some(MISSING_API_KEY_ENV.to_string()),
+                    protocol_version: "2024-11-05".to_string(),
+                    http_headers: HashMap::new(),
+                    env_http_headers: HashMap::new(),
+                }),
+                env: HashMap::new(),
+                enabled: true,
+                max_concurrent_requests: 1,
+                startup_timeout_ms: Some(1_000),
+            }],
             ..Default::default()
         };
-
-        mcp_config.providers = vec![McpProviderConfig {
-            name: "http-auth".to_string(),
-            transport: McpTransportConfig::Http(McpHttpServerConfig {
-                endpoint: "https://example.invalid/mcp".to_string(),
-                api_key_env: Some("MCP_TEST_MISSING_API_KEY".to_string()),
-                protocol_version: "2024-11-05".to_string(),
-                http_headers: HashMap::new(),
-                env_http_headers: HashMap::new(),
-            }),
-            env: HashMap::new(),
-            enabled: true,
-            max_concurrent_requests: 1,
-            startup_timeout_ms: Some(1_000),
-        }];
 
         let mut mcp_client = McpClient::new(mcp_config);
         assert!(mcp_client.initialize().await.is_ok());

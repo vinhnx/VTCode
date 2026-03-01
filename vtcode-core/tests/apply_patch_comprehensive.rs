@@ -127,13 +127,9 @@ async fn test_mixed_operations() {
 @@
 -original
 +updated
-*** End Patch"#;
+    *** End Patch"#;
 
     let registry = setup_registry(temp_dir.path()).await;
-    // We need to skip confirmations because we are deleting and adding in the same patch
-    unsafe {
-        std::env::set_var("VTCODE_SKIP_CONFIRMATIONS", "true");
-    }
 
     let result = registry
         .execute_tool("apply_patch", json!({ "input": patch_text }))

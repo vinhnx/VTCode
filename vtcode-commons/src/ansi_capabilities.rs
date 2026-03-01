@@ -1,6 +1,7 @@
 //! ANSI terminal capabilities detection and feature support
 
-use anstyle_query::{clicolor, clicolor_force, no_color, term_supports_color};
+use crate::color_policy::no_color_env_active;
+use anstyle_query::{clicolor, clicolor_force, term_supports_color};
 use once_cell::sync::Lazy;
 use std::sync::atomic::{AtomicU8, Ordering};
 
@@ -64,7 +65,7 @@ impl AnsiCapabilities {
             color_depth: detect_color_depth(),
             unicode_support: detect_unicode_support(),
             force_color: clicolor_force(),
-            no_color: no_color(),
+            no_color: no_color_env_active(),
         }
     }
 
@@ -218,7 +219,7 @@ fn detect_color_depth() -> ColorDepth {
         };
     }
 
-    let depth = if no_color() {
+    let depth = if no_color_env_active() {
         ColorDepth::None
     } else if clicolor_force() {
         ColorDepth::TrueColor
@@ -269,7 +270,7 @@ pub static CAPABILITIES: Lazy<AnsiCapabilities> = Lazy::new(AnsiCapabilities::de
 
 /// Check if NO_COLOR environment variable is set
 pub fn is_no_color() -> bool {
-    no_color()
+    no_color_env_active()
 }
 
 /// Check if CLICOLOR_FORCE is set

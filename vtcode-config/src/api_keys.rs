@@ -85,6 +85,50 @@ fn inferred_api_key_env(provider: &str) -> &'static str {
         .unwrap_or("GEMINI_API_KEY")
 }
 
+#[cfg(test)]
+mod test_env_overrides {
+    use std::collections::HashMap;
+    use std::sync::{LazyLock, Mutex};
+
+    static OVERRIDES: LazyLock<Mutex<HashMap<String, Option<String>>>> =
+        LazyLock::new(|| Mutex::new(HashMap::new()));
+
+    pub(super) fn get(key: &str) -> Option<Option<String>> {
+        OVERRIDES
+            .lock()
+            .ok()
+            .and_then(|map| map.get(key).cloned())
+    }
+
+    pub(super) fn set(key: &str, value: Option<&str>) {
+        if let Ok(mut map) = OVERRIDES.lock() {
+            map.insert(key.to_string(), value.map(ToString::to_string));
+        }
+    }
+
+    pub(super) fn restore(key: &str, previous: Option<Option<String>>) {
+        if let Ok(mut map) = OVERRIDES.lock() {
+            match previous {
+                Some(value) => {
+                    map.insert(key.to_string(), value);
+                }
+                None => {
+                    map.remove(key);
+                }
+            }
+        }
+    }
+}
+
+fn read_env_var(key: &str) -> Option<String> {
+    #[cfg(test)]
+    if let Some(override_value) = test_env_overrides::get(key) {
+        return override_value;
+    }
+
+    env::var(key).ok()
+}
+
 /// Load environment variables from .env file
 ///
 /// This function attempts to load environment variables from a .env file
@@ -94,7 +138,7 @@ pub fn load_dotenv() -> Result<()> {
     match dotenvy::dotenv() {
         Ok(path) => {
             // Only print in verbose mode to avoid polluting stdout/stderr in scripts
-            if env::var("VTCODE_VERBOSE").is_ok() || env::var("RUST_LOG").is_ok() {
+            if read_env_var("VTCODE_VERBOSE").is_some() || read_env_var("RUST_LOG").is_some() {
                 tracing::info!("Loaded environment variables from: {}", path.display());
             }
             Ok(())
@@ -134,7 +178,7 @@ pub fn get_api_key(provider: &str, sources: &ApiKeySources) -> Result<String> {
     let inferred_env = inferred_api_key_env(&normalized_provider);
 
     // Try the inferred environment variable first
-    if let Ok(key) = env::var(inferred_env)
+    if let Some(key) = read_env_var(inferred_env)
         && !key.is_empty()
     {
         return Ok(key);
@@ -155,7 +199,9 @@ pub fn get_api_key(provider: &str, sources: &ApiKeySources) -> Result<String> {
         "zai" => get_zai_api_key(sources),
         "ollama" => get_ollama_api_key(sources),
         "lmstudio" => get_lmstudio_api_key(sources),
-        "huggingface" => env::var("HF_TOKEN").map_err(|_| anyhow::anyhow!("HF_TOKEN not set")),
+        "huggingface" => {
+            read_env_var("HF_TOKEN").ok_or_else(|| anyhow::anyhow!("HF_TOKEN not set"))
+        }
         _ => Err(anyhow::anyhow!("Unsupported provider: {}", provider)),
     }
 }
@@ -186,7 +232,7 @@ fn get_api_key_with_fallback(
     provider_name: &str,
 ) -> Result<String> {
     // First try environment variable (most secure)
-    if let Ok(key) = env::var(env_var)
+    if let Some(key) = read_env_var(env_var)
         && !key.is_empty()
     {
         return Ok(key);
@@ -208,7 +254,7 @@ fn get_api_key_with_fallback(
 }
 
 fn get_optional_api_key_with_fallback(env_var: &str, config_value: Option<&String>) -> String {
-    if let Ok(key) = env::var(env_var)
+    if let Some(key) = read_env_var(env_var)
         && !key.is_empty()
     {
         return key;
@@ -327,149 +373,136 @@ fn get_lmstudio_api_key(sources: &ApiKeySources) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::env;
+
+    struct EnvOverrideGuard {
+        key: &'static str,
+        previous: Option<Option<String>>,
+    }
+
+    impl EnvOverrideGuard {
+        fn set(key: &'static str, value: Option<&str>) -> Self {
+            let previous = test_env_overrides::get(key);
+            test_env_overrides::set(key, value);
+            Self { key, previous }
+        }
+    }
+
+    impl Drop for EnvOverrideGuard {
+        fn drop(&mut self) {
+            test_env_overrides::restore(self.key, self.previous.clone());
+        }
+    }
+
+    fn with_override<F>(key: &'static str, value: Option<&str>, f: F)
+    where
+        F: FnOnce(),
+    {
+        let _guard = EnvOverrideGuard::set(key, value);
+        f();
+    }
+
+    fn with_overrides<F>(overrides: &[(&'static str, Option<&str>)], f: F)
+    where
+        F: FnOnce(),
+    {
+        let _guards: Vec<_> = overrides
+            .iter()
+            .map(|(key, value)| EnvOverrideGuard::set(key, *value))
+            .collect();
+        f();
+    }
 
     #[test]
     fn test_get_gemini_api_key_from_env() {
-        // Set environment variable
-        unsafe {
-            env::set_var("TEST_GEMINI_KEY", "test-gemini-key");
-        }
+        with_override("TEST_GEMINI_KEY", Some("test-gemini-key"), || {
+            let sources = ApiKeySources {
+                gemini_env: "TEST_GEMINI_KEY".to_string(),
+                ..Default::default()
+            };
 
-        let sources = ApiKeySources {
-            gemini_env: "TEST_GEMINI_KEY".to_string(),
-            ..Default::default()
-        };
-
-        let result = get_gemini_api_key(&sources);
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap(), "test-gemini-key");
-
-        // Clean up
-        unsafe {
-            env::remove_var("TEST_GEMINI_KEY");
-        }
+            let result = get_gemini_api_key(&sources);
+            assert!(result.is_ok());
+            assert_eq!(result.unwrap(), "test-gemini-key");
+        });
     }
 
     #[test]
     fn test_get_anthropic_api_key_from_env() {
-        // Set environment variable
-        unsafe {
-            env::set_var("TEST_ANTHROPIC_KEY", "test-anthropic-key");
-        }
+        with_override("TEST_ANTHROPIC_KEY", Some("test-anthropic-key"), || {
+            let sources = ApiKeySources {
+                anthropic_env: "TEST_ANTHROPIC_KEY".to_string(),
+                ..Default::default()
+            };
 
-        let sources = ApiKeySources {
-            anthropic_env: "TEST_ANTHROPIC_KEY".to_string(),
-            ..Default::default()
-        };
-
-        let result = get_anthropic_api_key(&sources);
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap(), "test-anthropic-key");
-
-        // Clean up
-        unsafe {
-            env::remove_var("TEST_ANTHROPIC_KEY");
-        }
+            let result = get_anthropic_api_key(&sources);
+            assert!(result.is_ok());
+            assert_eq!(result.unwrap(), "test-anthropic-key");
+        });
     }
 
     #[test]
     fn test_get_openai_api_key_from_env() {
-        // Set environment variable
-        unsafe {
-            env::set_var("TEST_OPENAI_KEY", "test-openai-key");
-        }
+        with_override("TEST_OPENAI_KEY", Some("test-openai-key"), || {
+            let sources = ApiKeySources {
+                openai_env: "TEST_OPENAI_KEY".to_string(),
+                ..Default::default()
+            };
 
-        let sources = ApiKeySources {
-            openai_env: "TEST_OPENAI_KEY".to_string(),
-            ..Default::default()
-        };
-
-        let result = get_openai_api_key(&sources);
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap(), "test-openai-key");
-
-        // Clean up
-        unsafe {
-            env::remove_var("TEST_OPENAI_KEY");
-        }
+            let result = get_openai_api_key(&sources);
+            assert!(result.is_ok());
+            assert_eq!(result.unwrap(), "test-openai-key");
+        });
     }
 
     #[test]
     fn test_get_deepseek_api_key_from_env() {
-        unsafe {
-            env::set_var("TEST_DEEPSEEK_KEY", "test-deepseek-key");
-        }
+        with_override("TEST_DEEPSEEK_KEY", Some("test-deepseek-key"), || {
+            let sources = ApiKeySources {
+                deepseek_env: "TEST_DEEPSEEK_KEY".to_string(),
+                ..Default::default()
+            };
 
-        let sources = ApiKeySources {
-            deepseek_env: "TEST_DEEPSEEK_KEY".to_string(),
-            ..Default::default()
-        };
-
-        let result = get_deepseek_api_key(&sources);
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap(), "test-deepseek-key");
-
-        unsafe {
-            env::remove_var("TEST_DEEPSEEK_KEY");
-        }
+            let result = get_deepseek_api_key(&sources);
+            assert!(result.is_ok());
+            assert_eq!(result.unwrap(), "test-deepseek-key");
+        });
     }
 
     #[test]
     fn test_get_gemini_api_key_from_config() {
-        let prior_gemini_key = env::var("TEST_GEMINI_CONFIG_KEY").ok();
-        let prior_google_key = env::var("GOOGLE_API_KEY").ok();
+        with_overrides(
+            &[
+                ("TEST_GEMINI_CONFIG_KEY", None),
+                ("GOOGLE_API_KEY", None),
+                ("GEMINI_API_KEY", None),
+            ],
+            || {
+                let sources = ApiKeySources {
+                    gemini_env: "TEST_GEMINI_CONFIG_KEY".to_string(),
+                    gemini_config: Some("config-gemini-key".to_string()),
+                    ..Default::default()
+                };
 
-        unsafe {
-            env::remove_var("TEST_GEMINI_CONFIG_KEY");
-            env::remove_var("GOOGLE_API_KEY");
-        }
-
-        let sources = ApiKeySources {
-            gemini_env: "TEST_GEMINI_CONFIG_KEY".to_string(),
-            gemini_config: Some("config-gemini-key".to_string()),
-            ..Default::default()
-        };
-
-        let result = get_gemini_api_key(&sources);
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap(), "config-gemini-key");
-
-        unsafe {
-            if let Some(value) = prior_gemini_key {
-                env::set_var("TEST_GEMINI_CONFIG_KEY", value);
-            } else {
-                env::remove_var("TEST_GEMINI_CONFIG_KEY");
-            }
-            if let Some(value) = prior_google_key {
-                env::set_var("GOOGLE_API_KEY", value);
-            } else {
-                env::remove_var("GOOGLE_API_KEY");
-            }
-        }
+                let result = get_gemini_api_key(&sources);
+                assert!(result.is_ok());
+                assert_eq!(result.unwrap(), "config-gemini-key");
+            },
+        );
     }
 
     #[test]
     fn test_get_api_key_with_fallback_prefers_env() {
-        // Set environment variable
-        unsafe {
-            env::set_var("TEST_FALLBACK_KEY", "env-key");
-        }
+        with_override("TEST_FALLBACK_KEY", Some("env-key"), || {
+            let sources = ApiKeySources {
+                openai_env: "TEST_FALLBACK_KEY".to_string(),
+                openai_config: Some("config-key".to_string()),
+                ..Default::default()
+            };
 
-        let sources = ApiKeySources {
-            openai_env: "TEST_FALLBACK_KEY".to_string(),
-            openai_config: Some("config-key".to_string()),
-            ..Default::default()
-        };
-
-        let result = get_openai_api_key(&sources);
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap(), "env-key"); // Should prefer env var
-
-        // Clean up
-        unsafe {
-            env::remove_var("TEST_FALLBACK_KEY");
-        }
+            let result = get_openai_api_key(&sources);
+            assert!(result.is_ok());
+            assert_eq!(result.unwrap(), "env-key"); // Should prefer env var
+        });
     }
 
     #[test]
@@ -509,24 +542,16 @@ mod tests {
 
     #[test]
     fn test_get_ollama_api_key_from_env() {
-        // Set environment variable
-        unsafe {
-            env::set_var("TEST_OLLAMA_KEY", "test-ollama-key");
-        }
+        with_override("TEST_OLLAMA_KEY", Some("test-ollama-key"), || {
+            let sources = ApiKeySources {
+                ollama_env: "TEST_OLLAMA_KEY".to_string(),
+                ..Default::default()
+            };
 
-        let sources = ApiKeySources {
-            ollama_env: "TEST_OLLAMA_KEY".to_string(),
-            ..Default::default()
-        };
-
-        let result = get_ollama_api_key(&sources);
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap(), "test-ollama-key");
-
-        // Clean up
-        unsafe {
-            env::remove_var("TEST_OLLAMA_KEY");
-        }
+            let result = get_ollama_api_key(&sources);
+            assert!(result.is_ok());
+            assert_eq!(result.unwrap(), "test-ollama-key");
+        });
     }
 
     #[test]
@@ -543,55 +568,41 @@ mod tests {
 
     #[test]
     fn test_get_lmstudio_api_key_from_env() {
-        unsafe {
-            env::set_var("TEST_LMSTUDIO_KEY", "test-lmstudio-key");
-        }
+        with_override("TEST_LMSTUDIO_KEY", Some("test-lmstudio-key"), || {
+            let sources = ApiKeySources {
+                lmstudio_env: "TEST_LMSTUDIO_KEY".to_string(),
+                ..Default::default()
+            };
 
-        let sources = ApiKeySources {
-            lmstudio_env: "TEST_LMSTUDIO_KEY".to_string(),
-            ..Default::default()
-        };
-
-        let result = get_lmstudio_api_key(&sources);
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap(), "test-lmstudio-key");
-
-        unsafe {
-            env::remove_var("TEST_LMSTUDIO_KEY");
-        }
+            let result = get_lmstudio_api_key(&sources);
+            assert!(result.is_ok());
+            assert_eq!(result.unwrap(), "test-lmstudio-key");
+        });
     }
 
     #[test]
     fn test_get_api_key_ollama_provider() {
-        // Set environment variable
-        unsafe {
-            env::set_var("OLLAMA_API_KEY", "test-ollama-env-key");
-        }
-
-        let sources = ApiKeySources::default();
-        let result = get_api_key("ollama", &sources);
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap(), "test-ollama-env-key");
-
-        // Clean up
-        unsafe {
-            env::remove_var("OLLAMA_API_KEY");
-        }
+        with_override("TEST_OLLAMA_PROVIDER_KEY", Some("test-ollama-env-key"), || {
+            let sources = ApiKeySources {
+                ollama_env: "TEST_OLLAMA_PROVIDER_KEY".to_string(),
+                ..Default::default()
+            };
+            let result = get_api_key("ollama", &sources);
+            assert!(result.is_ok());
+            assert_eq!(result.unwrap(), "test-ollama-env-key");
+        });
     }
 
     #[test]
     fn test_get_api_key_lmstudio_provider() {
-        unsafe {
-            env::set_var("LMSTUDIO_API_KEY", "test-lmstudio-env-key");
-        }
-
-        let sources = ApiKeySources::default();
-        let result = get_api_key("lmstudio", &sources);
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap(), "test-lmstudio-env-key");
-
-        unsafe {
-            env::remove_var("LMSTUDIO_API_KEY");
-        }
+        with_override("TEST_LMSTUDIO_PROVIDER_KEY", Some("test-lmstudio-env-key"), || {
+            let sources = ApiKeySources {
+                lmstudio_env: "TEST_LMSTUDIO_PROVIDER_KEY".to_string(),
+                ..Default::default()
+            };
+            let result = get_api_key("lmstudio", &sources);
+            assert!(result.is_ok());
+            assert_eq!(result.unwrap(), "test-lmstudio-env-key");
+        });
     }
 }

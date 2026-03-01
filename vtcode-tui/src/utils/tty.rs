@@ -22,6 +22,7 @@
 
 use crossterm::tty::IsTty;
 use std::io;
+use vtcode_commons::color_policy::no_color_env_active;
 
 /// Extension trait for TTY detection on standard I/O streams.
 ///
@@ -57,8 +58,8 @@ impl TtyExt for io::Stdout {
             return false;
         }
 
-        // Check for NO_COLOR environment variable
-        if std::env::var_os("NO_COLOR").is_some() {
+        // Check NO_COLOR with strict non-empty semantics.
+        if no_color_env_active() {
             return false;
         }
 
@@ -85,8 +86,8 @@ impl TtyExt for io::Stderr {
             return false;
         }
 
-        // Check for NO_COLOR environment variable
-        if std::env::var_os("NO_COLOR").is_some() {
+        // Check NO_COLOR with strict non-empty semantics.
+        if no_color_env_active() {
             return false;
         }
 

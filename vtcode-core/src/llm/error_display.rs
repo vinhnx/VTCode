@@ -5,10 +5,14 @@
 
 use crate::ui::styled::Styles;
 use anstyle::Style;
+use vtcode_commons::color_policy;
 
 /// Internal helper to wrap text with style codes - reduces duplication
 #[inline]
 fn style_text(style: Style, text: &str) -> String {
+    if !color_policy::color_output_enabled() {
+        return text.to_string();
+    }
     format!(
         "{}{}{}",
         Styles::render(&style),

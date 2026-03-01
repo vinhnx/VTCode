@@ -750,7 +750,7 @@ mod tests {
     #[tokio::test]
     async fn test_parse_raw_narrow_no_break_space_image_path() {
         let temp_dir = TempDir::new().unwrap();
-        let image_path = temp_dir.path().join("narrow\u{202F}space.png".to_string());
+        let image_path = temp_dir.path().join("narrow\u{202F}space.png");
 
         let mut temp_file = std::io::BufWriter::new(std::fs::File::create(&image_path).unwrap());
         temp_file

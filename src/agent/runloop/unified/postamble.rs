@@ -1,5 +1,5 @@
-use std::time::Duration;
 use crate::agent::runloop::git::CodeChangeDelta;
+use std::time::Duration;
 use vtcode_core::config::constants::ui;
 use vtcode_core::core::telemetry::TelemetryStats;
 use vtcode_tui::InlineHeaderContext;
@@ -62,7 +62,10 @@ fn aggregate_tokens(
     usage: &std::collections::HashMap<String, vtcode_core::core::telemetry::ModelUsageStats>,
 ) -> (u64, u64) {
     usage.values().fold((0, 0), |(p, c), s| {
-        (p + s.prompt_tokens + s.cached_prompt_tokens, c + s.completion_tokens)
+        (
+            p + s.prompt_tokens + s.cached_prompt_tokens,
+            c + s.completion_tokens,
+        )
     })
 }
 
@@ -73,13 +76,26 @@ fn top_model(
 }
 
 fn build_title(ctx: &Option<InlineHeaderContext>) -> String {
-    let app = ctx.as_ref().map(|c| c.app_name.trim()).filter(|s| !s.is_empty()).unwrap_or(ui::HEADER_VERSION_PREFIX);
-    let ver = ctx.as_ref().map(|c| c.version.trim()).filter(|s| !s.is_empty()).unwrap_or(env!("CARGO_PKG_VERSION"));
+    let app = ctx
+        .as_ref()
+        .map(|c| c.app_name.trim())
+        .filter(|s| !s.is_empty())
+        .unwrap_or(ui::HEADER_VERSION_PREFIX);
+    let ver = ctx
+        .as_ref()
+        .map(|c| c.version.trim())
+        .filter(|s| !s.is_empty())
+        .unwrap_or(env!("CARGO_PKG_VERSION"));
     format!("> {app} ({ver})")
 }
 
 fn build_trust_line(ctx: &InlineHeaderContext) -> String {
-    let trust = ctx.workspace_trust.trim().strip_prefix(ui::HEADER_TRUST_PREFIX).unwrap_or(&ctx.workspace_trust).trim();
+    let trust = ctx
+        .workspace_trust
+        .trim()
+        .strip_prefix(ui::HEADER_TRUST_PREFIX)
+        .unwrap_or(&ctx.workspace_trust)
+        .trim();
     let trust = trust.to_ascii_lowercase();
     if trust.contains("full auto") {
         "Accept edits".into()
@@ -97,15 +113,23 @@ fn format_duration(d: Duration) -> String {
     let h = s / 3600;
     let m = (s % 3600) / 60;
     let sec = s % 60;
-    if h > 0 { format!("{h}h {m}m {sec}s") }
-    else if m > 0 { format!("{m}m {sec}s") }
-    else { format!("{sec}s") }
+    if h > 0 {
+        format!("{h}h {m}m {sec}s")
+    } else if m > 0 {
+        format!("{m}m {sec}s")
+    } else {
+        format!("{sec}s")
+    }
 }
 
 fn format_number(n: u64) -> String {
-    if n >= 1_000_000 { format!("{:.1}m", n as f64 / 1_000_000.0) }
-    else if n >= 1_000 { format!("{:.1}k", n as f64 / 1_000.0) }
-    else { n.to_string() }
+    if n >= 1_000_000 {
+        format!("{:.1}m", n as f64 / 1_000_000.0)
+    } else if n >= 1_000 {
+        format!("{:.1}k", n as f64 / 1_000.0)
+    } else {
+        n.to_string()
+    }
 }
 
 #[cfg(test)]

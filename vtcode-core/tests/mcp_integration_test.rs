@@ -323,12 +323,18 @@ max_concurrent_requests = 1
 
     #[test]
     fn test_mcp_allowlist_configuration() {
-        let mut config = McpAllowListConfig::default();
-        config.enforce = true;
-        config.default.tools = Some(vec!["get_*".to_string(), "list_*".to_string()]);
-
-        let mut provider_rules = McpAllowListRules::default();
-        provider_rules.tools = Some(vec!["convert_*".to_string()]);
+        let provider_rules = McpAllowListRules {
+            tools: Some(vec!["convert_*".to_string()]),
+            ..Default::default()
+        };
+        let mut config = McpAllowListConfig {
+            enforce: true,
+            default: McpAllowListRules {
+                tools: Some(vec!["get_*".to_string(), "list_*".to_string()]),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
         config.providers.insert("time".to_string(), provider_rules);
 
         // Test default rules

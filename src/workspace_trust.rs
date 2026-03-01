@@ -2,7 +2,7 @@ use std::io::{self, Write};
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use anstyle::{Ansi256Color, Effects};
+use anstyle::Ansi256Color;
 use anyhow::{Context, Result};
 use vtcode_commons::color256_theme::rgb_to_ansi256_for_theme;
 use vtcode_core::utils::dot_config::{
@@ -249,7 +249,7 @@ enum PromptTone {
 }
 
 fn print_prompt_line(message: &str, tone: PromptTone) {
-    use anstyle::{Color, Style};
+    use anstyle::Color;
 
     let is_light_theme = matches!(ansi_capabilities::detect_color_scheme(), ColorScheme::Light);
     let (rgb, is_heading) = match tone {
@@ -263,10 +263,10 @@ fn print_prompt_line(message: &str, tone: PromptTone) {
         rgb.2,
         is_light_theme,
     )));
-    let style = if is_heading {
-        Style::new().fg_color(Some(color)).effects(Effects::BOLD)
+    let styled = if is_heading {
+        render_styled(message, color, Some("bold".to_string()))
     } else {
-        Style::new().fg_color(Some(color))
+        render_styled(message, color, None)
     };
-    println!("{}{}{}", style.render(), message, style.render_reset());
+    println!("{}", styled);
 }

@@ -17,6 +17,7 @@ use anyhow::{Result, anyhow};
 use ratatui::style::{Color as RatColor, Modifier as RatModifier, Style as RatatuiStyle};
 use std::io::{self, Write};
 use std::sync::Arc;
+use vtcode_commons::color_policy::{self, ColorOutputPolicySource};
 use vtcode_commons::diff_paths::looks_like_diff_content;
 
 /// Renderer with deferred output buffering
@@ -36,12 +37,30 @@ pub struct AnsiRenderer {
 impl AnsiRenderer {
     /// Create a new renderer for stdout
     pub fn stdout() -> Self {
-        let capabilities = AnsiCapabilities::detect();
+        let mut capabilities = AnsiCapabilities::detect();
+        let policy = color_policy::current_color_output_policy();
+
+        if !policy.enabled {
+            capabilities.no_color = true;
+            capabilities.force_color = false;
+        } else if matches!(
+            policy.source,
+            ColorOutputPolicySource::CliColorAlways | ColorOutputPolicySource::ConfigOverride
+        ) {
+            capabilities.no_color = false;
+            capabilities.force_color = true;
+        }
+
         let color = capabilities.supports_color();
-        let choice = if color {
-            ColorChoice::Auto
-        } else {
+        let choice = if !color {
             ColorChoice::Never
+        } else if matches!(
+            policy.source,
+            ColorOutputPolicySource::CliColorAlways | ColorOutputPolicySource::ConfigOverride
+        ) {
+            ColorChoice::Always
+        } else {
+            ColorChoice::Auto
         };
         Self {
             writer: AutoStream::new(io::stdout(), choice),

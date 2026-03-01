@@ -14,6 +14,7 @@ pub mod anstyle_utils;
 pub mod async_utils;
 pub mod at_pattern;
 pub mod color256_theme;
+pub mod color_policy;
 pub mod colors;
 pub mod diff;
 pub mod diff_paths;

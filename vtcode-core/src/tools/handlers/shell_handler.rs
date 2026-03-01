@@ -254,7 +254,6 @@ mod tests {
     #[tokio::test]
     async fn test_shell_handler_is_mutating() {
         // Shell commands are always mutating
-        assert!(true); // Placeholder - actual test would need full invocation
     }
 
     #[test]
