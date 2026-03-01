@@ -3751,3 +3751,198 @@ A collection of bugs found in Rust code through fuzz testing can be found in [th
 https://github.com/majiayu000/litellm-rs
 
 https://docs.litellm.ai/docs/
+
+--
+
+# VT Code Fuzzing Adoption Plan (Harness-Only,
+
+Security Parsers)
+
+## Summary
+
+- Convert the Rust Fuzz Book guidance into a
+  concrete cargo-fuzz setup for VT Code without
+  changing CI.
+- Keep repo toolchain default on stable; run
+  fuzzing explicitly via cargo +nightly fuzz ....
+- First-wave targets focus on security parser
+  surfaces in vtcode-core: shell command parsing,
+  exec policy rule parsing, and workspace path
+  validation.
+- Deliver runnable harnesses, seed corpora, and
+  developer docs so fuzzing is immediately usable
+  locally.
+
+## Review Findings (Current State)
+
+- No existing fuzz harness (fuzz/ directory is
+  missing).
+- CI workflows are stable-only and contain no fuzz
+  jobs.
+- Security docs already mark fuzzing as a future
+  item (docs/security/SECURITY_MODEL.md).
+- Rust Fuzz Book content exists as a large pasted
+  block in docs/project/TODO.md, but it is not
+  operationalized for VT Code.
+
+## Scope Decisions Locked
+
+- Adoption level: Harness only (no CI changes).
+- Target focus: Security parsers.
+- Nightly policy: Keep stable default; use
+  explicit +nightly commands.
+
+## Planned Changes
+
+### 1. Add cargo-fuzz project scaffolding
+
+- Create /Users/vinhnguyenxuan/Developer/learn-by-
+  doing/vtcode/fuzz/Cargo.toml.
+- Configure dependency on vtcode-core via path
+  (../vtcode-core), plus libfuzzer-sys.
+- Keep this fuzz crate out of workspace member
+  list (no workspace mutation needed).
+
+### 2. Add initial fuzz targets (security parser
+
+wave)
+
+- Add /Users/vinhnguyenxuan/Developer/learn-by-
+  doing/vtcode/fuzz/fuzz_targets/shell_parser.rs.
+- Add /Users/vinhnguyenxuan/Developer/learn-by-
+  doing/vtcode/fuzz/fuzz_targets/
+  exec_policy_parser.rs.
+- Add /Users/vinhnguyenxuan/Developer/learn-by-
+  doing/vtcode/fuzz/fuzz_targets/
+  unified_path_validation.rs.
+
+### 3. Target behavior details (decision complete)
+
+- shell_parser target calls:
+    - parse_shell_commands
+    - parse_shell_commands_tree_sitter
+    - parse_bash_lc_commands with generated
+      command vectors
+- Oracle checks:
+    - no panic/crash
+    - if parser returns command vectors, each
+      token is non-empty after trim
+- exec_policy_parser target calls:
+    - PolicyParser::parse_simple
+    - PolicyParser::parse_toml
+    - PolicyParser::parse_json
+- Input routing:
+    - first byte chooses parser mode; rest is UTF-
+      8-lossy text
+- Oracle checks:
+    - no panic/crash
+    - successful parse output can be consumed by
+      Policy::add_prefix_rule path without panic
+- unified_path_validation target:
+    - creates temporary workspace
+    - feeds arbitrary path strings to
+      validate_and_resolve_path
+    - includes occasional symlink fixture setup
+      for escape attempts
+- Oracle checks:
+    - no panic/crash
+    - Ok(path) must always remain within canonical
+      workspace root
+
+### 4. Add starter corpora
+
+- Create seed inputs under:
+    - /Users/vinhnguyenxuan/Developer/learn-by-
+      doing/vtcode/fuzz/corpus/shell_parser/
+    - /Users/vinhnguyenxuan/Developer/learn-by-
+      doing/vtcode/fuzz/corpus/exec_policy_parser/
+    - /Users/vinhnguyenxuan/Developer/learn-by-
+      doing/vtcode/fuzz/corpus/
+      unified_path_validation/
+- Seed set includes:
+    - valid simple commands
+    - quoted/escaped shell expressions
+    - chained operators (&&, ||, ;, pipes)
+    - path traversal patterns and symlink-like
+      patterns
+    - mixed valid/invalid policy lines, TOML
+      fragments, JSON fragments
+
+### 5. Document local fuzz workflow
+
+- Add /Users/vinhnguyenxuan/Developer/learn-by-
+  doing/vtcode/docs/development/fuzzing.md with:
+    - prerequisites (cargo-fuzz, nightly install)
+    - exact commands using cargo +nightly fuzz
+    - run/repro workflow
+    - corpus triage guidance
+- Update /Users/vinhnguyenxuan/Developer/learn-by-
+  doing/vtcode/docs/development/testing.md to link
+  fuzzing doc and include short command
+  cheatsheet.
+- Update docs/security/SECURITY_MODEL.md fuzzing
+  section from “Future” wording to “Implemented
+  locally (harness-only)” and list covered
+  surfaces.
+
+### 6. Optional cleanup tied to this review
+
+- Replace the large Rust Fuzz Book paste in docs/
+  project/TODO.md with:
+    - concise action checklist
+    - canonical link to external source (rust-
+      fuzz/book)
+    - link to VT Code-local fuzzing doc
+- This keeps TODO actionable and avoids duplicated
+  long-form external docs.
+
+## Public API / Interface Changes
+
+- No runtime/public Rust API changes for VT Code
+  users.
+- New developer interface:
+    - cargo +nightly fuzz run <target>
+    - local docs and fuzz targets as contributor-
+      facing tooling.
+
+## Verification Plan
+
+### Build and tooling checks
+
+1. cargo +nightly fuzz list from repo root
+   succeeds.
+2. cargo +nightly fuzz build exec_policy_parser
+
+### Smoke fuzz runs
+
+1. cargo +nightly fuzz run shell_parser --
+   -max_total_time=30
+2. cargo +nightly fuzz run exec_policy_parser --
+   -max_total_time=30
+3. cargo +nightly fuzz run unified_path_validation
+   -- -max_total_time=30
+
+- Success criteria: no harness panic; artifacts
+  generated only when real crash found.
+
+### Regression guard (existing quality gate
+
+unchanged)
+
+1. cargo check
+2. cargo clippy --locked
+3. cargo nextest run --locked --profile ci
+
+- Success criteria: no regressions introduced by
+  fuzz harness additions.
+
+## Assumptions and Defaults
+
+- Assume first iteration should prioritize crash-
+  finding over semantic deep oracles.
+- Assume no CI changes in this phase by explicit
+  user choice.
+- Assume stable toolchain remains default for all
+  standard dev/CI workflows.
+- Assume fuzzing targets live at repo root fuzz/
+  and focus on vtcode-core only for wave 1.

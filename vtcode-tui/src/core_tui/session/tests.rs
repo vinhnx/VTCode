@@ -29,13 +29,14 @@ fn make_segment(text: &str) -> InlineSegment {
 }
 
 fn themed_inline_colors() -> InlineTheme {
-    let mut theme = InlineTheme::default();
-    theme.foreground = Some(AnsiColorEnum::Rgb(RgbColor(0xEE, 0xEE, 0xEE)));
-    theme.tool_accent = Some(AnsiColorEnum::Rgb(RgbColor(0xBF, 0x45, 0x45)));
-    theme.tool_body = Some(AnsiColorEnum::Rgb(RgbColor(0xAA, 0x88, 0x88)));
-    theme.primary = Some(AnsiColorEnum::Rgb(RgbColor(0x88, 0x88, 0x88)));
-    theme.secondary = Some(AnsiColorEnum::Rgb(RgbColor(0x77, 0x99, 0xAA)));
-    theme
+    InlineTheme {
+        foreground: Some(AnsiColorEnum::Rgb(RgbColor(0xEE, 0xEE, 0xEE))),
+        tool_accent: Some(AnsiColorEnum::Rgb(RgbColor(0xBF, 0x45, 0x45))),
+        tool_body: Some(AnsiColorEnum::Rgb(RgbColor(0xAA, 0x88, 0x88))),
+        primary: Some(AnsiColorEnum::Rgb(RgbColor(0x88, 0x88, 0x88))),
+        secondary: Some(AnsiColorEnum::Rgb(RgbColor(0x77, 0x99, 0xAA))),
+        ..Default::default()
+    }
 }
 
 fn session_with_input(input: &str, cursor: usize) -> Session {
@@ -1600,8 +1601,10 @@ fn pty_scroll_preserves_order() {
 #[test]
 fn agent_label_uses_accent_color_without_border() {
     let accent = AnsiColorEnum::Rgb(RgbColor(0x12, 0x34, 0x56));
-    let mut theme = InlineTheme::default();
-    theme.primary = Some(accent);
+    let theme = InlineTheme {
+        primary: Some(accent),
+        ..Default::default()
+    };
 
     let mut session = Session::new(theme, None, VIEW_ROWS);
     session.labels.agent = Some("Agent".to_string());

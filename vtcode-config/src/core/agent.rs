@@ -1037,19 +1037,29 @@ mod tests {
 
     #[test]
     fn test_structured_reasoning_defaults_follow_prompt_mode() {
-        let mut config = AgentConfig::default();
+        let default_mode = AgentConfig {
+            system_prompt_mode: SystemPromptMode::Default,
+            ..Default::default()
+        };
+        assert!(default_mode.should_include_structured_reasoning_tags());
 
-        config.system_prompt_mode = SystemPromptMode::Default;
-        assert!(config.should_include_structured_reasoning_tags());
+        let specialized_mode = AgentConfig {
+            system_prompt_mode: SystemPromptMode::Specialized,
+            ..Default::default()
+        };
+        assert!(specialized_mode.should_include_structured_reasoning_tags());
 
-        config.system_prompt_mode = SystemPromptMode::Specialized;
-        assert!(config.should_include_structured_reasoning_tags());
+        let minimal_mode = AgentConfig {
+            system_prompt_mode: SystemPromptMode::Minimal,
+            ..Default::default()
+        };
+        assert!(!minimal_mode.should_include_structured_reasoning_tags());
 
-        config.system_prompt_mode = SystemPromptMode::Minimal;
-        assert!(!config.should_include_structured_reasoning_tags());
-
-        config.system_prompt_mode = SystemPromptMode::Lightweight;
-        assert!(!config.should_include_structured_reasoning_tags());
+        let lightweight_mode = AgentConfig {
+            system_prompt_mode: SystemPromptMode::Lightweight,
+            ..Default::default()
+        };
+        assert!(!lightweight_mode.should_include_structured_reasoning_tags());
     }
 
     #[test]

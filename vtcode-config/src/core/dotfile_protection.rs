@@ -386,8 +386,10 @@ mod tests {
 
     #[test]
     fn test_disabled_protection() {
-        let mut config = DotfileProtectionConfig::default();
-        config.enabled = false;
+        let config = DotfileProtectionConfig {
+            enabled: false,
+            ..Default::default()
+        };
 
         assert!(!config.is_protected(".gitignore"));
         assert!(!config.is_protected(".env"));
