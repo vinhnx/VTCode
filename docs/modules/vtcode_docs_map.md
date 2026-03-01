@@ -603,7 +603,8 @@ This document serves as an index of all VT Code documentation. When users ask qu
 
 - **File**: `docs/project/TODO.md`
   - **Content**: TODO.md
-  - **User Questions**: "What can you tell me about TODO.md?"
+  - **Topics**: Applied: Default Status Line Items Pattern (Codex PR #12015), Plan: Apply Data-Oriented Design to vtcode
+  - **User Questions**: "What can you tell me about TODO.md?", "How does Applied: Default Status Line Items Pattern (Codex PR #12015) work?", "How does Plan: Apply Data-Oriented Design to vtcode work?"
 
 - **File**: `docs/harness/TECH_DEBT_TRACKER.md`
   - **Content**: Tech Debt Tracker
