@@ -95,6 +95,13 @@ pub struct ToolCircuitDiagnostics {
     pub is_open: bool,
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct CircuitBreakerSnapshot {
+    pub diagnostics: Vec<ToolCircuitDiagnostics>,
+    pub open_circuits: Vec<String>,
+    pub open_count: usize,
+}
+
 /// Per-tool circuit breaker that tracks failure state independently for each tool.
 /// This prevents one misbehaving tool from disabling all tools in the system.
 ///
@@ -333,37 +340,16 @@ impl CircuitBreaker {
 
     /// Get list of tools with currently OPEN circuits
     pub fn get_open_circuits(&self) -> Vec<String> {
-        let states = self.tool_states.read();
-        states
-            .iter()
-            .filter(|(_, state)| matches!(state.status, CircuitState::Open))
-            .map(|(name, _)| name.clone())
-            .collect()
+        self.snapshot().open_circuits
     }
 
     /// Get diagnostic information for a specific tool
     pub fn get_diagnostics(&self, tool_name: &str) -> ToolCircuitDiagnostics {
-        let states = self.tool_states.read();
-        let state = states.get(tool_name);
-
-        if let Some(s) = state {
-            ToolCircuitDiagnostics {
-                tool_name: tool_name.to_string(),
-                status: s.status,
-                failure_count: s.failure_count,
-                current_backoff: s.current_backoff,
-                remaining_backoff: if matches!(s.status, CircuitState::Open) {
-                    s.last_failure_time
-                        .and_then(|last| s.current_backoff.checked_sub(last.elapsed()))
-                } else {
-                    None
-                },
-                opened_at: s.circuit_opened_at,
-                open_count: s.open_count,
-                is_open: matches!(s.status, CircuitState::Open),
-            }
-        } else {
-            ToolCircuitDiagnostics {
+        self.snapshot()
+            .diagnostics
+            .into_iter()
+            .find(|diag| diag.tool_name == tool_name)
+            .unwrap_or_else(|| ToolCircuitDiagnostics {
                 tool_name: tool_name.to_string(),
                 status: CircuitState::Closed,
                 failure_count: 0,
@@ -372,21 +358,27 @@ impl CircuitBreaker {
                 opened_at: None,
                 open_count: 0,
                 is_open: false,
-            }
-        }
+            })
     }
 
     /// Get diagnostics for all tools
     pub fn get_all_diagnostics(&self) -> Vec<ToolCircuitDiagnostics> {
+        self.snapshot().diagnostics
+    }
+
+    /// Get a full snapshot of circuit breaker state under a single read lock.
+    pub fn snapshot(&self) -> CircuitBreakerSnapshot {
         let states = self.tool_states.read();
-        states
+        let diagnostics: Vec<ToolCircuitDiagnostics> = states
             .iter()
-            .map(|(name, state)| ToolCircuitDiagnostics {
+            .map(|(name, state)| {
+                let is_open = matches!(state.status, CircuitState::Open);
+                ToolCircuitDiagnostics {
                 tool_name: name.clone(),
                 status: state.status,
                 failure_count: state.failure_count,
                 current_backoff: state.current_backoff,
-                remaining_backoff: if matches!(state.status, CircuitState::Open) {
+                remaining_backoff: if is_open {
                     state
                         .last_failure_time
                         .and_then(|last| state.current_backoff.checked_sub(last.elapsed()))
@@ -395,28 +387,32 @@ impl CircuitBreaker {
                 },
                 opened_at: state.circuit_opened_at,
                 open_count: state.open_count,
-                is_open: matches!(state.status, CircuitState::Open),
+                is_open,
+            }
             })
-            .collect()
+            .collect();
+
+        let open_circuits: Vec<String> = diagnostics
+            .iter()
+            .filter(|diag| diag.is_open)
+            .map(|diag| diag.tool_name.clone())
+            .collect();
+
+        CircuitBreakerSnapshot {
+            diagnostics,
+            open_count: open_circuits.len(),
+            open_circuits,
+        }
     }
 
     /// Check if recovery pause should be triggered based on open circuit count
     pub fn should_pause_for_recovery(&self, max_open_circuits: usize) -> bool {
-        let states = self.tool_states.read();
-        let open_count = states
-            .iter()
-            .filter(|(_, state)| matches!(state.status, CircuitState::Open))
-            .count();
-        open_count >= max_open_circuits
+        self.snapshot().open_count >= max_open_circuits
     }
 
     /// Get count of currently open circuits
     pub fn open_circuit_count(&self) -> usize {
-        let states = self.tool_states.read();
-        states
-            .iter()
-            .filter(|(_, state)| matches!(state.status, CircuitState::Open))
-            .count()
+        self.snapshot().open_count
     }
 }
 

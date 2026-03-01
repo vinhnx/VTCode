@@ -31,13 +31,17 @@ impl Drop for ProgressUpdateGuard {
 pub struct ProgressState {
     current: AtomicU64,
     total: AtomicU64,
-    message: Mutex<String>,
+    metadata: Mutex<ProgressMetadata>,
     is_complete: AtomicBool,
     start_time: Instant,
-    last_update: Mutex<Instant>,
-    estimated_remaining: Mutex<Option<Duration>>,
     stage: AtomicU8,
-    stage_name: Mutex<String>,
+}
+
+struct ProgressMetadata {
+    message: String,
+    last_update: Instant,
+    estimated_remaining: Option<Duration>,
+    stage_name: String,
 }
 
 #[allow(dead_code)]
@@ -47,13 +51,15 @@ impl ProgressState {
         Self {
             current: AtomicU64::new(0),
             total: AtomicU64::new(0),
-            message: Mutex::new(String::new()),
+            metadata: Mutex::new(ProgressMetadata {
+                message: String::new(),
+                last_update: Instant::now(),
+                estimated_remaining: None,
+                stage_name: String::new(),
+            }),
             is_complete: AtomicBool::new(false),
             start_time: Instant::now(),
-            last_update: Mutex::new(Instant::now()),
-            estimated_remaining: Mutex::new(None),
             stage: AtomicU8::new(0),
-            stage_name: Mutex::new(String::new()),
         }
     }
 
@@ -77,15 +83,15 @@ impl ProgressState {
 
     /// Update the progress message
     pub async fn set_message(&self, message: String) {
-        let mut msg = self.message.lock().await;
-        *msg = message;
+        let mut metadata = self.metadata.lock().await;
+        metadata.message = message;
     }
 
     /// Set the current stage and its name
     pub async fn set_stage(&self, stage: u8, name: &str) {
         self.stage.store(stage, Ordering::SeqCst);
-        let mut stage_name = self.stage_name.lock().await;
-        *stage_name = name.to_string();
+        let mut metadata = self.metadata.lock().await;
+        metadata.stage_name = name.to_string();
     }
 
     /// Calculate and update the estimated time remaining
@@ -99,8 +105,8 @@ impl ProgressState {
             let estimated_total = elapsed.as_secs_f64() / progress_ratio;
             let remaining = (estimated_total - elapsed.as_secs_f64()).max(0.0);
 
-            let mut est = self.estimated_remaining.lock().await;
-            *est = Some(Duration::from_secs_f64(remaining));
+            let mut metadata = self.metadata.lock().await;
+            metadata.estimated_remaining = Some(Duration::from_secs_f64(remaining));
         }
     }
 
@@ -110,18 +116,19 @@ impl ProgressState {
         self.current
             .store(self.total.load(Ordering::SeqCst), Ordering::SeqCst);
         self.stage.store(100, Ordering::SeqCst);
-        let mut stage_name = self.stage_name.lock().await;
-        *stage_name = "Completed".to_string();
+        let mut metadata = self.metadata.lock().await;
+        metadata.stage_name = "Completed".to_string();
     }
 
     /// Get the current progress state
     pub async fn get_progress(&self) -> (u64, u64, String, Option<Duration>, u8, String) {
         let current = self.current.load(Ordering::SeqCst);
         let total = self.total.load(Ordering::SeqCst);
-        let message = self.message.lock().await.clone();
-        let remaining = *self.estimated_remaining.lock().await;
+        let metadata = self.metadata.lock().await;
+        let message = metadata.message.clone();
+        let remaining = metadata.estimated_remaining;
         let stage = self.stage.load(Ordering::SeqCst);
-        let stage_name = self.stage_name.lock().await.clone();
+        let stage_name = metadata.stage_name.clone();
 
         (current, total, message, remaining, stage, stage_name)
     }
@@ -133,8 +140,8 @@ impl ProgressState {
 
     /// Check if enough time has passed since last update to warrant a UI refresh
     pub async fn should_update(&self) -> bool {
-        let last_update = self.last_update.lock().await;
-        last_update.elapsed() >= Duration::from_millis(100)
+        let metadata = self.metadata.lock().await;
+        metadata.last_update.elapsed() >= Duration::from_millis(100)
     }
 }
 

@@ -66,17 +66,23 @@ impl Priority {
 
 /// Adaptive Rate Limiter with per-tool priority and exponential backoff.
 pub struct AdaptiveRateLimiter {
-    buckets: Mutex<HashMap<String, TokenBucket>>,
-    tool_priorities: Mutex<HashMap<String, Priority>>,
+    inner: Mutex<RateLimiterInner>,
     default_capacity: f64,
     default_refill_rate: f64,
+}
+
+struct RateLimiterInner {
+    buckets: HashMap<String, TokenBucket>,
+    tool_priorities: HashMap<String, Priority>,
 }
 
 impl AdaptiveRateLimiter {
     pub fn new(default_capacity: f64, default_refill_rate: f64) -> Self {
         Self {
-            buckets: Mutex::new(HashMap::new()),
-            tool_priorities: Mutex::new(HashMap::new()),
+            inner: Mutex::new(RateLimiterInner {
+                buckets: HashMap::new(),
+                tool_priorities: HashMap::new(),
+            }),
             default_capacity,
             default_refill_rate,
         }
@@ -133,11 +139,13 @@ impl Default for AdaptiveRateLimiter {
 impl AdaptiveRateLimiter {
     /// Set a priority level for a specific tool.
     pub fn set_priority(&self, tool_name: &str, priority: Priority) {
-        if let Ok(mut priorities) = self.tool_priorities.lock() {
-            priorities.insert(tool_name.to_string(), priority);
+        if let Ok(mut inner) = self.inner.lock() {
+            inner
+                .tool_priorities
+                .insert(tool_name.to_string(), priority);
         } else {
             warn!(
-                "adaptive rate limiter priority lock poisoned while setting priority for '{}'",
+                "adaptive rate limiter state lock poisoned while setting priority for '{}'",
                 tool_name
             );
         }
@@ -146,28 +154,24 @@ impl AdaptiveRateLimiter {
     /// Try to acquire permission to execute a tool.
     /// Returns Ok(()) if allowed, or Err(Duration) indicating suggested wait time.
     pub fn try_acquire(&self, tool_name: &str) -> Result<(), Duration> {
-        let Ok(mut buckets) = self.buckets.lock() else {
+        let Ok(mut inner) = self.inner.lock() else {
             warn!(
-                "adaptive rate limiter bucket lock poisoned while acquiring '{}'",
+                "adaptive rate limiter state lock poisoned while acquiring '{}'",
                 tool_name
             );
             return Err(Duration::from_millis(100));
         };
-        let bucket = buckets
-            .entry(tool_name.to_string())
-            .or_insert_with(|| TokenBucket::new(self.default_capacity, self.default_refill_rate));
 
-        let Ok(priorities) = self.tool_priorities.lock() else {
-            warn!(
-                "adaptive rate limiter priority lock poisoned while acquiring '{}'",
-                tool_name
-            );
-            return Err(Duration::from_millis(100));
-        };
-        let priority = priorities
+        let priority = inner
+            .tool_priorities
             .get(tool_name)
             .copied()
             .unwrap_or(Priority::Normal);
+
+        let bucket = inner
+            .buckets
+            .entry(tool_name.to_string())
+            .or_insert_with(|| TokenBucket::new(self.default_capacity, self.default_refill_rate));
         let cost = priority.weight();
 
         if bucket.try_acquire(cost) {

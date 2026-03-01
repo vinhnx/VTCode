@@ -21,9 +21,20 @@ impl CacheKey for CommandCacheKey {
     }
 }
 
+fn command_cache_key(command: &str, cwd: &Path) -> CommandCacheKey {
+    CommandCacheKey {
+        command: command.to_string(),
+        cwd: cwd.to_path_buf(),
+    }
+}
+
 struct CommandCache {
-    config: Mutex<CommandCacheConfig>,
-    cache: Mutex<UnifiedCache<CommandCacheKey, ShellOutput>>,
+    inner: Mutex<CommandCacheInner>,
+}
+
+struct CommandCacheInner {
+    config: CommandCacheConfig,
+    cache: UnifiedCache<CommandCacheKey, ShellOutput>,
 }
 
 static COMMAND_CACHE: Lazy<CommandCache> =
@@ -64,8 +75,7 @@ impl CommandCache {
     fn new(config: CommandCacheConfig) -> Self {
         let cache = Self::build_cache(&config);
         Self {
-            config: Mutex::new(config),
-            cache: Mutex::new(cache),
+            inner: Mutex::new(CommandCacheInner { config, cache }),
         }
     }
 
@@ -78,12 +88,12 @@ impl CommandCache {
     }
 
     fn configure(&self, config: &CommandCacheConfig) {
-        *self.config.lock() = config.clone();
-        *self.cache.lock() = Self::build_cache(config);
+        let mut inner = self.inner.lock();
+        inner.config = config.clone();
+        inner.cache = Self::build_cache(config);
     }
 
-    fn allowlisted(&self, command: &str) -> bool {
-        let cfg = self.config.lock();
+    fn allowlisted_with_config(cfg: &CommandCacheConfig, command: &str) -> bool {
         if !cfg.enabled {
             return false;
         }
@@ -94,27 +104,28 @@ impl CommandCache {
         })
     }
 
+    fn allowlisted(&self, command: &str) -> bool {
+        let inner = self.inner.lock();
+        Self::allowlisted_with_config(&inner.config, command)
+    }
+
     fn get(&self, command: &str, cwd: &Path) -> Option<ShellOutput> {
-        if !self.allowlisted(command) {
+        let inner = self.inner.lock();
+        if !Self::allowlisted_with_config(&inner.config, command) {
             return None;
         }
-        let key = CommandCacheKey {
-            command: command.to_string(),
-            cwd: cwd.to_path_buf(),
-        };
-        self.cache.lock().get_owned(&key)
+        let key = command_cache_key(command, cwd);
+        inner.cache.get_owned(&key)
     }
 
     fn put(&self, command: &str, cwd: &Path, output: ShellOutput) {
-        if !self.allowlisted(command) || output.exit_code != 0 {
+        let inner = self.inner.lock();
+        if !Self::allowlisted_with_config(&inner.config, command) || output.exit_code != 0 {
             return;
         }
-        let key = CommandCacheKey {
-            command: command.to_string(),
-            cwd: cwd.to_path_buf(),
-        };
+        let key = command_cache_key(command, cwd);
         let size = (output.stdout.len() + output.stderr.len()) as u64;
-        self.cache.lock().insert(key, output, size);
+        inner.cache.insert(key, output, size);
     }
 }
 
@@ -135,10 +146,7 @@ pub async fn enter_inflight(command: &str, cwd: &Path) -> Option<InFlightState> 
         return None;
     }
 
-    let key = CommandCacheKey {
-        command: command.to_string(),
-        cwd: cwd.to_path_buf(),
-    };
+    let key = command_cache_key(command, cwd);
 
     let mut inflight = IN_FLIGHT.lock().await;
     if let Some(waiters) = inflight.get_mut(&key) {

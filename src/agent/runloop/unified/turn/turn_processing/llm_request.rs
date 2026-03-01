@@ -96,20 +96,18 @@ fn compact_tool_messages_for_retry(messages: &[uni::Message]) -> Vec<uni::Messag
             continue;
         }
 
-        let mut cloned = message.clone();
         let text = message.content.as_text();
-        let mut truncated = String::new();
-        let mut chars = text.chars();
-        for _ in 0..TOOL_RETRY_MAX_CHARS {
-            if let Some(ch) = chars.next() {
-                truncated.push(ch);
-            } else {
-                break;
-            }
+        if text.chars().count() <= TOOL_RETRY_MAX_CHARS {
+            compacted.push(message.clone());
+            continue;
         }
-        if chars.next().is_some() {
+
+        let mut truncated = text.chars().take(TOOL_RETRY_MAX_CHARS).collect::<String>();
+        if truncated.len() < text.len() {
             truncated.push_str("\n... [tool output truncated for retry]");
         }
+
+        let mut cloned = message.clone();
         cloned.content = uni::MessageContent::text(truncated);
         compacted.push(cloned);
     }

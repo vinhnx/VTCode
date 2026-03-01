@@ -102,6 +102,13 @@ struct CachedToolDiscoveryEntry {
     timestamp: Instant,
 }
 
+struct DiscoveryCacheInner {
+    bloom_filter: BloomFilter,
+    detailed_cache: LruCache<ToolDiscoveryCacheKey, CachedToolDiscoveryEntry>,
+    all_tools_cache: FxHashMap<String, Vec<McpToolInfo>>,
+    last_refresh: FxHashMap<String, Instant>,
+}
+
 /// Cached tool discovery result (matches actual API)
 #[derive(Debug, Clone)]
 pub struct ToolDiscoveryResult {
@@ -112,14 +119,7 @@ pub struct ToolDiscoveryResult {
 
 /// Multi-level caching system for tool discovery
 pub struct ToolDiscoveryCache {
-    /// Bloom filter for fast negative lookups
-    bloom_filter: Arc<RwLock<BloomFilter>>,
-    /// Detailed cache for positive results
-    detailed_cache: Arc<RwLock<LruCache<ToolDiscoveryCacheKey, CachedToolDiscoveryEntry>>>,
-    /// Cache of all tools for each provider
-    all_tools_cache: Arc<RwLock<FxHashMap<String, Vec<McpToolInfo>>>>,
-    /// Last refresh time for each provider
-    last_refresh: Arc<RwLock<FxHashMap<String, Instant>>>,
+    inner: Arc<RwLock<DiscoveryCacheInner>>,
     /// Cache configuration
     config: CacheConfig,
 }
@@ -149,18 +149,20 @@ impl ToolDiscoveryCache {
         let cache_size = NonZeroUsize::new(capacity).unwrap_or(NonZeroUsize::new(100).unwrap());
 
         Self {
-            bloom_filter: Arc::new(RwLock::new(bloom_filter)),
-            detailed_cache: Arc::new(RwLock::new(LruCache::new(cache_size))),
-            all_tools_cache: Arc::new(RwLock::new(FxHashMap::default())),
-            last_refresh: Arc::new(RwLock::new(FxHashMap::default())),
+            inner: Arc::new(RwLock::new(DiscoveryCacheInner {
+                bloom_filter,
+                detailed_cache: LruCache::new(cache_size),
+                all_tools_cache: FxHashMap::default(),
+                last_refresh: FxHashMap::default(),
+            })),
             config,
         }
     }
 
     /// Check if a tool might exist (fast negative lookup)
     pub fn might_have_tool(&self, tool_name: &str) -> bool {
-        match self.bloom_filter.read() {
-            Ok(bloom_filter) => bloom_filter.contains(tool_name),
+        match self.inner.read() {
+            Ok(inner) => inner.bloom_filter.contains(tool_name),
             Err(_) => {
                 tracing::warn!("Bloom filter lock poisoned, assuming tool might exist");
                 true
@@ -174,7 +176,7 @@ impl ToolDiscoveryCache {
         provider_name: &str,
         keyword: &str,
         detail_level: DetailLevel,
-    ) -> Option<Vec<ToolDiscoveryResult>> {
+    ) -> Option<Arc<Vec<ToolDiscoveryResult>>> {
         // OPTIMIZATION: Use to_owned() for explicit String allocation
         let key = ToolDiscoveryCacheKey {
             provider_name: provider_name.to_owned(),
@@ -182,22 +184,21 @@ impl ToolDiscoveryCache {
             detail_level,
         };
 
-        let mut detailed_cache = match self.detailed_cache.write() {
-            Ok(cache) => cache,
+        let mut inner = match self.inner.write() {
+            Ok(inner) => inner,
             Err(e) => {
                 tracing::error!("Detailed cache lock poisoned: {}", e);
                 return None;
             }
         };
 
-        if let Some(cached) = detailed_cache.get(&key) {
+        if let Some(cached) = inner.detailed_cache.get(&key) {
             // Check if the cached entry is still fresh
             if cached.timestamp.elapsed() < self.config.max_age {
-                // OPTIMIZATION: Arc allows returning owned Vec without cloning the data
-                return Some((*cached.results).clone());
+                return Some(Arc::clone(&cached.results));
             } else {
                 // Entry is stale, remove it
-                detailed_cache.pop(&key);
+                inner.detailed_cache.pop(&key);
             }
         }
 
@@ -212,6 +213,16 @@ impl ToolDiscoveryCache {
         detail_level: DetailLevel,
         results: Vec<ToolDiscoveryResult>,
     ) {
+        self.cache_discovery_shared(provider_name, keyword, detail_level, Arc::new(results));
+    }
+
+    fn cache_discovery_shared(
+        &self,
+        provider_name: &str,
+        keyword: &str,
+        detail_level: DetailLevel,
+        results: Arc<Vec<ToolDiscoveryResult>>,
+    ) {
         // OPTIMIZATION: Use to_owned() for explicit String allocation
         let key = ToolDiscoveryCacheKey {
             provider_name: provider_name.to_owned(),
@@ -221,26 +232,19 @@ impl ToolDiscoveryCache {
 
         let cached = CachedToolDiscoveryEntry {
             // OPTIMIZATION: Wrap in Arc once, share across cache hits
-            results: Arc::new(results.clone()),
+            results: Arc::clone(&results),
             timestamp: Instant::now(),
         };
 
-        if let Ok(mut detailed_cache) = self.detailed_cache.write() {
-            detailed_cache.put(key, cached);
-        } else {
-            tracing::error!("Failed to acquire detailed cache lock for writing");
+        let Ok(mut inner) = self.inner.write() else {
+            tracing::error!("Failed to acquire discovery cache lock for writing");
             return;
-        }
+        };
 
-        // Update bloom filter with all tool names
-        if !results.is_empty() {
-            if let Ok(mut bloom_filter) = self.bloom_filter.write() {
-                for result in &results {
-                    bloom_filter.insert(&result.tool.name);
-                }
-            } else {
-                tracing::error!("Failed to acquire bloom filter lock for writing");
-            }
+        inner.detailed_cache.put(key, cached);
+
+        for result in results.iter() {
+            inner.bloom_filter.insert(&result.tool.name);
         }
     }
 
@@ -250,71 +254,55 @@ impl ToolDiscoveryCache {
         provider_name: &str,
         refresh_if_stale: bool,
     ) -> Option<Vec<McpToolInfo>> {
-        let last_refresh = match self.last_refresh.read() {
-            Ok(lr) => lr,
+        let inner = match self.inner.read() {
+            Ok(inner) => inner,
             Err(e) => {
-                error!("Last refresh lock poisoned: {}", e);
+                error!("Discovery cache lock poisoned: {}", e);
                 return None;
             }
         };
-        let should_refresh = if let Some(last) = last_refresh.get(provider_name) {
+
+        let should_refresh = if let Some(last) = inner.last_refresh.get(provider_name) {
             last.elapsed() > self.config.provider_refresh_interval
         } else {
             true
         };
-        drop(last_refresh);
 
         if should_refresh && refresh_if_stale {
             return None; // Signal that refresh is needed
         }
 
-        match self.all_tools_cache.read() {
-            Ok(all_tools_cache) => all_tools_cache.get(provider_name).cloned(),
-            Err(e) => {
-                error!("All tools cache lock poisoned: {}", e);
-                None
-            }
-        }
+        inner.all_tools_cache.get(provider_name).cloned()
     }
 
     /// Cache all tools for a provider
     pub fn cache_all_tools(&self, provider_name: &str, tools: Vec<McpToolInfo>) {
-        // Update all tools cache
-        let mut all_tools_cache = match self.all_tools_cache.write() {
-            Ok(cache) => cache,
+        let mut inner = match self.inner.write() {
+            Ok(inner) => inner,
             Err(e) => {
-                tracing::error!("All tools cache lock poisoned: {}", e);
+                tracing::error!("Discovery cache lock poisoned: {}", e);
                 return;
             }
         };
-        all_tools_cache.insert(provider_name.to_owned(), tools.clone());
 
-        // Update last refresh time
-        if let Ok(mut last_refresh) = self.last_refresh.write() {
-            last_refresh.insert(provider_name.to_owned(), Instant::now());
-        } else {
-            tracing::error!("Failed to update last refresh time");
-        }
+        inner
+            .all_tools_cache
+            .insert(provider_name.to_owned(), tools.clone());
+        inner
+            .last_refresh
+            .insert(provider_name.to_owned(), Instant::now());
 
         // Update bloom filter with all tool names
-        let mut bloom_filter = match self.bloom_filter.write() {
-            Ok(bf) => bf,
-            Err(e) => {
-                tracing::error!("Bloom filter lock poisoned: {}", e);
-                return;
-            }
-        };
-        bloom_filter.clear(); // Clear and rebuild for accuracy
+        inner.bloom_filter.clear(); // Clear and rebuild for accuracy
 
-        for tool in &tools {
-            bloom_filter.insert(&tool.name);
-        }
+        let all_tool_names: Vec<String> = inner
+            .all_tools_cache
+            .values()
+            .flat_map(|provider_tools| provider_tools.iter().map(|tool| tool.name.clone()))
+            .collect();
 
-        // Also update from other providers
-        for other_tools in all_tools_cache.values() {
-            for tool in other_tools {
-                bloom_filter.insert(&tool.name);
-            }
+        for tool_name in all_tool_names {
+            inner.bloom_filter.insert(&tool_name);
         }
     }
 
@@ -327,39 +315,29 @@ impl ToolDiscoveryCache {
 
     /// Clear all caches
     pub fn clear(&self) {
-        if let Ok(mut bf) = self.bloom_filter.write() {
-            bf.clear();
-        }
-        if let Ok(mut dc) = self.detailed_cache.write() {
-            dc.clear();
-        }
-        if let Ok(mut atc) = self.all_tools_cache.write() {
-            atc.clear();
-        }
-        if let Ok(mut lr) = self.last_refresh.write() {
-            lr.clear();
+        if let Ok(mut inner) = self.inner.write() {
+            inner.bloom_filter.clear();
+            inner.detailed_cache.clear();
+            inner.all_tools_cache.clear();
+            inner.last_refresh.clear();
         }
     }
 
     /// Get cache statistics
     pub fn stats(&self) -> ToolCacheStats {
-        let (detailed_entries, detailed_capacity) = self
-            .detailed_cache
+        let (detailed_entries, detailed_capacity, all_tools_entries, bf_size, bf_hashes) = self
+            .inner
             .read()
-            .map(|cache| (cache.len(), cache.cap().get()))
-            .unwrap_or((0, 0));
-
-        let all_tools_entries = self
-            .all_tools_cache
-            .read()
-            .map(|cache| cache.len())
-            .unwrap_or(0);
-
-        let (bf_size, bf_hashes) = self
-            .bloom_filter
-            .read()
-            .map(|bf| (bf.size, bf.num_hashes))
-            .unwrap_or((0, 0));
+            .map(|inner| {
+                (
+                    inner.detailed_cache.len(),
+                    inner.detailed_cache.cap().get(),
+                    inner.all_tools_cache.len(),
+                    inner.bloom_filter.size,
+                    inner.bloom_filter.num_hashes,
+                )
+            })
+            .unwrap_or((0, 0, 0, 0, 0));
 
         ToolCacheStats {
             detailed_cache_entries: detailed_entries,
@@ -400,10 +378,10 @@ impl CachedToolDiscovery {
         keyword: &str,
         detail_level: DetailLevel,
         all_tools: Vec<McpToolInfo>,
-    ) -> Vec<ToolDiscoveryResult> {
+    ) -> Arc<Vec<ToolDiscoveryResult>> {
         // Check bloom filter first (fast negative lookup)
         if !self.cache.might_have_tool(keyword) && !keyword.is_empty() {
-            return Vec::new();
+            return Arc::new(Vec::new());
         }
 
         // Check detailed cache
@@ -415,11 +393,15 @@ impl CachedToolDiscovery {
         }
 
         // Perform the search
-        let results = self.perform_search(&all_tools, keyword, detail_level);
+        let results = Arc::new(self.perform_search(&all_tools, keyword, detail_level));
 
         // Cache the results
-        self.cache
-            .cache_discovery(provider_name, keyword, detail_level, results.clone());
+        self.cache.cache_discovery_shared(
+            provider_name,
+            keyword,
+            detail_level,
+            Arc::clone(&results),
+        );
 
         results
     }

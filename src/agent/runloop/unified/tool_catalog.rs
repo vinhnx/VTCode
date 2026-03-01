@@ -63,6 +63,8 @@ impl ToolCatalogState {
             let defs_guard = tools.read().await;
             if defs_guard.is_empty() {
                 None
+            } else if defs_guard.len() == 1 {
+                Some(Arc::new(vec![defs_guard[0].clone()]))
             } else {
                 Some(Arc::new(sort_tool_definitions(defs_guard.clone())))
             }

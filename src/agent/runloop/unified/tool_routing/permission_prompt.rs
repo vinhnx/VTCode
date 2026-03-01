@@ -121,8 +121,8 @@ pub(super) fn shell_requests_elevated_sandbox_permissions(
 ) -> bool {
     let args = shell_run_args(tool_name, tool_args);
     args.map(parse_shell_sandbox_permissions)
-    .map(|permissions| permissions.requires_approval())
-    .unwrap_or(false)
+        .map(|permissions| permissions.requires_approval())
+        .unwrap_or(false)
 }
 
 fn tool_args_diff_preview(tool_name: &str, tool_args: Option<&Value>) -> Option<Vec<String>> {
