@@ -369,11 +369,38 @@ fn bang_prefix_input_enables_shell_mode_border_title() {
 }
 
 #[test]
+fn bang_prefix_input_uses_zero_padding_for_visible_input_area() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.set_input("!echo hello".to_string());
+
+    assert_eq!(
+        session.input_block_padding(),
+        ratatui::widgets::Padding::new(0, 0, 0, 0)
+    );
+}
+
+#[test]
 fn non_bang_input_has_no_shell_mode_border_title() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
     session.set_input("run ls -la".to_string());
 
     assert_eq!(session.shell_mode_border_title(), None);
+}
+
+#[test]
+fn non_bang_input_uses_default_padding() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.set_input("run ls -la".to_string());
+
+    assert_eq!(
+        session.input_block_padding(),
+        ratatui::widgets::Padding::new(
+            ui::INLINE_INPUT_PADDING_HORIZONTAL,
+            ui::INLINE_INPUT_PADDING_HORIZONTAL,
+            ui::INLINE_INPUT_PADDING_VERTICAL,
+            ui::INLINE_INPUT_PADDING_VERTICAL,
+        )
+    );
 }
 
 #[test]
