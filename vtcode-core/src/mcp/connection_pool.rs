@@ -11,7 +11,7 @@ use tracing::{error, info, warn};
 
 use super::{McpElicitationHandler, McpProvider};
 use crate::config::mcp::{McpAllowListConfig, McpProviderConfig};
-use rmcp::model::{ClientCapabilities, Implementation, InitializeRequestParams};
+use rmcp::model::{ClientCapabilities, InitializeRequestParams};
 
 /// MCP connection pool for efficient provider management
 pub struct McpConnectionPool {
@@ -387,13 +387,7 @@ fn build_pool_initialize_params(_provider: &McpProvider) -> InitializeRequestPar
         capabilities: ClientCapabilities {
             ..Default::default()
         },
-        client_info: Implementation {
-            name: "vtcode".to_owned(),
-            version: env!("CARGO_PKG_VERSION").to_string(),
-            title: None,
-            icons: None,
-            website_url: None,
-        },
+        client_info: super::utils::build_client_implementation(),
         protocol_version: rmcp::model::ProtocolVersion::V_2024_11_05,
     }
 }

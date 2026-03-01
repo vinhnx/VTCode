@@ -376,6 +376,7 @@ mod tests {
                 name: "vtcode".to_owned(),
                 version: "1.0".to_owned(),
                 title: None,
+                description: None,
                 icons: None,
                 website_url: None,
             },

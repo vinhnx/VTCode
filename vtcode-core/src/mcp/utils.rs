@@ -4,10 +4,25 @@ use anyhow::{Context, Result};
 use chrono::Local;
 use iana_time_zone::get_timezone;
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
+use rmcp::model::Implementation;
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::env;
 use tracing::{debug, warn};
+
+/// Build the standard Implementation struct for vtcode MCP client.
+/// 
+/// This ensures consistent client identification across all MCP connections.
+pub fn build_client_implementation() -> Implementation {
+    Implementation {
+        name: "vtcode".to_owned(),
+        version: env!("CARGO_PKG_VERSION").to_string(),
+        title: None,
+        description: None,
+        icons: None,
+        website_url: None,
+    }
+}
 
 /// Environment variable for explicit local timezone override.
 pub const LOCAL_TIMEZONE_ENV_VAR: &str = "VTCODE_LOCAL_TIMEZONE";

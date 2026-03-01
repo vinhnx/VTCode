@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use chrono::Utc;
 use parking_lot::RwLock;
 use rmcp::model::{
-    CallToolResult, ClientCapabilities, Implementation, InitializeRequestParams, RootsCapabilities,
+    CallToolResult, ClientCapabilities, InitializeRequestParams, RootsCapabilities,
 };
 use rustc_hash::FxHashMap;
 use serde_json::{Map, Value, json};
@@ -902,20 +902,17 @@ impl McpClient {
         if self.elicitation_handler.is_some() {
             // Elicitation is now a first-class capability in rmcp
             capabilities.elicitation = Some(rmcp::model::ElicitationCapability {
-                schema_validation: Some(true),
+                form: Some(rmcp::model::FormElicitationCapability {
+                    schema_validation: Some(true),
+                }),
+                ..Default::default()
             });
         }
 
         InitializeRequestParams {
             meta: None,
             capabilities,
-            client_info: Implementation {
-                name: "vtcode".to_owned(),
-                version: env!("CARGO_PKG_VERSION").to_string(),
-                title: None,
-                icons: None,
-                website_url: None,
-            },
+            client_info: super::utils::build_client_implementation(),
             protocol_version: rmcp::model::ProtocolVersion::V_2024_11_05,
         }
     }

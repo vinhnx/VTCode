@@ -445,19 +445,46 @@ impl ClientHandler for LoggingClientHandler {
             };
 
             if let Some(handler) = handler {
-                let schema_value = match serde_json::to_value(&request.requested_schema) {
-                    Ok(value) => value,
-                    Err(err) => {
-                        warn!(
-                            provider = provider.as_str(),
-                            error = %err,
-                            "Failed to serialize MCP elicitation schema; using null placeholder"
-                        );
-                        Value::Null
+                // Extract message and schema from the enum variants
+                let (message, schema_value) = match &request {
+                    CreateElicitationRequestParams::FormElicitationParams {
+                        message,
+                        requested_schema,
+                        ..
+                    } => {
+                        let schema_value = match serde_json::to_value(requested_schema) {
+                            Ok(value) => value,
+                            Err(err) => {
+                                warn!(
+                                    provider = provider.as_str(),
+                                    error = %err,
+                                    "Failed to serialize MCP elicitation schema; using null placeholder"
+                                );
+                                Value::Null
+                            }
+                        };
+                        (message.clone(), schema_value)
+                    }
+                    CreateElicitationRequestParams::UrlElicitationParams {
+                        message,
+                        url,
+                        ..
+                    } => {
+                        // For URL-based elicitation, create a simple schema with the URL
+                        let schema_value = json!({
+                            "type": "object",
+                            "properties": {
+                                "url": {
+                                    "type": "string",
+                                    "const": url
+                                }
+                            }
+                        });
+                        (message.clone(), schema_value)
                     }
                 };
+
                 let validator = build_elicitation_validator(provider.as_str(), &schema_value);
-                let message = request.message.clone();
                 let payload = super::McpElicitationRequest {
                     message: message.clone(),
                     requested_schema: schema_value.clone(),
@@ -492,9 +519,17 @@ impl ClientHandler for LoggingClientHandler {
                     }
                 }
             } else {
+                let message_str = match &request {
+                    CreateElicitationRequestParams::FormElicitationParams { message, .. } => {
+                        message.as_str()
+                    }
+                    CreateElicitationRequestParams::UrlElicitationParams { message, .. } => {
+                        message.as_str()
+                    }
+                };
                 info!(
                     provider = provider.as_str(),
-                    message = request.message.as_str(),
+                    message = message_str,
                     "MCP provider requested elicitation but no handler configured; declining"
                 );
             }

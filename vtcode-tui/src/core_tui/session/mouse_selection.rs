@@ -73,11 +73,17 @@ impl MouseSelectionState {
             return String::new();
         }
 
+        // Clamp to the actual buffer area to avoid out-of-range buffer indexing panics.
+        let area = area.intersection(buf.area);
+        if area.width == 0 || area.height == 0 {
+            return String::new();
+        }
+
         let ((start_col, start_row), (end_col, end_row)) = self.normalized();
         let mut result = String::new();
 
         for row in start_row..=end_row {
-            if row < area.y || row >= area.y + area.height {
+            if row < area.y || row >= area.bottom() {
                 continue;
             }
             let line_start = if row == start_row {
@@ -86,13 +92,13 @@ impl MouseSelectionState {
                 area.x
             };
             let line_end = if row == end_row {
-                end_col.min(area.x + area.width)
+                end_col.min(area.right())
             } else {
-                area.x + area.width
+                area.right()
             };
 
             for col in line_start..line_end {
-                if col < area.x || col >= area.x + area.width {
+                if col < area.x || col >= area.right() {
                     continue;
                 }
                 let cell = &buf[(col, row)];
@@ -122,10 +128,16 @@ impl MouseSelectionState {
             return;
         }
 
+        // Clamp to the actual buffer area to avoid out-of-range buffer indexing panics.
+        let area = area.intersection(buf.area);
+        if area.width == 0 || area.height == 0 {
+            return;
+        }
+
         let ((start_col, start_row), (end_col, end_row)) = self.normalized();
 
         for row in start_row..=end_row {
-            if row < area.y || row >= area.y + area.height {
+            if row < area.y || row >= area.bottom() {
                 continue;
             }
             let line_start = if row == start_row {
@@ -134,13 +146,13 @@ impl MouseSelectionState {
                 area.x
             };
             let line_end = if row == end_row {
-                end_col.min(area.x + area.width)
+                end_col.min(area.right())
             } else {
-                area.x + area.width
+                area.right()
             };
 
             for col in line_start..line_end {
-                if col < area.x || col >= area.x + area.width {
+                if col < area.x || col >= area.right() {
                     continue;
                 }
                 let cell = &mut buf[(col, row)];
@@ -173,5 +185,43 @@ impl MouseSelectionState {
             CopyToClipboard::to_clipboard_from(text.as_bytes())
         );
         let _ = std::io::stderr().flush();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ratatui::style::Color;
+
+    #[test]
+    fn extract_text_clamps_area_to_buffer_bounds() {
+        let mut buf = Buffer::empty(Rect::new(0, 0, 2, 2));
+        buf[(0, 0)].set_symbol("A");
+        buf[(1, 0)].set_symbol("B");
+        buf[(0, 1)].set_symbol("C");
+        buf[(1, 1)].set_symbol("D");
+
+        let mut selection = MouseSelectionState::new();
+        selection.start_selection(0, 0);
+        selection.finish_selection(5, 5);
+
+        let text = selection.extract_text(&buf, Rect::new(0, 0, 10, 10));
+        assert_eq!(text, "AB\nCD");
+    }
+
+    #[test]
+    fn apply_highlight_clamps_area_to_buffer_bounds() {
+        let mut buf = Buffer::empty(Rect::new(0, 0, 1, 1));
+        buf[(0, 0)].set_fg(Color::Red);
+        buf[(0, 0)].set_bg(Color::Blue);
+
+        let mut selection = MouseSelectionState::new();
+        selection.start_selection(0, 0);
+        selection.finish_selection(5, 5);
+
+        selection.apply_highlight(&mut buf, Rect::new(0, 0, 10, 10));
+
+        assert_eq!(buf[(0, 0)].fg, Color::Blue);
+        assert_eq!(buf[(0, 0)].bg, Color::Red);
     }
 }

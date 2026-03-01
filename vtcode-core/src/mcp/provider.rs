@@ -541,13 +541,7 @@ impl McpProvider {
         let init_params = InitializeRequestParams {
             meta: None,
             capabilities: rmcp::model::ClientCapabilities::default(),
-            client_info: rmcp::model::Implementation {
-                name: "vtcode".to_owned(),
-                version: env!("CARGO_PKG_VERSION").to_string(),
-                title: None,
-                icons: None,
-                website_url: None,
-            },
+            client_info: super::utils::build_client_implementation(),
             protocol_version: rmcp::model::ProtocolVersion::V_2024_11_05,
         };
         self.initialize(init_params, startup_timeout, tool_timeout, allowlist)
