@@ -106,8 +106,7 @@ pub struct AgentRunner {
     /// Tracks the latest reasoning stage name for the current turn
     last_reasoning_stage: Mutex<Option<String>>,
     /// Receiver for steering messages (e.g., stop, pause)
-    steering_receiver:
-        Mutex<Option<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>>,
+    steering_receiver: Mutex<Option<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>>,
 }
 
 impl AgentRunner {

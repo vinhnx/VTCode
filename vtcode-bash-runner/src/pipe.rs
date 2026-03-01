@@ -23,9 +23,6 @@ use tokio::task::JoinHandle;
 use crate::process::{ChildTerminator, ProcessHandle, SpawnedProcess};
 use crate::process_group;
 
-#[cfg(target_os = "linux")]
-use libc;
-
 /// Terminator for pipe-based child processes.
 struct PipeChildTerminator {
     #[cfg(windows)]
@@ -136,7 +133,6 @@ impl PipeSpawnOptions {
 }
 
 /// Spawn a process using regular pipes, with configurable options.
-#[allow(unsafe_code)]
 async fn spawn_process_internal(opts: PipeSpawnOptions) -> Result<SpawnedProcess> {
     if opts.program.is_empty() {
         anyhow::bail!("missing program for pipe spawn");
@@ -149,17 +145,9 @@ async fn spawn_process_internal(opts: PipeSpawnOptions) -> Result<SpawnedProcess
         command.arg0(arg0);
     }
 
-    #[cfg(target_os = "linux")]
-    let parent_pid = unsafe { libc::getpid() };
-
     #[cfg(unix)]
-    unsafe {
-        command.pre_exec(move || {
-            process_group::detach_from_tty()?;
-            #[cfg(target_os = "linux")]
-            process_group::set_parent_death_signal(parent_pid)?;
-            Ok(())
-        });
+    {
+        command.process_group(0);
     }
 
     #[cfg(not(unix))]

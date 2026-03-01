@@ -893,9 +893,7 @@ where
 /// - type: Configured value (default: "enabled")
 /// - budget_tokens: Configured value (default: 12000)
 #[inline]
-pub fn make_anthropic_thinking_config(
-    config: &crate::config::core::AnthropicConfig,
-) -> Value {
+pub fn make_anthropic_thinking_config(config: &crate::config::core::AnthropicConfig) -> Value {
     serde_json::json!({
         "thinking": {
             "type": config.interleaved_thinking_type_enabled,

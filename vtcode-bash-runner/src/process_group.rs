@@ -19,10 +19,16 @@
 //!
 //! Inspired by codex-rs/utils/pty process group management patterns.
 
-#![allow(unsafe_code)]
-
 use std::io;
 
+#[cfg(unix)]
+use nix::errno::Errno;
+#[cfg(target_os = "linux")]
+use nix::sys::prctl;
+#[cfg(unix)]
+use nix::sys::signal::{self, Signal};
+#[cfg(unix)]
+use nix::unistd::{self, Pid};
 #[cfg(unix)]
 use tokio::process::Child;
 
@@ -43,33 +49,31 @@ pub enum KillSignal {
 
 #[cfg(unix)]
 impl KillSignal {
-    fn as_libc_signal(self) -> libc::c_int {
+    fn as_nix_signal(self) -> Signal {
         match self {
-            KillSignal::Int => libc::SIGINT,
-            KillSignal::Term => libc::SIGTERM,
-            KillSignal::Kill => libc::SIGKILL,
+            KillSignal::Int => Signal::SIGINT,
+            KillSignal::Term => Signal::SIGTERM,
+            KillSignal::Kill => Signal::SIGKILL,
         }
     }
+}
+
+#[cfg(unix)]
+fn nix_err_to_io(err: Errno) -> io::Error {
+    io::Error::from_raw_os_error(err as i32)
 }
 
 /// Ensure the child receives SIGTERM when the original parent dies.
 ///
 /// This should run in `pre_exec` and uses `parent_pid` captured before spawn to
 /// avoid a race where the parent exits between fork and exec.
-///
-/// # Safety
-/// This function uses unsafe libc calls and should only be called from a pre_exec hook.
 #[cfg(target_os = "linux")]
 pub fn set_parent_death_signal(parent_pid: libc::pid_t) -> io::Result<()> {
-    if unsafe { libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGTERM) } == -1 {
-        return Err(io::Error::last_os_error());
-    }
+    prctl::set_pdeathsig(Some(Signal::SIGTERM)).map_err(nix_err_to_io)?;
 
-    // Re-check parent PID to avoid race condition where parent exits between fork and exec
-    if unsafe { libc::getppid() } != parent_pid {
-        unsafe {
-            libc::raise(libc::SIGTERM);
-        }
+    // Re-check parent PID to avoid race condition where parent exits between fork and exec.
+    if unistd::getppid() != Pid::from_raw(parent_pid) {
+        signal::kill(unistd::getpid(), Signal::SIGTERM).map_err(nix_err_to_io)?;
     }
 
     Ok(())
@@ -87,16 +91,12 @@ pub fn set_parent_death_signal(_parent_pid: i32) -> io::Result<()> {
 /// signals from the controlling terminal.
 #[cfg(unix)]
 pub fn detach_from_tty() -> io::Result<()> {
-    let result = unsafe { libc::setsid() };
-    if result == -1 {
-        let err = io::Error::last_os_error();
-        // EPERM means we're already a session leader, fall back to setpgid
-        if err.raw_os_error() == Some(libc::EPERM) {
-            return set_process_group();
-        }
-        return Err(err);
+    match unistd::setsid() {
+        Ok(_) => Ok(()),
+        // EPERM means we're already a session leader, fall back to setpgid.
+        Err(Errno::EPERM) => set_process_group(),
+        Err(err) => Err(nix_err_to_io(err)),
     }
-    Ok(())
 }
 
 /// No-op on non-Unix platforms.
@@ -110,12 +110,7 @@ pub fn detach_from_tty() -> io::Result<()> {
 /// Intended for use in `pre_exec` so the child becomes the group leader.
 #[cfg(unix)]
 pub fn set_process_group() -> io::Result<()> {
-    let result = unsafe { libc::setpgid(0, 0) };
-    if result == -1 {
-        Err(io::Error::last_os_error())
-    } else {
-        Ok(())
-    }
+    unistd::setpgid(Pid::from_raw(0), Pid::from_raw(0)).map_err(nix_err_to_io)
 }
 
 /// No-op on non-Unix platforms.
@@ -137,38 +132,36 @@ pub fn kill_process_group_by_pid(pid: u32) -> io::Result<()> {
 pub fn kill_process_group_by_pid_with_signal(pid: u32, signal: KillSignal) -> io::Result<()> {
     use std::io::ErrorKind;
 
-    let pid_raw = pid as libc::pid_t;
-    let pgid = unsafe { libc::getpgid(pid_raw) };
+    let target_pid = Pid::from_raw(pid as libc::pid_t);
+    let pgid = unistd::getpgid(Some(target_pid));
     let mut pgid_err = None;
 
-    if pgid != -1 {
-        let result = unsafe { libc::killpg(pgid, signal.as_libc_signal()) };
-        if result == -1 {
-            let err = io::Error::last_os_error();
-            if err.kind() != ErrorKind::NotFound {
-                pgid_err = Some(err);
+    match pgid {
+        Ok(group) => {
+            if let Err(err) = signal::killpg(group, signal.as_nix_signal()) {
+                let io_err = nix_err_to_io(err);
+                if io_err.kind() != ErrorKind::NotFound {
+                    pgid_err = Some(io_err);
+                }
             }
         }
-    } else {
-        pgid_err = Some(io::Error::last_os_error());
+        Err(err) => pgid_err = Some(nix_err_to_io(err)),
     }
 
     // Always attempt to kill the direct child process handle as a fallback.
     // This ensures termination even if the cached PGID was stale or
     // the process group kill had issues.
-    let result = unsafe { libc::kill(pid_raw, signal.as_libc_signal()) };
-    if result == -1 {
-        let err = io::Error::last_os_error();
-        if err.kind() == ErrorKind::NotFound {
-            // If direct kill says not found, we're done regardless of pgid result
+    if let Err(err) = signal::kill(target_pid, signal.as_nix_signal()) {
+        let io_err = nix_err_to_io(err);
+        if io_err.kind() == ErrorKind::NotFound {
+            // If direct kill says not found, we're done regardless of pgid result.
             return Ok(());
         }
-        // If we have a pgid error and a direct kill error, prefer the pgid one
-        // if the direct one is also just a "not found" equivalent (ESRCH handled above)
-        if let Some(e) = pgid_err {
-            return Err(e);
+        // If we have a pgid error and a direct kill error, prefer the pgid one.
+        if let Some(pgid_error) = pgid_err {
+            return Err(pgid_error);
         }
-        return Err(err);
+        return Err(io_err);
     }
 
     Ok(())
@@ -197,12 +190,11 @@ pub fn kill_process_group(process_group_id: u32) -> io::Result<()> {
 pub fn kill_process_group_with_signal(process_group_id: u32, signal: KillSignal) -> io::Result<()> {
     use std::io::ErrorKind;
 
-    let pgid = process_group_id as libc::pid_t;
-    let result = unsafe { libc::killpg(pgid, signal.as_libc_signal()) };
-    if result == -1 {
-        let err = io::Error::last_os_error();
-        if err.kind() != ErrorKind::NotFound {
-            return Err(err);
+    let pgid = Pid::from_raw(process_group_id as libc::pid_t);
+    if let Err(err) = signal::killpg(pgid, signal.as_nix_signal()) {
+        let io_err = nix_err_to_io(err);
+        if io_err.kind() != ErrorKind::NotFound {
+            return Err(io_err);
         }
     }
 
@@ -261,19 +253,13 @@ pub fn kill_child_process_group_with_signal(
 /// Kill a process by PID on Windows.
 #[cfg(windows)]
 pub fn kill_process(pid: u32) -> io::Result<()> {
-    unsafe {
-        let handle = winapi::um::processthreadsapi::OpenProcess(
-            winapi::um::winnt::PROCESS_TERMINATE,
-            0,
-            pid,
-        );
-        if handle.is_null() {
-            return Err(io::Error::last_os_error());
-        }
-        let success = winapi::um::processthreadsapi::TerminateProcess(handle, 1);
-        let err = io::Error::last_os_error();
-        winapi::um::handleapi::CloseHandle(handle);
-        if success == 0 { Err(err) } else { Ok(()) }
+    let status = std::process::Command::new("taskkill")
+        .args(["/PID", &pid.to_string(), "/T", "/F"])
+        .status()?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(io::Error::other("taskkill failed"))
     }
 }
 
@@ -299,14 +285,13 @@ pub enum GracefulTerminationResult {
 /// Check if a process (by PID) is still running.
 #[cfg(unix)]
 fn is_process_running(pid: u32) -> bool {
-    // kill with signal 0 checks if process exists without sending a signal
-    let result = unsafe { libc::kill(pid as libc::pid_t, 0) };
-    if result == 0 {
-        return true;
+    let target_pid = Pid::from_raw(pid as libc::pid_t);
+    match signal::kill(target_pid, None::<Signal>) {
+        Ok(()) => true,
+        // EPERM = exists but no permission (still running)
+        Err(Errno::EPERM) => true,
+        Err(_) => false,
     }
-    let err = io::Error::last_os_error();
-    // ESRCH = no such process, EPERM = exists but no permission (still running)
-    err.raw_os_error() == Some(libc::EPERM)
 }
 
 #[cfg(not(unix))]
@@ -340,21 +325,20 @@ pub fn graceful_kill_process_group(
     }
 
     // Resolve PGID
-    let pgid = unsafe { libc::getpgid(pid as libc::pid_t) };
-    if pgid == -1 {
-        // Can't get PGID - process may have already exited
+    let target_pid = Pid::from_raw(pid as libc::pid_t);
+    let Ok(pgid) = unistd::getpgid(Some(target_pid)) else {
+        // Can't get PGID - process may have already exited.
         return GracefulTerminationResult::AlreadyExited;
-    }
+    };
 
     // Send initial signal (SIGTERM or SIGINT)
     let signal = match initial_signal {
-        KillSignal::Kill => libc::SIGTERM, // Don't send SIGKILL as initial
-        other => other.as_libc_signal(),
+        KillSignal::Kill => Signal::SIGTERM, // Don't send SIGKILL as initial.
+        other => other.as_nix_signal(),
     };
 
-    if unsafe { libc::killpg(pgid, signal) } == -1 {
-        let err = io::Error::last_os_error();
-        if err.raw_os_error() != Some(libc::ESRCH) {
+    if let Err(err) = signal::killpg(pgid, signal) {
+        if err != Errno::ESRCH {
             return GracefulTerminationResult::Error;
         }
         return GracefulTerminationResult::AlreadyExited;
@@ -374,12 +358,10 @@ pub fn graceful_kill_process_group(
     // Still running - force kill.
     // Use the robust termination behavior from codex-rs/utils/pty PR 12688
     // by attempting both a pgid kill and a direct pid kill.
-    let _ = unsafe { libc::killpg(pgid, libc::SIGKILL) };
-    let result = unsafe { libc::kill(pid as libc::pid_t, libc::SIGKILL) };
-    if result == -1 {
-        let err = io::Error::last_os_error();
-        if err.raw_os_error() == Some(libc::ESRCH) {
-            // Exited between check and kill
+    let _ = signal::killpg(pgid, Signal::SIGKILL);
+    if let Err(err) = signal::kill(target_pid, Signal::SIGKILL) {
+        if err == Errno::ESRCH {
+            // Exited between check and kill.
             return GracefulTerminationResult::GracefulExit;
         }
         return GracefulTerminationResult::Error;
@@ -390,9 +372,8 @@ pub fn graceful_kill_process_group(
 
 /// Graceful termination on non-Unix (best effort).
 ///
-/// On Windows, uses GenerateConsoleCtrlEvent to send Ctrl+C (SIGINT equivalent)
-/// or Ctrl+Break (SIGTERM equivalent) to the process group, followed by
-/// TerminateProcess if the process doesn't exit in time.
+/// On Windows, uses `taskkill` without `/F` first, then retries with `/F`
+/// after the grace period.
 #[cfg(not(unix))]
 pub fn graceful_kill_process_group(
     pid: u32,
@@ -401,64 +382,20 @@ pub fn graceful_kill_process_group(
 ) -> GracefulTerminationResult {
     #[cfg(windows)]
     {
-        use winapi::um::wincon::{CTRL_BREAK_EVENT, CTRL_C_EVENT, GenerateConsoleCtrlEvent};
-
-        // Check if process is still running via OpenProcess
-        let handle = unsafe {
-            winapi::um::processthreadsapi::OpenProcess(
-                winapi::um::winnt::PROCESS_QUERY_LIMITED_INFORMATION,
-                0,
-                pid,
-            )
-        };
-        if handle.is_null() {
-            return GracefulTerminationResult::AlreadyExited;
-        }
-        unsafe { winapi::um::handleapi::CloseHandle(handle) };
-
-        // Try to send console control event for graceful shutdown
-        let event = match initial_signal {
-            KillSignal::Int => CTRL_C_EVENT,
-            KillSignal::Term | KillSignal::Kill => CTRL_BREAK_EVENT,
-        };
-
-        // GenerateConsoleCtrlEvent sends to a process group (PGID = PID in Windows)
-        let sent = unsafe { GenerateConsoleCtrlEvent(event, pid) };
-        if sent != 0 {
-            // Wait for graceful exit
-            let deadline = std::time::Instant::now() + grace_period;
-            let poll_interval = std::time::Duration::from_millis(10);
-
-            while std::time::Instant::now() < deadline {
-                // Check if process has exited
-                let handle = unsafe {
-                    winapi::um::processthreadsapi::OpenProcess(
-                        winapi::um::winnt::PROCESS_QUERY_LIMITED_INFORMATION,
-                        0,
-                        pid,
-                    )
-                };
-                if handle.is_null() {
-                    return GracefulTerminationResult::GracefulExit;
-                }
-
-                let mut exit_code: u32 = 0;
-                let result = unsafe {
-                    winapi::um::processthreadsapi::GetExitCodeProcess(handle, &mut exit_code)
-                };
-                unsafe { winapi::um::handleapi::CloseHandle(handle) };
-
-                if result != 0 && exit_code != winapi::um::minwinbase::STILL_ACTIVE {
-                    return GracefulTerminationResult::GracefulExit;
-                }
-
-                std::thread::sleep(poll_interval);
+        let _ = initial_signal;
+        let pid_arg = pid.to_string();
+        match std::process::Command::new("taskkill")
+            .args(["/PID", &pid_arg, "/T"])
+            .status()
+        {
+            Ok(status) if status.success() => {
+                std::thread::sleep(grace_period);
+                GracefulTerminationResult::GracefulExit
             }
-        }
-
-        // Still running or couldn't send signal - force terminate
-        match kill_process(pid) {
-            Ok(()) => GracefulTerminationResult::ForcefulKill,
+            Ok(_) => match kill_process(pid) {
+                Ok(()) => GracefulTerminationResult::ForcefulKill,
+                Err(_) => GracefulTerminationResult::AlreadyExited,
+            },
             Err(_) => GracefulTerminationResult::Error,
         }
     }
@@ -500,7 +437,7 @@ mod tests {
         // Just verify it doesn't panic
         #[cfg(target_os = "linux")]
         {
-            let parent_pid = unsafe { libc::getpid() };
+            let parent_pid = unistd::getpid().as_raw();
             // Note: This will likely fail in tests since we're not in pre_exec
             // but it should not panic
             let _ = set_parent_death_signal(parent_pid);

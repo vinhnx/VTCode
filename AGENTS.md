@@ -77,6 +77,8 @@ vtcode/                          # Binary entrypoint (src/main.rs)
 
 **Errors**: `anyhow::Result<T>` with `.with_context()`. Never `unwrap()`.
 
+**Unsafe Code**: Do not use `unsafe` blocks or `#[allow(unsafe_code)]`. Prefer safe std/crate APIs.
+
 **Config**: Never hardcode. Use `vtcode_core::config::constants`, `vtcode.toml`, or `docs/models.json`.
 
 **Naming**: `snake_case` functions/vars, `PascalCase` types. Descriptive names, early returns, 4-space indent.

@@ -41,6 +41,7 @@ vtcode-exec-events = { path = "../vtcode-exec-events", version = "0.85.1", optio
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
+nix = { version = "0.31", features = ["user", "signal", "process"] }
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = [

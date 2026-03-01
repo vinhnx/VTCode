@@ -189,10 +189,7 @@ impl ZAIProvider {
             .as_ref()
             .is_some_and(|tools| !tools.is_empty())
         {
-            payload.insert(
-                "tool_choice".to_string(),
-                Value::String("auto".to_string()),
-            );
+            payload.insert("tool_choice".to_string(), Value::String("auto".to_string()));
         }
 
         if let Some(effort) = request.reasoning_effort {

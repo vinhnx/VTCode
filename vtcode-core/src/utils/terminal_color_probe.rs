@@ -12,14 +12,18 @@ use std::fs::{File, OpenOptions};
 #[cfg(unix)]
 use std::io::{Read, Write};
 #[cfg(unix)]
-use std::os::fd::AsRawFd;
-#[cfg(unix)]
 use std::time::{Duration, Instant};
 
 #[cfg(unix)]
 use anyhow::{Context, Result, anyhow};
 #[cfg(unix)]
 use crossterm::tty::IsTty;
+#[cfg(unix)]
+use nix::poll::{PollFd, PollFlags, PollTimeout, poll};
+#[cfg(unix)]
+use nix::sys::termios::{self, SetArg};
+#[cfg(unix)]
+use std::os::fd::AsFd;
 #[cfg(unix)]
 use vtcode_commons::ansi_capabilities::{ColorScheme, set_color_scheme_override};
 #[cfg(unix)]
@@ -99,9 +103,8 @@ fn probe_terminal_colors(timeout: Duration) -> Result<ProbeResult> {
 }
 
 #[cfg(unix)]
-#[allow(unsafe_code)]
 fn read_until_da1(tty: &mut File, timeout: Duration) -> Result<Vec<u8>> {
-    let fd = tty.as_raw_fd();
+    let poll_tty = tty.try_clone().context("failed to duplicate tty for polling")?;
     let deadline = Instant::now() + timeout;
     let mut buffer = Vec::with_capacity(1024);
 
@@ -116,17 +119,14 @@ fn read_until_da1(tty: &mut File, timeout: Duration) -> Result<Vec<u8>> {
         }
 
         let remaining_ms = (deadline - now).as_millis().min(i32::MAX as u128) as i32;
-        let mut pollfd = libc::pollfd {
-            fd,
-            events: libc::POLLIN,
-            revents: 0,
-        };
-
-        let poll_result = unsafe { libc::poll(&mut pollfd, 1, remaining_ms) };
-        if poll_result < 0 {
-            return Err(std::io::Error::last_os_error()).context("poll failed during OSC probe");
-        }
-        if poll_result == 0 || (pollfd.revents & libc::POLLIN) == 0 {
+        let timeout = PollTimeout::try_from(remaining_ms).unwrap_or(PollTimeout::MAX);
+        let mut pollfd = [PollFd::new(poll_tty.as_fd(), PollFlags::POLLIN)];
+        let poll_result = poll(&mut pollfd, timeout).context("poll failed during OSC probe")?;
+        let ready = pollfd[0]
+            .revents()
+            .unwrap_or(PollFlags::empty())
+            .contains(PollFlags::POLLIN);
+        if poll_result == 0 || !ready {
             continue;
         }
 
@@ -205,41 +205,27 @@ fn lightness((r, g, b): (u8, u8, u8)) -> f64 {
 
 #[cfg(unix)]
 struct RawModeGuard {
-    fd: libc::c_int,
-    original: libc::termios,
+    tty: File,
+    original: termios::Termios,
 }
 
 #[cfg(unix)]
 impl RawModeGuard {
-    #[allow(unsafe_code)]
     fn activate(tty: &File) -> Result<Self> {
-        let fd = tty.as_raw_fd();
-        let mut original = std::mem::MaybeUninit::<libc::termios>::uninit();
+        let tty = tty.try_clone().context("failed to duplicate tty handle")?;
+        let original = termios::tcgetattr(&tty).context("tcgetattr failed")?;
+        let mut raw = original.clone();
+        termios::cfmakeraw(&mut raw);
+        termios::tcsetattr(&tty, SetArg::TCSANOW, &raw).context("tcsetattr raw mode failed")?;
 
-        let get_result = unsafe { libc::tcgetattr(fd, original.as_mut_ptr()) };
-        if get_result != 0 {
-            return Err(std::io::Error::last_os_error()).context("tcgetattr failed");
-        }
-
-        let original = unsafe { original.assume_init() };
-        let mut raw = original;
-        unsafe { libc::cfmakeraw(&mut raw) };
-        let set_result = unsafe { libc::tcsetattr(fd, libc::TCSANOW, &raw) };
-        if set_result != 0 {
-            return Err(std::io::Error::last_os_error()).context("tcsetattr raw mode failed");
-        }
-
-        Ok(Self { fd, original })
+        Ok(Self { tty, original })
     }
 }
 
 #[cfg(unix)]
 impl Drop for RawModeGuard {
-    #[allow(unsafe_code)]
     fn drop(&mut self) {
-        unsafe {
-            libc::tcsetattr(self.fd, libc::TCSANOW, &self.original);
-        }
+        let _ = termios::tcsetattr(&self.tty, SetArg::TCSANOW, &self.original);
     }
 }
 

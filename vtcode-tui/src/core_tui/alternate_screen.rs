@@ -221,8 +221,7 @@ impl Drop for AlternateScreenSession {
 ///
 /// This is useful when you want to clear the screen before running a terminal app.
 pub fn clear_screen() -> Result<()> {
-    execute!(io::stdout(), Clear(ClearType::All))
-        .context("failed to clear alternate screen")
+    execute!(io::stdout(), Clear(ClearType::All)).context("failed to clear alternate screen")
 }
 
 /// Get current terminal size
