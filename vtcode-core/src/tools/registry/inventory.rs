@@ -24,16 +24,19 @@ struct ToolCacheEntry {
     use_count: std::sync::atomic::AtomicU64,
 }
 
+#[derive(Debug)]
+struct ToolInventoryState {
+    aliases: FxHashMap<String, String>,
+    frequently_used: FxHashSet<String>,
+    last_cache_cleanup: Instant,
+    sorted_names: Vec<String>,
+}
+
 #[derive(Clone)]
 pub(super) struct ToolInventory {
     workspace_root: PathBuf,
     tools: Arc<std::sync::RwLock<FxHashMap<String, Arc<ToolCacheEntry>>>>,
-    /// Map of lowercase alias name to canonical tool name
-    aliases: Arc<std::sync::RwLock<FxHashMap<String, String>>>,
-    frequently_used: Arc<std::sync::RwLock<FxHashSet<String>>>,
-    last_cache_cleanup: Arc<std::sync::RwLock<Instant>>,
-    /// HP-7: Maintain sorted list of tool names for O(1) available_tools() calls
-    sorted_names: Arc<std::sync::RwLock<Vec<String>>>,
+    state: Arc<std::sync::RwLock<ToolInventoryState>>,
     /// Track alias usage for analytics and debugging
     alias_metrics: Arc<std::sync::Mutex<AliasMetrics>>,
 
@@ -55,10 +58,12 @@ impl ToolInventory {
         Self {
             workspace_root,
             tools: Arc::new(std::sync::RwLock::new(FxHashMap::default())),
-            aliases: Arc::new(std::sync::RwLock::new(FxHashMap::default())),
-            frequently_used: Arc::new(std::sync::RwLock::new(FxHashSet::default())),
-            last_cache_cleanup: Arc::new(std::sync::RwLock::new(Instant::now())),
-            sorted_names: Arc::new(std::sync::RwLock::new(Vec::new())),
+            state: Arc::new(std::sync::RwLock::new(ToolInventoryState {
+                aliases: FxHashMap::default(),
+                frequently_used: FxHashSet::default(),
+                last_cache_cleanup: Instant::now(),
+                sorted_names: Vec::new(),
+            })),
             alias_metrics: Arc::new(std::sync::Mutex::new(AliasMetrics::default())),
             file_ops_tool,
             command_tool: Arc::new(std::sync::RwLock::new(command_tool)),
@@ -116,10 +121,10 @@ impl ToolInventory {
                 .tools
                 .read()
                 .map_err(|e| anyhow::anyhow!("tool registry read lock poisoned: {e}"))?;
-            let aliases_map = self
-                .aliases
+            let state = self
+                .state
                 .read()
-                .map_err(|e| anyhow::anyhow!("alias registry read lock poisoned: {e}"))?;
+                .map_err(|e| anyhow::anyhow!("inventory state read lock poisoned: {e}"))?;
 
             // Validate aliases don't conflict with existing tool names BEFORE registration
             for alias in &aliases {
@@ -132,7 +137,7 @@ impl ToolInventory {
                     ));
                 }
                 // Also check if it conflicts with an existing alias
-                if let Some(existing_target) = aliases_map.get(&alias_lower) {
+                if let Some(existing_target) = state.aliases.get(&alias_lower) {
                     // Only warn if the alias is being registered for a DIFFERENT tool
                     if existing_target != &name_lower {
                         return Err(anyhow::anyhow!(
@@ -166,21 +171,21 @@ impl ToolInventory {
                         use_count: std::sync::atomic::AtomicU64::new(0),
                     }));
                     // HP-7: Maintain sorted invariant - insert at correct position
-                    let mut sorted = self
-                        .sorted_names
+                    let mut state = self
+                        .state
                         .write()
-                        .map_err(|e| anyhow::anyhow!("sorted names write lock poisoned: {e}"))?;
-                    let pos = sorted.binary_search(&name_lower).unwrap_or_else(|e| e);
-                    sorted.insert(pos, name_lower.clone());
+                        .map_err(|e| anyhow::anyhow!("inventory state write lock poisoned: {e}"))?;
+                    let pos = state.sorted_names.binary_search(&name_lower).unwrap_or_else(|e| e);
+                    state.sorted_names.insert(pos, name_lower.clone());
                 }
             }
         }
 
         // Add to frequently used set if it's a common tool
         if self.is_common_tool(&name_lower)
-            && let Ok(mut freq) = self.frequently_used.write()
+            && let Ok(mut state) = self.state.write()
         {
-            freq.insert(name_lower.clone());
+            state.frequently_used.insert(name_lower.clone());
         }
 
         // Register case-insensitive aliases and track metrics
@@ -196,7 +201,7 @@ impl ToolInventory {
 
     /// Register case-insensitive aliases for a tool and track metrics
     fn register_aliases(&self, canonical_name_lower: &str, aliases: &[String]) {
-        let Ok(mut aliases_map) = self.aliases.write() else {
+        let Ok(mut state) = self.state.write() else {
             return;
         };
         let Ok(mut metrics) = self.alias_metrics.lock() else {
@@ -207,7 +212,7 @@ impl ToolInventory {
             let target = canonical_name_lower.to_owned();
 
             // Store lowercase -> canonical mapping
-            aliases_map.insert(alias_lower.clone(), target.clone());
+            state.aliases.insert(alias_lower.clone(), target.clone());
 
             // Initialize metrics for this alias
             metrics.usage.insert(alias_lower, (target, 0));
@@ -223,11 +228,11 @@ impl ToolInventory {
 
         let resolved_name = {
             let tools = self.tools.read().ok()?;
-            let aliases = self.aliases.read().ok()?;
+            let state = self.state.read().ok()?;
 
             // First check if there's an alias mapping for this name
             // This takes priority when the direct tool is not LLM-visible
-            let alias_target = aliases.get(&name_lower).cloned();
+            let alias_target = state.aliases.get(&name_lower).cloned();
 
             if let Some(entry) = tools.get(&name_lower) {
                 // Direct tool exists - check if it's LLM-visible
@@ -291,9 +296,9 @@ impl ToolInventory {
 
             // Track frequently used for aliased tools
             if resolved_name != name_lower
-                && let Ok(mut freq) = self.frequently_used.write()
+                && let Ok(mut state) = self.state.write()
             {
-                freq.insert(resolved_name);
+                state.frequently_used.insert(resolved_name);
             }
             return Some(entry.registration.clone());
         }
@@ -305,11 +310,11 @@ impl ToolInventory {
     pub fn get_registration(&self, name: &str) -> Option<ToolRegistration> {
         let name_lower = name.to_ascii_lowercase();
         let tools = self.tools.read().ok()?;
-        let aliases = self.aliases.read().ok()?;
+        let state = self.state.read().ok()?;
 
         let resolved_name = if tools.contains_key(&name_lower) {
             &name_lower
-        } else if let Some(aliased) = aliases.get(&name_lower) {
+        } else if let Some(aliased) = state.aliases.get(&name_lower) {
             aliased
         } else {
             return None;
@@ -327,35 +332,40 @@ impl ToolInventory {
             .ok()
             .is_some_and(|t| t.contains_key(&name_lower))
             || self
-                .aliases
+                .state
                 .read()
                 .ok()
-                .is_some_and(|a| a.contains_key(&name_lower))
+                .is_some_and(|s| s.aliases.contains_key(&name_lower))
     }
 
     pub fn available_tools(&self) -> Vec<String> {
-        self.sorted_names
+        self.state
             .read()
             .ok()
-            .map(|s| s.clone())
+            .map(|s| s.sorted_names.clone())
             .unwrap_or_default()
     }
 
     pub fn registered_aliases(&self) -> Vec<String> {
-        self.aliases
+        self.state
             .read()
             .ok()
-            .map(|a| a.keys().cloned().collect())
+            .map(|s| s.aliases.keys().cloned().collect())
             .unwrap_or_default()
     }
 
     /// Get all registered aliases with their canonical targets
     #[allow(dead_code)]
     pub fn all_aliases(&self) -> Vec<(String, String)> {
-        self.aliases
+        self.state
             .read()
             .ok()
-            .map(|a| a.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
+            .map(|s| {
+                s.aliases
+                    .iter()
+                    .map(|(k, v)| (k.clone(), v.clone()))
+                    .collect()
+            })
             .unwrap_or_default()
     }
 
@@ -383,13 +393,13 @@ impl ToolInventory {
         const MAX_TOOLS: usize = 1000;
 
         // Only clean up if enough time has passed
-        let Ok(last_cleanup) = self.last_cache_cleanup.read() else {
+        let Ok(state) = self.state.read() else {
             return;
         };
-        if last_cleanup.elapsed() < CACHE_CLEANUP_INTERVAL {
+        if state.last_cache_cleanup.elapsed() < CACHE_CLEANUP_INTERVAL {
             return;
         }
-        drop(last_cleanup);
+        drop(state);
 
         let Ok(mut tools) = self.tools.write() else {
             return;
@@ -401,10 +411,10 @@ impl ToolInventory {
         let now = Instant::now();
         let old_len = tools.len();
         let frequently_used_snapshot = self
-            .frequently_used
+            .state
             .read()
             .ok()
-            .map(|f| f.clone())
+            .map(|s| s.frequently_used.clone())
             .unwrap_or_default();
 
         // Remove tools that haven't been used in a while and aren't frequently used
@@ -419,8 +429,8 @@ impl ToolInventory {
             now.duration_since(last_used) < Duration::from_secs(3600) // 1 hour
         });
 
-        if let Ok(mut last_cleanup) = self.last_cache_cleanup.write() {
-            *last_cleanup = now;
+        if let Ok(mut state) = self.state.write() {
+            state.last_cache_cleanup = now;
         }
 
         let new_len = tools.len();
@@ -640,12 +650,9 @@ mod tests {
 
         // Keep one stale tool by marking it frequently used.
         {
-            let mut freq = inventory.frequently_used.write().unwrap();
-            freq.insert("tool_0".to_string());
-        }
-        {
-            let mut last_cleanup = inventory.last_cache_cleanup.write().unwrap();
-            *last_cleanup = Instant::now() - Duration::from_secs(301);
+            let mut state = inventory.state.write().unwrap();
+            state.frequently_used.insert("tool_0".to_string());
+            state.last_cache_cleanup = Instant::now() - Duration::from_secs(301);
         }
 
         inventory.cleanup_cache_if_needed();

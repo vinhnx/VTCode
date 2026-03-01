@@ -22,13 +22,17 @@ use super::{
     sanitize_filename,
 };
 
+struct McpClientState {
+    providers: FxHashMap<String, Arc<McpProvider>>,
+    allowlist: McpAllowListConfig,
+    tool_provider_index: FxHashMap<String, String>,
+    resource_provider_index: FxHashMap<String, String>,
+    prompt_provider_index: FxHashMap<String, String>,
+}
+
 pub struct McpClient {
     config: McpClientConfig,
-    providers: RwLock<FxHashMap<String, Arc<McpProvider>>>,
-    allowlist: RwLock<McpAllowListConfig>,
-    tool_provider_index: RwLock<FxHashMap<String, String>>,
-    resource_provider_index: RwLock<FxHashMap<String, String>>,
-    prompt_provider_index: RwLock<FxHashMap<String, String>>,
+    state: RwLock<McpClientState>,
     elicitation_handler: Option<Arc<dyn McpElicitationHandler>>,
 }
 
@@ -39,11 +43,13 @@ impl McpClient {
 
         Self {
             config,
-            providers: RwLock::new(FxHashMap::default()),
-            allowlist: RwLock::new(allowlist),
-            tool_provider_index: RwLock::new(FxHashMap::default()),
-            resource_provider_index: RwLock::new(FxHashMap::default()),
-            prompt_provider_index: RwLock::new(FxHashMap::default()),
+            state: RwLock::new(McpClientState {
+                providers: FxHashMap::default(),
+                allowlist,
+                tool_provider_index: FxHashMap::default(),
+                resource_provider_index: FxHashMap::default(),
+                prompt_provider_index: FxHashMap::default(),
+            }),
             elicitation_handler: None,
         }
     }
@@ -73,7 +79,7 @@ impl McpClient {
     /// Initialize providers sequentially (fallback method)
     async fn initialize_sequential(&mut self) -> Result<()> {
         let tool_timeout = self.tool_timeout();
-        let allowlist_snapshot = self.allowlist.read().clone();
+        let allowlist_snapshot = self.state.read().allowlist.clone();
 
         let mut initialized = FxHashMap::default();
 
@@ -144,10 +150,10 @@ impl McpClient {
             }
         }
 
-        *self.providers.write() = initialized;
+        self.state.write().providers = initialized;
         info!(
             "MCP client initialization complete. Active providers: {}",
-            self.providers.read().len()
+            self.state.read().providers.len()
         );
 
         Ok(())
@@ -210,7 +216,7 @@ impl McpClient {
         self.validate_tool_arguments(tool_name, args)?;
 
         let provider = self.resolve_provider_for_tool(tool_name).await?;
-        let allowlist_snapshot = self.allowlist.read().clone();
+        let allowlist_snapshot = self.state.read().allowlist.clone();
         let result = provider
             .call_tool(tool_name, args, self.tool_timeout(), &allowlist_snapshot)
             .await?;
@@ -220,34 +226,38 @@ impl McpClient {
 
     /// Refresh the internal allow list at runtime.
     pub fn update_allowlist(&self, allowlist: McpAllowListConfig) {
-        *self.allowlist.write() = allowlist;
-        self.tool_provider_index.write().clear();
-        self.resource_provider_index.write().clear();
-        self.prompt_provider_index.write().clear();
+        let providers: Vec<Arc<McpProvider>> = {
+            let mut state = self.state.write();
+            state.allowlist = allowlist;
+            state.tool_provider_index.clear();
+            state.resource_provider_index.clear();
+            state.prompt_provider_index.clear();
+            state.providers.values().cloned().collect()
+        };
 
-        for provider in self.providers.read().values() {
+        for provider in providers {
             provider.invalidate_caches();
         }
     }
 
     /// Current allow list snapshot.
     pub fn current_allowlist(&self) -> McpAllowListConfig {
-        self.allowlist.read().clone()
+        self.state.read().allowlist.clone()
     }
 
     /// Return the provider name serving the given tool if previously cached.
     pub fn provider_for_tool(&self, tool_name: &str) -> Option<String> {
-        self.tool_provider_index.read().get(tool_name).cloned()
+        self.state.read().tool_provider_index.get(tool_name).cloned()
     }
 
     /// Return the provider responsible for the given resource URI if known.
     pub fn provider_for_resource(&self, uri: &str) -> Option<String> {
-        self.resource_provider_index.read().get(uri).cloned()
+        self.state.read().resource_provider_index.get(uri).cloned()
     }
 
     /// Return the provider that exposes the given prompt if known.
     pub fn provider_for_prompt(&self, prompt_name: &str) -> Option<String> {
-        self.prompt_provider_index.read().get(prompt_name).cloned()
+        self.state.read().prompt_provider_index.get(prompt_name).cloned()
     }
 
     /// Execute a tool call on the appropriate provider.
@@ -284,12 +294,13 @@ impl McpClient {
     pub async fn read_resource(&self, uri: &str) -> Result<McpResourceData> {
         let provider = self.resolve_provider_for_resource(uri).await?;
         let provider_name = provider.name.clone();
-        let allowlist_snapshot = self.allowlist.read().clone();
+        let allowlist_snapshot = self.state.read().allowlist.clone();
         let data = provider
             .read_resource(uri, self.request_timeout(), &allowlist_snapshot)
             .await?;
-        self.resource_provider_index
+        self.state
             .write()
+            .resource_provider_index
             .insert(uri.into(), provider_name);
         Ok(data)
     }
@@ -302,7 +313,7 @@ impl McpClient {
     ) -> Result<McpPromptDetail> {
         let provider = self.resolve_provider_for_prompt(prompt_name).await?;
         let provider_name = provider.name.clone();
-        let allowlist_snapshot = self.allowlist.read().clone();
+        let allowlist_snapshot = self.state.read().allowlist.clone();
         let prompt = provider
             .get_prompt(
                 prompt_name,
@@ -311,8 +322,9 @@ impl McpClient {
                 &allowlist_snapshot,
             )
             .await?;
-        self.prompt_provider_index
+        self.state
             .write()
+            .prompt_provider_index
             .insert(prompt_name.into(), provider_name);
         Ok(prompt)
     }
@@ -320,9 +332,12 @@ impl McpClient {
     /// Shutdown all active provider connections.
     pub async fn shutdown(&self) -> Result<()> {
         let providers: Vec<Arc<McpProvider>> = {
-            let mut guard = self.providers.write();
-            let values: Vec<_> = guard.values().cloned().collect();
-            guard.clear();
+            let mut state = self.state.write();
+            let values: Vec<_> = state.providers.values().cloned().collect();
+            state.providers.clear();
+            state.tool_provider_index.clear();
+            state.resource_provider_index.clear();
+            state.prompt_provider_index.clear();
             values
         };
 
@@ -340,16 +355,13 @@ impl McpClient {
                 );
             }
         }
-
-        self.tool_provider_index.write().clear();
-        self.resource_provider_index.write().clear();
-        self.prompt_provider_index.write().clear();
         Ok(())
     }
 
     /// Current status snapshot for UI/debugging purposes.
     pub fn get_status(&self) -> McpClientStatus {
-        let providers = self.providers.read();
+        let state = self.state.read();
+        let providers = &state.providers;
         // Use iterator to collect keys directly without intermediate push
         let configured_providers: Vec<String> = providers.keys().cloned().collect();
         McpClientStatus {
@@ -512,13 +524,18 @@ impl McpClient {
 
     async fn collect_tools(&self, force_refresh: bool) -> Result<Vec<McpToolInfo>> {
         // Collect provider references in one pass
-        let providers: Vec<Arc<McpProvider>> = self.providers.read().values().cloned().collect();
+        let (providers, allowlist) = {
+            let state = self.state.read();
+            (
+                state.providers.values().cloned().collect::<Vec<_>>(),
+                state.allowlist.clone(),
+            )
+        };
 
         if providers.is_empty() {
             return Ok(Vec::new());
         }
 
-        let allowlist = self.allowlist.read().clone();
         let timeout = self.tool_timeout();
         let mut all_tools = Vec::with_capacity(128);
         let mut index_updates: FxHashMap<String, String> =
@@ -548,10 +565,13 @@ impl McpClient {
             }
         }
 
-        if !index_updates.is_empty() {
-            *self.tool_provider_index.write() = index_updates;
-        } else if force_refresh {
-            self.tool_provider_index.write().clear();
+        if !index_updates.is_empty() || force_refresh {
+            let mut state = self.state.write();
+            if index_updates.is_empty() {
+                state.tool_provider_index.clear();
+            } else {
+                state.tool_provider_index = index_updates;
+            }
         }
 
         Ok(all_tools)
@@ -559,14 +579,19 @@ impl McpClient {
 
     async fn collect_resources(&self, force_refresh: bool) -> Result<Vec<McpResourceInfo>> {
         // Collect provider references in one pass
-        let providers: Vec<Arc<McpProvider>> = self.providers.read().values().cloned().collect();
+        let (providers, allowlist) = {
+            let state = self.state.read();
+            (
+                state.providers.values().cloned().collect::<Vec<_>>(),
+                state.allowlist.clone(),
+            )
+        };
 
         if providers.is_empty() {
-            self.resource_provider_index.write().clear();
+            self.state.write().resource_provider_index.clear();
             return Ok(Vec::new());
         }
 
-        let allowlist = self.allowlist.read().clone();
         let timeout = self.request_timeout();
         let mut all_resources = Vec::with_capacity(64);
 
@@ -590,7 +615,8 @@ impl McpClient {
             }
         }
 
-        let mut index = self.resource_provider_index.write();
+        let mut state = self.state.write();
+        let index = &mut state.resource_provider_index;
         index.clear();
         for resource in &all_resources {
             index.insert(resource.uri.clone(), resource.provider.clone());
@@ -601,14 +627,19 @@ impl McpClient {
 
     async fn collect_prompts(&self, force_refresh: bool) -> Result<Vec<McpPromptInfo>> {
         // Collect provider references in one pass
-        let providers: Vec<Arc<McpProvider>> = self.providers.read().values().cloned().collect();
+        let (providers, allowlist) = {
+            let state = self.state.read();
+            (
+                state.providers.values().cloned().collect::<Vec<_>>(),
+                state.allowlist.clone(),
+            )
+        };
 
         if providers.is_empty() {
-            self.prompt_provider_index.write().clear();
+            self.state.write().prompt_provider_index.clear();
             return Ok(Vec::new());
         }
 
-        let allowlist = self.allowlist.read().clone();
         let timeout = self.request_timeout();
         let mut all_prompts = Vec::with_capacity(32);
 
@@ -632,7 +663,8 @@ impl McpClient {
             }
         }
 
-        let mut index = self.prompt_provider_index.write();
+        let mut state = self.state.write();
+        let index = &mut state.prompt_provider_index;
         index.clear();
         for prompt in &all_prompts {
             index.insert(prompt.name.clone(), prompt.provider.clone());
@@ -649,14 +681,19 @@ impl McpClient {
         }
 
         if let Some(provider) = self.provider_for_tool(tool_name)
-            && let Some(found) = self.providers.read().get(&provider)
+            && let Some(found) = self.state.read().providers.get(&provider)
         {
             return Ok(found.clone());
         }
 
-        let allowlist = self.allowlist.read().clone();
+        let (allowlist, providers) = {
+            let state = self.state.read();
+            (
+                state.allowlist.clone(),
+                state.providers.values().cloned().collect::<Vec<_>>(),
+            )
+        };
         let timeout = self.tool_timeout();
-        let providers: Vec<Arc<McpProvider>> = self.providers.read().values().cloned().collect();
 
         if providers.is_empty() {
             if self.config.providers.is_empty() {
@@ -673,8 +710,9 @@ impl McpClient {
         for provider in providers {
             match provider.has_tool(tool_name, &allowlist, timeout).await {
                 Ok(true) => {
-                    self.tool_provider_index
+                    self.state
                         .write()
+                        .tool_provider_index
                         .insert(tool_name.into(), provider.name.clone());
                     return Ok(provider);
                 }
@@ -691,7 +729,7 @@ impl McpClient {
         match self.collect_tools(true).await {
             Ok(_) => {
                 if let Some(provider) = self.provider_for_tool(tool_name)
-                    && let Some(found) = self.providers.read().get(&provider)
+                    && let Some(found) = self.state.read().providers.get(&provider)
                 {
                     return Ok(found.clone());
                 }
@@ -724,20 +762,26 @@ impl McpClient {
 
     async fn resolve_provider_for_resource(&self, uri: &str) -> Result<Arc<McpProvider>> {
         if let Some(provider) = self.provider_for_resource(uri)
-            && let Some(found) = self.providers.read().get(&provider)
+            && let Some(found) = self.state.read().providers.get(&provider)
         {
             return Ok(found.clone());
         }
 
-        let allowlist = self.allowlist.read().clone();
+        let (allowlist, providers) = {
+            let state = self.state.read();
+            (
+                state.allowlist.clone(),
+                state.providers.values().cloned().collect::<Vec<_>>(),
+            )
+        };
         let timeout = self.request_timeout();
-        let providers: Vec<Arc<McpProvider>> = self.providers.read().values().cloned().collect();
 
         for provider in providers {
             match provider.has_resource(uri, &allowlist, timeout).await {
                 Ok(true) => {
-                    self.resource_provider_index
+                    self.state
                         .write()
+                        .resource_provider_index
                         .insert(uri.into(), provider.name.clone());
                     return Ok(provider);
                 }
@@ -756,20 +800,26 @@ impl McpClient {
 
     async fn resolve_provider_for_prompt(&self, prompt_name: &str) -> Result<Arc<McpProvider>> {
         if let Some(provider) = self.provider_for_prompt(prompt_name)
-            && let Some(found) = self.providers.read().get(&provider)
+            && let Some(found) = self.state.read().providers.get(&provider)
         {
             return Ok(found.clone());
         }
 
-        let allowlist = self.allowlist.read().clone();
+        let (allowlist, providers) = {
+            let state = self.state.read();
+            (
+                state.allowlist.clone(),
+                state.providers.values().cloned().collect::<Vec<_>>(),
+            )
+        };
         let timeout = self.request_timeout();
-        let providers: Vec<Arc<McpProvider>> = self.providers.read().values().cloned().collect();
 
         for provider in providers {
             match provider.has_prompt(prompt_name, &allowlist, timeout).await {
                 Ok(true) => {
-                    self.prompt_provider_index
+                    self.state
                         .write()
+                        .prompt_provider_index
                         .insert(prompt_name.into(), provider.name.clone());
                     return Ok(provider);
                 }
@@ -790,7 +840,8 @@ impl McpClient {
     }
 
     fn record_tool_provider(&self, provider: &str, tools: &[McpToolInfo]) {
-        let mut index = self.tool_provider_index.write();
+        let mut state = self.state.write();
+        let index = &mut state.tool_provider_index;
         for tool in tools {
             index.insert(tool.name.clone(), provider.to_string());
         }
@@ -962,7 +1013,7 @@ impl McpToolExecutor for McpClient {
             return Ok(true);
         }
 
-        if self.providers.read().is_empty() {
+        if self.state.read().providers.is_empty() {
             if self.config.providers.is_empty() {
                 return Ok(false);
             }

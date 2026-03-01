@@ -336,12 +336,7 @@ mod tests {
         let config = McpClientConfig::default();
         let event_callback: Arc<dyn Fn(McpEvent) + Send + Sync> = Arc::new(|_event| {});
 
-        let manager = AsyncMcpManager::new(
-            config,
-            true,
-            AskForApproval::OnRequest,
-            event_callback,
-        );
+        let manager = AsyncMcpManager::new(config, true, AskForApproval::OnRequest, event_callback);
         let status = manager.get_status().await;
 
         // With default config, MCP should be disabled

@@ -26,7 +26,11 @@ include = [
 [dependencies]
 anyhow = { workspace = true }
 clap = { version = "4.5", features = ["derive"] }
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
+reqwest = { version = "0.12", default-features = false, features = [
+    "json",
+    "rustls-tls",
+    "stream",
+] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 json5 = "1.3"
@@ -151,6 +155,7 @@ editor-command = "2.0"
 signal-hook = "0.4"
 rand = "0.10"
 rustc-hash = { workspace = true }
+arc-swap = "1.7"
 
 lsp-types = "0.97.0"
 notify-rust = { version = "4.12", optional = true }
@@ -161,7 +166,10 @@ axum = { version = "0.8", features = ["json", "macros"], optional = true }
 tower = { version = "0.5", optional = true }
 tower-http = { version = "0.6", features = ["cors", "trace"], optional = true }
 tokio-stream = { version = "0.1", optional = true }
-tokio-tungstenite = { version = "0.28", default-features = false, features = ["connect", "rustls-tls-webpki-roots"] }
+tokio-tungstenite = { version = "0.28", default-features = false, features = [
+    "connect",
+    "rustls-tls-webpki-roots",
+] }
 
 [build-dependencies]
 vtcode-config = { path = "../vtcode-config", version = "0.85.0" }

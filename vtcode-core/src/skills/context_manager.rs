@@ -14,7 +14,7 @@ use lru::LruCache;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, RwLock};
 use tracing::{debug, info, warn};
 
 /// Configuration for context management
@@ -144,10 +144,10 @@ pub struct SkillContextEntry {
 #[derive(Clone)]
 pub struct ContextManager {
     config: ContextConfig,
-    inner: Arc<Mutex<ContextManagerInner>>,
+    inner: Arc<RwLock<ContextManagerInner>>,
 }
 
-/// Inner state for ContextManager to be wrapped in Arc<Mutex<>>
+/// Inner state for ContextManager to be wrapped in Arc<RwLock<>>
 struct ContextManagerInner {
     /// Active skill contexts (metadata only)
     active_skills: HashMap<String, SkillContextEntry>,
@@ -197,7 +197,7 @@ impl ContextManager {
 
         Self {
             config: config.clone(),
-            inner: Arc::new(Mutex::new(ContextManagerInner {
+            inner: Arc::new(RwLock::new(ContextManagerInner {
                 active_skills: HashMap::new(),
                 loaded_skills,
                 current_token_usage: 0,
@@ -218,8 +218,8 @@ impl ContextManager {
     pub fn register_skill_metadata(&self, manifest: SkillManifest) -> Result<()> {
         let name = manifest.name.clone();
 
-        let mut inner = self.inner.lock().unwrap_or_else(|poisoned| {
-            warn!("ContextManager lock poisoned while registering skill metadata; recovering");
+        let mut inner = self.inner.write().unwrap_or_else(|poisoned| {
+            warn!("ContextManager write lock poisoned while registering skill metadata; recovering");
             poisoned.into_inner()
         });
 
@@ -253,8 +253,8 @@ impl ContextManager {
 
     /// Load skill instructions (Level 2 loading)
     pub fn load_skill_instructions(&self, name: &str, instructions: String) -> Result<()> {
-        let mut inner = self.inner.lock().unwrap_or_else(|poisoned| {
-            warn!("ContextManager lock poisoned while loading skill instructions; recovering");
+        let mut inner = self.inner.write().unwrap_or_else(|poisoned| {
+            warn!("ContextManager write lock poisoned while loading skill instructions; recovering");
             poisoned.into_inner()
         });
 
@@ -305,8 +305,8 @@ impl ContextManager {
     /// Load full skill with resources (Level 3 loading)
     pub fn load_full_skill(&self, skill: Skill) -> Result<()> {
         let name = skill.name().to_string();
-        let mut inner = self.inner.lock().unwrap_or_else(|poisoned| {
-            warn!("ContextManager lock poisoned while loading full skill; recovering");
+        let mut inner = self.inner.write().unwrap_or_else(|poisoned| {
+            warn!("ContextManager write lock poisoned while loading full skill; recovering");
             poisoned.into_inner()
         });
 
@@ -358,8 +358,8 @@ impl ContextManager {
 
     /// Get skill context (with automatic loading)
     pub fn get_skill_context(&self, name: &str) -> Option<SkillContextEntry> {
-        let mut inner = self.inner.lock().unwrap_or_else(|poisoned| {
-            warn!("ContextManager lock poisoned while fetching skill context; recovering");
+        let mut inner = self.inner.write().unwrap_or_else(|poisoned| {
+            warn!("ContextManager write lock poisoned while fetching skill context; recovering");
             poisoned.into_inner()
         });
 
@@ -428,9 +428,9 @@ impl ContextManager {
     /// Get current context usage statistics
     pub fn get_stats(&self) -> ContextStats {
         self.inner
-            .lock()
+            .read()
             .unwrap_or_else(|poisoned| {
-                warn!("ContextManager lock poisoned while reading stats; recovering");
+                warn!("ContextManager read lock poisoned while reading stats; recovering");
                 poisoned.into_inner()
             })
             .stats
@@ -440,9 +440,9 @@ impl ContextManager {
     /// Get current token usage
     pub fn get_token_usage(&self) -> usize {
         self.inner
-            .lock()
+            .read()
             .unwrap_or_else(|poisoned| {
-                warn!("ContextManager lock poisoned while reading token usage; recovering");
+                warn!("ContextManager read lock poisoned while reading token usage; recovering");
                 poisoned.into_inner()
             })
             .current_token_usage
@@ -450,8 +450,8 @@ impl ContextManager {
 
     /// Clear all loaded skills (keep metadata)
     pub fn clear_loaded_skills(&self) {
-        let mut inner = self.inner.lock().unwrap_or_else(|poisoned| {
-            warn!("ContextManager lock poisoned while clearing loaded skills; recovering");
+        let mut inner = self.inner.write().unwrap_or_else(|poisoned| {
+            warn!("ContextManager write lock poisoned while clearing loaded skills; recovering");
             poisoned.into_inner()
         });
 
@@ -474,9 +474,9 @@ impl ContextManager {
     /// Get all active skill names
     pub fn get_active_skills(&self) -> Vec<String> {
         self.inner
-            .lock()
+            .read()
             .unwrap_or_else(|poisoned| {
-                warn!("ContextManager lock poisoned while reading active skills; recovering");
+                warn!("ContextManager read lock poisoned while reading active skills; recovering");
                 poisoned.into_inner()
             })
             .active_skills
@@ -487,8 +487,8 @@ impl ContextManager {
 
     /// Get memory usage estimate
     pub fn get_memory_usage(&self) -> usize {
-        let inner = self.inner.lock().unwrap_or_else(|poisoned| {
-            warn!("ContextManager lock poisoned while calculating memory usage; recovering");
+        let inner = self.inner.read().unwrap_or_else(|poisoned| {
+            warn!("ContextManager read lock poisoned while calculating memory usage; recovering");
             poisoned.into_inner()
         });
         let active_memory: usize = inner
@@ -552,7 +552,7 @@ impl PersistentContextManager {
         let inner = self
             .inner
             .inner
-            .lock()
+            .read()
             .map_err(|err| anyhow!("context manager lock poisoned while saving cache: {err}"))
             .context("Failed to save context manager cache state")?;
         let cache = ContextCache {

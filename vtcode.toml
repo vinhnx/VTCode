@@ -207,6 +207,7 @@ stdout_tail_lines = 20
 scrollback_lines = 400
 max_scrollback_bytes = 25000000
 large_output_threshold_kb = 5000
+shell_zsh_fork = false
 
 [agent.checkpointing]
 enabled = false

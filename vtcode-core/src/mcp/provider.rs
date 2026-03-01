@@ -1,3 +1,4 @@
+use arc_swap::ArcSwap;
 use anyhow::{Context, Result, anyhow};
 use rmcp::model::{
     CallToolRequestParams, CallToolResult, GetPromptRequestParams, InitializeRequestParams,
@@ -26,16 +27,21 @@ pub struct McpProvider {
     pub(super) name: String,
     #[allow(dead_code)]
     pub(super) protocol_version: String,
-    client: tokio::sync::RwLock<Arc<RmcpClient>>,
+    client: ArcSwap<RmcpClient>,
     /// Stored config so we can reconnect after disconnection.
     config: McpProviderConfig,
     /// Stored elicitation handler for reconnection.
     elicitation_handler: Option<Arc<dyn McpElicitationHandler>>,
     pub(crate) semaphore: Arc<Semaphore>,
-    tools_cache: Mutex<Option<Vec<McpToolInfo>>>,
-    resources_cache: Mutex<Option<Vec<McpResourceInfo>>>,
-    prompts_cache: Mutex<Option<Vec<McpPromptInfo>>>,
+    caches: Mutex<ProviderCaches>,
     initialize_result: Mutex<Option<InitializeResult>>,
+}
+
+#[derive(Default)]
+struct ProviderCaches {
+    tools: Option<Arc<Vec<McpToolInfo>>>,
+    resources: Option<Arc<Vec<McpResourceInfo>>>,
+    prompts: Option<Arc<Vec<McpPromptInfo>>>,
 }
 
 impl McpProvider {
@@ -100,26 +106,20 @@ impl McpProvider {
         Ok(Self {
             name: config.name.clone(),
             protocol_version,
-            client: tokio::sync::RwLock::new(Arc::new(client)),
+            client: ArcSwap::from_pointee(client),
             config,
             elicitation_handler,
             semaphore: Arc::new(Semaphore::new(max_requests)),
-            tools_cache: Mutex::new(None),
-            resources_cache: Mutex::new(None),
-            prompts_cache: Mutex::new(None),
+            caches: Mutex::new(ProviderCaches::default()),
             initialize_result: Mutex::new(None),
         })
     }
 
     pub(super) fn invalidate_caches(&self) {
-        if let Ok(mut cache) = self.tools_cache.try_lock() {
-            *cache = None;
-        }
-        if let Ok(mut cache) = self.resources_cache.try_lock() {
-            *cache = None;
-        }
-        if let Ok(mut cache) = self.prompts_cache.try_lock() {
-            *cache = None;
+        if let Ok(mut caches) = self.caches.try_lock() {
+            caches.tools = None;
+            caches.resources = None;
+            caches.prompts = None;
         }
     }
 
@@ -130,7 +130,7 @@ impl McpProvider {
         tool_timeout: Option<Duration>,
         allowlist: &McpAllowListConfig,
     ) -> Result<()> {
-        let client = self.client.read().await.clone();
+        let client = self.client.load_full();
         let result = client.initialize(params, startup_timeout).await?;
 
         let protocol_version_str = result.protocol_version.to_string();
@@ -155,11 +155,23 @@ impl McpProvider {
         allowlist: &McpAllowListConfig,
         timeout: Option<Duration>,
     ) -> Result<Vec<McpToolInfo>> {
-        if let Some(cache) = &*self.tools_cache.lock().await {
-            return Ok(cache.clone());
+        Ok(self
+            .list_tools_shared(allowlist, timeout)
+            .await?
+            .as_ref()
+            .clone())
+    }
+
+    async fn list_tools_shared(
+        &self,
+        allowlist: &McpAllowListConfig,
+        timeout: Option<Duration>,
+    ) -> Result<Arc<Vec<McpToolInfo>>> {
+        if let Some(cache) = &self.caches.lock().await.tools {
+            return Ok(Arc::clone(cache));
         }
 
-        self.refresh_tools(allowlist, timeout).await
+        self.refresh_tools_shared(allowlist, timeout).await
     }
 
     pub(super) async fn refresh_tools(
@@ -167,10 +179,22 @@ impl McpProvider {
         allowlist: &McpAllowListConfig,
         timeout: Option<Duration>,
     ) -> Result<Vec<McpToolInfo>> {
-        let client = self.client.read().await.clone();
+        Ok(self
+            .refresh_tools_shared(allowlist, timeout)
+            .await?
+            .as_ref()
+            .clone())
+    }
+
+    async fn refresh_tools_shared(
+        &self,
+        allowlist: &McpAllowListConfig,
+        timeout: Option<Duration>,
+    ) -> Result<Arc<Vec<McpToolInfo>>> {
+        let client = self.client.load_full();
         let tools = client.list_all_tools(timeout).await?;
-        let filtered = self.filter_tools(tools, allowlist);
-        *self.tools_cache.lock().await = Some(filtered.clone());
+        let filtered = Arc::new(self.filter_tools(tools, allowlist));
+        self.caches.lock().await.tools = Some(Arc::clone(&filtered));
         Ok(filtered)
     }
 
@@ -180,7 +204,7 @@ impl McpProvider {
         allowlist: &McpAllowListConfig,
         timeout: Option<Duration>,
     ) -> Result<bool> {
-        let tools = self.list_tools(allowlist, timeout).await?;
+        let tools = self.list_tools_shared(allowlist, timeout).await?;
         Ok(tools.iter().any(|tool| tool.name == tool_name))
     }
 
@@ -220,7 +244,7 @@ impl McpProvider {
             meta: None,
             task: None,
         };
-        let client = self.client.read().await.clone();
+        let client = self.client.load_full();
         client.call_tool(params, timeout).await
     }
 
@@ -245,15 +269,15 @@ impl McpProvider {
         allowlist: &McpAllowListConfig,
         timeout: Option<Duration>,
     ) -> Result<bool> {
-        if let Some(tools) = &*self.tools_cache.lock().await
+        if let Some(tools) = &self.caches.lock().await.tools
             && let Some(tool) = tools.iter().find(|tool| tool.name == tool_name)
         {
             return Ok(schema_requires_field(&tool.input_schema, field));
         }
 
-        match self.refresh_tools(allowlist, timeout).await {
+        match self.refresh_tools_shared(allowlist, timeout).await {
             Ok(tools) => Ok(tools
-                .into_iter()
+                .iter()
                 .find(|tool| tool.name == tool_name)
                 .map(|tool| schema_requires_field(&tool.input_schema, field))
                 .unwrap_or(false)),
@@ -272,11 +296,23 @@ impl McpProvider {
         allowlist: &McpAllowListConfig,
         timeout: Option<Duration>,
     ) -> Result<Vec<McpResourceInfo>> {
-        if let Some(cache) = &*self.resources_cache.lock().await {
-            return Ok(cache.clone());
+        Ok(self
+            .list_resources_shared(allowlist, timeout)
+            .await?
+            .as_ref()
+            .clone())
+    }
+
+    async fn list_resources_shared(
+        &self,
+        allowlist: &McpAllowListConfig,
+        timeout: Option<Duration>,
+    ) -> Result<Arc<Vec<McpResourceInfo>>> {
+        if let Some(cache) = &self.caches.lock().await.resources {
+            return Ok(Arc::clone(cache));
         }
 
-        self.refresh_resources(allowlist, timeout).await
+        self.refresh_resources_shared(allowlist, timeout).await
     }
 
     pub(super) async fn refresh_resources(
@@ -284,10 +320,22 @@ impl McpProvider {
         allowlist: &McpAllowListConfig,
         timeout: Option<Duration>,
     ) -> Result<Vec<McpResourceInfo>> {
-        let client = self.client.read().await.clone();
+        Ok(self
+            .refresh_resources_shared(allowlist, timeout)
+            .await?
+            .as_ref()
+            .clone())
+    }
+
+    async fn refresh_resources_shared(
+        &self,
+        allowlist: &McpAllowListConfig,
+        timeout: Option<Duration>,
+    ) -> Result<Arc<Vec<McpResourceInfo>>> {
+        let client = self.client.load_full();
         let resources = client.list_all_resources(timeout).await?;
-        let filtered = self.filter_resources(resources, allowlist);
-        *self.resources_cache.lock().await = Some(filtered.clone());
+        let filtered = Arc::new(self.filter_resources(resources, allowlist));
+        self.caches.lock().await.resources = Some(Arc::clone(&filtered));
         Ok(filtered)
     }
 
@@ -297,7 +345,7 @@ impl McpProvider {
         allowlist: &McpAllowListConfig,
         timeout: Option<Duration>,
     ) -> Result<bool> {
-        let resources = self.list_resources(allowlist, timeout).await?;
+        let resources = self.list_resources_shared(allowlist, timeout).await?;
         Ok(resources.iter().any(|resource| resource.uri == uri))
     }
 
@@ -325,7 +373,7 @@ impl McpProvider {
             uri: uri.to_string(),
             meta: None,
         };
-        let client = self.client.read().await.clone();
+        let client = self.client.load_full();
         let result = client.read_resource(params, timeout).await?;
         Ok(McpResourceData {
             provider: self.name.clone(),
@@ -340,11 +388,23 @@ impl McpProvider {
         allowlist: &McpAllowListConfig,
         timeout: Option<Duration>,
     ) -> Result<Vec<McpPromptInfo>> {
-        if let Some(cache) = &*self.prompts_cache.lock().await {
-            return Ok(cache.clone());
+        Ok(self
+            .list_prompts_shared(allowlist, timeout)
+            .await?
+            .as_ref()
+            .clone())
+    }
+
+    async fn list_prompts_shared(
+        &self,
+        allowlist: &McpAllowListConfig,
+        timeout: Option<Duration>,
+    ) -> Result<Arc<Vec<McpPromptInfo>>> {
+        if let Some(cache) = &self.caches.lock().await.prompts {
+            return Ok(Arc::clone(cache));
         }
 
-        self.refresh_prompts(allowlist, timeout).await
+        self.refresh_prompts_shared(allowlist, timeout).await
     }
 
     pub(super) async fn refresh_prompts(
@@ -352,10 +412,22 @@ impl McpProvider {
         allowlist: &McpAllowListConfig,
         timeout: Option<Duration>,
     ) -> Result<Vec<McpPromptInfo>> {
-        let client = self.client.read().await.clone();
+        Ok(self
+            .refresh_prompts_shared(allowlist, timeout)
+            .await?
+            .as_ref()
+            .clone())
+    }
+
+    async fn refresh_prompts_shared(
+        &self,
+        allowlist: &McpAllowListConfig,
+        timeout: Option<Duration>,
+    ) -> Result<Arc<Vec<McpPromptInfo>>> {
+        let client = self.client.load_full();
         let prompts = client.list_all_prompts(timeout).await?;
-        let filtered = self.filter_prompts(prompts, allowlist);
-        *self.prompts_cache.lock().await = Some(filtered.clone());
+        let filtered = Arc::new(self.filter_prompts(prompts, allowlist));
+        self.caches.lock().await.prompts = Some(Arc::clone(&filtered));
         Ok(filtered)
     }
 
@@ -365,7 +437,7 @@ impl McpProvider {
         allowlist: &McpAllowListConfig,
         timeout: Option<Duration>,
     ) -> Result<bool> {
-        let prompts = self.list_prompts(allowlist, timeout).await?;
+        let prompts = self.list_prompts_shared(allowlist, timeout).await?;
         Ok(prompts.iter().any(|prompt| prompt.name == prompt_name))
     }
 
@@ -401,7 +473,7 @@ impl McpProvider {
             arguments: Some(args_json),
             meta: None,
         };
-        let client = self.client.read().await.clone();
+        let client = self.client.load_full();
         let result = client.get_prompt(params, timeout).await?;
         Ok(McpPromptDetail {
             provider: self.name.clone(),
@@ -413,17 +485,22 @@ impl McpProvider {
     }
 
     pub(super) async fn cached_tools(&self) -> Option<Vec<McpToolInfo>> {
-        self.tools_cache.lock().await.clone()
+        self.caches
+            .lock()
+            .await
+            .tools
+            .as_ref()
+            .map(|tools| tools.as_ref().clone())
     }
 
     pub(super) async fn shutdown(&self) -> Result<()> {
-        let client = self.client.read().await.clone();
+        let client = self.client.load_full();
         client.shutdown().await
     }
 
     /// Returns `true` when the underlying transport is still connected and responsive.
     pub(super) async fn is_healthy(&self) -> bool {
-        let client = self.client.read().await.clone();
+        let client = self.client.load_full();
         client.is_healthy().await
     }
 
@@ -441,7 +518,7 @@ impl McpProvider {
 
         // Shut down the old client (best-effort).
         {
-            let old = self.client.read().await.clone();
+            let old = self.client.load_full();
             let _ = old.shutdown().await;
         }
 
@@ -453,8 +530,8 @@ impl McpProvider {
 
         // Swap inner client.
         {
-            let new_client = new_provider.client.read().await.clone();
-            *self.client.write().await = new_client;
+            let new_client = new_provider.client.load_full();
+            self.client.store(new_client);
         }
 
         // Invalidate all caches before re-initialisation.

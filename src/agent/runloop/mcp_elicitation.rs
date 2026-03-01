@@ -7,8 +7,8 @@ use vtcode_core::mcp::{
     ElicitationAction, McpElicitationHandler, McpElicitationRequest, McpElicitationResponse,
 };
 use vtcode_core::{
-    exec_policy::AskForApproval,
-    NotificationEvent, send_global_notification, utils::ansi_codes::notify_attention,
+    NotificationEvent, exec_policy::AskForApproval, send_global_notification,
+    utils::ansi_codes::notify_attention,
 };
 
 /// Interactive handler that prompts the user on the terminal when an MCP provider
@@ -132,8 +132,12 @@ mod tests {
 
     #[test]
     fn elicitation_reject_policy_defaults_to_prompting() {
-        assert!(!elicitation_is_rejected_by_policy(AskForApproval::OnFailure));
-        assert!(!elicitation_is_rejected_by_policy(AskForApproval::OnRequest));
+        assert!(!elicitation_is_rejected_by_policy(
+            AskForApproval::OnFailure
+        ));
+        assert!(!elicitation_is_rejected_by_policy(
+            AskForApproval::OnRequest
+        ));
         assert!(!elicitation_is_rejected_by_policy(
             AskForApproval::UnlessTrusted
         ));
