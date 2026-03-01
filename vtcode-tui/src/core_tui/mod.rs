@@ -114,7 +114,7 @@ pub fn spawn_session_with_prompts_and_options(
                 placeholder,
                 surface_preference,
                 inline_rows,
-                show_logs: crate::ui::tui::panic_hook::is_debug_mode(),
+                show_logs: crate::ui::tui::log::is_tui_log_capture_enabled(),
                 log_theme: None,
                 event_callback,
                 active_pty_sessions,

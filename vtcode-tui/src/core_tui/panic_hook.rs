@@ -118,9 +118,14 @@ pub fn init_panic_hook() {
                 let _ = restore_tui();
             }
 
-            if is_debug {
+            if cfg!(debug_assertions) && is_debug {
                 better_panic_hook(panic_info);
-            } else {
+                // In debug/dev mode, preserve normal panic semantics (unwind/abort by profile)
+                // rather than forcing immediate process exit from inside the hook.
+                return;
+            }
+
+            {
                 let metadata = app_metadata();
                 let mut report_metadata = HumanPanicMetadata::new(metadata.name, metadata.version)
                     .authors(format!("authored by {}", metadata.authors));
@@ -163,6 +168,9 @@ pub fn mark_tui_deinitialized() {
 ///
 /// Follows Ratatui recipe: https://ratatui.rs/recipes/apps/panic-hooks/
 pub fn restore_tui() -> io::Result<()> {
+    mark_tui_deinitialized();
+    let mut first_error: Option<io::Error> = None;
+
     // 1. Drain any pending crossterm events to prevent them from leaking to the shell
     // This is a best-effort drain with a zero timeout
     while let Ok(true) = ratatui::crossterm::event::poll(std::time::Duration::from_millis(0)) {
@@ -173,33 +181,54 @@ pub fn restore_tui() -> io::Result<()> {
     let mut stderr = io::stderr();
 
     // 2. Clear current line to remove any echoed ^C characters from rapid Ctrl+C presses
-    let _ = execute!(stderr, MoveToColumn(0), Clear(ClearType::CurrentLine));
+    if let Err(error) = execute!(stderr, MoveToColumn(0), Clear(ClearType::CurrentLine)) {
+        first_error.get_or_insert(error);
+    }
 
     // 3. Leave alternate screen FIRST (if we were in one)
     // This is the most critical operation for visual restoration
-    let _ = execute!(stderr, LeaveAlternateScreen);
+    if let Err(error) = execute!(stderr, LeaveAlternateScreen) {
+        first_error.get_or_insert(error);
+    }
 
     // 4. Disable various terminal modes that might have been enabled by the TUI
-    let _ = execute!(stderr, DisableBracketedPaste);
-    let _ = execute!(stderr, DisableFocusChange);
-    let _ = execute!(stderr, DisableMouseCapture);
-    let _ = execute!(stderr, PopKeyboardEnhancementFlags);
+    if let Err(error) = execute!(stderr, DisableBracketedPaste) {
+        first_error.get_or_insert(error);
+    }
+    if let Err(error) = execute!(stderr, DisableFocusChange) {
+        first_error.get_or_insert(error);
+    }
+    if let Err(error) = execute!(stderr, DisableMouseCapture) {
+        first_error.get_or_insert(error);
+    }
+    if let Err(error) = execute!(stderr, PopKeyboardEnhancementFlags) {
+        first_error.get_or_insert(error);
+    }
 
     // Ensure cursor state is restored
-    let _ = execute!(
+    if let Err(error) = execute!(
         stderr,
         SetCursorStyle::DefaultUserShape,
         Show,
         RestorePosition
-    );
+    ) {
+        first_error.get_or_insert(error);
+    }
 
     // 5. Disable raw mode LAST to ensure all cleanup commands are sent properly
-    let _ = disable_raw_mode();
+    if let Err(error) = disable_raw_mode() {
+        first_error.get_or_insert(error);
+    }
 
     // Additional flush to ensure all escape sequences are processed
-    let _ = stderr.flush();
+    if let Err(error) = stderr.flush() {
+        first_error.get_or_insert(error);
+    }
 
-    Ok(())
+    match first_error {
+        Some(error) => Err(error),
+        None => Ok(()),
+    }
 }
 
 /// A guard struct that automatically registers and unregisters TUI state

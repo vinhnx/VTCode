@@ -26,6 +26,18 @@ use main_helpers::{
     initialize_tracing_from_config,
 };
 
+fn env_flag_enabled(var_name: &str) -> bool {
+    std::env::var(var_name)
+        .ok()
+        .map(|value| {
+            matches!(
+                value.trim().to_ascii_lowercase().as_str(),
+                "1" | "true" | "yes" | "on" | "debug"
+            )
+        })
+        .unwrap_or(false)
+}
+
 fn main() -> std::process::ExitCode {
     const MAIN_THREAD_STACK_BYTES: usize = 16 * 1024 * 1024;
 
@@ -124,6 +136,9 @@ async fn run() -> Result<()> {
     let matches = cmd.get_matches();
     let args = Cli::from_arg_matches(&matches)?;
     panic_hook::set_debug_mode(args.debug);
+    let tui_log_capture_enabled =
+        cfg!(debug_assertions) && (args.debug || env_flag_enabled("VTCODE_TUI_LOGS"));
+    vtcode_tui::log::set_tui_log_capture_enabled(tui_log_capture_enabled);
 
     // Load .env (non-fatal if missing)
     if let Err(_err) = load_dotenv()

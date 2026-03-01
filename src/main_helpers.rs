@@ -10,7 +10,7 @@ use vtcode_core::utils::dot_config::DotManager;
 use vtcode_core::utils::error_log_collector::ErrorLogCollectorLayer;
 use vtcode_core::utils::session_archive::SESSION_DIR_ENV;
 use vtcode_core::utils::tty::TtyExt;
-use vtcode_tui::log::make_tui_log_layer;
+use vtcode_tui::log::{is_tui_log_capture_enabled, make_tui_log_layer};
 
 const DEBUG_LOG_FILE_NAME: &str = "vtcode-debug.log";
 const DEBUG_LOG_ROTATED_PREFIX: &str = "vtcode-debug-";
@@ -18,6 +18,14 @@ const DEFAULT_MAX_DEBUG_LOG_SIZE_MB: u64 = 50;
 const DEFAULT_MAX_DEBUG_LOG_AGE_DAYS: u32 = 7;
 const DEBUG_BYTES_PER_MB: u64 = 1024 * 1024;
 const SECONDS_PER_DAY: u64 = 24 * 60 * 60;
+
+fn maybe_tui_log_layer() -> Option<vtcode_tui::log::TuiLogLayer> {
+    if is_tui_log_capture_enabled() {
+        Some(make_tui_log_layer())
+    } else {
+        None
+    }
+}
 
 fn default_debug_log_dir() -> PathBuf {
     if let Some(custom) = std::env::var_os(SESSION_DIR_ENV) {
@@ -258,7 +266,7 @@ pub(crate) async fn initialize_tracing(args: &Cli) -> Result<bool> {
             let init_result = tracing_subscriber::registry()
                 .with(env_filter)
                 .with(fmt_layer)
-                .with(make_tui_log_layer())
+                .with(maybe_tui_log_layer())
                 .with(ErrorLogCollectorLayer)
                 .try_init();
 
@@ -271,7 +279,7 @@ pub(crate) async fn initialize_tracing(args: &Cli) -> Result<bool> {
             let init_result = tracing_subscriber::registry()
                 .with(env_filter)
                 .with(fmt_layer)
-                .with(make_tui_log_layer())
+                .with(maybe_tui_log_layer())
                 .with(ErrorLogCollectorLayer)
                 .try_init();
 
@@ -349,7 +357,7 @@ pub(crate) fn initialize_tracing_from_config(
     let init_result = tracing_subscriber::registry()
         .with(env_filter)
         .with(fmt_layer)
-        .with(make_tui_log_layer())
+        .with(maybe_tui_log_layer())
         .with(ErrorLogCollectorLayer)
         .try_init();
 

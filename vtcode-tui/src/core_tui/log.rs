@@ -1,4 +1,5 @@
 use std::fmt;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::SystemTime;
 
@@ -36,6 +37,13 @@ struct LogForwarder {
 }
 
 impl LogForwarder {
+    fn has_sender(&self) -> bool {
+        match self.sender.lock() {
+            Ok(guard) => guard.is_some(),
+            Err(_) => false,
+        }
+    }
+
     fn set_sender(&self, sender: UnboundedSender<LogEntry>) {
         match self.sender.lock() {
             Ok(mut guard) => {
@@ -73,6 +81,7 @@ impl LogForwarder {
 }
 
 static LOG_FORWARDER: Lazy<Arc<LogForwarder>> = Lazy::new(|| Arc::new(LogForwarder::default()));
+static TUI_LOG_CAPTURE_ENABLED: AtomicBool = AtomicBool::new(cfg!(debug_assertions));
 
 static LOG_THEME_NAME: Lazy<RwLock<Option<String>>> = Lazy::new(|| RwLock::new(None));
 static LOG_THEME_CACHE: Lazy<RwLock<Option<(String, Theme)>>> = Lazy::new(|| RwLock::new(None));
@@ -131,11 +140,28 @@ impl TuiLogLayer {
     }
 }
 
+pub fn set_tui_log_capture_enabled(enabled: bool) {
+    TUI_LOG_CAPTURE_ENABLED.store(enabled, Ordering::SeqCst);
+}
+
+pub fn is_tui_log_capture_enabled() -> bool {
+    TUI_LOG_CAPTURE_ENABLED.load(Ordering::SeqCst)
+}
+
 impl<S> Layer<S> for TuiLogLayer
 where
     S: Subscriber + for<'span> LookupSpan<'span>,
 {
     fn on_event(&self, event: &Event<'_>, _ctx: Context<'_, S>) {
+        if !is_tui_log_capture_enabled() {
+            return;
+        }
+
+        // If no inline consumer is attached, avoid formatting work entirely.
+        if !self.forwarder.has_sender() {
+            return;
+        }
+
         let level = *event.metadata().level();
 
         // Always filter out TRACE level

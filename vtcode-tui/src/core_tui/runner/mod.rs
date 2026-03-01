@@ -63,7 +63,6 @@ pub async fn run_tui(
     let _signal_guard = SignalCleanupGuard::new()?;
 
     let surface = TerminalSurface::detect(options.surface_preference, options.inline_rows)?;
-    let (log_tx, log_rx) = tokio::sync::mpsc::unbounded_channel();
     set_log_theme_name(options.log_theme.clone());
     let mut session = Session::new_with_logs(
         options.theme,
@@ -75,10 +74,15 @@ pub async fn run_tui(
         options.app_name.clone(),
     );
     session.show_logs = options.show_logs;
-    session.set_log_receiver(log_rx);
     session.active_pty_sessions = options.active_pty_sessions;
     session.set_workspace_root(options.workspace_root.clone());
-    register_tui_log_sender(log_tx);
+    if options.show_logs {
+        let (log_tx, log_rx) = tokio::sync::mpsc::unbounded_channel();
+        session.set_log_receiver(log_rx);
+        register_tui_log_sender(log_tx);
+    } else {
+        clear_tui_log_sender();
+    }
 
     let keyboard_flags = crate::config::keyboard_protocol_to_flags(&options.keyboard_protocol);
     let mut stderr = io::stderr();
