@@ -1,4 +1,3 @@
-use std::fmt;
 use std::io::{self, Write};
 
 use anyhow::{Context, Result, anyhow};
@@ -58,16 +57,9 @@ impl SelectionEntry {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
+#[error("selection interrupted by Ctrl+C")]
 pub struct SelectionInterrupted;
-
-impl fmt::Display for SelectionInterrupted {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("selection interrupted by Ctrl+C")
-    }
-}
-
-impl std::error::Error for SelectionInterrupted {}
 
 pub fn run_interactive_selection(
     title: &str,

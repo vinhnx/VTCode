@@ -3,13 +3,13 @@
 //! Provides structured error handling with context and observability hooks.
 
 use serde::{Deserialize, Serialize};
-use std::fmt;
 
 /// Result type for tool improvements operations
 pub type ImprovementResult<T> = Result<T, ImprovementError>;
 
 /// Structured errors for tool improvements
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, thiserror::Error)]
+#[error("{operation}: {context} ({log_entry})", log_entry = format!("[{}] {} - {} ({}{})", match severity { ErrorSeverity::Warning => "WARN", ErrorSeverity::Error => "ERROR", ErrorSeverity::Critical => "CRIT", }, operation, context, match kind { ErrorKind::ScoringFailed => "scoring_failed", ErrorKind::SelectionFailed => "selection_failed", ErrorKind::ChainExecutionFailed => "chain_failed", ErrorKind::CacheOperationFailed => "cache_failed", ErrorKind::ConfigurationInvalid => "config_invalid", _ => "unknown", }, source_message.as_ref().map(|s| format!(": {}", s)).unwrap_or_default()))]
 pub struct ImprovementError {
     /// Error kind
     pub kind: ErrorKind,
@@ -17,9 +17,9 @@ pub struct ImprovementError {
     /// Context information
     pub context: String,
 
-    /// Original source error (if any)
+    /// Original source error message (if any)
     #[serde(skip)]
-    pub source: Option<String>,
+    pub source_message: Option<String>,
 
     /// Operation that failed
     pub operation: String,
@@ -83,15 +83,15 @@ impl ImprovementError {
         Self {
             kind,
             context: context.into(),
-            source: None,
+            source_message: None,
             operation: operation.into(),
             severity: ErrorSeverity::Error,
         }
     }
 
     /// Add source error context
-    pub fn with_source(mut self, source: impl fmt::Display) -> Self {
-        self.source = Some(source.to_string());
+    pub fn with_source(mut self, source: impl std::fmt::Display) -> Self {
+        self.source_message = Some(source.to_string());
         self
     }
 
@@ -125,27 +125,13 @@ impl ImprovementError {
                 ErrorKind::ConfigurationInvalid => "config_invalid",
                 _ => "unknown",
             },
-            self.source
+            self.source_message
                 .as_ref()
                 .map(|s| format!(": {}", s))
                 .unwrap_or_default()
         )
     }
 }
-
-impl fmt::Display for ImprovementError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{}: {} ({})",
-            self.operation,
-            self.context,
-            self.to_log_entry()
-        )
-    }
-}
-
-impl std::error::Error for ImprovementError {}
 
 /// Observability event for tool improvements
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -252,7 +238,7 @@ impl ObservabilitySink for LoggingSink {
             operation = %error.operation,
             severity = ?error.severity,
             context = %error.context,
-            source = ?error.source,
+            source_message = ?error.source_message,
             "improvement_error: {}",
             error
         );

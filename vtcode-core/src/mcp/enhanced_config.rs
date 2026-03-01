@@ -206,50 +206,22 @@ impl ValidatedMcpClientConfig {
 }
 
 /// Validation error types
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, thiserror::Error)]
 pub enum ValidationError {
+    #[error("Invalid server port: {0}")]
     InvalidPort(u64),
+    #[error("Server bind address cannot be empty")]
     EmptyBindAddress,
+    #[error("API key environment variable must be set when auth is enabled")]
     MissingApiKeyEnv,
+    #[error("Startup timeout cannot exceed 300 seconds: {0}")]
     InvalidStartupTimeout(u64),
+    #[error("Tool timeout cannot exceed 3600 seconds: {0}")]
     InvalidToolTimeout(u64),
+    #[error("MCP provider name cannot be empty")]
     EmptyProviderName,
+    #[error("Max concurrent requests must be greater than 0 for provider '{0}': {1}")]
     InvalidMaxConcurrentRequests(String, usize),
-}
-
-impl std::fmt::Display for ValidationError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ValidationError::InvalidPort(port) => {
-                write!(f, "Invalid server port: {}", port)
-            }
-            ValidationError::EmptyBindAddress => {
-                write!(f, "Server bind address cannot be empty")
-            }
-            ValidationError::MissingApiKeyEnv => {
-                write!(
-                    f,
-                    "API key environment variable must be set when auth is enabled"
-                )
-            }
-            ValidationError::InvalidStartupTimeout(timeout) => {
-                write!(f, "Startup timeout cannot exceed 300 seconds: {}", timeout)
-            }
-            ValidationError::InvalidToolTimeout(timeout) => {
-                write!(f, "Tool timeout cannot exceed 3600 seconds: {}", timeout)
-            }
-            ValidationError::EmptyProviderName => {
-                write!(f, "MCP provider name cannot be empty")
-            }
-            ValidationError::InvalidMaxConcurrentRequests(name, count) => {
-                write!(
-                    f,
-                    "Max concurrent requests must be greater than 0 for provider '{}': {}",
-                    name, count
-                )
-            }
-        }
-    }
 }
 
 /// Enhanced tool configuration

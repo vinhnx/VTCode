@@ -9,7 +9,8 @@ use serde::{Deserialize, Serialize};
 ///
 /// Errors are designed to provide clear, actionable feedback with
 /// machine-readable types and codes alongside human-readable messages.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, thiserror::Error)]
+#[error("{error_type}: {message}")]
 pub struct OpenResponseError {
     /// Category of the error.
     #[serde(rename = "type")]
@@ -85,14 +86,6 @@ impl OpenResponseError {
         self
     }
 }
-
-impl std::fmt::Display for OpenResponseError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}: {}", self.error_type, self.message)
-    }
-}
-
-impl std::error::Error for OpenResponseError {}
 
 /// Category of error that occurred.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]

@@ -1,5 +1,4 @@
 use std::collections::HashSet;
-use std::fmt;
 use std::io::{self, Write};
 use std::str::FromStr;
 
@@ -121,16 +120,9 @@ fn select_provider_with_ratatui(providers: &[Provider], default: Provider) -> Re
     Ok(providers[selected_index])
 }
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
+#[error("setup interrupted by Ctrl+C")]
 struct SetupInterrupted;
-
-impl fmt::Display for SetupInterrupted {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("setup interrupted by Ctrl+C")
-    }
-}
-
-impl std::error::Error for SetupInterrupted {}
 
 pub(super) fn prompt_model(
     renderer: &mut AnsiRenderer,

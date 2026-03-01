@@ -43,6 +43,7 @@ syntect = { version = "5.2", default-features = false, features = [
     "default-fancy",
 ] }
 terminal_size = "0.4.3"
+thiserror = { workspace = true }
 tokio = { workspace = true }
 tokio-util = { version = "0.7", features = ["codec"] }
 toml = "0.9.11"

@@ -15,6 +15,7 @@ keywords = ["vtcode", "acp", "agent", "client-connection", "vt"]
 [dependencies]
 agent-client-protocol = "0.9.4"
 anyhow = "1.0"
+thiserror = { workspace = true }
 tokio = { version = "1.49", features = ["full"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
 serde = { version = "1.0", features = ["derive"] }

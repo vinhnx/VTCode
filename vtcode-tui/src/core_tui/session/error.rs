@@ -1,56 +1,53 @@
 //! Error types for TUI session operations
 
-use std::fmt;
-
 /// Errors that can occur in TUI session operations
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum SessionError {
     /// Error during rendering operations
-    RenderError { source: Box<dyn std::error::Error + Send + Sync> },
+    #[error("Render error: {source}")]
+    RenderError {
+        #[source]
+        source: Box<dyn std::error::Error + Send + Sync>,
+    },
     /// Error during input processing
-    InputError { source: Box<dyn std::error::Error + Send + Sync> },
+    #[error("Input error: {source}")]
+    InputError {
+        #[source]
+        source: Box<dyn std::error::Error + Send + Sync>,
+    },
     /// Error during state management
-    StateError { source: Box<dyn std::error::Error + Send + Sync> },
+    #[error("State error: {source}")]
+    StateError {
+        #[source]
+        source: Box<dyn std::error::Error + Send + Sync>,
+    },
     /// Error during UI component operations
-    UIError { source: Box<dyn std::error::Error + Send + Sync> },
+    #[error("UI error: {source}")]
+    UIError {
+        #[source]
+        source: Box<dyn std::error::Error + Send + Sync>,
+    },
     /// Error during message processing
-    MessageError { source: Box<dyn std::error::Error + Send + Sync> },
+    #[error("Message error: {source}")]
+    MessageError {
+        #[source]
+        source: Box<dyn std::error::Error + Send + Sync>,
+    },
     /// Error during cache operations
-    CacheError { source: Box<dyn std::error::Error + Send + Sync> },
+    #[error("Cache error: {source}")]
+    CacheError {
+        #[source]
+        source: Box<dyn std::error::Error + Send + Sync>,
+    },
     /// Resource exhausted error (e.g., memory, file handles)
+    #[error("Resource exhausted: {resource}")]
     ResourceExhausted { resource: String },
     /// Configuration error
-    ConfigError { source: Box<dyn std::error::Error + Send + Sync> },
-}
-
-impl fmt::Display for SessionError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            SessionError::RenderError { source } => write!(f, "Render error: {}", source),
-            SessionError::InputError { source } => write!(f, "Input error: {}", source),
-            SessionError::StateError { source } => write!(f, "State error: {}", source),
-            SessionError::UIError { source } => write!(f, "UI error: {}", source),
-            SessionError::MessageError { source } => write!(f, "Message error: {}", source),
-            SessionError::CacheError { source } => write!(f, "Cache error: {}", source),
-            SessionError::ResourceExhausted { resource } => write!(f, "Resource exhausted: {}", resource),
-            SessionError::ConfigError { source } => write!(f, "Configuration error: {}", source),
-        }
-    }
-}
-
-impl std::error::Error for SessionError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            SessionError::RenderError { source } => Some(source.as_ref()),
-            SessionError::InputError { source } => Some(source.as_ref()),
-            SessionError::StateError { source } => Some(source.as_ref()),
-            SessionError::UIError { source } => Some(source.as_ref()),
-            SessionError::MessageError { source } => Some(source.as_ref()),
-            SessionError::CacheError { source } => Some(source.as_ref()),
-            SessionError::ResourceExhausted { .. } => None,
-            SessionError::ConfigError { source } => Some(source.as_ref()),
-        }
-    }
+    #[error("Configuration error: {source}")]
+    ConfigError {
+        #[source]
+        source: Box<dyn std::error::Error + Send + Sync>,
+    },
 }
 
 impl SessionError {

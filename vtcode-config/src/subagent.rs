@@ -350,35 +350,20 @@ impl SubagentConfig {
 }
 
 /// Errors that can occur when parsing subagent configurations
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum SubagentParseError {
     /// Missing YAML frontmatter
+    #[error("Missing YAML frontmatter (---...---)")]
     MissingFrontmatter,
     /// YAML parsing error
-    YamlError(serde_yaml::Error),
+    #[error("YAML parse error: {0}")]
+    YamlError(#[from] serde_yaml::Error),
     /// Missing required field
+    #[error("Missing required field: {0}")]
     MissingField(String),
     /// IO error when reading file
-    IoError(std::io::Error),
-}
-
-impl fmt::Display for SubagentParseError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::MissingFrontmatter => write!(f, "Missing YAML frontmatter (---...---)"),
-            Self::YamlError(e) => write!(f, "YAML parse error: {}", e),
-            Self::MissingField(field) => write!(f, "Missing required field: {}", field),
-            Self::IoError(e) => write!(f, "IO error: {}", e),
-        }
-    }
-}
-
-impl std::error::Error for SubagentParseError {}
-
-impl From<std::io::Error> for SubagentParseError {
-    fn from(e: std::io::Error) -> Self {
-        Self::IoError(e)
-    }
+    #[error("IO error: {0}")]
+    IoError(#[from] std::io::Error),
 }
 
 /// Configuration for the subagent system in vtcode.toml

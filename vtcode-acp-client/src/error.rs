@@ -1,26 +1,29 @@
 //! Error types for ACP operations
 
-use std::fmt;
-
 /// Result type for ACP operations
 pub type AcpResult<T> = std::result::Result<T, AcpError>;
 
 /// Errors that can occur during ACP communication
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum AcpError {
     /// Agent not found or unavailable
+    #[error("Agent not found: {0}")]
     AgentNotFound(String),
 
     /// Network/HTTP error
+    #[error("Network error: {0}")]
     NetworkError(String),
 
     /// Message serialization/deserialization error
+    #[error("Serialization error: {0}")]
     SerializationError(String),
 
     /// Invalid request format
+    #[error("Invalid request: {0}")]
     InvalidRequest(String),
 
     /// Remote agent returned an error
+    #[error("Remote error from {agent_id}: {message}{code}", code = if let Some(code) = code { format!(" (code: {})", code) } else { String::new() })]
     RemoteError {
         agent_id: String,
         message: String,
@@ -28,41 +31,17 @@ pub enum AcpError {
     },
 
     /// Request timeout
+    #[error("Timeout: {0}")]
     Timeout(String),
 
     /// Configuration error
+    #[error("Configuration error: {0}")]
     ConfigError(String),
 
     /// Generic internal error
+    #[error("Internal error: {0}")]
     Internal(String),
 }
-
-impl fmt::Display for AcpError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            AcpError::AgentNotFound(id) => write!(f, "Agent not found: {}", id),
-            AcpError::NetworkError(e) => write!(f, "Network error: {}", e),
-            AcpError::SerializationError(e) => write!(f, "Serialization error: {}", e),
-            AcpError::InvalidRequest(e) => write!(f, "Invalid request: {}", e),
-            AcpError::RemoteError {
-                agent_id,
-                message,
-                code,
-            } => {
-                write!(f, "Remote error from {}: {}", agent_id, message)?;
-                if let Some(code) = code {
-                    write!(f, " (code: {})", code)?;
-                }
-                Ok(())
-            }
-            AcpError::Timeout(e) => write!(f, "Timeout: {}", e),
-            AcpError::ConfigError(e) => write!(f, "Configuration error: {}", e),
-            AcpError::Internal(e) => write!(f, "Internal error: {}", e),
-        }
-    }
-}
-
-impl std::error::Error for AcpError {}
 
 impl From<reqwest::Error> for AcpError {
     fn from(err: reqwest::Error) -> Self {

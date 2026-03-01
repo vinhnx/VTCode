@@ -2,7 +2,6 @@
 ///
 /// Provides structured error reporting with file/line context,
 /// partial output preservation, and helpful suggestions.
-use std::fmt;
 use std::fmt::Write as _;
 
 use thiserror::Error;
@@ -27,7 +26,8 @@ pub enum ToolError {
 }
 
 /// Error context for tool execution failures
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, thiserror::Error)]
+#[error("{message}")]
 pub struct ToolErrorContext {
     /// Tool name that failed
     pub tool_name: String,
@@ -189,12 +189,6 @@ impl ToolErrorContext {
         }
 
         self
-    }
-}
-
-impl fmt::Display for ToolErrorContext {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.format_for_user())
     }
 }
 

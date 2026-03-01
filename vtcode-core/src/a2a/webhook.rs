@@ -127,30 +127,21 @@ impl WebhookNotifier {
 }
 
 /// Webhook delivery errors
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, thiserror::Error)]
 pub enum WebhookError {
     /// Network error
+    #[error("Network error: {0}")]
     Network(String),
     /// HTTP error status code
+    #[error("HTTP error: {0}")]
     HttpError(u16),
     /// JSON serialization error
+    #[error("Serialization error: {0}")]
     Serialization(String),
     /// Unknown error
+    #[error("Unknown error")]
     Unknown,
 }
-
-impl std::fmt::Display for WebhookError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            WebhookError::Network(msg) => write!(f, "Network error: {}", msg),
-            WebhookError::HttpError(code) => write!(f, "HTTP error: {}", code),
-            WebhookError::Serialization(msg) => write!(f, "Serialization error: {}", msg),
-            WebhookError::Unknown => write!(f, "Unknown error"),
-        }
-    }
-}
-
-impl std::error::Error for WebhookError {}
 
 #[cfg(test)]
 mod tests {

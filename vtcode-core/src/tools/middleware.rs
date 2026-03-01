@@ -8,7 +8,6 @@
 //! retries without modifying core tool execution logic.
 
 use crate::tools::improvements_errors::{EventType, ObservabilityContext};
-use std::fmt;
 use std::sync::Arc;
 
 // OPTIMIZATION: Const string literals to avoid allocations in hot paths
@@ -50,25 +49,18 @@ impl MiddlewareResult {
 
 /// Errors that can occur during middleware chain execution
 #[deprecated(since = "0.1.0", note = "Use async_middleware error handling instead")]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, thiserror::Error)]
 pub enum MiddlewareError {
+    #[error("execution failed: {0}")]
     ExecutionFailed(&'static str),
+    #[error("validation failed: {0}")]
     ValidationFailed(&'static str),
+    #[error("cache failed: {0}")]
     CacheFailed(&'static str),
+    #[error("execution timeout exceeded")]
     TimeoutExceeded,
+    #[error("execution cancelled")]
     Cancelled,
-}
-
-impl fmt::Display for MiddlewareError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::ExecutionFailed(msg) => write!(f, "execution failed: {}", msg),
-            Self::ValidationFailed(msg) => write!(f, "validation failed: {}", msg),
-            Self::CacheFailed(msg) => write!(f, "cache failed: {}", msg),
-            Self::TimeoutExceeded => write!(f, "execution timeout exceeded"),
-            Self::Cancelled => write!(f, "execution cancelled"),
-        }
-    }
 }
 
 /// Metadata about execution through middleware

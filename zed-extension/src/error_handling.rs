@@ -285,6 +285,8 @@ impl fmt::Display for ExtensionError {
     }
 }
 
+impl std::error::Error for ExtensionError {}
+
 /// Recovery strategy for degraded operations
 #[derive(Debug, Clone)]
 pub struct RecoveryStrategy {

@@ -108,7 +108,8 @@ pub struct ConfirmationRequest {
 }
 
 /// A protection violation.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, thiserror::Error)]
+#[error("Dotfile protection violation for '{file_path}': {reason}. {suggestion}")]
 pub struct ProtectionViolation {
     /// Path to the dotfile.
     pub file_path: String,
@@ -119,18 +120,6 @@ pub struct ProtectionViolation {
     /// Suggested action.
     pub suggestion: String,
 }
-
-impl std::fmt::Display for ProtectionViolation {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "Dotfile protection violation for '{}': {}. {}",
-            self.file_path, self.reason, self.suggestion
-        )
-    }
-}
-
-impl std::error::Error for ProtectionViolation {}
 
 /// Context for a dotfile access request.
 #[derive(Debug, Clone)]
