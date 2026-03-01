@@ -246,6 +246,13 @@ jobs:
           path: artifacts
           merge-multiple: true
 
+      - name: Stage install scripts
+        run: |
+          # Copy install scripts to artifacts directory for release
+          cp scripts/install.sh artifacts/
+          cp scripts/install.ps1 artifacts/
+          chmod +x artifacts/install.sh
+
       - name: Generate Changelog
         id: changelog
         run: |
@@ -282,6 +289,8 @@ jobs:
           files: |
             artifacts/*.tar.gz
             artifacts/*.sha256
+            artifacts/install.sh
+            artifacts/install.ps1
           body_path: release_notes.md
           draft: false
           prerelease: false
