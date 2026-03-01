@@ -38,7 +38,7 @@ jobs:
           - x86_64-unknown-linux-musl
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 1
           sparse-checkout: |
@@ -112,7 +112,7 @@ jobs:
     name: Build (x86_64-pc-windows-msvc)
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 1
           sparse-checkout: |
@@ -177,7 +177,7 @@ jobs:
           - x86_64-apple-darwin
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 1
           sparse-checkout: |
@@ -236,7 +236,7 @@ jobs:
     if: ${{ always() && !cancelled() && !contains(needs.*.result, 'failure') }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0 # Full fetch to get all tags for changelog generation
 
