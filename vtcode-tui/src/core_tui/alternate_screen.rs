@@ -235,7 +235,7 @@ mod tests {
 
     #[test]
     fn test_enter_exit_cycle() {
-        if !std::io::stdout().is_tty_ext() {
+        if !io::stdout().is_tty_ext() {
             return;
         }
 
@@ -253,7 +253,7 @@ mod tests {
 
     #[test]
     fn test_run_with_closure() {
-        if !std::io::stdout().is_tty_ext() {
+        if !io::stdout().is_tty_ext() {
             return;
         }
 

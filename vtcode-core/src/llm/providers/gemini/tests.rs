@@ -35,8 +35,8 @@ fn convert_to_gemini_request_maps_history_and_system_prompt() {
             assistant_message,
             tool_response,
         ],
-        system_prompt: Some(std::sync::Arc::new("System prompt".to_string())),
-        tools: Some(std::sync::Arc::new(vec![tool_def])),
+        system_prompt: Some(Arc::new("System prompt".to_string())),
+        tools: Some(Arc::new(vec![tool_def])),
         model: models::google::GEMINI_3_FLASH_PREVIEW.to_string(),
         max_tokens: Some(256),
         temperature: Some(0.4),
@@ -88,7 +88,7 @@ fn convert_to_gemini_request_maps_history_and_system_prompt() {
 #[test]
 fn convert_from_gemini_response_extracts_tool_calls() {
     let response = GenerateContentResponse {
-        candidates: vec![crate::gemini::Candidate {
+        candidates: vec![Candidate {
             content: Content {
                 role: "model".to_string(),
                 parts: vec![
@@ -921,7 +921,7 @@ fn part_json_deserialization_function_call_with_thought_signature() {
         },
         "finishReason": "FUNCTION_CALL"
     });
-    let candidate: crate::gemini::streaming::StreamingCandidate =
+    let candidate: StreamingCandidate =
         serde_json::from_value(candidate_json).expect("should deserialize streaming candidate");
     assert_eq!(candidate.content.parts.len(), 1);
     match &candidate.content.parts[0] {

@@ -792,16 +792,16 @@ mod tests {
         assert_eq!(
             payload
                 .get("previous_response_id")
-                .and_then(serde_json::Value::as_str),
+                .and_then(Value::as_str),
             Some("resp_prev_1")
         );
         assert_eq!(
-            payload.get("store").and_then(serde_json::Value::as_bool),
+            payload.get("store").and_then(Value::as_bool),
             Some(false)
         );
         let include = payload
             .get("include")
-            .and_then(serde_json::Value::as_array)
+            .and_then(Value::as_array)
             .expect("include must exist");
         assert_eq!(include.len(), 2);
     }

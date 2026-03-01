@@ -225,7 +225,7 @@ mod tests {
 
         let log = progress_log.lock().unwrap();
         assert!(!log.is_empty());
-        assert!(log.iter().all(|&p| p >= 0.0 && p <= 1.0));
+        assert!(log.iter().all(|&p| (0.0..=1.0).contains(&p)));
     }
 
     #[test]

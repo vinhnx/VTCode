@@ -515,7 +515,7 @@ mod tests {
     fn cd_updates_working_directory() -> Result<()> {
         let dir = TempDir::new()?;
         let nested = dir.path().join("nested");
-        std::fs::create_dir(&nested)?;
+        fs::create_dir(&nested)?;
         let runner = BashRunner::new(
             dir.path().to_path_buf(),
             RecordingExecutor::default(),

@@ -339,7 +339,7 @@ mod tests {
         // Diff output without "success" marker is treated as failed
         // But should still show line counts if changes detected
         assert!(summary.contains("Edit") || summary.contains("lines"));
-        assert!(summary.contains("+2 lines") || summary.contains("-1 line") || summary.len() > 0);
+        assert!(summary.contains("+2 lines") || summary.contains("-1 line") || !summary.is_empty());
     }
 
     #[test]

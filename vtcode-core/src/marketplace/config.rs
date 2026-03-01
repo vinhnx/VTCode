@@ -305,7 +305,7 @@ mod tests {
     async fn test_add_remove_marketplace() {
         let mut settings = MarketplaceSettings::default();
 
-        let marketplace = crate::marketplace::MarketplaceSource::Git {
+        let marketplace = MarketplaceSource::Git {
             id: "test".to_string(),
             url: "https://example.com/test".to_string(),
             refspec: None,

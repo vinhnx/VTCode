@@ -47,38 +47,6 @@ impl FileOpsTool {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::config::constants::diff;
-    use crate::tools::file_ops::diff_preview::{build_diff_preview, diff_preview_error_skip};
-
-    #[test]
-    fn diff_preview_reports_truncation_and_omission() {
-        let after = (0..(diff::MAX_PREVIEW_LINES + 40))
-            .map(|idx| format!("line {idx}\n"))
-            .collect::<String>();
-
-        let preview = build_diff_preview("sample.txt", None, &after);
-
-        assert_eq!(preview["skipped"], Value::Bool(false));
-        assert_eq!(preview["truncated"], Value::Bool(true));
-        assert!(preview["omitted_line_count"].as_u64().unwrap() > 0);
-
-        let content = preview["content"].as_str().unwrap();
-        assert!(content.contains("lines omitted"));
-        assert!(content.lines().count() <= diff::HEAD_LINE_COUNT + diff::TAIL_LINE_COUNT + 1);
-    }
-
-    #[test]
-    fn diff_preview_skip_handles_error_detail() {
-        let preview = diff_preview_error_skip("failed", Some("InvalidData"));
-        assert_eq!(preview["reason"], Value::String("failed".to_string()));
-        assert_eq!(preview["detail"], Value::String("InvalidData".to_string()));
-        assert_eq!(preview["skipped"], Value::Bool(true));
-    }
-}
-
 #[async_trait]
 impl Tool for FileOpsTool {
     async fn execute(&self, args: Value) -> Result<Value> {
@@ -180,5 +148,37 @@ impl CacheableTool for FileOpsTool {
 
     fn cache_ttl(&self) -> u64 {
         60 // 1 minute for file listings
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::constants::diff;
+    use crate::tools::file_ops::diff_preview::{build_diff_preview, diff_preview_error_skip};
+
+    #[test]
+    fn diff_preview_reports_truncation_and_omission() {
+        let after = (0..(diff::MAX_PREVIEW_LINES + 40))
+            .map(|idx| format!("line {idx}\n"))
+            .collect::<String>();
+
+        let preview = build_diff_preview("sample.txt", None, &after);
+
+        assert_eq!(preview["skipped"], Value::Bool(false));
+        assert_eq!(preview["truncated"], Value::Bool(true));
+        assert!(preview["omitted_line_count"].as_u64().unwrap() > 0);
+
+        let content = preview["content"].as_str().unwrap();
+        assert!(content.contains("lines omitted"));
+        assert!(content.lines().count() <= diff::HEAD_LINE_COUNT + diff::TAIL_LINE_COUNT + 1);
+    }
+
+    #[test]
+    fn diff_preview_skip_handles_error_detail() {
+        let preview = diff_preview_error_skip("failed", Some("InvalidData"));
+        assert_eq!(preview["reason"], Value::String("failed".to_string()));
+        assert_eq!(preview["detail"], Value::String("InvalidData".to_string()));
+        assert_eq!(preview["skipped"], Value::Bool(true));
     }
 }

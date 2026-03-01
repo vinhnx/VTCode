@@ -140,7 +140,7 @@ mod tests {
     fn test_new_without_ls_colors() {
         // Create a FileColorizer when LS_COLORS is not set
         // We'll test the parsing function directly rather than modifying global env
-        let ls_colors_val = std::env::var("LS_COLORS").unwrap_or_default();
+        let ls_colors_val = env::var("LS_COLORS").unwrap_or_default();
         let colorizer = FileColorizer::new();
 
         // If LS_COLORS was not set originally, map should be empty

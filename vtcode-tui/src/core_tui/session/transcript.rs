@@ -422,8 +422,8 @@ mod tests {
 
         cache.update_row_offsets_from(0);
 
-        assert_eq!(cache.row_offsets.get(0).copied(), Some(0));
-        assert_eq!(cache.messages.get(0).map(|m| m.lines.len()), Some(2));
+        assert_eq!(cache.row_offsets.first().copied(), Some(0));
+        assert_eq!(cache.messages.first().map(|m| m.lines.len()), Some(2));
         assert_eq!(cache.row_offsets.get(1).copied(), None); // Non-existent message
         assert_eq!(cache.messages.get(1).map(|m| m.lines.len()), None); // Non-existent message
     }

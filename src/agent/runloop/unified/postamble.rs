@@ -66,9 +66,9 @@ fn aggregate_tokens(
     })
 }
 
-fn top_model<'a>(
-    usage: &'a std::collections::HashMap<String, vtcode_core::core::telemetry::ModelUsageStats>,
-) -> Option<(&'a String, &'a vtcode_core::core::telemetry::ModelUsageStats)> {
+fn top_model(
+    usage: &std::collections::HashMap<String, vtcode_core::core::telemetry::ModelUsageStats>,
+) -> Option<(&String, &vtcode_core::core::telemetry::ModelUsageStats)> {
     usage.iter().max_by_key(|(_, s)| s.api_time)
 }
 

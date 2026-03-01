@@ -335,7 +335,7 @@ mod tests {
         let engine = PatternEngine::new(100, 10);
 
         // Record pattern: grep -> read -> grep -> read
-        let tools = vec!["grep", "read", "grep", "read"];
+        let tools = ["grep", "read", "grep", "read"];
         for (i, tool) in tools.iter().enumerate() {
             engine.record(ExecutionEvent {
                 tool_name: (*tool).to_owned(),

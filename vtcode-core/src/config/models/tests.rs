@@ -340,10 +340,10 @@ fn test_fallback_models() {
 
 #[test]
 fn test_reexported_model_id_provider_types() {
-    let model: vtcode_config::models::ModelId = ModelId::GPT53Codex;
-    let provider: vtcode_config::models::Provider = Provider::Moonshot;
-    assert_eq!(model, vtcode_config::models::ModelId::GPT53Codex);
-    assert_eq!(provider, vtcode_config::models::Provider::Moonshot);
+    let model: ModelId = ModelId::GPT53Codex;
+    let provider: Provider = Provider::Moonshot;
+    assert_eq!(model, ModelId::GPT53Codex);
+    assert_eq!(provider, Provider::Moonshot);
 }
 
 #[test]

@@ -498,7 +498,7 @@ mod tests {
         // Total should be reasonable
         let total: u32 = sigs.values().map(|s| s.token_estimate).sum();
         assert!(
-            total >= 600 && total <= 1200,
+            (600..=1200).contains(&total),
             "Total token estimate out of range: {}",
             total
         );

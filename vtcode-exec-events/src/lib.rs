@@ -566,8 +566,8 @@ mod tests {
             },
         });
 
-        let payload = crate::json::versioned_to_string(&event)?;
-        let restored = crate::json::versioned_from_str(&payload)?;
+        let payload = json::versioned_to_string(&event)?;
+        let restored = json::versioned_from_str(&payload)?;
 
         assert_eq!(restored.schema_version, EVENT_SCHEMA_VERSION);
         assert_eq!(restored.event, event);

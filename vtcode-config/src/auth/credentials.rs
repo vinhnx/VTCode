@@ -230,74 +230,6 @@ impl CredentialStorage {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_storage_mode_default_is_keyring() {
-        assert_eq!(
-            AuthCredentialsStoreMode::default(),
-            AuthCredentialsStoreMode::Keyring
-        );
-    }
-
-    #[test]
-    fn test_storage_mode_effective_mode() {
-        assert_eq!(
-            AuthCredentialsStoreMode::Keyring.effective_mode(),
-            AuthCredentialsStoreMode::Keyring
-        );
-        assert_eq!(
-            AuthCredentialsStoreMode::File.effective_mode(),
-            AuthCredentialsStoreMode::File
-        );
-
-        // Auto should resolve to either Keyring or File
-        let auto_mode = AuthCredentialsStoreMode::Auto.effective_mode();
-        assert!(
-            auto_mode == AuthCredentialsStoreMode::Keyring
-                || auto_mode == AuthCredentialsStoreMode::File
-        );
-    }
-
-    #[test]
-    fn test_storage_mode_serialization() {
-        let keyring_json = serde_json::to_string(&AuthCredentialsStoreMode::Keyring).unwrap();
-        assert_eq!(keyring_json, "\"keyring\"");
-
-        let file_json = serde_json::to_string(&AuthCredentialsStoreMode::File).unwrap();
-        assert_eq!(file_json, "\"file\"");
-
-        let auto_json = serde_json::to_string(&AuthCredentialsStoreMode::Auto).unwrap();
-        assert_eq!(auto_json, "\"auto\"");
-
-        // Test deserialization
-        let parsed: AuthCredentialsStoreMode = serde_json::from_str("\"keyring\"").unwrap();
-        assert_eq!(parsed, AuthCredentialsStoreMode::Keyring);
-
-        let parsed: AuthCredentialsStoreMode = serde_json::from_str("\"file\"").unwrap();
-        assert_eq!(parsed, AuthCredentialsStoreMode::File);
-
-        let parsed: AuthCredentialsStoreMode = serde_json::from_str("\"auto\"").unwrap();
-        assert_eq!(parsed, AuthCredentialsStoreMode::Auto);
-    }
-
-    #[test]
-    fn test_credential_storage_new() {
-        let storage = CredentialStorage::new("vtcode", "test_key");
-        assert_eq!(storage.service, "vtcode");
-        assert_eq!(storage.user, "test_key");
-    }
-
-    #[test]
-    fn test_is_keyring_functional_check() {
-        // This test just verifies the function doesn't panic
-        // The actual result depends on the OS environment
-        let _functional = is_keyring_functional();
-    }
-}
-
 /// Custom API Key storage for provider-specific keys.
 ///
 /// Provides secure storage and retrieval of API keys for custom providers
@@ -423,4 +355,72 @@ pub fn clear_custom_api_keys(providers: &[String], mode: AuthCredentialsStoreMod
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_storage_mode_default_is_keyring() {
+        assert_eq!(
+            AuthCredentialsStoreMode::default(),
+            AuthCredentialsStoreMode::Keyring
+        );
+    }
+
+    #[test]
+    fn test_storage_mode_effective_mode() {
+        assert_eq!(
+            AuthCredentialsStoreMode::Keyring.effective_mode(),
+            AuthCredentialsStoreMode::Keyring
+        );
+        assert_eq!(
+            AuthCredentialsStoreMode::File.effective_mode(),
+            AuthCredentialsStoreMode::File
+        );
+
+        // Auto should resolve to either Keyring or File
+        let auto_mode = AuthCredentialsStoreMode::Auto.effective_mode();
+        assert!(
+            auto_mode == AuthCredentialsStoreMode::Keyring
+                || auto_mode == AuthCredentialsStoreMode::File
+        );
+    }
+
+    #[test]
+    fn test_storage_mode_serialization() {
+        let keyring_json = serde_json::to_string(&AuthCredentialsStoreMode::Keyring).unwrap();
+        assert_eq!(keyring_json, "\"keyring\"");
+
+        let file_json = serde_json::to_string(&AuthCredentialsStoreMode::File).unwrap();
+        assert_eq!(file_json, "\"file\"");
+
+        let auto_json = serde_json::to_string(&AuthCredentialsStoreMode::Auto).unwrap();
+        assert_eq!(auto_json, "\"auto\"");
+
+        // Test deserialization
+        let parsed: AuthCredentialsStoreMode = serde_json::from_str("\"keyring\"").unwrap();
+        assert_eq!(parsed, AuthCredentialsStoreMode::Keyring);
+
+        let parsed: AuthCredentialsStoreMode = serde_json::from_str("\"file\"").unwrap();
+        assert_eq!(parsed, AuthCredentialsStoreMode::File);
+
+        let parsed: AuthCredentialsStoreMode = serde_json::from_str("\"auto\"").unwrap();
+        assert_eq!(parsed, AuthCredentialsStoreMode::Auto);
+    }
+
+    #[test]
+    fn test_credential_storage_new() {
+        let storage = CredentialStorage::new("vtcode", "test_key");
+        assert_eq!(storage.service, "vtcode");
+        assert_eq!(storage.user, "test_key");
+    }
+
+    #[test]
+    fn test_is_keyring_functional_check() {
+        // This test just verifies the function doesn't panic
+        // The actual result depends on the OS environment
+        let _functional = is_keyring_functional();
+    }
 }

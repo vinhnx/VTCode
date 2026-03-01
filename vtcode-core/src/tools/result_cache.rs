@@ -243,7 +243,7 @@ mod tests {
 
     #[test]
     fn returns_none_for_missing_key() {
-        let mut cache = ToolResultCache::new(10);
+        let cache = ToolResultCache::new(10);
         let key = ToolCacheKey::new(tools::GREP_FILE, "pattern=test", "/workspace");
         assert!(cache.get(&key).is_none());
     }

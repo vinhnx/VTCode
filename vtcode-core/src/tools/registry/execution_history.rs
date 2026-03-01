@@ -829,7 +829,7 @@ mod tests {
     fn matches_read_file_alias_name_and_abs_relative_spool_path() {
         let history = ToolExecutionHistory::new(10);
         let rel_path = ".vtcode/context/tool_outputs/unified_exec_789.txt";
-        let abs_path = std::env::current_dir().unwrap().join(rel_path);
+        let abs_path = env::current_dir().unwrap().join(rel_path);
         let args = json!({
             "path": abs_path,
             "offset": 1,

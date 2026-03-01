@@ -1048,186 +1048,6 @@ fn collect_sed_flags(chars: std::str::Chars<'_>, target: &mut String) -> Result<
     Ok(())
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_validate_echo() {
-        assert!(validate_echo(&[]).is_ok());
-        assert!(validate_echo(&["hello".to_owned()]).is_ok());
-        assert!(validate_echo(&["-n".to_owned(), "hello".to_owned()]).is_ok());
-        assert!(validate_echo(&["-e".to_owned(), "test".to_owned()]).is_ok());
-        assert!(validate_echo(&["--invalid".to_owned()]).is_err());
-    }
-
-    #[test]
-    fn test_validate_pwd() {
-        assert!(validate_pwd(&[]).is_ok());
-        assert!(validate_pwd(&["arg".to_owned()]).is_err());
-    }
-
-    #[test]
-    fn test_validate_printenv() {
-        assert!(validate_printenv(&[]).is_ok());
-        assert!(validate_printenv(&["PATH".to_owned()]).is_ok());
-        assert!(validate_printenv(&["MY_VAR_123".to_owned()]).is_ok());
-        assert!(validate_printenv(&["MY-VAR".to_owned()]).is_err());
-        assert!(validate_printenv(&["MY VAR".to_owned()]).is_err());
-        assert!(validate_printenv(&["VAR1".to_owned(), "VAR2".to_owned()]).is_err());
-    }
-
-    #[tokio::test]
-    async fn test_validate_git_read_only() {
-        // Safe read-only operations
-        assert!(validate_git_read_only("status", &[]).is_ok());
-        assert!(validate_git_read_only("log", &["--oneline".to_owned()]).is_ok());
-        assert!(validate_git_read_only("diff", &["-p".to_owned()]).is_ok());
-        assert!(validate_git_read_only("show", &["HEAD".to_owned()]).is_ok());
-        assert!(validate_git_read_only("branch", &["-a".to_owned()]).is_ok());
-
-        // Dangerous patterns blocked
-        assert!(
-            validate_git_read_only("log", &["--format".to_owned(), "test;cat".to_owned()]).is_err()
-        );
-    }
-
-    #[test]
-    fn test_validate_git_commit() {
-        // Valid commits
-        assert!(validate_git_commit(&["-m".to_owned(), "fix: test".to_owned()]).is_ok());
-        assert!(validate_git_commit(&["-a".to_owned()]).is_ok());
-        assert!(validate_git_commit(&["--amend".to_owned()]).is_ok());
-
-        // Invalid commits
-        assert!(validate_git_commit(&["-m".to_owned()]).is_err()); // Missing message
-        assert!(validate_git_commit(&["--invalid-flag".to_owned()]).is_err());
-    }
-
-    #[test]
-    fn test_validate_git_reset() {
-        // Safe reset modes
-        assert!(validate_git_reset(&["--soft".to_owned()], false).is_ok());
-        assert!(validate_git_reset(&["--mixed".to_owned()], false).is_ok());
-        assert!(validate_git_reset(&["--unstage".to_owned()], false).is_ok());
-        assert!(validate_git_reset(&[], false).is_ok());
-
-        // Dangerous reset modes
-        assert!(validate_git_reset(&["--hard".to_owned()], false).is_err());
-        assert!(validate_git_reset(&["--merge".to_owned()], false).is_err());
-        assert!(validate_git_reset(&["--keep".to_owned()], false).is_err());
-    }
-
-    #[test]
-    fn test_validate_git_stash() {
-        // Safe stash operations
-        assert!(validate_git_stash(&["list".to_owned()]).is_ok());
-        assert!(validate_git_stash(&["show".to_owned()]).is_ok());
-        assert!(validate_git_stash(&["pop".to_owned()]).is_ok());
-        assert!(validate_git_stash(&["apply".to_owned()]).is_ok());
-        assert!(validate_git_stash(&["drop".to_owned()]).is_ok());
-
-        // Dangerous operations
-        assert!(validate_git_stash(&["push".to_owned()]).is_err());
-        assert!(validate_git_stash(&["save".to_owned()]).is_err());
-    }
-
-    #[tokio::test]
-    async fn test_validate_git_safe_operations() {
-        let workspace = std::path::PathBuf::from("/tmp");
-        let working = std::path::PathBuf::from("/tmp");
-
-        // Safe read-only operations should be allowed
-        assert!(
-            validate_git(&["status".to_owned()], &workspace, &working, false)
-                .await
-                .is_ok()
-        );
-        assert!(
-            validate_git(
-                &["log".to_owned(), "--oneline".to_owned()],
-                &workspace,
-                &working,
-                false
-            )
-            .await
-            .is_ok()
-        );
-        assert!(
-            validate_git(&["diff".to_owned()], &workspace, &working, false)
-                .await
-                .is_ok()
-        );
-        assert!(
-            validate_git(
-                &["show".to_owned(), "HEAD".to_owned()],
-                &workspace,
-                &working,
-                false
-            )
-            .await
-            .is_ok()
-        );
-    }
-
-    #[tokio::test]
-    async fn test_validate_git_dangerous_operations_blocked() {
-        let workspace = std::path::PathBuf::from("/tmp");
-        let working = std::path::PathBuf::from("/tmp");
-
-        // Dangerous operations should be blocked
-        assert!(
-            validate_git(
-                &["push".to_owned(), "--force".to_owned()],
-                &workspace,
-                &working,
-                false
-            )
-            .await
-            .is_err()
-        );
-        assert!(
-            validate_git(
-                &["push".to_owned(), "-f".to_owned()],
-                &workspace,
-                &working,
-                false
-            )
-            .await
-            .is_err()
-        );
-        assert!(
-            validate_git(&["clean".to_owned()], &workspace, &working, false)
-                .await
-                .is_err()
-        );
-        assert!(
-            validate_git(&["filter-branch".to_owned()], &workspace, &working, false)
-                .await
-                .is_err()
-        );
-        assert!(
-            validate_git(&["rebase".to_owned()], &workspace, &working, false)
-                .await
-                .is_err()
-        );
-        assert!(
-            validate_git(&["cherry-pick".to_owned()], &workspace, &working, false)
-                .await
-                .is_err()
-        );
-    }
-
-    #[test]
-    fn test_validate_which() {
-        assert!(validate_which(&["ls".to_owned()]).is_ok());
-        assert!(validate_which(&["git".to_owned(), "-a".to_owned()]).is_ok());
-        assert!(validate_which(&[]).is_err());
-        assert!(validate_which(&["/usr/bin/ls".to_owned()]).is_err()); // Contains /
-        assert!(validate_which(&["ls git".to_owned()]).is_err()); // Contains space
-    }
-}
-
 // Additional validators for common utilities
 async fn validate_tail(args: &[String], workspace_root: &Path, working_dir: &Path) -> Result<()> {
     // tail is read-only, similar to head
@@ -1394,4 +1214,184 @@ async fn validate_node(args: &[String], workspace_root: &Path, working_dir: &Pat
         ensure_within_workspace(workspace_root, &path).await?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_validate_echo() {
+        assert!(validate_echo(&[]).is_ok());
+        assert!(validate_echo(&["hello".to_owned()]).is_ok());
+        assert!(validate_echo(&["-n".to_owned(), "hello".to_owned()]).is_ok());
+        assert!(validate_echo(&["-e".to_owned(), "test".to_owned()]).is_ok());
+        assert!(validate_echo(&["--invalid".to_owned()]).is_err());
+    }
+
+    #[test]
+    fn test_validate_pwd() {
+        assert!(validate_pwd(&[]).is_ok());
+        assert!(validate_pwd(&["arg".to_owned()]).is_err());
+    }
+
+    #[test]
+    fn test_validate_printenv() {
+        assert!(validate_printenv(&[]).is_ok());
+        assert!(validate_printenv(&["PATH".to_owned()]).is_ok());
+        assert!(validate_printenv(&["MY_VAR_123".to_owned()]).is_ok());
+        assert!(validate_printenv(&["MY-VAR".to_owned()]).is_err());
+        assert!(validate_printenv(&["MY VAR".to_owned()]).is_err());
+        assert!(validate_printenv(&["VAR1".to_owned(), "VAR2".to_owned()]).is_err());
+    }
+
+    #[tokio::test]
+    async fn test_validate_git_read_only() {
+        // Safe read-only operations
+        assert!(validate_git_read_only("status", &[]).is_ok());
+        assert!(validate_git_read_only("log", &["--oneline".to_owned()]).is_ok());
+        assert!(validate_git_read_only("diff", &["-p".to_owned()]).is_ok());
+        assert!(validate_git_read_only("show", &["HEAD".to_owned()]).is_ok());
+        assert!(validate_git_read_only("branch", &["-a".to_owned()]).is_ok());
+
+        // Dangerous patterns blocked
+        assert!(
+            validate_git_read_only("log", &["--format".to_owned(), "test;cat".to_owned()]).is_err()
+        );
+    }
+
+    #[test]
+    fn test_validate_git_commit() {
+        // Valid commits
+        assert!(validate_git_commit(&["-m".to_owned(), "fix: test".to_owned()]).is_ok());
+        assert!(validate_git_commit(&["-a".to_owned()]).is_ok());
+        assert!(validate_git_commit(&["--amend".to_owned()]).is_ok());
+
+        // Invalid commits
+        assert!(validate_git_commit(&["-m".to_owned()]).is_err()); // Missing message
+        assert!(validate_git_commit(&["--invalid-flag".to_owned()]).is_err());
+    }
+
+    #[test]
+    fn test_validate_git_reset() {
+        // Safe reset modes
+        assert!(validate_git_reset(&["--soft".to_owned()], false).is_ok());
+        assert!(validate_git_reset(&["--mixed".to_owned()], false).is_ok());
+        assert!(validate_git_reset(&["--unstage".to_owned()], false).is_ok());
+        assert!(validate_git_reset(&[], false).is_ok());
+
+        // Dangerous reset modes
+        assert!(validate_git_reset(&["--hard".to_owned()], false).is_err());
+        assert!(validate_git_reset(&["--merge".to_owned()], false).is_err());
+        assert!(validate_git_reset(&["--keep".to_owned()], false).is_err());
+    }
+
+    #[test]
+    fn test_validate_git_stash() {
+        // Safe stash operations
+        assert!(validate_git_stash(&["list".to_owned()]).is_ok());
+        assert!(validate_git_stash(&["show".to_owned()]).is_ok());
+        assert!(validate_git_stash(&["pop".to_owned()]).is_ok());
+        assert!(validate_git_stash(&["apply".to_owned()]).is_ok());
+        assert!(validate_git_stash(&["drop".to_owned()]).is_ok());
+
+        // Dangerous operations
+        assert!(validate_git_stash(&["push".to_owned()]).is_err());
+        assert!(validate_git_stash(&["save".to_owned()]).is_err());
+    }
+
+    #[tokio::test]
+    async fn test_validate_git_safe_operations() {
+        let workspace = PathBuf::from("/tmp");
+        let working = PathBuf::from("/tmp");
+
+        // Safe read-only operations should be allowed
+        assert!(
+            validate_git(&["status".to_owned()], &workspace, &working, false)
+                .await
+                .is_ok()
+        );
+        assert!(
+            validate_git(
+                &["log".to_owned(), "--oneline".to_owned()],
+                &workspace,
+                &working,
+                false
+            )
+            .await
+            .is_ok()
+        );
+        assert!(
+            validate_git(&["diff".to_owned()], &workspace, &working, false)
+                .await
+                .is_ok()
+        );
+        assert!(
+            validate_git(
+                &["show".to_owned(), "HEAD".to_owned()],
+                &workspace,
+                &working,
+                false
+            )
+            .await
+            .is_ok()
+        );
+    }
+
+    #[tokio::test]
+    async fn test_validate_git_dangerous_operations_blocked() {
+        let workspace = PathBuf::from("/tmp");
+        let working = PathBuf::from("/tmp");
+
+        // Dangerous operations should be blocked
+        assert!(
+            validate_git(
+                &["push".to_owned(), "--force".to_owned()],
+                &workspace,
+                &working,
+                false
+            )
+            .await
+            .is_err()
+        );
+        assert!(
+            validate_git(
+                &["push".to_owned(), "-f".to_owned()],
+                &workspace,
+                &working,
+                false
+            )
+            .await
+            .is_err()
+        );
+        assert!(
+            validate_git(&["clean".to_owned()], &workspace, &working, false)
+                .await
+                .is_err()
+        );
+        assert!(
+            validate_git(&["filter-branch".to_owned()], &workspace, &working, false)
+                .await
+                .is_err()
+        );
+        assert!(
+            validate_git(&["rebase".to_owned()], &workspace, &working, false)
+                .await
+                .is_err()
+        );
+        assert!(
+            validate_git(&["cherry-pick".to_owned()], &workspace, &working, false)
+                .await
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn test_validate_which() {
+        assert!(validate_which(&["ls".to_owned()]).is_ok());
+        assert!(validate_which(&["git".to_owned(), "-a".to_owned()]).is_ok());
+        assert!(validate_which(&[]).is_err());
+        assert!(validate_which(&["/usr/bin/ls".to_owned()]).is_err()); // Contains /
+        assert!(validate_which(&["ls git".to_owned()]).is_err()); // Contains space
+    }
 }

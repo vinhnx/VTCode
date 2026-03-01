@@ -1526,7 +1526,7 @@ mod tests {
             listing.first_prompt_preview(),
             Some("prompt line".to_owned())
         );
-        let expected = super::truncate_preview(&long_response, 80);
+        let expected = truncate_preview(&long_response, 80);
         assert_eq!(listing.first_reply_preview(), Some(expected));
     }
 

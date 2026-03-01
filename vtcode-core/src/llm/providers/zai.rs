@@ -500,8 +500,8 @@ mod tests {
     use crate::config::types::ReasoningEffortLevel;
     use crate::llm::provider::{LLMRequest, Message, ToolChoice, ToolDefinition};
     use std::sync::Arc;
-    use wiremock::matchers::{method, path};
-    use wiremock::{Mock, MockServer, ResponseTemplate};
+    
+    
 
     #[test]
     fn normalizes_legacy_glm5_model_id() {
