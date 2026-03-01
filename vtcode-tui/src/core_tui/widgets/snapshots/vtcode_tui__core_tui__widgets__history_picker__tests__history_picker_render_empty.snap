@@ -1,0 +1,28 @@
+---
+source: vtcode-tui/src/core_tui/widgets/history_picker.rs
+expression: terminal.backend()
+---
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                ╭History (Ctrl+R)──────────────────────────────╮                "
+"                │Tab Navigate · Enter Accept · Esc Cancel      │                "
+"                │No history entries                            │                "
+"                │                                              │                "
+"                │                                              │                "
+"                │                                              │                "
+"                │                                              │                "
+"                │                                              │                "
+"                │                                              │                "
+"                │                                              │                "
+"                │                                              │                "
+"                │                                              │                "
+"                │                                              │                "
+"                ╰──────────────────────────────────────────────╯                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "

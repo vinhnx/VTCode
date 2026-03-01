@@ -748,6 +748,8 @@ build_artifacts/
 
 # Agent snapshots for debugging and reproducibility
 snapshots/
+!vtcode-tui/src/core_tui/widgets/snapshots/
+!vtcode-tui/src/core_tui/widgets/snapshots/*.snap
 TODO2.md
 
 # START Ruler Generated Files
