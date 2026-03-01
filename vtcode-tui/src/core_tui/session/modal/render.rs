@@ -78,12 +78,9 @@ fn wrap_line_to_width(line: &str, width: usize) -> Vec<String> {
 fn render_markdown_lines_for_modal(text: &str, width: usize, style: Style) -> Vec<Line<'static>> {
     let mut lines = Vec::new();
     for line in markdown_to_plain_lines(text) {
-        // Use URL-aware wrapping to preserve URL clickability
         let line_ratatui = Line::from(Span::styled(line, style));
-        let wrapped = wrapping::adaptive_wrap_line(line_ratatui, width);
-        for wrapped_line in wrapped {
-            lines.push(wrapped_line);
-        }
+        let wrapped = wrapping::wrap_line_preserving_urls(line_ratatui, width);
+        lines.extend(wrapped);
     }
 
     if lines.is_empty() {

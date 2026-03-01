@@ -13,6 +13,7 @@ use crate::tools::shell::resolve_fallback_shell;
 use crate::tools::tool_intent;
 use crate::tools::traits::Tool;
 use crate::tools::types::VTCodePtySession;
+use crate::zsh_exec_bridge::ZshExecBridgeSession;
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use regex::Regex;
@@ -22,7 +23,7 @@ use chrono;
 use futures::future::BoxFuture;
 use serde_json::{Value, json};
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeSet, HashMap},
     path::{Path, PathBuf},
     time::{Duration, Instant, SystemTime},
 };
@@ -1267,10 +1268,10 @@ impl ToolRegistry {
         let requested_command = command.clone();
         let is_git_diff = is_git_diff_command(&command);
 
-        let shell_program = resolve_shell_preference(
+        let shell_program = resolve_shell_preference_with_zsh_fork(
             payload.get("shell").and_then(|value| value.as_str()),
             self.pty_config(),
-        );
+        )?;
         let login_shell = payload
             .get("login")
             .and_then(|value| value.as_bool())
@@ -1375,6 +1376,17 @@ impl ToolRegistry {
             .map(Duration::from_millis)
             .unwrap_or(Duration::from_secs(10));
 
+        let mut session_env = HashMap::new();
+        let mut zsh_exec_bridge = None;
+        if self.pty_config().shell_zsh_fork {
+            let wrapper_executable =
+                std::env::current_exe().context("resolve current executable for zsh exec bridge")?;
+            let bridge = ZshExecBridgeSession::spawn(confirm)
+                .context("initialize zsh exec bridge session")?;
+            session_env = bridge.env_vars(&wrapper_executable);
+            zsh_exec_bridge = Some(bridge);
+        }
+
         let _session_guard = self
             .start_pty_session()
             .context("Maximum PTY sessions reached; cannot start new session")?;
@@ -1393,6 +1405,8 @@ impl ToolRegistry {
                 pixel_width: 0,
                 pixel_height: 0,
             },
+            session_env,
+            zsh_exec_bridge,
         )?;
 
         let mut output = String::new();
@@ -2078,6 +2092,42 @@ fn resolve_shell_preference(pref: Option<&str>, config: &crate::config::PtyConfi
                 .map(ToOwned::to_owned)
         })
         .unwrap_or_else(resolve_fallback_shell)
+}
+
+fn resolve_shell_preference_with_zsh_fork(
+    pref: Option<&str>,
+    config: &crate::config::PtyConfig,
+) -> Result<String> {
+    if !config.shell_zsh_fork {
+        return Ok(resolve_shell_preference(pref, config));
+    }
+
+    let zsh_path = config
+        .zsh_path
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| {
+            anyhow!(
+                "pty.shell_zsh_fork is enabled, but pty.zsh_path is not configured. \
+                 Set pty.zsh_path to an absolute patched zsh path."
+            )
+        })?;
+    let zsh_path = Path::new(zsh_path);
+    if !zsh_path.is_absolute() {
+        return Err(anyhow!(
+            "pty.zsh_path '{}' must be absolute when pty.shell_zsh_fork is enabled",
+            zsh_path.display()
+        ));
+    }
+    if !zsh_path.is_file() {
+        return Err(anyhow!(
+            "pty.zsh_path '{}' is not a readable file",
+            zsh_path.display()
+        ));
+    }
+
+    Ok(zsh_path.to_string_lossy().to_string())
 }
 
 fn normalized_shell_name(shell: &str) -> String {

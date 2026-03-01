@@ -1,3 +1,4 @@
+use anyhow::{Result, anyhow, bail};
 use serde::{Deserialize, Serialize};
 
 use crate::status_line::StatusLineConfig;
@@ -451,6 +452,14 @@ pub struct PtyConfig {
     /// Preferred shell program for PTY sessions (e.g. "zsh", "bash"); falls back to $SHELL
     #[serde(default)]
     pub preferred_shell: Option<String>,
+
+    /// Feature-gated shell runtime path that routes shell execution through zsh EXEC_WRAPPER hooks.
+    #[serde(default = "default_shell_zsh_fork")]
+    pub shell_zsh_fork: bool,
+
+    /// Optional absolute path to patched zsh used when shell_zsh_fork is enabled.
+    #[serde(default)]
+    pub zsh_path: Option<String>,
 }
 
 impl Default for PtyConfig {
@@ -466,7 +475,60 @@ impl Default for PtyConfig {
             max_scrollback_bytes: default_max_scrollback_bytes(),
             large_output_threshold_kb: default_large_output_threshold_kb(),
             preferred_shell: None,
+            shell_zsh_fork: default_shell_zsh_fork(),
+            zsh_path: None,
         }
+    }
+}
+
+impl PtyConfig {
+    pub fn validate(&self) -> Result<()> {
+        if !self.shell_zsh_fork {
+            return Ok(());
+        }
+
+        let zsh_path = self
+            .zsh_path
+            .as_deref()
+            .map(str::trim)
+            .filter(|path| !path.is_empty())
+            .ok_or_else(|| {
+                anyhow!(
+                    "pty.shell_zsh_fork is enabled, but pty.zsh_path is not configured. \
+                     Set pty.zsh_path to an absolute path to patched zsh."
+                )
+            })?;
+
+        #[cfg(not(unix))]
+        {
+            let _ = zsh_path;
+            bail!("pty.shell_zsh_fork is only supported on Unix platforms");
+        }
+
+        #[cfg(unix)]
+        {
+            let path = std::path::Path::new(zsh_path);
+            if !path.is_absolute() {
+                bail!(
+                    "pty.zsh_path '{}' must be an absolute path when pty.shell_zsh_fork is enabled",
+                    zsh_path
+                );
+            }
+            if !path.exists() {
+                bail!(
+                    "pty.zsh_path '{}' does not exist (required when pty.shell_zsh_fork is enabled)",
+                    zsh_path
+                );
+            }
+            if !path.is_file() {
+                bail!(
+                    "pty.zsh_path '{}' is not a file (required when pty.shell_zsh_fork is enabled)",
+                    zsh_path
+                );
+            }
+        }
+
+        Ok(())
     }
 }
 
@@ -488,6 +550,10 @@ fn default_max_pty_sessions() -> usize {
 
 fn default_pty_timeout() -> u64 {
     300
+}
+
+fn default_shell_zsh_fork() -> bool {
+    false
 }
 
 fn default_stdout_tail_lines() -> usize {

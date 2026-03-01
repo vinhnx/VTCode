@@ -196,12 +196,14 @@ impl PtyManager {
                     builder.arg(arg);
                 }
                 builder.cwd(&work_dir);
+                let extra_env = HashMap::new();
                 set_command_environment(
                     &mut builder,
                     &display_program,
                     size,
                     &workspace_root,
                     &extra_paths,
+                    &extra_env,
                 );
 
                 let pty_system = native_pty_system();
@@ -491,6 +493,8 @@ if output.len() > max_tokens * 4 {
         command: Vec<String>,
         working_dir: PathBuf,
         size: PtySize,
+        extra_env: HashMap<String, String>,
+        zsh_exec_bridge: Option<crate::zsh_exec_bridge::ZshExecBridgeSession>,
     ) -> Result<VTCodePtySession> {
         if command.is_empty() {
             return Err(anyhow!(
@@ -561,6 +565,7 @@ if output.len() > max_tokens * 4 {
             size,
             &self.workspace_root,
             &extra_paths,
+            &extra_env,
         );
 
         let child = pair.slave.spawn_command(builder).with_context(|| {
@@ -690,6 +695,7 @@ info!("PTY session '{}' processed {} unicode characters across {} sessions with 
             reader_thread: Mutex::new(Some(reader_thread)),
             metadata: metadata.clone(),
             last_input: Mutex::new(None),
+            zsh_exec_bridge,
         }));
 
         Ok(metadata)

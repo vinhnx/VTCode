@@ -177,6 +177,7 @@ pub mod turn_metadata; // Turn metadata for LLM requests (git context)
 pub mod types;
 pub mod ui;
 pub mod utils;
+mod zsh_exec_bridge;
 
 // Re-export common error macros and constants
 pub use vtcode_commons::errors::*;
@@ -255,6 +256,7 @@ pub use prompts::{
 };
 pub use security::{IntegrityTag, PayloadEnvelope, ZeroTrustContext};
 pub use telemetry::{TelemetryEvent, TelemetryPipeline};
+pub use zsh_exec_bridge::maybe_run_zsh_exec_wrapper_mode;
 
 // Open Responses specification types
 pub use open_responses::{

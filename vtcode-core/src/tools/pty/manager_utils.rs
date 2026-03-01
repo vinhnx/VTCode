@@ -27,6 +27,7 @@ pub(super) fn set_command_environment(
     size: PtySize,
     workspace_root: &Path,
     extra_paths: &[PathBuf],
+    extra_env: &HashMap<String, String>,
 ) {
     // Inherit environment from parent process to preserve PATH and other important variables
     let mut env_map: HashMap<OsString, OsString> = std::env::vars_os().collect();
@@ -81,6 +82,10 @@ pub(super) fn set_command_environment(
     builder.env_remove("MallocScribble");
     builder.env_remove("MallocDoNotProtectSentinel");
     builder.env_remove("MallocQuiet");
+
+    for (key, value) in extra_env {
+        builder.env(key, value);
+    }
 
     if is_shell_program(program) {
         builder.env("SHELL", program);

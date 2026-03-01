@@ -320,7 +320,7 @@ impl Session {
     /// Uses URL-aware wrapping to preserve URL clickability across all views.
     /// URLs are treated as atomic units and never split across lines.
     pub(super) fn wrap_line(&self, line: Line<'static>, max_width: usize) -> Vec<Line<'static>> {
-        wrapping::adaptive_wrap_line(line, max_width)
+        wrapping::wrap_line_preserving_urls(line, max_width)
     }
 
     fn reflow_agent_message_lines(

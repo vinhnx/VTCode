@@ -181,6 +181,8 @@ impl VTCodeConfig {
             .validate()
             .context("Invalid keyboard_protocol configuration")?;
 
+        self.pty.validate().context("Invalid pty configuration")?;
+
         Ok(())
     }
 
@@ -587,6 +589,15 @@ stdout_tail_lines = 20
 
 # Total lines to keep in PTY scrollback buffer
 scrollback_lines = 400
+
+# Optional preferred shell for PTY sessions (falls back to $SHELL when unset)
+# preferred_shell = "/bin/zsh"
+
+# Route shell execution through zsh EXEC_WRAPPER intercept hooks (feature-gated)
+shell_zsh_fork = false
+
+# Absolute path to patched zsh used when shell_zsh_fork is enabled
+# zsh_path = "/usr/local/bin/zsh"
 
 # Context management configuration - Controls conversation memory
 [context]

@@ -264,39 +264,20 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
     )
     .await?;
     match decision {
-        HitlDecision::Approved => {
-            // One-time approval - mark as preapproved for this execution but don't persist
+        HitlDecision::Approved | HitlDecision::ApprovedSession => {
+            let grant = if decision == HitlDecision::Approved {
+                PermissionGrant::Once
+            } else {
+                PermissionGrant::Session
+            };
+
+            // Mark as preapproved for this execution
             tool_registry.mark_tool_preapproved(tool_name).await;
 
-            // Cache permission grant for this session
+            // Cache permission grant using the granular cache_key for session/once
             if let Some(cache) = tool_permission_cache {
                 let mut perm_cache = cache.write().await;
-                perm_cache.cache_grant(cache_key.clone(), PermissionGrant::Once);
-            }
-
-            // Record approval decision for pattern learning (fire-and-forget to avoid UI stalls)
-            if let Some(recorder) = approval_recorder {
-                let tool_name_owned = tool_name.to_string();
-                let recorder_cloned = recorder.clone();
-                tokio::spawn(async move {
-                    let _ = tokio::time::timeout(
-                        Duration::from_millis(500),
-                        recorder_cloned.record_approval(&tool_name_owned, true, None),
-                    )
-                    .await;
-                });
-            }
-
-            Ok(ToolPermissionFlow::Approved)
-        }
-        HitlDecision::ApprovedSession => {
-            // Session-only approval - mark as preapproved but don't persist
-            tool_registry.mark_tool_preapproved(tool_name).await;
-
-            // Cache permission grant for this session
-            if let Some(cache) = tool_permission_cache {
-                let mut perm_cache = cache.write().await;
-                perm_cache.cache_grant(cache_key.clone(), PermissionGrant::Session);
+                perm_cache.cache_grant(cache_key.clone(), grant);
             }
 
             // Record approval decision for pattern learning (fire-and-forget)
@@ -319,15 +300,14 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
             tool_registry.mark_tool_preapproved(tool_name).await;
             tracing::info!("✓ Tool '{}' marked as preapproved", tool_name);
 
-            // Cache permission grant permanently (synchronous - immediate effect)
+            // Cache permission grant permanently at tool level
             if let Some(cache) = tool_permission_cache {
                 let mut perm_cache = cache.write().await;
                 perm_cache.cache_grant(tool_name.to_string(), PermissionGrant::Permanent);
                 tracing::info!("✓ Tool '{}' cached as permanently approved", tool_name);
             }
 
-            // Persist to policy manager IMMEDIATELY (not in background)
-            // This ensures the policy is saved before execution continues
+            // Persist to policy manager IMMEDIATELY
             if let Err(err) = tool_registry
                 .set_tool_policy(tool_name, ToolPolicy::Allow)
                 .await
@@ -353,74 +333,49 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
                 );
             }
 
-            // Record approval decision for pattern learning (fire-and-forget)
+            // Record approval decision for pattern learning
             if let Some(recorder) = approval_recorder {
                 let tool_name_owned = tool_name.to_string();
                 let recorder_cloned = recorder.clone();
                 tokio::spawn(async move {
-                    match tokio::time::timeout(
+                    let _ = tokio::time::timeout(
                         Duration::from_millis(500),
                         recorder_cloned.record_approval(&tool_name_owned, true, None),
                     )
-                    .await
-                    {
-                        Ok(Ok(())) => tracing::info!(
-                            "✓ Tool '{}' approval recorded (background)",
-                            tool_name_owned
-                        ),
-                        Ok(Err(err)) => tracing::warn!(
-                            "[background] Failed to record approval for '{}': {}",
-                            tool_name_owned,
-                            err
-                        ),
-                        Err(_) => tracing::warn!(
-                            "[background] Timed out recording approval for '{}'",
-                            tool_name_owned
-                        ),
-                    }
+                    .await;
                 });
             }
 
-            tracing::info!(
-                "✓ Returning ToolPermissionFlow::Approved for '{}'",
-                tool_name
-            );
             Ok(ToolPermissionFlow::Approved)
         }
-        HitlDecision::Denied => {
-            // Persist denial to policy so future runs honor the choice.
-            if let Some(cache) = tool_permission_cache {
-                let mut perm_cache = cache.write().await;
-                perm_cache.cache_grant(tool_name.to_string(), PermissionGrant::Denied);
-            }
+        HitlDecision::Denied | HitlDecision::DeniedOnce => {
+            if decision == HitlDecision::Denied {
+                // Persist denial to policy so future runs honor the choice.
+                if let Some(cache) = tool_permission_cache {
+                    let mut perm_cache = cache.write().await;
+                    perm_cache.cache_grant(tool_name.to_string(), PermissionGrant::Denied);
+                }
 
-            if let Err(err) = tool_registry
-                .set_tool_policy(tool_name, ToolPolicy::Deny)
-                .await
-            {
-                tracing::warn!("Failed to persist denial for tool '{}': {}", tool_name, err);
-            }
+                if let Err(err) = tool_registry
+                    .set_tool_policy(tool_name, ToolPolicy::Deny)
+                    .await
+                {
+                    tracing::warn!("Failed to persist denial for tool '{}': {}", tool_name, err);
+                }
 
-            if let Err(err) = tool_registry
-                .persist_mcp_tool_policy(tool_name, ToolPolicy::Deny)
-                .await
-            {
-                tracing::warn!(
-                    "Failed to persist MCP denial for tool '{}': {}",
-                    tool_name,
-                    err
-                );
+                if let Err(err) = tool_registry
+                    .persist_mcp_tool_policy(tool_name, ToolPolicy::Deny)
+                    .await
+                {
+                    tracing::warn!(
+                        "Failed to persist MCP denial for tool '{}': {}",
+                        tool_name,
+                        err
+                    );
+                }
             }
 
             // Record denial decision for pattern learning
-            if let Some(recorder) = approval_recorder {
-                let _ = recorder.record_approval(tool_name, false, None).await;
-            }
-
-            Ok(ToolPermissionFlow::Denied)
-        }
-        HitlDecision::DeniedOnce => {
-            // Record denial decision for pattern learning without persisting policy.
             if let Some(recorder) = approval_recorder {
                 let _ = recorder.record_approval(tool_name, false, None).await;
             }

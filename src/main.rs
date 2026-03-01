@@ -87,6 +87,10 @@ async fn run() -> Result<()> {
 
     panic_hook::init_panic_hook();
 
+    if vtcode_core::maybe_run_zsh_exec_wrapper_mode()? {
+        return Ok(());
+    }
+
     // Build the CLI command with dynamic augmentations
     let mut cmd = Cli::command();
 
