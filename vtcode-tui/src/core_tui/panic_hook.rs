@@ -20,8 +20,10 @@ use ratatui::crossterm::{
 
 static TUI_INITIALIZED: AtomicBool = AtomicBool::new(false);
 static DEBUG_MODE: AtomicBool = AtomicBool::new(cfg!(debug_assertions));
+static COLOR_EYRE_ENABLED: AtomicBool = AtomicBool::new(cfg!(debug_assertions));
 static SHOW_DIAGNOSTICS: AtomicBool = AtomicBool::new(false);
 static PANIC_HOOK_ONCE: Once = Once::new();
+static COLOR_EYRE_EYRE_HOOK_ONCE: Once = Once::new();
 static APP_METADATA: std::sync::OnceLock<AppMetadata> = std::sync::OnceLock::new();
 
 #[derive(Clone, Debug)]
@@ -53,6 +55,53 @@ pub fn set_debug_mode(enabled: bool) {
 /// Get whether the application is in debug mode
 pub fn is_debug_mode() -> bool {
     DEBUG_MODE.load(Ordering::SeqCst)
+}
+
+/// Set whether color-eyre formatting should be used for debug panic/error reporting.
+pub fn set_color_eyre_enabled(enabled: bool) {
+    COLOR_EYRE_ENABLED.store(enabled, Ordering::SeqCst);
+}
+
+/// Get whether color-eyre formatting is enabled for debug panic/error reporting.
+pub fn is_color_eyre_enabled() -> bool {
+    COLOR_EYRE_ENABLED.load(Ordering::SeqCst)
+}
+
+/// Install color-eyre's eyre hook for richer top-level error rendering in dev/debug mode.
+pub fn maybe_install_color_eyre_eyre_hook() {
+    if !cfg!(debug_assertions) || !is_color_eyre_enabled() {
+        return;
+    }
+
+    #[cfg(debug_assertions)]
+    COLOR_EYRE_EYRE_HOOK_ONCE.call_once(|| {
+        let hooks = color_eyre::config::HookBuilder::default().try_into_hooks();
+        match hooks {
+            Ok((_, eyre_hook)) => {
+                if let Err(error) = eyre_hook.install() {
+                    eprintln!("warning: failed to install color-eyre hook: {error}");
+                }
+            }
+            Err(error) => {
+                eprintln!("warning: failed to prepare color-eyre hook: {error}");
+            }
+        }
+    });
+}
+
+/// Print an application error using color-eyre when enabled, otherwise fallback formatting.
+pub fn print_error_report(error: anyhow::Error) {
+    if cfg!(debug_assertions) && is_color_eyre_enabled() {
+        #[cfg(debug_assertions)]
+        {
+            maybe_install_color_eyre_eyre_hook();
+            let report = color_eyre::eyre::eyre!("{error:#}");
+            eprintln!("{report:?}");
+            return;
+        }
+    }
+
+    eprintln!("Error: {error:?}");
 }
 
 /// Set whether diagnostics (ERROR-level logs, warnings) should be displayed in the TUI.
@@ -119,6 +168,19 @@ pub fn init_panic_hook() {
             }
 
             if cfg!(debug_assertions) && is_debug {
+                if is_color_eyre_enabled() {
+                    #[cfg(debug_assertions)]
+                    match color_eyre::config::HookBuilder::default().try_into_hooks() {
+                        Ok((panic_hook, _)) => {
+                            panic_hook.into_panic_hook()(panic_info);
+                            return;
+                        }
+                        Err(error) => {
+                            eprintln!("warning: failed to render color-eyre panic report: {error}");
+                        }
+                    }
+                }
+
                 better_panic_hook(panic_info);
                 // In debug/dev mode, preserve normal panic semantics (unwind/abort by profile)
                 // rather than forcing immediate process exit from inside the hook.
@@ -317,5 +379,14 @@ mod tests {
             false,
             "Drop should mark TUI as deinitialized"
         );
+    }
+
+    #[test]
+    fn test_color_eyre_toggle() {
+        set_color_eyre_enabled(false);
+        assert!(!is_color_eyre_enabled());
+
+        set_color_eyre_enabled(true);
+        assert!(is_color_eyre_enabled());
     }
 }
