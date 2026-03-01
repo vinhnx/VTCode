@@ -11,6 +11,19 @@ use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::http::HeaderValue;
 
 type ResponsesSocket = WebSocketStream<MaybeTlsStream<tokio::net::TcpStream>>;
+const OPENAI_BETA_RESPONSES_WEBSOCKET_V2: &str = "responses=v2";
+const WEBSOCKET_CONNECTION_LIMIT_REACHED_CODE: &str = "websocket_connection_limit_reached";
+
+pub(super) fn is_websocket_connection_limit_error(err: &LLMError) -> bool {
+    let message = match err {
+        LLMError::Provider { message, .. } | LLMError::Network { message, .. } => message,
+        LLMError::Authentication { .. }
+        | LLMError::RateLimit { .. }
+        | LLMError::InvalidRequest { .. } => return false,
+    };
+
+    message.contains(WEBSOCKET_CONNECTION_LIMIT_REACHED_CODE)
+}
 
 #[derive(Debug)]
 pub(crate) struct OpenAIResponsesWebSocketSession {
@@ -169,7 +182,10 @@ impl OpenAIProvider {
             );
             ws_request
                 .headers_mut()
-                .insert("OpenAI-Beta", HeaderValue::from_static("responses=v1"));
+                .insert(
+                    "OpenAI-Beta",
+                    HeaderValue::from_static(OPENAI_BETA_RESPONSES_WEBSOCKET_V2),
+                );
             if let Some(metadata) = &request.metadata
                 && let Ok(metadata_str) = serde_json::to_string(metadata)
                 && let Ok(value) = HeaderValue::from_str(&metadata_str)
@@ -276,7 +292,11 @@ async fn read_websocket_response(
                             .and_then(|error| error.get("message"))
                             .and_then(Value::as_str)
                             .unwrap_or("OpenAI WebSocket request failed");
-                        return Err(format_provider_error(format!("{code}: {message}")));
+                        let formatted = format!("{code}: {message}");
+                        if code == WEBSOCKET_CONNECTION_LIMIT_REACHED_CODE {
+                            return Err(format_network_error(formatted));
+                        }
+                        return Err(format_provider_error(formatted));
                     }
                     _ => {}
                 }
@@ -357,12 +377,41 @@ fn format_network_error(message: String) -> LLMError {
 
 #[cfg(test)]
 mod tests {
-    use super::responses_websocket_url;
+    use super::{
+        OPENAI_BETA_RESPONSES_WEBSOCKET_V2, WEBSOCKET_CONNECTION_LIMIT_REACHED_CODE,
+        is_websocket_connection_limit_error, responses_websocket_url,
+    };
+    use crate::llm::provider::LLMError;
 
     #[test]
     fn websocket_url_is_derived_from_http_base() {
         let ws = responses_websocket_url("https://api.openai.com/v1")
             .expect("websocket url should be built");
         assert_eq!(ws, "wss://api.openai.com/v1/responses");
+    }
+
+    #[test]
+    fn websocket_beta_header_prefers_v2_protocol() {
+        assert_eq!(OPENAI_BETA_RESPONSES_WEBSOCKET_V2, "responses=v2");
+    }
+
+    #[test]
+    fn websocket_connection_limit_error_is_detected() {
+        let err = LLMError::Network {
+            message: format!(
+                "OpenAI error: {WEBSOCKET_CONNECTION_LIMIT_REACHED_CODE}: limit reached"
+            ),
+            metadata: None,
+        };
+        assert!(is_websocket_connection_limit_error(&err));
+    }
+
+    #[test]
+    fn websocket_non_connection_limit_error_is_not_detected() {
+        let err = LLMError::Provider {
+            message: "OpenAI error: invalid_request".to_string(),
+            metadata: None,
+        };
+        assert!(!is_websocket_connection_limit_error(&err));
     }
 }

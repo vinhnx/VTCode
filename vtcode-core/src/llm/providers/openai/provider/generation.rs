@@ -4,6 +4,7 @@ use super::super::errors::{
 };
 use super::super::headers;
 use super::super::types::ResponsesApiState;
+use super::websocket::is_websocket_connection_limit_error;
 use super::OpenAIProvider;
 use crate::llm::error_display;
 use crate::llm::provider;
@@ -63,13 +64,37 @@ impl OpenAIProvider {
                 match self.generate_via_responses_websocket(&request).await {
                     Ok(response) => return Ok(response),
                     Err(err) => {
-                        #[cfg(debug_assertions)]
-                        debug!(
-                            target = "vtcode::llm::openai",
-                            model = %request.model,
-                            error = %err,
-                            "WebSocket mode failed; falling back to HTTP Responses API"
-                        );
+                        if is_websocket_connection_limit_error(&err) {
+                            #[cfg(debug_assertions)]
+                            debug!(
+                                target = "vtcode::llm::openai",
+                                model = %request.model,
+                                "WebSocket session limit reached; reconnecting and retrying once"
+                            );
+
+                            match self.generate_via_responses_websocket(&request).await {
+                                Ok(response) => return Ok(response),
+                                Err(retry_err) => {
+                                    #[cfg(not(debug_assertions))]
+                                    let _ = &retry_err;
+                                    #[cfg(debug_assertions)]
+                                    debug!(
+                                        target = "vtcode::llm::openai",
+                                        model = %request.model,
+                                        error = %retry_err,
+                                        "WebSocket retry failed; falling back to HTTP Responses API"
+                                    );
+                                }
+                            }
+                        } else {
+                            #[cfg(debug_assertions)]
+                            debug!(
+                                target = "vtcode::llm::openai",
+                                model = %request.model,
+                                error = %err,
+                                "WebSocket mode failed; falling back to HTTP Responses API"
+                            );
+                        }
                     }
                 }
             }

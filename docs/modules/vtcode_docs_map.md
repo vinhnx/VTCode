@@ -537,9 +537,9 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **User Questions**: "What can you tell me about Language Support in VT Code?", "How does Semantic Understanding work?", "How does Tree-sitter Security Parsing (Bash) work?"
 
 - **File**: `docs/installation/NATIVE_INSTALLERS.md`
-  - **Content**: Native Installers - Technical Guide
-  - **Topics**: macOS & Linux (Shell Installer), Windows (PowerShell Installer), Homebrew Formula, Comparison, Security
-  - **User Questions**: "What can you tell me about Native Installers - Technical Guide?", "How does macOS & Linux (Shell Installer) work?", "How does Windows (PowerShell Installer) work?"
+  - **Content**: Native Installers
+  - **Topics**: macOS & Linux (Shell), Windows (PowerShell)
+  - **User Questions**: "What can you tell me about Native Installers?", "How does macOS & Linux (Shell) work?", "How does Windows (PowerShell) work?"
 
 - **File**: `docs/protocols/OPEN_RESPONSES.md`
   - **Content**: Open Responses Specification Conformance
