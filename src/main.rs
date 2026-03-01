@@ -6,10 +6,11 @@
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 use anyhow::{Context, Result};
-use clap::{CommandFactory, FromArgMatches};
+use clap::{ColorChoice as CliColorChoice, CommandFactory, FromArgMatches};
 use colorchoice::ColorChoice as GlobalColorChoice;
 use std::path::PathBuf;
 use vtcode::startup::StartupContext;
+use vtcode_commons::color_policy::{self, ColorOutputPolicy, ColorOutputPolicySource};
 use vtcode_core::cli::args::{Cli, Commands};
 use vtcode_core::config::api_keys::load_dotenv;
 use vtcode_core::utils::terminal_color_probe::probe_and_cache_terminal_palette_harmony;
@@ -41,6 +42,39 @@ fn env_flag_enabled(var_name: &str) -> bool {
 
 fn debug_runtime_flag_enabled(debug_arg_enabled: bool, env_var: &str) -> bool {
     cfg!(debug_assertions) && (debug_arg_enabled || env_flag_enabled(env_var))
+}
+
+fn resolve_runtime_color_policy(args: &Cli) -> ColorOutputPolicy {
+    if args.no_color {
+        return ColorOutputPolicy {
+            enabled: false,
+            source: ColorOutputPolicySource::CliNoColor,
+        };
+    }
+
+    match args.color.color {
+        CliColorChoice::Always => ColorOutputPolicy {
+            enabled: true,
+            source: ColorOutputPolicySource::CliColorAlways,
+        },
+        CliColorChoice::Never => ColorOutputPolicy {
+            enabled: false,
+            source: ColorOutputPolicySource::CliColorNever,
+        },
+        CliColorChoice::Auto => {
+            if color_policy::no_color_env_active() {
+                ColorOutputPolicy {
+                    enabled: false,
+                    source: ColorOutputPolicySource::NoColorEnv,
+                }
+            } else {
+                ColorOutputPolicy {
+                    enabled: true,
+                    source: ColorOutputPolicySource::DefaultAuto,
+                }
+            }
+        }
+    }
 }
 
 fn main() -> std::process::ExitCode {
@@ -164,8 +198,11 @@ async fn run() -> Result<()> {
     }
 
     let print_mode = args.print.clone();
+    let color_policy = resolve_runtime_color_policy(&args);
+    color_policy::set_color_output_policy(color_policy);
+
     args.color.write_global();
-    if args.no_color {
+    if !color_policy.enabled {
         GlobalColorChoice::Never.write_global();
     }
 

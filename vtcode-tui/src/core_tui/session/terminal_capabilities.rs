@@ -6,6 +6,43 @@
 
 use std::env;
 
+#[cfg(test)]
+mod test_env_overrides {
+    use std::collections::HashMap;
+    use std::sync::{LazyLock, Mutex};
+
+    static OVERRIDES: LazyLock<Mutex<HashMap<String, Option<String>>>> =
+        LazyLock::new(|| Mutex::new(HashMap::new()));
+
+    pub(super) fn get(key: &str) -> Option<Option<String>> {
+        OVERRIDES
+            .lock()
+            .ok()
+            .and_then(|map| map.get(key).cloned())
+    }
+
+    pub(super) fn set(key: &str, value: Option<&str>) {
+        if let Ok(mut map) = OVERRIDES.lock() {
+            map.insert(key.to_string(), value.map(ToString::to_string));
+        }
+    }
+
+    pub(super) fn clear(key: &str) {
+        if let Ok(mut map) = OVERRIDES.lock() {
+            map.remove(key);
+        }
+    }
+}
+
+fn read_env_var(key: &str) -> Option<String> {
+    #[cfg(test)]
+    if let Some(override_value) = test_env_overrides::get(key) {
+        return override_value;
+    }
+
+    env::var(key).ok()
+}
+
 /// Detects if the current terminal supports Unicode box drawing characters
 ///
 /// This function checks various environment variables and terminal settings
@@ -13,12 +50,12 @@ use std::env;
 /// appearing as broken ANSI sequences.
 pub fn supports_unicode_box_drawing() -> bool {
     // Check if explicitly disabled via environment variable
-    if env::var("VTCODE_NO_UNICODE").is_ok() {
+    if read_env_var("VTCODE_NO_UNICODE").is_some() {
         return false;
     }
 
     // Check terminal type - many terminals support Unicode
-    if let Ok(term) = env::var("TERM") {
+    if let Some(term) = read_env_var("TERM") {
         let term_lower = term.to_lowercase();
 
         // Modern terminals that definitely support Unicode
@@ -47,7 +84,7 @@ pub fn supports_unicode_box_drawing() -> bool {
     }
 
     // Check LANG environment variable for UTF-8 locale
-    if let Ok(lang) = env::var("LANG")
+    if let Some(lang) = read_env_var("LANG")
         && (lang.to_lowercase().contains("utf-8") || lang.to_lowercase().contains("utf8"))
     {
         return true;
@@ -55,7 +92,7 @@ pub fn supports_unicode_box_drawing() -> bool {
 
     // Check LC_ALL and LC_CTYPE for UTF-8
     for var in &["LC_ALL", "LC_CTYPE"] {
-        if let Ok(locale) = env::var(var)
+        if let Some(locale) = read_env_var(var)
             && (locale.to_lowercase().contains("utf-8") || locale.to_lowercase().contains("utf8"))
         {
             return true;
@@ -83,11 +120,15 @@ mod tests {
     use super::*;
     #[inline]
     fn set_var(key: &str, value: &str) {
-        unsafe { env::set_var(key, value) };
+        test_env_overrides::set(key, Some(value));
     }
     #[inline]
     fn remove_var(key: &str) {
-        unsafe { env::remove_var(key) };
+        test_env_overrides::set(key, None);
+    }
+    #[inline]
+    fn clear_var(key: &str) {
+        test_env_overrides::clear(key);
     }
 
     #[test]
@@ -126,19 +167,19 @@ mod tests {
         // Restore original values
         match original_term {
             Some(val) => set_var("TERM", &val),
-            None => remove_var("TERM"),
+            None => clear_var("TERM"),
         }
         match original_lang {
             Some(val) => set_var("LANG", &val),
-            None => remove_var("LANG"),
+            None => clear_var("LANG"),
         }
         match original_lc_all {
             Some(val) => set_var("LC_ALL", &val),
-            None => remove_var("LC_ALL"),
+            None => clear_var("LC_ALL"),
         }
         match original_no_unicode {
             Some(val) => set_var("VTCODE_NO_UNICODE", &val),
-            None => remove_var("VTCODE_NO_UNICODE"),
+            None => clear_var("VTCODE_NO_UNICODE"),
         }
     }
 
@@ -160,7 +201,7 @@ mod tests {
         // Restore original TERM
         match original_term {
             Some(val) => set_var("TERM", &val),
-            None => remove_var("TERM"),
+            None => clear_var("TERM"),
         }
     }
 }

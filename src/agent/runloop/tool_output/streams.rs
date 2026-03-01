@@ -368,6 +368,7 @@ pub(crate) fn render_diff_content_block(
     let mut display_buffer = String::with_capacity(256);
     let mut current_language_hint: Option<String> = None;
     let line_number_width = numbered_diff_line_width(lines_slice);
+    let color_enabled = renderer.capabilities().supports_color();
     for line in lines_slice {
         if line.is_empty() {
             continue;
@@ -396,12 +397,16 @@ pub(crate) fn render_diff_content_block(
         }
 
         let line_style = select_line_style(tool_name, &display_buffer, git_styles, ls_styles);
-        let rendered = format_diff_line_with_gutter_and_syntax(
-            &display_buffer,
-            line_style,
-            current_language_hint.as_deref(),
-            line_number_width,
-        );
+        let rendered = if color_enabled {
+            format_diff_line_with_gutter_and_syntax(
+                &display_buffer,
+                line_style,
+                current_language_hint.as_deref(),
+                line_number_width,
+            )
+        } else {
+            display_buffer.clone()
+        };
         if rendered != display_buffer {
             let style = line_style.unwrap_or(fallback_style.style());
             renderer.line_with_override_style(fallback_style, style, &rendered)?;

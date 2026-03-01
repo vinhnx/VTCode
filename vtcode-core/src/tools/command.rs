@@ -472,7 +472,7 @@ mod tests {
             .prepare_invocation(&input)
             .await
             .expect("extra path should allow command");
-        assert_eq!(invocation.program, binary_path.to_string_lossy().to_owned());
+        assert_eq!(invocation.program, binary_path.to_string_lossy().into_owned());
         assert!(invocation.args.is_empty());
     }
 
@@ -575,29 +575,13 @@ mod tests {
         // critical environment variables were not being passed to subprocesses.
         // See: vtcode-core/src/tools/command.rs:execute_terminal_command()
 
-        // Set a test environment variable in the parent process
-        unsafe {
-            std::env::set_var("_TEST_VAR_FOR_ENV_INHERITANCE", "test_value");
-        }
-
         // The fix uses std::env::vars_os().collect() which inherits all parent variables
         let env: HashMap<OsString, OsString> = std::env::vars_os().collect();
-
-        // Verify our test variable is present
-        assert!(
-            env.contains_key(&OsString::from("_TEST_VAR_FOR_ENV_INHERITANCE")),
-            "Parent environment variables should be inherited"
-        );
 
         // Verify critical system variables are present
         assert!(
             env.contains_key(&OsString::from("PATH")),
             "PATH environment variable must be inherited for command resolution"
         );
-
-        // Cleanup
-        unsafe {
-            std::env::remove_var("_TEST_VAR_FOR_ENV_INHERITANCE");
-        }
     }
 }

@@ -368,6 +368,5 @@ mod tests {
     #[tokio::test]
     async fn test_discover_agent_display() {
         // This is a simple display test - actual client functionality is tested in integration tests
-        assert!(true);
     }
 }

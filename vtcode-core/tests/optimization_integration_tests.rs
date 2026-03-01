@@ -151,7 +151,6 @@ async fn test_optimized_agent_engine() -> Result<()> {
     // (In a real test, we'd run the engine for a short time)
 
     // For now, just verify creation
-    assert!(true); // Placeholder assertion
 
     Ok(())
 }

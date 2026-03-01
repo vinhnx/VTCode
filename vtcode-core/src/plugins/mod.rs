@@ -41,7 +41,6 @@ mod tests {
     #[test]
     fn test_plugin_system_compilation() {
         // This test just verifies that the plugin system compiles
-        assert!(true);
     }
 }
 

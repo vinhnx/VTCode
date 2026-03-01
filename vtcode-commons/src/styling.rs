@@ -1,5 +1,6 @@
 //! Unified message styles and their logical mappings
 
+use crate::color_policy;
 use anstyle::{AnsiColor, Color, Effects, RgbColor, Style};
 
 /// Standard color palette with semantic names
@@ -30,7 +31,10 @@ impl Default for ColorPalette {
 
 /// Render text with a single color and optional effects
 pub fn render_styled(text: &str, color: Color, effects: Option<String>) -> String {
-    let mut style = Style::new().fg_color(Some(color));
+    let mut style = Style::new();
+    if color_policy::color_output_enabled() {
+        style = style.fg_color(Some(color));
+    }
 
     if let Some(effects_str) = effects {
         let mut ansi_effects = Effects::new();
@@ -53,8 +57,12 @@ pub fn render_styled(text: &str, color: Color, effects: Option<String>) -> Strin
         style = style.effects(ansi_effects);
     }
 
-    // Use static reset code
-    format!("{}{}{}", style, text, "\x1b[0m")
+    let prefix = style.to_string();
+    if prefix.is_empty() {
+        text.to_string()
+    } else {
+        format!("{}{}{}", prefix, text, "\x1b[0m")
+    }
 }
 
 /// Build style from CSS/terminal color name

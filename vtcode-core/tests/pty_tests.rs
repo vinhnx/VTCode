@@ -124,8 +124,10 @@ async fn resolve_working_dir_rejects_missing_directory() {
 #[tokio::test]
 async fn session_input_roundtrip_and_resize() -> Result<()> {
     let temp_dir = tempdir()?;
-    let mut config = PtyConfig::default();
-    config.scrollback_lines = 200;
+    let config = PtyConfig {
+        scrollback_lines: 200,
+        ..Default::default()
+    };
     let manager = PtyManager::new(temp_dir.path().to_path_buf(), config);
 
     let working_dir = manager.resolve_working_dir(Some(".")).await?;

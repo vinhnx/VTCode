@@ -180,20 +180,10 @@ mod tests {
     #[test]
     fn compute_extra_search_paths_expands_home_and_env() {
         let workspace = std::env::current_dir().expect("workspace");
-        let temp = tempfile::tempdir().expect("tempdir");
-        let temp_path = temp.path().join("bin");
-        std::fs::create_dir_all(&temp_path).expect("create dir");
-        unsafe {
-            std::env::set_var("TEST_PATH_ENV", temp_path.display().to_string());
-        }
-
-        let entries = vec!["~/does/not/exist".to_string(), "$TEST_PATH_ENV".to_string()];
+        let home_dir = PathBuf::from(std::env::var("HOME").expect("HOME"));
+        let entries = vec!["~/does/not/exist".to_string(), "$HOME".to_string()];
         let resolved = compute_extra_search_paths(&entries, &workspace);
-        assert_eq!(resolved, vec![temp_path]);
-
-        unsafe {
-            std::env::remove_var("TEST_PATH_ENV");
-        }
+        assert_eq!(resolved, vec![home_dir]);
     }
 
     #[test]

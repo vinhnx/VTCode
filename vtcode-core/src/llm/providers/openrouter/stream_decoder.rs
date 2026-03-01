@@ -10,7 +10,6 @@ use crate::llm::providers::shared::{StreamDelta, StreamTelemetry, ToolCallBuilde
 use serde_json::Value;
 
 #[cfg(test)]
-#[cfg(test)]
 pub(crate) fn parse_usage_value(value: &Value) -> Usage {
     let prompt_tokens = value
         .get("prompt_tokens")
@@ -44,7 +43,6 @@ pub(crate) fn parse_usage_value(value: &Value) -> Usage {
     }
 }
 
-#[cfg(test)]
 #[cfg(test)]
 pub(crate) fn parse_stream_payload(
     payload: &Value,

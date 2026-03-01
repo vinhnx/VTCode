@@ -193,12 +193,8 @@ mod tests {
         let result = notifier.send_event(&config, event).await;
         assert!(result.is_err());
 
-        if let Err(e) = result {
-            // Should be network error, not serialization error
-            match e {
-                WebhookError::Serialization(_) => panic!("Unexpected serialization error"),
-                _ => {} // Expected network or HTTP error
-            }
+        if let Err(WebhookError::Serialization(_)) = result {
+            panic!("Unexpected serialization error");
         }
     }
 }

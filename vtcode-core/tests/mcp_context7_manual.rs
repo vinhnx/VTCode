@@ -21,9 +21,11 @@ async fn context7_list_tools_smoke() {
         startup_timeout_ms: None,
     };
 
-    let mut config = McpClientConfig::default();
-    config.enabled = true;
-    config.providers = vec![provider];
+    let config = McpClientConfig {
+        enabled: true,
+        providers: vec![provider],
+        ..Default::default()
+    };
 
     let mut client = McpClient::new(config);
     client.initialize().await.unwrap();

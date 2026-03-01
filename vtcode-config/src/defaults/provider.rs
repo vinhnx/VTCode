@@ -16,6 +16,50 @@ static DEFAULT_SYNTAX_LANGUAGES: Lazy<Vec<String>> = Lazy::new(Vec::new);
 static CONFIG_DEFAULTS: Lazy<RwLock<Arc<dyn ConfigDefaultsProvider>>> =
     Lazy::new(|| RwLock::new(Arc::new(DefaultConfigDefaults)));
 
+#[cfg(test)]
+mod test_env_overrides {
+    use std::collections::HashMap;
+    use std::sync::{LazyLock, Mutex};
+
+    static OVERRIDES: LazyLock<Mutex<HashMap<String, Option<String>>>> =
+        LazyLock::new(|| Mutex::new(HashMap::new()));
+
+    pub(super) fn get(key: &str) -> Option<Option<String>> {
+        OVERRIDES
+            .lock()
+            .ok()
+            .and_then(|map| map.get(key).cloned())
+    }
+
+    pub(super) fn set(key: &str, value: Option<&str>) {
+        if let Ok(mut map) = OVERRIDES.lock() {
+            map.insert(key.to_string(), value.map(ToString::to_string));
+        }
+    }
+
+    pub(super) fn restore(key: &str, previous: Option<Option<String>>) {
+        if let Ok(mut map) = OVERRIDES.lock() {
+            match previous {
+                Some(value) => {
+                    map.insert(key.to_string(), value);
+                }
+                None => {
+                    map.remove(key);
+                }
+            }
+        }
+    }
+}
+
+fn read_env_var(key: &str) -> Option<String> {
+    #[cfg(test)]
+    if let Some(override_value) = test_env_overrides::get(key) {
+        return override_value;
+    }
+
+    std::env::var(key).ok()
+}
+
 /// Provides access to filesystem and syntax defaults used by the configuration
 /// loader.
 pub trait ConfigDefaultsProvider: Send + Sync {
@@ -128,7 +172,7 @@ where
 /// Returns `None` if no suitable directory can be determined.
 pub fn get_config_dir() -> Option<PathBuf> {
     // Allow custom config directory via environment variable
-    if let Ok(custom_dir) = std::env::var("VTCODE_CONFIG") {
+    if let Some(custom_dir) = read_env_var("VTCODE_CONFIG") {
         let trimmed = custom_dir.trim();
         if !trimmed.is_empty() {
             return Some(PathBuf::from(trimmed));
@@ -154,7 +198,7 @@ pub fn get_config_dir() -> Option<PathBuf> {
 /// Returns `None` if no suitable directory can be determined.
 pub fn get_data_dir() -> Option<PathBuf> {
     // Allow custom data directory via environment variable
-    if let Ok(custom_dir) = std::env::var("VTCODE_DATA") {
+    if let Some(custom_dir) = read_env_var("VTCODE_DATA") {
         let trimmed = custom_dir.trim();
         if !trimmed.is_empty() {
             return Some(PathBuf::from(trimmed));
@@ -336,31 +380,18 @@ where
 mod tests {
     use super::{get_config_dir, get_data_dir};
     use serial_test::serial;
-    use std::ffi::OsString;
     use std::path::PathBuf;
 
     fn with_env_var<F>(key: &str, value: Option<&str>, f: F)
     where
         F: FnOnce(),
     {
-        let previous = std::env::var_os(key);
-        unsafe {
-            if let Some(value) = value {
-                std::env::set_var(key, value);
-            } else {
-                std::env::remove_var(key);
-            }
-        }
+        let previous = super::test_env_overrides::get(key);
+        super::test_env_overrides::set(key, value);
 
         f();
 
-        unsafe {
-            if let Some(previous) = previous {
-                std::env::set_var(key, previous);
-            } else {
-                std::env::remove_var(key);
-            }
-        }
+        super::test_env_overrides::restore(key, previous);
     }
 
     #[test]
@@ -408,13 +439,13 @@ mod tests {
     #[serial]
     fn env_guard_restores_original_value() {
         let key = "VTCODE_CONFIG";
-        let initial = std::env::var_os(key);
+        let initial = super::read_env_var(key);
         with_env_var(key, Some("/tmp/vtcode-config-test"), || {
             assert_eq!(
-                std::env::var_os(key),
-                Some(OsString::from("/tmp/vtcode-config-test"))
+                super::read_env_var(key),
+                Some("/tmp/vtcode-config-test".to_string())
             );
         });
-        assert_eq!(std::env::var_os(key), initial);
+        assert_eq!(super::read_env_var(key), initial);
     }
 }
