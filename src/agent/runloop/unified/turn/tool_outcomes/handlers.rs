@@ -114,19 +114,23 @@ fn build_tool_budget_exhausted_reason(used: usize, max: usize) -> String {
 }
 
 fn record_tool_call_budget_usage(ctx: &mut TurnProcessingContext<'_>) {
-    ctx.harness_state.record_tool_call();
-    if ctx
+    let parts = ctx.parts_mut();
+    parts.state.harness_state.record_tool_call();
+    if parts
+        .state
         .harness_state
         .should_emit_tool_budget_warning(TOOL_BUDGET_WARNING_THRESHOLD)
     {
-        let used = ctx.harness_state.tool_calls;
-        let max = ctx.harness_state.max_tool_calls;
-        let remaining = ctx.harness_state.remaining_tool_calls();
-        ctx.working_history
+        let used = parts.state.harness_state.tool_calls;
+        let max = parts.state.harness_state.max_tool_calls;
+        let remaining = parts.state.harness_state.remaining_tool_calls();
+        parts
+            .state
+            .working_history
             .push(uni::Message::system(build_tool_budget_warning_message(
                 used, max, remaining,
             )));
-        ctx.harness_state.mark_tool_budget_warning_emitted();
+        parts.state.harness_state.mark_tool_budget_warning_emitted();
     }
 }
 
@@ -145,7 +149,10 @@ pub(super) fn enforce_blocked_tool_call_guard(
     tool_name: &str,
     args: &Value,
 ) -> Option<TurnHandlerOutcome> {
-    let streak = ctx.harness_state.record_blocked_tool_call();
+    let streak = {
+        let parts = ctx.parts_mut();
+        parts.state.harness_state.record_blocked_tool_call()
+    };
     let max_streak = max_consecutive_blocked_tool_calls_per_turn(ctx);
     if streak <= max_streak {
         return None;
@@ -155,16 +162,21 @@ pub(super) fn enforce_blocked_tool_call_guard(
     let block_reason = format!(
         "Consecutive blocked tool calls reached per-turn cap ({max_streak}). Last blocked call: '{display_tool}'. Stopping turn to prevent retry churn."
     );
-    push_tool_response(
-        ctx.working_history,
-        tool_call_id.to_string(),
-        build_failure_error_content(
-            format!("Consecutive blocked tool calls exceeded cap ({max_streak}) for this turn."),
-            "blocked_streak",
-        ),
-    );
-    ctx.working_history
-        .push(uni::Message::system(block_reason.clone()));
+    {
+        let parts = ctx.parts_mut();
+        push_tool_response(
+            parts.state.working_history,
+            tool_call_id.to_string(),
+            build_failure_error_content(
+                format!("Consecutive blocked tool calls exceeded cap ({max_streak}) for this turn."),
+                "blocked_streak",
+            ),
+        );
+        parts
+            .state
+            .working_history
+            .push(uni::Message::system(block_reason.clone()));
+    }
 
     Some(TurnHandlerOutcome::Break(TurnLoopResult::Blocked {
         reason: Some(block_reason),
@@ -452,10 +464,14 @@ fn try_recover_preflight_for_unified_search(
     error: &anyhow::Error,
 ) -> Option<(vtcode_core::tools::registry::ToolPreflightOutcome, Value)> {
     let (_, recovered_args) = preflight_validation_fallback(tool_name, args_val, error)?;
-    match ctx
-        .tool_registry
-        .preflight_validate_call(tool_name, &recovered_args)
-    {
+    let preflight_result = {
+        let parts = ctx.parts_mut();
+        parts
+            .tool
+            .tool_registry
+            .preflight_validate_call(tool_name, &recovered_args)
+    };
+    match preflight_result {
         Ok(preflight) => Some((preflight, recovered_args)),
         Err(recovery_err) => {
             tracing::debug!(
@@ -518,7 +534,10 @@ fn enforce_duplicate_task_tracker_create_guard<'a>(
         "duplicate_task_tracker_create",
     )
     .to_string();
-    push_tool_response(ctx.working_history, tool_call_id.to_string(), content);
+    {
+        let parts = ctx.parts_mut();
+        push_tool_response(parts.state.working_history, tool_call_id.to_string(), content);
+    }
     let block_reason =
         "Blocked duplicate task_tracker.create in the same turn. Continue with task_tracker.update/list."
             .to_string();
@@ -537,12 +556,16 @@ fn enforce_repeated_shell_run_guard(
     args: &Value,
 ) -> Option<ValidationResult> {
     let Some(signature) = shell_run_signature(canonical_tool_name, args) else {
-        ctx.harness_state.reset_shell_command_run_streak();
+        let parts = ctx.parts_mut();
+        parts.state.harness_state.reset_shell_command_run_streak();
         return None;
     };
 
     let max_repeated_runs = max_consecutive_identical_shell_command_runs_per_turn(ctx);
-    let streak = ctx.harness_state.record_shell_command_run(signature);
+    let streak = {
+        let parts = ctx.parts_mut();
+        parts.state.harness_state.record_shell_command_run(signature)
+    };
     if streak <= max_repeated_runs {
         return None;
     }
@@ -552,11 +575,14 @@ fn enforce_repeated_shell_run_guard(
         "Repeated shell command guard stopped '{}' after {} identical runs (max {}). Reuse prior output or change the command.",
         display_tool, streak, max_repeated_runs
     );
-    push_tool_response(
-        ctx.working_history,
-        tool_call_id.to_string(),
-        build_repeated_shell_run_error_content(max_repeated_runs),
-    );
+    {
+        let parts = ctx.parts_mut();
+        push_tool_response(
+            parts.state.working_history,
+            tool_call_id.to_string(),
+            build_repeated_shell_run_error_content(max_repeated_runs),
+        );
+    }
 
     Some(ValidationResult::Outcome(TurnHandlerOutcome::Break(
         TurnLoopResult::Blocked {
@@ -607,12 +633,16 @@ fn enforce_spool_chunk_read_guard(
     args: &Value,
 ) -> Option<ValidationResult> {
     let Some(spool_path) = spool_chunk_read_path(canonical_tool_name, args) else {
-        ctx.harness_state.reset_spool_chunk_read_streak();
+        let parts = ctx.parts_mut();
+        parts.state.harness_state.reset_spool_chunk_read_streak();
         return None;
     };
 
     let max_reads_per_turn = max_sequential_spool_chunk_reads_per_turn(ctx);
-    let streak = ctx.harness_state.record_spool_chunk_read();
+    let streak = {
+        let parts = ctx.parts_mut();
+        parts.state.harness_state.record_spool_chunk_read()
+    };
     if streak <= max_reads_per_turn {
         return None;
     }
@@ -623,11 +653,14 @@ fn enforce_spool_chunk_read_guard(
         display_tool
     );
 
-    push_tool_response(
-        ctx.working_history,
-        tool_call_id.to_string(),
-        build_spool_chunk_guard_error_content(spool_path, max_reads_per_turn),
-    );
+    {
+        let parts = ctx.parts_mut();
+        push_tool_response(
+            parts.state.working_history,
+            tool_call_id.to_string(),
+            build_spool_chunk_guard_error_content(spool_path, max_reads_per_turn),
+        );
+    }
 
     Some(ValidationResult::Outcome(TurnHandlerOutcome::Break(
         TurnLoopResult::Blocked {
@@ -803,7 +836,10 @@ pub(crate) async fn handle_single_tool_call<'a, 'b, 'tool>(
     args_val: serde_json::Value,
 ) -> Result<Option<TurnHandlerOutcome>> {
     use crate::agent::runloop::unified::run_loop_context::TurnPhase;
-    t_ctx.ctx.harness_state.set_phase(TurnPhase::ExecutingTools);
+    {
+        let parts = t_ctx.ctx.parts_mut();
+        parts.state.harness_state.set_phase(TurnPhase::ExecutingTools);
+    }
 
     // 1. Validate (Circuit Breaker, Rate Limit, Loop Detection, Safety, Permission)
     let prepared = match validate_tool_call(t_ctx.ctx, &tool_call_id, tool_name, &args_val).await? {
@@ -817,7 +853,8 @@ pub(crate) async fn handle_single_tool_call<'a, 'b, 'tool>(
             return Ok(None);
         }
         ValidationResult::Proceed(prepared) => {
-            t_ctx.ctx.harness_state.reset_blocked_tool_call_streak();
+            let parts = t_ctx.ctx.parts_mut();
+            parts.state.harness_state.reset_blocked_tool_call_streak();
             prepared
         }
     };
@@ -849,24 +886,37 @@ pub(crate) async fn validate_tool_call<'a>(
     tool_name: &str,
     args_val: &serde_json::Value,
 ) -> Result<ValidationResult> {
-    if ctx.harness_state.tool_budget_exhausted() {
+    if {
+        let parts = ctx.parts_mut();
+        parts.state.harness_state.tool_budget_exhausted()
+    } {
+        let (tool_calls, max_tool_calls, exhausted_emitted) = {
+            let parts = ctx.parts_mut();
+            (
+                parts.state.harness_state.tool_calls,
+                parts.state.harness_state.max_tool_calls,
+                parts.state.harness_state.tool_budget_exhausted_emitted,
+            )
+        };
         let error_msg = format!(
             "Policy violation: exceeded max tool calls per turn ({})",
-            ctx.harness_state.max_tool_calls
+            max_tool_calls
         );
-        push_tool_response(
-            ctx.working_history,
-            tool_call_id.to_string(),
-            build_failure_error_content(error_msg, "policy"),
-        );
-        let block_reason = build_tool_budget_exhausted_reason(
-            ctx.harness_state.tool_calls,
-            ctx.harness_state.max_tool_calls,
-        );
-        if !ctx.harness_state.tool_budget_exhausted_emitted {
-            ctx.working_history
-                .push(uni::Message::system(block_reason.clone()));
-            ctx.harness_state.mark_tool_budget_exhausted_emitted();
+        let block_reason = build_tool_budget_exhausted_reason(tool_calls, max_tool_calls);
+        {
+            let parts = ctx.parts_mut();
+            push_tool_response(
+                parts.state.working_history,
+                tool_call_id.to_string(),
+                build_failure_error_content(error_msg, "policy"),
+            );
+            if !exhausted_emitted {
+                parts
+                    .state
+                    .working_history
+                    .push(uni::Message::system(block_reason.clone()));
+                parts.state.harness_state.mark_tool_budget_exhausted_emitted();
+            }
         }
         return Ok(ValidationResult::Outcome(TurnHandlerOutcome::Break(
             TurnLoopResult::Blocked {
@@ -875,16 +925,26 @@ pub(crate) async fn validate_tool_call<'a>(
         )));
     }
 
-    if ctx.harness_state.wall_clock_exhausted() {
+    if {
+        let parts = ctx.parts_mut();
+        parts.state.harness_state.wall_clock_exhausted()
+    } {
+        let max_tool_wall_clock_secs = {
+            let parts = ctx.parts_mut();
+            parts.state.harness_state.max_tool_wall_clock.as_secs()
+        };
         let error_msg = format!(
             "Policy violation: exceeded tool wall clock budget ({}s)",
-            ctx.harness_state.max_tool_wall_clock.as_secs()
+            max_tool_wall_clock_secs
         );
-        push_tool_response(
-            ctx.working_history,
-            tool_call_id.to_string(),
-            build_failure_error_content(error_msg, "policy"),
-        );
+        {
+            let parts = ctx.parts_mut();
+            push_tool_response(
+                parts.state.working_history,
+                tool_call_id.to_string(),
+                build_failure_error_content(error_msg, "policy"),
+            );
+        }
         return Ok(ValidationResult::Blocked);
     }
 
@@ -907,26 +967,32 @@ pub(crate) async fn validate_tool_call<'a>(
                 let (fallback_tool, fallback_tool_args) = fallback
                     .map(|(tool, args)| (Some(tool), Some(args)))
                     .unwrap_or((None, None));
-                push_tool_response(
-                    ctx.working_history,
-                    tool_call_id.to_string(),
-                    build_validation_error_content_with_fallback(
-                        format!("Tool preflight validation failed: {}", err),
-                        "preflight",
-                        fallback_tool,
-                        fallback_tool_args,
-                    ),
-                );
+                {
+                    let parts = ctx.parts_mut();
+                    push_tool_response(
+                        parts.state.working_history,
+                        tool_call_id.to_string(),
+                        build_validation_error_content_with_fallback(
+                            format!("Tool preflight validation failed: {}", err),
+                            "preflight",
+                            fallback_tool,
+                            fallback_tool_args,
+                        ),
+                    );
+                }
                 return Ok(ValidationResult::Blocked);
             }
         }
     };
     let canonical_tool_name = preflight.normalized_tool_name.clone();
-    let effective_args = maybe_apply_spool_read_offset_hint(
-        ctx.tool_registry,
-        &canonical_tool_name,
-        &preflight_args,
-    );
+    let effective_args = {
+        let parts = ctx.parts_mut();
+        maybe_apply_spool_read_offset_hint(
+            parts.tool.tool_registry,
+            &canonical_tool_name,
+            &preflight_args,
+        )
+    };
 
     if let Some(outcome) = enforce_duplicate_task_tracker_create_guard(
         ctx,
@@ -950,27 +1016,33 @@ pub(crate) async fn validate_tool_call<'a>(
     }
 
     // Phase 4 Check: Per-tool Circuit Breaker
-    if !ctx
-        .circuit_breaker
-        .allow_request_for_tool(&canonical_tool_name)
-    {
+    if {
+        let parts = ctx.parts_mut();
+        !parts
+            .tool
+            .circuit_breaker
+            .allow_request_for_tool(&canonical_tool_name)
+    } {
         let display_tool = tool_action_label(&canonical_tool_name, args_val);
         let block_reason = format!(
             "Circuit breaker stopped '{}' due to high failure rate. Wait before retrying or use a different tool.",
             display_tool
         );
         tracing::warn!(tool = %canonical_tool_name, "Circuit breaker open, tool disabled");
-        push_tool_response(
-            ctx.working_history,
-            tool_call_id.to_string(),
-            build_failure_error_content(
-                format!(
-                    "Tool '{}' is temporarily disabled due to high failure rate (Circuit Breaker OPEN).",
-                    canonical_tool_name
+        {
+            let parts = ctx.parts_mut();
+            push_tool_response(
+                parts.state.working_history,
+                tool_call_id.to_string(),
+                build_failure_error_content(
+                    format!(
+                        "Tool '{}' is temporarily disabled due to high failure rate (Circuit Breaker OPEN).",
+                        canonical_tool_name
+                    ),
+                    "circuit_breaker",
                 ),
-                "circuit_breaker",
-            ),
-        );
+            );
+        }
         return Ok(ValidationResult::Outcome(TurnHandlerOutcome::Break(
             TurnLoopResult::Blocked {
                 reason: Some(block_reason),
@@ -987,12 +1059,17 @@ pub(crate) async fn validate_tool_call<'a>(
 
     // Phase 4 Check: Adaptive Loop Detection
     let loop_tool_key = loop_detection_tool_key(&canonical_tool_name, &effective_args);
-    if let Some(warning) = ctx
-        .autonomous_executor
-        .record_tool_call(&loop_tool_key, &effective_args)
-    {
+    let loop_warning = {
+        let parts = ctx.parts_mut();
+        parts
+            .tool
+            .autonomous_executor
+            .record_tool_call(&loop_tool_key, &effective_args)
+    };
+    if let Some(warning) = loop_warning {
         let should_block = {
-            if let Ok(detector) = ctx.autonomous_executor.loop_detector().read() {
+            let parts = ctx.parts_mut();
+            if let Ok(detector) = parts.tool.autonomous_executor.loop_detector().read() {
                 detector.is_hard_limit_exceeded(&loop_tool_key)
             } else {
                 false
@@ -1007,15 +1084,19 @@ pub(crate) async fn validate_tool_call<'a>(
                 display_tool
             );
             // Ensure no orphan PTY processes keep running after a hard loop-detection stop.
-            ctx.tool_registry.terminate_all_pty_sessions();
-            ctx.handle.set_input_status(None, None);
-            ctx.input_status_state.left = None;
-            ctx.input_status_state.right = None;
-            if let Some(mut spooled) = ctx.tool_registry.find_recent_spooled_output(
-                &canonical_tool_name,
-                &effective_args,
-                Duration::from_secs(120),
-            ) {
+            let maybe_spooled = {
+                let parts = ctx.parts_mut();
+                parts.tool.tool_registry.terminate_all_pty_sessions();
+                parts.ui.handle.set_input_status(None, None);
+                parts.ui.input_status_state.left = None;
+                parts.ui.input_status_state.right = None;
+                parts.tool.tool_registry.find_recent_spooled_output(
+                    &canonical_tool_name,
+                    &effective_args,
+                    Duration::from_secs(120),
+                )
+            };
+            if let Some(mut spooled) = maybe_spooled {
                 if let Some(obj) = spooled.as_object_mut() {
                     obj.remove("output");
                     obj.remove("content");
@@ -1035,20 +1116,31 @@ pub(crate) async fn validate_tool_call<'a>(
                         ),
                     );
                 }
-                push_tool_response(
-                    ctx.working_history,
-                    tool_call_id.to_string(),
-                    super::execution_result::maybe_inline_spooled(&canonical_tool_name, &spooled),
-                );
+                {
+                    let parts = ctx.parts_mut();
+                    push_tool_response(
+                        parts.state.working_history,
+                        tool_call_id.to_string(),
+                        super::execution_result::maybe_inline_spooled(
+                            &canonical_tool_name,
+                            &spooled,
+                        ),
+                    );
+                }
                 return Ok(ValidationResult::Blocked);
             }
 
-            if preflight.readonly_classification
-                && let Some(mut reused) = ctx.tool_registry.find_recent_successful_output(
+            let maybe_reused = if preflight.readonly_classification {
+                let parts = ctx.parts_mut();
+                parts.tool.tool_registry.find_recent_successful_output(
                     &canonical_tool_name,
                     &effective_args,
                     Duration::from_secs(120),
                 )
+            } else {
+                None
+            };
+            if let Some(mut reused) = maybe_reused
             {
                 if let Some(obj) = reused.as_object_mut() {
                     // Drop bulky payload fields for repeated read-only reuse to avoid
@@ -1079,11 +1171,17 @@ pub(crate) async fn validate_tool_call<'a>(
                         ),
                     );
                 }
-                push_tool_response(
-                    ctx.working_history,
-                    tool_call_id.to_string(),
-                    super::execution_result::maybe_inline_spooled(&canonical_tool_name, &reused),
-                );
+                {
+                    let parts = ctx.parts_mut();
+                    push_tool_response(
+                        parts.state.working_history,
+                        tool_call_id.to_string(),
+                        super::execution_result::maybe_inline_spooled(
+                            &canonical_tool_name,
+                            &reused,
+                        ),
+                    );
+                }
                 return Ok(ValidationResult::Blocked);
             }
 
@@ -1091,11 +1189,14 @@ pub(crate) async fn validate_tool_call<'a>(
                 "Tool '{}' is blocked due to excessive repetition (Loop Detected).",
                 display_tool
             );
-            push_tool_response(
-                ctx.working_history,
-                tool_call_id.to_string(),
-                build_failure_error_content(error_msg, "loop_detection"),
-            );
+            {
+                let parts = ctx.parts_mut();
+                push_tool_response(
+                    parts.state.working_history,
+                    tool_call_id.to_string(),
+                    build_failure_error_content(error_msg, "loop_detection"),
+                );
+            }
 
             return Ok(ValidationResult::Outcome(TurnHandlerOutcome::Break(
                 TurnLoopResult::Blocked {
@@ -1110,7 +1211,10 @@ pub(crate) async fn validate_tool_call<'a>(
     // Safety Validation Loop
     loop {
         let validation_result = {
-            let mut validator = ctx.safety_validator.write().await;
+            let mut validator = {
+                let parts = ctx.parts_mut();
+                parts.tool.safety_validator.write().await
+            };
             validator
                 .validate_call(&canonical_tool_name, &effective_args)
                 .await
@@ -1119,83 +1223,103 @@ pub(crate) async fn validate_tool_call<'a>(
         match validation_result {
             Ok(_) => break,
             Err(SafetyError::SessionLimitReached { max }) => {
-                match prompt_session_limit_increase(
-                    ctx.handle,
-                    ctx.session,
-                    ctx.ctrl_c_state,
-                    ctx.ctrl_c_notify,
-                    max,
-                )
-                .await
+                let increase_result = {
+                    let parts = ctx.parts_mut();
+                    prompt_session_limit_increase(
+                        parts.ui.handle,
+                        parts.ui.session,
+                        parts.ui.ctrl_c_state,
+                        parts.ui.ctrl_c_notify,
+                        max,
+                    )
+                    .await
+                };
+                match increase_result
                 {
                     Ok(Some(increment)) => {
-                        let mut validator = ctx.safety_validator.write().await;
+                        let mut validator = {
+                            let parts = ctx.parts_mut();
+                            parts.tool.safety_validator.write().await
+                        };
                         validator.increase_session_limit(increment);
                         continue;
                     }
                     _ => {
-                        push_tool_response(
-                            ctx.working_history,
-                            tool_call_id.to_string(),
-                            build_failure_error_content(
-                                "Session tool limit reached and not increased by user".to_string(),
-                                "safety_limit",
-                            ),
-                        );
+                        {
+                            let parts = ctx.parts_mut();
+                            push_tool_response(
+                                parts.state.working_history,
+                                tool_call_id.to_string(),
+                                build_failure_error_content(
+                                    "Session tool limit reached and not increased by user"
+                                        .to_string(),
+                                    "safety_limit",
+                                ),
+                            );
+                        }
                         return Ok(ValidationResult::Blocked);
                     }
                 }
             }
             Err(err) => {
-                ctx.renderer.line(
-                    MessageStyle::Error,
-                    &format!("Safety validation failed: {}", err),
-                )?;
-                push_tool_response(
-                    ctx.working_history,
-                    tool_call_id.to_string(),
-                    build_failure_error_content(
-                        format!("Safety validation failed: {}", err),
-                        "safety_validation",
-                    ),
-                );
+                {
+                    let parts = ctx.parts_mut();
+                    parts.ui.renderer.line(
+                        MessageStyle::Error,
+                        &format!("Safety validation failed: {}", err),
+                    )?;
+                    push_tool_response(
+                        parts.state.working_history,
+                        tool_call_id.to_string(),
+                        build_failure_error_content(
+                            format!("Safety validation failed: {}", err),
+                            "safety_validation",
+                        ),
+                    );
+                }
                 return Ok(ValidationResult::Blocked);
             }
         }
     }
 
     // Ensure tool permission
-    match ensure_tool_permission(
-        crate::agent::runloop::unified::tool_routing::ToolPermissionsContext {
-            tool_registry: ctx.tool_registry,
-            renderer: ctx.renderer,
-            handle: ctx.handle,
-            session: ctx.session,
-            default_placeholder: ctx.default_placeholder.clone(),
-            ctrl_c_state: ctx.ctrl_c_state,
-            ctrl_c_notify: ctx.ctrl_c_notify,
-            hooks: ctx.lifecycle_hooks,
-            justification: None,
-            approval_recorder: Some(ctx.approval_recorder.as_ref()),
-            decision_ledger: Some(ctx.decision_ledger),
-            tool_permission_cache: Some(ctx.tool_permission_cache),
-            hitl_notification_bell: ctx
-                .vt_cfg
-                .map(|cfg| cfg.security.hitl_notification_bell)
-                .unwrap_or(true),
-            autonomous_mode: ctx.session_stats.is_autonomous_mode(),
-            human_in_the_loop: ctx
-                .vt_cfg
-                .map(|cfg| cfg.security.human_in_the_loop)
-                .unwrap_or(true),
-            delegate_mode: ctx.session_stats.is_delegate_mode(),
-            skip_confirmations: false, // Normal tool calls should prompt if configured
-        },
-        &canonical_tool_name,
-        Some(&effective_args),
-    )
-    .await
-    {
+    let permission_result = {
+        let parts = ctx.parts_mut();
+        ensure_tool_permission(
+            crate::agent::runloop::unified::tool_routing::ToolPermissionsContext {
+                tool_registry: parts.tool.tool_registry,
+                renderer: parts.ui.renderer,
+                handle: parts.ui.handle,
+                session: parts.ui.session,
+                default_placeholder: parts.ui.default_placeholder.clone(),
+                ctrl_c_state: parts.ui.ctrl_c_state,
+                ctrl_c_notify: parts.ui.ctrl_c_notify,
+                hooks: parts.ui.lifecycle_hooks,
+                justification: None,
+                approval_recorder: Some(parts.tool.approval_recorder.as_ref()),
+                decision_ledger: Some(parts.llm.decision_ledger),
+                tool_permission_cache: Some(parts.tool.tool_permission_cache),
+                hitl_notification_bell: parts
+                    .llm
+                    .vt_cfg
+                    .map(|cfg| cfg.security.hitl_notification_bell)
+                    .unwrap_or(true),
+                autonomous_mode: parts.state.session_stats.is_autonomous_mode(),
+                human_in_the_loop: parts
+                    .llm
+                    .vt_cfg
+                    .map(|cfg| cfg.security.human_in_the_loop)
+                    .unwrap_or(true),
+                delegate_mode: parts.state.session_stats.is_delegate_mode(),
+                skip_confirmations: false, // Normal tool calls should prompt if configured
+            },
+            &canonical_tool_name,
+            Some(&effective_args),
+        )
+        .await
+    };
+
+    match permission_result {
         Ok(ToolPermissionFlow::Approved) => {
             // Count budget only for calls that pass all validation/permission gates.
             record_tool_call_budget_usage(ctx);
@@ -1215,11 +1339,14 @@ pub(crate) async fn validate_tool_call<'a>(
             )
             .to_json_value();
 
-            push_tool_response(
-                ctx.working_history,
-                tool_call_id.to_string(),
-                serde_json::to_string(&denial).unwrap_or_else(|_| "{}".to_string()),
-            );
+            {
+                let parts = ctx.parts_mut();
+                push_tool_response(
+                    parts.state.working_history,
+                    tool_call_id.to_string(),
+                    serde_json::to_string(&denial).unwrap_or_else(|_| "{}".to_string()),
+                );
+            }
             Ok(ValidationResult::Blocked)
         }
         Ok(ToolPermissionFlow::Exit) => Ok(ValidationResult::Outcome(TurnHandlerOutcome::Break(
@@ -1232,11 +1359,14 @@ pub(crate) async fn validate_tool_call<'a>(
             let err_json = serde_json::json!({
                 "error": format!("Failed to evaluate policy for tool '{}': {}", tool_name, err)
             });
-            push_tool_response(
-                ctx.working_history,
-                tool_call_id.to_string(),
-                err_json.to_string(),
-            );
+            {
+                let parts = ctx.parts_mut();
+                push_tool_response(
+                    parts.state.working_history,
+                    tool_call_id.to_string(),
+                    err_json.to_string(),
+                );
+            }
             Ok(ValidationResult::Blocked)
         }
     }
@@ -1248,15 +1378,27 @@ async fn acquire_adaptive_rate_limit_slot<'a>(
     tool_name: &str,
 ) -> Result<Option<ValidationResult>> {
     for attempt in 0..MAX_RATE_LIMIT_ACQUIRE_ATTEMPTS {
-        match ctx.rate_limiter.try_acquire(tool_name) {
+        let acquire_result = {
+            let parts = ctx.parts_mut();
+            parts.tool.rate_limiter.try_acquire(tool_name)
+        };
+
+        match acquire_result {
             Ok(_) => return Ok(None),
             Err(wait_time) => {
-                if ctx.ctrl_c_state.is_cancel_requested() {
+                let (is_cancel_requested, is_exit_requested) = {
+                    let parts = ctx.parts_mut();
+                    (
+                        parts.ui.ctrl_c_state.is_cancel_requested(),
+                        parts.ui.ctrl_c_state.is_exit_requested(),
+                    )
+                };
+                if is_cancel_requested {
                     return Ok(Some(ValidationResult::Outcome(TurnHandlerOutcome::Break(
                         TurnLoopResult::Cancelled,
                     ))));
                 }
-                if ctx.ctrl_c_state.is_exit_requested() {
+                if is_exit_requested {
                     return Ok(Some(ValidationResult::Outcome(TurnHandlerOutcome::Break(
                         TurnLoopResult::Exit,
                     ))));
@@ -1271,11 +1413,14 @@ async fn acquire_adaptive_rate_limit_slot<'a>(
                         retry_after_ms,
                         "Adaptive rate limiter blocked tool execution after repeated attempts"
                     );
-                    push_tool_response(
-                        ctx.working_history,
-                        tool_call_id.to_string(),
-                        build_rate_limit_error_content(tool_name, retry_after_ms),
-                    );
+                    {
+                        let parts = ctx.parts_mut();
+                        push_tool_response(
+                            parts.state.working_history,
+                            tool_call_id.to_string(),
+                            build_rate_limit_error_content(tool_name, retry_after_ms),
+                        );
+                    }
                     return Ok(Some(ValidationResult::Blocked));
                 }
 
@@ -1286,13 +1431,23 @@ async fn acquire_adaptive_rate_limit_slot<'a>(
 
                 tokio::select! {
                     _ = tokio::time::sleep(bounded_wait) => {},
-                    _ = ctx.ctrl_c_notify.notified() => {
-                        if ctx.ctrl_c_state.is_exit_requested() {
+                    _ = {
+                        let parts = ctx.parts_mut();
+                        parts.ui.ctrl_c_notify.notified()
+                    } => {
+                        let (is_exit_requested, is_cancel_requested) = {
+                            let parts = ctx.parts_mut();
+                            (
+                                parts.ui.ctrl_c_state.is_exit_requested(),
+                                parts.ui.ctrl_c_state.is_cancel_requested(),
+                            )
+                        };
+                        if is_exit_requested {
                             return Ok(Some(ValidationResult::Outcome(TurnHandlerOutcome::Break(
                                 TurnLoopResult::Exit,
                             ))));
                         }
-                        if ctx.ctrl_c_state.is_cancel_requested() {
+                        if is_cancel_requested {
                             return Ok(Some(ValidationResult::Outcome(TurnHandlerOutcome::Break(
                                 TurnLoopResult::Cancelled,
                             ))));
@@ -1694,43 +1849,58 @@ mod tests {
         let mut turn_modified_files: BTreeSet<std::path::PathBuf> = BTreeSet::new();
         let mut repeated_tool_attempts = LoopTracker::new();
 
-        let mut tp_ctx = TurnProcessingContext::new(
-            &mut renderer,
-            &handle,
-            &mut session_stats,
-            &mut auto_exit_plan_mode_attempted,
-            &mut mcp_panel_state,
-            &tool_result_cache,
-            &approval_recorder,
-            &decision_ledger,
-            &mut working_history,
-            &mut tool_registry,
-            &tools,
-            &tool_catalog,
-            &ctrl_c_state,
-            &ctrl_c_notify,
-            None,
-            &mut context_manager,
-            &mut last_forced_redraw,
-            &mut input_status_state,
-            &mut session,
-            None,
-            &default_placeholder,
-            &tool_permission_cache,
-            &safety_validator,
-            &mut provider_client,
-            &mut config,
-            &traj,
-            false,
-            &circuit_breaker,
-            &tool_health_tracker,
-            &rate_limiter,
-            &telemetry,
-            &autonomous_executor,
-            &error_recovery,
-            &mut harness_state,
-            None,
-            &mut steering_receiver,
+        let tool = crate::agent::runloop::unified::turn::context::ToolContext {
+            tool_result_cache: &tool_result_cache,
+            approval_recorder: &approval_recorder,
+            tool_registry: &mut tool_registry,
+            tools: &tools,
+            tool_catalog: &tool_catalog,
+            tool_permission_cache: &tool_permission_cache,
+            safety_validator: &safety_validator,
+            circuit_breaker: &circuit_breaker,
+            tool_health_tracker: &tool_health_tracker,
+            rate_limiter: &rate_limiter,
+            telemetry: &telemetry,
+            autonomous_executor: &autonomous_executor,
+            error_recovery: &error_recovery,
+        };
+        let llm = crate::agent::runloop::unified::turn::context::LLMContext {
+            provider_client: &mut provider_client,
+            config: &mut config,
+            vt_cfg: None,
+            context_manager: &mut context_manager,
+            decision_ledger: &decision_ledger,
+            traj: &traj,
+        };
+        let ui = crate::agent::runloop::unified::turn::context::UIContext {
+            renderer: &mut renderer,
+            handle: &handle,
+            session: &mut session,
+            ctrl_c_state: &ctrl_c_state,
+            ctrl_c_notify: &ctrl_c_notify,
+            lifecycle_hooks: None,
+            default_placeholder: &default_placeholder,
+            last_forced_redraw: &mut last_forced_redraw,
+            input_status_state: &mut input_status_state,
+        };
+        let state = crate::agent::runloop::unified::turn::context::TurnProcessingState {
+            session_stats: &mut session_stats,
+            auto_exit_plan_mode_attempted: &mut auto_exit_plan_mode_attempted,
+            mcp_panel_state: &mut mcp_panel_state,
+            working_history: &mut working_history,
+            full_auto: false,
+            harness_state: &mut harness_state,
+            harness_emitter: None,
+            steering_receiver: &mut steering_receiver,
+        };
+
+        let mut tp_ctx = TurnProcessingContext::from_parts(
+            crate::agent::runloop::unified::turn::context::TurnProcessingContextParts {
+                tool,
+                llm,
+                ui,
+                state,
+            },
         );
 
         let mut outcome_ctx = ToolOutcomeContext {

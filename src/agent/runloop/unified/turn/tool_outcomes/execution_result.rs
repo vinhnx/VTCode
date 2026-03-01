@@ -30,12 +30,18 @@ fn record_tool_execution(
     is_argument_error: bool,
 ) {
     let duration = start_time.elapsed();
-    ctx.tool_health_tracker
+    let parts = ctx.parts_mut();
+    parts
+        .tool
+        .tool_health_tracker
         .record_execution(tool_name, success, duration);
     if !is_argument_error {
-        ctx.autonomous_executor.record_execution(tool_name, success);
+        parts
+            .tool
+            .autonomous_executor
+            .record_execution(tool_name, success);
     }
-    ctx.telemetry.record_tool_usage(tool_name, success);
+    parts.tool.telemetry.record_tool_usage(tool_name, success);
 }
 
 fn is_blocked_or_denied_failure(error: &str) -> bool {
@@ -410,7 +416,11 @@ pub(crate) async fn handle_tool_execution_result<'a>(
         }
         ToolExecutionStatus::Cancelled => {
             handle_cancelled(t_ctx, tool_call_id, tool_name, args_val).await?;
-            if t_ctx.ctx.ctrl_c_state.is_exit_requested() {
+            let exit_requested = {
+                let parts = t_ctx.ctx.parts_mut();
+                parts.ui.ctrl_c_state.is_exit_requested()
+            };
+            if exit_requested {
                 return Ok(Some(TurnHandlerOutcome::Break(TurnLoopResult::Exit)));
             }
             return Ok(Some(TurnHandlerOutcome::Break(TurnLoopResult::Cancelled)));
@@ -597,15 +607,19 @@ async fn handle_success<'a>(
         );
     }
 
-    t_ctx.ctx.harness_state.reset_blocked_tool_call_streak();
-
-    let content_for_model = maybe_inline_spooled(tool_name, output);
-    push_tool_response(t_ctx.ctx.working_history, tool_call_id, content_for_model);
+    // Update blocked-streak and record tool response in grouped context form.
+    {
+        let parts = t_ctx.ctx.parts_mut();
+        parts.state.harness_state.reset_blocked_tool_call_streak();
+        let content_for_model = maybe_inline_spooled(tool_name, output);
+        push_tool_response(parts.state.working_history, tool_call_id, content_for_model);
+    }
+    let mut turn_loop_ctx = t_ctx.ctx.as_turn_loop_context();
+    let vt_cfg = turn_loop_ctx.vt_cfg;
 
     // Handle UI output and file modifications
-    let vt_cfg = t_ctx.ctx.vt_cfg;
     let (_any_write, mod_files, _last_stdout) = handle_pipeline_output_from_turn_ctx(
-        &mut t_ctx.ctx.as_turn_loop_context(),
+        &mut turn_loop_ctx,
         tool_name,
         args_val,
         pipeline_outcome,
@@ -642,12 +656,15 @@ async fn handle_failure<'a>(
 
     let is_plan_mode_denial = agent_execution::is_plan_mode_denial(&error_str);
     let blocked_or_denied_failure = is_blocked_or_denied_failure(&error_str);
-    let should_auto_exit = is_plan_mode_denial
-        && t_ctx.ctx.session_stats.is_plan_mode()
-        && !t_ctx
-            .ctx
-            .tool_registry
-            .is_plan_mode_allowed(tool_name, args_val);
+    let should_auto_exit = {
+        let parts = t_ctx.ctx.parts_mut();
+        is_plan_mode_denial
+            && parts.state.session_stats.is_plan_mode()
+            && !parts
+                .tool
+                .tool_registry
+                .is_plan_mode_allowed(tool_name, args_val)
+    };
 
     let (user_msg, hint) =
         crate::agent::runloop::unified::turn::turn_helpers::format_tool_error_for_user(
@@ -661,11 +678,15 @@ async fn handle_failure<'a>(
     }
     let error_msg = user_msg;
     if is_plan_mode_denial {
+        let consecutive_blocked_tool_calls = {
+            let parts = t_ctx.ctx.parts_mut();
+            parts.state.harness_state.consecutive_blocked_tool_calls
+        };
         emit_turn_metric_log(
             t_ctx.ctx,
             "plan_mode_denial",
             tool_name,
-            t_ctx.ctx.harness_state.consecutive_blocked_tool_calls,
+            consecutive_blocked_tool_calls,
             super::handlers::max_consecutive_blocked_tool_calls_per_turn(t_ctx.ctx),
         );
     }
@@ -680,7 +701,10 @@ async fn handle_failure<'a>(
     }
 
     if blocked_or_denied_failure {
-        let streak = t_ctx.ctx.harness_state.record_blocked_tool_call();
+        let streak = {
+            let parts = t_ctx.ctx.parts_mut();
+            parts.state.harness_state.record_blocked_tool_call()
+        };
         let max_streak = super::handlers::max_consecutive_blocked_tool_calls_per_turn(t_ctx.ctx);
         if streak > max_streak {
             emit_turn_metric_log(
@@ -694,16 +718,20 @@ async fn handle_failure<'a>(
             let block_reason = format!(
                 "Consecutive blocked/denied tool calls reached per-turn cap ({max_streak}). Last blocked call: '{display_tool}'. Stopping turn to prevent retry churn."
             );
-            t_ctx
-                .ctx
-                .working_history
-                .push(uni::Message::system(block_reason.clone()));
+            {
+                let parts = t_ctx.ctx.parts_mut();
+                parts
+                    .state
+                    .working_history
+                    .push(uni::Message::system(block_reason.clone()));
+            }
             return Ok(Some(TurnHandlerOutcome::Break(TurnLoopResult::Blocked {
                 reason: Some(block_reason),
             })));
         }
     } else {
-        t_ctx.ctx.harness_state.reset_blocked_tool_call_streak();
+        let parts = t_ctx.ctx.parts_mut();
+        parts.state.harness_state.reset_blocked_tool_call_streak();
     }
 
     Ok(None)
@@ -745,22 +773,22 @@ async fn push_tool_error_response(
         if let Some((tool, args)) = fallback_from_error(tool_name, &error_msg) {
             (Some(tool), Some(args))
         } else {
-            (
-                t_ctx
-                    .ctx
-                    .tool_registry
-                    .suggest_fallback_tool(tool_name)
-                    .await,
-                None,
-            )
+            let fallback = {
+                let parts = t_ctx.ctx.parts_mut();
+                parts.tool.tool_registry.suggest_fallback_tool(tool_name).await
+            };
+            (fallback, None)
         };
     let error_content =
         build_error_content(error_msg, fallback_tool, fallback_tool_args, failure_kind);
-    push_tool_response(
-        t_ctx.ctx.working_history,
-        tool_call_id,
-        error_content.to_string(),
-    );
+    {
+        let parts = t_ctx.ctx.parts_mut();
+        push_tool_response(
+            parts.state.working_history,
+            tool_call_id,
+            error_content.to_string(),
+        );
+    }
 }
 
 async fn handle_cancelled(
@@ -771,14 +799,20 @@ async fn handle_cancelled(
 ) -> Result<()> {
     let display_tool = tool_action_label(tool_name, args_val);
     let error_msg = format!("Tool '{}' execution cancelled", display_tool);
-    t_ctx.ctx.renderer.line(MessageStyle::Info, &error_msg)?;
+    {
+        let parts = t_ctx.ctx.parts_mut();
+        parts.ui.renderer.line(MessageStyle::Info, &error_msg)?;
+    }
 
     let error_content = serde_json::json!({"error": error_msg});
-    push_tool_response(
-        t_ctx.ctx.working_history,
-        tool_call_id,
-        error_content.to_string(),
-    );
+    {
+        let parts = t_ctx.ctx.parts_mut();
+        push_tool_response(
+            parts.state.working_history,
+            tool_call_id,
+            error_content.to_string(),
+        );
+    }
 
     Ok(())
 }
@@ -789,24 +823,31 @@ async fn run_post_tool_hooks<'a>(
     args_val: &serde_json::Value,
     output: &serde_json::Value,
 ) -> Result<()> {
-    if let Some(hooks) = ctx.lifecycle_hooks {
+    let hooks = {
+        let parts = ctx.parts_mut();
+        parts.ui.lifecycle_hooks
+    };
+
+    if let Some(hooks) = hooks {
         match hooks
             .run_post_tool_use(tool_name, Some(args_val), output)
             .await
         {
             Ok(outcome) => {
+                let parts = ctx.parts_mut();
                 crate::agent::runloop::unified::turn::utils::render_hook_messages(
-                    ctx.renderer,
+                    parts.ui.renderer,
                     &outcome.messages,
                 )?;
                 for context in outcome.additional_context {
                     if !context.trim().is_empty() {
-                        ctx.working_history.push(uni::Message::system(context));
+                        parts.state.working_history.push(uni::Message::system(context));
                     }
                 }
             }
             Err(err) => {
-                ctx.renderer.line(
+                let parts = ctx.parts_mut();
+                parts.ui.renderer.line(
                     MessageStyle::Error,
                     &format!("Failed to run post-tool hooks: {}", err),
                 )?;
@@ -820,14 +861,24 @@ async fn handle_plan_mode_auto_exit<'a, 'b>(
     t_ctx: &mut super::handlers::ToolOutcomeContext<'a, 'b>,
     trigger_start_time: std::time::Instant,
 ) -> Result<Option<TurnHandlerOutcome>> {
-    if *t_ctx.ctx.auto_exit_plan_mode_attempted {
+    let auto_exit_already_attempted = {
+        let parts = t_ctx.ctx.parts_mut();
+        *parts.state.auto_exit_plan_mode_attempted
+    };
+
+    if auto_exit_already_attempted {
+        let parts = t_ctx.ctx.parts_mut();
         display_status(
-            t_ctx.ctx.renderer,
+            parts.ui.renderer,
             "Plan Mode still active. Call `exit_plan_mode` to review the plan or refine the plan before retrying.",
         )?;
         return Ok(None);
     }
-    *t_ctx.ctx.auto_exit_plan_mode_attempted = true;
+
+    {
+        let parts = t_ctx.ctx.parts_mut();
+        *parts.state.auto_exit_plan_mode_attempted = true;
+    }
 
     let exit_args = build_exit_plan_mode_args(EXIT_PLAN_MODE_REASON_AUTO_TRIGGER_ON_DENIAL);
 
@@ -860,7 +911,8 @@ pub(crate) fn record_mcp_tool_event(
     tool_name: &str,
     status: &ToolExecutionStatus,
 ) {
-    record_mcp_event_to_panel(t_ctx.ctx.mcp_panel_state, tool_name, status);
+    let parts = t_ctx.ctx.parts_mut();
+    record_mcp_event_to_panel(parts.state.mcp_panel_state, tool_name, status);
 }
 
 /// Record MCP tool execution event directly to the MCP panel state.

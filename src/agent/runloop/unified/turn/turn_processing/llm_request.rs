@@ -278,56 +278,83 @@ pub(crate) async fn execute_llm_request(
     _max_tokens_opt: Option<u32>,
     parallel_cfg_opt: Option<Box<ParallelToolConfig>>,
 ) -> Result<(uni::LLMResponse, bool)> {
-    let provider_name = ctx.provider_client.name().to_string();
-    let plan_mode = ctx.session_stats.is_plan_mode();
-    let request_user_input_enabled = ctx
-        .vt_cfg
-        .as_ref()
-        .map(|cfg| cfg.chat.ask_questions.enabled)
-        .unwrap_or(true);
-    let context_window_size = ctx.provider_client.effective_context_size(active_model);
-    let turn_timeout_secs = ctx
-        .vt_cfg
-        .as_ref()
-        .map(|cfg| cfg.optimization.agent_execution.max_execution_time_secs)
-        .unwrap_or(300);
+    let (provider_name, plan_mode, request_user_input_enabled, context_window_size, turn_timeout_secs) = {
+        let parts = ctx.parts_mut();
+        (
+            parts.llm.provider_client.name().to_string(),
+            parts.state.session_stats.is_plan_mode(),
+            parts
+                .llm
+                .vt_cfg
+                .as_ref()
+                .map(|cfg| cfg.chat.ask_questions.enabled)
+                .unwrap_or(true),
+            parts.llm.provider_client.effective_context_size(active_model),
+            parts
+                .llm
+                .vt_cfg
+                .as_ref()
+                .map(|cfg| cfg.optimization.agent_execution.max_execution_time_secs)
+                .unwrap_or(300),
+        )
+    };
     let request_timeout_secs =
         llm_attempt_timeout_secs(turn_timeout_secs, plan_mode, &provider_name);
 
-    let active_agent_name = ctx.session_stats.active_agent();
-    let active_agent_prompt_body = vtcode_core::subagents::get_agent_prompt_body(active_agent_name);
+    let active_agent_name = {
+        let parts = ctx.parts_mut();
+        parts.state.session_stats.active_agent().to_string()
+    };
+    let active_agent_prompt_body =
+        vtcode_core::subagents::get_agent_prompt_body(active_agent_name.as_str());
 
-    let mut system_prompt = ctx
-        .context_manager
-        .build_system_prompt(
-            ctx.working_history,
+    let mut system_prompt = {
+        let parts = ctx.parts_mut();
+        parts.llm.context_manager.build_system_prompt(
+            parts.state.working_history,
             step_count,
             crate::agent::runloop::unified::context_manager::SystemPromptParams {
-                full_auto: ctx.full_auto,
+                full_auto: parts.state.full_auto,
                 plan_mode,
                 context_window_size: Some(context_window_size),
-                active_agent_name: Some(active_agent_name.to_string()),
+                active_agent_name: Some(active_agent_name.clone()),
                 active_agent_prompt: active_agent_prompt_body,
             },
         )
-        .await?;
+        .await?
+    };
+
+    let (max_tool_calls, max_tool_wall_clock_secs, max_tool_retries) = {
+        let parts = ctx.parts_mut();
+        (
+            parts.state.harness_state.max_tool_calls,
+            parts.state.harness_state.max_tool_wall_clock.as_secs(),
+            parts.state.harness_state.max_tool_retries,
+        )
+    };
 
     upsert_harness_limits_section(
         &mut system_prompt,
-        ctx.harness_state.max_tool_calls,
-        ctx.harness_state.max_tool_wall_clock.as_secs(),
-        ctx.harness_state.max_tool_retries,
+        max_tool_calls,
+        max_tool_wall_clock_secs,
+        max_tool_retries,
     );
 
-    let capabilities = uni::get_cached_capabilities(&**ctx.provider_client, active_model);
+    let capabilities = {
+        let parts = ctx.parts_mut();
+        uni::get_cached_capabilities(&**parts.llm.provider_client, active_model)
+    };
     let mut use_streaming = capabilities.streaming;
-    let reasoning_effort = ctx.vt_cfg.as_ref().and_then(|cfg| {
-        if capabilities.reasoning_effort {
-            Some(cfg.agent.reasoning_effort)
-        } else {
-            None
-        }
-    });
+    let reasoning_effort = {
+        let parts = ctx.parts_mut();
+        parts.llm.vt_cfg.as_ref().and_then(|cfg| {
+            if capabilities.reasoning_effort {
+                Some(cfg.agent.reasoning_effort)
+            } else {
+                None
+            }
+        })
+    };
     let temperature = if reasoning_effort.is_some()
         && matches!(provider_name.as_str(), "anthropic" | "minimax")
     {
@@ -336,14 +363,21 @@ pub(crate) async fn execute_llm_request(
         Some(0.7)
     };
 
-    let tool_snapshot = ctx
-        .tool_catalog
-        .filtered_snapshot_with_stats(ctx.tools, plan_mode, request_user_input_enabled)
-        .await;
+    let tool_snapshot = {
+        let parts = ctx.parts_mut();
+        parts
+            .tool
+            .tool_catalog
+            .filtered_snapshot_with_stats(parts.tool.tools, plan_mode, request_user_input_enabled)
+            .await
+    };
     let current_tools = tool_snapshot.snapshot;
-    let openai_prompt_cache_enabled = provider_name.eq_ignore_ascii_case("openai")
-        && ctx.config.prompt_cache.enabled
-        && ctx.config.prompt_cache.providers.openai.enabled;
+    let openai_prompt_cache_enabled = {
+        let parts = ctx.parts_mut();
+        provider_name.eq_ignore_ascii_case("openai")
+            && parts.llm.config.prompt_cache.enabled
+            && parts.llm.config.prompt_cache.providers.openai.enabled
+    };
     let has_tools = current_tools.is_some();
     emit_tool_catalog_cache_metrics(
         ctx,

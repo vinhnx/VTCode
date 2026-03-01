@@ -187,43 +187,58 @@ impl<'a> TurnLoopContext<'a> {
         &'b mut self,
         working_history: &'b mut Vec<uni::Message>,
     ) -> crate::agent::runloop::unified::turn::context::TurnProcessingContext<'b> {
-        crate::agent::runloop::unified::turn::context::TurnProcessingContext::new(
-            self.renderer,
-            self.handle,
-            self.session_stats,
-            self.auto_exit_plan_mode_attempted,
-            self.mcp_panel_state,
-            self.tool_result_cache,
-            self.approval_recorder,
-            self.decision_ledger,
+        let tool = crate::agent::runloop::unified::turn::context::ToolContext {
+            tool_result_cache: self.tool_result_cache,
+            approval_recorder: self.approval_recorder,
+            tool_registry: self.tool_registry,
+            tools: self.tools,
+            tool_catalog: self.tool_catalog,
+            tool_permission_cache: self.tool_permission_cache,
+            safety_validator: self.safety_validator,
+            circuit_breaker: self.circuit_breaker,
+            tool_health_tracker: self.tool_health_tracker,
+            rate_limiter: self.rate_limiter,
+            telemetry: self.telemetry,
+            autonomous_executor: self.autonomous_executor,
+            error_recovery: self.error_recovery,
+        };
+        let llm = crate::agent::runloop::unified::turn::context::LLMContext {
+            provider_client: self.provider_client,
+            config: self.config,
+            vt_cfg: self.vt_cfg,
+            context_manager: self.context_manager,
+            decision_ledger: self.decision_ledger,
+            traj: self.traj,
+        };
+        let ui = crate::agent::runloop::unified::turn::context::UIContext {
+            renderer: self.renderer,
+            handle: self.handle,
+            session: self.session,
+            ctrl_c_state: self.ctrl_c_state,
+            ctrl_c_notify: self.ctrl_c_notify,
+            lifecycle_hooks: self.lifecycle_hooks,
+            default_placeholder: self.default_placeholder,
+            last_forced_redraw: self.last_forced_redraw,
+            input_status_state: self.input_status_state,
+        };
+        let state = crate::agent::runloop::unified::turn::context::TurnProcessingState {
+            session_stats: self.session_stats,
+            auto_exit_plan_mode_attempted: self.auto_exit_plan_mode_attempted,
+            mcp_panel_state: self.mcp_panel_state,
             working_history,
-            self.tool_registry,
-            self.tools,
-            self.tool_catalog,
-            self.ctrl_c_state,
-            self.ctrl_c_notify,
-            self.vt_cfg,
-            self.context_manager,
-            self.last_forced_redraw,
-            self.input_status_state,
-            self.session,
-            self.lifecycle_hooks,
-            self.default_placeholder,
-            self.tool_permission_cache,
-            self.safety_validator,
-            self.provider_client,
-            self.config,
-            self.traj,
-            self.full_auto,
-            self.circuit_breaker,
-            self.tool_health_tracker,
-            self.rate_limiter,
-            self.telemetry,
-            self.autonomous_executor,
-            self.error_recovery,
-            self.harness_state,
-            self.harness_emitter,
-            self.steering_receiver,
+            full_auto: self.full_auto,
+            harness_state: self.harness_state,
+            harness_emitter: self.harness_emitter,
+            steering_receiver: self.steering_receiver,
+        };
+
+        crate::agent::runloop::unified::turn::context::TurnProcessingContext::from_parts(
+            crate::agent::runloop::unified::turn::context::TurnProcessingContextParts {
+                tool,
+                llm,
+                ui,
+                state,
+            },
         )
     }
 }
@@ -377,7 +392,10 @@ pub async fn run_turn_loop(
         turn_processing_ctx
             .harness_state
             .set_phase(TurnPhase::Requesting);
-        let active_model = turn_processing_ctx.config.model.clone();
+        let active_model = {
+            let parts = turn_processing_ctx.parts_mut();
+            parts.llm.config.model.clone()
+        };
         let (response, response_streamed) = match execute_llm_request(
             &mut turn_processing_ctx,
             step_count,
@@ -390,38 +408,55 @@ pub async fn run_turn_loop(
             Ok(val) => val,
             Err(err) => {
                 // Record the error in the recovery state for diagnostics
-                let mut recovery = turn_processing_ctx.error_recovery.write().await;
-                recovery.record_error("llm_request", format!("{:#}", err), ErrorType::Other);
+                {
+                    let mut recovery = {
+                        let parts = turn_processing_ctx.parts_mut();
+                        parts.tool.error_recovery.write().await
+                    };
+                    recovery.record_error("llm_request", format!("{:#}", err), ErrorType::Other);
+                }
 
                 // execute_llm_request already performs retry/backoff for retryable provider errors.
                 // Avoid a second retry layer here, which can consume turn budget and cause timeouts.
                 // Restore input status on request failure to clear loading/shimmer state.
-                turn_processing_ctx
-                    .handle
-                    .set_input_status(restore_status_left.clone(), restore_status_right.clone());
-                turn_processing_ctx.input_status_state.left = restore_status_left;
-                turn_processing_ctx.input_status_state.right = restore_status_right;
+                {
+                    let parts = turn_processing_ctx.parts_mut();
+                    parts.ui.handle.set_input_status(
+                        restore_status_left.clone(),
+                        restore_status_right.clone(),
+                    );
+                    parts.ui.input_status_state.left = restore_status_left;
+                    parts.ui.input_status_state.right = restore_status_right;
+                }
 
-                if maybe_recover_after_post_tool_llm_failure(
-                    turn_processing_ctx.renderer,
-                    turn_processing_ctx.working_history,
-                    &err,
-                    step_count,
-                    turn_history_start_len,
-                    "execute_llm_request",
-                )? {
+                let recovered = {
+                    let parts = turn_processing_ctx.parts_mut();
+                    maybe_recover_after_post_tool_llm_failure(
+                        parts.ui.renderer,
+                        parts.state.working_history,
+                        &err,
+                        step_count,
+                        turn_history_start_len,
+                        "execute_llm_request",
+                    )?
+                };
+                if recovered {
                     result = TurnLoopResult::Completed;
                     break;
                 }
 
-                display_error(turn_processing_ctx.renderer, "LLM request failed", &err)?;
+                {
+                    let parts = turn_processing_ctx.parts_mut();
+                    display_error(parts.ui.renderer, "LLM request failed", &err)?;
+                }
                 // Show recovery hints derived from the canonical error category
                 {
                     let err_cat = vtcode_commons::classify_anyhow_error(&err);
                     let suggestions = err_cat.recovery_suggestions();
                     if !suggestions.is_empty() {
                         let hint = suggestions.join("; ");
-                        turn_processing_ctx.renderer.line(
+                        let parts = turn_processing_ctx.parts_mut();
+                        parts.ui.renderer.line(
                             vtcode_core::utils::ansi::MessageStyle::Info,
                             &format!("Hint: {}", hint),
                         )?;
@@ -440,28 +475,33 @@ pub async fn run_turn_loop(
         // Track token usage for context awareness before any borrows occur
         let response_usage = response.usage.clone();
 
-        if turn_processing_ctx.session_stats.is_plan_mode() {
-            turn_processing_ctx
-                .session_stats
-                .increment_plan_mode_turns();
+        {
+            let parts = turn_processing_ctx.parts_mut();
+            if parts.state.session_stats.is_plan_mode() {
+                parts.state.session_stats.increment_plan_mode_turns();
+            }
         }
 
         // Process the LLM response
-        let allow_plan_interview = turn_processing_ctx.session_stats.is_plan_mode()
-            && turn_config.request_user_input_enabled
-            && crate::agent::runloop::unified::turn::turn_processing::plan_mode_interview_ready(
-                turn_processing_ctx.session_stats,
-            );
-        let mut processing_result = match process_llm_response(
-            &response,
-            turn_processing_ctx.renderer,
-            turn_processing_ctx.working_history.len(),
-            turn_processing_ctx.session_stats.is_plan_mode(),
-            allow_plan_interview,
-            turn_config.request_user_input_enabled,
-            Some(&validation_cache),
-            Some(turn_processing_ctx.tool_registry),
-        ) {
+        let processing_result_outcome = {
+            let parts = turn_processing_ctx.parts_mut();
+            let allow_plan_interview = parts.state.session_stats.is_plan_mode()
+                && turn_config.request_user_input_enabled
+                && crate::agent::runloop::unified::turn::turn_processing::plan_mode_interview_ready(
+                    parts.state.session_stats,
+                );
+            process_llm_response(
+                &response,
+                parts.ui.renderer,
+                parts.state.working_history.len(),
+                parts.state.session_stats.is_plan_mode(),
+                allow_plan_interview,
+                turn_config.request_user_input_enabled,
+                Some(&validation_cache),
+                Some(parts.tool.tool_registry),
+            )
+        };
+        let mut processing_result = match processing_result_outcome {
             Ok(result) => result,
             Err(err) => {
                 let err_cat = vtcode_commons::classify_anyhow_error(&err);
@@ -474,31 +514,45 @@ pub async fn run_turn_loop(
                     );
                 }
 
-                let mut recovery = turn_processing_ctx.error_recovery.write().await;
-                recovery.record_error("llm_response_parse", format!("{:#}", err), ErrorType::Other);
-                if maybe_recover_after_post_tool_llm_failure(
-                    turn_processing_ctx.renderer,
-                    turn_processing_ctx.working_history,
-                    &err,
-                    step_count,
-                    turn_history_start_len,
-                    "process_llm_response",
-                )? {
+                {
+                    let mut recovery = {
+                        let parts = turn_processing_ctx.parts_mut();
+                        parts.tool.error_recovery.write().await
+                    };
+                    recovery.record_error(
+                        "llm_response_parse",
+                        format!("{:#}", err),
+                        ErrorType::Other,
+                    );
+                }
+                let recovered = {
+                    let parts = turn_processing_ctx.parts_mut();
+                    maybe_recover_after_post_tool_llm_failure(
+                        parts.ui.renderer,
+                        parts.state.working_history,
+                        &err,
+                        step_count,
+                        turn_history_start_len,
+                        "process_llm_response",
+                    )?
+                };
+                if recovered {
                     result = TurnLoopResult::Completed;
                     break;
                 }
                 return Err(err);
             }
         };
-        if turn_processing_ctx.session_stats.is_plan_mode()
-            && turn_config.request_user_input_enabled
         {
-            processing_result = maybe_force_plan_mode_interview(
-                processing_result,
-                response.content.as_deref(),
-                turn_processing_ctx.session_stats,
-                turn_processing_ctx.working_history.len(),
-            );
+            let parts = turn_processing_ctx.parts_mut();
+            if parts.state.session_stats.is_plan_mode() && turn_config.request_user_input_enabled {
+                processing_result = maybe_force_plan_mode_interview(
+                    processing_result,
+                    response.content.as_deref(),
+                    parts.state.session_stats,
+                    parts.state.working_history.len(),
+                );
+            }
         }
 
         // Restore input status if there are no tool calls (turn is completing)
@@ -506,17 +560,23 @@ pub async fn run_turn_loop(
         let has_tool_calls = matches!(processing_result, TurnProcessingResult::ToolCalls { .. });
         if !has_tool_calls {
             // Restore the input status bar to its original state
-            turn_processing_ctx
+            let parts = turn_processing_ctx.parts_mut();
+            parts
+                .ui
                 .handle
                 .set_input_status(restore_status_left, restore_status_right);
         }
 
         if has_tool_calls {
-            turn_processing_ctx
+            let parts = turn_processing_ctx.parts_mut();
+            parts
+                .state
                 .harness_state
                 .set_phase(TurnPhase::ExecutingTools);
         } else {
-            turn_processing_ctx
+            let parts = turn_processing_ctx.parts_mut();
+            parts
+                .state
                 .harness_state
                 .set_phase(TurnPhase::Finalizing);
         }
