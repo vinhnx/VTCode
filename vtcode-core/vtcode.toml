@@ -507,7 +507,7 @@ display_mode = "minimal"
 show_sidebar = true
 dim_completed_todos = true
 message_block_spacing = true
-show_turn_timer = true
+show_turn_timer = false
 minimum_contrast = 4.5
 bold_is_bright = false
 safe_colors_only = false
@@ -835,7 +835,7 @@ interleaved_thinking_beta = "interleaved-thinking-2025-05-14"
 interleaved_thinking_budget_tokens = 31999
 interleaved_thinking_type_enabled = "enabled"
 effort = "low"
-count_tokens_enabled = true
+count_tokens_enabled = false
 
 [provider.anthropic.tool_search]
 enabled = false

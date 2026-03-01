@@ -4,6 +4,7 @@ use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 use smallvec::SmallVec;
+pub(super) use vtcode_commons::diff_paths::looks_like_diff_content;
 use vtcode_core::config::ToolOutputMode;
 use vtcode_core::config::constants::defaults;
 use vtcode_core::config::loader::VTCodeConfig;
@@ -61,23 +62,6 @@ pub(crate) fn render_code_fence_blocks(
 
 pub(super) fn should_render_as_code_block(style: MessageStyle) -> bool {
     matches!(style, MessageStyle::ToolOutput | MessageStyle::Output)
-}
-
-pub(super) fn looks_like_diff_content(content: &str) -> bool {
-    content.lines().any(|line| {
-        let trimmed = line.trim_start();
-        trimmed.starts_with("diff --")
-            || trimmed.starts_with("index ")
-            || trimmed.starts_with("@@")
-            || trimmed.starts_with("--- ")
-            || trimmed.starts_with("+++ ")
-            || trimmed.starts_with("new file mode")
-            || trimmed.starts_with("deleted file mode")
-            || trimmed.starts_with("*** Begin Patch")
-            || trimmed.starts_with("*** Update File:")
-            || trimmed.starts_with("*** Add File:")
-            || trimmed.starts_with("*** Delete File:")
-    })
 }
 
 pub(super) fn build_markdown_code_block(lines: &[&str]) -> String {
@@ -462,5 +446,17 @@ mod tests {
         assert!(!truncated);
         assert_eq!(lines.first().copied(), Some("row-1"));
         assert_eq!(lines.last().copied(), Some("row-30"));
+    }
+
+    #[test]
+    fn diff_detector_ignores_plus_minus_plain_text() {
+        let plain = "+ enabled feature flag\n- disabled old path\n";
+        assert!(!looks_like_diff_content(plain));
+    }
+
+    #[test]
+    fn diff_detector_accepts_real_unified_diff() {
+        let diff = "diff --git a/a.rs b/a.rs\n@@ -1 +1 @@\n-old\n+new\n";
+        assert!(looks_like_diff_content(diff));
     }
 }

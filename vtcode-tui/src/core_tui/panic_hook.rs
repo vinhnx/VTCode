@@ -19,6 +19,7 @@ use ratatui::crossterm::{
 
 static TUI_INITIALIZED: AtomicBool = AtomicBool::new(false);
 static DEBUG_MODE: AtomicBool = AtomicBool::new(cfg!(debug_assertions));
+static SHOW_DIAGNOSTICS: AtomicBool = AtomicBool::new(false);
 static PANIC_HOOK_ONCE: Once = Once::new();
 
 /// Set whether the application is in debug mode
@@ -31,6 +32,17 @@ pub fn set_debug_mode(enabled: bool) {
 /// Get whether the application is in debug mode
 pub fn is_debug_mode() -> bool {
     DEBUG_MODE.load(Ordering::SeqCst)
+}
+
+/// Set whether diagnostics (ERROR-level logs, warnings) should be displayed in the TUI.
+/// Driven by `ui.show_diagnostics_in_transcript` in vtcode.toml.
+pub fn set_show_diagnostics(enabled: bool) {
+    SHOW_DIAGNOSTICS.store(enabled, Ordering::SeqCst);
+}
+
+/// Get whether diagnostics should be displayed in the TUI
+pub fn show_diagnostics() -> bool {
+    SHOW_DIAGNOSTICS.load(Ordering::SeqCst)
 }
 
 /// Initialize the panic hook to restore terminal state on panic and provide better formatting

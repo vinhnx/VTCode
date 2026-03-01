@@ -85,8 +85,8 @@ pub async fn handle_outcome(
         SlashCommandOutcome::StartThemePalette { mode } => {
             handlers::handle_start_theme_palette(ctx, mode).await
         }
-        SlashCommandOutcome::StartSessionsPalette { limit } => {
-            handlers::handle_start_sessions_palette(ctx, limit).await
+        SlashCommandOutcome::StartResumePalette { limit } => {
+            handlers::handle_start_resume_palette(ctx, limit).await
         }
         SlashCommandOutcome::StartFileBrowser { initial_filter } => {
             handlers::handle_start_file_browser(ctx, initial_filter).await
@@ -113,6 +113,11 @@ pub async fn handle_outcome(
         SlashCommandOutcome::ManageMcp { action } => handlers::handle_manage_mcp(ctx, action).await,
 
         SlashCommandOutcome::RunDoctor => handlers::handle_run_doctor(ctx).await,
+        SlashCommandOutcome::Update {
+            check_only,
+            install,
+            force,
+        } => handlers::handle_update(ctx, check_only, install, force).await,
         SlashCommandOutcome::StartTerminalSetup => handlers::handle_start_terminal_setup(ctx).await,
         SlashCommandOutcome::ManageWorkspaceDirectories { command } => {
             handlers::handle_manage_workspace_directories(ctx, command).await

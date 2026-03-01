@@ -6197,7 +6197,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode"
-version = "0.84.1"
+version = "0.85.0"
 dependencies = [
  "agent-client-protocol",
  "anstyle",
@@ -6249,6 +6249,7 @@ dependencies = [
  "tracing-subscriber",
  "url",
  "vtcode-acp-client",
+ "vtcode-commons",
  "vtcode-config",
  "vtcode-core",
  "vtcode-tui",
@@ -6259,7 +6260,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-acp-client"
-version = "0.84.1"
+version = "0.85.0"
 dependencies = [
  "agent-client-protocol",
  "anyhow",
@@ -6275,7 +6276,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-bash-runner"
-version = "0.84.1"
+version = "0.85.0"
 dependencies = [
  "anyhow",
  "assert_fs",
@@ -6294,7 +6295,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-commons"
-version = "0.84.1"
+version = "0.85.0"
 dependencies = [
  "anstyle",
  "anstyle-crossterm 4.0.2",
@@ -6318,7 +6319,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-config"
-version = "0.84.1"
+version = "0.85.0"
 dependencies = [
  "anyhow",
  "assert_fs",
@@ -6350,7 +6351,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-core"
-version = "0.84.1"
+version = "0.85.0"
 dependencies = [
  "ansi-to-tui",
  "anstream 1.0.0",
@@ -6464,7 +6465,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-exec-events"
-version = "0.84.1"
+version = "0.85.0"
 dependencies = [
  "chrono",
  "log",
@@ -6478,7 +6479,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-file-search"
-version = "0.84.1"
+version = "0.85.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -6494,7 +6495,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-indexer"
-version = "0.84.1"
+version = "0.85.0"
 dependencies = [
  "anyhow",
  "ignore",
@@ -6506,7 +6507,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-llm"
-version = "0.84.1"
+version = "0.85.0"
 dependencies = [
  "anyhow",
  "assert_fs",
@@ -6518,7 +6519,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-lmstudio"
-version = "0.84.1"
+version = "0.85.0"
 dependencies = [
  "reqwest 0.12.28",
  "serde_json",
@@ -6532,7 +6533,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-markdown-store"
-version = "0.84.1"
+version = "0.85.0"
 dependencies = [
  "anyhow",
  "fs2",
@@ -6546,7 +6547,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-tools"
-version = "0.84.1"
+version = "0.85.0"
 dependencies = [
  "anyhow",
  "assert_fs",
@@ -6562,7 +6563,7 @@ dependencies = [
 
 [[package]]
 name = "vtcode-tui"
-version = "0.84.1"
+version = "0.85.0"
 dependencies = [
  "anstyle",
  "anstyle-git",

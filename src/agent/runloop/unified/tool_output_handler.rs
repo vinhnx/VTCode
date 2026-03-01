@@ -281,7 +281,7 @@ mod tests {
 
         // Ensure cache invalidation removed the entry
         {
-            let mut c = cache.write().await;
+            let c = cache.write().await;
             assert!(c.get(&key).is_none());
         }
     }
@@ -404,7 +404,7 @@ mod tests {
 
         // Ensure cache invalidated
         {
-            let mut c = cache.write().await;
+            let c = cache.write().await;
             assert!(c.get(&key).is_none());
         }
 

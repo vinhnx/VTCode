@@ -22,6 +22,95 @@ fn has_active_navigation_ui(session: &Session) -> bool {
         || crate::ui::tui::session::slash::slash_navigation_available(session)
 }
 
+#[cfg(unix)]
+fn is_suspend_shortcut(event: &ratatui::crossterm::event::Event) -> bool {
+    use ratatui::crossterm::event::{Event as CrosstermEvent, KeyCode, KeyEventKind, KeyModifiers};
+
+    matches!(
+        event,
+        CrosstermEvent::Key(key)
+            if matches!(key.kind, KeyEventKind::Press)
+                && key.modifiers.contains(KeyModifiers::CONTROL)
+                && matches!(key.code, KeyCode::Char('z') | KeyCode::Char('Z') | KeyCode::Char('\u{1A}'))
+    )
+}
+
+#[cfg(unix)]
+fn suspend_to_shell<B: Backend>(
+    terminal: &mut Terminal<B>,
+    session: &mut Session,
+    inputs: &mut EventListener,
+    event_channels: &EventChannels,
+    use_alternate_screen: bool,
+    keyboard_flags: ratatui::crossterm::event::KeyboardEnhancementFlags,
+) -> Result<()> {
+    use ratatui::crossterm::{
+        event::{
+            DisableBracketedPaste, DisableFocusChange, DisableMouseCapture, EnableBracketedPaste,
+            EnableFocusChange, EnableMouseCapture, PushKeyboardEnhancementFlags,
+        },
+        terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
+    };
+    use signal_hook::{consts::signal::SIGTSTP, low_level::raise};
+
+    event_channels.pause();
+    inputs.clear_queue();
+
+    let suspend_result = (|| -> Result<()> {
+        let mut stderr = io::stderr();
+        if use_alternate_screen {
+            execute!(stderr, LeaveAlternateScreen)
+                .context("failed to leave alternate screen before suspend")?;
+        }
+
+        if let Err(error) = execute!(
+            stderr,
+            DisableMouseCapture,
+            DisableFocusChange,
+            DisableBracketedPaste
+        ) {
+            tracing::debug!(%error, "failed to disable terminal enhancements before suspend");
+        }
+        if let Err(error) = disable_raw_mode() {
+            tracing::debug!(%error, "failed to disable raw mode before suspend");
+        }
+
+        raise(SIGTSTP).context("failed to suspend process with SIGTSTP")?;
+
+        enable_raw_mode().context("failed to re-enable raw mode after resume")?;
+        if let Err(error) = execute!(
+            stderr,
+            EnableBracketedPaste,
+            EnableMouseCapture,
+            EnableFocusChange
+        ) {
+            tracing::debug!(%error, "failed to re-enable terminal enhancements after resume");
+        }
+        if !keyboard_flags.is_empty()
+            && let Err(error) = execute!(stderr, PushKeyboardEnhancementFlags(keyboard_flags))
+        {
+            tracing::debug!(%error, "failed to restore keyboard enhancement flags after resume");
+        }
+        if use_alternate_screen {
+            execute!(stderr, EnterAlternateScreen)
+                .context("failed to re-enter alternate screen after resume")?;
+            terminal.clear().map_err(|error| {
+                anyhow::anyhow!("failed to clear terminal after resume: {}", error)
+            })?;
+        }
+
+        Ok(())
+    })();
+
+    event_channels.resume();
+    inputs.clear_queue();
+    if suspend_result.is_ok() {
+        session.mark_dirty();
+    }
+
+    suspend_result
+}
+
 fn handle_inline_command(
     terminal: &mut Terminal<impl Backend>,
     session: &mut Session,
@@ -61,7 +150,12 @@ pub(super) async fn drive_terminal<B: Backend>(
     inputs: &mut EventListener,
     event_channels: EventChannels,
     event_callback: Option<InlineEventCallback>,
+    use_alternate_screen: bool,
+    keyboard_flags: ratatui::crossterm::event::KeyboardEnhancementFlags,
 ) -> Result<()> {
+    #[cfg(not(unix))]
+    let _ = (use_alternate_screen, keyboard_flags);
+
     let mut cursor_steady = false;
     'main: loop {
         // Process all pending commands without blocking
@@ -131,6 +225,21 @@ pub(super) async fn drive_terminal<B: Backend>(
                     Some(TerminalEvent::Crossterm(event)) => {
                         // Record input for adaptive tick rate (switches to 16Hz)
                         event_channels.record_input();
+
+                        #[cfg(unix)]
+                        if is_suspend_shortcut(&event) {
+                            if let Err(error) = suspend_to_shell(
+                                terminal,
+                                session,
+                                inputs,
+                                &event_channels,
+                                use_alternate_screen,
+                                keyboard_flags,
+                            ) {
+                                tracing::warn!(%error, "failed to suspend inline session");
+                            }
+                            continue 'main;
+                        }
 
                         // Skip event processing if the TUI is suspended (e.g., external editor is running)
                         if !event_channels.rx_paused.load(std::sync::atomic::Ordering::Acquire) {
@@ -203,4 +312,22 @@ pub(super) async fn drive_terminal<B: Backend>(
     }
 
     Ok(())
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::is_suspend_shortcut;
+    use ratatui::crossterm::event::{Event as CrosstermEvent, KeyCode, KeyEvent, KeyModifiers};
+
+    #[test]
+    fn ctrl_z_is_suspend_shortcut() {
+        let event = CrosstermEvent::Key(KeyEvent::new(KeyCode::Char('z'), KeyModifiers::CONTROL));
+        assert!(is_suspend_shortcut(&event));
+    }
+
+    #[test]
+    fn plain_z_is_not_suspend_shortcut() {
+        let event = CrosstermEvent::Key(KeyEvent::new(KeyCode::Char('z'), KeyModifiers::NONE));
+        assert!(!is_suspend_shortcut(&event));
+    }
 }

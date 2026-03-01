@@ -2,9 +2,7 @@ use anyhow::Result;
 use std::fmt::Write as _;
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::time::Duration;
-#[cfg(debug_assertions)]
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use tokio::task;
 #[cfg(debug_assertions)]
 use tracing::debug;
@@ -24,75 +22,36 @@ struct UnsafeSendContext {
 unsafe impl Send for UnsafeSendContext {}
 unsafe impl Sync for UnsafeSendContext {}
 
-fn contains_any(message: &str, markers: &[&str]) -> bool {
-    markers.iter().any(|marker| message.contains(marker))
-}
-
+/// Delegate LLM retryability checks to the canonical [`vtcode_commons::ErrorCategory`] classifier.
+#[cfg(test)]
 fn is_retryable_llm_error(message: &str) -> bool {
-    let msg = message.to_ascii_lowercase();
-    let non_retryable = [
-        "invalid api key",
-        "authentication failed",
-        "unauthorized",
-        "forbidden",
-        "permission denied",
-        "usage limit",
-        "weekly usage limit",
-        "daily usage limit",
-        "monthly spending limit",
-        "insufficient credits",
-        "quota exceeded",
-        "billing",
-        "payment required",
-        "bad request",
-        "context length exceeded",
-        "maximum context length",
-        "token limit exceeded",
-        "invalid request",
-        "400",
-        "401",
-        "403",
-        "404",
-        "model not found",
-        "endpoint not found",
-    ];
-    if contains_any(&msg, &non_retryable) {
-        return false;
-    }
-
-    let retryable = [
-        "rate limit",
-        "too many requests",
-        "timeout",
-        "timed out",
-        "429",
-        "internal server error",
-        "500",
-        "502",
-        "503",
-        "504",
-        "bad gateway",
-        "gateway timeout",
-        "service unavailable",
-        "temporarily unavailable",
-        "overloaded",
-        "try again",
-        "retry later",
-        "connection reset",
-        "connection refused",
-        "connection",
-        "socket hang up",
-        "econnreset",
-        "etimedout",
-        "deadline exceeded",
-        "network",
-    ];
-    contains_any(&msg, &retryable)
+    vtcode_commons::is_retryable_llm_error_message(message)
 }
+
+/// Classify an LLM error message into an [`vtcode_commons::ErrorCategory`] for
+/// structured logging and user-facing hints.
+fn classify_llm_error(message: &str) -> vtcode_commons::ErrorCategory {
+    vtcode_commons::classify_error_message(message)
+}
+
+const STREAM_TIMEOUT_FALLBACK_PROVIDERS: &[&str] = &[
+    "huggingface",
+    "ollama",
+    "minimax",
+    "deepseek",
+    "moonshot",
+    "zai",
+    "openrouter",
+    "lmstudio",
+];
+
+const RECENT_TOOL_RESPONSE_WINDOW: usize = 10;
+const TOOL_RETRY_MAX_CHARS: usize = 1200;
 
 fn supports_streaming_timeout_fallback(provider_name: &str) -> bool {
-    provider_name.eq_ignore_ascii_case("huggingface")
-        || provider_name.eq_ignore_ascii_case("ollama")
+    STREAM_TIMEOUT_FALLBACK_PROVIDERS
+        .iter()
+        .any(|provider| provider_name.eq_ignore_ascii_case(provider))
 }
 
 fn is_stream_timeout_error(message: &str) -> bool {
@@ -100,6 +59,65 @@ fn is_stream_timeout_error(message: &str) -> bool {
     msg.contains("stream request timed out")
         || msg.contains("streaming request timed out")
         || msg.contains("llm request timed out after")
+}
+
+fn has_recent_tool_responses(messages: &[uni::Message]) -> bool {
+    messages
+        .iter()
+        .rev()
+        .take(RECENT_TOOL_RESPONSE_WINDOW)
+        .any(|message| message.role == uni::MessageRole::Tool)
+}
+
+fn compact_tool_messages_for_retry(messages: &[uni::Message]) -> Vec<uni::Message> {
+    let mut tool_seen = 0usize;
+    let mut keep_start: Option<usize> = None;
+    for (index, message) in messages.iter().enumerate().rev() {
+        if message.role == uni::MessageRole::Tool {
+            tool_seen += 1;
+            if tool_seen == 2 {
+                keep_start = Some(index);
+                break;
+            }
+        }
+    }
+
+    let mut compacted = Vec::with_capacity(messages.len());
+    for (index, message) in messages.iter().enumerate() {
+        if message.role != uni::MessageRole::Tool {
+            compacted.push(message.clone());
+            continue;
+        }
+
+        if let Some(start_index) = keep_start
+            && index < start_index
+        {
+            continue;
+        }
+
+        let mut cloned = message.clone();
+        let text = message.content.as_text();
+        let mut truncated = String::new();
+        let mut chars = text.chars();
+        for _ in 0..TOOL_RETRY_MAX_CHARS {
+            if let Some(ch) = chars.next() {
+                truncated.push(ch);
+            } else {
+                break;
+            }
+        }
+        if chars.next().is_some() {
+            truncated.push_str("\n... [tool output truncated for retry]");
+        }
+        cloned.content = uni::MessageContent::text(truncated);
+        compacted.push(cloned);
+    }
+
+    if compacted.is_empty() {
+        messages.to_vec()
+    } else {
+        compacted
+    }
 }
 
 fn llm_attempt_timeout_secs(turn_timeout_secs: u64, plan_mode: bool, provider_name: &str) -> u64 {
@@ -404,33 +422,16 @@ pub(crate) async fn execute_llm_request(
         return Err(anyhow::Error::new(err));
     }
 
-    match ctx
-        .provider_client
-        .count_prompt_tokens_exact(&request)
-        .await
-    {
-        Ok(Some(exact_prompt_tokens)) => {
-            ctx.context_manager
-                .set_pending_exact_prompt_token_count(exact_prompt_tokens as usize);
-        }
-        Ok(None) => {}
-        Err(error) => {
-            tracing::warn!(
-                provider = %provider_name,
-                model = %active_model,
-                error = %error,
-                "Exact prompt token counting unavailable for this request"
-            );
-        }
-    }
     let action_suggestion = extract_action_from_messages(ctx.working_history);
 
     let max_retries = llm_retry_attempts(ctx.vt_cfg.map(|cfg| cfg.agent.max_task_retries));
     let mut llm_result = Err(anyhow::anyhow!("LLM request failed to execute"));
     let mut attempts_made = 0usize;
     let mut stream_fallback_used = false;
+    let mut compacted_tool_retry_used = false;
     let mut last_error_retryable: Option<bool> = None;
     let mut last_error_preview: Option<String> = None;
+    let mut last_error_category: Option<vtcode_commons::ErrorCategory> = None;
 
     #[cfg(debug_assertions)]
     let mut request_timer = Instant::now();
@@ -441,10 +442,15 @@ pub(crate) async fn execute_llm_request(
             use crate::agent::runloop::unified::turn::turn_helpers::calculate_backoff;
             let delay = calculate_backoff(attempt - 1, 500, 10_000);
             let delay_secs = delay.as_secs_f64();
+            let reason_hint = last_error_category
+                .as_ref()
+                .map(|cat| cat.user_label())
+                .unwrap_or("unknown error");
             crate::agent::runloop::unified::turn::turn_helpers::display_status(
                 ctx.renderer,
                 &format!(
-                    "LLM request failed, retrying in {:.1}s... (attempt {}/{})",
+                    "LLM request failed ({}), retrying in {:.1}s... (attempt {}/{})",
+                    reason_hint,
                     delay_secs,
                     attempt + 1,
                     max_retries
@@ -491,6 +497,7 @@ pub(crate) async fn execute_llm_request(
             _spinner.set_defer_restore(true);
         }
         task::yield_now().await;
+        let attempt_started_at = Instant::now();
 
         #[cfg(debug_assertions)]
         {
@@ -509,6 +516,7 @@ pub(crate) async fn execute_llm_request(
         }
 
         request.stream = use_streaming;
+        let has_post_tool_context = has_recent_tool_responses(&request.messages);
 
         let step_result = if use_streaming {
             let state = ::vtcode_core::core::agent::session::AgentSessionState::new(
@@ -608,6 +616,20 @@ pub(crate) async fn execute_llm_request(
                 Err(err) => Err(err),
             }
         };
+        let attempt_elapsed = attempt_started_at.elapsed();
+        match &step_result {
+            Ok((response, _)) => {
+                ctx.telemetry.record_llm_request(
+                    active_model,
+                    attempt_elapsed,
+                    response.usage.as_ref(),
+                );
+            }
+            Err(_) => {
+                ctx.telemetry
+                    .record_llm_request(active_model, attempt_elapsed, None);
+            }
+        }
 
         #[cfg(debug_assertions)]
         {
@@ -631,9 +653,21 @@ pub(crate) async fn execute_llm_request(
             }
             Err(err) => {
                 let msg = err.to_string();
-                let is_retryable = is_retryable_llm_error(&msg);
+                let category = classify_llm_error(&msg);
+                let is_retryable = category.is_retryable();
                 last_error_retryable = Some(is_retryable);
                 last_error_preview = Some(compact_error_message(&msg, 180));
+                last_error_category = Some(category);
+
+                tracing::warn!(
+                    target: "vtcode.llm.retry",
+                    error = %msg,
+                    category = %last_error_category.as_ref().unwrap().user_label(),
+                    retryable = is_retryable,
+                    attempt = attempt + 1,
+                    max_retries,
+                    "LLM request attempt failed"
+                );
 
                 if !crate::agent::runloop::unified::turn::turn_helpers::should_continue_operation(
                     ctx.ctrl_c_state,
@@ -657,6 +691,40 @@ pub(crate) async fn execute_llm_request(
                     }
                     _spinner.finish();
                     continue;
+                }
+
+                // Universal post-tool recovery: when a provider fails after
+                // receiving tool results, try non-streaming first, then compact
+                // the tool messages. Works for all providers, not just MiniMax.
+                if has_post_tool_context && attempt < max_retries - 1 {
+                    if use_streaming {
+                        use_streaming = false;
+                        stream_fallback_used = true;
+                        crate::agent::runloop::unified::turn::turn_helpers::display_status(
+                            ctx.renderer,
+                            &format!(
+                                "{} post-tool follow-up failed; retrying with non-streaming.",
+                                provider_name
+                            ),
+                        )?;
+                        _spinner.finish();
+                        continue;
+                    }
+
+                    if !compacted_tool_retry_used {
+                        let compacted = compact_tool_messages_for_retry(&request.messages);
+                        request.messages = compacted;
+                        compacted_tool_retry_used = true;
+                        crate::agent::runloop::unified::turn::turn_helpers::display_status(
+                            ctx.renderer,
+                            &format!(
+                                "{} follow-up still failed; retrying with compacted tool context.",
+                                provider_name
+                            ),
+                        )?;
+                        _spinner.finish();
+                        continue;
+                    }
                 }
 
                 llm_result = Err(err);
@@ -793,8 +861,29 @@ mod tests {
     fn supports_streaming_timeout_fallback_covers_supported_providers() {
         assert!(supports_streaming_timeout_fallback("huggingface"));
         assert!(supports_streaming_timeout_fallback("ollama"));
+        assert!(supports_streaming_timeout_fallback("minimax"));
         assert!(supports_streaming_timeout_fallback("HUGGINGFACE"));
         assert!(!supports_streaming_timeout_fallback("openai"));
+    }
+
+    #[test]
+    fn compact_tool_messages_for_retry_keeps_recent_tool_outputs_only() {
+        let messages = vec![
+            uni::Message::user("u1".to_string()),
+            uni::Message::tool_response("call_1".to_string(), "old tool".to_string()),
+            uni::Message::assistant("a1".to_string()),
+            uni::Message::tool_response("call_2".to_string(), "new tool".to_string()),
+        ];
+
+        let compacted = compact_tool_messages_for_retry(&messages);
+        assert_eq!(
+            compacted
+                .iter()
+                .filter(|message| message.role == uni::MessageRole::Tool)
+                .count(),
+            2
+        );
+        assert_eq!(compacted.len(), 4);
     }
 
     #[test]

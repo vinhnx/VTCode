@@ -9,7 +9,7 @@ use std::collections::HashSet;
 use thiserror::Error;
 use vtcode_core::tools::{
     RiskLevel, SafetyDecision, SafetyError as GatewaySafetyError, SafetyGateway,
-    SafetyGatewayConfig, UnifiedExecutionContext, WorkspaceTrust,
+    SafetyGatewayConfig, ToolInvocationId, UnifiedExecutionContext, WorkspaceTrust,
 };
 
 /// Safety violation errors
@@ -151,11 +151,22 @@ impl ToolCallSafetyValidator {
         tool_name: &str,
         args: &Value,
     ) -> std::result::Result<CallValidation, SafetyError> {
+        self.validate_call_with_invocation_id(tool_name, args, ToolInvocationId::new())
+            .await
+    }
+
+    /// Validate a tool call with an explicit invocation id for log correlation.
+    pub async fn validate_call_with_invocation_id(
+        &mut self,
+        tool_name: &str,
+        args: &Value,
+        invocation_id: ToolInvocationId,
+    ) -> std::result::Result<CallValidation, SafetyError> {
         let intent = vtcode_core::tools::tool_intent::classify_tool_intent(tool_name, args);
 
         let result = self
             .safety_gateway
-            .check_and_record(&self.gateway_ctx, tool_name, args)
+            .check_and_record_with_id(&self.gateway_ctx, tool_name, args, Some(invocation_id))
             .await;
 
         match result.decision {

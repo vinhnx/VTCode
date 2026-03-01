@@ -11,6 +11,7 @@ use crate::agent::runloop::unified::turn::session::interaction_loop::{
 use crate::agent::runloop::unified::turn::tool_outcomes::handlers::{
     ToolOutcomeContext, handle_single_tool_call,
 };
+use vtcode_core::command_safety::shell_parser::parse_shell_commands_tree_sitter;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::session::SessionId;
 
@@ -19,27 +20,47 @@ pub(crate) struct DirectToolContext<'a, 'b> {
     pub input_status_state: &'b mut InputStatusState,
 }
 
+enum DirectToolInput {
+    Execute {
+        tool_name: String,
+        args: serde_json::Value,
+        is_bang_prefix: bool,
+    },
+    InvalidBang {
+        command: String,
+        diagnosis: String,
+    },
+}
+
 pub(crate) async fn handle_direct_tool_execution(
     input: &str,
     ctx: &mut DirectToolContext<'_, '_>,
 ) -> Result<Option<InteractionOutcome>> {
-    // Check for bash mode with '!' prefix or explicit 'run' command
-    let (tool_name_str, args, input_str) = if input.starts_with('!') {
-        let bash_command = input.trim_start_matches('!').trim();
-        if bash_command.is_empty() {
-            return Ok(None);
-        }
-        (
-            "bash".to_string(),
-            serde_json::json!({"command": bash_command}),
-            input,
-        )
-    } else if let Some((name, tool_args)) =
-        crate::agent::runloop::unified::shell::detect_explicit_run_command(input)
-    {
-        (name.to_string(), tool_args, input)
-    } else {
+    let Some(parsed) = parse_direct_tool_input(input) else {
         return Ok(None);
+    };
+
+    let (tool_name_str, args, is_bang_prefix) = match parsed {
+        DirectToolInput::Execute {
+            tool_name,
+            args,
+            is_bang_prefix,
+        } => (tool_name, args, is_bang_prefix),
+        DirectToolInput::InvalidBang { command, diagnosis } => {
+            ctx.interaction_ctx.renderer.line(
+                vtcode_core::utils::ansi::MessageStyle::Info,
+                "Shell mode (!): command rejected (invalid bash grammar).",
+            )?;
+            ctx.interaction_ctx.renderer.line(
+                vtcode_core::utils::ansi::MessageStyle::Info,
+                &format!("Diagnosis: {diagnosis}"),
+            )?;
+            ctx.interaction_ctx.renderer.line(
+                vtcode_core::utils::ansi::MessageStyle::Info,
+                &format!("Recovery: fix syntax and retry as `!{command}`, or remove `!` to ask in natural language."),
+            )?;
+            return Ok(Some(InteractionOutcome::DirectToolHandled));
+        }
     };
 
     // Construct HarnessTurnState (simplified for direct execution)
@@ -71,11 +92,17 @@ pub(crate) async fn handle_direct_tool_execution(
     };
 
     // 1. Display user message and push to history
-    display_user_message(t_ctx.ctx.renderer, input_str)?;
+    if is_bang_prefix {
+        t_ctx.ctx.renderer.line(
+            vtcode_core::utils::ansi::MessageStyle::Info,
+            "Shell mode (!): executing command directly.",
+        )?;
+    }
+    display_user_message(t_ctx.ctx.renderer, input)?;
     t_ctx
         .ctx
         .working_history
-        .push(uni::Message::user(input_str.to_string()));
+        .push(uni::Message::user(input.to_string()));
 
     // 2. Inject assistant message with tool call to keep history valid for LLM
     let tool_call_id = format!(
@@ -114,6 +141,88 @@ pub(crate) async fn handle_direct_tool_execution(
         }));
     }
 
-    let follow_up = format!("Ran `{}`. Next step?", tool_name_str);
-    Ok(Some(InteractionOutcome::Continue { input: follow_up }))
+    // Direct tool paths already executed and rendered output; skip creating an
+    // immediate LLM turn for this interaction loop iteration.
+    Ok(Some(InteractionOutcome::DirectToolHandled))
+}
+
+fn parse_direct_tool_input(input: &str) -> Option<DirectToolInput> {
+    // Check for bash mode with '!' prefix or explicit 'run' command
+    let trimmed = input.trim_start();
+    if let Some(rest) = trimmed.strip_prefix('!') {
+        let bash_command = rest.trim();
+        if bash_command.is_empty() {
+            return None;
+        }
+        return match validate_bang_shell_command(bash_command) {
+            Ok(()) => Some(DirectToolInput::Execute {
+                tool_name: "bash".to_string(),
+                args: serde_json::json!({ "command": bash_command }),
+                is_bang_prefix: true,
+            }),
+            Err(diagnosis) => Some(DirectToolInput::InvalidBang {
+                command: bash_command.to_string(),
+                diagnosis,
+            }),
+        };
+    }
+
+    crate::agent::runloop::unified::shell::detect_explicit_run_command(input).map(
+        |(tool_name, args)| DirectToolInput::Execute {
+            tool_name,
+            args,
+            is_bang_prefix: false,
+        },
+    )
+}
+
+fn validate_bang_shell_command(command: &str) -> std::result::Result<(), String> {
+    match parse_shell_commands_tree_sitter(command) {
+        Ok(commands) if !commands.is_empty() => Ok(()),
+        Ok(_) => Err("No executable shell command found.".to_string()),
+        Err(err) => Err(err),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{DirectToolInput, parse_direct_tool_input};
+
+    #[test]
+    fn parses_bang_prefix_with_leading_whitespace() {
+        let parsed = parse_direct_tool_input("   !echo hello").expect("direct tool");
+        match parsed {
+            DirectToolInput::Execute {
+                tool_name,
+                args,
+                is_bang_prefix,
+            } => {
+                assert_eq!(tool_name, "bash");
+                assert_eq!(args["command"], "echo hello");
+                assert!(is_bang_prefix);
+            }
+            DirectToolInput::InvalidBang { .. } => {
+                panic!("expected valid !-command to parse");
+            }
+        }
+    }
+
+    #[test]
+    fn rejects_invalid_bang_command_with_diagnosis() {
+        let parsed = parse_direct_tool_input("! )(").expect("invalid command should be handled");
+        match parsed {
+            DirectToolInput::InvalidBang { command, diagnosis } => {
+                assert_eq!(command, ")(");
+                assert!(!diagnosis.trim().is_empty());
+            }
+            DirectToolInput::Execute { .. } => {
+                panic!("expected invalid !-command to be rejected");
+            }
+        }
+    }
+
+    #[test]
+    fn rejects_empty_bang_command() {
+        assert!(parse_direct_tool_input("!   ").is_none());
+    }
 }

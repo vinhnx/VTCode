@@ -43,6 +43,8 @@ pub struct HarnessTurnState {
     pub blocked_tool_calls: usize,
     pub consecutive_blocked_tool_calls: usize,
     pub consecutive_spool_chunk_reads: usize,
+    pub consecutive_same_shell_command_runs: usize,
+    pub last_shell_command_signature: Option<String>,
     pub seen_task_tracker_create_signatures: HashSet<String>,
     pub tool_budget_warning_emitted: bool,
     pub tool_budget_exhausted_emitted: bool,
@@ -68,6 +70,8 @@ impl HarnessTurnState {
             blocked_tool_calls: 0,
             consecutive_blocked_tool_calls: 0,
             consecutive_spool_chunk_reads: 0,
+            consecutive_same_shell_command_runs: 0,
+            last_shell_command_signature: None,
             seen_task_tracker_create_signatures: HashSet::new(),
             tool_budget_warning_emitted: false,
             tool_budget_exhausted_emitted: false,
@@ -130,6 +134,23 @@ impl HarnessTurnState {
 
     pub fn reset_spool_chunk_read_streak(&mut self) {
         self.consecutive_spool_chunk_reads = 0;
+    }
+
+    pub fn record_shell_command_run(&mut self, signature: String) -> usize {
+        if self.last_shell_command_signature.as_deref() == Some(signature.as_str()) {
+            self.consecutive_same_shell_command_runs =
+                self.consecutive_same_shell_command_runs.saturating_add(1);
+        } else {
+            self.last_shell_command_signature = Some(signature);
+            self.consecutive_same_shell_command_runs = 1;
+        }
+
+        self.consecutive_same_shell_command_runs
+    }
+
+    pub fn reset_shell_command_run_streak(&mut self) {
+        self.last_shell_command_signature = None;
+        self.consecutive_same_shell_command_runs = 0;
     }
 
     pub fn record_task_tracker_create_signature(&mut self, signature: String) -> bool {
@@ -290,5 +311,49 @@ mod tests {
         assert!(state.record_task_tracker_create_signature(
             "task_tracker::create::{\"title\":\"A\",\"items\":[\"y\"]}".to_string()
         ));
+    }
+
+    #[test]
+    fn harness_state_tracks_identical_shell_command_streak() {
+        let mut state = HarnessTurnState::new(
+            TurnRunId("run-1".to_string()),
+            TurnId("turn-1".to_string()),
+            4,
+            10,
+            1,
+        );
+
+        assert_eq!(
+            state.record_shell_command_run("unified_exec::cargo check".to_string()),
+            1
+        );
+        assert_eq!(
+            state.record_shell_command_run("unified_exec::cargo check".to_string()),
+            2
+        );
+        assert_eq!(
+            state.record_shell_command_run("unified_exec::cargo test".to_string()),
+            1
+        );
+        assert_eq!(
+            state.last_shell_command_signature.as_deref(),
+            Some("unified_exec::cargo test")
+        );
+    }
+
+    #[test]
+    fn harness_state_resets_shell_command_streak() {
+        let mut state = HarnessTurnState::new(
+            TurnRunId("run-1".to_string()),
+            TurnId("turn-1".to_string()),
+            4,
+            10,
+            1,
+        );
+
+        state.record_shell_command_run("run_pty_cmd::cargo check".to_string());
+        state.reset_shell_command_run_streak();
+        assert_eq!(state.consecutive_same_shell_command_runs, 0);
+        assert!(state.last_shell_command_signature.is_none());
     }
 }

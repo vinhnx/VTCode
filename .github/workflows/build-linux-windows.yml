@@ -46,7 +46,7 @@ jobs:
           - x86_64-unknown-linux-musl
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ inputs.tag }}
           fetch-depth: 1
@@ -105,7 +105,7 @@ jobs:
           fi
 
       - name: Upload Artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: vtcode-${{ inputs.tag }}-${{ matrix.target }}
           path: |
@@ -120,7 +120,7 @@ jobs:
     name: Build (x86_64-pc-windows-msvc)
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ inputs.tag }}
           fetch-depth: 1
@@ -163,7 +163,7 @@ jobs:
           fi
 
       - name: Upload Artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: vtcode-${{ inputs.tag }}-x86_64-pc-windows-msvc
           path: |

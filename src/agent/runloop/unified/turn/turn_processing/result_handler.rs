@@ -1,6 +1,9 @@
 use anyhow::Result;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
+use vtcode_core::config::constants::tools;
+use vtcode_core::llm::provider as uni;
+use vtcode_core::tools::tool_intent;
 
 use crate::agent::runloop::unified::turn::context::{
     TurnHandlerOutcome, TurnLoopResult, TurnProcessingContext, TurnProcessingResult,
@@ -24,6 +27,51 @@ pub(crate) struct HandleTurnProcessingResultParams<'a> {
     pub tool_repeat_limit: usize,
 }
 
+fn is_command_execution_tool_call(tool_call: &uni::ToolCall) -> bool {
+    let Some(function) = tool_call.function.as_ref() else {
+        return false;
+    };
+    let tool_name = function.name.as_str();
+    let args_val = tool_call
+        .parsed_arguments()
+        .unwrap_or_else(|_| serde_json::json!({}));
+
+    match tool_name {
+        tools::RUN_PTY_CMD | tools::SHELL => true,
+        tools::UNIFIED_EXEC | tools::EXEC_PTY_CMD | tools::EXEC => {
+            tool_intent::unified_exec_action(&args_val).unwrap_or("run") == "run"
+        }
+        _ => false,
+    }
+}
+
+fn should_suppress_pre_tool_result_claim(
+    assistant_text: &str,
+    tool_calls: &[uni::ToolCall],
+) -> bool {
+    if assistant_text.trim().is_empty() {
+        return false;
+    }
+    if !tool_calls.iter().any(is_command_execution_tool_call) {
+        return false;
+    }
+
+    let lower = assistant_text.to_ascii_lowercase();
+    [
+        "found ",
+        "warning",
+        "warnings",
+        "error",
+        "errors",
+        "passed",
+        "failed",
+        "no issues",
+        "completed successfully",
+    ]
+    .iter()
+    .any(|marker| lower.contains(marker))
+}
+
 /// Dispatch the appropriate response handler based on the processing result.
 pub(crate) async fn handle_turn_processing_result<'a>(
     params: HandleTurnProcessingResultParams<'a>,
@@ -34,6 +82,12 @@ pub(crate) async fn handle_turn_processing_result<'a>(
             assistant_text,
             reasoning,
         } => {
+            let assistant_text =
+                if should_suppress_pre_tool_result_claim(&assistant_text, &tool_calls) {
+                    String::new()
+                } else {
+                    assistant_text
+                };
             params.ctx.handle_assistant_response(
                 assistant_text,
                 reasoning,
@@ -90,5 +144,37 @@ pub(crate) async fn handle_turn_processing_result<'a>(
             Ok(TurnHandlerOutcome::Break(TurnLoopResult::Cancelled))
         }
         TurnProcessingResult::Aborted => Ok(TurnHandlerOutcome::Break(TurnLoopResult::Aborted)),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::should_suppress_pre_tool_result_claim;
+    use vtcode_core::llm::provider as uni;
+
+    #[test]
+    fn suppresses_result_claims_before_run_tool_output() {
+        let tool_calls = vec![uni::ToolCall::function(
+            "call_1".to_string(),
+            "run_pty_cmd".to_string(),
+            r#"{"command":"cargo clippy"}"#.to_string(),
+        )];
+        assert!(should_suppress_pre_tool_result_claim(
+            "Found 3 clippy warnings. Let me fix them.",
+            &tool_calls
+        ));
+    }
+
+    #[test]
+    fn keeps_non_result_preamble_for_run_tools() {
+        let tool_calls = vec![uni::ToolCall::function(
+            "call_1".to_string(),
+            "run_pty_cmd".to_string(),
+            r#"{"command":"cargo clippy"}"#.to_string(),
+        )];
+        assert!(!should_suppress_pre_tool_result_claim(
+            "Running cargo clippy now.",
+            &tool_calls
+        ));
     }
 }

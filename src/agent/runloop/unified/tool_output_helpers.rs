@@ -151,6 +151,15 @@ fn is_git_diff_payload(output: &serde_json::Value) -> bool {
         .is_some_and(|content_type| content_type == "git_diff")
 }
 
+fn has_renderable_stream_content(output: &serde_json::Value) -> bool {
+    ["output", "stdout", "stderr"].iter().any(|key| {
+        output
+            .get(*key)
+            .and_then(serde_json::Value::as_str)
+            .is_some_and(|s| !s.trim().is_empty())
+    })
+}
+
 /// Common logic for rendering tool output with error handling
 pub async fn render_tool_output_common(
     renderer: &mut AnsiRenderer,
@@ -164,10 +173,15 @@ pub async fn render_tool_output_common(
     let git_diff_payload = is_git_diff_payload(output);
 
     if inline_run_tool && !git_diff_payload {
-        if let Some(completion) = compact_run_completion_line(output, command_success) {
-            renderer.line(MessageStyle::ToolDetail, &completion)?;
+        let has_stream_content = has_renderable_stream_content(output);
+        if !has_stream_content {
+            if command_success {
+                renderer.line(MessageStyle::ToolDetail, "(no output)")?;
+            } else if let Some(completion) = compact_run_completion_line(output, command_success) {
+                renderer.line(MessageStyle::ToolDetail, &completion)?;
+            }
+            return Ok(());
         }
-        return Ok(());
     }
 
     // Inline PTY streaming already renders a "• Ran <command>" header. Avoid duplicating

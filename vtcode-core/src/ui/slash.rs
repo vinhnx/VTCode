@@ -92,6 +92,10 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
             name: "doctor",
             description: "Run installation and configuration diagnostics",
         },
+        SlashCommandInfo {
+            name: "update",
+            description: "Check for new VT Code releases and install updates (usage: /update [check|install] [--force])",
+        },
         // Integrations
         SlashCommandInfo {
             name: "mcp",
@@ -99,8 +103,8 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
         },
         // Session management
         SlashCommandInfo {
-            name: "sessions",
-            description: "List recent archived sessions (usage: /sessions [limit])",
+            name: "resume",
+            description: "List recent archived sessions (usage: /resume [limit])",
         },
         SlashCommandInfo {
             name: "clear",

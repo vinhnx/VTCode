@@ -154,41 +154,10 @@ fn syntax_highlighting_defaults_are_valid() {
     config
         .validate()
         .expect("default syntax highlighting config should be valid");
+    // Default is empty — all syntect grammars enabled
     assert!(
-        config
-            .enabled_languages
-            .iter()
-            .any(|lang| lang.eq_ignore_ascii_case("markdown"))
-    );
-    assert!(
-        config
-            .enabled_languages
-            .iter()
-            .any(|lang| lang.eq_ignore_ascii_case("md"))
-    );
-    assert!(
-        config
-            .enabled_languages
-            .iter()
-            .any(|lang| lang.eq_ignore_ascii_case("bash"))
-    );
-    assert!(
-        config
-            .enabled_languages
-            .iter()
-            .any(|lang| lang.eq_ignore_ascii_case("sh"))
-    );
-    assert!(
-        config
-            .enabled_languages
-            .iter()
-            .any(|lang| lang.eq_ignore_ascii_case("shell"))
-    );
-    assert!(
-        config
-            .enabled_languages
-            .iter()
-            .any(|lang| lang.eq_ignore_ascii_case("zsh"))
+        config.enabled_languages.is_empty(),
+        "default enabled_languages should be empty to allow all syntect grammars"
     );
 }
 

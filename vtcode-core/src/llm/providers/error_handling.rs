@@ -63,6 +63,17 @@ pub async fn handle_openai_http_error(
 
     let status = response.status();
     let error_text = response.text().await.unwrap_or_default();
+
+    // Universal diagnostic logging — helps debug post-tool follow-up failures
+    // and transient API issues across all OpenAI-compatible providers.
+    tracing::warn!(
+        provider = provider_name,
+        status = %status,
+        body = %error_text,
+        "{} HTTP error",
+        provider_name
+    );
+
     Err(parse_api_error(provider_name, status, &error_text))
 }
 

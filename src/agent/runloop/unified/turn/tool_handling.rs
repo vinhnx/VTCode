@@ -102,11 +102,17 @@ pub(crate) async fn handle_tool_execution_result(
             }
         }
         ToolExecutionStatus::Failure { error } => {
-            // Add error result to history
-            let error_msg = format!("Tool '{}' execution failed: {}", tool_name, error);
-            ctx.renderer.line(MessageStyle::Error, &error_msg)?;
+            // Add error result to history — use sanitized, categorised message
+            let (primary_msg, hint) = super::turn_helpers::format_tool_error_for_user(
+                tool_name,
+                &error.to_string(),
+            );
+            ctx.renderer.line(MessageStyle::Error, &primary_msg)?;
+            if let Some(h) = &hint {
+                ctx.renderer.line(MessageStyle::Info, h)?;
+            }
 
-            let error_content = serde_json::json!({"error": error_msg});
+            let error_content = serde_json::json!({"error": primary_msg});
             let limited_content = truncate_message_content(&error_content.to_string());
             working_history.push(uni::Message::tool_response_with_origin(
                 tool_call_id,
@@ -116,9 +122,14 @@ pub(crate) async fn handle_tool_execution_result(
             enforce_history_limits(working_history);
         }
         ToolExecutionStatus::Timeout { error } => {
-            // Add timeout result to history
-            let error_msg = format!("Tool '{}' timed out: {}", tool_name, error.message);
+            // Add timeout result to history with sanitized message
+            let sanitized = super::turn_helpers::sanitize_error_for_display(&error.message);
+            let error_msg = format!("Tool '{}' timed out: {}", tool_name, sanitized);
             ctx.renderer.line(MessageStyle::Error, &error_msg)?;
+            ctx.renderer.line(
+                MessageStyle::Info,
+                "Hint: The operation exceeded its time limit. Try a smaller scope or increase the timeout.",
+            )?;
 
             let error_content = serde_json::json!({"error": error_msg});
             let limited_content = truncate_message_content(&error_content.to_string());

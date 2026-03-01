@@ -21,7 +21,7 @@ pub(crate) use execution::{
     run_tool_call_with_args,
 };
 pub(crate) use hitl::execute_hitl_tool;
-pub(crate) use status::{ToolExecutionStatus, ToolPipelineOutcome};
+pub(crate) use status::{ToolBatchOutcome, ToolExecutionStatus, ToolPipelineOutcome};
 
 /// Default timeout for tool execution if no policy is configured
 const DEFAULT_TOOL_TIMEOUT: Duration = Duration::from_secs(180);

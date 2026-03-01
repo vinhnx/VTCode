@@ -146,18 +146,17 @@ fn is_relevant_config_event(event: &notify::Event, _workspace_path: &Path) -> bo
 
 /// Get all potential config file paths to watch
 fn get_config_file_paths(workspace_path: &Path) -> Vec<PathBuf> {
-    let mut paths = Vec::new();
-
-    // Core config files
-    paths.push(workspace_path.join("vtcode.toml"));
-    paths.push(workspace_path.join(".vtcode.toml"));
-    paths.push(workspace_path.join(".vtcode").join("theme.toml"));
-
-    // Live-edit directories (workspace-level and dot-folder level)
-    paths.push(workspace_path.join("config"));
-    paths.push(workspace_path.join("theme"));
-    paths.push(workspace_path.join(".vtcode").join("config"));
-    paths.push(workspace_path.join(".vtcode").join("theme"));
+    let mut paths = vec![
+        // Core config files
+        workspace_path.join("vtcode.toml"),
+        workspace_path.join(".vtcode.toml"),
+        workspace_path.join(".vtcode").join("theme.toml"),
+        // Live-edit directories (workspace-level and dot-folder level)
+        workspace_path.join("config"),
+        workspace_path.join("theme"),
+        workspace_path.join(".vtcode").join("config"),
+        workspace_path.join(".vtcode").join("theme"),
+    ];
 
     // Global config (if applicable)
     if let Some(home_dir) = home::home_dir() {

@@ -15,9 +15,8 @@ use reqwest::Client as HttpClient;
 use serde_json::{Map, Value};
 
 use super::common::{
-    execute_token_count_request, map_finish_reason_common, override_base_url,
-    parse_prompt_tokens_from_count_response, parse_response_openai_format, resolve_model,
-    serialize_messages_openai_format, strip_generation_controls_for_token_count,
+    map_finish_reason_common, override_base_url, parse_response_openai_format, resolve_model,
+    serialize_messages_openai_format,
 };
 use super::error_handling::handle_openai_http_error;
 
@@ -134,6 +133,20 @@ impl MoonshotProvider {
             payload.insert("stream".to_string(), Value::Bool(true));
         }
 
+        // Add tools if present (was previously missing — Moonshot supports function calling)
+        if let Some(tools) = &request.tools
+            && let Some(serialized_tools) = super::common::serialize_tools_openai_format(tools)
+        {
+            payload.insert("tools".to_string(), Value::Array(serialized_tools));
+        }
+
+        if let Some(choice) = &request.tool_choice {
+            payload.insert(
+                "tool_choice".to_string(),
+                choice.to_provider_format(PROVIDER_KEY),
+            );
+        }
+
         Ok(Value::Object(payload))
     }
 }
@@ -156,62 +169,6 @@ impl LLMProvider for MoonshotProvider {
             .as_ref()
             .and_then(|b| b.model_supports_reasoning_effort)
             .unwrap_or(false)
-    }
-
-    async fn count_prompt_tokens_exact(
-        &self,
-        request: &LLMRequest,
-    ) -> Result<Option<u32>, LLMError> {
-        // Moonshot tokenizer endpoint documents model + messages payload.
-        // If tools are present, we cannot guarantee exact full-prompt accounting.
-        if request
-            .tools
-            .as_ref()
-            .is_some_and(|tools| !tools.is_empty())
-        {
-            return Ok(None);
-        }
-
-        let mut request = request.clone();
-        if request.model.trim().is_empty() {
-            request.model = self.model.clone();
-        }
-
-        let mut payload = self.convert_to_moonshot_format(&request)?;
-        strip_generation_controls_for_token_count(&mut payload);
-
-        let url = format!(
-            "{}/tokenizers/estimate-token-count",
-            self.base_url.trim_end_matches('/')
-        );
-
-        let response_json = execute_token_count_request(
-            self.http_client.post(&url).bearer_auth(&self.api_key),
-            &payload,
-            PROVIDER_NAME,
-        )
-        .await?;
-
-        let Some(response_json) = response_json else {
-            return Ok(None);
-        };
-
-        let prompt_tokens = parse_prompt_tokens_from_count_response(&response_json).or_else(|| {
-            response_json
-                .get("data")
-                .and_then(|d| d.get("total_tokens"))
-                .and_then(Value::as_u64)
-                .or_else(|| {
-                    response_json
-                        .get("data")
-                        .and_then(|d| d.get("input_tokens"))
-                        .and_then(Value::as_u64)
-                })
-                .or_else(|| response_json.get("total_tokens").and_then(Value::as_u64))
-                .and_then(|raw| u32::try_from(raw).ok())
-        });
-
-        Ok(prompt_tokens)
     }
 
     async fn generate(&self, mut request: LLMRequest) -> Result<LLMResponse, LLMError> {
@@ -315,11 +272,20 @@ impl LLMProvider for MoonshotProvider {
                     if let Some(choices) = value.get("choices").and_then(|c| c.as_array())
                         && let Some(choice) = choices.first()
                     {
-                        if let Some(delta) = choice.get("delta")
-                            && let Some(content) = delta.get("content").and_then(|c| c.as_str())
-                        {
-                            for event in aggregator.handle_content(content) {
-                                let _ = tx.send(Ok(event));
+                        if let Some(delta) = choice.get("delta") {
+                            // Handle reasoning_content field (Kimi K2 Thinking models)
+                            if let Some(reasoning) =
+                                delta.get("reasoning_content").and_then(|c| c.as_str())
+                                && let Some(d) = aggregator.handle_reasoning(reasoning)
+                            {
+                                let _ = tx.send(Ok(LLMStreamEvent::Reasoning { delta: d }));
+                            }
+
+                            // Handle regular content
+                            if let Some(content) = delta.get("content").and_then(|c| c.as_str()) {
+                                for event in aggregator.handle_content(content) {
+                                    let _ = tx.send(Ok(event));
+                                }
                             }
                         }
 
@@ -401,133 +367,5 @@ impl LLMClient for MoonshotProvider {
 
     fn model_id(&self) -> &str {
         &self.model
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::MoonshotProvider;
-    use crate::config::TimeoutsConfig;
-    use crate::config::constants::models;
-    use crate::llm::provider::{LLMProvider, LLMRequest, Message, ToolDefinition};
-    use std::sync::Arc;
-    use wiremock::matchers::{method, path};
-    use wiremock::{Mock, MockServer, ResponseTemplate};
-
-    fn sample_request(model: &str) -> LLMRequest {
-        LLMRequest {
-            model: model.to_string(),
-            messages: vec![Message::user("hello".to_string())],
-            ..Default::default()
-        }
-    }
-
-    #[tokio::test]
-    async fn exact_count_uses_moonshot_tokenizer_endpoint() {
-        let server = MockServer::start().await;
-        Mock::given(method("POST"))
-            .and(path("/v1/tokenizers/estimate-token-count"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                "data": { "total_tokens": 44 }
-            })))
-            .mount(&server)
-            .await;
-
-        let provider = MoonshotProvider::new_with_client(
-            "test-key".to_string(),
-            models::moonshot::DEFAULT_MODEL.to_string(),
-            reqwest::Client::new(),
-            format!("{}/v1", server.uri()),
-            TimeoutsConfig::default(),
-        );
-
-        let count = <MoonshotProvider as LLMProvider>::count_prompt_tokens_exact(
-            &provider,
-            &sample_request(models::moonshot::DEFAULT_MODEL),
-        )
-        .await
-        .expect("count should succeed");
-        assert_eq!(count, Some(44));
-    }
-
-    #[tokio::test]
-    async fn exact_count_accepts_usage_prompt_tokens_shape() {
-        let server = MockServer::start().await;
-        Mock::given(method("POST"))
-            .and(path("/v1/tokenizers/estimate-token-count"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                "usage": { "prompt_tokens": 27 }
-            })))
-            .mount(&server)
-            .await;
-
-        let provider = MoonshotProvider::new_with_client(
-            "test-key".to_string(),
-            models::moonshot::DEFAULT_MODEL.to_string(),
-            reqwest::Client::new(),
-            format!("{}/v1", server.uri()),
-            TimeoutsConfig::default(),
-        );
-
-        let count = <MoonshotProvider as LLMProvider>::count_prompt_tokens_exact(
-            &provider,
-            &sample_request(models::moonshot::DEFAULT_MODEL),
-        )
-        .await
-        .expect("count should succeed");
-        assert_eq!(count, Some(27));
-    }
-
-    #[tokio::test]
-    async fn exact_count_returns_none_when_unavailable() {
-        let server = MockServer::start().await;
-        Mock::given(method("POST"))
-            .and(path("/v1/tokenizers/estimate-token-count"))
-            .respond_with(ResponseTemplate::new(404))
-            .mount(&server)
-            .await;
-
-        let provider = MoonshotProvider::new_with_client(
-            "test-key".to_string(),
-            models::moonshot::DEFAULT_MODEL.to_string(),
-            reqwest::Client::new(),
-            format!("{}/v1", server.uri()),
-            TimeoutsConfig::default(),
-        );
-
-        let count = <MoonshotProvider as LLMProvider>::count_prompt_tokens_exact(
-            &provider,
-            &sample_request(models::moonshot::DEFAULT_MODEL),
-        )
-        .await
-        .expect("count should succeed");
-        assert_eq!(count, None);
-    }
-
-    #[tokio::test]
-    async fn exact_count_returns_none_when_tools_present() {
-        let provider = MoonshotProvider::new("test-key".to_string());
-        let request = LLMRequest {
-            model: models::moonshot::DEFAULT_MODEL.to_string(),
-            messages: vec![Message::user("hello".to_string())],
-            tools: Some(Arc::new(vec![ToolDefinition::function(
-                "get_weather".to_string(),
-                "Get weather".to_string(),
-                serde_json::json!({
-                    "type": "object",
-                    "properties": {
-                        "location": {"type": "string"}
-                    },
-                    "required": ["location"]
-                }),
-            )])),
-            ..Default::default()
-        };
-
-        let count =
-            <MoonshotProvider as LLMProvider>::count_prompt_tokens_exact(&provider, &request)
-                .await
-                .expect("count should succeed");
-        assert_eq!(count, None);
     }
 }

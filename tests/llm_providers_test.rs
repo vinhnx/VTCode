@@ -292,7 +292,7 @@ fn test_request_validation() {
     let gemini = GeminiProvider::new("test_key".to_string());
     let openai = OpenAIProvider::new("test_key".to_string());
     let anthropic = AnthropicProvider::new("test_key".to_string());
-    let openrouter = OpenRouterProvider::new("test_key".to_string());
+    let _openrouter = OpenRouterProvider::new("test_key".to_string());
 
     // Test valid requests
     let valid_gemini_request = LLMRequest {

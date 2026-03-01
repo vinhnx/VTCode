@@ -54,10 +54,10 @@ pub(crate) fn process_llm_response(
     }
 
     if tool_calls.is_empty()
-        && let Some(text) = final_text.clone()
+        && let Some(text) = final_text.as_deref()
         && !text.trim().is_empty()
         && let Some((name, args)) =
-            crate::agent::runloop::text_tools::detect_textual_tool_call(&text)
+            crate::agent::runloop::text_tools::detect_textual_tool_call(text)
     {
         if let Some(validation_failures) =
             validate_tool_args_security(&name, &args, validation_cache, tool_registry)
@@ -74,7 +74,7 @@ pub(crate) fn process_llm_response(
             )?;
         } else {
             let args_json = serde_json::to_string(&args).unwrap_or_else(|_| "{}".to_string());
-            let code_blocks = crate::agent::runloop::text_tools::extract_code_fence_blocks(&text);
+            let code_blocks = crate::agent::runloop::text_tools::extract_code_fence_blocks(text);
             if !code_blocks.is_empty() {
                 crate::agent::runloop::tool_output::render_code_fence_blocks(
                     renderer,
@@ -108,8 +108,8 @@ pub(crate) fn process_llm_response(
         && allow_plan_interview
         && request_user_input_enabled
         && tool_calls.is_empty()
-        && let Some(text) = final_text.clone()
-        && let Some(args) = build_interview_args_from_text(&text)
+        && let Some(text) = final_text.as_deref()
+        && let Some(args) = build_interview_args_from_text(text)
     {
         let args_json = serde_json::to_string(&args).unwrap_or_else(|_| "{}".to_string());
         let call_id = format!("call_interview_{}", conversation_len);
@@ -128,7 +128,7 @@ pub(crate) fn process_llm_response(
             assistant_text: if interpreted_textual_call {
                 String::new()
             } else {
-                final_text.clone().unwrap_or_default()
+                final_text.unwrap_or_default()
             },
             reasoning: split_reasoning_from_text(response.reasoning.as_deref().unwrap_or("")).0,
         });

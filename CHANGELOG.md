@@ -2,6 +2,39 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.85.0 - 2026-03-01
+
+### Highlights
+#### Bug Fixes
+
+- Update contributor handling in changelog template (f1ef0a2c) 
+#### Features
+
+- Add diagnostics visibility toggle in transcript for debug builds (2b339962) 
+### Other Changes
+#### Other
+
+- Refactor diff rendering and styling for consistency and accessibility (3edcf204) 
+- Refactor token counting methods and remove unused tests across providers; update configuration for default provider and model. (55c76984) 
+- Add health check and reconnection methods to MCP provider; enhance error classification and guidance (45fcc200) 
+- Enhance error handling and logging across providers; improve session archive retention and diagnostics (ce94ca83) 
+- Refactor error recovery to use tokio::sync::RwLock; update tool outcome handling and improve cache retrieval methods (76c1789f) 
+- Add support for "show diff" command and improve tool call validation (62051691) 
+- Update color scheme for unified diff background and gutter colors; change terminal theme to improve readability (525653e9) 
+- Add diff theme configuration and improve styling for terminal output (501634f1) 
+- Enhance interactive mode with new keyboard shortcuts and shell mode indicators; update configuration to disable turn timer (87919849) 
+- Refactor input handling and padding logic; enhance shell command validation and error feedback (d520d2ea) 
+- Add file reference metadata handling and update input with aliases (91e39103) 
+- Implement postamble exit summarization with metric calculation and enhance markdown output styling (02d01e99) 
+- Implement code change tracking and exit summary reporting (5e776910) 
+- Refactor session handling to streamline resume logic and enhance message rendering (6654f328) 
+#### Refactors
+
+- Rename sessions command to resume and update related handlers (c63ab822) 
+- Enhance panic handling, optimize agent harness, and improve token efficiency (c68e7ea1) 
+- Enhance error handling and recovery mechanisms; improve error categorization and logging (43a4e099) 
+### Contributors
+@vinhnx
 ## 0.84.1 - 2026-02-28
 
 ### Highlights

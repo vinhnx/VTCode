@@ -3,10 +3,11 @@
 use super::ToolRegistry;
 
 pub(super) fn runtime_sandbox_config_default() -> vtcode_config::SandboxConfig {
-    let mut config = vtcode_config::SandboxConfig::default();
     // Keep legacy behavior for registry instances that never receive workspace config.
-    config.enabled = false;
-    config
+    vtcode_config::SandboxConfig {
+        enabled: false,
+        ..Default::default()
+    }
 }
 
 impl ToolRegistry {

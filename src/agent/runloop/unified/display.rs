@@ -1,3 +1,6 @@
+use crate::agent::runloop::unified::shell::{
+    detect_explicit_run_command, strip_run_command_prefixes,
+};
 use anstyle::{AnsiColor, Color as AnsiColorEnum, Effects, Reset, Style as AnsiStyle};
 use anyhow::{Context, Result};
 use vtcode_core::command_safety::shell_parser::parse_shell_commands_tree_sitter;
@@ -236,6 +239,7 @@ fn highlight_shell_user_input(message: &str) -> Option<String> {
     }
 
     if let Some((prefix_end, command)) = extract_run_command_for_highlight(trimmed) {
+        detect_explicit_run_command(trimmed)?;
         if !is_valid_bash_grammar(strip_matching_backticks(command)) {
             return None;
         }
@@ -294,52 +298,13 @@ fn extract_run_command_for_highlight(input: &str) -> Option<(usize, &str)> {
         return None;
     }
 
-    let mut remainder = &input[index..];
-    let mut consumed = 0usize;
-    while let Some((used, rest)) = consume_leading_wrapper(remainder) {
-        consumed += used;
-        remainder = rest;
-        while let Some(ch) = remainder.chars().next() {
-            if !ch.is_whitespace() {
-                break;
-            }
-            consumed += ch.len_utf8();
-            remainder = &remainder[ch.len_utf8()..];
-        }
-    }
-
-    let command_start = index + consumed;
-    if command_start >= input.len() {
+    let command = strip_run_command_prefixes(&input[index..]);
+    if command.is_empty() {
         return None;
     }
 
-    Some((command_start, &input[command_start..]))
-}
-
-fn consume_leading_wrapper(input: &str) -> Option<(usize, &str)> {
-    let lower = input.to_ascii_lowercase();
-    let candidates = [
-        "unix command ",
-        "shell command ",
-        "command ",
-        "cmd ",
-        "please ",
-        "kindly ",
-        "just ",
-        "quickly ",
-        "quick ",
-        "a quick ",
-        "an quick ",
-    ];
-
-    for candidate in candidates {
-        if lower.starts_with(candidate) {
-            let used = candidate.len();
-            return Some((used, &input[used..]));
-        }
-    }
-
-    None
+    let command_start = input.len().saturating_sub(command.len());
+    Some((command_start, command))
 }
 
 #[cfg(test)]
@@ -381,6 +346,13 @@ mod tests {
         let highlighted =
             highlight_shell_user_input("run unix command ls -la").expect("should highlight");
         assert_eq!(strip_ansi(&highlighted), "run unix command ls -la");
+    }
+
+    #[test]
+    fn preserves_text_with_mixed_wrappers() {
+        let highlighted =
+            highlight_shell_user_input("run command please cargo check").expect("should highlight");
+        assert_eq!(strip_ansi(&highlighted), "run command please cargo check");
     }
 
     #[test]

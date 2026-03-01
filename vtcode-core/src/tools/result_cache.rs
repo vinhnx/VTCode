@@ -165,12 +165,12 @@ impl ToolResultCache {
     }
 
     /// Retrieve a result if cached and fresh - now returns zero-copy Arc by default
-    pub fn get(&mut self, key: &ToolCacheKey) -> Option<Arc<String>> {
+    pub fn get(&self, key: &ToolCacheKey) -> Option<Arc<String>> {
         self.inner.get(key)
     }
 
     /// Get owned value (explicitly clones when needed)
-    pub fn get_owned(&mut self, key: &ToolCacheKey) -> Option<String> {
+    pub fn get_owned(&self, key: &ToolCacheKey) -> Option<String> {
         self.inner.get_owned(key)
     }
 

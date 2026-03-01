@@ -148,6 +148,12 @@ where
             return;
         }
 
+        // Only show ERROR level logs in TUI when explicitly allowed via
+        // ui.show_diagnostics_in_transcript config
+        if level == tracing::Level::ERROR && !crate::ui::tui::panic_hook::show_diagnostics() {
+            return;
+        }
+
         let mut visitor = FieldVisitor::default();
         event.record(&mut visitor);
 

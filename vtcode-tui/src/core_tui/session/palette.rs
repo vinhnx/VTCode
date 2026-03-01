@@ -113,8 +113,9 @@ impl Session {
         {
             let before = &self.input_manager.content()[..start];
             let after = &self.input_manager.content()[end..];
-            let new_content = format!("{}{} {}", before, file_path, after);
-            let new_cursor = start + file_path.len() + 1;
+            let reference_alias = format!("@{}", file_path);
+            let new_content = format!("{}{} {}", before, reference_alias, after);
+            let new_cursor = start + reference_alias.len() + 1;
 
             self.input_manager.set_content(new_content);
             self.input_manager.set_cursor(new_cursor);

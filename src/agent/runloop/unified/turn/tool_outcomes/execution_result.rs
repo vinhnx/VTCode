@@ -1,7 +1,6 @@
 //! Tool execution result handling for turn flow.
 
 use anyhow::Result;
-use vtcode_core::config::constants::defaults::DEFAULT_MAX_CONSECUTIVE_BLOCKED_TOOL_CALLS_PER_TURN;
 use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::notifications::{notify_tool_failure, notify_tool_success};
@@ -37,13 +36,6 @@ fn record_tool_execution(
         ctx.autonomous_executor.record_execution(tool_name, success);
     }
     ctx.telemetry.record_tool_usage(tool_name, success);
-}
-
-fn max_consecutive_blocked_tool_calls_per_turn(ctx: &TurnProcessingContext<'_>) -> usize {
-    ctx.vt_cfg
-        .map(|cfg| cfg.tools.max_consecutive_blocked_tool_calls_per_turn)
-        .filter(|value| *value > 0)
-        .unwrap_or(DEFAULT_MAX_CONSECUTIVE_BLOCKED_TOOL_CALLS_PER_TURN)
 }
 
 fn is_blocked_or_denied_failure(error: &str) -> bool {
@@ -657,15 +649,24 @@ async fn handle_failure<'a>(
             .tool_registry
             .is_plan_mode_allowed(tool_name, args_val);
 
-    let error_msg = format!("Tool '{}' execution failed: {}", tool_name, error);
-    tracing::debug!(tool = %tool_name, error = %error, "Tool execution failed");
+    let (user_msg, hint) =
+        crate::agent::runloop::unified::turn::turn_helpers::format_tool_error_for_user(
+            tool_name, &error_str,
+        );
+    if let Some(h) = &hint {
+        // Append the recovery hint as the first line the LLM will see.
+        tracing::debug!(tool = %tool_name, error = %error, hint = %h, "Tool execution failed");
+    } else {
+        tracing::debug!(tool = %tool_name, error = %error, "Tool execution failed");
+    }
+    let error_msg = user_msg;
     if is_plan_mode_denial {
         emit_turn_metric_log(
             t_ctx.ctx,
             "plan_mode_denial",
             tool_name,
             t_ctx.ctx.harness_state.consecutive_blocked_tool_calls,
-            max_consecutive_blocked_tool_calls_per_turn(t_ctx.ctx),
+            super::handlers::max_consecutive_blocked_tool_calls_per_turn(t_ctx.ctx),
         );
     }
 
@@ -680,7 +681,7 @@ async fn handle_failure<'a>(
 
     if blocked_or_denied_failure {
         let streak = t_ctx.ctx.harness_state.record_blocked_tool_call();
-        let max_streak = max_consecutive_blocked_tool_calls_per_turn(t_ctx.ctx);
+        let max_streak = super::handlers::max_consecutive_blocked_tool_calls_per_turn(t_ctx.ctx);
         if streak > max_streak {
             emit_turn_metric_log(
                 t_ctx.ctx,
@@ -722,7 +723,10 @@ async fn handle_timeout(
         );
     }
 
-    let error_msg = format!("Tool '{}' timed out: {}", tool_name, error.message);
+    let sanitized = crate::agent::runloop::unified::turn::turn_helpers::sanitize_error_for_display(
+        &error.message,
+    );
+    let error_msg = format!("Tool '{}' timed out: {}", tool_name, sanitized);
     tracing::debug!(tool = %tool_name, error = %error.message, "Tool timed out");
 
     push_tool_error_response(t_ctx, tool_call_id, tool_name, error_msg, "timeout").await;

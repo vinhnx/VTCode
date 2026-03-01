@@ -86,7 +86,7 @@ impl Default for AnthropicConfig {
 
 #[inline]
 fn default_count_tokens_enabled() -> bool {
-    true
+    false
 }
 
 /// Configuration for Anthropic's tool search feature (advanced-tool-use beta)

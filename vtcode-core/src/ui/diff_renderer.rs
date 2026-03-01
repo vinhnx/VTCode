@@ -1,10 +1,10 @@
 use crate::config::constants::diff as diff_constants;
 use crate::ui::git_config::GitColorConfig;
 use crate::utils::style_helpers::style_from_color_name;
-use anstyle::{AnsiColor, Color, Reset, Style};
-use anstyle_git;
+use anstyle::{Reset, Style};
 use std::fmt::Write as _;
 use std::path::Path;
+use vtcode_commons::styling::DiffColorPalette;
 
 pub(crate) struct GitDiffPalette {
     pub(crate) bullet: Style,
@@ -23,34 +23,13 @@ fn strip_diff_background(style: Style) -> Style {
     style.bg_color(None)
 }
 
-fn standard_diff_style(style: Style, color: AnsiColor) -> Style {
-    Style::new()
-        .fg_color(Some(Color::Ansi(color)))
-        .effects(style.get_effects())
-}
-
 impl GitDiffPalette {
     fn new(use_colors: bool) -> Self {
-        let git_parse = |git_color: &str| -> Style {
-            if use_colors {
-                anstyle_git::parse(git_color).unwrap_or(
-                    // Fallback to original behavior for backwards compatibility
-                    match git_color {
-                        "new" => style_from_color_name("green"),
-                        "old" => style_from_color_name("red"),
-                        "context" => Style::new().dimmed(),
-                        "meta" | "header" => style_from_color_name("cyan"),
-                        _ => Style::new(),
-                    },
-                )
-            } else {
-                Style::new()
-            }
-        };
-
-        let added = standard_diff_style(git_parse("new"), AnsiColor::Green);
-        let removed = standard_diff_style(git_parse("old"), AnsiColor::Red);
-        let header = standard_diff_style(git_parse("meta"), AnsiColor::Cyan);
+        // Use consolidated DiffColorPalette with standard ANSI colors (no bold)
+        let palette = DiffColorPalette::default();
+        let added = palette.added_style();
+        let removed = palette.removed_style();
+        let header = palette.header_style();
 
         Self {
             bullet: if use_colors {
@@ -64,8 +43,12 @@ impl GitDiffPalette {
             stat_removed: strip_diff_background(removed),
             line_added: strip_diff_background(added),
             line_removed: strip_diff_background(removed),
-            line_context: strip_diff_background(git_parse("context")),
-            line_header: strip_diff_background(header), // Git uses "meta" for headers
+            line_context: if use_colors {
+                Style::new().dimmed()
+            } else {
+                Style::new()
+            },
+            line_header: strip_diff_background(header),
             line_number: if use_colors {
                 style_from_color_name("cyan")
             } else {
@@ -80,9 +63,11 @@ impl GitDiffPalette {
             return Self::new(false);
         }
 
-        let added = standard_diff_style(config.diff_new, AnsiColor::Green);
-        let removed = standard_diff_style(config.diff_old, AnsiColor::Red);
-        let header = standard_diff_style(config.diff_header, AnsiColor::Cyan);
+        // Use consolidated DiffColorPalette - ignore git config theme for consistency
+        let palette = DiffColorPalette::default();
+        let added = palette.added_style();
+        let removed = palette.removed_style();
+        let header = palette.header_style();
 
         Self {
             bullet: style_from_color_name("cyan"),
@@ -93,7 +78,7 @@ impl GitDiffPalette {
             line_added: strip_diff_background(added),
             line_removed: strip_diff_background(removed),
             line_context: strip_diff_background(config.diff_context),
-            line_header: strip_diff_background(header), // Use the configuration from Git
+            line_header: strip_diff_background(header),
             line_number: style_from_color_name("cyan"),
         }
     }

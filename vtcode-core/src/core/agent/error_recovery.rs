@@ -21,16 +21,8 @@ pub struct RecentError {
     pub error_type: ErrorType,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum ErrorType {
-    ToolExecution,
-    CircuitBreaker,
-    Timeout,
-    PermissionDenied,
-    InvalidArguments,
-    ResourceNotFound,
-    Other,
-}
+// Re-export the canonical ErrorType from core::error_recovery
+pub use crate::core::error_recovery::ErrorType;
 
 #[derive(Debug, Clone)]
 pub struct CircuitEvent {
@@ -165,7 +157,7 @@ impl ErrorRecoveryState {
                 std::collections::HashSet::new(),
             ));
             entry.0 += 1;
-            entry.2.insert(error.error_type.clone());
+            entry.2.insert(error.error_type);
         }
 
         tool_errors

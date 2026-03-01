@@ -147,6 +147,8 @@ pub async fn run_tui(
         &mut input_listener,
         event_channels,
         options.event_callback,
+        surface.use_alternate(),
+        keyboard_flags,
     )
     .await;
 

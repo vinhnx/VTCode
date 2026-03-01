@@ -237,13 +237,6 @@ impl LLMProvider for LmStudioProvider {
         self.inner.generate(request).await
     }
 
-    async fn count_prompt_tokens_exact(
-        &self,
-        request: &LLMRequest,
-    ) -> Result<Option<u32>, LLMError> {
-        self.inner.count_prompt_tokens_exact(request).await
-    }
-
     async fn stream(&self, request: LLMRequest) -> Result<LLMStream, LLMError> {
         self.inner.stream(request).await
     }

@@ -2,7 +2,6 @@ use anyhow::Result;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::sync::RwLock as StdRwLock;
 use std::time::Instant;
 use tokio::sync::RwLock;
 
@@ -27,7 +26,7 @@ use vtcode_core::llm::provider as uni;
 use vtcode_core::notifications::{CompletionStatus, NotificationEvent, send_global_notification};
 use vtcode_core::tools::ToolResultCache;
 use vtcode_core::tools::{ApprovalRecorder, ToolRegistry};
-use vtcode_core::utils::ansi::AnsiRenderer;
+use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_tui::{InlineHandle, InlineSession};
 
 // Using `tool_output_handler::handle_pipeline_output_from_turn_ctx` adapter where needed
@@ -40,7 +39,6 @@ use vtcode_core::core::agent::error_recovery::ErrorType;
 
 pub struct TurnLoopOutcome {
     pub result: TurnLoopResult,
-    pub working_history: Vec<uni::Message>,
     pub turn_modified_files: BTreeSet<PathBuf>,
 }
 
@@ -72,7 +70,7 @@ pub struct TurnLoopContext<'a> {
     pub telemetry: &'a Arc<vtcode_core::core::telemetry::TelemetryManager>,
     pub autonomous_executor: &'a Arc<vtcode_core::tools::autonomous_executor::AutonomousExecutor>,
     pub error_recovery:
-        &'a Arc<StdRwLock<vtcode_core::core::agent::error_recovery::ErrorRecoveryState>>,
+        &'a Arc<RwLock<vtcode_core::core::agent::error_recovery::ErrorRecoveryState>>,
     pub harness_state: &'a mut HarnessTurnState,
     pub harness_emitter: Option<&'a HarnessEventEmitter>,
     pub config: &'a mut AgentConfig,
@@ -113,7 +111,7 @@ impl<'a> TurnLoopContext<'a> {
         telemetry: &'a Arc<vtcode_core::core::telemetry::TelemetryManager>,
         autonomous_executor: &'a Arc<vtcode_core::tools::autonomous_executor::AutonomousExecutor>,
         error_recovery: &'a Arc<
-            StdRwLock<vtcode_core::core::agent::error_recovery::ErrorRecoveryState>,
+            RwLock<vtcode_core::core::agent::error_recovery::ErrorRecoveryState>,
         >,
         harness_state: &'a mut HarnessTurnState,
         harness_emitter: Option<&'a HarnessEventEmitter>,
@@ -186,10 +184,63 @@ impl<'a> TurnLoopContext<'a> {
     }
 }
 
+fn has_tool_response_since(messages: &[uni::Message], baseline_len: usize) -> bool {
+    messages
+        .get(baseline_len..)
+        .is_some_and(|recent| recent.iter().any(|msg| msg.role == uni::MessageRole::Tool))
+}
+
+fn maybe_recover_after_post_tool_llm_failure(
+    renderer: &mut AnsiRenderer,
+    working_history: &[uni::Message],
+    err: &anyhow::Error,
+    step_count: usize,
+    turn_history_start_len: usize,
+    failure_stage: &'static str,
+) -> Result<bool> {
+    let has_partial_tool_progress =
+        has_tool_response_since(working_history, turn_history_start_len);
+    if !has_partial_tool_progress {
+        return Ok(false);
+    }
+
+    let err_cat = vtcode_commons::classify_anyhow_error(err);
+    let transient_hint = if err_cat.is_retryable() {
+        " (transient — may resolve on retry)"
+    } else {
+        ""
+    };
+    let summary = format!(
+        "Tool execution completed, but the model follow-up failed{}. Output above is valid.",
+        transient_hint,
+    );
+    renderer.line(MessageStyle::Info, &summary)?;
+    renderer.line(
+        MessageStyle::Info,
+        &format!("Follow-up error category: {}", err_cat.user_label()),
+    )?;
+    if !err_cat.is_retryable() {
+        renderer.line(
+            MessageStyle::Info,
+            "Tip: rerun with a narrower prompt or switch provider/model for the follow-up.",
+        )?;
+    }
+
+    tracing::warn!(
+        error = %err,
+        step = step_count,
+        stage = failure_stage,
+        category = ?err_cat,
+        retryable = err_cat.is_retryable(),
+        "Recovered turn after post-tool LLM phase failure"
+    );
+    Ok(true)
+}
+
 // For `TurnLoopContext`, we will reuse the generic `handle_pipeline_output` via an adapter below.
 
 pub async fn run_turn_loop(
-    mut working_history: Vec<uni::Message>,
+    working_history: &mut Vec<uni::Message>,
     mut ctx: TurnLoopContext<'_>,
     session_end_reason: &mut crate::hooks::lifecycle::SessionEndReason,
 ) -> Result<TurnLoopOutcome> {
@@ -217,6 +268,7 @@ pub async fn run_turn_loop(
 
     let mut step_count = 0;
     let mut current_max_tool_loops = turn_config.max_tool_loops;
+    let turn_history_start_len = working_history.len();
     // Optimization: Interned signatures with exponential backoff for loop detection
     let mut repeated_tool_attempts = LoopTracker::new();
 
@@ -236,31 +288,21 @@ pub async fn run_turn_loop(
     ctx.autonomous_executor.reset_turn_loop_detection();
 
     loop {
-        if handle_steering_messages(&mut ctx, &mut working_history, &mut result).await? {
+        if handle_steering_messages(&mut ctx, working_history, &mut result).await? {
             break;
         }
 
         step_count += 1;
         ctx.telemetry.record_turn();
 
-        if handle_pre_request_action(
-            &mut ctx,
-            &mut working_history,
-            session_end_reason,
-            &mut result,
-        )
-        .await?
+        if handle_pre_request_action(&mut ctx, working_history, session_end_reason, &mut result)
+            .await?
         {
             break;
         }
 
-        if maybe_handle_plan_mode_exit_trigger(
-            &mut ctx,
-            &mut working_history,
-            step_count,
-            &mut result,
-        )
-        .await?
+        if maybe_handle_plan_mode_exit_trigger(&mut ctx, working_history, step_count, &mut result)
+            .await?
         {
             break;
         }
@@ -291,7 +333,7 @@ pub async fn run_turn_loop(
             tool_result_cache: ctx.tool_result_cache,
             approval_recorder: ctx.approval_recorder,
             decision_ledger: ctx.decision_ledger,
-            working_history: &mut working_history,
+            working_history,
             tool_registry: ctx.tool_registry,
             tools: ctx.tools,
             tool_catalog: ctx.tool_catalog,
@@ -341,18 +383,43 @@ pub async fn run_turn_loop(
             Ok(val) => val,
             Err(err) => {
                 // Record the error in the recovery state for diagnostics
-                if let Ok(mut recovery) = ctx.error_recovery.write() {
-                    recovery.record_error("llm_request", format!("{:#}", err), ErrorType::Other);
-                }
+                let mut recovery = ctx.error_recovery.write().await;
+                recovery.record_error("llm_request", format!("{:#}", err), ErrorType::Other);
 
                 // execute_llm_request already performs retry/backoff for retryable provider errors.
                 // Avoid a second retry layer here, which can consume turn budget and cause timeouts.
                 // Restore input status on request failure to clear loading/shimmer state.
-                ctx.handle
+                turn_processing_ctx
+                    .handle
                     .set_input_status(restore_status_left.clone(), restore_status_right.clone());
-                ctx.input_status_state.left = restore_status_left;
-                ctx.input_status_state.right = restore_status_right;
-                display_error(ctx.renderer, "LLM request failed", &err)?;
+                turn_processing_ctx.input_status_state.left = restore_status_left;
+                turn_processing_ctx.input_status_state.right = restore_status_right;
+
+                if maybe_recover_after_post_tool_llm_failure(
+                    turn_processing_ctx.renderer,
+                    turn_processing_ctx.working_history,
+                    &err,
+                    step_count,
+                    turn_history_start_len,
+                    "execute_llm_request",
+                )? {
+                    result = TurnLoopResult::Completed;
+                    break;
+                }
+
+                display_error(turn_processing_ctx.renderer, "LLM request failed", &err)?;
+                // Show recovery hints derived from the canonical error category
+                {
+                    let err_cat = vtcode_commons::classify_anyhow_error(&err);
+                    let suggestions = err_cat.recovery_suggestions();
+                    if !suggestions.is_empty() {
+                        let hint = suggestions.join("; ");
+                        turn_processing_ctx.renderer.line(
+                            vtcode_core::utils::ansi::MessageStyle::Info,
+                            &format!("Hint: {}", hint),
+                        )?;
+                    }
+                }
                 // Log error via tracing instead of polluting conversation history
                 // Adding error messages as assistant content can poison future turns
                 tracing::error!(error = %err, step = step_count, "LLM request failed");
@@ -378,7 +445,7 @@ pub async fn run_turn_loop(
             && crate::agent::runloop::unified::turn::turn_processing::plan_mode_interview_ready(
                 turn_processing_ctx.session_stats,
             );
-        let mut processing_result = process_llm_response(
+        let mut processing_result = match process_llm_response(
             &response,
             turn_processing_ctx.renderer,
             turn_processing_ctx.working_history.len(),
@@ -387,7 +454,35 @@ pub async fn run_turn_loop(
             turn_config.request_user_input_enabled,
             Some(&validation_cache),
             Some(turn_processing_ctx.tool_registry),
-        )?;
+        ) {
+            Ok(result) => result,
+            Err(err) => {
+                let err_cat = vtcode_commons::classify_anyhow_error(&err);
+                if err_cat.is_retryable() {
+                    tracing::warn!(
+                        error = %err,
+                        step = step_count,
+                        category = ?err_cat,
+                        "Response parse failed with transient error; skipping extra request retry"
+                    );
+                }
+
+                let mut recovery = ctx.error_recovery.write().await;
+                recovery.record_error("llm_response_parse", format!("{:#}", err), ErrorType::Other);
+                if maybe_recover_after_post_tool_llm_failure(
+                    turn_processing_ctx.renderer,
+                    turn_processing_ctx.working_history,
+                    &err,
+                    step_count,
+                    turn_history_start_len,
+                    "process_llm_response",
+                )? {
+                    result = TurnLoopResult::Completed;
+                    break;
+                }
+                return Err(err);
+            }
+        };
         if turn_processing_ctx.session_stats.is_plan_mode()
             && turn_config.request_user_input_enabled
         {
@@ -419,7 +514,7 @@ pub async fn run_turn_loop(
         }
 
         // Handle the turn processing result (dispatch tool calls or finish turn)
-        match handle_turn_processing_result(HandleTurnProcessingResultParams {
+        let turn_outcome_result = handle_turn_processing_result(HandleTurnProcessingResultParams {
             ctx: &mut turn_processing_ctx,
             processing_result,
             response_streamed,
@@ -430,8 +525,32 @@ pub async fn run_turn_loop(
             max_tool_loops: current_max_tool_loops,
             tool_repeat_limit: turn_config.tool_repeat_limit,
         })
-        .await?
-        {
+        .await;
+        let turn_outcome = match turn_outcome_result {
+            Ok(outcome) => outcome,
+            Err(err) => {
+                // Record result-handler errors for diagnostics (mirrors llm_request recording)
+                let mut recovery = ctx.error_recovery.write().await;
+                recovery.record_error(
+                    "turn_result_handler",
+                    format!("{:#}", err),
+                    ErrorType::ToolExecution,
+                );
+                if maybe_recover_after_post_tool_llm_failure(
+                    ctx.renderer,
+                    working_history,
+                    &err,
+                    step_count,
+                    turn_history_start_len,
+                    "handle_turn_processing_result",
+                )? {
+                    result = TurnLoopResult::Completed;
+                    break;
+                }
+                return Err(err);
+            }
+        };
+        match turn_outcome {
             TurnHandlerOutcome::Continue => {
                 // Update token usage before continuing loop
                 ctx.context_manager.update_token_usage(&response_usage);
@@ -468,7 +587,6 @@ pub async fn run_turn_loop(
     // Final outcome with the correct result status
     Ok(TurnLoopOutcome {
         result,
-        working_history,
         turn_modified_files,
     })
 }
@@ -512,5 +630,42 @@ async fn emit_turn_outcome_notification(result: &TurnLoopResult) {
         && let Err(err) = send_global_notification(notification).await
     {
         tracing::debug!(error = %err, "Failed to emit turn outcome notification");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::has_tool_response_since;
+    use vtcode_core::llm::provider as uni;
+
+    #[test]
+    fn has_tool_response_since_detects_new_tool_message() {
+        let messages = vec![
+            uni::Message::user("run script".to_string()),
+            uni::Message::assistant("".to_string()),
+            uni::Message::tool_response("call_1".to_string(), "ok".to_string()),
+        ];
+
+        assert!(has_tool_response_since(&messages, 1));
+    }
+
+    #[test]
+    fn has_tool_response_since_ignores_non_tool_messages() {
+        let messages = vec![
+            uni::Message::user("hello".to_string()),
+            uni::Message::assistant("done".to_string()),
+        ];
+
+        assert!(!has_tool_response_since(&messages, 0));
+    }
+
+    #[test]
+    fn has_tool_response_since_handles_baseline_past_end() {
+        let messages = vec![uni::Message::tool_response(
+            "call_1".to_string(),
+            "ok".to_string(),
+        )];
+
+        assert!(!has_tool_response_since(&messages, 10));
     }
 }
