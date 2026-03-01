@@ -287,7 +287,7 @@ fn default_message_block_spacing() -> bool {
 }
 
 fn default_show_turn_timer() -> bool {
-    true
+    false
 }
 
 fn default_show_diagnostics_in_transcript() -> bool {

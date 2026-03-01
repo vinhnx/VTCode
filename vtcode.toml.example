@@ -810,6 +810,11 @@ safe_colors_only = false
 # - "dark": Force dark mode theme selection
 color_scheme_mode = "auto"
 
+# Show per-turn elapsed timer line after completed turns.
+# When enabled, displays "Worked for Xs/m/h" after each completed turn.
+# Default: false (disabled)
+show_turn_timer = false
+
 
 # Status line configuration
 [ui.status_line]

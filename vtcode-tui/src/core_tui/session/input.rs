@@ -45,6 +45,9 @@ struct InputLayout {
     cursor_column: u16,
 }
 
+const SHELL_MODE_BORDER_TITLE: &str = " ! Shell mode ";
+const SHELL_MODE_STATUS_HINT: &str = "Shell mode (!): direct command execution";
+
 impl Session {
     pub(super) fn render_input(&mut self, frame: &mut Frame<'_>, area: Rect) {
         frame.render_widget(Clear, area);
@@ -72,12 +75,24 @@ impl Session {
         }
 
         let background_style = self.styles.input_background_style();
-        let block = Block::new().style(background_style).padding(Padding::new(
+        let shell_mode_title = self.shell_mode_border_title();
+        let mut block = if shell_mode_title.is_some() {
+            Block::bordered()
+        } else {
+            Block::new()
+        };
+        block = block.style(background_style).padding(Padding::new(
             ui::INLINE_INPUT_PADDING_HORIZONTAL,
             ui::INLINE_INPUT_PADDING_HORIZONTAL,
             ui::INLINE_INPUT_PADDING_VERTICAL,
             ui::INLINE_INPUT_PADDING_VERTICAL,
         ));
+        if let Some(title) = shell_mode_title {
+            block = block
+                .title(title)
+                .border_type(super::terminal_capabilities::get_border_type())
+                .border_style(self.styles.accent_style().add_modifier(Modifier::BOLD));
+        }
         let inner = block.inner(input_area);
         let input_render = self.build_input_render(inner.width, inner.height);
         let paragraph = Paragraph::new(input_render.text)
@@ -382,7 +397,7 @@ impl Session {
             return None;
         }
 
-        let left = self
+        let mut left = self
             .input_status_left
             .as_ref()
             .map(|value| value.trim().to_owned())
@@ -392,6 +407,13 @@ impl Session {
             .as_ref()
             .map(|value| value.trim().to_owned())
             .filter(|value| !value.is_empty());
+
+        if let Some(shell_hint) = self.shell_mode_status_hint() {
+            left = Some(match left {
+                Some(existing) => format!("{existing} · {shell_hint}"),
+                None => shell_hint.to_string(),
+            });
+        }
 
         // Build scroll indicator if enabled
         let scroll_indicator = if ui::SCROLL_INDICATOR_ENABLED {
@@ -455,6 +477,18 @@ impl Session {
         }
 
         Some(Line::from(spans))
+    }
+
+    pub(crate) fn input_uses_shell_prefix(&self) -> bool {
+        self.input_manager.content().trim_start().starts_with('!')
+    }
+
+    pub(crate) fn shell_mode_border_title(&self) -> Option<&'static str> {
+        self.input_uses_shell_prefix().then_some(SHELL_MODE_BORDER_TITLE)
+    }
+
+    fn shell_mode_status_hint(&self) -> Option<&'static str> {
+        self.input_uses_shell_prefix().then_some(SHELL_MODE_STATUS_HINT)
     }
 
     /// Build scroll indicator string with percentage
