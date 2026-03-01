@@ -55,6 +55,28 @@ Runs comprehensive code quality checks (same as CI pipeline).
 -   Test execution
 -   Documentation generation
 
+### `perf/` - Local Performance Workflow
+
+Performance scripts are grouped under `scripts/perf` and are intentionally local/manual (not CI-gated).
+
+```bash
+# Capture a baseline (writes .vtcode/perf/baseline.json + logs)
+./scripts/perf/baseline.sh baseline
+
+# Capture current metrics (writes .vtcode/perf/latest.json + logs)
+./scripts/perf/baseline.sh latest
+
+# Compare baseline vs latest
+./scripts/perf/compare.sh
+
+# Build release binary for profiling (line tables + frame pointers)
+./scripts/perf/profile.sh
+
+# Local-only CPU tuned builds/runs
+./scripts/perf/native-build.sh
+./scripts/perf/native-run.sh -- --version
+```
+
 ### `release.sh` - Release Management
 
 Creates multi-crate releases for VT Code using [`cargo-release`](https://github.com/crate-ci/cargo-release).

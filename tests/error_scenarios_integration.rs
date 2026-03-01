@@ -121,7 +121,7 @@ mod error_scenarios {
                     backoff,
                 } => {
                     assert!(
-                        max_attempts >= 1 && max_attempts <= 10,
+                        (1..=10).contains(&max_attempts),
                         "{:?} has unreasonable max_attempts={}",
                         cat,
                         max_attempts

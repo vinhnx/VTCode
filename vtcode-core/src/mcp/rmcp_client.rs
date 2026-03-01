@@ -78,18 +78,27 @@ impl RmcpClient {
             let program_name = program.to_string_lossy().into_owned();
             let provider_label = provider_name.clone();
             Some(tokio::spawn(async move {
-                let mut reader = BufReader::new(stderr).lines();
+                let mut reader = BufReader::new(stderr);
+                let mut line = String::new();
                 loop {
-                    match reader.next_line().await {
-                        Ok(Some(line)) => {
+                    line.clear();
+                    match reader.read_line(&mut line).await {
+                        Ok(0) => break,
+                        Ok(_) => {
+                            let mut trimmed = line.as_str();
+                            if let Some(stripped) = trimmed.strip_suffix('\n') {
+                                trimmed = stripped;
+                            }
+                            if let Some(stripped) = trimmed.strip_suffix('\r') {
+                                trimmed = stripped;
+                            }
                             info!(
                                 provider = provider_label.as_str(),
                                 program = program_name.as_str(),
-                                message = line.as_str(),
+                                message = trimmed,
                                 "MCP server stderr"
                             );
                         }
-                        Ok(None) => break,
                         Err(error) => {
                             warn!(
                                 provider = provider_label.as_str(),

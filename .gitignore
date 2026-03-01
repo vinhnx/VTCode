@@ -37,6 +37,7 @@ GOOGLE_API_KEY
 *.log
 logs/
 *.log.*
+.vtcode/perf/
 
 # Temporary Files
 *.tmp

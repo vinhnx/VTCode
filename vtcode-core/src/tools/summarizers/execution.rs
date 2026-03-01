@@ -18,6 +18,7 @@
 use super::{Summarizer, truncate_line, truncate_to_tokens};
 use anyhow::Result;
 use serde_json::Value;
+use std::collections::VecDeque;
 
 /// Summarizer for bash/shell execution results
 pub struct BashSummarizer {
@@ -195,22 +196,32 @@ fn parse_bash_output(output: &str, metadata: Option<&Value>) -> BashResult {
 
 /// Parse output text into head/tail lines
 fn parse_output_lines(output: &str, result: &mut BashResult) {
-    let lines: Vec<&str> = output.lines().collect();
-    result.total_lines = lines.len();
+    const HEAD_LINES: usize = 5;
+    const TAIL_LINES: usize = 3;
+
+    result.total_lines = 0;
     result.total_bytes = output.len();
+    result.head_lines.clear();
+    result.tail_lines.clear();
 
-    // Head lines (first 5)
-    result.head_lines = lines.iter().take(5).map(|line| line.to_string()).collect();
+    let mut tail: VecDeque<String> = VecDeque::with_capacity(TAIL_LINES);
+    for line in output.lines() {
+        result.total_lines += 1;
+        if result.head_lines.len() < HEAD_LINES {
+            result.head_lines.push(line.to_string());
+        }
 
-    // Tail lines (last 3) if output is long
-    if lines.len() > 8 {
-        result.tail_lines = lines
-            .iter()
-            .rev()
-            .take(3)
-            .rev()
-            .map(|line| line.to_string())
-            .collect();
+        if TAIL_LINES > 0 {
+            if tail.len() == TAIL_LINES {
+                tail.pop_front();
+            }
+            tail.push_back(line.to_string());
+        }
+    }
+
+    // Tail lines (last 3) if output is long.
+    if result.total_lines > HEAD_LINES + TAIL_LINES {
+        result.tail_lines = tail.into_iter().collect();
     }
 }
 

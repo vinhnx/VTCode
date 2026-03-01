@@ -41,7 +41,7 @@ pub async fn handle_trajectory_command(
     let log_path = file.unwrap_or_else(|| workspace.join(".vtcode/logs/trajectory.jsonl"));
     let f =
         File::open(&log_path).with_context(|| format!("Failed to open {}", log_path.display()))?;
-    let reader = BufReader::new(f);
+    let mut reader = BufReader::new(f);
 
     let mut class_counts: HashMap<String, usize> = HashMap::new();
     let mut model_counts: HashMap<String, usize> = HashMap::new();
@@ -51,12 +51,17 @@ pub async fn handle_trajectory_command(
     let mut total_tools = 0;
     let mut recent_timestamps: Vec<i64> = Vec::new();
 
-    for line in reader.lines() {
-        let line = line?;
-        if line.trim().is_empty() {
+    let mut line = String::new();
+    loop {
+        line.clear();
+        if reader.read_line(&mut line)? == 0 {
+            break;
+        }
+        let raw = line.trim_end_matches(['\n', '\r']);
+        if raw.trim().is_empty() {
             continue;
         }
-        if let Ok(rec) = serde_json::from_str::<Rec>(&line) {
+        if let Ok(rec) = serde_json::from_str::<Rec>(raw) {
             match rec {
                 Rec::Route {
                     selected_model,
@@ -96,8 +101,7 @@ pub async fn handle_trajectory_command(
     // Show time range if we have timestamps
     if !recent_timestamps.is_empty() {
         recent_timestamps.sort();
-        if let (Some(oldest), Some(newest)) =
-            (recent_timestamps.first(), recent_timestamps.last())
+        if let (Some(oldest), Some(newest)) = (recent_timestamps.first(), recent_timestamps.last())
         {
             let oldest_time = format_timestamp(*oldest);
             let newest_time = format_timestamp(*newest);

@@ -77,22 +77,24 @@ pub(super) fn preprocess_terminal_stdout<'a>(
 
     let filtered_text =
         if stdout.contains("MallocStackLogging:") || stdout.contains("malloc: enabling abort()") {
-            let lines: Vec<&str> = stdout.lines().collect();
-            let filtered: Vec<&str> = lines
-                .iter()
-                .filter(|line| {
-                    !line.contains("MallocStackLogging:")
-                        && !line.contains("malloc: enabling abort()")
-                        && !line.contains("can't turn off malloc stack logging")
-                })
-                .copied()
-                .collect();
+            let mut filtered = String::with_capacity(stdout.len());
+            let mut removed_any = false;
 
-            if filtered.len() == lines.len() {
-                None
-            } else {
-                Some(filtered.join("\n"))
+            for line in stdout.lines() {
+                if line.contains("MallocStackLogging:")
+                    || line.contains("malloc: enabling abort()")
+                    || line.contains("can't turn off malloc stack logging")
+                {
+                    removed_any = true;
+                    continue;
+                }
+                if !filtered.is_empty() {
+                    filtered.push('\n');
+                }
+                filtered.push_str(line);
             }
+
+            removed_any.then_some(filtered)
         } else {
             None
         };

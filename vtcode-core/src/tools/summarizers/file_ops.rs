@@ -15,6 +15,7 @@
 use super::{Summarizer, truncate_line, truncate_to_tokens};
 use anyhow::Result;
 use serde_json::Value;
+use std::collections::VecDeque;
 
 /// Summarizer for read_file results
 pub struct ReadSummarizer {
@@ -180,24 +181,29 @@ struct EditStats {
 
 /// Parse read_file output to extract statistics
 fn parse_read_output(output: &str) -> ReadStats {
-    let mut stats = ReadStats::default();
+    let mut stats = ReadStats {
+        total_chars: output.len(),
+        ..ReadStats::default()
+    };
 
-    let lines: Vec<&str> = output.lines().collect();
-    stats.total_lines = lines.len();
-    stats.total_chars = output.len();
+    const PREVIEW_LINES: usize = 10;
+    const SUFFIX_LINES: usize = 3;
 
-    // Get preview lines (first 10)
-    stats.preview_lines = lines.iter().take(10).map(|line| line.to_string()).collect();
+    let mut tail: VecDeque<String> = VecDeque::with_capacity(SUFFIX_LINES);
+    for line in output.lines() {
+        stats.total_lines += 1;
+        if stats.preview_lines.len() < PREVIEW_LINES {
+            stats.preview_lines.push(line.to_string());
+        }
 
-    // Get suffix lines (last 3)
-    if lines.len() > 13 {
-        stats.suffix_lines = lines
-            .iter()
-            .rev()
-            .take(3)
-            .rev()
-            .map(|line| line.to_string())
-            .collect();
+        if tail.len() == SUFFIX_LINES {
+            tail.pop_front();
+        }
+        tail.push_back(line.to_string());
+    }
+
+    if stats.total_lines > PREVIEW_LINES + SUFFIX_LINES {
+        stats.suffix_lines = tail.into_iter().collect();
     }
 
     stats

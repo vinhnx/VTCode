@@ -17,6 +17,33 @@ const MAX_GREP_RESULTS: usize = 5;
 const MAX_LIST_FILES: usize = 50;
 const MAX_FILE_LINES: usize = 2000;
 
+fn truncate_with_total_lines(text: &str, max_lines: usize) -> Option<(String, usize)> {
+    if max_lines == 0 {
+        let total = text.lines().count();
+        return Some((String::new(), total));
+    }
+
+    let mut out = String::new();
+    let mut lines = text.lines();
+    let mut total = 0usize;
+
+    while let Some(line) = lines.next() {
+        total += 1;
+        if total <= max_lines {
+            if total > 1 {
+                out.push('\n');
+            }
+            out.push_str(line);
+            continue;
+        }
+
+        total += lines.count();
+        return Some((out, total));
+    }
+
+    None
+}
+
 /// Checkpoint state for context reset
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CheckpointState {
@@ -160,14 +187,12 @@ impl ContextOptimizer {
         if let Some(obj) = result.as_object()
             && let Some(content) = obj.get("content").and_then(|v| v.as_str())
         {
-            let lines: Vec<&str> = content.lines().collect();
-            let is_truncated = lines.len() > MAX_FILE_LINES;
-
-            let final_content = if is_truncated {
-                // Simple line-based truncation
-                lines[..MAX_FILE_LINES].join("\n")
+            let (final_content, is_truncated) = if let Some((truncated, _total_lines)) =
+                truncate_with_total_lines(content, MAX_FILE_LINES)
+            {
+                (truncated, true)
             } else {
-                content.to_string()
+                (content.to_string(), false)
             };
 
             // Reconstruct the object to ensure consistent field ordering and presence
@@ -214,28 +239,23 @@ impl ContextOptimizer {
             } else {
                 "output"
             };
-            if let Some(stdout) = obj.get(stream_key).and_then(|v| v.as_str()) {
-                let lines: Vec<&str> = stdout.lines().collect();
-                let is_truncated = lines.len() > MAX_FILE_LINES;
-
-                if is_truncated {
-                    let truncated = lines[..MAX_FILE_LINES].join("\n");
-                    let lines_count = stdout.lines().count();
-
-                    // Clone the original object to preserve exit_code, stderr, etc.
-                    let mut new_obj = obj.clone();
-                    new_obj.insert(stream_key.to_string(), json!(truncated));
-                    new_obj.insert("is_truncated".to_string(), json!(true));
-                    new_obj.insert("original_lines".to_string(), json!(lines_count));
-                    new_obj.insert(
+            if let Some(stdout) = obj.get(stream_key).and_then(|v| v.as_str())
+                && let Some((truncated, lines_count)) =
+                    truncate_with_total_lines(stdout, MAX_FILE_LINES)
+            {
+                // Clone the original object to preserve exit_code, stderr, etc.
+                let mut new_obj = obj.clone();
+                new_obj.insert(stream_key.to_string(), json!(truncated));
+                new_obj.insert("is_truncated".to_string(), json!(true));
+                new_obj.insert("original_lines".to_string(), json!(lines_count));
+                new_obj.insert(
                     "note".to_string(),
                     json!(
                         "Output truncated. Use 'grep_file' or specific commands to search content."
                     ),
                 );
 
-                    return Value::Object(new_obj);
-                }
+                return Value::Object(new_obj);
             }
         }
         result

@@ -94,6 +94,16 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: Common Commands, Release Workflow, Configuration, Commit Types, Troubleshooting
   - **User Questions**: "What can you tell me about Git-cliff Quick Reference?", "How does Common Commands work?", "How does Release Workflow work?"
 
+- **File**: `docs/development/performance-hasher-policy.md`
+  - **Content**: Performance Hasher Policy
+  - **Topics**: Default, When `rustc_hash` Is Allowed, When It Is Not Allowed, Migration Gate
+  - **User Questions**: "What can you tell me about Performance Hasher Policy?", "How does Default work?", "How does When `rustc_hash` Is Allowed work?"
+
+- **File**: `docs/development/performance.md`
+  - **Content**: Performance Optimization
+  - **Topics**: Goals, Local Workflow, Profiling Build, Local Native Tuning, Benchmarks
+  - **User Questions**: "What can you tell me about Performance Optimization?", "How does Goals work?", "How does Local Workflow work?"
+
 - **File**: `docs/development/PROCESS_HARDENING.md`
   - **Content**: Process Hardening
   - **Topics**: Architecture, Security Measures, Implementation Details, Testing, Security Philosophy
@@ -576,6 +586,11 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: anstyle-git Syntax, anstyle-ls Syntax, Git Config Color Syntax, Vtcode Integration Points, Cheat Sheet: Common Patterns
   - **User Questions**: "What can you tell me about Quick Reference: Anstyle Crates?", "How does anstyle-git Syntax work?", "How does anstyle-ls Syntax work?"
 
+- **File**: `docs/project/TODO.md`
+  - **Content**: Rust Fuzz Book
+  - **Topics**: Applied: Default Status Line Items Pattern (Codex PR #12015), Plan: Apply Data-Oriented Design to vtcode, [Requirements](#requirements), [Installing](#installing), [Upgrading](#upgrading)
+  - **User Questions**: "What can you tell me about Rust Fuzz Book?", "How does Applied: Default Status Line Items Pattern (Codex PR #12015) work?", "How does Plan: Apply Data-Oriented Design to vtcode work?"
+
 - **File**: `docs/features/SHELL_SNAPSHOT.md`
   - **Content**: Shell Environment Snapshot
   - **Topics**: Problem, Solution, Usage, Architecture, Excluded Environment Variables
@@ -605,11 +620,6 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Content**: Styling Quick Start Guide
   - **Topics**: For CLI Output, For TUI Widgets, Unified Theme, Color Reference, Common Patterns
   - **User Questions**: "What can you tell me about Styling Quick Start Guide?", "How does For CLI Output work?", "How does For TUI Widgets work?"
-
-- **File**: `docs/project/TODO.md`
-  - **Content**: TODO.md
-  - **Topics**: Applied: Default Status Line Items Pattern (Codex PR #12015), Plan: Apply Data-Oriented Design to vtcode
-  - **User Questions**: "What can you tell me about TODO.md?", "How does Applied: Default Status Line Items Pattern (Codex PR #12015) work?", "How does Plan: Apply Data-Oriented Design to vtcode work?"
 
 - **File**: `docs/harness/TECH_DEBT_TRACKER.md`
   - **Content**: Tech Debt Tracker

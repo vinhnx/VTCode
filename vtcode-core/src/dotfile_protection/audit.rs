@@ -221,17 +221,26 @@ impl AuditLog {
     /// Read the last entry's hash from the log file.
     fn read_last_hash(log_path: &Path) -> Result<String> {
         let file = File::open(log_path).with_context(|| "Failed to open audit log")?;
-        let reader = BufReader::new(file);
+        let mut reader = BufReader::new(file);
 
         let mut last_hash =
             "0000000000000000000000000000000000000000000000000000000000000000".to_string();
+        let mut line = String::new();
 
-        for line in reader.lines() {
-            let line = line.with_context(|| "Failed to read audit log line")?;
-            if line.trim().is_empty() {
+        loop {
+            line.clear();
+            if reader
+                .read_line(&mut line)
+                .with_context(|| "Failed to read audit log line")?
+                == 0
+            {
+                break;
+            }
+            let raw = line.trim_end_matches(['\n', '\r']);
+            if raw.trim().is_empty() {
                 continue;
             }
-            if let Ok(entry) = serde_json::from_str::<AuditEntry>(&line)
+            if let Ok(entry) = serde_json::from_str::<AuditEntry>(raw)
                 && let Some(hash) = entry.entry_hash
             {
                 last_hash = hash;
@@ -285,16 +294,25 @@ impl AuditLog {
         }
 
         let file = File::open(&self.log_path).with_context(|| "Failed to open audit log")?;
-        let reader = BufReader::new(file);
+        let mut reader = BufReader::new(file);
         let mut entries = Vec::new();
+        let mut line = String::new();
 
-        for line in reader.lines() {
-            let line = line.with_context(|| "Failed to read audit log line")?;
-            if line.trim().is_empty() {
+        loop {
+            line.clear();
+            if reader
+                .read_line(&mut line)
+                .with_context(|| "Failed to read audit log line")?
+                == 0
+            {
+                break;
+            }
+            let raw = line.trim_end_matches(['\n', '\r']);
+            if raw.trim().is_empty() {
                 continue;
             }
             let entry: AuditEntry =
-                serde_json::from_str(&line).with_context(|| "Failed to parse audit entry")?;
+                serde_json::from_str(raw).with_context(|| "Failed to parse audit entry")?;
             entries.push(entry);
         }
 

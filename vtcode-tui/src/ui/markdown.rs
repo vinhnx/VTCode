@@ -903,10 +903,10 @@ fn extract_hidden_location_suffix(dest_url: &str) -> Option<String> {
     }
 
     // Check for hash-based location (#L74C3 or #L74C3-L76C9)
-    if let Some((_, fragment)) = dest_url.rsplit_once('#') {
-        if HASH_LOCATION_SUFFIX_RE.is_match(fragment) {
-            return normalize_hash_location(fragment);
-        }
+    if let Some((_, fragment)) = dest_url.rsplit_once('#')
+        && HASH_LOCATION_SUFFIX_RE.is_match(fragment)
+    {
+        return normalize_hash_location(fragment);
     }
 
     // Check for colon-based location (:74 or :74:3 or :74:3-76:9)
@@ -1515,21 +1515,21 @@ fn try_highlight(
 
     // When enabled_languages is non-empty, use it as an allowlist;
     // otherwise highlight any language syntect recognises (~250 grammars).
-    if let Some(lang) = language {
-        if !config.enabled_languages.is_empty() {
-            let direct_match = config
+    if let Some(lang) = language
+        && !config.enabled_languages.is_empty()
+    {
+        let direct_match = config
+            .enabled_languages
+            .iter()
+            .any(|entry| entry.eq_ignore_ascii_case(lang));
+        if !direct_match {
+            let syntax_ref = syntax_highlight::find_syntax_by_token(lang);
+            let resolved_match = config
                 .enabled_languages
                 .iter()
-                .any(|entry| entry.eq_ignore_ascii_case(lang));
-            if !direct_match {
-                let syntax_ref = syntax_highlight::find_syntax_by_token(lang);
-                let resolved_match = config
-                    .enabled_languages
-                    .iter()
-                    .any(|entry| entry.eq_ignore_ascii_case(&syntax_ref.name));
-                if !resolved_match {
-                    return None;
-                }
+                .any(|entry| entry.eq_ignore_ascii_case(&syntax_ref.name));
+            if !resolved_match {
+                return None;
             }
         }
     }

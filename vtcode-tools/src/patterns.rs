@@ -183,7 +183,7 @@ fn normalize_features(features: &[f64]) -> Vec<f64> {
             if i == 0 {
                 f // Keep event count as-is
             } else {
-                f.min(1.0).max(0.0) // Clamp to [0, 1]
+                f.clamp(0.0, 1.0) // Clamp to [0, 1]
             }
         })
         .collect()

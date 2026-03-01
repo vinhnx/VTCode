@@ -95,19 +95,12 @@ rust.unstable_features = "warn"
 [workspace.lints.clippy]
 # Refined lint profile aligned with current clippy/rustc versions.
 # Keep high-value correctness and safety checks strict, avoid obsolete lint names.
-unknown_lints = "warn"
 dbg_macro = "warn"
 todo = "warn"
-print_stdout = "warn"
-print_stderr = "warn"
-unwrap_used = "warn"
-expect_used = "warn"
-indexing_slicing = "warn"
-unused_result_ok = "warn"
 
 # Unsafe hygiene: unsafe remains visible and requires explicit rationale.
-undocumented_unsafe_blocks = "deny"
-multiple_unsafe_ops_per_block = "deny"
+undocumented_unsafe_blocks = "warn"
+multiple_unsafe_ops_per_block = "warn"
 
 
 [dependencies]

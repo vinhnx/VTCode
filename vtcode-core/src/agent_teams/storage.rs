@@ -256,7 +256,7 @@ impl TeamStorage {
                 ensure_dir_exists_sync(parent)?;
             }
             write_json_file_sync(&tasks_path, &tasks)?;
-            lock_file.unlock().ok();
+            FileExt::unlock(&lock_file).ok();
             Ok(result)
         })
         .await?

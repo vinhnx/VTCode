@@ -5,6 +5,7 @@
 
 use async_trait::async_trait;
 use std::sync::Arc;
+use std::ops::Add;
 use std::sync::atomic::{AtomicU64, Ordering};
 use vtcode_core::tools::{ToolCallRequest, ToolCallResponse};
 
@@ -81,6 +82,14 @@ impl MiddlewareChain {
             let _ = mw.on_error(req, err).await;
         }
         Ok(())
+    }
+}
+
+impl Add<Arc<dyn Middleware>> for MiddlewareChain {
+    type Output = Self;
+
+    fn add(self, rhs: Arc<dyn Middleware>) -> Self::Output {
+        MiddlewareChain::add(self, rhs)
     }
 }
 

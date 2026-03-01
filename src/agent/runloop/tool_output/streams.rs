@@ -609,7 +609,7 @@ pub(crate) async fn render_stream_section(
         // Content was already truncated by tokens, so we need to process it differently
         // Split the truncated content by lines and use that
         let lines: SmallVec<[&str; 32]> = effective_normalized_content.lines().collect();
-        let total_lines = effective_normalized_content.lines().count();
+        let total_lines = lines.len();
         (lines, total_lines, true) // Always mark as truncated if token-based truncation was applied
     } else {
         let prefer_full = renderer.prefers_untruncated_output();

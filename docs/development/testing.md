@@ -1,10 +1,10 @@
 # **Testing Guide**
 
-This guide covers vtcode's comprehensive test suite, including unit tests, integration tests, benchmarks, and testing best practices.
+This guide covers VT Code's comprehensive test suite, including unit tests, integration tests, benchmarks, and testing best practices.
 
 ## **Test Overview**
 
-vtcode includes a multi-layered test suite designed to ensure reliability and performance:
+VT Code includes a multi-layered test suite designed to ensure reliability and performance:
 
 -   **Unit Tests**: Test individual components and functions
 -   **Integration Tests**: Test end-to-end functionality
@@ -48,11 +48,9 @@ cargo test --test integration_tests -- --nocapture
 # Run all benchmarks
 cargo bench
 
-# Run specific benchmark
-cargo bench -- search_benchmark
-
-# Run benchmarks with custom options
-cargo bench --features criterion/html_reports
+# Run specific Criterion benches used in this workspace
+cargo bench -p vtcode-core --bench tool_pipeline
+cargo bench -p vtcode-tools --bench cache_bench
 ```
 
 ## **Test Structure**
@@ -65,8 +63,8 @@ tests/
  integration_tests.rs   # End-to-end integration tests
 
 benches/
- search_benchmark.rs    # Search performance benchmarks
- tree_sitter_benchmark.rs # Tree-sitter performance benchmarks
+ tool_pipeline.rs       # vtcode-core tool pipeline benchmarks
+ cache_bench.rs         # vtcode-tools cache benchmarks
 
 src/
  lib.rs                 # Unit tests for library exports
@@ -242,32 +240,27 @@ fn test_file_operations() {
 
 ## **Performance Benchmarks**
 
-### Search Performance
+### Core Tool Pipeline Performance
 
 ```bash
-cargo bench -- search_benchmark
+cargo bench -p vtcode-core --bench tool_pipeline
 ```
 
 Measures:
 
--   Simple pattern search performance
--   Word boundary search performance
--   Case-insensitive search performance
--   Search with context lines performance
--   Glob pattern filtering performance
+-   Rate limiter throughput and latency
+-   Tool pipeline outcome construction overhead
 
-### Tree-sitter Performance
+### Tool Cache Performance
 
 ```bash
-cargo bench -- tree_sitter_benchmark
+cargo bench -p vtcode-tools --bench cache_bench
 ```
 
 Measures:
 
--   Parsing performance for different languages
--   Symbol extraction performance
--   Code analysis performance
--   File analysis performance
+-   LRU insert/get throughput
+-   Owned vs `Arc` retrieval overhead
 
 ## **Testing Best Practices**
 
@@ -372,19 +365,17 @@ fn test_with_debug_output() {
 
 ### Benchmark Baselines
 
-```rust
-// Establish performance baselines
-#[bench]
-fn bench_baseline_search(b: &mut Bencher) {
-    // Baseline implementation
-}
+```bash
+# Capture baseline and latest local metrics
+./scripts/perf/baseline.sh baseline
+./scripts/perf/baseline.sh latest
 ```
 
 ### Performance Regression Detection
 
 ```bash
-# Compare against baseline
-cargo bench --baseline baseline
+# Compare baseline vs latest
+./scripts/perf/compare.sh
 ```
 
 ## **Testing Checklist**

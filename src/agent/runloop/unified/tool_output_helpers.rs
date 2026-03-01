@@ -215,29 +215,6 @@ pub fn render_error_common(
     Ok(())
 }
 
-#[cfg(test)]
-mod tests {
-    use super::is_git_diff_payload;
-
-    #[test]
-    fn detects_git_diff_payload() {
-        let output = serde_json::json!({
-            "output": "diff --git a/src/main.rs b/src/main.rs",
-            "content_type": "git_diff"
-        });
-        assert!(is_git_diff_payload(&output));
-    }
-
-    #[test]
-    fn ignores_non_git_diff_payload() {
-        let output = serde_json::json!({
-            "output": "Checking crate",
-            "content_type": "exec_inspect"
-        });
-        assert!(!is_git_diff_payload(&output));
-    }
-}
-
 /// Common logic for handling tool success
 pub async fn handle_tool_success_common(
     session_stats: &mut SessionStats,
@@ -278,4 +255,27 @@ pub async fn handle_tool_success_common(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_git_diff_payload;
+
+    #[test]
+    fn detects_git_diff_payload() {
+        let output = serde_json::json!({
+            "output": "diff --git a/src/main.rs b/src/main.rs",
+            "content_type": "git_diff"
+        });
+        assert!(is_git_diff_payload(&output));
+    }
+
+    #[test]
+    fn ignores_non_git_diff_payload() {
+        let output = serde_json::json!({
+            "output": "Checking crate",
+            "content_type": "exec_inspect"
+        });
+        assert!(!is_git_diff_payload(&output));
+    }
 }

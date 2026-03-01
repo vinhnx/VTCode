@@ -341,13 +341,12 @@ impl SimpleIndexer {
             let path = entry.path();
 
             // Only index files, not directories
-            if entry.file_type().is_some_and(|ft| ft.is_file()) {
-                if !self.is_excluded_path(path)
-                    && let Some(index) = self.build_file_index(path)?
-                {
-                    self.index_cache.insert(index.path.clone(), index.clone());
-                    entries.push(index);
-                }
+            if entry.file_type().is_some_and(|ft| ft.is_file())
+                && !self.is_excluded_path(path)
+                && let Some(index) = self.build_file_index(path)?
+            {
+                self.index_cache.insert(index.path.clone(), index.clone());
+                entries.push(index);
             }
         }
 

@@ -69,12 +69,20 @@ pub trait Summarizer {
 ///
 /// Useful for command output, file content, etc.
 pub fn extract_key_info(text: &str, max_lines: usize) -> String {
-    let lines: Vec<&str> = text.lines().take(max_lines).collect();
-    if text.lines().count() > max_lines {
+    let mut lines: Vec<&str> = Vec::with_capacity(max_lines.min(32));
+    let mut total_lines = 0usize;
+    for line in text.lines() {
+        total_lines += 1;
+        if lines.len() < max_lines {
+            lines.push(line);
+        }
+    }
+
+    if total_lines > max_lines {
         format!(
             "{}\n[...{} more lines]",
             lines.join("\n"),
-            text.lines().count() - max_lines
+            total_lines - max_lines
         )
     } else {
         lines.join("\n")

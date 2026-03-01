@@ -898,10 +898,11 @@ pub(crate) async fn validate_tool_call<'a>(
     tool_name: &str,
     args_val: &serde_json::Value,
 ) -> Result<ValidationResult> {
-    if {
+    let tool_budget_exhausted = {
         let parts = ctx.parts_mut();
         parts.state.harness_state.tool_budget_exhausted()
-    } {
+    };
+    if tool_budget_exhausted {
         let (tool_calls, max_tool_calls, exhausted_emitted) = {
             let parts = ctx.parts_mut();
             (
@@ -940,10 +941,11 @@ pub(crate) async fn validate_tool_call<'a>(
         )));
     }
 
-    if {
+    let wall_clock_exhausted = {
         let parts = ctx.parts_mut();
         parts.state.harness_state.wall_clock_exhausted()
-    } {
+    };
+    if wall_clock_exhausted {
         let max_tool_wall_clock_secs = {
             let parts = ctx.parts_mut();
             parts.state.harness_state.max_tool_wall_clock.as_secs()
@@ -1031,13 +1033,14 @@ pub(crate) async fn validate_tool_call<'a>(
     }
 
     // Phase 4 Check: Per-tool Circuit Breaker
-    if {
+    let circuit_breaker_blocked = {
         let parts = ctx.parts_mut();
         !parts
             .tool
             .circuit_breaker
             .allow_request_for_tool(&canonical_tool_name)
-    } {
+    };
+    if circuit_breaker_blocked {
         let display_tool = tool_action_label(&canonical_tool_name, args_val);
         let block_reason = format!(
             "Circuit breaker stopped '{}' due to high failure rate. Wait before retrying or use a different tool.",

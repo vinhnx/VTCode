@@ -358,6 +358,38 @@ pub(crate) fn build_model_status_with_context_and_spooled(
     Some(parts.join(" | "))
 }
 
+/// Update spooled files count in status state
+pub(crate) fn update_spooled_files_count(state: &mut InputStatusState, count: usize) {
+    state.spooled_files_count = Some(count);
+}
+
+pub(crate) fn update_team_status(
+    state: &mut InputStatusState,
+    session_stats: &crate::agent::runloop::unified::state::SessionStats,
+) {
+    let Some(team_context) = session_stats.team_context.as_ref() else {
+        state.team_label = None;
+        state.delegate_mode = false;
+        return;
+    };
+
+    let label = match team_context.role {
+        vtcode_core::agent_teams::TeamRole::Lead => session_stats
+            .team_state
+            .as_ref()
+            .and_then(|team| team.active_teammate())
+            .map(|name| format!("team:{} -> {}", team_context.team_name, name))
+            .unwrap_or_else(|| format!("team:{} (lead)", team_context.team_name)),
+        vtcode_core::agent_teams::TeamRole::Teammate => {
+            let name = team_context.teammate_name.as_deref().unwrap_or("teammate");
+            format!("team:{} as {}", team_context.team_name, name)
+        }
+    };
+
+    state.team_label = Some(label);
+    state.delegate_mode = session_stats.is_delegate_mode();
+}
+
 #[cfg(test)]
 mod tests {
     use super::build_model_status_with_context_and_spooled;
@@ -407,36 +439,4 @@ mod tests {
         assert_eq!(high.as_deref(), Some("model | 100% context left"));
         assert_eq!(low.as_deref(), Some("model | 0% context left"));
     }
-}
-
-/// Update spooled files count in status state
-pub(crate) fn update_spooled_files_count(state: &mut InputStatusState, count: usize) {
-    state.spooled_files_count = Some(count);
-}
-
-pub(crate) fn update_team_status(
-    state: &mut InputStatusState,
-    session_stats: &crate::agent::runloop::unified::state::SessionStats,
-) {
-    let Some(team_context) = session_stats.team_context.as_ref() else {
-        state.team_label = None;
-        state.delegate_mode = false;
-        return;
-    };
-
-    let label = match team_context.role {
-        vtcode_core::agent_teams::TeamRole::Lead => session_stats
-            .team_state
-            .as_ref()
-            .and_then(|team| team.active_teammate())
-            .map(|name| format!("team:{} -> {}", team_context.team_name, name))
-            .unwrap_or_else(|| format!("team:{} (lead)", team_context.team_name)),
-        vtcode_core::agent_teams::TeamRole::Teammate => {
-            let name = team_context.teammate_name.as_deref().unwrap_or("teammate");
-            format!("team:{} as {}", team_context.team_name, name)
-        }
-    };
-
-    state.team_label = Some(label);
-    state.delegate_mode = session_stats.is_delegate_mode();
 }

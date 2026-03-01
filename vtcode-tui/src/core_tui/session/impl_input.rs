@@ -39,10 +39,12 @@ impl Session {
         }
 
         // Clear streaming state on turn completion (status cleared)
-        if let InlineCommand::SetInputStatus { left, right } = &command {
-            if self.is_streaming_final_answer && left.is_none() && right.is_none() {
-                self.is_streaming_final_answer = false;
-            }
+        if let InlineCommand::SetInputStatus { left, right } = &command
+            && self.is_streaming_final_answer
+            && left.is_none()
+            && right.is_none()
+        {
+            self.is_streaming_final_answer = false;
         }
 
         match command {

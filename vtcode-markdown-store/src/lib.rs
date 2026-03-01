@@ -192,7 +192,7 @@ fn write_with_lock(path: &Path, data: &[u8]) -> Result<()> {
         .open(path)
         .with_context(|| format!("Failed to open file at {}", path.display()))?;
 
-    file.lock_exclusive()
+    FileExt::lock_exclusive(&file)
         .with_context(|| format!("Failed to acquire exclusive lock for {}", path.display()))?;
 
     file.set_len(0).with_context(|| {
@@ -216,7 +216,7 @@ fn write_with_lock(path: &Path, data: &[u8]) -> Result<()> {
         )
     })?;
 
-    file.unlock()
+    FileExt::unlock(&file)
         .with_context(|| format!("Failed to release exclusive lock for {}", path.display()))
 }
 
@@ -226,7 +226,7 @@ fn read_with_shared_lock(path: &Path) -> Result<String> {
         .open(path)
         .with_context(|| format!("Failed to open file at {}", path.display()))?;
 
-    file.lock_shared()
+    FileExt::lock_shared(&file)
         .with_context(|| format!("Failed to acquire shared lock for {}", path.display()))?;
 
     let mut content = String::new();
@@ -237,7 +237,7 @@ fn read_with_shared_lock(path: &Path) -> Result<String> {
         )
     })?;
 
-    file.unlock()
+    FileExt::unlock(&file)
         .with_context(|| format!("Failed to release shared lock for {}", path.display()))?;
 
     Ok(content)
