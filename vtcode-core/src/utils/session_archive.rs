@@ -28,6 +28,60 @@ const DEFAULT_SESSION_MAX_SIZE_MB: u64 = 100;
 const BYTES_PER_MB: u64 = 1024 * 1024;
 const SECONDS_PER_DAY: u64 = 24 * 60 * 60;
 
+#[cfg(test)]
+mod test_env_overrides {
+    use std::collections::HashMap;
+    use std::ffi::OsString;
+    use std::sync::{LazyLock, Mutex};
+
+    static OVERRIDES: LazyLock<Mutex<HashMap<String, Option<OsString>>>> =
+        LazyLock::new(|| Mutex::new(HashMap::new()));
+
+    pub(super) fn get(key: &str) -> Option<Option<OsString>> {
+        OVERRIDES.lock().ok().and_then(|map| map.get(key).cloned())
+    }
+
+    pub(super) fn set(key: &str, value: Option<OsString>) {
+        if let Ok(mut map) = OVERRIDES.lock() {
+            map.insert(key.to_owned(), value);
+        }
+    }
+
+    pub(super) fn clear(key: &str) {
+        if let Ok(mut map) = OVERRIDES.lock() {
+            map.remove(key);
+        }
+    }
+}
+
+fn read_env_var_os(key: &str) -> Option<std::ffi::OsString> {
+    #[cfg(test)]
+    if let Some(override_value) = test_env_overrides::get(key) {
+        return override_value;
+    }
+
+    env::var_os(key)
+}
+
+fn read_env_var(key: &str) -> Option<String> {
+    #[cfg(test)]
+    if let Some(override_value) = test_env_overrides::get(key) {
+        return override_value.map(|value| value.to_string_lossy().to_string());
+    }
+
+    env::var(key).ok()
+}
+
+#[cfg(test)]
+fn set_test_env_override_path(key: &str, value: &Path) {
+    test_env_overrides::set(key, Some(value.as_os_str().to_os_string()));
+}
+
+#[cfg(test)]
+fn clear_test_env_override(key: &str) {
+    test_env_overrides::clear(key);
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SessionArchiveMetadata {
     pub workspace_label: String,
@@ -766,7 +820,7 @@ pub async fn search_sessions(
 }
 
 async fn resolve_sessions_dir() -> Result<PathBuf> {
-    if let Some(custom) = env::var_os(SESSION_DIR_ENV) {
+    if let Some(custom) = read_env_var_os(SESSION_DIR_ENV) {
         let path = PathBuf::from(custom);
         ensure_dir_exists(&path).await?;
         return Ok(path);
@@ -807,11 +861,11 @@ impl Default for SessionRetentionLimits {
 }
 
 fn parse_env_usize(key: &str) -> Option<usize> {
-    env::var(key).ok()?.trim().parse::<usize>().ok()
+    read_env_var(key)?.trim().parse::<usize>().ok()
 }
 
 fn parse_env_u64(key: &str) -> Option<u64> {
-    env::var(key).ok()?.trim().parse::<u64>().ok()
+    read_env_var(key)?.trim().parse::<u64>().ok()
 }
 
 fn session_retention_limits() -> SessionRetentionLimits {
@@ -1018,23 +1072,14 @@ mod tests {
 
     impl EnvGuard {
         fn set(key: &'static str, value: &Path) -> Self {
-            // SAFETY: Tests control the lifetime of this environment mutation
-            // and provide UTF-8-compatible values derived from filesystem
-            // paths, restoring the previous state via the guard's Drop impl.
-            unsafe {
-                env::set_var(key, value);
-            }
+            set_test_env_override_path(key, value);
             Self { key }
         }
     }
 
     impl Drop for EnvGuard {
         fn drop(&mut self) {
-            // SAFETY: The guard owns the only mutation to this variable during
-            // the test, so removing it when the guard drops is sound.
-            unsafe {
-                env::remove_var(self.key);
-            }
+            clear_test_env_override(self.key);
         }
     }
 

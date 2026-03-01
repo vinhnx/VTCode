@@ -790,15 +790,10 @@ mod tests {
             .expect("native payload should serialize");
 
         assert_eq!(
-            payload
-                .get("previous_response_id")
-                .and_then(Value::as_str),
+            payload.get("previous_response_id").and_then(Value::as_str),
             Some("resp_prev_1")
         );
-        assert_eq!(
-            payload.get("store").and_then(Value::as_bool),
-            Some(false)
-        );
+        assert_eq!(payload.get("store").and_then(Value::as_bool), Some(false));
         let include = payload
             .get("include")
             .and_then(Value::as_array)

@@ -942,8 +942,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_rate_limiting() {
-        let mut config = SafetyGatewayConfig::default();
-        config.rate_limit_per_second = 2;
+        let config = SafetyGatewayConfig {
+            rate_limit_per_second: 2,
+            ..Default::default()
+        };
         let gateway = SafetyGateway::with_config(config);
         let ctx = make_ctx();
 
@@ -962,8 +964,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_atomic_check_and_record_rate_limited() {
-        let mut config = SafetyGatewayConfig::default();
-        config.rate_limit_per_second = 2;
+        let config = SafetyGatewayConfig {
+            rate_limit_per_second: 2,
+            ..Default::default()
+        };
         let gateway = SafetyGateway::with_config(config);
         let ctx = make_ctx();
 

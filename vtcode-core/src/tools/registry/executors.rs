@@ -2310,8 +2310,10 @@ mod shell_preference_tests {
 
     #[test]
     fn explicit_shell_overrides_config_preference() {
-        let mut config = PtyConfig::default();
-        config.preferred_shell = Some("/bin/bash".to_string());
+        let config = PtyConfig {
+            preferred_shell: Some("/bin/bash".to_string()),
+            ..Default::default()
+        };
 
         let resolved = resolve_shell_preference(Some(" /bin/zsh "), &config);
         assert_eq!(resolved, "/bin/zsh");
@@ -2319,8 +2321,10 @@ mod shell_preference_tests {
 
     #[test]
     fn config_preferred_shell_used_when_explicit_missing() {
-        let mut config = PtyConfig::default();
-        config.preferred_shell = Some("zsh".to_string());
+        let config = PtyConfig {
+            preferred_shell: Some("zsh".to_string()),
+            ..Default::default()
+        };
 
         let resolved = resolve_shell_preference(None, &config);
         assert_eq!(resolved, "zsh");
@@ -2328,8 +2332,10 @@ mod shell_preference_tests {
 
     #[test]
     fn blank_explicit_shell_falls_back_to_config_preference() {
-        let mut config = PtyConfig::default();
-        config.preferred_shell = Some("bash".to_string());
+        let config = PtyConfig {
+            preferred_shell: Some("bash".to_string()),
+            ..Default::default()
+        };
 
         let resolved = resolve_shell_preference(Some("   "), &config);
         assert_eq!(resolved, "bash");
@@ -2337,8 +2343,10 @@ mod shell_preference_tests {
 
     #[test]
     fn blank_config_shell_falls_back_to_default_resolver() {
-        let mut config = PtyConfig::default();
-        config.preferred_shell = Some("   ".to_string());
+        let config = PtyConfig {
+            preferred_shell: Some("   ".to_string()),
+            ..Default::default()
+        };
 
         let resolved = resolve_shell_preference(None, &config);
         assert_eq!(resolved, resolve_fallback_shell());
@@ -2353,8 +2361,10 @@ mod shell_preference_tests {
 
     #[test]
     fn zsh_fork_disabled_uses_standard_shell_resolution() -> anyhow::Result<()> {
-        let mut config = PtyConfig::default();
-        config.preferred_shell = Some("/bin/bash".to_string());
+        let config = PtyConfig {
+            preferred_shell: Some("/bin/bash".to_string()),
+            ..Default::default()
+        };
         let resolved = resolve_shell_preference_with_zsh_fork(None, &config)?;
         assert_eq!(resolved, "/bin/bash");
         Ok(())
@@ -2760,9 +2770,11 @@ mod sandbox_runtime_tests {
 
     #[test]
     fn runtime_sandbox_config_maps_workspace_policy_overrides() {
-        let mut config = vtcode_config::SandboxConfig::default();
-        config.enabled = true;
-        config.default_mode = vtcode_config::SandboxMode::WorkspaceWrite;
+        let mut config = vtcode_config::SandboxConfig {
+            enabled: true,
+            default_mode: vtcode_config::SandboxMode::WorkspaceWrite,
+            ..Default::default()
+        };
         config.network.allow_all = false;
         config.network.allowlist = vec![vtcode_config::NetworkAllowlistEntryConfig {
             domain: "api.github.com".to_string(),
@@ -2786,9 +2798,11 @@ mod sandbox_runtime_tests {
 
     #[test]
     fn read_only_policy_adapts_to_workspace_write_for_mutating_commands() {
-        let mut config = vtcode_config::SandboxConfig::default();
-        config.enabled = true;
-        config.default_mode = vtcode_config::SandboxMode::ReadOnly;
+        let config = vtcode_config::SandboxConfig {
+            enabled: true,
+            default_mode: vtcode_config::SandboxMode::ReadOnly,
+            ..Default::default()
+        };
 
         let command = vec!["cargo".to_string(), "fmt".to_string()];
         let policy =
@@ -2799,9 +2813,11 @@ mod sandbox_runtime_tests {
 
     #[test]
     fn read_only_policy_stays_read_only_for_non_mutating_commands() {
-        let mut config = vtcode_config::SandboxConfig::default();
-        config.enabled = true;
-        config.default_mode = vtcode_config::SandboxMode::ReadOnly;
+        let config = vtcode_config::SandboxConfig {
+            enabled: true,
+            default_mode: vtcode_config::SandboxMode::ReadOnly,
+            ..Default::default()
+        };
 
         let command = vec!["ls".to_string(), "-la".to_string()];
         let policy =
@@ -2822,9 +2838,11 @@ mod sandbox_runtime_tests {
 
     #[test]
     fn workspace_write_allow_all_network_is_not_blocked() {
-        let mut config = vtcode_config::SandboxConfig::default();
-        config.enabled = true;
-        config.default_mode = vtcode_config::SandboxMode::WorkspaceWrite;
+        let mut config = vtcode_config::SandboxConfig {
+            enabled: true,
+            default_mode: vtcode_config::SandboxMode::WorkspaceWrite,
+            ..Default::default()
+        };
         config.network.allow_all = true;
         config.network.block_all = false;
 
@@ -2853,9 +2871,11 @@ mod sandbox_runtime_tests {
 
     #[test]
     fn external_mode_is_rejected_for_local_pty_execution() {
-        let mut config = vtcode_config::SandboxConfig::default();
-        config.enabled = true;
-        config.default_mode = vtcode_config::SandboxMode::External;
+        let config = vtcode_config::SandboxConfig {
+            enabled: true,
+            default_mode: vtcode_config::SandboxMode::External,
+            ..Default::default()
+        };
 
         let command = vec!["ls".to_string()];
         let requested = command.clone();
@@ -2905,9 +2925,11 @@ mod sandbox_runtime_tests {
 
     #[test]
     fn with_additional_permissions_widens_read_only_for_write_roots() {
-        let mut config = vtcode_config::SandboxConfig::default();
-        config.enabled = true;
-        config.default_mode = vtcode_config::SandboxMode::ReadOnly;
+        let config = vtcode_config::SandboxConfig {
+            enabled: true,
+            default_mode: vtcode_config::SandboxMode::ReadOnly,
+            ..Default::default()
+        };
 
         let command = vec!["bash".to_string(), "-lc".to_string(), "echo hi".to_string()];
         let requested = command.clone();
@@ -2936,9 +2958,11 @@ mod sandbox_runtime_tests {
 
     #[test]
     fn require_escalated_bypasses_runtime_sandbox_enforcement() {
-        let mut config = vtcode_config::SandboxConfig::default();
-        config.enabled = true;
-        config.default_mode = vtcode_config::SandboxMode::External;
+        let config = vtcode_config::SandboxConfig {
+            enabled: true,
+            default_mode: vtcode_config::SandboxMode::External,
+            ..Default::default()
+        };
 
         let command = vec!["echo".to_string(), "hello".to_string()];
         let requested = command.clone();

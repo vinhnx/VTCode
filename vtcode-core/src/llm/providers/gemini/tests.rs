@@ -808,8 +808,10 @@ mod caching_tests {
 
     #[test]
     fn test_gemini_explicit_mode_config() {
-        let mut config = PromptCachingConfig::default();
-        config.enabled = true;
+        let mut config = PromptCachingConfig {
+            enabled: true,
+            ..Default::default()
+        };
         config.providers.gemini.enabled = true;
         config.providers.gemini.mode = GeminiPromptCacheMode::Explicit;
         config.providers.gemini.explicit_ttl_seconds = Some(1200);

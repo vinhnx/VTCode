@@ -94,10 +94,7 @@ mod test_env_overrides {
         LazyLock::new(|| Mutex::new(HashMap::new()));
 
     pub(super) fn get(key: &str) -> Option<Option<String>> {
-        OVERRIDES
-            .lock()
-            .ok()
-            .and_then(|map| map.get(key).cloned())
+        OVERRIDES.lock().ok().and_then(|map| map.get(key).cloned())
     }
 
     pub(super) fn set(key: &str, value: Option<&str>) {
@@ -582,27 +579,35 @@ mod tests {
 
     #[test]
     fn test_get_api_key_ollama_provider() {
-        with_override("TEST_OLLAMA_PROVIDER_KEY", Some("test-ollama-env-key"), || {
-            let sources = ApiKeySources {
-                ollama_env: "TEST_OLLAMA_PROVIDER_KEY".to_string(),
-                ..Default::default()
-            };
-            let result = get_api_key("ollama", &sources);
-            assert!(result.is_ok());
-            assert_eq!(result.unwrap(), "test-ollama-env-key");
-        });
+        with_override(
+            "TEST_OLLAMA_PROVIDER_KEY",
+            Some("test-ollama-env-key"),
+            || {
+                let sources = ApiKeySources {
+                    ollama_env: "TEST_OLLAMA_PROVIDER_KEY".to_string(),
+                    ..Default::default()
+                };
+                let result = get_api_key("ollama", &sources);
+                assert!(result.is_ok());
+                assert_eq!(result.unwrap(), "test-ollama-env-key");
+            },
+        );
     }
 
     #[test]
     fn test_get_api_key_lmstudio_provider() {
-        with_override("TEST_LMSTUDIO_PROVIDER_KEY", Some("test-lmstudio-env-key"), || {
-            let sources = ApiKeySources {
-                lmstudio_env: "TEST_LMSTUDIO_PROVIDER_KEY".to_string(),
-                ..Default::default()
-            };
-            let result = get_api_key("lmstudio", &sources);
-            assert!(result.is_ok());
-            assert_eq!(result.unwrap(), "test-lmstudio-env-key");
-        });
+        with_override(
+            "TEST_LMSTUDIO_PROVIDER_KEY",
+            Some("test-lmstudio-env-key"),
+            || {
+                let sources = ApiKeySources {
+                    lmstudio_env: "TEST_LMSTUDIO_PROVIDER_KEY".to_string(),
+                    ..Default::default()
+                };
+                let result = get_api_key("lmstudio", &sources);
+                assert!(result.is_ok());
+                assert_eq!(result.unwrap(), "test-lmstudio-env-key");
+            },
+        );
     }
 }

@@ -81,7 +81,7 @@ impl CachedToolExecutor {
 
     /// Add middleware to the chain.
     pub fn with_middleware(mut self, mw: Arc<dyn crate::middleware::Middleware>) -> Self {
-        self.middleware = self.middleware.add(mw);
+        self.middleware = self.middleware.push(mw);
         self
     }
 

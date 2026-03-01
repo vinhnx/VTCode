@@ -15,9 +15,10 @@ mod memory_integration {
         if let Ok(status) = fs::read_to_string("/proc/self/status") {
             for line in status.lines() {
                 if line.starts_with("VmRSS:")
-                    && let Ok(kb) = line.split_whitespace().nth(1).unwrap_or("0").parse::<u64>() {
-                        return kb;
-                    }
+                    && let Ok(kb) = line.split_whitespace().nth(1).unwrap_or("0").parse::<u64>()
+                {
+                    return kb;
+                }
             }
         }
         0

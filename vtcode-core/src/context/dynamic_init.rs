@@ -269,8 +269,10 @@ mod tests {
     #[tokio::test]
     async fn test_disabled_skips_creation() {
         let temp = tempdir().unwrap();
-        let mut config = vtcode_config::DynamicContextConfig::default();
-        config.enabled = false;
+        let config = vtcode_config::DynamicContextConfig {
+            enabled: false,
+            ..Default::default()
+        };
 
         let dirs = initialize_dynamic_context(temp.path(), &config)
             .await

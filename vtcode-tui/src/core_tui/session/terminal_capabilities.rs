@@ -15,10 +15,7 @@ mod test_env_overrides {
         LazyLock::new(|| Mutex::new(HashMap::new()));
 
     pub(super) fn get(key: &str) -> Option<Option<String>> {
-        OVERRIDES
-            .lock()
-            .ok()
-            .and_then(|map| map.get(key).cloned())
+        OVERRIDES.lock().ok().and_then(|map| map.get(key).cloned())
     }
 
     pub(super) fn set(key: &str, value: Option<&str>) {

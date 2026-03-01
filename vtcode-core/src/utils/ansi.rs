@@ -1354,9 +1354,11 @@ mod tests {
     #[test]
     fn prepare_markdown_lines_uses_syntax_highlighting_config() {
         let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
-        let mut config = SyntaxHighlightingConfig::default();
-        config.enabled = true;
-        config.enabled_languages = vec!["rust".to_string()];
+        let config = SyntaxHighlightingConfig {
+            enabled: true,
+            enabled_languages: vec!["rust".to_string()],
+            ..Default::default()
+        };
         let sink = InlineSink::new(InlineHandle::new_for_tests(sender), config);
         let base_style = MessageStyle::Response.style();
         let markdown = "```rust\nlet value = 1;\n```";

@@ -104,7 +104,9 @@ fn probe_terminal_colors(timeout: Duration) -> Result<ProbeResult> {
 
 #[cfg(unix)]
 fn read_until_da1(tty: &mut File, timeout: Duration) -> Result<Vec<u8>> {
-    let poll_tty = tty.try_clone().context("failed to duplicate tty for polling")?;
+    let poll_tty = tty
+        .try_clone()
+        .context("failed to duplicate tty for polling")?;
     let deadline = Instant::now() + timeout;
     let mut buffer = Vec::with_capacity(1024);
 

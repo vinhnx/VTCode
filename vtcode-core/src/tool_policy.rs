@@ -1134,8 +1134,10 @@ mod tests {
 
     #[test]
     fn test_tool_policy_config_serialization() {
-        let mut config = ToolPolicyConfig::default();
-        config.available_tools = vec![tools::READ_FILE.to_owned(), tools::WRITE_FILE.to_owned()];
+        let mut config = ToolPolicyConfig {
+            available_tools: vec![tools::READ_FILE.to_owned(), tools::WRITE_FILE.to_owned()],
+            ..Default::default()
+        };
         config
             .policies
             .insert(tools::READ_FILE.to_owned(), ToolPolicy::Allow);
@@ -1155,8 +1157,10 @@ mod tests {
         let dir = tempdir().unwrap();
         let config_path = dir.path().join("tool-policy.json");
 
-        let mut config = ToolPolicyConfig::default();
-        config.available_tools = vec!["tool1".to_owned()];
+        let mut config = ToolPolicyConfig {
+            available_tools: vec!["tool1".to_owned()],
+            ..Default::default()
+        };
         config
             .policies
             .insert("tool1".to_owned(), ToolPolicy::Prompt);
@@ -1172,8 +1176,7 @@ mod tests {
 
         // Add new tool
         let new_tools = vec!["tool1".to_owned(), "tool2".to_owned()];
-        let current_tools: HashSet<_> =
-            loaded_config.available_tools.iter().collect();
+        let current_tools: HashSet<_> = loaded_config.available_tools.iter().collect();
 
         for tool in &new_tools {
             if !current_tools.contains(tool) {

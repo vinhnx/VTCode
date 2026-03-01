@@ -1200,8 +1200,6 @@ impl LLMClient for OllamaProvider {
 mod tests {
     use super::*;
     use crate::llm::provider::{ContentPart, Message, MessageContent};
-    
-    
 
     fn test_provider() -> OllamaProvider {
         OllamaProvider::from_config(

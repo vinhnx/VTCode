@@ -500,8 +500,6 @@ mod tests {
     use crate::config::types::ReasoningEffortLevel;
     use crate::llm::provider::{LLMRequest, Message, ToolChoice, ToolDefinition};
     use std::sync::Arc;
-    
-    
 
     #[test]
     fn normalizes_legacy_glm5_model_id() {

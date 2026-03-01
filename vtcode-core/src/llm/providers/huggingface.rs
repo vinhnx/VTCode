@@ -1110,18 +1110,3 @@ impl LLMClient for HuggingFaceProvider {
         &self.model
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    
-    
-
-    fn sample_request(model: &str) -> LLMRequest {
-        LLMRequest {
-            messages: vec![crate::llm::provider::Message::user("hello".to_string())],
-            model: model.to_string(),
-            ..Default::default()
-        }
-    }
-}

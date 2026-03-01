@@ -92,13 +92,18 @@ mod prompt_cache_tests {
 
     #[test]
     fn test_requires_extended_ttl_beta() {
-        let mut settings = AnthropicPromptCacheSettings::default();
-        settings.tools_ttl_seconds = 3600;
-        settings.messages_ttl_seconds = 300;
+        let settings = AnthropicPromptCacheSettings {
+            tools_ttl_seconds: 3600,
+            messages_ttl_seconds: 300,
+            ..Default::default()
+        };
         assert!(requires_extended_ttl_beta(&settings));
 
-        settings.tools_ttl_seconds = 300;
-        settings.messages_ttl_seconds = 300;
+        let settings = AnthropicPromptCacheSettings {
+            tools_ttl_seconds: 300,
+            messages_ttl_seconds: 300,
+            ..Default::default()
+        };
         assert!(!requires_extended_ttl_beta(&settings));
     }
 }

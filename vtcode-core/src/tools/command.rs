@@ -472,7 +472,10 @@ mod tests {
             .prepare_invocation(&input)
             .await
             .expect("extra path should allow command");
-        assert_eq!(invocation.program, binary_path.to_string_lossy().into_owned());
+        assert_eq!(
+            invocation.program,
+            binary_path.to_string_lossy().into_owned()
+        );
         assert!(invocation.args.is_empty());
     }
 

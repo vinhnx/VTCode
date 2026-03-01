@@ -8,7 +8,44 @@ use rmcp::model::Implementation;
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::env;
+#[cfg(test)]
+use std::sync::{LazyLock, Mutex};
 use tracing::{debug, warn};
+
+#[cfg(test)]
+static TEST_ENV_OVERRIDES: LazyLock<Mutex<HashMap<String, Option<String>>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+
+#[cfg(test)]
+fn get_test_env_override(key: &str) -> Option<Option<String>> {
+    TEST_ENV_OVERRIDES
+        .lock()
+        .ok()
+        .and_then(|map| map.get(key).cloned())
+}
+
+fn read_env_var(key: &str) -> Option<String> {
+    #[cfg(test)]
+    if let Some(override_value) = get_test_env_override(key) {
+        return override_value;
+    }
+
+    env::var(key).ok()
+}
+
+#[cfg(test)]
+pub(crate) fn set_test_env_override(key: &str, value: Option<&str>) {
+    if let Ok(mut map) = TEST_ENV_OVERRIDES.lock() {
+        map.insert(key.to_owned(), value.map(ToOwned::to_owned));
+    }
+}
+
+#[cfg(test)]
+pub(crate) fn clear_test_env_override(key: &str) {
+    if let Ok(mut map) = TEST_ENV_OVERRIDES.lock() {
+        map.remove(key);
+    }
+}
 
 /// Build the standard Implementation struct for vtcode MCP client.
 ///
@@ -49,14 +86,14 @@ pub fn ensure_timezone_argument(
 
 /// Detect the local timezone using environment variables or system detection.
 pub fn detect_local_timezone() -> Result<String> {
-    if let Ok(value) = env::var(LOCAL_TIMEZONE_ENV_VAR) {
+    if let Some(value) = read_env_var(LOCAL_TIMEZONE_ENV_VAR) {
         let trimmed = value.trim();
         if !trimmed.is_empty() {
             return Ok(trimmed.to_string());
         }
     }
 
-    if let Ok(value) = env::var(TZ_ENV_VAR) {
+    if let Some(value) = read_env_var(TZ_ENV_VAR) {
         let trimmed = value.trim();
         if !trimmed.is_empty() {
             return Ok(trimmed.to_string());
@@ -149,8 +186,9 @@ pub fn build_headers(
     }
 
     for (key, env_var) in env_headers {
-        match env::var(env_var) {
-            Ok(value) if !value.trim().is_empty() => match HeaderName::from_bytes(key.as_bytes()) {
+        match read_env_var(env_var) {
+            Some(value) if !value.trim().is_empty() => match HeaderName::from_bytes(key.as_bytes())
+            {
                 Ok(name) => match HeaderValue::from_str(&value) {
                     Ok(header_value) => {
                         map.insert(name, header_value);
@@ -173,14 +211,14 @@ pub fn build_headers(
                     );
                 }
             },
-            Ok(_) => {
+            Some(_) => {
                 debug!(
                     header = key.as_str(),
                     env_var = env_var.as_str(),
                     "Skipping MCP HTTP header from environment because the value is empty"
                 );
             }
-            Err(_) => {
+            None => {
                 debug!(
                     header = key.as_str(),
                     env_var = env_var.as_str(),
