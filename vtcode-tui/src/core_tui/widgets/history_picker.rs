@@ -173,6 +173,7 @@ impl<'a> HistoryPickerWidget<'a> {
 mod tests {
     use super::*;
     use crate::ui::tui::InlineTheme;
+    use insta::assert_snapshot;
     use ratatui::Terminal;
     use ratatui::backend::TestBackend;
 
@@ -208,8 +209,7 @@ mod tests {
             })
             .unwrap();
 
-        // Should render without panicking
-        assert!(true);
+        assert_snapshot!(terminal.backend());
     }
 
     #[test]
@@ -247,7 +247,6 @@ mod tests {
             })
             .unwrap();
 
-        // Should render without panicking
-        assert!(true);
+        assert_snapshot!(terminal.backend());
     }
 }

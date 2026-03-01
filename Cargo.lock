@@ -6508,6 +6508,7 @@ dependencies = [
  "futures",
  "human-panic",
  "humantime",
+ "insta",
  "line-clipping",
  "nucleo-matcher",
  "once_cell",

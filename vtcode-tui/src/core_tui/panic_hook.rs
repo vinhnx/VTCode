@@ -132,7 +132,7 @@ pub fn init_panic_hook() {
 
                 let file_path = human_panic_dump(&report_metadata, panic_info);
                 if let Err(error) = print_msg(file_path, &report_metadata) {
-                    eprintln!("\nVTCode encountered a critical error and needs to shut down.");
+                    eprintln!("\nVT Code encountered a critical error and needs to shut down.");
                     eprintln!("Failed to print crash report details: {}", error);
                     original_hook(panic_info);
                 }
