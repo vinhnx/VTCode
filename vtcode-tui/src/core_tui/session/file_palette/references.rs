@@ -1,5 +1,5 @@
 pub fn extract_file_reference(input: &str, cursor: usize) -> Option<(usize, usize, String)> {
-    if cursor == 0 || cursor > input.len() {
+    if cursor > input.len() {
         return None;
     }
 

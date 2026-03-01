@@ -493,6 +493,23 @@ if output.len() > max_tokens * 4 {
         command: Vec<String>,
         working_dir: PathBuf,
         size: PtySize,
+    ) -> Result<VTCodePtySession> {
+        self.create_session_with_bridge(
+            session_id,
+            command,
+            working_dir,
+            size,
+            HashMap::new(),
+            None,
+        )
+    }
+
+    pub(crate) fn create_session_with_bridge(
+        &self,
+        session_id: String,
+        command: Vec<String>,
+        working_dir: PathBuf,
+        size: PtySize,
         extra_env: HashMap<String, String>,
         zsh_exec_bridge: Option<crate::zsh_exec_bridge::ZshExecBridgeSession>,
     ) -> Result<VTCodePtySession> {
@@ -695,7 +712,7 @@ info!("PTY session '{}' processed {} unicode characters across {} sessions with 
             reader_thread: Mutex::new(Some(reader_thread)),
             metadata: metadata.clone(),
             last_input: Mutex::new(None),
-            zsh_exec_bridge,
+            _zsh_exec_bridge: zsh_exec_bridge,
         }));
 
         Ok(metadata)

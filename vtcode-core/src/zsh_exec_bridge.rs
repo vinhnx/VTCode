@@ -1,6 +1,10 @@
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
+#[cfg(not(unix))]
+use anyhow::anyhow;
+#[cfg(not(unix))]
 use std::collections::HashMap;
+#[cfg(not(unix))]
 use std::path::Path;
 
 pub(crate) const ZSH_EXEC_BRIDGE_WRAPPER_SOCKET_ENV_VAR: &str =
