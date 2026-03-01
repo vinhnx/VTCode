@@ -317,6 +317,10 @@ impl SimpleIndexer {
 
     /// Index a single file.
     pub fn index_file(&mut self, file_path: &Path) -> Result<()> {
+        if !file_path.exists() {
+            return Ok(());
+        }
+
         if let Some(index) = self.build_file_index(file_path)? {
             self.index_cache.insert(index.path.clone(), index.clone());
             self.storage.persist(self.config.index_dir(), &index)?;
@@ -607,7 +611,7 @@ impl SimpleIndexer {
 
     #[inline]
     fn should_index_file_path(&self, path: &Path) -> bool {
-        path.exists() && self.filter.should_index_file(path, &self.config)
+        self.filter.should_index_file(path, &self.config)
     }
 
     fn build_walker(&self, dir_path: &Path) -> Walk {

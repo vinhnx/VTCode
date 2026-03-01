@@ -113,7 +113,7 @@ fn build_compact_header(context: &InlineHeaderContext) -> String {
 fn build_top_model_line(model_rows: &[(&String, &ModelUsageStats)]) -> Option<String> {
     let (model, stats) = model_rows.first()?;
     Some(format!(
-        "Model: {} | {} | {} in/{} out",
+        "Model: {ANSI_BOLD}{ANSI_MAGENTA}{}{ANSI_RESET} | {} | {} in/{} out",
         model,
         format_short_duration(stats.api_time),
         format_token_count(stats.prompt_tokens + stats.cached_prompt_tokens),
@@ -205,6 +205,8 @@ fn style_terminal_window_lines(lines: &[String]) -> String {
     for (index, line) in lines.iter().enumerate() {
         let line_render = if index == 0 {
             style_title_line(line)
+        } else if line.contains("Model:") {
+            line.clone()
         } else {
             style_dim_line(line)
         };
@@ -253,7 +255,7 @@ mod tests {
     fn terminal_window_returns_title_and_lines() {
         let rows = vec![
             "Ollama gpt-oss | Accept edits".to_string(),
-            "Session 1m | API 4s | 28k in/239 out".to_string(),
+            "Session 1m | API 4s | 28k in/239 out | 150 diff".to_string(),
             "Model: gpt-oss 4s | 28k in/239 out".to_string(),
         ];
         let rendered = render_terminal_window("> VT Code (0.85.1)", &rows, 110);
