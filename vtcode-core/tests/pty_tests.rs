@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::time::Duration;
 
 use anyhow::Result;
@@ -71,8 +70,6 @@ async fn create_list_and_close_session_preserves_screen_contents() -> Result<()>
         ],
         working_dir,
         size,
-        HashMap::new(),
-        None,
     )?;
 
     std::thread::sleep(Duration::from_millis(150));
@@ -149,8 +146,6 @@ async fn session_input_roundtrip_and_resize() -> Result<()> {
         ],
         working_dir,
         size,
-        HashMap::new(),
-        None,
     )?;
 
     std::thread::sleep(Duration::from_millis(150));
@@ -302,8 +297,6 @@ async fn pty_terminate_kills_background_children_in_same_process_group() -> Resu
         ],
         working_dir,
         size,
-        HashMap::new(),
-        None,
     )?;
 
     // Wait for the background process to be spawned and its PID to be printed

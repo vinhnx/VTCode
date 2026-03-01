@@ -1395,7 +1395,7 @@ impl ToolRegistry {
 
         let session_id = generate_session_id("run");
 
-        let session_metadata = self.pty_manager().create_session(
+        let session_metadata = self.pty_manager().create_session_with_bridge(
             session_id.clone(),
             command,
             working_dir_path,

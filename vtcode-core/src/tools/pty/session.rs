@@ -162,7 +162,7 @@ pub(super) struct PtySessionHandle {
     pub(super) reader_thread: Mutex<Option<JoinHandle<()>>>,
     pub(super) metadata: VTCodePtySession,
     pub(super) last_input: Mutex<Option<CommandEchoState>>,
-    pub(super) zsh_exec_bridge: Option<crate::zsh_exec_bridge::ZshExecBridgeSession>,
+    pub(super) _zsh_exec_bridge: Option<crate::zsh_exec_bridge::ZshExecBridgeSession>,
 }
 
 impl PtySessionHandle {
