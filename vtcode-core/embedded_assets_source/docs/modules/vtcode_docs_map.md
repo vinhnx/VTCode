@@ -168,6 +168,11 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: Overview, Core Architecture, Tool Implementations, Design Principles, Adding New Tools
   - **User Questions**: "What can you tell me about VT Code Architecture Guide?", "How does Overview work?", "How does Core Architecture work?"
 
+- **File**: `docs/COMPATIBILITY.md`
+  - **Content**: VT Code Platform Compatibility Matrix
+  - **Topics**: Quick Reference, Minimum Supported Rust Version (MSRV), Platform-Specific Features, LLM Provider Compatibility, Feature Flags Matrix
+  - **User Questions**: "What can you tell me about VT Code Platform Compatibility Matrix?", "How does Quick Reference work?", "How does Minimum Supported Rust Version (MSRV) work?"
+
 ### Integrations & Tooling
 
 - **File**: `docs/guides/INIT_COMMAND_GUIDE.md`

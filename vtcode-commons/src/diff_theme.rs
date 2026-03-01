@@ -8,6 +8,9 @@
 
 use anstyle::{Ansi256Color, AnsiColor, Color, RgbColor};
 
+use crate::ansi_capabilities::{ColorScheme, detect_color_scheme};
+use crate::color256_theme::adjust_index_for_theme;
+
 /// Terminal background theme for diff rendering.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DiffTheme {
@@ -18,11 +21,9 @@ pub enum DiffTheme {
 impl DiffTheme {
     /// Detect theme from the terminal environment.
     pub fn detect() -> Self {
-        let term = std::env::var("TERM").unwrap_or_default().to_lowercase();
-        if term.contains("light") {
-            Self::Light
-        } else {
-            Self::Dark
+        match detect_color_scheme() {
+            ColorScheme::Light => Self::Light,
+            ColorScheme::Dark | ColorScheme::Unknown => Self::Dark,
         }
     }
 
@@ -87,18 +88,19 @@ fn rgb(t: (u8, u8, u8)) -> Color {
     Color::Rgb(RgbColor(t.0, t.1, t.2))
 }
 
-fn indexed(i: u8) -> Color {
-    Color::Ansi256(Ansi256Color(i))
+fn indexed(i: u8, theme: DiffTheme) -> Color {
+    let adjusted = adjust_index_for_theme(i, theme.is_light());
+    Color::Ansi256(Ansi256Color(adjusted))
 }
 
 /// Get background color for addition lines based on theme and color level.
 pub fn diff_add_bg(theme: DiffTheme, level: DiffColorLevel) -> Color {
     match (theme, level) {
         (DiffTheme::Dark, DiffColorLevel::TrueColor) => rgb(DARK_TC_ADD_LINE_BG),
-        (DiffTheme::Dark, DiffColorLevel::Ansi256) => indexed(DARK_256_ADD_LINE_BG),
+        (DiffTheme::Dark, DiffColorLevel::Ansi256) => indexed(DARK_256_ADD_LINE_BG, theme),
         (DiffTheme::Dark, DiffColorLevel::Ansi16) => Color::Ansi(AnsiColor::Green),
         (DiffTheme::Light, DiffColorLevel::TrueColor) => rgb(LIGHT_TC_ADD_LINE_BG),
-        (DiffTheme::Light, DiffColorLevel::Ansi256) => indexed(LIGHT_256_ADD_LINE_BG),
+        (DiffTheme::Light, DiffColorLevel::Ansi256) => indexed(LIGHT_256_ADD_LINE_BG, theme),
         (DiffTheme::Light, DiffColorLevel::Ansi16) => Color::Ansi(AnsiColor::BrightGreen),
     }
 }
@@ -107,10 +109,10 @@ pub fn diff_add_bg(theme: DiffTheme, level: DiffColorLevel) -> Color {
 pub fn diff_del_bg(theme: DiffTheme, level: DiffColorLevel) -> Color {
     match (theme, level) {
         (DiffTheme::Dark, DiffColorLevel::TrueColor) => rgb(DARK_TC_DEL_LINE_BG),
-        (DiffTheme::Dark, DiffColorLevel::Ansi256) => indexed(DARK_256_DEL_LINE_BG),
+        (DiffTheme::Dark, DiffColorLevel::Ansi256) => indexed(DARK_256_DEL_LINE_BG, theme),
         (DiffTheme::Dark, DiffColorLevel::Ansi16) => Color::Ansi(AnsiColor::Red),
         (DiffTheme::Light, DiffColorLevel::TrueColor) => rgb(LIGHT_TC_DEL_LINE_BG),
-        (DiffTheme::Light, DiffColorLevel::Ansi256) => indexed(LIGHT_256_DEL_LINE_BG),
+        (DiffTheme::Light, DiffColorLevel::Ansi256) => indexed(LIGHT_256_DEL_LINE_BG, theme),
         (DiffTheme::Light, DiffColorLevel::Ansi16) => Color::Ansi(AnsiColor::BrightRed),
     }
 }
@@ -119,7 +121,7 @@ pub fn diff_del_bg(theme: DiffTheme, level: DiffColorLevel) -> Color {
 pub fn diff_gutter_fg_light(level: DiffColorLevel) -> Color {
     match level {
         DiffColorLevel::TrueColor => rgb(LIGHT_TC_GUTTER_FG),
-        DiffColorLevel::Ansi256 => indexed(LIGHT_256_GUTTER_FG),
+        DiffColorLevel::Ansi256 => indexed(LIGHT_256_GUTTER_FG, DiffTheme::Light),
         DiffColorLevel::Ansi16 => Color::Ansi(AnsiColor::Black),
     }
 }
@@ -128,7 +130,7 @@ pub fn diff_gutter_fg_light(level: DiffColorLevel) -> Color {
 pub fn diff_gutter_bg_add_light(level: DiffColorLevel) -> Color {
     match level {
         DiffColorLevel::TrueColor => rgb(LIGHT_TC_ADD_NUM_BG),
-        DiffColorLevel::Ansi256 => indexed(LIGHT_256_ADD_NUM_BG),
+        DiffColorLevel::Ansi256 => indexed(LIGHT_256_ADD_NUM_BG, DiffTheme::Light),
         DiffColorLevel::Ansi16 => Color::Ansi(AnsiColor::BrightGreen),
     }
 }
@@ -137,7 +139,7 @@ pub fn diff_gutter_bg_add_light(level: DiffColorLevel) -> Color {
 pub fn diff_gutter_bg_del_light(level: DiffColorLevel) -> Color {
     match level {
         DiffColorLevel::TrueColor => rgb(LIGHT_TC_DEL_NUM_BG),
-        DiffColorLevel::Ansi256 => indexed(LIGHT_256_DEL_NUM_BG),
+        DiffColorLevel::Ansi256 => indexed(LIGHT_256_DEL_NUM_BG, DiffTheme::Light),
         DiffColorLevel::Ansi16 => Color::Ansi(AnsiColor::BrightRed),
     }
 }
@@ -174,6 +176,14 @@ mod tests {
     fn dark_256_uses_indexed_colors() {
         let add = diff_add_bg(DiffTheme::Dark, DiffColorLevel::Ansi256);
         let del = diff_del_bg(DiffTheme::Dark, DiffColorLevel::Ansi256);
+        assert!(matches!(add, Color::Ansi256(Ansi256Color(22))));
+        assert!(matches!(del, Color::Ansi256(Ansi256Color(52))));
+    }
+
+    #[test]
+    fn light_256_defaults_to_non_harmonious_adjustment() {
+        let add = diff_add_bg(DiffTheme::Light, DiffColorLevel::Ansi256);
+        let del = diff_del_bg(DiffTheme::Light, DiffColorLevel::Ansi256);
         assert!(matches!(add, Color::Ansi256(Ansi256Color(22))));
         assert!(matches!(del, Color::Ansi256(Ansi256Color(52))));
     }

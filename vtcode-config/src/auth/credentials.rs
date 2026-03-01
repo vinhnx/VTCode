@@ -34,6 +34,7 @@ use std::collections::BTreeMap;
 ///   custom implementation)
 /// - `Auto`: Try keyring first, fall back to file if unavailable
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "lowercase")]
 pub enum AuthCredentialsStoreMode {
     /// Use OS-specific keyring service.

@@ -122,11 +122,45 @@ impl ColorScheme {
     }
 }
 
+const COLOR_SCHEME_LIGHT: u8 = 0;
+const COLOR_SCHEME_DARK: u8 = 1;
+const COLOR_SCHEME_UNKNOWN: u8 = 2;
+const COLOR_SCHEME_UNSET: u8 = 255;
+
+static COLOR_SCHEME_RUNTIME_OVERRIDE: AtomicU8 = AtomicU8::new(COLOR_SCHEME_UNSET);
+
 /// Detect terminal color scheme from environment.
 pub fn detect_color_scheme() -> ColorScheme {
+    if let Some(override_scheme) = color_scheme_runtime_override() {
+        return override_scheme;
+    }
+
     // Check cached value first
     static CACHED: Lazy<ColorScheme> = Lazy::new(detect_color_scheme_uncached);
     *CACHED
+}
+
+fn color_scheme_runtime_override() -> Option<ColorScheme> {
+    match COLOR_SCHEME_RUNTIME_OVERRIDE.load(Ordering::Relaxed) {
+        COLOR_SCHEME_LIGHT => Some(ColorScheme::Light),
+        COLOR_SCHEME_DARK => Some(ColorScheme::Dark),
+        COLOR_SCHEME_UNKNOWN => Some(ColorScheme::Unknown),
+        _ => None,
+    }
+}
+
+/// Store a runtime color scheme override.
+///
+/// This is intended to be populated once at startup by terminal OSC probing.
+/// Set `None` to clear the runtime override.
+pub fn set_color_scheme_override(value: Option<ColorScheme>) {
+    let encoded = match value {
+        Some(ColorScheme::Light) => COLOR_SCHEME_LIGHT,
+        Some(ColorScheme::Dark) => COLOR_SCHEME_DARK,
+        Some(ColorScheme::Unknown) => COLOR_SCHEME_UNKNOWN,
+        None => COLOR_SCHEME_UNSET,
+    };
+    COLOR_SCHEME_RUNTIME_OVERRIDE.store(encoded, Ordering::Relaxed);
 }
 
 fn detect_color_scheme_uncached() -> ColorScheme {

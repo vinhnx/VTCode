@@ -2,6 +2,7 @@
 name = "vtcode-indexer"
 version = "0.85.1"
 edition = "2024"
+rust-version = "1.85"
 authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
 description = "Workspace-friendly code indexer extracted from VT Code"
 license = "MIT"
@@ -26,3 +27,6 @@ vtcode-commons = { path = "../vtcode-commons", version = "0.85.1" }
 
 [dev-dependencies]
 tempfile = "3.25"
+
+[lints]
+workspace = true

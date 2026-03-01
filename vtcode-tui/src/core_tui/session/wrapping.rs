@@ -45,12 +45,10 @@ pub fn wrap_line_preserving_urls(line: Line<'static>, max_width: usize) -> Vec<L
         .collect();
 
     // Single URL that fits - return unwrapped for terminal link detection
-    if urls.len() == 1 && urls[0].0 == 0 && urls[0].1 == text.len() {
-        if text.width() <= max_width {
-            return vec![line];
-        }
-        // URL too wide - fall through to wrap it
+    if urls.len() == 1 && urls[0].0 == 0 && urls[0].1 == text.len() && text.width() <= max_width {
+        return vec![line];
     }
+    // URL too wide - fall through to wrap it
 
     // Mixed content - split around URLs and wrap each segment
     wrap_mixed_content(line, max_width, &urls)

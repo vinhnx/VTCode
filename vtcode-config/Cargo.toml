@@ -2,6 +2,7 @@
 name = "vtcode-config"
 version = "0.85.1"
 edition = "2024"
+rust-version = "1.85"
 authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
 description = "Config loader components shared across VT Code and downstream adopters"
 license = "MIT"
@@ -62,3 +63,6 @@ serde_json = { workspace = true }
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
+
+[lints]
+workspace = true

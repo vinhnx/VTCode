@@ -4,7 +4,7 @@
 //! Supports dark and light theme variants.
 
 use crate::terminal_setup::detector::TerminalType;
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 
 /// Default VT Code dark theme colors
 pub struct VTCodeDarkTheme {
@@ -61,113 +61,271 @@ impl Default for VTCodeDarkTheme {
     }
 }
 
+impl VTCodeDarkTheme {
+    fn base16_colors(&self) -> [&'static str; 16] {
+        [
+            self.black,
+            self.red,
+            self.green,
+            self.yellow,
+            self.blue,
+            self.magenta,
+            self.cyan,
+            self.white,
+            self.bright_black,
+            self.bright_red,
+            self.bright_green,
+            self.bright_yellow,
+            self.bright_blue,
+            self.bright_magenta,
+            self.bright_cyan,
+            self.bright_white,
+        ]
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+struct Rgb {
+    r: u8,
+    g: u8,
+    b: u8,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct Lab {
+    l: f64,
+    a: f64,
+    b: f64,
+}
+
+impl Rgb {
+    fn from_hex(hex: &str) -> Result<Self> {
+        let trimmed = hex.trim_start_matches('#');
+        if trimmed.len() != 6 {
+            return Err(anyhow!("Invalid hex color '{}': expected #RRGGBB", hex));
+        }
+
+        let r = u8::from_str_radix(&trimmed[0..2], 16)
+            .map_err(|_| anyhow!("Invalid red component in '{}'", hex))?;
+        let g = u8::from_str_radix(&trimmed[2..4], 16)
+            .map_err(|_| anyhow!("Invalid green component in '{}'", hex))?;
+        let b = u8::from_str_radix(&trimmed[4..6], 16)
+            .map_err(|_| anyhow!("Invalid blue component in '{}'", hex))?;
+
+        Ok(Self { r, g, b })
+    }
+
+    fn to_hex(self) -> String {
+        format!("#{:02x}{:02x}{:02x}", self.r, self.g, self.b)
+    }
+
+    fn to_lab(self) -> Lab {
+        let r = srgb_to_linear(self.r as f64 / 255.0);
+        let g = srgb_to_linear(self.g as f64 / 255.0);
+        let b = srgb_to_linear(self.b as f64 / 255.0);
+
+        let x = r * 0.412_456_4 + g * 0.357_576_1 + b * 0.180_437_5;
+        let y = r * 0.212_672_9 + g * 0.715_152_2 + b * 0.072_175;
+        let z = r * 0.019_333_9 + g * 0.119_192 + b * 0.950_304_1;
+
+        let fx = lab_f(x / 0.95047);
+        let fy = lab_f(y);
+        let fz = lab_f(z / 1.08883);
+
+        Lab {
+            l: 116.0 * fy - 16.0,
+            a: 500.0 * (fx - fy),
+            b: 200.0 * (fy - fz),
+        }
+    }
+
+    fn from_lab(lab: Lab) -> Self {
+        let fy = (lab.l + 16.0) / 116.0;
+        let fx = fy + (lab.a / 500.0);
+        let fz = fy - (lab.b / 200.0);
+
+        let x = 0.95047 * lab_f_inv(fx);
+        let y = lab_f_inv(fy);
+        let z = 1.08883 * lab_f_inv(fz);
+
+        let r_linear = x * 3.240_454_2 + y * -1.537_138_5 + z * -0.498_531_4;
+        let g_linear = x * -0.969_266 + y * 1.876_010_8 + z * 0.041_556;
+        let b_linear = x * 0.055_643_4 + y * -0.204_025_9 + z * 1.057_225_2;
+
+        Self {
+            r: to_u8(linear_to_srgb(r_linear)),
+            g: to_u8(linear_to_srgb(g_linear)),
+            b: to_u8(linear_to_srgb(b_linear)),
+        }
+    }
+}
+
+fn srgb_to_linear(channel: f64) -> f64 {
+    if channel <= 0.04045 {
+        channel / 12.92
+    } else {
+        ((channel + 0.055) / 1.055).powf(2.4)
+    }
+}
+
+fn linear_to_srgb(channel: f64) -> f64 {
+    if channel <= 0.0031308 {
+        12.92 * channel
+    } else {
+        1.055 * channel.powf(1.0 / 2.4) - 0.055
+    }
+}
+
+fn lab_f(value: f64) -> f64 {
+    if value > 216.0 / 24389.0 {
+        value.cbrt()
+    } else {
+        (24389.0 / 27.0 * value + 16.0) / 116.0
+    }
+}
+
+fn lab_f_inv(value: f64) -> f64 {
+    let cube = value * value * value;
+    if cube > 216.0 / 24389.0 {
+        cube
+    } else {
+        (116.0 * value - 16.0) / (24389.0 / 27.0)
+    }
+}
+
+fn to_u8(value: f64) -> u8 {
+    (value.clamp(0.0, 1.0) * 255.0).round() as u8
+}
+
+fn lerp_lab(t: f64, start: Lab, end: Lab) -> Lab {
+    Lab {
+        l: start.l + t * (end.l - start.l),
+        a: start.a + t * (end.a - start.a),
+        b: start.b + t * (end.b - start.b),
+    }
+}
+
+fn generate_256_palette(theme: &VTCodeDarkTheme, harmonious: bool) -> Result<Vec<Rgb>> {
+    let base16 = theme
+        .base16_colors()
+        .iter()
+        .map(|color| Rgb::from_hex(color))
+        .collect::<Result<Vec<_>>>()?;
+
+    let background = Rgb::from_hex(theme.background)?;
+    let foreground = Rgb::from_hex(theme.foreground)?;
+
+    let mut base8_lab = [
+        background.to_lab(),
+        base16[1].to_lab(),
+        base16[2].to_lab(),
+        base16[3].to_lab(),
+        base16[4].to_lab(),
+        base16[5].to_lab(),
+        base16[6].to_lab(),
+        foreground.to_lab(),
+    ];
+
+    let is_light_theme = base8_lab[7].l < base8_lab[0].l;
+    if is_light_theme && !harmonious {
+        base8_lab.swap(0, 7);
+    }
+
+    let mut palette = base16;
+
+    for r in 0..6 {
+        let t_r = r as f64 / 5.0;
+        let c0 = lerp_lab(t_r, base8_lab[0], base8_lab[1]);
+        let c1 = lerp_lab(t_r, base8_lab[2], base8_lab[3]);
+        let c2 = lerp_lab(t_r, base8_lab[4], base8_lab[5]);
+        let c3 = lerp_lab(t_r, base8_lab[6], base8_lab[7]);
+
+        for g in 0..6 {
+            let t_g = g as f64 / 5.0;
+            let c4 = lerp_lab(t_g, c0, c1);
+            let c5 = lerp_lab(t_g, c2, c3);
+
+            for b in 0..6 {
+                let t_b = b as f64 / 5.0;
+                let color = lerp_lab(t_b, c4, c5);
+                palette.push(Rgb::from_lab(color));
+            }
+        }
+    }
+
+    for shade in 0..24 {
+        let t = (shade as f64 + 1.0) / 25.0;
+        let color = lerp_lab(t, base8_lab[0], base8_lab[7]);
+        palette.push(Rgb::from_lab(color));
+    }
+
+    Ok(palette)
+}
+
+fn ghostty_palette_lines(palette: &[Rgb]) -> String {
+    palette
+        .iter()
+        .enumerate()
+        .map(|(index, color)| format!("palette = {index}={}", color.to_hex()))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn kitty_palette_lines(palette: &[Rgb]) -> String {
+    palette
+        .iter()
+        .enumerate()
+        .map(|(index, color)| format!("color{index} {}", color.to_hex()))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 /// Generate theme configuration for the specified terminal
 pub fn generate_config(terminal: TerminalType) -> Result<String> {
     let theme = VTCodeDarkTheme::default();
+    let generated_palette = generate_256_palette(&theme, false)?;
 
     let config = match terminal {
         TerminalType::Ghostty => {
-            format!(
+            let mut config = format!(
                 r#"# VT Code Dark Theme for Ghostty
 background = {background}
 foreground = {foreground}
 cursor-color = {cursor}
 selection-background = {selection_bg}
-
-# ANSI colors
-palette = 0={black}
-palette = 1={red}
-palette = 2={green}
-palette = 3={yellow}
-palette = 4={blue}
-palette = 5={magenta}
-palette = 6={cyan}
-palette = 7={white}
-palette = 8={bright_black}
-palette = 9={bright_red}
-palette = 10={bright_green}
-palette = 11={bright_yellow}
-palette = 12={bright_blue}
-palette = 13={bright_magenta}
-palette = 14={bright_cyan}
-palette = 15={bright_white}
 "#,
                 background = theme.background,
                 foreground = theme.foreground,
                 cursor = theme.cursor,
                 selection_bg = theme.selection_bg,
-                black = theme.black,
-                red = theme.red,
-                green = theme.green,
-                yellow = theme.yellow,
-                blue = theme.blue,
-                magenta = theme.magenta,
-                cyan = theme.cyan,
-                white = theme.white,
-                bright_black = theme.bright_black,
-                bright_red = theme.bright_red,
-                bright_green = theme.bright_green,
-                bright_yellow = theme.bright_yellow,
-                bright_blue = theme.bright_blue,
-                bright_magenta = theme.bright_magenta,
-                bright_cyan = theme.bright_cyan,
-                bright_white = theme.bright_white,
-            )
+            );
+            config.push_str("\n# ANSI + 256-color palette generated from base colors\n");
+            config.push_str(&ghostty_palette_lines(&generated_palette));
+            config.push('\n');
+            config
         }
 
         TerminalType::Kitty => {
-            format!(
+            let mut config = format!(
                 r#"# VT Code Dark Theme for Kitty
 background {background}
 foreground {foreground}
 cursor {cursor}
 selection_background {selection_bg}
-
-# ANSI colors
-color0 {black}
-color1 {red}
-color2 {green}
-color3 {yellow}
-color4 {blue}
-color5 {magenta}
-color6 {cyan}
-color7 {white}
-
-# Bright colors
-color8 {bright_black}
-color9 {bright_red}
-color10 {bright_green}
-color11 {bright_yellow}
-color12 {bright_blue}
-color13 {bright_magenta}
-color14 {bright_cyan}
-color15 {bright_white}
 "#,
                 background = theme.background,
                 foreground = theme.foreground,
                 cursor = theme.cursor,
                 selection_bg = theme.selection_bg,
-                black = theme.black,
-                red = theme.red,
-                green = theme.green,
-                yellow = theme.yellow,
-                blue = theme.blue,
-                magenta = theme.magenta,
-                cyan = theme.cyan,
-                white = theme.white,
-                bright_black = theme.bright_black,
-                bright_red = theme.bright_red,
-                bright_green = theme.bright_green,
-                bright_yellow = theme.bright_yellow,
-                bright_blue = theme.bright_blue,
-                bright_magenta = theme.bright_magenta,
-                bright_cyan = theme.bright_cyan,
-                bright_white = theme.bright_white,
-            )
+            );
+            config.push_str("\n# ANSI + 256-color palette generated from base colors\n");
+            config.push_str(&kitty_palette_lines(&generated_palette));
+            config.push('\n');
+            config
         }
 
         TerminalType::Alacritty => {
-            format!(
+            let mut config = format!(
                 r#"# VT Code Dark Theme for Alacritty
 [colors.primary]
 background = '{background}'
@@ -219,7 +377,16 @@ white = '{bright_white}'
                 bright_magenta = theme.bright_magenta,
                 bright_cyan = theme.bright_cyan,
                 bright_white = theme.bright_white,
-            )
+            );
+
+            config.push_str("\n# Extended indexed colors (16-255)\n");
+            for (index, color) in generated_palette.iter().enumerate().skip(16) {
+                config.push_str("[[colors.indexed_colors]]\n");
+                config.push_str(&format!("index = {index}\n"));
+                config.push_str(&format!("color = '{}'\n\n", color.to_hex()));
+            }
+
+            config
         }
 
         TerminalType::WezTerm => {
@@ -585,15 +752,16 @@ mod tests {
     #[test]
     fn test_generate_ghostty_config() {
         let config = generate_config(TerminalType::Ghostty).unwrap();
-        assert!(config.contains("palette"));
+        assert!(config.contains("palette = 0="));
+        assert!(config.contains("palette = 255="));
         assert!(config.contains("#1e1e1e"));
     }
 
     #[test]
     fn test_generate_kitty_config() {
         let config = generate_config(TerminalType::Kitty).unwrap();
-        assert!(config.contains("color0"));
-        assert!(config.contains("color15"));
+        assert!(config.contains("color0 "));
+        assert!(config.contains("color255 "));
     }
 
     #[test]
@@ -601,6 +769,7 @@ mod tests {
         let config = generate_config(TerminalType::Alacritty).unwrap();
         assert!(config.contains("[colors"));
         assert!(config.contains("primary"));
+        assert!(config.contains("index = 255"));
     }
 
     #[test]
@@ -627,5 +796,26 @@ mod tests {
     fn test_generate_config() {
         // This test exists for backward compatibility with the stub
         assert!(generate_config(TerminalType::Kitty).is_ok());
+    }
+
+    #[test]
+    fn test_generated_palette_has_256_entries_and_preserves_base16() {
+        let theme = VTCodeDarkTheme::default();
+        let palette = generate_256_palette(&theme, false).unwrap();
+
+        assert_eq!(palette.len(), 256);
+
+        let expected_base16 = theme
+            .base16_colors()
+            .iter()
+            .map(|c| Rgb::from_hex(c).unwrap().to_hex())
+            .collect::<Vec<_>>();
+        let actual_base16 = palette
+            .iter()
+            .take(16)
+            .map(|rgb| rgb.to_hex())
+            .collect::<Vec<_>>();
+
+        assert_eq!(actual_base16, expected_base16);
     }
 }

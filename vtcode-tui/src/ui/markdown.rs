@@ -439,12 +439,12 @@ fn handle_start_tag(tag: &Tag<'_>, ctx: &mut MarkdownContext<'_>) {
         Tag::Strikethrough => ctx.push_style(Style::strikethrough),
         Tag::Superscript | Tag::Subscript => ctx.push_style(Style::italic),
         Tag::Link { dest_url, .. } | Tag::Image { dest_url, .. } => {
-            let show_destination = should_render_link_destination(&dest_url);
+            let show_destination = should_render_link_destination(dest_url);
             let label_start_segment_idx = ctx.current_line.segments.len();
             *ctx.link_state = Some(LinkState {
                 destination: dest_url.to_string(),
                 show_destination,
-                hidden_location_suffix: extract_hidden_location_suffix(&dest_url),
+                hidden_location_suffix: extract_hidden_location_suffix(dest_url),
                 label_start_segment_idx,
             });
             ctx.push_style(Style::underline);

@@ -613,6 +613,8 @@ pub fn normalize_model_id(model: &str, provider: &str) -> String {
 // Serialization Helpers
 // ============================================================================
 
+/// Serde module for UUID serialization.
+#[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
 mod uuid_serde {
     use serde::{self, Deserialize, Deserializer, Serializer};
     use uuid::Uuid;

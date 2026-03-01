@@ -2,6 +2,7 @@
 name = "vtcode-file-search"
 version = "0.85.1"
 edition = "2024"
+rust-version = "1.85"
 license = "MIT"
 readme = "README.md"
 description = "Fast, parallel fuzzy file search library for VT Code"
@@ -28,3 +29,6 @@ num_cpus = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
+
+[lints]
+workspace = true

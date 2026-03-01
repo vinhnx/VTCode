@@ -2,6 +2,7 @@
 name = "vtcode-acp-client"
 version = "0.85.1"
 edition = "2024"
+rust-version = "1.85"
 authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
 description = "ACP client implementation for inter-agent communication and orchestration"
 license = "MIT"
@@ -28,3 +29,6 @@ futures-util = "0.3"
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
+
+[lints]
+workspace = true

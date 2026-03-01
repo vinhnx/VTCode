@@ -12,6 +12,7 @@ use std::path::PathBuf;
 use vtcode::startup::StartupContext;
 use vtcode_core::cli::args::{Cli, Commands};
 use vtcode_core::config::api_keys::load_dotenv;
+use vtcode_core::utils::terminal_color_probe::probe_and_cache_terminal_palette_harmony;
 use vtcode_tui::panic_hook;
 
 mod agent;
@@ -149,6 +150,9 @@ async fn run() -> Result<()> {
     if let Err(_err) = load_dotenv()
         && !args.quiet
     {}
+
+    // Probe terminal color semantics once and cache for theme-aware ANSI256 mapping.
+    probe_and_cache_terminal_palette_harmony();
 
     // Initialize tracing based on both RUST_LOG env var and config
     let env_tracing_initialized = initialize_tracing(&args).await.unwrap_or_default();

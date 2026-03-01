@@ -3,100 +3,74 @@
 //! This module provides caching for frequently parsed anstyle strings to avoid
 //! repeated parsing overhead, especially useful for theme parsing and
 //! frequently used style configurations.
+//!
+//! Uses [`LrMap`] (left-right concurrent map) for lock-free reads on the hot
+//! path while still allowing safe concurrent inserts on cache miss.
 
 use anstyle::Style as AnsiStyle;
 use anyhow::{Context, Result};
-use std::collections::HashMap;
-use std::sync::RwLock;
+use vtcode_commons::lr_map::LrMap;
 
 /// Thread-safe cached parser for Git and LS_COLORS style strings
 pub struct CachedStyleParser {
-    git_cache: RwLock<HashMap<String, AnsiStyle>>,
-    ls_colors_cache: RwLock<HashMap<String, AnsiStyle>>,
+    git_cache: LrMap<String, AnsiStyle>,
+    ls_colors_cache: LrMap<String, AnsiStyle>,
 }
 
 impl CachedStyleParser {
     /// Create a new cached style parser
     pub fn new() -> Self {
         Self {
-            git_cache: RwLock::new(HashMap::new()),
-            ls_colors_cache: RwLock::new(HashMap::new()),
+            git_cache: LrMap::new(),
+            ls_colors_cache: LrMap::new(),
         }
     }
 
     /// Parse and cache a Git-style color string (e.g., "bold red blue")
     pub fn parse_git_style(&self, input: &str) -> Result<AnsiStyle> {
-        // Check cache first
-        if let Ok(cache) = self.git_cache.read()
-            && let Some(cached) = cache.get(input)
-        {
-            return Ok(*cached);
+        if let Some(cached) = self.git_cache.get(input) {
+            return Ok(cached);
         }
 
-        // Parse and cache result
         let result = anstyle_git::parse(input)
             .map_err(|e| anyhow::anyhow!("Failed to parse Git style '{}': {:?}", input, e))?;
 
-        if let Ok(mut cache) = self.git_cache.write() {
-            cache.insert(input.to_string(), result);
-        }
-
+        self.git_cache.insert(input.to_string(), result);
         Ok(result)
     }
 
     /// Parse and cache an LS_COLORS-style string (e.g., "01;34")
     pub fn parse_ls_colors(&self, input: &str) -> Result<AnsiStyle> {
-        // Check cache first
-        if let Ok(cache) = self.ls_colors_cache.read()
-            && let Some(cached) = cache.get(input)
-        {
-            return Ok(*cached);
+        if let Some(cached) = self.ls_colors_cache.get(input) {
+            return Ok(cached);
         }
 
-        // Parse and cache result
         let result = anstyle_ls::parse(input)
             .ok_or_else(|| anyhow::anyhow!("Failed to parse LS_COLORS '{}'", input))?;
 
-        if let Ok(mut cache) = self.ls_colors_cache.write() {
-            cache.insert(input.to_string(), result);
-        }
-
+        self.ls_colors_cache.insert(input.to_string(), result);
         Ok(result)
     }
 
     /// Parse using Git syntax first, then LS_COLORS as fallback, with caching
     pub fn parse_flexible(&self, input: &str) -> Result<AnsiStyle> {
-        // Try Git syntax first
         match self.parse_git_style(input) {
             Ok(style) => Ok(style),
-            Err(_) => {
-                // Fall back to LS_COLORS if Git parsing fails
-                self.parse_ls_colors(input)
-                    .with_context(|| format!("Could not parse style string: '{}'", input))
-            }
+            Err(_) => self
+                .parse_ls_colors(input)
+                .with_context(|| format!("Could not parse style string: '{}'", input)),
         }
     }
 
     /// Clear all cached styles
     pub fn clear_cache(&self) {
-        if let Ok(mut git_cache) = self.git_cache.write() {
-            git_cache.clear();
-        }
-        if let Ok(mut ls_colors_cache) = self.ls_colors_cache.write() {
-            ls_colors_cache.clear();
-        }
+        self.git_cache.clear();
+        self.ls_colors_cache.clear();
     }
 
     /// Get cache statistics
     pub fn cache_stats(&self) -> (usize, usize) {
-        let git_count = self.git_cache.read().ok().map(|c| c.len()).unwrap_or(0);
-        let ls_colors_count = self
-            .ls_colors_cache
-            .read()
-            .ok()
-            .map(|c| c.len())
-            .unwrap_or(0);
-        (git_count, ls_colors_count)
+        (self.git_cache.len(), self.ls_colors_cache.len())
     }
 }
 

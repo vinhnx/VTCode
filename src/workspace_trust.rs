@@ -4,11 +4,13 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use anstyle::{Ansi256Color, Effects};
 use anyhow::{Context, Result};
+use vtcode_commons::color256_theme::rgb_to_ansi256_for_theme;
 use vtcode_core::utils::dot_config::{
     WorkspaceTrustLevel, WorkspaceTrustRecord, get_dot_manager, load_user_config,
 };
 use vtcode_core::utils::path::canonicalize_workspace;
 use vtcode_core::utils::style_helpers::{ColorPalette, render_styled};
+use vtcode_core::utils::{ansi_capabilities, ansi_capabilities::ColorScheme};
 
 const WARNING_RGB: (u8, u8, u8) = (166, 51, 51);
 const INFO_RGB: (u8, u8, u8) = (217, 154, 78);
@@ -249,39 +251,22 @@ enum PromptTone {
 fn print_prompt_line(message: &str, tone: PromptTone) {
     use anstyle::{Color, Style};
 
-    let style = match tone {
-        PromptTone::Heading => {
-            let color = Color::Ansi256(Ansi256Color(rgb_to_ansi256(
-                WARNING_RGB.0,
-                WARNING_RGB.1,
-                WARNING_RGB.2,
-            )));
-            Style::new().fg_color(Some(color)).effects(Effects::BOLD)
-        }
-        PromptTone::Body => {
-            let color = Color::Ansi256(Ansi256Color(rgb_to_ansi256(
-                INFO_RGB.0, INFO_RGB.1, INFO_RGB.2,
-            )));
-            Style::new().fg_color(Some(color))
-        }
+    let is_light_theme = matches!(ansi_capabilities::detect_color_scheme(), ColorScheme::Light);
+    let (rgb, is_heading) = match tone {
+        PromptTone::Heading => (WARNING_RGB, true),
+        PromptTone::Body => (INFO_RGB, false),
+    };
+
+    let color = Color::Ansi256(Ansi256Color(rgb_to_ansi256_for_theme(
+        rgb.0,
+        rgb.1,
+        rgb.2,
+        is_light_theme,
+    )));
+    let style = if is_heading {
+        Style::new().fg_color(Some(color)).effects(Effects::BOLD)
+    } else {
+        Style::new().fg_color(Some(color))
     };
     println!("{}{}{}", style.render(), message, style.render_reset());
-}
-
-fn rgb_to_ansi256(r: u8, g: u8, b: u8) -> u8 {
-    if r == g && g == b {
-        if r < 8 {
-            return 16;
-        }
-        if r > 248 {
-            return 231;
-        }
-        return ((r as u16 - 8) / 10) as u8 + 232;
-    }
-
-    let r_index = ((r as u16 * 5) / 255) as u8;
-    let g_index = ((g as u16 * 5) / 255) as u8;
-    let b_index = ((b as u16 * 5) / 255) as u8;
-
-    16 + 36 * r_index + 6 * g_index + b_index
 }

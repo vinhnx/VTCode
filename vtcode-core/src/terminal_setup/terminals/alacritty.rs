@@ -43,8 +43,11 @@ pub fn generate_config(
                 config_sections.push(String::new());
             }
             crate::terminal_setup::detector::TerminalFeature::ThemeSync => {
-                config_sections.push("# Theme colors will be configured separately".to_string());
-                config_sections.push(String::new());
+                config_sections.push("# Theme synchronization".to_string());
+                let theme_config = crate::terminal_setup::features::theme_sync::generate_config(
+                    TerminalType::Alacritty,
+                )?;
+                config_sections.push(theme_config);
             }
             crate::terminal_setup::detector::TerminalFeature::Notifications => {
                 config_sections.push("# System notifications".to_string());
@@ -94,11 +97,13 @@ mod tests {
             TerminalFeature::Multiline,
             TerminalFeature::CopyPaste,
             TerminalFeature::ShellIntegration,
+            TerminalFeature::ThemeSync,
         ];
         let config = generate_config(&features).unwrap();
         assert!(config.contains("keyboard.bindings"));
         assert!(config.contains("save_to_clipboard"));
         assert!(config.contains("[shell]"));
+        assert!(config.contains("index = 255"));
     }
 
     #[test]

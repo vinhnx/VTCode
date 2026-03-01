@@ -36,8 +36,11 @@ pub fn generate_config(
                 config_lines.push(shell_config);
             }
             crate::terminal_setup::detector::TerminalFeature::ThemeSync => {
-                config_lines.push("# Theme will be configured separately".to_string());
-                config_lines.push(String::new());
+                config_lines.push("# Theme synchronization".to_string());
+                let theme_config = crate::terminal_setup::features::theme_sync::generate_config(
+                    TerminalType::Ghostty,
+                )?;
+                config_lines.push(theme_config);
             }
             crate::terminal_setup::detector::TerminalFeature::Notifications => {
                 config_lines.push("# System notifications".to_string());
@@ -80,6 +83,7 @@ mod tests {
         assert!(config.contains("shift+enter"));
         assert!(config.contains("copy-on-select"));
         assert!(config.contains("shell-integration"));
+        assert!(config.contains("palette = 255="));
     }
 
     #[test]

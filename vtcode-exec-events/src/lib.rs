@@ -218,18 +218,18 @@ pub use tracing_support::PublicTracingEmitter as TracingEmitter;
 
 #[cfg(feature = "schema-export")]
 pub mod schema {
-    use schemars::{schema::RootSchema, schema_for};
+    use schemars::JsonSchema;
 
     use super::{ThreadEvent, VersionedThreadEvent};
 
     /// Generates a JSON Schema describing [`ThreadEvent`].
-    pub fn thread_event_schema() -> RootSchema {
-        schema_for!(ThreadEvent)
+    pub fn thread_event_schema() -> schemars::schema::Schema {
+        <ThreadEvent as JsonSchema>::schema_name().into()
     }
 
     /// Generates a JSON Schema describing [`VersionedThreadEvent`].
-    pub fn versioned_thread_event_schema() -> RootSchema {
-        schema_for!(VersionedThreadEvent)
+    pub fn versioned_thread_event_schema() -> schemars::schema::Schema {
+        <VersionedThreadEvent as JsonSchema>::schema_name().into()
     }
 }
 

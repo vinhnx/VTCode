@@ -41,8 +41,11 @@ pub fn generate_config(
                 config_lines.push(String::new());
             }
             crate::terminal_setup::detector::TerminalFeature::ThemeSync => {
-                config_lines.push("# Theme colors will be configured separately".to_string());
-                config_lines.push(String::new());
+                config_lines.push("# Theme synchronization".to_string());
+                let theme_config = crate::terminal_setup::features::theme_sync::generate_config(
+                    TerminalType::Kitty,
+                )?;
+                config_lines.push(theme_config);
             }
             crate::terminal_setup::detector::TerminalFeature::Notifications => {
                 config_lines.push("# System notifications".to_string());
@@ -89,11 +92,13 @@ mod tests {
             TerminalFeature::Multiline,
             TerminalFeature::CopyPaste,
             TerminalFeature::ShellIntegration,
+            TerminalFeature::ThemeSync,
         ];
         let config = generate_config(&features).unwrap();
         assert!(config.contains("shift+enter"));
         assert!(config.contains("copy_on_select"));
         assert!(config.contains("shell_integration"));
+        assert!(config.contains("color255 "));
     }
 
     #[test]
