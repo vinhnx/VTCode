@@ -25,20 +25,15 @@ pub(crate) fn print_exit_summary(data: ExitSummaryData) {
 
     let mut lines = Vec::new();
     if let Some(context) = data.header_context.as_ref() {
-        lines.push(build_header_info_line(context));
+        lines.push(build_compact_header(context));
     }
     lines.push(format!(
-        "API {} | Session {} | Changes {}",
-        format_short_duration(data.telemetry.api_time_spent),
+        "Session {} | API {} | {} in/{} out",
         format_long_duration(data.total_session_time),
-        format_code_changes(data.code_changes)
+        format_short_duration(data.telemetry.api_time_spent),
+        format_token_count(data.telemetry.total_prompt_tokens),
+        format_token_count(data.telemetry.total_completion_tokens)
     ));
-    if data.telemetry.dropped_metric_updates > 0 {
-        lines.push(format!(
-            "Metrics: dropped {} low-priority updates to keep runtime non-blocking",
-            data.telemetry.dropped_metric_updates
-        ));
-    }
     if let Some(top_model_line) = build_top_model_line(&model_rows) {
         lines.push(top_model_line);
     }
@@ -49,9 +44,8 @@ pub(crate) fn print_exit_summary(data: ExitSummaryData) {
     println!("{}", style_terminal_window_lines(&rendered_lines));
     if let Some(session_id) = data.resume_identifier {
         println!();
-        println!("{ANSI_DIM}Resume this session with:{ANSI_RESET}");
         println!(
-            "{ANSI_BOLD}{ANSI_GREEN}vtcode --resume {}{ANSI_RESET}",
+            "{ANSI_DIM}Resume:{ANSI_RESET} {ANSI_BOLD}{ANSI_GREEN}vtcode --resume {}{ANSI_RESET}",
             session_id
         );
     }
@@ -246,14 +240,6 @@ fn render_terminal_window(title: &str, lines: &[String], _max_content_width: usi
         out.push(line.clone());
     }
     out
-}
-
-fn clip_to_width(_value: &str, _width: usize) -> String {
-    String::new()
-}
-
-fn render_row(_content: &str, _content_width: usize) -> String {
-    String::new()
 }
 
 fn style_terminal_window_lines(lines: &[String]) -> String {
