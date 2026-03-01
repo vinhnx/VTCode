@@ -162,6 +162,7 @@ pub async fn read_instruction_bundle(
     let mut segments = Vec::with_capacity(sources.len()); // One segment per source
     let mut truncated = false;
     let mut bytes_read = 0usize;
+    let mut truncation_warning_emitted = false;
 
     for source in sources {
         if remaining == 0 {
@@ -198,11 +199,20 @@ pub async fn read_instruction_bundle(
 
         if metadata.len() as usize > remaining {
             truncated = true;
-            warn!(
-                "Instruction file `{}` exceeds remaining budget ({} bytes) - truncating.",
-                source.path.display(),
-                remaining
-            );
+            if !truncation_warning_emitted {
+                warn!(
+                    "Instruction file `{}` exceeds remaining budget ({} bytes) - truncating.",
+                    source.path.display(),
+                    remaining
+                );
+                truncation_warning_emitted = true;
+            } else {
+                tracing::debug!(
+                    "Additional instruction file `{}` exceeds remaining budget ({} bytes); truncating.",
+                    source.path.display(),
+                    remaining
+                );
+            }
         }
 
         if data.iter().all(|byte| byte.is_ascii_whitespace()) {

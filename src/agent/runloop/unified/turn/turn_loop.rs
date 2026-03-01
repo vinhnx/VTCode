@@ -39,7 +39,6 @@ use vtcode_core::core::agent::error_recovery::ErrorType;
 
 pub struct TurnLoopOutcome {
     pub result: TurnLoopResult,
-    pub working_history: Vec<uni::Message>,
     pub turn_modified_files: BTreeSet<PathBuf>,
 }
 
@@ -241,7 +240,7 @@ fn maybe_recover_after_post_tool_llm_failure(
 // For `TurnLoopContext`, we will reuse the generic `handle_pipeline_output` via an adapter below.
 
 pub async fn run_turn_loop(
-    mut working_history: Vec<uni::Message>,
+    working_history: &mut Vec<uni::Message>,
     mut ctx: TurnLoopContext<'_>,
     session_end_reason: &mut crate::hooks::lifecycle::SessionEndReason,
 ) -> Result<TurnLoopOutcome> {
@@ -289,31 +288,21 @@ pub async fn run_turn_loop(
     ctx.autonomous_executor.reset_turn_loop_detection();
 
     loop {
-        if handle_steering_messages(&mut ctx, &mut working_history, &mut result).await? {
+        if handle_steering_messages(&mut ctx, working_history, &mut result).await? {
             break;
         }
 
         step_count += 1;
         ctx.telemetry.record_turn();
 
-        if handle_pre_request_action(
-            &mut ctx,
-            &mut working_history,
-            session_end_reason,
-            &mut result,
-        )
-        .await?
+        if handle_pre_request_action(&mut ctx, working_history, session_end_reason, &mut result)
+            .await?
         {
             break;
         }
 
-        if maybe_handle_plan_mode_exit_trigger(
-            &mut ctx,
-            &mut working_history,
-            step_count,
-            &mut result,
-        )
-        .await?
+        if maybe_handle_plan_mode_exit_trigger(&mut ctx, working_history, step_count, &mut result)
+            .await?
         {
             break;
         }
@@ -344,7 +333,7 @@ pub async fn run_turn_loop(
             tool_result_cache: ctx.tool_result_cache,
             approval_recorder: ctx.approval_recorder,
             decision_ledger: ctx.decision_ledger,
-            working_history: &mut working_history,
+            working_history,
             tool_registry: ctx.tool_registry,
             tools: ctx.tools,
             tool_catalog: ctx.tool_catalog,
@@ -549,7 +538,7 @@ pub async fn run_turn_loop(
                 );
                 if maybe_recover_after_post_tool_llm_failure(
                     ctx.renderer,
-                    &working_history,
+                    working_history,
                     &err,
                     step_count,
                     turn_history_start_len,
@@ -598,7 +587,6 @@ pub async fn run_turn_loop(
     // Final outcome with the correct result status
     Ok(TurnLoopOutcome {
         result,
-        working_history,
         turn_modified_files,
     })
 }

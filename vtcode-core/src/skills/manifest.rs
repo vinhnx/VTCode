@@ -9,6 +9,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
+
+static ALLOWED_TOOLS_ARRAY_WARNED: AtomicBool = AtomicBool::new(false);
 
 /// YAML frontmatter structure for SKILL.md
 #[derive(Debug, Serialize, Deserialize)]
@@ -128,7 +131,18 @@ pub fn parse_skill_file(skill_path: &Path) -> anyhow::Result<(SkillManifest, Str
     let reference_errors = reference_validator.validate_references(&instructions);
 
     if !reference_errors.is_empty() {
-        tracing::warn!("File reference validation warnings: {:?}", reference_errors);
+        let sample_count = reference_errors.len().min(3);
+        let sample = &reference_errors[..sample_count];
+        tracing::warn!(
+            warning_count = reference_errors.len(),
+            sample = ?sample,
+            "File reference validation warnings detected (showing first {})",
+            sample_count
+        );
+        tracing::debug!(
+            warnings = ?reference_errors,
+            "File reference validation warnings (full list)"
+        );
     }
 
     Ok((manifest, instructions))
@@ -248,7 +262,9 @@ fn infer_description_from_instructions(instructions: &str) -> Option<String> {
 fn normalize_allowed_tools(field: AllowedToolsField) -> anyhow::Result<String> {
     match field {
         AllowedToolsField::List(tools) => {
-            if !tools.is_empty() {
+            if !tools.is_empty()
+                && !ALLOWED_TOOLS_ARRAY_WARNED.swap(true, Ordering::Relaxed)
+            {
                 tracing::warn!(
                     "allowed-tools uses deprecated array format, please use a string instead"
                 );

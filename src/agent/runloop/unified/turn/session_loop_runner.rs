@@ -1,6 +1,7 @@
 use super::*;
 use crate::agent::runloop::unified::plan_mode_state::render_plan_mode_next_step_hint;
 use crate::agent::runloop::unified::run_loop_context::TurnPhase;
+use crate::agent::runloop::unified::turn::turn_loop::TurnLoopOutcome;
 
 const PLAN_MODE_MIN_TOOL_CALLS_PER_TURN: usize = 48;
 const DIRECT_TOOL_FOLLOW_UP_DIRECTIVE: &str = "For this direct shell command follow-up, keep the response concise and action-oriented: 1) one short line summarizing the command result, 2) one short line with the exact next action. Avoid extra explanation unless there is an error.";
@@ -68,6 +69,53 @@ fn build_partial_timeout_messages(
     }
 
     (renderer_message, error_message)
+}
+
+struct TurnExecutionMetrics {
+    attempts_made: usize,
+    retry_count: usize,
+    history_snapshot_bytes: usize,
+    timeout_secs: u64,
+    elapsed_ms: u128,
+    outcome: &'static str,
+}
+
+fn estimate_history_bytes(history: &[vtcode_core::llm::provider::Message]) -> usize {
+    use vtcode_core::llm::provider::{ContentPart, MessageContent};
+
+    history
+        .iter()
+        .map(|message| {
+            let content_bytes = match &message.content {
+                MessageContent::Text(text) => text.len(),
+                MessageContent::Parts(parts) => parts
+                    .iter()
+                    .map(|part| match part {
+                        ContentPart::Text { text } => text.len(),
+                        ContentPart::Image { .. } | ContentPart::File { .. } => 128,
+                    })
+                    .sum::<usize>(),
+            };
+            let reasoning_bytes = message.reasoning.as_ref().map_or(0, String::len);
+            let tool_call_id_bytes = message.tool_call_id.as_ref().map_or(0, String::len);
+            let origin_tool_bytes = message.origin_tool.as_ref().map_or(0, String::len);
+            content_bytes + reasoning_bytes + tool_call_id_bytes + origin_tool_bytes + 32
+        })
+        .sum()
+}
+
+fn emit_turn_execution_metrics(turn_metrics: TurnExecutionMetrics) {
+    tracing::info!(
+        target: "vtcode.turn.metrics",
+        metric = "turn_execution",
+        attempts_made = turn_metrics.attempts_made,
+        retry_count = turn_metrics.retry_count,
+        history_snapshot_bytes = turn_metrics.history_snapshot_bytes,
+        timeout_secs = turn_metrics.timeout_secs,
+        elapsed_ms = turn_metrics.elapsed_ms,
+        outcome = turn_metrics.outcome,
+        "turn metric"
+    );
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -349,8 +397,10 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                 harness_config.max_tool_wall_clock_secs,
             );
             let turn_started_at = Instant::now();
-            let mut attempts = 0;
-            let mut history_backup: Option<Vec<vtcode_core::llm::provider::Message>> = None;
+            let mut attempts: usize = 0;
+            let history_snapshot_bytes = estimate_history_bytes(&working_history);
+            let mut turn_history_checkpoint: Option<Vec<vtcode_core::llm::provider::Message>> =
+                Some(working_history.clone());
             let outcome = match loop {
                 let mut auto_exit_plan_mode_attempted = false;
                 let plan_mode_active = session_stats.is_plan_mode();
@@ -365,16 +415,6 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                     harness_config.max_tool_wall_clock_secs,
                     harness_config.max_tool_retries,
                 );
-                let history_for_turn = if attempts == 0 {
-                    if history_backup.is_none() {
-                        history_backup = Some(working_history.clone());
-                    }
-                    std::mem::take(&mut working_history)
-                } else {
-                    history_backup
-                        .take()
-                        .expect("history_backup must be set after first attempt")
-                };
                 let execution_history_len_before_attempt = tool_registry.execution_history_len();
                 let turn_loop_ctx = crate::agent::runloop::unified::turn::TurnLoopContext::new(
                     &mut renderer,
@@ -417,7 +457,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                 let result = timeout(
                     Duration::from_secs(timeout_secs),
                     crate::agent::runloop::unified::turn::run_turn_loop(
-                        history_for_turn,
+                        &mut working_history,
                         turn_loop_ctx,
                         &mut session_end_reason,
                     ),
@@ -443,26 +483,11 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                             } else {
                                 RunLoopTurnLoopResult::Cancelled
                             };
-                            let recovered_history = history_backup
-                                .take()
-                                .or_else(|| {
-                                    if working_history.is_empty() {
-                                        None
-                                    } else {
-                                        Some(std::mem::take(&mut working_history))
-                                    }
-                                })
-                                .or_else(|| {
-                                    if conversation_history.is_empty() {
-                                        None
-                                    } else {
-                                        Some(std::mem::take(&mut conversation_history))
-                                    }
-                                })
-                                .unwrap_or_default();
+                            if let Some(snapshot) = turn_history_checkpoint.take() {
+                                working_history = snapshot;
+                            }
                             break Ok(TurnLoopOutcome {
                                 result: interrupted_result,
-                                working_history: recovered_history,
                                 turn_modified_files: std::collections::BTreeSet::new(),
                             });
                         }
@@ -498,6 +523,14 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                                 timeout_secs
                             ));
                         }
+                        let Some(snapshot) = turn_history_checkpoint.take() else {
+                            let checkpoint_error =
+                                "Turn timeout retry checkpoint unavailable; stopping turn."
+                                    .to_string();
+                            renderer.line(MessageStyle::Error, &checkpoint_error)?;
+                            break Err(anyhow::anyhow!(checkpoint_error));
+                        };
+                        working_history = snapshot;
                         renderer.line(
                             MessageStyle::Error,
                             &format!(
@@ -526,22 +559,6 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                         );
                         TurnLoopOutcome {
                             result: RunLoopTurnLoopResult::Completed,
-                            working_history: history_backup
-                                .or_else(|| {
-                                    if working_history.is_empty() {
-                                        None
-                                    } else {
-                                        Some(working_history)
-                                    }
-                                })
-                                .or_else(|| {
-                                    if conversation_history.is_empty() {
-                                        None
-                                    } else {
-                                        Some(std::mem::take(&mut conversation_history))
-                                    }
-                                })
-                                .unwrap_or_default(),
                             turn_modified_files: std::collections::BTreeSet::new(),
                         }
                     } else {
@@ -549,27 +566,12 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                         let _ = renderer.line(MessageStyle::Error, &format!("Error: {}", err));
                         TurnLoopOutcome {
                             result: RunLoopTurnLoopResult::Aborted,
-                            working_history: history_backup
-                                .or_else(|| {
-                                    if working_history.is_empty() {
-                                        None
-                                    } else {
-                                        Some(working_history)
-                                    }
-                                })
-                                .or_else(|| {
-                                    if conversation_history.is_empty() {
-                                        None
-                                    } else {
-                                        Some(std::mem::take(&mut conversation_history))
-                                    }
-                                })
-                                .unwrap_or_default(),
                             turn_modified_files: std::collections::BTreeSet::new(),
                         }
                     }
                 }
             };
+            conversation_history = working_history;
             let outcome_result = outcome.result.clone();
             let turn_elapsed = turn_started_at.elapsed();
             let show_turn_timer = vt_cfg
@@ -601,6 +603,20 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                     )
                     .ok();
             }
+            emit_turn_execution_metrics(TurnExecutionMetrics {
+                attempts_made: attempts.saturating_add(1),
+                retry_count: attempts,
+                history_snapshot_bytes,
+                timeout_secs,
+                elapsed_ms: turn_elapsed.as_millis(),
+                outcome: match &outcome_result {
+                    RunLoopTurnLoopResult::Completed => "completed",
+                    RunLoopTurnLoopResult::Aborted => "aborted",
+                    RunLoopTurnLoopResult::Cancelled => "cancelled",
+                    RunLoopTurnLoopResult::Exit => "exit",
+                    RunLoopTurnLoopResult::Blocked { .. } => "blocked",
+                },
+            });
 
             if session_stats.take_context_clear_request() {
                 conversation_history.clear();

@@ -61,7 +61,6 @@ pub async fn apply_turn_outcome(
             Ok(())
         }
         TurnLoopResult::Blocked { reason } => {
-            *ctx.conversation_history = outcome.working_history;
             if let Some(reason) = reason.as_deref() {
                 let _ = ctx.renderer.line(MessageStyle::Info, reason);
             }
@@ -71,7 +70,6 @@ pub async fn apply_turn_outcome(
             Ok(())
         }
         TurnLoopResult::Completed => {
-            *ctx.conversation_history = outcome.working_history;
             if let Some(manager) = ctx.checkpoint_manager {
                 let conversation_snapshot: Vec<SessionMessage> = ctx
                     .conversation_history
@@ -171,9 +169,9 @@ mod tests {
         let mut conversation_history = Vec::new();
         let outcome = TurnLoopOutcome {
             result: TurnLoopResult::Completed,
-            working_history: vec![uni::Message::assistant("done".to_string())],
             turn_modified_files: BTreeSet::new(),
         };
+        conversation_history.push(uni::Message::assistant("done".to_string()));
 
         apply_turn_outcome(
             outcome,
@@ -207,7 +205,6 @@ mod tests {
         let mut conversation_history = Vec::new();
         let outcome = TurnLoopOutcome {
             result: TurnLoopResult::Cancelled,
-            working_history: Vec::new(),
             turn_modified_files: BTreeSet::new(),
         };
 
@@ -243,9 +240,9 @@ mod tests {
         let mut conversation_history = Vec::new();
         let outcome = TurnLoopOutcome {
             result: TurnLoopResult::Completed,
-            working_history: vec![uni::Message::assistant("done".to_string())],
             turn_modified_files: BTreeSet::new(),
         };
+        conversation_history.push(uni::Message::assistant("done".to_string()));
 
         apply_turn_outcome(
             outcome,
