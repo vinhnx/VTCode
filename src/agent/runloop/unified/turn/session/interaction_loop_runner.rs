@@ -3,6 +3,7 @@ use serde::Deserialize;
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::path::Path;
+use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::ui::theme;
 use vtcode_core::utils::ansi::MessageStyle;
@@ -12,6 +13,9 @@ use crate::agent::runloop::ResumeSession;
 use crate::agent::runloop::model_picker::ModelPickerProgress;
 use crate::agent::runloop::prompt::refine_and_enrich_prompt;
 use crate::agent::runloop::tui_compat::{inline_theme_from_core_styles, to_tui_appearance};
+use crate::agent::runloop::unified::async_mcp_manager::{
+    AsyncMcpManager, approval_policy_from_human_in_the_loop,
+};
 use crate::agent::runloop::unified::display::display_user_message;
 use crate::agent::runloop::unified::inline_events::{
     InlineEventLoopResources, InlineInterruptCoordinator, InlineLoopAction, poll_inline_loop_action,
@@ -174,6 +178,19 @@ fn apply_live_theme_and_appearance(
     handle.force_redraw();
 }
 
+fn sync_mcp_approval_policy(
+    async_mcp_manager: Option<&AsyncMcpManager>,
+    vt_cfg: Option<&VTCodeConfig>,
+) {
+    let (Some(mcp_manager), Some(cfg)) = (async_mcp_manager, vt_cfg) else {
+        return;
+    };
+    let desired_policy = approval_policy_from_human_in_the_loop(cfg.security.human_in_the_loop);
+    if mcp_manager.approval_policy() != desired_policy {
+        mcp_manager.set_approval_policy(desired_policy);
+    }
+}
+
 pub(super) async fn run_interaction_loop_impl(
     ctx: &mut InteractionLoopContext<'_>,
     state: &mut InteractionState<'_>,
@@ -205,6 +222,7 @@ pub(super) async fn run_interaction_loop_impl(
                 apply_live_theme_and_appearance(ctx.handle, cfg);
             }
         }
+        sync_mcp_approval_policy(ctx.async_mcp_manager.as_deref(), ctx.vt_cfg.as_ref());
 
         let spooled_count = ctx.tool_registry.spooled_files_count().await;
         crate::agent::runloop::unified::status_line::update_spooled_files_count(
@@ -282,93 +300,96 @@ pub(super) async fn run_interaction_loop_impl(
             team_active: ctx.session_stats.team_context.is_some(),
         };
 
-        let mut input_owned =
-            match poll_inline_loop_action(ctx.session, ctx.ctrl_c_notify, resources).await? {
-                InlineLoopAction::Continue => continue,
-                InlineLoopAction::Submit(text) => text,
-                InlineLoopAction::ToggleDelegateMode => {
-                    let enabled = ctx.session_stats.toggle_delegate_mode();
-                    ctx.renderer.line(
-                        MessageStyle::Info,
-                        if enabled {
-                            "Delegate mode enabled (coordination only)."
-                        } else {
-                            "Delegate mode disabled."
-                        },
-                    )?;
-                    continue;
-                }
-                InlineLoopAction::SwitchTeammate(direction) => {
-                    handle_team_switch(ctx, direction).await?;
-                    continue;
-                }
-                InlineLoopAction::Exit(reason) => {
-                    return Ok(InteractionOutcome::Exit { reason });
-                }
-                InlineLoopAction::PlanApproved {
+        let inline_action =
+            poll_inline_loop_action(ctx.session, ctx.ctrl_c_notify, resources).await?;
+        sync_mcp_approval_policy(ctx.async_mcp_manager.as_deref(), ctx.vt_cfg.as_ref());
+
+        let mut input_owned = match inline_action {
+            InlineLoopAction::Continue => continue,
+            InlineLoopAction::Submit(text) => text,
+            InlineLoopAction::ToggleDelegateMode => {
+                let enabled = ctx.session_stats.toggle_delegate_mode();
+                ctx.renderer.line(
+                    MessageStyle::Info,
+                    if enabled {
+                        "Delegate mode enabled (coordination only)."
+                    } else {
+                        "Delegate mode disabled."
+                    },
+                )?;
+                continue;
+            }
+            InlineLoopAction::SwitchTeammate(direction) => {
+                handle_team_switch(ctx, direction).await?;
+                continue;
+            }
+            InlineLoopAction::Exit(reason) => {
+                return Ok(InteractionOutcome::Exit { reason });
+            }
+            InlineLoopAction::PlanApproved {
+                auto_accept,
+                clear_context,
+            } => {
+                ctx.renderer.line(
+                    MessageStyle::Info,
+                    if clear_context {
+                        "Plan approved. Clearing context and auto-accepting edits..."
+                    } else if auto_accept {
+                        "Plan approved with auto-accept. Starting execution..."
+                    } else {
+                        "Plan approved. Starting execution with manual approval..."
+                    },
+                )?;
+                return Ok(InteractionOutcome::PlanApproved {
                     auto_accept,
                     clear_context,
-                } => {
-                    ctx.renderer.line(
-                        MessageStyle::Info,
-                        if clear_context {
-                            "Plan approved. Clearing context and auto-accepting edits..."
-                        } else if auto_accept {
-                            "Plan approved with auto-accept. Starting execution..."
-                        } else {
-                            "Plan approved. Starting execution with manual approval..."
-                        },
-                    )?;
-                    return Ok(InteractionOutcome::PlanApproved {
-                        auto_accept,
-                        clear_context,
-                    });
-                }
-                InlineLoopAction::PlanEditRequested => {
-                    ctx.renderer.line(
-                        MessageStyle::Info,
-                        "Returning to plan mode. Continue refining your plan.",
-                    )?;
-                    continue;
-                }
-                InlineLoopAction::ResumeSession(session_id) => {
-                    ctx.renderer.line(
-                        MessageStyle::Info,
-                        &format!("Loading session: {}", session_id),
-                    )?;
+                });
+            }
+            InlineLoopAction::PlanEditRequested => {
+                ctx.renderer.line(
+                    MessageStyle::Info,
+                    "Returning to plan mode. Continue refining your plan.",
+                )?;
+                continue;
+            }
+            InlineLoopAction::ResumeSession(session_id) => {
+                ctx.renderer.line(
+                    MessageStyle::Info,
+                    &format!("Loading session: {}", session_id),
+                )?;
 
-                    match find_session_by_identifier(&session_id).await {
-                        Ok(Some(listing)) => {
-                            let resume = ResumeSession::from_listing(&listing, false);
+                match find_session_by_identifier(&session_id).await {
+                    Ok(Some(listing)) => {
+                        let resume = ResumeSession::from_listing(&listing, false);
 
-                            ctx.renderer.line(
-                                MessageStyle::Info,
-                                &format!("Restarting with session: {}", session_id),
-                            )?;
-                            return Ok(InteractionOutcome::Resume {
-                                resume_session: Box::new(resume),
-                            });
-                        }
-                        Ok(None) => {
-                            ctx.renderer.line(
-                                MessageStyle::Error,
-                                &format!("Session not found: {}", session_id),
-                            )?;
-                            continue;
-                        }
-                        Err(err) => {
-                            ctx.renderer.line(
-                                MessageStyle::Error,
-                                &format!("Failed to load session: {}", err),
-                            )?;
-                            continue;
-                        }
+                        ctx.renderer.line(
+                            MessageStyle::Info,
+                            &format!("Restarting with session: {}", session_id),
+                        )?;
+                        return Ok(InteractionOutcome::Resume {
+                            resume_session: Box::new(resume),
+                        });
+                    }
+                    Ok(None) => {
+                        ctx.renderer.line(
+                            MessageStyle::Error,
+                            &format!("Session not found: {}", session_id),
+                        )?;
+                        continue;
+                    }
+                    Err(err) => {
+                        ctx.renderer.line(
+                            MessageStyle::Error,
+                            &format!("Failed to load session: {}", err),
+                        )?;
+                        continue;
                     }
                 }
-                InlineLoopAction::DiffApproved | InlineLoopAction::DiffRejected => {
-                    continue;
-                }
-            };
+            }
+            InlineLoopAction::DiffApproved | InlineLoopAction::DiffRejected => {
+                continue;
+            }
+        };
 
         if input_owned.is_empty() {
             continue;
@@ -397,6 +418,7 @@ pub(super) async fn run_interaction_loop_impl(
         {
             tracing::warn!("Failed to apply workspace configuration to tools: {}", err);
         }
+        sync_mcp_approval_policy(ctx.async_mcp_manager.as_deref(), ctx.vt_cfg.as_ref());
 
         if let Some(mcp_manager) = ctx.async_mcp_manager {
             let mcp_status = mcp_manager.get_status().await;

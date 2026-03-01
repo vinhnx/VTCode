@@ -38,6 +38,10 @@ fn env_flag_enabled(var_name: &str) -> bool {
         .unwrap_or(false)
 }
 
+fn debug_runtime_flag_enabled(debug_arg_enabled: bool, env_var: &str) -> bool {
+    cfg!(debug_assertions) && (debug_arg_enabled || env_flag_enabled(env_var))
+}
+
 fn main() -> std::process::ExitCode {
     const MAIN_THREAD_STACK_BYTES: usize = 16 * 1024 * 1024;
 
@@ -136,11 +140,9 @@ async fn run() -> Result<()> {
     let matches = cmd.get_matches();
     let args = Cli::from_arg_matches(&matches)?;
     panic_hook::set_debug_mode(args.debug);
-    let color_eyre_enabled =
-        cfg!(debug_assertions) && (args.debug || env_flag_enabled("VTCODE_COLOR_EYRE"));
+    let color_eyre_enabled = debug_runtime_flag_enabled(args.debug, "VTCODE_COLOR_EYRE");
     panic_hook::set_color_eyre_enabled(color_eyre_enabled);
-    let tui_log_capture_enabled =
-        cfg!(debug_assertions) && (args.debug || env_flag_enabled("VTCODE_TUI_LOGS"));
+    let tui_log_capture_enabled = debug_runtime_flag_enabled(args.debug, "VTCODE_TUI_LOGS");
     vtcode_tui::log::set_tui_log_capture_enabled(tui_log_capture_enabled);
 
     // Load .env (non-fatal if missing)

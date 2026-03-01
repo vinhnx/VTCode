@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use serde_json::Value;
+use std::sync::{Arc, RwLock as StdRwLock};
 use tokio::sync::Mutex;
 
 use vtcode_core::mcp::{
@@ -16,11 +17,14 @@ use vtcode_core::{
 pub struct InteractiveMcpElicitationHandler {
     prompt_lock: Mutex<()>,
     hitl_notification_bell: bool,
-    approval_policy: AskForApproval,
+    approval_policy: Arc<StdRwLock<AskForApproval>>,
 }
 
 impl InteractiveMcpElicitationHandler {
-    pub fn new(hitl_notification_bell: bool, approval_policy: AskForApproval) -> Self {
+    pub fn new(
+        hitl_notification_bell: bool,
+        approval_policy: Arc<StdRwLock<AskForApproval>>,
+    ) -> Self {
         Self {
             prompt_lock: Mutex::new(()),
             hitl_notification_bell,
@@ -48,7 +52,17 @@ impl McpElicitationHandler for InteractiveMcpElicitationHandler {
     ) -> Result<McpElicitationResponse> {
         use std::io::{self, Write};
 
-        if elicitation_is_rejected_by_policy(self.approval_policy) {
+        let approval_policy = match self.approval_policy.read() {
+            Ok(policy) => *policy,
+            Err(poisoned) => {
+                tracing::warn!(
+                    "MCP elicitation approval policy lock poisoned; continuing with recovered value"
+                );
+                *poisoned.into_inner()
+            }
+        };
+
+        if elicitation_is_rejected_by_policy(approval_policy) {
             tracing::info!(
                 "Auto-declining MCP elicitation from '{}' due to approval policy",
                 provider

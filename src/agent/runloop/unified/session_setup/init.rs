@@ -7,7 +7,9 @@ use super::types::{
 use crate::agent::runloop::ResumeSession;
 use crate::agent::runloop::mcp_events;
 use crate::agent::runloop::telemetry::build_trajectory_logger;
-use crate::agent::runloop::unified::async_mcp_manager::{AsyncMcpManager, McpInitStatus};
+use crate::agent::runloop::unified::async_mcp_manager::{
+    AsyncMcpManager, McpInitStatus, approval_policy_from_human_in_the_loop,
+};
 use crate::agent::runloop::unified::prompts::read_system_prompt;
 use crate::agent::runloop::unified::tool_call_safety::ToolCallSafetyValidator;
 use crate::agent::runloop::unified::tool_catalog::ToolCatalogState;
@@ -28,7 +30,6 @@ use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::core::agent::state::recover_history_from_crash;
 use vtcode_core::core::decision_tracker::DecisionTracker;
-use vtcode_core::exec_policy::{AskForApproval, RejectConfig};
 use vtcode_core::llm::{
     factory::{ProviderConfig, create_provider_with_config},
     provider as uni,
@@ -304,15 +305,7 @@ fn create_async_mcp_manager(vt_cfg: Option<&VTCodeConfig>) -> Option<Arc<AsyncMc
         "Setting up async MCP client with {} providers",
         cfg.mcp.providers.len()
     );
-    let approval_policy = if cfg.security.human_in_the_loop {
-        AskForApproval::OnRequest
-    } else {
-        AskForApproval::Reject(RejectConfig {
-            sandbox_approval: true,
-            rules: true,
-            mcp_elicitations: true,
-        })
-    };
+    let approval_policy = approval_policy_from_human_in_the_loop(cfg.security.human_in_the_loop);
     let manager = AsyncMcpManager::new(
         cfg.mcp.clone(),
         cfg.security.hitl_notification_bell,
