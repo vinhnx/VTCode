@@ -25,6 +25,7 @@ use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::core::agent::state::recover_history_from_crash;
 use vtcode_core::core::decision_tracker::DecisionTracker;
+use vtcode_core::exec_policy::{AskForApproval, RejectConfig};
 use vtcode_core::llm::{
     factory::{ProviderConfig, create_provider_with_config},
     provider as uni,
@@ -296,9 +297,19 @@ fn create_async_mcp_manager(vt_cfg: Option<&VTCodeConfig>) -> Option<Arc<AsyncMc
         "Setting up async MCP client with {} providers",
         cfg.mcp.providers.len()
     );
+    let approval_policy = if cfg.security.human_in_the_loop {
+        AskForApproval::OnRequest
+    } else {
+        AskForApproval::Reject(RejectConfig {
+            sandbox_approval: true,
+            rules: true,
+            mcp_elicitations: true,
+        })
+    };
     let manager = AsyncMcpManager::new(
         cfg.mcp.clone(),
         cfg.security.hitl_notification_bell,
+        approval_policy,
         Arc::new(|_event: mcp_events::McpEvent| {}),
     );
     let manager_arc = Arc::new(manager);

@@ -2,6 +2,32 @@
 
 use serde::{Deserialize, Serialize};
 
+/// Fine-grained rejection controls for approval prompts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct RejectConfig {
+    /// Reject approval prompts related to sandbox escalation.
+    pub sandbox_approval: bool,
+    /// Reject prompts triggered by policy `prompt` rules.
+    pub rules: bool,
+    /// Reject MCP elicitation prompts.
+    pub mcp_elicitations: bool,
+}
+
+impl RejectConfig {
+    pub const fn rejects_sandbox_approval(self) -> bool {
+        self.sandbox_approval
+    }
+
+    pub const fn rejects_rules_approval(self) -> bool {
+        self.rules
+    }
+
+    pub const fn rejects_mcp_elicitations(self) -> bool {
+        self.mcp_elicitations
+    }
+}
+
 /// Policy for when to ask for approval before executing commands.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -18,12 +44,18 @@ pub enum AskForApproval {
 
     /// Ask only on failure (retry with approval).
     OnFailure,
+
+    /// Fine-grained rejection controls for approval prompts.
+    Reject(RejectConfig),
 }
 
 impl AskForApproval {
     /// Check if this policy requires asking for unknown commands.
     pub fn requires_approval_for_unknown(&self) -> bool {
-        matches!(self, Self::UnlessTrusted | Self::OnRequest)
+        matches!(
+            self,
+            Self::UnlessTrusted | Self::OnRequest | Self::Reject(_)
+        )
     }
 }
 
@@ -185,6 +217,7 @@ impl ExecApprovalRequirement {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
     #[test]
     fn test_skip_requirement() {
@@ -217,5 +250,49 @@ mod tests {
         assert!(rule.contains("cargo"));
         assert!(rule.contains("build"));
         assert!(rule.contains("allow"));
+    }
+
+    #[test]
+    fn test_reject_config_helpers() {
+        let config = RejectConfig {
+            sandbox_approval: true,
+            rules: false,
+            mcp_elicitations: true,
+        };
+        assert!(config.rejects_sandbox_approval());
+        assert!(!config.rejects_rules_approval());
+        assert!(config.rejects_mcp_elicitations());
+    }
+
+    #[test]
+    fn test_reject_policy_serde_roundtrip() {
+        let value = json!({
+            "reject": {
+                "sandbox_approval": true,
+                "rules": false,
+                "mcp_elicitations": true
+            }
+        });
+        let policy: AskForApproval = serde_json::from_value(value).expect("deserialize policy");
+        assert_eq!(
+            policy,
+            AskForApproval::Reject(RejectConfig {
+                sandbox_approval: true,
+                rules: false,
+                mcp_elicitations: true,
+            })
+        );
+
+        let serialized = serde_json::to_value(policy).expect("serialize policy");
+        assert_eq!(
+            serialized,
+            json!({
+                "reject": {
+                    "sandbox_approval": true,
+                    "rules": false,
+                    "mcp_elicitations": true
+                }
+            })
+        );
     }
 }

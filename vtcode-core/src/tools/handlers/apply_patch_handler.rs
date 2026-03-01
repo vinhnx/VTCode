@@ -104,6 +104,16 @@ impl Approvable<ApplyPatchRequest> for ApplyPatchRuntime {
         })
     }
 
+    fn wants_no_sandbox_approval(&self, policy: AskForApproval) -> bool {
+        match policy {
+            AskForApproval::Never => false,
+            AskForApproval::Reject(reject_config) => !reject_config.rejects_sandbox_approval(),
+            AskForApproval::OnFailure => true,
+            AskForApproval::OnRequest => true,
+            AskForApproval::UnlessTrusted => true,
+        }
+    }
+
     fn start_approval_async<'a>(
         &'a mut self,
         _req: &'a ApplyPatchRequest,
@@ -505,6 +515,7 @@ const APPLY_PATCH_UPDATE_EXAMPLE: &str = r#"*** Begin Patch
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::exec_policy::RejectConfig;
 
     #[test]
     fn test_parse_apply_patch_command_direct() {
@@ -535,5 +546,25 @@ mod tests {
     fn test_create_json_tool() {
         let tool = create_apply_patch_json_tool();
         assert_eq!(tool.name(), "apply_patch");
+    }
+
+    #[test]
+    fn wants_no_sandbox_approval_reject_respects_sandbox_flag() {
+        let runtime = ApplyPatchRuntime::new();
+        assert!(runtime.wants_no_sandbox_approval(AskForApproval::OnRequest));
+        assert!(
+            !runtime.wants_no_sandbox_approval(AskForApproval::Reject(RejectConfig {
+                sandbox_approval: true,
+                rules: false,
+                mcp_elicitations: false,
+            }))
+        );
+        assert!(
+            runtime.wants_no_sandbox_approval(AskForApproval::Reject(RejectConfig {
+                sandbox_approval: false,
+                rules: false,
+                mcp_elicitations: false,
+            }))
+        );
     }
 }

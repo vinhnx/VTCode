@@ -216,11 +216,11 @@ fn sensitive_paths_from_runtime_config(
     sensitive_paths
 }
 
-const MISSING_ADDITIONAL_PERMISSIONS_MESSAGE: &str =
-    "missing `additional_permissions`; provide `fs_read` and/or `fs_write` when using `with_additional_permissions`";
+const MISSING_ADDITIONAL_PERMISSIONS_MESSAGE: &str = "missing `additional_permissions`; provide `fs_read` and/or `fs_write` when using `with_additional_permissions`";
 
 fn parse_requested_sandbox_permissions(
     payload: &serde_json::Map<String, Value>,
+    cwd: &Path,
 ) -> Result<(SandboxPermissions, Option<AdditionalPermissions>)> {
     let sandbox_permissions = payload
         .get("sandbox_permissions")
@@ -240,6 +240,26 @@ fn parse_requested_sandbox_permissions(
         .with_context(|| {
             "Invalid additional_permissions. Expected object with fs_read/fs_write string arrays."
         })?;
+
+    let additional_permissions = if sandbox_permissions.uses_additional_permissions() {
+        let Some(additional_permissions) = additional_permissions else {
+            return Err(anyhow!(MISSING_ADDITIONAL_PERMISSIONS_MESSAGE));
+        };
+        let normalized = normalize_additional_permissions(additional_permissions, cwd)?;
+        if normalized.is_empty() {
+            return Err(anyhow!(
+                "`additional_permissions` must include at least one path in `fs_read` or `fs_write`"
+            ));
+        }
+        Some(normalized)
+    } else {
+        if additional_permissions.is_some() {
+            return Err(anyhow!(
+                "`additional_permissions` requires `sandbox_permissions` set to `with_additional_permissions`"
+            ));
+        }
+        None
+    };
 
     Ok((sandbox_permissions, additional_permissions))
 }
@@ -281,33 +301,6 @@ fn normalize_additional_permissions(
         normalize_permission_paths(additional_permissions.fs_write, command_cwd, "fs_write")?;
 
     Ok(AdditionalPermissions { fs_read, fs_write })
-}
-
-fn normalize_and_validate_additional_permissions(
-    sandbox_permissions: SandboxPermissions,
-    additional_permissions: Option<AdditionalPermissions>,
-    cwd: &Path,
-) -> Result<Option<AdditionalPermissions>> {
-    if sandbox_permissions.uses_additional_permissions() {
-        let Some(additional_permissions) = additional_permissions else {
-            return Err(anyhow!(MISSING_ADDITIONAL_PERMISSIONS_MESSAGE));
-        };
-        let normalized = normalize_additional_permissions(additional_permissions, cwd)?;
-        if normalized.is_empty() {
-            return Err(anyhow!(
-                "`additional_permissions` must include at least one path in `fs_read` or `fs_write`"
-            ));
-        }
-        return Ok(Some(normalized));
-    }
-
-    if additional_permissions.is_some() {
-        return Err(anyhow!(
-            "`additional_permissions` requires `sandbox_permissions` set to `with_additional_permissions`"
-        ));
-    }
-
-    Ok(None)
 }
 
 fn dedupe_writable_roots(writable_roots: Vec<WritableRoot>) -> Vec<WritableRoot> {
@@ -1515,13 +1508,8 @@ impl ToolRegistry {
             .pty_manager()
             .resolve_working_dir(payload.get("working_dir").and_then(|value| value.as_str()))
             .await?;
-        let (sandbox_permissions, parsed_additional_permissions) =
-            parse_requested_sandbox_permissions(payload)?;
-        let additional_permissions = normalize_and_validate_additional_permissions(
-            sandbox_permissions,
-            parsed_additional_permissions,
-            &working_dir_path,
-        )?;
+        let (sandbox_permissions, additional_permissions) =
+            parse_requested_sandbox_permissions(payload, &working_dir_path)?;
 
         let display_command = if should_use_windows_command_tokenizer(Some(&shell_program)) {
             join_windows_command(&command)
@@ -2761,7 +2749,7 @@ mod unified_action_error_tests {
 mod sandbox_runtime_tests {
     use super::{
         apply_runtime_sandbox_to_command, enforce_sandbox_preflight_guards,
-        normalize_and_validate_additional_permissions, sandbox_policy_for_command,
+        parse_requested_sandbox_permissions, sandbox_policy_for_command,
         sandbox_policy_from_runtime_config,
     };
     use crate::sandboxing::{
@@ -2892,12 +2880,8 @@ mod sandbox_runtime_tests {
             }
         });
         let obj = payload.as_object().expect("payload object");
-        let err = normalize_and_validate_additional_permissions(
-            obj,
-            SandboxPermissions::UseDefault,
-            PathBuf::from(".").as_path(),
-        )
-        .expect_err("additional_permissions without with_additional_permissions should fail");
+        let err = parse_requested_sandbox_permissions(obj, PathBuf::from(".").as_path())
+            .expect_err("additional_permissions without with_additional_permissions should fail");
         assert!(
             err.to_string()
                 .contains("requires `sandbox_permissions` set to `with_additional_permissions`")
@@ -2914,12 +2898,8 @@ mod sandbox_runtime_tests {
             }
         });
         let obj = payload.as_object().expect("payload object");
-        let err = normalize_and_validate_additional_permissions(
-            obj,
-            SandboxPermissions::WithAdditionalPermissions,
-            PathBuf::from(".").as_path(),
-        )
-        .expect_err("empty additional_permissions should fail");
+        let err = parse_requested_sandbox_permissions(obj, PathBuf::from(".").as_path())
+            .expect_err("empty additional_permissions should fail");
         assert!(err.to_string().contains("must include at least one path"));
     }
 

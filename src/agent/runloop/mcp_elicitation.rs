@@ -7,6 +7,7 @@ use vtcode_core::mcp::{
     ElicitationAction, McpElicitationHandler, McpElicitationRequest, McpElicitationResponse,
 };
 use vtcode_core::{
+    exec_policy::AskForApproval,
     NotificationEvent, send_global_notification, utils::ansi_codes::notify_attention,
 };
 
@@ -15,14 +16,26 @@ use vtcode_core::{
 pub struct InteractiveMcpElicitationHandler {
     prompt_lock: Mutex<()>,
     hitl_notification_bell: bool,
+    approval_policy: AskForApproval,
 }
 
 impl InteractiveMcpElicitationHandler {
-    pub fn new(hitl_notification_bell: bool) -> Self {
+    pub fn new(hitl_notification_bell: bool, approval_policy: AskForApproval) -> Self {
         Self {
             prompt_lock: Mutex::new(()),
             hitl_notification_bell,
+            approval_policy,
         }
+    }
+}
+
+fn elicitation_is_rejected_by_policy(approval_policy: AskForApproval) -> bool {
+    match approval_policy {
+        AskForApproval::Never => true,
+        AskForApproval::OnFailure => false,
+        AskForApproval::OnRequest => false,
+        AskForApproval::UnlessTrusted => false,
+        AskForApproval::Reject(reject_config) => reject_config.rejects_mcp_elicitations(),
     }
 }
 
@@ -34,6 +47,17 @@ impl McpElicitationHandler for InteractiveMcpElicitationHandler {
         request: McpElicitationRequest,
     ) -> Result<McpElicitationResponse> {
         use std::io::{self, Write};
+
+        if elicitation_is_rejected_by_policy(self.approval_policy) {
+            tracing::info!(
+                "Auto-declining MCP elicitation from '{}' due to approval policy",
+                provider
+            );
+            return Ok(McpElicitationResponse {
+                action: ElicitationAction::Decline,
+                content: None,
+            });
+        }
 
         let _guard = self.prompt_lock.lock().await;
 
@@ -98,5 +122,39 @@ impl McpElicitationHandler for InteractiveMcpElicitationHandler {
             action: ElicitationAction::Accept,
             content: Some(content),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::elicitation_is_rejected_by_policy;
+    use vtcode_core::exec_policy::{AskForApproval, RejectConfig};
+
+    #[test]
+    fn elicitation_reject_policy_defaults_to_prompting() {
+        assert!(!elicitation_is_rejected_by_policy(AskForApproval::OnFailure));
+        assert!(!elicitation_is_rejected_by_policy(AskForApproval::OnRequest));
+        assert!(!elicitation_is_rejected_by_policy(
+            AskForApproval::UnlessTrusted
+        ));
+        assert!(!elicitation_is_rejected_by_policy(AskForApproval::Reject(
+            RejectConfig {
+                sandbox_approval: false,
+                rules: false,
+                mcp_elicitations: false,
+            }
+        )));
+    }
+
+    #[test]
+    fn elicitation_reject_policy_respects_never_and_reject_config() {
+        assert!(elicitation_is_rejected_by_policy(AskForApproval::Never));
+        assert!(elicitation_is_rejected_by_policy(AskForApproval::Reject(
+            RejectConfig {
+                sandbox_approval: false,
+                rules: false,
+                mcp_elicitations: true,
+            }
+        )));
     }
 }

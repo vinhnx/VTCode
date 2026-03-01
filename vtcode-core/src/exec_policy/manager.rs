@@ -17,6 +17,38 @@ use std::{
 };
 use tokio::sync::RwLock;
 
+const PROMPT_CONFLICT_REASON: &str =
+    "approval required by policy, but AskForApproval is set to Never";
+const REJECT_SANDBOX_APPROVAL_REASON: &str =
+    "approval required by policy, but AskForApproval::Reject.sandbox_approval is set";
+const REJECT_RULES_APPROVAL_REASON: &str =
+    "approval required by policy rule, but AskForApproval::Reject.rules is set";
+
+fn prompt_is_rejected_by_policy(
+    approval_policy: AskForApproval,
+    prompt_is_rule: bool,
+) -> Option<&'static str> {
+    match approval_policy {
+        AskForApproval::Never => Some(PROMPT_CONFLICT_REASON),
+        AskForApproval::OnFailure => None,
+        AskForApproval::OnRequest => None,
+        AskForApproval::UnlessTrusted => None,
+        AskForApproval::Reject(reject_config) => {
+            if prompt_is_rule {
+                if reject_config.rejects_rules_approval() {
+                    Some(REJECT_RULES_APPROVAL_REASON)
+                } else {
+                    None
+                }
+            } else if reject_config.rejects_sandbox_approval() {
+                Some(REJECT_SANDBOX_APPROVAL_REASON)
+            } else {
+                None
+            }
+        }
+    }
+}
+
 /// Configuration for the execution policy manager.
 #[derive(Debug, Clone)]
 pub struct ExecPolicyConfig {
@@ -153,9 +185,22 @@ impl ExecPolicyManager {
 
         match decision {
             Decision::Allow => ExecApprovalRequirement::skip(),
-            Decision::Prompt => ExecApprovalRequirement::needs_approval(
-                self.format_approval_reason(command, &rule_match),
-            ),
+            Decision::Prompt => {
+                let prompt_is_rule = matches!(
+                    rule_match,
+                    RuleMatch::PrefixRuleMatch {
+                        decision: Decision::Prompt,
+                        ..
+                    }
+                );
+
+                match prompt_is_rejected_by_policy(self.config.default_approval, prompt_is_rule) {
+                    Some(reason) => ExecApprovalRequirement::forbidden(reason),
+                    None => ExecApprovalRequirement::needs_approval(
+                        self.format_approval_reason(command, &rule_match),
+                    ),
+                }
+            }
             Decision::Forbidden => ExecApprovalRequirement::forbidden(
                 self.format_forbidden_reason(command, &rule_match),
             ),
@@ -317,6 +362,76 @@ mod tests {
             .check_approval(&["unknown".to_string(), "command".to_string()])
             .await;
         assert!(result.requires_approval());
+    }
+
+    #[tokio::test]
+    async fn test_prompt_conflict_with_never_policy_forbids() {
+        let dir = tempdir().unwrap();
+        let manager = ExecPolicyManager::new(
+            dir.path().to_path_buf(),
+            ExecPolicyConfig {
+                default_approval: AskForApproval::Never,
+                ..ExecPolicyConfig::default()
+            },
+        );
+
+        let result = manager
+            .check_approval(&["unknown".to_string(), "command".to_string()])
+            .await;
+        assert_eq!(
+            result,
+            ExecApprovalRequirement::forbidden(PROMPT_CONFLICT_REASON)
+        );
+    }
+
+    #[tokio::test]
+    async fn test_reject_rules_policy_forbids_rule_prompt() {
+        let dir = tempdir().unwrap();
+        let manager = ExecPolicyManager::new(
+            dir.path().to_path_buf(),
+            ExecPolicyConfig {
+                default_approval: AskForApproval::Reject(crate::exec_policy::RejectConfig {
+                    sandbox_approval: false,
+                    rules: true,
+                    mcp_elicitations: false,
+                }),
+                ..ExecPolicyConfig::default()
+            },
+        );
+        manager
+            .add_prefix_rule(&["git".to_string()], Decision::Prompt)
+            .await
+            .expect("add prompt rule");
+
+        let result = manager.check_approval(&["git".to_string()]).await;
+        assert_eq!(
+            result,
+            ExecApprovalRequirement::forbidden(REJECT_RULES_APPROVAL_REASON)
+        );
+    }
+
+    #[tokio::test]
+    async fn test_reject_sandbox_policy_forbids_non_rule_prompt() {
+        let dir = tempdir().unwrap();
+        let manager = ExecPolicyManager::new(
+            dir.path().to_path_buf(),
+            ExecPolicyConfig {
+                default_approval: AskForApproval::Reject(crate::exec_policy::RejectConfig {
+                    sandbox_approval: true,
+                    rules: false,
+                    mcp_elicitations: false,
+                }),
+                ..ExecPolicyConfig::default()
+            },
+        );
+
+        let result = manager
+            .check_approval(&["unknown".to_string(), "command".to_string()])
+            .await;
+        assert_eq!(
+            result,
+            ExecApprovalRequirement::forbidden(REJECT_SANDBOX_APPROVAL_REASON)
+        );
     }
 
     #[tokio::test]

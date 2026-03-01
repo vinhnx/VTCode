@@ -27,7 +27,7 @@ mod manager;
 mod parser;
 mod policy;
 
-pub use approval::{AskForApproval, ExecApprovalRequirement, ExecPolicyAmendment};
+pub use approval::{AskForApproval, ExecApprovalRequirement, ExecPolicyAmendment, RejectConfig};
 pub use manager::{ExecPolicyConfig, ExecPolicyManager, SharedExecPolicyManager};
 pub use parser::{PolicyFile, PolicyParser, PolicyRule};
 pub use policy::{Decision, Policy, PolicyEvaluation, PrefixRule, RuleMatch};
