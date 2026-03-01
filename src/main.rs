@@ -139,7 +139,6 @@ async fn run() -> Result<()> {
     let color_eyre_enabled =
         cfg!(debug_assertions) && (args.debug || env_flag_enabled("VTCODE_COLOR_EYRE"));
     panic_hook::set_color_eyre_enabled(color_eyre_enabled);
-    panic_hook::maybe_install_color_eyre_eyre_hook();
     let tui_log_capture_enabled =
         cfg!(debug_assertions) && (args.debug || env_flag_enabled("VTCODE_TUI_LOGS"));
     vtcode_tui::log::set_tui_log_capture_enabled(tui_log_capture_enabled);
