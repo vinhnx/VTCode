@@ -40,6 +40,8 @@ pub enum TeamRoleArg {
 pub fn long_version() -> String {
     use crate::config::defaults::{get_config_dir, get_data_dir};
 
+    let git_info = option_env!("VT_CODE_GIT_INFO").unwrap_or(env!("CARGO_PKG_VERSION"));
+
     let config_dir = get_config_dir()
         .map(|p| p.display().to_string())
         .unwrap_or_else(|| "~/.vtcode/".to_string());
@@ -50,7 +52,7 @@ pub fn long_version() -> String {
 
     format!(
         "{}\n\nAuthors: {}\nConfig directory: {}\nData directory: {}\n\nEnvironment variables:\n  VTCODE_CONFIG - Override config directory\n  VTCODE_DATA - Override data directory",
-        env!("CARGO_PKG_VERSION"),
+        git_info,
         env!("CARGO_PKG_AUTHORS"),
         config_dir,
         data_dir
@@ -998,5 +1000,27 @@ impl Cli {
     /// Check if debug mode is enabled (includes verbose)
     pub fn is_debug_mode(&self) -> bool {
         self.debug || self.verbose
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::long_version;
+
+    #[test]
+    fn long_version_includes_expected_sections() {
+        let text = long_version();
+        assert!(text.contains("Authors:"));
+        assert!(text.contains("Config directory:"));
+        assert!(text.contains("Data directory:"));
+        assert!(text.contains("VTCODE_CONFIG"));
+        assert!(text.contains("VTCODE_DATA"));
+    }
+
+    #[test]
+    fn long_version_starts_with_build_git_info() {
+        let text = long_version();
+        let expected = option_env!("VT_CODE_GIT_INFO").unwrap_or(env!("CARGO_PKG_VERSION"));
+        assert!(text.starts_with(expected));
     }
 }
