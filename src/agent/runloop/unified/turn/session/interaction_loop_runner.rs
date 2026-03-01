@@ -191,6 +191,10 @@ fn sync_mcp_approval_policy(
     }
 }
 
+fn sync_mcp_approval_policy_for_context(ctx: &InteractionLoopContext<'_>) {
+    sync_mcp_approval_policy(ctx.async_mcp_manager.as_deref(), ctx.vt_cfg.as_ref());
+}
+
 pub(super) async fn run_interaction_loop_impl(
     ctx: &mut InteractionLoopContext<'_>,
     state: &mut InteractionState<'_>,
@@ -220,9 +224,9 @@ pub(super) async fn run_interaction_loop_impl(
                     tracing::warn!("Failed to apply live-reloaded workspace config: {}", err);
                 }
                 apply_live_theme_and_appearance(ctx.handle, cfg);
+                sync_mcp_approval_policy_for_context(ctx);
             }
         }
-        sync_mcp_approval_policy(ctx.async_mcp_manager.as_deref(), ctx.vt_cfg.as_ref());
 
         let spooled_count = ctx.tool_registry.spooled_files_count().await;
         crate::agent::runloop::unified::status_line::update_spooled_files_count(
@@ -302,7 +306,7 @@ pub(super) async fn run_interaction_loop_impl(
 
         let inline_action =
             poll_inline_loop_action(ctx.session, ctx.ctrl_c_notify, resources).await?;
-        sync_mcp_approval_policy(ctx.async_mcp_manager.as_deref(), ctx.vt_cfg.as_ref());
+        sync_mcp_approval_policy_for_context(ctx);
 
         let mut input_owned = match inline_action {
             InlineLoopAction::Continue => continue,
@@ -418,7 +422,7 @@ pub(super) async fn run_interaction_loop_impl(
         {
             tracing::warn!("Failed to apply workspace configuration to tools: {}", err);
         }
-        sync_mcp_approval_policy(ctx.async_mcp_manager.as_deref(), ctx.vt_cfg.as_ref());
+        sync_mcp_approval_policy_for_context(ctx);
 
         if let Some(mcp_manager) = ctx.async_mcp_manager {
             let mcp_status = mcp_manager.get_status().await;
