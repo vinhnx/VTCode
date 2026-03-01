@@ -47,7 +47,7 @@ mod tests {
     #[tokio::test]
     async fn test_middleware_metrics() -> anyhow::Result<()> {
         let metrics = MetricsMiddleware::new();
-        let chain = MiddlewareChain::new().add(metrics.clone());
+        let chain = MiddlewareChain::new().push(metrics.clone());
 
         let req = ToolRequest {
             id: "req-1".to_string(),
@@ -57,7 +57,7 @@ mod tests {
         };
 
         // Simulate 5 tool executions
-        for i in 0..5 {
+        for i in 0_u64..5 {
             chain.before_execute(&req).await?;
 
             let res = ToolResponse {
@@ -65,7 +65,7 @@ mod tests {
                 success: true,
                 result: Some(serde_json::json!({"result": i})),
                 error: None,
-                duration_ms: Some(10 + i as u64),
+                duration_ms: Some(10 + i),
                 cache_hit: Some(i % 2 == 0), // Alternate cache hits
             };
 
@@ -114,7 +114,7 @@ mod tests {
     async fn test_full_workflow_simulation() -> anyhow::Result<()> {
         let cache = Arc::new(LruCache::new(100, Duration::from_secs(60)));
         let metrics = MetricsMiddleware::new();
-        let chain = MiddlewareChain::new().add(metrics.clone());
+        let chain = MiddlewareChain::new().push(metrics.clone());
 
         let mut detector = PatternDetector::new(2);
         let now = std::time::Instant::now();
