@@ -5,7 +5,7 @@ use ratatui::{
     layout::Rect,
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Clear, Paragraph, Wrap},
+    widgets::{Block, Paragraph, Wrap},
 };
 use unicode_segmentation::UnicodeSegmentation;
 
@@ -57,7 +57,6 @@ fn line_is_empty(spans: &[Span<'static>]) -> bool {
 
 impl Session {
     pub(super) fn render_header(&self, frame: &mut Frame<'_>, area: Rect, lines: &[Line<'static>]) {
-        frame.render_widget(Clear, area);
         if area.height == 0 || area.width == 0 {
             return;
         }

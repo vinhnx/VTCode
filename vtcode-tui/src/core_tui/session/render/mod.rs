@@ -222,11 +222,9 @@ fn render_transcript(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
 
     let paragraph = Paragraph::new(visible_lines).style(default_style(session));
 
-    // Only clear if content actually changed, not on viewport-only scroll
-    // This is a significant optimization: avoids expensive Clear operation on most scrolls
-    // Combined with layout skip above, this reduces render CPU by ~50% during scrolling
+    // Ratatui recreates a fresh frame buffer for every draw call.
+    // Keep only the state bookkeeping here; explicit clearing is unnecessary.
     if session.transcript_content_changed {
-        frame.render_widget(Clear, scroll_area);
         session.transcript_content_changed = false;
     }
     frame.render_widget(paragraph, scroll_area);

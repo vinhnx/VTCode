@@ -6,7 +6,7 @@ use anstyle::{Color as AnsiColorEnum, Effects};
 use ratatui::{
     buffer::Buffer,
     prelude::*,
-    widgets::{Block, Clear, Padding, Paragraph, Wrap},
+    widgets::{Block, Padding, Paragraph, Wrap},
 };
 use regex::Regex;
 use std::path::Path;
@@ -52,7 +52,6 @@ const SHELL_MODE_STATUS_HINT: &str = "Shell mode (!): direct command execution";
 
 impl Session {
     pub(super) fn render_input(&mut self, frame: &mut Frame<'_>, area: Rect) {
-        frame.render_widget(Clear, area);
         if area.height == 0 {
             self.set_input_area(None);
             return;
@@ -115,16 +114,11 @@ impl Session {
             }
         }
 
-        if let Some(status_rect) = status_area {
-            if let Some(line) = status_line {
-                let paragraph = Paragraph::new(line)
-                    .style(self.styles.default_style())
-                    .wrap(Wrap { trim: false });
-                frame.render_widget(paragraph, status_rect);
-            } else {
-                // Clear the reserved status row to prevent stale artifacts
-                frame.render_widget(Clear, status_rect);
-            }
+        if let (Some(status_rect), Some(line)) = (status_area, status_line) {
+            let paragraph = Paragraph::new(line)
+                .style(self.styles.default_style())
+                .wrap(Wrap { trim: false });
+            frame.render_widget(paragraph, status_rect);
         }
     }
 
