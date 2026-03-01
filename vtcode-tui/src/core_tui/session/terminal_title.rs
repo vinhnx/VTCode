@@ -248,12 +248,13 @@ fn sanitize_for_terminal_title(s: &str) -> String {
 
 /// Truncate title to maximum length while preserving readability
 fn truncate_title(title: String) -> String {
+    const ELLIPSIS: &str = "…";
     if title.len() <= MAX_TITLE_LENGTH {
         title
     } else {
         // Truncate and add ellipsis
-        let truncated = &title[..MAX_TITLE_LENGTH.saturating_sub(3)];
-        format!("{}...", truncated)
+        let truncated = &title[..MAX_TITLE_LENGTH.saturating_sub(ELLIPSIS.len())];
+        format!("{}{}", truncated, ELLIPSIS)
     }
 }
 

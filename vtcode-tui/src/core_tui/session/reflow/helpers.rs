@@ -3,8 +3,8 @@ use unicode_width::UnicodeWidthStr;
 
 use crate::config::constants::ui;
 
-use super::super::super::types::InlineMessageKind;
 use super::super::message::MessageLine;
+use crate::core_tui::types::InlineMessageKind;
 
 #[derive(Clone, Copy)]
 pub(super) struct BlockChars {
@@ -125,7 +125,15 @@ pub(super) fn collapse_excess_newlines(text: &str) -> std::borrow::Cow<'_, str> 
 /// Used for table lines where word-wrapping would break the box-drawing
 /// alignment. Spans are trimmed at the character boundary that exceeds the
 /// width; any remaining spans are dropped.
+///
+/// This is a re-export from the centralized line_truncation module.
 pub(super) fn truncate_line_to_width(line: Line<'static>, max_width: usize) -> Line<'static> {
+    // Use the centralized version without ellipsis for backward compatibility
+    truncate_line_to_width_internal(line, max_width)
+}
+
+/// Internal implementation without ellipsis for backward compatibility
+fn truncate_line_to_width_internal(line: Line<'static>, max_width: usize) -> Line<'static> {
     let total: usize = line.spans.iter().map(|s| s.width()).sum();
     if total <= max_width {
         return line;
@@ -158,4 +166,13 @@ pub(super) fn truncate_line_to_width(line: Line<'static>, max_width: usize) -> L
         }
     }
     Line::from(truncated_spans)
+}
+
+/// Truncate a line and append an ellipsis on overflow.
+///
+/// This is a re-export from the centralized line_truncation module for
+/// consistent ellipsis handling across the TUI.
+#[allow(dead_code)]
+pub(super) fn truncate_line_with_ellipsis(line: Line<'static>, max_width: usize) -> Line<'static> {
+    super::super::utils::line_truncation::truncate_line_with_ellipsis_if_overflow(line, max_width)
 }

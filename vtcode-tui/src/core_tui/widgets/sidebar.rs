@@ -9,6 +9,9 @@ use super::layout_mode::LayoutMode;
 use super::panel::{Panel, PanelStyles};
 use crate::ui::tui::session::styling::SessionStyles;
 
+/// Ellipsis character used to indicate truncated text (consistent with line_truncation module).
+const ELLIPSIS: &str = "…";
+
 /// Sidebar section types for organizing content
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SidebarSection {
@@ -237,15 +240,15 @@ impl Widget for SidebarWidget<'_> {
 fn truncate_string(s: &str, max_width: usize) -> String {
     if s.len() <= max_width {
         s.to_string()
-    } else if max_width <= 3 {
+    } else if max_width <= ELLIPSIS.len() {
         s.chars().take(max_width).collect()
     } else {
-        let target = max_width.saturating_sub(3);
+        let target = max_width.saturating_sub(ELLIPSIS.len());
         let end = s
             .char_indices()
             .map(|(i, _)| i)
             .rfind(|&i| i <= target)
             .unwrap_or(0);
-        format!("{}...", &s[..end])
+        format!("{}{}", &s[..end], ELLIPSIS)
     }
 }

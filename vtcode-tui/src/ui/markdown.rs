@@ -537,15 +537,15 @@ fn handle_end_tag(tag: TagEnd, ctx: &mut MarkdownContext<'_>) {
         TagEnd::Link | TagEnd::Image => {
             if let Some(link) = ctx.link_state.take() {
                 if link.show_destination {
-                    ctx.current_line
-                        .push_segment(ctx.current_style(), " (");
+                    ctx.current_line.push_segment(ctx.current_style(), " (");
                     ctx.current_line
                         .push_segment(ctx.current_style(), &link.destination);
-                    ctx.current_line
-                        .push_segment(ctx.current_style(), ")");
+                    ctx.current_line.push_segment(ctx.current_style(), ")");
                 } else if let Some(location_suffix) = link.hidden_location_suffix.as_deref() {
                     // Check if the label already has a location suffix
-                    let label_text = ctx.current_line.segments
+                    let label_text = ctx
+                        .current_line
+                        .segments
                         .get(link.label_start_segment_idx..)
                         .map(|spans| spans.iter().map(|s| s.text.as_str()).collect::<String>())
                         .unwrap_or_default();
@@ -876,10 +876,12 @@ fn is_local_path_like_link(dest_url: &str) -> bool {
 }
 
 static COLON_LOCATION_SUFFIX_RE: LazyLock<Regex> =
-    LazyLock::new(|| match Regex::new(r":\d+(?::\d+)?(?:[-–]\d+(?::\d+)?)?$") {
-        Ok(regex) => regex,
-        Err(error) => panic!("invalid location suffix regex: {error}"),
-    });
+    LazyLock::new(
+        || match Regex::new(r":\d+(?::\d+)?(?:[-–]\d+(?::\d+)?)?$") {
+            Ok(regex) => regex,
+            Err(error) => panic!("invalid location suffix regex: {error}"),
+        },
+    );
 
 static HASH_LOCATION_SUFFIX_RE: LazyLock<Regex> =
     LazyLock::new(|| match Regex::new(r"^L\d+(?:C\d+)?(?:-L\d+(?:C\d+)?)?$") {
@@ -2053,10 +2055,18 @@ index 0000000..1111111 100644\n\
         let markdown = "[markdown_render.rs:74](/Users/example/code/codex/codex-rs/tui/src/markdown_render.rs:74)";
         let lines = render_markdown(markdown);
         let text_lines = lines_to_text(&lines);
-        
+
         // Should contain the link text but NOT the destination
-        assert!(text_lines.iter().any(|line| line.contains("markdown_render.rs:74")));
-        assert!(!text_lines.iter().any(|line| line.contains("/Users/example")));
+        assert!(
+            text_lines
+                .iter()
+                .any(|line| line.contains("markdown_render.rs:74"))
+        );
+        assert!(
+            !text_lines
+                .iter()
+                .any(|line| line.contains("/Users/example"))
+        );
     }
 
     #[test]
@@ -2065,7 +2075,7 @@ index 0000000..1111111 100644\n\
         let lines = render_markdown(markdown);
         let text_lines = lines_to_text(&lines);
         let combined = text_lines.join("");
-        
+
         // Should contain both the link text and the destination
         assert!(combined.contains("docs"));
         assert!(combined.contains("https://example.com/docs"));
@@ -2077,7 +2087,7 @@ index 0000000..1111111 100644\n\
         let lines = render_markdown(markdown);
         let text_lines = lines_to_text(&lines);
         let combined = text_lines.join("");
-        
+
         // Should contain the link text but NOT the destination
         assert!(combined.contains("relative"));
         assert!(!combined.contains("./path/to/file.md"));
@@ -2089,7 +2099,7 @@ index 0000000..1111111 100644\n\
         let lines = render_markdown(markdown);
         let text_lines = lines_to_text(&lines);
         let combined = text_lines.join("");
-        
+
         // Should contain the link text but NOT the destination
         assert!(combined.contains("home relative"));
         assert!(!combined.contains("~/path/to/file.md"));
@@ -2101,7 +2111,7 @@ index 0000000..1111111 100644\n\
         let lines = render_markdown(markdown);
         let text_lines = lines_to_text(&lines);
         let combined = text_lines.join("");
-        
+
         // Should contain the link text but NOT the destination
         assert!(combined.contains("parent"));
         assert!(!combined.contains("../path/to/file.md"));
@@ -2113,7 +2123,7 @@ index 0000000..1111111 100644\n\
         let lines = render_markdown(markdown);
         let text_lines = lines_to_text(&lines);
         let combined = text_lines.join("");
-        
+
         // Should contain the link text but NOT the destination
         assert!(combined.contains("file url"));
         assert!(!combined.contains("file:///path/to/file.md"));
@@ -2125,7 +2135,7 @@ index 0000000..1111111 100644\n\
         let lines = render_markdown(markdown);
         let text_lines = lines_to_text(&lines);
         let combined = text_lines.join("");
-        
+
         // Should contain the link text but NOT the destination
         assert!(combined.contains("windows"));
         assert!(!combined.contains("C:\\path\\to\\file.md"));
@@ -2137,7 +2147,7 @@ index 0000000..1111111 100644\n\
         let lines = render_markdown(markdown);
         let text_lines = lines_to_text(&lines);
         let combined = text_lines.join("");
-        
+
         // Should contain both the link text and the destination
         assert!(combined.contains("secure"));
         assert!(combined.contains("https://secure.example.com"));
@@ -2163,8 +2173,7 @@ index 0000000..1111111 100644\n\
 
     #[test]
     fn test_file_link_hides_destination() {
-        let markdown =
-            "[codex-rs/tui/src/markdown_render.rs](/Users/example/code/codex/codex-rs/tui/src/markdown_render.rs)";
+        let markdown = "[codex-rs/tui/src/markdown_render.rs](/Users/example/code/codex/codex-rs/tui/src/markdown_render.rs)";
         let lines = render_markdown(markdown);
         let text_lines = lines_to_text(&lines);
         let combined = text_lines.join("");
@@ -2176,8 +2185,7 @@ index 0000000..1111111 100644\n\
 
     #[test]
     fn test_file_link_appends_line_number_when_label_lacks_it() {
-        let markdown =
-            "[markdown_render.rs](/Users/example/code/codex/codex-rs/tui/src/markdown_render.rs:74)";
+        let markdown = "[markdown_render.rs](/Users/example/code/codex/codex-rs/tui/src/markdown_render.rs:74)";
         let lines = render_markdown(markdown);
         let text_lines = lines_to_text(&lines);
         let combined = text_lines.join("");
@@ -2189,8 +2197,7 @@ index 0000000..1111111 100644\n\
 
     #[test]
     fn test_file_link_uses_label_for_line_number() {
-        let markdown =
-            "[markdown_render.rs:74](/Users/example/code/codex/codex-rs/tui/src/markdown_render.rs:74)";
+        let markdown = "[markdown_render.rs:74](/Users/example/code/codex/codex-rs/tui/src/markdown_render.rs:74)";
         let lines = render_markdown(markdown);
         let text_lines = lines_to_text(&lines);
         let combined = text_lines.join("");
@@ -2203,8 +2210,7 @@ index 0000000..1111111 100644\n\
 
     #[test]
     fn test_file_link_appends_hash_anchor_when_label_lacks_it() {
-        let markdown =
-            "[markdown_render.rs](file:///Users/example/code/codex/codex-rs/tui/src/markdown_render.rs#L74C3)";
+        let markdown = "[markdown_render.rs](file:///Users/example/code/codex/codex-rs/tui/src/markdown_render.rs#L74C3)";
         let lines = render_markdown(markdown);
         let text_lines = lines_to_text(&lines);
         let combined = text_lines.join("");
@@ -2216,8 +2222,7 @@ index 0000000..1111111 100644\n\
 
     #[test]
     fn test_file_link_uses_label_for_hash_anchor() {
-        let markdown =
-            "[markdown_render.rs#L74C3](file:///Users/example/code/codex/codex-rs/tui/src/markdown_render.rs#L74C3)";
+        let markdown = "[markdown_render.rs#L74C3](file:///Users/example/code/codex/codex-rs/tui/src/markdown_render.rs#L74C3)";
         let lines = render_markdown(markdown);
         let text_lines = lines_to_text(&lines);
         let combined = text_lines.join("");
@@ -2228,8 +2233,7 @@ index 0000000..1111111 100644\n\
 
     #[test]
     fn test_file_link_appends_range_when_label_lacks_it() {
-        let markdown =
-            "[markdown_render.rs](/Users/example/code/codex/codex-rs/tui/src/markdown_render.rs:74:3-76:9)";
+        let markdown = "[markdown_render.rs](/Users/example/code/codex/codex-rs/tui/src/markdown_render.rs:74:3-76:9)";
         let lines = render_markdown(markdown);
         let text_lines = lines_to_text(&lines);
         let combined = text_lines.join("");
@@ -2241,8 +2245,7 @@ index 0000000..1111111 100644\n\
 
     #[test]
     fn test_file_link_uses_label_for_range() {
-        let markdown =
-            "[markdown_render.rs:74:3-76:9](/Users/example/code/codex/codex-rs/tui/src/markdown_render.rs:74:3-76:9)";
+        let markdown = "[markdown_render.rs:74:3-76:9](/Users/example/code/codex/codex-rs/tui/src/markdown_render.rs:74:3-76:9)";
         let lines = render_markdown(markdown);
         let text_lines = lines_to_text(&lines);
         let combined = text_lines.join("");
@@ -2255,8 +2258,7 @@ index 0000000..1111111 100644\n\
 
     #[test]
     fn test_file_link_appends_hash_range_when_label_lacks_it() {
-        let markdown =
-            "[markdown_render.rs](file:///Users/example/code/codex/codex-rs/tui/src/markdown_render.rs#L74C3-L76C9)";
+        let markdown = "[markdown_render.rs](file:///Users/example/code/codex/codex-rs/tui/src/markdown_render.rs#L74C3-L76C9)";
         let lines = render_markdown(markdown);
         let text_lines = lines_to_text(&lines);
         let combined = text_lines.join("");
@@ -2268,8 +2270,7 @@ index 0000000..1111111 100644\n\
 
     #[test]
     fn test_file_link_uses_label_for_hash_range() {
-        let markdown =
-            "[markdown_render.rs#L74C3-L76C9](file:///Users/example/code/codex/codex-rs/tui/src/markdown_render.rs#L74C3-L76C9)";
+        let markdown = "[markdown_render.rs#L74C3-L76C9](file:///Users/example/code/codex/codex-rs/tui/src/markdown_render.rs#L74C3-L76C9)";
         let lines = render_markdown(markdown);
         let text_lines = lines_to_text(&lines);
         let combined = text_lines.join("");

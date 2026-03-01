@@ -50,6 +50,7 @@ pub mod slash_palette;
 pub mod styling;
 mod text_utils;
 mod transcript;
+pub mod utils;
 
 // New modular components (refactored from main session.rs)
 mod command;

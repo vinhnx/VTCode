@@ -14,6 +14,8 @@ use std::sync::LazyLock;
 use tui_shimmer::shimmer_spans_with_style_at_phase;
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
+use super::utils::line_truncation::truncate_line_with_ellipsis_if_overflow;
+
 struct InputRender {
     text: Text<'static>,
     cursor_x: u16,
@@ -473,7 +475,10 @@ impl Session {
             return None;
         }
 
-        Some(Line::from(spans))
+        let mut line = Line::from(spans);
+        // Apply ellipsis truncation to prevent status line from overflowing
+        line = truncate_line_with_ellipsis_if_overflow(line, usize::from(width));
+        Some(line)
     }
 
     pub(crate) fn input_uses_shell_prefix(&self) -> bool {
