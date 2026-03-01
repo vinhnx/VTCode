@@ -400,10 +400,11 @@ fn render_content_preview(
         markdown.push('\n');
     }
     markdown.push_str("```");
-    renderer.render_markdown_output(MessageStyle::ToolDetail, &markdown)?;
+    renderer.render_markdown_output(MessageStyle::ToolOutput, &markdown)?;
     if !show_all {
-        renderer.line(
+        renderer.line_with_override_style(
             MessageStyle::ToolDetail,
+            MessageStyle::ToolDetail.style().dimmed(),
             &format!("… +{} more lines", all_lines.len() - display_lines.len()),
         )?;
     }
