@@ -133,6 +133,16 @@ fn move_left_word_skips_trailing_whitespace() {
 }
 
 #[test]
+fn file_palette_insertion_uses_at_alias_in_input() {
+    let mut session = session_with_input("check @mai", "check @mai".len());
+
+    session.insert_file_reference("src/main.rs");
+
+    assert_eq!(session.input_manager.content(), "check @src/main.rs ");
+    assert_eq!(session.cursor(), "check @src/main.rs ".len());
+}
+
+#[test]
 fn arrow_keys_navigate_input_history() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
 
