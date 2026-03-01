@@ -339,22 +339,7 @@ pub(super) async fn run_interaction_loop_impl(
 
                     match find_session_by_identifier(&session_id).await {
                         Ok(Some(listing)) => {
-                            let history_iter = if !listing.snapshot.messages.is_empty() {
-                                listing.snapshot.messages.iter()
-                            } else if let Some(progress) = &listing.snapshot.progress {
-                                progress.recent_messages.iter()
-                            } else {
-                                [].iter()
-                            };
-                            let history = history_iter.map(uni::Message::from).collect();
-
-                            let resume = ResumeSession {
-                                identifier: listing.identifier(),
-                                snapshot: listing.snapshot.clone(),
-                                history,
-                                path: listing.path.clone(),
-                                is_fork: false,
-                            };
+                            let resume = ResumeSession::from_listing(&listing, false);
 
                             ctx.renderer.line(
                                 MessageStyle::Info,

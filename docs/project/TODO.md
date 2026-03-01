@@ -1,3 +1,7 @@
+NOTE: use private relay signup codex free
+
+---
+
 Analyze the codebase to identify and improve panic-prone code patterns including force unwraps (!), force try, expect() calls, implicitly unwrapped optionals, and fatalError usages. For each occurrence, assess whether it can be replaced with safer alternatives such as guard statements, optional binding, custom error handling, Result types, or default values. Provide refactored code examples for each improvement, explain the potential runtime failures being prevented, and suggest coding standards to minimize future unsafe patterns. Include analysis of any custom panic handlers or recovery mechanisms that could be implemented.
 
 ---
@@ -105,60 +109,3 @@ Conduct a comprehensive review and enhancement of error handling and recovery me
 ---
 
 check src/agent/runloop/unified/turn module Analyze the agent harness codebase focusing on the runloop, unified, turn, and tool_outcomes components to identify performance bottlenecks, inefficiencies, and optimization opportunities. Perform a comprehensive review of data flow and control flow through these components, examining how tool calls are executed, how outcomes are processed, and how turn execution manages state and sequencing. Evaluate whether the current implementation maximizes parallelism where possible, minimizes blocking operations, and maintains efficient memory usage patterns. Identify any redundant computational steps, unnecessary data transformations, or algorithmic inefficiencies that degrade performance. Assess the current error handling mechanisms for robustness, examining exception propagation paths, retry logic, and failure recovery procedures to ensure they do not introduce excessive latency or create cascading failure scenarios. Examine the design of core data structures used throughout these components for optimal access patterns, memory efficiency, and scalability characteristics. Provide specific, actionable recommendations for refactoring code to reduce complexity, implementing caching where appropriate to avoid redundant computation, optimizing hot path execution, and improving the overall responsiveness and throughput of the agent harness. Your analysis should include concrete code-level suggestions with estimated impact on performance metrics and potential tradeoffs to consider when implementing optimizations.
-
----
-
-use private relay signup codex
-
----
-
-improve and restore full TUI styling for session resume
-
-```
-╭> VT Code (0.84.1)──────────────────────────────────────────────────────────────╮
-│Ollama gpt-oss:20b-cloud low | Accept edits | Session: Standard | Tools: 66 |   │
-╰────────────────────────────────────────────────────────────────────────────────╯
-  │ 301T052918Z_019690-71140.json                                                │
-  │ Conversation history:                                                        │
-  ╰──────────────────────────────────────────────────────────────────────────────╯
-
-
-──────────────────────────────────────────────────────────────────────────────────
-  [1] You:
-
-  run cargo fmt
-
-
-
- •   [2] Assistant:
-
-
-
-        [3] Tool [tool_call_id: direct_run_pty_cmd_1]:
-        {"output":"","is_exited":true,"session_id":"run-6b1df108","command":"c
-      argo fmt","working_directory":".","exit_code":0}
-
-  ╭─ Info ───────────────────────────────────────────────────────────────────────╮
-  │   [4] System:                                                                │
-  │   For this direct shell command follow-up, keep the response concise and acti│
-  │ on-oriented: 1) one short line summarizing the command result, 2) one short l│
-  │ ine with the exact next action. Avoid extra explanation unless there is an er│
-  │ ror.                                                                         │
-  ╰──────────────────────────────────────────────────────────────────────────────╯
-
- •   [5] Assistant:
-     cargo fmt completed successfully.
-
-     Next: run cargo clippy && cargo nextest run to verify build and tests.
-
-
-
-
-
-
- Type your message, or @files, /commands, Shift+Tab: cycle modes, Control+C:
-
-Ghostty main*                        gpt-oss:20b-cloud | 100% context left | (low)
-```
-
-currently the messages displayed when resuming a session are not styled with the full VTCode TUI styling, which can make it harder to read and navigate the conversation history. The goal is to restore the full TUI styling for session resume so that users have a consistent and visually appealing experience when resuming sessions. This includes ensuring that all messages, system prompts, tool calls, and other elements are displayed with the appropriate colors, fonts, and layout as defined by the VTCode theme. The implementation should also ensure that any interactive elements such as buttons or links are properly styled and functional upon session resume. Overall, this improvement will enhance the usability and aesthetics of the VTCode interface during session resumption.

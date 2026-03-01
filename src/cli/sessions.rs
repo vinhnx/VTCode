@@ -3,7 +3,6 @@ use chrono::Local;
 use dialoguer::{Select, theme::ColorfulTheme};
 use std::path::PathBuf;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
-use vtcode_core::llm::provider::Message;
 use vtcode_core::utils::colors::style;
 use vtcode_core::utils::session_archive::{
     SessionListing, find_session_by_identifier, list_recent_sessions,
@@ -105,24 +104,7 @@ async fn select_session_interactively(is_fork: bool) -> Result<Option<ResumeSess
 }
 
 fn convert_listing(listing: &SessionListing, is_fork: bool) -> ResumeSession {
-    // Prefer full archived messages; fall back to recent progress if the full log is absent.
-    let history_source = if !listing.snapshot.messages.is_empty() {
-        listing.snapshot.messages.iter()
-    } else if let Some(progress) = &listing.snapshot.progress {
-        progress.recent_messages.iter()
-    } else {
-        [].iter()
-    };
-
-    let history = history_source.map(Message::from).collect();
-
-    ResumeSession {
-        identifier: listing.identifier(),
-        snapshot: listing.snapshot.clone(),
-        history,
-        path: listing.path.clone(),
-        is_fork,
-    }
+    ResumeSession::from_listing(listing, is_fork)
 }
 
 fn format_listing(listing: &SessionListing) -> String {

@@ -12,6 +12,7 @@ use crate::hooks::lifecycle::{LifecycleHookEngine, SessionEndReason, SessionStar
 use crate::ide_context::IdeContextBridge;
 use anyhow::{Context, Result};
 use chrono::Local;
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Notify;
 use tracing::warn;
@@ -22,7 +23,6 @@ use vtcode_core::llm::provider as uni;
 use vtcode_core::ui::slash::SLASH_COMMANDS;
 use vtcode_core::ui::theme;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
-use vtcode_core::utils::formatting::indent_block;
 use vtcode_core::utils::session_archive::{SessionArchive, SessionArchiveMetadata};
 use vtcode_core::utils::transcript;
 use vtcode_tui::{InlineEvent, InlineEventCallback, SessionOptions, spawn_session_with_options};
@@ -367,38 +367,251 @@ fn render_resume_state_if_present(
 
     if !session.history.is_empty() {
         renderer.line(MessageStyle::Info, "Conversation history:")?;
-        for (idx, msg) in session.history.iter().enumerate() {
-            let (style, role_label) = match msg.role {
-                uni::MessageRole::User => (MessageStyle::User, "You"),
-                uni::MessageRole::Assistant => (MessageStyle::Response, "Assistant"),
-                uni::MessageRole::Tool => (MessageStyle::ToolOutput, "Tool"),
-                uni::MessageRole::System => (MessageStyle::Info, "System"),
-            };
-            let tool_suffix = msg
-                .tool_call_id
-                .as_ref()
-                .map(|id| format!(" [tool_call_id: {}]", id))
-                .unwrap_or_default();
-            renderer.line(
-                style,
-                &format!("  [{}] {}{}:", idx + 1, role_label, tool_suffix),
-            )?;
-            match &msg.content {
-                uni::MessageContent::Text(text) => {
-                    let indented = indent_block(text, "  ");
-                    renderer.line(style, &indented)?;
-                }
-                uni::MessageContent::Parts(parts) => {
-                    renderer.line(style, &format!("  [content parts: {}]", parts.len()))?;
-                }
-            }
-            if idx + 1 < session.history.len() {
-                renderer.line(style, "")?;
-            }
-        }
+        let lines = build_structured_resume_lines(&session.history);
+        render_resume_lines(renderer, &lines)?;
+    } else if !session.snapshot.transcript.is_empty() {
+        renderer.line(
+            MessageStyle::Info,
+            "Conversation history (legacy transcript):",
+        )?;
+        let lines = build_legacy_resume_lines(&session.snapshot.transcript);
+        render_resume_lines(renderer, &lines)?;
     }
     renderer.line_if_not_empty(MessageStyle::Output)?;
     Ok(())
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct ResumeRenderLine {
+    style: MessageStyle,
+    text: String,
+}
+
+impl ResumeRenderLine {
+    fn new(style: MessageStyle, text: impl Into<String>) -> Self {
+        Self {
+            style,
+            text: text.into(),
+        }
+    }
+}
+
+fn render_resume_lines(renderer: &mut AnsiRenderer, lines: &[ResumeRenderLine]) -> Result<()> {
+    for line in lines {
+        renderer.line(line.style, &line.text)?;
+    }
+    Ok(())
+}
+
+fn build_structured_resume_lines(history: &[uni::Message]) -> Vec<ResumeRenderLine> {
+    let mut lines = Vec::new();
+    let mut tool_name_by_call_id: HashMap<String, String> = HashMap::new();
+
+    for (index, message) in history.iter().enumerate() {
+        if index > 0 {
+            push_resume_spacing(&mut lines);
+        }
+        match message.role {
+            uni::MessageRole::User => {
+                push_content_lines(&mut lines, MessageStyle::User, &message.content);
+            }
+            uni::MessageRole::Assistant => {
+                let mut rendered_any = false;
+
+                if let Some(tool_calls) = &message.tool_calls {
+                    for tool_call in tool_calls {
+                        rendered_any = true;
+                        let tool_name = tool_call
+                            .function
+                            .as_ref()
+                            .map(|function| function.name.clone())
+                            .unwrap_or_else(|| "unknown".to_string());
+                        if !tool_call.id.trim().is_empty() {
+                            tool_name_by_call_id.insert(tool_call.id.clone(), tool_name.clone());
+                        }
+
+                        lines.push(ResumeRenderLine::new(
+                            MessageStyle::Tool,
+                            format_resume_tool_header(&tool_name, Some(tool_call.id.as_str())),
+                        ));
+
+                        if let Some(function) = &tool_call.function {
+                            let args_block = format_tool_arguments_for_resume(&function.arguments);
+                            if !args_block.is_empty() {
+                                lines.push(ResumeRenderLine::new(
+                                    MessageStyle::ToolDetail,
+                                    args_block,
+                                ));
+                            }
+                        } else if let Some(text) = tool_call.text.as_deref()
+                            && !text.trim().is_empty()
+                        {
+                            lines.push(ResumeRenderLine::new(
+                                MessageStyle::ToolDetail,
+                                text.trim().to_string(),
+                            ));
+                        }
+                    }
+                }
+
+                if let Some(reasoning) = message.reasoning.as_deref()
+                    && !reasoning.trim().is_empty()
+                {
+                    rendered_any = true;
+                    lines.push(ResumeRenderLine::new(
+                        MessageStyle::Reasoning,
+                        reasoning.trim().to_string(),
+                    ));
+                }
+
+                if let Some(content) = project_content_text(&message.content) {
+                    rendered_any = true;
+                    lines.push(ResumeRenderLine::new(MessageStyle::Response, content));
+                }
+
+                if !rendered_any {
+                    lines.push(ResumeRenderLine::new(
+                        MessageStyle::Response,
+                        "Assistant: [no content]",
+                    ));
+                }
+            }
+            uni::MessageRole::Tool => {
+                let call_id = message.tool_call_id.as_deref();
+                let tool_name = call_id
+                    .and_then(|id| tool_name_by_call_id.get(id))
+                    .cloned()
+                    .or_else(|| message.origin_tool.clone())
+                    .unwrap_or_else(|| "tool".to_string());
+                lines.push(ResumeRenderLine::new(
+                    MessageStyle::Tool,
+                    format_resume_tool_header(&tool_name, call_id),
+                ));
+                push_content_lines(&mut lines, MessageStyle::ToolOutput, &message.content);
+            }
+            uni::MessageRole::System => {
+                lines.push(ResumeRenderLine::new(MessageStyle::Info, "System:"));
+                push_content_lines(&mut lines, MessageStyle::Info, &message.content);
+            }
+        }
+    }
+
+    lines
+}
+
+fn format_resume_tool_header(tool_name: &str, tool_call_id: Option<&str>) -> String {
+    match tool_call_id {
+        Some(id) if !id.trim().is_empty() && tool_name.trim().eq_ignore_ascii_case("tool") => {
+            format!("Tool [tool_call_id: {}]:", id)
+        }
+        Some(id) if !id.trim().is_empty() => {
+            format!("Tool {} [tool_call_id: {}]:", tool_name, id)
+        }
+        _ if tool_name.trim().eq_ignore_ascii_case("tool") => "Tool:".to_string(),
+        _ => format!("Tool {}:", tool_name),
+    }
+}
+
+fn format_tool_arguments_for_resume(arguments: &str) -> String {
+    let trimmed = arguments.trim();
+    if trimmed.is_empty() {
+        return String::new();
+    }
+
+    match serde_json::from_str::<serde_json::Value>(trimmed) {
+        Ok(value) => serde_json::to_string_pretty(&value)
+            .map(|pretty| format!("```json\n{}\n```", pretty))
+            .unwrap_or_else(|_| format!("```json\n{}\n```", trimmed)),
+        Err(_) => format!("```text\n{}\n```", trimmed),
+    }
+}
+
+fn push_resume_spacing(lines: &mut Vec<ResumeRenderLine>) {
+    if lines.last().is_none_or(|line| !line.text.is_empty()) {
+        lines.push(ResumeRenderLine::new(MessageStyle::Info, ""));
+    }
+}
+
+fn push_content_lines(
+    lines: &mut Vec<ResumeRenderLine>,
+    style: MessageStyle,
+    content: &uni::MessageContent,
+) {
+    if let Some(projected) = project_content_text(content) {
+        lines.push(ResumeRenderLine::new(style, projected));
+    } else {
+        lines.push(ResumeRenderLine::new(style, "[no textual content]"));
+    }
+}
+
+fn project_content_text(content: &uni::MessageContent) -> Option<String> {
+    match content {
+        uni::MessageContent::Text(text) => (!text.trim().is_empty()).then(|| text.clone()),
+        uni::MessageContent::Parts(parts) => {
+            let mut fragments = Vec::new();
+            for part in parts {
+                match part {
+                    uni::ContentPart::Text { text } => {
+                        if !text.trim().is_empty() {
+                            fragments.push(text.clone());
+                        }
+                    }
+                    uni::ContentPart::Image { mime_type, .. } => {
+                        fragments.push(format!("[image content: {}]", mime_type));
+                    }
+                    uni::ContentPart::File {
+                        filename,
+                        file_id,
+                        file_url,
+                        ..
+                    } => {
+                        if let Some(name) = filename {
+                            fragments.push(format!("[file attachment: {}]", name));
+                        } else if let Some(id) = file_id {
+                            fragments.push(format!("[file attachment id: {}]", id));
+                        } else if let Some(url) = file_url {
+                            fragments.push(format!("[file attachment url: {}]", url));
+                        } else {
+                            fragments.push("[file attachment]".to_string());
+                        }
+                    }
+                }
+            }
+
+            (!fragments.is_empty()).then(|| fragments.join("\n"))
+        }
+    }
+}
+
+fn build_legacy_resume_lines(transcript: &[String]) -> Vec<ResumeRenderLine> {
+    transcript
+        .iter()
+        .map(|line| ResumeRenderLine::new(infer_legacy_line_style(line), line.clone()))
+        .collect()
+}
+
+fn infer_legacy_line_style(line: &str) -> MessageStyle {
+    let trimmed = line.trim_start();
+    if trimmed.is_empty() {
+        return MessageStyle::Info;
+    }
+
+    if trimmed.contains("You:") {
+        return MessageStyle::User;
+    }
+    if trimmed.contains("Assistant:") {
+        return MessageStyle::Response;
+    }
+    if trimmed.contains("System:") {
+        return MessageStyle::Info;
+    }
+    if trimmed.contains("Tool ")
+        || trimmed.contains("[tool_call_id:")
+        || trimmed.contains("\"tool_call_id\"")
+    {
+        return MessageStyle::ToolOutput;
+    }
+    MessageStyle::Info
 }
 
 async fn setup_session_archive(
@@ -458,4 +671,68 @@ async fn setup_session_archive(
     };
 
     (session_archive, session_archive_error)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn structured_resume_lines_preserve_tool_context() {
+        let mut assistant =
+            uni::Message::assistant("cargo fmt completed successfully.".to_string());
+        assistant.reasoning = Some("Need to run formatter before checks.".to_string());
+        assistant.tool_calls = Some(vec![uni::ToolCall::function(
+            "call_123".to_string(),
+            "unified_exec".to_string(),
+            "{\"cmd\":\"cargo fmt\"}".to_string(),
+        )]);
+
+        let mut tool_response =
+            uni::Message::tool_response("call_123".to_string(), "{\"exit_code\":0}".to_string());
+        tool_response.origin_tool = Some("unified_exec".to_string());
+
+        let history = vec![
+            uni::Message::user("run cargo fmt".to_string()),
+            assistant,
+            tool_response,
+        ];
+
+        let lines = build_structured_resume_lines(&history);
+
+        assert!(lines.iter().any(|line| {
+            line.style == MessageStyle::User && line.text.contains("run cargo fmt")
+        }));
+        assert!(!lines.iter().any(|line| line.text == "You:"));
+        assert!(!lines.iter().any(|line| line.text == "Assistant:"));
+        assert!(lines.iter().any(|line| {
+            line.style == MessageStyle::Tool
+                && line
+                    .text
+                    .contains("Tool unified_exec [tool_call_id: call_123]:")
+        }));
+        assert!(lines.iter().any(|line| {
+            line.style == MessageStyle::ToolDetail && line.text.starts_with("```json")
+        }));
+        assert!(lines.iter().any(|line| {
+            line.style == MessageStyle::ToolOutput && line.text.contains("\"exit_code\":0")
+        }));
+    }
+
+    #[test]
+    fn legacy_style_inference_maps_common_prefixes() {
+        assert_eq!(infer_legacy_line_style("  [1] You:"), MessageStyle::User);
+        assert_eq!(
+            infer_legacy_line_style("  [5] Assistant:"),
+            MessageStyle::Response
+        );
+        assert_eq!(
+            infer_legacy_line_style("System: startup"),
+            MessageStyle::Info
+        );
+        assert_eq!(
+            infer_legacy_line_style("Tool [tool_call_id: call_1]:"),
+            MessageStyle::ToolOutput
+        );
+    }
 }
