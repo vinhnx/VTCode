@@ -10,6 +10,7 @@ use unicode_width::UnicodeWidthStr;
 use super::layout::{ModalBodyContext, ModalRenderStyles, ModalSection};
 use super::state::{ModalListState, ModalSearchState, WizardModalState, WizardStepState};
 use crate::ui::tui::session::terminal_capabilities;
+use crate::ui::tui::session::wrapping;
 use std::mem;
 
 fn markdown_to_plain_lines(text: &str) -> Vec<String> {
@@ -77,9 +78,11 @@ fn wrap_line_to_width(line: &str, width: usize) -> Vec<String> {
 fn render_markdown_lines_for_modal(text: &str, width: usize, style: Style) -> Vec<Line<'static>> {
     let mut lines = Vec::new();
     for line in markdown_to_plain_lines(text) {
-        let wrapped = wrap_line_to_width(line.as_str(), width);
+        // Use URL-aware wrapping to preserve URL clickability
+        let line_ratatui = Line::from(Span::styled(line, style));
+        let wrapped = wrapping::adaptive_wrap_line(line_ratatui, width);
         for wrapped_line in wrapped {
-            lines.push(Line::from(Span::styled(wrapped_line, style)));
+            lines.push(wrapped_line);
         }
     }
 

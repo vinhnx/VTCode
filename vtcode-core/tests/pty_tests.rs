@@ -269,3 +269,145 @@ async fn run_pty_command_returns_timeout_error() -> Result<()> {
 
     Ok(())
 }
+
+#[cfg(unix)]
+#[tokio::test]
+async fn pty_terminate_kills_background_children_in_same_process_group() -> Result<()> {
+    use nix::sys::signal::kill;
+    use nix::unistd::Pid;
+
+    let temp_dir = tempdir()?;
+    let manager = PtyManager::new(temp_dir.path().to_path_buf(), PtyConfig::default());
+
+    let working_dir = manager.resolve_working_dir(Some(".")).await?;
+    let size = PtySize {
+        rows: 24,
+        cols: 80,
+        pixel_width: 0,
+        pixel_height: 0,
+    };
+
+    let session_id = "background-test".to_string();
+    manager.create_session(
+        session_id.clone(),
+        vec![
+            "sh".to_string(),
+            "-c".to_string(),
+            "sleep 1000 & echo \"bg_pid:$!\"; wait".to_string(),
+        ],
+        working_dir,
+        size,
+    )?;
+
+    // Wait for the background process to be spawned and its PID to be printed
+    let mut bg_pid: Option<i32> = None;
+    for _ in 0..20 {
+        if let Ok(Some(output)) = manager.read_session_output(&session_id, false) {
+            if let Some(line) = output.lines().find(|l| l.contains("bg_pid:")) {
+                if let Some(pid_str) = line.split(':').last() {
+                    if let Ok(pid) = pid_str.trim().parse::<i32>() {
+                        bg_pid = Some(pid);
+                        break;
+                    }
+                }
+            }
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+
+    let bg_pid = bg_pid.expect("Failed to capture background PID");
+    let pid = Pid::from_raw(bg_pid);
+
+    // Verify background process is running
+    assert!(
+        kill(pid, None).is_ok(),
+        "Background process should be running"
+    );
+
+    // Close session, which should kill the process group
+    manager.close_session(&session_id)?;
+
+    // Verify background process is killed (may need a short wait for signal to propagate)
+    let mut killed = false;
+    for _ in 0..10 {
+        if kill(pid, None).is_err() {
+            killed = true;
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+
+    assert!(killed, "Background process should have been killed");
+
+    Ok(())
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn run_pty_command_timeout_kills_background_children() -> Result<()> {
+    use nix::sys::signal::kill;
+    use nix::unistd::Pid;
+    use std::fs;
+
+    let temp_dir = tempdir()?;
+    let manager = PtyManager::new(temp_dir.path().to_path_buf(), PtyConfig::default());
+
+    let working_dir = manager.resolve_working_dir(Some(".")).await?;
+
+    // Create a temporary file to store the background PID
+    let pid_file = temp_dir.path().join("bg_pid.txt");
+
+    // Script that spawns a background process and writes its PID to a file, then sleeps
+    let script = format!("sleep 1000 & echo $! > {}; sleep 5", pid_file.display());
+
+    let request = PtyCommandRequest {
+        command: vec!["sh".to_string(), "-c".to_string(), script],
+        working_dir,
+        timeout: Duration::from_millis(500), // Short timeout to trigger kill
+        size: PtySize {
+            rows: 24,
+            cols: 80,
+            pixel_width: 0,
+            pixel_height: 0,
+        },
+        max_tokens: None,
+        output_callback: None,
+    };
+
+    // run_command should timeout and kill the process group
+    let result = manager.run_command(request).await;
+    let err = match result {
+        Ok(_) => anyhow::bail!("Expected timeout error"),
+        Err(e) => e,
+    };
+    assert!(err.to_string().contains("timed out"));
+
+    // Give a small amount of time for the background process to write the file if it hasn't yet
+    // though the timeout is 500ms, which should be enough for 'echo $! > file'
+    std::thread::sleep(Duration::from_millis(100));
+
+    // Read the background PID
+    let bg_pid_str = fs::read_to_string(&pid_file).expect("Failed to read PID file");
+    let bg_pid = bg_pid_str
+        .trim()
+        .parse::<i32>()
+        .expect("Failed to parse PID");
+    let pid = Pid::from_raw(bg_pid);
+
+    // Verify background process is killed
+    let mut killed = false;
+    for _ in 0..10 {
+        if kill(pid, None).is_err() {
+            killed = true;
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+
+    assert!(
+        killed,
+        "Background process should have been killed by run_command timeout"
+    );
+
+    Ok(())
+}

@@ -1740,3 +1740,132 @@ fn tool_detail_renders_with_border_and_body_style() {
     assert!(body_span.style.add_modifier.contains(Modifier::ITALIC));
     assert_eq!(body_span.content.clone().into_owned(), "result line");
 }
+
+// Tests for streaming input queuing behavior (GitHub #12569)
+// These tests verify that input is queued instead of submitted immediately
+// when the assistant is streaming its final answer.
+
+#[test]
+fn streaming_state_starts_false() {
+    let session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    assert!(!session.is_streaming_final_answer);
+}
+
+#[test]
+fn streaming_state_set_on_agent_append_line() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    assert!(!session.is_streaming_final_answer);
+
+    session.handle_command(InlineCommand::AppendLine {
+        kind: InlineMessageKind::Agent,
+        segments: vec![InlineSegment {
+            text: "Hello".to_string(),
+            style: std::sync::Arc::new(InlineTextStyle::default()),
+        }],
+    });
+
+    assert!(session.is_streaming_final_answer);
+}
+
+#[test]
+fn streaming_state_set_on_agent_inline() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    assert!(!session.is_streaming_final_answer);
+
+    session.handle_command(InlineCommand::Inline {
+        kind: InlineMessageKind::Agent,
+        segment: InlineSegment {
+            text: "Hello".to_string(),
+            style: std::sync::Arc::new(InlineTextStyle::default()),
+        },
+    });
+
+    assert!(session.is_streaming_final_answer);
+}
+
+#[test]
+fn streaming_state_cleared_on_turn_completion() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+
+    // Start streaming
+    session.handle_command(InlineCommand::AppendLine {
+        kind: InlineMessageKind::Agent,
+        segments: vec![InlineSegment {
+            text: "Hello".to_string(),
+            style: std::sync::Arc::new(InlineTextStyle::default()),
+        }],
+    });
+    assert!(session.is_streaming_final_answer);
+
+    // Simulate turn completion (status cleared)
+    session.handle_command(InlineCommand::SetInputStatus {
+        left: None,
+        right: None,
+    });
+
+    assert!(!session.is_streaming_final_answer);
+}
+
+#[test]
+fn streaming_state_not_cleared_on_status_update_with_content() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+
+    // Start streaming
+    session.handle_command(InlineCommand::AppendLine {
+        kind: InlineMessageKind::Agent,
+        segments: vec![InlineSegment {
+            text: "Hello".to_string(),
+            style: std::sync::Arc::new(InlineTextStyle::default()),
+        }],
+    });
+    assert!(session.is_streaming_final_answer);
+
+    // Status update with content (not turn completion)
+    session.handle_command(InlineCommand::SetInputStatus {
+        left: Some("Working...".to_string()),
+        right: None,
+    });
+
+    assert!(session.is_streaming_final_answer);
+}
+
+#[test]
+fn non_agent_messages_dont_trigger_streaming_state() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+
+    session.handle_command(InlineCommand::AppendLine {
+        kind: InlineMessageKind::User,
+        segments: vec![InlineSegment {
+            text: "Hello".to_string(),
+            style: std::sync::Arc::new(InlineTextStyle::default()),
+        }],
+    });
+
+    assert!(!session.is_streaming_final_answer);
+}
+
+#[test]
+fn empty_agent_segments_dont_trigger_streaming_state() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+
+    session.handle_command(InlineCommand::AppendLine {
+        kind: InlineMessageKind::Agent,
+        segments: vec![],
+    });
+
+    assert!(!session.is_streaming_final_answer);
+}
+
+#[test]
+fn streaming_state_set_on_agent_append_pasted_message() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    assert!(!session.is_streaming_final_answer);
+
+    session.handle_command(InlineCommand::AppendPastedMessage {
+        kind: InlineMessageKind::Agent,
+        text: "Hello".to_string(),
+        line_count: 1,
+    });
+
+    assert!(session.is_streaming_final_answer);
+}

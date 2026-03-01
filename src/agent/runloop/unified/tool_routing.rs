@@ -120,20 +120,28 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
         return Ok(ToolPermissionFlow::Approved);
     }
 
+    // Generate cache key - use command text for shell tools to enable granular session approval
+    let command_text = extract_shell_command_text(tool_name, tool_args);
+    let cache_key = if let Some(cmd) = &command_text {
+        format!("{}:{}", tool_name, cmd)
+    } else {
+        tool_name.to_string()
+    };
+
     // Check tool permission cache for previously granted permissions
     if let Some(cache) = tool_permission_cache {
         let permission_cache = cache.read().await;
 
         // Check if tool access is denied by policy (not execution failure)
         // Only reject on explicit policy denials, not temporary execution failures
-        if permission_cache.is_denied(tool_name) {
+        if permission_cache.is_denied(&cache_key) || permission_cache.is_denied(tool_name) {
             return Ok(ToolPermissionFlow::Denied);
         }
 
         // Check if we have cached permission that can be reused
         // Temporary denials are NOT reusable; they should be retried
-        if permission_cache.can_use_cached(tool_name) {
-            tracing::debug!("Using cached ACP permission for tool: {}", tool_name);
+        if permission_cache.can_use_cached(&cache_key) || permission_cache.can_use_cached(tool_name) {
+            tracing::debug!("Using cached ACP permission for tool invocation: {}", cache_key);
             return Ok(ToolPermissionFlow::Approved);
         }
     }

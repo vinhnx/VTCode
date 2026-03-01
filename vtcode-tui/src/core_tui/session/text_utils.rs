@@ -97,7 +97,11 @@ pub(super) fn pty_wrapped_continuation_prefix(base_prefix: &str, line_text: &str
     format!("{}{}", base_prefix, " ".repeat(hang_width))
 }
 
-/// Wrap a line of text to fit within the specified width
+/// Wrap a line of text to fit within the specified width.
+///
+/// This is the standard wrapping function that wraps at grapheme boundaries.
+/// For URL-aware wrapping that preserves URLs as atomic units, use
+/// `super::wrapping::adaptive_wrap_line` instead.
 pub fn wrap_line(line: Line<'static>, max_width: usize) -> Vec<Line<'static>> {
     if max_width == 0 {
         return vec![Line::default()];

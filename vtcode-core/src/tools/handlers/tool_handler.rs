@@ -11,7 +11,6 @@
 //! - `ToolInvocation` for execution context
 
 use std::collections::HashMap;
-use std::fmt;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -167,62 +166,21 @@ pub struct ToolInvocation {
 /// Shared diff tracker type alias
 pub type SharedDiffTracker = Arc<tokio::sync::Mutex<DiffTracker>>;
 
-type ConstraintValidator<T> = dyn Fn(&T) -> Result<(), ConstraintError> + Send + Sync;
-
-/// Error type for constrained values used in tool turn context.
-#[derive(Debug, thiserror::Error, PartialEq, Eq)]
-#[error("{message}")]
-pub struct ConstraintError {
-    message: String,
-}
-
-impl ConstraintError {
-    pub fn new(message: impl Into<String>) -> Self {
-        Self {
-            message: message.into(),
-        }
-    }
-}
-
-/// A value paired with a validator to preserve constraints through cloning/passing.
-#[derive(Clone)]
+/// Lightweight wrapper used to preserve policy fields as structured values.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Constrained<T> {
     value: T,
-    validator: Arc<ConstraintValidator<T>>,
 }
 
 impl<T> Constrained<T> {
-    pub fn new(
-        initial_value: T,
-        validator: impl Fn(&T) -> Result<(), ConstraintError> + Send + Sync + 'static,
-    ) -> Result<Self, ConstraintError> {
-        let validator = Arc::new(validator);
-        validator(&initial_value)?;
-        Ok(Self {
-            value: initial_value,
-            validator,
-        })
-    }
-
     pub fn allow_any(initial_value: T) -> Self {
         Self {
             value: initial_value,
-            validator: Arc::new(|_| Ok(())),
         }
     }
 
     pub fn get(&self) -> &T {
         &self.value
-    }
-
-    pub fn can_set(&self, candidate: &T) -> Result<(), ConstraintError> {
-        (self.validator)(candidate)
-    }
-
-    pub fn set(&mut self, value: T) -> Result<(), ConstraintError> {
-        (self.validator)(&value)?;
-        self.value = value;
-        Ok(())
     }
 }
 
@@ -237,22 +195,6 @@ impl<T: Default> Default for Constrained<T> {
         Self::allow_any(T::default())
     }
 }
-
-impl<T: fmt::Debug> fmt::Debug for Constrained<T> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Constrained")
-            .field("value", &self.value)
-            .finish()
-    }
-}
-
-impl<T: PartialEq> PartialEq for Constrained<T> {
-    fn eq(&self, other: &Self) -> bool {
-        self.value == other.value
-    }
-}
-
-impl<T: Eq> Eq for Constrained<T> {}
 
 /// Session trait for tool execution context
 #[async_trait]

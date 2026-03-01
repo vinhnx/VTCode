@@ -21,6 +21,30 @@ impl Session {
     }
 
     pub fn handle_command(&mut self, command: InlineCommand) {
+        // Track streaming state: set when agent starts responding
+        if matches!(
+            &command,
+            InlineCommand::AppendLine { kind: InlineMessageKind::Agent, segments }
+                if !segments.is_empty()
+        ) || matches!(
+            &command,
+            InlineCommand::AppendPastedMessage { kind: InlineMessageKind::Agent, text, .. }
+                if !text.is_empty()
+        ) || matches!(
+            &command,
+            InlineCommand::Inline { kind: InlineMessageKind::Agent, segment }
+                if !segment.text.is_empty()
+        ) {
+            self.is_streaming_final_answer = true;
+        }
+
+        // Clear streaming state on turn completion (status cleared)
+        if let InlineCommand::SetInputStatus { left, right } = &command {
+            if self.is_streaming_final_answer && left.is_none() && right.is_none() {
+                self.is_streaming_final_answer = false;
+            }
+        }
+
         match command {
             InlineCommand::AppendLine { kind, segments } => {
                 self.clear_thinking_spinner_if_active(kind);

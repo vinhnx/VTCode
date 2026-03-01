@@ -5,15 +5,12 @@ use std::time::Duration;
 
 use parking_lot::Mutex;
 use portable_pty::{Child, MasterPty};
-use tracing::{debug, warn};
+use tracing::warn;
 use vt100::Parser;
 
 use crate::tools::types::VTCodePtySession;
 
 use super::scrollback::PtyScrollback;
-
-/// Grace period to wait after SIGTERM before sending SIGKILL (ms)
-const GRACEFUL_SHUTDOWN_TIMEOUT_MS: u64 = 500;
 
 /// Maximum time to wait for reader thread to finish (ms)
 const READER_THREAD_TIMEOUT_MS: u64 = 5000;
@@ -177,12 +174,7 @@ impl PtySessionHandle {
     ///
     /// This ensures that child processes have a chance to clean up
     /// before being forcibly terminated.
-    #[cfg(unix)]
     pub(super) fn graceful_terminate(&self) {
-        use vtcode_bash_runner::{
-            GracefulTerminationResult, KillSignal, graceful_kill_process_group,
-        };
-
         let mut child = self.child.lock();
 
         // Check if already exited
@@ -190,60 +182,13 @@ impl PtySessionHandle {
             return;
         }
 
-        // Use unified graceful termination helper
+        // Use unified cross-platform graceful termination (SIGTERM -> SIGKILL)
         if let Some(pid) = self.child_pid {
-            let result = graceful_kill_process_group(
-                pid,
-                KillSignal::Term,
-                Duration::from_millis(GRACEFUL_SHUTDOWN_TIMEOUT_MS),
-            );
-
-            match result {
-                GracefulTerminationResult::GracefulExit => {
-                    debug!(pid = pid, "Process group exited gracefully");
-                }
-                GracefulTerminationResult::ForcefulKill => {
-                    debug!(pid = pid, "Process group required SIGKILL");
-                }
-                GracefulTerminationResult::AlreadyExited => {
-                    debug!(pid = pid, "Process group was already exited");
-                }
-                GracefulTerminationResult::Error => {
-                    warn!(pid = pid, "Failed to terminate process group");
-                }
-            }
+            vtcode_bash_runner::graceful_kill_process_group_default(pid);
         }
 
         // Fallback: use portable-pty's kill for any remaining cleanup
         let _ = child.kill();
-        let _ = child.wait();
-    }
-
-    /// Gracefully terminate on non-Unix (just kill directly)
-    #[cfg(not(unix))]
-    pub(super) fn graceful_terminate(&self) {
-        use vtcode_bash_runner::{GracefulTerminationResult, graceful_kill_process_group_default};
-
-        let mut child = self.child.lock();
-
-        // Check if already exited
-        if let Ok(Some(_)) = child.try_wait() {
-            return;
-        }
-
-        // Try graceful termination via process group
-        if let Some(pid) = self.child_pid {
-            let result = graceful_kill_process_group_default(pid);
-            match result {
-                GracefulTerminationResult::Error => {
-                    // Fallback to portable-pty's kill
-                    let _ = child.kill();
-                }
-                _ => {}
-            }
-        } else {
-            let _ = child.kill();
-        }
         let _ = child.wait();
     }
 }
@@ -264,35 +209,15 @@ impl Drop for PtySessionHandle {
 
         // Kill child process and its process group using graceful termination
         // This uses SIGTERM first, then SIGKILL after a grace period
-        #[cfg(unix)]
         {
-            use vtcode_bash_runner::{KillSignal, graceful_kill_process_group};
-
             let mut child = self.child.lock();
             if let Ok(None) = child.try_wait() {
-                // Use unified graceful termination helper
+                // Use unified cross-platform graceful termination
                 if let Some(pid) = self.child_pid {
-                    let _ = graceful_kill_process_group(
-                        pid,
-                        KillSignal::Term,
-                        Duration::from_millis(GRACEFUL_SHUTDOWN_TIMEOUT_MS),
-                    );
+                    vtcode_bash_runner::graceful_kill_process_group_default(pid);
                 }
 
                 // Fallback: use portable-pty's kill for any remaining cleanup
-                let _ = child.kill();
-            }
-        }
-
-        #[cfg(not(unix))]
-        {
-            use vtcode_bash_runner::graceful_kill_process_group_default;
-
-            let mut child = self.child.lock();
-            if let Ok(None) = child.try_wait() {
-                if let Some(pid) = self.child_pid {
-                    let _ = graceful_kill_process_group_default(pid);
-                }
                 let _ = child.kill();
             }
         }

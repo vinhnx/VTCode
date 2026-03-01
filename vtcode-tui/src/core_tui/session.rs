@@ -51,6 +51,7 @@ pub mod styling;
 mod text_utils;
 mod transcript;
 pub mod utils;
+pub mod wrapping;
 
 // New modular components (refactored from main session.rs)
 mod command;
@@ -217,4 +218,10 @@ pub struct Session {
     pub(crate) workspace_root: Option<std::path::PathBuf>,
     /// Last set terminal title to avoid redundant updates
     last_terminal_title: Option<String>,
+
+    // --- Streaming State ---
+    /// Track if the assistant is currently streaming a final answer.
+    /// When true, user input should be queued instead of submitted immediately
+    /// to prevent race conditions with turn completion (see GitHub #12569).
+    pub(crate) is_streaming_final_answer: bool,
 }

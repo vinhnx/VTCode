@@ -491,7 +491,13 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
             // Instead, it's added in session_loop.rs after the user message is displayed,
             // ensuring proper message ordering in the transcript (user message first, then spinner).
 
-            if queue_submit {
+            // Queue input if streaming final answer to prevent race condition with turn completion.
+            // This prevents the "dead state" issue where prompts entered during final streaming
+            // could be lost, causing the agent to stop handling subsequent prompts normally.
+            // See: https://github.com/openai/codex/pull/12569
+            let should_queue = queue_submit || session.is_streaming_final_answer;
+
+            if should_queue {
                 session.push_queued_input(submitted.clone());
                 session.mark_dirty();
                 Some(InlineEvent::QueueSubmit(submitted))

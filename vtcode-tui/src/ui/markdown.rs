@@ -17,6 +17,7 @@ use vtcode_commons::diff_paths::{
 };
 
 use crate::utils::diff_styles::DiffColorPalette;
+use crate::core_tui::session::wrapping;
 
 const LIST_INDENT_WIDTH: usize = 2;
 const CODE_LINE_NUMBER_MIN_WIDTH: usize = 3;

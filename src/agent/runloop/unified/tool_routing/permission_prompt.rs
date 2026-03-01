@@ -46,7 +46,7 @@ pub(super) fn extract_shell_command_text(
         if parts.is_empty() {
             None
         } else {
-            Some(parts.join(" "))
+            Some(shell_words::join(parts))
         }
     } else {
         command_value.as_str().map(|value| value.to_owned())

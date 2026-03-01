@@ -180,6 +180,9 @@ impl Session {
             app_name,
             workspace_root: None,
             last_terminal_title: None,
+
+            // --- Streaming State ---
+            is_streaming_final_answer: false,
         };
         session.ensure_prompt_style_color();
         session

@@ -213,6 +213,7 @@ impl PtyManager {
                     .slave
                     .spawn_command(builder)
                     .with_context(|| format!("failed to spawn PTY command '{display_program}'"))?;
+                let child_pid = child.process_id();
                 let mut killer = child.clone_killer();
                 drop(pair.slave);
 
@@ -256,14 +257,24 @@ match reader.read(&mut buffer) {
 anyhow!("PTY command wait thread panicked: {:?}", panic)
                     })?,
                     Err(mpsc::RecvTimeoutError::Timeout) => {
-// Kill the process first
-if let Err(e) = killer.kill() {
-    warn!(
-        target: "vtcode.pty.timeout",
-        error = %e,
-        "Failed to kill PTY command after timeout"
-    );
-}
+                        // Kill the process group first (including background children).
+                        // If that fails, fallback to killing the direct process handle.
+                        let mut should_fallback_kill = true;
+                        if let Some(pid) = child_pid {
+                            let result = vtcode_bash_runner::graceful_kill_process_group_default(pid);
+                            should_fallback_kill =
+                                matches!(result, vtcode_bash_runner::GracefulTerminationResult::Error);
+                        }
+
+                        if should_fallback_kill {
+                            if let Err(e) = killer.kill() {
+                                warn!(
+                                    target: "vtcode.pty.timeout",
+                                    error = %e,
+                                    "Failed to kill PTY command after timeout"
+                                );
+                            }
+                        }
 
 // Wait with a grace period - don't hang forever
 let grace_period = Duration::from_millis(THREAD_JOIN_GRACE_PERIOD_MS);
