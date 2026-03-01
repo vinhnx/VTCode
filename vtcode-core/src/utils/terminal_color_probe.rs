@@ -134,7 +134,9 @@ fn read_until_da1(tty: &mut File, timeout: Duration) -> Result<Vec<u8>> {
             .read(&mut chunk)
             .context("failed to read OSC probe response")?;
         if bytes_read == 0 {
-            return Err(anyhow!("terminal closed while waiting for OSC probe response"));
+            return Err(anyhow!(
+                "terminal closed while waiting for OSC probe response"
+            ));
         }
         buffer.extend_from_slice(&chunk[..bytes_read]);
     }
