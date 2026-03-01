@@ -7,6 +7,7 @@ use tokio::sync::Notify;
 use tokio::task;
 use vtcode_core::core::interfaces::ui::UiSession;
 use vtcode_core::notifications::{NotificationEvent, send_global_notification};
+use vtcode_core::sandboxing::SandboxPermissions as CoreSandboxPermissions;
 use vtcode_core::utils::ansi::AnsiRenderer;
 use vtcode_tui::InlineEvent;
 use vtcode_tui::InlineHandle;
@@ -17,26 +18,23 @@ use crate::agent::runloop::unified::ui_interaction::PlaceholderGuard;
 
 use super::HitlDecision;
 
-pub(super) fn extract_shell_command_text(
-    tool_name: &str,
-    tool_args: Option<&Value>,
-) -> Option<String> {
+fn shell_run_args<'a>(tool_name: &str, tool_args: Option<&'a Value>) -> Option<&'a Value> {
     let args = tool_args?;
-    let command_value = match tool_name {
-        "run_pty_cmd" | "shell" => args.get("command").or_else(|| args.get("raw_command")),
+    match tool_name {
+        "run_pty_cmd" | "shell" => Some(args),
         "unified_exec" | "exec_pty_cmd" | "exec" => {
             let action = args
                 .get("action")
                 .and_then(|v| v.as_str())
                 .or_else(|| args.get("command").map(|_| "run"));
-            if action == Some("run") {
-                args.get("command").or_else(|| args.get("raw_command"))
-            } else {
-                None
-            }
+            (action == Some("run")).then_some(args)
         }
         _ => None,
-    }?;
+    }
+}
+
+fn extract_shell_command_text_from_run_args(args: &Value) -> Option<String> {
+    let command_value = args.get("command").or_else(|| args.get("raw_command"))?;
 
     if let Some(arr) = command_value.as_array() {
         let parts = arr
@@ -51,6 +49,24 @@ pub(super) fn extract_shell_command_text(
     } else {
         command_value.as_str().map(|value| value.to_owned())
     }
+}
+
+fn parse_shell_sandbox_permissions(args: &Value) -> CoreSandboxPermissions {
+    args.get("sandbox_permissions")
+        .cloned()
+        .map(serde_json::from_value::<CoreSandboxPermissions>)
+        .transpose()
+        .ok()
+        .flatten()
+        .unwrap_or(CoreSandboxPermissions::UseDefault)
+}
+
+pub(super) fn extract_shell_command_text(
+    tool_name: &str,
+    tool_args: Option<&Value>,
+) -> Option<String> {
+    let args = shell_run_args(tool_name, tool_args)?;
+    extract_shell_command_text_from_run_args(args)
 }
 
 pub(super) fn shell_command_requires_prompt(command: &str) -> bool {
@@ -70,6 +86,43 @@ pub(super) fn shell_command_requires_prompt(command: &str) -> bool {
     }
 
     vtcode_core::command_safety::command_might_be_dangerous(&tokens)
+}
+
+pub(super) fn shell_permission_cache_suffix(
+    tool_name: &str,
+    tool_args: Option<&Value>,
+) -> Option<String> {
+    let args = shell_run_args(tool_name, tool_args)?;
+    let command = extract_shell_command_text_from_run_args(args)?;
+    let sandbox_permissions = parse_shell_sandbox_permissions(args);
+    let additional_permissions = args.get("additional_permissions");
+
+    if sandbox_permissions == CoreSandboxPermissions::UseDefault && additional_permissions.is_none()
+    {
+        return Some(command);
+    }
+
+    let sandbox_permissions = serde_json::to_string(&sandbox_permissions)
+        .unwrap_or_else(|_| "\"use_default\"".to_string());
+    let additional_permissions = additional_permissions
+        .map(|value| {
+            serde_json::to_string(value).unwrap_or_else(|_| "\"<invalid_additional>\"".to_string())
+        })
+        .unwrap_or_else(|| "null".to_string());
+
+    Some(format!(
+        "{command}|sandbox_permissions={sandbox_permissions}|additional_permissions={additional_permissions}"
+    ))
+}
+
+pub(super) fn shell_requests_elevated_sandbox_permissions(
+    tool_name: &str,
+    tool_args: Option<&Value>,
+) -> bool {
+    let args = shell_run_args(tool_name, tool_args);
+    args.map(parse_shell_sandbox_permissions)
+    .map(|permissions| permissions.requires_approval())
+    .unwrap_or(false)
 }
 
 fn tool_args_diff_preview(tool_name: &str, tool_args: Option<&Value>) -> Option<Vec<String>> {
@@ -440,5 +493,98 @@ pub(super) async fn prompt_tool_permission<S: UiSession + ?Sized>(
                 ctrl_c_state.disarm_exit();
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        extract_shell_command_text, shell_permission_cache_suffix,
+        shell_requests_elevated_sandbox_permissions,
+    };
+    use serde_json::json;
+
+    #[test]
+    fn unified_exec_extracts_command_when_action_is_run() {
+        let args = json!({
+            "action": "run",
+            "command": "cargo check"
+        });
+        let command = extract_shell_command_text("unified_exec", Some(&args));
+        assert_eq!(command.as_deref(), Some("cargo check"));
+    }
+
+    #[test]
+    fn unified_exec_ignores_non_run_actions() {
+        let args = json!({
+            "action": "poll",
+            "session_id": "run-123"
+        });
+        let command = extract_shell_command_text("unified_exec", Some(&args));
+        assert_eq!(command, None);
+    }
+
+    #[test]
+    fn elevated_sandbox_permissions_require_prompt_for_unified_exec_run() {
+        let args = json!({
+            "action": "run",
+            "command": "echo hi",
+            "sandbox_permissions": "with_additional_permissions"
+        });
+        assert!(shell_requests_elevated_sandbox_permissions(
+            "unified_exec",
+            Some(&args)
+        ));
+    }
+
+    #[test]
+    fn elevated_sandbox_permissions_ignored_for_unified_exec_poll() {
+        let args = json!({
+            "action": "poll",
+            "session_id": "run-123",
+            "sandbox_permissions": "with_additional_permissions"
+        });
+        assert!(!shell_requests_elevated_sandbox_permissions(
+            "unified_exec",
+            Some(&args)
+        ));
+    }
+
+    #[test]
+    fn require_escalated_permissions_require_prompt_for_unified_exec_run() {
+        let args = json!({
+            "action": "run",
+            "command": "echo hi",
+            "sandbox_permissions": "require_escalated"
+        });
+        assert!(shell_requests_elevated_sandbox_permissions(
+            "unified_exec",
+            Some(&args)
+        ));
+    }
+
+    #[test]
+    fn cache_suffix_includes_permissions_for_shell_run() {
+        let plain = json!({
+            "command": "echo hi"
+        });
+        let with_permissions = json!({
+            "command": "echo hi",
+            "sandbox_permissions": "with_additional_permissions",
+            "additional_permissions": {
+                "fs_write": ["/tmp/demo.txt"]
+            }
+        });
+
+        let plain_key = shell_permission_cache_suffix("shell", Some(&plain));
+        let permissioned_key = shell_permission_cache_suffix("shell", Some(&with_permissions));
+
+        assert_ne!(plain_key, permissioned_key);
+        assert!(
+            permissioned_key
+                .as_deref()
+                .unwrap_or_default()
+                .contains("with_additional_permissions")
+        );
     }
 }

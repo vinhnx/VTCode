@@ -1,5 +1,7 @@
 //! Sandbox permissions for fine-grained access control.
 
+use std::path::PathBuf;
+
 use serde::{Deserialize, Serialize};
 
 /// Fine-grained permissions for sandbox operations.
@@ -16,6 +18,9 @@ pub enum SandboxPermissions {
     /// Request escalated permissions (requires approval).
     RequireEscalated,
 
+    /// Request additional per-command sandbox permissions.
+    WithAdditionalPermissions,
+
     /// Bypass the sandbox entirely (requires explicit approval).
     BypassSandbox,
 }
@@ -23,7 +28,25 @@ pub enum SandboxPermissions {
 impl SandboxPermissions {
     /// Check if this permission requires approval.
     pub fn requires_approval(&self) -> bool {
+        matches!(
+            self,
+            Self::RequireEscalated | Self::WithAdditionalPermissions | Self::BypassSandbox
+        )
+    }
+
+    /// Check if this permission requests full unsandboxed execution.
+    pub fn requires_escalated_permissions(&self) -> bool {
         matches!(self, Self::RequireEscalated | Self::BypassSandbox)
+    }
+
+    /// Check if this permission requests any additional privileges.
+    pub fn requires_additional_permissions(&self) -> bool {
+        !matches!(self, Self::UseDefault)
+    }
+
+    /// Check if this permission requests additional sandboxed permissions.
+    pub fn uses_additional_permissions(&self) -> bool {
+        matches!(self, Self::WithAdditionalPermissions)
     }
 
     /// Check if this permission bypasses the sandbox.
@@ -37,8 +60,28 @@ impl SandboxPermissions {
         match (self, other) {
             (BypassSandbox, _) | (_, BypassSandbox) => BypassSandbox,
             (RequireEscalated, _) | (_, RequireEscalated) => RequireEscalated,
+            (WithAdditionalPermissions, _) | (_, WithAdditionalPermissions) => {
+                WithAdditionalPermissions
+            }
             (UseDefault, UseDefault) => UseDefault,
         }
+    }
+}
+
+/// Additional per-command filesystem permissions.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct AdditionalPermissions {
+    /// Additional filesystem paths to grant read access.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub fs_read: Vec<PathBuf>,
+    /// Additional filesystem paths to grant write access.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub fs_write: Vec<PathBuf>,
+}
+
+impl AdditionalPermissions {
+    pub fn is_empty(&self) -> bool {
+        self.fs_read.is_empty() && self.fs_write.is_empty()
     }
 }
 
@@ -58,6 +101,7 @@ mod tests {
         let perm = SandboxPermissions::RequireEscalated;
         assert!(perm.requires_approval());
         assert!(!perm.bypasses_sandbox());
+        assert!(perm.requires_escalated_permissions());
     }
 
     #[test]
@@ -65,6 +109,17 @@ mod tests {
         let perm = SandboxPermissions::BypassSandbox;
         assert!(perm.requires_approval());
         assert!(perm.bypasses_sandbox());
+        assert!(perm.requires_escalated_permissions());
+    }
+
+    #[test]
+    fn test_with_additional_permissions() {
+        let perm = SandboxPermissions::WithAdditionalPermissions;
+        assert!(perm.requires_approval());
+        assert!(perm.requires_additional_permissions());
+        assert!(perm.uses_additional_permissions());
+        assert!(!perm.requires_escalated_permissions());
+        assert!(!perm.bypasses_sandbox());
     }
 
     #[test]
@@ -72,6 +127,10 @@ mod tests {
         use SandboxPermissions::*;
 
         assert_eq!(UseDefault.merge(&UseDefault), UseDefault);
+        assert_eq!(
+            UseDefault.merge(&WithAdditionalPermissions),
+            WithAdditionalPermissions
+        );
         assert_eq!(UseDefault.merge(&RequireEscalated), RequireEscalated);
         assert_eq!(RequireEscalated.merge(&BypassSandbox), BypassSandbox);
     }

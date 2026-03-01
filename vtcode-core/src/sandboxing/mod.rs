@@ -55,7 +55,7 @@ pub use debug::{
 };
 pub use exec_env::{CommandSpec, ExecEnv, ExecExpiration, SandboxType};
 pub use manager::{SandboxManager, SandboxTransformError};
-pub use permissions::SandboxPermissions;
+pub use permissions::{AdditionalPermissions, SandboxPermissions};
 pub use policy::{
     BLOCKED_SYSCALLS, DEFAULT_SENSITIVE_PATHS, FILTERED_SYSCALLS, NetworkAllowlistEntry,
     ResourceLimits, SandboxPolicy, SeccompProfile, SensitivePath, WritableRoot,

@@ -1,7 +1,7 @@
 use anyhow::Result;
-use serde::{Deserialize, Serialize};
 #[cfg(not(unix))]
 use anyhow::anyhow;
+use serde::{Deserialize, Serialize};
 #[cfg(not(unix))]
 use std::collections::HashMap;
 #[cfg(not(unix))]
@@ -41,8 +41,8 @@ mod unix_impl {
         ZSH_EXEC_BRIDGE_WRAPPER_SOCKET_ENV_VAR, ZSH_EXEC_WRAPPER_MODE_ENV_VAR,
     };
     use anyhow::{Context, Result, bail};
-    use std::collections::HashMap;
     use parking_lot::Mutex;
+    use std::collections::HashMap;
     use std::fs;
     use std::io::{ErrorKind, Read, Write};
     use std::os::unix::net::{UnixListener, UnixStream};
@@ -66,10 +66,8 @@ mod unix_impl {
 
     impl ZshExecBridgeSession {
         pub(crate) fn spawn(allow_confirmed_dangerous: bool) -> Result<Self> {
-            let socket_path = std::env::temp_dir().join(format!(
-                "vtcode-zsh-exec-bridge-{}.sock",
-                Uuid::new_v4()
-            ));
+            let socket_path = std::env::temp_dir()
+                .join(format!("vtcode-zsh-exec-bridge-{}.sock", Uuid::new_v4()));
 
             if socket_path.exists() {
                 fs::remove_file(&socket_path).with_context(|| {
@@ -170,8 +168,7 @@ mod unix_impl {
         let request: WrapperExecRequest =
             serde_json::from_str(payload.trim()).context("parse wrapper request payload")?;
 
-        let (action, reason) =
-            evaluate_wrapper_exec_request(&request, allow_confirmed_dangerous);
+        let (action, reason) = evaluate_wrapper_exec_request(&request, allow_confirmed_dangerous);
         let response = WrapperExecResponse {
             request_id: request.request_id.clone(),
             action,
@@ -351,7 +348,7 @@ mod unix_impl {
 }
 
 #[cfg(unix)]
-pub use unix_impl::ZshExecBridgeSession;
+pub(crate) use unix_impl::ZshExecBridgeSession;
 
 #[cfg(unix)]
 pub fn maybe_run_zsh_exec_wrapper_mode() -> Result<bool> {
@@ -359,17 +356,17 @@ pub fn maybe_run_zsh_exec_wrapper_mode() -> Result<bool> {
 }
 
 #[cfg(not(unix))]
-pub struct ZshExecBridgeSession;
+pub(crate) struct ZshExecBridgeSession;
 
 #[cfg(not(unix))]
 impl ZshExecBridgeSession {
-    pub fn spawn(_allow_confirmed_dangerous: bool) -> Result<Self> {
+    pub(crate) fn spawn(_allow_confirmed_dangerous: bool) -> Result<Self> {
         Err(anyhow!(
             "zsh exec bridge is only supported on Unix platforms"
         ))
     }
 
-    pub fn env_vars(&self, _wrapper_executable: &Path) -> HashMap<String, String> {
+    pub(crate) fn env_vars(&self, _wrapper_executable: &Path) -> HashMap<String, String> {
         HashMap::new()
     }
 }

@@ -41,7 +41,7 @@ pub struct StatusLineConfig {
 
 impl StatusLineConfig {
     /// Get the effective status line mode, using defaults for unset values.
-    /// 
+    ///
     /// Following Codex PR #12015's pattern for default configuration fallback,
     /// this method ensures that when a status line config is not explicitly set,
     /// sensible defaults are applied (Auto mode by default).
@@ -62,7 +62,7 @@ impl Default for StatusLineConfig {
 }
 
 /// Returns the default status line mode when not explicitly configured.
-/// 
+///
 /// This is the fallback when `tui.status_line` config is unset (pattern from Codex PR #12015).
 fn default_status_line_mode() -> StatusLineMode {
     StatusLineMode::Auto

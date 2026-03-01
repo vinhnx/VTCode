@@ -11,8 +11,8 @@ use unicode_width::UnicodeWidthStr;
 
 use super::super::style::ratatui_style_from_inline;
 use super::super::types::InlineMessageKind;
-use super::{Session, message::MessageLine, render, terminal_capabilities, text_utils};
 use super::wrapping;
+use super::{Session, message::MessageLine, render, terminal_capabilities, text_utils};
 use crate::config::constants::ui;
 
 mod blocks;

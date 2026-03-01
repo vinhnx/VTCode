@@ -47,7 +47,7 @@ impl OpenAIResponsesWebSocketSession {
         }
     }
 
-    fn can_continue_from(&self, payload: &Value, allow_empty_delta: bool) -> bool {
+    fn can_continue_from(&self, payload: &Value) -> bool {
         let Some(previous_response_id) = self.last_response_id.as_ref() else {
             return false;
         };
@@ -78,11 +78,7 @@ impl OpenAIResponsesWebSocketSession {
         let Some(current_input) = payload.get("input").and_then(Value::as_array) else {
             return false;
         };
-        input_is_incremental(
-            self.last_input.as_slice(),
-            current_input.as_slice(),
-            allow_empty_delta,
-        )
+        input_is_incremental(self.last_input.as_slice(), current_input.as_slice())
     }
 
     fn clear_chain(&mut self) {
@@ -106,7 +102,6 @@ impl OpenAIProvider {
         &self,
         request: &LLMRequest,
     ) -> Result<LLMResponse, LLMError> {
-        let allow_empty_delta = true;
         let mut session_guard = self.websocket_session.lock().await;
         let session = self
             .ensure_websocket_session(&mut session_guard, request)
@@ -119,7 +114,7 @@ impl OpenAIProvider {
             .map(str::is_empty)
             .unwrap_or(true);
         if needs_warmup {
-            let warmup_prepared = prepare_websocket_event(payload.clone(), session, true, false)?;
+            let warmup_prepared = prepare_websocket_event(payload.clone(), session, true)?;
             match send_websocket_event(session, &warmup_prepared.event).await {
                 Ok(response_json) => {
                     update_session_from_response(
@@ -138,7 +133,7 @@ impl OpenAIProvider {
             }
         }
 
-        let prepared = prepare_websocket_event(payload, session, false, allow_empty_delta)?;
+        let prepared = prepare_websocket_event(payload, session, false)?;
         let sent_with_previous = prepared.used_previous_response_id;
 
         match send_websocket_event(session, &prepared.event).await {
@@ -238,15 +233,8 @@ fn update_session_from_response(
     session.last_tools = prepared.event.get("tools").cloned();
 }
 
-fn input_is_incremental(
-    last_input: &[Value],
-    current_input: &[Value],
-    allow_empty_delta: bool,
-) -> bool {
+fn input_is_incremental(last_input: &[Value], current_input: &[Value]) -> bool {
     if current_input.len() < last_input.len() {
-        return false;
-    }
-    if !allow_empty_delta && current_input.len() == last_input.len() {
         return false;
     }
     current_input.starts_with(last_input)
@@ -264,7 +252,6 @@ fn prepare_websocket_event(
     payload: Value,
     session: &OpenAIResponsesWebSocketSession,
     warmup: bool,
-    allow_empty_delta: bool,
 ) -> Result<PreparedWebSocketEvent, LLMError> {
     let mut request_obj = payload
         .as_object()
@@ -285,7 +272,7 @@ fn prepare_websocket_event(
         .ok_or_else(|| format_provider_error("Responses payload missing input".to_string()))?;
 
     let mut used_previous_response_id = false;
-    if session.can_continue_from(&Value::Object(request_obj.clone()), allow_empty_delta) {
+    if session.can_continue_from(&Value::Object(request_obj.clone())) {
         if let Some(previous_response_id) = session.last_response_id.clone() {
             request_obj.insert(
                 "previous_response_id".to_string(),
@@ -490,22 +477,16 @@ mod tests {
     }
 
     #[test]
-    fn websocket_incremental_input_disallows_empty_delta_by_default() {
+    fn websocket_incremental_input_allows_empty_delta_for_v2_chaining() {
         let input = vec![Value::String("a".to_string())];
-        assert!(!input_is_incremental(&input, &input, false));
-    }
-
-    #[test]
-    fn websocket_incremental_input_allows_empty_delta_when_enabled() {
-        let input = vec![Value::String("a".to_string())];
-        assert!(input_is_incremental(&input, &input, true));
+        assert!(input_is_incremental(&input, &input));
     }
 
     #[test]
     fn websocket_incremental_input_requires_prefix_match() {
         let previous = vec![Value::String("a".to_string())];
         let current = vec![Value::String("b".to_string())];
-        assert!(!input_is_incremental(&previous, &current, true));
+        assert!(!input_is_incremental(&previous, &current));
     }
 
     #[test]

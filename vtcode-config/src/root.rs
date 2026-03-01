@@ -483,8 +483,13 @@ impl Default for PtyConfig {
 
 impl PtyConfig {
     pub fn validate(&self) -> Result<()> {
+        self.zsh_fork_shell_path()?;
+        Ok(())
+    }
+
+    pub fn zsh_fork_shell_path(&self) -> Result<Option<&str>> {
         if !self.shell_zsh_fork {
-            return Ok(());
+            return Ok(None);
         }
 
         let zsh_path = self
@@ -528,7 +533,7 @@ impl PtyConfig {
             }
         }
 
-        Ok(())
+        Ok(Some(zsh_path))
     }
 }
 

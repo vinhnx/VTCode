@@ -367,6 +367,29 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
                     "cwd": {"type": "string", "description": "Alias for workdir."},
                     "shell": {"type": "string", "description": "Shell binary."},
                     "login": {"type": "boolean", "description": "Use login shell.", "default": true},
+                    "sandbox_permissions": {
+                        "type": "string",
+                        "enum": ["use_default", "with_additional_permissions", "require_escalated"],
+                        "description": "Sandbox permissions for the command. Use `with_additional_permissions` to request extra sandboxed filesystem access, or `require_escalated` to run without sandbox restrictions."
+                    },
+                    "additional_permissions": {
+                        "type": "object",
+                        "description": "Only used with `sandbox_permissions=with_additional_permissions`.",
+                        "properties": {
+                            "fs_read": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": "Additional filesystem paths to grant read access."
+                            },
+                            "fs_write": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": "Additional filesystem paths to grant write access."
+                            }
+                        },
+                        "additionalProperties": false
+                    },
+                    "justification": {"type": "string", "description": "Approval question when requesting `require_escalated` execution."},
                     "timeout_secs": {"type": "integer", "description": "Timeout in seconds.", "default": 180},
                     "yield_time_ms": {"type": "integer", "description": "Time to wait for output (ms).", "default": 1000},
                     "confirm": {"type": "boolean", "description": "Confirm destructive ops.", "default": false},
@@ -958,7 +981,7 @@ fn permission_label(permission: &ToolPolicy) -> &'static str {
 
 #[cfg(test)]
 mod tests {
-    use super::build_function_declarations_with_mode;
+    use super::{base_function_declarations, build_function_declarations_with_mode};
     use crate::config::constants::tools;
     use crate::config::types::ToolDocumentationMode;
     use std::collections::BTreeSet;
@@ -987,7 +1010,7 @@ mod tests {
 
     #[test]
     fn unified_exec_schema_advertises_inspect_action() {
-        let declarations = build_function_declarations_with_mode(ToolDocumentationMode::Full);
+        let declarations = base_function_declarations();
         let unified_exec = declarations
             .iter()
             .find(|decl| decl.name == tools::UNIFIED_EXEC)
@@ -1005,6 +1028,15 @@ mod tests {
             actions
                 .iter()
                 .any(|value| value.as_str() == Some("continue"))
+        );
+
+        let permissions = unified_exec.parameters["properties"]["sandbox_permissions"]["enum"]
+            .as_array()
+            .expect("sandbox_permissions enum");
+        assert!(
+            permissions
+                .iter()
+                .any(|value| value.as_str() == Some("with_additional_permissions"))
         );
     }
 

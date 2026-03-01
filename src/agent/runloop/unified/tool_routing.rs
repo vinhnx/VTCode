@@ -27,6 +27,7 @@ use crate::hooks::lifecycle::{LifecycleHookEngine, PreToolHookDecision};
 use hook_messages::render_hook_messages;
 use permission_prompt::{
     extract_shell_command_text, prompt_tool_permission, shell_command_requires_prompt,
+    shell_permission_cache_suffix, shell_requests_elevated_sandbox_permissions,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -122,11 +123,9 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
 
     // Generate cache key - use command text for shell tools to enable granular session approval
     let command_text = extract_shell_command_text(tool_name, tool_args);
-    let cache_key = if let Some(cmd) = &command_text {
-        format!("{}:{}", tool_name, cmd)
-    } else {
-        tool_name.to_string()
-    };
+    let cache_key = shell_permission_cache_suffix(tool_name, tool_args)
+        .map(|suffix| format!("{tool_name}:{suffix}"))
+        .unwrap_or_else(|| tool_name.to_string());
 
     // Check tool permission cache for previously granted permissions
     if let Some(cache) = tool_permission_cache {
@@ -140,8 +139,12 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
 
         // Check if we have cached permission that can be reused
         // Temporary denials are NOT reusable; they should be retried
-        if permission_cache.can_use_cached(&cache_key) || permission_cache.can_use_cached(tool_name) {
-            tracing::debug!("Using cached ACP permission for tool invocation: {}", cache_key);
+        if permission_cache.can_use_cached(&cache_key) || permission_cache.can_use_cached(tool_name)
+        {
+            tracing::debug!(
+                "Using cached ACP permission for tool invocation: {}",
+                cache_key
+            );
             return Ok(ToolPermissionFlow::Approved);
         }
     }
@@ -176,9 +179,10 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
         return Ok(ToolPermissionFlow::Denied);
     }
 
-    let command_requires_prompt = extract_shell_command_text(tool_name, tool_args)
+    let command_requires_prompt = command_text
+        .as_deref()
         .map(|command| {
-            let requires_prompt = shell_command_requires_prompt(&command);
+            let requires_prompt = shell_command_requires_prompt(command);
             if requires_prompt {
                 tracing::debug!(
                     "Command '{}' requires interactive approval for tool '{}'",
@@ -189,10 +193,19 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
             requires_prompt
         })
         .unwrap_or(false);
+    let elevated_sandbox_permissions =
+        shell_requests_elevated_sandbox_permissions(tool_name, tool_args);
+    if elevated_sandbox_permissions {
+        tracing::debug!(
+            "Tool '{}' requested elevated sandbox permissions and requires approval",
+            tool_name
+        );
+    }
 
     let should_prompt = hook_requires_prompt
         || policy_decision == ToolPermissionDecision::Prompt
-        || command_requires_prompt;
+        || command_requires_prompt
+        || elevated_sandbox_permissions;
 
     if !should_prompt {
         return Ok(ToolPermissionFlow::Approved);

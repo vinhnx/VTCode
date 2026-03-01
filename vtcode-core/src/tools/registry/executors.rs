@@ -2,8 +2,9 @@ use crate::exec::code_executor::Language;
 use crate::exec::skill_manager::{Skill, SkillMetadata};
 use crate::mcp::{DetailLevel, ToolDiscovery};
 use crate::sandboxing::{
-    CommandSpec as SandboxCommandSpec, NetworkAllowlistEntry, ResourceLimits, SandboxManager,
-    SandboxPolicy, SandboxTransformError, SeccompProfile, SensitivePath, default_sensitive_paths,
+    AdditionalPermissions, CommandSpec as SandboxCommandSpec, NetworkAllowlistEntry,
+    ResourceLimits, SandboxManager, SandboxPermissions, SandboxPolicy, SandboxTransformError,
+    SeccompProfile, SensitivePath, WritableRoot, default_sensitive_paths,
 };
 use crate::tools::file_tracker::FileTracker;
 use crate::tools::registry::declarations::{
@@ -215,18 +216,204 @@ fn sensitive_paths_from_runtime_config(
     sensitive_paths
 }
 
+const MISSING_ADDITIONAL_PERMISSIONS_MESSAGE: &str =
+    "missing `additional_permissions`; provide `fs_read` and/or `fs_write` when using `with_additional_permissions`";
+
+fn parse_requested_sandbox_permissions(
+    payload: &serde_json::Map<String, Value>,
+) -> Result<(SandboxPermissions, Option<AdditionalPermissions>)> {
+    let sandbox_permissions = payload
+        .get("sandbox_permissions")
+        .cloned()
+        .map(serde_json::from_value::<SandboxPermissions>)
+        .transpose()
+        .with_context(|| {
+            "Invalid sandbox_permissions. Use one of: use_default, with_additional_permissions, require_escalated."
+        })?
+        .unwrap_or_default();
+
+    let additional_permissions = payload
+        .get("additional_permissions")
+        .cloned()
+        .map(serde_json::from_value::<AdditionalPermissions>)
+        .transpose()
+        .with_context(|| {
+            "Invalid additional_permissions. Expected object with fs_read/fs_write string arrays."
+        })?;
+
+    Ok((sandbox_permissions, additional_permissions))
+}
+
+fn normalize_permission_paths(
+    paths: Vec<PathBuf>,
+    command_cwd: &Path,
+    permission_kind: &str,
+) -> Result<Vec<PathBuf>> {
+    let mut out = Vec::with_capacity(paths.len());
+    let mut seen = BTreeSet::new();
+
+    for path in paths {
+        if path.as_os_str().is_empty() {
+            return Err(anyhow!("{permission_kind} contains an empty path"));
+        }
+
+        let resolved = if path.is_absolute() {
+            path
+        } else {
+            command_cwd.join(path)
+        };
+        let normalized = crate::utils::path::normalize_path(&resolved);
+        if seen.insert(normalized.clone()) {
+            out.push(normalized);
+        }
+    }
+
+    Ok(out)
+}
+
+fn normalize_additional_permissions(
+    additional_permissions: AdditionalPermissions,
+    command_cwd: &Path,
+) -> Result<AdditionalPermissions> {
+    let fs_read =
+        normalize_permission_paths(additional_permissions.fs_read, command_cwd, "fs_read")?;
+    let fs_write =
+        normalize_permission_paths(additional_permissions.fs_write, command_cwd, "fs_write")?;
+
+    Ok(AdditionalPermissions { fs_read, fs_write })
+}
+
+fn normalize_and_validate_additional_permissions(
+    sandbox_permissions: SandboxPermissions,
+    additional_permissions: Option<AdditionalPermissions>,
+    cwd: &Path,
+) -> Result<Option<AdditionalPermissions>> {
+    if sandbox_permissions.uses_additional_permissions() {
+        let Some(additional_permissions) = additional_permissions else {
+            return Err(anyhow!(MISSING_ADDITIONAL_PERMISSIONS_MESSAGE));
+        };
+        let normalized = normalize_additional_permissions(additional_permissions, cwd)?;
+        if normalized.is_empty() {
+            return Err(anyhow!(
+                "`additional_permissions` must include at least one path in `fs_read` or `fs_write`"
+            ));
+        }
+        return Ok(Some(normalized));
+    }
+
+    if additional_permissions.is_some() {
+        return Err(anyhow!(
+            "`additional_permissions` requires `sandbox_permissions` set to `with_additional_permissions`"
+        ));
+    }
+
+    Ok(None)
+}
+
+fn dedupe_writable_roots(writable_roots: Vec<WritableRoot>) -> Vec<WritableRoot> {
+    let mut deduped = Vec::with_capacity(writable_roots.len());
+    let mut seen = BTreeSet::new();
+
+    for root in writable_roots {
+        let normalized = crate::utils::path::normalize_path(&root.root);
+        if seen.insert(normalized.clone()) {
+            deduped.push(WritableRoot::new(normalized));
+        }
+    }
+
+    deduped
+}
+
+fn sandbox_policy_with_additional_permissions(
+    sandbox_policy: SandboxPolicy,
+    additional_permissions: &AdditionalPermissions,
+) -> SandboxPolicy {
+    if additional_permissions.is_empty() {
+        return sandbox_policy;
+    }
+
+    match sandbox_policy {
+        SandboxPolicy::DangerFullAccess | SandboxPolicy::ExternalSandbox { .. } => sandbox_policy,
+        SandboxPolicy::WorkspaceWrite {
+            writable_roots,
+            network_access,
+            network_allowlist,
+            sensitive_paths,
+            resource_limits,
+            seccomp_profile,
+            exclude_tmpdir_env_var,
+            exclude_slash_tmp,
+        } => {
+            let mut merged_writes = writable_roots;
+            merged_writes.extend(
+                additional_permissions
+                    .fs_write
+                    .iter()
+                    .cloned()
+                    .map(WritableRoot::new),
+            );
+            SandboxPolicy::WorkspaceWrite {
+                writable_roots: dedupe_writable_roots(merged_writes),
+                network_access,
+                network_allowlist,
+                sensitive_paths,
+                resource_limits,
+                seccomp_profile,
+                exclude_tmpdir_env_var,
+                exclude_slash_tmp,
+            }
+        }
+        SandboxPolicy::ReadOnly => {
+            if additional_permissions.fs_write.is_empty() {
+                SandboxPolicy::ReadOnly
+            } else {
+                SandboxPolicy::WorkspaceWrite {
+                    writable_roots: dedupe_writable_roots(
+                        additional_permissions
+                            .fs_write
+                            .iter()
+                            .cloned()
+                            .map(WritableRoot::new)
+                            .collect(),
+                    ),
+                    network_access: false,
+                    network_allowlist: Vec::new(),
+                    sensitive_paths: None,
+                    resource_limits: ResourceLimits::conservative(),
+                    seccomp_profile: SeccompProfile::strict(),
+                    exclude_tmpdir_env_var: false,
+                    exclude_slash_tmp: false,
+                }
+            }
+        }
+    }
+}
+
 fn apply_runtime_sandbox_to_command(
     command: Vec<String>,
     requested_command: &[String],
     sandbox_config: &vtcode_config::SandboxConfig,
     workspace_root: &Path,
     working_dir: &Path,
+    sandbox_permissions: SandboxPermissions,
+    additional_permissions: Option<&AdditionalPermissions>,
 ) -> Result<Vec<String>> {
+    if sandbox_permissions.requires_escalated_permissions() {
+        return Ok(command);
+    }
+
     if !sandbox_config.enabled {
         return Ok(command);
     }
 
-    let policy = sandbox_policy_for_command(sandbox_config, workspace_root, requested_command)?;
+    let mut policy = sandbox_policy_for_command(sandbox_config, workspace_root, requested_command)?;
+    if sandbox_permissions.uses_additional_permissions() {
+        let Some(additional_permissions) = additional_permissions else {
+            return Err(anyhow!(MISSING_ADDITIONAL_PERMISSIONS_MESSAGE));
+        };
+        policy = sandbox_policy_with_additional_permissions(policy, additional_permissions);
+    }
+
     if matches!(policy, SandboxPolicy::DangerFullAccess) {
         return Ok(command);
     }
@@ -1328,6 +1515,13 @@ impl ToolRegistry {
             .pty_manager()
             .resolve_working_dir(payload.get("working_dir").and_then(|value| value.as_str()))
             .await?;
+        let (sandbox_permissions, parsed_additional_permissions) =
+            parse_requested_sandbox_permissions(payload)?;
+        let additional_permissions = normalize_and_validate_additional_permissions(
+            sandbox_permissions,
+            parsed_additional_permissions,
+            &working_dir_path,
+        )?;
 
         let display_command = if should_use_windows_command_tokenizer(Some(&shell_program)) {
             join_windows_command(&command)
@@ -1368,6 +1562,8 @@ impl ToolRegistry {
             &sandbox_config,
             self.workspace_root(),
             &working_dir_path,
+            sandbox_permissions,
+            additional_permissions.as_ref(),
         )?;
 
         let yield_duration = payload
@@ -1379,8 +1575,8 @@ impl ToolRegistry {
         let mut session_env = HashMap::new();
         let mut zsh_exec_bridge = None;
         if self.pty_config().shell_zsh_fork {
-            let wrapper_executable =
-                std::env::current_exe().context("resolve current executable for zsh exec bridge")?;
+            let wrapper_executable = std::env::current_exe()
+                .context("resolve current executable for zsh exec bridge")?;
             let bridge = ZshExecBridgeSession::spawn(confirm)
                 .context("initialize zsh exec bridge session")?;
             session_env = bridge.env_vars(&wrapper_executable);
@@ -2098,36 +2294,11 @@ fn resolve_shell_preference_with_zsh_fork(
     pref: Option<&str>,
     config: &crate::config::PtyConfig,
 ) -> Result<String> {
-    if !config.shell_zsh_fork {
-        return Ok(resolve_shell_preference(pref, config));
+    if let Some(zsh_path) = config.zsh_fork_shell_path()? {
+        return Ok(zsh_path.to_string());
     }
 
-    let zsh_path = config
-        .zsh_path
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .ok_or_else(|| {
-            anyhow!(
-                "pty.shell_zsh_fork is enabled, but pty.zsh_path is not configured. \
-                 Set pty.zsh_path to an absolute patched zsh path."
-            )
-        })?;
-    let zsh_path = Path::new(zsh_path);
-    if !zsh_path.is_absolute() {
-        return Err(anyhow!(
-            "pty.zsh_path '{}' must be absolute when pty.shell_zsh_fork is enabled",
-            zsh_path.display()
-        ));
-    }
-    if !zsh_path.is_file() {
-        return Err(anyhow!(
-            "pty.zsh_path '{}' is not a readable file",
-            zsh_path.display()
-        ));
-    }
-
-    Ok(zsh_path.to_string_lossy().to_string())
+    Ok(resolve_shell_preference(pref, config))
 }
 
 fn normalized_shell_name(shell: &str) -> String {
@@ -2145,7 +2316,7 @@ fn build_shell_command_string(raw: Option<&str>, parts: &[String], _shell: &str)
 
 #[cfg(test)]
 mod shell_preference_tests {
-    use super::resolve_shell_preference;
+    use super::{resolve_shell_preference, resolve_shell_preference_with_zsh_fork};
     use crate::config::PtyConfig;
     use crate::tools::shell::resolve_fallback_shell;
 
@@ -2190,6 +2361,40 @@ mod shell_preference_tests {
         let config = PtyConfig::default();
         let resolved = resolve_shell_preference(None, &config);
         assert_eq!(resolved, resolve_fallback_shell());
+    }
+
+    #[test]
+    fn zsh_fork_disabled_uses_standard_shell_resolution() -> anyhow::Result<()> {
+        let mut config = PtyConfig::default();
+        config.preferred_shell = Some("/bin/bash".to_string());
+        let resolved = resolve_shell_preference_with_zsh_fork(None, &config)?;
+        assert_eq!(resolved, "/bin/bash");
+        Ok(())
+    }
+
+    #[test]
+    fn zsh_fork_missing_path_returns_error() {
+        let config = PtyConfig {
+            shell_zsh_fork: true,
+            zsh_path: None,
+            ..PtyConfig::default()
+        };
+        assert!(resolve_shell_preference_with_zsh_fork(Some("/bin/bash"), &config).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn zsh_fork_ignores_explicit_shell_and_uses_configured_path() -> anyhow::Result<()> {
+        let zsh = tempfile::NamedTempFile::new()?;
+        let expected = zsh.path().to_string_lossy().to_string();
+        let config = PtyConfig {
+            shell_zsh_fork: true,
+            zsh_path: Some(expected.clone()),
+            ..PtyConfig::default()
+        };
+        let resolved = resolve_shell_preference_with_zsh_fork(Some("/bin/bash"), &config)?;
+        assert_eq!(resolved, expected);
+        Ok(())
     }
 }
 
@@ -2556,9 +2761,13 @@ mod unified_action_error_tests {
 mod sandbox_runtime_tests {
     use super::{
         apply_runtime_sandbox_to_command, enforce_sandbox_preflight_guards,
-        sandbox_policy_for_command, sandbox_policy_from_runtime_config,
+        normalize_and_validate_additional_permissions, sandbox_policy_for_command,
+        sandbox_policy_from_runtime_config,
     };
-    use crate::sandboxing::{SandboxPolicy, SensitivePath};
+    use crate::sandboxing::{
+        AdditionalPermissions, SandboxPermissions, SandboxPolicy, SensitivePath,
+    };
+    use serde_json::json;
     use std::path::PathBuf;
 
     #[test]
@@ -2668,8 +2877,101 @@ mod sandbox_runtime_tests {
             &config,
             PathBuf::from(".").as_path(),
             PathBuf::from(".").as_path(),
+            SandboxPermissions::UseDefault,
+            None,
         )
         .expect_err("external sandbox should not be allowed in local PTY flow");
         assert!(error.to_string().contains("not supported"));
+    }
+
+    #[test]
+    fn additional_permissions_validation_requires_with_additional_permissions() {
+        let payload = json!({
+            "additional_permissions": {
+                "fs_write": ["/tmp/demo.txt"]
+            }
+        });
+        let obj = payload.as_object().expect("payload object");
+        let err = normalize_and_validate_additional_permissions(
+            obj,
+            SandboxPermissions::UseDefault,
+            PathBuf::from(".").as_path(),
+        )
+        .expect_err("additional_permissions without with_additional_permissions should fail");
+        assert!(
+            err.to_string()
+                .contains("requires `sandbox_permissions` set to `with_additional_permissions`")
+        );
+    }
+
+    #[test]
+    fn with_additional_permissions_requires_non_empty_permissions() {
+        let payload = json!({
+            "sandbox_permissions": "with_additional_permissions",
+            "additional_permissions": {
+                "fs_read": [],
+                "fs_write": []
+            }
+        });
+        let obj = payload.as_object().expect("payload object");
+        let err = normalize_and_validate_additional_permissions(
+            obj,
+            SandboxPermissions::WithAdditionalPermissions,
+            PathBuf::from(".").as_path(),
+        )
+        .expect_err("empty additional_permissions should fail");
+        assert!(err.to_string().contains("must include at least one path"));
+    }
+
+    #[test]
+    fn with_additional_permissions_widens_read_only_for_write_roots() {
+        let mut config = vtcode_config::SandboxConfig::default();
+        config.enabled = true;
+        config.default_mode = vtcode_config::SandboxMode::ReadOnly;
+
+        let command = vec!["bash".to_string(), "-lc".to_string(), "echo hi".to_string()];
+        let requested = command.clone();
+        let extra_path = PathBuf::from("/tmp/extra-write-root");
+        let additional_permissions = AdditionalPermissions {
+            fs_read: Vec::new(),
+            fs_write: vec![extra_path.clone()],
+        };
+        let transformed = apply_runtime_sandbox_to_command(
+            command,
+            &requested,
+            &config,
+            PathBuf::from("/tmp/ws").as_path(),
+            PathBuf::from("/tmp/ws").as_path(),
+            SandboxPermissions::WithAdditionalPermissions,
+            Some(&additional_permissions),
+        )
+        .expect("sandbox transform should succeed");
+        let needle = extra_path.to_string_lossy().to_string();
+
+        assert!(
+            transformed.iter().any(|arg| arg.contains(&needle)),
+            "transformed sandbox command should include additional writable root"
+        );
+    }
+
+    #[test]
+    fn require_escalated_bypasses_runtime_sandbox_enforcement() {
+        let mut config = vtcode_config::SandboxConfig::default();
+        config.enabled = true;
+        config.default_mode = vtcode_config::SandboxMode::External;
+
+        let command = vec!["echo".to_string(), "hello".to_string()];
+        let requested = command.clone();
+        let out = apply_runtime_sandbox_to_command(
+            command.clone(),
+            &requested,
+            &config,
+            PathBuf::from(".").as_path(),
+            PathBuf::from(".").as_path(),
+            SandboxPermissions::RequireEscalated,
+            None,
+        )
+        .expect("require_escalated should bypass sandbox transform");
+        assert_eq!(out, command);
     }
 }

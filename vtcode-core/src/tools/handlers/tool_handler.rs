@@ -60,6 +60,7 @@ pub enum SandboxPermissions {
     #[default]
     UseDefault,
     RequireEscalated,
+    WithAdditionalPermissions,
 }
 
 /// Tool output types (from Codex)

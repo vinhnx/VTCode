@@ -84,12 +84,12 @@ impl Session {
                     self.insert_file_reference(&path);
                     self.close_file_palette();
                     self.mark_dirty();
-                    true  // Selection made: consume event
+                    true // Selection made: consume event
                 } else {
                     // No selection: close palette and fall through to normal submit
                     self.close_file_palette();
                     self.mark_dirty();
-                    false  // Let normal Enter handling proceed
+                    false // Let normal Enter handling proceed
                 }
             }
             KeyCode::Esc => {

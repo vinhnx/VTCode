@@ -238,6 +238,8 @@ __UNIFIED_TOOL_GUIDANCE__
 
 **Command Approval**: Policy rules → heuristics → session approval → blocked. Safe: ls, cat, grep, find, etc. Dangerous: rm, sudo, chmod, etc.
 
+**Permission Requests**: Prefer `sandbox_permissions="with_additional_permissions"` plus `additional_permissions.fs_read/fs_write` before requesting `require_escalated`.
+
 **Turn Diff Tracking**: All file changes within a turn are aggregated for unified diff view.
 
 ## Plan Mode (Read-Only Exploration)

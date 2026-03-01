@@ -481,8 +481,7 @@ fn test_current_at_token_tracks_tokens_with_second_at() {
     for (cursor_pos, description) in test_cases {
         let result = extract_file_reference(input, cursor_pos);
         assert_eq!(
-            result,
-            None,
+            result, None,
             "Failed for case: {description} - input: '{input}', cursor: {cursor_pos}"
         );
     }
@@ -524,8 +523,7 @@ fn test_current_at_token_ignores_mid_word_at() {
     for (cursor_pos, description) in test_cases {
         let result = extract_file_reference(input, cursor_pos);
         assert_eq!(
-            result,
-            None,
+            result, None,
             "Failed for case: {description} - input: '{input}', cursor: {cursor_pos}"
         );
     }
