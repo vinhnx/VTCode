@@ -25,4 +25,4 @@ ignore = "0.4"                                     # Respect .gitignore, .ignore
 vtcode-commons = { path = "../vtcode-commons", version = "0.84.1" }
 
 [dev-dependencies]
-tempfile = "3.24"
+tempfile = "3.25"

@@ -48,9 +48,9 @@ bootstrap = []
 schema = ["dep:schemars"]
 
 [dev-dependencies]
-tempfile = "3.24"
+tempfile = "3.25"
 assert_fs = "1.1"
-serial_test = "3.3"
+serial_test = "3.4"
 
 [build-dependencies]
 anyhow = "1.0"

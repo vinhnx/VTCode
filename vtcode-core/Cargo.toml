@@ -71,7 +71,7 @@ iana-time-zone = "0.1"
 humantime = "2.1"
 terminal_size = "0.4.3"
 async-trait = "0.1.89"
-bytes = "1.10"
+bytes = "1.11"
 # Dotenv support
 dotenvy = "0.15"
 # Home directory detection
@@ -79,7 +79,7 @@ dirs = "6.0"
 # YAML support
 serde_yaml = "0.9"
 # Zip support for skill packaging
-zip = { version = "7.2", default-features = false, features = ["deflate"] }
+zip = { version = "8.1", default-features = false, features = ["deflate"] }
 # Semantic versioning for Ollama version detection (Codex pattern)
 semver = { workspace = true }
 tracing = "0.1"
@@ -91,10 +91,10 @@ anstyle-git = "1.1"
 anstyle-ls = "1.0"
 anstyle-crossterm = "4.0"
 anstyle-query = "1.0"
-anstream = "0.6"
+anstream = "1.0"
 colorchoice-clap = "1.0"
 quick_cache = "0.6"
-roff = "0.2"
+roff = "1.0"
 unicode-segmentation = "1.11"
 unicode-width = { workspace = true }
 crossterm = { workspace = true, features = ["event-stream"] }
@@ -111,7 +111,7 @@ perg = "0.8.0"
 nucleo-matcher = "0.3"
 line-clipping = "0.3"
 vtcode-file-search = { version = "0.84.1", path = "../vtcode-file-search" }
-tui-shimmer = "0.1.2"
+tui-shimmer = "0.1.3"
 pulldown-cmark = { version = "0.13", default-features = false, features = [
     "simd",
 ] }
@@ -136,24 +136,24 @@ schemars = { workspace = true, optional = true }
 
 # MCP (Model Context Protocol) support
 # Phase 1: Upgrade to 0.9.0+ for improved transport and lifecycle management
-rmcp = { version = "0.14", features = [
+rmcp = { version = "0.15", features = [
     "client",
     "transport-child-process",
     "transport-streamable-http-client-reqwest",
 ] }
 openai-harmony = "0.0.8"
 url = "2.5"
-jsonschema = "0.40"
-uuid = { version = "1.20.0", features = ["v4", "fast-rng", "serde"] }
+jsonschema = "0.43"
+uuid = { version = "1.21.0", features = ["v4", "fast-rng", "serde"] }
 which = "8.0.0"
 textwrap = "0.16"
 editor-command = "2.0"
 signal-hook = "0.4"
-rand = "0.9"
+rand = "0.10"
 rustc-hash = { workspace = true }
 
 lsp-types = "0.97.0"
-notify-rust = { version = "4.11", optional = true }
+notify-rust = { version = "4.12", optional = true }
 ring = "0.17"
 
 # A2A (Agent2Agent) Protocol HTTP server support
@@ -201,7 +201,7 @@ rustdoc-args = ["--cfg", "docsrs"]
 [dev-dependencies]
 assert_fs = "1.1"
 mockito = "1.7"
-proptest = "1.5"
+proptest = "1.10"
 criterion = "0.8"
 wiremock = "0.6.5"
 

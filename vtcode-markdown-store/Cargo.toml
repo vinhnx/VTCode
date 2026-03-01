@@ -32,5 +32,5 @@ serde_json = { workspace = true }
 serde_yaml = "0.9"
 
 [dev-dependencies]
-tempfile = "3.24"
-serial_test = "3.3"
+tempfile = "3.25"
+serial_test = "3.4"
