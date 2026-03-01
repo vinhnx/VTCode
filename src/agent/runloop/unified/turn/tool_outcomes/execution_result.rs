@@ -775,7 +775,11 @@ async fn push_tool_error_response(
         } else {
             let fallback = {
                 let parts = t_ctx.ctx.parts_mut();
-                parts.tool.tool_registry.suggest_fallback_tool(tool_name).await
+                parts
+                    .tool
+                    .tool_registry
+                    .suggest_fallback_tool(tool_name)
+                    .await
             };
             (fallback, None)
         };
@@ -841,7 +845,10 @@ async fn run_post_tool_hooks<'a>(
                 )?;
                 for context in outcome.additional_context {
                     if !context.trim().is_empty() {
-                        parts.state.working_history.push(uni::Message::system(context));
+                        parts
+                            .state
+                            .working_history
+                            .push(uni::Message::system(context));
                     }
                 }
             }

@@ -374,21 +374,21 @@ impl CircuitBreaker {
             .map(|(name, state)| {
                 let is_open = matches!(state.status, CircuitState::Open);
                 ToolCircuitDiagnostics {
-                tool_name: name.clone(),
-                status: state.status,
-                failure_count: state.failure_count,
-                current_backoff: state.current_backoff,
-                remaining_backoff: if is_open {
-                    state
-                        .last_failure_time
-                        .and_then(|last| state.current_backoff.checked_sub(last.elapsed()))
-                } else {
-                    None
-                },
-                opened_at: state.circuit_opened_at,
-                open_count: state.open_count,
-                is_open,
-            }
+                    tool_name: name.clone(),
+                    status: state.status,
+                    failure_count: state.failure_count,
+                    current_backoff: state.current_backoff,
+                    remaining_backoff: if is_open {
+                        state
+                            .last_failure_time
+                            .and_then(|last| state.current_backoff.checked_sub(last.elapsed()))
+                    } else {
+                        None
+                    },
+                    opened_at: state.circuit_opened_at,
+                    open_count: state.open_count,
+                    is_open,
+                }
             })
             .collect();
 

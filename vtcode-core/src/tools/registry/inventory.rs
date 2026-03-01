@@ -175,7 +175,10 @@ impl ToolInventory {
                         .state
                         .write()
                         .map_err(|e| anyhow::anyhow!("inventory state write lock poisoned: {e}"))?;
-                    let pos = state.sorted_names.binary_search(&name_lower).unwrap_or_else(|e| e);
+                    let pos = state
+                        .sorted_names
+                        .binary_search(&name_lower)
+                        .unwrap_or_else(|e| e);
                     state.sorted_names.insert(pos, name_lower.clone());
                 }
             }

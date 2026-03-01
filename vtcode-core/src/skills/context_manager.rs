@@ -219,7 +219,9 @@ impl ContextManager {
         let name = manifest.name.clone();
 
         let mut inner = self.inner.write().unwrap_or_else(|poisoned| {
-            warn!("ContextManager write lock poisoned while registering skill metadata; recovering");
+            warn!(
+                "ContextManager write lock poisoned while registering skill metadata; recovering"
+            );
             poisoned.into_inner()
         });
 
@@ -254,7 +256,9 @@ impl ContextManager {
     /// Load skill instructions (Level 2 loading)
     pub fn load_skill_instructions(&self, name: &str, instructions: String) -> Result<()> {
         let mut inner = self.inner.write().unwrap_or_else(|poisoned| {
-            warn!("ContextManager write lock poisoned while loading skill instructions; recovering");
+            warn!(
+                "ContextManager write lock poisoned while loading skill instructions; recovering"
+            );
             poisoned.into_inner()
         });
 

@@ -278,7 +278,13 @@ pub(crate) async fn execute_llm_request(
     _max_tokens_opt: Option<u32>,
     parallel_cfg_opt: Option<Box<ParallelToolConfig>>,
 ) -> Result<(uni::LLMResponse, bool)> {
-    let (provider_name, plan_mode, request_user_input_enabled, context_window_size, turn_timeout_secs) = {
+    let (
+        provider_name,
+        plan_mode,
+        request_user_input_enabled,
+        context_window_size,
+        turn_timeout_secs,
+    ) = {
         let parts = ctx.parts_mut();
         (
             parts.llm.provider_client.name().to_string(),
@@ -289,7 +295,10 @@ pub(crate) async fn execute_llm_request(
                 .as_ref()
                 .map(|cfg| cfg.chat.ask_questions.enabled)
                 .unwrap_or(true),
-            parts.llm.provider_client.effective_context_size(active_model),
+            parts
+                .llm
+                .provider_client
+                .effective_context_size(active_model),
             parts
                 .llm
                 .vt_cfg
@@ -310,18 +319,21 @@ pub(crate) async fn execute_llm_request(
 
     let mut system_prompt = {
         let parts = ctx.parts_mut();
-        parts.llm.context_manager.build_system_prompt(
-            parts.state.working_history,
-            step_count,
-            crate::agent::runloop::unified::context_manager::SystemPromptParams {
-                full_auto: parts.state.full_auto,
-                plan_mode,
-                context_window_size: Some(context_window_size),
-                active_agent_name: Some(active_agent_name.clone()),
-                active_agent_prompt: active_agent_prompt_body,
-            },
-        )
-        .await?
+        parts
+            .llm
+            .context_manager
+            .build_system_prompt(
+                parts.state.working_history,
+                step_count,
+                crate::agent::runloop::unified::context_manager::SystemPromptParams {
+                    full_auto: parts.state.full_auto,
+                    plan_mode,
+                    context_window_size: Some(context_window_size),
+                    active_agent_name: Some(active_agent_name.clone()),
+                    active_agent_prompt: active_agent_prompt_body,
+                },
+            )
+            .await?
     };
 
     let (max_tool_calls, max_tool_wall_clock_secs, max_tool_retries) = {

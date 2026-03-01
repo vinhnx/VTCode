@@ -168,7 +168,9 @@ pub(super) fn enforce_blocked_tool_call_guard(
             parts.state.working_history,
             tool_call_id.to_string(),
             build_failure_error_content(
-                format!("Consecutive blocked tool calls exceeded cap ({max_streak}) for this turn."),
+                format!(
+                    "Consecutive blocked tool calls exceeded cap ({max_streak}) for this turn."
+                ),
                 "blocked_streak",
             ),
         );
@@ -536,7 +538,11 @@ fn enforce_duplicate_task_tracker_create_guard<'a>(
     .to_string();
     {
         let parts = ctx.parts_mut();
-        push_tool_response(parts.state.working_history, tool_call_id.to_string(), content);
+        push_tool_response(
+            parts.state.working_history,
+            tool_call_id.to_string(),
+            content,
+        );
     }
     let block_reason =
         "Blocked duplicate task_tracker.create in the same turn. Continue with task_tracker.update/list."
@@ -564,7 +570,10 @@ fn enforce_repeated_shell_run_guard(
     let max_repeated_runs = max_consecutive_identical_shell_command_runs_per_turn(ctx);
     let streak = {
         let parts = ctx.parts_mut();
-        parts.state.harness_state.record_shell_command_run(signature)
+        parts
+            .state
+            .harness_state
+            .record_shell_command_run(signature)
     };
     if streak <= max_repeated_runs {
         return None;
@@ -838,7 +847,10 @@ pub(crate) async fn handle_single_tool_call<'a, 'b, 'tool>(
     use crate::agent::runloop::unified::run_loop_context::TurnPhase;
     {
         let parts = t_ctx.ctx.parts_mut();
-        parts.state.harness_state.set_phase(TurnPhase::ExecutingTools);
+        parts
+            .state
+            .harness_state
+            .set_phase(TurnPhase::ExecutingTools);
     }
 
     // 1. Validate (Circuit Breaker, Rate Limit, Loop Detection, Safety, Permission)
@@ -915,7 +927,10 @@ pub(crate) async fn validate_tool_call<'a>(
                     .state
                     .working_history
                     .push(uni::Message::system(block_reason.clone()));
-                parts.state.harness_state.mark_tool_budget_exhausted_emitted();
+                parts
+                    .state
+                    .harness_state
+                    .mark_tool_budget_exhausted_emitted();
             }
         }
         return Ok(ValidationResult::Outcome(TurnHandlerOutcome::Break(
@@ -1140,8 +1155,7 @@ pub(crate) async fn validate_tool_call<'a>(
             } else {
                 None
             };
-            if let Some(mut reused) = maybe_reused
-            {
+            if let Some(mut reused) = maybe_reused {
                 if let Some(obj) = reused.as_object_mut() {
                     // Drop bulky payload fields for repeated read-only reuse to avoid
                     // flooding context with duplicate content.
@@ -1234,8 +1248,7 @@ pub(crate) async fn validate_tool_call<'a>(
                     )
                     .await
                 };
-                match increase_result
-                {
+                match increase_result {
                     Ok(Some(increment)) => {
                         let mut validator = {
                             let parts = ctx.parts_mut();

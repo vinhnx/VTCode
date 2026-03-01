@@ -303,9 +303,7 @@ pub async fn run_turn_loop(
     mut ctx: TurnLoopContext<'_>,
     session_end_reason: &mut crate::hooks::lifecycle::SessionEndReason,
 ) -> Result<TurnLoopOutcome> {
-    use crate::agent::runloop::unified::turn::context::{
-        TurnHandlerOutcome, TurnProcessingResult,
-    };
+    use crate::agent::runloop::unified::turn::context::{TurnHandlerOutcome, TurnProcessingResult};
     use crate::agent::runloop::unified::turn::guards::run_proactive_guards;
     use crate::agent::runloop::unified::turn::turn_processing::{
         HandleTurnProcessingResultParams, execute_llm_request, handle_turn_processing_result,
@@ -575,10 +573,7 @@ pub async fn run_turn_loop(
                 .set_phase(TurnPhase::ExecutingTools);
         } else {
             let parts = turn_processing_ctx.parts_mut();
-            parts
-                .state
-                .harness_state
-                .set_phase(TurnPhase::Finalizing);
+            parts.state.harness_state.set_phase(TurnPhase::Finalizing);
         }
 
         // Handle the turn processing result (dispatch tool calls or finish turn)

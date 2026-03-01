@@ -247,7 +247,11 @@ impl McpClient {
 
     /// Return the provider name serving the given tool if previously cached.
     pub fn provider_for_tool(&self, tool_name: &str) -> Option<String> {
-        self.state.read().tool_provider_index.get(tool_name).cloned()
+        self.state
+            .read()
+            .tool_provider_index
+            .get(tool_name)
+            .cloned()
     }
 
     /// Return the provider responsible for the given resource URI if known.
@@ -257,7 +261,11 @@ impl McpClient {
 
     /// Return the provider that exposes the given prompt if known.
     pub fn provider_for_prompt(&self, prompt_name: &str) -> Option<String> {
-        self.state.read().prompt_provider_index.get(prompt_name).cloned()
+        self.state
+            .read()
+            .prompt_provider_index
+            .get(prompt_name)
+            .cloned()
     }
 
     /// Execute a tool call on the appropriate provider.
