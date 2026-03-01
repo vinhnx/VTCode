@@ -5,7 +5,9 @@ use crate::ui::syntax_highlight;
 use crate::ui::theme::{self, ThemeStyles};
 use anstyle::{Effects, Style};
 use pulldown_cmark::{CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, TagEnd};
+use regex::Regex;
 use std::cmp::max;
+use std::sync::LazyLock;
 use syntect::util::LinesWithEndings;
 use unicode_width::UnicodeWidthStr;
 use vtcode_commons::diff_paths::{
@@ -106,6 +108,14 @@ enum ListKind {
     Ordered { next: usize },
 }
 
+#[derive(Clone, Debug)]
+struct LinkState {
+    destination: String,
+    show_destination: bool,
+    hidden_location_suffix: Option<String>,
+    label_start_segment_idx: usize,
+}
+
 #[derive(Debug, Clone, Copy, Default)]
 pub struct RenderMarkdownOptions {
     pub preserve_code_indentation: bool,
@@ -151,6 +161,7 @@ pub fn render_markdown_to_lines_with_options(
     let mut code_block: Option<CodeBlockState> = None;
     let mut active_table: Option<TableBuffer> = None;
     let mut table_cell_index: usize = 0;
+    let mut link_state: Option<LinkState> = None;
 
     for event in parser {
         // Handle code block accumulation separately to avoid borrow conflicts
@@ -226,6 +237,7 @@ pub fn render_markdown_to_lines_with_options(
             code_block: &mut code_block,
             active_table: &mut active_table,
             table_cell_index: &mut table_cell_index,
+            link_state: &mut link_state,
         };
 
         match event {
@@ -326,6 +338,7 @@ struct MarkdownContext<'a> {
     code_block: &'a mut Option<CodeBlockState>,
     active_table: &'a mut Option<TableBuffer>,
     table_cell_index: &'a mut usize,
+    link_state: &'a mut Option<LinkState>,
 }
 
 impl MarkdownContext<'_> {
@@ -425,7 +438,17 @@ fn handle_start_tag(tag: &Tag<'_>, ctx: &mut MarkdownContext<'_>) {
         }
         Tag::Strikethrough => ctx.push_style(Style::strikethrough),
         Tag::Superscript | Tag::Subscript => ctx.push_style(Style::italic),
-        Tag::Link { .. } | Tag::Image { .. } => ctx.push_style(Style::underline),
+        Tag::Link { dest_url, .. } | Tag::Image { dest_url, .. } => {
+            let show_destination = should_render_link_destination(&dest_url);
+            let label_start_segment_idx = ctx.current_line.segments.len();
+            *ctx.link_state = Some(LinkState {
+                destination: dest_url.to_string(),
+                show_destination,
+                hidden_location_suffix: extract_hidden_location_suffix(&dest_url),
+                label_start_segment_idx,
+            });
+            ctx.push_style(Style::underline);
+        }
         Tag::CodeBlock(kind) => {
             let language = match kind {
                 CodeBlockKind::Fenced(info) => info
@@ -508,9 +531,31 @@ fn handle_end_tag(tag: TagEnd, ctx: &mut MarkdownContext<'_>) {
         | TagEnd::Strong
         | TagEnd::Strikethrough
         | TagEnd::Superscript
-        | TagEnd::Subscript
-        | TagEnd::Link
-        | TagEnd::Image => {
+        | TagEnd::Subscript => {
+            ctx.pop_style();
+        }
+        TagEnd::Link | TagEnd::Image => {
+            if let Some(link) = ctx.link_state.take() {
+                if link.show_destination {
+                    ctx.current_line
+                        .push_segment(ctx.current_style(), " (");
+                    ctx.current_line
+                        .push_segment(ctx.current_style(), &link.destination);
+                    ctx.current_line
+                        .push_segment(ctx.current_style(), ")");
+                } else if let Some(location_suffix) = link.hidden_location_suffix.as_deref() {
+                    // Check if the label already has a location suffix
+                    let label_text = ctx.current_line.segments
+                        .get(link.label_start_segment_idx..)
+                        .map(|spans| spans.iter().map(|s| s.text.as_str()).collect::<String>())
+                        .unwrap_or_default();
+
+                    if !label_has_location_suffix(&label_text) {
+                        ctx.current_line
+                            .push_segment(ctx.current_style(), location_suffix);
+                    }
+                }
+            }
             ctx.pop_style();
         }
         TagEnd::CodeBlock => {}
@@ -809,6 +854,97 @@ fn choose_markdown_accent(base_style: Style, candidates: &[Style]) -> Option<ans
         candidate
             .get_fg_color()
             .filter(|color| base_fg != Some(*color))
+    })
+}
+
+fn should_render_link_destination(dest_url: &str) -> bool {
+    !is_local_path_like_link(dest_url)
+}
+
+fn is_local_path_like_link(dest_url: &str) -> bool {
+    dest_url.starts_with("file://")
+        || dest_url.starts_with('/')
+        || dest_url.starts_with("~/")
+        || dest_url.starts_with("./")
+        || dest_url.starts_with("../")
+        || dest_url.starts_with("\\\\")
+        || matches!(
+            dest_url.as_bytes(),
+            [drive, b':', separator, ..]
+                if drive.is_ascii_alphabetic() && matches!(separator, b'/' | b'\\')
+        )
+}
+
+static COLON_LOCATION_SUFFIX_RE: LazyLock<Regex> =
+    LazyLock::new(|| match Regex::new(r":\d+(?::\d+)?(?:[-–]\d+(?::\d+)?)?$") {
+        Ok(regex) => regex,
+        Err(error) => panic!("invalid location suffix regex: {error}"),
+    });
+
+static HASH_LOCATION_SUFFIX_RE: LazyLock<Regex> =
+    LazyLock::new(|| match Regex::new(r"^L\d+(?:C\d+)?(?:-L\d+(?:C\d+)?)?$") {
+        Ok(regex) => regex,
+        Err(error) => panic!("invalid hash location regex: {error}"),
+    });
+
+/// Check if text already has a location suffix (colon or hash format)
+fn label_has_location_suffix(text: &str) -> bool {
+    text.rsplit_once('#')
+        .is_some_and(|(_, fragment)| HASH_LOCATION_SUFFIX_RE.is_match(fragment))
+        || COLON_LOCATION_SUFFIX_RE.find(text).is_some()
+}
+
+/// Extract and normalize location suffix from a local file link destination
+fn extract_hidden_location_suffix(dest_url: &str) -> Option<String> {
+    if !is_local_path_like_link(dest_url) {
+        return None;
+    }
+
+    // Check for hash-based location (#L74C3 or #L74C3-L76C9)
+    if let Some((_, fragment)) = dest_url.rsplit_once('#') {
+        if HASH_LOCATION_SUFFIX_RE.is_match(fragment) {
+            return normalize_hash_location(fragment);
+        }
+    }
+
+    // Check for colon-based location (:74 or :74:3 or :74:3-76:9)
+    COLON_LOCATION_SUFFIX_RE
+        .find(dest_url)
+        .map(|m| m.as_str().to_string())
+}
+
+/// Convert hash location format (L74C3 or L74C3-L76C9) to colon format (:74:3 or :74:3-76:9)
+fn normalize_hash_location(fragment: &str) -> Option<String> {
+    let (start, end) = match fragment.split_once('-') {
+        Some((start, end)) => (start, Some(end)),
+        None => (fragment, None),
+    };
+
+    let (start_line, start_col) = parse_hash_point(start)?;
+    let mut result = format!(":{start_line}");
+    if let Some(col) = start_col {
+        result.push(':');
+        result.push_str(col);
+    }
+
+    if let Some(end) = end {
+        let (end_line, end_col) = parse_hash_point(end)?;
+        result.push('-');
+        result.push_str(end_line);
+        if let Some(col) = end_col {
+            result.push(':');
+            result.push_str(col);
+        }
+    }
+
+    Some(result)
+}
+
+fn parse_hash_point(point: &str) -> Option<(&str, Option<&str>)> {
+    let point = point.strip_prefix('L')?;
+    Some(match point.split_once('C') {
+        Some((line, col)) => (line, Some(col)),
+        None => (point, None),
     })
 }
 
@@ -1910,5 +2046,276 @@ index 0000000..1111111 100644\n\
 
         // Should show (+1 -1) not (+0 -0)
         assert_eq!(summary_line, "• Diff ask.rs (+1 -1)");
+    }
+
+    #[test]
+    fn test_markdown_file_link_hides_destination() {
+        let markdown = "[markdown_render.rs:74](/Users/example/code/codex/codex-rs/tui/src/markdown_render.rs:74)";
+        let lines = render_markdown(markdown);
+        let text_lines = lines_to_text(&lines);
+        
+        // Should contain the link text but NOT the destination
+        assert!(text_lines.iter().any(|line| line.contains("markdown_render.rs:74")));
+        assert!(!text_lines.iter().any(|line| line.contains("/Users/example")));
+    }
+
+    #[test]
+    fn test_markdown_url_link_shows_destination() {
+        let markdown = "[docs](https://example.com/docs)";
+        let lines = render_markdown(markdown);
+        let text_lines = lines_to_text(&lines);
+        let combined = text_lines.join("");
+        
+        // Should contain both the link text and the destination
+        assert!(combined.contains("docs"));
+        assert!(combined.contains("https://example.com/docs"));
+    }
+
+    #[test]
+    fn test_markdown_relative_link_hides_destination() {
+        let markdown = "[relative](./path/to/file.md)";
+        let lines = render_markdown(markdown);
+        let text_lines = lines_to_text(&lines);
+        let combined = text_lines.join("");
+        
+        // Should contain the link text but NOT the destination
+        assert!(combined.contains("relative"));
+        assert!(!combined.contains("./path/to/file.md"));
+    }
+
+    #[test]
+    fn test_markdown_home_relative_link_hides_destination() {
+        let markdown = "[home relative](~/path/to/file.md)";
+        let lines = render_markdown(markdown);
+        let text_lines = lines_to_text(&lines);
+        let combined = text_lines.join("");
+        
+        // Should contain the link text but NOT the destination
+        assert!(combined.contains("home relative"));
+        assert!(!combined.contains("~/path/to/file.md"));
+    }
+
+    #[test]
+    fn test_markdown_parent_relative_link_hides_destination() {
+        let markdown = "[parent](../path/to/file.md)";
+        let lines = render_markdown(markdown);
+        let text_lines = lines_to_text(&lines);
+        let combined = text_lines.join("");
+        
+        // Should contain the link text but NOT the destination
+        assert!(combined.contains("parent"));
+        assert!(!combined.contains("../path/to/file.md"));
+    }
+
+    #[test]
+    fn test_markdown_file_url_link_hides_destination() {
+        let markdown = "[file url](file:///path/to/file.md)";
+        let lines = render_markdown(markdown);
+        let text_lines = lines_to_text(&lines);
+        let combined = text_lines.join("");
+        
+        // Should contain the link text but NOT the destination
+        assert!(combined.contains("file url"));
+        assert!(!combined.contains("file:///path/to/file.md"));
+    }
+
+    #[test]
+    fn test_markdown_windows_path_link_hides_destination() {
+        let markdown = "[windows](C:\\path\\to\\file.md)";
+        let lines = render_markdown(markdown);
+        let text_lines = lines_to_text(&lines);
+        let combined = text_lines.join("");
+        
+        // Should contain the link text but NOT the destination
+        assert!(combined.contains("windows"));
+        assert!(!combined.contains("C:\\path\\to\\file.md"));
+    }
+
+    #[test]
+    fn test_markdown_https_link_shows_destination() {
+        let markdown = "[secure](https://secure.example.com)";
+        let lines = render_markdown(markdown);
+        let text_lines = lines_to_text(&lines);
+        let combined = text_lines.join("");
+        
+        // Should contain both the link text and the destination
+        assert!(combined.contains("secure"));
+        assert!(combined.contains("https://secure.example.com"));
+    }
+
+    #[test]
+    fn test_markdown_http_link_shows_destination() {
+        let markdown = "[http](http://example.com)";
+        let lines = render_markdown(markdown);
+        let text_lines = lines_to_text(&lines);
+        let combined = text_lines.join("");
+
+        // Should contain both the link text and the destination
+        assert!(combined.contains("http"));
+        assert!(combined.contains("http://example.com"));
+    }
+
+    #[test]
+    fn test_load_location_suffix_regexes() {
+        let _colon = &*COLON_LOCATION_SUFFIX_RE;
+        let _hash = &*HASH_LOCATION_SUFFIX_RE;
+    }
+
+    #[test]
+    fn test_file_link_hides_destination() {
+        let markdown =
+            "[codex-rs/tui/src/markdown_render.rs](/Users/example/code/codex/codex-rs/tui/src/markdown_render.rs)";
+        let lines = render_markdown(markdown);
+        let text_lines = lines_to_text(&lines);
+        let combined = text_lines.join("");
+
+        // Should contain the link text but NOT the destination path
+        assert!(combined.contains("codex-rs/tui/src/markdown_render.rs"));
+        assert!(!combined.contains("/Users/example"));
+    }
+
+    #[test]
+    fn test_file_link_appends_line_number_when_label_lacks_it() {
+        let markdown =
+            "[markdown_render.rs](/Users/example/code/codex/codex-rs/tui/src/markdown_render.rs:74)";
+        let lines = render_markdown(markdown);
+        let text_lines = lines_to_text(&lines);
+        let combined = text_lines.join("");
+
+        // Should contain the filename AND the line number
+        assert!(combined.contains("markdown_render.rs"));
+        assert!(combined.contains(":74"));
+    }
+
+    #[test]
+    fn test_file_link_uses_label_for_line_number() {
+        let markdown =
+            "[markdown_render.rs:74](/Users/example/code/codex/codex-rs/tui/src/markdown_render.rs:74)";
+        let lines = render_markdown(markdown);
+        let text_lines = lines_to_text(&lines);
+        let combined = text_lines.join("");
+
+        // Should contain the label with line number, but not duplicate
+        assert!(combined.contains("markdown_render.rs:74"));
+        // Should not have duplicate :74
+        assert!(!combined.contains(":74:74"));
+    }
+
+    #[test]
+    fn test_file_link_appends_hash_anchor_when_label_lacks_it() {
+        let markdown =
+            "[markdown_render.rs](file:///Users/example/code/codex/codex-rs/tui/src/markdown_render.rs#L74C3)";
+        let lines = render_markdown(markdown);
+        let text_lines = lines_to_text(&lines);
+        let combined = text_lines.join("");
+
+        // Should contain the filename AND the converted location
+        assert!(combined.contains("markdown_render.rs"));
+        assert!(combined.contains(":74:3"));
+    }
+
+    #[test]
+    fn test_file_link_uses_label_for_hash_anchor() {
+        let markdown =
+            "[markdown_render.rs#L74C3](file:///Users/example/code/codex/codex-rs/tui/src/markdown_render.rs#L74C3)";
+        let lines = render_markdown(markdown);
+        let text_lines = lines_to_text(&lines);
+        let combined = text_lines.join("");
+
+        // Should contain the label with location, but not duplicate
+        assert!(combined.contains("markdown_render.rs#L74C3"));
+    }
+
+    #[test]
+    fn test_file_link_appends_range_when_label_lacks_it() {
+        let markdown =
+            "[markdown_render.rs](/Users/example/code/codex/codex-rs/tui/src/markdown_render.rs:74:3-76:9)";
+        let lines = render_markdown(markdown);
+        let text_lines = lines_to_text(&lines);
+        let combined = text_lines.join("");
+
+        // Should contain the filename AND the range
+        assert!(combined.contains("markdown_render.rs"));
+        assert!(combined.contains(":74:3-76:9"));
+    }
+
+    #[test]
+    fn test_file_link_uses_label_for_range() {
+        let markdown =
+            "[markdown_render.rs:74:3-76:9](/Users/example/code/codex/codex-rs/tui/src/markdown_render.rs:74:3-76:9)";
+        let lines = render_markdown(markdown);
+        let text_lines = lines_to_text(&lines);
+        let combined = text_lines.join("");
+
+        // Should contain the label with range, but not duplicate
+        assert!(combined.contains("markdown_render.rs:74:3-76:9"));
+        // Should not have duplicate range
+        assert!(!combined.contains(":74:3-76:9:74:3-76:9"));
+    }
+
+    #[test]
+    fn test_file_link_appends_hash_range_when_label_lacks_it() {
+        let markdown =
+            "[markdown_render.rs](file:///Users/example/code/codex/codex-rs/tui/src/markdown_render.rs#L74C3-L76C9)";
+        let lines = render_markdown(markdown);
+        let text_lines = lines_to_text(&lines);
+        let combined = text_lines.join("");
+
+        // Should contain the filename AND the converted range
+        assert!(combined.contains("markdown_render.rs"));
+        assert!(combined.contains(":74:3-76:9"));
+    }
+
+    #[test]
+    fn test_file_link_uses_label_for_hash_range() {
+        let markdown =
+            "[markdown_render.rs#L74C3-L76C9](file:///Users/example/code/codex/codex-rs/tui/src/markdown_render.rs#L74C3-L76C9)";
+        let lines = render_markdown(markdown);
+        let text_lines = lines_to_text(&lines);
+        let combined = text_lines.join("");
+
+        // Should contain the label with range, but not duplicate
+        assert!(combined.contains("markdown_render.rs#L74C3-L76C9"));
+    }
+
+    #[test]
+    fn test_normalize_hash_location_single() {
+        assert_eq!(normalize_hash_location("L74C3"), Some(":74:3".to_string()));
+    }
+
+    #[test]
+    fn test_normalize_hash_location_range() {
+        assert_eq!(
+            normalize_hash_location("L74C3-L76C9"),
+            Some(":74:3-76:9".to_string())
+        );
+    }
+
+    #[test]
+    fn test_normalize_hash_location_line_only() {
+        assert_eq!(normalize_hash_location("L74"), Some(":74".to_string()));
+    }
+
+    #[test]
+    fn test_normalize_hash_location_range_line_only() {
+        assert_eq!(
+            normalize_hash_location("L74-L76"),
+            Some(":74-76".to_string())
+        );
+    }
+
+    #[test]
+    fn test_label_has_location_suffix_colon() {
+        assert!(label_has_location_suffix("file.rs:74"));
+        assert!(label_has_location_suffix("file.rs:74:3"));
+        assert!(label_has_location_suffix("file.rs:74:3-76:9"));
+        assert!(!label_has_location_suffix("file.rs"));
+    }
+
+    #[test]
+    fn test_label_has_location_suffix_hash() {
+        assert!(label_has_location_suffix("file.rs#L74C3"));
+        assert!(label_has_location_suffix("file.rs#L74C3-L76C9"));
+        assert!(!label_has_location_suffix("file.rs#section"));
     }
 }
