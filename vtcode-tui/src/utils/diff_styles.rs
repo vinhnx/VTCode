@@ -1,13 +1,14 @@
 //! Unified diff styles for TUI rendering
 //!
-//! Re-exports core diff styling from vtcode-commons and provides
+//! Re-exports diff theme from vtcode-commons and provides
 //! ratatui-specific style helpers for diff rendering.
 
-// Re-export core diff styling from vtcode-commons
-pub use vtcode_commons::styling::{
-    DiffColorLevel, DiffColorPalette, DiffTheme, diff_add_bg, diff_del_bg,
-    diff_gutter_bg_add_light, diff_gutter_bg_del_light, diff_gutter_fg_light,
+// Re-export diff theme from vtcode-commons
+pub use vtcode_commons::diff_theme::{
+    DiffColorLevel, DiffTheme, diff_add_bg, diff_del_bg, diff_gutter_bg_add_light,
+    diff_gutter_bg_del_light, diff_gutter_fg_light,
 };
+pub use vtcode_commons::styling::DiffColorPalette;
 
 use ratatui::style::{Color as RatatuiColor, Modifier, Style as RatatuiStyle};
 
@@ -138,7 +139,7 @@ mod tests {
         let bg = diff_add_bg(DiffTheme::Dark, DiffColorLevel::TrueColor);
         assert!(matches!(
             bg,
-            anstyle::Color::Rgb(anstyle::RgbColor(20, 40, 20))
+            anstyle::Color::Rgb(anstyle::RgbColor(25, 45, 35))
         ));
     }
 
@@ -147,7 +148,7 @@ mod tests {
         let bg = diff_del_bg(DiffTheme::Dark, DiffColorLevel::TrueColor);
         assert!(matches!(
             bg,
-            anstyle::Color::Rgb(anstyle::RgbColor(48, 16, 16))
+            anstyle::Color::Rgb(anstyle::RgbColor(90, 40, 40))
         ));
     }
 
@@ -156,7 +157,7 @@ mod tests {
         let bg = diff_add_bg(DiffTheme::Light, DiffColorLevel::TrueColor);
         assert!(matches!(
             bg,
-            anstyle::Color::Rgb(anstyle::RgbColor(220, 245, 220))
+            anstyle::Color::Rgb(anstyle::RgbColor(215, 240, 215))
         ));
     }
 
@@ -165,7 +166,7 @@ mod tests {
         let bg = diff_del_bg(DiffTheme::Light, DiffColorLevel::TrueColor);
         assert!(matches!(
             bg,
-            anstyle::Color::Rgb(anstyle::RgbColor(250, 220, 220))
+            anstyle::Color::Rgb(anstyle::RgbColor(255, 235, 235))
         ));
     }
 

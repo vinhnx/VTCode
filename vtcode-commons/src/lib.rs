@@ -16,6 +16,7 @@ pub mod at_pattern;
 pub mod colors;
 pub mod diff;
 pub mod diff_paths;
+pub mod diff_theme;
 pub mod error_category;
 pub mod errors;
 pub mod formatting;

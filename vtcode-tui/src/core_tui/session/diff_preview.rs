@@ -227,15 +227,7 @@ fn render_diff_content(
 
             // For changed lines with syntax highlighting, apply bg tint
             let highlighted = highlight_line_with_bg(text, language, content_bg);
-            if line_type == DiffLineType::Delete {
-                // Dim deleted lines so additions are more scannable
-                spans.extend(highlighted.into_iter().map(|mut s| {
-                    s.style = s.style.add_modifier(Modifier::DIM);
-                    s
-                }));
-            } else {
-                spans.extend(highlighted);
-            }
+            spans.extend(highlighted);
 
             lines.push(Line::from(spans).style(line_bg));
         }

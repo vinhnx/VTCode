@@ -1301,6 +1301,47 @@ pub fn highlight_line_for_diff(line: &str, language: Option<&str>) -> Option<Vec
         syntax_highlight::get_active_syntax_theme(),
         true,
     )
+    .map(|segments| {
+        // Make text brighter for better readability in diff view
+        segments
+            .into_iter()
+            .map(|(style, text)| {
+                // Get original foreground color and brighten it
+                let fg = style.get_fg_color().map(|c| {
+                    match c {
+                        anstyle::Color::Rgb(rgb) => {
+                            // Brighten RGB colors by 20%
+                            let brighten = |v: u8| (v as u16 * 120 / 100).min(255) as u8;
+                            anstyle::Color::Rgb(anstyle::RgbColor(
+                                brighten(rgb.0),
+                                brighten(rgb.1),
+                                brighten(rgb.2),
+                            ))
+                        }
+                        anstyle::Color::Ansi(ansi) => {
+                            // Map dark ANSI to bright ANSI
+                            match ansi {
+                                anstyle::AnsiColor::Black => anstyle::Color::Ansi(anstyle::AnsiColor::BrightWhite),
+                                anstyle::AnsiColor::Red => anstyle::Color::Ansi(anstyle::AnsiColor::BrightRed),
+                                anstyle::AnsiColor::Green => anstyle::Color::Ansi(anstyle::AnsiColor::BrightGreen),
+                                anstyle::AnsiColor::Yellow => anstyle::Color::Ansi(anstyle::AnsiColor::BrightYellow),
+                                anstyle::AnsiColor::Blue => anstyle::Color::Ansi(anstyle::AnsiColor::BrightBlue),
+                                anstyle::AnsiColor::Magenta => anstyle::Color::Ansi(anstyle::AnsiColor::BrightMagenta),
+                                anstyle::AnsiColor::Cyan => anstyle::Color::Ansi(anstyle::AnsiColor::BrightCyan),
+                                anstyle::AnsiColor::White => anstyle::Color::Ansi(anstyle::AnsiColor::BrightWhite),
+                                other => anstyle::Color::Ansi(other),
+                            }
+                        }
+                        other => other,
+                    }
+                });
+                let bg = style.get_bg_color();
+                // Rebuild style with brighter fg, preserve bg, normal weight (no bold)
+                let new_style = style.fg_color(fg).bg_color(bg);
+                (new_style, text)
+            })
+            .collect()
+    })
 }
 
 fn try_highlight(

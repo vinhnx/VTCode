@@ -14,14 +14,6 @@ extract and open source more components from vtcode-core
 
 ---
 
-Shell integration: respects $SHELL environment variable and supports the ! prefix for direct shell execution.
-
----
-
-Keyboard-first navigation: Full UNIX keybinding support (Ctrl+A/E/W/U/K, Alt+arrows), suspend/resume with Ctrl+Z, and a quick help overlay with ?.
-
----
-
 Review the unified_exec implementation and vtcode's tool ecosystem to identify token efficiency gaps. Analyze which components waste tokens through redundancy, verbosity, or inefficient patterns, and which are already optimized. Develop optimizations for inefficient tools and propose new tools that consolidate multiple operations into single calls to reduce token consumption in recurring workflows.
 
 Specifically examine these known issues: command payloads for non-diff unified_exec still contain duplicated text (output and stdout fields), which wastes tokens across all command-like tool calls. Address this by ensuring unified_exec normalizes all tool calls to eliminate redundant information.
@@ -63,24 +55,23 @@ Perform a comprehensive analysis of the codebase to identify and eliminate all i
 
 ---
 
-IMPLEMENT POSTAMBLE CROSSTERM EXIT SUMMARIAZATION
+IMPLEMENT POSTAMBLE CROSSTERM EXIT SUMMARIAZATION with proper metric calculation, keep it lightweight but informative
 
 REF:
 
 ```
- Total usage est:        5 Premium
- requests
+ > VT Code session summary:
+
  API time spent:         14m 55s
  Total session time:     1h 13m 43s
  Total code changes:     +137 -13
  Breakdown by AI model:
   gpt-5.3-codex           10.0m in,
-  40.1k out, 8.9m cached (Est. 5
-  Premium requests)
+  40.1k out, 8.9m cached
 
- Resume this session with copilot
- --resume=ce712ef0-6605-4cd4-82bf-fad39
- bd55bca
+ Resume this session with
+
+ vtcode --resume=ce712ef0-6605-4cd4-82bf-fad39 bd55bca
 ```
 
 ---
