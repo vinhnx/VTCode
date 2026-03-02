@@ -143,6 +143,7 @@ pub(crate) struct InteractionState<'a> {
     pub model_picker_state: &'a mut Option<ModelPickerState>,
     pub palette_state: &'a mut Option<ActivePalette>,
     pub last_known_mcp_tools: &'a mut Vec<String>,
+    pub pending_mcp_refresh: &'a mut bool,
     pub mcp_catalog_initialized: &'a mut bool,
     pub last_mcp_refresh: &'a mut Instant,
     pub ctrl_c_notice_displayed: &'a mut bool,

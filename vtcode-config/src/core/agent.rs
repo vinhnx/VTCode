@@ -236,6 +236,11 @@ pub struct AgentHarnessConfig {
     /// Maximum retries for retryable tool errors
     #[serde(default = "default_harness_max_tool_retries")]
     pub max_tool_retries: u32,
+    /// Enable automatic context compaction when token pressure crosses threshold.
+    ///
+    /// Disabled by default. When disabled, no automatic compaction is triggered.
+    #[serde(default = "default_harness_auto_compaction_enabled")]
+    pub auto_compaction_enabled: bool,
     /// Optional JSONL event log path for harness events
     #[serde(default)]
     pub event_log_path: Option<String>,
@@ -247,6 +252,7 @@ impl Default for AgentHarnessConfig {
             max_tool_calls_per_turn: default_harness_max_tool_calls_per_turn(),
             max_tool_wall_clock_secs: default_harness_max_tool_wall_clock_secs(),
             max_tool_retries: default_harness_max_tool_retries(),
+            auto_compaction_enabled: default_harness_auto_compaction_enabled(),
             event_log_path: None,
         }
     }
@@ -537,6 +543,11 @@ const fn default_harness_max_tool_wall_clock_secs() -> u64 {
 #[inline]
 const fn default_harness_max_tool_retries() -> u32 {
     defaults::DEFAULT_MAX_TOOL_RETRIES
+}
+
+#[inline]
+const fn default_harness_auto_compaction_enabled() -> bool {
+    false
 }
 
 #[inline]

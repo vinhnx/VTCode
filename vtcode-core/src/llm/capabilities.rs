@@ -29,6 +29,9 @@ pub struct ProviderCapabilities {
     /// Whether the provider supports context/prompt caching
     pub context_caching: bool,
 
+    /// Whether the provider supports Responses API server-side compaction
+    pub responses_compaction: bool,
+
     /// Model for which capabilities were detected
     pub model: String,
 
@@ -48,6 +51,7 @@ impl ProviderCapabilities {
             parallel_tools: provider.supports_parallel_tool_config(model),
             structured_output: provider.supports_structured_output(model),
             context_caching: provider.supports_context_caching(model),
+            responses_compaction: provider.supports_responses_compaction(model),
             model: model.into(),
             context_size: provider.effective_context_size(model),
         }
@@ -83,6 +87,9 @@ impl ProviderCapabilities {
         if self.parallel_tools {
             features.push("parallel-tools");
         }
+        if self.responses_compaction {
+            features.push("responses-compaction");
+        }
 
         let features_str = if features.is_empty() {
             "basic".to_string()
@@ -112,6 +119,7 @@ mod tests {
             parallel_tools: false,
             structured_output: true,
             context_caching: true,
+            responses_compaction: false,
             model: "gemini-2.0-pro".to_owned(),
             context_size: 2_000_000,
         };
@@ -134,6 +142,7 @@ mod tests {
             parallel_tools: false,
             structured_output: false,
             context_caching: false,
+            responses_compaction: false,
             model: "basic-model".to_owned(),
             context_size: 128_000,
         };

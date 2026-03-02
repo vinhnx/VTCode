@@ -41,20 +41,44 @@ fn test_pre_request_check_ignores_conversation_length() {
 }
 
 #[test]
-fn test_pre_request_check_compacts_on_threshold() {
+fn test_pre_request_check_skips_compaction_when_disabled() {
     let mut manager = ContextManager::new(
         "sys".into(),
         (),
         Arc::new(RwLock::new(HashMap::new())),
         None,
     );
-    manager.cached_stats.total_token_usage = 170_000;
+    manager.cached_stats.total_token_usage = 195_000;
 
     let history = vec![uni::Message::user("hello".to_string())];
-    assert!(matches!(
+    assert_eq!(
         manager.pre_request_check(&history, 200_000),
-        super::PreRequestAction::Compact(_)
-    ));
+        super::PreRequestAction::Proceed
+    );
+}
+
+#[test]
+fn test_pre_request_check_skips_compaction_when_enabled() {
+    use vtcode_config::core::AgentConfig;
+    let mut manager = ContextManager::new(
+        "sys".into(),
+        (),
+        Arc::new(RwLock::new(HashMap::new())),
+        Some(AgentConfig {
+            harness: vtcode_config::core::agent::AgentHarnessConfig {
+                auto_compaction_enabled: true,
+                ..Default::default()
+            },
+            ..Default::default()
+        }),
+    );
+    manager.cached_stats.total_token_usage = 195_000;
+
+    let history = vec![uni::Message::user("hello".to_string())];
+    assert_eq!(
+        manager.pre_request_check(&history, 200_000),
+        super::PreRequestAction::Proceed
+    );
 }
 
 #[test]

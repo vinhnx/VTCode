@@ -375,6 +375,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
         let mut ctrl_c_notice_displayed = false;
         let mut mcp_catalog_initialized = tool_registry.mcp_client().is_some();
         let mut last_known_mcp_tools: Vec<String> = Vec::with_capacity(16);
+        let mut pending_mcp_refresh = false;
         let mut last_mcp_refresh = std::time::Instant::now();
         loop {
             let interaction_outcome = {
@@ -428,6 +429,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                         model_picker_state: &mut model_picker_state,
                         palette_state: &mut palette_state,
                         last_known_mcp_tools: &mut last_known_mcp_tools,
+                        pending_mcp_refresh: &mut pending_mcp_refresh,
                         mcp_catalog_initialized: &mut mcp_catalog_initialized,
                         last_mcp_refresh: &mut last_mcp_refresh,
                         ctrl_c_notice_displayed: &mut ctrl_c_notice_displayed,

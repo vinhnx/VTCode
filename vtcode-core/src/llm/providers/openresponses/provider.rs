@@ -89,6 +89,10 @@ impl OpenResponsesProvider {
         format!("{}/responses", self.base_url.trim_end_matches('/'))
     }
 
+    fn supports_compaction_endpoint(&self) -> bool {
+        self.base_url.contains("api.openai.com") || self.base_url.contains("api.openresponses.com")
+    }
+
     fn build_native_payload(&self, request: &LLMRequest, stream: bool) -> Result<Value, LLMError> {
         use crate::open_responses::{
             ContentPart, ImageDetail, InputFileContent, InputImageContent, MessageRole, OutputItem,
@@ -212,10 +216,18 @@ impl OpenResponsesProvider {
             req.tools = Some((**tools).clone());
         }
 
-        serde_json::to_value(req).map_err(|e| LLMError::Provider {
+        let mut payload = serde_json::to_value(req).map_err(|e| LLMError::Provider {
             message: format!("Failed to serialize Open Responses request: {e}"),
             metadata: None,
-        })
+        })?;
+
+        if let Some(context_management) = &request.context_management
+            && let Some(map) = payload.as_object_mut()
+        {
+            map.insert("context_management".to_string(), context_management.clone());
+        }
+
+        Ok(payload)
     }
 
     fn build_payload(&self, request: &LLMRequest, stream: bool) -> Result<Value, LLMError> {
@@ -490,6 +502,10 @@ impl LLMProvider for OpenResponsesProvider {
             .as_ref()
             .and_then(|b| b.model_supports_reasoning_effort)
             .unwrap_or(true)
+    }
+
+    fn supports_responses_compaction(&self, _model: &str) -> bool {
+        self.supports_compaction_endpoint()
     }
 
     fn supported_models(&self) -> Vec<String> {
@@ -770,9 +786,23 @@ impl LLMProvider for OpenResponsesProvider {
 mod tests {
     use super::*;
 
+    fn test_provider(base_url: &str) -> OpenResponsesProvider {
+        let http_client = reqwest::Client::builder()
+            .no_proxy()
+            .build()
+            .expect("test client should build");
+        OpenResponsesProvider::new_with_client(
+            String::new(),
+            "gpt-5".to_string(),
+            http_client,
+            base_url.to_string(),
+            TimeoutsConfig::default(),
+        )
+    }
+
     #[test]
     fn native_payload_includes_responses_continuity_fields() {
-        let provider = OpenResponsesProvider::with_model(String::new(), "gpt-5".to_string());
+        let provider = test_provider("https://api.openresponses.com/v1");
         let mut request = LLMRequest {
             model: "gpt-5".to_string(),
             messages: vec![crate::llm::provider::Message::user("hello".to_string())],
@@ -799,5 +829,40 @@ mod tests {
             .and_then(Value::as_array)
             .expect("include must exist");
         assert_eq!(include.len(), 2);
+    }
+
+    #[test]
+    fn native_payload_includes_context_management() {
+        let provider = test_provider("https://api.openresponses.com/v1");
+        let mut request = LLMRequest {
+            model: "gpt-5".to_string(),
+            messages: vec![crate::llm::provider::Message::user("hello".to_string())],
+            ..Default::default()
+        };
+        request.context_management = Some(serde_json::json!([{
+            "type": "compaction",
+            "compact_threshold": 200000
+        }]));
+
+        let payload = provider
+            .build_native_payload(&request, false)
+            .expect("native payload should serialize");
+        let management = payload
+            .get("context_management")
+            .and_then(Value::as_array)
+            .expect("context management should exist");
+        assert_eq!(management.len(), 1);
+    }
+
+    #[test]
+    fn openresponses_provider_reports_compaction_support() {
+        let provider = test_provider("https://api.openresponses.com/v1");
+        assert!(provider.supports_responses_compaction("gpt-5"));
+    }
+
+    #[test]
+    fn openresponses_provider_disables_compaction_for_unknown_endpoint() {
+        let provider = test_provider("https://api.example.com/v1");
+        assert!(!provider.supports_responses_compaction("gpt-5"));
     }
 }

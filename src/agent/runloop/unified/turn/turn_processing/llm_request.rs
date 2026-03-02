@@ -1,4 +1,5 @@
 use anyhow::Result;
+use serde_json::json;
 use std::fmt::Write as _;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -454,6 +455,30 @@ pub(crate) async fn execute_llm_request(
     } else {
         None
     };
+    let context_management = {
+        let auto_compaction_enabled = ctx
+            .vt_cfg
+            .map(|cfg| cfg.agent.harness.auto_compaction_enabled)
+            .unwrap_or(false);
+        let supports_server_compaction = supports_responses_chaining(&provider_name)
+            && ctx
+                .provider_client
+                .supports_responses_compaction(active_model);
+        if auto_compaction_enabled && supports_server_compaction {
+            let context_size = ctx.provider_client.effective_context_size(active_model);
+            if context_size > 0 {
+                let compact_threshold = ((context_size as f64) * 0.85).round() as u64;
+                Some(json!([{
+                    "type": "compaction",
+                    "compact_threshold": compact_threshold.max(1),
+                }]))
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    };
 
     let mut request = uni::LLMRequest {
         messages: ctx.working_history.to_vec(),
@@ -466,6 +491,7 @@ pub(crate) async fn execute_llm_request(
         parallel_tool_config: parallel_config,
         reasoning_effort,
         metadata,
+        context_management,
         previous_response_id,
         prompt_cache_key,
         ..Default::default()
