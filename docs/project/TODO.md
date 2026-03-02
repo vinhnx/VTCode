@@ -6908,3 +6908,120 @@ Type "continue" to retry with a different strategy.
 ---
 
 https://deepwiki.com/search/how-does-plan-mode-task-tracke_6c26d7b2-e4ef-44e0-8033-8fc8114740d4?mode=fast
+
+---
+
+TUI:
+
+• I have scope on teams now: we’ll remove Agent Teams along with subagents. I need one more
+implementation-level decision on compatibility behavior for existing configs and commands to finalize a
+no-surprises plan.
+
+• Questions 1/1 answered
+• How strict should removal be for existing `vtcode.toml` and command usage (`/agents`, `/subagent`, `/
+    team`, `spawn_subagent`)?
+answer: Hard Removal (Recommended)
+
+• I’ll use hard removal semantics. Final scope question: whether you want documentation/config samples
+cleaned in the same change or left for a follow-up.
+
+• Questions 1/1 answered
+• Should this same change also remove subagent/team references from docs, READMEs, and
+`vtcode.toml.example`?
+answer: Clean All Now (Recommended)
+
+plan:
+
+```
+
+  # Remove Subagents and Agent Teams Completely
+
+  ## Summary
+
+  Remove the entire subagents system and all agent-team surfaces from VT Code runtime, config, tools,
+  CLI slash UX, and docs. Keep Plan/Edit mode functional by relocating planner/coder prompt profiles
+  out of the subagents module into a dedicated prompt-profile module.
+
+  ## Scope Locked
+
+  1. Remove Agent Teams too.
+  2. Use hard removal semantics.
+  3. Clean docs and config samples in the same change.
+
+  ## Public API / Interface Changes
+
+  1. Remove vtcode_core::subagents module export and all related public types/functions
+     (SubagentRegistry, SubagentRunner, SpawnParams, get_agent_prompt_body, etc.).
+  2. Remove spawn_subagent tool constant and handler from public tool surfaces.
+  3. Remove vtcode_config::subagent module and exported subagent types (SubagentsConfig,
+     SubagentConfig, etc.).
+  4. Remove vtcode_config::agent_teams module and exported team types (AgentTeamsConfig, TeammateMode).
+  5. Remove slash commands /agents, /subagent, /team.
+  6. Keep Plan/Edit behavior, but source active-agent prompts from a new stable prompt-profile API in
+     vtcode-core::prompts (planner/coder only).
+
+  ## Implementation Plan
+
+  1. Remove subagent runtime and tool wiring.
+      - Delete vtcode-core/src/subagents/*.
+      - Delete vtcode-core/src/tools/handlers/spawn_subagent.rs.
+      - Remove module wiring in vtcode-core/src/lib.rs, vtcode-core/src/tools/handlers/mod.rs, tool
+        constants, tool intent classification, and plan-mode checks.
+      - Remove spawn-subagent registration in src/agent/runloop/unified/session_setup/skill_setup.rs.
+  2. Preserve planner/coder mode prompts without subagents.
+      - Add vtcode-core/src/prompts/agent_profiles.rs with planner and coder prompt bodies and lookup
+        helper.
+      - Switch src/agent/runloop/unified/turn/turn_processing/llm_request.rs from
+  3. Remove Agent Teams end-to-end.
+      - Remove team state/runtime usage from src/startup/*, unified state/session loop, status line,
+        slash handlers, and team task logic.
+      - Remove team model picker target and finalize path (TeamDefault and related branch).
+  4. Remove subagent/team config schema and persistence paths.
+      - Delete vtcode-config/src/subagent.rs and vtcode-config/src/agent_teams.rs.
+      - Remove fields from VTCodeConfig (subagents, agent_teams) and re-exports in vtcode-config/src/
+        lib.rs.
+      - Remove subagent/team model persistence functions in src/agent/runloop/unified/
+        model_selection.rs.
+      - Remove related sections in default config text and vtcode.toml.example.
+  5. Enforce hard removal behavior.
+      - Slash commands: parsing /agents, /subagent, /team returns explicit “removed” errors with
+        replacement guidance.
+      - Config loading: add validation in vtcode-config loader to reject effective TOML containing
+        [subagents] or [agent_teams] with a clear error message, instead of silent ignore.
+  6. Clean documentation and generated references now.
+      - Remove/update subagent/team mentions from root and crate READMEs, user docs, docs index/maps,
+        harness docs, skill usage docs, and examples.
+      - Remove docs/subagents/* and references in docs map generators if no longer used.
+
+  ## Test Cases and Validation
+
+  1. Build and lint:
+      - cargo check
+      - cargo clippy --workspace --all-targets -- -D warnings
+  2. Test suite:
+      - cargo nextest run
+  3. Targeted behavior checks:
+      - /plan and /mode still work, including planner/coder prompt switching.
+      - /agents, /subagent, /team now return explicit removal errors.
+      - No spawn_subagent tool appears in tool catalogs or prompt docs.
+      - Config with [subagents] or [agent_teams] fails with deterministic validation message.
+  4. Regression checks:
+      - Session startup no longer logs vtcode_core::subagents::registry: Loaded builtin agent....
+      - Model picker still works for main model selection.
+
+  ## Assumptions and Defaults
+
+  1. Breaking changes are acceptable in this branch/release (no compatibility shim).
+  2. Agent-team feature is removed, not renamed or retained behind flags.
+  3. Documentation is expected to match runtime immediately in this same change.
+  4. Existing dirty working-tree files unrelated to this scope remain untouched.
+```
+
+interactive HTIL:
+
+```
+  Implement this plan?
+
+› 1. Yes, implement this plan  Switch to Default and start coding.
+  2. No, stay in Plan mode     Continue planning with the model.
+```
