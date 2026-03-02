@@ -33,7 +33,7 @@ pub struct ExecEventRecorder {
     events: Vec<ThreadEvent>,
     next_item_index: u64,
     event_sink: Option<EventSink>,
-    active_agent_message: Option<StreamingAgentMessage>,
+    active_assistant_message: Option<StreamingAgentMessage>,
     active_reasoning: Option<StreamingAgentMessage>,
     current_reasoning_stage: Option<String>,
 }
@@ -44,7 +44,7 @@ impl ExecEventRecorder {
             events: Vec::new(),
             next_item_index: 0,
             event_sink,
-            active_agent_message: None,
+            active_assistant_message: None,
             active_reasoning: None,
             current_reasoning_stage: None,
         };
@@ -101,7 +101,7 @@ impl ExecEventRecorder {
             return false;
         }
 
-        if let Some(active) = self.active_agent_message.as_mut() {
+        if let Some(active) = self.active_assistant_message.as_mut() {
             active.buffer = text.into();
             let item = ThreadItem {
                 id: active.id.clone(),
@@ -121,7 +121,7 @@ impl ExecEventRecorder {
                 }),
             };
             self.record(ThreadEvent::ItemStarted(ItemStartedEvent { item }));
-            self.active_agent_message = Some(StreamingAgentMessage {
+            self.active_assistant_message = Some(StreamingAgentMessage {
                 id,
                 buffer: text_owned,
             });
@@ -130,7 +130,7 @@ impl ExecEventRecorder {
     }
 
     pub fn agent_message_stream_complete(&mut self) {
-        if let Some(active) = self.active_agent_message.take() {
+        if let Some(active) = self.active_assistant_message.take() {
             let item = ThreadItem {
                 id: active.id,
                 details: ThreadItemDetails::AgentMessage(AgentMessageItem {
@@ -285,7 +285,7 @@ impl ExecEventRecorder {
     }
 
     pub fn into_events(mut self) -> Vec<ThreadEvent> {
-        if let Some(active) = self.active_agent_message.take() {
+        if let Some(active) = self.active_assistant_message.take() {
             let item = ThreadItem {
                 id: active.id,
                 details: ThreadItemDetails::AgentMessage(AgentMessageItem {

@@ -340,7 +340,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
             Some(InlineEvent::Submit("/clear".to_string()))
         }
         KeyCode::BackTab => {
-            // Shift+Tab: Toggle editing mode (delegate mode when teams are active)
+            // Shift+Tab: Toggle editing mode
             session.mark_dirty();
             Some(InlineEvent::ToggleMode)
         }
@@ -392,10 +392,6 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
             Some(InlineEvent::ScrollPageDown)
         }
         KeyCode::Up => {
-            if has_shift {
-                session.mark_dirty();
-                return Some(InlineEvent::TeamPrev);
-            }
             let edit_queue_modifier = has_alt || (raw_meta && !has_super);
             if edit_queue_modifier && !session.queued_inputs.is_empty() {
                 if let Some(latest) = session.pop_latest_queued_input() {
@@ -414,10 +410,6 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
             }
         }
         KeyCode::Down => {
-            if has_shift {
-                session.mark_dirty();
-                return Some(InlineEvent::TeamNext);
-            }
             if session.navigate_history_next() {
                 session.mark_dirty();
                 Some(InlineEvent::HistoryNext)

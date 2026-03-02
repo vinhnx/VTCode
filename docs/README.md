@@ -280,7 +280,6 @@ cargo clippy && cargo fmt
 
 - **[Roadmap](./project/ROADMAP.md)** - Future development plans and milestones
 - **[Changelog](../CHANGELOG.md)** - Version history and release notes
-- **[TODO](./project/TODO.md)** - Current development tasks
 
 ### Development Resources
 

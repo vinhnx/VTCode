@@ -67,8 +67,6 @@ vtcode/                          # Binary entrypoint (src/main.rs)
 
 **Skills** (`.vtcode/skills/` → `~/.vtcode/skills/` → embedded): agentskills.io standard. See `docs/skills/`.
 
-**Subagents** (`vtcode-core/src/subagents/`): `spawn_subagent` tool. Built-in: `explore`, `plan`, `general`, `code-reviewer`, `debugger`. Custom: `.vtcode/agents/`. See `docs/subagents/SUBAGENTS.md`.
-
 **Process Hardening** (`vtcode-process-hardening/`): Pre-main security (ptrace disable, core dump disable, env var removal). Exit codes: 5/6/7. See `docs/development/PROCESS_HARDENING.md`.
 
 ## Code Style & Conventions

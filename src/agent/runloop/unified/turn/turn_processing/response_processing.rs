@@ -596,8 +596,9 @@ Outro"#
         };
 
         let mut renderer = AnsiRenderer::stdout();
-        let result = process_llm_response(&response, &mut renderer, 0, true, false, true, None, None)
-            .expect("processing should succeed");
+        let result =
+            process_llm_response(&response, &mut renderer, 0, true, false, true, None, None)
+                .expect("processing should succeed");
 
         match result {
             TurnProcessingResult::TextResponse {

@@ -291,7 +291,6 @@ pub(super) async fn run_interaction_loop_impl(
             provider_client: ctx.provider_client,
             session_bootstrap: ctx.session_bootstrap,
             full_auto: ctx.full_auto,
-            team_active: false,
         };
 
         let inline_action =
@@ -301,20 +300,6 @@ pub(super) async fn run_interaction_loop_impl(
         let mut input_owned = match inline_action {
             InlineLoopAction::Continue => continue,
             InlineLoopAction::Submit(text) => text,
-            InlineLoopAction::ToggleDelegateMode => {
-                ctx.renderer.line(
-                    MessageStyle::Info,
-                    "Agent teams were removed. Delegate mode is no longer available.",
-                )?;
-                continue;
-            }
-            InlineLoopAction::SwitchTeammate => {
-                ctx.renderer.line(
-                    MessageStyle::Info,
-                    "Agent teams were removed. Teammate switching is no longer available.",
-                )?;
-                continue;
-            }
             InlineLoopAction::Exit(reason) => {
                 return Ok(InteractionOutcome::Exit { reason });
             }

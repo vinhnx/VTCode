@@ -49,12 +49,6 @@ hooks = [
 hooks = [
   { command = "$VT_PROJECT_DIR/.vtcode/hooks/task-complete.sh" }
 ]
-
-# Teammate idle hooks - Run when a teammate has no active tasks
-[[hooks.lifecycle.teammate_idle]]
-hooks = [
-  { command = "$VT_PROJECT_DIR/.vtcode/hooks/teammate-idle.sh" }
-]
 ```
 
 ## Hook Events
@@ -88,14 +82,9 @@ hooks = [
 
 ### TaskCompletion / TaskCompleted
 
--   Runs when a task is marked completed or failed (for example, agent team tasks)
+-   Runs when a task is marked completed or failed
 -   Configure `task_completion` or `task_completed` (both are supported)
 -   Matchers apply to `task_name`
-
-### TeammateIdle
-
--   Runs when a teammate has no pending or in-progress tasks
--   Matchers apply to `teammate` (the teammate name)
 
 ## Hook Matching
 

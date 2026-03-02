@@ -264,7 +264,6 @@ Dependencies: (to be identified)
             "status": "success",
             "message": "Entered Plan Mode. You are now in read-only mode for exploration and planning.",
             "plan_file": plan_file.display().to_string(),
-            "active_agent": "planner",
             "instructions": [
                 "1. Read files and search code to understand the codebase",
                 "2. Ask clarifying questions if requirements are ambiguous",
@@ -553,11 +552,10 @@ impl Tool for ExitPlanModeTool {
             "plan_tracker_file": tracker_file.map(|p| p.display().to_string()),
             "plan_content": plan_content,
             "plan_summary": plan_summary,
-            "pending_active_agent": "coder",
             "next_steps": [
                 "User will see the Implementation Blueprint panel",
                 "User can choose: Execute or Stay in Plan Mode",
-                "If approved, active agent switches to 'coder' and mutating tools will be enabled",
+                "If approved, Plan Mode will be disabled and mutating tools will be enabled",
                 "Execute the plan step by step after approval"
             ],
             "requires_confirmation": true

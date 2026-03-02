@@ -34,7 +34,6 @@ pub(crate) async fn transition_to_plan_mode(
     }
 
     session_stats.set_plan_mode(true);
-    session_stats.switch_to_planner();
     handle.set_editing_mode(EditingMode::Plan);
 }
 
@@ -52,6 +51,5 @@ pub(crate) async fn transition_to_edit_mode(
     }
 
     session_stats.set_plan_mode(false);
-    session_stats.switch_to_coder();
     handle.set_editing_mode(EditingMode::Edit);
 }

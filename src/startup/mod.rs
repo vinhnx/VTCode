@@ -143,8 +143,6 @@ impl StartupContext {
             apply_permission_mode_override(&mut config, permission_mode)?;
         }
 
-        validate_removed_team_flags(args)?;
-
         // Validate configuration against models database
         validate_startup_configuration(&config, &workspace, args.quiet)?;
 
@@ -373,19 +371,6 @@ fn provider_env_override() -> Option<String> {
         .or_else(|| std::env::var("provider").ok())
         .map(|value| value.trim().to_owned())
         .filter(|value| !value.is_empty())
-}
-
-fn validate_removed_team_flags(args: &Cli) -> Result<()> {
-    let has_removed_team_flags = args.team.is_some()
-        || args.teammate.is_some()
-        || args.team_role.is_some()
-        || args.teammate_mode.is_some();
-    if has_removed_team_flags {
-        bail!(
-            "Agent teams have been removed. The flags --team, --teammate, --team-role, and --teammate-mode are no longer supported."
-        );
-    }
-    Ok(())
 }
 
 /// Validate whether prompt_cache_retention is applicable for the given model and provider.

@@ -481,8 +481,6 @@ pub(super) async fn prompt_tool_permission<S: UiSession + ?Sized>(
             | InlineEvent::BackgroundOperation
             | InlineEvent::LaunchEditor
             | InlineEvent::ToggleMode
-            | InlineEvent::TeamPrev
-            | InlineEvent::TeamNext
             | InlineEvent::PlanConfirmation(_)
             | InlineEvent::DiffPreviewApply
             | InlineEvent::DiffPreviewReject

@@ -335,7 +335,6 @@ async fn check_tool_permission(
             human_in_the_loop: vt_cfg
                 .map(|cfg| cfg.security.human_in_the_loop)
                 .unwrap_or(true),
-            delegate_mode: ctx.session_stats.is_delegate_mode(),
             skip_confirmations,
         },
         name,

@@ -332,14 +332,6 @@ pub(crate) async fn execute_llm_request(
     let request_timeout_secs =
         llm_attempt_timeout_secs(turn_timeout_secs, plan_mode, &provider_name);
 
-    let active_agent_name = {
-        let parts = ctx.parts_mut();
-        parts.state.session_stats.active_agent().to_string()
-    };
-    let active_agent_prompt_body = vtcode_core::prompts::get_agent_prompt_body(
-        active_agent_name.as_str(),
-    );
-
     let mut system_prompt = {
         let parts = ctx.parts_mut();
         parts
@@ -352,8 +344,6 @@ pub(crate) async fn execute_llm_request(
                     full_auto: parts.state.full_auto,
                     plan_mode,
                     context_window_size: Some(context_window_size),
-                    active_agent_name: Some(active_agent_name.clone()),
-                    active_agent_prompt: active_agent_prompt_body,
                 },
             )
             .await?

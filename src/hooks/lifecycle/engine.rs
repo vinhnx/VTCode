@@ -18,7 +18,7 @@ use crate::hooks::lifecycle::interpret::{
     interpret_session_start, interpret_user_prompt,
 };
 use crate::hooks::lifecycle::interpret_events::{
-    interpret_task_completion, interpret_teammate_idle,
+    interpret_task_completion,
 };
 use crate::hooks::lifecycle::types::{
     HookMessage, PostToolHookOutcome, PreToolHookDecision, PreToolHookOutcome, SessionEndReason,
@@ -278,42 +278,6 @@ impl LifecycleHookEngine {
                     Ok(result) => interpret_task_completion(command, &result, &mut messages),
                     Err(err) => messages.push(HookMessage::error(format!(
                         "TaskCompletion hook `{}` failed: {err}",
-                        command.command
-                    ))),
-                }
-            }
-        }
-
-        Ok(messages)
-    }
-
-    #[allow(dead_code)]
-    pub async fn run_teammate_idle(
-        &self,
-        teammate: &str,
-        details: Option<&Value>,
-    ) -> Result<Vec<HookMessage>> {
-        let mut messages = Vec::new();
-
-        if self.inner.hooks.teammate_idle.is_empty() {
-            return Ok(messages);
-        }
-
-        let payload = self.build_teammate_idle_payload(teammate, details).await?;
-
-        for group in &self.inner.hooks.teammate_idle {
-            if !group.matcher.matches(teammate) {
-                continue;
-            }
-
-            for command in &group.commands {
-                match self
-                    .execute_command("TeammateIdle", command, &payload)
-                    .await
-                {
-                    Ok(result) => interpret_teammate_idle(command, &result, &mut messages),
-                    Err(err) => messages.push(HookMessage::error(format!(
-                        "TeammateIdle hook `{}` failed: {err}",
                         command.command
                     ))),
                 }

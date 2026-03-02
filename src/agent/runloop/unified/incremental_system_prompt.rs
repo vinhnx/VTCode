@@ -204,8 +204,7 @@ impl IncrementalSystemPrompt {
             || context.error_count > 0
             || context.token_usage_ratio > 0.0
             || context.full_auto
-            || context.plan_mode
-            || context.active_agent_prompt.is_some();
+            || context.plan_mode;
 
         if has_context {
             let _ = writeln!(prompt, "\n[Context]");
@@ -254,13 +253,6 @@ impl IncrementalSystemPrompt {
                         "\n# FULL-AUTO: Complete task autonomously until done or blocked."
                     );
                 }
-            }
-
-            // Inject active agent profile prompt (replaces hardcoded plan mode injection)
-            // This supports the planner/coder profile architecture.
-            if let Some(ref agent_prompt) = context.active_agent_prompt {
-                // Use the active profile prompt directly.
-                let _ = writeln!(prompt, "\n{}", agent_prompt);
             }
 
             // Always append runtime plan-mode guardrails when plan mode is active.
@@ -403,13 +395,8 @@ pub struct SystemPromptContext {
     pub error_count: usize,
     pub token_usage_ratio: f64,
     pub full_auto: bool,
-    /// Plan mode: read-only mode for exploration and planning (legacy, for backward compatibility)
+    /// Plan mode: read-only mode for exploration and planning.
     pub plan_mode: bool,
-    /// Active agent profile name (e.g., "planner", "coder")
-    /// This determines which profile prompt is used.
-    pub active_agent_name: String,
-    /// Active profile prompt body, appended to the base system prompt when present.
-    pub active_agent_prompt: Option<String>,
     /// Discovered skills for immediate awareness
     pub discovered_skills: Vec<vtcode_core::skills::types::Skill>,
     /// Total context window size for the current model (e.g., 200000, 1000000)
@@ -434,8 +421,6 @@ impl SystemPromptContext {
         ((self.token_usage_ratio * 1000.0) as usize).hash(&mut hasher);
         self.full_auto.hash(&mut hasher);
         self.plan_mode.hash(&mut hasher);
-        self.active_agent_name.hash(&mut hasher);
-        self.active_agent_prompt.hash(&mut hasher);
         self.context_window_size.hash(&mut hasher);
         self.current_token_usage.hash(&mut hasher);
         self.supports_context_awareness.hash(&mut hasher);

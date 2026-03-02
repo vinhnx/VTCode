@@ -11,8 +11,6 @@ mod management;
 mod parsing;
 #[path = "slash_commands/rendering.rs"]
 mod rendering;
-#[path = "slash_commands/team_agent.rs"]
-mod team_agent;
 use flow::{
     handle_agent_command, handle_auth_command, handle_login_command, handle_logout_command,
     handle_mode_command, handle_plan_command, handle_resume_command, handle_rewind_command,
@@ -20,7 +18,6 @@ use flow::{
 use management::{handle_add_dir_command, handle_mcp_command};
 use parsing::{parse_session_log_export_format, split_command_and_args};
 use rendering::{render_generate_agent_file_usage, render_help, render_theme_list};
-use team_agent::{handle_agents_command, handle_team_command};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ThemePaletteMode {
@@ -390,16 +387,6 @@ pub async fn handle_slash_command(
                     Ok(SlashCommandOutcome::Handled)
                 }
             }
-        }
-        "agents" => handle_agents_command(args, renderer),
-        "team" => handle_team_command(args, renderer),
-        "subagent" => {
-            let _ = args;
-            renderer.line(
-                MessageStyle::Error,
-                "The subagents system has been removed. '/subagent' is no longer available.",
-            )?;
-            Ok(SlashCommandOutcome::Handled)
         }
         "plan" => handle_plan_command(args, renderer),
         "agent" => handle_agent_command(args, renderer),

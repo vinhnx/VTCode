@@ -67,7 +67,6 @@ pub(crate) struct ToolPermissionsContext<'a, S: UiSession + ?Sized> {
     pub hitl_notification_bell: bool,
     pub autonomous_mode: bool,
     pub human_in_the_loop: bool,
-    pub delegate_mode: bool,
     pub skip_confirmations: bool,
 }
 
@@ -92,20 +91,11 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
         hitl_notification_bell,
         autonomous_mode,
         human_in_the_loop,
-        delegate_mode,
         skip_confirmations,
     } = ctx;
 
     if skip_confirmations {
         return Ok(ToolPermissionFlow::Approved);
-    }
-
-    if delegate_mode {
-        renderer.line(
-            MessageStyle::Info,
-            "Delegate mode active. Tool execution is disabled.",
-        )?;
-        return Ok(ToolPermissionFlow::Denied);
     }
 
     if !human_in_the_loop {

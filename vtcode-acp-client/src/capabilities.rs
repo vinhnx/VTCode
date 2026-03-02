@@ -242,7 +242,6 @@ pub struct AgentFeatures {
     /// Supports code execution
     #[serde(default)]
     pub code_execution: bool,
-
 }
 
 /// Model information

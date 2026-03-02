@@ -129,8 +129,6 @@ async fn build_system_prompt_with_empty_base_prompt_fails() {
         full_auto: false,
         plan_mode: false,
         context_window_size: None,
-        active_agent_name: None,
-        active_agent_prompt: None,
     };
 
     let result = manager.build_system_prompt(&[], 0, params).await;

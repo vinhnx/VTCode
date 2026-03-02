@@ -11,7 +11,6 @@ pub(super) struct CompiledLifecycleHooks {
     pub(super) pre_tool_use: Vec<CompiledHookGroup>,
     pub(super) post_tool_use: Vec<CompiledHookGroup>,
     pub(super) task_completion: Vec<CompiledHookGroup>,
-    pub(super) teammate_idle: Vec<CompiledHookGroup>,
 }
 
 impl CompiledLifecycleHooks {
@@ -27,7 +26,6 @@ impl CompiledLifecycleHooks {
             pre_tool_use: compile_groups(&config.pre_tool_use)?,
             post_tool_use: compile_groups(&config.post_tool_use)?,
             task_completion,
-            teammate_idle: compile_groups(&config.teammate_idle)?,
         })
     }
 
@@ -38,7 +36,6 @@ impl CompiledLifecycleHooks {
             && self.pre_tool_use.is_empty()
             && self.post_tool_use.is_empty()
             && self.task_completion.is_empty()
-            && self.teammate_idle.is_empty()
     }
 }
 

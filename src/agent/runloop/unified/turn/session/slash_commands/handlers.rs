@@ -189,7 +189,6 @@ pub async fn handle_execute_tool(
                 .as_ref()
                 .map(|cfg| cfg.security.human_in_the_loop)
                 .unwrap_or(true),
-            delegate_mode: ctx.session_stats.is_delegate_mode(),
             skip_confirmations: false,
         },
         &name,

@@ -146,7 +146,7 @@ Last reviewed: 2026-02-16
 
 | Dimension        | Grade | Evidence / Notes                                                                                                                                                                                            |
 | ---------------- | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Test Coverage    | B+    | Inline event-loop mapping now has focused regressions for key actions (`LaunchEditor`, `ToggleMode`, team switch, plan confirmation, interrupt exit) in `src/agent/runloop/unified/inline_events/tests.rs`. |
+| Test Coverage    | B+    | Inline event-loop mapping now has focused regressions for key actions (`LaunchEditor`, `ToggleMode`, plan confirmation, interrupt exit) in `src/agent/runloop/unified/inline_events/tests.rs`. |
 | API Stability    | B     | Event loop and keybinding behavior are stable.                                                                                                                                                              |
 | Agent Legibility | B     | Large-handler debt was addressed; navigation and structure are more legible than prior review.                                                                                                              |
 | Error Handling   | B     | Terminal restoration and cleanup behavior are robust.                                                                                                                                                       |

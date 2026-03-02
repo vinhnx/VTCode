@@ -11,8 +11,6 @@ async fn test_incremental_prompt_caching() {
         token_usage_ratio: 0.0,
         full_auto: false,
         plan_mode: false,
-        active_agent_name: String::new(),
-        active_agent_prompt: None,
         discovered_skills: Vec::new(),
         context_window_size: None,
         current_token_usage: None,
@@ -66,8 +64,6 @@ async fn test_incremental_prompt_rebuild() {
         token_usage_ratio: 0.0,
         full_auto: false,
         plan_mode: false,
-        active_agent_name: String::new(),
-        active_agent_prompt: None,
         discovered_skills: Vec::new(),
         context_window_size: None,
         current_token_usage: None,
@@ -135,8 +131,6 @@ async fn test_context_awareness_token_budget_warning() {
         token_usage_ratio: 0.65,
         full_auto: false,
         plan_mode: false,
-        active_agent_name: String::new(),
-        active_agent_prompt: None,
         discovered_skills: Vec::new(),
         context_window_size: Some(200_000),
         current_token_usage: Some(130_000),
@@ -172,8 +166,6 @@ async fn test_context_awareness_token_budget_high() {
         token_usage_ratio: 0.88,
         full_auto: true,
         plan_mode: false,
-        active_agent_name: String::new(),
-        active_agent_prompt: None,
         discovered_skills: Vec::new(),
         context_window_size: Some(200_000),
         current_token_usage: Some(176_000),
@@ -209,8 +201,6 @@ async fn test_context_awareness_token_budget_critical() {
         token_usage_ratio: 0.95,
         full_auto: false,
         plan_mode: false,
-        active_agent_name: String::new(),
-        active_agent_prompt: None,
         discovered_skills: Vec::new(),
         context_window_size: Some(200_000),
         current_token_usage: Some(190_000),
@@ -246,8 +236,6 @@ async fn test_context_awareness_normal_no_guidance() {
         token_usage_ratio: 0.10,
         full_auto: false,
         plan_mode: false,
-        active_agent_name: String::new(),
-        active_agent_prompt: None,
         discovered_skills: Vec::new(),
         context_window_size: Some(200_000),
         current_token_usage: Some(20_000),
@@ -285,8 +273,6 @@ async fn test_non_context_aware_model_no_budget_tags() {
         token_usage_ratio: 0.10,
         full_auto: false,
         plan_mode: false,
-        active_agent_name: String::new(),
-        active_agent_prompt: None,
         discovered_skills: Vec::new(),
         context_window_size: None,
         current_token_usage: None,
@@ -311,7 +297,7 @@ async fn test_non_context_aware_model_no_budget_tags() {
 }
 
 #[tokio::test]
-async fn test_plan_mode_notice_appended_with_active_agent_prompt() {
+async fn test_plan_mode_notice_appended() {
     let prompt_builder = IncrementalSystemPrompt::new();
     let base_prompt = "You are a helpful assistant.";
     let context = SystemPromptContext {
@@ -321,8 +307,6 @@ async fn test_plan_mode_notice_appended_with_active_agent_prompt() {
         token_usage_ratio: 0.0,
         full_auto: false,
         plan_mode: true,
-        active_agent_name: "planner".to_string(),
-        active_agent_prompt: Some("Custom planner agent prompt.".to_string()),
         discovered_skills: Vec::new(),
         context_window_size: None,
         current_token_usage: None,
@@ -342,7 +326,6 @@ async fn test_plan_mode_notice_appended_with_active_agent_prompt() {
         )
         .await;
 
-    assert!(prompt.contains("Custom planner agent prompt."));
     assert!(prompt.contains(vtcode_core::prompts::system::PLAN_MODE_READ_ONLY_HEADER));
     assert!(prompt.contains(vtcode_core::prompts::system::PLAN_MODE_EXIT_INSTRUCTION_LINE));
     assert!(prompt.contains(vtcode_core::prompts::system::PLAN_MODE_PLAN_QUALITY_LINE));
@@ -361,8 +344,6 @@ async fn test_full_auto_is_constrained_in_plan_mode() {
         token_usage_ratio: 0.0,
         full_auto: true,
         plan_mode: true,
-        active_agent_name: "planner".to_string(),
-        active_agent_prompt: None,
         discovered_skills: Vec::new(),
         context_window_size: None,
         current_token_usage: None,

@@ -206,12 +206,6 @@ python3 scripts/generate_config_field_reference.py
 | `hooks.lifecycle.task_completion[].hooks[].timeout_seconds` | `integer \| null` | no | `null` | Optional execution timeout in seconds |
 | `hooks.lifecycle.task_completion[].hooks[].type` | `string` | no | `"command"` | Type of hook command (currently only 'command' is supported) |
 | `hooks.lifecycle.task_completion[].matcher` | `null \| string` | no | `null` | Optional regex matcher to filter when this group runs. Matched against context strings (e.g. tool name, project path). |
-| `hooks.lifecycle.teammate_idle` | `array` | no | `[]` | Commands to run when a teammate agent remains idle |
-| `hooks.lifecycle.teammate_idle[].hooks` | `array` | no | `[]` | List of hook commands to execute sequentially in this group |
-| `hooks.lifecycle.teammate_idle[].hooks[].command` | `string` | no | `""` | The shell command string to execute |
-| `hooks.lifecycle.teammate_idle[].hooks[].timeout_seconds` | `integer \| null` | no | `null` | Optional execution timeout in seconds |
-| `hooks.lifecycle.teammate_idle[].hooks[].type` | `string` | no | `"command"` | Type of hook command (currently only 'command' is supported) |
-| `hooks.lifecycle.teammate_idle[].matcher` | `null \| string` | no | `null` | Optional regex matcher to filter when this group runs. Matched against context strings (e.g. tool name, project path). |
 | `hooks.lifecycle.user_prompt_submit` | `array` | no | `[]` | Commands to run when the user submits a prompt (pre-processing) |
 | `hooks.lifecycle.user_prompt_submit[].hooks` | `array` | no | `[]` | List of hook commands to execute sequentially in this group |
 | `hooks.lifecycle.user_prompt_submit[].hooks[].command` | `string` | no | `""` | The shell command string to execute |

@@ -825,7 +825,6 @@ pre_tool_use = []
 post_tool_use = []
 task_completion = []
 task_completed = []
-teammate_idle = []
 
 [model]
 skip_loop_detection = false

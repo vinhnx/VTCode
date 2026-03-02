@@ -1,36 +1,12 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result};
 
 use crate::auth::migrate_custom_api_keys_to_keyring;
 use crate::defaults::{self};
 use crate::loader::config::VTCodeConfig;
 use crate::loader::layers::{ConfigLayerEntry, ConfigLayerSource, ConfigLayerStack};
-
-pub(crate) fn validate_removed_sections_absent(config: &toml::Value) -> Result<()> {
-    let Some(table) = config.as_table() else {
-        return Ok(());
-    };
-
-    let mut removed_sections = Vec::new();
-    if table.contains_key("subagents") {
-        removed_sections.push("[subagents]");
-    }
-    if table.contains_key("agent_teams") {
-        removed_sections.push("[agent_teams]");
-    }
-
-    if removed_sections.is_empty() {
-        return Ok(());
-    }
-
-    let sections = removed_sections.join(", ");
-    bail!(
-        "Configuration section(s) {} are no longer supported because subagents and agent teams were removed. Remove these section(s) from your configuration.",
-        sections
-    );
-}
 
 /// Configuration manager for loading and validating configurations
 #[derive(Clone)]
@@ -170,7 +146,6 @@ impl ConfigManager {
         }
 
         let effective_toml = layer_stack.effective_config();
-        validate_removed_sections_absent(&effective_toml)?;
         let mut config: VTCodeConfig = effective_toml
             .try_into()
             .context("Failed to deserialize effective configuration")?;
@@ -258,7 +233,6 @@ impl ConfigManager {
         ));
 
         let effective_toml = layer_stack.effective_config();
-        validate_removed_sections_absent(&effective_toml)?;
         let config: VTCodeConfig = effective_toml.try_into().with_context(|| {
             format!(
                 "Failed to parse effective config with file: {}",

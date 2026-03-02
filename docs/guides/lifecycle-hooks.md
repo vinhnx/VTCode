@@ -140,7 +140,7 @@ inspect outputs, enforce policy, or append extra context for the model.
 
 ### TaskCompletion / TaskCompleted
 
-Runs when a task is marked completed or failed (for example, an agent team task).
+Runs when a task is marked completed or failed.
 Configure either `task_completion` or `task_completed` in `vtcode.toml` (both are
 supported). Payload:
 
@@ -149,25 +149,9 @@ supported). Payload:
   "session_id": "...",
   "cwd": "/path/to/project",
   "hook_event_name": "TaskCompletion",
-  "task_name": "team_task",
+  "task_name": "task_name",
   "status": "completed" | "failed",
-  "details": { "task_id": 1, "assigned_to": "teammate-1", "summary": "..." } | null,
-  "transcript_path": "..." | null
-}
-```
-
-### TeammateIdle
-
-Runs when a teammate has no pending or in-progress tasks. Configure
-`teammate_idle` in `vtcode.toml`. Payload:
-
-```json
-{
-  "session_id": "...",
-  "cwd": "/path/to/project",
-  "hook_event_name": "TeammateIdle",
-  "teammate": "teammate-1",
-  "details": { "team": "team", "teammate": "teammate-1" } | null,
+  "details": { "task_id": 1, "summary": "..." } | null,
   "transcript_path": "..." | null
 }
 ```

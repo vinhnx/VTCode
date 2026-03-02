@@ -220,7 +220,6 @@ fn test_provider_defaults() {
         ModelId::default_orchestrator_for_provider(Provider::ZAI),
         ModelId::ZaiGlm5
     );
-
 }
 
 #[test]

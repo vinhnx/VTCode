@@ -174,8 +174,6 @@ pub(crate) async fn update_input_status_if_changed(
                 state.context_tokens,
                 state.is_cancelling,
                 state.spooled_files_count,
-                None,
-                false,
             );
             (state.git_left.clone(), right)
         }
@@ -228,12 +226,10 @@ pub(crate) async fn update_input_status_if_changed(
                         trimmed_model,
                         trimmed_reasoning,
                         state.context_utilization,
-                            state.context_tokens,
-                            state.is_cancelling,
-                            state.spooled_files_count,
-                            None,
-                            false,
-                        );
+                        state.context_tokens,
+                        state.is_cancelling,
+                        state.spooled_files_count,
+                    );
                     (state.git_left.clone(), right)
                 }
             } else {
@@ -245,8 +241,6 @@ pub(crate) async fn update_input_status_if_changed(
                     state.context_tokens,
                     state.is_cancelling,
                     state.spooled_files_count,
-                    None,
-                    false,
                 );
                 (state.git_left.clone(), right)
             }
@@ -303,8 +297,6 @@ pub(crate) fn build_model_status_with_context(
         total_tokens,
         is_cancelling,
         None,
-        None,
-        false,
     )
 }
 
@@ -317,8 +309,6 @@ pub(crate) fn build_model_status_with_context_and_spooled(
     _total_tokens: Option<usize>,
     is_cancelling: bool,
     spooled_files: Option<usize>,
-    team_label: Option<&str>,
-    delegate_mode: bool,
 ) -> Option<String> {
     let mut parts = Vec::new();
 
@@ -337,16 +327,6 @@ pub(crate) fn build_model_status_with_context_and_spooled(
         && count > 0
     {
         parts.push(format!("{} spooled", count));
-    }
-
-    if let Some(label) = team_label
-        && !label.trim().is_empty()
-    {
-        parts.push(label.trim().to_string());
-    }
-
-    if delegate_mode {
-        parts.push("delegate".to_string());
     }
 
     if !reasoning.is_empty() {
@@ -374,8 +354,6 @@ mod tests {
             Some(83_000),
             false,
             None,
-            None,
-            false,
         );
 
         assert_eq!(
@@ -393,8 +371,6 @@ mod tests {
             Some(1_000),
             false,
             None,
-            None,
-            false,
         );
         let low = build_model_status_with_context_and_spooled(
             "model",
@@ -403,8 +379,6 @@ mod tests {
             Some(1_000),
             false,
             None,
-            None,
-            false,
         );
 
         assert_eq!(high.as_deref(), Some("model | 100% context left"));

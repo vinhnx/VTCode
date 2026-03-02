@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 
 use crate::loader::layers::{ConfigLayerEntry, ConfigLayerSource};
-use crate::loader::manager::{ConfigManager, validate_removed_sections_absent};
+use crate::loader::manager::ConfigManager;
 
 /// Builder for creating a [`ConfigManager`] with custom overrides.
 #[derive(Debug, Clone, Default)]
@@ -76,7 +76,6 @@ impl ConfigBuilder {
 
             // Re-evaluate config
             let effective_toml = manager.layer_stack.effective_config();
-            validate_removed_sections_absent(&effective_toml)?;
             manager.config = effective_toml
                 .try_into()
                 .context("Failed to deserialize effective configuration after runtime overrides")?;

@@ -100,22 +100,4 @@ impl LifecycleHookEngine {
             "transcript_path": transcript_path,
         }))
     }
-
-    #[allow(dead_code)]
-    pub(super) async fn build_teammate_idle_payload(
-        &self,
-        teammate: &str,
-        details: Option<&Value>,
-    ) -> Result<Value> {
-        let cwd = self.inner.workspace.to_string_lossy().into_owned();
-        let transcript_path = self.current_transcript_path().await;
-        Ok(json!({
-            "session_id": self.inner.session_id,
-            "cwd": cwd,
-            "hook_event_name": "TeammateIdle",
-            "teammate": teammate,
-            "details": details.cloned().unwrap_or(Value::Null),
-            "transcript_path": transcript_path,
-        }))
-    }
 }

@@ -156,9 +156,6 @@ pub enum InlineEvent {
     ForceCancelPtySession,
     /// Toggle editing mode (Shift+Tab cycles through Edit -> Plan -> Edit).
     ToggleMode,
-    /// Reserved for legacy team navigation keybindings.
-    TeamPrev,
-    TeamNext,
     /// Plan confirmation result (human-in-the-loop)
     PlanConfirmation(PlanConfirmationResult),
     /// Diff preview approval - apply edit changes

@@ -1,15 +1,14 @@
 use crate::agent::runloop::git::CodeChangeDelta;
 use std::time::Duration;
+use vtcode_commons::color256_theme::rgb_to_ansi256_for_theme;
 use vtcode_core::config::constants::ui;
 use vtcode_core::core::telemetry::TelemetryStats;
 use vtcode_tui::InlineHeaderContext;
+use vtcode_tui::ui::theme;
 
 const ANSI_RESET: &str = "\x1b[0m";
 const ANSI_BOLD: &str = "\x1b[1m";
 const ANSI_DIM: &str = "\x1b[2m";
-const ANSI_CYAN: &str = "\x1b[36m";
-const ANSI_GREEN: &str = "\x1b[32m";
-const ANSI_MAGENTA: &str = "\x1b[35m";
 
 pub(crate) struct ExitSummaryData {
     pub total_session_time: Duration,
@@ -24,9 +23,21 @@ pub(crate) fn print_exit_summary(data: ExitSummaryData) {
     let diff = data.code_changes.unwrap_or_default();
     let top_model = top_model(&data.telemetry.model_usage);
 
+    let current_theme = theme::active_theme_id();
+    let is_light = theme::is_light_theme(&current_theme);
+
+    // Ciapre theme colors (RGB)
+    const TITLE_RGB: (u8, u8, u8) = (0xAE, 0xA4, 0x7F); // primary_accent
+    const MODEL_RGB: (u8, u8, u8) = (0xCC, 0x8A, 0x3E); // secondary_accent (yellow/gold)
+    const RESUME_RGB: (u8, u8, u8) = (0x98, 0xBB, 0x74); // green variant
+
+    let title_color = rgb_to_ansi256_for_theme(TITLE_RGB.0, TITLE_RGB.1, TITLE_RGB.2, is_light);
+    let model_color = rgb_to_ansi256_for_theme(MODEL_RGB.0, MODEL_RGB.1, MODEL_RGB.2, is_light);
+    let resume_color = rgb_to_ansi256_for_theme(RESUME_RGB.0, RESUME_RGB.1, RESUME_RGB.2, is_light);
+
     let title = build_title(&data.header_context);
     println!();
-    println!("{ANSI_BOLD}{ANSI_CYAN}{title}{ANSI_RESET}");
+    println!("{ANSI_BOLD}\x1b[38;5;{title_color}m{title}{ANSI_RESET}");
 
     if let Some(ctx) = &data.header_context {
         println!("{ANSI_DIM}{}{ANSI_RESET}", build_trust_line(ctx));
@@ -45,7 +56,7 @@ pub(crate) fn print_exit_summary(data: ExitSummaryData) {
     if let Some((model, stats)) = top_model {
         let p = stats.prompt_tokens + stats.cached_prompt_tokens;
         println!(
-            "{ANSI_DIM}Model: {ANSI_BOLD}{ANSI_MAGENTA}{model}{ANSI_RESET}{ANSI_DIM} | {} | {} in / {} out{ANSI_RESET}",
+            "{ANSI_DIM}Model: {ANSI_BOLD}\x1b[38;5;{model_color}m{model}{ANSI_RESET}{ANSI_DIM} | {} | {} in / {} out{ANSI_RESET}",
             format_duration(stats.api_time),
             format_number(p),
             format_number(stats.completion_tokens)
@@ -53,7 +64,9 @@ pub(crate) fn print_exit_summary(data: ExitSummaryData) {
     }
 
     if let Some(session_id) = data.resume_identifier {
-        println!("{ANSI_DIM}Resume: {ANSI_GREEN}vtcode --resume {session_id}{ANSI_RESET}");
+        println!(
+            "{ANSI_DIM}Resume: \x1b[38;5;{resume_color}mvtcode --resume {session_id}{ANSI_RESET}"
+        );
     }
     println!();
 }

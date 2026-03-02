@@ -3,7 +3,6 @@
 //! This module provides flexible system prompt generation with
 //! template-based composition and context-aware customization.
 
-pub mod agent_profiles;
 pub mod cache_aware;
 pub mod config;
 pub mod context;
@@ -18,7 +17,6 @@ pub mod temporal;
 
 // Re-export main types for backward compatibility
 pub use cache_aware::sort_tool_definitions;
-pub use agent_profiles::get_agent_prompt_body;
 pub use config::SystemPromptConfig;
 pub use context::PromptContext;
 pub use generator::{SystemPromptGenerator, generate_system_instruction_with_config};

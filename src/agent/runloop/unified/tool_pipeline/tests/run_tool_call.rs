@@ -172,7 +172,7 @@ async fn test_run_tool_call_prevalidated_blocks_mutation_in_plan_mode() {
 
     registry.enable_plan_mode();
     registry.plan_mode_state().enable();
-    session_stats.switch_to_planner();
+    session_stats.set_plan_mode(true);
 
     let mut harness_state = build_harness_state();
     let mut ctx = crate::agent::runloop::unified::run_loop_context::RunLoopContext::new(
@@ -250,7 +250,7 @@ async fn test_run_tool_call_prevalidated_allows_task_tracker_in_plan_mode() {
 
     registry.enable_plan_mode();
     registry.plan_mode_state().enable();
-    session_stats.switch_to_planner();
+    session_stats.set_plan_mode(true);
 
     let plans_dir = test_ctx.workspace.join(".vtcode").join("plans");
     std::fs::create_dir_all(&plans_dir).expect("create plans dir");
@@ -334,7 +334,7 @@ async fn test_run_tool_call_non_prevalidated_allows_task_tracker_in_plan_mode_an
 
     registry.enable_plan_mode();
     registry.plan_mode_state().enable();
-    session_stats.switch_to_planner();
+    session_stats.set_plan_mode(true);
 
     let plans_dir = test_ctx.workspace.join(".vtcode").join("plans");
     std::fs::create_dir_all(&plans_dir).expect("create plans dir");
@@ -420,7 +420,7 @@ async fn test_run_tool_call_prevalidated_allows_plan_task_tracker_in_plan_mode()
 
     registry.enable_plan_mode();
     registry.plan_mode_state().enable();
-    session_stats.switch_to_planner();
+    session_stats.set_plan_mode(true);
 
     let plans_dir = test_ctx.workspace.join(".vtcode").join("plans");
     std::fs::create_dir_all(&plans_dir).expect("create plans dir");

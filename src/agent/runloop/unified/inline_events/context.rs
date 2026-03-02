@@ -21,7 +21,6 @@ use super::state::InlineEventState;
 pub(crate) struct InlineEventContext<'a> {
     state: InlineEventState<'a>,
     modal: InlineModalProcessor<'a>,
-    team_active: bool,
 }
 
 impl<'a> InlineEventContext<'a> {
@@ -38,7 +37,6 @@ impl<'a> InlineEventContext<'a> {
         provider_client: &'a mut Box<dyn uni::LLMProvider>,
         session_bootstrap: &'a SessionBootstrap,
         full_auto: bool,
-        team_active: bool,
     ) -> Self {
         let state = InlineEventState::new(renderer, interrupts, ctrl_c_notice_displayed);
         let modal = InlineModalProcessor::new(
@@ -52,11 +50,7 @@ impl<'a> InlineEventContext<'a> {
             full_auto,
         );
 
-        Self {
-            state,
-            modal,
-            team_active,
-        }
+        Self { state, modal }
     }
 
     pub(crate) async fn process_event(
@@ -124,15 +118,9 @@ impl<'a> InlineEventContext<'a> {
             | InlineEvent::HistoryPrevious
             | InlineEvent::HistoryNext => self.input_processor().passive(),
             InlineEvent::ToggleMode => {
-                if self.team_active {
-                    InlineLoopAction::ToggleDelegateMode
-                } else {
-                    // Shift+Tab: Cycle editing modes via /mode command
-                    self.input_processor().submit("/mode".to_string())
-                }
+                // Shift+Tab: Cycle editing modes via /mode command
+                self.input_processor().submit("/mode".to_string())
             }
-            InlineEvent::TeamPrev => InlineLoopAction::SwitchTeammate,
-            InlineEvent::TeamNext => InlineLoopAction::SwitchTeammate,
             InlineEvent::PlanConfirmation(result) => {
                 use vtcode_tui::PlanConfirmationResult;
                 // Handle plan confirmation result (Claude Code style HITL)

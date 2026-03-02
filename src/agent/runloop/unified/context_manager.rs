@@ -18,8 +18,6 @@ pub(crate) struct SystemPromptParams {
     pub full_auto: bool,
     pub plan_mode: bool,
     pub context_window_size: Option<usize>,
-    pub active_agent_name: Option<String>,
-    pub active_agent_prompt: Option<String>,
 }
 
 /// Statistics tracked incrementally to avoid re-scanning history
@@ -283,8 +281,6 @@ impl ContextManager {
             token_usage_ratio,
             full_auto: params.full_auto,
             plan_mode: params.plan_mode,
-            active_agent_name: params.active_agent_name.unwrap_or("coder".to_string()),
-            active_agent_prompt: params.active_agent_prompt,
             discovered_skills: self.loaded_skills.read().await.values().cloned().collect(),
             context_window_size: params.context_window_size,
             current_token_usage: if supports_context_awareness {
