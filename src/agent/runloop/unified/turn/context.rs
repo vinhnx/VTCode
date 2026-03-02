@@ -45,11 +45,13 @@ pub(crate) enum TurnProcessingResult {
         tool_calls: Vec<uni::ToolCall>,
         assistant_text: String,
         reasoning: Vec<ReasoningSegment>,
+        reasoning_details: Option<Vec<String>>,
     },
     /// Turn resulted in a text response
     TextResponse {
         text: String,
         reasoning: Vec<ReasoningSegment>,
+        reasoning_details: Option<Vec<String>>,
         proposed_plan: Option<String>,
     },
     /// Turn resulted in no actionable output
@@ -382,6 +384,7 @@ impl<'a> TurnProcessingContext<'a> {
         &mut self,
         text: String,
         reasoning: Vec<ReasoningSegment>,
+        reasoning_details: Option<Vec<String>>,
         response_streamed: bool,
     ) -> anyhow::Result<()> {
         let mut text = text;
@@ -422,7 +425,7 @@ impl<'a> TurnProcessingContext<'a> {
             .collect::<Vec<_>>()
             .join("\n");
         let msg = uni::Message::assistant(text.clone());
-        let msg_with_reasoning = if !combined_reasoning.is_empty() {
+        let mut msg_with_reasoning = if !combined_reasoning.is_empty() {
             if reasoning_duplicates_content(&combined_reasoning, &text) {
                 msg
             } else {
@@ -432,7 +435,18 @@ impl<'a> TurnProcessingContext<'a> {
             msg
         };
 
-        if !text.is_empty() || msg_with_reasoning.reasoning.is_some() {
+        if let Some(details) = reasoning_details.filter(|d| !d.is_empty()) {
+            let payload = details
+                .into_iter()
+                .map(|detail| parse_reasoning_detail_value(&detail))
+                .collect::<Vec<_>>();
+            msg_with_reasoning = msg_with_reasoning.with_reasoning_details(Some(payload));
+        }
+
+        if !text.is_empty()
+            || msg_with_reasoning.reasoning.is_some()
+            || msg_with_reasoning.reasoning_details.is_some()
+        {
             push_assistant_message(self.working_history, msg_with_reasoning);
         }
 
@@ -443,6 +457,7 @@ impl<'a> TurnProcessingContext<'a> {
         &mut self,
         text: String,
         reasoning: Vec<ReasoningSegment>,
+        reasoning_details: Option<Vec<String>>,
         proposed_plan: Option<String>,
         response_streamed: bool,
     ) -> anyhow::Result<TurnHandlerOutcome> {
@@ -452,7 +467,7 @@ impl<'a> TurnProcessingContext<'a> {
             self.working_history,
             &text,
         );
-        self.handle_assistant_response(text, reasoning, response_streamed)?;
+        self.handle_assistant_response(text, reasoning, reasoning_details, response_streamed)?;
 
         if should_force_continue {
             push_system_directive_once(self.working_history, AUTONOMOUS_CONTINUE_DIRECTIVE);
@@ -561,6 +576,16 @@ fn reasoning_duplicates_content(reasoning: &str, content: &str) -> bool {
     r == c || r.contains(c) || c.contains(r)
 }
 
+fn parse_reasoning_detail_value(detail: &str) -> serde_json::Value {
+    let trimmed = detail.trim();
+    if (trimmed.starts_with('{') || trimmed.starts_with('['))
+        && let Ok(parsed) = serde_json::from_str::<serde_json::Value>(trimmed)
+    {
+        return parsed;
+    }
+    serde_json::Value::String(detail.to_string())
+}
+
 fn push_assistant_message(history: &mut Vec<uni::Message>, msg: uni::Message) {
     if let Some(last) = history.last_mut()
         && last.role == uni::MessageRole::Assistant
@@ -568,6 +593,7 @@ fn push_assistant_message(history: &mut Vec<uni::Message>, msg: uni::Message) {
     {
         last.content = msg.content;
         last.reasoning = msg.reasoning;
+        last.reasoning_details = msg.reasoning_details;
     } else {
         history.push(msg);
     }
@@ -982,5 +1008,33 @@ mod tests {
             &history,
             "Implemented updated syntax highlighting for diff previews.\n\n**Diff preview changes**\n\n```\n@@\n- old\n+ new\n```\n"
         ));
+    }
+
+    #[test]
+    fn parse_reasoning_detail_value_decodes_stringified_json_object() {
+        let parsed =
+            parse_reasoning_detail_value(r#"{"type":"reasoning.text","id":"r1","text":"hello"}"#);
+        assert!(parsed.is_object());
+        assert_eq!(parsed["type"], "reasoning.text");
+    }
+
+    #[test]
+    fn push_assistant_message_preserves_reasoning_details_when_merging() {
+        let mut history = vec![uni::Message::assistant("old".to_string())];
+        let new_msg =
+            uni::Message::assistant("new".to_string()).with_reasoning_details(Some(vec![
+                serde_json::json!({"type":"reasoning.text","text":"trace"}),
+            ]));
+
+        push_assistant_message(&mut history, new_msg);
+
+        assert_eq!(history.len(), 1);
+        assert_eq!(history[0].content.as_text(), "new");
+        assert_eq!(
+            history[0].reasoning_details,
+            Some(vec![
+                serde_json::json!({"type":"reasoning.text","text":"trace"})
+            ])
+        );
     }
 }

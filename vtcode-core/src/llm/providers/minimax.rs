@@ -94,14 +94,15 @@ impl MinimaxProvider {
     fn build_payload(&self, request: &LLMRequest, stream: bool) -> Result<Value, LLMError> {
         let mut messages = Vec::new();
 
-        if let Some(system) = &request.system_prompt {
-            messages.push(serde_json::json!({
-                "role": "system",
-                "content": system
-            }));
-        }
+        // MiniMax's Anthropic-compatible API doesn't support system role in messages
+        // System prompt is handled separately via the system_prompt field in the request
 
         for message in &request.messages {
+            // Skip system messages as MiniMax doesn't support them in the messages array
+            if message.role == MessageRole::System {
+                continue;
+            }
+
             let mut message_obj = serde_json::json!({
                 "role": message.role.as_generic_str(),
                 "content": serialize_message_content_openai_for_role(&message.role, &message.content)
@@ -117,7 +118,7 @@ impl MinimaxProvider {
                         tc.function.as_ref().map(|func| {
                             serde_json::json!({
                                 "id": tc.id,
-                                "type": tc.call_type,
+                                "type": "function",
                                 "function": {
                                     "name": func.name,
                                     "arguments": func.arguments
@@ -129,6 +130,26 @@ impl MinimaxProvider {
 
                 if !tool_calls_json.is_empty() {
                     message_obj["tool_calls"] = Value::Array(tool_calls_json);
+                }
+                tracing::debug!(
+                    target: "minimax",
+                    assistant_message_with_tool_calls = true,
+                    tool_call_count = tool_calls.len(),
+                    tool_call_ids = ?tool_calls.iter().map(|tc| &tc.id).collect::<Vec<_>>(),
+                    "Building assistant message with tool calls"
+                );
+            }
+
+            if message.role == MessageRole::Assistant
+                && let Some(reasoning_details) = &message.reasoning_details
+                && !reasoning_details.is_empty()
+            {
+                let normalized_details: Vec<Value> = reasoning_details
+                    .iter()
+                    .filter_map(normalize_reasoning_detail_for_minimax)
+                    .collect();
+                if !normalized_details.is_empty() {
+                    message_obj["reasoning_details"] = Value::Array(normalized_details);
                 }
             }
 
@@ -143,6 +164,12 @@ impl MinimaxProvider {
                             metadata: None,
                         })?;
                 message_obj["tool_call_id"] = Value::String(tool_call_id.clone());
+                tracing::debug!(
+                    target: "minimax",
+                    tool_result_message = true,
+                    tool_call_id = %tool_call_id,
+                    "Building tool result message"
+                );
             }
 
             messages.push(message_obj);
@@ -153,6 +180,15 @@ impl MinimaxProvider {
             "messages": messages,
             "stream": stream
         });
+
+        // Add system prompt separately (MiniMax supports this in OpenAI-compatible format)
+        if let Some(system) = &request.system_prompt {
+            payload["system_prompt"] = serde_json::json!(system);
+        }
+
+        if should_enable_reasoning_split(&request.model) {
+            payload["reasoning_split"] = Value::Bool(true);
+        }
 
         if let Some(tools) = &request.tools {
             let tools_json: Vec<Value> = tools
@@ -219,6 +255,32 @@ fn normalize_openai_base_url(base_url: &str) -> String {
     }
 
     format!("{trimmed}/v1")
+}
+
+fn should_enable_reasoning_split(model: &str) -> bool {
+    model.to_ascii_lowercase().contains("minimax-m2")
+}
+
+fn normalize_reasoning_detail_for_minimax(detail: &Value) -> Option<Value> {
+    match detail {
+        Value::Object(_) => Some(detail.clone()),
+        Value::String(text) => {
+            let trimmed = text.trim();
+            if trimmed.is_empty() {
+                return None;
+            }
+
+            if (trimmed.starts_with('{') || trimmed.starts_with('['))
+                && let Ok(parsed) = serde_json::from_str::<Value>(trimmed)
+                && parsed.is_object()
+            {
+                return Some(parsed);
+            }
+
+            None
+        }
+        _ => None,
+    }
 }
 
 impl MinimaxProvider {
@@ -364,17 +426,36 @@ impl LLMProvider for MinimaxProvider {
             metadata: None,
         })?;
 
-        // First, check for native reasoning_details field (OpenAI-compatible API format)
-        let native_reasoning = message
+        let native_reasoning_details_json = message
             .get("reasoning_details")
             .and_then(|rd| rd.as_array())
-            .map(|details| {
-                details
-                    .iter()
-                    .filter_map(|d| d.get("text").and_then(|t| t.as_str()))
-                    .collect::<Vec<_>>()
-                    .join("\n\n")
-            });
+            .filter(|details| !details.is_empty());
+
+        // First, check for native reasoning_details field (OpenAI-compatible API format)
+        let native_reasoning = native_reasoning_details_json.and_then(|details| {
+            let joined = details
+                .iter()
+                .filter_map(|d| d.get("text").and_then(|t| t.as_str()))
+                .collect::<Vec<_>>()
+                .join("\n\n");
+            if joined.is_empty() {
+                None
+            } else {
+                Some(joined)
+            }
+        });
+
+        let native_reasoning_details = native_reasoning_details_json.map(|details| {
+            details
+                .iter()
+                .map(|detail| {
+                    detail
+                        .as_str()
+                        .map(ToOwned::to_owned)
+                        .unwrap_or_else(|| detail.to_string())
+                })
+                .collect::<Vec<_>>()
+        });
 
         let content_text = message
             .get("content")
@@ -425,7 +506,7 @@ impl LLMProvider for MinimaxProvider {
             usage,
             finish_reason,
             reasoning,
-            reasoning_details: None,
+            reasoning_details: native_reasoning_details,
             tool_references: Vec::new(),
             request_id: None,
             organization_id: None,
@@ -500,6 +581,12 @@ impl LLMProvider for MinimaxProvider {
                                 }
                             }
 
+                            if let Some(reasoning_details) =
+                                delta.get("reasoning_details").and_then(|v| v.as_array())
+                            {
+                                aggregator.set_reasoning_details(reasoning_details);
+                            }
+
                             // Handle tool calls
                             if let Some(tool_calls) = delta.get("tool_calls").and_then(|v| v.as_array()) {
                                 aggregator.handle_tool_calls(tool_calls);
@@ -562,7 +649,12 @@ impl LLMClient for MinimaxProvider {
 
 #[cfg(test)]
 mod tests {
-    use super::normalize_openai_base_url;
+    use super::{
+        MinimaxProvider, normalize_openai_base_url, normalize_reasoning_detail_for_minimax,
+        should_enable_reasoning_split,
+    };
+    use crate::llm::provider::{LLMRequest, Message};
+    use serde_json::json;
 
     #[test]
     fn normalize_minimax_anthropic_base_to_openai_v1() {
@@ -586,5 +678,70 @@ mod tests {
             normalize_openai_base_url("https://api.minimax.io/v1"),
             "https://api.minimax.io/v1"
         );
+    }
+
+    #[test]
+    fn reasoning_split_enabled_for_m2_models() {
+        assert!(should_enable_reasoning_split("MiniMax-M2.5"));
+        assert!(should_enable_reasoning_split("minimax-m2"));
+        assert!(!should_enable_reasoning_split("MiniMax-Text-01"));
+    }
+
+    #[test]
+    fn payload_preserves_assistant_reasoning_details() {
+        let provider =
+            MinimaxProvider::with_model("test-key".to_string(), "MiniMax-M2.5".to_string());
+        let assistant =
+            Message::assistant("answer".to_string()).with_reasoning_details(Some(vec![json!({
+                "type": "reasoning_content",
+                "text": "chain"
+            })]));
+        let request = LLMRequest {
+            model: "MiniMax-M2.5".to_string(),
+            messages: vec![assistant],
+            ..Default::default()
+        };
+
+        let payload = provider
+            .build_payload(&request, false)
+            .expect("payload should serialize");
+
+        assert_eq!(payload["reasoning_split"], json!(true));
+        let messages = payload["messages"]
+            .as_array()
+            .expect("messages should be an array");
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0]["role"], json!("assistant"));
+        assert!(messages[0]["reasoning_details"].is_array());
+        assert!(messages[0]["reasoning_details"][0].is_object());
+    }
+
+    #[test]
+    fn payload_normalizes_stringified_reasoning_details() {
+        let provider =
+            MinimaxProvider::with_model("test-key".to_string(), "MiniMax-M2.5".to_string());
+        let assistant =
+            Message::assistant("answer".to_string()).with_reasoning_details(Some(vec![json!(
+                r#"{"type":"reasoning.text","id":"r1","text":"chain"}"#
+            )]));
+        let request = LLMRequest {
+            model: "MiniMax-M2.5".to_string(),
+            messages: vec![assistant],
+            ..Default::default()
+        };
+
+        let payload = provider
+            .build_payload(&request, false)
+            .expect("payload should serialize");
+        assert!(payload["messages"][0]["reasoning_details"][0].is_object());
+        assert_eq!(
+            payload["messages"][0]["reasoning_details"][0]["type"],
+            "reasoning.text"
+        );
+    }
+
+    #[test]
+    fn normalize_reasoning_detail_rejects_non_object_strings() {
+        assert!(normalize_reasoning_detail_for_minimax(&json!("plain text")).is_none());
     }
 }

@@ -1,9 +1,9 @@
-# Fix clippy warnings
+# VT Code Agent Reliability Improvement
 
-- [x] Fix question_mark warning in tool_intent.rs
-- [x] Fix vec_init_then_push in palettes.rs
-- [x] Fix too_many_arguments in modal.rs (8 args) - suppressed with #[allow]
-- [x] Fix too_many_arguments in palettes.rs (9 args) - suppressed with #[allow]
-- [x] Fix large_enum_variant warning in palettes.rs - boxed the large variant
-
-All clippy warnings resolved. Build compiles cleanly.
+- [ ] Slice 1: Structured Error Types (vtcode-core/src/error.rs)
+- [ ] Slice 2: Retry Layer (vtcode-core/src/retry.rs)
+- [ ] Slice 3: Circuit Breaker (vtcode-core/src/circuit_breaker.rs)
+- [ ] Slice 4: LLM Provider Resilience (vtcode-llm/)
+- [ ] Slice 5: Tool Execution Hardening (vtcode-tools/)
+- [ ] Slice 6: Integration Tests (tests/reliability_tests.rs)
+- [ ] Slice 7: Observability (vtcode-core/src/metrics.rs)

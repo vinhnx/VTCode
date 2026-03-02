@@ -32,10 +32,12 @@ fn strip_assistant_text(processing_result: TurnProcessingResult) -> TurnProcessi
             tool_calls,
             assistant_text: _,
             reasoning,
+            reasoning_details,
         } => TurnProcessingResult::ToolCalls {
             tool_calls,
             assistant_text: String::new(),
             reasoning,
+            reasoning_details,
         },
         TurnProcessingResult::TextResponse { .. } => TurnProcessingResult::Empty,
         TurnProcessingResult::Empty
@@ -62,14 +64,17 @@ fn maybe_append_plan_mode_reminder(
             tool_calls,
             assistant_text,
             reasoning,
+            reasoning_details,
         } => TurnProcessingResult::ToolCalls {
             tool_calls,
             assistant_text: append_plan_mode_reminder_text(&assistant_text),
             reasoning,
+            reasoning_details,
         },
         TurnProcessingResult::TextResponse {
             text,
             reasoning,
+            reasoning_details,
             proposed_plan,
         } => {
             let reminder_text = if text.trim().is_empty() && proposed_plan.is_some() {
@@ -80,6 +85,7 @@ fn maybe_append_plan_mode_reminder(
             TurnProcessingResult::TextResponse {
                 text: reminder_text,
                 reasoning,
+                reasoning_details,
                 proposed_plan,
             }
         }
@@ -260,28 +266,33 @@ fn inject_plan_mode_interview(
             mut tool_calls,
             assistant_text,
             reasoning,
+            reasoning_details,
         } => {
             tool_calls.push(call);
             TurnProcessingResult::ToolCalls {
                 tool_calls,
                 assistant_text,
                 reasoning,
+                reasoning_details,
             }
         }
         TurnProcessingResult::TextResponse {
             text,
             reasoning,
+            reasoning_details,
             proposed_plan: _,
         } => TurnProcessingResult::ToolCalls {
             tool_calls: vec![call],
             assistant_text: text,
             reasoning,
+            reasoning_details,
         },
         TurnProcessingResult::Empty | TurnProcessingResult::Completed => {
             TurnProcessingResult::ToolCalls {
                 tool_calls: vec![call],
                 assistant_text: String::new(),
                 reasoning: Vec::new(),
+                reasoning_details: None,
             }
         }
         TurnProcessingResult::Cancelled | TurnProcessingResult::Aborted => processing_result,
@@ -306,6 +317,7 @@ fn filter_interview_tool_calls(
         tool_calls,
         assistant_text,
         reasoning,
+        reasoning_details,
     } = processing_result
     else {
         return InterviewToolCallFilter {
@@ -347,11 +359,13 @@ fn filter_interview_tool_calls(
                 tool_calls: Vec::new(),
                 assistant_text,
                 reasoning,
+                reasoning_details,
             }
         } else {
             TurnProcessingResult::TextResponse {
                 text: assistant_text,
                 reasoning,
+                reasoning_details,
                 proposed_plan: None,
             }
         }
@@ -360,6 +374,7 @@ fn filter_interview_tool_calls(
             tool_calls: filtered,
             assistant_text,
             reasoning,
+            reasoning_details,
         }
     };
 

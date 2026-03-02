@@ -369,6 +369,7 @@ pub struct StreamAggregator {
     pub model: String,
     pub content: String,
     pub reasoning: String,
+    pub reasoning_details: Vec<String>,
     pub reasoning_buffer: ReasoningBuffer,
     pub tool_builders: Vec<ToolCallBuilder>,
     pub usage: Option<crate::llm::provider::Usage>,
@@ -382,6 +383,7 @@ impl StreamAggregator {
             model,
             content: String::new(),
             reasoning: String::new(),
+            reasoning_details: Vec::new(),
             reasoning_buffer: ReasoningBuffer::default(),
             tool_builders: Vec::new(),
             usage: None,
@@ -403,6 +405,23 @@ impl StreamAggregator {
             self.reasoning.push_str(d);
         }
         result
+    }
+
+    /// Store structured reasoning details received from streaming deltas.
+    pub fn set_reasoning_details(&mut self, details: &[Value]) {
+        if details.is_empty() {
+            return;
+        }
+
+        self.reasoning_details = details
+            .iter()
+            .map(|detail| {
+                detail
+                    .as_str()
+                    .map(ToOwned::to_owned)
+                    .unwrap_or_else(|| detail.to_string())
+            })
+            .collect();
     }
 
     /// Process tool call deltas.
@@ -450,7 +469,11 @@ impl StreamAggregator {
             } else {
                 Some(self.reasoning)
             },
-            reasoning_details: None,
+            reasoning_details: if self.reasoning_details.is_empty() {
+                None
+            } else {
+                Some(self.reasoning_details)
+            },
             tool_references: Vec::new(),
             request_id: None,
             organization_id: None,

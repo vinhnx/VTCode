@@ -134,6 +134,7 @@ pub(crate) fn process_llm_response(
                 final_text.unwrap_or_default()
             },
             reasoning: split_reasoning_from_text(response.reasoning.as_deref().unwrap_or("")).0,
+            reasoning_details: response.reasoning_details.clone(),
         });
     }
 
@@ -143,6 +144,7 @@ pub(crate) fn process_llm_response(
         return Ok(TurnProcessingResult::TextResponse {
             text,
             reasoning: split_reasoning_from_text(response.reasoning.as_deref().unwrap_or("")).0,
+            reasoning_details: response.reasoning_details.clone(),
             proposed_plan,
         });
     }
@@ -726,6 +728,47 @@ Open questions for alignment:
                 assert_eq!(
                     name,
                     vtcode_core::config::constants::tools::REQUEST_USER_INPUT
+                );
+            }
+            _ => panic!("Expected tool calls"),
+        }
+    }
+
+    #[test]
+    fn process_llm_response_preserves_reasoning_details_for_tool_calls() {
+        let response = LLMResponse {
+            content: Some("".to_string()),
+            tool_calls: Some(vec![vtcode_core::llm::provider::ToolCall::function(
+                "call_1".to_string(),
+                "unified_search".to_string(),
+                r#"{"action":"grep","pattern":"x"}"#.to_string(),
+            )]),
+            model: "test".to_string(),
+            usage: None,
+            finish_reason: FinishReason::ToolCalls,
+            reasoning: None,
+            reasoning_details: Some(vec![
+                r#"{"type":"reasoning_content","text":"trace"}"#.to_string(),
+            ]),
+            tool_references: Vec::new(),
+            request_id: None,
+            organization_id: None,
+        };
+
+        let mut renderer = AnsiRenderer::stdout();
+        let result =
+            process_llm_response(&response, &mut renderer, 0, false, false, true, None, None)
+                .expect("processing should succeed");
+
+        match result {
+            TurnProcessingResult::ToolCalls {
+                reasoning_details, ..
+            } => {
+                assert_eq!(
+                    reasoning_details,
+                    Some(vec![
+                        r#"{"type":"reasoning_content","text":"trace"}"#.to_string()
+                    ])
                 );
             }
             _ => panic!("Expected tool calls"),

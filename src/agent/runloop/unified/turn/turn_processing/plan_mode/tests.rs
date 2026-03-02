@@ -8,6 +8,7 @@ fn maybe_force_plan_mode_interview_inserts_tool_call() {
     let processing_result = TurnProcessingResult::TextResponse {
         text: "Proceeding without explicit questions.".to_string(),
         reasoning: Vec::new(),
+        reasoning_details: None,
         proposed_plan: None,
     };
 
@@ -46,6 +47,7 @@ fn maybe_force_plan_mode_interview_includes_distinct_question_options() {
     let processing_result = TurnProcessingResult::TextResponse {
         text: "Proceeding without explicit questions.".to_string(),
         reasoning: Vec::new(),
+        reasoning_details: None,
         proposed_plan: None,
     };
 
@@ -104,6 +106,7 @@ fn maybe_force_plan_mode_interview_skips_when_questions_present() {
     let processing_result = TurnProcessingResult::TextResponse {
         text: "What should I do next?".to_string(),
         reasoning: Vec::new(),
+        reasoning_details: None,
         proposed_plan: None,
     };
 
@@ -132,6 +135,7 @@ fn maybe_force_plan_mode_interview_marks_shown_when_plan_present() {
     let processing_result = TurnProcessingResult::TextResponse {
         text: "<proposed_plan>\nPlan content\n</proposed_plan>".to_string(),
         reasoning: Vec::new(),
+        reasoning_details: None,
         proposed_plan: None,
     };
 
@@ -164,6 +168,7 @@ fn maybe_force_plan_mode_interview_appends_reminder_when_plan_ready() {
     let processing_result = TurnProcessingResult::TextResponse {
         text: "<proposed_plan>\nPlan content\n</proposed_plan>".to_string(),
         reasoning: Vec::new(),
+        reasoning_details: None,
         proposed_plan: None,
     };
 
@@ -196,6 +201,7 @@ fn maybe_force_plan_mode_interview_does_not_duplicate_reminder() {
     let processing_result = TurnProcessingResult::TextResponse {
         text: text.clone(),
         reasoning: Vec::new(),
+        reasoning_details: None,
         proposed_plan: None,
     };
 
@@ -227,6 +233,7 @@ fn maybe_force_plan_mode_interview_defers_when_tool_calls_present() {
         )],
         assistant_text: String::new(),
         reasoning: Vec::new(),
+        reasoning_details: None,
     };
 
     let result = maybe_force_plan_mode_interview(
@@ -267,6 +274,7 @@ fn maybe_force_plan_mode_interview_strips_interview_from_mixed_tool_calls() {
         ],
         assistant_text: String::new(),
         reasoning: Vec::new(),
+        reasoning_details: None,
     };
 
     let result = maybe_force_plan_mode_interview(
