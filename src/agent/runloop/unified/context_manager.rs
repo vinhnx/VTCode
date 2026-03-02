@@ -44,11 +44,11 @@ struct ContextStats {
 pub enum TokenBudgetStatus {
     /// Below 70% - normal operation
     Normal,
-    /// 70-85% - start preparing for context handoff
+    /// 70-90% - start preparing for context handoff
     Warning,
-    /// 85-90% - active context management needed
+    /// 90-95% - active context management needed
     High,
-    /// Above 90% - immediate action required
+    /// Above 95% - immediate action required
     Critical,
 }
 
@@ -189,8 +189,8 @@ impl ContextManager {
     /// Get token budget status and guidance together (single computation)
     /// Uses thresholds from Anthropic context window documentation:
     /// - 70%: Warning - prepare for handoff
-    /// - 85%: High - active management needed
-    /// - 90%: Critical - immediate action required
+    /// - 90%: High - active management needed
+    /// - 95%: Critical - immediate action required
     pub(crate) fn get_token_budget_status_and_guidance(
         &self,
         context_window_size: usize,

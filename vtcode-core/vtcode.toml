@@ -86,6 +86,9 @@ max_tool_calls_per_turn = 32
 max_tool_wall_clock_secs = 600
 max_tool_retries = 2
 auto_compaction_enabled = false
+# Optional absolute token threshold for Responses server-side compaction.
+# If unset, VT Code derives ~90% of the active model context size.
+# auto_compaction_threshold_tokens = 200000
 
 [agent.circuit_breaker]
 enabled = true

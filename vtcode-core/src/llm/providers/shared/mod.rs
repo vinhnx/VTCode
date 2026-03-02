@@ -1,5 +1,5 @@
 use crate::llm::error_display;
-use crate::llm::provider::{LLMError, LLMResponse, ToolCall};
+use crate::llm::provider::{LLMError, LLMResponse, Message, MessageRole, ToolCall};
 pub use crate::llm::providers::ReasoningBuffer;
 mod tag_sanitizer;
 use crate::llm::providers::split_reasoning_from_text;
@@ -162,6 +162,206 @@ pub fn finalize_tool_calls(builders: Vec<ToolCallBuilder>) -> Option<Vec<ToolCal
         .collect();
 
     if calls.is_empty() { None } else { Some(calls) }
+}
+
+fn append_output_item_text(value: &Value, text: &mut String) {
+    if let Some(part_text) = value.get("text").and_then(Value::as_str) {
+        text.push_str(part_text);
+    }
+    if let Some(part_output) = value.get("output").and_then(Value::as_str) {
+        text.push_str(part_output);
+    }
+    if let Some(refusal) = value.get("refusal").and_then(Value::as_str) {
+        text.push_str(refusal);
+    }
+
+    match value {
+        Value::String(s) => text.push_str(s),
+        Value::Array(parts) => {
+            for part in parts {
+                append_output_item_text(part, text);
+            }
+        }
+        Value::Object(_) => {
+            if let Some(content) = value.get("content") {
+                append_output_item_text(content, text);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn output_item_text(content: &Value) -> String {
+    let mut text = String::new();
+    append_output_item_text(content, &mut text);
+    text
+}
+
+fn parse_function_call_item(item: &Value) -> Option<ToolCall> {
+    let function_obj = item.get("function").and_then(Value::as_object);
+    let name = function_obj
+        .and_then(|f| f.get("name").and_then(Value::as_str))
+        .or_else(|| item.get("name").and_then(Value::as_str))?
+        .to_string();
+
+    let id = item
+        .get("id")
+        .and_then(Value::as_str)
+        .or_else(|| item.get("call_id").and_then(Value::as_str))
+        .filter(|value| !value.is_empty())
+        .unwrap_or("tool_call_compacted")
+        .to_string();
+
+    let arguments_value = function_obj
+        .and_then(|f| f.get("arguments"))
+        .or_else(|| item.get("arguments"));
+    let arguments = arguments_value.map_or_else(
+        || "{}".to_string(),
+        |value| {
+            value
+                .as_str()
+                .map(ToOwned::to_owned)
+                .unwrap_or_else(|| value.to_string())
+        },
+    );
+
+    Some(ToolCall::function(id, name, arguments))
+}
+
+fn parse_message_item(item: &Value) -> Option<Message> {
+    let role = item
+        .get("role")
+        .and_then(Value::as_str)
+        .unwrap_or("assistant");
+    let content_value = item.get("content").unwrap_or(&Value::Null);
+    let content = output_item_text(content_value).trim().to_string();
+
+    let tool_calls: Vec<ToolCall> = content_value
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|part| {
+            let part_type = part.get("type").and_then(Value::as_str).unwrap_or("");
+            if part_type == "function_call" || part_type == "tool_call" {
+                parse_function_call_item(part)
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    let tool_result = content_value
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find_map(|part| {
+            let part_type = part.get("type").and_then(Value::as_str).unwrap_or("");
+            if part_type != "tool_result" {
+                return None;
+            }
+
+            let tool_call_id = part
+                .get("tool_call_id")
+                .and_then(Value::as_str)
+                .or_else(|| item.get("tool_call_id").and_then(Value::as_str))
+                .or_else(|| item.get("call_id").and_then(Value::as_str))
+                .map(ToOwned::to_owned)?;
+
+            let tool_output = output_item_text(part.get("content").unwrap_or(&Value::Null))
+                .trim()
+                .to_string();
+            Some((tool_call_id, tool_output))
+        });
+
+    match role {
+        "system" => Some(Message::system(content)),
+        "developer" => Some(Message::system(content)),
+        "user" => Some(Message::user(content)),
+        "assistant" => {
+            if tool_calls.is_empty() {
+                Some(Message::assistant(content))
+            } else {
+                Some(Message::assistant_with_tools(content, tool_calls))
+            }
+        }
+        "tool" => {
+            if let Some((tool_call_id, tool_output)) = tool_result {
+                return Some(Message::tool_response(tool_call_id, tool_output));
+            }
+
+            let tool_call_id = item
+                .get("tool_call_id")
+                .and_then(Value::as_str)
+                .or_else(|| item.get("call_id").and_then(Value::as_str))
+                .map(ToOwned::to_owned)?;
+            Some(Message::tool_response(tool_call_id, content))
+        }
+        _ => Some(Message {
+            role: MessageRole::Assistant,
+            content: crate::llm::provider::MessageContent::text(content),
+            ..Message::default()
+        }),
+    }
+}
+
+#[inline]
+fn preserve_opaque_item(item: &Value) -> Message {
+    Message::assistant(String::new()).with_reasoning_details(Some(vec![item.clone()]))
+}
+
+/// Convert `/responses/compact` output items into VT Code message history.
+///
+/// Opaque/unmapped items are preserved in `reasoning_details` so they can be
+/// forwarded back to Responses-compatible providers on subsequent turns.
+pub(crate) fn parse_compacted_output_messages(output: &[Value]) -> Vec<Message> {
+    let mut messages = Vec::new();
+
+    for item in output {
+        let item_type = item.get("type").and_then(Value::as_str).unwrap_or("");
+        match item_type {
+            "message" => {
+                if let Some(message) = parse_message_item(item) {
+                    messages.push(message);
+                } else {
+                    messages.push(preserve_opaque_item(item));
+                }
+            }
+            "function_call" | "tool_call" => {
+                if let Some(tool_call) = parse_function_call_item(item) {
+                    messages.push(Message::assistant_with_tools(
+                        String::new(),
+                        vec![tool_call],
+                    ));
+                }
+            }
+            "function_call_output" => {
+                let call_id = item
+                    .get("call_id")
+                    .and_then(Value::as_str)
+                    .or_else(|| item.get("id").and_then(Value::as_str))
+                    .filter(|value| !value.is_empty());
+                if let Some(call_id) = call_id {
+                    let output_text = item
+                        .get("output")
+                        .map(|value| {
+                            value
+                                .as_str()
+                                .map(ToOwned::to_owned)
+                                .unwrap_or_else(|| value.to_string())
+                        })
+                        .unwrap_or_default();
+                    messages.push(Message::tool_response(call_id.to_string(), output_text));
+                } else {
+                    messages.push(preserve_opaque_item(item));
+                }
+            }
+            _ => {
+                messages.push(preserve_opaque_item(item));
+            }
+        }
+    }
+
+    messages
 }
 
 /// Helper to aggregate streaming events and produce a final LLMResponse.
@@ -636,5 +836,87 @@ mod tests {
     fn find_sse_boundary_prefers_newline() {
         let buffer = "data: foo\n\nrest";
         assert_eq!(find_sse_boundary(buffer), Some((9, 2)));
+    }
+
+    #[test]
+    fn parse_compacted_output_messages_keeps_messages() {
+        let output = vec![json!({
+            "type": "message",
+            "role": "assistant",
+            "content": [
+                { "type": "output_text", "text": "Compacted response" }
+            ]
+        })];
+
+        let parsed = parse_compacted_output_messages(&output);
+        assert_eq!(parsed.len(), 1);
+        assert_eq!(parsed[0].role, MessageRole::Assistant);
+        assert_eq!(parsed[0].content.as_text(), "Compacted response");
+    }
+
+    #[test]
+    fn parse_compacted_output_messages_keeps_tool_pairs() {
+        let output = vec![
+            json!({
+                "type": "function_call",
+                "id": "call_1",
+                "name": "shell",
+                "arguments": "{\"command\":\"pwd\"}"
+            }),
+            json!({
+                "type": "function_call_output",
+                "call_id": "call_1",
+                "output": "/tmp/work"
+            }),
+        ];
+
+        let parsed = parse_compacted_output_messages(&output);
+        assert_eq!(parsed.len(), 2);
+        assert_eq!(parsed[0].role, MessageRole::Assistant);
+        assert!(parsed[0].tool_calls.is_some());
+        assert_eq!(parsed[1].role, MessageRole::Tool);
+        assert_eq!(parsed[1].tool_call_id.as_deref(), Some("call_1"));
+    }
+
+    #[test]
+    fn parse_compacted_output_messages_preserves_compaction_items() {
+        let output = vec![json!({
+            "type": "compaction",
+            "encrypted_content": "opaque_state"
+        })];
+
+        let parsed = parse_compacted_output_messages(&output);
+        assert_eq!(parsed.len(), 1);
+        assert_eq!(parsed[0].role, MessageRole::Assistant);
+        let preserved = parsed[0]
+            .reasoning_details
+            .as_ref()
+            .and_then(|items| items.first())
+            .and_then(|item| item.get("type"))
+            .and_then(Value::as_str);
+        assert_eq!(preserved, Some("compaction"));
+    }
+
+    #[test]
+    fn parse_compacted_output_messages_parses_tool_result_messages() {
+        let output = vec![json!({
+            "type": "message",
+            "role": "tool",
+            "content": [
+                {
+                    "type": "tool_result",
+                    "tool_call_id": "call_42",
+                    "content": [
+                        { "type": "output_text", "text": "done" }
+                    ]
+                }
+            ]
+        })];
+
+        let parsed = parse_compacted_output_messages(&output);
+        assert_eq!(parsed.len(), 1);
+        assert_eq!(parsed[0].role, MessageRole::Tool);
+        assert_eq!(parsed[0].tool_call_id.as_deref(), Some("call_42"));
+        assert_eq!(parsed[0].content.as_text(), "done");
     }
 }

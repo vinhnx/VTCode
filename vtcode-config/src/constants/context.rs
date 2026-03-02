@@ -28,12 +28,12 @@ pub const ENTERPRISE_CONTEXT_WINDOW: usize = 500_000;
 pub const TOKEN_BUDGET_WARNING_THRESHOLD: f64 = 0.70;
 
 /// Second warning threshold - active context management needed
-/// At 85% usage: Actively summarize and persist state
-pub const TOKEN_BUDGET_HIGH_THRESHOLD: f64 = 0.85;
+/// At 90% usage: Actively summarize and persist state
+pub const TOKEN_BUDGET_HIGH_THRESHOLD: f64 = 0.90;
 
 /// Critical threshold - immediate action required
-/// At 90% usage: Force context handoff or summary
-pub const TOKEN_BUDGET_CRITICAL_THRESHOLD: f64 = 0.90;
+/// At 95% usage: Force context handoff or summary
+pub const TOKEN_BUDGET_CRITICAL_THRESHOLD: f64 = 0.95;
 
 // =========================================================================
 // Extended Thinking Token Management

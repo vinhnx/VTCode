@@ -239,6 +239,62 @@ pub async fn handle_clear_conversation(
     Ok(SlashCommandControl::Continue)
 }
 
+pub async fn handle_compact_conversation(
+    ctx: SlashCommandContext<'_>,
+) -> Result<SlashCommandControl> {
+    if ctx.conversation_history.is_empty() {
+        ctx.renderer
+            .line(MessageStyle::Info, "No conversation history to compact.")?;
+        return Ok(SlashCommandControl::Continue);
+    }
+
+    if !ctx
+        .provider_client
+        .supports_responses_compaction(&ctx.config.model)
+    {
+        ctx.renderer.line(
+            MessageStyle::Warning,
+            "Compaction is unavailable for this provider/endpoint.",
+        )?;
+        return Ok(SlashCommandControl::Continue);
+    }
+
+    let original_len = ctx.conversation_history.len();
+    let compacted = match vtcode_core::compaction::compact_history(
+        ctx.provider_client.as_ref(),
+        &ctx.config.model,
+        ctx.conversation_history,
+        &vtcode_core::compaction::CompactionConfig::default(),
+    )
+    .await
+    {
+        Ok(history) => history,
+        Err(err) => {
+            ctx.renderer
+                .line(MessageStyle::Error, &format!("Compaction failed: {}", err))?;
+            return Ok(SlashCommandControl::Continue);
+        }
+    };
+
+    if compacted == *ctx.conversation_history {
+        ctx.renderer
+            .line(MessageStyle::Info, "Conversation is already compact.")?;
+        return Ok(SlashCommandControl::Continue);
+    }
+
+    *ctx.conversation_history = compacted;
+    ctx.session_stats.clear_previous_response_chain();
+    ctx.renderer.line(
+        MessageStyle::Info,
+        &format!(
+            "Compacted conversation history ({} -> {} messages).",
+            original_len,
+            ctx.conversation_history.len()
+        ),
+    )?;
+    Ok(SlashCommandControl::Continue)
+}
+
 pub async fn handle_clear_screen(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
     ctx.renderer.clear_screen();
     ctx.renderer.line(

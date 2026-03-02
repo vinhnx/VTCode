@@ -4,7 +4,7 @@ use once_cell::sync::Lazy;
 use rustc_hash::FxHashMap;
 use std::sync::RwLock;
 
-use super::{LLMRequest, LLMResponse, LLMStream, LLMStreamEvent};
+use super::{LLMRequest, LLMResponse, LLMStream, LLMStreamEvent, Message};
 pub use vtcode_commons::llm::{LLMError, LLMErrorMetadata};
 
 /// Cached provider capabilities to reduce repeated trait method calls
@@ -112,6 +112,19 @@ pub trait LLMProvider: Send + Sync {
     fn effective_context_size(&self, _model: &str) -> usize {
         // Default to 128k context window (common baseline)
         128_000
+    }
+
+    /// Compact conversation history using provider-native Responses `/compact`
+    /// support when available.
+    async fn compact_history(
+        &self,
+        _model: &str,
+        _history: &[Message],
+    ) -> Result<Vec<Message>, LLMError> {
+        Err(LLMError::Provider {
+            message: "Conversation compaction is not supported by this provider".to_string(),
+            metadata: None,
+        })
     }
 
     /// Generate completion

@@ -186,7 +186,8 @@
     "switch_edit_mode": "prompt",
     "switch_plan_mode": "prompt",
     "switch_to_edit_mode": "prompt",
-    "switch_to_plan_mode": "prompt"
+    "switch_to_plan_mode": "prompt",
+    "load_skill": "allow"
   },
   "constraints": {},
   "mcp": {

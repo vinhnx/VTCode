@@ -98,6 +98,22 @@ impl provider::LLMProvider for OpenAIProvider {
         self.generate_request(request).await
     }
 
+    async fn compact_history(
+        &self,
+        model: &str,
+        history: &[provider::Message],
+    ) -> Result<Vec<provider::Message>, provider::LLMError> {
+        if !self.supports_responses_compaction(model) {
+            return Err(provider::LLMError::Provider {
+                message: "OpenAI Responses compaction is not supported for this endpoint/model"
+                    .to_string(),
+                metadata: None,
+            });
+        }
+
+        self.compact_history_request(model, history).await
+    }
+
     fn supported_models(&self) -> Vec<String> {
         models::openai::SUPPORTED_MODELS
             .iter()

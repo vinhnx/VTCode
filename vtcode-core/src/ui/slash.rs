@@ -111,6 +111,10 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
             description: "Clear visible screen (usage: /clear [new])",
         },
         SlashCommandInfo {
+            name: "compact",
+            description: "Compact current conversation history for compatible Responses providers (usage: /compact)",
+        },
+        SlashCommandInfo {
             name: "new",
             description: "Start a new session",
         },
@@ -266,7 +270,7 @@ mod tests {
     #[test]
     fn prefix_matches_are_sorted_alphabetically() {
         let names = names_for("c");
-        assert_eq!(names, vec!["clear", "command", "config", "context", "copy"]);
+        assert_eq!(names, vec!["clear", "command", "compact", "config", "copy"]);
     }
 
     #[test]

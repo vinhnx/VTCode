@@ -169,8 +169,8 @@ fn test_token_budget_status_high_threshold() {
         None,
     );
 
-    // Set token usage to 85% (170000/200000)
-    manager.cached_stats.total_token_usage = 170_000;
+    // Set token usage to 90% (180000/200000)
+    manager.cached_stats.total_token_usage = 180_000;
 
     assert_eq!(
         manager.get_token_budget_status(200_000),
@@ -191,8 +191,8 @@ fn test_token_budget_status_critical_threshold() {
         None,
     );
 
-    // Set token usage to 90% (180000/200000)
-    manager.cached_stats.total_token_usage = 180_000;
+    // Set token usage to 95% (190000/200000)
+    manager.cached_stats.total_token_usage = 190_000;
 
     assert_eq!(
         manager.get_token_budget_status(200_000),
@@ -233,13 +233,13 @@ fn test_token_budget_status_and_guidance_together() {
     );
 
     // Test critical threshold
-    manager.cached_stats.total_token_usage = 185_000;
+    manager.cached_stats.total_token_usage = 195_000;
     let (status, guidance) = manager.get_token_budget_status_and_guidance(200_000);
     assert_eq!(status, TokenBudgetStatus::Critical);
     assert!(guidance.contains("CRITICAL"));
 
     // Test high threshold
-    manager.cached_stats.total_token_usage = 175_000;
+    manager.cached_stats.total_token_usage = 185_000;
     let (status, guidance) = manager.get_token_budget_status_and_guidance(200_000);
     assert_eq!(status, TokenBudgetStatus::High);
     assert!(guidance.contains("HIGH"));

@@ -6,9 +6,10 @@ use crate::config::core::{AnthropicConfig, ModelConfig, PromptCachingConfig};
 use crate::llm::error_display;
 use crate::llm::provider::{
     FinishReason, LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent,
-    ToolCall,
+    Message, ToolCall,
 };
 use crate::llm::providers::common::serialize_message_content_openai;
+use crate::llm::providers::shared::parse_compacted_output_messages;
 use anyhow::Result;
 use async_stream::try_stream;
 use async_trait::async_trait;
@@ -28,6 +29,13 @@ pub struct OpenResponsesProvider {
 }
 
 impl OpenResponsesProvider {
+    fn output_item_to_value(item: crate::open_responses::OutputItem) -> Result<Value, LLMError> {
+        serde_json::to_value(item).map_err(|e| LLMError::Provider {
+            message: format!("Failed to serialize Open Responses input item: {e}"),
+            metadata: None,
+        })
+    }
+
     pub fn new(api_key: String) -> Self {
         Self::with_model(api_key, models::openresponses::DEFAULT_MODEL.to_string())
     }
@@ -89,8 +97,84 @@ impl OpenResponsesProvider {
         format!("{}/responses", self.base_url.trim_end_matches('/'))
     }
 
+    fn responses_compact_url(&self) -> String {
+        format!("{}/responses/compact", self.base_url.trim_end_matches('/'))
+    }
+
     fn supports_compaction_endpoint(&self) -> bool {
         self.base_url.contains("api.openai.com") || self.base_url.contains("api.openresponses.com")
+    }
+
+    async fn compact_history_request(
+        &self,
+        model: &str,
+        history: &[Message],
+    ) -> Result<Vec<Message>, LLMError> {
+        let resolved_model = if model.trim().is_empty() {
+            self.model.clone()
+        } else {
+            model.trim().to_string()
+        };
+        let request = LLMRequest {
+            model: resolved_model.clone(),
+            messages: history.to_vec(),
+            ..Default::default()
+        };
+        let native_payload = self.build_native_payload(&request, false)?;
+        let input = native_payload
+            .get("input")
+            .cloned()
+            .unwrap_or_else(|| json!([]));
+        let compact_payload = json!({
+            "model": resolved_model,
+            "input": input,
+        });
+
+        let response = self
+            .http_client
+            .post(self.responses_compact_url())
+            .bearer_auth(&self.api_key)
+            .json(&compact_payload)
+            .send()
+            .await
+            .map_err(|e| format_network_error("OpenResponses", &e))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            let formatted_error = error_display::format_llm_error(
+                "OpenResponses",
+                &format!("Compaction endpoint error (HTTP {}): {}", status, body),
+            );
+            return Err(LLMError::Provider {
+                message: formatted_error,
+                metadata: None,
+            });
+        }
+
+        let json: Value = response
+            .json()
+            .await
+            .map_err(|e| format_parse_error("OpenResponses", &e))?;
+        let output = json
+            .get("output")
+            .and_then(|value| value.as_array())
+            .ok_or_else(|| LLMError::Provider {
+                message:
+                    "Invalid response from OpenResponses compact endpoint: missing output array"
+                        .to_string(),
+                metadata: None,
+            })?;
+
+        let compacted = parse_compacted_output_messages(output);
+        if compacted.is_empty() {
+            return Err(LLMError::Provider {
+                message: "Compaction response contained no reusable messages".to_string(),
+                metadata: None,
+            });
+        }
+
+        Ok(compacted)
     }
 
     fn build_native_payload(&self, request: &LLMRequest, stream: bool) -> Result<Value, LLMError> {
@@ -99,96 +183,116 @@ impl OpenResponsesProvider {
             Request,
         };
 
-        let mut input = Vec::new();
+        let mut input: Vec<Value> = Vec::new();
 
         if let Some(system) = &request.system_prompt {
-            input.push(OutputItem::completed_message(
+            input.push(Self::output_item_to_value(OutputItem::completed_message(
                 "msg_system",
                 MessageRole::System,
                 vec![ContentPart::input_text(system.as_str())],
-            ));
+            ))?);
         }
 
         for (i, message) in request.messages.iter().enumerate() {
+            if let Some(reasoning_details) = &message.reasoning_details {
+                for item in reasoning_details {
+                    input.push(item.clone());
+                }
+            }
+
             let role = match message.role.as_generic_str() {
-                "user" => MessageRole::User,
-                "assistant" => MessageRole::Assistant,
-                "system" => MessageRole::System,
-                _ => MessageRole::User,
+                "user" => Some(MessageRole::User),
+                "assistant" => Some(MessageRole::Assistant),
+                "system" => Some(MessageRole::System),
+                // Tool responses are represented by function_call_output items below.
+                "tool" => None,
+                _ => Some(MessageRole::User),
             };
 
-            let id = format!("msg_{i}");
-            let mut content = Vec::new();
-            match &message.content {
-                crate::llm::provider::MessageContent::Text(text) => {
-                    if !text.trim().is_empty() {
-                        content.push(ContentPart::input_text(text.as_str()));
+            if let Some(role) = role {
+                let id = format!("msg_{i}");
+                let mut content = Vec::new();
+                match &message.content {
+                    crate::llm::provider::MessageContent::Text(text) => {
+                        if !text.trim().is_empty() {
+                            content.push(ContentPart::input_text(text.as_str()));
+                        }
                     }
-                }
-                crate::llm::provider::MessageContent::Parts(parts) => {
-                    for part in parts {
-                        match part {
-                            crate::llm::provider::ContentPart::Text { text } => {
-                                if !text.trim().is_empty() {
-                                    content.push(ContentPart::input_text(text.as_str()));
+                    crate::llm::provider::MessageContent::Parts(parts) => {
+                        for part in parts {
+                            match part {
+                                crate::llm::provider::ContentPart::Text { text } => {
+                                    if !text.trim().is_empty() {
+                                        content.push(ContentPart::input_text(text.as_str()));
+                                    }
                                 }
-                            }
-                            crate::llm::provider::ContentPart::Image {
-                                data, mime_type, ..
-                            } => {
-                                content.push(ContentPart::InputImage(InputImageContent {
-                                    image_url: format!("data:{};base64,{}", mime_type, data),
-                                    detail: ImageDetail::Auto,
-                                }));
-                            }
-                            crate::llm::provider::ContentPart::File {
-                                filename,
-                                file_id,
-                                file_data,
-                                file_url,
-                                ..
-                            } => {
-                                content.push(ContentPart::InputFile(InputFileContent {
-                                    filename: filename.clone(),
-                                    file_id: file_id.clone(),
-                                    file_data: file_data.clone(),
-                                    file_url: file_url.clone(),
-                                }));
+                                crate::llm::provider::ContentPart::Image {
+                                    data,
+                                    mime_type,
+                                    ..
+                                } => {
+                                    content.push(ContentPart::InputImage(InputImageContent {
+                                        image_url: format!("data:{};base64,{}", mime_type, data),
+                                        detail: ImageDetail::Auto,
+                                    }));
+                                }
+                                crate::llm::provider::ContentPart::File {
+                                    filename,
+                                    file_id,
+                                    file_data,
+                                    file_url,
+                                    ..
+                                } => {
+                                    content.push(ContentPart::InputFile(InputFileContent {
+                                        filename: filename.clone(),
+                                        file_id: file_id.clone(),
+                                        file_data: file_data.clone(),
+                                        file_url: file_url.clone(),
+                                    }));
+                                }
                             }
                         }
                     }
                 }
+                if content.is_empty() {
+                    let content_text = message.content.as_text();
+                    if !content_text.trim().is_empty() {
+                        content.push(ContentPart::input_text(content_text.to_string()));
+                    }
+                }
+                if !content.is_empty() {
+                    input.push(Self::output_item_to_value(OutputItem::completed_message(
+                        id, role, content,
+                    ))?);
+                }
             }
-            if content.is_empty() {
-                content.push(ContentPart::input_text(message.content.as_text()));
-            }
-
-            input.push(OutputItem::completed_message(id, role, content));
 
             // Handle tool calls and outputs if present in message history
             if let Some(tool_calls) = &message.tool_calls {
                 for (j, tc) in tool_calls.iter().enumerate() {
                     if let Some(f) = &tc.function {
-                        input.push(OutputItem::function_call(
+                        input.push(Self::output_item_to_value(OutputItem::function_call(
                             format!("fc_{i}_{j}"),
                             &f.name,
                             serde_json::from_str(&f.arguments).unwrap_or(Value::Null),
-                        ));
+                        ))?);
                     }
                 }
             }
 
             if let Some(tool_call_id) = &message.tool_call_id {
                 // If this message is a tool output, add it as FunctionCallOutput
-                input.push(OutputItem::completed_function_call_output(
-                    format!("fco_{i}"),
-                    Some(tool_call_id.clone()),
-                    message.content.as_text(),
-                ));
+                input.push(Self::output_item_to_value(
+                    OutputItem::completed_function_call_output(
+                        format!("fco_{i}"),
+                        Some(tool_call_id.clone()),
+                        message.content.as_text(),
+                    ),
+                )?);
             }
         }
 
-        let mut req = Request::new(&request.model, input);
+        let mut req = Request::new(&request.model, Vec::new());
         req.stream = stream;
         req.temperature = request.temperature.map(|t| t as f64);
         req.max_output_tokens = request.max_tokens.map(|t| t as u64);
@@ -220,6 +324,9 @@ impl OpenResponsesProvider {
             message: format!("Failed to serialize Open Responses request: {e}"),
             metadata: None,
         })?;
+        if let Some(map) = payload.as_object_mut() {
+            map.insert("input".to_string(), Value::Array(input));
+        }
 
         if let Some(context_management) = &request.context_management
             && let Some(map) = payload.as_object_mut()
@@ -506,6 +613,23 @@ impl LLMProvider for OpenResponsesProvider {
 
     fn supports_responses_compaction(&self, _model: &str) -> bool {
         self.supports_compaction_endpoint()
+    }
+
+    async fn compact_history(
+        &self,
+        model: &str,
+        history: &[Message],
+    ) -> Result<Vec<Message>, LLMError> {
+        if !self.supports_compaction_endpoint() {
+            return Err(LLMError::Provider {
+                message:
+                    "OpenResponses compact endpoint is not supported for this configured base URL"
+                        .to_string(),
+                metadata: None,
+            });
+        }
+
+        self.compact_history_request(model, history).await
     }
 
     fn supported_models(&self) -> Vec<String> {
@@ -805,7 +929,7 @@ mod tests {
         let provider = test_provider("https://api.openresponses.com/v1");
         let mut request = LLMRequest {
             model: "gpt-5".to_string(),
-            messages: vec![crate::llm::provider::Message::user("hello".to_string())],
+            messages: vec![Message::user("hello".to_string())],
             ..Default::default()
         };
         request.previous_response_id = Some("resp_prev_1".to_string());
@@ -836,7 +960,7 @@ mod tests {
         let provider = test_provider("https://api.openresponses.com/v1");
         let mut request = LLMRequest {
             model: "gpt-5".to_string(),
-            messages: vec![crate::llm::provider::Message::user("hello".to_string())],
+            messages: vec![Message::user("hello".to_string())],
             ..Default::default()
         };
         request.context_management = Some(serde_json::json!([{
@@ -864,5 +988,82 @@ mod tests {
     fn openresponses_provider_disables_compaction_for_unknown_endpoint() {
         let provider = test_provider("https://api.example.com/v1");
         assert!(!provider.supports_responses_compaction("gpt-5"));
+    }
+
+    #[test]
+    fn native_payload_preserves_opaque_reasoning_details_items() {
+        let provider = test_provider("https://api.openresponses.com/v1");
+        let message = Message::assistant(String::new()).with_reasoning_details(Some(vec![json!({
+            "type": "compaction",
+            "id": "cmp_1",
+            "status": "completed",
+            "encrypted_content": "opaque_state"
+        })]));
+        let request = LLMRequest {
+            model: "gpt-5".to_string(),
+            messages: vec![message],
+            ..Default::default()
+        };
+
+        let payload = provider
+            .build_native_payload(&request, false)
+            .expect("native payload should serialize");
+        let input = payload
+            .get("input")
+            .and_then(Value::as_array)
+            .expect("input should be an array");
+
+        assert_eq!(input.len(), 1);
+        assert_eq!(
+            input[0].get("type").and_then(Value::as_str),
+            Some("compaction")
+        );
+        assert_eq!(
+            input[0].get("encrypted_content").and_then(Value::as_str),
+            Some("opaque_state")
+        );
+    }
+
+    #[test]
+    fn native_payload_emits_tool_response_only_as_function_call_output() {
+        let provider = test_provider("https://api.openresponses.com/v1");
+        let request = LLMRequest {
+            model: "gpt-5".to_string(),
+            messages: vec![
+                Message::assistant_with_tools(
+                    String::new(),
+                    vec![ToolCall::function(
+                        "call_1".to_string(),
+                        "shell".to_string(),
+                        "{\"command\":\"pwd\"}".to_string(),
+                    )],
+                ),
+                Message::tool_response("call_1".to_string(), "/tmp/work".to_string()),
+            ],
+            ..Default::default()
+        };
+
+        let payload = provider
+            .build_native_payload(&request, false)
+            .expect("native payload should serialize");
+        let input = payload
+            .get("input")
+            .and_then(Value::as_array)
+            .expect("input should be an array");
+
+        assert!(input.iter().any(|item| {
+            item.get("type").and_then(Value::as_str) == Some("function_call_output")
+                && item.get("call_id").and_then(Value::as_str) == Some("call_1")
+        }));
+        assert!(!input.iter().any(|item| {
+            item.get("type").and_then(Value::as_str) == Some("message")
+                && item.get("role").and_then(Value::as_str) == Some("user")
+                && item
+                    .get("content")
+                    .and_then(Value::as_array)
+                    .into_iter()
+                    .flatten()
+                    .any(|part| part.get("text").and_then(Value::as_str) == Some("/tmp/work"))
+        }));
     }
 }

@@ -7,6 +7,7 @@ use std::time::{Duration, Instant};
 use tokio::task;
 #[cfg(debug_assertions)]
 use tracing::debug;
+use vtcode_config::constants::context::TOKEN_BUDGET_HIGH_THRESHOLD;
 use vtcode_config::constants::defaults::{DEFAULT_MAX_CONVERSATION_TURNS, DEFAULT_MAX_TOOL_LOOPS};
 use vtcode_config::context::default_max_context_tokens;
 use vtcode_core::config::OpenAIPromptCacheKeyMode;
@@ -118,6 +119,26 @@ fn compact_tool_messages_for_retry(messages: &[uni::Message]) -> Vec<uni::Messag
     } else {
         compacted
     }
+}
+
+fn resolve_compaction_threshold(
+    configured_threshold: Option<u64>,
+    context_size: usize,
+) -> Option<u64> {
+    let configured_threshold = configured_threshold.filter(|threshold| *threshold > 0);
+    let derived_threshold = if context_size > 0 {
+        Some(((context_size as f64) * TOKEN_BUDGET_HIGH_THRESHOLD).round() as u64)
+    } else {
+        None
+    };
+
+    configured_threshold.or(derived_threshold).map(|threshold| {
+        let mut threshold = threshold.max(1);
+        if context_size > 0 {
+            threshold = threshold.min(context_size as u64);
+        }
+        threshold
+    })
 }
 
 fn llm_attempt_timeout_secs(turn_timeout_secs: u64, plan_mode: bool, provider_name: &str) -> u64 {
@@ -456,21 +477,24 @@ pub(crate) async fn execute_llm_request(
         None
     };
     let context_management = {
-        let auto_compaction_enabled = ctx
-            .vt_cfg
-            .map(|cfg| cfg.agent.harness.auto_compaction_enabled)
+        let harness_config = ctx.vt_cfg.map(|cfg| &cfg.agent.harness);
+        let auto_compaction_enabled = harness_config
+            .map(|cfg| cfg.auto_compaction_enabled)
             .unwrap_or(false);
-        let supports_server_compaction = supports_responses_chaining(&provider_name)
-            && ctx
-                .provider_client
-                .supports_responses_compaction(active_model);
+        let supports_server_compaction = ctx
+            .provider_client
+            .supports_responses_compaction(active_model);
         if auto_compaction_enabled && supports_server_compaction {
             let context_size = ctx.provider_client.effective_context_size(active_model);
-            if context_size > 0 {
-                let compact_threshold = ((context_size as f64) * 0.85).round() as u64;
+            let configured_threshold =
+                harness_config.and_then(|cfg| cfg.auto_compaction_threshold_tokens);
+
+            if let Some(compact_threshold) =
+                resolve_compaction_threshold(configured_threshold, context_size)
+            {
                 Some(json!([{
                     "type": "compaction",
-                    "compact_threshold": compact_threshold.max(1),
+                    "compact_threshold": compact_threshold,
                 }]))
             } else {
                 None
@@ -998,6 +1022,29 @@ mod tests {
     #[test]
     fn llm_retry_attempts_respects_upper_bound() {
         assert_eq!(llm_retry_attempts(Some(16)), MAX_LLM_RETRY_ATTEMPTS);
+    }
+
+    #[test]
+    fn resolve_compaction_threshold_prefers_configured_value() {
+        assert_eq!(resolve_compaction_threshold(Some(42), 200_000), Some(42));
+    }
+
+    #[test]
+    fn resolve_compaction_threshold_uses_context_ratio_when_unset() {
+        assert_eq!(resolve_compaction_threshold(None, 200_000), Some(180_000));
+    }
+
+    #[test]
+    fn resolve_compaction_threshold_clamps_to_context_size() {
+        assert_eq!(
+            resolve_compaction_threshold(Some(300_000), 200_000),
+            Some(200_000)
+        );
+    }
+
+    #[test]
+    fn resolve_compaction_threshold_requires_context_or_override() {
+        assert_eq!(resolve_compaction_threshold(None, 0), None);
     }
 
     #[test]

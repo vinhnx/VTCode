@@ -65,6 +65,7 @@ pub enum SlashCommandOutcome {
     },
     ClearScreen,
     ClearConversation,
+    CompactConversation,
     CopyLatestAssistantReply,
     ShowStatus,
     ManageMcp {
@@ -331,6 +332,13 @@ pub async fn handle_slash_command(
                 Ok(SlashCommandOutcome::Handled)
             }
         },
+        "compact" | "context" => {
+            if !args.is_empty() {
+                renderer.line(MessageStyle::Error, "Usage: /compact")?;
+                return Ok(SlashCommandOutcome::Handled);
+            }
+            Ok(SlashCommandOutcome::CompactConversation)
+        }
         "copy" => {
             if !args.is_empty() {
                 renderer.line(MessageStyle::Error, "Usage: /copy")?;

@@ -241,6 +241,11 @@ pub struct AgentHarnessConfig {
     /// Disabled by default. When disabled, no automatic compaction is triggered.
     #[serde(default = "default_harness_auto_compaction_enabled")]
     pub auto_compaction_enabled: bool,
+    /// Optional absolute compact threshold (tokens) for Responses server-side compaction.
+    ///
+    /// When unset, VT Code derives a threshold from the provider context window.
+    #[serde(default)]
+    pub auto_compaction_threshold_tokens: Option<u64>,
     /// Optional JSONL event log path for harness events
     #[serde(default)]
     pub event_log_path: Option<String>,
@@ -253,6 +258,7 @@ impl Default for AgentHarnessConfig {
             max_tool_wall_clock_secs: default_harness_max_tool_wall_clock_secs(),
             max_tool_retries: default_harness_max_tool_retries(),
             auto_compaction_enabled: default_harness_auto_compaction_enabled(),
+            auto_compaction_threshold_tokens: None,
             event_log_path: None,
         }
     }

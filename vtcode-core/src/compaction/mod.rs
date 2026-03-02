@@ -1,10 +1,14 @@
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use std::fmt::Write;
+use vtcode_config::constants::context::TOKEN_BUDGET_HIGH_THRESHOLD;
 
 use crate::llm::provider::{LLMProvider, LLMRequest, Message, MessageRole};
 
 pub mod summarizer;
+
+const DEFAULT_COMPACTION_TARGET_THRESHOLD: f64 = 0.50;
+const DEFAULT_COMPACTION_KEEP_LAST_MESSAGES: usize = 10;
 
 /// Compaction configuration for context window management.
 #[derive(Debug, Clone)]
@@ -22,11 +26,11 @@ pub struct CompactionConfig {
 impl Default for CompactionConfig {
     fn default() -> Self {
         Self {
-            trigger_threshold: 0.85,
-            target_threshold: 0.50,
+            trigger_threshold: TOKEN_BUDGET_HIGH_THRESHOLD,
+            target_threshold: DEFAULT_COMPACTION_TARGET_THRESHOLD,
             summary_prompt: "Summarize the conversation so far. Preserve decisions, file paths, commands, TODOs, and open questions. Keep it concise but actionable."
                 .to_string(),
-            keep_last_messages: 10,
+            keep_last_messages: DEFAULT_COMPACTION_KEEP_LAST_MESSAGES,
         }
     }
 }
@@ -40,6 +44,13 @@ pub async fn compact_history(
 ) -> Result<Vec<Message>> {
     if history.len() <= config.keep_last_messages {
         return Ok(history.to_vec());
+    }
+
+    if provider.supports_responses_compaction(model) {
+        return provider
+            .compact_history(model, history)
+            .await
+            .context("Failed to compact history via Responses compact endpoint");
     }
 
     let summary_prompt = build_summary_prompt(history, &config.summary_prompt);

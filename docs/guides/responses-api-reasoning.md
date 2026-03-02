@@ -53,11 +53,13 @@ VT Code already routes GPT-5.1 (Codex) and other reasoning-focused models throug
 
 8. **Reasoning visibility**: When troubleshooting, inspect `.vtcode/logs/trajectory.jsonl` for `reasoning` or `reasoning_summary` entries. The agent’s telemetry also logs `reasoning_effort` (see the inline status line guide) so you can correlate agent decisions with expectation-aligned reasoning levels.
 
-9. **Auto-compaction setting**: Auto compaction is disabled by default. Turn it on explicitly:
+9. **Auto-compaction settings**: Auto compaction is disabled by default. Turn it on explicitly:
 
     ```toml
     [agent.harness]
     auto_compaction_enabled = true
+    # Optional explicit threshold; if omitted VT Code uses ~90% of model context.
+    auto_compaction_threshold_tokens = 200000
     ```
 
     VT Code applies this only on compatible Responses providers/endpoints.

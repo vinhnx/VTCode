@@ -278,7 +278,7 @@ pub(crate) async fn run_doctor_diagnostics(
     )?;
     renderer.line(
         MessageStyle::Info,
-        "[TIP] For more details: `/skills list` (available skills), `/status` (session), `/context` (memory)",
+        "[TIP] For more details: `/skills list` (available skills), `/status` (session), `/compact` (conversation compaction)",
     )?;
     renderer.line(
         MessageStyle::Info,

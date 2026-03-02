@@ -3,6 +3,7 @@ use super::super::errors::{
     is_responses_api_unsupported,
 };
 use super::super::headers;
+use super::super::responses_api::build_standard_responses_payload;
 use super::super::types::ResponsesApiState;
 use super::OpenAIProvider;
 use super::websocket::is_websocket_connection_limit_error;
@@ -10,7 +11,8 @@ use crate::llm::error_display;
 use crate::llm::provider;
 use crate::llm::provider::LLMProvider;
 use crate::llm::providers::error_handling::is_rate_limit_error;
-use serde_json::Value;
+use crate::llm::providers::shared::parse_compacted_output_messages;
+use serde_json::{Value, json};
 use tracing::debug;
 
 #[cfg(debug_assertions)]
@@ -22,6 +24,106 @@ fn should_attempt_responses_api(state: ResponsesApiState) -> bool {
 }
 
 impl OpenAIProvider {
+    pub(crate) async fn compact_history_request(
+        &self,
+        model: &str,
+        history: &[provider::Message],
+    ) -> Result<Vec<provider::Message>, provider::LLMError> {
+        let resolved_model = if model.trim().is_empty() {
+            self.model.to_string()
+        } else {
+            model.trim().to_string()
+        };
+
+        let request = provider::LLMRequest {
+            model: resolved_model.clone(),
+            messages: history.to_vec(),
+            ..Default::default()
+        };
+        let responses_payload = build_standard_responses_payload(&request)?;
+        if responses_payload.input.is_empty() {
+            return Ok(history.to_vec());
+        }
+
+        let mut compact_payload = json!({
+            "model": resolved_model,
+            "input": responses_payload.input,
+        });
+        if let Some(instructions) = responses_payload.instructions
+            && let Value::Object(ref mut map) = compact_payload
+        {
+            map.insert("instructions".to_string(), json!(instructions));
+        }
+        let url = format!("{}/responses/compact", self.base_url);
+
+        let response = headers::apply_responses_beta(self.authorize(self.http_client.post(&url)))
+            .json(&compact_payload)
+            .send()
+            .await
+            .map_err(|e| {
+                let formatted_error =
+                    error_display::format_llm_error("OpenAI", &format!("Network error: {}", e));
+                provider::LLMError::Network {
+                    message: formatted_error,
+                    metadata: None,
+                }
+            })?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response.text().await.unwrap_or_default();
+            let formatted_error = error_display::format_llm_error(
+                "OpenAI",
+                &format!(
+                    "Compaction endpoint error (HTTP {}): {}",
+                    status, error_text
+                ),
+            );
+            return Err(provider::LLMError::Provider {
+                message: formatted_error,
+                metadata: None,
+            });
+        }
+
+        let response_json: Value = response.json().await.map_err(|e| {
+            let formatted_error = error_display::format_llm_error(
+                "OpenAI",
+                &format!("Failed to parse compaction response: {}", e),
+            );
+            provider::LLMError::Provider {
+                message: formatted_error,
+                metadata: None,
+            }
+        })?;
+        let output = response_json
+            .get("output")
+            .and_then(|value| value.as_array())
+            .ok_or_else(|| {
+                let formatted_error = error_display::format_llm_error(
+                    "OpenAI",
+                    "Invalid compaction response format: missing output array",
+                );
+                provider::LLMError::Provider {
+                    message: formatted_error,
+                    metadata: None,
+                }
+            })?;
+
+        let compacted = parse_compacted_output_messages(output);
+        if compacted.is_empty() {
+            let formatted_error = error_display::format_llm_error(
+                "OpenAI",
+                "Compaction response contained no reusable messages",
+            );
+            return Err(provider::LLMError::Provider {
+                message: formatted_error,
+                metadata: None,
+            });
+        }
+
+        Ok(compacted)
+    }
+
     pub(crate) async fn generate_request(
         &self,
         request: provider::LLMRequest,
