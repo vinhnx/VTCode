@@ -69,54 +69,11 @@ DRY and KISS
 
 ---
 
-improve agent's postamlbe summarization. reference and also suggest next actions based on the summary. This will help users quickly understand the outcome of the agent's actions and what they can do next. And for the agent itself.
-
-```
-• Implemented. I tightened theme color distribution and readability logic across
-  both vtcode-tui and vtcode-core.
-
-  - Added luminance balancing for rendered text/accent styles (foreground,
-    primary, secondary, user, response, reasoning, alert) relative to background:
-      - vtcode-tui/src/ui/theme.rs:118:118
-      - vtcode-core/src/ui/theme.rs:118:118
-  - Added explicit luminance adjustment helpers:
-      - vtcode-tui/src/ui/theme.rs:1414:1414
-      - vtcode-core/src/ui/theme.rs:1373:1373
-  - Strengthened ensure_contrast with final black/white high-contrast fallback so
-    accessibility floor is always met:
-      - vtcode-tui/src/ui/theme.rs:1450:1450
-      - vtcode-core/src/ui/theme.rs:1409:1409
-  - Added full-theme regression tests to enforce contrast + readability bounds
-    across all registered themes:
-      - vtcode-tui/src/ui/theme.rs:1781:1781
-      - vtcode-core/src/ui/theme.rs:1726:1726
-
-  Validation run:
-  - cargo check -p vtcode-core passed
-  - cargo test -p vtcode-tui
-    ui::theme::tests::test_all_themes_have_readable_foreground_and_accents --
-    --nocapture passed
-
-  Note:
-
-  - I also noticed an unrelated local config change in vtcode.toml (theme changed
-    to ciapre). I left it untouched.
-    ``
-```
-
-the goal is to provide users with a clear and concise summary of the agent's actions, including any relevant metrics such as API usage, time spent, and code changes. Additionally, the summary should suggest next steps for the user to take based on the outcome of the agent's actions. This could include options to resume the session, view detailed logs, or take specific actions based on the results of the agent's work. The postamble summarization should be designed to help users quickly understand the results of their interactions with the agent and guide them towards meaningful next steps. The tone should be informative and actionable, providing users with the information they need to make informed decisions about how to proceed after the agent has completed its tasks. Not too verbose, but comprehensive enough to cover the key outcomes and next steps. Not too blunt, but clear and concise.
-
----
-
 Conduct a comprehensive review and enhancement of error handling and recovery mechanisms within the agent loop, with particular emphasis on tool call operations. Implement a multi-layered error handling strategy that includes retry logic with exponential backoff for transient failures such as network timeouts, rate limiting, and temporary service unavailability while implementing fail-fast behavior for non-recoverable errors including authentication failures, invalid parameters, and permission denied scenarios. Develop and integrate a robust state management system that ensures the agent can maintain consistent internal state during and after error occurrences, including proper rollback mechanisms for partial operations and transaction-like semantics where appropriate. Create a comprehensive error categorization system that distinguishes between retryable and non-retryable errors and implements appropriate handling strategies for each category. Enhance user-facing error messages to be clear, actionable, and informative while avoiding technical jargon that may confuse end users. Implement proper logging at multiple levels including debug, info, warning, and error levels to facilitate troubleshooting and monitoring. Conduct a thorough audit of existing error handling implementations to identify gaps, inconsistencies, and potential failure points. Refactor the error handling code to improve modularity, testability, and maintainability while ensuring comprehensive test coverage for error scenarios including edge cases and unexpected inputs. Add appropriate circuit breaker patterns for external service calls to prevent cascading failures and enable graceful degradation when dependent services are unavailable. Implement proper resource cleanup and resource leak prevention throughout the agent loop.
 
 ---
 
 check src/agent/runloop/unified/turn module Analyze the agent harness codebase focusing on the runloop, unified, turn, and tool_outcomes components to identify performance bottlenecks, inefficiencies, and optimization opportunities. Perform a comprehensive review of data flow and control flow through these components, examining how tool calls are executed, how outcomes are processed, and how turn execution manages state and sequencing. Evaluate whether the current implementation maximizes parallelism where possible, minimizes blocking operations, and maintains efficient memory usage patterns. Identify any redundant computational steps, unnecessary data transformations, or algorithmic inefficiencies that degrade performance. Assess the current error handling mechanisms for robustness, examining exception propagation paths, retry logic, and failure recovery procedures to ensure they do not introduce excessive latency or create cascading failure scenarios. Examine the design of core data structures used throughout these components for optimal access patterns, memory efficiency, and scalability characteristics. Provide specific, actionable recommendations for refactoring code to reduce complexity, implementing caching where appropriate to avoid redundant computation, optimizing hot path execution, and improving the overall responsiveness and throughput of the agent harness. Your analysis should include concrete code-level suggestions with estimated impact on performance metrics and potential tradeoffs to consider when implementing optimizations.
-
---
-
-https://zed.dev/blog/split-diffs
 
 ---
 
