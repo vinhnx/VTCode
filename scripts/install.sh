@@ -22,20 +22,67 @@ normalize_version() {
 
 # Download with curl or wget
 download() {
+    url="$1"
+    output="$2"
+    
     if command -v curl >/dev/null 2>&1; then
-        curl -fsSL "$1" -o "$2"
+        # Use -f to fail on HTTP errors, -L to follow redirects
+        if curl -fSL --connect-timeout 10 --max-time 120 "$url" -o "$output" 2>/dev/null; then
+            return 0
+        fi
     elif command -v wget >/dev/null 2>&1; then
-        wget -q -O "$2" "$1"
+        if wget -q --timeout=10 "$url" -O "$output" 2>/dev/null; then
+            return 0
+        fi
     else
         die "curl or wget is required"
     fi
+    
+    # Check if URL returns 404 (invalid version or platform)
+    if curl -fsIL --connect-timeout 10 "$url" 2>/dev/null | grep -q "404"; then
+        die "Version not found: $resolved_version for platform $platform\nCheck available releases: https://github.com/vinhnx/vtcode/releases"
+    fi
+    
+    die "Failed to download from $url"
 }
 
 fetch_latest_version() {
-    release_json=$(curl -fsSL "https://api.github.com/repos/vinhnx/vtcode/releases/latest")
-    version=$(echo "$release_json" | sed -n 's/.*"tag_name":[[:space:]]*"v\([^"]*\)".*/\1/p' | head -n 1)
-    [ -z "$version" ] && die "Failed to fetch latest version"
-    echo "$version"
+    # Try to fetch from GitHub API with retry logic
+    attempt=1
+    max_attempts=3
+    
+    while [ $attempt -le $max_attempts ]; do
+        # Use GitHub API to get latest release
+        release_json=$(curl -fsSL --connect-timeout 10 --max-time 30 \
+            "https://api.github.com/repos/vinhnx/vtcode/releases/latest" 2>/dev/null) || true
+        
+        # Try multiple parsing methods (jq preferred, then grep/sed fallback)
+        if command -v jq >/dev/null 2>&1; then
+            version=$(echo "$release_json" | jq -r '.tag_name // empty' 2>/dev/null | sed 's/^v//')
+        else
+            # Fallback: grep for tag_name field, extract version
+            version=$(echo "$release_json" | grep -o '"tag_name"[[:space:]]*:[[:space:]]*"v[^"]*"' \
+                | head -1 | sed 's/.*"v//' | tr -d '"' | tr -d ' ')
+        fi
+        
+        # Validate version format (should be like "0.85.2")
+        if [ -n "$version" ] && echo "$version" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+'; then
+            echo "$version"
+            return 0
+        fi
+        
+        # Check for rate limiting
+        if echo "$release_json" | grep -q "rate limit"; then
+            [ $attempt -lt $max_attempts ] && step "Rate limited, retrying in 2s... ($attempt/$max_attempts)"
+        else
+            [ $attempt -lt $max_attempts ] && step "Retrying... ($attempt/$max_attempts)"
+        fi
+        
+        attempt=$((attempt + 1))
+        [ $attempt -le $max_attempts ] && sleep 2
+    done
+    
+    die "Failed to fetch latest version from GitHub API. Try specifying a version: bash install.sh v0.85.2"
 }
 
 # Detect platform
@@ -51,10 +98,10 @@ get_platform() {
     
     case "$arch" in
         x86_64 | amd64) arch_name="x86_64" ;;
-        arm64 | aarch64) 
+        arm64 | aarch64)
             arch_name="aarch64"
             # Detect Rosetta 2 on macOS Intel
-            if [ "$os" = "darwin" ] && [ "$(sysctl -n sysctl.proc_translated 2>/dev/null || true)" = "1" ]; then
+            if [ "$os_name" = "apple-darwin" ] && [ "$(sysctl -n sysctl.proc_translated 2>/dev/null || true)" = "1" ]; then
                 : # Keep aarch64 for Rosetta
             fi
             ;;
@@ -116,18 +163,35 @@ main() {
     download "$url" "$tmp_dir/$asset"
     
     step "Extracting..."
-    tar -xzf "$tmp_dir/$asset" -C "$tmp_dir"
-    
+    if ! tar -xzf "$tmp_dir/$asset" -C "$tmp_dir" 2>/dev/null; then
+        die "Failed to extract archive. File may be corrupted."
+    fi
+
+    # Verify binary was extracted
+    if [ ! -f "$tmp_dir/vtcode" ]; then
+        die "Binary not found in archive. Expected: vtcode"
+    fi
+
     # Install
     step "Installing to $INSTALL_DIR"
     mkdir -p "$INSTALL_DIR"
-    cp "$tmp_dir/vtcode" "$INSTALL_DIR/vtcode"
+    if ! cp "$tmp_dir/vtcode" "$INSTALL_DIR/vtcode" 2>/dev/null; then
+        die "Failed to copy binary to $INSTALL_DIR"
+    fi
     chmod 0755 "$INSTALL_DIR/vtcode"
     
     # PATH
     add_to_path
+
+    # Verify installation
+    if "$INSTALL_DIR/vtcode" --version >/dev/null 2>&1; then
+        version=$("$INSTALL_DIR/vtcode" --version 2>&1 | head -1)
+        step "Installation successful! $version"
+    else
+        step "Installation complete (verification skipped)"
+    fi
     
-    step "Done! Run: vtcode"
+    step "Run: vtcode"
 }
 
 # Check dependencies
