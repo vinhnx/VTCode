@@ -2,6 +2,79 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.85.2 - 2026-03-02
+
+### Highlights
+#### Bug Fixes
+
+- Use RngExt trait for random_range method in slug.rs (b9b03932) 
+- Trim whitespace from custom config and data directory environment variables (179f1ef9) 
+#### Documentation
+
+- Add final notes and principles for coding agents in AGENTS.md (9d2e061c) 
+#### Features
+
+- Include git version info in long_version and add tests (8a1fe108) 
+- Add snapshot files for history picker and slash widget tests (b397909d) 
+- Implement TUI log capture feature and enhance panic hook handling (89813122) 
+- Integrate color-eyre for enhanced error reporting in debug mode (05591670) 
+### Other Changes
+#### Other
+
+- Enhance skill authoring and routing logic; add response chaining support (121a8ece) 
+- Add `thiserror` integration for improved error handling across multiple modules (b5081d89) 
+- Add websocket connection limit error handling and update API versioning (6f76cfb7) 
+- Add installation scripts to release artifacts and update installation documentation (816c6d41) 
+- Refactor error log collector to use a bounded buffer and enhance link rendering in markdown (c7ef605b) 
+- Refactor line truncation logic and introduce utility module for consistent ellipsis handling (69742626) 
+- Refactor websocket header insertion and update apply_patch handler to use Arc for session and turn context (13e4b403) 
+- Add error log buffer size limit and refactor tool context for constrained policies (f8b71916) 
+- Refactor tool routing and permission handling; improve URL-aware text wrapping (564fdad7) 
+- Refactor tool permission caching and enhance error handling; improve text wrapping utilities (ed68b7fd) 
+- Add support for zsh exec wrapper and enhance PTY configuration (9d992fed) 
+- Add data-oriented design plan and optimization phases for vtcode (98175726) 
+- Enhance status line configuration and improve token extraction logic for file references (68bb39d4) 
+- Document applied default status line items pattern and outline data-oriented design plan for vtcode (db98b328) 
+- Add tests for PtyConfig validation and refactor session creation methods (8cd350ef) 
+- Refactor TODO.md to improve formatting and clarify implementation instructions (265c835a) 
+- Enhance file palette key handling to manage selection and normal submit behavior (309e8b22) 
+- Refactor process group termination logic for robust child process cleanup (bb1ab07f) 
+- Refactor WebSocket session handling and enhance incremental input validation (e874c269) 
+- Refactor sandbox permissions and enhance tool execution handling (f997edb2) 
+- Implement fine-grained rejection controls for approval prompts and update related logic (3b9a7775) 
+- Refactor caching mechanisms to use inner struct with RwLock for improved concurrency (46102de4) 
+- Refactor session initialization to encapsulate execution and metadata contexts (ef3d1020) 
+- Enhance TurnProcessingContext with new as_turn_processing_context method for improved context management (c0b47e4d) 
+- Refactor RunLoopContext and TurnProcessingContext to use constructor methods for improved clarity and maintainability (cd9d63a5) 
+- Refactor TurnProcessingContext to use parts for better modularity and readability (b133ff3d) 
+- Refactor code for improved readability and consistency in multiple files (2565bbdb) 
+- Add Clippy configuration for vtcode with custom lint settings (fac8a298) 
+- Implement theme synchronization for Alacritty, Ghostty, and Kitty terminals; remove CachedStyleParser and replace with LrMap for improved performance; add terminal color probe for enhanced theme detection; update Cargo.toml files for Rust 1.85 compatibility. (c7dd0f28) 
+- Refactor code to use `parking_lot::RwLock` instead of `std::sync::RwLock` for improved performance; update various imports and method calls across multiple files; bump Rust version to 1.88 in Cargo.toml files. (10892d08) 
+- Refactor code for improved readability and consistency across multiple files (d876e596) 
+- Refactor command processing, improve output handling, and enhance telemetry reporting (ec20b546) 
+- Refactor tests and improve code readability (2c2ade2b) 
+- Add color policy module and integrate into styling and error display (3287a044) 
+- Add fuzzing adoption plan for security parsers and initial setup (4b4d8d8f) 
+- Refactor code for consistency and readability across multiple modules (502cda47) 
+- Refactor middleware chain initialization to use push method (2368dec1) 
+- Update integration tests to replace 'cargo test' with 'cargo check' and adjust access count assertions (862c07df) 
+- Add fuzzing support for security parsers and update documentation (bd445376) 
+- Refactor command safety checks and improve loop detection tests (b8ede10b) 
+- Enhance command validation and tool execution with unified action handling (0c3d4b86) 
+#### Refactors
+
+- Remove unnecessary Clear widget calls in header and input rendering (fb1c8de7) 
+- Streamline architecture documentation and enhance clarity (565ea315) 
+- Rename color-eyre hook functions for clarity and consistency (3c555a86) 
+- Update approval policy handling to use Arc<RwLock> for thread safety (3b91595f) 
+- Create sync_mcp_approval_policy_for_context function for improved clarity (92a6cf82) 
+- Improve error handling and simplify string conversion in terminal color probe and LM Studio client (e41acb42) 
+- Update exit summary formatting and remove unused functions (7c58ff16) 
+- Streamline lint configuration and enhance exit summary output (eaca32a6) 
+- Enhance exit summary formatting and improve file indexing logic (d143fe97) 
+### Contributors
+@vinhnx
 ## 0.85.1 - 2026-03-01
 
 ### Highlights
