@@ -166,17 +166,21 @@ When acting under an assumption, state it in one line and proceed.
   1. <change with file refs>
   2. ...
 
+  References
+  1. <path:line> <why this reference matters>
+  2. ...
+
   Validation
   1. <command> passed/failed
   2. ...
 
   Conclusion
-  <done, or final blocker + next action>
+  <done, or final blocker>
 
-  Follow-up (optional)
-  <one actionable suggestion that builds on the completed work>
+  Next action
+  <exactly one actionable next-step question based on the outcome>
   ```
-- When relevant, end with one brief follow-up suggestion framed as a question (e.g., "Want me to also add X to improve Y?"). Skip if fully self-contained.
+- For multi-file work, always include `References`.
 
 **Formatting**:
 - Monospace for commands, paths, env vars, code identifiers.
@@ -289,7 +293,7 @@ __UNIFIED_TOOL_GUIDANCE__
 **Discover**: `list_skills` and `load_skill` to find/activate tools (hidden by default).
 **Delegation**: Use focused plans and clear step handoffs inside the main conversation.
 
-**Output**: No emoji — use plain Unicode symbols (✓, ✗, →, •, ■, ▸, —) instead. Preambles: avoid unless needed. Trivial final answers: 1-3 sentences, outcomes first, `path:line` refs, monospace for code. For multi-file work, use sections: `What changed`, `Validation`, `Conclusion`, `Follow-up` (optional — one actionable suggestion as a question). No chain-of-thought, inline citations, repeating plans, or code dumps.
+**Output**: No emoji — use plain Unicode symbols (✓, ✗, →, •, ■, ▸, —) instead. Preambles: avoid unless needed. Trivial final answers: 1-3 sentences, outcomes first, `path:line` refs, monospace for code. For multi-file work, use sections: `What changed`, `References`, `Validation`, `Conclusion`, `Next action`. End with exactly one actionable next-step question. No chain-of-thought, inline citations, repeating plans, or code dumps.
 
 **Security**: Never print/log secrets. Never commit secrets to repo. Redact if encountered.
 
@@ -332,7 +336,7 @@ Complex refactoring and multi-file analysis. Methodical, outcome-focused, expert
 ## Output Contract
 
 **Tone**: Concise, methodical, outcome-focused. Lead with progress and results. No emoji — use plain Unicode symbols (✓, ✗, →, •, ■, ▸, —) instead.
-Trivial final answers: 1-3 sentences, outcomes first, `path:line` refs. Multi-file work: use sections `What changed`, `Validation`, `Conclusion`, `Follow-up` (optional — one actionable suggestion as a question). Avoid preambles, chain-of-thought, code dumps.
+Trivial final answers: 1-3 sentences, outcomes first, `path:line` refs. Multi-file work: use sections `What changed`, `References`, `Validation`, `Conclusion`, `Next action`. End with exactly one actionable next-step question. Avoid preambles, chain-of-thought, code dumps.
 
 ## Decision Policy & Execution
 
@@ -1076,6 +1080,34 @@ mod tests {
             assert!(
                 !result.contains("update_plan"),
                 "{mode_name} prompt should not reference deprecated update_plan"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn test_generated_prompts_require_references_and_next_action_question() {
+        let project_root = PathBuf::from(".");
+
+        for (mode_name, mode) in [
+            ("default", SystemPromptMode::Default),
+            ("minimal", SystemPromptMode::Minimal),
+            ("specialized", SystemPromptMode::Specialized),
+        ] {
+            let mut config = VTCodeConfig::default();
+            config.agent.system_prompt_mode = mode;
+            config.agent.include_temporal_context = false;
+            config.agent.include_working_directory = false;
+            config.agent.instruction_max_bytes = 0;
+
+            let result = compose_system_instruction_text(&project_root, Some(&config), None).await;
+
+            assert!(
+                result.contains("References"),
+                "{mode_name} prompt should require references in multi-file summaries"
+            );
+            assert!(
+                result.contains("exactly one actionable next-step question"),
+                "{mode_name} prompt should require one actionable next-step question"
             );
         }
     }
