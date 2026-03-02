@@ -235,7 +235,7 @@ async fn test_run_tool_call_prevalidated_blocks_mutation_in_plan_mode() {
 }
 
 #[tokio::test]
-async fn test_run_tool_call_prevalidated_blocks_task_tracker_in_plan_mode() {
+async fn test_run_tool_call_prevalidated_allows_task_tracker_in_plan_mode() {
     let mut test_ctx = TestContext::new().await;
     let mut registry = test_ctx.registry;
 
@@ -251,6 +251,15 @@ async fn test_run_tool_call_prevalidated_blocks_task_tracker_in_plan_mode() {
     registry.enable_plan_mode();
     registry.plan_mode_state().enable();
     session_stats.switch_to_planner();
+
+    let plans_dir = test_ctx.workspace.join(".vtcode").join("plans");
+    std::fs::create_dir_all(&plans_dir).expect("create plans dir");
+    let plan_file = plans_dir.join("tracker-test-task-tracker.md");
+    std::fs::write(&plan_file, "# Tracker Test\n").expect("write plan file");
+    registry
+        .plan_mode_state()
+        .set_plan_file(Some(plan_file))
+        .await;
 
     let mut harness_state = build_harness_state();
     let mut ctx = crate::agent::runloop::unified::run_loop_context::RunLoopContext::new(
@@ -295,25 +304,22 @@ async fn test_run_tool_call_prevalidated_blocks_task_tracker_in_plan_mode() {
     .expect("run_tool_call must run");
 
     match outcome.status {
-        ToolExecutionStatus::Failure { error } => {
-            let error_text = error.to_string();
+        ToolExecutionStatus::Success { output, .. } => {
             assert!(
-                error_text.contains("task_tracker")
-                    || error_text.contains("tool denied by plan mode"),
-                "unexpected error text: {error_text}"
-            );
-            assert!(
-                error_text.contains("not allowed in Plan mode")
-                    || error_text.contains("tool denied by plan mode"),
-                "unexpected error text: {error_text}"
+                output["status"] == "ok" || output["status"] == "empty",
+                "unexpected status: {}",
+                output["status"]
             );
         }
-        other => panic!("Expected plan mode failure, got: {:?}", other),
+        other => panic!(
+            "Expected task_tracker success in plan mode, got: {:?}",
+            other
+        ),
     }
 }
 
 #[tokio::test]
-async fn test_run_tool_call_non_prevalidated_blocks_task_tracker_in_plan_mode_without_budget_use() {
+async fn test_run_tool_call_non_prevalidated_allows_task_tracker_in_plan_mode_and_tracks_budget() {
     let mut test_ctx = TestContext::new().await;
     let mut registry = test_ctx.registry;
 
@@ -329,6 +335,15 @@ async fn test_run_tool_call_non_prevalidated_blocks_task_tracker_in_plan_mode_wi
     registry.enable_plan_mode();
     registry.plan_mode_state().enable();
     session_stats.switch_to_planner();
+
+    let plans_dir = test_ctx.workspace.join(".vtcode").join("plans");
+    std::fs::create_dir_all(&plans_dir).expect("create plans dir");
+    let plan_file = plans_dir.join("tracker-test-task-tracker-non-prevalidated.md");
+    std::fs::write(&plan_file, "# Tracker Test\n").expect("write plan file");
+    registry
+        .plan_mode_state()
+        .set_plan_file(Some(plan_file))
+        .await;
 
     let mut harness_state = build_harness_state_with(2);
     let mut ctx = crate::agent::runloop::unified::run_loop_context::RunLoopContext::new(
@@ -373,23 +388,20 @@ async fn test_run_tool_call_non_prevalidated_blocks_task_tracker_in_plan_mode_wi
     .expect("run_tool_call must run");
 
     match outcome.status {
-        ToolExecutionStatus::Failure { error } => {
-            let error_text = error.to_string();
+        ToolExecutionStatus::Success { output, .. } => {
             assert!(
-                error_text.contains("task_tracker")
-                    || error_text.contains("tool denied by plan mode"),
-                "unexpected error text: {error_text}"
-            );
-            assert!(
-                error_text.contains("not allowed in Plan mode")
-                    || error_text.contains("tool denied by plan mode"),
-                "unexpected error text: {error_text}"
+                output["status"] == "ok" || output["status"] == "empty",
+                "unexpected status: {}",
+                output["status"]
             );
         }
-        other => panic!("Expected plan mode failure, got: {:?}", other),
+        other => panic!(
+            "Expected task_tracker success in plan mode, got: {:?}",
+            other
+        ),
     }
 
-    assert_eq!(ctx.harness_state.tool_calls, 0);
+    assert_eq!(ctx.harness_state.tool_calls, 1);
 }
 
 #[tokio::test]
@@ -530,7 +542,7 @@ async fn test_run_tool_call_non_prevalidated_blocks_plan_task_tracker_outside_pl
     match outcome.status {
         ToolExecutionStatus::Failure { error } => {
             assert!(error.to_string().contains("plan_task_tracker"));
-            assert!(error.to_string().contains("only available"));
+            assert!(error.to_string().contains("compatibility alias"));
         }
         other => panic!("Expected plan mode failure, got: {:?}", other),
     }

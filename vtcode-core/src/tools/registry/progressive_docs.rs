@@ -279,11 +279,16 @@ pub fn minimal_tool_signatures() -> HashMap<&'static str, ToolSignature> {
         tools::TASK_TRACKER,
         ToolSignature {
             name: tools::TASK_TRACKER,
-            brief: "Track multi-step checklist",
+            brief: "Adaptive checklist (Plan/Edit modes)",
             required_params: vec![("action", "string", "create|update|list|add")],
             common_params: vec![
                 ("items", "array", "Task descriptions"),
                 ("index", "integer", "Item index for update"),
+                (
+                    "index_path",
+                    "string",
+                    "Hierarchical index path (e.g., 2.1)",
+                ),
                 ("status", "string", "pending|in_progress|completed|blocked"),
             ],
             token_estimate: 35,
@@ -294,10 +299,11 @@ pub fn minimal_tool_signatures() -> HashMap<&'static str, ToolSignature> {
         tools::PLAN_TASK_TRACKER,
         ToolSignature {
             name: tools::PLAN_TASK_TRACKER,
-            brief: "Plan-mode scoped checklist",
+            brief: "Plan-mode compatibility alias",
             required_params: vec![("action", "string", "create|update|list|add")],
             common_params: vec![
                 ("items", "array", "Task descriptions"),
+                ("index", "integer", "Top-level index fallback"),
                 ("index_path", "string", "Hierarchical path (e.g., 2.1)"),
                 ("status", "string", "pending|in_progress|completed|blocked"),
             ],

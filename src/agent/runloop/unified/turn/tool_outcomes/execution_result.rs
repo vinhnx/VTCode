@@ -57,6 +57,7 @@ fn is_blocked_or_denied_failure(error: &str) -> bool {
         "tool argument validation failed",
         "not allowed in plan mode",
         "only available when plan mode is active",
+        "compatibility alias",
     ]
     .iter()
     .any(|marker| lowered.contains(marker))
@@ -1203,7 +1204,7 @@ mod tests {
     #[test]
     fn blocked_or_denied_failure_detects_guardable_errors() {
         assert!(is_blocked_or_denied_failure(
-            "task_tracker is a TODO/checklist tool and is not allowed in Plan mode"
+            "plan_task_tracker is a Plan Mode compatibility alias. Use task_tracker in Edit mode, or switch to Plan Mode."
         ));
         assert!(is_blocked_or_denied_failure("Tool permission denied"));
         assert!(is_blocked_or_denied_failure(

@@ -6,7 +6,8 @@
 use super::plan_mode::PlanModeState;
 use crate::config::constants::tools;
 use crate::tools::handlers::task_tracking::{
-    TaskCounts, TaskTrackingStatus, append_notes, parse_marked_status_prefix, parse_status_prefix,
+    TaskCounts, TaskTrackingStatus, append_notes, append_notes_section, is_bulk_sync_update,
+    parse_marked_status_prefix, parse_status_prefix,
 };
 use crate::tools::traits::Tool;
 use crate::utils::file_utils::{
@@ -53,6 +54,10 @@ pub struct PlanTaskTrackerArgs {
     #[serde(default)]
     pub index_path: Option<String>,
 
+    /// Flat index fallback for compatibility with task_tracker calls
+    #[serde(default)]
+    pub index: Option<usize>,
+
     /// New status for update
     #[serde(default)]
     pub status: Option<String>,
@@ -81,13 +86,7 @@ impl PlanTaskDocument {
     fn to_markdown(&self) -> String {
         let mut out = format!("# {}\n\n## Plan of Work\n\n", self.title);
         write_markdown_nodes(&self.items, 0, &mut out);
-        if let Some(notes) = self.notes.as_deref()
-            && !notes.trim().is_empty()
-        {
-            out.push_str("\n## Notes\n\n");
-            out.push_str(notes.trim());
-            out.push('\n');
-        }
+        append_notes_section(&mut out, self.notes.as_deref());
         out
     }
 
@@ -112,7 +111,7 @@ impl PlanTaskDocument {
         build_view_lines(&self.items, "", "", &mut lines);
 
         json!({
-            "title": "Updated Plan",
+            "title": self.title,
             "lines": lines,
         })
     }
@@ -142,6 +141,20 @@ fn flatten_items_json(nodes: &[PlanTaskNode]) -> Vec<Value> {
     let mut items = Vec::new();
     flatten_items_json_inner(nodes, "", 0, &mut items);
     items
+}
+
+fn flatten_for_global_items(
+    nodes: &[PlanTaskNode],
+    level: usize,
+    out: &mut Vec<(PlanTaskStatus, String)>,
+) {
+    for node in nodes {
+        out.push((
+            node.status.clone(),
+            format!("{}{}", "  ".repeat(level), node.description),
+        ));
+        flatten_for_global_items(&node.children, level + 1, out);
+    }
 }
 
 fn flatten_items_json_inner(
@@ -454,6 +467,46 @@ impl PlanTaskTrackerTool {
         Ok(tracker_file)
     }
 
+    fn global_task_file(&self) -> Option<PathBuf> {
+        self.state.workspace_root().map(|workspace| {
+            workspace
+                .join(".vtcode")
+                .join("tasks")
+                .join("current_task.md")
+        })
+    }
+
+    async fn mirror_global_task_file(&self, document: &PlanTaskDocument) -> Result<()> {
+        let Some(task_file) = self.global_task_file() else {
+            return Ok(());
+        };
+
+        if let Some(parent) = task_file.parent() {
+            ensure_dir_exists(parent).await.with_context(|| {
+                format!("Failed to create tasks directory: {}", parent.display())
+            })?;
+        }
+
+        let mut lines = Vec::new();
+        flatten_for_global_items(&document.items, 0, &mut lines);
+
+        let mut markdown = format!("# {}\n\n", document.title);
+        for (status, description) in lines {
+            markdown.push_str(&format!("- {} {}\n", status.flat_checkbox(), description));
+        }
+        append_notes_section(&mut markdown, document.notes.as_deref());
+
+        write_file_with_context(&task_file, &markdown, "task checklist")
+            .await
+            .with_context(|| {
+                format!(
+                    "Failed to write mirrored task checklist file: {}",
+                    task_file.display()
+                )
+            })?;
+        Ok(())
+    }
+
     fn success_payload(
         status: &str,
         message: String,
@@ -467,6 +520,22 @@ impl PlanTaskTrackerTool {
             "checklist": document.summary_json(),
             "view": document.view_json(),
         })
+    }
+
+    async fn persist_document_and_payload(
+        &self,
+        status: &str,
+        message: String,
+        document: &PlanTaskDocument,
+    ) -> Result<Value> {
+        let tracker_file = self.save_document(document).await?;
+        self.mirror_global_task_file(document).await?;
+        Ok(Self::success_payload(
+            status,
+            message,
+            &tracker_file,
+            document,
+        ))
     }
 
     async fn handle_create(&self, args: &PlanTaskTrackerArgs) -> Result<Value> {
@@ -492,13 +561,12 @@ impl PlanTaskTrackerTool {
         };
         document.notes = append_notes(document.notes.take(), args.notes.as_deref());
 
-        let tracker_file = self.save_document(&document).await?;
-        Ok(Self::success_payload(
+        self.persist_document_and_payload(
             "created",
             "Plan task tracker created successfully.".to_string(),
-            &tracker_file,
             &document,
-        ))
+        )
+        .await
     }
 
     async fn handle_update(&self, args: &PlanTaskTrackerArgs) -> Result<Value> {
@@ -507,11 +575,40 @@ impl PlanTaskTrackerTool {
             .await?
             .context("No active plan tracker. Use action='create' first.")?;
 
+        if is_bulk_sync_update(
+            args.items.as_deref(),
+            args.index,
+            args.index_path.as_deref(),
+            args.status.as_deref(),
+        ) {
+            let input_items = args.items.as_deref().unwrap_or(&[]);
+            let flat_lines = build_flat_create_lines(input_items);
+            if flat_lines.is_empty() {
+                bail!("No valid items provided for checklist sync");
+            }
+            if let Some(title) = args.title.as_deref() {
+                document.title = title.to_string();
+            }
+            document.items = build_tree_from_flat(&flat_lines);
+            document.notes = append_notes(document.notes.take(), args.notes.as_deref());
+
+            return self
+                .persist_document_and_payload(
+                    "updated",
+                    "Checklist synchronized from provided items.".to_string(),
+                    &document,
+                )
+                .await;
+        }
+
         let index_path = args
             .index_path
-            .as_deref()
-            .context("'index_path' is required for 'update' (example: \"2.1\")")?;
-        let path = parse_index_path(index_path)?;
+            .clone()
+            .or_else(|| args.index.map(|value| value.to_string()))
+            .context(
+                "'index_path' is required for 'update' (example: \"2.1\"), or provide 'index' for top-level compatibility",
+            )?;
+        let path = parse_index_path(&index_path)?;
         let status_str = args
             .status
             .as_deref()
@@ -528,16 +625,15 @@ impl PlanTaskTrackerTool {
 
         document.notes = append_notes(document.notes.take(), args.notes.as_deref());
 
-        let tracker_file = self.save_document(&document).await?;
-        Ok(Self::success_payload(
+        self.persist_document_and_payload(
             "updated",
             format!(
                 "Item {} status changed: {} -> {}",
                 index_path, old_status, new_status_str
             ),
-            &tracker_file,
             &document,
-        ))
+        )
+        .await
     }
 
     async fn handle_list(&self) -> Result<Value> {
@@ -590,13 +686,12 @@ impl PlanTaskTrackerTool {
 
         document.notes = append_notes(document.notes.take(), args.notes.as_deref());
 
-        let tracker_file = self.save_document(&document).await?;
-        Ok(Self::success_payload(
+        self.persist_document_and_payload(
             "added",
             "Plan task added successfully.".to_string(),
-            &tracker_file,
             &document,
-        ))
+        )
+        .await
     }
 }
 
@@ -624,7 +719,7 @@ impl Tool for PlanTaskTrackerTool {
     }
 
     fn description(&self) -> &'static str {
-        "Plan-mode scoped task tracker. Persists hierarchical plan progress under .vtcode/plans/<plan>.tasks.md. Actions: create, update, list, add."
+        "Plan-mode compatibility alias for adaptive task tracking. Persists hierarchical plan progress under .vtcode/plans/<plan>.tasks.md and mirrors updates to .vtcode/tasks/current_task.md. Actions: create, update, list, add."
     }
 
     fn parameter_schema(&self) -> Option<Value> {
@@ -648,6 +743,10 @@ impl Tool for PlanTaskTrackerTool {
                 "index_path": {
                     "type": "string",
                     "description": "Hierarchical index path for update (example: '2.1')."
+                },
+                "index": {
+                    "type": "integer",
+                    "description": "Top-level index compatibility fallback for update."
                 },
                 "status": {
                     "type": "string",
@@ -684,7 +783,11 @@ impl Tool for PlanTaskTrackerTool {
                         "required": ["action"]
                     },
                     "then": {
-                        "required": ["index_path", "status"]
+                        "anyOf": [
+                            { "required": ["index_path", "status"] },
+                            { "required": ["index", "status"] },
+                            { "required": ["items"] }
+                        ]
                     }
                 },
                 {
@@ -817,6 +920,63 @@ mod tests {
 
         assert_eq!(listed["status"], "ok");
         assert_eq!(listed["checklist"]["completed"], 1);
+    }
+
+    #[tokio::test]
+    async fn update_supports_bulk_item_sync_and_global_mirror() {
+        let (temp_dir, _state, tool) = setup_plan_mode().await;
+
+        tool.execute(json!({
+            "action": "create",
+            "items": ["Step 1", "Step 2"]
+        }))
+        .await
+        .expect("create tracker");
+
+        let updated = tool
+            .execute(json!({
+                "action": "update",
+                "items": ["[x] Step 1", "[~] Step 2", "[ ] Step 3"]
+            }))
+            .await
+            .expect("bulk update");
+
+        assert_eq!(updated["status"], "updated");
+        assert_eq!(updated["checklist"]["completed"], 1);
+        assert_eq!(updated["checklist"]["in_progress"], 1);
+        assert_eq!(updated["checklist"]["pending"], 1);
+
+        let mirrored = temp_dir
+            .path()
+            .join(".vtcode")
+            .join("tasks")
+            .join("current_task.md");
+        let mirrored_content = std::fs::read_to_string(mirrored).expect("read mirrored checklist");
+        assert!(mirrored_content.contains("Step 3"));
+    }
+
+    #[tokio::test]
+    async fn update_accepts_flat_index_fallback() {
+        let (_temp_dir, _state, tool) = setup_plan_mode().await;
+
+        tool.execute(json!({
+            "action": "create",
+            "items": ["Parent task"]
+        }))
+        .await
+        .expect("create tracker");
+
+        let updated = tool
+            .execute(json!({
+                "action": "update",
+                "index": 1,
+                "status": "completed"
+            }))
+            .await
+            .expect("flat-index update");
+
+        assert_eq!(updated["status"], "updated");
+        assert_eq!(updated["checklist"]["completed"], 1);
     }
 
     #[tokio::test]

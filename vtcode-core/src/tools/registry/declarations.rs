@@ -641,7 +641,7 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
         // ============================================================
         FunctionDeclaration {
             name: tools::TASK_TRACKER.to_string(),
-            description: "Track implementation progress with a structured checklist. Actions: create, update, list, add.".to_string(),
+            description: "Adaptive task tracker for both Plan and Edit modes. Persists checklist progress and mirrors between `.vtcode/tasks/current_task.md` and active `.vtcode/plans/<plan>.tasks.md` sidecars when available. Actions: create, update, list, add.".to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
@@ -657,12 +657,14 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
                         "description": "Task items (create)."
                     },
                     "index": {"type": "integer", "description": "1-based index (update)."},
+                    "index_path": {"type": "string", "description": "Hierarchical path for update (Plan Mode, example: 2.1)."},
                     "status": {
                         "type": "string",
                         "enum": ["pending", "in_progress", "completed", "blocked"],
                         "description": "New status (update)."
                     },
                     "description": {"type": "string", "description": "Task text (add)."},
+                    "parent_index_path": {"type": "string", "description": "Optional parent path for add in Plan Mode (example: 2)."},
                     "notes": {"type": "string", "description": "Optional notes."}
                 },
                 "required": ["action"]
@@ -671,7 +673,7 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
 
         FunctionDeclaration {
             name: tools::PLAN_TASK_TRACKER.to_string(),
-            description: "Plan-mode scoped hierarchical checklist persisted under .vtcode/plans/<plan>.tasks.md. Actions: create, update, list, add.".to_string(),
+            description: "Plan-mode compatibility alias for task_tracker. Uses hierarchical checklist persistence under `.vtcode/plans/<plan>.tasks.md` and mirrors to `.vtcode/tasks/current_task.md`. Actions: create, update, list, add.".to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
@@ -687,6 +689,7 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
                         "description": "Task items (create). Leading 2-space indentation indicates nesting."
                     },
                     "index_path": {"type": "string", "description": "Hierarchical path for update (example: 2.1)."},
+                    "index": {"type": "integer", "description": "Top-level index compatibility fallback for update."},
                     "status": {
                         "type": "string",
                         "enum": ["pending", "in_progress", "completed", "blocked"],

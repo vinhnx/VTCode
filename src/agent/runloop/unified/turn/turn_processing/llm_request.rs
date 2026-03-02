@@ -489,16 +489,14 @@ pub(crate) async fn execute_llm_request(
             let configured_threshold =
                 harness_config.and_then(|cfg| cfg.auto_compaction_threshold_tokens);
 
-            if let Some(compact_threshold) =
-                resolve_compaction_threshold(configured_threshold, context_size)
-            {
-                Some(json!([{
-                    "type": "compaction",
-                    "compact_threshold": compact_threshold,
-                }]))
-            } else {
-                None
-            }
+            resolve_compaction_threshold(configured_threshold, context_size).map(
+                |compact_threshold| {
+                    json!([{
+                        "type": "compaction",
+                        "compact_threshold": compact_threshold,
+                    }])
+                },
+            )
         } else {
             None
         }

@@ -333,21 +333,29 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn prevalidated_execution_blocks_task_tracker_in_plan_mode() -> Result<()> {
+    async fn prevalidated_execution_allows_task_tracker_in_plan_mode() -> Result<()> {
         let temp_dir = TempDir::new()?;
         let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
         registry.allow_all_tools().await?;
         registry.enable_plan_mode();
+        registry.plan_mode_state().enable();
 
-        let args = json!({
-            "action": "list"
-        });
+        let plans_dir = temp_dir.path().join(".vtcode").join("plans");
+        std::fs::create_dir_all(&plans_dir)?;
+        let plan_file = plans_dir.join("adaptive-test.md");
+        std::fs::write(&plan_file, "# Adaptive test\n")?;
+        registry
+            .plan_mode_state()
+            .set_plan_file(Some(plan_file))
+            .await;
 
-        let err = registry
+        let args = json!({"action": "create", "items": ["Track step"]});
+
+        let response = registry
             .execute_tool_ref_prevalidated(tools::TASK_TRACKER, &args)
             .await
-            .expect_err("plan mode should block task_tracker on prevalidated path");
-        assert!(err.to_string().contains("plan mode"));
+            .expect("task_tracker should be allowed in plan mode");
+        assert_eq!(response["status"], "created");
 
         Ok(())
     }

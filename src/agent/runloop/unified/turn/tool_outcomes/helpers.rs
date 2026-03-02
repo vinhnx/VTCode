@@ -188,7 +188,7 @@ fn is_plan_artifact_write(name: &str, args: &serde_json::Value) -> bool {
 
     let canonical = canonical_tool_name(name);
     match canonical.as_ref() {
-        tool_names::PLAN_TASK_TRACKER => true,
+        tool_names::PLAN_TASK_TRACKER | tool_names::TASK_TRACKER => true,
         tool_names::UNIFIED_FILE => {
             if !unified_file_action(args)
                 .map(|action| action.eq_ignore_ascii_case("read"))
@@ -512,6 +512,27 @@ mod tests {
             &mut tracker,
             &success,
             vtcode_core::config::constants::tools::PLAN_TASK_TRACKER,
+            &json!({"action":"create","items":["step"]}),
+        );
+        assert_eq!(tracker.consecutive_mutations, 0);
+        assert_eq!(tracker.consecutive_navigations, 0);
+    }
+
+    #[test]
+    fn task_tracker_does_not_increment_mutations() {
+        let mut tracker = LoopTracker::new();
+        let success = ToolPipelineOutcome::from_status(ToolExecutionStatus::Success {
+            output: serde_json::json!({}),
+            stdout: None,
+            modified_files: vec![],
+            command_success: true,
+            has_more: false,
+        });
+
+        update_repetition_tracker(
+            &mut tracker,
+            &success,
+            vtcode_core::config::constants::tools::TASK_TRACKER,
             &json!({"action":"create","items":["step"]}),
         );
         assert_eq!(tracker.consecutive_mutations, 0);

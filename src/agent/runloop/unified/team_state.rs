@@ -293,10 +293,6 @@ impl TeamState {
         Ok(())
     }
 
-    pub fn prompt_snapshot(&self) -> String {
-        self.config.prompt_snapshot(&self.tasks)
-    }
-
     pub async fn read_mailbox(&mut self, recipient: &str) -> Result<Vec<TeamMailboxMessage>> {
         let offset = self.mailbox_offsets.get(recipient).copied().unwrap_or(0);
         let (messages, new_offset) = self
