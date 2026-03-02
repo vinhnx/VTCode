@@ -99,14 +99,23 @@ pub fn render(session: &mut Session, frame: &mut Frame<'_>) {
     if session.show_logs {
         let split = Layout::vertical([Constraint::Percentage(70), Constraint::Percentage(30)])
             .split(transcript_area);
-        render_transcript(session, frame, split[0]);
+        let (transcript_body, slash_area) =
+            super::slash::split_inline_slash_area(session, split[0]);
+        render_transcript(session, frame, transcript_body);
+        if let Some(slash_area) = slash_area {
+            super::slash::render_slash_palette(session, frame, slash_area);
+        }
         render_log_view(session, frame, split[1]);
     } else {
-        render_transcript(session, frame, transcript_area);
+        let (transcript_body, slash_area) =
+            super::slash::split_inline_slash_area(session, transcript_area);
+        render_transcript(session, frame, transcript_body);
+        if let Some(slash_area) = slash_area {
+            super::slash::render_slash_palette(session, frame, slash_area);
+        }
     }
     session.render_input(frame, input_area);
     render_modal(session, frame, size);
-    super::slash::render_slash_palette(session, frame, size);
     render_file_palette(session, frame, size);
 }
 

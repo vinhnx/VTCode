@@ -48,7 +48,7 @@ impl Session {
         let _available_width = main_area.width;
         let _horizontal_minimum = ui::INLINE_CONTENT_MIN_WIDTH + ui::INLINE_NAVIGATION_MIN_WIDTH;
 
-        let transcript_area = main_area;
+        let (transcript_area, slash_area) = slash::split_inline_slash_area(self, main_area);
         let navigation_area = Rect::new(main_area.x, main_area.y, 0, 0); // No navigation area since timeline pane is removed
 
         // Use SessionWidget for buffer-based rendering (header, transcript, overlays)
@@ -64,7 +64,9 @@ impl Session {
         // Timeline pane has been removed, so no navigation rendering
         self.render_input(frame, input_area);
         render::render_modal(self, frame, viewport);
-        slash::render_slash_palette(self, frame, viewport);
+        if let Some(slash_area) = slash_area {
+            slash::render_slash_palette(self, frame, slash_area);
+        }
         render::render_file_palette(self, frame, viewport);
 
         // Render diff preview modal if active
