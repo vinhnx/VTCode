@@ -20,78 +20,24 @@ pub(crate) struct SkillSetupState {
 pub(crate) async fn discover_skills(
     config: &CoreAgentConfig,
     resume: Option<&ResumeSession>,
-    tools: &Arc<RwLock<Vec<uni::ToolDefinition>>>,
 ) -> SkillSetupState {
-    let mut discovered_skill_adapters: Vec<vtcode_core::skills::executor::SkillToolAdapter> =
+    let discovered_skill_adapters: Vec<vtcode_core::skills::executor::SkillToolAdapter> =
         Vec::new();
     let library_skills_map = Arc::new(RwLock::new(HashMap::new()));
     let active_skills_map = Arc::new(RwLock::new(HashMap::new()));
-    let mut dormant_tool_defs = HashMap::new();
+    let dormant_tool_defs = HashMap::new();
 
-    let mut skill_discovery = vtcode_core::skills::discovery::SkillDiscovery::new();
-    match skill_discovery.discover_all(&config.workspace).await {
-        Ok(result) => {
-            info!(
-                "Discovered {} skills and {} CLI tools",
-                result.skills.len(),
-                result.tools.len()
-            );
+    info!(
+        workspace = %config.workspace.display(),
+        "Deferring skill discovery until an explicit /skills command"
+    );
 
-            for skill_ctx in result.skills {
-                if let Ok(lightweight_skill) = vtcode_core::skills::types::Skill::new(
-                    skill_ctx.manifest().clone(),
-                    skill_ctx.path().clone(),
-                    String::new(),
-                ) {
-                    library_skills_map
-                        .write()
-                        .await
-                        .insert(lightweight_skill.name().to_string(), lightweight_skill);
-                }
-            }
-
-            for tool_config in result.tools {
-                match vtcode_core::skills::cli_bridge::CliToolBridge::new(tool_config) {
-                    Ok(bridge) => match bridge.to_skill() {
-                        Ok(skill) => {
-                            library_skills_map
-                                .write()
-                                .await
-                                .insert(skill.name().to_string(), skill.clone());
-                            let adapter =
-                                vtcode_core::skills::executor::SkillToolAdapter::new(skill);
-                            discovered_skill_adapters.push(adapter.clone());
-
-                            let def = uni::ToolDefinition::function(
-                                adapter.name().to_string(),
-                                format!("(SKILL) {}", adapter.description()),
-                                adapter.parameter_schema().unwrap_or(serde_json::json!({
-                                    "type": "object",
-                                    "properties": {
-                                        "input": {"type": "string", "description": "Input arguments"}
-                                    }
-                                })),
-                            );
-                            dormant_tool_defs.insert(adapter.name().to_string(), def);
-                        }
-                        Err(e) => warn!("Failed to convert tool bridge to skill: {}", e),
-                    },
-                    Err(e) => warn!("Failed to create bridge for tool: {}", e),
-                }
-            }
-
-            if let Some(resume_session) = resume {
-                restore_active_skills_from_resume(
-                    resume_session,
-                    tools,
-                    &active_skills_map,
-                    &library_skills_map,
-                    &dormant_tool_defs,
-                )
-                .await;
-            }
-        }
-        Err(e) => warn!("Skill discovery failed: {}", e),
+    if let Some(resume_session) = resume
+        && !resume_session.snapshot.metadata.loaded_skills.is_empty()
+    {
+        warn!(
+            "Skipping loaded skill restore during startup; use /skills load to reactivate session skills"
+        );
     }
 
     SkillSetupState {
@@ -126,37 +72,6 @@ pub(crate) async fn register_skill_tools(
     )
     .await?;
     Ok(())
-}
-
-async fn restore_active_skills_from_resume(
-    resume_session: &ResumeSession,
-    tools: &Arc<RwLock<Vec<uni::ToolDefinition>>>,
-    active_skills_map: &Arc<RwLock<HashMap<String, vtcode_core::skills::types::Skill>>>,
-    library_skills_map: &Arc<RwLock<HashMap<String, vtcode_core::skills::types::Skill>>>,
-    dormant_tool_defs: &HashMap<String, uni::ToolDefinition>,
-) {
-    let previously_active = &resume_session.snapshot.metadata.loaded_skills;
-    if previously_active.is_empty() {
-        return;
-    }
-
-    let mut tools_guard = tools.write().await;
-    let mut active_skills = active_skills_map.write().await;
-    let library_skills = library_skills_map.read().await;
-
-    for skill_name in previously_active {
-        if let Some(skill) = library_skills.get(skill_name) {
-            active_skills.insert(skill_name.clone(), skill.clone());
-        }
-        if let Some(def) = dormant_tool_defs.get(skill_name)
-            && !tools_guard
-                .iter()
-                .any(|t| t.function_name() == def.function_name())
-        {
-            info!("Restoring active skill tool: {}", skill_name);
-            tools_guard.push(def.clone());
-        }
-    }
 }
 
 async fn register_list_skills_tool(

@@ -19,6 +19,7 @@ pub async fn handle_manage_skills(
     ctx: SlashCommandContext<'_>,
     action: crate::agent::runloop::SkillCommandAction,
 ) -> Result<SlashCommandControl> {
+    super::activation::ensure_skills_context_activated(&ctx).await?;
     let outcome = handle_skill_command(action, ctx.config.workspace.clone()).await?;
 
     match outcome {

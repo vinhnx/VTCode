@@ -17,6 +17,14 @@ use vtcode_core::skills::types::{Skill, SkillManifest};
 
 use super::skills_commands_parser::parse_skill_command as parse_skill_command_impl;
 
+async fn regenerate_skills_index_best_effort(workspace: &std::path::Path) {
+    use vtcode_core::exec::skill_manager::SkillManager;
+    let skill_manager = SkillManager::new(workspace);
+    if let Err(e) = skill_manager.generate_index().await {
+        tracing::warn!("Failed to regenerate skills index: {}", e);
+    }
+}
+
 /// Skill-related command actions
 #[derive(Clone, Debug)]
 pub enum SkillCommandAction {
@@ -148,12 +156,7 @@ Shortcuts:
         }
 
         SkillCommandAction::List { query } => {
-            // Regenerate the skills index to ensure it's up to date with any newly added skills
-            use vtcode_core::exec::skill_manager::SkillManager;
-            let skill_manager = SkillManager::new(&workspace);
-            if let Err(e) = skill_manager.generate_index().await {
-                tracing::warn!("Failed to regenerate skills index: {}", e);
-            }
+            regenerate_skills_index_best_effort(&workspace).await;
 
             let discovery_result = loader.discover_all_skills().await?;
             let mut skills = discovery_result.skills;
@@ -190,12 +193,7 @@ Shortcuts:
         }
 
         SkillCommandAction::Load { name } => {
-            // Regenerate the skills index to ensure it's up to date with any newly added skills
-            use vtcode_core::exec::skill_manager::SkillManager;
-            let skill_manager = SkillManager::new(&workspace);
-            if let Err(e) = skill_manager.generate_index().await {
-                tracing::warn!("Failed to regenerate skills index: {}", e);
-            }
+            regenerate_skills_index_best_effort(&workspace).await;
 
             match loader.get_skill(&name).await {
                 Ok(enhanced_skill) => match enhanced_skill {
@@ -227,12 +225,7 @@ Shortcuts:
         SkillCommandAction::Unload { name } => Ok(SkillCommandOutcome::UnloadSkill { name }),
 
         SkillCommandAction::Info { name } => {
-            // Regenerate the skills index to ensure it's up to date with any newly added skills
-            use vtcode_core::exec::skill_manager::SkillManager;
-            let skill_manager = SkillManager::new(&workspace);
-            if let Err(e) = skill_manager.generate_index().await {
-                tracing::warn!("Failed to regenerate skills index: {}", e);
-            }
+            regenerate_skills_index_best_effort(&workspace).await;
 
             match loader.get_skill(&name).await {
                 Ok(enhanced_skill) => match enhanced_skill {

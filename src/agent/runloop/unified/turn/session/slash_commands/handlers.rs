@@ -18,6 +18,8 @@ use crate::agent::runloop::unified::palettes::{ActivePalette, show_config_palett
 use crate::agent::runloop::unified::turn::config_modal::load_config_modal_content;
 #[path = "apps.rs"]
 mod apps;
+#[path = "activation.rs"]
+mod activation;
 #[path = "diagnostics.rs"]
 mod diagnostics;
 #[path = "mcp.rs"]

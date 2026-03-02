@@ -1,13 +1,10 @@
 use super::AgentRunner;
 use crate::config::VTCodeConfig;
 use crate::core::loop_detector::LoopDetector;
-use crate::mcp::McpClient;
 use crate::prompts::system::compose_system_instruction_text;
 use anyhow::Result;
 use std::sync::Arc;
-use std::time::Duration;
-use tokio::time::timeout;
-use tracing::warn;
+use tracing::{info, warn};
 
 impl AgentRunner {
     /// Apply workspace configuration to the tool registry, including tool policies and MCP setup.
@@ -40,37 +37,11 @@ impl AgentRunner {
         self.max_turns = vt_cfg.automation.full_auto.max_turns.max(1);
 
         if vt_cfg.mcp.enabled {
-            let mut mcp_client = McpClient::new(vt_cfg.mcp.clone());
-
             // Validate configuration before initializing
             if let Err(e) = crate::mcp::validate_mcp_config(&vt_cfg.mcp) {
                 warn!("MCP configuration validation error: {e}");
             }
-            match timeout(Duration::from_secs(30), mcp_client.initialize()).await {
-                Ok(Ok(())) => {
-                    let mcp_client = Arc::new(mcp_client);
-                    self.tool_registry
-                        .set_mcp_client(Arc::clone(&mcp_client))
-                        .await;
-                    if let Err(err) = self.tool_registry.refresh_mcp_tools().await {
-                        warn!("Failed to refresh MCP tools: {}", err);
-                    }
-
-                    // Sync MCP tools to files for dynamic context discovery
-                    if vt_cfg.context.dynamic.enabled
-                        && vt_cfg.context.dynamic.sync_mcp_tools
-                        && let Err(err) = mcp_client.sync_tools_to_files(&self._workspace).await
-                    {
-                        warn!("Failed to sync MCP tools to files: {}", err);
-                    }
-                }
-                Ok(Err(err)) => {
-                    warn!("MCP client initialization failed: {}", err);
-                }
-                Err(_) => {
-                    warn!("MCP client initialization timed out after 30 seconds");
-                }
-            }
+            info!("Deferring MCP client initialization to on-demand activation");
         }
 
         // Initialize dynamic context discovery directories

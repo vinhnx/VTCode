@@ -17,9 +17,7 @@ use crate::hooks::lifecycle::interpret::{
     HookCommandResult, interpret_post_tool, interpret_pre_tool, interpret_session_end,
     interpret_session_start, interpret_user_prompt,
 };
-use crate::hooks::lifecycle::interpret_events::{
-    interpret_task_completion,
-};
+use crate::hooks::lifecycle::interpret_events::interpret_task_completion;
 use crate::hooks::lifecycle::types::{
     HookMessage, PostToolHookOutcome, PreToolHookDecision, PreToolHookOutcome, SessionEndReason,
     SessionStartHookOutcome, SessionStartTrigger, UserPromptHookOutcome,

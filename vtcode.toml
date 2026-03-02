@@ -20,7 +20,7 @@ default_model = "gpt-oss:20b-cloud"
 #   default_model = "zai-org/GLM-5:novita"
 
 # Visual theme for the terminal interface
-theme = "vitesse-black"
+theme = "ciapre-dark"
 
 # Temperature for main LLM responses (0.0-1.0)
 # Lower values = more deterministic, higher values = more creative
@@ -942,8 +942,19 @@ enable-auto-trigger = true
 enable-description-matching = true
 min-keyword-matches = 2
 
+[subagents]
+enabled = true
+max_concurrent = 3
+default_timeout_seconds = 300
+additional_agent_dirs = []
+
 [output_style]
 active_style = "default"
+
+[agent_teams]
+enabled = false
+max_teammates = 4
+teammate_mode = "auto"
 
 [dotfile_protection]
 enabled = true

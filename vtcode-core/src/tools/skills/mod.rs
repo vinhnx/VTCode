@@ -88,6 +88,15 @@ impl Tool for LoadSkillTool {
             .and_then(|v| v.as_str())
             .ok_or_else(|| anyhow::anyhow!("Missing 'name' argument"))?;
 
+        {
+            let skills = self.skills.read().await;
+            if skills.is_empty() && self.dormant_tools.is_empty() {
+                return Err(anyhow::anyhow!(
+                    "No skills are active in this session yet. Use `/skills list` (or `/skills load <name>`) to activate skills on demand."
+                ));
+            }
+        }
+
         // 1. Activate tool definition if it exists in dormant set
         let mut activation_status = "No associated tools to activate.";
         if let Some(tool_list) = &self.active_tools
@@ -240,6 +249,14 @@ impl Tool for ListSkillsTool {
         let variety_filter = args.get("variety").and_then(|v| v.as_str());
 
         let skills = self.skills.read().await;
+        if skills.is_empty() && self.dormant_tools.is_empty() {
+            return Ok(serde_json::json!({
+                "count": 0,
+                "groups": {},
+                "activation_required": true,
+                "message": "Skills are discovered lazily. Use `/skills list` to activate and discover available skills."
+            }));
+        }
         let mut skill_list = Vec::new();
 
         for skill in skills.values() {
@@ -393,6 +410,11 @@ impl Tool for LoadSkillResourceTool {
             .ok_or_else(|| anyhow::anyhow!("Missing 'resource_path' argument"))?;
 
         let skills = self.skills.read().await;
+        if skills.is_empty() {
+            return Err(anyhow::anyhow!(
+                "No skills are active in this session yet. Use `/skills list` first."
+            ));
+        }
         if let Some(skill) = skills.get(skill_name) {
             // Security check: must be relative and within skill path
             let full_path = skill.path.join(resource_path);

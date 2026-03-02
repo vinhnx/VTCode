@@ -76,8 +76,6 @@ pub(crate) fn show_theme_palette(
         let label = theme::theme_label(id).unwrap_or(id);
         let badge = if id == current_id {
             Some(THEME_ACTIVE_BADGE.to_string())
-        } else if !theme::theme_matches_terminal_scheme(id) {
-            Some("⚠ mismatch".to_string())
         } else {
             None
         };

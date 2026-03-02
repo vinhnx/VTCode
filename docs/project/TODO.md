@@ -7024,65 +7024,6 @@ interactive HTIL:
   2. No, stay in Plan mode     Continue planning with the model.
 ```
 
----
-
-disable auto skills discovery, only load on demand /skills
-
-```
-2026-03-01T02:28:03.019664Z  INFO vtcode_core::skills::discovery: Starting skill discovery in: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode
-2026-03-01T02:28:03.019689Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.github/skills
-2026-03-01T02:28:03.019698Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.agents/skills
-2026-03-01T02:28:03.019726Z  INFO vtcode_core::skills::discovery: Found 0 skills in /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/skills
-2026-03-01T02:28:03.019740Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.claude/skills
-2026-03-01T02:28:03.019747Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.pi/skills
-2026-03-01T02:28:03.019755Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.codex/skills
-2026-03-01T02:28:03.019768Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./skills
-2026-03-01T02:28:03.022793Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-creator from /Users/vinhnguyenxuan/.vtcode/skills/.system/skill-creator
-2026-03-01T02:28:03.023404Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-installer from /Users/vinhnguyenxuan/.vtcode/skills/.system/skill-installer
-2026-03-01T02:28:03.023454Z  INFO vtcode_core::skills::discovery: Found 2 skills in /Users/vinhnguyenxuan/.vtcode/skills
-2026-03-01T02:28:03.023929Z  WARN vtcode_core::skills::manifest: allowed-tools uses deprecated array format, please use a string instead
-2026-03-01T02:28:03.024272Z  INFO vtcode_core::skills::discovery: Discovered skill: doc-generator from /Users/vinhnguyenxuan/.claude/skills/doc-generator
-2026-03-01T02:28:03.024538Z  WARN vtcode_core::skills::manifest: allowed-tools uses deprecated array format, please use a string instead
-2026-03-01T02:28:03.024826Z  INFO vtcode_core::skills::discovery: Discovered skill: spreadsheet-generator from /Users/vinhnguyenxuan/.claude/skills/spreadsheet-generator
-2026-03-01T02:28:03.025218Z  WARN vtcode_core::skills::manifest: allowed-tools uses deprecated array format, please use a string instead
-2026-03-01T02:28:03.025491Z  INFO vtcode_core::skills::discovery: Discovered skill: code-review-skill from /Users/vinhnguyenxuan/.claude/skills/code-review-skill
-2026-03-01T02:28:03.025706Z  WARN vtcode_core::skills::manifest: allowed-tools uses deprecated array format, please use a string instead
-2026-03-01T02:28:03.026005Z  INFO vtcode_core::skills::discovery: Discovered skill: pdf-report-generator from /Users/vinhnguyenxuan/.claude/skills/pdf-report-generator
-2026-03-01T02:28:03.026327Z  WARN vtcode_core::skills::manifest: allowed-tools uses deprecated array format, please use a string instead
-2026-03-01T02:28:03.026587Z  INFO vtcode_core::skills::discovery: Discovered skill: strict-architecture from /Users/vinhnguyenxuan/.claude/skills/strict-architecture
-2026-03-01T02:28:03.026614Z  INFO vtcode_core::skills::discovery: Found 5 skills in /Users/vinhnguyenxuan/.claude/skills
-2026-03-01T02:28:03.026622Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/.copilot/skills
-2026-03-01T02:28:03.026634Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/.pi/agent/skills
-2026-03-01T02:28:03.027834Z  WARN vtcode_core::skills::manifest: File reference validation warnings: ["Invalid reference 'scripts/rotate_pdf.py`': Referenced file does not exist: \"/Users/vinhnguyenxuan/.codex/skills/.system/skill-creator/scripts/rotate_pdf.py`\"", "Invalid reference 'references/schema.md`': Referenced file does not exist: \"/Users/vinhnguyenxuan/.codex/skills/.system/skill-creator/references/schema.md`\"", "Invalid reference 'OOXML.md': Invalid directory 'OOXML.md'. Must be 'scripts/', 'references/', or 'assets/'", "Invalid reference 'references/mnda.md`': Referenced file does not exist: \"/Users/vinhnguyenxuan/.codex/skills/.system/skill-creator/references/mnda.md`\"", "Invalid reference 'references/policies.md`': Referenced file does not exist: \"/Users/vinhnguyenxuan/.codex/skills/.system/skill-creator/references/policies.md`\"", "Invalid reference 'assets/frontend-template/`': Path is too deep: 'assets/frontend-template/`'. Per Agent Skills spec, references must be one level deep.", "Invalid reference 'assets/font.ttf`': Referenced file does not exist: \"/Users/vinhnguyenxuan/.codex/skills/.system/skill-creator/assets/font.ttf`\"", "Invalid reference 'EXAMPLES.md': Invalid directory 'EXAMPLES.md'. Must be 'scripts/', 'references/', or 'assets/'", "Invalid reference 'REDLINING.md': Invalid directory 'REDLINING.md'. Must be 'scripts/', 'references/', or 'assets/'", "Invalid reference 'scripts/init_skill.py`': Referenced file does not exist: \"/Users/vinhnguyenxuan/.codex/skills/.system/skill-creator/scripts/init_skill.py`\"", "Invalid reference 'references/openai_yaml.md.': Referenced file does not exist: \"/Users/vinhnguyenxuan/.codex/skills/.system/skill-creator/references/openai_yaml.md.\"", "Invalid reference 'references/`.': Referenced file does not exist: \"/Users/vinhnguyenxuan/.codex/skills/.system/skill-creator/references/`.\"", "Invalid reference 'references/api_docs.md`': Referenced file does not exist: \"/Users/vinhnguyenxuan/.codex/skills/.system/skill-creator/references/api_docs.md`\"", "Invalid reference 'scripts/`': Referenced file does not exist: \"/Users/vinhnguyenxuan/.codex/skills/.system/skill-creator/scripts/`\"", "Invalid reference 'scripts/generate_openai_yaml.py`': Referenced file does not exist: \"/Users/vinhnguyenxuan/.codex/skills/.system/skill-creator/scripts/generate_openai_yaml.py`\"", "Invalid reference 'assets/`': Referenced file does not exist: \"/Users/vinhnguyenxuan/.codex/skills/.system/skill-creator/assets/`\"", "Invalid reference 'REFERENCE.md': Invalid directory 'REFERENCE.md'. Must be 'scripts/', 'references/', or 'assets/'", "Invalid reference 'assets/logo.png`': Referenced file does not exist: \"/Users/vinhnguyenxuan/.codex/skills/.system/skill-creator/assets/logo.png`\"", "Invalid reference 'FORMS.md': Invalid directory 'FORMS.md'. Must be 'scripts/', 'references/', or 'assets/'", "Invalid reference 'references/`': Referenced file does not exist: \"/Users/vinhnguyenxuan/.codex/skills/.system/skill-creator/references/`\"", "Invalid reference 'assets/slides.pptx`': Referenced file does not exist: \"/Users/vinhnguyenxuan/.codex/skills/.system/skill-creator/assets/slides.pptx`\"", "Invalid reference 'DOCX-JS.md': Invalid directory 'DOCX-JS.md'. Must be 'scripts/', 'references/', or 'assets/'", "Invalid reference 'references/finance.md`': Referenced file does not exist: \"/Users/vinhnguyenxuan/.codex/skills/.system/skill-creator/references/finance.md`\"", "Invalid reference 'assets/hello-world/`': Path is too deep: 'assets/hello-world/`'. Per Agent Skills spec, references must be one level deep."]
-2026-03-01T02:28:03.027886Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-creator from /Users/vinhnguyenxuan/.codex/skills/.system/skill-creator
-2026-03-01T02:28:03.028575Z  WARN vtcode_core::skills::manifest: File reference validation warnings: ["Invalid reference 'scripts/list-skills.py`': Referenced file does not exist: \"/Users/vinhnguyenxuan/.codex/skills/.system/skill-installer/scripts/list-skills.py`\""]
-2026-03-01T02:28:03.028588Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-installer from /Users/vinhnguyenxuan/.codex/skills/.system/skill-installer
-2026-03-01T02:28:03.028675Z  INFO vtcode_core::skills::discovery: Found 2 skills in /Users/vinhnguyenxuan/.codex/skills
-2026-03-01T02:28:03.028692Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./tools
-2026-03-01T02:28:03.028699Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./vendor/tools
-2026-03-01T02:28:03.028706Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/.vtcode/tools
-```
-
----
-
-also disable mcp auto-discovery and loading, only acviate on demand or via /mcp
-
-```
-2026-03-01T02:28:02.634324Z  INFO vtcode_core::mcp::client: Initializing MCP client with 0 configured providers
-2026-03-01T02:28:02.634955Z  INFO vtcode_core::mcp::client: MCP client initialization complete. Active providers: 0
-2026-03-01T02:28:03.011958Z  WARN vtcode_core::instructions: Instruction file `/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
-```
-
----
-
-2026-03-01T02:45:34.808531Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/context/tool_outputs
-2026-03-01T02:45:34.808557Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/history
-2026-03-01T02:45:34.808582Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/mcp/tools
-2026-03-01T02:45:34.808599Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/terminals
-2026-03-01T02:45:34.808614Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/skills
-
-===> disable mcps/skills tool context activataion only on activated
-
 ===
 
 improve /Users/vinhnguyenxuan/.vtcode/sessions/vtcode-debug.log, currently it seems to be concatinate? it should be per session-id

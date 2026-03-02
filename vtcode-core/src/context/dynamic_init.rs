@@ -38,14 +38,12 @@ impl DynamicContextDirs {
         }
     }
 
-    /// Get all directories as a slice
-    pub fn all_dirs(&self) -> Vec<&std::path::PathBuf> {
+    /// Get directories that should exist at startup.
+    pub fn startup_dirs(&self) -> Vec<&std::path::PathBuf> {
         vec![
             &self.tool_outputs,
             &self.history,
-            &self.mcp_tools,
             &self.terminals,
-            &self.skills,
         ]
     }
 }
@@ -64,8 +62,8 @@ pub async fn initialize_dynamic_context(
 
     let dirs = DynamicContextDirs::from_workspace(workspace);
 
-    // Create all directories
-    for dir in dirs.all_dirs() {
+    // Create startup directories only; MCP/skills directories are created on demand.
+    for dir in dirs.startup_dirs() {
         if let Err(e) = fs::create_dir_all(dir).await {
             warn!(
                 path = %dir.display(),
@@ -86,15 +84,8 @@ pub async fn initialize_dynamic_context(
         }
     }
 
-    // Create initial index files
-    if config.sync_skills {
-        create_initial_skills_index(&dirs.skills).await;
-    }
     if config.sync_terminals {
         create_initial_terminals_index(&dirs.terminals).await;
-    }
-    if config.sync_mcp_tools {
-        create_initial_mcp_index(&dirs.mcp_tools).await;
     }
 
     info!(
@@ -103,6 +94,50 @@ pub async fn initialize_dynamic_context(
     );
 
     Ok(dirs)
+}
+
+/// Ensure MCP dynamic-context directories exist once MCP is activated.
+pub async fn ensure_mcp_dynamic_context(
+    workspace: &Path,
+    config: &vtcode_config::DynamicContextConfig,
+) -> Result<()> {
+    if !config.enabled || !config.sync_mcp_tools {
+        return Ok(());
+    }
+
+    let dirs = DynamicContextDirs::from_workspace(workspace);
+    if let Err(e) = fs::create_dir_all(&dirs.mcp_tools).await {
+        warn!(
+            path = %dirs.mcp_tools.display(),
+            error = %e,
+            "Failed to create MCP dynamic context directory"
+        );
+        return Ok(());
+    }
+    create_initial_mcp_index(&dirs.mcp_tools).await;
+    Ok(())
+}
+
+/// Ensure skills dynamic-context directories exist once skills are activated.
+pub async fn ensure_skills_dynamic_context(
+    workspace: &Path,
+    config: &vtcode_config::DynamicContextConfig,
+) -> Result<()> {
+    if !config.enabled || !config.sync_skills {
+        return Ok(());
+    }
+
+    let dirs = DynamicContextDirs::from_workspace(workspace);
+    if let Err(e) = fs::create_dir_all(&dirs.skills).await {
+        warn!(
+            path = %dirs.skills.display(),
+            error = %e,
+            "Failed to create skills dynamic context directory"
+        );
+        return Ok(());
+    }
+    create_initial_skills_index(&dirs.skills).await;
+    Ok(())
 }
 
 /// Generate README content for .vtcode directory
@@ -255,15 +290,17 @@ mod tests {
         assert!(dirs.vtcode_dir.exists());
         assert!(dirs.tool_outputs.exists());
         assert!(dirs.history.exists());
-        assert!(dirs.skills.exists());
         assert!(dirs.terminals.exists());
+        assert!(!dirs.skills.exists());
+        assert!(!dirs.mcp_tools.exists());
 
         // Check README was created
         assert!(dirs.vtcode_dir.join("README.md").exists());
 
-        // Check index files were created
-        assert!(dirs.skills.join("INDEX.md").exists());
+        // Check startup index files were created
         assert!(dirs.terminals.join("INDEX.md").exists());
+        assert!(!dirs.skills.join("INDEX.md").exists());
+        assert!(!dirs.mcp_tools.join("INDEX.md").exists());
     }
 
     #[tokio::test]
@@ -280,5 +317,33 @@ mod tests {
 
         // Directories should not be created when disabled
         assert!(!dirs.vtcode_dir.exists());
+    }
+
+    #[tokio::test]
+    async fn test_ensure_mcp_dynamic_context() {
+        let temp = tempdir().unwrap();
+        let config = vtcode_config::DynamicContextConfig::default();
+
+        ensure_mcp_dynamic_context(temp.path(), &config)
+            .await
+            .unwrap();
+
+        let dirs = DynamicContextDirs::from_workspace(temp.path());
+        assert!(dirs.mcp_tools.exists());
+        assert!(dirs.mcp_tools.join("INDEX.md").exists());
+    }
+
+    #[tokio::test]
+    async fn test_ensure_skills_dynamic_context() {
+        let temp = tempdir().unwrap();
+        let config = vtcode_config::DynamicContextConfig::default();
+
+        ensure_skills_dynamic_context(temp.path(), &config)
+            .await
+            .unwrap();
+
+        let dirs = DynamicContextDirs::from_workspace(temp.path());
+        assert!(dirs.skills.exists());
+        assert!(dirs.skills.join("INDEX.md").exists());
     }
 }

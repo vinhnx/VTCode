@@ -23,7 +23,7 @@ use std::sync::Arc;
 use std::time::Duration as StdDuration;
 use tokio::sync::RwLock;
 use tokio::time::Duration;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, info, warn};
 use vtcode_core::acp::ToolPermissionCache;
 use vtcode_core::config::WorkspaceTrustLevel;
 use vtcode_core::config::loader::VTCodeConfig;
@@ -105,7 +105,7 @@ pub(crate) async fn initialize_session(
         build_tool_definitions(config, tool_documentation_mode, async_mcp_manager.as_ref()).await;
     let tools = Arc::new(RwLock::new(tool_definitions));
 
-    let skill_setup = discover_skills(config, resume, &tools).await;
+    let skill_setup = discover_skills(config, resume).await;
     let decision_ledger = Arc::new(RwLock::new(DecisionTracker::new()));
     let mut conversation_history = build_conversation_history_from_resume(resume).await;
     recover_history_from_crash(&mut conversation_history);
@@ -311,11 +311,7 @@ fn create_async_mcp_manager(vt_cfg: Option<&VTCodeConfig>) -> Option<Arc<AsyncMc
         approval_policy,
         Arc::new(|_event: mcp_events::McpEvent| {}),
     );
-    let manager_arc = Arc::new(manager);
-    if let Err(e) = manager_arc.start_initialization() {
-        error!("Failed to start async MCP initialization: {}", e);
-    }
-    Some(manager_arc)
+    Some(Arc::new(manager))
 }
 
 async fn determine_mcp_bootstrap_error(manager: Option<&Arc<AsyncMcpManager>>) -> Option<String> {
