@@ -119,6 +119,47 @@ fn responses_payload_uses_function_wrapper() {
 }
 
 #[test]
+fn responses_payload_passes_context_management() {
+    let provider = OpenAIProvider::with_model(String::new(), models::openai::GPT_5.to_string());
+    let mut request = sample_request(models::openai::GPT_5);
+    request.context_management = Some(json!([{
+        "type": "compaction",
+        "compact_threshold": 200000
+    }]));
+
+    let payload = provider
+        .convert_to_openai_responses_format(&request)
+        .expect("conversion should succeed");
+    let management = payload
+        .get("context_management")
+        .and_then(Value::as_array)
+        .expect("context_management should be present");
+    assert_eq!(management.len(), 1);
+    assert_eq!(
+        management[0].get("type").and_then(Value::as_str),
+        Some("compaction")
+    );
+}
+
+#[test]
+fn supports_responses_compaction_tracks_responses_api_availability() {
+    let openai = OpenAIProvider::with_model(String::new(), models::openai::GPT_5.to_string());
+    assert!(openai.supports_responses_compaction(models::openai::GPT_5));
+
+    let xai = OpenAIProvider::from_config(
+        Some(String::new()),
+        Some(models::openai::GPT_5.to_string()),
+        Some("https://api.x.ai/v1".to_string()),
+        None,
+        None,
+        None,
+        None,
+        None,
+    );
+    assert!(!xai.supports_responses_compaction(models::openai::GPT_5));
+}
+
+#[test]
 fn responses_payload_serializes_user_input_file_by_id() {
     let provider = OpenAIProvider::with_model(String::new(), models::openai::GPT_5.to_string());
     let request = provider::LLMRequest {

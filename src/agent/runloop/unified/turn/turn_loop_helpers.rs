@@ -1,9 +1,7 @@
 use anyhow::Result;
 
 use crate::agent::runloop::unified::turn::context::TurnLoopResult;
-use crate::agent::runloop::unified::turn::turn_helpers::{
-    display_error, display_status, supports_responses_chaining,
-};
+use crate::agent::runloop::unified::turn::turn_helpers::{display_error, display_status};
 use crate::agent::runloop::unified::turn::turn_loop::TurnLoopContext;
 use crate::hooks::lifecycle::SessionEndReason;
 use vtcode_core::config::constants::defaults::{
@@ -237,51 +235,6 @@ pub(super) async fn handle_pre_request_action(
             });
             if !duplicate_alert {
                 working_history.push(uni::Message::system(alert));
-            }
-            Ok(false)
-        }
-        PreRequestAction::Compact(msg) => {
-            display_status(ctx.renderer, &msg)?;
-            let provider_name = ctx.provider_client.name().to_string();
-            let supports_server_side_compaction = supports_responses_chaining(&provider_name);
-            let has_previous_response_chain = ctx
-                .session_stats
-                .previous_response_id_for(&provider_name, &ctx.config.model)
-                .is_some();
-
-            if supports_server_side_compaction && has_previous_response_chain {
-                display_status(
-                    ctx.renderer,
-                    "Using provider-side response chaining before local compaction.",
-                )?;
-                return Ok(false);
-            }
-
-            let compacted = ctx
-                .context_manager
-                .compact_history_if_needed(
-                    working_history,
-                    ctx.provider_client.as_ref(),
-                    &ctx.config.model,
-                )
-                .await?;
-            *working_history = compacted;
-
-            if let Some(team) = ctx.session_stats.team_state.as_ref() {
-                let snapshot = team.prompt_snapshot();
-                if !snapshot.is_empty() {
-                    working_history.retain(|msg| {
-                        !(msg.role == uni::MessageRole::System
-                            && msg
-                                .content
-                                .as_text_borrowed()
-                                .is_some_and(|t| t.starts_with("[vtcode:team_state]")))
-                    });
-                    working_history.push(uni::Message::system(format!(
-                        "[vtcode:team_state]\n{}",
-                        snapshot
-                    )));
-                }
             }
             Ok(false)
         }

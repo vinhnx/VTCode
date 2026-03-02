@@ -17,6 +17,7 @@ pub struct ProviderCapabilities {
     pub parallel_tool_config: bool,
     pub structured_output: bool,
     pub context_caching: bool,
+    pub responses_compaction: bool,
     pub vision: bool,
 }
 
@@ -44,6 +45,7 @@ pub fn get_cached_capabilities(provider: &dyn LLMProvider, model: &str) -> Provi
         parallel_tool_config: provider.supports_parallel_tool_config(model),
         structured_output: provider.supports_structured_output(model),
         context_caching: provider.supports_context_caching(model),
+        responses_compaction: provider.supports_responses_compaction(model),
         vision: provider.supports_vision(model),
     };
 
@@ -98,6 +100,11 @@ pub trait LLMProvider: Send + Sync {
 
     /// Whether the provider supports vision (image analysis) for given model
     fn supports_vision(&self, _model: &str) -> bool {
+        false
+    }
+
+    /// Whether the provider supports Responses API server-side compaction.
+    fn supports_responses_compaction(&self, _model: &str) -> bool {
         false
     }
 

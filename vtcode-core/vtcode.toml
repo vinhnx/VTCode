@@ -85,6 +85,7 @@ enable_relative_value_inference = true
 max_tool_calls_per_turn = 32
 max_tool_wall_clock_secs = 600
 max_tool_retries = 2
+auto_compaction_enabled = false
 
 [agent.circuit_breaker]
 enabled = true

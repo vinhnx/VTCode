@@ -33,7 +33,6 @@ surface_metrics = true
 -   `idle_expiration_seconds` — how long (in seconds) a cached prefix can remain idle before expiry.
 -   `surface_metrics` — when enabled, OpenAI usage responses expose cache-hit statistics surfaced through VT Code’s usage telemetry.
 -   `prompt_cache_retention` — optional time duration to set the Responses API server-side cache retention for prefixes (e.g., "24h"). Increasing this value can improve cache hit rates and reduce costs/latency for repeated prompt patterns on GPT-5-series.
--   `prompt_cache_retention` — optional time duration to set the Responses API server-side cache retention for prefixes (e.g., "24h"). Increasing this value can improve cache hit rates and reduce costs/latency for repeated prompt patterns on GPT-5-series.
 -   Default: `None` (opt-in) - VT Code does not set prompt_cache_retention by default; add it to `vtcode.toml` to enable it.
 -   Valid formats: `<number>[s|m|h|d]` (e.g., `30s`, `5m`, `24h`, `7d`).
 -   Valid range: minimum `1s`; maximum `30d`.
@@ -50,6 +49,16 @@ surface_metrics = true
     ```
 
 -   Applies only to OpenAI models that use the Responses API; for other models this value is ignored.
+
+## Prefix Stability Rules
+
+Prompt caching on Responses-style providers only hits when the new request keeps an exact prefix match. In VT Code, the most common cache breakers are:
+
+-   Changing `model`, `tools`, or sandbox/environment instruction blocks mid-session.
+-   Reordering tools between requests.
+-   Injecting new dynamic context above existing prompt items.
+
+To reduce avoidable misses, VT Code keeps tool ordering deterministic and defers MCP `tools/list_changed` refreshes to turn boundaries so an active turn sees a stable tool catalog.
 
 ### Anthropic (Claude)
 

@@ -282,6 +282,7 @@ pub(super) async fn run_interaction_loop_impl(
                 state.mcp_catalog_initialized,
                 state.last_mcp_refresh,
                 state.last_known_mcp_tools,
+                state.pending_mcp_refresh,
                 MCP_REFRESH_INTERVAL,
             )
             .await?;

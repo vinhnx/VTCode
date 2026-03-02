@@ -1,7 +1,6 @@
 use super::OpenAIProvider;
 use crate::config::constants::models;
 use crate::llm::client::LLMClient;
-use crate::llm::error_display;
 use crate::llm::provider;
 use crate::llm::types as llm_types;
 use async_trait::async_trait;
@@ -68,6 +67,21 @@ impl provider::LLMProvider for OpenAIProvider {
         };
 
         !models::openai::TOOL_UNAVAILABLE_MODELS.contains(&requested)
+    }
+
+    fn supports_responses_compaction(&self, model: &str) -> bool {
+        if !self.base_url.contains("api.openai.com") {
+            return false;
+        }
+        let requested = if model.trim().is_empty() {
+            self.model.as_ref()
+        } else {
+            model
+        };
+        !matches!(
+            self.responses_api_state(requested),
+            super::super::types::ResponsesApiState::Disabled
+        )
     }
 
     async fn stream(

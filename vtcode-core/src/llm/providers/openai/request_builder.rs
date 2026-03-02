@@ -246,6 +246,10 @@ pub(crate) fn build_responses_request(
         }
     }
 
+    if let Some(context_management) = &request.context_management {
+        openai_request["context_management"] = context_management.clone();
+    }
+
     let mut sampling_parameters = json!({});
     let mut has_sampling = false;
 

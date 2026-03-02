@@ -22,7 +22,7 @@ VT Code already routes GPT-5.1 (Codex) and other reasoning-focused models throug
 
 3. **Preserve reasoning items across API calls**: When VT Code issues function calls, the Responses API automatically keeps the `output` payload (which includes reasoning items), and we append it back into the context before reissuing the request. This mirrors the guidance to pass `previous_response_id` or to reinsert reasoning components so that subsequent calls continue where the model left off.
 
-4. **Prefer server-side continuity before local compaction**: VT Code now attempts Responses-style continuity (`previous_response_id`) first for providers that support it (OpenAI/OpenResponses paths), then falls back to local history compaction when needed. This keeps long tool loops coherent while preserving a safe fallback path.
+4. **Use hybrid continuity + server-side compaction**: VT Code keeps Responses-style continuity (`previous_response_id`) for OpenAI/OpenResponses providers and enables compaction via `context_management` on `/responses` requests when `agent.harness.auto_compaction_enabled = true`.
 
 5. **Use encrypted reasoning for ZDR-style compliance**: If you are restricted from storing model state, add the following flags when calling OpenAI via `vtcode.toml` overrides or CLI hacks:
 
@@ -52,6 +52,15 @@ VT Code already routes GPT-5.1 (Codex) and other reasoning-focused models throug
 7. **Function calling etiquette**: Ensure any VT Code tool definitions expose their JSON schema via the `function` payload. The Responses API requires each tool message to include a `tool_call_id`, and VT Code already handles this when serializing `ToolDefinition`s. Reinjecting reasoning summaries into `context` keeps every tool loop consistent with the `responses` guidance.
 
 8. **Reasoning visibility**: When troubleshooting, inspect `.vtcode/logs/trajectory.jsonl` for `reasoning` or `reasoning_summary` entries. The agent’s telemetry also logs `reasoning_effort` (see the inline status line guide) so you can correlate agent decisions with expectation-aligned reasoning levels.
+
+9. **Auto-compaction setting**: Auto compaction is disabled by default. Turn it on explicitly:
+
+    ```toml
+    [agent.harness]
+    auto_compaction_enabled = true
+    ```
+
+    VT Code applies this only on compatible Responses providers/endpoints.
 
 ## Example workflow
 

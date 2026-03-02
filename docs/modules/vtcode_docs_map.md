@@ -839,7 +839,7 @@ This document serves as an index of all VT Code documentation. When users ask qu
 
 - **File**: `docs/tools/PROMPT_CACHING_GUIDE.md`
   - **Content**: Prompt Caching Guide
-  - **Topics**: Global Settings, Provider Overrides, Usage Telemetry, Validation & Testing, Implementation Architecture
+  - **Topics**: Global Settings, Provider Overrides, Prefix Stability Rules, Usage Telemetry, Validation & Testing
   - **User Questions**: "What can you tell me about Prompt Caching Guide?", "How does Global Settings work?", "How does Provider Overrides work?"
 
 - **File**: `docs/tools/TOOL_SPECS.md`

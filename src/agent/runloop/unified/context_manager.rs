@@ -6,7 +6,6 @@ use anyhow::{Result, bail};
 use vtcode_config::constants::context::{
     TOKEN_BUDGET_CRITICAL_THRESHOLD, TOKEN_BUDGET_HIGH_THRESHOLD, TOKEN_BUDGET_WARNING_THRESHOLD,
 };
-use vtcode_core::compaction::{CompactionConfig, compact_history};
 use vtcode_core::llm::provider as uni;
 
 use crate::agent::runloop::unified::incremental_system_prompt::{
@@ -61,7 +60,6 @@ pub(crate) struct ContextManager {
     loaded_skills: Arc<RwLock<HashMap<String, vtcode_core::skills::types::Skill>>>,
     /// Incrementally tracked statistics
     cached_stats: ContextStats,
-    compaction_config: CompactionConfig,
     /// Agent configuration
     agent_config: Option<vtcode_config::core::AgentConfig>,
 }
@@ -78,7 +76,6 @@ impl ContextManager {
             incremental_prompt_builder: IncrementalSystemPrompt::new(),
             loaded_skills,
             cached_stats: ContextStats::default(),
-            compaction_config: CompactionConfig::default(),
             agent_config,
         }
     }
@@ -88,20 +85,10 @@ impl ContextManager {
     pub(crate) fn pre_request_check(
         &self,
         _history: &[uni::Message],
-        context_window_size: usize,
+        _context_window_size: usize,
     ) -> PreRequestAction {
-        let usage_ratio = if context_window_size == 0 {
-            0.0
-        } else {
-            self.cached_stats.total_token_usage as f64 / context_window_size as f64
-        };
-
-        if usage_ratio >= self.compaction_config.trigger_threshold {
-            return PreRequestAction::Compact(
-                "Context window at threshold. Compacting conversation history.".to_string(),
-            );
-        }
-
+        // Auto compaction is handled by provider-side Responses `context_management`.
+        // Keep pre-request flow non-mutating here.
         PreRequestAction::Proceed
     }
 
@@ -187,20 +174,6 @@ impl ContextManager {
                 }
             }
         }
-    }
-
-    pub(crate) async fn compact_history_if_needed(
-        &mut self,
-        history: &[uni::Message],
-        provider_client: &dyn uni::LLMProvider,
-        model: &str,
-    ) -> Result<Vec<uni::Message>> {
-        let new_history =
-            compact_history(provider_client, model, history, &self.compaction_config).await?;
-        if new_history.len() != history.len() {
-            self.cached_stats = ContextStats::default();
-        }
-        Ok(new_history)
     }
 
     /// Compute usage ratio once, avoiding repeated division
@@ -350,8 +323,6 @@ pub enum PreRequestAction {
     Warn(String),
     /// Stop execution and force user intervention or summary
     Stop(String),
-    /// Compact history before proceeding
-    Compact(String),
 }
 
 #[cfg(test)]
