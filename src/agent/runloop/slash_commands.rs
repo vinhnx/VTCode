@@ -88,15 +88,6 @@ pub enum SlashCommandOutcome {
     ManageSkills {
         action: crate::agent::runloop::SkillCommandAction,
     },
-    ManageAgents {
-        action: AgentCommandAction,
-    },
-    ManageTeams {
-        action: TeamCommandAction,
-    },
-    ManageSubagentConfig {
-        action: SubagentConfigCommandAction,
-    },
     SubmitPrompt {
         prompt: String,
     },
@@ -134,67 +125,6 @@ pub enum SlashCommandOutcome {
     ShareLog {
         format: SessionLogExportFormat,
     },
-}
-
-#[derive(Clone, Debug)]
-pub enum AgentCommandAction {
-    List,
-    Create,
-    Edit(String),
-    Delete(String),
-    #[allow(dead_code)]
-    Help,
-}
-
-#[derive(Clone, Debug)]
-pub enum TeamCommandAction {
-    Start {
-        name: Option<String>,
-        count: Option<usize>,
-        subagent_type: Option<String>,
-        model: Option<String>,
-    },
-    Add {
-        name: String,
-        subagent_type: Option<String>,
-        model: Option<String>,
-    },
-    Remove {
-        name: String,
-    },
-    TaskAdd {
-        description: String,
-        depends_on: Vec<u64>,
-    },
-    TaskClaim {
-        task_id: u64,
-    },
-    TaskComplete {
-        task_id: u64,
-        success: bool,
-        summary: Option<String>,
-    },
-    Assign {
-        task_id: u64,
-        teammate: String,
-    },
-    Message {
-        recipient: String,
-        message: String,
-    },
-    Broadcast {
-        message: String,
-    },
-    Tasks,
-    Teammates,
-    Model,
-    Stop,
-    Help,
-}
-
-#[derive(Clone, Debug)]
-pub enum SubagentConfigCommandAction {
-    Model,
 }
 
 #[derive(Clone, Debug)]
@@ -464,12 +394,11 @@ pub async fn handle_slash_command(
         "agents" => handle_agents_command(args, renderer),
         "team" => handle_team_command(args, renderer),
         "subagent" => {
-            if args.trim().is_empty() || args.trim().eq_ignore_ascii_case("model") {
-                return Ok(SlashCommandOutcome::ManageSubagentConfig {
-                    action: SubagentConfigCommandAction::Model,
-                });
-            }
-            renderer.line(MessageStyle::Error, "Usage: /subagent model")?;
+            let _ = args;
+            renderer.line(
+                MessageStyle::Error,
+                "The subagents system has been removed. '/subagent' is no longer available.",
+            )?;
             Ok(SlashCommandOutcome::Handled)
         }
         "plan" => handle_plan_command(args, renderer),

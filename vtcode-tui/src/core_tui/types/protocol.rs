@@ -154,10 +154,9 @@ pub enum InlineEvent {
     FileSelected(String),
     LaunchEditor,
     ForceCancelPtySession,
-    /// Toggle editing mode (Shift+Tab cycles through Edit -> Plan -> Edit)
-    /// When agent teams are active, Shift+Tab toggles delegate mode instead.
+    /// Toggle editing mode (Shift+Tab cycles through Edit -> Plan -> Edit).
     ToggleMode,
-    /// Cycle active teammate (Shift+Up/Down when agent teams are active)
+    /// Reserved for legacy team navigation keybindings.
     TeamPrev,
     TeamNext,
     /// Plan confirmation result (human-in-the-loop)

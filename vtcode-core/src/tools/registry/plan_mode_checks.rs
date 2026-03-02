@@ -35,7 +35,6 @@ impl ToolRegistry {
             tool_names::LIST_SKILLS,
             tool_names::LOAD_SKILL,
             tool_names::LOAD_SKILL_RESOURCE,
-            tool_names::SPAWN_SUBAGENT,
             "get_errors",
             "search_tools",
             "think",

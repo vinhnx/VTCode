@@ -34,7 +34,7 @@ pub enum TrustLevel {
     /// Standard trust (default for most operations)
     #[default]
     Standard,
-    /// Elevated trust (e.g., internal subagent, pre-approved patterns)
+    /// Elevated trust (e.g., internal workflows, pre-approved patterns)
     Elevated,
     /// Full trust (e.g., system tools, fully autonomous mode)
     Full,
@@ -140,7 +140,7 @@ pub struct ToolExecutionContext {
     pub invocation_id: String,
     /// Session ID for grouping related calls
     pub session_id: String,
-    /// Parent invocation ID (for subagent chains)
+    /// Parent invocation ID (for nested tool chains)
     pub parent_invocation_id: Option<String>,
     /// Turn number in conversation
     pub turn_number: Option<u32>,
@@ -185,8 +185,8 @@ impl ToolExecutionContext {
         }
     }
 
-    /// Create context for a subagent call
-    pub fn for_subagent(&self, trust_level: TrustLevel) -> Self {
+    /// Create context for a nested child call.
+    pub fn for_child(&self, trust_level: TrustLevel) -> Self {
         Self {
             trust_level,
             approval_state: ApprovalState::Pending,
@@ -673,14 +673,14 @@ mod tests {
     }
 
     #[test]
-    fn test_context_for_subagent() {
+    fn test_context_for_child() {
         let ctx = ToolExecutionContext::new("session-1");
         let original_id = ctx.invocation_id.clone();
 
-        let subagent_ctx = ctx.for_subagent(TrustLevel::Elevated);
-        assert_eq!(subagent_ctx.trust_level, TrustLevel::Elevated);
-        assert_eq!(subagent_ctx.parent_invocation_id, Some(original_id));
-        assert_eq!(subagent_ctx.attempt, 1);
+        let child_ctx = ctx.for_child(TrustLevel::Elevated);
+        assert_eq!(child_ctx.trust_level, TrustLevel::Elevated);
+        assert_eq!(child_ctx.parent_invocation_id, Some(original_id));
+        assert_eq!(child_ctx.attempt, 1);
     }
 
     #[test]

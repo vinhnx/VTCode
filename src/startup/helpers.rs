@@ -379,12 +379,30 @@ mod tests {
 
     #[test]
     fn applies_inline_overrides_to_config() -> Result<()> {
+        let _guard = workspace_guard();
+        let temp_dir = TempDir::new()?;
+        let previous_config_dir = env::var("VTCODE_CONFIG").ok();
+        unsafe {
+            env::set_var("VTCODE_CONFIG", temp_dir.path());
+        }
+
         let overrides = vec![("agent.provider".to_owned(), "\"openai\"".to_owned())];
 
-        let manager = ConfigBuilder::new().cli_overrides(&overrides).build()?;
+        let manager = ConfigBuilder::new()
+            .workspace(temp_dir.path().to_path_buf())
+            .cli_overrides(&overrides)
+            .build()?;
         let config = manager.config();
 
         assert_eq!(config.agent.provider, "openai");
+
+        unsafe {
+            if let Some(previous) = previous_config_dir {
+                env::set_var("VTCODE_CONFIG", previous);
+            } else {
+                env::remove_var("VTCODE_CONFIG");
+            }
+        }
         Ok(())
     }
 }

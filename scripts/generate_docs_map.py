@@ -16,7 +16,6 @@ CATEGORY_MAPPING = {
     "guides": "Integrations & Tooling",
     "mcp": "Integrations & Tooling",
     "ide": "Editor Integrations",
-    "subagents": "Advanced Features & Research",
     "tools": "Tools & Functionality",
     "modules": "Modules & Implementation",
 }
@@ -196,8 +195,6 @@ def main():
         "### Workflows & Agent Behavior",
         "- \"What is Plan Mode and how do I use it?\"",
         "- \"How do I use the @ symbol to reference files in my messages?\"",
-        "- \"What are agent teams and how do they work?\"",
-        "- \"How can I delegate tasks to specialized subagents like the code-reviewer?\"",
         "- \"How do I use the /files slash command to browse my workspace?\"",
         "- \"What is the Decision Ledger and how does it help with coherence?\"",
         "- \"How does the agent handle long-running conversations?\"",

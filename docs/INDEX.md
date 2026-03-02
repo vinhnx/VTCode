@@ -19,7 +19,6 @@ Last reviewed: 2026-02-16
 - [Security Model](security/SECURITY_MODEL.md) - Security architecture.
 - [Process Hardening](development/PROCESS_HARDENING.md) - Runtime hardening controls.
 - [MCP Start Here](mcp/00_START_HERE.md) - MCP integration onboarding.
-- [Subagents Guide](subagents/SUBAGENTS.md) - Subagent types and configuration.
 - [Testing Guide](development/testing.md) - Test strategy and commands.
 
 ## Engineering References

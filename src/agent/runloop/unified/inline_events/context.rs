@@ -131,12 +131,8 @@ impl<'a> InlineEventContext<'a> {
                     self.input_processor().submit("/mode".to_string())
                 }
             }
-            InlineEvent::TeamPrev => InlineLoopAction::SwitchTeammate(
-                crate::agent::runloop::unified::inline_events::TeamSwitchDirection::Previous,
-            ),
-            InlineEvent::TeamNext => InlineLoopAction::SwitchTeammate(
-                crate::agent::runloop::unified::inline_events::TeamSwitchDirection::Next,
-            ),
+            InlineEvent::TeamPrev => InlineLoopAction::SwitchTeammate,
+            InlineEvent::TeamNext => InlineLoopAction::SwitchTeammate,
             InlineEvent::PlanConfirmation(result) => {
                 use vtcode_tui::PlanConfirmationResult;
                 // Handle plan confirmation result (Claude Code style HITL)

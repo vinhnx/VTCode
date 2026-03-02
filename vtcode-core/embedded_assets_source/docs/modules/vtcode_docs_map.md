@@ -10,23 +10,6 @@ This document serves as an index of all VT Code documentation. When users ask qu
 
 ## Documentation Categories
 
-### Advanced Features & Research
-
-- **File**: `docs/subagents/agent-teams.md`
-  - **Content**: Agent Teams (Experimental)
-  - **Topics**: Enablement, Commands, Keybindings (Inline UI), Modes, Teammate Sessions (CLI)
-  - **User Questions**: "What can you tell me about Agent Teams (Experimental)?", "How does Enablement work?", "How does Commands work?"
-
-- **File**: `docs/subagents/SUBAGENTS_IMPLEMENTATION.md`
-  - **Content**: Sub-Agents Implementation Guide for VT Code
-  - **Topics**: Overview, Current Architecture Alignment, Recommended Format Updates, Key Agent Descriptions (for Auto-Delegation), Model Optimization
-  - **User Questions**: "What can you tell me about Sub-Agents Implementation Guide for VT Code?", "How does Overview work?", "How does Current Architecture Alignment work?"
-
-- **File**: `docs/subagents/SUBAGENTS.md`
-  - **Content**: VT Code Subagents
-  - **Topics**: Why Use Subagents, How Subagents Work, When to Use Subagents, Agent Teams (MVP), Built-in Subagents
-  - **User Questions**: "What can you tell me about VT Code Subagents?", "How does Why Use Subagents work?", "How does How Subagents Work work?"
-
 ### Configuration & Customization
 
 - **File**: `docs/config/CONFIG_FIELD_REFERENCE.md`
@@ -613,8 +596,8 @@ This document serves as an index of all VT Code documentation. When users ask qu
 
 - **File**: `docs/skills/SKILL_TOOL_USAGE.md`
   - **Content**: Skill Tool Usage Guide
-  - **Topics**: Tool Workflow, Security Review Results, Tool Reference, When to Use Each Tool, Best Practices
-  - **User Questions**: "What can you tell me about Skill Tool Usage Guide?", "How does Tool Workflow work?", "How does Security Review Results work?"
+  - **Topics**: Tool Workflow, Tool Reference, Best Practices, Troubleshooting
+  - **User Questions**: "What can you tell me about Skill Tool Usage Guide?", "How does Tool Workflow work?", "How does Tool Reference work?"
 
 - **File**: `docs/styling/styling_integration.md`
   - **Content**: Styling Integration: anstyle-crossterm
@@ -856,7 +839,7 @@ This document serves as an index of all VT Code documentation. When users ask qu
 
 - **File**: `docs/user-guide/commands.md`
   - **Content**: Command Reference
-  - **Topics**: grep_file (ripgrep-like), File operations, Agent teams, Quick Actions in Chat Input, stats (session metrics)
+  - **Topics**: grep_file (ripgrep-like), File operations, Quick Actions in Chat Input, stats (session metrics), update (binary updates)
   - **User Questions**: "What can you tell me about Command Reference?", "How does grep_file (ripgrep-like) work?", "How does File operations work?"
 
 - **File**: `docs/user-guide/interactive-mode.md`
@@ -880,8 +863,6 @@ This document serves as an index of all VT Code documentation. When users ask qu
 ### Workflows & Agent Behavior
 - "What is Plan Mode and how do I use it?"
 - "How do I use the @ symbol to reference files in my messages?"
-- "What are agent teams and how do they work?"
-- "How can I delegate tasks to specialized subagents like the code-reviewer?"
 - "How do I use the /files slash command to browse my workspace?"
 - "What is the Decision Ledger and how does it help with coherence?"
 - "How does the agent handle long-running conversations?"

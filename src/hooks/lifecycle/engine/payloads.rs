@@ -101,6 +101,7 @@ impl LifecycleHookEngine {
         }))
     }
 
+    #[allow(dead_code)]
     pub(super) async fn build_teammate_idle_payload(
         &self,
         teammate: &str,

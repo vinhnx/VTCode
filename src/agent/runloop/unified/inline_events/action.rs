@@ -6,7 +6,7 @@ pub(crate) enum InlineLoopAction {
     Exit(SessionEndReason),
     ResumeSession(String), // Session identifier to resume
     ToggleDelegateMode,
-    SwitchTeammate(TeamSwitchDirection),
+    SwitchTeammate,
     /// Plan approved (Claude Code style HITL) - transition from Plan to Edit mode
     PlanApproved {
         /// If true, auto-accept file edits without prompting
@@ -20,10 +20,4 @@ pub(crate) enum InlineLoopAction {
     DiffApproved,
     /// Diff preview rejected - cancel the edit changes
     DiffRejected,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum TeamSwitchDirection {
-    Next,
-    Previous,
 }

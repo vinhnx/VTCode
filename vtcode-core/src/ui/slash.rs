@@ -71,18 +71,6 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
             name: "skills",
             description: "Manage skills and plugins (usage: /skills list|load|unload|use)",
         },
-        SlashCommandInfo {
-            name: "agents",
-            description: "Create, edit, and manage subagents (usage: /agents [--create|--edit|--delete])",
-        },
-        SlashCommandInfo {
-            name: "team",
-            description: "Manage agent teams (usage: /team start|task|assign|message|teammates|stop)",
-        },
-        SlashCommandInfo {
-            name: "subagent",
-            description: "Configure subagent defaults (usage: /subagent model)",
-        },
         // Status and diagnostics
         SlashCommandInfo {
             name: "status",

@@ -4,7 +4,6 @@ use std::time::Duration;
 use crate::agent::runloop::model_picker::ModelPickerState;
 use crate::agent::runloop::unified::inline_events::{
     InlineEventContext, InlineInterruptCoordinator, InlineLoopAction, InlineQueueState,
-    TeamSwitchDirection,
 };
 use crate::agent::runloop::unified::palettes::ActivePalette;
 use crate::agent::runloop::unified::state::CtrlCState;
@@ -237,14 +236,8 @@ async fn team_navigation_events_map_to_switch_directions() {
         .await
         .expect("process team next");
 
-    assert!(matches!(
-        prev,
-        InlineLoopAction::SwitchTeammate(TeamSwitchDirection::Previous)
-    ));
-    assert!(matches!(
-        next,
-        InlineLoopAction::SwitchTeammate(TeamSwitchDirection::Next)
-    ));
+    assert!(matches!(prev, InlineLoopAction::SwitchTeammate));
+    assert!(matches!(next, InlineLoopAction::SwitchTeammate));
 }
 
 #[tokio::test]

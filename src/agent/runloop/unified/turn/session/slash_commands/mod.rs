@@ -134,15 +134,6 @@ pub async fn handle_outcome(
         SlashCommandOutcome::ManageSkills { action } => {
             handlers::handle_manage_skills(ctx, action).await
         }
-        SlashCommandOutcome::ManageAgents { action } => {
-            handlers::handle_manage_agents(ctx, action).await
-        }
-        SlashCommandOutcome::ManageTeams { action } => {
-            handlers::handle_manage_teams(ctx, action).await
-        }
-        SlashCommandOutcome::ManageSubagentConfig { action } => {
-            handlers::handle_manage_subagent_config(ctx, action).await
-        }
         SlashCommandOutcome::RewindToTurn { turn, scope } => {
             handlers::handle_rewind_to_turn(ctx, turn, scope).await
         }

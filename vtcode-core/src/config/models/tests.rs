@@ -192,31 +192,6 @@ fn test_provider_defaults() {
     );
 
     assert_eq!(
-        ModelId::default_subagent_for_provider(Provider::Gemini),
-        ModelId::Gemini3FlashPreview
-    );
-    assert_eq!(
-        ModelId::default_subagent_for_provider(Provider::OpenAI),
-        ModelId::GPT5Mini
-    );
-    assert_eq!(
-        ModelId::default_subagent_for_provider(Provider::Anthropic),
-        ModelId::ClaudeSonnet45
-    );
-    assert_eq!(
-        ModelId::default_subagent_for_provider(Provider::DeepSeek),
-        ModelId::DeepSeekChat
-    );
-    assert_eq!(
-        ModelId::default_subagent_for_provider(Provider::Ollama),
-        ModelId::OllamaQwen317b
-    );
-    assert_eq!(
-        ModelId::default_subagent_for_provider(Provider::ZAI),
-        ModelId::OllamaGlm5Cloud
-    );
-
-    assert_eq!(
         ModelId::default_single_for_provider(Provider::DeepSeek),
         ModelId::DeepSeekReasoner
     );
@@ -234,7 +209,6 @@ fn test_provider_defaults() {
 fn test_model_defaults() {
     assert_eq!(ModelId::default(), ModelId::Gemini3FlashPreview);
     assert_eq!(ModelId::default_orchestrator(), ModelId::Gemini31ProPreview);
-    assert_eq!(ModelId::default_subagent(), ModelId::Gemini3FlashPreview);
 }
 
 #[test]

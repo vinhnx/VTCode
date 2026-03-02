@@ -3,14 +3,11 @@ use anyhow::{Context, Result};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tracing::{debug, info, warn};
+use tracing::{info, warn};
 use vtcode_config::constants::tools as tool_constants;
-use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::llm::provider as uni;
-use vtcode_core::subagents::SubagentRegistry;
 use vtcode_core::tools::ToolRegistry;
-use vtcode_core::tools::handlers::SpawnSubagentTool;
 use vtcode_core::tools::traits::Tool;
 
 pub(crate) struct SkillSetupState {
@@ -105,12 +102,10 @@ pub(crate) async fn discover_skills(
     }
 }
 
-pub(crate) async fn register_skill_and_subagent_tools(
+pub(crate) async fn register_skill_tools(
     tool_registry: &mut ToolRegistry,
     tools: &Arc<RwLock<Vec<uni::ToolDefinition>>>,
     skill_setup: &SkillSetupState,
-    config: &CoreAgentConfig,
-    vt_cfg: Option<&VTCodeConfig>,
 ) -> Result<()> {
     register_list_skills_tool(
         tool_registry,
@@ -130,7 +125,6 @@ pub(crate) async fn register_skill_and_subagent_tools(
         &skill_setup.discovered_skill_adapters,
     )
     .await?;
-    register_spawn_subagent_tool(tool_registry, tools, config, vt_cfg).await?;
     Ok(())
 }
 
@@ -284,74 +278,6 @@ async fn register_load_skill_tool(
                 "name": {"type": "string"}
             },
             "required": ["name"]
-        }),
-    ));
-    Ok(())
-}
-
-async fn register_spawn_subagent_tool(
-    tool_registry: &mut ToolRegistry,
-    tools: &Arc<RwLock<Vec<uni::ToolDefinition>>>,
-    config: &CoreAgentConfig,
-    vt_cfg: Option<&VTCodeConfig>,
-) -> Result<()> {
-    let subagent_config = vt_cfg.map(|cfg| cfg.subagents.clone()).unwrap_or_default();
-    if !subagent_config.enabled {
-        debug!("Subagents are disabled via vtcode.toml");
-        return Ok(());
-    }
-
-    let subagent_registry =
-        SubagentRegistry::new(config.workspace.clone(), subagent_config).await?;
-    let spawn_subagent_tool = SpawnSubagentTool::new(
-        Arc::new(subagent_registry),
-        config.clone(),
-        Arc::new(tool_registry.clone()),
-        config.workspace.clone(),
-    );
-    let spawn_subagent_reg = vtcode_core::tools::registry::ToolRegistration::from_tool_instance(
-        tool_constants::SPAWN_SUBAGENT,
-        vtcode_core::config::types::CapabilityLevel::Basic,
-        spawn_subagent_tool,
-    );
-    tool_registry
-        .register_tool(spawn_subagent_reg)
-        .await
-        .context("Failed to register spawn_subagent tool")?;
-
-    let mut tools_guard = tools.write().await;
-    tools_guard.push(uni::ToolDefinition::function(
-        tool_constants::SPAWN_SUBAGENT.to_string(),
-        "Spawn a specialized subagent to handle a specific task with isolated context. Subagents are useful for focused expertise or preserving main conversation context.".to_string(),
-        serde_json::json!({
-            "type": "object",
-            "properties": {
-                "prompt": {
-                    "type": "string",
-                    "description": "Task description for the subagent"
-                },
-                "subagent_type": {
-                    "type": "string",
-                    "description": "Optional: specific subagent type (explore, plan, general, code-reviewer, debugger)"
-                },
-                "resume": {
-                    "type": "string",
-                    "description": "Optional: agent ID to resume"
-                },
-                "thoroughness": {
-                    "type": "string",
-                    "description": "Optional: thoroughness level (quick, medium, very_thorough). Default: medium."
-                },
-                "timeout_seconds": {
-                    "type": "integer",
-                    "description": "Optional: timeout in seconds"
-                },
-                "parent_context": {
-                    "type": "string",
-                    "description": "Optional: context from parent agent"
-                }
-            },
-            "required": ["prompt"]
         }),
     ));
     Ok(())

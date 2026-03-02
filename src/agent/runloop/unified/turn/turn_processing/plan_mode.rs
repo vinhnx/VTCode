@@ -14,7 +14,6 @@ fn has_discovery_tool(session_stats: &crate::agent::runloop::unified::state::Ses
         tools::LIST_FILES,
         tools::GREP_FILE,
         tools::UNIFIED_SEARCH,
-        tools::SPAWN_SUBAGENT,
     ]
     .iter()
     .any(|tool| session_stats.has_tool(tool))

@@ -1,38 +1,5 @@
 use super::SessionLogExportFormat;
 
-pub(super) fn extract_flag_value(tokens: &mut Vec<String>, flag: &str) -> Option<String> {
-    let needle = flag.to_ascii_lowercase();
-    if let Some(pos) = tokens
-        .iter()
-        .position(|token| token.to_ascii_lowercase() == needle)
-    {
-        let value = tokens.get(pos + 1).cloned();
-        let end = (pos + 2).min(tokens.len());
-        tokens.drain(pos..end);
-        return value;
-    }
-
-    if let Some(pos) = tokens.iter().position(|token| {
-        token
-            .to_ascii_lowercase()
-            .starts_with(&format!("{}=", needle))
-    }) {
-        let token = tokens.remove(pos);
-        if let Some(value) = token.split_once('=').map(|x| x.1) {
-            return Some(value.to_string());
-        }
-    }
-
-    None
-}
-
-pub(super) fn parse_depends_on(value: &str) -> Vec<u64> {
-    value
-        .split([',', ' '])
-        .filter_map(|item| item.trim().parse::<u64>().ok())
-        .collect()
-}
-
 pub(super) fn split_command_and_args(input: &str) -> (&str, &str) {
     if let Some((idx, _)) = input.char_indices().find(|(_, ch)| ch.is_whitespace()) {
         let (command, rest) = input.split_at(idx);

@@ -82,7 +82,6 @@ pub(crate) async fn run_single_agent_loop_unified(
     _skip_confirmations: bool,
     full_auto: bool,
     plan_mode: bool,
-    team_context: Option<vtcode_core::agent_teams::TeamContext>,
     resume: Option<ResumeSession>,
     mut steering_receiver: Option<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>,
 ) -> Result<()> {
@@ -92,7 +91,6 @@ pub(crate) async fn run_single_agent_loop_unified(
         _skip_confirmations,
         full_auto,
         plan_mode,
-        team_context,
         resume,
         &mut steering_receiver,
     )

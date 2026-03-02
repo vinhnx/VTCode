@@ -69,24 +69,7 @@ unified_search grep "fn main" src/
 
 **Priority**: Medium (requires tool refactoring)
 
-### 2. Subagent Naming
-
-**Current friction**:
-```
-spawn_subagent {
-  "prompt": "...",
-  "subagent_type": "explore"
-}
-```
-
-**Intuitive expectation**:
-```
-spawn_subagent --name explore --prompt "..."
-```
-
-**Priority**: Medium (ergonomics improvement)
-
-### 3. Configuration Shortcuts
+### 2. Configuration Shortcuts
 
 **Current friction**:
 - Agents must know exact config file locations

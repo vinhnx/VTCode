@@ -289,7 +289,6 @@ unified_exec = "allow"
 load_skill = "allow"
 open_file = "allow"
 search_file = "allow"
-spawn_subagent = "allow"
 task_tracker = "allow"
 exec_code = "allow"
 "send_command<|channel|>analysis" = "allow"
@@ -945,19 +944,6 @@ min-keyword-matches = 2
 
 [output_style]
 active_style = "default"
-
-[subagents]
-enabled = true
-# Personal subagent model override should live in ~/.vtcode/vtcode.toml
-# default_model = "gpt-5.3-codex"
-max_concurrent = 3
-default_timeout_seconds = 300
-additional_agent_dirs = []
-
-[agent_teams]
-enabled = true
-max_teammates = 3
-teammate_mode = "auto"
 
 [dotfile_protection]
 enabled = true

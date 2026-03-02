@@ -20,9 +20,7 @@ use crate::agent::runloop::unified::display::display_user_message;
 use crate::agent::runloop::unified::inline_events::{
     InlineEventLoopResources, InlineInterruptCoordinator, InlineLoopAction, poll_inline_loop_action,
 };
-use crate::agent::runloop::unified::model_selection::{
-    finalize_model_selection, finalize_subagent_model_selection, finalize_team_model_selection,
-};
+use crate::agent::runloop::unified::model_selection::finalize_model_selection;
 use crate::agent::runloop::unified::state::ModelPickerTarget;
 use crate::agent::runloop::unified::turn::session::{
     mcp_lifecycle, slash_command_handler, tool_dispatch,
@@ -31,7 +29,6 @@ use crate::hooks::lifecycle::SessionEndReason;
 use vtcode::config_watcher::SimpleConfigWatcher;
 
 use super::interaction_loop::{InteractionLoopContext, InteractionOutcome, InteractionState};
-use super::interaction_loop_team::{direct_message_target, handle_team_switch, poll_team_mailbox};
 
 const REPEATED_FOLLOW_UP_DIRECTIVE: &str = "User has asked to continue repeatedly. Do not keep exploring silently. In your next assistant response, provide a concrete status update: completed work, current blocker, and the exact next action. If a recent tool error provides a replacement tool (for example read_pty_session), use it directly instead of retrying the same failing call.";
 const REPEATED_FOLLOW_UP_STALLED_DIRECTIVE: &str = "Previous turn stalled or aborted and the user asked to continue repeatedly. Recover autonomously without asking for more user prompts: identify the likely root cause from recent errors, execute exactly one adjusted strategy, and then provide either a completion summary or a final blocker review with specific next action. If the last tool error includes fallback_tool/fallback_tool_args, use that fallback first. Do not repeat a failing tool call when the error already provides the next tool to use.";
@@ -242,10 +239,6 @@ pub(super) async fn run_interaction_loop_impl(
             context_used_tokens,
             context_limit_tokens,
         );
-        crate::agent::runloop::unified::status_line::update_team_status(
-            state.input_status_state,
-            ctx.session_stats,
-        );
 
         if let Err(error) =
             crate::agent::runloop::unified::status_line::update_input_status_if_changed(
@@ -259,10 +252,6 @@ pub(super) async fn run_interaction_loop_impl(
             .await
         {
             tracing::warn!("Failed to refresh status line: {}", error);
-        }
-
-        if let Err(error) = poll_team_mailbox(ctx).await {
-            tracing::warn!("Failed to read team mailbox: {}", error);
         }
 
         if ctx.ctrl_c_state.is_exit_requested() {
@@ -302,7 +291,7 @@ pub(super) async fn run_interaction_loop_impl(
             provider_client: ctx.provider_client,
             session_bootstrap: ctx.session_bootstrap,
             full_auto: ctx.full_auto,
-            team_active: ctx.session_stats.team_context.is_some(),
+            team_active: false,
         };
 
         let inline_action =
@@ -313,19 +302,17 @@ pub(super) async fn run_interaction_loop_impl(
             InlineLoopAction::Continue => continue,
             InlineLoopAction::Submit(text) => text,
             InlineLoopAction::ToggleDelegateMode => {
-                let enabled = ctx.session_stats.toggle_delegate_mode();
                 ctx.renderer.line(
                     MessageStyle::Info,
-                    if enabled {
-                        "Delegate mode enabled (coordination only)."
-                    } else {
-                        "Delegate mode disabled."
-                    },
+                    "Agent teams were removed. Delegate mode is no longer available.",
                 )?;
                 continue;
             }
-            InlineLoopAction::SwitchTeammate(direction) => {
-                handle_team_switch(ctx, direction).await?;
+            InlineLoopAction::SwitchTeammate => {
+                ctx.renderer.line(
+                    MessageStyle::Info,
+                    "Agent teams were removed. Teammate switching is no longer available.",
+                )?;
                 continue;
             }
             InlineLoopAction::Exit(reason) => {
@@ -454,17 +441,6 @@ pub(super) async fn run_interaction_loop_impl(
             slash_command_handler::CommandProcessingResult::NotHandled => {}
         }
 
-        if let Some(target) = direct_message_target(ctx.session_stats)
-            && !input_owned.trim_start().starts_with('/')
-            && let Some(team) = ctx.session_stats.team_state.as_mut()
-        {
-            team.send_message(&target, "lead", input_owned.clone(), None)
-                .await?;
-            ctx.renderer
-                .line(MessageStyle::Info, &format!("Message sent to {}.", target))?;
-            continue;
-        }
-
         if let Some(hooks) = ctx.lifecycle_hooks {
             match hooks.run_user_prompt_submit(input_owned.as_str()).await {
                 Ok(outcome) => {
@@ -512,57 +488,24 @@ pub(super) async fn run_interaction_loop_impl(
                     };
                     let target = ctx.session_stats.model_picker_target;
                     ctx.session_stats.model_picker_target = ModelPickerTarget::Main;
-                    match target {
-                        ModelPickerTarget::Main => {
-                            if let Err(err) = finalize_model_selection(
-                                ctx.renderer,
-                                &picker_state,
-                                selection,
-                                ctx.config,
-                                ctx.vt_cfg,
-                                ctx.provider_client,
-                                ctx.session_bootstrap,
-                                ctx.handle,
-                                ctx.full_auto,
-                            )
-                            .await
-                            {
-                                ctx.renderer.line(
-                                    MessageStyle::Error,
-                                    &format!("Failed to apply model selection: {}", err),
-                                )?;
-                            }
-                        }
-                        ModelPickerTarget::SubagentDefault => {
-                            if let Err(err) = finalize_subagent_model_selection(
-                                ctx.renderer,
-                                selection,
-                                ctx.vt_cfg,
-                                &ctx.config.workspace,
-                            )
-                            .await
-                            {
-                                ctx.renderer.line(
-                                    MessageStyle::Error,
-                                    &format!("Failed to set subagent model: {}", err),
-                                )?;
-                            }
-                        }
-                        ModelPickerTarget::TeamDefault => {
-                            if let Err(err) = finalize_team_model_selection(
-                                ctx.renderer,
-                                selection,
-                                ctx.vt_cfg,
-                                &ctx.config.workspace,
-                            )
-                            .await
-                            {
-                                ctx.renderer.line(
-                                    MessageStyle::Error,
-                                    &format!("Failed to set team model: {}", err),
-                                )?;
-                            }
-                        }
+                    if target == ModelPickerTarget::Main
+                        && let Err(err) = finalize_model_selection(
+                            ctx.renderer,
+                            &picker_state,
+                            selection,
+                            ctx.config,
+                            ctx.vt_cfg,
+                            ctx.provider_client,
+                            ctx.session_bootstrap,
+                            ctx.handle,
+                            ctx.full_auto,
+                        )
+                        .await
+                    {
+                        ctx.renderer.line(
+                            MessageStyle::Error,
+                            &format!("Failed to apply model selection: {}", err),
+                        )?;
                     }
                     continue;
                 }

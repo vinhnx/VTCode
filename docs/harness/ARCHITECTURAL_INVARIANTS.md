@@ -19,7 +19,7 @@ types / commons
     ↓
   tools
     ↓
-  agent (runloop, subagents)
+  agent (runloop, modes)
     ↓
    TUI (src/)
 ```

@@ -329,7 +329,6 @@ async fn run() -> Result<()> {
                 skip_confirmations,
                 full_auto_requested,
                 startup.plan_mode_requested,
-                startup.team_context.clone(),
             )
             .await?;
         }
@@ -365,7 +364,6 @@ async fn run() -> Result<()> {
                 skip_confirmations,
                 full_auto_requested,
                 startup.plan_mode_requested,
-                startup.team_context.clone(),
             )
             .await?;
         }
@@ -504,7 +502,6 @@ async fn run() -> Result<()> {
                 skip_confirmations,
                 full_auto_requested,
                 startup.plan_mode_requested,
-                startup.team_context.clone(),
             )
             .await?;
         }

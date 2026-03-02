@@ -31,7 +31,7 @@ If a decision isn't in the repo, it hasn't been made.
 - AGENTS.md provides a table of contents: workspace structure, key commands, critical conventions, and pointers to deeper documentation.
 - `docs/harness/` contains the operational knowledge base: beliefs, invariants, quality scores, execution plans.
 - `docs/ARCHITECTURE.md` describes the system design.
-- Domain-specific docs (MCP, subagents, security) live in their respective `docs/` subdirectories.
+- Domain-specific docs (MCP, providers, security) live in their respective `docs/` subdirectories.
 
 An agent should be able to orient itself from AGENTS.md alone, then drill into specific docs only when working in that domain.
 

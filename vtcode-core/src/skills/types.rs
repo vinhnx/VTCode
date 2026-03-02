@@ -97,10 +97,10 @@ pub struct SkillManifest {
     #[serde(rename = "user-invocable")]
     #[serde(alias = "user_invocable")]
     pub user_invocable: Option<bool>,
-    /// Optional execution context ("fork" for subagent)
+    /// Optional execution context ("fork" for isolated execution)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub context: Option<String>,
-    /// Optional subagent identifier when context is forked
+    /// Optional profile identifier when context is forked
     #[serde(skip_serializing_if = "Option::is_none")]
     pub agent: Option<String>,
     /// Optional hooks configuration (raw payload)

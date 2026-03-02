@@ -595,10 +595,10 @@ fn normalize_fallback_options(value: &Value) -> Option<Vec<Value>> {
             .get("label")
             .and_then(Value::as_str)
             .map(|value| value.to_ascii_lowercase());
-        if let Some(label) = label {
-            if !seen_labels.insert(label) {
-                continue;
-            }
+        if let Some(label) = label
+            && !seen_labels.insert(label)
+        {
+            continue;
         }
         normalized.push(normalized_option);
         if normalized.len() == 3 {

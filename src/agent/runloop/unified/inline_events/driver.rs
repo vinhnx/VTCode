@@ -167,7 +167,7 @@ impl<'a> InlineEventLoop<'a> {
             InlineLoopAction::Submit(_) => None,
             InlineLoopAction::ResumeSession(_) => None,
             InlineLoopAction::ToggleDelegateMode => None,
-            InlineLoopAction::SwitchTeammate(_) => None,
+            InlineLoopAction::SwitchTeammate => None,
             InlineLoopAction::PlanApproved { .. } => None,
             InlineLoopAction::PlanEditRequested => None,
             InlineLoopAction::DiffApproved => None,

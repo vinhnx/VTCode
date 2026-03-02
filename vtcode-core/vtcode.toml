@@ -856,17 +856,6 @@ enable-auto-trigger = true
 enable-description-matching = true
 min-keyword-matches = 2
 
-[subagents]
-enabled = true
-max_concurrent = 3
-default_timeout_seconds = 300
-additional_agent_dirs = []
-
-[agent_teams]
-enabled = false
-max_teammates = 4
-teammate_mode = "auto"
-
 [output_style]
 active_style = "default"
 

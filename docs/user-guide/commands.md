@@ -66,16 +66,6 @@ Ask: Search for TODO|FIXME across the repo with 2 lines of context in .rs files
 -   `write_file(path, content, mode?)` — mode: `overwrite`, `append`, or `skip_if_exists`
 -   `edit_file(path, old_str, new_str)` — tolerant to whitespace differences and detects rename conflicts
 
-## Agent teams
-
-Agent teams are an experimental feature for coordinating multiple subagents in a single session.
-
-- Enable `[agent_teams] enabled = true` and `[subagents] enabled = true` in `vtcode.toml`.
-- Use `/team start` to create a team, then `/team task add` and `/team assign` to delegate tasks.
-- Use `/team model` to set a default model for team subagents.
-- Use `/subagent model` to set a default model for all subagents.
-- See `docs/agent-teams.md` for full usage and limitations.
-
 ## Quick Actions in Chat Input
 
 VT Code provides several quick actions directly in the chat input for faster workflow:
