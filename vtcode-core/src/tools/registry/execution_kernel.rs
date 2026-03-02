@@ -22,8 +22,6 @@ fn required_args_for_tool(tool_name: &str) -> &'static [&'static str] {
         tool_names::READ_FILE => &["path"],
         tool_names::WRITE_FILE => &["path", "content"],
         tool_names::EDIT_FILE => &["path", "old_str", "new_str"],
-        tool_names::LIST_FILES => &["path"],
-        tool_names::GREP_FILE => &["pattern", "path"],
         tool_names::RUN_PTY_CMD => &["command"],
         tool_names::APPLY_PATCH => &["patch"],
         _ => &[],
@@ -220,12 +218,7 @@ pub(super) fn preflight_validate_call(
                 .registration_for(candidate)
                 .map(|registration| registration.name().to_string())
         })
-        .or_else(|| {
-            candidates
-                .first()
-                .map(|candidate| canonical_tool_name(candidate).to_string())
-        })
-        .unwrap_or_else(|| canonical_tool_name(name).to_string());
+        .ok_or_else(|| anyhow!("Unknown tool: {}", canonical_tool_name(name)))?;
 
     let required = required_args_for_tool(&normalized_tool_name);
     let mut failures = Vec::new();

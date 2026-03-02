@@ -82,12 +82,12 @@ fn extract_git_diff_cache_target(tool_name: &str, args: &Value) -> Option<String
 
 fn command_parts_for_cache(tool_name: &str, args: &Value) -> Option<Vec<String>> {
     match tool_name {
-        tools::RUN_PTY_CMD | tools::SHELL => {
+        tools::RUN_PTY_CMD | "shell" => {
             let mut parts = command_value_to_parts(args.get("command")?)?;
             append_args(&mut parts, args.get("args"));
             if parts.is_empty() { None } else { Some(parts) }
         }
-        tools::UNIFIED_EXEC | tools::EXEC_PTY_CMD | tools::EXEC => {
+        tools::UNIFIED_EXEC | "exec_pty_cmd" | "exec" => {
             let action = args.get("action").and_then(Value::as_str).unwrap_or("run");
             if action != "run" {
                 return None;

@@ -22,9 +22,9 @@ async fn list_files_pagination_and_default_response_format() {
         vtcode_dir.join("tool-policy.json"),
         json!({
             "version": 1,
-            "available_tools": [tools::LIST_FILES],
-            "policies": { tools::LIST_FILES: "allow" },
-            "constraints": { tools::LIST_FILES: { "max_items_per_call": 10, "default_response_format": "concise" } }
+            "available_tools": [tools::UNIFIED_SEARCH],
+            "policies": { tools::UNIFIED_SEARCH: "allow" },
+            "constraints": { tools::UNIFIED_SEARCH: { "max_items_per_call": 10, "default_response_format": "concise" } }
         }).to_string(),
     ).unwrap();
 
@@ -34,7 +34,7 @@ async fn list_files_pagination_and_default_response_format() {
     });
     let out = registry
         .execute_tool(
-            tools::LIST_FILES,
+            tools::UNIFIED_SEARCH,
             json!({
                 "path": "src",
                 "page": 1,
@@ -72,16 +72,16 @@ async fn grep_file_default_concise_and_cap() {
         vtcode_dir.join("tool-policy.json"),
         json!({
             "version": 1,
-            "available_tools": [tools::GREP_FILE],
-            "policies": { tools::GREP_FILE: "allow" },
-            "constraints": { tools::GREP_FILE: { "max_results_per_call": 1, "default_response_format": "concise" } }
+            "available_tools": [tools::UNIFIED_SEARCH],
+            "policies": { tools::UNIFIED_SEARCH: "allow" },
+            "constraints": { tools::UNIFIED_SEARCH: { "max_results_per_call": 1, "default_response_format": "concise" } }
         }).to_string(),
     ).unwrap();
 
     let registry = ToolRegistry::new(ws.clone()).await;
     let out = registry
         .execute_tool(
-            tools::GREP_FILE,
+            tools::UNIFIED_SEARCH,
             json!({
                 "pattern": "TODO",
                 "path": ".",

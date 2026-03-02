@@ -525,8 +525,6 @@ impl ToolExecutionHistory {
             .identical_limit
             .load(std::sync::atomic::Ordering::Relaxed);
         if is_read_style_tool_call(tool_name, args)
-            || tool_name_matches(tool_name, tools::GREP_FILE)
-            || tool_name_matches(tool_name, tools::LIST_FILES)
             || tool_name_matches(tool_name, tools::UNIFIED_SEARCH)
         {
             base_limit.max(MIN_READONLY_IDENTICAL_LIMIT)

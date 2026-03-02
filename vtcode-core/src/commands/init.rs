@@ -194,7 +194,10 @@ async fn analyze_project(registry: &mut ToolRegistry, workspace: &Path) -> Resul
 
     // Analyze root directory structure
     let root_files = registry
-        .execute_tool(tools::LIST_FILES, json!({"path": ".", "max_items": 100}))
+        .execute_tool(
+            tools::UNIFIED_SEARCH,
+            json!({"action": "list", "path": ".", "max_items": 100}),
+        )
         .await?;
 
     if let Some(files) = root_files.get("files")

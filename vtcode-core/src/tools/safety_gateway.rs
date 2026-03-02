@@ -17,6 +17,7 @@ use serde_json::Value;
 use thiserror::Error;
 use tokio::sync::Mutex;
 
+use crate::config::constants::tools;
 use crate::config::CommandsConfig;
 use crate::dotfile_protection::{
     AccessContext, AccessType, DotfileGuardian, ProtectionDecision, get_global_guardian,
@@ -767,8 +768,15 @@ impl SafetyGateway {
             ToolSource::Internal
         };
 
+        let action = args.get("action").and_then(|v| v.as_str());
+        let risk_tool_name = if tool_name == tools::UNIFIED_SEARCH && action == Some("web") {
+            "unified_search:web"
+        } else {
+            tool_name
+        };
+
         let mut ctx =
-            ToolRiskContext::new(tool_name.to_string(), source, self.config.workspace_trust);
+            ToolRiskContext::new(risk_tool_name.to_string(), source, self.config.workspace_trust);
 
         // Set flags based on tool type
         if self.is_mutating_call(tool_name, args) {
@@ -779,7 +787,10 @@ impl SafetyGateway {
         }
 
         // Check for network access
-        if tool_name == "web_search" || tool_name == "fetch_url" || tool_name == "web_fetch" {
+        if tool_name == "web_search"
+            || tool_name == "fetch_url"
+            || (tool_name == tools::UNIFIED_SEARCH && action == Some("web"))
+        {
             ctx = ctx.accesses_network();
         }
 

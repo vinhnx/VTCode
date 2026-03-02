@@ -117,13 +117,13 @@ pub(crate) fn validate_tool_args_security(
 
     // 1. Check required arguments using static slices
     let required: &[&str] = match name {
-        n if n == tool_names::READ_FILE => &["path"],
-        n if n == tool_names::WRITE_FILE => &["path", "content"],
-        n if n == tool_names::EDIT_FILE => &["path", "old_str", "new_str"],
-        n if n == tool_names::LIST_FILES => &["path"],
-        n if n == tool_names::GREP_FILE => &["pattern", "path"],
-        n if n == tool_names::RUN_PTY_CMD => &["command"],
-        n if n == tool_names::APPLY_PATCH => &["patch"],
+        tool_names::READ_FILE => &["path"],
+        tool_names::WRITE_FILE => &["path", "content"],
+        tool_names::EDIT_FILE => &["path", "old_str", "new_str"],
+        "list_files" => &["path"],
+        "grep_file" => &["pattern", "path"],
+        tool_names::RUN_PTY_CMD => &["command"],
+        tool_names::APPLY_PATCH => &["patch"],
         _ => EMPTY_REQUIRED,
     };
 
@@ -249,10 +249,10 @@ fn is_readonly_signature(signature: &str) -> bool {
     if matches!(
         tool_name_str,
         tool_names::READ_FILE
-            | tool_names::GREP_FILE
-            | tool_names::LIST_FILES
-            | tool_names::SEARCH_TOOLS
-            | tool_names::AGENT_INFO
+            | "grep_file"
+            | "list_files"
+            | "search_tools"
+            | "agent_info"
             | tool_names::UNIFIED_SEARCH
     ) {
         return true;

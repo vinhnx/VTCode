@@ -255,7 +255,12 @@ impl ToolRegistry {
     }
 
     pub async fn grep_file(&self, args: Value) -> Result<Value> {
-        self.execute_tool(tools::GREP_FILE, args).await
+        let mut payload = args;
+        if let Some(obj) = payload.as_object_mut() {
+            obj.entry("action".to_string())
+                .or_insert_with(|| json!("grep"));
+        }
+        self.execute_tool(tools::UNIFIED_SEARCH, payload).await
     }
 
     pub fn last_grep_file_result(&self) -> Option<GrepSearchResult> {
@@ -263,6 +268,11 @@ impl ToolRegistry {
     }
 
     pub async fn list_files(&self, args: Value) -> Result<Value> {
-        self.execute_tool(tools::LIST_FILES, args).await
+        let mut payload = args;
+        if let Some(obj) = payload.as_object_mut() {
+            obj.entry("action".to_string())
+                .or_insert_with(|| json!("list"));
+        }
+        self.execute_tool(tools::UNIFIED_SEARCH, payload).await
     }
 }

@@ -19,10 +19,8 @@ use tracing::warn;
 
 /// Tools that are always safe to execute autonomously
 const SAFE_AUTONOMOUS_TOOLS: &[&str] = &[
-    tools::GREP_FILE,
-    tools::LIST_FILES,
+    tools::UNIFIED_SEARCH,
     tools::READ_FILE,
-    tools::SEARCH_TOOLS,
     tools::LIST_PTY_SESSIONS,
     tools::READ_PTY_SESSION,
 ];
@@ -240,6 +238,15 @@ impl AutonomousExecutor {
         {
             return self.is_destructive_command(cmd);
         }
+        if tool_name == tools::UNIFIED_EXEC
+            && matches!(
+                args.get("action").and_then(|v| v.as_str()),
+                Some("run" | "continue")
+            )
+            && let Some(cmd) = args.get("command").and_then(|v| v.as_str())
+        {
+            return self.is_destructive_command(cmd);
+        }
 
         false
     }
@@ -284,7 +291,9 @@ impl AutonomousExecutor {
             self.validate_file_path(args.get("path"))?;
         } else if tool_name == "shell" || tool_name == tools::RUN_PTY_CMD {
             self.validate_command(args.get("command"))?;
-        } else if tool_name == tools::LIST_FILES {
+        } else if tool_name == tools::UNIFIED_SEARCH
+            && args.get("action").and_then(|v| v.as_str()) == Some("list")
+        {
             self.validate_list_files_args(args)?;
         }
         Ok(())
@@ -612,14 +621,14 @@ mod tests {
         let executor = AutonomousExecutor::new();
 
         let root_variations = vec![
-            json!({"path": "."}),
-            json!({"path": ""}),
-            json!({"path": "./"}),
-            json!({}),
+            json!({"action": "list", "path": "."}),
+            json!({"action": "list", "path": ""}),
+            json!({"action": "list", "path": "./"}),
+            json!({"action": "list"}),
         ];
 
         for args in root_variations {
-            let result = executor.validate_args(tools::LIST_FILES, &args);
+            let result = executor.validate_args(tools::UNIFIED_SEARCH, &args);
             assert!(result.is_err());
             assert!(result.unwrap_err().to_string().contains("root directory"));
         }
@@ -629,8 +638,8 @@ mod tests {
     fn test_list_files_specific_path_allowed() {
         let executor = AutonomousExecutor::new();
 
-        let args = json!({"path": "src/core/"});
-        let result = executor.validate_args(tools::LIST_FILES, &args);
+        let args = json!({"action": "list", "path": "src/core/"});
+        let result = executor.validate_args(tools::UNIFIED_SEARCH, &args);
         assert!(result.is_ok());
     }
 
@@ -650,15 +659,15 @@ mod tests {
         let args = json!({"path": "src/"});
 
         // First two calls should not block
-        assert!(executor.should_block(tools::GREP_FILE, &args).is_none());
-        executor.record_tool_call(tools::GREP_FILE, &args);
+        assert!(executor.should_block(tools::UNIFIED_SEARCH, &args).is_none());
+        executor.record_tool_call(tools::UNIFIED_SEARCH, &args);
 
-        assert!(executor.should_block(tools::GREP_FILE, &args).is_none());
-        executor.record_tool_call(tools::GREP_FILE, &args);
+        assert!(executor.should_block(tools::UNIFIED_SEARCH, &args).is_none());
+        executor.record_tool_call(tools::UNIFIED_SEARCH, &args);
 
         // Third call should trigger warning
-        executor.record_tool_call(tools::GREP_FILE, &args);
-        let block_msg = executor.should_block(tools::GREP_FILE, &args);
+        executor.record_tool_call(tools::UNIFIED_SEARCH, &args);
+        let block_msg = executor.should_block(tools::UNIFIED_SEARCH, &args);
         assert!(block_msg.is_some());
         let message = block_msg.unwrap();
         assert!(
@@ -672,13 +681,13 @@ mod tests {
         let executor = AutonomousExecutor::new();
         let args = json!({"path": "src/"});
 
-        executor.record_tool_call(tools::GREP_FILE, &args);
-        executor.record_tool_call(tools::GREP_FILE, &args);
-        executor.record_tool_call(tools::GREP_FILE, &args);
-        assert!(executor.should_block(tools::GREP_FILE, &args).is_some());
+        executor.record_tool_call(tools::UNIFIED_SEARCH, &args);
+        executor.record_tool_call(tools::UNIFIED_SEARCH, &args);
+        executor.record_tool_call(tools::UNIFIED_SEARCH, &args);
+        assert!(executor.should_block(tools::UNIFIED_SEARCH, &args).is_some());
 
         executor.reset_turn_loop_detection();
-        assert!(executor.should_block(tools::GREP_FILE, &args).is_none());
+        assert!(executor.should_block(tools::UNIFIED_SEARCH, &args).is_none());
     }
 
     #[test]
@@ -686,18 +695,18 @@ mod tests {
         let executor = AutonomousExecutor::new();
 
         // Record some executions
-        executor.record_execution(tools::GREP_FILE, true);
-        executor.record_execution(tools::GREP_FILE, true);
-        executor.record_execution(tools::GREP_FILE, false);
+        executor.record_execution(tools::UNIFIED_SEARCH, true);
+        executor.record_execution(tools::UNIFIED_SEARCH, true);
+        executor.record_execution(tools::UNIFIED_SEARCH, false);
 
         // Check stats
-        let (total, success, failed) = executor.get_tool_stats(tools::GREP_FILE).unwrap();
+        let (total, success, failed) = executor.get_tool_stats(tools::UNIFIED_SEARCH).unwrap();
         assert_eq!(total, 3);
         assert_eq!(success, 2);
         assert_eq!(failed, 1);
 
         // Check success rate
-        let rate = executor.get_success_rate(tools::GREP_FILE);
+        let rate = executor.get_success_rate(tools::UNIFIED_SEARCH);
         assert!((rate - 0.666).abs() < 0.01);
     }
 

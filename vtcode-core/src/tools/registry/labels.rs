@@ -9,11 +9,7 @@ pub fn tool_action_label(tool_name: &str, args: &Value) -> String {
     match actual_tool_name {
         name if name == tool_names::RUN_PTY_CMD => "Run command (PTY)".to_string(),
         name if name == tool_names::EXECUTE_CODE => "Run code".to_string(),
-        name if name == tool_names::LIST_FILES => "List files".to_string(),
-        name if name == tool_names::GREP_FILE => "Search text".to_string(),
-        name if name == tool_names::SEARCH_TOOLS => "List tools".to_string(),
         name if name == tool_names::GET_ERRORS => "List errors".to_string(),
-        name if name == tool_names::AGENT_INFO => "Show agent info".to_string(),
         name if name == tool_names::LIST_SKILLS => "List skills".to_string(),
         name if name == tool_names::LOAD_SKILL => "Load skill".to_string(),
         name if name == tool_names::LOAD_SKILL_RESOURCE => "Load skill resource".to_string(),
@@ -67,7 +63,7 @@ pub fn tool_action_label(tool_name: &str, args: &Value) -> String {
                 _ => "File operation".to_string(),
             }
         }
-        "fetch" | "web_fetch" => "Fetch".to_string(),
+        "fetch" => "Fetch".to_string(),
         _ => humanize_tool_name(actual_tool_name),
     }
 }

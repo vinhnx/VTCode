@@ -37,10 +37,7 @@ pub fn classify_tool_intent(tool_name: &str, args: &Value) -> ToolIntent {
     } else {
         match tool {
             tools::READ_FILE
-            | tools::LIST_FILES
-            | tools::GREP_FILE
             | tools::UNIFIED_SEARCH
-            | tools::AGENT_INFO
             | tools::ENTER_PLAN_MODE
             | tools::EXIT_PLAN_MODE
             | tools::REQUEST_USER_INPUT
@@ -50,7 +47,6 @@ pub fn classify_tool_intent(tool_name: &str, args: &Value) -> ToolIntent {
             | tools::TASK_TRACKER
             | tools::PLAN_TASK_TRACKER
             | "get_errors"
-            | "search_tools"
             | "think" => false,
             tools::UNIFIED_FILE | tools::UNIFIED_EXEC => true,
             _ => true,
@@ -63,7 +59,6 @@ pub fn classify_tool_intent(tool_name: &str, args: &Value) -> ToolIntent {
         | tools::EDIT_FILE
         | tools::APPLY_PATCH
         | tools::RUN_PTY_CMD
-        | tools::SHELL
         | tools::SEND_PTY_INPUT
         | tools::CREATE_PTY_SESSION
         | tools::EXECUTE_CODE => true,

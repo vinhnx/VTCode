@@ -19,18 +19,6 @@ pub const LOAD_SKILL: &str = "load_skill";
 pub const LOAD_SKILL_RESOURCE: &str = "load_skill_resource";
 
 // ============================================================
-// LEGACY SEARCH ALIASES (use unified_search instead)
-// ============================================================
-pub const GREP_FILE: &str = "grep_file";
-pub const LIST_FILES: &str = "list_files";
-pub const SEARCH_TOOLS: &str = "search_tools";
-pub const SKILL: &str = "skill";
-pub const AGENT_INFO: &str = "agent_info";
-pub const WEB_FETCH: &str = "web_fetch";
-pub const SEARCH: &str = "search";
-pub const FIND: &str = "find";
-
-// ============================================================
 // LEGACY EXECUTION ALIASES (use unified_exec instead)
 // ============================================================
 pub const RUN_PTY_CMD: &str = "run_pty_cmd";
@@ -41,11 +29,6 @@ pub const SEND_PTY_INPUT: &str = "send_pty_input";
 pub const READ_PTY_SESSION: &str = "read_pty_session";
 pub const RESIZE_PTY_SESSION: &str = "resize_pty_session";
 pub const EXECUTE_CODE: &str = "execute_code";
-/// Legacy provider-emitted alias for execute_code.
-pub const EXEC_CODE: &str = "exec_code";
-pub const EXEC_PTY_CMD: &str = "exec_pty_cmd";
-pub const EXEC: &str = "exec";
-pub const SHELL: &str = "shell";
 
 // ============================================================
 // LEGACY FILE OPERATION ALIASES (use unified_file instead)

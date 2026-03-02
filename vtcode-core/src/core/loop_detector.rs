@@ -15,6 +15,12 @@ const DETECTION_WINDOW: usize = 10;
 const HARD_LIMIT_MULTIPLIER: usize = 2; // Hard stop at 2x soft limit
 const MAX_SIMILAR_READ_TARGET_CALLS: usize = 8;
 const MAX_SIMILAR_READ_TARGET_VARIANTS: usize = 3;
+const LEGACY_GREP_FILE: &str = "grep_file";
+const LEGACY_LIST_FILES: &str = "list_files";
+const LEGACY_SEARCH_TOOLS: &str = "search_tools";
+const LEGACY_EXEC_PTY_CMD: &str = "exec_pty_cmd";
+const LEGACY_EXEC: &str = "exec";
+const LEGACY_SHELL: &str = "shell";
 
 #[inline]
 fn base_tool_name(tool_name: &str) -> &str {
@@ -36,7 +42,7 @@ fn normalize_args_for_detection(tool_name: &str, args: &serde_json::Value) -> se
         normalized.remove("per_page");
 
         // For list_files: normalize root path variations
-        if base_name == tools::LIST_FILES {
+        if base_name == LEGACY_LIST_FILES {
             if let Some(path) = normalized.get("path").and_then(|v| v.as_str()) {
                 let trimmed = path.trim();
                 let only_root_markers = trimmed.trim_matches(|c| c == '.' || c == '/').is_empty();
@@ -184,7 +190,7 @@ impl LoopDetector {
         let base_name = base_tool_name(tool_name);
         let is_readonly = matches!(
             base_name,
-            tools::READ_FILE | tools::GREP_FILE | tools::LIST_FILES | tools::UNIFIED_SEARCH
+            tools::READ_FILE | LEGACY_GREP_FILE | LEGACY_LIST_FILES | tools::UNIFIED_SEARCH
         ) || (base_name == tools::UNIFIED_FILE && tool_name.ends_with("::read"));
 
         let is_mutating = matches!(
@@ -332,14 +338,14 @@ impl LoopDetector {
     /// Suggest alternative approaches for common loop patterns
     pub fn suggest_alternative(&self, tool_name: &str) -> Option<String> {
         match tool_name {
-            tools::LIST_FILES => Some(
+            LEGACY_LIST_FILES => Some(
                 "Instead of listing files repeatedly:\n\
                  • Use grep_file to search for specific patterns\n\
                  • Target specific subdirectories (e.g., 'src/', 'tests/')\n\
                  • Use read_file if you know the exact file path"
                     .to_string(),
             ),
-            tools::GREP_FILE => Some(
+            LEGACY_GREP_FILE => Some(
                 "Instead of grepping repeatedly:\n\
                  • Refine your search pattern to be more specific\n\
                  • Use read_file to examine specific files\n\
@@ -353,7 +359,7 @@ impl LoopDetector {
                  • Consider if you already have the information needed"
                     .to_string(),
             ),
-            tools::SEARCH_TOOLS => Some(
+            LEGACY_SEARCH_TOOLS => Some(
                 "Instead of searching tools repeatedly:\n\
                  • Review the tools you've already discovered\n\
                  • Use execute_code to call tools directly\n\
@@ -407,16 +413,16 @@ impl LoopDetector {
         }
 
         match base_name {
-            tools::READ_FILE | tools::GREP_FILE | tools::LIST_FILES | tools::UNIFIED_SEARCH => {
+            tools::READ_FILE | LEGACY_GREP_FILE | LEGACY_LIST_FILES | tools::UNIFIED_SEARCH => {
                 MAX_READONLY_TOOL_CALLS
             }
             tools::WRITE_FILE | tools::EDIT_FILE | "apply_patch" => MAX_WRITE_TOOL_CALLS,
             tools::RUN_PTY_CMD
             | tools::EXECUTE_CODE
-            | tools::EXEC_PTY_CMD
-            | tools::EXEC
+            | LEGACY_EXEC_PTY_CMD
+            | LEGACY_EXEC
             | tools::UNIFIED_EXEC
-            | tools::SHELL => MAX_COMMAND_TOOL_CALLS,
+            | LEGACY_SHELL => MAX_COMMAND_TOOL_CALLS,
             _ => MAX_OTHER_TOOL_CALLS,
         }
     }
@@ -428,10 +434,10 @@ impl LoopDetector {
             base_name,
             tools::RUN_PTY_CMD
                 | tools::EXECUTE_CODE
-                | tools::EXEC_PTY_CMD
-                | tools::EXEC
+                | LEGACY_EXEC_PTY_CMD
+                | LEGACY_EXEC
                 | tools::UNIFIED_EXEC
-                | tools::SHELL
+                | LEGACY_SHELL
         )
     }
 
@@ -439,12 +445,12 @@ impl LoopDetector {
     #[inline]
     fn suggest_alternative_for_tool(tool_name: &str) -> String {
         match base_tool_name(tool_name) {
-            tools::LIST_FILES => "Instead of listing repeatedly:\n\
+            LEGACY_LIST_FILES => "Instead of listing repeatedly:\n\
                  • Use grep_file to search for specific patterns\n\
                  • Target specific subdirectories (e.g., 'src/', 'tests/')\n\
                  • Use read_file if you know the exact file path"
                 .to_string(),
-            tools::GREP_FILE => "Instead of grepping repeatedly:\n\
+            LEGACY_GREP_FILE => "Instead of grepping repeatedly:\n\
                  • Refine your search pattern to be more specific\n\
                  • Use read_file to examine specific files\n\
                  • Consider using execute_code for complex filtering"
@@ -454,7 +460,7 @@ impl LoopDetector {
                  • Read specific line ranges with read_range parameter\n\
                  • Consider if you already have the information needed"
                 .to_string(),
-            tools::SEARCH_TOOLS => "Instead of searching tools repeatedly:\n\
+            LEGACY_SEARCH_TOOLS => "Instead of searching tools repeatedly:\n\
                  • Review the tools you've already discovered\n\
                  • Use execute_code to call tools directly\n\
                  • Check if you need a different approach to the task"
@@ -557,11 +563,11 @@ mod tests {
         let args = json!({"path": "src/"});
 
         // First two calls - no warning
-        assert!(detector.record_call(tools::GREP_FILE, &args).is_none());
-        assert!(detector.record_call(tools::GREP_FILE, &args).is_none());
+        assert!(detector.record_call(LEGACY_GREP_FILE, &args).is_none());
+        assert!(detector.record_call(LEGACY_GREP_FILE, &args).is_none());
 
         // Third identical call - hard stop
-        let warning = detector.record_call(tools::GREP_FILE, &args);
+        let warning = detector.record_call(LEGACY_GREP_FILE, &args);
         assert!(warning.is_some());
         assert!(warning.unwrap().contains("HARD STOP"));
     }
@@ -590,16 +596,16 @@ mod tests {
         ];
 
         for path in &paths[..2] {
-            assert!(detector.record_call(tools::LIST_FILES, path).is_none());
+            assert!(detector.record_call(LEGACY_LIST_FILES, path).is_none());
         }
 
         // Third call with any root variation should trigger
-        let warning = detector.record_call(tools::LIST_FILES, &paths[2]);
+        let warning = detector.record_call(LEGACY_LIST_FILES, &paths[2]);
         assert!(warning.is_some());
 
         // Further root-only variations should continue to warn
         for path in &paths[3..] {
-            assert!(detector.record_call(tools::LIST_FILES, path).is_some());
+            assert!(detector.record_call(LEGACY_LIST_FILES, path).is_some());
         }
     }
 
@@ -649,8 +655,8 @@ mod tests {
     fn test_different_tools_no_warning() {
         let mut detector = LoopDetector::new();
 
-        detector.record_call(tools::LIST_FILES, &json!({"path": "/src"}));
-        detector.record_call(tools::GREP_FILE, &json!({"pattern": "test"}));
+        detector.record_call(LEGACY_LIST_FILES, &json!({"path": "/src"}));
+        detector.record_call(LEGACY_GREP_FILE, &json!({"pattern": "test"}));
         detector.record_call(tools::READ_FILE, &json!({"path": "main.rs"}));
 
         assert_eq!(detector.tool_counts.len(), 3);
@@ -661,15 +667,15 @@ mod tests {
         let mut detector = LoopDetector::new();
 
         // These should be treated as different calls
-        detector.record_call(tools::LIST_FILES, &json!({"path": "src"}));
-        detector.record_call(tools::LIST_FILES, &json!({"path": "docs"}));
-        detector.record_call(tools::LIST_FILES, &json!({"path": "tests"}));
+        detector.record_call(LEGACY_LIST_FILES, &json!({"path": "src"}));
+        detector.record_call(LEGACY_LIST_FILES, &json!({"path": "docs"}));
+        detector.record_call(LEGACY_LIST_FILES, &json!({"path": "tests"}));
 
         // Count for each should be 1
         assert_eq!(
             detector
                 .tool_counts
-                .get(tools::LIST_FILES)
+                .get(LEGACY_LIST_FILES)
                 .copied()
                 .unwrap_or(0),
             3
@@ -692,7 +698,7 @@ mod tests {
     #[test]
     fn test_normalize_args_removes_pagination() {
         let args = json!({"path": "src", "page": 1, "per_page": 10});
-        let normalized = normalize_args_for_detection(tools::LIST_FILES, &args);
+        let normalized = normalize_args_for_detection(LEGACY_LIST_FILES, &args);
 
         assert!(normalized.get("page").is_none());
         assert!(normalized.get("per_page").is_none());
@@ -705,35 +711,35 @@ mod tests {
         let args = json!({"path": "src"});
 
         // Record calls for multiple tools
-        detector.record_call(tools::LIST_FILES, &args);
-        detector.record_call(tools::LIST_FILES, &args);
-        detector.record_call(tools::GREP_FILE, &json!({"pattern": "test"}));
+        detector.record_call(LEGACY_LIST_FILES, &args);
+        detector.record_call(LEGACY_LIST_FILES, &args);
+        detector.record_call(LEGACY_GREP_FILE, &json!({"pattern": "test"}));
 
-        assert_eq!(detector.get_call_count(tools::LIST_FILES), 2);
-        assert_eq!(detector.get_call_count(tools::GREP_FILE), 1);
+        assert_eq!(detector.get_call_count(LEGACY_LIST_FILES), 2);
+        assert_eq!(detector.get_call_count(LEGACY_GREP_FILE), 1);
 
         // Reset only list_files
-        detector.reset_tool(tools::LIST_FILES);
+        detector.reset_tool(LEGACY_LIST_FILES);
 
-        assert_eq!(detector.get_call_count(tools::LIST_FILES), 0);
-        assert_eq!(detector.get_call_count(tools::GREP_FILE), 1);
+        assert_eq!(detector.get_call_count(LEGACY_LIST_FILES), 0);
+        assert_eq!(detector.get_call_count(LEGACY_GREP_FILE), 1);
     }
 
     #[test]
     fn test_suggest_alternative_for_list_files() {
         let detector = LoopDetector::new();
-        let suggestion = detector.suggest_alternative(tools::LIST_FILES);
+        let suggestion = detector.suggest_alternative(LEGACY_LIST_FILES);
 
         assert!(suggestion.is_some());
         let msg = suggestion.unwrap();
-        assert!(msg.contains(tools::GREP_FILE));
+        assert!(msg.contains(LEGACY_GREP_FILE));
         assert!(msg.contains("subdirectories"));
     }
 
     #[test]
     fn test_suggest_alternative_for_grep_file() {
         let detector = LoopDetector::new();
-        let suggestion = detector.suggest_alternative(tools::GREP_FILE);
+        let suggestion = detector.suggest_alternative(LEGACY_GREP_FILE);
 
         assert!(suggestion.is_some());
         let msg = suggestion.unwrap();
@@ -754,17 +760,17 @@ mod tests {
     #[test]
     fn test_faster_detection_with_lower_limit() {
         let mut detector = LoopDetector::with_max_repeated_calls(100);
-        detector.set_tool_limit(tools::LIST_FILES, 3);
+        detector.set_tool_limit(LEGACY_LIST_FILES, 3);
         let args = json!({"path": "src"});
 
         // First call - no warning
-        assert!(detector.record_call(tools::LIST_FILES, &args).is_none());
+        assert!(detector.record_call(LEGACY_LIST_FILES, &args).is_none());
 
         // Second call - no warning
-        assert!(detector.record_call(tools::LIST_FILES, &args).is_none());
+        assert!(detector.record_call(LEGACY_LIST_FILES, &args).is_none());
 
         // Third call - should trigger warning (soft limit = 3)
-        let warning = detector.record_call(tools::LIST_FILES, &args);
+        let warning = detector.record_call(LEGACY_LIST_FILES, &args);
         assert!(warning.is_some());
         assert!(warning.unwrap().contains("Loop detected"));
     }
@@ -852,7 +858,7 @@ mod tests {
                 &json!({"path": "vtcode-core/src/a2a/server.rs", "offset_lines": 1, "limit": 20}),
             );
             let _ = detector.record_call(
-                tools::GREP_FILE,
+                LEGACY_GREP_FILE,
                 &json!({"pattern": "handle_loop_detection", "path": "vtcode-core/src"}),
             );
         }
@@ -870,11 +876,11 @@ mod tests {
         // Sequence: A, B, C, B, A (where A=LIST, B=GREP, C=READ)
         // This avoids identical patterns (k=2: [B, A] vs [B, C], k=3: [C, B, A] vs ???)
         let sequence = [
-            (tools::LIST_FILES, &list_args),
-            (tools::GREP_FILE, &grep_args),
+            (LEGACY_LIST_FILES, &list_args),
+            (LEGACY_GREP_FILE, &grep_args),
             (tools::READ_FILE, &read_args),
-            (tools::GREP_FILE, &grep_args),
-            (tools::LIST_FILES, &list_args),
+            (LEGACY_GREP_FILE, &grep_args),
+            (LEGACY_LIST_FILES, &list_args),
         ];
 
         for (i, (tool, args)) in sequence.iter().enumerate() {
@@ -906,7 +912,7 @@ mod tests {
         // Subsequent read calls should start from 0; single call should be fine
         assert!(
             detector
-                .record_call(tools::LIST_FILES, &list_args)
+                .record_call(LEGACY_LIST_FILES, &list_args)
                 .is_none()
         );
     }

@@ -1380,21 +1380,6 @@ impl ToolRegistry {
         Box::pin(async move { self.edit_file(args).await })
     }
 
-    pub(super) fn grep_file_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
-        let manager = self.inventory.grep_file_manager();
-        Box::pin(async move {
-            manager
-                .perform_search(serde_json::from_value(args)?)
-                .await
-                .map(|r| json!(r))
-        })
-    }
-
-    pub(super) fn list_files_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
-        let tool = self.inventory.file_ops_tool().clone();
-        Box::pin(async move { tool.execute(args).await })
-    }
-
     pub(super) fn run_pty_cmd_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
         Box::pin(async move { self.execute_run_pty_cmd(args).await })
     }
@@ -1417,14 +1402,6 @@ impl ToolRegistry {
 
     pub(super) fn get_errors_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
         Box::pin(async move { self.execute_get_errors(args).await })
-    }
-
-    pub(super) fn agent_info_executor(&self, _args: Value) -> BoxFuture<'_, Result<Value>> {
-        Box::pin(async move { self.execute_agent_info().await })
-    }
-
-    pub(super) fn search_tools_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
-        Box::pin(async move { self.execute_search_tools(args).await })
     }
 
     pub(super) fn apply_patch_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {

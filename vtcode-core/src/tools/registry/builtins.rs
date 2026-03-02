@@ -108,16 +108,7 @@ pub(super) fn builtin_tool_registrations(
             ToolRegistry::unified_search_executor,
         )
         .with_aliases([
-            tools::GREP_FILE,
-            tools::LIST_FILES,
-            tools::AGENT_INFO,
-            tools::WEB_FETCH,
-            tools::SKILL,
-            tools::SEARCH_TOOLS,
-            tools::SEARCH,
-            tools::FIND,
             "grep",
-            "repo_browser.list_files",
             "search text",
             "list files",
             "list tools",
@@ -137,15 +128,11 @@ pub(super) fn builtin_tool_registrations(
         .with_aliases([
             tools::RUN_PTY_CMD,
             tools::EXECUTE_CODE,
-            tools::EXEC_CODE,
             tools::CREATE_PTY_SESSION,
             tools::LIST_PTY_SESSIONS,
             tools::CLOSE_PTY_SESSION,
             tools::SEND_PTY_INPUT,
             tools::READ_PTY_SESSION,
-            tools::EXEC_PTY_CMD,
-            tools::EXEC,
-            tools::SHELL,
             "bash",
             "container.exec",
             "exec code",
@@ -212,20 +199,6 @@ pub(super) fn builtin_tool_registrations(
         )
         .with_llm_visibility(false),
         ToolRegistration::new(
-            tools::GREP_FILE,
-            CapabilityLevel::CodeSearch,
-            false,
-            ToolRegistry::grep_file_executor,
-        )
-        .with_llm_visibility(false),
-        ToolRegistration::new(
-            tools::LIST_FILES,
-            CapabilityLevel::CodeSearch,
-            false,
-            ToolRegistry::list_files_executor,
-        )
-        .with_llm_visibility(false),
-        ToolRegistration::new(
             tools::RUN_PTY_CMD,
             CapabilityLevel::Bash,
             true,
@@ -265,20 +238,6 @@ pub(super) fn builtin_tool_registrations(
             CapabilityLevel::CodeSearch,
             false,
             ToolRegistry::get_errors_executor,
-        )
-        .with_llm_visibility(false),
-        ToolRegistration::new(
-            tools::AGENT_INFO,
-            CapabilityLevel::CodeSearch,
-            false,
-            ToolRegistry::agent_info_executor,
-        )
-        .with_llm_visibility(false),
-        ToolRegistration::new(
-            tools::SEARCH_TOOLS,
-            CapabilityLevel::CodeSearch,
-            false,
-            ToolRegistry::search_tools_executor,
         )
         .with_llm_visibility(false),
         ToolRegistration::new(

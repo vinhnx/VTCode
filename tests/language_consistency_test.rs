@@ -514,7 +514,7 @@ mod integration_tests {
 
         let response = registry
             .execute_tool(
-                tools::LIST_FILES,
+                tools::UNIFIED_SEARCH,
                 json!({
                     "path": ".",
                     "per_page": 10
@@ -524,7 +524,7 @@ mod integration_tests {
             .unwrap();
 
         assert!(
-            validate_tool_response_language(tools::LIST_FILES, &response).is_ok(),
+            validate_tool_response_language(tools::UNIFIED_SEARCH, &response).is_ok(),
             "list_files response should maintain language consistency"
         );
         assert!(
@@ -598,7 +598,7 @@ mod integration_tests {
 
         let list_response = registry
             .execute_tool(
-                tools::LIST_FILES,
+                tools::UNIFIED_SEARCH,
                 json!({
                     "path": ".",
                     "per_page": 10

@@ -22,10 +22,8 @@ use crate::utils::file_utils::{
 };
 
 const AUTO_ALLOW_TOOLS: &[&str] = &[
-    tools::GREP_FILE,
-    tools::LIST_FILES,
+    tools::UNIFIED_SEARCH,
     tools::READ_FILE,
-    tools::SEARCH_TOOLS,
     tools::LIST_PTY_SESSIONS,
     tools::READ_PTY_SESSION,
     // RUN_PTY_CMD removed - should require prompt in tools_policy mode
@@ -609,7 +607,7 @@ impl ToolPolicyManager {
         }
 
         match tool_name {
-            tools::LIST_FILES => tools_config
+            tools::UNIFIED_SEARCH => tools_config
                 .policies
                 .get("list_dir")
                 .or_else(|| tools_config.policies.get("list_directory"))

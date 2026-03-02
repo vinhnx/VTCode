@@ -412,8 +412,8 @@ mod tests {
 
         // Read-only tools
         assert!(!classify_tool_intent("read_file", &json!({})).mutating);
-        assert!(!classify_tool_intent("grep_file", &json!({})).mutating);
-        assert!(!classify_tool_intent("list_files", &json!({})).mutating);
+        assert!(!classify_tool_intent("unified_search", &json!({"action":"grep"})).mutating);
+        assert!(!classify_tool_intent("unified_search", &json!({"action":"list"})).mutating);
     }
 
     #[test]

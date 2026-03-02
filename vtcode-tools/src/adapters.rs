@@ -196,7 +196,7 @@ mod tests {
         let builder = RegistryBuilder::new(&paths, &telemetry, &reporter, &formatter);
         let registry = builder.build().expect("registry");
 
-        assert!(registry.has_tool(vtcode_core::config::constants::tools::LIST_FILES));
+        assert!(registry.has_tool(vtcode_core::config::constants::tools::UNIFIED_SEARCH));
 
         let events = telemetry.take();
         assert!(matches!(

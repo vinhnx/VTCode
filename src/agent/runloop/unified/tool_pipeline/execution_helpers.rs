@@ -36,11 +36,11 @@ fn is_command_tool(tool_name: &str) -> bool {
     matches!(
         tool_name,
         tools::RUN_PTY_CMD
-            | tools::SHELL
+            | "shell"
             | tools::UNIFIED_EXEC
             | tools::EXECUTE_CODE
-            | tools::EXEC_PTY_CMD
-            | tools::EXEC
+            | "exec_pty_cmd"
+            | "exec"
     )
 }
 

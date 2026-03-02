@@ -5,19 +5,20 @@ use vtcode_core::config::constants::tools;
 use vtcode_core::tools::ToolRegistry;
 
 #[tokio::test]
-async fn preflight_infers_action_for_grep_file_alias() -> Result<()> {
+async fn preflight_rejects_removed_grep_file_alias() -> Result<()> {
     let temp_dir = TempDir::new()?;
     let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
 
-    let outcome = registry.preflight_validate_call(
-        "grep_file",
-        &json!({
-            "pattern": "LLMStreamEvent::",
-            "path": "."
-        }),
-    )?;
-
-    assert_eq!(outcome.normalized_tool_name, tools::UNIFIED_SEARCH);
+    let err = registry
+        .preflight_validate_call(
+            "grep_file",
+            &json!({
+                "pattern": "LLMStreamEvent::",
+                "path": "."
+            }),
+        )
+        .expect_err("grep_file alias should be rejected");
+    assert!(err.to_string().contains("Unknown tool"));
     Ok(())
 }
 
@@ -39,18 +40,19 @@ async fn preflight_infers_action_for_humanized_search_text_alias() -> Result<()>
 }
 
 #[tokio::test]
-async fn preflight_repo_browser_list_alias_still_normalizes_to_unified_search() -> Result<()> {
+async fn preflight_rejects_removed_repo_browser_list_alias() -> Result<()> {
     let temp_dir = TempDir::new()?;
     let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
 
-    let outcome = registry.preflight_validate_call(
-        "repo_browser.list_files",
-        &json!({
-            "path": "."
-        }),
-    )?;
-
-    assert_eq!(outcome.normalized_tool_name, tools::UNIFIED_SEARCH);
+    let err = registry
+        .preflight_validate_call(
+            "repo_browser.list_files",
+            &json!({
+                "path": "."
+            }),
+        )
+        .expect_err("repo_browser.list_files alias should be rejected");
+    assert!(err.to_string().contains("Unknown tool"));
     Ok(())
 }
 

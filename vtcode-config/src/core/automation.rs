@@ -55,8 +55,7 @@ fn default_full_auto_enabled() -> bool {
 fn default_full_auto_allowed_tools() -> Vec<String> {
     vec![
         tools::READ_FILE.to_string(),
-        tools::LIST_FILES.to_string(),
-        tools::GREP_FILE.to_string(),
+        tools::UNIFIED_SEARCH.to_string(),
     ]
 }
 

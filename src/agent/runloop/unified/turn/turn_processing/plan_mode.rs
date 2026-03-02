@@ -11,8 +11,8 @@ fn has_discovery_tool(session_stats: &crate::agent::runloop::unified::state::Ses
 
     [
         tools::READ_FILE,
-        tools::LIST_FILES,
-        tools::GREP_FILE,
+        "list_files",
+        "grep_file",
         tools::UNIFIED_SEARCH,
     ]
     .iter()

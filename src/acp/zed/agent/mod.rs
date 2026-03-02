@@ -87,7 +87,7 @@ impl ZedAgent {
 
         for decl in decls {
             if decl.name != tools::READ_FILE
-                && decl.name != tools::LIST_FILES
+                && decl.name != "list_files"
                 && !TOOLS_EXCLUDED_FROM_ACP.contains(&decl.name.as_str())
                 && available_local_tools.contains(decl.name.as_str())
             {

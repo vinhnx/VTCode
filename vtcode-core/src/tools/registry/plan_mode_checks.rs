@@ -25,10 +25,7 @@ impl ToolRegistry {
         // Check if it's a known read-only tool
         let read_only_tools = [
             tool_names::READ_FILE,
-            tool_names::LIST_FILES,
-            tool_names::GREP_FILE,
             tool_names::UNIFIED_SEARCH,
-            tool_names::AGENT_INFO,
             tool_names::ENTER_PLAN_MODE,
             tool_names::EXIT_PLAN_MODE,
             tool_names::REQUEST_USER_INPUT,
@@ -36,7 +33,6 @@ impl ToolRegistry {
             tool_names::LOAD_SKILL,
             tool_names::LOAD_SKILL_RESOURCE,
             "get_errors",
-            "search_tools",
             "think",
         ];
 
