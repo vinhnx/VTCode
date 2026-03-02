@@ -191,37 +191,6 @@ max_snapshots = 50
 # Maximum age of checkpoints to keep (in days)
 max_age_days = 30
 
-# Subagent system (opt-in)
-[subagents]
-# Enable subagents (default: false)
-enabled = false
-
-# Maximum concurrent subagents
-# max_concurrent = 3
-
-# Default timeout for subagent execution (seconds)
-# default_timeout_seconds = 300
-
-# Default model for subagents (override per-agent model if set)
-# default_model = ""
-
-# Agent teams (experimental)
-[agent_teams]
-# Enable agent teams (default: false)
-enabled = false
-
-# Maximum number of teammates per team
-# max_teammates = 4
-
-# Default model for agent team subagents
-# default_model = ""
-
-# Teammate display mode (auto, tmux, in_process)
-# teammate_mode = "auto"
-
-# Override storage directory for team data
-# storage_dir = "~/.vtcode"
-
 # External editor configuration
 # Uses the editor-command crate to detect and launch the user's preferred editor
 # https://docs.rs/editor-command/latest/editor_command/

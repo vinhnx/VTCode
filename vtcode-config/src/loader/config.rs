@@ -4,7 +4,6 @@ use std::fs;
 use std::path::Path;
 
 use crate::acp::AgentClientProtocolConfig;
-use crate::agent_teams::AgentTeamsConfig;
 use crate::context::ContextFeaturesConfig;
 use crate::core::{
     AgentConfig, AnthropicConfig, AuthConfig, AutomationConfig, CommandsConfig,
@@ -18,7 +17,6 @@ use crate::mcp::McpClientConfig;
 use crate::optimization::OptimizationConfig;
 use crate::output_styles::OutputStyleConfig;
 use crate::root::{ChatConfig, PtyConfig, UiConfig};
-use crate::subagent::SubagentsConfig;
 use crate::telemetry::TelemetryConfig;
 use crate::timeouts::TimeoutsConfig;
 
@@ -136,14 +134,6 @@ pub struct VTCodeConfig {
     /// Skills system configuration (Agent Skills spec)
     #[serde(default)]
     pub skills: SkillsConfig,
-
-    /// Subagent system configuration
-    #[serde(default)]
-    pub subagents: SubagentsConfig,
-
-    /// Agent teams configuration (experimental)
-    #[serde(default)]
-    pub agent_teams: AgentTeamsConfig,
 
     /// Output style configuration
     #[serde(default)]
@@ -372,37 +362,6 @@ max_snapshots = 50
 
 # Maximum age of checkpoints to keep (in days)
 max_age_days = 30
-
-# Subagent system (opt-in)
-[subagents]
-# Enable subagents (default: false)
-enabled = false
-
-# Maximum concurrent subagents
-# max_concurrent = 3
-
-# Default timeout for subagent execution (seconds)
-# default_timeout_seconds = 300
-
-# Default model for subagents (override per-agent model if set)
-# default_model = ""
-
-# Agent teams (experimental)
-[agent_teams]
-# Enable agent teams (default: false)
-enabled = false
-
-# Maximum number of teammates per team
-# max_teammates = 4
-
-# Default model for agent team subagents
-# default_model = ""
-
-# Teammate display mode (auto, tmux, in_process)
-# teammate_mode = "auto"
-
-# Optional storage directory override for team state
-# storage_dir = "~/.vtcode"
 
 # Tool security configuration
 [tools]

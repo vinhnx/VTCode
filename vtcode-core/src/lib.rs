@@ -124,7 +124,6 @@
 // Public modules
 pub mod a2a; // Agent2Agent Protocol support
 pub mod acp;
-pub mod agent_teams;
 #[cfg(feature = "anthropic-api")]
 pub mod anthropic_api;
 pub mod audit;
@@ -167,7 +166,6 @@ pub mod sandboxing; // Codex-style sandbox policy and execution environment
 pub mod security;
 pub mod session;
 pub mod skills;
-pub mod subagents;
 pub mod telemetry;
 pub mod terminal_setup;
 pub mod tool_policy;

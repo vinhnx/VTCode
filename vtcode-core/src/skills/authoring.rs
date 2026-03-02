@@ -22,8 +22,8 @@ description: [TODO: Complete and informative explanation of what the skill does 
 # argument-hint: "[file] [format]"  # Optional usage hint for slash commands
 # user-invocable: true              # Show in user menu (defaults to true)
 # compatibility: "Designed for VT Code (or similar CLI agents)"
-# context: "fork"                   # Run in a subagent context
-# agent: "explore"                  # Subagent type when context=fork
+# context: "fork"                   # Run in a forked context
+# agent: "explore"                  # Optional profile hint when context=fork
 # license: MIT
 # metadata:
 #   author: Your Name

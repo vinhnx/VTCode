@@ -24,10 +24,9 @@ The VT Code terminal UI includes an interactive mode that combines keyboard-firs
 | `Ctrl+V` (macOS/Linux) or `Alt+V` (Windows) | Paste an image from the clipboard. | Works with image-enabled sessions. |
 | `Ctrl+Z` (Unix) | Suspend VT Code to the shell; run `fg` to resume. | Job-control support for terminal workflows. |
 | `Up/Down arrows` | Navigate through command history. | Recall previous prompts or commands. |
-| `Shift+Up/Down arrows` | Cycle active teammate (lead only). | Requires agent teams. |
 | `Esc` + `Esc` | Rewind the conversation and code to the latest checkpoint. | Idle context only (while no task/PTY is running). |
 | `Tab` | Toggle extended thinking (analysis) mode on and off. | Switch between shorter and more verbose reasoning. |
-| `Shift+Tab` or `Alt+M` | Cycle permission modes. | Switches Auto-Accept Mode, Plan Mode, and normal mode (delegate mode when teams are active). |
+| `Shift+Tab` or `Alt+M` | Cycle permission modes. | Switches Auto-Accept Mode, Plan Mode, and normal mode. |
 
 ### Multiline Input
 
@@ -49,12 +48,6 @@ The VT Code terminal UI includes an interactive mode that combines keyboard-firs
 | `/` at start of input | Issue a slash command. | Run `/help` or `/slash-commands` in a session to list everything available. |
 | `!` at start of input | Enter Bash mode. | Runs shell commands directly and streams their output. |
 | `@` within input | Open file picker. | Triggers file path autocomplete and picker to quickly reference files in your message. |
-
-### Agent Teams (Experimental)
-
-Use `/team` commands to coordinate multiple agent sessions. In-process mode sends messages to teammates; tmux mode opens a split pane for each teammate. See `docs/agent-teams.md` for enablement and limitations.
-
-Use `/team model` or `/subagent model` to set default models interactively.
 
 ## Plan Mode Notes
 

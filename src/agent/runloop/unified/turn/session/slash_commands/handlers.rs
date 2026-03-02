@@ -9,18 +9,13 @@ use vtcode_core::llm::provider as uni;
 use vtcode_core::utils::ansi::MessageStyle;
 use vtcode_core::utils::transcript;
 
-use crate::agent::runloop::slash_commands::SubagentConfigCommandAction;
-use crate::agent::runloop::unified::state::{ModelPickerTarget, SessionStats};
-use crate::agent::runloop::unified::team_state::TeamState;
+use crate::agent::runloop::unified::state::SessionStats;
 use crate::agent::runloop::unified::tool_routing::{ToolPermissionFlow, ensure_tool_permission};
 use crate::hooks::lifecycle::SessionEndReason;
-use vtcode_core::agent_teams::{TeamRole, TeamStorage, TeamTaskStatus};
 
 use super::{SlashCommandContext, SlashCommandControl};
 use crate::agent::runloop::unified::palettes::{ActivePalette, show_config_palette};
 use crate::agent::runloop::unified::turn::config_modal::load_config_modal_content;
-#[path = "agents.rs"]
-mod agents;
 #[path = "apps.rs"]
 mod apps;
 #[path = "diagnostics.rs"]
@@ -35,15 +30,12 @@ mod oauth;
 mod share_log;
 #[path = "skills.rs"]
 mod skills;
-#[path = "team.rs"]
-mod team;
 #[path = "ui.rs"]
 mod ui;
 #[path = "update.rs"]
 mod update;
 #[path = "workspace.rs"]
 mod workspace;
-pub use agents::handle_manage_agents;
 pub use apps::{handle_launch_editor, handle_launch_git, handle_new_session, handle_open_docs};
 pub use diagnostics::{handle_run_doctor, handle_show_status, handle_start_terminal_setup};
 pub use mcp::handle_manage_mcp;
@@ -51,7 +43,6 @@ pub use modes::{handle_cycle_mode, handle_toggle_autonomous_mode, handle_toggle_
 pub use oauth::{handle_oauth_login, handle_oauth_logout, handle_show_auth_status};
 pub use share_log::handle_share_log;
 pub use skills::handle_manage_skills;
-pub use team::handle_manage_teams;
 pub use ui::{
     handle_start_file_browser, handle_start_model_selection, handle_start_resume_palette,
     handle_start_theme_palette, handle_theme_changed,
@@ -467,150 +458,4 @@ pub async fn handle_rewind_to_turn(
 pub async fn handle_exit(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
     ctx.renderer.line(MessageStyle::Info, "✓")?;
     Ok(SlashCommandControl::BreakWithReason(SessionEndReason::Exit))
-}
-
-fn agent_teams_enabled(vt_cfg: &Option<VTCodeConfig>) -> bool {
-    if let Ok(value) = std::env::var("VTCODE_EXPERIMENTAL_AGENT_TEAMS") {
-        let normalized = value.trim().to_ascii_lowercase();
-        if matches!(normalized.as_str(), "1" | "true" | "yes") {
-            return true;
-        }
-    }
-
-    vt_cfg
-        .as_ref()
-        .map(|cfg| cfg.agent_teams.enabled)
-        .unwrap_or(false)
-}
-
-fn resolve_max_teammates(vt_cfg: &Option<VTCodeConfig>) -> usize {
-    let max_teammates = vt_cfg
-        .as_ref()
-        .map(|cfg| cfg.agent_teams.max_teammates)
-        .unwrap_or(4);
-    max_teammates.max(1)
-}
-
-fn resolve_default_team_model(
-    vt_cfg: &Option<VTCodeConfig>,
-    override_model: Option<String>,
-) -> Option<String> {
-    override_model.or_else(|| {
-        vt_cfg
-            .as_ref()
-            .and_then(|cfg| cfg.agent_teams.default_model.clone())
-    })
-}
-
-fn render_team_usage(renderer: &mut vtcode_core::utils::ansi::AnsiRenderer) -> Result<()> {
-    renderer.line(MessageStyle::Info, "Agent Teams (experimental)")?;
-    renderer.line(MessageStyle::Output, "")?;
-    renderer.line(
-        MessageStyle::Output,
-        "  /team start [name] [count] [subagent_type] [--model MODEL]",
-    )?;
-    renderer.line(
-        MessageStyle::Output,
-        "  /team add <name> [subagent_type] [--model MODEL]",
-    )?;
-    renderer.line(MessageStyle::Output, "  /team remove <name>")?;
-    renderer.line(
-        MessageStyle::Output,
-        "  /team task add <description> [--depends-on 1,2]",
-    )?;
-    renderer.line(MessageStyle::Output, "  /team task claim <task_id>")?;
-    renderer.line(
-        MessageStyle::Output,
-        "  /team task complete <task_id> [summary]",
-    )?;
-    renderer.line(
-        MessageStyle::Output,
-        "  /team task fail <task_id> [summary]",
-    )?;
-    renderer.line(MessageStyle::Output, "  /team assign <task_id> <teammate>")?;
-    renderer.line(
-        MessageStyle::Output,
-        "  /team message <teammate|lead> <message>",
-    )?;
-    renderer.line(MessageStyle::Output, "  /team broadcast <message>")?;
-    renderer.line(MessageStyle::Output, "  /team tasks")?;
-    renderer.line(MessageStyle::Output, "  /team teammates")?;
-    renderer.line(MessageStyle::Output, "  /team model")?;
-    renderer.line(MessageStyle::Output, "  /team stop")?;
-    Ok(())
-}
-
-async fn ensure_team_state(ctx: &mut SlashCommandContext<'_>) -> Result<bool> {
-    if ctx.session_stats.team_state.is_none() {
-        let Some(team_context) = ctx.session_stats.team_context.clone() else {
-            return Ok(false);
-        };
-        let storage = TeamStorage::from_config(ctx.vt_cfg.as_ref()).await?;
-        match TeamState::load(storage, &team_context.team_name).await {
-            Ok(team) => {
-                ctx.session_stats.team_state = Some(team);
-            }
-            Err(err) => {
-                ctx.renderer.line(
-                    MessageStyle::Error,
-                    &format!("Failed to load team '{}': {}", team_context.team_name, err),
-                )?;
-                ctx.session_stats.team_context = None;
-                return Ok(false);
-            }
-        }
-    }
-
-    Ok(ctx.session_stats.team_state.is_some())
-}
-
-fn resolve_teammate_mode(
-    vt_cfg: &Option<VTCodeConfig>,
-) -> vtcode_config::agent_teams::TeammateMode {
-    let mode = vt_cfg
-        .as_ref()
-        .map(|cfg| cfg.agent_teams.teammate_mode)
-        .unwrap_or(vtcode_config::agent_teams::TeammateMode::Auto);
-    match mode {
-        vtcode_config::agent_teams::TeammateMode::Auto => {
-            if std::env::var("TMUX").is_ok() {
-                vtcode_config::agent_teams::TeammateMode::Tmux
-            } else {
-                vtcode_config::agent_teams::TeammateMode::InProcess
-            }
-        }
-        _ => mode,
-    }
-}
-
-fn current_sender(ctx: &SlashCommandContext<'_>) -> String {
-    match ctx.session_stats.team_context.as_ref() {
-        Some(context) if context.role == TeamRole::Teammate => context
-            .teammate_name
-            .clone()
-            .unwrap_or_else(|| "teammate".to_string()),
-        _ => "lead".to_string(),
-    }
-}
-
-fn is_teammate_idle(tasks: &vtcode_core::agent_teams::TeamTaskList, teammate: &str) -> bool {
-    !tasks.tasks.iter().any(|task| {
-        task.assigned_to.as_deref() == Some(teammate)
-            && matches!(
-                task.status,
-                TeamTaskStatus::Pending | TeamTaskStatus::InProgress
-            )
-    })
-}
-
-pub async fn handle_manage_subagent_config(
-    ctx: SlashCommandContext<'_>,
-    action: SubagentConfigCommandAction,
-) -> Result<SlashCommandControl> {
-    match action {
-        SubagentConfigCommandAction::Model => {
-            ctx.session_stats.model_picker_target = ModelPickerTarget::SubagentDefault;
-            ui::start_model_picker(ctx).await
-        }
-    }
 }

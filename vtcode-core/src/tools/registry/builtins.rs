@@ -300,7 +300,6 @@ pub(super) fn builtin_tool_registrations(
         // - list_skills
         // - load_skill
         // - load_skill_resource
-        // - spawn_subagent
     ];
 
     // Apply descriptions and schemas from signatures where available

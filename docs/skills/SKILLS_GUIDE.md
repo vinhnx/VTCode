@@ -135,8 +135,8 @@ author: Your Name
 - `user-invocable` - Toggle visibility in user menus
 - `disable-model-invocation` - Prevents model invocation when skill is active
 - `when-to-use` - Short guidance for automatic triggering
-- `context` - Set to `fork` to run in a subagent context
-- `agent` - Subagent type when `context = "fork"`
+- `context` - Set to `fork` to run in an isolated context
+- `agent` - Optional profile hint when `context = "fork"`
 - `hooks` - Skill-scoped hook configuration
 
 ### Routing Quality Recommendations

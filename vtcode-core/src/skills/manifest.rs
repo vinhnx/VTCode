@@ -310,8 +310,8 @@ license: MIT
 # allowed-tools: "Read Write Bash"  # Space-delimited list per Agent Skills spec
 # argument-hint: "[path] [format]" # Optional slash command hint
 # user-invocable: true             # Hide from menu when false
-# context: "fork"                  # Run in subagent context
-# agent: "explore"                 # Subagent type when context=fork
+# context: "fork"                  # Run in forked context
+# agent: "explore"                 # Optional profile hint when context=fork
 # metadata:
 #   version: "1.0"
 #   author: your-org

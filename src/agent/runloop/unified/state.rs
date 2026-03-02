@@ -16,8 +16,6 @@ pub const CODER_AGENT: &str = "coder";
 pub enum ModelPickerTarget {
     #[default]
     Main,
-    SubagentDefault,
-    TeamDefault,
 }
 
 #[derive(Default)]
@@ -25,8 +23,8 @@ pub(crate) struct SessionStats {
     tools: std::collections::BTreeSet<String>,
     /// Current editing mode: Edit or Plan (legacy, for backward compatibility)
     pub editing_mode: EditingMode,
-    /// Active agent profile name - the subagent config driving the main conversation
-    /// This replaces EditingMode with a more flexible approach
+    /// Active agent profile name driving the main conversation.
+    /// This replaces EditingMode with a more flexible approach.
     pub active_agent_name: String,
     /// Whether the plan mode interview has already been shown in this session
     plan_mode_interview_shown: bool,
@@ -48,18 +46,6 @@ pub(crate) struct SessionStats {
     /// Error recovery state for circuit breaker recovery flow
     #[allow(dead_code)]
     pub error_recovery: Arc<RwLock<ErrorRecoveryState>>,
-
-    /// Agent teams state (in-process only)
-    pub team_state: Option<crate::agent::runloop::unified::team_state::TeamState>,
-
-    /// Team context for this session (lead/teammate)
-    pub team_context: Option<vtcode_core::agent_teams::TeamContext>,
-
-    /// In-process teammate runners (persistent tokio tasks)
-    pub in_process_runner: Option<vtcode_core::agent_teams::InProcessTeamRunner>,
-
-    /// Delegate mode toggle (team coordination only)
-    pub delegate_mode: bool,
 
     /// Target configuration for the active model picker
     pub model_picker_target: ModelPickerTarget,
@@ -112,12 +98,7 @@ impl SessionStats {
     }
 
     pub(crate) fn is_delegate_mode(&self) -> bool {
-        self.delegate_mode
-    }
-
-    pub(crate) fn toggle_delegate_mode(&mut self) -> bool {
-        self.delegate_mode = !self.delegate_mode;
-        self.delegate_mode
+        false
     }
 
     /// Set plan mode (for backward compatibility)

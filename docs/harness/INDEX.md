@@ -33,7 +33,6 @@ The principle: if an agent cannot complete a task autonomously from information 
 | Configuration Precedence | `docs/config/CONFIGURATION_PRECEDENCE.md` | Config invariants in `ARCHITECTURAL_INVARIANTS.md` reference this.                  |
 | Security Model           | `docs/SECURITY.md`                        | Security invariants reference the security docs.                                    |
 | MCP Integration          | `docs/mcp/00_START_HERE.md`               | MCP domain quality score references this.                                           |
-| Subagents Guide          | `docs/subagents/SUBAGENTS.md`             | Subagent domain quality score references this.                                      |
 | Process Hardening        | `docs/development/PROCESS_HARDENING.md`               | Security domain quality score references this.                                      |
 | Provider Guides          | `docs/providers/PROVIDER_GUIDES.md`                 | LLM domain quality score references this.                                           |
 
@@ -56,7 +55,7 @@ AGENTS.md (root)          ← Start here. The map.
   ├── docs/ARCHITECTURE.md  ← System design
   ├── docs/config/          ← Configuration details
   ├── docs/security/        ← Security model
-  └── docs/subagents/       ← Subagent system
+  └── docs/providers/       ← Provider setup
 ```
 
 ## Maintaining Freshness

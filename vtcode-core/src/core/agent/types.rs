@@ -23,27 +23,27 @@ pub enum Priority {
 
 /// Agent type for VT Code architecture
 ///
-/// Supports both single-agent mode and specialized subagents for task delegation.
+/// Supports both single-agent mode and specialized profiles for task delegation.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum AgentType {
     /// Single main agent (default mode)
     #[default]
     Single,
-    /// Main orchestrator that delegates to subagents
+    /// Main orchestrator that delegates to specialized profiles.
     Orchestrator,
     /// Fast, read-only codebase exploration (haiku-equivalent)
     Explore,
     /// Research specialist for planning mode
     Plan,
-    /// General-purpose subagent for complex multi-step tasks
+    /// General-purpose profile for complex multi-step tasks.
     General,
-    /// User-defined custom subagent
+    /// User-defined custom profile.
     Custom(String),
 }
 
 impl AgentType {
-    /// Check if this is a subagent type
-    pub fn is_subagent(&self) -> bool {
+    /// Check if this is a specialized profile type.
+    pub fn is_specialized(&self) -> bool {
         matches!(
             self,
             Self::Explore | Self::Plan | Self::General | Self::Custom(_)

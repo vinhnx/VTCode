@@ -13,7 +13,6 @@ pub struct TurnDriverParams<'a, Resume> {
     pub skip_confirmations: bool,
     pub full_auto: bool,
     pub plan_mode: bool,
-    pub team_context: Option<crate::agent_teams::TeamContext>,
     pub resume: Option<Resume>,
     pub steering_receiver: &'a mut Option<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>,
 }
@@ -26,7 +25,6 @@ impl<'a, Resume> TurnDriverParams<'a, Resume> {
         skip_confirmations: bool,
         full_auto: bool,
         plan_mode: bool,
-        team_context: Option<crate::agent_teams::TeamContext>,
         resume: Option<Resume>,
         steering_receiver: &'a mut Option<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>,
     ) -> Self {
@@ -36,7 +34,6 @@ impl<'a, Resume> TurnDriverParams<'a, Resume> {
             skip_confirmations,
             full_auto,
             plan_mode,
-            team_context,
             resume,
             steering_receiver,
         }
@@ -52,7 +49,6 @@ impl<'a, Resume> TurnDriverParams<'a, Resume> {
             skip_confirmations: self.skip_confirmations,
             full_auto: self.full_auto,
             plan_mode: self.plan_mode,
-            team_context: self.team_context,
             resume: map(self.resume),
             steering_receiver: self.steering_receiver,
         }

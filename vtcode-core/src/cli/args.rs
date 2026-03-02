@@ -4,23 +4,12 @@ use crate::config::models::ModelId;
 use clap::{ArgAction, ColorChoice, Parser, Subcommand, ValueEnum, ValueHint};
 use colorchoice_clap::Color as ColorSelection;
 use std::path::PathBuf;
-use vtcode_config::agent_teams::TeammateMode;
 
 #[derive(Clone, Debug, ValueEnum)]
 pub enum TeammateModeArg {
     Auto,
     Tmux,
     InProcess,
-}
-
-impl From<TeammateModeArg> for TeammateMode {
-    fn from(value: TeammateModeArg) -> Self {
-        match value {
-            TeammateModeArg::Auto => TeammateMode::Auto,
-            TeammateModeArg::Tmux => TeammateMode::Tmux,
-            TeammateModeArg::InProcess => TeammateMode::InProcess,
-        }
-    }
 }
 
 #[derive(Clone, Debug, ValueEnum)]

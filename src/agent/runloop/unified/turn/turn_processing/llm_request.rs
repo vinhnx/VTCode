@@ -336,8 +336,9 @@ pub(crate) async fn execute_llm_request(
         let parts = ctx.parts_mut();
         parts.state.session_stats.active_agent().to_string()
     };
-    let active_agent_prompt_body =
-        vtcode_core::subagents::get_agent_prompt_body(active_agent_name.as_str());
+    let active_agent_prompt_body = vtcode_core::prompts::get_agent_prompt_body(
+        active_agent_name.as_str(),
+    );
 
     let mut system_prompt = {
         let parts = ctx.parts_mut();

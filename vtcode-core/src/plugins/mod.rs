@@ -2,7 +2,7 @@
 //!
 //! This module provides a comprehensive plugin system that supports:
 //! - Commands (slash commands)
-//! - Agents (subagents)
+//! - Agents (specialized profiles)
 //! - Skills (model-invoked capabilities)
 //! - Hooks (event handlers)
 //! - MCP servers (Model Context Protocol)

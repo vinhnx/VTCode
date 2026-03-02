@@ -9,7 +9,6 @@ pub async fn handle_chat_command(
     skip_confirmations: bool,
     full_auto: bool,
     plan_mode: bool,
-    team_context: Option<vtcode_core::agent_teams::TeamContext>,
 ) -> Result<()> {
     match ensure_workspace_trust(&config.workspace, full_auto).await? {
         WorkspaceTrustGateResult::Trusted(level) => {
@@ -26,7 +25,6 @@ pub async fn handle_chat_command(
         skip_confirmations,
         full_auto,
         plan_mode,
-        team_context,
         None,
     )
     .await

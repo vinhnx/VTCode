@@ -19,12 +19,6 @@ pub const LOAD_SKILL: &str = "load_skill";
 pub const LOAD_SKILL_RESOURCE: &str = "load_skill_resource";
 
 // ============================================================
-// AGENT CONTROL TOOLS (Delegation)
-// ============================================================
-/// Spawn a subagent for specialized tasks (explore, plan, general, etc.)
-pub const SPAWN_SUBAGENT: &str = "spawn_subagent";
-
-// ============================================================
 // LEGACY SEARCH ALIASES (use unified_search instead)
 // ============================================================
 pub const GREP_FILE: &str = "grep_file";

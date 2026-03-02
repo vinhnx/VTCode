@@ -231,7 +231,6 @@ pub(super) async fn run_single_agent_loop_unified_impl(
     _skip_confirmations: bool,
     full_auto: bool,
     plan_mode: bool,
-    team_context: Option<vtcode_core::agent_teams::TeamContext>,
     resume: Option<ResumeSession>,
     steering_receiver: &mut Option<tokio::sync::mpsc::UnboundedReceiver<SteeringMessage>>,
 ) -> Result<()> {
@@ -357,7 +356,6 @@ pub(super) async fn run_single_agent_loop_unified_impl(
             cancel_token.clone(),
         );
         let mut session_stats = SessionStats::default();
-        session_stats.team_context = team_context.clone();
         session_stats.circuit_breaker = circuit_breaker.clone();
         session_stats.tool_health_tracker = tool_health_tracker.clone();
         session_stats.rate_limiter = rate_limiter.clone();

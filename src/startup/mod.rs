@@ -1,10 +1,7 @@
 use std::path::PathBuf;
 use std::str::FromStr;
 
-use anyhow::{Context, Result, anyhow, bail};
-use vtcode_config::agent_teams::TeammateMode;
-use vtcode_core::agent_teams::{TeamContext, TeamRole};
-use vtcode_core::cli::TeamRoleArg;
+use anyhow::{Context, Result, bail};
 use vtcode_core::dotfile_protection::init_global_guardian;
 use vtcode_core::utils::validation::validate_path_exists;
 
@@ -40,7 +37,6 @@ pub struct StartupContext {
     pub session_resume: Option<SessionResumeMode>,
     pub custom_session_id: Option<String>,
     pub plan_mode_requested: bool,
-    pub team_context: Option<vtcode_core::agent_teams::TeamContext>,
 }
 
 #[derive(Debug, Clone)]
@@ -147,11 +143,7 @@ impl StartupContext {
             apply_permission_mode_override(&mut config, permission_mode)?;
         }
 
-        if let Some(mode) = args.teammate_mode.clone() {
-            config.agent_teams.teammate_mode = mode.into();
-        }
-
-        let team_context = resolve_team_context(&mut config, args)?;
+        validate_removed_team_flags(args)?;
 
         // Validate configuration against models database
         validate_startup_configuration(&config, &workspace, args.quiet)?;
@@ -345,7 +337,6 @@ impl StartupContext {
             session_resume,
             custom_session_id,
             plan_mode_requested,
-            team_context,
         })
     }
 }
@@ -384,52 +375,17 @@ fn provider_env_override() -> Option<String> {
         .filter(|value| !value.is_empty())
 }
 
-fn resolve_team_context(config: &mut VTCodeConfig, args: &Cli) -> Result<Option<TeamContext>> {
-    let has_team_args = args.team.is_some() || args.teammate.is_some() || args.team_role.is_some();
-    if !has_team_args {
-        return Ok(None);
+fn validate_removed_team_flags(args: &Cli) -> Result<()> {
+    let has_removed_team_flags = args.team.is_some()
+        || args.teammate.is_some()
+        || args.team_role.is_some()
+        || args.teammate_mode.is_some();
+    if has_removed_team_flags {
+        bail!(
+            "Agent teams have been removed. The flags --team, --teammate, --team-role, and --teammate-mode are no longer supported."
+        );
     }
-
-    let role = match args.team_role {
-        Some(TeamRoleArg::Lead) => TeamRole::Lead,
-        Some(TeamRoleArg::Teammate) => TeamRole::Teammate,
-        None => {
-            if args.teammate.is_some() {
-                TeamRole::Teammate
-            } else {
-                TeamRole::Lead
-            }
-        }
-    };
-
-    let team_name = args
-        .team
-        .clone()
-        .ok_or_else(|| anyhow!("--team is required when joining a team"))?;
-
-    let teammate_name = match role {
-        TeamRole::Lead => None,
-        TeamRole::Teammate => Some(
-            args.teammate
-                .clone()
-                .ok_or_else(|| anyhow!("--teammate is required for teammate role"))?,
-        ),
-    };
-
-    let mode = args
-        .teammate_mode
-        .clone()
-        .map(TeammateMode::from)
-        .unwrap_or(config.agent_teams.teammate_mode);
-
-    config.agent_teams.enabled = true;
-
-    Ok(Some(TeamContext {
-        team_name,
-        role,
-        teammate_name,
-        mode,
-    }))
+    Ok(())
 }
 
 /// Validate whether prompt_cache_retention is applicable for the given model and provider.

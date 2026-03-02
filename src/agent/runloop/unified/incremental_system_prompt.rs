@@ -256,15 +256,14 @@ impl IncrementalSystemPrompt {
                 }
             }
 
-            // Inject active agent's system prompt (replaces hardcoded plan mode injection)
-            // This supports the planner/coder subagent architecture
+            // Inject active agent profile prompt (replaces hardcoded plan mode injection)
+            // This supports the planner/coder profile architecture.
             if let Some(ref agent_prompt) = context.active_agent_prompt {
-                // Use the subagent's system prompt directly
+                // Use the active profile prompt directly.
                 let _ = writeln!(prompt, "\n{}", agent_prompt);
             }
 
-            // Always append runtime plan-mode guardrails when plan mode is active,
-            // even when subagent prompts are injected.
+            // Always append runtime plan-mode guardrails when plan mode is active.
             if context.plan_mode {
                 append_plan_mode_notice(&mut prompt);
             }
@@ -407,10 +406,9 @@ pub struct SystemPromptContext {
     /// Plan mode: read-only mode for exploration and planning (legacy, for backward compatibility)
     pub plan_mode: bool,
     /// Active agent profile name (e.g., "planner", "coder")
-    /// This determines which subagent's system prompt is used
+    /// This determines which profile prompt is used.
     pub active_agent_name: String,
-    /// Active agent's system prompt (from SubagentConfig)
-    /// If set, this will be appended to the base system prompt
+    /// Active profile prompt body, appended to the base system prompt when present.
     pub active_agent_prompt: Option<String>,
     /// Discovered skills for immediate awareness
     pub discovered_skills: Vec<vtcode_core::skills::types::Skill>,

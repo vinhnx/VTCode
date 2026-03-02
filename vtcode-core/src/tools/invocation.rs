@@ -76,7 +76,7 @@ impl From<Uuid> for ToolInvocationId {
 /// Complete context for a single tool invocation.
 ///
 /// Tracks all metadata needed for correlation, retry handling,
-/// and hierarchical execution (subagents, nested calls).
+/// and hierarchical execution (nested child calls).
 #[derive(Debug, Clone)]
 pub struct ToolInvocation {
     /// Unique identifier for this invocation
@@ -89,7 +89,7 @@ pub struct ToolInvocation {
     pub session_id: String,
     /// Attempt number (1-based, incremented on retry)
     pub attempt: u32,
-    /// Parent invocation ID for nested/subagent calls
+    /// Parent invocation ID for nested child calls
     pub parent_id: Option<ToolInvocationId>,
     /// Timestamp when invocation was created
     pub created_at: Instant,
@@ -122,7 +122,7 @@ impl ToolInvocation {
         }
     }
 
-    /// Create a child invocation for nested/subagent calls.
+    /// Create a child invocation for nested calls.
     pub fn child(&self, tool_name: impl Into<String>, args: Value) -> Self {
         Self {
             id: ToolInvocationId::new(),
@@ -272,7 +272,7 @@ mod tests {
 
     #[test]
     fn test_invocation_child() {
-        let parent = ToolInvocation::new("spawn_subagent", json!({}), "session-789");
+        let parent = ToolInvocation::new("task_tracker", json!({}), "session-789");
         let child = parent.child("read_file", json!({"path": "/src/main.rs"}));
 
         assert_eq!(child.parent_id, Some(parent.id));

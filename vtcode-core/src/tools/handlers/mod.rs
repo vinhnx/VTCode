@@ -61,7 +61,6 @@ pub mod plan_mode;
 pub mod plan_task_tracker;
 pub mod read_file;
 pub mod shell_handler;
-pub mod spawn_subagent;
 pub mod task_tracker;
 pub mod task_tracking;
 
@@ -134,9 +133,6 @@ pub use router::{
 
 // Shell handler
 pub use shell_handler::{ShellHandler, create_shell_tool};
-
-// Spawn subagent
-pub use spawn_subagent::SpawnSubagentTool;
 
 // Plan mode tools
 pub use plan_mode::{EnterPlanModeTool, ExitPlanModeTool, PlanModeState};

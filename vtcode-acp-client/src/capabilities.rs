@@ -243,9 +243,6 @@ pub struct AgentFeatures {
     #[serde(default)]
     pub code_execution: bool,
 
-    /// Supports subagent spawning
-    #[serde(default)]
-    pub subagents: bool,
 }
 
 /// Model information

@@ -87,4 +87,3 @@ human_in_the_loop = true
 
 - [CLI Reference](CLI_REFERENCE.md) - Full CLI documentation
 - [Configuration](config/CONFIGURATION_PRECEDENCE.md) - Configuration options
-- [Subagents](subagents/SUBAGENTS.md) - Creating planning-focused subagents

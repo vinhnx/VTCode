@@ -41,7 +41,6 @@ pub mod root;
 #[cfg(feature = "schema")]
 pub mod schema;
 pub mod status_line;
-pub mod subagent;
 pub mod telemetry;
 pub mod timeouts;
 pub mod types;
@@ -51,7 +50,6 @@ pub use acp::{
     AgentClientProtocolZedToolsConfig, AgentClientProtocolZedWorkspaceTrustMode,
     WorkspaceTrustLevel,
 };
-pub use agent_teams::{AgentTeamsConfig, TeammateMode};
 pub use api_keys::ApiKeySources;
 pub use context::{ContextFeaturesConfig, DynamicContextConfig, LedgerConfig};
 pub use core::{
@@ -95,10 +93,6 @@ pub use root::{
 #[cfg(feature = "schema")]
 pub use schema::{vtcode_config_schema, vtcode_config_schema_json, vtcode_config_schema_pretty};
 pub use status_line::{StatusLineConfig, StatusLineMode};
-pub use subagent::{
-    SubagentConfig, SubagentModel, SubagentParseError, SubagentPermissionMode, SubagentSource,
-    SubagentsConfig,
-};
 pub use telemetry::TelemetryConfig;
 pub use timeouts::{TimeoutsConfig, resolve_timeout};
 pub use types::{
@@ -111,4 +105,3 @@ pub use auth::{
     AuthStatus, OpenRouterOAuthConfig, OpenRouterToken, PkceChallenge, clear_oauth_token,
     generate_pkce_challenge, get_auth_status, get_auth_url, load_oauth_token, save_oauth_token,
 };
-pub mod agent_teams;

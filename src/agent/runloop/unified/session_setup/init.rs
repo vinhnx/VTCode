@@ -1,5 +1,5 @@
 use super::mcp_tools::build_mcp_tool_definitions;
-use super::skill_setup::{discover_skills, register_skill_and_subagent_tools};
+use super::skill_setup::{discover_skills, register_skill_tools};
 use super::types::{
     SessionMetadataContext, SessionState, ToolExecutionContext,
     build_conversation_history_from_resume,
@@ -161,8 +161,7 @@ pub(crate) async fn initialize_session(
             .context("Failed to determine workspace trust level for tool policy")?,
     };
     apply_workspace_trust_prompt_policy(&mut tool_registry, full_auto, workspace_trust_level).await;
-    register_skill_and_subagent_tools(&mut tool_registry, &tools, &skill_setup, config, vt_cfg)
-        .await?;
+    register_skill_tools(&mut tool_registry, &tools, &skill_setup).await?;
 
     let tool_result_cache = Arc::new(RwLock::new(ToolResultCache::new(128)));
     let tool_permission_cache = Arc::new(RwLock::new(ToolPermissionCache::new()));

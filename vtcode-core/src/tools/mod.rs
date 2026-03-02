@@ -342,8 +342,6 @@ pub use handlers::{
     SharedTurnDiffTracker,
     ShellEnvironmentPolicy,
     ShellToolCallParams,
-    // Subagent
-    SpawnSubagentTool,
     StdoutStream,
     ToolCallError,
     ToolCtx,

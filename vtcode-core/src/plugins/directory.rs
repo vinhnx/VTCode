@@ -339,7 +339,7 @@ impl PluginDirectory {
         let mut structure = HashMap::new();
         structure.insert(".vtcode-plugin/", "Plugin manifest directory (required)");
         structure.insert("commands/", "Slash command Markdown files");
-        structure.insert("agents/", "Subagent Markdown files");
+        structure.insert("agents/", "Agent profile Markdown files");
         structure.insert("skills/", "Agent Skills with SKILL.md files");
         structure.insert("hooks/", "Hook configurations");
         structure.insert("scripts/", "Hook and utility scripts");

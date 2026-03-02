@@ -106,11 +106,6 @@ python3 scripts/generate_config_field_reference.py
 | `agent.vibe_coding.min_prompt_words` | `integer` | no | `2` | Minimum prompt words for refinement (default: 2 words) |
 | `agent.vibe_coding.track_value_history` | `boolean` | no | `true` | Track value history for inference |
 | `agent.vibe_coding.track_workspace_state` | `boolean` | no | `true` | Track workspace state (file activity, value changes) |
-| `agent_teams.default_model` | `null \| string` | no | `null` | Default model for agent team subagents |
-| `agent_teams.enabled` | `boolean` | no | `false` | Enable agent teams (experimental) |
-| `agent_teams.max_teammates` | `integer` | no | `4` | Maximum number of teammates in a team |
-| `agent_teams.storage_dir` | `null \| string` | no | `null` | Override storage directory for team data |
-| `agent_teams.teammate_mode` | `string` | no | `"auto"` | Teammate display mode (auto, tmux, in_process) |
 | `auth.openrouter.auto_refresh` | `boolean` | no | `true` | Whether to automatically refresh tokens when they expire. If false, the user will be prompted to re-authenticate. |
 | `auth.openrouter.callback_port` | `integer` | no | `8484` | Port for the local OAuth callback server. The server listens on localhost for the OAuth redirect. |
 | `auth.openrouter.flow_timeout_secs` | `integer` | no | `300` | Timeout in seconds for the OAuth flow. If the user doesn't complete authentication within this time, the flow is cancelled. |
@@ -440,12 +435,6 @@ python3 scripts/generate_config_field_reference.py
 | `skills.min-keyword-matches` | `integer` | no | `2` | Minimum keyword matches required for description-based trigger |
 | `skills.prompt-format` | `string` | no | `"xml"` | Prompt format for skills section (Agent Skills spec) - "xml": XML wrapping for safety (Claude models default) - "markdown": Plain markdown sections |
 | `skills.render-mode` | `string` | no | `"lean"` | Rendering mode for skills in system prompt - "lean": Codex-style minimal (name + description + path only, 40-60% token savings) - "full": Full metadata with version, author, native flags |
-| `subagents.additional_agent_dirs` | `array` | no | `[]` | Additional directories to search for subagent definitions |
-| `subagents.additional_agent_dirs[]` | `string` | no | `-` | - |
-| `subagents.default_model` | `null \| string` | no | `null` | Default model for subagents (if not specified in subagent config) |
-| `subagents.default_timeout_seconds` | `integer` | no | `300` | Default timeout for subagent execution (seconds) |
-| `subagents.enabled` | `boolean` | no | `false` | Enable the subagent system |
-| `subagents.max_concurrent` | `integer` | no | `3` | Maximum concurrent subagents |
 | `syntax_highlighting.cache_themes` | `boolean` | no | `true` | Enable theme caching for better performance |
 | `syntax_highlighting.enabled` | `boolean` | no | `true` | Enable syntax highlighting for tool output |
 | `syntax_highlighting.enabled_languages` | `array` | no | `["rust", "python", "javascript", "typescript", "go", "java", "cpp", "c", "php", "html", "css", "sql", "csharp", "bash...` | Languages to enable syntax highlighting for |

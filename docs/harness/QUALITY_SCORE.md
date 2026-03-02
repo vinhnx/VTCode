@@ -120,25 +120,6 @@ Last reviewed: 2026-02-16
 
 ---
 
-## Subagent System
-
-**Scope**: `vtcode-core/src/subagents/`, `vtcode-config/src/subagent.rs`
-**Related debt**: none open
-
-| Dimension        | Grade | Evidence / Notes                                                                                                                                       |
-| ---------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Test Coverage    | B     | Built-in types plus custom loading paths are now tested in `vtcode-core` and `vtcode-config`; isolation/failure propagation coverage is still limited. |
-| API Stability    | B     | `spawn_subagent` contract and definition format are stable.                                                                                            |
-| Agent Legibility | B     | `docs/subagents/SUBAGENTS.md` documents creation and usage paths.                                                                                      |
-| Error Handling   | B     | Isolation reduces blast radius; error reporting format can be more structured.                                                                         |
-| Documentation    | B     | Core guide exists; complex interaction patterns are only partially documented.                                                                         |
-
-**Overall: B**
-**Priority action**: add isolation and failure-propagation tests for subagent runner execution paths.
-**Verify**: `cargo nextest run -p vtcode-core`
-
----
-
 ## PTY/Exec
 
 **Scope**: `vtcode-bash-runner/`, `vtcode-core/src/exec/`

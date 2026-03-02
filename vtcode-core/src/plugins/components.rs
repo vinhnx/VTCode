@@ -2,7 +2,7 @@
 //!
 //! This module handles the different types of components that plugins can provide:
 //! - Commands (slash commands)
-//! - Agents (subagents)
+//! - Agents (specialized profiles)
 //! - Skills (model-invoked capabilities)
 //! - Hooks (event handlers)
 //! - MCP servers (Model Context Protocol)
@@ -51,7 +51,7 @@ impl CommandsHandler {
     }
 }
 
-/// Handler for plugin agents (subagents)
+/// Handler for plugin agents.
 pub struct AgentsHandler;
 
 impl AgentsHandler {

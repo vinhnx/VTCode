@@ -287,6 +287,7 @@ impl LifecycleHookEngine {
         Ok(messages)
     }
 
+    #[allow(dead_code)]
     pub async fn run_teammate_idle(
         &self,
         teammate: &str,

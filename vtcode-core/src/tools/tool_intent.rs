@@ -47,7 +47,6 @@ pub fn classify_tool_intent(tool_name: &str, args: &Value) -> ToolIntent {
             | tools::LIST_SKILLS
             | tools::LOAD_SKILL
             | tools::LOAD_SKILL_RESOURCE
-            | tools::SPAWN_SUBAGENT
             | tools::TASK_TRACKER
             | tools::PLAN_TASK_TRACKER
             | "get_errors"
