@@ -2767,4 +2767,42 @@ A plan is ready to execute. Would you like to proceed?
 
 ==
 
-review vtcode system prompt and make validation commands baed on current working project's toolchain aware (not Rust-hardcoded). 
+review vtcode system prompt and make validation commands baed on current working project's toolchain aware (not Rust-hardcoded).
+
+--
+
+https://github.com/preiter93/tui-widget-list
+
+==
+
+easy and relax loop detection logic.
+Loop detector stopped repeated 'Search text' calls for this turn. │
+│ Type "continue" to retry with a different strategy.
+
+currently it just stops and asks user to type "continue" to retry with a different strategy, but it can be more flexible by allowing the agent to automatically try a different approach (e.g., if it was using 'Search text', it can try 'Read file' or 'List files' instead) without needing user input, while still preventing infinite loops.
+
+---
+
+improve vtcode interview questsions for plan mode with llm-generated questions that are more specific and relevant to the task at hand, rather than generic questions. For example, if the task is about implementing a new feature, the questions can be about the design choices, potential edge cases, and how it integrates with existing features. This will help the agent make more informed decisions and create a more effective plan.
+
+currently it seems to be hardcode.
+
+---
+
+remove
+╭─ Info ───────────────────────────────────────────────────────────────────────╮
+│ Ready to code? │
+│ A plan is ready to execute. Would you like to proceed? │
+╰──────────────────────────────────────────────────────────────────────────────╯
+• Proposed Plan# VT Code Agent Reliability Improvement Plan## SummaryImpro
+ve agent reliability through layered defenses: structured error types, retry wi
+th backoff, circuit breakers, and observability. Target: **reduce agent task fa
+ilure rate by 50%** (measured via integration test pass rate).## Scope Locked
+
+- **In scope**: Error handling, retry logic, LLM failover, tool execution resi
+  lience, test coverage- **Out of scope**: UI changes, new features, performance
+  optimization, refactoring without reliability impact## Public API / Interfac
+  e Changes1. `vtcode-core/src/error.rs` — Add structured error types with retry
+  metadata2. `vtcode-core/src/retry.rs` — New mod
+
+step in the tui

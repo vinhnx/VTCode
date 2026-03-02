@@ -5,6 +5,7 @@ use ratatui::{
     prelude::*,
     widgets::{Block, List, ListItem, Paragraph, Tabs, Wrap},
 };
+use tui_widget_list::{ListBuilder, ListState as WidgetListState, ListView};
 use unicode_width::UnicodeWidthStr;
 
 use super::layout::{ModalBodyContext, ModalRenderStyles, ModalSection};
@@ -90,6 +91,21 @@ fn render_markdown_lines_for_modal(text: &str, width: usize, style: Style) -> Ve
     }
 }
 
+#[derive(Clone)]
+struct ModalListViewItem {
+    lines: Vec<Line<'static>>,
+    style: Style,
+}
+
+impl Widget for ModalListViewItem {
+    fn render(self, area: Rect, buf: &mut Buffer) {
+        Paragraph::new(self.lines)
+            .style(self.style)
+            .wrap(Wrap { trim: false })
+            .render(area, buf);
+    }
+}
+
 pub fn render_modal_list(
     frame: &mut Frame<'_>,
     area: Rect,
@@ -110,17 +126,53 @@ pub fn render_modal_list(
         return;
     }
 
+    let block = modal_list_block(list, styles, footer_hint);
     let viewport_rows = area.height.saturating_sub(2);
     list.set_viewport_rows(viewport_rows);
     list.ensure_visible(viewport_rows);
     let content_width = area.width.saturating_sub(4) as usize;
-    let items = modal_list_items(list, styles, content_width);
-    let widget = List::new(items)
-        .block(modal_list_block(list, styles, footer_hint))
-        .highlight_style(styles.highlight)
-        .highlight_symbol(ui::MODAL_LIST_HIGHLIGHT_FULL)
-        .repeat_highlight_symbol(true);
-    frame.render_stateful_widget(widget, area, &mut list.list_state);
+    let rendered_items = list
+        .visible_indices
+        .iter()
+        .enumerate()
+        .map(|(visible_index, &item_index)| {
+            let lines =
+                modal_list_item_lines(list, visible_index, item_index, styles, content_width);
+            (
+                ModalListViewItem {
+                    lines: lines.clone(),
+                    style: styles.selectable,
+                },
+                lines.len().max(1).min(u16::MAX as usize) as u16,
+            )
+        })
+        .collect::<Vec<_>>();
+
+    let mut widget_state = WidgetListState::default();
+    widget_state.select(
+        list.list_state
+            .selected()
+            .filter(|index| *index < rendered_items.len()),
+    );
+
+    let highlight_style = styles.highlight;
+    let item_count = rendered_items.len();
+    let builder = ListBuilder::new(move |context| {
+        let (base_item, height) = &rendered_items[context.index];
+        let mut item = base_item.clone();
+        if context.is_selected {
+            item.style = highlight_style;
+        }
+        (item, *height)
+    });
+
+    let widget = ListView::new(builder, item_count)
+        .block(block)
+        .infinite_scrolling(false);
+    frame.render_stateful_widget(widget, area, &mut widget_state);
+
+    list.list_state.select(widget_state.selected);
+    *list.list_state.offset_mut() = widget_state.scroll_offset_index();
 }
 
 /// Render wizard tabs header showing steps with completion status
@@ -745,16 +797,32 @@ pub fn modal_list_items(
 
 fn modal_list_item(
     list: &ModalListState,
-    _visible_index: usize,
+    visible_index: usize,
     item_index: usize,
     styles: &ModalRenderStyles,
     content_width: usize,
 ) -> ListItem<'static> {
+    ListItem::new(modal_list_item_lines(
+        list,
+        visible_index,
+        item_index,
+        styles,
+        content_width,
+    ))
+}
+
+fn modal_list_item_lines(
+    list: &ModalListState,
+    _visible_index: usize,
+    item_index: usize,
+    styles: &ModalRenderStyles,
+    content_width: usize,
+) -> Vec<Line<'static>> {
     let item = match list.items.get(item_index) {
         Some(i) => i,
         None => {
             tracing::warn!("modal list item index {item_index} out of bounds");
-            return ListItem::new("");
+            return vec![Line::default()];
         }
     };
     if item.is_divider {
@@ -763,7 +831,7 @@ fn modal_list_item(
         } else {
             item.title.clone()
         };
-        return ListItem::new(vec![Line::from(Span::styled(divider, styles.divider))]);
+        return vec![Line::from(Span::styled(divider, styles.divider))];
     }
 
     let indent = "  ".repeat(item.indent as usize);
@@ -822,7 +890,7 @@ fn modal_list_item(
     if !list.compact_rows() && item.selection.is_some() {
         lines.push(Line::default());
     }
-    ListItem::new(lines)
+    lines
 }
 
 #[cfg(test)]
