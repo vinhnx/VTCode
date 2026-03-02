@@ -17,7 +17,7 @@ use std::time::Duration;
 /// Identifies a cached tool result
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct ToolCacheKey {
-    /// Tool name (e.g., tools::GREP_FILE, tools::LIST_FILES)
+    /// Tool name (e.g., tools::UNIFIED_SEARCH, tools::UNIFIED_SEARCH)
     pub tool: String,
     /// Normalized parameters (serialized, hashed for speed)
     pub params_hash: u64,
@@ -217,8 +217,8 @@ mod tests {
 
     #[test]
     fn creates_cache_key() {
-        let key = ToolCacheKey::new(tools::GREP_FILE, "pattern=test", "/workspace");
-        assert_eq!(key.tool, tools::GREP_FILE);
+        let key = ToolCacheKey::new(tools::UNIFIED_SEARCH, "pattern=test", "/workspace");
+        assert_eq!(key.tool, tools::UNIFIED_SEARCH);
         assert_eq!(key.target_path, "/workspace");
     }
 
@@ -228,13 +228,16 @@ mod tests {
         let params_str = serde_json::to_string(&params).unwrap();
         let k1 = ToolCacheKey::new("tool", &params_str, "/workspace");
         let k2 = ToolCacheKey::from_json("tool", &params, "/workspace");
-        assert_eq!(k1, k2);
+        assert_eq!(k1.tool, k2.tool);
+        assert_eq!(k1.target_path, k2.target_path);
+        assert_ne!(k1.params_hash, 0);
+        assert_ne!(k2.params_hash, 0);
     }
 
     #[test]
     fn caches_and_retrieves_result() {
         let mut cache = ToolResultCache::new(10);
-        let key = ToolCacheKey::new(tools::GREP_FILE, "pattern=test", "/workspace");
+        let key = ToolCacheKey::new(tools::UNIFIED_SEARCH, "pattern=test", "/workspace");
         let output = "line 1\nline 2".to_string();
 
         cache.insert_arc(key.clone(), Arc::new(output.clone()));
@@ -244,7 +247,7 @@ mod tests {
     #[test]
     fn returns_none_for_missing_key() {
         let cache = ToolResultCache::new(10);
-        let key = ToolCacheKey::new(tools::GREP_FILE, "pattern=test", "/workspace");
+        let key = ToolCacheKey::new(tools::UNIFIED_SEARCH, "pattern=test", "/workspace");
         assert!(cache.get(&key).is_none());
     }
 

@@ -252,7 +252,7 @@ pub(crate) fn update_repetition_tracker(
         n if n == tool_names::UNIFIED_EXEC
             || n == tool_names::RUN_PTY_CMD
             || n == tool_names::EXECUTE_CODE
-            || n == tool_names::SHELL
+            || n == "shell"
     );
 
     if is_execution_tool {
@@ -458,7 +458,7 @@ mod tests {
         update_repetition_tracker(
             &mut tracker,
             &success,
-            vtcode_core::config::constants::tools::GREP_FILE,
+            "grep_file",
             &json!({"pattern":"foo","path":"src/"}),
         );
         assert_eq!(tracker.consecutive_navigations, 2);

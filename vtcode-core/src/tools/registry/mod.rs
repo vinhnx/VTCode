@@ -361,17 +361,19 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn preflight_normalizes_exec_code_alias_to_unified_exec() -> Result<()> {
+    async fn preflight_rejects_removed_exec_code_alias() -> Result<()> {
         let temp_dir = TempDir::new()?;
         let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
 
-        let outcome = registry.preflight_validate_call(
-            "exec_code",
-            &json!({
-                "command": "echo vtcode"
-            }),
-        )?;
-        assert_eq!(outcome.normalized_tool_name, tools::UNIFIED_EXEC);
+        let err = registry
+            .preflight_validate_call(
+                "exec_code",
+                &json!({
+                    "command": "echo vtcode"
+                }),
+            )
+            .expect_err("exec_code alias should be rejected");
+        assert!(err.to_string().contains("Unknown tool"));
 
         Ok(())
     }
@@ -403,11 +405,10 @@ mod tests {
         )?;
         assert_eq!(read_outcome.normalized_tool_name, tools::UNIFIED_FILE);
 
-        let list_outcome = registry.preflight_validate_call(
-            "repo_browser.list_files",
-            &json!({"path": "vtcode-core/src"}),
-        )?;
-        assert_eq!(list_outcome.normalized_tool_name, tools::UNIFIED_SEARCH);
+        let list_err = registry
+            .preflight_validate_call("repo_browser.list_files", &json!({"path": "vtcode-core/src"}))
+            .expect_err("repo_browser.list_files alias should be rejected");
+        assert!(list_err.to_string().contains("Unknown tool"));
 
         Ok(())
     }

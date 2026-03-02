@@ -94,35 +94,6 @@ pub fn minimal_tool_signatures() -> HashMap<&'static str, ToolSignature> {
     let mut sigs = HashMap::new();
 
     // SEARCH & DISCOVERY
-    sigs.insert(
-        tools::GREP_FILE,
-        ToolSignature {
-            name: tools::GREP_FILE,
-            brief: "Search code with regex",
-            required_params: vec![("pattern", "string", "Search pattern")],
-            common_params: vec![
-                ("path", "string", "Directory"),
-                ("max_results", "integer", "Result limit"),
-                ("literal", "boolean", "Exact match"),
-            ],
-            token_estimate: 40,
-        },
-    );
-
-    sigs.insert(
-        tools::LIST_FILES,
-        ToolSignature {
-            name: tools::LIST_FILES,
-            brief: "Explore directories",
-            required_params: vec![("path", "string", "Directory path")],
-            common_params: vec![
-                ("mode", "string", "list|recursive|find"),
-                ("max_items", "integer", "Scan limit"),
-            ],
-            token_estimate: 35,
-        },
-    );
-
     // EXECUTION
     sigs.insert(
         tools::RUN_PTY_CMD,
@@ -182,9 +153,10 @@ pub fn minimal_tool_signatures() -> HashMap<&'static str, ToolSignature> {
         ToolSignature {
             name: tools::UNIFIED_FILE,
             brief: "Read/write/edit/patch files",
-            required_params: vec![("path", "string", "File path")],
+            required_params: vec![],
             common_params: vec![
                 ("action", "string", "read|write|edit|patch|delete|move|copy"),
+                ("path", "string", "File path"),
                 ("content", "string", "Content for write"),
                 ("old_str", "string", "Match text for edit"),
                 ("new_str", "string", "Replacement for edit"),
@@ -265,17 +237,6 @@ pub fn minimal_tool_signatures() -> HashMap<&'static str, ToolSignature> {
 
     // TOOLS & SKILLS
     sigs.insert(
-        tools::SEARCH_TOOLS,
-        ToolSignature {
-            name: tools::SEARCH_TOOLS,
-            brief: "Find tools by keyword",
-            required_params: vec![("keyword", "string", "Search term")],
-            common_params: vec![],
-            token_estimate: 30,
-        },
-    );
-
-    sigs.insert(
         tools::TASK_TRACKER,
         ToolSignature {
             name: tools::TASK_TRACKER,
@@ -311,29 +272,6 @@ pub fn minimal_tool_signatures() -> HashMap<&'static str, ToolSignature> {
         },
     );
 
-    sigs.insert(
-        tools::SKILL,
-        ToolSignature {
-            name: tools::SKILL,
-            brief: "Load pre-built skill",
-            required_params: vec![("name", "string", "Skill name")],
-            common_params: vec![],
-            token_estimate: 30,
-        },
-    );
-
-    // Merged agent diagnostics tool
-    sigs.insert(
-        tools::AGENT_INFO,
-        ToolSignature {
-            name: tools::AGENT_INFO,
-            brief: "Agent diagnostics",
-            required_params: vec![],
-            common_params: vec![("mode", "string", "debug|analyze|full")],
-            token_estimate: 30,
-        },
-    );
-
     // EXECUTION
     sigs.insert(
         tools::EXECUTE_CODE,
@@ -350,18 +288,6 @@ pub fn minimal_tool_signatures() -> HashMap<&'static str, ToolSignature> {
     );
 
     // NOTE: PTY session tools hidden from LLM - use run_pty_cmd
-
-    // WEB
-    sigs.insert(
-        "web_fetch",
-        ToolSignature {
-            name: "web_fetch",
-            brief: "Fetch web content",
-            required_params: vec![("url", "string", "URL to fetch")],
-            common_params: vec![("timeout", "integer", "Max seconds")],
-            token_estimate: 35,
-        },
-    );
 
     sigs
 }
@@ -473,16 +399,15 @@ mod tests {
         let sigs = minimal_tool_signatures();
 
         // Verify we have signatures for key tools
-        assert!(sigs.contains_key(tools::GREP_FILE));
-        assert!(sigs.contains_key(tools::LIST_FILES));
+        assert!(sigs.contains_key(tools::UNIFIED_SEARCH));
         assert!(sigs.contains_key(tools::RUN_PTY_CMD));
         assert!(sigs.contains_key(tools::READ_FILE));
         assert!(sigs.contains_key(tools::EDIT_FILE));
 
-        // Should have at least 20 tools
+        // Should have at least 12 tools
         assert!(
-            sigs.len() >= 20,
-            "Expected >= 20 tool signatures, got {}",
+            sigs.len() >= 12,
+            "Expected >= 12 tool signatures, got {}",
             sigs.len()
         );
     }
@@ -504,7 +429,7 @@ mod tests {
         // Total should be reasonable
         let total: u32 = sigs.values().map(|s| s.token_estimate).sum();
         assert!(
-            (600..=1200).contains(&total),
+            (300..=1200).contains(&total),
             "Total token estimate out of range: {}",
             total
         );

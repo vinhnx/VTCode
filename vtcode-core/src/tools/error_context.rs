@@ -199,8 +199,8 @@ mod tests {
 
     #[test]
     fn test_creates_error_context() {
-        let ctx = ToolErrorContext::new(tools::GREP_FILE, "Pattern not found");
-        assert_eq!(ctx.tool_name, tools::GREP_FILE);
+        let ctx = ToolErrorContext::new(tools::UNIFIED_SEARCH, "Pattern not found");
+        assert_eq!(ctx.tool_name, tools::UNIFIED_SEARCH);
         assert_eq!(ctx.message, "Pattern not found");
         assert!(ctx.partial_output.is_none());
         assert!(ctx.suggestions.is_empty());
@@ -228,13 +228,13 @@ mod tests {
 
     #[test]
     fn test_formats_for_user() {
-        let ctx = ToolErrorContext::new(tools::GREP_FILE, "Permission denied")
+        let ctx = ToolErrorContext::new(tools::UNIFIED_SEARCH, "Permission denied")
             .with_file("secret.txt")
             .with_line(1)
             .with_suggestion("Check file permissions");
 
         let formatted = ctx.format_for_user();
-        assert!(formatted.contains(tools::GREP_FILE));
+        assert!(formatted.contains(tools::UNIFIED_SEARCH));
         assert!(formatted.contains("Permission denied"));
         assert!(formatted.contains("secret.txt"));
         assert!(formatted.contains("Line: 1"));

@@ -685,7 +685,7 @@ mod tests {
     fn test_logging_middleware() {
         let middleware = LoggingMiddleware::new(tracing::Level::INFO);
         let request = ToolRequest {
-            tool_name: crate::config::constants::tools::GREP_FILE.into(),
+            tool_name: crate::config::constants::tools::UNIFIED_SEARCH.into(),
             arguments: "pattern:test".into(),
             context: "src/".into(),
             metadata: RequestMetadata::default(),

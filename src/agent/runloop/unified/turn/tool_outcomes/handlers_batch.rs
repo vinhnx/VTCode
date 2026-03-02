@@ -28,7 +28,7 @@ fn can_parallelize_batch_tool_call(prepared: &PreparedToolCall) -> bool {
             | tools::RUN_PTY_CMD
             | tools::UNIFIED_EXEC
             | tools::SEND_PTY_INPUT
-            | tools::SHELL
+            | "shell"
     ) {
         return false;
     }

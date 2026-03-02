@@ -212,8 +212,9 @@ Cargo.lock
     println!("{}", style("Step 6: Testing project build...").cyan());
     let test_build_result = registry
         .execute_tool(
-            tools::LIST_FILES,
+            tools::UNIFIED_SEARCH,
             json!({
+                "action": "list",
                 "path": format!("{}/src", name),
                 "include_hidden": false
             }),

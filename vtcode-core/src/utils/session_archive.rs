@@ -456,8 +456,8 @@ fn progress_transcript_from_recent_messages(recent_messages: &[SessionMessage]) 
 fn normalize_session_tool_name(name: &str) -> String {
     match name {
         n if n == tool_names::UNIFIED_EXEC
-            || n == tool_names::SHELL
-            || n == tool_names::EXEC_PTY_CMD =>
+            || n == "shell"
+            || n == "exec_pty_cmd" =>
         {
             tool_names::RUN_PTY_CMD.to_string()
         }
@@ -1377,8 +1377,8 @@ mod tests {
             distinct_tools: vec![
                 tool_names::UNIFIED_EXEC.to_string(),
                 tool_names::RUN_PTY_CMD.to_string(),
-                tool_names::SHELL.to_string(),
-                tool_names::EXEC_PTY_CMD.to_string(),
+                "shell".to_string(),
+                "exec_pty_cmd".to_string(),
             ],
             recent_messages: recent,
             turn_number: 2,

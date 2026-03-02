@@ -79,7 +79,7 @@ impl SupportedTool {
     pub fn function_name(&self) -> &'static str {
         match self {
             Self::ReadFile => tools::READ_FILE,
-            Self::ListFiles => tools::LIST_FILES,
+            Self::ListFiles => "list_files",
             Self::SwitchMode => "switch_mode",
         }
     }
@@ -283,7 +283,7 @@ impl AcpToolRegistry {
             });
 
             let list_files = ToolDefinition::function(
-                tools::LIST_FILES.to_string(),
+                "list_files".to_string(),
                 list_files_description, // Avoid clone since we own the value now
                 list_files_schema,
             );
@@ -431,16 +431,14 @@ impl AcpToolRegistry {
 
     pub fn tool_kind(&self, function_name: &str) -> agent_client_protocol::ToolKind {
         match function_name {
-            n if n == tools::READ_FILE => agent_client_protocol::ToolKind::Read,
-            n if n == tools::GREP_FILE || n == tools::LIST_FILES => {
-                agent_client_protocol::ToolKind::Search
-            }
-            n if n == tools::RUN_PTY_CMD => agent_client_protocol::ToolKind::Execute,
-            n if n == tools::WRITE_FILE || n == tools::CREATE_FILE || n == tools::EDIT_FILE => {
+            tools::READ_FILE => agent_client_protocol::ToolKind::Read,
+            "grep_file" | "list_files" => agent_client_protocol::ToolKind::Search,
+            tools::RUN_PTY_CMD => agent_client_protocol::ToolKind::Execute,
+            tools::WRITE_FILE | tools::CREATE_FILE | tools::EDIT_FILE => {
                 agent_client_protocol::ToolKind::Edit
             }
-            n if n == tools::DELETE_FILE => agent_client_protocol::ToolKind::Delete,
-            n if n == tools::WEB_FETCH => agent_client_protocol::ToolKind::Fetch,
+            tools::DELETE_FILE => agent_client_protocol::ToolKind::Delete,
+            "web_fetch" => agent_client_protocol::ToolKind::Fetch,
             _ => agent_client_protocol::ToolKind::Other,
         }
     }

@@ -59,7 +59,12 @@ impl AgentRunner {
             .clone()
             .unwrap_or_else(|| workspace_path.clone());
 
-        if matches!(name, tools::GREP_FILE | tools::LIST_FILES) && !normalized.contains_key("path")
+        if name == tools::UNIFIED_SEARCH
+            && matches!(
+                normalized.get("action").and_then(Value::as_str),
+                Some("grep" | "list")
+            )
+            && !normalized.contains_key("path")
         {
             normalized.insert("path".to_string(), Value::String(fallback_dir));
         }

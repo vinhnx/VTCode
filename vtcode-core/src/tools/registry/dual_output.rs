@@ -11,6 +11,7 @@ use crate::tools::summarizers::{
     file_ops::{EditSummarizer, ReadSummarizer},
     search::{GrepSummarizer, ListSummarizer},
 };
+use crate::tools::tool_intent;
 
 use super::{SplitToolResult, ToolRegistry};
 
@@ -52,52 +53,59 @@ impl ToolRegistry {
 
         // Check if we have a summarizer for this tool
         match tool_name {
-            tools::GREP_FILE => {
-                // Apply grep summarization
-                let summarizer = GrepSummarizer::default();
-                match summarizer.summarize(&ui_content, None) {
-                    Ok(llm_content) => {
-                        debug!(
-                            tool = tools::GREP_FILE,
-                            ui_tokens = %summarizer.estimate_savings(&ui_content, &llm_content).1,
-                            llm_tokens = %summarizer.estimate_savings(&ui_content, &llm_content).0,
-                            savings_pct = %summarizer.estimate_savings(&ui_content, &llm_content).2,
-                            "Applied grep summarization"
-                        );
-                        Ok(SplitToolResult::new(tool_name, llm_content, ui_content))
+            tools::UNIFIED_SEARCH => {
+                match tool_intent::unified_search_action(&args).unwrap_or("grep") {
+                    "grep" => {
+                        let summarizer = GrepSummarizer::default();
+                        match summarizer.summarize(&ui_content, None) {
+                            Ok(llm_content) => {
+                                debug!(
+                                    tool = tools::UNIFIED_SEARCH,
+                                    action = "grep",
+                                    ui_tokens = %summarizer.estimate_savings(&ui_content, &llm_content).1,
+                                    llm_tokens = %summarizer.estimate_savings(&ui_content, &llm_content).0,
+                                    savings_pct = %summarizer.estimate_savings(&ui_content, &llm_content).2,
+                                    "Applied grep summarization"
+                                );
+                                Ok(SplitToolResult::new(tool_name, llm_content, ui_content))
+                            }
+                            Err(e) => {
+                                warn!(
+                                    tool = tools::UNIFIED_SEARCH,
+                                    action = "grep",
+                                    error = %e,
+                                    "Failed to summarize grep output, using simple result"
+                                );
+                                Ok(SplitToolResult::simple(tool_name, ui_content))
+                            }
+                        }
                     }
-                    Err(e) => {
-                        warn!(
-                            tool = tools::GREP_FILE,
-                            error = %e,
-                            "Failed to summarize grep output, using simple result"
-                        );
-                        Ok(SplitToolResult::simple(tool_name, ui_content))
+                    "list" => {
+                        let summarizer = ListSummarizer::default();
+                        match summarizer.summarize(&ui_content, None) {
+                            Ok(llm_content) => {
+                                debug!(
+                                    tool = tools::UNIFIED_SEARCH,
+                                    action = "list",
+                                    ui_tokens = %summarizer.estimate_savings(&ui_content, &llm_content).1,
+                                    llm_tokens = %summarizer.estimate_savings(&ui_content, &llm_content).0,
+                                    savings_pct = %summarizer.estimate_savings(&ui_content, &llm_content).2,
+                                    "Applied list summarization"
+                                );
+                                Ok(SplitToolResult::new(tool_name, llm_content, ui_content))
+                            }
+                            Err(e) => {
+                                warn!(
+                                    tool = tools::UNIFIED_SEARCH,
+                                    action = "list",
+                                    error = %e,
+                                    "Failed to summarize list output, using simple result"
+                                );
+                                Ok(SplitToolResult::simple(tool_name, ui_content))
+                            }
+                        }
                     }
-                }
-            }
-            tools::LIST_FILES => {
-                // Apply list summarization
-                let summarizer = ListSummarizer::default();
-                match summarizer.summarize(&ui_content, None) {
-                    Ok(llm_content) => {
-                        debug!(
-                            tool = tools::LIST_FILES,
-                            ui_tokens = %summarizer.estimate_savings(&ui_content, &llm_content).1,
-                            llm_tokens = %summarizer.estimate_savings(&ui_content, &llm_content).0,
-                            savings_pct = %summarizer.estimate_savings(&ui_content, &llm_content).2,
-                            "Applied list summarization"
-                        );
-                        Ok(SplitToolResult::new(tool_name, llm_content, ui_content))
-                    }
-                    Err(e) => {
-                        warn!(
-                            tool = tools::LIST_FILES,
-                            error = %e,
-                            "Failed to summarize list output, using simple result"
-                        );
-                        Ok(SplitToolResult::simple(tool_name, ui_content))
-                    }
+                    _ => Ok(SplitToolResult::simple(tool_name, ui_content)),
                 }
             }
             tools::READ_FILE => {

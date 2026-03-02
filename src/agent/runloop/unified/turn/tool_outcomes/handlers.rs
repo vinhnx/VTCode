@@ -325,10 +325,10 @@ fn extract_command_args_suffix(args: &Value) -> Option<String> {
 
 fn shell_run_signature(canonical_tool_name: &str, args: &Value) -> Option<String> {
     let command_value = match canonical_tool_name {
-        tool_names::RUN_PTY_CMD | tool_names::SHELL => {
+        tool_names::RUN_PTY_CMD | "shell" => {
             args.get("command").or_else(|| args.get("raw_command"))
         }
-        tool_names::UNIFIED_EXEC | tool_names::EXEC_PTY_CMD | tool_names::EXEC => {
+        tool_names::UNIFIED_EXEC | "exec_pty_cmd" | "exec" => {
             if tool_intent::unified_exec_action(args).unwrap_or("run") == "run" {
                 args.get("command")
                     .or_else(|| args.get("cmd"))
@@ -936,7 +936,7 @@ fn build_spool_chunk_guard_error_content(path: &str, max_reads_per_turn: usize) 
             "Spool chunk reads exceeded per-turn cap ({}). Use targeted extraction before reading more from '{}'.",
             max_reads_per_turn, path
         ),
-        Some(tool_names::GREP_FILE.to_string()),
+        Some("grep_file".to_string()),
         Some(json!({
             "path": path,
             "pattern": "warning|error|TODO"

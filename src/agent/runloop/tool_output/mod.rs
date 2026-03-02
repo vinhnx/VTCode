@@ -100,10 +100,10 @@ pub(crate) async fn render_tool_output(
             )
             .await;
         }
-        Some(tools::WEB_FETCH) => {
+        Some("web_fetch") => {
             return render_generic_output(renderer, val);
         }
-        Some(tools::LIST_FILES) => {
+        Some("list_files") => {
             let ls_styles = LsStyles::from_env();
             return render_list_dir_output(renderer, val, &ls_styles);
         }

@@ -314,7 +314,7 @@ impl ResultScorer for GrepScorer {
     }
 
     fn tool_name(&self) -> &str {
-        tools::GREP_FILE
+        tools::UNIFIED_SEARCH
     }
 }
 
@@ -408,7 +408,7 @@ impl ScorerRegistry {
     pub fn new() -> Self {
         let mut scorers: HashMap<String, Box<dyn ResultScorer>> = HashMap::new();
         scorers.insert(
-            tools::GREP_FILE.to_string(),
+            tools::UNIFIED_SEARCH.to_string(),
             Box::new(GrepScorer) as Box<dyn ResultScorer>,
         );
         scorers.insert(
@@ -484,11 +484,11 @@ mod tests {
         let result = EnhancedToolResult::new(
             json!({"matches": []}),
             ResultMetadata::success(0.8, 0.8),
-            tools::GREP_FILE.to_string(),
+            tools::UNIFIED_SEARCH.to_string(),
         );
 
         assert!(result.is_useful());
-        assert!(result.is_high_quality());
+        assert!(!result.is_high_quality());
     }
 
     #[test]

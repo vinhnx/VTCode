@@ -252,9 +252,9 @@ const fn default_editor_suspend_tui() -> bool {
 }
 
 const DEFAULT_TOOL_POLICIES: &[(&str, ToolPolicy)] = &[
+    // Search operations (non-destructive)
+    (tools::UNIFIED_SEARCH, ToolPolicy::Allow),
     // File operations (non-destructive)
-    (tools::LIST_FILES, ToolPolicy::Allow),
-    (tools::GREP_FILE, ToolPolicy::Allow),
     (tools::READ_FILE, ToolPolicy::Allow),
     // File operations (write/create)
     (tools::WRITE_FILE, ToolPolicy::Allow),
@@ -274,12 +274,8 @@ const DEFAULT_TOOL_POLICIES: &[(&str, ToolPolicy)] = &[
     (tools::CLOSE_PTY_SESSION, ToolPolicy::Allow),
     // Code execution (requires confirmation)
     (tools::EXECUTE_CODE, ToolPolicy::Prompt),
-    // Planning and meta tools
-    (tools::SEARCH_TOOLS, ToolPolicy::Allow),
-    (tools::SKILL, ToolPolicy::Allow),
-    // Diagnostic and introspection tools
-    // Web operations (requires confirmation)
-    (tools::WEB_FETCH, ToolPolicy::Prompt),
+    // Canonical execution interface
+    (tools::UNIFIED_EXEC, ToolPolicy::Prompt),
 ];
 
 #[cfg(test)]

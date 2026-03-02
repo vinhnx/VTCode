@@ -120,7 +120,10 @@ async fn check_filesystem_permissions(config: &AgentConfig) -> Result<()> {
 
     // Try to list files in the workspace
     registry
-        .execute_tool(tools::LIST_FILES, json!({"path": ".", "max_items": 5}))
+        .execute_tool(
+            tools::UNIFIED_SEARCH,
+            json!({"action": "list", "path": ".", "max_items": 5}),
+        )
         .await?;
 
     // Try to create a test file

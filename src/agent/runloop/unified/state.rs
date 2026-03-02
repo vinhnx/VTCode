@@ -62,8 +62,8 @@ impl SessionStats {
     pub(crate) fn record_tool(&mut self, name: &str) {
         let normalized_name = match name {
             n if n == tool_names::UNIFIED_EXEC
-                || n == tool_names::SHELL
-                || n == tool_names::EXEC_PTY_CMD =>
+                || n == "shell"
+                || n == "exec_pty_cmd" =>
             {
                 tool_names::RUN_PTY_CMD
             }
@@ -342,8 +342,8 @@ mod tests {
     fn record_tool_normalizes_exec_aliases() {
         let mut stats = SessionStats::default();
         stats.record_tool(tools::UNIFIED_EXEC);
-        stats.record_tool(tools::SHELL);
-        stats.record_tool(tools::EXEC_PTY_CMD);
+        stats.record_tool("shell");
+        stats.record_tool("exec_pty_cmd");
 
         assert_eq!(stats.sorted_tools(), vec![tools::RUN_PTY_CMD.to_string()]);
     }

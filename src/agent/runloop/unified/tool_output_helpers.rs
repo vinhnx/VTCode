@@ -114,7 +114,7 @@ pub fn check_write_effect_common(name: &str) -> bool {
 }
 
 fn is_run_pty_tool(name: &str, args_val: &serde_json::Value) -> bool {
-    if matches!(name, tool_names::RUN_PTY_CMD | tool_names::SHELL) {
+    if matches!(name, tool_names::RUN_PTY_CMD | "shell") {
         return true;
     }
     if name == tool_names::UNIFIED_EXEC {

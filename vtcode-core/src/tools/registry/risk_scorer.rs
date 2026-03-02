@@ -211,7 +211,7 @@ impl ToolRiskScorer {
     fn base_risk_for_tool(tool_name: &str) -> u32 {
         match tool_name {
             // Read-only tools (base: 0)
-            tools::READ_FILE | tools::LIST_FILES | tools::GREP_FILE => 0,
+            tools::READ_FILE | tools::UNIFIED_SEARCH => 0,
 
             // Safe metadata tools (base: 5)
             "file_info" | "status" | "logs" => 5,
@@ -223,10 +223,13 @@ impl ToolRiskScorer {
             tools::APPLY_PATCH | tools::DELETE_FILE => 25,
 
             // PTY/interactive commands (base: 35)
-            tools::CREATE_PTY_SESSION | tools::RUN_PTY_CMD | tools::SEND_PTY_INPUT => 35,
+            tools::CREATE_PTY_SESSION
+            | tools::RUN_PTY_CMD
+            | tools::SEND_PTY_INPUT
+            | tools::UNIFIED_EXEC => 35,
 
             // Network operations (base: 40)
-            "web_search" | "fetch_url" => 40,
+            "web_search" | "fetch_url" | "unified_search:web" => 40,
 
             // MCP tools (default to medium risk)
             _ if tool_name.starts_with("mcp_") => 30,

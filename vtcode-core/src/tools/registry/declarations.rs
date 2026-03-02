@@ -279,64 +279,6 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
         // SEARCH & DISCOVERY TOOLS
         // ============================================================
         FunctionDeclaration {
-            name: tools::GREP_FILE.to_owned(),
-            description: "Regex code search (ripgrep). Find patterns, TODOs. Supports globs, file types, context. literal:true for exact match.".to_owned(),
-            parameters: json!({
-                "type": "object",
-                "properties": {
-                    "pattern": {"type": "string", "description": "Regex or literal. Examples: 'TODO|FIXME', 'fn \\\\w+\\\\('"},
-                    "path": {"type": "string", "description": "Directory (relative). Default: current.", "default": "."},
-                    "max_results": {"type": "integer", "description": "Max results (1-1000).", "default": 100},
-                    "case_sensitive": {"type": "boolean", "description": "Case-sensitive. Default: smart-case.", "default": false},
-                    "literal": {"type": "boolean", "description": "Literal match, not regex.", "default": false},
-                    "glob_pattern": {"type": "string", "description": "File glob. Ex: '**/*.rs', 'src/**/*.ts'"},
-                    "context_lines": {"type": "integer", "description": "Context lines (0-20).", "default": 0},
-                    "respect_ignore_files": {"type": "boolean", "description": "Respect .gitignore.", "default": true},
-                    "include_hidden": {"type": "boolean", "description": "Include dotfiles.", "default": false},
-                    "max_file_size": {"type": "integer", "description": "Max file size (bytes)."},
-                    "search_hidden": {"type": "boolean", "description": "Search hidden dirs.", "default": false},
-                    "search_binary": {"type": "boolean", "description": "Search binaries.", "default": false},
-                    "files_with_matches": {"type": "boolean", "description": "Return filenames only.", "default": false},
-                    "type_pattern": {"type": "string", "description": "File type: rust, python, typescript, etc."},
-                    "invert_match": {"type": "boolean", "description": "Return non-matching lines.", "default": false},
-                    "word_boundaries": {"type": "boolean", "description": "Match word boundaries only.", "default": false},
-                    "line_number": {"type": "boolean", "description": "Include line numbers.", "default": true},
-                    "column": {"type": "boolean", "description": "Include column numbers.", "default": false},
-                    "only_matching": {"type": "boolean", "description": "Show matched part only.", "default": false},
-                    "trim": {"type": "boolean", "description": "Trim whitespace.", "default": false},
-                    "response_format": {"type": "string", "description": "'concise' or 'detailed'.", "default": "concise"}
-                },
-                "required": ["pattern"]
-            }),
-        },
-
-        FunctionDeclaration {
-            name: "list_files".to_string(),
-            description: "Explore workspace. Modes: list, recursive, find_name, find_content, largest. Paginate large dirs.".to_string(),
-            parameters: json!({
-                "type": "object",
-                "properties": {
-                    "path": {"type": "string", "description": "Directory (relative). Default: root."},
-                    "mode": {"type": "string", "description": "list|recursive|find_name|find_content|largest.", "default": "list"},
-                    "max_items": {"type": "integer", "description": "Max items to scan.", "default": 1000},
-                    "page": {"type": "integer", "description": "Page number.", "default": 1},
-                    "per_page": {"type": "integer", "description": "Items per page.", "default": 50},
-                    "response_format": {"type": "string", "description": "'concise' or 'detailed'.", "default": "concise"},
-                    "include_hidden": {"type": "boolean", "description": "Include dotfiles.", "default": false},
-                    "name_pattern": {"type": "string", "description": "Glob for find_name mode.", "default": "*"},
-                    "content_pattern": {"type": "string", "description": "Regex for find_content mode."},
-                    "file_extensions": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": "Filter by extensions."
-                    },
-                    "case_sensitive": {"type": "boolean", "description": "Case-sensitive patterns.", "default": true}
-                },
-                "required": ["path"]
-            }),
-        },
-
-        FunctionDeclaration {
             name: tools::UNIFIED_EXEC.to_string(),
             description: "Run commands and manage PTY sessions. Use continue for one-call send+read, or inspect for one-call output preview/filtering from session or spool file.".to_string(),
             parameters: json!({
@@ -421,8 +363,7 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
                     "limit": {"type": "integer", "description": "Number of lines to read."},
                     "mode": {"type": "string", "description": "Mode for 'read' (e.g., 'head', 'tail') or 'write' (e.g., 'fail_if_exists')."},
                     "indentation": {"type": "boolean", "description": "Include indentation info in 'read' output.", "default": false}
-                },
-                "required": ["path"]
+                }
             }),
         },
 
@@ -941,9 +882,6 @@ fn apply_metadata_overrides(declarations: &mut [FunctionDeclaration]) {
 
     for decl in declarations.iter_mut() {
         if let Some(meta) = metadata_by_name.remove(decl.name.as_str()) {
-            if let Some(schema) = meta.parameter_schema() {
-                decl.parameters = schema.clone();
-            }
             annotate_parameters(&mut decl.parameters, meta);
         }
     }

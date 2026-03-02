@@ -21,10 +21,7 @@ const ALWAYS_PROMPT_IN_SAFE_MODE: &[&str] = &[
     tools::CREATE_FILE,
     tools::DELETE_FILE,
     tools::APPLY_PATCH,
-    "exec",
-    "shell",
-    "unified_exec",
-    "exec_pty_cmd",
+    tools::UNIFIED_EXEC,
 ];
 
 #[derive(Clone, Default)]
@@ -122,7 +119,9 @@ impl ToolPolicyGateway {
             }
 
             match normalized {
-                n if n == tools::LIST_FILES => {
+                n if n == tools::UNIFIED_SEARCH
+                    && obj.get("action").and_then(|v| v.as_str()) == Some("list") =>
+                {
                     if let Some(cap) = constraints.max_items_per_call {
                         let requested = obj
                             .get("max_items")
@@ -137,7 +136,9 @@ impl ToolPolicyGateway {
                         }
                     }
                 }
-                n if n == tools::GREP_FILE => {
+                n if n == tools::UNIFIED_SEARCH
+                    && obj.get("action").and_then(|v| v.as_str()) == Some("grep") =>
+                {
                     if let Some(cap) = constraints.max_results_per_call {
                         let requested = obj
                             .get("max_results")

@@ -173,9 +173,9 @@ pub(crate) fn select_line_style(
         tools::UNIFIED_EXEC
         | tools::RUN_PTY_CMD
         | tools::EXECUTE_CODE
-        | tools::EXEC_PTY_CMD
-        | tools::EXEC
-        | tools::SHELL
+        | "exec_pty_cmd"
+        | "exec"
+        | "shell"
         | tools::WRITE_FILE
         | tools::EDIT_FILE
         | tools::APPLY_PATCH,

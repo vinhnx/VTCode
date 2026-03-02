@@ -88,12 +88,18 @@ impl ContextOptimizer {
     /// Optimize tool result based on tool type and budget
     pub async fn optimize_result(&mut self, tool_name: &str, result: Value) -> Value {
         let optimized = match tool_name {
-            tools::GREP_FILE => self.optimize_grep_result(result),
-            tools::LIST_FILES => self.optimize_list_files_result(result),
-            tools::READ_FILE => self.optimize_read_file_result(result),
-            "shell" | tools::RUN_PTY_CMD | tools::UNIFIED_EXEC => {
-                self.optimize_command_result(result)
+            tools::UNIFIED_SEARCH => {
+                if result.get("matches").is_some() {
+                    self.optimize_grep_result(result)
+                } else if result.get("files").is_some() || result.get("items").is_some() {
+                    self.optimize_list_files_result(result)
+                } else {
+                    result
+                }
             }
+            tools::READ_FILE => self.optimize_read_file_result(result),
+            tools::RUN_PTY_CMD | tools::UNIFIED_EXEC => self.optimize_command_result(result),
+            "shell" => self.optimize_command_result(result),
             _ => result,
         };
 
@@ -326,7 +332,7 @@ mod tests {
             .collect();
         let result = json!({"matches": matches});
 
-        let optimized = optimizer.optimize_result(tools::GREP_FILE, result).await;
+        let optimized = optimizer.optimize_result(tools::UNIFIED_SEARCH, result).await;
 
         let opt_matches = optimized["matches"].as_array().unwrap();
         assert_eq!(opt_matches.len(), MAX_GREP_RESULTS);
@@ -343,7 +349,7 @@ mod tests {
         ];
         let result = json!({"matches": matches});
 
-        let optimized = optimizer.optimize_result(tools::GREP_FILE, result).await;
+        let optimized = optimizer.optimize_result(tools::UNIFIED_SEARCH, result).await;
         let opt_matches = optimized["matches"].as_array().unwrap();
         assert_eq!(opt_matches.len(), 2);
         assert_eq!(optimized["total"], 2);
@@ -357,7 +363,7 @@ mod tests {
         let files: Vec<_> = (0..100).map(|i| json!(format!("file{}.rs", i))).collect();
         let result = json!({"files": files});
 
-        let optimized = optimizer.optimize_result(tools::LIST_FILES, result).await;
+        let optimized = optimizer.optimize_result(tools::UNIFIED_SEARCH, result).await;
 
         assert_eq!(optimized["total_files"], 100);
         assert!(optimized["sample"].is_array());
