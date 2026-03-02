@@ -6907,9 +6907,7 @@ Type "continue" to retry with a different strategy.
 
 ---
 
-https://deepwiki.com/search/how-does-plan-mode-task-tracke_6c26d7b2-e4ef-44e0-8033-8fc8114740d4?mode=fast
-
----
+reference plan mode and hitl flow structure
 
 TUI:
 
