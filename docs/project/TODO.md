@@ -221,17 +221,17 @@ call errors
 ```
 2026-03-01T02:28:02.634324Z  INFO vtcode_core::mcp::client: Initializing MCP client with 0 configured providers
 2026-03-01T02:28:02.634955Z  INFO vtcode_core::mcp::client: MCP client initialization complete. Active providers: 0
-2026-03-01T02:28:03.011958Z  WARN vtcode_core::instructions: Instruction file `/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
+2026-03-01T02:28:03.011958Z  WARN vtcode_core::instructions: Instruction file `./AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
 2026-03-01T02:28:03.017267Z DEBUG vtcode_core::tools::registry::declarations: Building and caching declarations mode=Minimal
 2026-03-01T02:28:03.018319Z DEBUG vtcode_core::tools::registry::declarations: Building minimal tool declarations from canonical schema mode="minimal"
 2026-03-01T02:28:03.019664Z  INFO vtcode_core::skills::discovery: Starting skill discovery in: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode
-2026-03-01T02:28:03.019689Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.github/skills
-2026-03-01T02:28:03.019698Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.agents/skills
-2026-03-01T02:28:03.019726Z  INFO vtcode_core::skills::discovery: Found 0 skills in /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/skills
-2026-03-01T02:28:03.019740Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.claude/skills
-2026-03-01T02:28:03.019747Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.pi/skills
-2026-03-01T02:28:03.019755Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.codex/skills
-2026-03-01T02:28:03.019768Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./skills
+2026-03-01T02:28:03.019689Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.github/skills
+2026-03-01T02:28:03.019698Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.agents/skills
+2026-03-01T02:28:03.019726Z  INFO vtcode_core::skills::discovery: Found 0 skills in ./.vtcode/skills
+2026-03-01T02:28:03.019740Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.claude/skills
+2026-03-01T02:28:03.019747Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.pi/skills
+2026-03-01T02:28:03.019755Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.codex/skills
+2026-03-01T02:28:03.019768Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ././skills
 2026-03-01T02:28:03.022793Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-creator from /Users/vinhnguyenxuan/.vtcode/skills/.system/skill-creator
 2026-03-01T02:28:03.023404Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-installer from /Users/vinhnguyenxuan/.vtcode/skills/.system/skill-installer
 2026-03-01T02:28:03.023454Z  INFO vtcode_core::skills::discovery: Found 2 skills in /Users/vinhnguyenxuan/.vtcode/skills
@@ -253,11 +253,11 @@ call errors
 2026-03-01T02:28:03.028575Z  WARN vtcode_core::skills::manifest: File reference validation warnings: ["Invalid reference 'scripts/list-skills.py`': Referenced file does not exist: \"/Users/vinhnguyenxuan/.codex/skills/.system/skill-installer/scripts/list-skills.py`\""]
 2026-03-01T02:28:03.028588Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-installer from /Users/vinhnguyenxuan/.codex/skills/.system/skill-installer
 2026-03-01T02:28:03.028675Z  INFO vtcode_core::skills::discovery: Found 2 skills in /Users/vinhnguyenxuan/.codex/skills
-2026-03-01T02:28:03.028692Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./tools
-2026-03-01T02:28:03.028699Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./vendor/tools
+2026-03-01T02:28:03.028692Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: ././tools
+2026-03-01T02:28:03.028699Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: ././vendor/tools
 2026-03-01T02:28:03.028706Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/.vtcode/tools
 2026-03-01T02:28:03.029084Z  INFO vtcode_core::core::agent::state: History invariants are valid
-2026-03-01T02:28:03.029945Z  WARN vtcode_core::instructions: Instruction file `/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
+2026-03-01T02:28:03.029945Z  WARN vtcode_core::instructions: Instruction file `./AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
 2026-03-01T02:28:03.029961Z DEBUG vtcode_core::prompts::system: Selected system prompt mode mode="default" base_tokens_approx=1989
 2026-03-01T02:28:03.091029Z DEBUG vtcode_core::tools::registry::maintenance: Seeded default tool policies from registrations seeded=5
 2026-03-01T02:28:03.134938Z DEBUG vtcode_core::tools::registry::maintenance: Seeded default tool policies from registrations seeded=4
@@ -271,11 +271,11 @@ call errors
 2026-03-01T02:28:03.163259Z DEBUG vtcode_core::subagents::registry: Loaded builtin agent: planner
 2026-03-01T02:28:03.163270Z DEBUG vtcode_core::subagents::registry: Loaded builtin agent: coder
 2026-03-01T02:28:03.163285Z  INFO vtcode_core::subagents::registry: Loaded 7 subagents: ["explore", "plan", "planner", "general", "coder", "debugger", "code-reviewer"]
-2026-03-01T02:28:03.163391Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/context/tool_outputs
-2026-03-01T02:28:03.163442Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/history
-2026-03-01T02:28:03.163480Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/mcp/tools
-2026-03-01T02:28:03.163497Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/terminals
-2026-03-01T02:28:03.163513Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/skills
+2026-03-01T02:28:03.163391Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/context/tool_outputs
+2026-03-01T02:28:03.163442Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/history
+2026-03-01T02:28:03.163480Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/mcp/tools
+2026-03-01T02:28:03.163497Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/terminals
+2026-03-01T02:28:03.163513Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/skills
 2026-03-01T02:28:03.163534Z  INFO vtcode_core::context::dynamic_init: Initialized dynamic context discovery directories workspace=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode
 2026-03-01T02:28:38.777492Z  INFO vtcode_core::tools::registry::inventory: Internal tool routed via alias to LLM-visible parent alias=run_pty_cmd canonical=unified_exec count=1
 2026-03-01T02:28:38.783807Z DEBUG vtcode_core::tools::safety_gateway: SafetyGateway: checking and recording safety invocation_id=unknown tool=unified_exec
@@ -325,17 +325,17 @@ call errors
 2026-03-01T02:30:32.186261Z  INFO vtcode_core::mcp::client: No active MCP connections to shutdown
 2026-03-01T02:45:33.652632Z  INFO vtcode_core::mcp::client: Initializing MCP client with 0 configured providers
 2026-03-01T02:45:33.653360Z  INFO vtcode_core::mcp::client: MCP client initialization complete. Active providers: 0
-2026-03-01T02:45:34.054493Z  WARN vtcode_core::instructions: Instruction file `/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
+2026-03-01T02:45:34.054493Z  WARN vtcode_core::instructions: Instruction file `./AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
 2026-03-01T02:45:34.633424Z DEBUG vtcode_core::tools::registry::declarations: Building and caching declarations mode=Minimal
 2026-03-01T02:45:34.635515Z DEBUG vtcode_core::tools::registry::declarations: Building minimal tool declarations from canonical schema mode="minimal"
 2026-03-01T02:45:34.638889Z  INFO vtcode_core::skills::discovery: Starting skill discovery in: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode
-2026-03-01T02:45:34.639086Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.github/skills
-2026-03-01T02:45:34.639147Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.agents/skills
-2026-03-01T02:45:34.639451Z  INFO vtcode_core::skills::discovery: Found 0 skills in /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/skills
-2026-03-01T02:45:34.639513Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.claude/skills
-2026-03-01T02:45:34.639560Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.pi/skills
-2026-03-01T02:45:34.639605Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.codex/skills
-2026-03-01T02:45:34.639650Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./skills
+2026-03-01T02:45:34.639086Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.github/skills
+2026-03-01T02:45:34.639147Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.agents/skills
+2026-03-01T02:45:34.639451Z  INFO vtcode_core::skills::discovery: Found 0 skills in ./.vtcode/skills
+2026-03-01T02:45:34.639513Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.claude/skills
+2026-03-01T02:45:34.639560Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.pi/skills
+2026-03-01T02:45:34.639605Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.codex/skills
+2026-03-01T02:45:34.639650Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ././skills
 2026-03-01T02:45:34.645025Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-creator from /Users/vinhnguyenxuan/.vtcode/skills/.system/skill-creator
 2026-03-01T02:45:34.647167Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-installer from /Users/vinhnguyenxuan/.vtcode/skills/.system/skill-installer
 2026-03-01T02:45:34.647653Z  INFO vtcode_core::skills::discovery: Found 2 skills in /Users/vinhnguyenxuan/.vtcode/skills
@@ -357,11 +357,11 @@ call errors
 2026-03-01T02:45:34.660009Z  WARN vtcode_core::skills::manifest: File reference validation warnings: ["Invalid reference 'scripts/list-skills.py`': Referenced file does not exist: \"/Users/vinhnguyenxuan/.codex/skills/.system/skill-installer/scripts/list-skills.py`\""]
 2026-03-01T02:45:34.660053Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-installer from /Users/vinhnguyenxuan/.codex/skills/.system/skill-installer
 2026-03-01T02:45:34.660439Z  INFO vtcode_core::skills::discovery: Found 2 skills in /Users/vinhnguyenxuan/.codex/skills
-2026-03-01T02:45:34.660508Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./tools
-2026-03-01T02:45:34.660533Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./vendor/tools
+2026-03-01T02:45:34.660508Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: ././tools
+2026-03-01T02:45:34.660533Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: ././vendor/tools
 2026-03-01T02:45:34.660556Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/.vtcode/tools
 2026-03-01T02:45:34.661146Z  INFO vtcode_core::core::agent::state: History invariants are valid
-2026-03-01T02:45:34.663269Z  WARN vtcode_core::instructions: Instruction file `/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
+2026-03-01T02:45:34.663269Z  WARN vtcode_core::instructions: Instruction file `./AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
 2026-03-01T02:45:34.663337Z DEBUG vtcode_core::prompts::system: Selected system prompt mode mode="default" base_tokens_approx=1989
 2026-03-01T02:45:34.717282Z DEBUG vtcode_core::tools::registry::maintenance: Seeded default tool policies from registrations seeded=2
 2026-03-01T02:45:34.741628Z DEBUG vtcode_core::tools::registry::maintenance: Seeded default tool policies from registrations seeded=2
@@ -375,11 +375,11 @@ call errors
 2026-03-01T02:45:34.808406Z DEBUG vtcode_core::subagents::registry: Loaded builtin agent: planner
 2026-03-01T02:45:34.808418Z DEBUG vtcode_core::subagents::registry: Loaded builtin agent: coder
 2026-03-01T02:45:34.808434Z  INFO vtcode_core::subagents::registry: Loaded 7 subagents: ["code-reviewer", "planner", "general", "debugger", "coder", "explore", "plan"]
-2026-03-01T02:45:34.808531Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/context/tool_outputs
-2026-03-01T02:45:34.808557Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/history
-2026-03-01T02:45:34.808582Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/mcp/tools
-2026-03-01T02:45:34.808599Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/terminals
-2026-03-01T02:45:34.808614Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/skills
+2026-03-01T02:45:34.808531Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/context/tool_outputs
+2026-03-01T02:45:34.808557Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/history
+2026-03-01T02:45:34.808582Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/mcp/tools
+2026-03-01T02:45:34.808599Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/terminals
+2026-03-01T02:45:34.808614Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/skills
 2026-03-01T02:45:34.808639Z  INFO vtcode_core::context::dynamic_init: Initialized dynamic context discovery directories workspace=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode
 2026-03-01T02:45:39.151406Z  INFO vtcode_core::tools::registry::inventory: Internal tool routed via alias to LLM-visible parent alias=run_pty_cmd canonical=unified_exec count=1
 2026-03-01T02:45:39.157159Z DEBUG vtcode_core::tools::safety_gateway: SafetyGateway: checking and recording safety invocation_id=unknown tool=unified_exec
@@ -429,17 +429,17 @@ call errors
 2026-03-01T02:47:47.419892Z  INFO vtcode_core::mcp::client: No active MCP connections to shutdown
 2026-03-01T03:08:09.473150Z  INFO vtcode_core::mcp::client: Initializing MCP client with 0 configured providers
 2026-03-01T03:08:09.473817Z  INFO vtcode_core::mcp::client: MCP client initialization complete. Active providers: 0
-2026-03-01T03:08:09.869325Z  WARN vtcode_core::instructions: Instruction file `/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
+2026-03-01T03:08:09.869325Z  WARN vtcode_core::instructions: Instruction file `./AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
 2026-03-01T03:08:10.516360Z DEBUG vtcode_core::tools::registry::declarations: Building and caching declarations mode=Minimal
 2026-03-01T03:08:10.519307Z DEBUG vtcode_core::tools::registry::declarations: Building minimal tool declarations from canonical schema mode="minimal"
 2026-03-01T03:08:10.522788Z  INFO vtcode_core::skills::discovery: Starting skill discovery in: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode
-2026-03-01T03:08:10.522962Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.github/skills
-2026-03-01T03:08:10.523023Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.agents/skills
-2026-03-01T03:08:10.523315Z  INFO vtcode_core::skills::discovery: Found 0 skills in /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/skills
-2026-03-01T03:08:10.523376Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.claude/skills
-2026-03-01T03:08:10.523466Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.pi/skills
-2026-03-01T03:08:10.523531Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.codex/skills
-2026-03-01T03:08:10.523582Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./skills
+2026-03-01T03:08:10.522962Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.github/skills
+2026-03-01T03:08:10.523023Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.agents/skills
+2026-03-01T03:08:10.523315Z  INFO vtcode_core::skills::discovery: Found 0 skills in ./.vtcode/skills
+2026-03-01T03:08:10.523376Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.claude/skills
+2026-03-01T03:08:10.523466Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.pi/skills
+2026-03-01T03:08:10.523531Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.codex/skills
+2026-03-01T03:08:10.523582Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ././skills
 2026-03-01T03:08:10.531902Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-creator from /Users/vinhnguyenxuan/.vtcode/skills/.system/skill-creator
 2026-03-01T03:08:10.533816Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-installer from /Users/vinhnguyenxuan/.vtcode/skills/.system/skill-installer
 2026-03-01T03:08:10.534156Z  INFO vtcode_core::skills::discovery: Found 2 skills in /Users/vinhnguyenxuan/.vtcode/skills
@@ -459,11 +459,11 @@ call errors
 2026-03-01T03:08:10.547542Z DEBUG vtcode_core::skills::manifest: File reference validation warnings (full list) warnings=["Invalid reference 'scripts/list-skills.py`': Referenced file does not exist: \"/Users/vinhnguyenxuan/.codex/skills/.system/skill-installer/scripts/list-skills.py`\""]
 2026-03-01T03:08:10.547589Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-installer from /Users/vinhnguyenxuan/.codex/skills/.system/skill-installer
 2026-03-01T03:08:10.548124Z  INFO vtcode_core::skills::discovery: Found 2 skills in /Users/vinhnguyenxuan/.codex/skills
-2026-03-01T03:08:10.548236Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./tools
-2026-03-01T03:08:10.548299Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./vendor/tools
+2026-03-01T03:08:10.548236Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: ././tools
+2026-03-01T03:08:10.548299Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: ././vendor/tools
 2026-03-01T03:08:10.548335Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/.vtcode/tools
 2026-03-01T03:08:10.549269Z  INFO vtcode_core::core::agent::state: History invariants are valid
-2026-03-01T03:08:10.551233Z  WARN vtcode_core::instructions: Instruction file `/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
+2026-03-01T03:08:10.551233Z  WARN vtcode_core::instructions: Instruction file `./AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
 2026-03-01T03:08:10.551297Z DEBUG vtcode_core::prompts::system: Selected system prompt mode mode="default" base_tokens_approx=1989
 2026-03-01T03:08:10.628055Z DEBUG vtcode_core::tools::registry::maintenance: Seeded default tool policies from registrations seeded=4
 2026-03-01T03:08:10.674011Z DEBUG vtcode_core::tools::registry::maintenance: Seeded default tool policies from registrations seeded=4
@@ -477,11 +477,11 @@ call errors
 2026-03-01T03:08:10.736777Z DEBUG vtcode_core::subagents::registry: Loaded builtin agent: planner
 2026-03-01T03:08:10.736788Z DEBUG vtcode_core::subagents::registry: Loaded builtin agent: coder
 2026-03-01T03:08:10.736809Z  INFO vtcode_core::subagents::registry: Loaded 7 subagents: ["coder", "debugger", "general", "explore", "code-reviewer", "plan", "planner"]
-2026-03-01T03:08:10.737495Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/context/tool_outputs
-2026-03-01T03:08:10.737531Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/history
-2026-03-01T03:08:10.737554Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/mcp/tools
-2026-03-01T03:08:10.737572Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/terminals
-2026-03-01T03:08:10.737589Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/skills
+2026-03-01T03:08:10.737495Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/context/tool_outputs
+2026-03-01T03:08:10.737531Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/history
+2026-03-01T03:08:10.737554Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/mcp/tools
+2026-03-01T03:08:10.737572Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/terminals
+2026-03-01T03:08:10.737589Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/skills
 2026-03-01T03:08:10.737615Z  INFO vtcode_core::context::dynamic_init: Initialized dynamic context discovery directories workspace=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode
 2026-03-01T03:09:07.965626Z  INFO vtcode_core::tools::registry::inventory: Internal tool routed via alias to LLM-visible parent alias=run_pty_cmd canonical=unified_exec count=1
 2026-03-01T03:09:07.970545Z DEBUG vtcode_core::tools::safety_gateway: SafetyGateway: checking and recording safety invocation_id=bcb7ea7f tool=unified_exec
@@ -516,17 +516,17 @@ call errors
 2026-03-01T03:16:56.063024Z  INFO vtcode_core::mcp::client: No active MCP connections to shutdown
 2026-03-01T03:17:39.351210Z  INFO vtcode_core::mcp::client: Initializing MCP client with 0 configured providers
 2026-03-01T03:17:39.351886Z  INFO vtcode_core::mcp::client: MCP client initialization complete. Active providers: 0
-2026-03-01T03:17:39.814165Z  WARN vtcode_core::instructions: Instruction file `/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
+2026-03-01T03:17:39.814165Z  WARN vtcode_core::instructions: Instruction file `./AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
 2026-03-01T03:17:39.819313Z DEBUG vtcode_core::tools::registry::declarations: Building and caching declarations mode=Minimal
 2026-03-01T03:17:39.820190Z DEBUG vtcode_core::tools::registry::declarations: Building minimal tool declarations from canonical schema mode="minimal"
 2026-03-01T03:17:39.821533Z  INFO vtcode_core::skills::discovery: Starting skill discovery in: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode
-2026-03-01T03:17:39.821560Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.github/skills
-2026-03-01T03:17:39.821570Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.agents/skills
-2026-03-01T03:17:39.821604Z  INFO vtcode_core::skills::discovery: Found 0 skills in /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/skills
-2026-03-01T03:17:39.821615Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.claude/skills
-2026-03-01T03:17:39.821626Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.pi/skills
-2026-03-01T03:17:39.821634Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.codex/skills
-2026-03-01T03:17:39.821641Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./skills
+2026-03-01T03:17:39.821560Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.github/skills
+2026-03-01T03:17:39.821570Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.agents/skills
+2026-03-01T03:17:39.821604Z  INFO vtcode_core::skills::discovery: Found 0 skills in ./.vtcode/skills
+2026-03-01T03:17:39.821615Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.claude/skills
+2026-03-01T03:17:39.821626Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.pi/skills
+2026-03-01T03:17:39.821634Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.codex/skills
+2026-03-01T03:17:39.821641Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ././skills
 2026-03-01T03:17:39.825323Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-creator from /Users/vinhnguyenxuan/.vtcode/skills/.system/skill-creator
 2026-03-01T03:17:39.825921Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-installer from /Users/vinhnguyenxuan/.vtcode/skills/.system/skill-installer
 2026-03-01T03:17:39.825981Z  INFO vtcode_core::skills::discovery: Found 2 skills in /Users/vinhnguyenxuan/.vtcode/skills
@@ -546,11 +546,11 @@ call errors
 2026-03-01T03:17:39.830920Z DEBUG vtcode_core::skills::manifest: File reference validation warnings (full list) warnings=["Invalid reference 'scripts/list-skills.py`': Referenced file does not exist: \"/Users/vinhnguyenxuan/.codex/skills/.system/skill-installer/scripts/list-skills.py`\""]
 2026-03-01T03:17:39.830928Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-installer from /Users/vinhnguyenxuan/.codex/skills/.system/skill-installer
 2026-03-01T03:17:39.831025Z  INFO vtcode_core::skills::discovery: Found 2 skills in /Users/vinhnguyenxuan/.codex/skills
-2026-03-01T03:17:39.831044Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./tools
-2026-03-01T03:17:39.831053Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./vendor/tools
+2026-03-01T03:17:39.831044Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: ././tools
+2026-03-01T03:17:39.831053Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: ././vendor/tools
 2026-03-01T03:17:39.831061Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/.vtcode/tools
 2026-03-01T03:17:39.831515Z  INFO vtcode_core::core::agent::state: History invariants are valid
-2026-03-01T03:17:39.832643Z  WARN vtcode_core::instructions: Instruction file `/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
+2026-03-01T03:17:39.832643Z  WARN vtcode_core::instructions: Instruction file `./AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
 2026-03-01T03:17:39.832675Z DEBUG vtcode_core::prompts::system: Selected system prompt mode mode="default" base_tokens_approx=1989
 2026-03-01T03:17:39.889714Z DEBUG vtcode_core::tools::registry::maintenance: Seeded default tool policies from registrations seeded=4
 2026-03-01T03:17:39.947257Z DEBUG vtcode_core::tools::registry::maintenance: Seeded default tool policies from registrations seeded=4
@@ -564,11 +564,11 @@ call errors
 2026-03-01T03:17:40.006394Z DEBUG vtcode_core::subagents::registry: Loaded builtin agent: planner
 2026-03-01T03:17:40.006404Z DEBUG vtcode_core::subagents::registry: Loaded builtin agent: coder
 2026-03-01T03:17:40.006419Z  INFO vtcode_core::subagents::registry: Loaded 7 subagents: ["planner", "plan", "general", "explore", "debugger", "code-reviewer", "coder"]
-2026-03-01T03:17:40.006686Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/context/tool_outputs
-2026-03-01T03:17:40.006710Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/history
-2026-03-01T03:17:40.006728Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/mcp/tools
-2026-03-01T03:17:40.006744Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/terminals
-2026-03-01T03:17:40.006759Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/skills
+2026-03-01T03:17:40.006686Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/context/tool_outputs
+2026-03-01T03:17:40.006710Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/history
+2026-03-01T03:17:40.006728Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/mcp/tools
+2026-03-01T03:17:40.006744Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/terminals
+2026-03-01T03:17:40.006759Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/skills
 2026-03-01T03:17:40.006783Z  INFO vtcode_core::context::dynamic_init: Initialized dynamic context discovery directories workspace=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode
 2026-03-01T03:18:08.263638Z  INFO vtcode_core::tools::registry::inventory: Internal tool routed via alias to LLM-visible parent alias=run_pty_cmd canonical=unified_exec count=1
 2026-03-01T03:18:08.272898Z DEBUG vtcode_core::tools::safety_gateway: SafetyGateway: checking and recording safety invocation_id=0d7ede12 tool=unified_exec
@@ -620,17 +620,17 @@ call errors
 2026-03-01T03:20:42.342445Z  INFO vtcode_core::mcp::client: No active MCP connections to shutdown
 2026-03-01T03:21:23.453147Z  INFO vtcode_core::mcp::client: Initializing MCP client with 0 configured providers
 2026-03-01T03:21:23.454097Z  INFO vtcode_core::mcp::client: MCP client initialization complete. Active providers: 0
-2026-03-01T03:21:23.906093Z  WARN vtcode_core::instructions: Instruction file `/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
+2026-03-01T03:21:23.906093Z  WARN vtcode_core::instructions: Instruction file `./AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
 2026-03-01T03:21:23.911325Z DEBUG vtcode_core::tools::registry::declarations: Building and caching declarations mode=Minimal
 2026-03-01T03:21:23.912190Z DEBUG vtcode_core::tools::registry::declarations: Building minimal tool declarations from canonical schema mode="minimal"
 2026-03-01T03:21:23.913528Z  INFO vtcode_core::skills::discovery: Starting skill discovery in: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode
-2026-03-01T03:21:23.913564Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.github/skills
-2026-03-01T03:21:23.913577Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.agents/skills
-2026-03-01T03:21:23.913643Z  INFO vtcode_core::skills::discovery: Found 0 skills in /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/skills
-2026-03-01T03:21:23.913654Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.claude/skills
-2026-03-01T03:21:23.913663Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.pi/skills
-2026-03-01T03:21:23.913670Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.codex/skills
-2026-03-01T03:21:23.913677Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./skills
+2026-03-01T03:21:23.913564Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.github/skills
+2026-03-01T03:21:23.913577Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.agents/skills
+2026-03-01T03:21:23.913643Z  INFO vtcode_core::skills::discovery: Found 0 skills in ./.vtcode/skills
+2026-03-01T03:21:23.913654Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.claude/skills
+2026-03-01T03:21:23.913663Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.pi/skills
+2026-03-01T03:21:23.913670Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.codex/skills
+2026-03-01T03:21:23.913677Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ././skills
 2026-03-01T03:21:23.917278Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-creator from /Users/vinhnguyenxuan/.vtcode/skills/.system/skill-creator
 2026-03-01T03:21:23.917955Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-installer from /Users/vinhnguyenxuan/.vtcode/skills/.system/skill-installer
 2026-03-01T03:21:23.918009Z  INFO vtcode_core::skills::discovery: Found 2 skills in /Users/vinhnguyenxuan/.vtcode/skills
@@ -650,11 +650,11 @@ call errors
 2026-03-01T03:21:23.923806Z DEBUG vtcode_core::skills::manifest: File reference validation warnings (full list) warnings=["Invalid reference 'scripts/list-skills.py`': Referenced file does not exist: \"/Users/vinhnguyenxuan/.codex/skills/.system/skill-installer/scripts/list-skills.py`\""]
 2026-03-01T03:21:23.923816Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-installer from /Users/vinhnguyenxuan/.codex/skills/.system/skill-installer
 2026-03-01T03:21:23.923938Z  INFO vtcode_core::skills::discovery: Found 2 skills in /Users/vinhnguyenxuan/.codex/skills
-2026-03-01T03:21:23.923961Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./tools
-2026-03-01T03:21:23.923970Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./vendor/tools
+2026-03-01T03:21:23.923961Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: ././tools
+2026-03-01T03:21:23.923970Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: ././vendor/tools
 2026-03-01T03:21:23.923979Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/.vtcode/tools
 2026-03-01T03:21:23.924470Z  INFO vtcode_core::core::agent::state: History invariants are valid
-2026-03-01T03:21:23.925657Z  WARN vtcode_core::instructions: Instruction file `/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
+2026-03-01T03:21:23.925657Z  WARN vtcode_core::instructions: Instruction file `./AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
 2026-03-01T03:21:23.925692Z DEBUG vtcode_core::prompts::system: Selected system prompt mode mode="default" base_tokens_approx=1989
 2026-03-01T03:21:23.986932Z DEBUG vtcode_core::tools::registry::maintenance: Seeded default tool policies from registrations seeded=4
 2026-03-01T03:21:24.030489Z DEBUG vtcode_core::tools::registry::maintenance: Seeded default tool policies from registrations seeded=4
@@ -668,11 +668,11 @@ call errors
 2026-03-01T03:21:24.089470Z DEBUG vtcode_core::subagents::registry: Loaded builtin agent: planner
 2026-03-01T03:21:24.089482Z DEBUG vtcode_core::subagents::registry: Loaded builtin agent: coder
 2026-03-01T03:21:24.089493Z  INFO vtcode_core::subagents::registry: Loaded 7 subagents: ["explore", "plan", "code-reviewer", "planner", "coder", "general", "debugger"]
-2026-03-01T03:21:24.089748Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/context/tool_outputs
-2026-03-01T03:21:24.089773Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/history
-2026-03-01T03:21:24.089791Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/mcp/tools
-2026-03-01T03:21:24.089808Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/terminals
-2026-03-01T03:21:24.089823Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/skills
+2026-03-01T03:21:24.089748Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/context/tool_outputs
+2026-03-01T03:21:24.089773Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/history
+2026-03-01T03:21:24.089791Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/mcp/tools
+2026-03-01T03:21:24.089808Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/terminals
+2026-03-01T03:21:24.089823Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/skills
 2026-03-01T03:21:24.089850Z  INFO vtcode_core::context::dynamic_init: Initialized dynamic context discovery directories workspace=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode
 2026-03-01T03:21:29.854179Z  INFO vtcode_core::tools::registry::inventory: Internal tool routed via alias to LLM-visible parent alias=run_pty_cmd canonical=unified_exec count=1
 2026-03-01T03:21:29.862583Z DEBUG vtcode_core::tools::safety_gateway: SafetyGateway: checking and recording safety invocation_id=b5ce443e tool=unified_exec
@@ -705,17 +705,17 @@ call errors
 2026-03-01T03:23:42.948341Z  INFO vtcode_core::mcp::client: No active MCP connections to shutdown
 2026-03-01T03:25:00.294232Z  INFO vtcode_core::mcp::client: Initializing MCP client with 0 configured providers
 2026-03-01T03:25:00.295101Z  INFO vtcode_core::mcp::client: MCP client initialization complete. Active providers: 0
-2026-03-01T03:25:00.751820Z  WARN vtcode_core::instructions: Instruction file `/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
+2026-03-01T03:25:00.751820Z  WARN vtcode_core::instructions: Instruction file `./AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
 2026-03-01T03:25:01.302970Z DEBUG vtcode_core::tools::registry::declarations: Building and caching declarations mode=Minimal
 2026-03-01T03:25:01.304457Z DEBUG vtcode_core::tools::registry::declarations: Building minimal tool declarations from canonical schema mode="minimal"
 2026-03-01T03:25:01.306430Z  INFO vtcode_core::skills::discovery: Starting skill discovery in: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode
-2026-03-01T03:25:01.306494Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.github/skills
-2026-03-01T03:25:01.306517Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.agents/skills
-2026-03-01T03:25:01.306636Z  INFO vtcode_core::skills::discovery: Found 0 skills in /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/skills
-2026-03-01T03:25:01.306660Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.claude/skills
-2026-03-01T03:25:01.306676Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.pi/skills
-2026-03-01T03:25:01.306691Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.codex/skills
-2026-03-01T03:25:01.306705Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./skills
+2026-03-01T03:25:01.306494Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.github/skills
+2026-03-01T03:25:01.306517Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.agents/skills
+2026-03-01T03:25:01.306636Z  INFO vtcode_core::skills::discovery: Found 0 skills in ./.vtcode/skills
+2026-03-01T03:25:01.306660Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.claude/skills
+2026-03-01T03:25:01.306676Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.pi/skills
+2026-03-01T03:25:01.306691Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.codex/skills
+2026-03-01T03:25:01.306705Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ././skills
 2026-03-01T03:25:01.311580Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-creator from /Users/vinhnguyenxuan/.vtcode/skills/.system/skill-creator
 2026-03-01T03:25:01.313204Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-installer from /Users/vinhnguyenxuan/.vtcode/skills/.system/skill-installer
 2026-03-01T03:25:01.313504Z  INFO vtcode_core::skills::discovery: Found 2 skills in /Users/vinhnguyenxuan/.vtcode/skills
@@ -735,11 +735,11 @@ call errors
 2026-03-01T03:25:01.323139Z DEBUG vtcode_core::skills::manifest: File reference validation warnings (full list) warnings=["Invalid reference 'scripts/list-skills.py`': Referenced file does not exist: \"/Users/vinhnguyenxuan/.codex/skills/.system/skill-installer/scripts/list-skills.py`\""]
 2026-03-01T03:25:01.323155Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-installer from /Users/vinhnguyenxuan/.codex/skills/.system/skill-installer
 2026-03-01T03:25:01.323333Z  INFO vtcode_core::skills::discovery: Found 2 skills in /Users/vinhnguyenxuan/.codex/skills
-2026-03-01T03:25:01.323371Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./tools
-2026-03-01T03:25:01.323386Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./vendor/tools
+2026-03-01T03:25:01.323371Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: ././tools
+2026-03-01T03:25:01.323386Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: ././vendor/tools
 2026-03-01T03:25:01.323401Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/.vtcode/tools
 2026-03-01T03:25:01.324036Z  INFO vtcode_core::core::agent::state: History invariants are valid
-2026-03-01T03:25:01.326117Z  WARN vtcode_core::instructions: Instruction file `/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
+2026-03-01T03:25:01.326117Z  WARN vtcode_core::instructions: Instruction file `./AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
 2026-03-01T03:25:01.326172Z DEBUG vtcode_core::prompts::system: Selected system prompt mode mode="default" base_tokens_approx=1989
 2026-03-01T03:25:01.401430Z DEBUG vtcode_core::tools::registry::maintenance: Seeded default tool policies from registrations seeded=4
 2026-03-01T03:25:01.448966Z DEBUG vtcode_core::tools::registry::maintenance: Seeded default tool policies from registrations seeded=4
@@ -753,11 +753,11 @@ call errors
 2026-03-01T03:25:01.516906Z DEBUG vtcode_core::subagents::registry: Loaded builtin agent: planner
 2026-03-01T03:25:01.516918Z DEBUG vtcode_core::subagents::registry: Loaded builtin agent: coder
 2026-03-01T03:25:01.516933Z  INFO vtcode_core::subagents::registry: Loaded 7 subagents: ["explore", "code-reviewer", "debugger", "planner", "general", "coder", "plan"]
-2026-03-01T03:25:01.517205Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/context/tool_outputs
-2026-03-01T03:25:01.517226Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/history
-2026-03-01T03:25:01.517244Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/mcp/tools
-2026-03-01T03:25:01.517260Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/terminals
-2026-03-01T03:25:01.517285Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/skills
+2026-03-01T03:25:01.517205Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/context/tool_outputs
+2026-03-01T03:25:01.517226Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/history
+2026-03-01T03:25:01.517244Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/mcp/tools
+2026-03-01T03:25:01.517260Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/terminals
+2026-03-01T03:25:01.517285Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/skills
 2026-03-01T03:25:01.517320Z  INFO vtcode_core::context::dynamic_init: Initialized dynamic context discovery directories workspace=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode
 2026-03-01T03:25:07.431080Z  INFO vtcode_core::tools::registry::inventory: Internal tool routed via alias to LLM-visible parent alias=run_pty_cmd canonical=unified_exec count=1
 2026-03-01T03:25:07.438720Z DEBUG vtcode_core::tools::safety_gateway: SafetyGateway: checking and recording safety invocation_id=d25fe435 tool=unified_exec
@@ -777,17 +777,17 @@ call errors
 2026-03-01T03:28:34.957308Z  INFO vtcode_core::mcp::client: No active MCP connections to shutdown
 2026-03-01T03:29:17.081703Z  INFO vtcode_core::mcp::client: Initializing MCP client with 0 configured providers
 2026-03-01T03:29:17.082515Z  INFO vtcode_core::mcp::client: MCP client initialization complete. Active providers: 0
-2026-03-01T03:29:17.583704Z  WARN vtcode_core::instructions: Instruction file `/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
+2026-03-01T03:29:17.583704Z  WARN vtcode_core::instructions: Instruction file `./AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
 2026-03-01T03:29:17.588067Z DEBUG vtcode_core::tools::registry::declarations: Building and caching declarations mode=Minimal
 2026-03-01T03:29:17.589110Z DEBUG vtcode_core::tools::registry::declarations: Building minimal tool declarations from canonical schema mode="minimal"
 2026-03-01T03:29:17.590192Z  INFO vtcode_core::skills::discovery: Starting skill discovery in: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode
-2026-03-01T03:29:17.590215Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.github/skills
-2026-03-01T03:29:17.590225Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.agents/skills
-2026-03-01T03:29:17.590268Z  INFO vtcode_core::skills::discovery: Found 0 skills in /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/skills
-2026-03-01T03:29:17.590279Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.claude/skills
-2026-03-01T03:29:17.590286Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.pi/skills
-2026-03-01T03:29:17.590294Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.codex/skills
-2026-03-01T03:29:17.590302Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./skills
+2026-03-01T03:29:17.590215Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.github/skills
+2026-03-01T03:29:17.590225Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.agents/skills
+2026-03-01T03:29:17.590268Z  INFO vtcode_core::skills::discovery: Found 0 skills in ./.vtcode/skills
+2026-03-01T03:29:17.590279Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.claude/skills
+2026-03-01T03:29:17.590286Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.pi/skills
+2026-03-01T03:29:17.590294Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.codex/skills
+2026-03-01T03:29:17.590302Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ././skills
 2026-03-01T03:29:17.593831Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-creator from /Users/vinhnguyenxuan/.vtcode/skills/.system/skill-creator
 2026-03-01T03:29:17.594430Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-installer from /Users/vinhnguyenxuan/.vtcode/skills/.system/skill-installer
 2026-03-01T03:29:17.594493Z  INFO vtcode_core::skills::discovery: Found 2 skills in /Users/vinhnguyenxuan/.vtcode/skills
@@ -807,11 +807,11 @@ call errors
 2026-03-01T03:29:17.600514Z DEBUG vtcode_core::skills::manifest: File reference validation warnings (full list) warnings=["Invalid reference 'scripts/list-skills.py`': Referenced file does not exist: \"/Users/vinhnguyenxuan/.codex/skills/.system/skill-installer/scripts/list-skills.py`\""]
 2026-03-01T03:29:17.600523Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-installer from /Users/vinhnguyenxuan/.codex/skills/.system/skill-installer
 2026-03-01T03:29:17.600620Z  INFO vtcode_core::skills::discovery: Found 2 skills in /Users/vinhnguyenxuan/.codex/skills
-2026-03-01T03:29:17.600639Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./tools
-2026-03-01T03:29:17.600647Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./vendor/tools
+2026-03-01T03:29:17.600639Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: ././tools
+2026-03-01T03:29:17.600647Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: ././vendor/tools
 2026-03-01T03:29:17.600655Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/.vtcode/tools
 2026-03-01T03:29:17.601458Z  INFO vtcode_core::core::agent::state: History invariants are valid
-2026-03-01T03:29:17.602769Z  WARN vtcode_core::instructions: Instruction file `/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
+2026-03-01T03:29:17.602769Z  WARN vtcode_core::instructions: Instruction file `./AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
 2026-03-01T03:29:17.602788Z DEBUG vtcode_core::prompts::system: Selected system prompt mode mode="default" base_tokens_approx=1989
 2026-03-01T03:29:17.661809Z DEBUG vtcode_core::tools::registry::maintenance: Seeded default tool policies from registrations seeded=4
 2026-03-01T03:29:17.705869Z DEBUG vtcode_core::tools::registry::maintenance: Seeded default tool policies from registrations seeded=4
@@ -825,11 +825,11 @@ call errors
 2026-03-01T03:29:17.765812Z DEBUG vtcode_core::subagents::registry: Loaded builtin agent: planner
 2026-03-01T03:29:17.765824Z DEBUG vtcode_core::subagents::registry: Loaded builtin agent: coder
 2026-03-01T03:29:17.765841Z  INFO vtcode_core::subagents::registry: Loaded 7 subagents: ["plan", "debugger", "planner", "code-reviewer", "explore", "general", "coder"]
-2026-03-01T03:29:17.766016Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/context/tool_outputs
-2026-03-01T03:29:17.766035Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/history
-2026-03-01T03:29:17.766051Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/mcp/tools
-2026-03-01T03:29:17.766075Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/terminals
-2026-03-01T03:29:17.766099Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/skills
+2026-03-01T03:29:17.766016Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/context/tool_outputs
+2026-03-01T03:29:17.766035Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/history
+2026-03-01T03:29:17.766051Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/mcp/tools
+2026-03-01T03:29:17.766075Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/terminals
+2026-03-01T03:29:17.766099Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/skills
 2026-03-01T03:29:17.766123Z  INFO vtcode_core::context::dynamic_init: Initialized dynamic context discovery directories workspace=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode
 2026-03-01T03:29:35.928292Z  INFO vtcode_core::tools::registry::inventory: Internal tool routed via alias to LLM-visible parent alias=run_pty_cmd canonical=unified_exec count=1
 2026-03-01T03:29:35.937410Z DEBUG vtcode_core::tools::safety_gateway: SafetyGateway: checking and recording safety invocation_id=c1f31f24 tool=unified_exec
@@ -849,17 +849,17 @@ call errors
 2026-03-01T03:32:31.167520Z  INFO vtcode_core::mcp::client: No active MCP connections to shutdown
 2026-03-01T03:33:12.830068Z  INFO vtcode_core::mcp::client: Initializing MCP client with 0 configured providers
 2026-03-01T03:33:12.831298Z  INFO vtcode_core::mcp::client: MCP client initialization complete. Active providers: 0
-2026-03-01T03:33:13.294414Z  WARN vtcode_core::instructions: Instruction file `/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
+2026-03-01T03:33:13.294414Z  WARN vtcode_core::instructions: Instruction file `./AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
 2026-03-01T03:33:13.299141Z DEBUG vtcode_core::tools::registry::declarations: Building and caching declarations mode=Minimal
 2026-03-01T03:33:13.300144Z DEBUG vtcode_core::tools::registry::declarations: Building minimal tool declarations from canonical schema mode="minimal"
 2026-03-01T03:33:13.301108Z  INFO vtcode_core::skills::discovery: Starting skill discovery in: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode
-2026-03-01T03:33:13.301132Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.github/skills
-2026-03-01T03:33:13.301141Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.agents/skills
-2026-03-01T03:33:13.301198Z  INFO vtcode_core::skills::discovery: Found 0 skills in /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/skills
-2026-03-01T03:33:13.301209Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.claude/skills
-2026-03-01T03:33:13.301216Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.pi/skills
-2026-03-01T03:33:13.301223Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.codex/skills
-2026-03-01T03:33:13.301229Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./skills
+2026-03-01T03:33:13.301132Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.github/skills
+2026-03-01T03:33:13.301141Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.agents/skills
+2026-03-01T03:33:13.301198Z  INFO vtcode_core::skills::discovery: Found 0 skills in ./.vtcode/skills
+2026-03-01T03:33:13.301209Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.claude/skills
+2026-03-01T03:33:13.301216Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.pi/skills
+2026-03-01T03:33:13.301223Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.codex/skills
+2026-03-01T03:33:13.301229Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ././skills
 2026-03-01T03:33:13.304953Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-creator from /Users/vinhnguyenxuan/.vtcode/skills/.system/skill-creator
 2026-03-01T03:33:13.305519Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-installer from /Users/vinhnguyenxuan/.vtcode/skills/.system/skill-installer
 2026-03-01T03:33:13.305569Z  INFO vtcode_core::skills::discovery: Found 2 skills in /Users/vinhnguyenxuan/.vtcode/skills
@@ -879,11 +879,11 @@ call errors
 2026-03-01T03:33:13.310581Z DEBUG vtcode_core::skills::manifest: File reference validation warnings (full list) warnings=["Invalid reference 'scripts/list-skills.py`': Referenced file does not exist: \"/Users/vinhnguyenxuan/.codex/skills/.system/skill-installer/scripts/list-skills.py`\""]
 2026-03-01T03:33:13.310589Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-installer from /Users/vinhnguyenxuan/.codex/skills/.system/skill-installer
 2026-03-01T03:33:13.310686Z  INFO vtcode_core::skills::discovery: Found 2 skills in /Users/vinhnguyenxuan/.codex/skills
-2026-03-01T03:33:13.310704Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./tools
-2026-03-01T03:33:13.310712Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./vendor/tools
+2026-03-01T03:33:13.310704Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: ././tools
+2026-03-01T03:33:13.310712Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: ././vendor/tools
 2026-03-01T03:33:13.310718Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/.vtcode/tools
 2026-03-01T03:33:13.311369Z  INFO vtcode_core::core::agent::state: History invariants are valid
-2026-03-01T03:33:13.313024Z  WARN vtcode_core::instructions: Instruction file `/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
+2026-03-01T03:33:13.313024Z  WARN vtcode_core::instructions: Instruction file `./AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
 2026-03-01T03:33:13.313051Z DEBUG vtcode_core::prompts::system: Selected system prompt mode mode="default" base_tokens_approx=1989
 2026-03-01T03:33:13.373987Z DEBUG vtcode_core::tools::registry::maintenance: Seeded default tool policies from registrations seeded=4
 2026-03-01T03:33:13.419747Z DEBUG vtcode_core::tools::registry::maintenance: Seeded default tool policies from registrations seeded=4
@@ -897,11 +897,11 @@ call errors
 2026-03-01T03:33:13.480653Z DEBUG vtcode_core::subagents::registry: Loaded builtin agent: planner
 2026-03-01T03:33:13.480664Z DEBUG vtcode_core::subagents::registry: Loaded builtin agent: coder
 2026-03-01T03:33:13.480675Z  INFO vtcode_core::subagents::registry: Loaded 7 subagents: ["explore", "plan", "debugger", "planner", "coder", "general", "code-reviewer"]
-2026-03-01T03:33:13.481047Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/context/tool_outputs
-2026-03-01T03:33:13.481070Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/history
-2026-03-01T03:33:13.481087Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/mcp/tools
-2026-03-01T03:33:13.481103Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/terminals
-2026-03-01T03:33:13.481117Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/skills
+2026-03-01T03:33:13.481047Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/context/tool_outputs
+2026-03-01T03:33:13.481070Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/history
+2026-03-01T03:33:13.481087Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/mcp/tools
+2026-03-01T03:33:13.481103Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/terminals
+2026-03-01T03:33:13.481117Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/skills
 2026-03-01T03:33:13.481143Z  INFO vtcode_core::context::dynamic_init: Initialized dynamic context discovery directories workspace=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode
 2026-03-01T03:33:23.917602Z  INFO vtcode_core::tools::registry::inventory: Internal tool routed via alias to LLM-visible parent alias=run_pty_cmd canonical=unified_exec count=1
 2026-03-01T03:33:23.924177Z DEBUG vtcode_core::tools::safety_gateway: SafetyGateway: checking and recording safety invocation_id=60695fa0 tool=unified_exec
@@ -921,17 +921,17 @@ call errors
 2026-03-01T03:35:05.399250Z  INFO vtcode_core::mcp::client: No active MCP connections to shutdown
 2026-03-01T03:35:44.351642Z  INFO vtcode_core::mcp::client: Initializing MCP client with 0 configured providers
 2026-03-01T03:35:44.352849Z  INFO vtcode_core::mcp::client: MCP client initialization complete. Active providers: 0
-2026-03-01T03:35:44.787473Z  WARN vtcode_core::instructions: Instruction file `/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
+2026-03-01T03:35:44.787473Z  WARN vtcode_core::instructions: Instruction file `./AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
 2026-03-01T03:35:44.792435Z DEBUG vtcode_core::tools::registry::declarations: Building and caching declarations mode=Minimal
 2026-03-01T03:35:44.793406Z DEBUG vtcode_core::tools::registry::declarations: Building minimal tool declarations from canonical schema mode="minimal"
 2026-03-01T03:35:44.794370Z  INFO vtcode_core::skills::discovery: Starting skill discovery in: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode
-2026-03-01T03:35:44.794398Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.github/skills
-2026-03-01T03:35:44.794408Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.agents/skills
-2026-03-01T03:35:44.794437Z  INFO vtcode_core::skills::discovery: Found 0 skills in /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/skills
-2026-03-01T03:35:44.794448Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.claude/skills
-2026-03-01T03:35:44.794456Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.pi/skills
-2026-03-01T03:35:44.794463Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.codex/skills
-2026-03-01T03:35:44.794470Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./skills
+2026-03-01T03:35:44.794398Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.github/skills
+2026-03-01T03:35:44.794408Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.agents/skills
+2026-03-01T03:35:44.794437Z  INFO vtcode_core::skills::discovery: Found 0 skills in ./.vtcode/skills
+2026-03-01T03:35:44.794448Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.claude/skills
+2026-03-01T03:35:44.794456Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.pi/skills
+2026-03-01T03:35:44.794463Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.codex/skills
+2026-03-01T03:35:44.794470Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ././skills
 2026-03-01T03:35:44.798427Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-creator from /Users/vinhnguyenxuan/.vtcode/skills/.system/skill-creator
 2026-03-01T03:35:44.798978Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-installer from /Users/vinhnguyenxuan/.vtcode/skills/.system/skill-installer
 2026-03-01T03:35:44.799029Z  INFO vtcode_core::skills::discovery: Found 2 skills in /Users/vinhnguyenxuan/.vtcode/skills
@@ -951,11 +951,11 @@ call errors
 2026-03-01T03:35:44.804350Z DEBUG vtcode_core::skills::manifest: File reference validation warnings (full list) warnings=["Invalid reference 'scripts/list-skills.py`': Referenced file does not exist: \"/Users/vinhnguyenxuan/.codex/skills/.system/skill-installer/scripts/list-skills.py`\""]
 2026-03-01T03:35:44.804358Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-installer from /Users/vinhnguyenxuan/.codex/skills/.system/skill-installer
 2026-03-01T03:35:44.804453Z  INFO vtcode_core::skills::discovery: Found 2 skills in /Users/vinhnguyenxuan/.codex/skills
-2026-03-01T03:35:44.804472Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./tools
-2026-03-01T03:35:44.804479Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./vendor/tools
+2026-03-01T03:35:44.804472Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: ././tools
+2026-03-01T03:35:44.804479Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: ././vendor/tools
 2026-03-01T03:35:44.804487Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/.vtcode/tools
 2026-03-01T03:35:44.805047Z  INFO vtcode_core::core::agent::state: History invariants are valid
-2026-03-01T03:35:44.806603Z  WARN vtcode_core::instructions: Instruction file `/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
+2026-03-01T03:35:44.806603Z  WARN vtcode_core::instructions: Instruction file `./AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
 2026-03-01T03:35:44.806624Z DEBUG vtcode_core::prompts::system: Selected system prompt mode mode="default" base_tokens_approx=1989
 2026-03-01T03:35:44.865809Z DEBUG vtcode_core::tools::registry::maintenance: Seeded default tool policies from registrations seeded=4
 2026-03-01T03:35:44.909853Z DEBUG vtcode_core::tools::registry::maintenance: Seeded default tool policies from registrations seeded=4
@@ -969,11 +969,11 @@ call errors
 2026-03-01T03:35:45.024794Z DEBUG vtcode_core::subagents::registry: Loaded builtin agent: planner
 2026-03-01T03:35:45.024806Z DEBUG vtcode_core::subagents::registry: Loaded builtin agent: coder
 2026-03-01T03:35:45.024820Z  INFO vtcode_core::subagents::registry: Loaded 7 subagents: ["general", "explore", "code-reviewer", "debugger", "planner", "coder", "plan"]
-2026-03-01T03:35:45.025066Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/context/tool_outputs
-2026-03-01T03:35:45.025095Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/history
-2026-03-01T03:35:45.025114Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/mcp/tools
-2026-03-01T03:35:45.025131Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/terminals
-2026-03-01T03:35:45.025167Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/skills
+2026-03-01T03:35:45.025066Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/context/tool_outputs
+2026-03-01T03:35:45.025095Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/history
+2026-03-01T03:35:45.025114Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/mcp/tools
+2026-03-01T03:35:45.025131Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/terminals
+2026-03-01T03:35:45.025167Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/skills
 2026-03-01T03:35:45.025193Z  INFO vtcode_core::context::dynamic_init: Initialized dynamic context discovery directories workspace=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode
 2026-03-01T03:36:05.451853Z  INFO vtcode_core::tools::registry::inventory: Internal tool routed via alias to LLM-visible parent alias=run_pty_cmd canonical=unified_exec count=1
 2026-03-01T03:36:05.460661Z DEBUG vtcode_core::tools::safety_gateway: SafetyGateway: checking and recording safety invocation_id=d6519204 tool=unified_exec
@@ -993,17 +993,17 @@ call errors
 2026-03-01T03:38:30.957059Z  INFO vtcode_core::mcp::client: No active MCP connections to shutdown
 2026-03-01T03:39:11.599750Z  INFO vtcode_core::mcp::client: Initializing MCP client with 0 configured providers
 2026-03-01T03:39:11.600784Z  INFO vtcode_core::mcp::client: MCP client initialization complete. Active providers: 0
-2026-03-01T03:39:12.042459Z  WARN vtcode_core::instructions: Instruction file `/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
+2026-03-01T03:39:12.042459Z  WARN vtcode_core::instructions: Instruction file `./AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
 2026-03-01T03:39:12.047060Z DEBUG vtcode_core::tools::registry::declarations: Building and caching declarations mode=Minimal
 2026-03-01T03:39:12.048057Z DEBUG vtcode_core::tools::registry::declarations: Building minimal tool declarations from canonical schema mode="minimal"
 2026-03-01T03:39:12.049324Z  INFO vtcode_core::skills::discovery: Starting skill discovery in: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode
-2026-03-01T03:39:12.049352Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.github/skills
-2026-03-01T03:39:12.049363Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.agents/skills
-2026-03-01T03:39:12.049397Z  INFO vtcode_core::skills::discovery: Found 0 skills in /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/skills
-2026-03-01T03:39:12.049409Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.claude/skills
-2026-03-01T03:39:12.049416Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.pi/skills
-2026-03-01T03:39:12.049424Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.codex/skills
-2026-03-01T03:39:12.049431Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./skills
+2026-03-01T03:39:12.049352Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.github/skills
+2026-03-01T03:39:12.049363Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.agents/skills
+2026-03-01T03:39:12.049397Z  INFO vtcode_core::skills::discovery: Found 0 skills in ./.vtcode/skills
+2026-03-01T03:39:12.049409Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.claude/skills
+2026-03-01T03:39:12.049416Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.pi/skills
+2026-03-01T03:39:12.049424Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.codex/skills
+2026-03-01T03:39:12.049431Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ././skills
 2026-03-01T03:39:12.052912Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-creator from /Users/vinhnguyenxuan/.vtcode/skills/.system/skill-creator
 2026-03-01T03:39:12.053487Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-installer from /Users/vinhnguyenxuan/.vtcode/skills/.system/skill-installer
 2026-03-01T03:39:12.053542Z  INFO vtcode_core::skills::discovery: Found 2 skills in /Users/vinhnguyenxuan/.vtcode/skills
@@ -1023,11 +1023,11 @@ call errors
 2026-03-01T03:39:12.057914Z DEBUG vtcode_core::skills::manifest: File reference validation warnings (full list) warnings=["Invalid reference 'scripts/list-skills.py`': Referenced file does not exist: \"/Users/vinhnguyenxuan/.codex/skills/.system/skill-installer/scripts/list-skills.py`\""]
 2026-03-01T03:39:12.057923Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-installer from /Users/vinhnguyenxuan/.codex/skills/.system/skill-installer
 2026-03-01T03:39:12.058020Z  INFO vtcode_core::skills::discovery: Found 2 skills in /Users/vinhnguyenxuan/.codex/skills
-2026-03-01T03:39:12.058040Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./tools
-2026-03-01T03:39:12.058048Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./vendor/tools
+2026-03-01T03:39:12.058040Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: ././tools
+2026-03-01T03:39:12.058048Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: ././vendor/tools
 2026-03-01T03:39:12.058056Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/.vtcode/tools
 2026-03-01T03:39:12.058753Z  INFO vtcode_core::core::agent::state: History invariants are valid
-2026-03-01T03:39:12.060117Z  WARN vtcode_core::instructions: Instruction file `/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
+2026-03-01T03:39:12.060117Z  WARN vtcode_core::instructions: Instruction file `./AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
 2026-03-01T03:39:12.060146Z DEBUG vtcode_core::prompts::system: Selected system prompt mode mode="default" base_tokens_approx=1989
 2026-03-01T03:39:12.121676Z DEBUG vtcode_core::tools::registry::maintenance: Seeded default tool policies from registrations seeded=4
 2026-03-01T03:39:12.240533Z DEBUG vtcode_core::tools::registry::maintenance: Seeded default tool policies from registrations seeded=4
@@ -1041,11 +1041,11 @@ call errors
 2026-03-01T03:39:12.317464Z DEBUG vtcode_core::subagents::registry: Loaded builtin agent: planner
 2026-03-01T03:39:12.317475Z DEBUG vtcode_core::subagents::registry: Loaded builtin agent: coder
 2026-03-01T03:39:12.317487Z  INFO vtcode_core::subagents::registry: Loaded 7 subagents: ["coder", "explore", "planner", "general", "plan", "debugger", "code-reviewer"]
-2026-03-01T03:39:12.317750Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/context/tool_outputs
-2026-03-01T03:39:12.317771Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/history
-2026-03-01T03:39:12.317788Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/mcp/tools
-2026-03-01T03:39:12.317805Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/terminals
-2026-03-01T03:39:12.317821Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/skills
+2026-03-01T03:39:12.317750Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/context/tool_outputs
+2026-03-01T03:39:12.317771Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/history
+2026-03-01T03:39:12.317788Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/mcp/tools
+2026-03-01T03:39:12.317805Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/terminals
+2026-03-01T03:39:12.317821Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/skills
 2026-03-01T03:39:12.317847Z  INFO vtcode_core::context::dynamic_init: Initialized dynamic context discovery directories workspace=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode
 2026-03-01T03:39:20.150076Z  INFO vtcode_core::tools::registry::inventory: Internal tool routed via alias to LLM-visible parent alias=run_pty_cmd canonical=unified_exec count=1
 2026-03-01T03:39:20.158535Z DEBUG vtcode_core::tools::safety_gateway: SafetyGateway: checking and recording safety invocation_id=8c229b13 tool=unified_exec
@@ -1066,17 +1066,17 @@ call errors
 2026-03-01T03:42:13.755966Z  INFO vtcode_core::mcp::client: No active MCP connections to shutdown
 2026-03-01T03:42:56.261075Z  INFO vtcode_core::mcp::client: Initializing MCP client with 0 configured providers
 2026-03-01T03:42:56.262083Z  INFO vtcode_core::mcp::client: MCP client initialization complete. Active providers: 0
-2026-03-01T03:42:56.740122Z  WARN vtcode_core::instructions: Instruction file `/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
+2026-03-01T03:42:56.740122Z  WARN vtcode_core::instructions: Instruction file `./AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
 2026-03-01T03:42:57.339448Z DEBUG vtcode_core::tools::registry::declarations: Building and caching declarations mode=Minimal
 2026-03-01T03:42:57.342071Z DEBUG vtcode_core::tools::registry::declarations: Building minimal tool declarations from canonical schema mode="minimal"
 2026-03-01T03:42:57.344364Z  INFO vtcode_core::skills::discovery: Starting skill discovery in: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode
-2026-03-01T03:42:57.344518Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.github/skills
-2026-03-01T03:42:57.344556Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.agents/skills
-2026-03-01T03:42:57.344805Z  INFO vtcode_core::skills::discovery: Found 0 skills in /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/skills
-2026-03-01T03:42:57.344840Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.claude/skills
-2026-03-01T03:42:57.344861Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.pi/skills
-2026-03-01T03:42:57.344882Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.codex/skills
-2026-03-01T03:42:57.344905Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./skills
+2026-03-01T03:42:57.344518Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.github/skills
+2026-03-01T03:42:57.344556Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.agents/skills
+2026-03-01T03:42:57.344805Z  INFO vtcode_core::skills::discovery: Found 0 skills in ./.vtcode/skills
+2026-03-01T03:42:57.344840Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.claude/skills
+2026-03-01T03:42:57.344861Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.pi/skills
+2026-03-01T03:42:57.344882Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.codex/skills
+2026-03-01T03:42:57.344905Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ././skills
 2026-03-01T03:42:57.350460Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-creator from /Users/vinhnguyenxuan/.vtcode/skills/.system/skill-creator
 2026-03-01T03:42:57.352217Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-installer from /Users/vinhnguyenxuan/.vtcode/skills/.system/skill-installer
 2026-03-01T03:42:57.352458Z  INFO vtcode_core::skills::discovery: Found 2 skills in /Users/vinhnguyenxuan/.vtcode/skills
@@ -1096,11 +1096,11 @@ call errors
 2026-03-01T03:42:57.363639Z DEBUG vtcode_core::skills::manifest: File reference validation warnings (full list) warnings=["Invalid reference 'scripts/list-skills.py`': Referenced file does not exist: \"/Users/vinhnguyenxuan/.codex/skills/.system/skill-installer/scripts/list-skills.py`\""]
 2026-03-01T03:42:57.363661Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-installer from /Users/vinhnguyenxuan/.codex/skills/.system/skill-installer
 2026-03-01T03:42:57.363920Z  INFO vtcode_core::skills::discovery: Found 2 skills in /Users/vinhnguyenxuan/.codex/skills
-2026-03-01T03:42:57.363974Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./tools
-2026-03-01T03:42:57.363994Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./vendor/tools
+2026-03-01T03:42:57.363974Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: ././tools
+2026-03-01T03:42:57.363994Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: ././vendor/tools
 2026-03-01T03:42:57.364015Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/.vtcode/tools
 2026-03-01T03:42:57.364896Z  INFO vtcode_core::core::agent::state: History invariants are valid
-2026-03-01T03:42:57.367440Z  WARN vtcode_core::instructions: Instruction file `/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
+2026-03-01T03:42:57.367440Z  WARN vtcode_core::instructions: Instruction file `./AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
 2026-03-01T03:42:57.367534Z DEBUG vtcode_core::prompts::system: Selected system prompt mode mode="default" base_tokens_approx=1989
 2026-03-01T03:42:57.450399Z DEBUG vtcode_core::tools::registry::maintenance: Seeded default tool policies from registrations seeded=4
 2026-03-01T03:42:57.511888Z DEBUG vtcode_core::tools::registry::maintenance: Seeded default tool policies from registrations seeded=4
@@ -1114,11 +1114,11 @@ call errors
 2026-03-01T03:42:57.573813Z DEBUG vtcode_core::subagents::registry: Loaded builtin agent: planner
 2026-03-01T03:42:57.573825Z DEBUG vtcode_core::subagents::registry: Loaded builtin agent: coder
 2026-03-01T03:42:57.573838Z  INFO vtcode_core::subagents::registry: Loaded 7 subagents: ["planner", "coder", "general", "explore", "plan", "code-reviewer", "debugger"]
-2026-03-01T03:42:57.574070Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/context/tool_outputs
-2026-03-01T03:42:57.574089Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/history
-2026-03-01T03:42:57.574105Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/mcp/tools
-2026-03-01T03:42:57.574120Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/terminals
-2026-03-01T03:42:57.574135Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/skills
+2026-03-01T03:42:57.574070Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/context/tool_outputs
+2026-03-01T03:42:57.574089Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/history
+2026-03-01T03:42:57.574105Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/mcp/tools
+2026-03-01T03:42:57.574120Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/terminals
+2026-03-01T03:42:57.574135Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/skills
 2026-03-01T03:42:57.574164Z  INFO vtcode_core::context::dynamic_init: Initialized dynamic context discovery directories workspace=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode
 2026-03-01T03:43:08.816880Z  INFO vtcode_core::tools::registry::inventory: Internal tool routed via alias to LLM-visible parent alias=run_pty_cmd canonical=unified_exec count=1
 2026-03-01T03:43:08.823834Z DEBUG vtcode_core::tools::safety_gateway: SafetyGateway: checking and recording safety invocation_id=03594685 tool=unified_exec
@@ -1139,17 +1139,17 @@ call errors
 2026-03-01T03:45:21.396669Z  INFO vtcode_core::mcp::client: No active MCP connections to shutdown
 2026-03-01T03:46:50.222929Z  INFO vtcode_core::mcp::client: Initializing MCP client with 0 configured providers
 2026-03-01T03:46:50.224218Z  INFO vtcode_core::mcp::client: MCP client initialization complete. Active providers: 0
-2026-03-01T03:46:50.714369Z  WARN vtcode_core::instructions: Instruction file `/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
+2026-03-01T03:46:50.714369Z  WARN vtcode_core::instructions: Instruction file `./AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
 2026-03-01T03:46:50.720412Z DEBUG vtcode_core::tools::registry::declarations: Building and caching declarations mode=Minimal
 2026-03-01T03:46:50.721483Z DEBUG vtcode_core::tools::registry::declarations: Building minimal tool declarations from canonical schema mode="minimal"
 2026-03-01T03:46:50.723271Z  INFO vtcode_core::skills::discovery: Starting skill discovery in: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode
-2026-03-01T03:46:50.723324Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.github/skills
-2026-03-01T03:46:50.723336Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.agents/skills
-2026-03-01T03:46:50.723418Z  INFO vtcode_core::skills::discovery: Found 0 skills in /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/skills
-2026-03-01T03:46:50.723431Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.claude/skills
-2026-03-01T03:46:50.723440Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.pi/skills
-2026-03-01T03:46:50.723447Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.codex/skills
-2026-03-01T03:46:50.723455Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./skills
+2026-03-01T03:46:50.723324Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.github/skills
+2026-03-01T03:46:50.723336Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.agents/skills
+2026-03-01T03:46:50.723418Z  INFO vtcode_core::skills::discovery: Found 0 skills in ./.vtcode/skills
+2026-03-01T03:46:50.723431Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.claude/skills
+2026-03-01T03:46:50.723440Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.pi/skills
+2026-03-01T03:46:50.723447Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.codex/skills
+2026-03-01T03:46:50.723455Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ././skills
 2026-03-01T03:46:50.727961Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-creator from /Users/vinhnguyenxuan/.vtcode/skills/.system/skill-creator
 2026-03-01T03:46:50.728916Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-installer from /Users/vinhnguyenxuan/.vtcode/skills/.system/skill-installer
 2026-03-01T03:46:50.729018Z  INFO vtcode_core::skills::discovery: Found 2 skills in /Users/vinhnguyenxuan/.vtcode/skills
@@ -1169,11 +1169,11 @@ call errors
 2026-03-01T03:46:50.736635Z DEBUG vtcode_core::skills::manifest: File reference validation warnings (full list) warnings=["Invalid reference 'scripts/list-skills.py`': Referenced file does not exist: \"/Users/vinhnguyenxuan/.codex/skills/.system/skill-installer/scripts/list-skills.py`\""]
 2026-03-01T03:46:50.736645Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-installer from /Users/vinhnguyenxuan/.codex/skills/.system/skill-installer
 2026-03-01T03:46:50.736758Z  INFO vtcode_core::skills::discovery: Found 2 skills in /Users/vinhnguyenxuan/.codex/skills
-2026-03-01T03:46:50.736783Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./tools
-2026-03-01T03:46:50.736792Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./vendor/tools
+2026-03-01T03:46:50.736783Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: ././tools
+2026-03-01T03:46:50.736792Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: ././vendor/tools
 2026-03-01T03:46:50.736801Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/.vtcode/tools
 2026-03-01T03:46:50.736888Z  INFO vtcode_core::core::agent::state: History invariants are valid
-2026-03-01T03:46:50.738878Z  WARN vtcode_core::instructions: Instruction file `/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
+2026-03-01T03:46:50.738878Z  WARN vtcode_core::instructions: Instruction file `./AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
 2026-03-01T03:46:50.738909Z DEBUG vtcode_core::prompts::system: Selected system prompt mode mode="default" base_tokens_approx=1989
 2026-03-01T03:46:50.799983Z DEBUG vtcode_core::tools::registry::maintenance: Seeded default tool policies from registrations seeded=4
 2026-03-01T03:46:50.847266Z DEBUG vtcode_core::tools::registry::maintenance: Seeded default tool policies from registrations seeded=4
@@ -1187,11 +1187,11 @@ call errors
 2026-03-01T03:46:50.915936Z DEBUG vtcode_core::subagents::registry: Loaded builtin agent: planner
 2026-03-01T03:46:50.915947Z DEBUG vtcode_core::subagents::registry: Loaded builtin agent: coder
 2026-03-01T03:46:50.915969Z  INFO vtcode_core::subagents::registry: Loaded 7 subagents: ["code-reviewer", "debugger", "planner", "plan", "general", "coder", "explore"]
-2026-03-01T03:46:50.916406Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/context/tool_outputs
-2026-03-01T03:46:50.916466Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/history
-2026-03-01T03:46:50.916503Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/mcp/tools
-2026-03-01T03:46:50.916522Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/terminals
-2026-03-01T03:46:50.916538Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/skills
+2026-03-01T03:46:50.916406Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/context/tool_outputs
+2026-03-01T03:46:50.916466Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/history
+2026-03-01T03:46:50.916503Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/mcp/tools
+2026-03-01T03:46:50.916522Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/terminals
+2026-03-01T03:46:50.916538Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/skills
 2026-03-01T03:46:50.916564Z  INFO vtcode_core::context::dynamic_init: Initialized dynamic context discovery directories workspace=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode
 2026-03-01T03:46:55.263951Z  WARN vtcode_core::llm::providers::ollama: Failed to connect to Ollama server: reqwest::Error { kind: Request, url: "http://localhost:11434/api/tags", source: hyper_util::client::legacy::Error(Connect, ConnectError("tcp connect error", 127.0.0.1:11434, Os { code: 61, kind: ConnectionRefused, message: "Connection refused" })) }
 2026-03-01T03:47:12.017367Z  INFO vtcode_core::tools::registry::inventory: Internal tool routed via alias to LLM-visible parent alias=run_pty_cmd canonical=unified_exec count=1
@@ -1212,17 +1212,17 @@ call errors
 2026-03-01T03:48:43.911663Z  INFO vtcode_core::mcp::client: No active MCP connections to shutdown
 2026-03-01T03:50:53.042312Z  INFO vtcode_core::mcp::client: Initializing MCP client with 0 configured providers
 2026-03-01T03:50:53.043551Z  INFO vtcode_core::mcp::client: MCP client initialization complete. Active providers: 0
-2026-03-01T03:50:53.642384Z  WARN vtcode_core::instructions: Instruction file `/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
+2026-03-01T03:50:53.642384Z  WARN vtcode_core::instructions: Instruction file `./AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
 2026-03-01T03:50:53.647891Z DEBUG vtcode_core::tools::registry::declarations: Building and caching declarations mode=Minimal
 2026-03-01T03:50:53.648903Z DEBUG vtcode_core::tools::registry::declarations: Building minimal tool declarations from canonical schema mode="minimal"
 2026-03-01T03:50:53.650789Z  INFO vtcode_core::skills::discovery: Starting skill discovery in: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode
-2026-03-01T03:50:53.650853Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.github/skills
-2026-03-01T03:50:53.650869Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.agents/skills
-2026-03-01T03:50:53.650942Z  INFO vtcode_core::skills::discovery: Found 0 skills in /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/skills
-2026-03-01T03:50:53.650959Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.claude/skills
-2026-03-01T03:50:53.650974Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.pi/skills
-2026-03-01T03:50:53.650983Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.codex/skills
-2026-03-01T03:50:53.650991Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./skills
+2026-03-01T03:50:53.650853Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.github/skills
+2026-03-01T03:50:53.650869Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.agents/skills
+2026-03-01T03:50:53.650942Z  INFO vtcode_core::skills::discovery: Found 0 skills in ./.vtcode/skills
+2026-03-01T03:50:53.650959Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.claude/skills
+2026-03-01T03:50:53.650974Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.pi/skills
+2026-03-01T03:50:53.650983Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.codex/skills
+2026-03-01T03:50:53.650991Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ././skills
 2026-03-01T03:50:53.656016Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-creator from /Users/vinhnguyenxuan/.vtcode/skills/.system/skill-creator
 2026-03-01T03:50:53.656905Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-installer from /Users/vinhnguyenxuan/.vtcode/skills/.system/skill-installer
 2026-03-01T03:50:53.657000Z  INFO vtcode_core::skills::discovery: Found 2 skills in /Users/vinhnguyenxuan/.vtcode/skills
@@ -1242,11 +1242,11 @@ call errors
 2026-03-01T03:50:53.664105Z DEBUG vtcode_core::skills::manifest: File reference validation warnings (full list) warnings=["Invalid reference 'scripts/list-skills.py`': Referenced file does not exist: \"/Users/vinhnguyenxuan/.codex/skills/.system/skill-installer/scripts/list-skills.py`\""]
 2026-03-01T03:50:53.664117Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-installer from /Users/vinhnguyenxuan/.codex/skills/.system/skill-installer
 2026-03-01T03:50:53.664247Z  INFO vtcode_core::skills::discovery: Found 2 skills in /Users/vinhnguyenxuan/.codex/skills
-2026-03-01T03:50:53.664283Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./tools
-2026-03-01T03:50:53.664295Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./vendor/tools
+2026-03-01T03:50:53.664283Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: ././tools
+2026-03-01T03:50:53.664295Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: ././vendor/tools
 2026-03-01T03:50:53.664307Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/.vtcode/tools
 2026-03-01T03:50:53.664394Z  INFO vtcode_core::core::agent::state: History invariants are valid
-2026-03-01T03:50:53.666514Z  WARN vtcode_core::instructions: Instruction file `/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
+2026-03-01T03:50:53.666514Z  WARN vtcode_core::instructions: Instruction file `./AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
 2026-03-01T03:50:53.666568Z DEBUG vtcode_core::prompts::system: Selected system prompt mode mode="default" base_tokens_approx=1989
 2026-03-01T03:50:53.763954Z DEBUG vtcode_core::tools::registry::maintenance: Seeded default tool policies from registrations seeded=4
 2026-03-01T03:50:53.859988Z DEBUG vtcode_core::tools::registry::maintenance: Seeded default tool policies from registrations seeded=4
@@ -1260,11 +1260,11 @@ call errors
 2026-03-01T03:50:53.993846Z DEBUG vtcode_core::subagents::registry: Loaded builtin agent: planner
 2026-03-01T03:50:53.993901Z DEBUG vtcode_core::subagents::registry: Loaded builtin agent: coder
 2026-03-01T03:50:53.993959Z  INFO vtcode_core::subagents::registry: Loaded 7 subagents: ["coder", "planner", "general", "explore", "code-reviewer", "plan", "debugger"]
-2026-03-01T03:50:53.995090Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/context/tool_outputs
-2026-03-01T03:50:53.995754Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/history
-2026-03-01T03:50:53.995826Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/mcp/tools
-2026-03-01T03:50:53.995864Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/terminals
-2026-03-01T03:50:53.995910Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/skills
+2026-03-01T03:50:53.995090Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/context/tool_outputs
+2026-03-01T03:50:53.995754Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/history
+2026-03-01T03:50:53.995826Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/mcp/tools
+2026-03-01T03:50:53.995864Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/terminals
+2026-03-01T03:50:53.995910Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/skills
 2026-03-01T03:50:53.996018Z  INFO vtcode_core::context::dynamic_init: Initialized dynamic context discovery directories workspace=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode
 2026-03-01T03:51:15.253686Z  INFO vtcode_core::tools::registry::inventory: Internal tool routed via alias to LLM-visible parent alias=run_pty_cmd canonical=unified_exec count=1
 2026-03-01T03:51:15.263034Z DEBUG vtcode_core::tools::safety_gateway: SafetyGateway: checking and recording safety invocation_id=ac6d9b3b tool=unified_exec
@@ -1284,17 +1284,17 @@ call errors
 2026-03-01T03:57:23.835709Z  INFO vtcode_core::mcp::client: No active MCP connections to shutdown
 2026-03-01T03:58:12.949026Z  INFO vtcode_core::mcp::client: Initializing MCP client with 0 configured providers
 2026-03-01T03:58:12.950340Z  INFO vtcode_core::mcp::client: MCP client initialization complete. Active providers: 0
-2026-03-01T03:58:13.400987Z  WARN vtcode_core::instructions: Instruction file `/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
+2026-03-01T03:58:13.400987Z  WARN vtcode_core::instructions: Instruction file `./AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
 2026-03-01T03:58:13.962632Z DEBUG vtcode_core::tools::registry::declarations: Building and caching declarations mode=Minimal
 2026-03-01T03:58:13.964050Z DEBUG vtcode_core::tools::registry::declarations: Building minimal tool declarations from canonical schema mode="minimal"
 2026-03-01T03:58:13.966401Z  INFO vtcode_core::skills::discovery: Starting skill discovery in: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode
-2026-03-01T03:58:13.966477Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.github/skills
-2026-03-01T03:58:13.966501Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.agents/skills
-2026-03-01T03:58:13.966615Z  INFO vtcode_core::skills::discovery: Found 0 skills in /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/skills
-2026-03-01T03:58:13.966638Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.claude/skills
-2026-03-01T03:58:13.966657Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.pi/skills
-2026-03-01T03:58:13.966674Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.codex/skills
-2026-03-01T03:58:13.966692Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./skills
+2026-03-01T03:58:13.966477Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.github/skills
+2026-03-01T03:58:13.966501Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.agents/skills
+2026-03-01T03:58:13.966615Z  INFO vtcode_core::skills::discovery: Found 0 skills in ./.vtcode/skills
+2026-03-01T03:58:13.966638Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.claude/skills
+2026-03-01T03:58:13.966657Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.pi/skills
+2026-03-01T03:58:13.966674Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.codex/skills
+2026-03-01T03:58:13.966692Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ././skills
 2026-03-01T03:58:13.973235Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-creator from /Users/vinhnguyenxuan/.vtcode/skills/.system/skill-creator
 2026-03-01T03:58:13.975078Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-installer from /Users/vinhnguyenxuan/.vtcode/skills/.system/skill-installer
 2026-03-01T03:58:13.975251Z  INFO vtcode_core::skills::discovery: Found 2 skills in /Users/vinhnguyenxuan/.vtcode/skills
@@ -1314,11 +1314,11 @@ call errors
 2026-03-01T03:58:13.985938Z DEBUG vtcode_core::skills::manifest: File reference validation warnings (full list) warnings=["Invalid reference 'scripts/list-skills.py`': Referenced file does not exist: \"/Users/vinhnguyenxuan/.codex/skills/.system/skill-installer/scripts/list-skills.py`\""]
 2026-03-01T03:58:13.985963Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-installer from /Users/vinhnguyenxuan/.codex/skills/.system/skill-installer
 2026-03-01T03:58:13.986238Z  INFO vtcode_core::skills::discovery: Found 2 skills in /Users/vinhnguyenxuan/.codex/skills
-2026-03-01T03:58:13.986297Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./tools
-2026-03-01T03:58:13.986317Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./vendor/tools
+2026-03-01T03:58:13.986297Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: ././tools
+2026-03-01T03:58:13.986317Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: ././vendor/tools
 2026-03-01T03:58:13.986338Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/.vtcode/tools
 2026-03-01T03:58:13.986472Z  INFO vtcode_core::core::agent::state: History invariants are valid
-2026-03-01T03:58:13.988656Z  WARN vtcode_core::instructions: Instruction file `/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
+2026-03-01T03:58:13.988656Z  WARN vtcode_core::instructions: Instruction file `./AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
 2026-03-01T03:58:13.988735Z DEBUG vtcode_core::prompts::system: Selected system prompt mode mode="default" base_tokens_approx=1989
 2026-03-01T03:58:14.052639Z DEBUG vtcode_core::tools::registry::maintenance: Seeded default tool policies from registrations seeded=4
 2026-03-01T03:58:14.100516Z DEBUG vtcode_core::tools::registry::maintenance: Seeded default tool policies from registrations seeded=4
@@ -1332,11 +1332,11 @@ call errors
 2026-03-01T03:58:14.162422Z DEBUG vtcode_core::subagents::registry: Loaded builtin agent: planner
 2026-03-01T03:58:14.162434Z DEBUG vtcode_core::subagents::registry: Loaded builtin agent: coder
 2026-03-01T03:58:14.162446Z  INFO vtcode_core::subagents::registry: Loaded 7 subagents: ["debugger", "coder", "plan", "planner", "code-reviewer", "explore", "general"]
-2026-03-01T03:58:14.162678Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/context/tool_outputs
-2026-03-01T03:58:14.162697Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/history
-2026-03-01T03:58:14.162712Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/mcp/tools
-2026-03-01T03:58:14.162726Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/terminals
-2026-03-01T03:58:14.162739Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/skills
+2026-03-01T03:58:14.162678Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/context/tool_outputs
+2026-03-01T03:58:14.162697Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/history
+2026-03-01T03:58:14.162712Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/mcp/tools
+2026-03-01T03:58:14.162726Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/terminals
+2026-03-01T03:58:14.162739Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/skills
 2026-03-01T03:58:14.162762Z  INFO vtcode_core::context::dynamic_init: Initialized dynamic context discovery directories workspace=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode
 2026-03-01T03:58:20.838305Z  INFO vtcode_core::tools::registry::inventory: Internal tool routed via alias to LLM-visible parent alias=run_pty_cmd canonical=unified_exec count=1
 2026-03-01T03:58:20.843822Z DEBUG vtcode_core::tools::safety_gateway: SafetyGateway: checking and recording safety invocation_id=2f22101f tool=unified_exec
@@ -1357,17 +1357,17 @@ call errors
 2026-03-01T04:04:32.834912Z  INFO vtcode_core::mcp::client: No active MCP connections to shutdown
 2026-03-01T04:04:34.792329Z  INFO vtcode_core::mcp::client: Initializing MCP client with 0 configured providers
 2026-03-01T04:04:34.793021Z  INFO vtcode_core::mcp::client: MCP client initialization complete. Active providers: 0
-2026-03-01T04:04:35.209358Z  WARN vtcode_core::instructions: Instruction file `/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
+2026-03-01T04:04:35.209358Z  WARN vtcode_core::instructions: Instruction file `./AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
 2026-03-01T04:04:35.214326Z DEBUG vtcode_core::tools::registry::declarations: Building and caching declarations mode=Minimal
 2026-03-01T04:04:35.215193Z DEBUG vtcode_core::tools::registry::declarations: Building minimal tool declarations from canonical schema mode="minimal"
 2026-03-01T04:04:35.216787Z  INFO vtcode_core::skills::discovery: Starting skill discovery in: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode
-2026-03-01T04:04:35.216807Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.github/skills
-2026-03-01T04:04:35.216815Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.agents/skills
-2026-03-01T04:04:35.216841Z  INFO vtcode_core::skills::discovery: Found 0 skills in /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/skills
-2026-03-01T04:04:35.216851Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.claude/skills
-2026-03-01T04:04:35.216858Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.pi/skills
-2026-03-01T04:04:35.216867Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.codex/skills
-2026-03-01T04:04:35.216873Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./skills
+2026-03-01T04:04:35.216807Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.github/skills
+2026-03-01T04:04:35.216815Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.agents/skills
+2026-03-01T04:04:35.216841Z  INFO vtcode_core::skills::discovery: Found 0 skills in ./.vtcode/skills
+2026-03-01T04:04:35.216851Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.claude/skills
+2026-03-01T04:04:35.216858Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.pi/skills
+2026-03-01T04:04:35.216867Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.codex/skills
+2026-03-01T04:04:35.216873Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ././skills
 2026-03-01T04:04:35.220793Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-creator from /Users/vinhnguyenxuan/.vtcode/skills/.system/skill-creator
 2026-03-01T04:04:35.221317Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-installer from /Users/vinhnguyenxuan/.vtcode/skills/.system/skill-installer
 2026-03-01T04:04:35.221365Z  INFO vtcode_core::skills::discovery: Found 2 skills in /Users/vinhnguyenxuan/.vtcode/skills
@@ -1387,11 +1387,11 @@ call errors
 2026-03-01T04:04:35.226408Z DEBUG vtcode_core::skills::manifest: File reference validation warnings (full list) warnings=["Invalid reference 'scripts/list-skills.py`': Referenced file does not exist: \"/Users/vinhnguyenxuan/.codex/skills/.system/skill-installer/scripts/list-skills.py`\""]
 2026-03-01T04:04:35.226415Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-installer from /Users/vinhnguyenxuan/.codex/skills/.system/skill-installer
 2026-03-01T04:04:35.226503Z  INFO vtcode_core::skills::discovery: Found 2 skills in /Users/vinhnguyenxuan/.codex/skills
-2026-03-01T04:04:35.226519Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./tools
-2026-03-01T04:04:35.226526Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./vendor/tools
+2026-03-01T04:04:35.226519Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: ././tools
+2026-03-01T04:04:35.226526Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: ././vendor/tools
 2026-03-01T04:04:35.226533Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/.vtcode/tools
 2026-03-01T04:04:35.226777Z  INFO vtcode_core::core::agent::state: History invariants are valid
-2026-03-01T04:04:35.228162Z  WARN vtcode_core::instructions: Instruction file `/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
+2026-03-01T04:04:35.228162Z  WARN vtcode_core::instructions: Instruction file `./AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
 2026-03-01T04:04:35.228194Z DEBUG vtcode_core::prompts::system: Selected system prompt mode mode="default" base_tokens_approx=1989
 2026-03-01T04:04:35.283872Z DEBUG vtcode_core::tools::registry::maintenance: Seeded default tool policies from registrations seeded=4
 2026-03-01T04:04:35.325811Z DEBUG vtcode_core::tools::registry::maintenance: Seeded default tool policies from registrations seeded=4
@@ -1405,11 +1405,11 @@ call errors
 2026-03-01T04:04:35.382645Z DEBUG vtcode_core::subagents::registry: Loaded builtin agent: planner
 2026-03-01T04:04:35.382655Z DEBUG vtcode_core::subagents::registry: Loaded builtin agent: coder
 2026-03-01T04:04:35.382666Z  INFO vtcode_core::subagents::registry: Loaded 7 subagents: ["debugger", "general", "planner", "explore", "code-reviewer", "plan", "coder"]
-2026-03-01T04:04:35.382864Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/context/tool_outputs
-2026-03-01T04:04:35.382888Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/history
-2026-03-01T04:04:35.382908Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/mcp/tools
-2026-03-01T04:04:35.382925Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/terminals
-2026-03-01T04:04:35.382941Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/skills
+2026-03-01T04:04:35.382864Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/context/tool_outputs
+2026-03-01T04:04:35.382888Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/history
+2026-03-01T04:04:35.382908Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/mcp/tools
+2026-03-01T04:04:35.382925Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/terminals
+2026-03-01T04:04:35.382941Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/skills
 2026-03-01T04:04:35.382963Z  INFO vtcode_core::context::dynamic_init: Initialized dynamic context discovery directories workspace=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode
 2026-03-01T04:05:09.440604Z DEBUG vtcode_core::tools::safety_gateway: SafetyGateway: checking and recording safety invocation_id=e4da0cde tool=unified_exec
 2026-03-01T04:05:09.440730Z  INFO vtcode_core::tools::safety_gateway: SafetyGateway: requires approval invocation_id=e4da0cde tool=unified_exec risk=medium
@@ -1501,17 +1501,17 @@ call errors
 2026-03-01T04:07:15.878212Z  INFO vtcode_core::mcp::client: No active MCP connections to shutdown
 2026-03-01T04:14:28.421739Z  INFO vtcode_core::mcp::client: Initializing MCP client with 0 configured providers
 2026-03-01T04:14:28.422839Z  INFO vtcode_core::mcp::client: MCP client initialization complete. Active providers: 0
-2026-03-01T04:14:28.863316Z  WARN vtcode_core::instructions: Instruction file `/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
+2026-03-01T04:14:28.863316Z  WARN vtcode_core::instructions: Instruction file `./AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
 2026-03-01T04:14:29.414940Z DEBUG vtcode_core::tools::registry::declarations: Building and caching declarations mode=Minimal
 2026-03-01T04:14:29.416361Z DEBUG vtcode_core::tools::registry::declarations: Building minimal tool declarations from canonical schema mode="minimal"
 2026-03-01T04:14:29.419527Z  INFO vtcode_core::skills::discovery: Starting skill discovery in: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode
-2026-03-01T04:14:29.419808Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.github/skills
-2026-03-01T04:14:29.419849Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.agents/skills
-2026-03-01T04:14:29.420000Z  INFO vtcode_core::skills::discovery: Found 0 skills in /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/skills
-2026-03-01T04:14:29.420027Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.claude/skills
-2026-03-01T04:14:29.420048Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.pi/skills
-2026-03-01T04:14:29.420066Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.codex/skills
-2026-03-01T04:14:29.420085Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./skills
+2026-03-01T04:14:29.419808Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.github/skills
+2026-03-01T04:14:29.419849Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.agents/skills
+2026-03-01T04:14:29.420000Z  INFO vtcode_core::skills::discovery: Found 0 skills in ./.vtcode/skills
+2026-03-01T04:14:29.420027Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.claude/skills
+2026-03-01T04:14:29.420048Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.pi/skills
+2026-03-01T04:14:29.420066Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.codex/skills
+2026-03-01T04:14:29.420085Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ././skills
 2026-03-01T04:14:29.425890Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-creator from /Users/vinhnguyenxuan/.vtcode/skills/.system/skill-creator
 2026-03-01T04:14:29.427424Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-installer from /Users/vinhnguyenxuan/.vtcode/skills/.system/skill-installer
 2026-03-01T04:14:29.427645Z  INFO vtcode_core::skills::discovery: Found 2 skills in /Users/vinhnguyenxuan/.vtcode/skills
@@ -1531,11 +1531,11 @@ call errors
 2026-03-01T04:14:29.440296Z DEBUG vtcode_core::skills::manifest: File reference validation warnings (full list) warnings=["Invalid reference 'scripts/list-skills.py`': Referenced file does not exist: \"/Users/vinhnguyenxuan/.codex/skills/.system/skill-installer/scripts/list-skills.py`\""]
 2026-03-01T04:14:29.440342Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-installer from /Users/vinhnguyenxuan/.codex/skills/.system/skill-installer
 2026-03-01T04:14:29.440637Z  INFO vtcode_core::skills::discovery: Found 2 skills in /Users/vinhnguyenxuan/.codex/skills
-2026-03-01T04:14:29.440708Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./tools
-2026-03-01T04:14:29.440730Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./vendor/tools
+2026-03-01T04:14:29.440708Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: ././tools
+2026-03-01T04:14:29.440730Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: ././vendor/tools
 2026-03-01T04:14:29.440755Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/.vtcode/tools
 2026-03-01T04:14:29.441013Z  INFO vtcode_core::core::agent::state: History invariants are valid
-2026-03-01T04:14:29.444011Z  WARN vtcode_core::instructions: Instruction file `/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
+2026-03-01T04:14:29.444011Z  WARN vtcode_core::instructions: Instruction file `./AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
 2026-03-01T04:14:29.444114Z DEBUG vtcode_core::prompts::system: Selected system prompt mode mode="default" base_tokens_approx=1989
 2026-03-01T04:14:29.523057Z DEBUG vtcode_core::tools::registry::maintenance: Seeded default tool policies from registrations seeded=4
 2026-03-01T04:14:29.579622Z DEBUG vtcode_core::tools::registry::maintenance: Seeded default tool policies from registrations seeded=4
@@ -1549,11 +1549,11 @@ call errors
 2026-03-01T04:14:29.645054Z DEBUG vtcode_core::subagents::registry: Loaded builtin agent: planner
 2026-03-01T04:14:29.645066Z DEBUG vtcode_core::subagents::registry: Loaded builtin agent: coder
 2026-03-01T04:14:29.645082Z  INFO vtcode_core::subagents::registry: Loaded 7 subagents: ["planner", "debugger", "explore", "plan", "coder", "code-reviewer", "general"]
-2026-03-01T04:14:29.645172Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/context/tool_outputs
-2026-03-01T04:14:29.645198Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/history
-2026-03-01T04:14:29.645217Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/mcp/tools
-2026-03-01T04:14:29.645235Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/terminals
-2026-03-01T04:14:29.645250Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/skills
+2026-03-01T04:14:29.645172Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/context/tool_outputs
+2026-03-01T04:14:29.645198Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/history
+2026-03-01T04:14:29.645217Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/mcp/tools
+2026-03-01T04:14:29.645235Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/terminals
+2026-03-01T04:14:29.645250Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/skills
 2026-03-01T04:14:29.645275Z  INFO vtcode_core::context::dynamic_init: Initialized dynamic context discovery directories workspace=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode
 2026-03-01T04:14:40.250285Z  INFO vtcode_core::tools::registry::inventory: Tool alias resolved and usage tracked alias=bash canonical=unified_exec count=1
 2026-03-01T04:14:40.255436Z DEBUG vtcode_core::tools::safety_gateway: SafetyGateway: checking and recording safety invocation_id=c85eb244 tool=unified_exec
@@ -1585,17 +1585,17 @@ call errors
 2026-03-01T04:15:13.988146Z  INFO vtcode_core::mcp::client: No active MCP connections to shutdown
 2026-03-01T04:58:01.642905Z  INFO vtcode_core::mcp::client: Initializing MCP client with 0 configured providers
 2026-03-01T04:58:01.644131Z  INFO vtcode_core::mcp::client: MCP client initialization complete. Active providers: 0
-2026-03-01T04:58:02.814903Z  WARN vtcode_core::instructions: Instruction file `/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
+2026-03-01T04:58:02.814903Z  WARN vtcode_core::instructions: Instruction file `./AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
 2026-03-01T04:58:03.385166Z DEBUG vtcode_core::tools::registry::declarations: Building and caching declarations mode=Minimal
 2026-03-01T04:58:03.386234Z DEBUG vtcode_core::tools::registry::declarations: Building minimal tool declarations from canonical schema mode="minimal"
 2026-03-01T04:58:03.388096Z  INFO vtcode_core::skills::discovery: Starting skill discovery in: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode
-2026-03-01T04:58:03.388158Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.github/skills
-2026-03-01T04:58:03.388179Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.agents/skills
-2026-03-01T04:58:03.388269Z  INFO vtcode_core::skills::discovery: Found 0 skills in /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/skills
-2026-03-01T04:58:03.388284Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.claude/skills
-2026-03-01T04:58:03.388299Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.pi/skills
-2026-03-01T04:58:03.388308Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.codex/skills
-2026-03-01T04:58:03.388316Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./skills
+2026-03-01T04:58:03.388158Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.github/skills
+2026-03-01T04:58:03.388179Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.agents/skills
+2026-03-01T04:58:03.388269Z  INFO vtcode_core::skills::discovery: Found 0 skills in ./.vtcode/skills
+2026-03-01T04:58:03.388284Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.claude/skills
+2026-03-01T04:58:03.388299Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.pi/skills
+2026-03-01T04:58:03.388308Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.codex/skills
+2026-03-01T04:58:03.388316Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ././skills
 2026-03-01T04:58:03.392022Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-creator from /Users/vinhnguyenxuan/.vtcode/skills/.system/skill-creator
 2026-03-01T04:58:03.392832Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-installer from /Users/vinhnguyenxuan/.vtcode/skills/.system/skill-installer
 2026-03-01T04:58:03.392942Z  INFO vtcode_core::skills::discovery: Found 2 skills in /Users/vinhnguyenxuan/.vtcode/skills
@@ -1615,11 +1615,11 @@ call errors
 2026-03-01T04:58:03.399333Z DEBUG vtcode_core::skills::manifest: File reference validation warnings (full list) warnings=["Invalid reference 'scripts/list-skills.py`': Referenced file does not exist: \"/Users/vinhnguyenxuan/.codex/skills/.system/skill-installer/scripts/list-skills.py`\""]
 2026-03-01T04:58:03.399344Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-installer from /Users/vinhnguyenxuan/.codex/skills/.system/skill-installer
 2026-03-01T04:58:03.399506Z  INFO vtcode_core::skills::discovery: Found 2 skills in /Users/vinhnguyenxuan/.codex/skills
-2026-03-01T04:58:03.399542Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./tools
-2026-03-01T04:58:03.399554Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./vendor/tools
+2026-03-01T04:58:03.399542Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: ././tools
+2026-03-01T04:58:03.399554Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: ././vendor/tools
 2026-03-01T04:58:03.399566Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/.vtcode/tools
 2026-03-01T04:58:03.399852Z  INFO vtcode_core::core::agent::state: History invariants are valid
-2026-03-01T04:58:03.401422Z  WARN vtcode_core::instructions: Instruction file `/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
+2026-03-01T04:58:03.401422Z  WARN vtcode_core::instructions: Instruction file `./AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
 2026-03-01T04:58:03.401463Z DEBUG vtcode_core::prompts::system: Selected system prompt mode mode="default" base_tokens_approx=1989
 2026-03-01T04:58:03.481647Z DEBUG vtcode_core::tools::registry::maintenance: Seeded default tool policies from registrations seeded=4
 2026-03-01T04:58:03.658607Z DEBUG vtcode_core::tools::registry::maintenance: Seeded default tool policies from registrations seeded=4
@@ -1633,11 +1633,11 @@ call errors
 2026-03-01T04:58:03.765060Z DEBUG vtcode_core::subagents::registry: Loaded builtin agent: planner
 2026-03-01T04:58:03.765072Z DEBUG vtcode_core::subagents::registry: Loaded builtin agent: coder
 2026-03-01T04:58:03.765110Z  INFO vtcode_core::subagents::registry: Loaded 7 subagents: ["code-reviewer", "debugger", "planner", "plan", "coder", "general", "explore"]
-2026-03-01T04:58:03.765594Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/context/tool_outputs
-2026-03-01T04:58:03.765794Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/history
-2026-03-01T04:58:03.766317Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/mcp/tools
-2026-03-01T04:58:03.766373Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/terminals
-2026-03-01T04:58:03.766445Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/skills
+2026-03-01T04:58:03.765594Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/context/tool_outputs
+2026-03-01T04:58:03.765794Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/history
+2026-03-01T04:58:03.766317Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/mcp/tools
+2026-03-01T04:58:03.766373Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/terminals
+2026-03-01T04:58:03.766445Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/skills
 2026-03-01T04:58:03.766504Z  INFO vtcode_core::context::dynamic_init: Initialized dynamic context discovery directories workspace=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode
 2026-03-01T04:58:16.777517Z DEBUG vtcode_core::tools::safety_gateway: SafetyGateway: checking and recording safety invocation_id=1cc63a2d tool=unified_file
 2026-03-01T04:58:16.779364Z DEBUG vtcode_core::tools::registry::execution_facade: Validation classified tool as read-only tool=unified_file
@@ -1682,17 +1682,17 @@ call errors
 2026-03-01T05:21:26.019747Z  INFO vtcode_core::mcp::client: No active MCP connections to shutdown
 2026-03-01T05:22:16.242131Z  INFO vtcode_core::mcp::client: Initializing MCP client with 0 configured providers
 2026-03-01T05:22:16.243858Z  INFO vtcode_core::mcp::client: MCP client initialization complete. Active providers: 0
-2026-03-01T05:22:16.802241Z  WARN vtcode_core::instructions: Instruction file `/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
+2026-03-01T05:22:16.802241Z  WARN vtcode_core::instructions: Instruction file `./AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
 2026-03-01T05:22:17.407874Z DEBUG vtcode_core::tools::registry::declarations: Building and caching declarations mode=Minimal
 2026-03-01T05:22:17.412101Z DEBUG vtcode_core::tools::registry::declarations: Building minimal tool declarations from canonical schema mode="minimal"
 2026-03-01T05:22:17.414566Z  INFO vtcode_core::skills::discovery: Starting skill discovery in: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode
-2026-03-01T05:22:17.414767Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.github/skills
-2026-03-01T05:22:17.414820Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.agents/skills
-2026-03-01T05:22:17.415014Z  INFO vtcode_core::skills::discovery: Found 0 skills in /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/skills
-2026-03-01T05:22:17.415052Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.claude/skills
-2026-03-01T05:22:17.415075Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.pi/skills
-2026-03-01T05:22:17.415096Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.codex/skills
-2026-03-01T05:22:17.415115Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./skills
+2026-03-01T05:22:17.414767Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.github/skills
+2026-03-01T05:22:17.414820Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.agents/skills
+2026-03-01T05:22:17.415014Z  INFO vtcode_core::skills::discovery: Found 0 skills in ./.vtcode/skills
+2026-03-01T05:22:17.415052Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.claude/skills
+2026-03-01T05:22:17.415075Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.pi/skills
+2026-03-01T05:22:17.415096Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.codex/skills
+2026-03-01T05:22:17.415115Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ././skills
 2026-03-01T05:22:17.420809Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-creator from /Users/vinhnguyenxuan/.vtcode/skills/.system/skill-creator
 2026-03-01T05:22:17.422188Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-installer from /Users/vinhnguyenxuan/.vtcode/skills/.system/skill-installer
 2026-03-01T05:22:17.422433Z  INFO vtcode_core::skills::discovery: Found 2 skills in /Users/vinhnguyenxuan/.vtcode/skills
@@ -1712,11 +1712,11 @@ call errors
 2026-03-01T05:22:17.433083Z DEBUG vtcode_core::skills::manifest: File reference validation warnings (full list) warnings=["Invalid reference 'scripts/list-skills.py`': Referenced file does not exist: \"/Users/vinhnguyenxuan/.codex/skills/.system/skill-installer/scripts/list-skills.py`\""]
 2026-03-01T05:22:17.433098Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-installer from /Users/vinhnguyenxuan/.codex/skills/.system/skill-installer
 2026-03-01T05:22:17.433260Z  INFO vtcode_core::skills::discovery: Found 2 skills in /Users/vinhnguyenxuan/.codex/skills
-2026-03-01T05:22:17.433279Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./tools
-2026-03-01T05:22:17.433290Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./vendor/tools
+2026-03-01T05:22:17.433279Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: ././tools
+2026-03-01T05:22:17.433290Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: ././vendor/tools
 2026-03-01T05:22:17.433303Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/.vtcode/tools
 2026-03-01T05:22:17.433834Z  INFO vtcode_core::core::agent::state: History invariants are valid
-2026-03-01T05:22:17.435615Z  WARN vtcode_core::instructions: Instruction file `/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
+2026-03-01T05:22:17.435615Z  WARN vtcode_core::instructions: Instruction file `./AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
 2026-03-01T05:22:17.435653Z DEBUG vtcode_core::prompts::system: Selected system prompt mode mode="default" base_tokens_approx=1989
 2026-03-01T05:22:17.501497Z DEBUG vtcode_core::tools::registry::maintenance: Seeded default tool policies from registrations seeded=4
 2026-03-01T05:22:17.597096Z DEBUG vtcode_core::tools::registry::maintenance: Seeded default tool policies from registrations seeded=4
@@ -1730,11 +1730,11 @@ call errors
 2026-03-01T05:22:17.704746Z DEBUG vtcode_core::subagents::registry: Loaded builtin agent: planner
 2026-03-01T05:22:17.704770Z DEBUG vtcode_core::subagents::registry: Loaded builtin agent: coder
 2026-03-01T05:22:17.704791Z  INFO vtcode_core::subagents::registry: Loaded 7 subagents: ["planner", "explore", "plan", "code-reviewer", "debugger", "coder", "general"]
-2026-03-01T05:22:17.704892Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/context/tool_outputs
-2026-03-01T05:22:17.704917Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/history
-2026-03-01T05:22:17.704935Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/mcp/tools
-2026-03-01T05:22:17.704952Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/terminals
-2026-03-01T05:22:17.704981Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/skills
+2026-03-01T05:22:17.704892Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/context/tool_outputs
+2026-03-01T05:22:17.704917Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/history
+2026-03-01T05:22:17.704935Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/mcp/tools
+2026-03-01T05:22:17.704952Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/terminals
+2026-03-01T05:22:17.704981Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/skills
 2026-03-01T05:22:17.705004Z  INFO vtcode_core::context::dynamic_init: Initialized dynamic context discovery directories workspace=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode
 2026-03-01T05:22:47.079310Z  INFO vtcode_core::notifications: Notification: Agent turn ended: completed successfully
 2026-03-01T05:22:49.072537Z  INFO vtcode_core::tools::registry::inventory: Internal tool routed via alias to LLM-visible parent alias=run_pty_cmd canonical=unified_exec count=1
@@ -1755,17 +1755,17 @@ call errors
 2026-03-01T05:22:55.109179Z  INFO vtcode_core::mcp::client: No active MCP connections to shutdown
 2026-03-01T05:26:26.124342Z  INFO vtcode_core::mcp::client: Initializing MCP client with 0 configured providers
 2026-03-01T05:26:26.125319Z  INFO vtcode_core::mcp::client: MCP client initialization complete. Active providers: 0
-2026-03-01T05:26:26.633176Z  WARN vtcode_core::instructions: Instruction file `/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
+2026-03-01T05:26:26.633176Z  WARN vtcode_core::instructions: Instruction file `./AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
 2026-03-01T05:26:26.638902Z DEBUG vtcode_core::tools::registry::declarations: Building and caching declarations mode=Minimal
 2026-03-01T05:26:26.639927Z DEBUG vtcode_core::tools::registry::declarations: Building minimal tool declarations from canonical schema mode="minimal"
 2026-03-01T05:26:26.641475Z  INFO vtcode_core::skills::discovery: Starting skill discovery in: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode
-2026-03-01T05:26:26.641532Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.github/skills
-2026-03-01T05:26:26.641542Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.agents/skills
-2026-03-01T05:26:26.641611Z  INFO vtcode_core::skills::discovery: Found 0 skills in /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/skills
-2026-03-01T05:26:26.641623Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.claude/skills
-2026-03-01T05:26:26.641631Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.pi/skills
-2026-03-01T05:26:26.641639Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.codex/skills
-2026-03-01T05:26:26.641646Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./skills
+2026-03-01T05:26:26.641532Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.github/skills
+2026-03-01T05:26:26.641542Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.agents/skills
+2026-03-01T05:26:26.641611Z  INFO vtcode_core::skills::discovery: Found 0 skills in ./.vtcode/skills
+2026-03-01T05:26:26.641623Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.claude/skills
+2026-03-01T05:26:26.641631Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.pi/skills
+2026-03-01T05:26:26.641639Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.codex/skills
+2026-03-01T05:26:26.641646Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ././skills
 2026-03-01T05:26:26.645692Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-creator from /Users/vinhnguyenxuan/.vtcode/skills/.system/skill-creator
 2026-03-01T05:26:26.646419Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-installer from /Users/vinhnguyenxuan/.vtcode/skills/.system/skill-installer
 2026-03-01T05:26:26.646504Z  INFO vtcode_core::skills::discovery: Found 2 skills in /Users/vinhnguyenxuan/.vtcode/skills
@@ -1785,11 +1785,11 @@ call errors
 2026-03-01T05:26:26.652586Z DEBUG vtcode_core::skills::manifest: File reference validation warnings (full list) warnings=["Invalid reference 'scripts/list-skills.py`': Referenced file does not exist: \"/Users/vinhnguyenxuan/.codex/skills/.system/skill-installer/scripts/list-skills.py`\""]
 2026-03-01T05:26:26.652596Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-installer from /Users/vinhnguyenxuan/.codex/skills/.system/skill-installer
 2026-03-01T05:26:26.652710Z  INFO vtcode_core::skills::discovery: Found 2 skills in /Users/vinhnguyenxuan/.codex/skills
-2026-03-01T05:26:26.652723Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./tools
-2026-03-01T05:26:26.652731Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./vendor/tools
+2026-03-01T05:26:26.652723Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: ././tools
+2026-03-01T05:26:26.652731Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: ././vendor/tools
 2026-03-01T05:26:26.652741Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/.vtcode/tools
 2026-03-01T05:26:26.653206Z  INFO vtcode_core::core::agent::state: History invariants are valid
-2026-03-01T05:26:26.654528Z  WARN vtcode_core::instructions: Instruction file `/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
+2026-03-01T05:26:26.654528Z  WARN vtcode_core::instructions: Instruction file `./AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
 2026-03-01T05:26:26.654563Z DEBUG vtcode_core::prompts::system: Selected system prompt mode mode="default" base_tokens_approx=1989
 2026-03-01T05:26:26.748167Z DEBUG vtcode_core::tools::registry::maintenance: Seeded default tool policies from registrations seeded=4
 2026-03-01T05:26:26.816198Z DEBUG vtcode_core::tools::registry::maintenance: Seeded default tool policies from registrations seeded=4
@@ -1803,11 +1803,11 @@ call errors
 2026-03-01T05:26:26.898709Z DEBUG vtcode_core::subagents::registry: Loaded builtin agent: planner
 2026-03-01T05:26:26.898721Z DEBUG vtcode_core::subagents::registry: Loaded builtin agent: coder
 2026-03-01T05:26:26.898736Z  INFO vtcode_core::subagents::registry: Loaded 7 subagents: ["general", "debugger", "explore", "coder", "planner", "plan", "code-reviewer"]
-2026-03-01T05:26:26.898874Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/context/tool_outputs
-2026-03-01T05:26:26.898912Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/history
-2026-03-01T05:26:26.898977Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/mcp/tools
-2026-03-01T05:26:26.899063Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/terminals
-2026-03-01T05:26:26.899106Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/skills
+2026-03-01T05:26:26.898874Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/context/tool_outputs
+2026-03-01T05:26:26.898912Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/history
+2026-03-01T05:26:26.898977Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/mcp/tools
+2026-03-01T05:26:26.899063Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/terminals
+2026-03-01T05:26:26.899106Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/skills
 2026-03-01T05:26:26.899155Z  INFO vtcode_core::context::dynamic_init: Initialized dynamic context discovery directories workspace=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode
 2026-03-01T05:26:30.884755Z  INFO vtcode_core::notifications: Notification: Agent turn ended: completed successfully
 2026-03-01T05:26:32.368061Z  INFO vtcode_core::tools::registry::inventory: Internal tool routed via alias to LLM-visible parent alias=run_pty_cmd canonical=unified_exec count=1
@@ -1828,17 +1828,17 @@ call errors
 2026-03-01T05:26:37.496584Z  INFO vtcode_core::mcp::client: No active MCP connections to shutdown
 2026-03-01T05:29:17.410594Z  INFO vtcode_core::mcp::client: Initializing MCP client with 0 configured providers
 2026-03-01T05:29:17.411821Z  INFO vtcode_core::mcp::client: MCP client initialization complete. Active providers: 0
-2026-03-01T05:29:17.842013Z  WARN vtcode_core::instructions: Instruction file `/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
+2026-03-01T05:29:17.842013Z  WARN vtcode_core::instructions: Instruction file `./AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
 2026-03-01T05:29:17.849266Z DEBUG vtcode_core::tools::registry::declarations: Building and caching declarations mode=Minimal
 2026-03-01T05:29:17.850328Z DEBUG vtcode_core::tools::registry::declarations: Building minimal tool declarations from canonical schema mode="minimal"
 2026-03-01T05:29:17.851679Z  INFO vtcode_core::skills::discovery: Starting skill discovery in: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode
-2026-03-01T05:29:17.851849Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.github/skills
-2026-03-01T05:29:17.851858Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.agents/skills
-2026-03-01T05:29:17.851886Z  INFO vtcode_core::skills::discovery: Found 0 skills in /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/skills
-2026-03-01T05:29:17.851896Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.claude/skills
-2026-03-01T05:29:17.851903Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.pi/skills
-2026-03-01T05:29:17.851910Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.codex/skills
-2026-03-01T05:29:17.851917Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./skills
+2026-03-01T05:29:17.851849Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.github/skills
+2026-03-01T05:29:17.851858Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.agents/skills
+2026-03-01T05:29:17.851886Z  INFO vtcode_core::skills::discovery: Found 0 skills in ./.vtcode/skills
+2026-03-01T05:29:17.851896Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.claude/skills
+2026-03-01T05:29:17.851903Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.pi/skills
+2026-03-01T05:29:17.851910Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.codex/skills
+2026-03-01T05:29:17.851917Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ././skills
 2026-03-01T05:29:17.855746Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-creator from /Users/vinhnguyenxuan/.vtcode/skills/.system/skill-creator
 2026-03-01T05:29:17.856331Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-installer from /Users/vinhnguyenxuan/.vtcode/skills/.system/skill-installer
 2026-03-01T05:29:17.856380Z  INFO vtcode_core::skills::discovery: Found 2 skills in /Users/vinhnguyenxuan/.vtcode/skills
@@ -1858,11 +1858,11 @@ call errors
 2026-03-01T05:29:17.861578Z DEBUG vtcode_core::skills::manifest: File reference validation warnings (full list) warnings=["Invalid reference 'scripts/list-skills.py`': Referenced file does not exist: \"/Users/vinhnguyenxuan/.codex/skills/.system/skill-installer/scripts/list-skills.py`\""]
 2026-03-01T05:29:17.861586Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-installer from /Users/vinhnguyenxuan/.codex/skills/.system/skill-installer
 2026-03-01T05:29:17.861680Z  INFO vtcode_core::skills::discovery: Found 2 skills in /Users/vinhnguyenxuan/.codex/skills
-2026-03-01T05:29:17.861689Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./tools
-2026-03-01T05:29:17.861697Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./vendor/tools
+2026-03-01T05:29:17.861689Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: ././tools
+2026-03-01T05:29:17.861697Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: ././vendor/tools
 2026-03-01T05:29:17.861704Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/.vtcode/tools
 2026-03-01T05:29:17.862081Z  INFO vtcode_core::core::agent::state: History invariants are valid
-2026-03-01T05:29:17.863293Z  WARN vtcode_core::instructions: Instruction file `/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
+2026-03-01T05:29:17.863293Z  WARN vtcode_core::instructions: Instruction file `./AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
 2026-03-01T05:29:17.863318Z DEBUG vtcode_core::prompts::system: Selected system prompt mode mode="default" base_tokens_approx=1989
 2026-03-01T05:29:17.919321Z DEBUG vtcode_core::tools::registry::maintenance: Seeded default tool policies from registrations seeded=4
 2026-03-01T05:29:17.961856Z DEBUG vtcode_core::tools::registry::maintenance: Seeded default tool policies from registrations seeded=4
@@ -1876,11 +1876,11 @@ call errors
 2026-03-01T05:29:18.016242Z DEBUG vtcode_core::subagents::registry: Loaded builtin agent: planner
 2026-03-01T05:29:18.016254Z DEBUG vtcode_core::subagents::registry: Loaded builtin agent: coder
 2026-03-01T05:29:18.016275Z  INFO vtcode_core::subagents::registry: Loaded 7 subagents: ["plan", "debugger", "planner", "code-reviewer", "coder", "explore", "general"]
-2026-03-01T05:29:18.016339Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/context/tool_outputs
-2026-03-01T05:29:18.016357Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/history
-2026-03-01T05:29:18.016372Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/mcp/tools
-2026-03-01T05:29:18.016387Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/terminals
-2026-03-01T05:29:18.016401Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/skills
+2026-03-01T05:29:18.016339Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/context/tool_outputs
+2026-03-01T05:29:18.016357Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/history
+2026-03-01T05:29:18.016372Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/mcp/tools
+2026-03-01T05:29:18.016387Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/terminals
+2026-03-01T05:29:18.016401Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/skills
 2026-03-01T05:29:18.016426Z  INFO vtcode_core::context::dynamic_init: Initialized dynamic context discovery directories workspace=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode
 2026-03-01T05:29:20.253985Z  INFO vtcode_core::tools::registry::inventory: Internal tool routed via alias to LLM-visible parent alias=run_pty_cmd canonical=unified_exec count=1
 2026-03-01T05:29:20.258959Z DEBUG vtcode_core::tools::safety_gateway: SafetyGateway: checking and recording safety invocation_id=d1242b7e tool=unified_exec
@@ -1900,17 +1900,17 @@ call errors
 2026-03-01T05:29:26.846779Z  INFO vtcode_core::mcp::client: No active MCP connections to shutdown
 2026-03-01T05:35:40.262194Z  INFO vtcode_core::mcp::client: Initializing MCP client with 0 configured providers
 2026-03-01T05:35:40.262873Z  INFO vtcode_core::mcp::client: MCP client initialization complete. Active providers: 0
-2026-03-01T05:35:40.480454Z  WARN vtcode_core::instructions: Instruction file `/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
+2026-03-01T05:35:40.480454Z  WARN vtcode_core::instructions: Instruction file `./AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
 2026-03-01T05:35:40.486219Z DEBUG vtcode_core::tools::registry::declarations: Building and caching declarations mode=Minimal
 2026-03-01T05:35:40.487082Z DEBUG vtcode_core::tools::registry::declarations: Building minimal tool declarations from canonical schema mode="minimal"
 2026-03-01T05:35:40.488406Z  INFO vtcode_core::skills::discovery: Starting skill discovery in: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode
-2026-03-01T05:35:40.488436Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.github/skills
-2026-03-01T05:35:40.488441Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.agents/skills
-2026-03-01T05:35:40.488469Z  INFO vtcode_core::skills::discovery: Found 0 skills in /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/skills
-2026-03-01T05:35:40.488480Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.claude/skills
-2026-03-01T05:35:40.488484Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.pi/skills
-2026-03-01T05:35:40.488488Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.codex/skills
-2026-03-01T05:35:40.488492Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./skills
+2026-03-01T05:35:40.488436Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.github/skills
+2026-03-01T05:35:40.488441Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.agents/skills
+2026-03-01T05:35:40.488469Z  INFO vtcode_core::skills::discovery: Found 0 skills in ./.vtcode/skills
+2026-03-01T05:35:40.488480Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.claude/skills
+2026-03-01T05:35:40.488484Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.pi/skills
+2026-03-01T05:35:40.488488Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.codex/skills
+2026-03-01T05:35:40.488492Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ././skills
 2026-03-01T05:35:40.491885Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-creator from /Users/vinhnguyenxuan/.vtcode/skills/.system/skill-creator
 2026-03-01T05:35:40.492466Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-installer from /Users/vinhnguyenxuan/.vtcode/skills/.system/skill-installer
 2026-03-01T05:35:40.492517Z  INFO vtcode_core::skills::discovery: Found 2 skills in /Users/vinhnguyenxuan/.vtcode/skills
@@ -1930,13 +1930,13 @@ call errors
 2026-03-01T05:35:40.496791Z DEBUG vtcode_core::skills::manifest: File reference validation warnings (full list) warnings=["Invalid reference 'scripts/list-skills.py`': Referenced file does not exist: \"/Users/vinhnguyenxuan/.codex/skills/.system/skill-installer/scripts/list-skills.py`\""]
 2026-03-01T05:35:40.496795Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-installer from /Users/vinhnguyenxuan/.codex/skills/.system/skill-installer
 2026-03-01T05:35:40.496885Z  INFO vtcode_core::skills::discovery: Found 2 skills in /Users/vinhnguyenxuan/.codex/skills
-2026-03-01T05:35:40.496894Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./tools
-2026-03-01T05:35:40.496898Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./vendor/tools
+2026-03-01T05:35:40.496894Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: ././tools
+2026-03-01T05:35:40.496898Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: ././vendor/tools
 2026-03-01T05:35:40.496902Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/.vtcode/tools
 2026-03-01T05:35:40.497254Z  WARN vtcode_core::core::agent::state: Found 1 orphan outputs during recovery
 2026-03-01T05:35:40.497535Z  WARN vtcode_core::core::agent::state: Removing orphan output for call direct_run_pty_cmd_1
 2026-03-01T05:35:40.497553Z  INFO vtcode_core::core::agent::state: Removed 1 orphan outputs
-2026-03-01T05:35:40.498640Z  WARN vtcode_core::instructions: Instruction file `/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
+2026-03-01T05:35:40.498640Z  WARN vtcode_core::instructions: Instruction file `./AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
 2026-03-01T05:35:40.498667Z DEBUG vtcode_core::prompts::system: Selected system prompt mode mode="default" base_tokens_approx=1989
 2026-03-01T05:35:40.553507Z DEBUG vtcode_core::tools::registry::maintenance: Seeded default tool policies from registrations seeded=4
 2026-03-01T05:35:40.596008Z DEBUG vtcode_core::tools::registry::maintenance: Seeded default tool policies from registrations seeded=4
@@ -1950,26 +1950,26 @@ call errors
 2026-03-01T05:35:40.647322Z DEBUG vtcode_core::subagents::registry: Loaded builtin agent: planner
 2026-03-01T05:35:40.647332Z DEBUG vtcode_core::subagents::registry: Loaded builtin agent: coder
 2026-03-01T05:35:40.647341Z  INFO vtcode_core::subagents::registry: Loaded 7 subagents: ["explore", "plan", "code-reviewer", "planner", "general", "debugger", "coder"]
-2026-03-01T05:35:40.647431Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/context/tool_outputs
-2026-03-01T05:35:40.647448Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/history
-2026-03-01T05:35:40.647462Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/mcp/tools
-2026-03-01T05:35:40.647474Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/terminals
-2026-03-01T05:35:40.647485Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/skills
+2026-03-01T05:35:40.647431Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/context/tool_outputs
+2026-03-01T05:35:40.647448Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/history
+2026-03-01T05:35:40.647462Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/mcp/tools
+2026-03-01T05:35:40.647474Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/terminals
+2026-03-01T05:35:40.647485Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/skills
 2026-03-01T05:35:40.647502Z  INFO vtcode_core::context::dynamic_init: Initialized dynamic context discovery directories workspace=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode
 2026-03-01T05:43:29.653545Z  INFO vtcode_core::mcp::client: No active MCP connections to shutdown
 2026-03-01T05:44:20.424867Z  INFO vtcode_core::mcp::client: Initializing MCP client with 0 configured providers
 2026-03-01T05:44:20.425935Z  INFO vtcode_core::mcp::client: MCP client initialization complete. Active providers: 0
-2026-03-01T05:44:20.635499Z  WARN vtcode_core::instructions: Instruction file `/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
+2026-03-01T05:44:20.635499Z  WARN vtcode_core::instructions: Instruction file `./AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
 2026-03-01T05:44:21.195913Z DEBUG vtcode_core::tools::registry::declarations: Building and caching declarations mode=Minimal
 2026-03-01T05:44:21.198122Z DEBUG vtcode_core::tools::registry::declarations: Building minimal tool declarations from canonical schema mode="minimal"
 2026-03-01T05:44:21.201046Z  INFO vtcode_core::skills::discovery: Starting skill discovery in: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode
-2026-03-01T05:44:21.201210Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.github/skills
-2026-03-01T05:44:21.201246Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.agents/skills
-2026-03-01T05:44:21.201513Z  INFO vtcode_core::skills::discovery: Found 0 skills in /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/skills
-2026-03-01T05:44:21.201572Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.claude/skills
-2026-03-01T05:44:21.201609Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.pi/skills
-2026-03-01T05:44:21.201639Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.codex/skills
-2026-03-01T05:44:21.201672Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./skills
+2026-03-01T05:44:21.201210Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.github/skills
+2026-03-01T05:44:21.201246Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.agents/skills
+2026-03-01T05:44:21.201513Z  INFO vtcode_core::skills::discovery: Found 0 skills in ./.vtcode/skills
+2026-03-01T05:44:21.201572Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.claude/skills
+2026-03-01T05:44:21.201609Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.pi/skills
+2026-03-01T05:44:21.201639Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.codex/skills
+2026-03-01T05:44:21.201672Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ././skills
 2026-03-01T05:44:21.208130Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-creator from /Users/vinhnguyenxuan/.vtcode/skills/.system/skill-creator
 2026-03-01T05:44:21.210103Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-installer from /Users/vinhnguyenxuan/.vtcode/skills/.system/skill-installer
 2026-03-01T05:44:21.210386Z  INFO vtcode_core::skills::discovery: Found 2 skills in /Users/vinhnguyenxuan/.vtcode/skills
@@ -1989,11 +1989,11 @@ call errors
 2026-03-01T05:44:21.221536Z DEBUG vtcode_core::skills::manifest: File reference validation warnings (full list) warnings=["Invalid reference 'scripts/list-skills.py`': Referenced file does not exist: \"/Users/vinhnguyenxuan/.codex/skills/.system/skill-installer/scripts/list-skills.py`\""]
 2026-03-01T05:44:21.221557Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-installer from /Users/vinhnguyenxuan/.codex/skills/.system/skill-installer
 2026-03-01T05:44:21.221793Z  INFO vtcode_core::skills::discovery: Found 2 skills in /Users/vinhnguyenxuan/.codex/skills
-2026-03-01T05:44:21.221819Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./tools
-2026-03-01T05:44:21.221837Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./vendor/tools
+2026-03-01T05:44:21.221819Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: ././tools
+2026-03-01T05:44:21.221837Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: ././vendor/tools
 2026-03-01T05:44:21.221855Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/.vtcode/tools
 2026-03-01T05:44:21.222713Z  INFO vtcode_core::core::agent::state: History invariants are valid
-2026-03-01T05:44:21.224872Z  WARN vtcode_core::instructions: Instruction file `/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
+2026-03-01T05:44:21.224872Z  WARN vtcode_core::instructions: Instruction file `./AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
 2026-03-01T05:44:21.224929Z DEBUG vtcode_core::prompts::system: Selected system prompt mode mode="default" base_tokens_approx=1989
 2026-03-01T05:44:21.292738Z DEBUG vtcode_core::tools::registry::maintenance: Seeded default tool policies from registrations seeded=4
 2026-03-01T05:44:21.335001Z DEBUG vtcode_core::tools::registry::maintenance: Seeded default tool policies from registrations seeded=4
@@ -2007,26 +2007,26 @@ call errors
 2026-03-01T05:44:21.389146Z DEBUG vtcode_core::subagents::registry: Loaded builtin agent: planner
 2026-03-01T05:44:21.389157Z DEBUG vtcode_core::subagents::registry: Loaded builtin agent: coder
 2026-03-01T05:44:21.389172Z  INFO vtcode_core::subagents::registry: Loaded 7 subagents: ["plan", "general", "planner", "debugger", "coder", "explore", "code-reviewer"]
-2026-03-01T05:44:21.389261Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/context/tool_outputs
-2026-03-01T05:44:21.389279Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/history
-2026-03-01T05:44:21.389294Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/mcp/tools
-2026-03-01T05:44:21.389309Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/terminals
-2026-03-01T05:44:21.389321Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/skills
+2026-03-01T05:44:21.389261Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/context/tool_outputs
+2026-03-01T05:44:21.389279Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/history
+2026-03-01T05:44:21.389294Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/mcp/tools
+2026-03-01T05:44:21.389309Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/terminals
+2026-03-01T05:44:21.389321Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/skills
 2026-03-01T05:44:21.389342Z  INFO vtcode_core::context::dynamic_init: Initialized dynamic context discovery directories workspace=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode
 2026-03-01T05:56:55.190042Z  INFO vtcode_core::mcp::client: No active MCP connections to shutdown
 2026-03-01T05:56:56.950971Z  INFO vtcode_core::mcp::client: Initializing MCP client with 0 configured providers
 2026-03-01T05:56:56.951834Z  INFO vtcode_core::mcp::client: MCP client initialization complete. Active providers: 0
-2026-03-01T05:56:57.558488Z  WARN vtcode_core::instructions: Instruction file `/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
+2026-03-01T05:56:57.558488Z  WARN vtcode_core::instructions: Instruction file `./AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
 2026-03-01T05:56:57.564394Z DEBUG vtcode_core::tools::registry::declarations: Building and caching declarations mode=Minimal
 2026-03-01T05:56:57.565407Z DEBUG vtcode_core::tools::registry::declarations: Building minimal tool declarations from canonical schema mode="minimal"
 2026-03-01T05:56:57.567077Z  INFO vtcode_core::skills::discovery: Starting skill discovery in: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode
-2026-03-01T05:56:57.567106Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.github/skills
-2026-03-01T05:56:57.567116Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.agents/skills
-2026-03-01T05:56:57.567161Z  INFO vtcode_core::skills::discovery: Found 0 skills in /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/skills
-2026-03-01T05:56:57.567173Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.claude/skills
-2026-03-01T05:56:57.567181Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.pi/skills
-2026-03-01T05:56:57.567189Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.codex/skills
-2026-03-01T05:56:57.567197Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./skills
+2026-03-01T05:56:57.567106Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.github/skills
+2026-03-01T05:56:57.567116Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.agents/skills
+2026-03-01T05:56:57.567161Z  INFO vtcode_core::skills::discovery: Found 0 skills in ./.vtcode/skills
+2026-03-01T05:56:57.567173Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.claude/skills
+2026-03-01T05:56:57.567181Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.pi/skills
+2026-03-01T05:56:57.567189Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.codex/skills
+2026-03-01T05:56:57.567197Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ././skills
 2026-03-01T05:56:57.571185Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-creator from /Users/vinhnguyenxuan/.vtcode/skills/.system/skill-creator
 2026-03-01T05:56:57.571857Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-installer from /Users/vinhnguyenxuan/.vtcode/skills/.system/skill-installer
 2026-03-01T05:56:57.571914Z  INFO vtcode_core::skills::discovery: Found 2 skills in /Users/vinhnguyenxuan/.vtcode/skills
@@ -2046,11 +2046,11 @@ call errors
 2026-03-01T05:56:57.577162Z DEBUG vtcode_core::skills::manifest: File reference validation warnings (full list) warnings=["Invalid reference 'scripts/list-skills.py`': Referenced file does not exist: \"/Users/vinhnguyenxuan/.codex/skills/.system/skill-installer/scripts/list-skills.py`\""]
 2026-03-01T05:56:57.577170Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-installer from /Users/vinhnguyenxuan/.codex/skills/.system/skill-installer
 2026-03-01T05:56:57.577272Z  INFO vtcode_core::skills::discovery: Found 2 skills in /Users/vinhnguyenxuan/.codex/skills
-2026-03-01T05:56:57.577282Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./tools
-2026-03-01T05:56:57.577291Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./vendor/tools
+2026-03-01T05:56:57.577282Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: ././tools
+2026-03-01T05:56:57.577291Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: ././vendor/tools
 2026-03-01T05:56:57.577299Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/.vtcode/tools
 2026-03-01T05:56:57.577713Z  INFO vtcode_core::core::agent::state: History invariants are valid
-2026-03-01T05:56:57.579079Z  WARN vtcode_core::instructions: Instruction file `/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
+2026-03-01T05:56:57.579079Z  WARN vtcode_core::instructions: Instruction file `./AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
 2026-03-01T05:56:57.579107Z DEBUG vtcode_core::prompts::system: Selected system prompt mode mode="default" base_tokens_approx=1989
 2026-03-01T05:56:57.641365Z DEBUG vtcode_core::tools::registry::maintenance: Seeded default tool policies from registrations seeded=4
 2026-03-01T05:56:57.686809Z DEBUG vtcode_core::tools::registry::maintenance: Seeded default tool policies from registrations seeded=4
@@ -2064,11 +2064,11 @@ call errors
 2026-03-01T05:56:57.741967Z DEBUG vtcode_core::subagents::registry: Loaded builtin agent: planner
 2026-03-01T05:56:57.741980Z DEBUG vtcode_core::subagents::registry: Loaded builtin agent: coder
 2026-03-01T05:56:57.741993Z  INFO vtcode_core::subagents::registry: Loaded 7 subagents: ["code-reviewer", "debugger", "planner", "coder", "plan", "general", "explore"]
-2026-03-01T05:56:57.742090Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/context/tool_outputs
-2026-03-01T05:56:57.742123Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/history
-2026-03-01T05:56:57.742147Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/mcp/tools
-2026-03-01T05:56:57.742172Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/terminals
-2026-03-01T05:56:57.742194Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/skills
+2026-03-01T05:56:57.742090Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/context/tool_outputs
+2026-03-01T05:56:57.742123Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/history
+2026-03-01T05:56:57.742147Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/mcp/tools
+2026-03-01T05:56:57.742172Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/terminals
+2026-03-01T05:56:57.742194Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/skills
 2026-03-01T05:56:57.742220Z  INFO vtcode_core::context::dynamic_init: Initialized dynamic context discovery directories workspace=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode
 2026-03-01T05:57:00.719322Z  INFO vtcode_core::tools::registry::inventory: Internal tool routed via alias to LLM-visible parent alias=run_pty_cmd canonical=unified_exec count=1
 2026-03-01T05:57:00.726135Z DEBUG vtcode_core::tools::safety_gateway: SafetyGateway: checking and recording safety invocation_id=11c7f14a tool=unified_exec
@@ -2088,17 +2088,17 @@ call errors
 2026-03-01T05:57:06.808327Z  INFO vtcode_core::mcp::client: No active MCP connections to shutdown
 2026-03-01T06:12:01.245584Z  INFO vtcode_core::mcp::client: Initializing MCP client with 0 configured providers
 2026-03-01T06:12:01.246569Z  INFO vtcode_core::mcp::client: MCP client initialization complete. Active providers: 0
-2026-03-01T06:12:01.689496Z  WARN vtcode_core::instructions: Instruction file `/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
+2026-03-01T06:12:01.689496Z  WARN vtcode_core::instructions: Instruction file `./AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
 2026-03-01T06:12:02.268424Z DEBUG vtcode_core::tools::registry::declarations: Building and caching declarations mode=Minimal
 2026-03-01T06:12:02.269935Z DEBUG vtcode_core::tools::registry::declarations: Building minimal tool declarations from canonical schema mode="minimal"
 2026-03-01T06:12:02.272358Z  INFO vtcode_core::skills::discovery: Starting skill discovery in: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode
-2026-03-01T06:12:02.272511Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.github/skills
-2026-03-01T06:12:02.272538Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.agents/skills
-2026-03-01T06:12:02.272753Z  INFO vtcode_core::skills::discovery: Found 0 skills in /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/skills
-2026-03-01T06:12:02.272802Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.claude/skills
-2026-03-01T06:12:02.272817Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.pi/skills
-2026-03-01T06:12:02.272831Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.codex/skills
-2026-03-01T06:12:02.272845Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./skills
+2026-03-01T06:12:02.272511Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.github/skills
+2026-03-01T06:12:02.272538Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.agents/skills
+2026-03-01T06:12:02.272753Z  INFO vtcode_core::skills::discovery: Found 0 skills in ./.vtcode/skills
+2026-03-01T06:12:02.272802Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.claude/skills
+2026-03-01T06:12:02.272817Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.pi/skills
+2026-03-01T06:12:02.272831Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.codex/skills
+2026-03-01T06:12:02.272845Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ././skills
 2026-03-01T06:12:02.278951Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-creator from /Users/vinhnguyenxuan/.vtcode/skills/.system/skill-creator
 2026-03-01T06:12:02.280321Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-installer from /Users/vinhnguyenxuan/.vtcode/skills/.system/skill-installer
 2026-03-01T06:12:02.280476Z  INFO vtcode_core::skills::discovery: Found 2 skills in /Users/vinhnguyenxuan/.vtcode/skills
@@ -2118,13 +2118,13 @@ call errors
 2026-03-01T06:12:02.288172Z DEBUG vtcode_core::skills::manifest: File reference validation warnings (full list) warnings=["Invalid reference 'scripts/list-skills.py`': Referenced file does not exist: \"/Users/vinhnguyenxuan/.codex/skills/.system/skill-installer/scripts/list-skills.py`\""]
 2026-03-01T06:12:02.288176Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-installer from /Users/vinhnguyenxuan/.codex/skills/.system/skill-installer
 2026-03-01T06:12:02.288294Z  INFO vtcode_core::skills::discovery: Found 2 skills in /Users/vinhnguyenxuan/.codex/skills
-2026-03-01T06:12:02.288307Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./tools
-2026-03-01T06:12:02.288313Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./vendor/tools
+2026-03-01T06:12:02.288307Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: ././tools
+2026-03-01T06:12:02.288313Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: ././vendor/tools
 2026-03-01T06:12:02.288319Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/.vtcode/tools
 2026-03-01T06:12:02.288800Z  WARN vtcode_core::core::agent::state: Found 1 orphan outputs during recovery
 2026-03-01T06:12:02.288976Z  WARN vtcode_core::core::agent::state: Removing orphan output for call direct_run_pty_cmd_1
 2026-03-01T06:12:02.288997Z  INFO vtcode_core::core::agent::state: Removed 1 orphan outputs
-2026-03-01T06:12:02.290201Z  WARN vtcode_core::instructions: Instruction file `/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
+2026-03-01T06:12:02.290201Z  WARN vtcode_core::instructions: Instruction file `./AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
 2026-03-01T06:12:02.290223Z DEBUG vtcode_core::prompts::system: Selected system prompt mode mode="default" base_tokens_approx=1989
 2026-03-01T06:12:02.350690Z DEBUG vtcode_core::tools::registry::maintenance: Seeded default tool policies from registrations seeded=4
 2026-03-01T06:12:02.397005Z DEBUG vtcode_core::tools::registry::maintenance: Seeded default tool policies from registrations seeded=4
@@ -2138,26 +2138,26 @@ call errors
 2026-03-01T06:12:02.460552Z DEBUG vtcode_core::subagents::registry: Loaded builtin agent: planner
 2026-03-01T06:12:02.460562Z DEBUG vtcode_core::subagents::registry: Loaded builtin agent: coder
 2026-03-01T06:12:02.460576Z  INFO vtcode_core::subagents::registry: Loaded 7 subagents: ["plan", "planner", "explore", "debugger", "coder", "general", "code-reviewer"]
-2026-03-01T06:12:02.460679Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/context/tool_outputs
-2026-03-01T06:12:02.460692Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/history
-2026-03-01T06:12:02.460704Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/mcp/tools
-2026-03-01T06:12:02.460715Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/terminals
-2026-03-01T06:12:02.460728Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/skills
+2026-03-01T06:12:02.460679Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/context/tool_outputs
+2026-03-01T06:12:02.460692Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/history
+2026-03-01T06:12:02.460704Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/mcp/tools
+2026-03-01T06:12:02.460715Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/terminals
+2026-03-01T06:12:02.460728Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/skills
 2026-03-01T06:12:02.460745Z  INFO vtcode_core::context::dynamic_init: Initialized dynamic context discovery directories workspace=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode
 2026-03-01T06:12:13.839519Z  INFO vtcode_core::mcp::client: No active MCP connections to shutdown
 2026-03-01T06:12:17.122456Z  INFO vtcode_core::mcp::client: Initializing MCP client with 0 configured providers
 2026-03-01T06:12:17.123340Z  INFO vtcode_core::mcp::client: MCP client initialization complete. Active providers: 0
-2026-03-01T06:12:17.351729Z  WARN vtcode_core::instructions: Instruction file `/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
+2026-03-01T06:12:17.351729Z  WARN vtcode_core::instructions: Instruction file `./AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
 2026-03-01T06:12:17.357521Z DEBUG vtcode_core::tools::registry::declarations: Building and caching declarations mode=Minimal
 2026-03-01T06:12:17.358553Z DEBUG vtcode_core::tools::registry::declarations: Building minimal tool declarations from canonical schema mode="minimal"
 2026-03-01T06:12:17.359837Z  INFO vtcode_core::skills::discovery: Starting skill discovery in: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode
-2026-03-01T06:12:17.359961Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.github/skills
-2026-03-01T06:12:17.359969Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.agents/skills
-2026-03-01T06:12:17.360013Z  INFO vtcode_core::skills::discovery: Found 0 skills in /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/skills
-2026-03-01T06:12:17.360024Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.claude/skills
-2026-03-01T06:12:17.360031Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.pi/skills
-2026-03-01T06:12:17.360038Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.codex/skills
-2026-03-01T06:12:17.360044Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./skills
+2026-03-01T06:12:17.359961Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.github/skills
+2026-03-01T06:12:17.359969Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.agents/skills
+2026-03-01T06:12:17.360013Z  INFO vtcode_core::skills::discovery: Found 0 skills in ./.vtcode/skills
+2026-03-01T06:12:17.360024Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.claude/skills
+2026-03-01T06:12:17.360031Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.pi/skills
+2026-03-01T06:12:17.360038Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.codex/skills
+2026-03-01T06:12:17.360044Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ././skills
 2026-03-01T06:12:17.363820Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-creator from /Users/vinhnguyenxuan/.vtcode/skills/.system/skill-creator
 2026-03-01T06:12:17.364243Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-installer from /Users/vinhnguyenxuan/.vtcode/skills/.system/skill-installer
 2026-03-01T06:12:17.364291Z  INFO vtcode_core::skills::discovery: Found 2 skills in /Users/vinhnguyenxuan/.vtcode/skills
@@ -2177,11 +2177,11 @@ call errors
 2026-03-01T06:12:17.367927Z DEBUG vtcode_core::skills::manifest: File reference validation warnings (full list) warnings=["Invalid reference 'scripts/list-skills.py`': Referenced file does not exist: \"/Users/vinhnguyenxuan/.codex/skills/.system/skill-installer/scripts/list-skills.py`\""]
 2026-03-01T06:12:17.367934Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-installer from /Users/vinhnguyenxuan/.codex/skills/.system/skill-installer
 2026-03-01T06:12:17.368027Z  INFO vtcode_core::skills::discovery: Found 2 skills in /Users/vinhnguyenxuan/.codex/skills
-2026-03-01T06:12:17.368036Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./tools
-2026-03-01T06:12:17.368044Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./vendor/tools
+2026-03-01T06:12:17.368036Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: ././tools
+2026-03-01T06:12:17.368044Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: ././vendor/tools
 2026-03-01T06:12:17.368052Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/.vtcode/tools
 2026-03-01T06:12:17.368499Z  INFO vtcode_core::core::agent::state: History invariants are valid
-2026-03-01T06:12:17.369685Z  WARN vtcode_core::instructions: Instruction file `/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
+2026-03-01T06:12:17.369685Z  WARN vtcode_core::instructions: Instruction file `./AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
 2026-03-01T06:12:17.369862Z DEBUG vtcode_core::prompts::system: Selected system prompt mode mode="default" base_tokens_approx=1989
 2026-03-01T06:12:17.430766Z DEBUG vtcode_core::tools::registry::maintenance: Seeded default tool policies from registrations seeded=4
 2026-03-01T06:12:17.475709Z DEBUG vtcode_core::tools::registry::maintenance: Seeded default tool policies from registrations seeded=4
@@ -2195,11 +2195,11 @@ call errors
 2026-03-01T06:12:17.528330Z DEBUG vtcode_core::subagents::registry: Loaded builtin agent: planner
 2026-03-01T06:12:17.528340Z DEBUG vtcode_core::subagents::registry: Loaded builtin agent: coder
 2026-03-01T06:12:17.528352Z  INFO vtcode_core::subagents::registry: Loaded 7 subagents: ["debugger", "coder", "planner", "code-reviewer", "explore", "general", "plan"]
-2026-03-01T06:12:17.528434Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/context/tool_outputs
-2026-03-01T06:12:17.528449Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/history
-2026-03-01T06:12:17.528462Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/mcp/tools
-2026-03-01T06:12:17.528475Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/terminals
-2026-03-01T06:12:17.528486Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/skills
+2026-03-01T06:12:17.528434Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/context/tool_outputs
+2026-03-01T06:12:17.528449Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/history
+2026-03-01T06:12:17.528462Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/mcp/tools
+2026-03-01T06:12:17.528475Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/terminals
+2026-03-01T06:12:17.528486Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/skills
 2026-03-01T06:12:17.528504Z  INFO vtcode_core::context::dynamic_init: Initialized dynamic context discovery directories workspace=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode
 2026-03-01T06:12:20.798804Z DEBUG vtcode_core::tools::safety_gateway: SafetyGateway: checking and recording safety invocation_id=ccf7f2b7 tool=unified_exec
 2026-03-01T06:12:20.798936Z  INFO vtcode_core::tools::safety_gateway: SafetyGateway: requires approval invocation_id=ccf7f2b7 tool=unified_exec risk=medium
@@ -2219,17 +2219,17 @@ call errors
 2026-03-01T06:12:33.527725Z  INFO vtcode_core::mcp::client: No active MCP connections to shutdown
 2026-03-01T06:12:47.585695Z  INFO vtcode_core::mcp::client: Initializing MCP client with 0 configured providers
 2026-03-01T06:12:47.586570Z  INFO vtcode_core::mcp::client: MCP client initialization complete. Active providers: 0
-2026-03-01T06:12:47.776548Z  WARN vtcode_core::instructions: Instruction file `/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
+2026-03-01T06:12:47.776548Z  WARN vtcode_core::instructions: Instruction file `./AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
 2026-03-01T06:12:47.782050Z DEBUG vtcode_core::tools::registry::declarations: Building and caching declarations mode=Minimal
 2026-03-01T06:12:47.782771Z DEBUG vtcode_core::tools::registry::declarations: Building minimal tool declarations from canonical schema mode="minimal"
 2026-03-01T06:12:47.784070Z  INFO vtcode_core::skills::discovery: Starting skill discovery in: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode
-2026-03-01T06:12:47.784198Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.github/skills
-2026-03-01T06:12:47.784203Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.agents/skills
-2026-03-01T06:12:47.784230Z  INFO vtcode_core::skills::discovery: Found 0 skills in /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/skills
-2026-03-01T06:12:47.784241Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.claude/skills
-2026-03-01T06:12:47.784246Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.pi/skills
-2026-03-01T06:12:47.784250Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.codex/skills
-2026-03-01T06:12:47.784254Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./skills
+2026-03-01T06:12:47.784198Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.github/skills
+2026-03-01T06:12:47.784203Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.agents/skills
+2026-03-01T06:12:47.784230Z  INFO vtcode_core::skills::discovery: Found 0 skills in ./.vtcode/skills
+2026-03-01T06:12:47.784241Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.claude/skills
+2026-03-01T06:12:47.784246Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.pi/skills
+2026-03-01T06:12:47.784250Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.codex/skills
+2026-03-01T06:12:47.784254Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ././skills
 2026-03-01T06:12:47.788147Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-creator from /Users/vinhnguyenxuan/.vtcode/skills/.system/skill-creator
 2026-03-01T06:12:47.788552Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-installer from /Users/vinhnguyenxuan/.vtcode/skills/.system/skill-installer
 2026-03-01T06:12:47.788590Z  INFO vtcode_core::skills::discovery: Found 2 skills in /Users/vinhnguyenxuan/.vtcode/skills
@@ -2249,13 +2249,13 @@ call errors
 2026-03-01T06:12:47.791714Z DEBUG vtcode_core::skills::manifest: File reference validation warnings (full list) warnings=["Invalid reference 'scripts/list-skills.py`': Referenced file does not exist: \"/Users/vinhnguyenxuan/.codex/skills/.system/skill-installer/scripts/list-skills.py`\""]
 2026-03-01T06:12:47.791717Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-installer from /Users/vinhnguyenxuan/.codex/skills/.system/skill-installer
 2026-03-01T06:12:47.791792Z  INFO vtcode_core::skills::discovery: Found 2 skills in /Users/vinhnguyenxuan/.codex/skills
-2026-03-01T06:12:47.791801Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./tools
-2026-03-01T06:12:47.791806Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./vendor/tools
+2026-03-01T06:12:47.791801Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: ././tools
+2026-03-01T06:12:47.791806Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: ././vendor/tools
 2026-03-01T06:12:47.791810Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/.vtcode/tools
 2026-03-01T06:12:47.792478Z  WARN vtcode_core::core::agent::state: Found 1 orphan outputs during recovery
 2026-03-01T06:12:47.792657Z  WARN vtcode_core::core::agent::state: Removing orphan output for call tool_call_0
 2026-03-01T06:12:47.792674Z  INFO vtcode_core::core::agent::state: Removed 1 orphan outputs
-2026-03-01T06:12:47.793685Z  WARN vtcode_core::instructions: Instruction file `/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
+2026-03-01T06:12:47.793685Z  WARN vtcode_core::instructions: Instruction file `./AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
 2026-03-01T06:12:47.793701Z DEBUG vtcode_core::prompts::system: Selected system prompt mode mode="default" base_tokens_approx=1989
 2026-03-01T06:12:47.849945Z DEBUG vtcode_core::tools::registry::maintenance: Seeded default tool policies from registrations seeded=4
 2026-03-01T06:12:47.892574Z DEBUG vtcode_core::tools::registry::maintenance: Seeded default tool policies from registrations seeded=4
@@ -2269,26 +2269,26 @@ call errors
 2026-03-01T06:12:47.943716Z DEBUG vtcode_core::subagents::registry: Loaded builtin agent: planner
 2026-03-01T06:12:47.943725Z DEBUG vtcode_core::subagents::registry: Loaded builtin agent: coder
 2026-03-01T06:12:47.943733Z  INFO vtcode_core::subagents::registry: Loaded 7 subagents: ["plan", "debugger", "code-reviewer", "explore", "general", "planner", "coder"]
-2026-03-01T06:12:47.943816Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/context/tool_outputs
-2026-03-01T06:12:47.943829Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/history
-2026-03-01T06:12:47.943840Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/mcp/tools
-2026-03-01T06:12:47.943853Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/terminals
-2026-03-01T06:12:47.943863Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/skills
+2026-03-01T06:12:47.943816Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/context/tool_outputs
+2026-03-01T06:12:47.943829Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/history
+2026-03-01T06:12:47.943840Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/mcp/tools
+2026-03-01T06:12:47.943853Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/terminals
+2026-03-01T06:12:47.943863Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/skills
 2026-03-01T06:12:47.943880Z  INFO vtcode_core::context::dynamic_init: Initialized dynamic context discovery directories workspace=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode
 2026-03-01T06:15:07.001340Z  INFO vtcode_core::mcp::client: No active MCP connections to shutdown
 2026-03-01T06:15:09.136935Z  INFO vtcode_core::mcp::client: Initializing MCP client with 0 configured providers
 2026-03-01T06:15:09.137838Z  INFO vtcode_core::mcp::client: MCP client initialization complete. Active providers: 0
-2026-03-01T06:15:09.357222Z  WARN vtcode_core::instructions: Instruction file `/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
+2026-03-01T06:15:09.357222Z  WARN vtcode_core::instructions: Instruction file `./AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
 2026-03-01T06:15:09.363314Z DEBUG vtcode_core::tools::registry::declarations: Building and caching declarations mode=Minimal
 2026-03-01T06:15:09.363944Z DEBUG vtcode_core::tools::registry::declarations: Building minimal tool declarations from canonical schema mode="minimal"
 2026-03-01T06:15:09.365286Z  INFO vtcode_core::skills::discovery: Starting skill discovery in: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode
-2026-03-01T06:15:09.365307Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.github/skills
-2026-03-01T06:15:09.365313Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.agents/skills
-2026-03-01T06:15:09.365344Z  INFO vtcode_core::skills::discovery: Found 0 skills in /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/skills
-2026-03-01T06:15:09.365356Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.claude/skills
-2026-03-01T06:15:09.365361Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.pi/skills
-2026-03-01T06:15:09.365365Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.codex/skills
-2026-03-01T06:15:09.365369Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./skills
+2026-03-01T06:15:09.365307Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.github/skills
+2026-03-01T06:15:09.365313Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.agents/skills
+2026-03-01T06:15:09.365344Z  INFO vtcode_core::skills::discovery: Found 0 skills in ./.vtcode/skills
+2026-03-01T06:15:09.365356Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.claude/skills
+2026-03-01T06:15:09.365361Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.pi/skills
+2026-03-01T06:15:09.365365Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.codex/skills
+2026-03-01T06:15:09.365369Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ././skills
 2026-03-01T06:15:09.369349Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-creator from /Users/vinhnguyenxuan/.vtcode/skills/.system/skill-creator
 2026-03-01T06:15:09.369920Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-installer from /Users/vinhnguyenxuan/.vtcode/skills/.system/skill-installer
 2026-03-01T06:15:09.369970Z  INFO vtcode_core::skills::discovery: Found 2 skills in /Users/vinhnguyenxuan/.vtcode/skills
@@ -2308,13 +2308,13 @@ call errors
 2026-03-01T06:15:09.374326Z DEBUG vtcode_core::skills::manifest: File reference validation warnings (full list) warnings=["Invalid reference 'scripts/list-skills.py`': Referenced file does not exist: \"/Users/vinhnguyenxuan/.codex/skills/.system/skill-installer/scripts/list-skills.py`\""]
 2026-03-01T06:15:09.374330Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-installer from /Users/vinhnguyenxuan/.codex/skills/.system/skill-installer
 2026-03-01T06:15:09.374421Z  INFO vtcode_core::skills::discovery: Found 2 skills in /Users/vinhnguyenxuan/.codex/skills
-2026-03-01T06:15:09.374431Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./tools
-2026-03-01T06:15:09.374435Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./vendor/tools
+2026-03-01T06:15:09.374431Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: ././tools
+2026-03-01T06:15:09.374435Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: ././vendor/tools
 2026-03-01T06:15:09.374439Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/.vtcode/tools
 2026-03-01T06:15:09.375218Z  WARN vtcode_core::core::agent::state: Found 1 orphan outputs during recovery
 2026-03-01T06:15:09.375446Z  WARN vtcode_core::core::agent::state: Removing orphan output for call tool_call_0
 2026-03-01T06:15:09.375478Z  INFO vtcode_core::core::agent::state: Removed 1 orphan outputs
-2026-03-01T06:15:09.376486Z  WARN vtcode_core::instructions: Instruction file `/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
+2026-03-01T06:15:09.376486Z  WARN vtcode_core::instructions: Instruction file `./AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
 2026-03-01T06:15:09.376504Z DEBUG vtcode_core::prompts::system: Selected system prompt mode mode="default" base_tokens_approx=1989
 2026-03-01T06:15:09.430399Z DEBUG vtcode_core::tools::registry::maintenance: Seeded default tool policies from registrations seeded=4
 2026-03-01T06:15:09.474349Z DEBUG vtcode_core::tools::registry::maintenance: Seeded default tool policies from registrations seeded=4
@@ -2328,26 +2328,26 @@ call errors
 2026-03-01T06:15:09.525397Z DEBUG vtcode_core::subagents::registry: Loaded builtin agent: planner
 2026-03-01T06:15:09.525405Z DEBUG vtcode_core::subagents::registry: Loaded builtin agent: coder
 2026-03-01T06:15:09.525414Z  INFO vtcode_core::subagents::registry: Loaded 7 subagents: ["plan", "debugger", "code-reviewer", "planner", "coder", "general", "explore"]
-2026-03-01T06:15:09.525485Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/context/tool_outputs
-2026-03-01T06:15:09.525501Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/history
-2026-03-01T06:15:09.525513Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/mcp/tools
-2026-03-01T06:15:09.525524Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/terminals
-2026-03-01T06:15:09.525537Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/skills
+2026-03-01T06:15:09.525485Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/context/tool_outputs
+2026-03-01T06:15:09.525501Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/history
+2026-03-01T06:15:09.525513Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/mcp/tools
+2026-03-01T06:15:09.525524Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/terminals
+2026-03-01T06:15:09.525537Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/skills
 2026-03-01T06:15:09.525555Z  INFO vtcode_core::context::dynamic_init: Initialized dynamic context discovery directories workspace=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode
 2026-03-01T07:41:23.072024Z  INFO vtcode_core::mcp::client: No active MCP connections to shutdown
 2026-03-01T10:52:17.798798Z  INFO vtcode_core::mcp::client: Initializing MCP client with 0 configured providers
 2026-03-01T10:52:17.799544Z  INFO vtcode_core::mcp::client: MCP client initialization complete. Active providers: 0
-2026-03-01T10:52:18.864972Z  WARN vtcode_core::instructions: Instruction file `/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
+2026-03-01T10:52:18.864972Z  WARN vtcode_core::instructions: Instruction file `./AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
 2026-03-01T10:52:19.435856Z DEBUG vtcode_core::tools::registry::declarations: Building and caching declarations mode=Minimal
 2026-03-01T10:52:19.437882Z DEBUG vtcode_core::tools::registry::declarations: Building minimal tool declarations from canonical schema mode="minimal"
 2026-03-01T10:52:19.440876Z  INFO vtcode_core::skills::discovery: Starting skill discovery in: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode
-2026-03-01T10:52:19.441040Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.github/skills
-2026-03-01T10:52:19.441115Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.agents/skills
-2026-03-01T10:52:19.441349Z  INFO vtcode_core::skills::discovery: Found 0 skills in /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/skills
-2026-03-01T10:52:19.441392Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.claude/skills
-2026-03-01T10:52:19.441438Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.pi/skills
-2026-03-01T10:52:19.441463Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.codex/skills
-2026-03-01T10:52:19.441533Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./skills
+2026-03-01T10:52:19.441040Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.github/skills
+2026-03-01T10:52:19.441115Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.agents/skills
+2026-03-01T10:52:19.441349Z  INFO vtcode_core::skills::discovery: Found 0 skills in ./.vtcode/skills
+2026-03-01T10:52:19.441392Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.claude/skills
+2026-03-01T10:52:19.441438Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.pi/skills
+2026-03-01T10:52:19.441463Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ./.codex/skills
+2026-03-01T10:52:19.441533Z DEBUG vtcode_core::skills::discovery: Skill path does not exist: ././skills
 2026-03-01T10:52:19.446832Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-creator from /Users/vinhnguyenxuan/.vtcode/skills/.system/skill-creator
 2026-03-01T10:52:19.448449Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-installer from /Users/vinhnguyenxuan/.vtcode/skills/.system/skill-installer
 2026-03-01T10:52:19.448649Z  INFO vtcode_core::skills::discovery: Found 2 skills in /Users/vinhnguyenxuan/.vtcode/skills
@@ -2367,11 +2367,11 @@ call errors
 2026-03-01T10:52:19.460596Z DEBUG vtcode_core::skills::manifest: File reference validation warnings (full list) warnings=["Invalid reference 'scripts/list-skills.py`': Referenced file does not exist: \"/Users/vinhnguyenxuan/.codex/skills/.system/skill-installer/scripts/list-skills.py`\""]
 2026-03-01T10:52:19.460622Z  INFO vtcode_core::skills::discovery: Discovered skill: skill-installer from /Users/vinhnguyenxuan/.codex/skills/.system/skill-installer
 2026-03-01T10:52:19.460934Z  INFO vtcode_core::skills::discovery: Found 2 skills in /Users/vinhnguyenxuan/.codex/skills
-2026-03-01T10:52:19.460972Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./tools
-2026-03-01T10:52:19.460992Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/./vendor/tools
+2026-03-01T10:52:19.460972Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: ././tools
+2026-03-01T10:52:19.460992Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: ././vendor/tools
 2026-03-01T10:52:19.461013Z DEBUG vtcode_core::skills::discovery: Tool path does not exist: /Users/vinhnguyenxuan/.vtcode/tools
 2026-03-01T10:52:19.461677Z  INFO vtcode_core::core::agent::state: History invariants are valid
-2026-03-01T10:52:19.464149Z  WARN vtcode_core::instructions: Instruction file `/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
+2026-03-01T10:52:19.464149Z  WARN vtcode_core::instructions: Instruction file `./AGENTS.md` exceeds remaining budget (16384 bytes) - truncating.
 2026-03-01T10:52:19.464200Z DEBUG vtcode_core::prompts::system: Selected system prompt mode mode="default" base_tokens_approx=2032
 2026-03-01T10:52:19.552779Z DEBUG vtcode_core::tools::registry::maintenance: Seeded default tool policies from registrations seeded=4
 2026-03-01T10:52:19.609119Z DEBUG vtcode_core::tools::registry::maintenance: Seeded default tool policies from registrations seeded=4
@@ -2385,11 +2385,11 @@ call errors
 2026-03-01T10:52:19.668231Z DEBUG vtcode_core::subagents::registry: Loaded builtin agent: planner
 2026-03-01T10:52:19.668242Z DEBUG vtcode_core::subagents::registry: Loaded builtin agent: coder
 2026-03-01T10:52:19.668265Z  INFO vtcode_core::subagents::registry: Loaded 7 subagents: ["explore", "code-reviewer", "debugger", "planner", "plan", "coder", "general"]
-2026-03-01T10:52:19.668375Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/context/tool_outputs
-2026-03-01T10:52:19.668603Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/history
-2026-03-01T10:52:19.668631Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/mcp/tools
-2026-03-01T10:52:19.668649Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/terminals
-2026-03-01T10:52:19.668665Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/.vtcode/skills
+2026-03-01T10:52:19.668375Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/context/tool_outputs
+2026-03-01T10:52:19.668603Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/history
+2026-03-01T10:52:19.668631Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/mcp/tools
+2026-03-01T10:52:19.668649Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/terminals
+2026-03-01T10:52:19.668665Z DEBUG vtcode_core::context::dynamic_init: Created dynamic context directory path=./.vtcode/skills
 2026-03-01T10:52:19.668829Z  INFO vtcode_core::context::dynamic_init: Initialized dynamic context discovery directories workspace=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode
 2026-03-01T10:52:32.976139Z DEBUG vtcode_core::tools::safety_gateway: SafetyGateway: checking and recording safety invocation_id=5e4c7874 tool=unified_search
 2026-03-01T10:52:32.977342Z DEBUG vtcode_core::tools::registry::execution_facade: Validation classified tool as read-only tool=unified_search
@@ -2427,7 +2427,7 @@ call errors
 2026-03-01T10:53:19.510442Z TRACE tool_execution{tool=unified_file requested=unified_file session_id=session-1772362339480 task_id=}: vtcode_core::tools::registry::execution_facade: Tool execution context and routing finalized tool=unified_file requested=unified_file mcp_provider= mcp_tool= context={"session_id":"session-1772362339480","task_id":null}
 2026-03-01T10:53:19.510465Z DEBUG tool_execution{tool=unified_file requested=unified_file session_id=session-1772362339480 task_id=}: vtcode_core::tools::registry::execution_facade: Executing tool with effective timeout tool=unified_file category=standard timeout_ms=180000
 2026-03-01T10:53:19.510566Z DEBUG tool_execution{tool=unified_file requested=unified_file session_id=session-1772362339480 task_id=}: vtcode_core::tools::registry::executors: Captured unified_file payload diagnostics tool="unified_file" action="read" payload_bytes=41 patch_source_bytes=0 patch_base64=false session_id=session-1772362339480 task_id=
-2026-03-01T10:53:19.513070Z  INFO tool_execution{tool=unified_file requested=unified_file session_id=session-1772362339480 task_id=}: vtcode_core::tools::file_ops::read::logging: File chunking operation: {"operation":"read_file_chunked","file_path":"/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/docs/README.md","truncated":true,"total_lines":342,"timestamp":"2026-03-01T10:53:19.513031+00:00"}
+2026-03-01T10:53:19.513070Z  INFO tool_execution{tool=unified_file requested=unified_file session_id=session-1772362339480 task_id=}: vtcode_core::tools::file_ops::read::logging: File chunking operation: {"operation":"read_file_chunked","file_path":"./docs/README.md","truncated":true,"total_lines":342,"timestamp":"2026-03-01T10:53:19.513031+00:00"}
 2026-03-01T10:53:19.513577Z DEBUG tool_execution{tool=unified_file requested=unified_file session_id=session-1772362339480 task_id=}: vtcode_core::tools::registry::execution_facade: exit
 2026-03-01T10:53:19.513609Z DEBUG tool_execution{tool=unified_file requested=unified_file session_id=session-1772362339480 task_id=}: vtcode_core::tools::registry::execution_facade: close time.busy=3.32ms time.idle=64.1µs
 2026-03-01T10:53:24.955980Z  INFO vtcode_core::tools::registry::inventory: Internal tool routed via alias to LLM-visible parent alias=read_file canonical=unified_file count=3
@@ -2771,7 +2771,7 @@ Type "continue" to retry with a different strategy.
           "text": "@docs/README.md"
         },
         {
-          "text": "\n\n[file_reference_metadata]\n@docs/README.md=/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/docs/README.md\n"
+          "text": "\n\n[file_reference_metadata]\n@docs/README.md=./docs/README.md\n"
         }
       ],
       "tool_call_id": null
@@ -3751,198 +3751,3 @@ A collection of bugs found in Rust code through fuzz testing can be found in [th
 https://github.com/majiayu000/litellm-rs
 
 https://docs.litellm.ai/docs/
-
---
-
-# VT Code Fuzzing Adoption Plan (Harness-Only,
-
-Security Parsers)
-
-## Summary
-
-- Convert the Rust Fuzz Book guidance into a
-  concrete cargo-fuzz setup for VT Code without
-  changing CI.
-- Keep repo toolchain default on stable; run
-  fuzzing explicitly via cargo +nightly fuzz ....
-- First-wave targets focus on security parser
-  surfaces in vtcode-core: shell command parsing,
-  exec policy rule parsing, and workspace path
-  validation.
-- Deliver runnable harnesses, seed corpora, and
-  developer docs so fuzzing is immediately usable
-  locally.
-
-## Review Findings (Current State)
-
-- No existing fuzz harness (fuzz/ directory is
-  missing).
-- CI workflows are stable-only and contain no fuzz
-  jobs.
-- Security docs already mark fuzzing as a future
-  item (docs/security/SECURITY_MODEL.md).
-- Rust Fuzz Book content exists as a large pasted
-  block in docs/project/TODO.md, but it is not
-  operationalized for VT Code.
-
-## Scope Decisions Locked
-
-- Adoption level: Harness only (no CI changes).
-- Target focus: Security parsers.
-- Nightly policy: Keep stable default; use
-  explicit +nightly commands.
-
-## Planned Changes
-
-### 1. Add cargo-fuzz project scaffolding
-
-- Create /Users/vinhnguyenxuan/Developer/learn-by-
-  doing/vtcode/fuzz/Cargo.toml.
-- Configure dependency on vtcode-core via path
-  (../vtcode-core), plus libfuzzer-sys.
-- Keep this fuzz crate out of workspace member
-  list (no workspace mutation needed).
-
-### 2. Add initial fuzz targets (security parser
-
-wave)
-
-- Add /Users/vinhnguyenxuan/Developer/learn-by-
-  doing/vtcode/fuzz/fuzz_targets/shell_parser.rs.
-- Add /Users/vinhnguyenxuan/Developer/learn-by-
-  doing/vtcode/fuzz/fuzz_targets/
-  exec_policy_parser.rs.
-- Add /Users/vinhnguyenxuan/Developer/learn-by-
-  doing/vtcode/fuzz/fuzz_targets/
-  unified_path_validation.rs.
-
-### 3. Target behavior details (decision complete)
-
-- shell_parser target calls:
-    - parse_shell_commands
-    - parse_shell_commands_tree_sitter
-    - parse_bash_lc_commands with generated
-      command vectors
-- Oracle checks:
-    - no panic/crash
-    - if parser returns command vectors, each
-      token is non-empty after trim
-- exec_policy_parser target calls:
-    - PolicyParser::parse_simple
-    - PolicyParser::parse_toml
-    - PolicyParser::parse_json
-- Input routing:
-    - first byte chooses parser mode; rest is UTF-
-      8-lossy text
-- Oracle checks:
-    - no panic/crash
-    - successful parse output can be consumed by
-      Policy::add_prefix_rule path without panic
-- unified_path_validation target:
-    - creates temporary workspace
-    - feeds arbitrary path strings to
-      validate_and_resolve_path
-    - includes occasional symlink fixture setup
-      for escape attempts
-- Oracle checks:
-    - no panic/crash
-    - Ok(path) must always remain within canonical
-      workspace root
-
-### 4. Add starter corpora
-
-- Create seed inputs under:
-    - /Users/vinhnguyenxuan/Developer/learn-by-
-      doing/vtcode/fuzz/corpus/shell_parser/
-    - /Users/vinhnguyenxuan/Developer/learn-by-
-      doing/vtcode/fuzz/corpus/exec_policy_parser/
-    - /Users/vinhnguyenxuan/Developer/learn-by-
-      doing/vtcode/fuzz/corpus/
-      unified_path_validation/
-- Seed set includes:
-    - valid simple commands
-    - quoted/escaped shell expressions
-    - chained operators (&&, ||, ;, pipes)
-    - path traversal patterns and symlink-like
-      patterns
-    - mixed valid/invalid policy lines, TOML
-      fragments, JSON fragments
-
-### 5. Document local fuzz workflow
-
-- Add /Users/vinhnguyenxuan/Developer/learn-by-
-  doing/vtcode/docs/development/fuzzing.md with:
-    - prerequisites (cargo-fuzz, nightly install)
-    - exact commands using cargo +nightly fuzz
-    - run/repro workflow
-    - corpus triage guidance
-- Update /Users/vinhnguyenxuan/Developer/learn-by-
-  doing/vtcode/docs/development/testing.md to link
-  fuzzing doc and include short command
-  cheatsheet.
-- Update docs/security/SECURITY_MODEL.md fuzzing
-  section from “Future” wording to “Implemented
-  locally (harness-only)” and list covered
-  surfaces.
-
-### 6. Optional cleanup tied to this review
-
-- Replace the large Rust Fuzz Book paste in docs/
-  project/TODO.md with:
-    - concise action checklist
-    - canonical link to external source (rust-
-      fuzz/book)
-    - link to VT Code-local fuzzing doc
-- This keeps TODO actionable and avoids duplicated
-  long-form external docs.
-
-## Public API / Interface Changes
-
-- No runtime/public Rust API changes for VT Code
-  users.
-- New developer interface:
-    - cargo +nightly fuzz run <target>
-    - local docs and fuzz targets as contributor-
-      facing tooling.
-
-## Verification Plan
-
-### Build and tooling checks
-
-1. cargo +nightly fuzz list from repo root
-   succeeds.
-2. cargo +nightly fuzz build exec_policy_parser
-
-### Smoke fuzz runs
-
-1. cargo +nightly fuzz run shell_parser --
-   -max_total_time=30
-2. cargo +nightly fuzz run exec_policy_parser --
-   -max_total_time=30
-3. cargo +nightly fuzz run unified_path_validation
-   -- -max_total_time=30
-
-- Success criteria: no harness panic; artifacts
-  generated only when real crash found.
-
-### Regression guard (existing quality gate
-
-unchanged)
-
-1. cargo check
-2. cargo clippy --locked
-3. cargo nextest run --locked --profile ci
-
-- Success criteria: no regressions introduced by
-  fuzz harness additions.
-
-## Assumptions and Defaults
-
-- Assume first iteration should prioritize crash-
-  finding over semantic deep oracles.
-- Assume no CI changes in this phase by explicit
-  user choice.
-- Assume stable toolchain remains default for all
-  standard dev/CI workflows.
-- Assume fuzzing targets live at repo root fuzz/
-  and focus on vtcode-core only for wave 1.
