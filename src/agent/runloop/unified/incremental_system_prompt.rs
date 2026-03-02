@@ -17,6 +17,12 @@ fn append_plan_mode_notice(prompt: &mut String) {
     prompt.push('\n');
     prompt.push_str(vtcode_core::prompts::system::PLAN_MODE_EXIT_INSTRUCTION_LINE);
     prompt.push('\n');
+    prompt.push_str(vtcode_core::prompts::system::PLAN_MODE_PLAN_QUALITY_LINE);
+    prompt.push('\n');
+    prompt.push_str(vtcode_core::prompts::system::PLAN_MODE_NO_AUTO_EXIT_LINE);
+    prompt.push('\n');
+    prompt.push_str(vtcode_core::prompts::system::PLAN_MODE_TASK_TRACKER_LINE);
+    prompt.push('\n');
 }
 
 /// Cached system prompt that avoids redundant rebuilding

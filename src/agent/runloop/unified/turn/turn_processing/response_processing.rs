@@ -558,6 +558,75 @@ mod tests {
     }
 
     #[test]
+    fn process_llm_response_golden_transcript_requires_structured_plan_sections() {
+        let response = LLMResponse {
+            content: Some(
+                r#"Intro
+<proposed_plan>
+## Applied Patterns
+- Default Status Line Items Pattern applied to prompt-token reduction.
+
+## Purpose / Big Picture
+Reduce static prompt size by moving Plan Mode guidance to runtime injection.
+
+## Phases
+### Phase 1
+1. Extract Plan Mode guidance constants.
+2. Inject Plan Mode guidance only when Plan Mode is active.
+
+## Verification
+- `cargo check`
+- targeted Plan Mode tests
+
+## Decisions
+- Keep global prompt lean and append Plan Mode guardrails at runtime.
+</proposed_plan>
+Outro"#
+                    .to_string(),
+            ),
+            tool_calls: None,
+            model: "test".to_string(),
+            usage: None,
+            finish_reason: FinishReason::Stop,
+            reasoning: None,
+            reasoning_details: None,
+            tool_references: Vec::new(),
+            request_id: None,
+            organization_id: None,
+        };
+
+        let mut renderer = AnsiRenderer::stdout();
+        let result = process_llm_response(&response, &mut renderer, 0, true, false, true, None, None)
+            .expect("processing should succeed");
+
+        match result {
+            TurnProcessingResult::TextResponse {
+                text,
+                proposed_plan,
+                ..
+            } => {
+                let plan = proposed_plan.expect("expected extracted proposed plan");
+                for required_section in [
+                    "## Applied Patterns",
+                    "## Purpose / Big Picture",
+                    "## Phases",
+                    "## Verification",
+                    "## Decisions",
+                ] {
+                    assert!(
+                        plan.contains(required_section),
+                        "proposed_plan missing required section: {required_section}"
+                    );
+                }
+                assert!(!text.contains("<proposed_plan>"));
+                assert!(text.contains("Intro"));
+                assert!(text.contains("Outro"));
+            }
+            _ => panic!("Expected text response with extracted proposed plan"),
+        }
+    }
+
+    #[test]
     fn extract_interview_questions_strips_markdown_wrapping() {
         let text = "**How should we proceed?**";
         let questions = extract_interview_questions(text);

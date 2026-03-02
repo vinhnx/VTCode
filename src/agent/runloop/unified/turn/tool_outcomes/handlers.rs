@@ -444,6 +444,17 @@ fn preflight_validation_fallback(
     error: &anyhow::Error,
 ) -> Option<(String, Value)> {
     let error_text = error.to_string();
+    let is_request_user_input = tool_name == tool_names::REQUEST_USER_INPUT
+        || error_text.contains("tool 'request_user_input'")
+        || error_text.contains("for 'request_user_input'");
+    if is_request_user_input {
+        let normalized = request_user_input_preflight_fallback_args(args_val)?;
+        if normalized == *args_val {
+            return None;
+        }
+        return Some((tool_names::REQUEST_USER_INPUT.to_string(), normalized));
+    }
+
     let is_unified_search = tool_name == tool_names::UNIFIED_SEARCH
         || error_text.contains("tool 'unified_search'")
         || error_text.contains("for 'unified_search'");
@@ -451,12 +462,312 @@ fn preflight_validation_fallback(
         return None;
     }
 
-    let normalized = tool_intent::normalize_unified_search_args(args_val);
+    let mut normalized = tool_intent::normalize_unified_search_args(args_val);
+    if normalized.get("action").and_then(Value::as_str) == Some("grep")
+        && normalized.get("pattern").is_none()
+    {
+        let fallback_pattern = normalized
+            .get("keyword")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string)
+            .or_else(|| {
+                normalized
+                    .get("query")
+                    .and_then(Value::as_str)
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                    .map(str::to_string)
+            });
+
+        if let Some(pattern) = fallback_pattern
+            && let Some(obj) = normalized.as_object_mut()
+        {
+            obj.insert("pattern".to_string(), Value::String(pattern));
+        }
+    }
+
     if normalized == *args_val || normalized.get("action").is_none() {
         return None;
     }
 
     Some((tool_names::UNIFIED_SEARCH.to_string(), normalized))
+}
+
+fn find_ci_field<'a>(obj: &'a serde_json::Map<String, Value>, key: &str) -> Option<&'a Value> {
+    obj.get(key).or_else(|| {
+        obj.iter()
+            .find(|(name, _)| name.eq_ignore_ascii_case(key))
+            .map(|(_, value)| value)
+    })
+}
+
+fn truncate_chars(value: &str, max_chars: usize) -> String {
+    value.chars().take(max_chars).collect()
+}
+
+fn normalize_fallback_question_id(raw: Option<&str>, index: usize) -> String {
+    let source = raw.unwrap_or_default();
+    let mut out = String::new();
+    let mut last_was_underscore = false;
+    for ch in source.chars() {
+        if ch.is_ascii_alphanumeric() {
+            out.push(ch.to_ascii_lowercase());
+            last_was_underscore = false;
+        } else if !last_was_underscore {
+            out.push('_');
+            last_was_underscore = true;
+        }
+    }
+    while out.starts_with('_') {
+        out.remove(0);
+    }
+    while out.ends_with('_') {
+        out.pop();
+    }
+    if out.is_empty() {
+        return format!("question_{}", index + 1);
+    }
+    if !out
+        .chars()
+        .next()
+        .map(|ch| ch.is_ascii_lowercase())
+        .unwrap_or(false)
+    {
+        out.insert(0, 'q');
+    }
+    out
+}
+
+fn normalize_fallback_header(raw: Option<&str>, fallback: &str) -> String {
+    let candidate = raw
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or(fallback);
+    truncate_chars(candidate, 12)
+}
+
+fn normalize_fallback_option(value: &Value) -> Option<Value> {
+    match value {
+        Value::String(label) => {
+            let label = label.trim();
+            if label.is_empty() {
+                return None;
+            }
+            Some(json!({
+                "label": label,
+                "description": "Select this option."
+            }))
+        }
+        Value::Object(obj) => {
+            let label = ["label", "title", "id"]
+                .iter()
+                .find_map(|key| find_ci_field(obj, key).and_then(Value::as_str))
+                .map(str::trim)
+                .filter(|value| !value.is_empty())?;
+            let description = ["description", "subtitle", "details"]
+                .iter()
+                .find_map(|key| find_ci_field(obj, key).and_then(Value::as_str))
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .unwrap_or("Select this option.");
+            Some(json!({
+                "label": label,
+                "description": description
+            }))
+        }
+        _ => None,
+    }
+}
+
+fn normalize_fallback_options(value: &Value) -> Option<Vec<Value>> {
+    let Value::Array(raw_options) = value else {
+        return None;
+    };
+    let mut normalized = Vec::new();
+    let mut seen_labels = std::collections::BTreeSet::new();
+    for option in raw_options {
+        let Some(normalized_option) = normalize_fallback_option(option) else {
+            continue;
+        };
+        let label = normalized_option
+            .get("label")
+            .and_then(Value::as_str)
+            .map(|value| value.to_ascii_lowercase());
+        if let Some(label) = label {
+            if !seen_labels.insert(label) {
+                continue;
+            }
+        }
+        normalized.push(normalized_option);
+        if normalized.len() == 3 {
+            break;
+        }
+    }
+    if normalized.len() >= 2 {
+        Some(normalized)
+    } else {
+        None
+    }
+}
+
+fn normalize_request_user_input_question(
+    obj: &serde_json::Map<String, Value>,
+    index: usize,
+) -> Option<serde_json::Map<String, Value>> {
+    let question_text = ["question", "prompt", "text"]
+        .iter()
+        .find_map(|key| find_ci_field(obj, key).and_then(Value::as_str))
+        .map(str::trim)
+        .filter(|value| !value.is_empty())?;
+
+    let mut question = serde_json::Map::new();
+    let question_id = ["id", "question_id", "name"]
+        .iter()
+        .find_map(|key| find_ci_field(obj, key).and_then(Value::as_str));
+    question.insert(
+        "id".to_string(),
+        Value::String(normalize_fallback_question_id(question_id, index)),
+    );
+    let header_source = ["header", "title"]
+        .iter()
+        .find_map(|key| find_ci_field(obj, key).and_then(Value::as_str));
+    question.insert(
+        "header".to_string(),
+        Value::String(normalize_fallback_header(header_source, "Question")),
+    );
+    question.insert(
+        "question".to_string(),
+        Value::String(question_text.to_string()),
+    );
+
+    if let Some(options_value) =
+        find_ci_field(obj, "options").or_else(|| find_ci_field(obj, "items"))
+        && let Some(options) = normalize_fallback_options(options_value)
+    {
+        question.insert("options".to_string(), Value::Array(options));
+    }
+
+    Some(question)
+}
+
+fn request_user_input_preflight_fallback_args(args_val: &Value) -> Option<Value> {
+    let single_text_question = args_val
+        .as_str()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string);
+    if let Some(question) = single_text_question {
+        return Some(json!({
+            "questions": [{
+                "id": "question_1",
+                "header": "Question",
+                "question": question
+            }]
+        }));
+    }
+
+    let args_obj = args_val.as_object()?;
+
+    if let Some(questions_value) = find_ci_field(args_obj, "questions") {
+        let mut normalized_questions = Vec::new();
+        match questions_value {
+            Value::Array(entries) => {
+                for (index, entry) in entries.iter().enumerate() {
+                    if let Some(obj) = entry.as_object()
+                        && let Some(question) = normalize_request_user_input_question(obj, index)
+                    {
+                        normalized_questions.push(Value::Object(question));
+                    }
+                }
+            }
+            Value::Object(obj) => {
+                if let Some(question) = normalize_request_user_input_question(obj, 0) {
+                    normalized_questions.push(Value::Object(question));
+                }
+            }
+            _ => {}
+        }
+        if !normalized_questions.is_empty() {
+            return Some(json!({ "questions": normalized_questions }));
+        }
+    }
+
+    if let Some(tabs_value) = find_ci_field(args_obj, "tabs")
+        && let Some(first_tab) = tabs_value.as_array().and_then(|tabs| tabs.first())
+        && let Some(tab_obj) = first_tab.as_object()
+    {
+        let question_text = find_ci_field(args_obj, "question")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .or_else(|| {
+                find_ci_field(tab_obj, "question")
+                    .and_then(Value::as_str)
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+            })
+            .unwrap_or("What should we prioritize?");
+        let question_id = find_ci_field(tab_obj, "id")
+            .and_then(Value::as_str)
+            .or_else(|| find_ci_field(args_obj, "id").and_then(Value::as_str));
+        let header_source = find_ci_field(tab_obj, "title")
+            .and_then(Value::as_str)
+            .or_else(|| find_ci_field(args_obj, "header").and_then(Value::as_str));
+
+        let mut question = serde_json::Map::new();
+        question.insert(
+            "id".to_string(),
+            Value::String(normalize_fallback_question_id(question_id, 0)),
+        );
+        question.insert(
+            "header".to_string(),
+            Value::String(normalize_fallback_header(header_source, "Question")),
+        );
+        question.insert(
+            "question".to_string(),
+            Value::String(question_text.to_string()),
+        );
+        if let Some(items) = find_ci_field(tab_obj, "items")
+            && let Some(options) = normalize_fallback_options(items)
+        {
+            question.insert("options".to_string(), Value::Array(options));
+        }
+
+        return Some(json!({ "questions": [Value::Object(question)] }));
+    }
+
+    if let Some(question_text) = find_ci_field(args_obj, "question")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        let mut question = serde_json::Map::new();
+        let question_id = find_ci_field(args_obj, "id").and_then(Value::as_str);
+        let header_source = find_ci_field(args_obj, "header").and_then(Value::as_str);
+        question.insert(
+            "id".to_string(),
+            Value::String(normalize_fallback_question_id(question_id, 0)),
+        );
+        question.insert(
+            "header".to_string(),
+            Value::String(normalize_fallback_header(header_source, "Question")),
+        );
+        question.insert(
+            "question".to_string(),
+            Value::String(question_text.to_string()),
+        );
+        if let Some(options_value) = find_ci_field(args_obj, "options")
+            && let Some(options) = normalize_fallback_options(options_value)
+        {
+            question.insert("options".to_string(), Value::Array(options));
+        }
+
+        return Some(json!({ "questions": [Value::Object(question)] }));
+    }
+
+    None
 }
 
 fn try_recover_preflight_for_unified_search(
@@ -1689,6 +2000,86 @@ mod tests {
         assert_eq!(fallback.0, tool_names::UNIFIED_SEARCH);
         assert_eq!(fallback.1["action"], "grep");
         assert_eq!(fallback.1["pattern"], "LLMStreamEvent::");
+    }
+
+    #[test]
+    fn preflight_fallback_maps_keyword_to_pattern_for_grep() {
+        let error = anyhow!("Invalid arguments for tool 'unified_search': missing field `pattern`");
+        let args = json!({
+            "action": "grep",
+            "keyword": "system prompt",
+            "path": "src"
+        });
+        let fallback = preflight_validation_fallback(tool_names::UNIFIED_SEARCH, &args, &error)
+            .expect("fallback expected for grep missing pattern");
+        assert_eq!(fallback.0, tool_names::UNIFIED_SEARCH);
+        assert_eq!(fallback.1["action"], "grep");
+        assert_eq!(fallback.1["pattern"], "system prompt");
+    }
+
+    #[test]
+    fn preflight_fallback_normalizes_request_user_input_single_question_shape() {
+        let error = anyhow!(
+            "Invalid arguments for tool 'request_user_input': \"questions\" is a required property"
+        );
+        let args = json!({
+            "question": "Which direction should we take?",
+            "header": "Scope",
+            "options": [
+                {"label": "Minimal", "description": "Smallest viable change"},
+                {"label": "Full", "description": "Broader implementation"}
+            ]
+        });
+        let fallback = preflight_validation_fallback(tool_names::REQUEST_USER_INPUT, &args, &error)
+            .expect("fallback expected for request_user_input shorthand");
+        assert_eq!(fallback.0, tool_names::REQUEST_USER_INPUT);
+        assert_eq!(fallback.1["questions"][0]["id"], "question_1");
+        assert_eq!(fallback.1["questions"][0]["header"], "Scope");
+        assert_eq!(
+            fallback.1["questions"][0]["question"],
+            "Which direction should we take?"
+        );
+        assert_eq!(
+            fallback.1["questions"][0]["options"]
+                .as_array()
+                .map(|v| v.len()),
+            Some(2)
+        );
+    }
+
+    #[test]
+    fn preflight_fallback_normalizes_request_user_input_tabs_shape() {
+        let error = anyhow!(
+            "Invalid arguments for tool 'request_user_input': additional properties are not allowed"
+        );
+        let args = json!({
+            "question": "Which area should we prioritize first?",
+            "tabs": [
+                {
+                    "id": "priority",
+                    "title": "Priority",
+                    "items": [
+                        {"title": "Reliability", "subtitle": "Reduce failure modes"},
+                        {"title": "UX", "subtitle": "Improve user flow"}
+                    ]
+                }
+            ]
+        });
+        let fallback = preflight_validation_fallback(tool_names::REQUEST_USER_INPUT, &args, &error)
+            .expect("fallback expected for request_user_input tabbed payload");
+        assert_eq!(fallback.0, tool_names::REQUEST_USER_INPUT);
+        assert_eq!(fallback.1["questions"][0]["id"], "priority");
+        assert_eq!(fallback.1["questions"][0]["header"], "Priority");
+        assert_eq!(
+            fallback.1["questions"][0]["question"],
+            "Which area should we prioritize first?"
+        );
+        assert_eq!(
+            fallback.1["questions"][0]["options"]
+                .as_array()
+                .map(|v| v.len()),
+            Some(2)
+        );
     }
 
     #[test]
