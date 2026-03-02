@@ -7024,13 +7024,6 @@ interactive HTIL:
   2. No, stay in Plan mode     Continue planning with the model.
 ```
 
-===
-
-improve /Users/vinhnguyenxuan/.vtcode/sessions/vtcode-debug.log, currently it seems to be concatinate? it should be per session-id
-. it should be the same id as /Users/vinhnguyenxuan/.vtcode/sessions/session-vtcode-20260302T071207Z_608757-31640.json
-
-with matching messages log and debug log for easier debugging and traceability.
-
 ---
 
 auto suggest and higlight commands in chat input
@@ -7076,3 +7069,8 @@ pub const WEB_FETCH: &str = "web_fetch";
 pub const SEARCH: &str = "search";
 pub const FIND: &str = "find";
 /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-config/src/constants/tools.rs
+
+---
+
+fix git diff show red/green ansi color to not override to code blocks in markdown rendering.
+'/Users/vinhnguyenxuan/Desktop/Screenshot 2026-03-02 at 5.04.19 PM.png'

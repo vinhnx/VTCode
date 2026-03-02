@@ -13,6 +13,7 @@ use vtcode::startup::StartupContext;
 use vtcode_commons::color_policy::{self, ColorOutputPolicy, ColorOutputPolicySource};
 use vtcode_core::cli::args::{Cli, Commands};
 use vtcode_core::config::api_keys::load_dotenv;
+use vtcode_core::utils::session_archive::reserve_session_archive_identifier;
 use vtcode_core::utils::terminal_color_probe::probe_and_cache_terminal_palette_harmony;
 use vtcode_tui::panic_hook;
 
@@ -24,7 +25,8 @@ mod main_helpers;
 mod workspace_trust;
 
 use main_helpers::{
-    build_print_prompt, detect_available_ide, initialize_default_error_tracing, initialize_tracing,
+    build_command_debug_session_id, build_print_prompt, configure_runtime_debug_context,
+    detect_available_ide, initialize_default_error_tracing, initialize_tracing,
     initialize_tracing_from_config,
 };
 
@@ -73,6 +75,67 @@ fn resolve_runtime_color_policy(args: &Cli) -> ColorOutputPolicy {
                     source: ColorOutputPolicySource::DefaultAuto,
                 }
             }
+        }
+    }
+}
+
+async fn configure_debug_session_routing(
+    args: &Cli,
+    startup: &StartupContext,
+    print_mode: &Option<String>,
+    potential_prompt: &Option<String>,
+) {
+    let mode_hint = if startup.session_resume.is_some() {
+        "resume"
+    } else if print_mode.is_some() || potential_prompt.is_some() {
+        "ask"
+    } else if startup.automation_prompt.is_some() {
+        "auto"
+    } else {
+        match args.command {
+            Some(Commands::Chat) => "chat",
+            Some(Commands::ChatVerbose) => "chat-verbose",
+            Some(Commands::Ask { .. }) => "ask",
+            Some(Commands::Exec { .. }) => "exec",
+            Some(Commands::Benchmark { .. }) => "benchmark",
+            Some(Commands::Analyze { .. }) => "analyze",
+            Some(Commands::AgentClientProtocol { .. }) => "acp",
+            Some(_) => "command",
+            None => "chat",
+        }
+    };
+    let archive_backed_session = startup.session_resume.is_some()
+        || matches!(
+            args.command,
+            Some(Commands::Chat) | Some(Commands::ChatVerbose)
+        )
+        || (args.command.is_none()
+            && print_mode.is_none()
+            && potential_prompt.is_none()
+            && startup.automation_prompt.is_none());
+    let command_debug_session_id = build_command_debug_session_id(mode_hint);
+    if !archive_backed_session {
+        configure_runtime_debug_context(command_debug_session_id, None);
+        return;
+    }
+
+    let custom_suffix = if startup.session_resume.is_some() {
+        startup.custom_session_id.clone()
+    } else {
+        None
+    };
+    let workspace_label = startup
+        .workspace
+        .file_name()
+        .and_then(|component| component.to_str())
+        .map(|value| value.to_string())
+        .unwrap_or_else(|| "workspace".to_string());
+    match reserve_session_archive_identifier(&workspace_label, custom_suffix).await {
+        Ok(session_id) => {
+            configure_runtime_debug_context(session_id.clone(), Some(session_id));
+        }
+        Err(_) => {
+            configure_runtime_debug_context(command_debug_session_id, None);
         }
     }
 }
@@ -188,9 +251,6 @@ async fn run() -> Result<()> {
     // Probe terminal color semantics once and cache for theme-aware ANSI256 mapping.
     probe_and_cache_terminal_palette_harmony();
 
-    // Initialize tracing based on both RUST_LOG env var and config
-    let env_tracing_initialized = initialize_tracing(&args).await.unwrap_or_default();
-
     if args.print.is_some() && args.command.is_some() {
         anyhow::bail!(
             "The --print/-p flag cannot be combined with subcommands. Use print mode without a subcommand."
@@ -233,6 +293,11 @@ async fn run() -> Result<()> {
             .context("failed to initialize VT Code startup context")?;
         (startup, None)
     };
+
+    configure_debug_session_routing(&args, &startup, &print_mode, &potential_prompt).await;
+
+    // Initialize tracing based on both RUST_LOG env var and config
+    let env_tracing_initialized = initialize_tracing().await.unwrap_or_default();
 
     cli::set_workspace_env(&startup.workspace);
     cli::set_additional_dirs_env(&startup.additional_dirs);

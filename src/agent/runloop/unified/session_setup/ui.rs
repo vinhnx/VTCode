@@ -10,6 +10,7 @@ use crate::agent::runloop::unified::turn::workspace::load_workspace_files;
 use crate::agent::runloop::unified::{context_manager, palettes, state};
 use crate::hooks::lifecycle::{LifecycleHookEngine, SessionEndReason, SessionStartTrigger};
 use crate::ide_context::IdeContextBridge;
+use crate::main_helpers::{runtime_archive_session_id, runtime_debug_log_path};
 use anyhow::{Context, Result};
 use chrono::Local;
 use std::collections::HashMap;
@@ -621,6 +622,9 @@ async fn setup_session_archive(
     config: &CoreAgentConfig,
     provider_label: String,
 ) -> (Option<SessionArchive>, Option<String>) {
+    let reserved_archive_id = runtime_archive_session_id();
+    let debug_log_path = runtime_debug_log_path().map(|path| path.to_string_lossy().to_string());
+
     let mut session_archive_error: Option<String> = None;
     let session_archive = if let Some(resume) = resume_state {
         if resume.is_fork {
@@ -628,7 +632,23 @@ async fn setup_session_archive(
                 .identifier
                 .strip_prefix("forked-")
                 .map(|s| s.to_string());
-            match SessionArchive::fork(&resume.snapshot, custom_id).await {
+            let archive_metadata = SessionArchiveMetadata::new(
+                resume.snapshot.metadata.workspace_label.clone(),
+                resume.snapshot.metadata.workspace_path.clone(),
+                resume.snapshot.metadata.model.clone(),
+                resume.snapshot.metadata.provider.clone(),
+                resume.snapshot.metadata.theme.clone(),
+                resume.snapshot.metadata.reasoning_effort.clone(),
+            )
+            .with_loaded_skills(resume.snapshot.metadata.loaded_skills.clone())
+            .with_debug_log_path(debug_log_path.clone());
+            match create_archive_with_optional_identifier(
+                archive_metadata,
+                custom_id,
+                reserved_archive_id.as_deref(),
+            )
+            .await
+            {
                 Ok(archive) => Some(archive),
                 Err(err) => {
                     session_archive_error = Some(err.to_string());
@@ -643,8 +663,15 @@ async fn setup_session_archive(
                 provider_label,
                 config.theme.clone(),
                 config.reasoning_effort.as_str().to_string(),
-            );
-            match SessionArchive::new(archive_metadata, None).await {
+            )
+            .with_debug_log_path(debug_log_path.clone());
+            match create_archive_with_optional_identifier(
+                archive_metadata,
+                None,
+                reserved_archive_id.as_deref(),
+            )
+            .await
+            {
                 Ok(archive) => Some(archive),
                 Err(err) => {
                     session_archive_error = Some(err.to_string());
@@ -660,8 +687,15 @@ async fn setup_session_archive(
             provider_label,
             config.theme.clone(),
             config.reasoning_effort.as_str().to_string(),
-        );
-        match SessionArchive::new(archive_metadata, None).await {
+        )
+        .with_debug_log_path(debug_log_path);
+        match create_archive_with_optional_identifier(
+            archive_metadata,
+            None,
+            reserved_archive_id.as_deref(),
+        )
+        .await
+        {
             Ok(archive) => Some(archive),
             Err(err) => {
                 session_archive_error = Some(err.to_string());
@@ -671,6 +705,26 @@ async fn setup_session_archive(
     };
 
     (session_archive, session_archive_error)
+}
+
+async fn create_archive_with_optional_identifier(
+    metadata: SessionArchiveMetadata,
+    custom_suffix: Option<String>,
+    reserved_archive_id: Option<&str>,
+) -> Result<SessionArchive> {
+    if let Some(reserved_id) = reserved_archive_id {
+        match SessionArchive::new_with_identifier(metadata.clone(), reserved_id.to_string()).await {
+            Ok(archive) => return Ok(archive),
+            Err(err) => {
+                warn!(
+                    "failed to use reserved archive id '{}': {}; falling back to generated id",
+                    reserved_id, err
+                );
+            }
+        }
+    }
+
+    SessionArchive::new(metadata, custom_suffix).await
 }
 
 #[cfg(test)]

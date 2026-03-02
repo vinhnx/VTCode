@@ -90,6 +90,8 @@ pub struct SessionArchiveMetadata {
     pub provider: String,
     pub theme: String,
     pub reasoning_effort: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub debug_log_path: Option<String>,
     /// Names of skills loaded in this session
     #[serde(default)]
     pub loaded_skills: Vec<String>,
@@ -111,6 +113,7 @@ impl SessionArchiveMetadata {
             provider: provider.into(),
             theme: theme.into(),
             reasoning_effort: reasoning_effort.into(),
+            debug_log_path: None,
             loaded_skills: Vec::new(),
         }
     }
@@ -118,6 +121,12 @@ impl SessionArchiveMetadata {
     /// Set loaded skills for this session
     pub fn with_loaded_skills(mut self, skills: Vec<String>) -> Self {
         self.loaded_skills = skills;
+        self
+    }
+
+    /// Set debug log path associated with this archive.
+    pub fn with_debug_log_path(mut self, path: Option<String>) -> Self {
+        self.debug_log_path = path;
         self
     }
 }
@@ -314,7 +323,21 @@ fn generate_unique_archive_path(
     started_at: DateTime<Utc>,
     custom_suffix: Option<&str>,
 ) -> PathBuf {
-    let sanitized_label = sanitize_component(&metadata.workspace_label);
+    generate_unique_archive_path_for_label(
+        sessions_dir,
+        &metadata.workspace_label,
+        started_at,
+        custom_suffix,
+    )
+}
+
+fn generate_unique_archive_path_for_label(
+    sessions_dir: &Path,
+    workspace_label: &str,
+    started_at: DateTime<Utc>,
+    custom_suffix: Option<&str>,
+) -> PathBuf {
+    let sanitized_label = sanitize_component(workspace_label);
     let timestamp = started_at.format("%Y%m%dT%H%M%SZ").to_string();
 
     if let Some(suffix) = custom_suffix {
@@ -357,6 +380,41 @@ fn generate_unique_archive_path(
             attempt = attempt.wrapping_add(1);
         }
     }
+}
+
+fn session_identifier_from_archive_path(path: &Path) -> Result<String> {
+    path.file_stem()
+        .and_then(|stem| stem.to_str())
+        .map(|value| value.to_string())
+        .ok_or_else(|| anyhow::anyhow!("failed to derive session identifier from archive path"))
+}
+
+fn is_valid_session_identifier(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 256
+        && value
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_'))
+}
+
+/// Reserve a unique session archive identifier for the current process.
+///
+/// The returned identifier is the JSON file stem (without `.json`) and can be reused
+/// to create an archive and pair external artifacts (for example debug logs).
+pub async fn reserve_session_archive_identifier(
+    workspace_label: &str,
+    custom_suffix: Option<String>,
+) -> Result<String> {
+    let sessions_dir = resolve_sessions_dir().await?;
+    apply_session_retention_best_effort(&sessions_dir);
+    let started_at = Utc::now();
+    let path = generate_unique_archive_path_for_label(
+        &sessions_dir,
+        workspace_label,
+        started_at,
+        custom_suffix.as_deref(),
+    );
+    session_identifier_from_archive_path(&path)
 }
 
 fn progress_transcript_from_recent_messages(recent_messages: &[SessionMessage]) -> Vec<String> {
@@ -450,6 +508,19 @@ impl ProgressThrottle {
 }
 
 impl SessionArchive {
+    fn from_path(
+        path: PathBuf,
+        metadata: SessionArchiveMetadata,
+        started_at: DateTime<Utc>,
+    ) -> Self {
+        Self {
+            path,
+            metadata,
+            started_at,
+            progress_throttle: Arc::new(Mutex::new(ProgressThrottle::new())),
+        }
+    }
+
     pub async fn new(
         metadata: SessionArchiveMetadata,
         custom_suffix: Option<String>,
@@ -464,12 +535,32 @@ impl SessionArchive {
             custom_suffix.as_deref(),
         );
 
-        Ok(Self {
-            path,
-            metadata,
-            started_at,
-            progress_throttle: Arc::new(Mutex::new(ProgressThrottle::new())),
-        })
+        Ok(Self::from_path(path, metadata, started_at))
+    }
+
+    /// Create a session archive using an explicitly reserved session identifier.
+    pub async fn new_with_identifier(
+        metadata: SessionArchiveMetadata,
+        session_identifier: String,
+    ) -> Result<Self> {
+        let sessions_dir = resolve_sessions_dir().await?;
+        apply_session_retention_best_effort(&sessions_dir);
+        if !is_valid_session_identifier(&session_identifier) {
+            return Err(anyhow::anyhow!(
+                "Invalid session identifier '{}': only ASCII letters, digits, '-' and '_' are allowed",
+                session_identifier
+            ));
+        }
+
+        let path = sessions_dir.join(format!("{}.{}", session_identifier, SESSION_FILE_EXTENSION));
+        if path.exists() {
+            return Err(anyhow::anyhow!(
+                "Session archive identifier '{}' already exists",
+                session_identifier
+            ));
+        }
+
+        Ok(Self::from_path(path, metadata, Utc::now()))
     }
 
     pub fn finalize(
@@ -637,6 +728,7 @@ impl SessionArchive {
             provider: source_snapshot.metadata.provider.clone(),
             theme: source_snapshot.metadata.theme.clone(),
             reasoning_effort: source_snapshot.metadata.reasoning_effort.clone(),
+            debug_log_path: source_snapshot.metadata.debug_log_path.clone(),
             loaded_skills: source_snapshot.metadata.loaded_skills.clone(),
         };
 
@@ -647,12 +739,7 @@ impl SessionArchive {
             custom_suffix.as_deref(),
         );
 
-        Ok(Self {
-            path,
-            metadata: forked_metadata,
-            started_at,
-            progress_throttle: Arc::new(Mutex::new(ProgressThrottle::new())),
-        })
+        Ok(Self::from_path(path, forked_metadata, started_at))
     }
 }
 
@@ -1414,6 +1501,50 @@ mod tests {
         assert!(name.contains("20250925T101530Z_654321"));
         let pid_fragment = format!("{:05}", process::id());
         assert!(name.contains(&pid_fragment));
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn reserve_session_identifier_can_be_reused_for_archive() -> Result<()> {
+        let temp_dir = tempfile::tempdir().context("failed to create temp dir")?;
+        let _guard = EnvGuard::set(SESSION_DIR_ENV, temp_dir.path());
+
+        let session_id = reserve_session_archive_identifier("ExampleWorkspace", None).await?;
+        assert!(session_id.starts_with("session-exampleworkspace-"));
+
+        let metadata = SessionArchiveMetadata::new(
+            "ExampleWorkspace",
+            "/tmp/example",
+            "model-x",
+            "provider-y",
+            "dark",
+            "medium",
+        )
+        .with_debug_log_path(Some("/tmp/debug-session.log".to_string()));
+        let archive = SessionArchive::new_with_identifier(metadata.clone(), session_id.clone())
+            .await
+            .context("failed to create archive with reserved session id")?;
+        let path = archive.finalize(
+            vec!["line one".to_owned()],
+            1,
+            vec![],
+            vec![SessionMessage::new(MessageRole::User, "hello")],
+        )?;
+        let stored = fs::read_to_string(&path)
+            .with_context(|| format!("failed to read stored session: {}", path.display()))?;
+        let snapshot: SessionSnapshot =
+            serde_json::from_str(&stored).context("failed to deserialize stored snapshot")?;
+
+        let stem = path
+            .file_stem()
+            .and_then(|value| value.to_str())
+            .ok_or_else(|| anyhow!("missing file stem"))?;
+        assert_eq!(stem, session_id);
+        assert_eq!(
+            snapshot.metadata.debug_log_path,
+            Some("/tmp/debug-session.log".to_string())
+        );
 
         Ok(())
     }
