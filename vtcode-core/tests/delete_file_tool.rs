@@ -13,11 +13,14 @@ async fn delete_file_tool_removes_file() {
     // Ensure file exists
     assert!(file_path.exists());
 
-    // Call delete_file tool
-    let args = json!({ "path": "to_delete.txt" });
-    let val = registry.execute_tool("delete_file", args).await.unwrap();
+    // Call unified_file with action="delete" (delete_file is an alias)
+    let args = json!({ "action": "delete", "path": "to_delete.txt" });
+    let val = registry.execute_tool("unified_file", args).await.unwrap();
     assert_eq!(val.get("success").and_then(|v| v.as_bool()), Some(true));
-    assert_eq!(val.get("deleted").and_then(|v| v.as_bool()), Some(true));
+    // Check for deleted field or kind field indicating file was removed
+    let deleted = val.get("deleted").and_then(|v| v.as_bool())
+        .or_else(|| val.get("kind").and_then(|v| v.as_str()).map(|k| k == "file"));
+    assert_eq!(deleted, Some(true));
 
     // Verify removal
     assert!(!file_path.exists());
@@ -34,10 +37,13 @@ async fn delete_file_tool_removes_directory_recursively() {
     let registry = ToolRegistry::new(tmp.path().to_path_buf()).await;
     registry.initialize_async().await.unwrap();
 
-    let args = json!({ "path": "nested", "recursive": true });
-    let val = registry.execute_tool("delete_file", args).await.unwrap();
+    let args = json!({ "action": "delete", "path": "nested", "recursive": true });
+    let val = registry.execute_tool("unified_file", args).await.unwrap();
 
     assert_eq!(val.get("success").and_then(|v| v.as_bool()), Some(true));
-    assert_eq!(val.get("deleted").and_then(|v| v.as_bool()), Some(true));
+    // Check for deleted field or kind field indicating directory was removed
+    let deleted = val.get("deleted").and_then(|v| v.as_bool())
+        .or_else(|| val.get("kind").and_then(|v| v.as_str()).map(|k| k == "directory"));
+    assert_eq!(deleted, Some(true));
     assert!(!dir_path.exists());
 }

@@ -132,10 +132,14 @@ pub fn unified_file_action(args: &Value) -> Option<&str> {
 /// Returns the action string or None if no inference is possible.
 pub fn unified_exec_action(args: &Value) -> Option<&str> {
     args.get("action").and_then(|v| v.as_str()).or_else(|| {
+        // Check for standard command fields
         if args.get("command").is_some()
             || args.get("cmd").is_some()
             || args.get("raw_command").is_some()
         {
+            Some("run")
+        // Check for indexed command arguments (command.0, command.1, etc.)
+        } else if args.get("command.0").is_some() || args.get("command.1").is_some() {
             Some("run")
         } else if args.get("code").is_some() {
             Some("code")
