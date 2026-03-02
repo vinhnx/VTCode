@@ -124,6 +124,7 @@ cargo clippy --workspace --all-targets -- -D warnings && cargo fmt --check && ca
 **Performance**: Single codegen unit, strict Clippy, no `expect_used`/`unwrap_used`.
 
 **Pitfalls**:
+
 1. Don't assume paths — validate boundaries
 2. Don't skip quality gate
 3. Don't assume `RwLock` is faster — benchmark; `Mutex` often wins
@@ -134,7 +135,9 @@ cargo clippy --workspace --all-targets -- -D warnings && cargo fmt --check && ca
 
 - **Complete autonomously**: Resolve fully before yielding; no intermediate confirmations
 - **Root cause fixes**: Fix at the source, not surface-level
-- **Verify yourself**: Run `cargo check`, `cargo nextest`, `cargo clippy` after changes
+- **Verify yourself**: Run `cargo check`, `cargo nextest`, `cargo clippy` after changes.
+- **No scope creep**: Stick to the task; don't fix unrelated issues (mention in final message).
+- **Testing**: Prefer cargo nextest for speed. Add tests if none exist, but don't add if it requires significant scope increase. Also run cargo insta snapshots if applicable for UI tests.
 - **Safety gate**: No `unsafe` code (including tests) and enforce `cargo clippy --workspace --all-targets -- -D warnings`
 - **Precision over ambition**: Surgical changes respecting existing style
 - **Stay in scope**: Don't fix unrelated issues (mention in final message)
@@ -144,7 +147,7 @@ cargo clippy --workspace --all-targets -- -D warnings && cargo fmt --check && ca
 
 **Preambles** (before tool calls): 1-2 sentences showing progress. Group related actions. Skip for trivial reads.
 
-> "Explored repo structure; checking LLM provider factory."  
+> "Explored repo structure; checking LLM provider factory."
 > "Config loads. Patching tool registry and tests."
 
 **Progress updates** for longer tasks: "Finished tool trait analysis; implementing code_intelligence op."
