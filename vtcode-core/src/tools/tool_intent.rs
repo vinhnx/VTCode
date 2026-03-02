@@ -46,8 +46,9 @@ pub fn classify_tool_intent(tool_name: &str, args: &Value) -> ToolIntent {
             | tools::LOAD_SKILL_RESOURCE
             | tools::TASK_TRACKER
             | tools::PLAN_TASK_TRACKER
-            | "get_errors"
-            | "think" => false,
+            | tools::GET_ERRORS
+            | tools::SEARCH_TOOLS
+            | tools::THINK => false,
             tools::UNIFIED_FILE | tools::UNIFIED_EXEC => true,
             _ => true,
         }

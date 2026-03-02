@@ -192,6 +192,12 @@ pub mod request_response;
 pub mod unified_error;
 pub mod unified_executor;
 
+/// Internal helper IDs for apply_patch and tracker constructors.
+pub const CREATE_APPLY_PATCH_FREEFORM_TOOL_ID: &str = "create_apply_patch_freeform_tool";
+pub const CREATE_APPLY_PATCH_JSON_TOOL_ID: &str = "create_apply_patch_json_tool";
+pub const INTERCEPT_APPLY_PATCH_ID: &str = "intercept_apply_patch";
+pub const NEW_SHARED_TRACKER_ID: &str = "new_shared_tracker";
+
 // Re-export main types and traits for backward compatibility
 pub use async_pipeline::{
     AsyncToolPipeline, ExecutionContext, ExecutionPriority, ToolRequest as AsyncToolRequest,

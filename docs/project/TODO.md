@@ -2889,67 +2889,7 @@ auto suggest and higlight commands in chat input
 1. suggest: '/Users/vinhnguyenxuan/Desktop/Screenshot 2026-03-02 at 2.48.34 PM.png'
 2. highlight: '/Users/vinhnguyenxuan/Desktop/Screenshot 2026-03-02 at 2.49.11 PM.png'
 
-===
-
-make constants
-
-    create_apply_patch_freeform_tool,
-    create_apply_patch_json_tool,
-    intercept_apply_patch,
-    new_shared_tracker,
-
-/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-core/src/tools/mod.rs
-
-            | "get_errors"
-            | "search_tools"
-            | "think" => false,
-
-/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-core/src/tools/tool_intent.rs
-
-===
-
-remove
-/// Legacy provider-emitted alias for execute_code.
-pub const EXEC_CODE: &str = "exec_code";
-pub const EXEC_PTY_CMD: &str = "exec_pty_cmd";
-pub const EXEC: &str = "exec";
-pub const SHELL: &str = "shell";
-
-// ============================================================
-// LEGACY SEARCH ALIASES (use unified_search instead)
-// ============================================================
-pub const GREP_FILE: &str = "grep_file";
-pub const LIST_FILES: &str = "list_files";
-pub const SEARCH_TOOLS: &str = "search_tools";
-pub const SKILL: &str = "skill";
-pub const AGENT_INFO: &str = "agent_info";
-pub const WEB_FETCH: &str = "web_fetch";
-pub const SEARCH: &str = "search";
-pub const FIND: &str = "find";
-/Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-config/src/constants/tools.rs
-
 ---
 
 fix git diff show red/green ansi color to not override to code blocks in markdown rendering.
 '/Users/vinhnguyenxuan/Desktop/Screenshot 2026-03-02 at 5.04.19 PM.png'
-
-===
-
-make constants
-
-```
-unified_search
-think
-get_errors
-web_search
-fetch_url
-list
-grep
-fetch
-exec_pty_cmd
-shell
-grep_file
-list_files
-```
-
-tools id

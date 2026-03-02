@@ -9,6 +9,21 @@ pub const UNIFIED_EXEC: &str = "unified_exec";
 pub const UNIFIED_FILE: &str = "unified_file";
 
 // ============================================================
+// TOOL IDS
+// ============================================================
+pub const THINK: &str = "think";
+pub const SEARCH_TOOLS: &str = "search_tools";
+pub const WEB_SEARCH: &str = "web_search";
+pub const FETCH_URL: &str = "fetch_url";
+pub const LIST: &str = "list";
+pub const GREP: &str = "grep";
+pub const FETCH: &str = "fetch";
+pub const EXEC_PTY_CMD: &str = "exec_pty_cmd";
+pub const SHELL: &str = "shell";
+pub const GREP_FILE: &str = "grep_file";
+pub const LIST_FILES: &str = "list_files";
+
+// ============================================================
 // SKILL MANAGEMENT TOOLS (Progressive Disclosure)
 // ============================================================
 /// List all available skills (local and dormant system utilities)
