@@ -196,7 +196,10 @@ async fn test_bash_dual_output() {
     // Verify: LLM summary should mention command execution details
     let llm_lower = result.llm_content.to_lowercase();
     assert!(
-        llm_lower.contains("command") || llm_lower.contains("exit") || llm_lower.contains("output") || llm_lower.contains("success"),
+        llm_lower.contains("command")
+            || llm_lower.contains("exit")
+            || llm_lower.contains("output")
+            || llm_lower.contains("success"),
         "LLM summary should mention execution details: {}",
         result.llm_content
     );

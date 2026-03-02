@@ -427,7 +427,8 @@ impl FileOpsTool {
                 // Handle flat metadata structure (direct key-value pairs)
                 for (k, v) in obj {
                     match k.as_str() {
-                        "size_bytes" | "content_kind" | "encoding" | "mime_type" | "is_truncated" => {
+                        "size_bytes" | "content_kind" | "encoding" | "mime_type"
+                        | "is_truncated" => {
                             builder = builder.data(k.clone(), v.clone());
                         }
                         _ => {}

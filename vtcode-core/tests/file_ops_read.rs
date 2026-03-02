@@ -39,7 +39,9 @@ async fn read_file_returns_base64_for_images() {
         Some("image")
     );
     assert_eq!(
-        value["metadata"]["data"].get("mime_type").and_then(|v| v.as_str()),
+        value["metadata"]["data"]
+            .get("mime_type")
+            .and_then(|v| v.as_str()),
         Some("image/png")
     );
 
@@ -73,7 +75,9 @@ async fn read_file_reports_text_metadata() {
         Some("text")
     );
     assert_eq!(
-        value["metadata"]["data"].get("encoding").and_then(|v| v.as_str()),
+        value["metadata"]["data"]
+            .get("encoding")
+            .and_then(|v| v.as_str()),
         Some("utf8")
     );
 }

@@ -682,7 +682,7 @@ fn validate_git_reset(args: &[String], confirm: bool) -> Result<()> {
     let is_destructive = args
         .iter()
         .any(|a| a == "--hard" || a == "--merge" || a == "--keep");
-    
+
     if is_destructive && !confirm {
         return Err(anyhow!(
             "git reset with --hard, --merge, or --keep is potentially destructive. Set `confirm=true` to proceed."
@@ -696,7 +696,7 @@ fn validate_git_reset(args: &[String], confirm: bool) -> Result<()> {
     } else {
         vec![]
     };
-    
+
     for arg in args {
         if arg.starts_with('-') {
             let is_safe = safe_modes.iter().any(|m| arg.contains(m));

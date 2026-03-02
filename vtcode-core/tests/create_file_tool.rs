@@ -21,7 +21,9 @@ async fn create_file_succeeds_for_new_path() {
 
     assert_eq!(result.get("success").and_then(|v| v.as_bool()), Some(true));
     // Check for created field or successful write indication
-    let created = result.get("created").and_then(|v| v.as_bool())
+    let created = result
+        .get("created")
+        .and_then(|v| v.as_bool())
         .or_else(|| result.get("success").and_then(|v| v.as_bool()));
     assert_eq!(created, Some(true));
 

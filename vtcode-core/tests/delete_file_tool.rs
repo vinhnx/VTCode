@@ -18,8 +18,11 @@ async fn delete_file_tool_removes_file() {
     let val = registry.execute_tool("unified_file", args).await.unwrap();
     assert_eq!(val.get("success").and_then(|v| v.as_bool()), Some(true));
     // Check for deleted field or kind field indicating file was removed
-    let deleted = val.get("deleted").and_then(|v| v.as_bool())
-        .or_else(|| val.get("kind").and_then(|v| v.as_str()).map(|k| k == "file"));
+    let deleted = val.get("deleted").and_then(|v| v.as_bool()).or_else(|| {
+        val.get("kind")
+            .and_then(|v| v.as_str())
+            .map(|k| k == "file")
+    });
     assert_eq!(deleted, Some(true));
 
     // Verify removal
@@ -42,8 +45,11 @@ async fn delete_file_tool_removes_directory_recursively() {
 
     assert_eq!(val.get("success").and_then(|v| v.as_bool()), Some(true));
     // Check for deleted field or kind field indicating directory was removed
-    let deleted = val.get("deleted").and_then(|v| v.as_bool())
-        .or_else(|| val.get("kind").and_then(|v| v.as_str()).map(|k| k == "directory"));
+    let deleted = val.get("deleted").and_then(|v| v.as_bool()).or_else(|| {
+        val.get("kind")
+            .and_then(|v| v.as_str())
+            .map(|k| k == "directory")
+    });
     assert_eq!(deleted, Some(true));
     assert!(!dir_path.exists());
 }

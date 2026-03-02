@@ -151,7 +151,10 @@ async fn test_git_diff_blocked() {
 
     let result = validate_command(&command, &root, &working_dir, false).await;
     // git diff is allowed as it's a read-only operation
-    assert!(result.is_ok(), "git diff should be allowed as read-only operation");
+    assert!(
+        result.is_ok(),
+        "git diff should be allowed as read-only operation"
+    );
 }
 
 #[tokio::test]

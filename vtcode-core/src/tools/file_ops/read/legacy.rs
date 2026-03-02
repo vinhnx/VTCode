@@ -32,11 +32,7 @@ impl FileOpsTool {
                 "encoding": "base64",
                 "mime_type": image_data.mime_type,
             });
-            return Ok((
-                image_data.base64_data.clone(),
-                metadata,
-                false,
-            ));
+            return Ok((image_data.base64_data.clone(), metadata, false));
         }
 
         if let Some(encoding) = input.encoding.as_deref()
