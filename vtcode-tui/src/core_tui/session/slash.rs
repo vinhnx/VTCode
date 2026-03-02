@@ -1,23 +1,57 @@
 use ratatui::crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
+    buffer::Buffer,
     prelude::*,
-    widgets::{Block, Clear, List, ListItem, Paragraph, Wrap},
+    widgets::{Clear, Paragraph, Widget, Wrap},
 };
+use tui_widget_list::{ListBuilder, ListState as WidgetListState, ListView};
 
-use super::terminal_capabilities;
 use crate::config::constants::ui;
 use crate::ui::search::fuzzy_score;
 
 use super::super::types::InlineTextStyle;
 use super::{
-    Session,
-    modal::{ModalListLayout, compute_modal_area},
-    ratatui_color_from_ansi, ratatui_style_from_inline,
+    Session, ratatui_color_from_ansi, ratatui_style_from_inline,
     slash_palette::{self, SlashPaletteUpdate, command_prefix, command_range},
 };
 
-pub fn render_slash_palette(session: &mut Session, frame: &mut Frame<'_>, viewport: Rect) {
-    if viewport.height == 0 || viewport.width == 0 || session.modal.is_some() {
+const MAX_SLASH_LIST_ROWS: usize = 10;
+
+pub(crate) fn split_inline_slash_area(session: &mut Session, area: Rect) -> (Rect, Option<Rect>) {
+    if area.height == 0 || area.width == 0 || session.modal.is_some() || session.file_palette_active
+    {
+        session.slash_palette.clear_visible_rows();
+        return (area, None);
+    }
+
+    let suggestions = session.slash_palette.suggestions();
+    if suggestions.is_empty() {
+        session.slash_palette.clear_visible_rows();
+        return (area, None);
+    }
+
+    let instruction_rows = slash_palette_instructions(session)
+        .len()
+        .min(u16::MAX as usize) as u16;
+    let desired_list_rows = suggestions
+        .len()
+        .min(MAX_SLASH_LIST_ROWS)
+        .min(u16::MAX as usize) as u16;
+    let desired_height = instruction_rows.saturating_add(desired_list_rows.max(1));
+    let max_panel_height = area.height.saturating_sub(1);
+    if max_panel_height <= instruction_rows {
+        session.slash_palette.clear_visible_rows();
+        return (area, None);
+    }
+
+    let panel_height = desired_height.min(max_panel_height);
+    let chunks =
+        Layout::vertical([Constraint::Min(1), Constraint::Length(panel_height)]).split(area);
+    (chunks[0], Some(chunks[1]))
+}
+
+pub fn render_slash_palette(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
+    if area.height == 0 || area.width == 0 || session.modal.is_some() {
         session.slash_palette.clear_visible_rows();
         return;
     }
@@ -27,46 +61,110 @@ pub fn render_slash_palette(session: &mut Session, frame: &mut Frame<'_>, viewpo
         return;
     }
 
-    let instructions = slash_palette_instructions(session);
-    let area = compute_modal_area(viewport, instructions.len(), 0, 0, true);
-
     frame.render_widget(Clear, area);
-    let block = Block::bordered()
-        .title(session.suggestion_block_title())
-        .border_type(terminal_capabilities::get_border_type())
-        .style(session.styles.default_style())
-        .border_style(session.styles.border_style());
-    let inner = block.inner(area);
-    frame.render_widget(block, area);
-    if inner.height == 0 || inner.width == 0 {
+
+    let instructions = slash_palette_instructions(session);
+    let instruction_rows = instructions.len().min(u16::MAX as usize) as u16;
+    let layout = if instruction_rows == 0 {
+        Layout::vertical([Constraint::Min(1)]).split(area)
+    } else {
+        Layout::vertical([Constraint::Length(instruction_rows), Constraint::Min(1)]).split(area)
+    };
+
+    if layout.is_empty() {
         session.slash_palette.clear_visible_rows();
         return;
     }
 
-    let layout = ModalListLayout::new(inner, instructions.len());
-    if let Some(text_area) = layout.text_area {
+    let list_area = if instruction_rows == 0 {
+        layout[0]
+    } else {
+        let text_area = layout[0];
         let paragraph = Paragraph::new(instructions).wrap(Wrap { trim: true });
         frame.render_widget(paragraph, text_area);
+        if layout.len() < 2 {
+            session.slash_palette.clear_visible_rows();
+            return;
+        }
+        layout[1]
+    };
+
+    if list_area.height == 0 || list_area.width == 0 {
+        session.slash_palette.clear_visible_rows();
+        return;
     }
 
     session
         .slash_palette
-        .set_visible_rows(layout.list_area.height as usize);
+        .set_visible_rows((list_area.height as usize).min(MAX_SLASH_LIST_ROWS));
 
-    // Get all list items (scrollable via ListState)
-    let list_items = slash_list_items(session);
+    let rows = slash_rows(session);
+    let item_count = rows.len();
+    let default_style = session.styles.default_style();
+    let highlight_style = slash_highlight_style(session);
+    let name_style = slash_name_style(session);
+    let description_style = slash_description_style(session);
+    let selected_prefix = ui::MODAL_LIST_HIGHLIGHT_FULL.to_owned();
+    let unselected_prefix = " ".repeat(selected_prefix.chars().count());
 
-    let list = List::new(list_items)
-        .style(session.styles.default_style())
-        .highlight_style(slash_highlight_style(session))
-        .highlight_symbol(ui::MODAL_LIST_HIGHLIGHT_FULL)
-        .repeat_highlight_symbol(true);
-
-    frame.render_stateful_widget(
-        list,
-        layout.list_area,
-        session.slash_palette.list_state_mut(),
+    let mut widget_state = WidgetListState::default();
+    widget_state.select(
+        session
+            .slash_palette
+            .list_state_mut()
+            .selected()
+            .filter(|index| *index < item_count),
     );
+
+    let builder = ListBuilder::new(move |context| {
+        let row = &rows[context.index];
+        let line = Line::from(vec![
+            Span::styled(
+                if context.is_selected {
+                    selected_prefix.clone()
+                } else {
+                    unselected_prefix.clone()
+                },
+                default_style,
+            ),
+            Span::styled(format!("/{}", row.name), name_style),
+            Span::raw(" "),
+            Span::styled(row.description.clone(), description_style),
+        ]);
+        (
+            SlashListViewItem {
+                line,
+                style: if context.is_selected {
+                    highlight_style
+                } else {
+                    default_style
+                },
+            },
+            1,
+        )
+    });
+
+    let list = ListView::new(builder, item_count).infinite_scrolling(false);
+    frame.render_stateful_widget(list, list_area, &mut widget_state);
+
+    let list_state = session.slash_palette.list_state_mut();
+    list_state.select(widget_state.selected);
+    *list_state.offset_mut() = widget_state.scroll_offset_index();
+}
+
+#[derive(Clone)]
+struct SlashListViewItem {
+    line: Line<'static>,
+    style: Style,
+}
+
+impl Widget for SlashListViewItem {
+    fn render(self, area: Rect, buf: &mut Buffer) {
+        Paragraph::new(self.line)
+            .style(self.style)
+            .wrap(Wrap { trim: false })
+            .render(area, buf);
+    }
 }
 
 fn slash_palette_instructions(session: &Session) -> Vec<Line<'static>> {
@@ -418,22 +516,22 @@ fn should_submit_immediately_from_palette(session: &Session) -> bool {
     )
 }
 
-fn slash_list_items(session: &Session) -> Vec<ListItem<'static>> {
+#[derive(Clone)]
+struct SlashRow {
+    name: String,
+    description: String,
+}
+
+fn slash_rows(session: &Session) -> Vec<SlashRow> {
     session
         .slash_palette
         .suggestions()
         .iter()
         .map(|suggestion| match suggestion {
-            slash_palette::SlashPaletteSuggestion::Static(command) => {
-                ListItem::new(Line::from(vec![
-                    Span::styled(format!("/{}", command.name), slash_name_style(session)),
-                    Span::raw(" "),
-                    Span::styled(
-                        command.description.to_owned(),
-                        slash_description_style(session),
-                    ),
-                ]))
-            }
+            slash_palette::SlashPaletteSuggestion::Static(command) => SlashRow {
+                name: command.name.to_owned(),
+                description: command.description.to_owned(),
+            },
         })
         .collect()
 }

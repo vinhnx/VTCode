@@ -9,7 +9,7 @@ provider = "minimax"
 api_key_env = "MINIMAX_API_KEY"
 
 # Default model to use when no specific model is specified
-default_model = "MiniMax-M2"
+default_model = "MiniMax-M2.5"
 
 # Personal/local overrides should live in user config, not workspace config:
 #   ~/.vtcode/vtcode.toml
@@ -56,7 +56,7 @@ include_working_directory = true
 # "edit" - Full tool access for file modifications and command execution (default)
 # "plan" - Read-only mode that produces implementation plans without making changes
 # Toggle during session with Shift+Tab or /plan command
-default_editing_mode = "plan"
+default_editing_mode = "edit"
 require_plan_confirmation = true
 autonomous_mode = false
 credential_storage_mode = "keyring"

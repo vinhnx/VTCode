@@ -635,13 +635,6 @@ impl Session {
         style
     }
 
-    pub(super) fn suggestion_block_title(&self) -> Line<'static> {
-        Line::from(vec![Span::styled(
-            ui::SUGGESTION_BLOCK_TITLE.to_owned(),
-            self.section_title_style(),
-        )])
-    }
-
     fn strip_prefix<'a>(value: &'a str, prefix: &str) -> &'a str {
         value.strip_prefix(prefix).unwrap_or(value)
     }
