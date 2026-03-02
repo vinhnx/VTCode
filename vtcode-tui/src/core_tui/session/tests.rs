@@ -723,6 +723,57 @@ fn control_g_launches_editor_from_plan_confirmation_modal() {
 }
 
 #[test]
+fn plan_confirmation_modal_matches_four_way_gate_copy() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    let plan = crate::ui::tui::types::PlanContent::from_markdown(
+        "Test Plan".to_string(),
+        "## Implementation Plan\n1. Step",
+        Some(".vtcode/plans/test-plan.md".to_string()),
+    );
+    command::show_plan_confirmation_modal(&mut session, plan);
+
+    let modal = session
+        .modal
+        .as_ref()
+        .expect("plan confirmation modal should be present");
+    assert_eq!(modal.title, "Ready to code?");
+    assert_eq!(
+        modal.lines.first().map(String::as_str),
+        Some("A plan is ready to execute. Would you like to proceed?")
+    );
+
+    let list = modal
+        .list
+        .as_ref()
+        .expect("plan confirmation should include list options");
+    assert_eq!(list.items.len(), 4);
+
+    assert_eq!(list.items[0].title, "Yes, auto-accept edits (Recommended)");
+    assert_eq!(
+        list.items[0].subtitle.as_deref(),
+        Some("Keep context and execute with auto-approval.")
+    );
+
+    assert_eq!(list.items[1].title, "Yes, manually approve edits");
+    assert_eq!(
+        list.items[1].subtitle.as_deref(),
+        Some("Keep context and confirm each edit before applying.")
+    );
+
+    assert_eq!(list.items[2].title, "No, stay in Plan mode");
+    assert_eq!(
+        list.items[2].subtitle.as_deref(),
+        Some("Keep planning without executing yet.")
+    );
+
+    assert_eq!(list.items[3].title, "Type feedback to revise the plan");
+    assert_eq!(
+        list.items[3].subtitle.as_deref(),
+        Some("Return to plan mode and refine the plan.")
+    );
+}
+
+#[test]
 fn control_super_e_does_not_launch_editor() {
     let text = "hello world";
     let mut session = session_with_input(text, 0);

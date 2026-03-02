@@ -202,13 +202,6 @@ async fn plan_confirmation_events_map_to_expected_actions() {
         )
         .await
         .expect("process auto");
-    let clear_context_auto = context
-        .process_event(
-            InlineEvent::PlanConfirmation(PlanConfirmationResult::ClearContextAutoAccept),
-            &mut queue,
-        )
-        .await
-        .expect("process clear context auto");
     let edit = context
         .process_event(
             InlineEvent::PlanConfirmation(PlanConfirmationResult::EditPlan),
@@ -226,24 +219,11 @@ async fn plan_confirmation_events_map_to_expected_actions() {
 
     assert!(matches!(
         execute,
-        InlineLoopAction::PlanApproved {
-            auto_accept: false,
-            clear_context: false
-        }
+        InlineLoopAction::PlanApproved { auto_accept: false }
     ));
     assert!(matches!(
         auto,
-        InlineLoopAction::PlanApproved {
-            auto_accept: true,
-            clear_context: false
-        }
-    ));
-    assert!(matches!(
-        clear_context_auto,
-        InlineLoopAction::PlanApproved {
-            auto_accept: true,
-            clear_context: true
-        }
+        InlineLoopAction::PlanApproved { auto_accept: true }
     ));
     assert!(matches!(edit, InlineLoopAction::PlanEditRequested));
     assert!(matches!(cancel, InlineLoopAction::Continue));

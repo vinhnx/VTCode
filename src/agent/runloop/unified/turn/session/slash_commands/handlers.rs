@@ -16,10 +16,10 @@ use crate::hooks::lifecycle::SessionEndReason;
 use super::{SlashCommandContext, SlashCommandControl};
 use crate::agent::runloop::unified::palettes::{ActivePalette, show_config_palette};
 use crate::agent::runloop::unified::turn::config_modal::load_config_modal_content;
-#[path = "apps.rs"]
-mod apps;
 #[path = "activation.rs"]
 mod activation;
+#[path = "apps.rs"]
+mod apps;
 #[path = "diagnostics.rs"]
 mod diagnostics;
 #[path = "mcp.rs"]

@@ -659,10 +659,18 @@ mod tests {
         let args = json!({"path": "src/"});
 
         // First two calls should not block
-        assert!(executor.should_block(tools::UNIFIED_SEARCH, &args).is_none());
+        assert!(
+            executor
+                .should_block(tools::UNIFIED_SEARCH, &args)
+                .is_none()
+        );
         executor.record_tool_call(tools::UNIFIED_SEARCH, &args);
 
-        assert!(executor.should_block(tools::UNIFIED_SEARCH, &args).is_none());
+        assert!(
+            executor
+                .should_block(tools::UNIFIED_SEARCH, &args)
+                .is_none()
+        );
         executor.record_tool_call(tools::UNIFIED_SEARCH, &args);
 
         // Third call should trigger warning
@@ -684,10 +692,18 @@ mod tests {
         executor.record_tool_call(tools::UNIFIED_SEARCH, &args);
         executor.record_tool_call(tools::UNIFIED_SEARCH, &args);
         executor.record_tool_call(tools::UNIFIED_SEARCH, &args);
-        assert!(executor.should_block(tools::UNIFIED_SEARCH, &args).is_some());
+        assert!(
+            executor
+                .should_block(tools::UNIFIED_SEARCH, &args)
+                .is_some()
+        );
 
         executor.reset_turn_loop_detection();
-        assert!(executor.should_block(tools::UNIFIED_SEARCH, &args).is_none());
+        assert!(
+            executor
+                .should_block(tools::UNIFIED_SEARCH, &args)
+                .is_none()
+        );
     }
 
     #[test]

@@ -458,20 +458,22 @@ fn preflight_validation_fallback(
     let is_unified_search = tool_name == tool_names::UNIFIED_SEARCH
         || error_text.contains("tool 'unified_search'")
         || error_text.contains("for 'unified_search'");
-    if !is_unified_search {
-        return None;
-    }
-
-    let mut normalized = tool_intent::normalize_unified_search_args(args_val);
-    if normalized.get("action").and_then(Value::as_str) == Some("grep")
-        && normalized.get("pattern").is_none()
-    {
-        let fallback_pattern = normalized
-            .get("keyword")
+    if is_unified_search {
+        let mut normalized = tool_intent::normalize_unified_search_args(args_val);
+        let inferred_pattern = normalized
+            .get("pattern")
             .and_then(Value::as_str)
             .map(str::trim)
             .filter(|value| !value.is_empty())
             .map(str::to_string)
+            .or_else(|| {
+                normalized
+                    .get("keyword")
+                    .and_then(Value::as_str)
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                    .map(str::to_string)
+            })
             .or_else(|| {
                 normalized
                     .get("query")
@@ -481,18 +483,87 @@ fn preflight_validation_fallback(
                     .map(str::to_string)
             });
 
-        if let Some(pattern) = fallback_pattern
-            && let Some(obj) = normalized.as_object_mut()
-        {
-            obj.insert("pattern".to_string(), Value::String(pattern));
+        if let Some(obj) = normalized.as_object_mut() {
+            let action = obj
+                .get("action")
+                .and_then(Value::as_str)
+                .unwrap_or_default();
+            if action.eq_ignore_ascii_case("read") {
+                if inferred_pattern.is_some() {
+                    obj.insert("action".to_string(), Value::String("grep".to_string()));
+                } else {
+                    obj.insert("action".to_string(), Value::String("list".to_string()));
+                }
+            }
+
+            if obj.get("action").and_then(Value::as_str) == Some("grep")
+                && obj.get("pattern").is_none()
+                && let Some(pattern) = inferred_pattern
+            {
+                obj.insert("pattern".to_string(), Value::String(pattern));
+            }
+        }
+
+        if normalized != *args_val && normalized.get("action").is_some() {
+            return Some((tool_names::UNIFIED_SEARCH.to_string(), normalized));
         }
     }
 
-    if normalized == *args_val || normalized.get("action").is_none() {
+    let is_unified_file = tool_name == tool_names::UNIFIED_FILE
+        || error_text.contains("tool 'unified_file'")
+        || error_text.contains("for 'unified_file'");
+    if !is_unified_file {
         return None;
     }
 
-    Some((tool_names::UNIFIED_SEARCH.to_string(), normalized))
+    remap_unified_file_command_args_to_unified_exec(args_val)
+        .map(|args| (tool_names::UNIFIED_EXEC.to_string(), args))
+}
+
+fn remap_unified_file_command_args_to_unified_exec(args: &Value) -> Option<Value> {
+    let obj = args.as_object()?;
+    let command = obj
+        .get("command")
+        .or_else(|| obj.get("cmd"))
+        .or_else(|| obj.get("raw_command"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())?;
+    let action = obj.get("action").and_then(Value::as_str).map(str::trim);
+    if let Some(action) = action
+        && !action.is_empty()
+        && !action.eq_ignore_ascii_case("run")
+        && !action.eq_ignore_ascii_case("exec")
+        && !action.eq_ignore_ascii_case("execute")
+        && !action.eq_ignore_ascii_case("shell")
+    {
+        return None;
+    }
+
+    let mut mapped = serde_json::Map::new();
+    mapped.insert("action".to_string(), Value::String("run".to_string()));
+    mapped.insert("command".to_string(), Value::String(command.to_string()));
+
+    for key in [
+        "args",
+        "cwd",
+        "workdir",
+        "env",
+        "timeout_ms",
+        "yield_time_ms",
+        "login",
+        "shell",
+        "tty",
+        "sandbox_permissions",
+        "justification",
+        "prefix_rule",
+    ] {
+        if let Some(value) = obj.get(key) {
+            mapped.insert(key.to_string(), value.clone());
+        }
+    }
+
+    Some(Value::Object(mapped))
 }
 
 fn find_ci_field<'a>(obj: &'a serde_json::Map<String, Value>, key: &str) -> Option<&'a Value> {
@@ -770,28 +841,34 @@ fn request_user_input_preflight_fallback_args(args_val: &Value) -> Option<Value>
     None
 }
 
-fn try_recover_preflight_for_unified_search(
+fn try_recover_preflight_with_fallback(
     ctx: &mut TurnProcessingContext<'_>,
     tool_name: &str,
     args_val: &Value,
     error: &anyhow::Error,
-) -> Option<(vtcode_core::tools::registry::ToolPreflightOutcome, Value)> {
-    let (_, recovered_args) = preflight_validation_fallback(tool_name, args_val, error)?;
+) -> Option<(
+    String,
+    vtcode_core::tools::registry::ToolPreflightOutcome,
+    Value,
+)> {
+    let (recovered_tool_name, recovered_args) =
+        preflight_validation_fallback(tool_name, args_val, error)?;
     let preflight_result = {
         let parts = ctx.parts_mut();
         parts
             .tool
             .tool_registry
-            .preflight_validate_call(tool_name, &recovered_args)
+            .preflight_validate_call(&recovered_tool_name, &recovered_args)
     };
     match preflight_result {
-        Ok(preflight) => Some((preflight, recovered_args)),
+        Ok(preflight) => Some((recovered_tool_name, preflight, recovered_args)),
         Err(recovery_err) => {
             tracing::debug!(
                 tool = tool_name,
                 original_error = %error,
+                recovered_tool = %recovered_tool_name,
                 recovery_error = %recovery_err,
-                "Unified search preflight recovery failed"
+                "Preflight recovery fallback failed"
             );
             None
         }
@@ -1276,18 +1353,19 @@ pub(crate) async fn validate_tool_call<'a>(
         return Ok(ValidationResult::Blocked);
     }
 
-    let (preflight, preflight_args) = match ctx
+    let (mut preflight, mut preflight_args) = match ctx
         .tool_registry
         .preflight_validate_call(tool_name, args_val)
     {
         Ok(preflight) => (preflight, args_val.clone()),
         Err(err) => {
-            if let Some((recovered_preflight, recovered_args)) =
-                try_recover_preflight_for_unified_search(ctx, tool_name, args_val, &err)
+            if let Some((recovered_tool_name, recovered_preflight, recovered_args)) =
+                try_recover_preflight_with_fallback(ctx, tool_name, args_val, &err)
             {
                 tracing::info!(
                     tool = tool_name,
-                    "Recovered preflight for unified_search by normalizing arguments"
+                    recovered_tool = %recovered_tool_name,
+                    "Recovered tool preflight by applying fallback arguments"
                 );
                 (recovered_preflight, recovered_args)
             } else {
@@ -1312,6 +1390,25 @@ pub(crate) async fn validate_tool_call<'a>(
             }
         }
     };
+
+    if preflight.normalized_tool_name == tool_names::UNIFIED_FILE
+        && let Some(remapped_args) =
+            remap_unified_file_command_args_to_unified_exec(&preflight_args)
+    {
+        let remapped_preflight = ctx
+            .tool_registry
+            .preflight_validate_call(tool_names::UNIFIED_EXEC, &remapped_args);
+        if let Ok(mapped) = remapped_preflight {
+            tracing::info!(
+                original_tool = tool_name,
+                remapped_tool = tool_names::UNIFIED_EXEC,
+                "Remapped unified_file command payload to unified_exec run action"
+            );
+            preflight = mapped;
+            preflight_args = remapped_args;
+        }
+    }
+
     let canonical_tool_name = preflight.normalized_tool_name.clone();
     let effective_args = {
         let parts = ctx.parts_mut();
@@ -2014,6 +2111,36 @@ mod tests {
         assert_eq!(fallback.0, tool_names::UNIFIED_SEARCH);
         assert_eq!(fallback.1["action"], "grep");
         assert_eq!(fallback.1["pattern"], "system prompt");
+    }
+
+    #[test]
+    fn preflight_fallback_remaps_unified_search_read_action() {
+        let error = anyhow!("Tool execution failed: Invalid action: read");
+        let args = json!({
+            "action": "read",
+            "query": "retry",
+            "path": "src"
+        });
+        let fallback = preflight_validation_fallback(tool_names::UNIFIED_SEARCH, &args, &error)
+            .expect("fallback expected for invalid read action");
+        assert_eq!(fallback.0, tool_names::UNIFIED_SEARCH);
+        assert_eq!(fallback.1["action"], "grep");
+        assert_eq!(fallback.1["pattern"], "retry");
+    }
+
+    #[test]
+    fn preflight_fallback_remaps_unified_file_command_payload_to_unified_exec() {
+        let error = anyhow!("Missing action in unified_file");
+        let args = json!({
+            "command": "git status --short",
+            "cwd": "."
+        });
+        let fallback = preflight_validation_fallback(tool_names::UNIFIED_FILE, &args, &error)
+            .expect("fallback expected for unified_file command payload");
+        assert_eq!(fallback.0, tool_names::UNIFIED_EXEC);
+        assert_eq!(fallback.1["action"], "run");
+        assert_eq!(fallback.1["command"], "git status --short");
+        assert_eq!(fallback.1["cwd"], ".");
     }
 
     #[test]

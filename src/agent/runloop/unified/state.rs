@@ -50,8 +50,6 @@ pub(crate) struct SessionStats {
     turn_stalled: bool,
     /// Reason associated with the last stalled turn, when available
     turn_stall_reason: Option<String>,
-    /// Whether context clear was requested after plan approval
-    pending_context_clear: bool,
     /// Provider-scoped previous response ID for Responses-style server-side chaining.
     previous_response_id: Option<String>,
     previous_response_provider: Option<String>,
@@ -61,10 +59,7 @@ pub(crate) struct SessionStats {
 impl SessionStats {
     pub(crate) fn record_tool(&mut self, name: &str) {
         let normalized_name = match name {
-            n if n == tool_names::UNIFIED_EXEC
-                || n == "shell"
-                || n == "exec_pty_cmd" =>
-            {
+            n if n == tool_names::UNIFIED_EXEC || n == "shell" || n == "exec_pty_cmd" => {
                 tool_names::RUN_PTY_CMD
             }
             _ => name,
@@ -206,15 +201,6 @@ impl SessionStats {
 
     fn consume_follow_up_prompt_suppression(&mut self) -> bool {
         std::mem::take(&mut self.suppress_next_follow_up_prompt)
-    }
-
-    pub(crate) fn request_context_clear(&mut self) {
-        self.pending_context_clear = true;
-        self.clear_previous_response_chain();
-    }
-
-    pub(crate) fn take_context_clear_request(&mut self) -> bool {
-        std::mem::take(&mut self.pending_context_clear)
     }
 
     pub(crate) fn previous_response_id_for(&self, provider: &str, model: &str) -> Option<String> {

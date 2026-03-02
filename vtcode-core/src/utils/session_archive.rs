@@ -455,10 +455,7 @@ fn progress_transcript_from_recent_messages(recent_messages: &[SessionMessage]) 
 
 fn normalize_session_tool_name(name: &str) -> String {
     match name {
-        n if n == tool_names::UNIFIED_EXEC
-            || n == "shell"
-            || n == "exec_pty_cmd" =>
-        {
+        n if n == tool_names::UNIFIED_EXEC || n == "shell" || n == "exec_pty_cmd" => {
             tool_names::RUN_PTY_CMD.to_string()
         }
         _ => name.to_string(),

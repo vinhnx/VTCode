@@ -179,8 +179,6 @@ impl PlanContent {
 pub enum PlanConfirmationResult {
     /// Execute the plan - transition to Edit mode
     Execute,
-    /// Clear conversation context and execute with auto-accept enabled
-    ClearContextAutoAccept,
     /// Return to planning to edit the plan
     EditPlan,
     /// Cancel execution and stay in Plan mode

@@ -49,7 +49,10 @@ pub(crate) fn process_llm_response(
         && let Some(ref text) = final_text
     {
         let extraction = extract_proposed_plan(text);
-        final_text = Some(extraction.stripped_text);
+        final_text = Some(
+            text.replace("<proposed_plan>", "")
+                .replace("</proposed_plan>", ""),
+        );
         proposed_plan = extraction.plan_text;
     }
 
@@ -525,7 +528,7 @@ mod tests {
     }
 
     #[test]
-    fn process_llm_response_strips_proposed_plan_in_plan_mode() {
+    fn process_llm_response_keeps_plan_visible_in_plan_mode() {
         let response = LLMResponse {
             content: Some("Intro\n<proposed_plan>\n- Step 1\n</proposed_plan>\nOutro".to_string()),
             tool_calls: None,
@@ -550,36 +553,52 @@ mod tests {
                 proposed_plan,
                 ..
             } => {
-                assert_eq!(text, "Intro\n\nOutro");
+                assert_eq!(text, "Intro\n\n- Step 1\n\nOutro");
+                assert!(!text.contains("<proposed_plan>"));
                 assert_eq!(proposed_plan.as_deref(), Some("- Step 1"));
             }
-            _ => panic!("Expected stripped text response with proposed plan"),
+            _ => panic!("Expected text response with visible proposed plan"),
         }
     }
 
     #[test]
-    fn process_llm_response_golden_transcript_requires_structured_plan_sections() {
+    fn process_llm_response_golden_transcript_requires_kiss_dry_plan_sections() {
         let response = LLMResponse {
             content: Some(
                 r#"Intro
 <proposed_plan>
-## Applied Patterns
-- Default Status Line Items Pattern applied to prompt-token reduction.
+• Proposed Plan
 
-## Purpose / Big Picture
-Reduce static prompt size by moving Plan Mode guidance to runtime injection.
+# Enforce Plan Mode Blueprint
 
-## Phases
-### Phase 1
-1. Extract Plan Mode guidance constants.
-2. Inject Plan Mode guidance only when Plan Mode is active.
+## Summary
+Make Plan Mode output deterministic by enforcing one shared blueprint for reasoning logs and final plans.
 
-## Verification
-- `cargo check`
-- targeted Plan Mode tests
+## Scope Locked
+1. Use hard contract enforcement.
+2. Keep the 4-way HITL gate text.
+3. Remove legacy section contract tests.
 
-## Decisions
-- Keep global prompt lean and append Plan Mode guardrails at runtime.
+## Public API / Interface Changes
+1. Update plan prompt contract wording.
+2. Update Plan Mode scaffold template.
+3. Treat old section contract checks as deprecated.
+
+## Implementation Plan
+1. Update prompt constants -> files: [vtcode-core/src/prompts/system.rs] -> verify: [cargo check]
+2. Update template + docs -> files: [vtcode-core/src/tools/handlers/plan_mode.rs, docs/guides/PLAN_MODE.md] -> verify: [cargo check]
+3. Update tests -> files: [src/agent/runloop/unified/turn/turn_processing/response_processing.rs] -> verify: [cargo test -p vtcode process_llm_response_golden_transcript_requires_kiss_dry_plan_sections -- --nocapture]
+
+## Test Cases and Validation
+1. Build and lint: [project build and lint command(s) based on detected toolchain]
+2. Tests: [project test command(s) based on detected toolchain]
+3. Targeted behavior checks: plan-mode transcript checks
+4. Regression checks: proposed plan extraction still strips wrapper tags only
+
+## Assumptions and Defaults
+1. Title/content can vary, section headers stay fixed.
+2. Reasoning log appears before proposed plan.
+3. Non-plan execution flow remains unchanged.
 </proposed_plan>
 Outro"#
                     .to_string(),
@@ -608,11 +627,13 @@ Outro"#
             } => {
                 let plan = proposed_plan.expect("expected extracted proposed plan");
                 for required_section in [
-                    "## Applied Patterns",
-                    "## Purpose / Big Picture",
-                    "## Phases",
-                    "## Verification",
-                    "## Decisions",
+                    "• Proposed Plan",
+                    "## Summary",
+                    "## Scope Locked",
+                    "## Public API / Interface Changes",
+                    "## Implementation Plan",
+                    "## Test Cases and Validation",
+                    "## Assumptions and Defaults",
                 ] {
                     assert!(
                         plan.contains(required_section),

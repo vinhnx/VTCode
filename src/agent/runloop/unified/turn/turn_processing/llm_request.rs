@@ -73,28 +73,10 @@ fn has_recent_tool_responses(messages: &[uni::Message]) -> bool {
 }
 
 fn compact_tool_messages_for_retry(messages: &[uni::Message]) -> Vec<uni::Message> {
-    let mut tool_seen = 0usize;
-    let mut keep_start: Option<usize> = None;
-    for (index, message) in messages.iter().enumerate().rev() {
-        if message.role == uni::MessageRole::Tool {
-            tool_seen += 1;
-            if tool_seen == 2 {
-                keep_start = Some(index);
-                break;
-            }
-        }
-    }
-
     let mut compacted = Vec::with_capacity(messages.len());
-    for (index, message) in messages.iter().enumerate() {
+    for message in messages {
         if message.role != uni::MessageRole::Tool {
             compacted.push(message.clone());
-            continue;
-        }
-
-        if let Some(start_index) = keep_start
-            && index < start_index
-        {
             continue;
         }
 
@@ -996,6 +978,26 @@ mod tests {
             2
         );
         assert_eq!(compacted.len(), 4);
+    }
+
+    #[test]
+    fn compact_tool_messages_for_retry_keeps_all_tool_call_ids() {
+        let messages = vec![
+            uni::Message::tool_response("call_1".to_string(), "first".to_string()),
+            uni::Message::assistant("a1".to_string()),
+            uni::Message::tool_response("call_2".to_string(), "second".to_string()),
+            uni::Message::assistant("a2".to_string()),
+            uni::Message::tool_response("call_3".to_string(), "third".to_string()),
+        ];
+
+        let compacted = compact_tool_messages_for_retry(&messages);
+        let tool_ids = compacted
+            .iter()
+            .filter(|message| message.role == uni::MessageRole::Tool)
+            .filter_map(|message| message.tool_call_id.clone())
+            .collect::<Vec<_>>();
+
+        assert_eq!(tool_ids, vec!["call_1", "call_2", "call_3"]);
     }
 
     #[test]

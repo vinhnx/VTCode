@@ -77,102 +77,6 @@ check src/agent/runloop/unified/turn module Analyze the agent harness codebase f
 
 ---
 
-```
-## Applied: Default Status Line Items Pattern (Codex PR #12015)
-
-The Codex PR demonstrates enabling default status line items when config is unset:
-
-**Pattern Summary**:
-
-1. Define `DEFAULT_STATUS_LINE_ITEMS` const (e.g., `["model-with-reasoning", "context-remaining", "current-dir"]`)
-2. Add `configured_status_line_items()` helper that returns defaults when config is `None`
-3. Update schema/docs to explain the fallback behavior
-4. Fix telemetry gating so defaults are properly counted
-
-**Application to vtcode**:
-
-- vtcode uses `StatusLineMode` (Auto/Command/Hidden) rather than items
-- Pattern already applied implicitly: `Auto` mode provides sensible defaults
-- Consider adding explicit `DEFAULT_STATUS_LINE_MODE` constant in `vtcode-config/src/status_line.rs`
-- Document in config schema that unset values use defaults
-
----
-
-## Plan: Apply Data-Oriented Design to vtcode
-
-The article by Ivan Enderlin (Matrix Rust SDK) demonstrates three optimization patterns that yielded a **98.7% execution time reduction**: (1) reduce memory pressure by returning only needed data instead of cloning full structs, (2) eliminate lock contention by pre-fetching into compact cache structs, and (3) apply Data-oriented Design by grouping co-accessed fields. All three patterns have direct applicability to vtcode's MCP subsystem, tool execution pipeline, and turn processing contexts.
-
-The work is organized into 4 phases, prioritized by impact and risk.
-
----
-
-**Steps**
-
-### Phase 1: Lock Consolidation (Highest Impact, Lowest Risk)
-
-1. **Consolidate `McpClient` 5 RwLocks → 1** in client.rs: Create `McpClientInner { providers, allowlist, tool_provider_index, resource_provider_index, prompt_provider_index }` behind a single `parking_lot::RwLock`. Every method currently acquiring 2–5 locks (e.g., `update_allowlist` at client.rs, `collect_tools` at client.rs) becomes a single lock acquisition. Additionally, replace repetitive `self.allowlist.read().clone()` (11+ call sites) with `Arc`-shared snapshot.
-
-2. **Merge `AdaptiveRateLimiter` double-Mutex → 1** in adaptive_rate_limiter.rs: Create `RateLimiterInner { buckets: HashMap<String, TokenBucket>, priorities: HashMap<String, Priority> }` under a single `Mutex`. `try_acquire()` at adaptive_rate_limiter.rs currently locks `buckets` then `priorities` on **every tool call** via the global static `GLOBAL_ADAPTIVE_RATE_LIMITER`. This halves lock overhead and eliminates a potential deadlock vector.
-
-3. **Consolidate `ToolInventory` 7 locks → 2** in inventory.rs: Group `tools`, `aliases`, `sorted_names`, `frequently_used` into `RwLock<ToolRegistryData>`. Keep `alias_metrics` as separate `Mutex` (write-heavy, infrequent). Keep `command_tool` separate (different access pattern). `get_registration` and `has_tool` currently acquire 2 read locks each — consolidated to 1.
-
-4. **Consolidate `ToolDiscoveryCache` 4 Arc<RwLock> → 1** in tool_discovery_cache.rs: Merge `bloom_filter`, `detailed_cache`, `all_tools_cache`, `last_refresh` into `RwLock<DiscoveryCacheInner>`. Methods like `cache_all_tools` (tool_discovery_cache.rs) and `clear()` (tool_discovery_cache.rs) drop from 3–4 lock acquisitions to 1.
-
-5. **Replace `McpProvider` async RwLock with `ArcSwap`** in provider.rs: The `client: tokio::sync::RwLock<Arc<RmcpClient>>` is read-locked on every MCP operation (`list_tools`, `call_tool`, etc.) but only write-locked on reconnect. Switch to `arc_swap::ArcSwap<RmcpClient>` — readers become wait-free (`load()`), only `reconnect` uses `store()`.
-
-6. **Merge `CommandCache` double-Mutex → 1** in command_cache.rs: Combine `config: Mutex` + `cache: Mutex` into single `Mutex<CommandCacheInner>`. Every `get()`/`put()` in the shell execution path currently pays double-lock cost.
-
-### Phase 2: Memory Pressure Reduction (High Impact)
-
-7. **Fix `ToolDiscoveryCache` defeating its own `Arc`** at tool_discovery_cache.rs: Change `(*cached.results).clone()` to `Arc::clone(&cached.results)` and update callers to accept `Arc<Vec<ToolDiscoveryResult>>`. The current code dereferences the `Arc` then deep-clones the inner `Vec`, completely defeating the purpose of `Arc` wrapping.
-
-8. **Wrap `McpProvider` caches in `Arc`** in provider.rs: Change `tools_cache: Mutex<Option<Vec<McpToolInfo>>>` to `Mutex<Option<Arc<Vec<McpToolInfo>>>>`. Cache hit path in `list_tools` (provider.rs) returns `Arc::clone()` instead of deep-cloning the entire vec of tool info structs (each containing `String` name, description, JSON schema).
-
-9. **Eliminate clone-to-sort in `ToolCatalogState::sorted_snapshot`** at tool_catalog.rs: `defs_guard.clone()` clones the entire `Vec<ToolDefinition>` every cache miss. Instead, sort in-place on a `Vec` obtained via `Vec::from(defs_guard.iter().cloned())` only when dirty, and store the sorted result as `Arc<Vec<ToolDefinition>>` — the existing `cached_sorted` field already does this on cache hit; the improvement is to avoid the full clone when the input `tools` vec hasn't changed.
-
-10. **Use `Cow` pattern for `compact_tool_messages_for_retry`** in llm*request.rs: Messages that don't need modification should be referenced, not cloned. Use `Cow<'*, uni::Message>` or collect indices of messages to modify rather than cloning every non-tool message.
-
-### Phase 3: Data-Oriented Design (Structural)
-
-11. **Group `SessionState` fields into domain sub-structs** in types.rs: The current 20+ flat fields with 8 `Arc<RwLock<T>>` create cache-line pollution. Create:
-    - `ToolExecutionContext { tool_result_cache, tool_permission_cache, circuit_breaker, rate_limiter, tool_health_tracker, validation_cache, autonomous_executor }` — co-accessed during tool execution
-    - `SessionMetadata { decision_ledger, trajectory, telemetry, error_recovery }` — co-accessed during logging/diagnostics
-    - Keep `provider_client`, `tools`, `tool_catalog`, `conversation_history` at the top level since they're accessed individually
-
-12. **Refactor `TurnProcessingContext` into domain sub-contexts** in context.rs: The 30+ fields with the manual `as_turn_loop_context()` copy at context.rs is the exact "Array of Structures" anti-pattern from the article. Create:
-    - `ToolContext<'a>` — tool_registry, tools, tool_catalog, tool_result_cache, circuit_breaker, rate_limiter, tool_health_tracker, approval_recorder, autonomous_executor
-    - `LLMContext<'a>` — provider_client, config, context_manager, vt_cfg
-    - `UIContext<'a>` — renderer, handle, session, input_status_state, last_forced_redraw, default_placeholder
-    - `as_turn_loop_context()` becomes trivial field copies of 3–4 sub-struct references instead of 20+
-
-### Phase 4: Secondary Optimizations (Lower Priority)
-
-13. **Skills `ContextManager`: `Mutex` → `RwLock`** in context_manager.rs: Read-only methods (`get_stats`, `get_token_usage`, `get_memory_usage`) currently serialize behind a single Mutex. Split to `RwLock` so readers don't block each other during skill-heavy turns.
-
-14. **`CircuitBreaker` snapshot method** in circuit_breaker.rs: Add `snapshot() -> Arc<CircuitBreakerSnapshot>` that acquires the lock once and returns all diagnostics. The existing `get_open_circuits`, `get_diagnostics`, `get_all_diagnostics`, `should_pause_for_recovery`, `open_circuit_count` each acquire a separate `.read()` on the same `RwLock<HashMap>`.
-
-15. **Replace `Arc<RwLock<String>>` with `ArcSwap`** for `HarnessContext` session/task IDs in harness.rs: These are read on every tool call but rarely written. `ArcSwap::load()` is wait-free.
-
----
-
-**Verification**
-
-- `cargo check` after each step to catch compile errors incrementally
-- `cargo nextest run` after each phase to verify no regressions
-- `cargo clippy` to ensure no new warnings
-- After Phase 1 & 2 are complete, add a micro-benchmark for `AdaptiveRateLimiter::try_acquire` and `ToolDiscoveryCache::get_cached_discovery` to measure lock/clone reduction
-- After Phase 3, verify `sizeof::<ToolExecutionContext>()` and `sizeof::<UIContext>()` fit within a typical L1 cache line (128 bytes on Apple Silicon)
-
-**Decisions**
-
-- Chose `parking_lot::RwLock` over `std::sync::RwLock` for consolidated locks: already used in `McpClient`, provides `try_read`/`try_write` without poisoning
-- Chose `ArcSwap` over `RwLock` for McpProvider client: the read-heavy/write-rare pattern is textbook `ArcSwap` — readers are wait-free, only reconnect swaps. Requires adding `arc-swap` as a dependency.
-- Chose sub-struct grouping (AoS with co-access locality) over full SoA for `SessionState`/`TurnProcessingContext`: SoA doesn't apply here because different fields of the same "row" are accessed together in context, unlike the pure iterate-one-field-at-a-time SoA pattern
-- Deferred `ProgressState` consolidation (Phase 4) — updates are infrequent enough that the 4-mutex overhead is negligible
-```
-
-review the overrall plan and start implement carefully. can you do better? KISS and DRY. then start implement
-
 ---
 
 ===> see and diagnose and improve vtcode agent harness, looks for and improve
@@ -2765,125 +2669,6 @@ https://docs.litellm.ai/docs/
 
 ---
 
-reference plan mode and hitl flow structure
-
-TUI:
-
-• I have scope on teams now: we’ll remove Agent Teams along with subagents. I need one more
-implementation-level decision on compatibility behavior for existing configs and commands to finalize a
-no-surprises plan.
-
-• Questions 1/1 answered
-• How strict should removal be for existing `vtcode.toml` and command usage (`/agents`, `/subagent`, `/
-    team`, `spawn_subagent`)?
-answer: Hard Removal (Recommended)
-
-• I’ll use hard removal semantics. Final scope question: whether you want documentation/config samples
-cleaned in the same change or left for a follow-up.
-
-• Questions 1/1 answered
-• Should this same change also remove subagent/team references from docs, READMEs, and
-`vtcode.toml.example`?
-answer: Clean All Now (Recommended)
-
-plan:
-
-```
-
-  # Remove Subagents and Agent Teams Completely
-
-  ## Summary
-
-  Remove the entire subagents system and all agent-team surfaces from VT Code runtime, config, tools,
-  CLI slash UX, and docs. Keep Plan/Edit mode functional by relocating planner/coder prompt profiles
-  out of the subagents module into a dedicated prompt-profile module.
-
-  ## Scope Locked
-
-  1. Remove Agent Teams too.
-  2. Use hard removal semantics.
-  3. Clean docs and config samples in the same change.
-
-  ## Public API / Interface Changes
-
-  1. Remove vtcode_core::subagents module export and all related public types/functions
-     (SubagentRegistry, SubagentRunner, SpawnParams, get_agent_prompt_body, etc.).
-  2. Remove spawn_subagent tool constant and handler from public tool surfaces.
-  3. Remove vtcode_config::subagent module and exported subagent types (SubagentsConfig,
-     SubagentConfig, etc.).
-  4. Remove vtcode_config::agent_teams module and exported team types (AgentTeamsConfig, TeammateMode).
-  5. Remove slash commands /agents, /subagent, /team.
-  6. Keep Plan/Edit behavior, but source active-agent prompts from a new stable prompt-profile API in
-     vtcode-core::prompts (planner/coder only).
-
-  ## Implementation Plan
-
-  1. Remove subagent runtime and tool wiring.
-      - Delete vtcode-core/src/subagents/*.
-      - Delete vtcode-core/src/tools/handlers/spawn_subagent.rs.
-      - Remove module wiring in vtcode-core/src/lib.rs, vtcode-core/src/tools/handlers/mod.rs, tool
-        constants, tool intent classification, and plan-mode checks.
-      - Remove spawn-subagent registration in src/agent/runloop/unified/session_setup/skill_setup.rs.
-  2. Preserve planner/coder mode prompts without subagents.
-      - Add vtcode-core/src/prompts/agent_profiles.rs with planner and coder prompt bodies and lookup
-        helper.
-      - Switch src/agent/runloop/unified/turn/turn_processing/llm_request.rs from
-  3. Remove Agent Teams end-to-end.
-      - Remove team state/runtime usage from src/startup/*, unified state/session loop, status line,
-        slash handlers, and team task logic.
-      - Remove team model picker target and finalize path (TeamDefault and related branch).
-  4. Remove subagent/team config schema and persistence paths.
-      - Delete vtcode-config/src/subagent.rs and vtcode-config/src/agent_teams.rs.
-      - Remove fields from VTCodeConfig (subagents, agent_teams) and re-exports in vtcode-config/src/
-        lib.rs.
-      - Remove subagent/team model persistence functions in src/agent/runloop/unified/
-        model_selection.rs.
-      - Remove related sections in default config text and vtcode.toml.example.
-  5. Enforce hard removal behavior.
-      - Slash commands: parsing /agents, /subagent, /team returns explicit “removed” errors with
-        replacement guidance.
-      - Config loading: add validation in vtcode-config loader to reject effective TOML containing
-        [subagents] or [agent_teams] with a clear error message, instead of silent ignore.
-  6. Clean documentation and generated references now.
-      - Remove/update subagent/team mentions from root and crate READMEs, user docs, docs index/maps,
-        harness docs, skill usage docs, and examples.
-      - Remove docs/subagents/* and references in docs map generators if no longer used.
-
-  ## Test Cases and Validation
-
-  1. Build and lint:
-      - cargo check
-      - cargo clippy --workspace --all-targets -- -D warnings
-  2. Test suite:
-      - cargo nextest run
-  3. Targeted behavior checks:
-      - /plan and /mode still work, including planner/coder prompt switching.
-      - /agents, /subagent, /team now return explicit removal errors.
-      - No spawn_subagent tool appears in tool catalogs or prompt docs.
-      - Config with [subagents] or [agent_teams] fails with deterministic validation message.
-  4. Regression checks:
-      - Session startup no longer logs vtcode_core::subagents::registry: Loaded builtin agent....
-      - Model picker still works for main model selection.
-
-  ## Assumptions and Defaults
-
-  1. Breaking changes are acceptable in this branch/release (no compatibility shim).
-  2. Agent-team feature is removed, not renamed or retained behind flags.
-  3. Documentation is expected to match runtime immediately in this same change.
-  4. Existing dirty working-tree files unrelated to this scope remain untouched.
-```
-
-interactive HTIL:
-
-```
-  Implement this plan?
-
-› 1. Yes, implement this plan  Switch to Default and start coding.
-  2. No, stay in Plan mode     Continue planning with the model.
-```
-
----
-
 auto suggest and higlight commands in chat input
 
 1. suggest: '/Users/vinhnguyenxuan/Desktop/Screenshot 2026-03-02 at 2.48.34 PM.png'
@@ -2893,3 +2678,93 @@ auto suggest and higlight commands in chat input
 
 fix git diff show red/green ansi color to not override to code blocks in markdown rendering.
 '/Users/vinhnguyenxuan/Desktop/Screenshot 2026-03-02 at 5.04.19 PM.png'
+
+```
+
+```
+
+---
+
+make plan mode workflow follow this structure prompt and blueprint. the the final proposed plan should be in the exact format of the plan blueprint, and the reasoning and decision log should follow the structure of the reasoning + decision log blueprint.
+
+### 1) Agent reasoning + decision log blueprint
+
+• Scope checkpoint: [what is locked] / [what remains open].
+• Decision needed: [single high-impact choice] and why it affects
+implementation.
+
+• Questions 1/1 answered
+• [exact question text]
+answer: [selected option label]
+
+• Locked decision: [choice], so implementation will [concrete consequence].
+• Next open decision: [if any], otherwise: “No remaining scope decisions;
+drafting final plan.”
+
+### 2) Plan blueprint (Plan Mode final output)
+
+```
+• Proposed Plan
+
+
+  # [Task Title]
+
+  ## Summary
+
+  [2-4 lines: goal, user impact, what will change, what will not]
+
+  ## Scope Locked
+
+  1. [Decision A]
+  2. [Decision B]
+  3. [Decision C]
+
+  ## Public API / Interface Changes
+
+  1. [Removed/added/changed API, command, config, schema]
+  2. [Tooling/runtime behavior changes]
+  3. [Compatibility or break behavior]
+
+  1. [Step] → files: [paths] → verify: [check]
+  2. [Step] → files: [paths] → verify: [check]
+  3. [Step] → files: [paths] → verify: [check]
+
+  ## Test Cases and Validation
+     warnings
+  2. Tests: cargo nextest run
+  3. Targeted behavior checks: [explicit commands/manual checks]
+  4. Regression checks: [what must not break]
+
+  ## Assumptions and Defaults
+
+  1. [Explicit assumption]
+  2. [Default chosen when user did not specify]
+  3. [Out-of-scope items intentionally not changed]
+```
+
+### 3) HITL confirmation blueprint (post-plan)
+
+Use VT Code’s real 4-way execution gate, not binary yes/no:
+
+Ready to code?
+
+A plan is ready to execute. Would you like to proceed?
+
+1. Yes, clear context and auto-accept edits (Recommended)
+   Reset conversation history and execute immediately.
+2. Yes, auto-accept edits
+   Keep context and execute with auto-approval.
+3. Yes, manually approve edits
+   Keep context and confirm each edit before applying.
+4. Type feedback to revise the plan
+   Return to plan mode and refine the plan.
+
+---
+
+```
+
+```
+
+==
+
+review vtcode system prompt and make validation commands baed on current working project's toolchain aware (not Rust-hardcoded). 

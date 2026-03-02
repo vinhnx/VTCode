@@ -40,11 +40,7 @@ impl DynamicContextDirs {
 
     /// Get directories that should exist at startup.
     pub fn startup_dirs(&self) -> Vec<&std::path::PathBuf> {
-        vec![
-            &self.tool_outputs,
-            &self.history,
-            &self.terminals,
-        ]
+        vec![&self.tool_outputs, &self.history, &self.terminals]
     }
 }
 

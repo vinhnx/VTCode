@@ -20,7 +20,7 @@ use anyhow::{Context, Result};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::SystemTime;
@@ -163,6 +163,123 @@ impl EnterPlanModeTool {
     }
 }
 
+#[derive(Debug, Clone)]
+struct ValidationCommandHints {
+    build_and_lint: String,
+    tests: String,
+}
+
+fn package_manager_for_workspace(workspace_root: &Path) -> &'static str {
+    if workspace_root.join("pnpm-lock.yaml").exists() {
+        "pnpm"
+    } else if workspace_root.join("yarn.lock").exists() {
+        "yarn"
+    } else if workspace_root.join("bun.lockb").exists() || workspace_root.join("bun.lock").exists()
+    {
+        "bun"
+    } else {
+        "npm"
+    }
+}
+
+fn node_script_command(pm: &str, script: &str) -> String {
+    match pm {
+        "yarn" => format!("yarn {script}"),
+        "bun" => format!("bun run {script}"),
+        _ => format!("{pm} run {script}"),
+    }
+}
+
+fn package_json_has_script(workspace_root: &Path, script: &str) -> bool {
+    let path = workspace_root.join("package.json");
+    let Ok(content) = std::fs::read_to_string(path) else {
+        return false;
+    };
+    let Ok(json) = serde_json::from_str::<Value>(&content) else {
+        return false;
+    };
+    json.get("scripts")
+        .and_then(Value::as_object)
+        .is_some_and(|scripts| scripts.contains_key(script))
+}
+
+fn detect_validation_command_hints(workspace_root: &Path) -> ValidationCommandHints {
+    if workspace_root.join("Cargo.toml").exists() {
+        return ValidationCommandHints {
+            build_and_lint:
+                "`cargo check`; `cargo clippy --workspace --all-targets -- -D warnings`".to_string(),
+            tests: "`cargo test` (or `cargo nextest run` if nextest is configured)".to_string(),
+        };
+    }
+
+    if workspace_root.join("package.json").exists() {
+        let pm = package_manager_for_workspace(workspace_root);
+        let has_build = package_json_has_script(workspace_root, "build");
+        let has_lint = package_json_has_script(workspace_root, "lint");
+        let has_test = package_json_has_script(workspace_root, "test");
+
+        let build_and_lint = match (has_build, has_lint) {
+            (true, true) => format!(
+                "`{}`; `{}`",
+                node_script_command(pm, "build"),
+                node_script_command(pm, "lint")
+            ),
+            (true, false) => format!(
+                "`{}`; plus configured lint command for the workspace",
+                node_script_command(pm, "build")
+            ),
+            (false, true) => format!(
+                "`{}`; plus configured build/typecheck command for the workspace",
+                node_script_command(pm, "lint")
+            ),
+            (false, false) => {
+                format!("Use configured {pm} build/lint (or typecheck) scripts for this workspace")
+            }
+        };
+        let tests = if has_test {
+            format!("`{}`", node_script_command(pm, "test"))
+        } else {
+            format!("Use configured {pm} test command for this workspace")
+        };
+
+        return ValidationCommandHints {
+            build_and_lint,
+            tests,
+        };
+    }
+
+    if workspace_root.join("pyproject.toml").exists()
+        || workspace_root.join("requirements.txt").exists()
+        || workspace_root.join("setup.py").exists()
+    {
+        return ValidationCommandHints {
+            build_and_lint:
+                "`python -m compileall .`; run configured linter (for example `ruff check .`)"
+                    .to_string(),
+            tests: "`pytest`".to_string(),
+        };
+    }
+
+    if workspace_root.join("go.mod").exists() {
+        return ValidationCommandHints {
+            build_and_lint: "`go build ./...`; `go vet ./...`".to_string(),
+            tests: "`go test ./...`".to_string(),
+        };
+    }
+
+    if workspace_root.join("Makefile").exists() {
+        return ValidationCommandHints {
+            build_and_lint: "`make lint` (or `make build` if no lint target exists)".to_string(),
+            tests: "`make test`".to_string(),
+        };
+    }
+
+    ValidationCommandHints {
+        build_and_lint: "[project build and lint command(s)]".to_string(),
+        tests: "[project test command(s)]".to_string(),
+    }
+}
+
 #[async_trait]
 impl Tool for EnterPlanModeTool {
     async fn execute(&self, args: Value) -> Result<Value> {
@@ -187,64 +304,84 @@ impl Tool for EnterPlanModeTool {
         let plans_dir = self.state.ensure_plans_dir().await?;
         let plan_name = self.generate_plan_name(args.plan_name.as_deref());
         let plan_file = plans_dir.join(format!("{}.md", plan_name));
+        let workspace_root = self
+            .state
+            .workspace_root()
+            .unwrap_or_else(|| PathBuf::from("."));
+        let validation_hints = detect_validation_command_hints(&workspace_root);
 
-        // Create initial plan file with ExecPlan-compliant template
-        // Reference: .vtcode/PLANS.md for full ExecPlan specification
+        // Create initial plan file using the canonical blueprint structure.
         let initial_content = format!(
             r#"# {}
 
-This ExecPlan is a living document. The sections `Progress`, `Surprises & Discoveries`, `Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work proceeds.
+• Scope checkpoint: [what is locked] / [what remains open].
+• Decision needed: [single high-impact choice] and why it affects
+implementation.
 
-Reference: `.vtcode/PLANS.md` for full ExecPlan specification.
+• Questions 1/1 answered
+• [exact question text]
+answer: [selected option label]
 
-## Purpose / Big Picture
+• Locked decision: [choice], so implementation will [concrete consequence].
+• Next open decision: [if any], otherwise: "No remaining scope decisions;
+drafting final plan."
+
+<proposed_plan>
+• Proposed Plan
+
+
+# {}
+
+## Summary
 
 {}
 
-## Progress
+## Scope Locked
 
-- [ ] Explore codebase and understand requirements
-- [ ] Design implementation approach
-- [ ] Review plan with user
-- [ ] (Add implementation steps here)
+1. [Decision A]
+2. [Decision B]
+3. [Decision C]
 
-## Surprises & Discoveries
+## Public API / Interface Changes
 
-(Document unexpected behaviors, bugs, optimizations, or insights discovered during implementation.)
+1. [Removed/added/changed API, command, config, schema]
+2. [Tooling/runtime behavior changes]
+3. [Compatibility or break behavior]
 
-## Decision Log
+## Implementation Plan
 
-(Record every decision made while working on the plan.)
+1. [Step] -> files: [paths] -> verify: [check]
+2. [Step] -> files: [paths] -> verify: [check]
+3. [Step] -> files: [paths] -> verify: [check]
 
-- Decision: Initial plan created
-  Rationale: Starting from ExecPlan template
-  Date: {}
+## Test Cases and Validation
 
-## Outcomes & Retrospective
+1. Build and lint: {}
+2. Tests: {}
+3. Targeted behavior checks: [explicit commands/manual checks]
+4. Regression checks: [what must not break]
 
-(Summarize outcomes, gaps, and lessons learned at major milestones or at completion.)
+## Assumptions and Defaults
 
-## Context and Orientation
+1. [Explicit assumption]
+2. [Default chosen when user did not specify]
+3. [Out-of-scope items intentionally not changed]
 
-Key files: (to be identified)
-Dependencies: (to be identified)
+</proposed_plan>
 
-## Plan of Work
-
-(Describe the sequence of edits and additions. For each edit, name the file and location.)
-
-## Validation and Acceptance
-
-(Describe how to verify the changes work. Include test commands and expected outputs.)
+> Note: Edit this plan directly at `{}`.
 
 ---
 *Plan created: {}*
 "#,
             plan_name.replace('-', " ").to_uppercase(),
+            plan_name.replace('-', " ").to_uppercase(),
             args.description
                 .as_deref()
-                .unwrap_or("(Describe the goal here - what someone gains after this change and how they can see it working)"),
-            chrono::Utc::now().format("%Y-%m-%d"),
+                .unwrap_or("[2-4 lines: goal, user impact, what will change, what will not]"),
+            validation_hints.build_and_lint,
+            validation_hints.tests,
+            plan_file.display(),
             chrono::Utc::now().format("%Y-%m-%d %H:%M:%S UTC")
         );
 
@@ -266,15 +403,14 @@ Dependencies: (to be identified)
             "plan_file": plan_file.display().to_string(),
             "instructions": [
                 "1. Read files and search code to understand the codebase",
-                "2. Ask clarifying questions if requirements are ambiguous",
-                "3. Update the plan file with your implementation approach",
+                "2. Lock decisions with concise decision-log entries",
+                "3. Fill the reasoning+decision log and final proposed plan blueprint",
                 "4. Use exit_plan_mode when ready for the user to review and approve"
             ],
             "workflow_phases": [
-                "Phase 1: Initial Understanding - Explore code and ask questions",
-                "Phase 2: Design - Propose implementation approach",
-                "Phase 3: Review - Verify alignment with user intent",
-                "Phase 4: Final Plan - Write detailed implementation steps"
+                "Phase A: Decision Log - lock high-impact choices",
+                "Phase B: Final Plan - produce one canonical blueprint",
+                "Phase C: HITL Review - execute or revise"
             ]
         }))
     }
@@ -346,6 +482,8 @@ fn plan_has_actionable_steps(content: &str) -> bool {
             let header_lower = header.trim().to_lowercase();
             in_action_section = header_lower == "plan of work"
                 || header_lower == "concrete steps"
+                || header_lower == "implementation plan"
+                || header_lower == "implementation"
                 || header_lower.starts_with("phase ");
             continue;
         }
@@ -383,7 +521,7 @@ fn plan_has_actionable_steps(content: &str) -> bool {
     false
 }
 
-fn tracker_file_for_plan_file(plan_file: &std::path::Path) -> Option<PathBuf> {
+fn tracker_file_for_plan_file(plan_file: &Path) -> Option<PathBuf> {
     let stem = plan_file.file_stem()?.to_str()?;
     Some(plan_file.with_file_name(format!("{stem}.tasks.md")))
 }
@@ -502,7 +640,7 @@ impl Tool for ExitPlanModeTool {
         if !plan_ready || !plan_recently_updated {
             return Ok(json!({
                 "status": "not_ready",
-                "message": "Plan not ready for confirmation. Add actionable steps under a Plan of Work/Concrete Steps section (or a Phase section) and update the plan file in this session, then retry.",
+                "message": "Plan not ready for confirmation. Add actionable steps under an Implementation Plan/Implementation/Plan of Work/Concrete Steps section (or a Phase section) and update the plan file in this session, then retry.",
                 "reason": args.reason,
                 "plan_file": plan_file.map(|p| p.display().to_string()),
                 "plan_tracker_file": tracker_file.map(|p| p.display().to_string()),
@@ -626,6 +764,42 @@ mod tests {
         // Plan file should exist
         let plan_file = state.get_plan_file().await.unwrap();
         assert!(plan_file.exists());
+
+        let content = std::fs::read_to_string(&plan_file).unwrap();
+        assert!(content.contains("## Test Cases and Validation"));
+        assert!(content.contains("[project build and lint command(s)]"));
+        assert!(content.contains("[project test command(s)]"));
+        assert!(content.contains(&format!(
+            "> Note: Edit this plan directly at `{}`.",
+            plan_file.display()
+        )));
+    }
+
+    #[test]
+    fn test_detect_validation_hints_for_rust_workspace() {
+        let temp_dir = TempDir::new().unwrap();
+        std::fs::write(temp_dir.path().join("Cargo.toml"), "[package]\nname='x'\n").unwrap();
+
+        let hints = detect_validation_command_hints(temp_dir.path());
+        assert!(hints.build_and_lint.contains("cargo check"));
+        assert!(hints.build_and_lint.contains("cargo clippy"));
+        assert!(hints.tests.contains("cargo test"));
+    }
+
+    #[test]
+    fn test_detect_validation_hints_for_node_workspace() {
+        let temp_dir = TempDir::new().unwrap();
+        std::fs::write(
+            temp_dir.path().join("package.json"),
+            r#"{"name":"x","scripts":{"build":"tsc","lint":"eslint .","test":"vitest run"}}"#,
+        )
+        .unwrap();
+        std::fs::write(temp_dir.path().join("pnpm-lock.yaml"), "lockfileVersion: 9").unwrap();
+
+        let hints = detect_validation_command_hints(temp_dir.path());
+        assert!(hints.build_and_lint.contains("pnpm run build"));
+        assert!(hints.build_and_lint.contains("pnpm run lint"));
+        assert_eq!(hints.tests, "`pnpm run test`");
     }
 
     #[tokio::test]

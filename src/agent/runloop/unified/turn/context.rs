@@ -518,11 +518,14 @@ impl<'a> TurnProcessingContext<'a> {
             return Ok(());
         }
 
-        let plan = PlanContent::from_markdown(
-            "Implementation Plan".to_string(),
-            &plan_text,
-            None::<String>,
-        );
+        let plan_file = self
+            .tool_registry
+            .plan_mode_state()
+            .get_plan_file()
+            .await
+            .map(|path| path.to_string_lossy().to_string());
+        let plan =
+            PlanContent::from_markdown("Implementation Plan".to_string(), &plan_text, plan_file);
 
         let confirmation = execute_plan_confirmation(
             self.handle,
@@ -535,21 +538,12 @@ impl<'a> TurnProcessingContext<'a> {
 
         if matches!(
             confirmation,
-            PlanConfirmationOutcome::Execute
-                | PlanConfirmationOutcome::AutoAccept
-                | PlanConfirmationOutcome::ClearContextAutoAccept
+            PlanConfirmationOutcome::Execute | PlanConfirmationOutcome::AutoAccept
         ) {
             self.handle.set_skip_confirmations(matches!(
                 confirmation,
                 PlanConfirmationOutcome::AutoAccept
-                    | PlanConfirmationOutcome::ClearContextAutoAccept
             ));
-            if matches!(
-                confirmation,
-                PlanConfirmationOutcome::ClearContextAutoAccept
-            ) {
-                self.session_stats.request_context_clear();
-            }
             transition_to_edit_mode(self.tool_registry, self.session_stats, self.handle, true)
                 .await;
         }

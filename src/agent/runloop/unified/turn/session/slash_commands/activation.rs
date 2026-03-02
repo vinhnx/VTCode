@@ -12,8 +12,11 @@ pub(super) async fn ensure_skills_context_activated(ctx: &SlashCommandContext<'_
         return Ok(());
     };
 
-    vtcode_core::context::ensure_skills_dynamic_context(&ctx.config.workspace, &vt_cfg.context.dynamic)
-        .await
+    vtcode_core::context::ensure_skills_dynamic_context(
+        &ctx.config.workspace,
+        &vt_cfg.context.dynamic,
+    )
+    .await
 }
 
 pub(super) async fn ensure_mcp_activated(ctx: &mut SlashCommandContext<'_>) -> Result<()> {
@@ -52,8 +55,10 @@ pub(super) async fn try_attach_ready_mcp(ctx: &mut SlashCommandContext<'_>) -> R
             Ok(true)
         }
         McpInitStatus::Error { message } => {
-            ctx.renderer
-                .line(MessageStyle::Error, &format!("MCP activation failed: {}", message))?;
+            ctx.renderer.line(
+                MessageStyle::Error,
+                &format!("MCP activation failed: {}", message),
+            )?;
             Ok(false)
         }
         McpInitStatus::Disabled | McpInitStatus::Initializing { .. } => Ok(false),

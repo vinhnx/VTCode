@@ -86,7 +86,7 @@ pub const PLAN_MODE_READ_ONLY_NOTICE_LINE: &str = "Plan Mode is active. Mutating
 pub const PLAN_MODE_EXIT_INSTRUCTION_LINE: &str =
     "Call `exit_plan_mode` when ready to transition to implementation.";
 /// Shared Plan Mode instruction line enforcing detailed cumulative plan structure.
-pub const PLAN_MODE_PLAN_QUALITY_LINE: &str = "When proposing plans, use a detailed cumulative structure: Applied Patterns, Purpose, phased steps with file-level outcomes + verification, Verification checklist, and Decision Log.";
+pub const PLAN_MODE_PLAN_QUALITY_LINE: &str = "Follow the exact Plan Mode blueprint (KISS + DRY): emit the Agent reasoning + decision log with bullets `Scope checkpoint`, `Decision needed`, `Questions 1/1 answered`, exact question text + `answer: ...`, `Locked decision`, and `Next open decision`; then emit exactly one `<proposed_plan>` block with `• Proposed Plan`, `# <Task Title>`, `## Summary`, `## Scope Locked`, `## Public API / Interface Changes`, `## Implementation Plan`, `## Test Cases and Validation`, and `## Assumptions and Defaults`. After `</proposed_plan>`, include a short note with the editable plan file path when the path is available in context.";
 /// Shared Plan Mode guard line requiring explicit transition from planning to execution.
 pub const PLAN_MODE_NO_AUTO_EXIT_LINE: &str = "Do not auto-exit Plan Mode just because a plan exists; wait for explicit implementation intent.";
 /// Shared Plan Mode task-tracking line clarifying availability and aliasing.
@@ -364,7 +364,7 @@ Trivial final answers: 1-3 sentences, outcomes first, `path:line` refs. Multi-fi
 __UNIFIED_TOOL_GUIDANCE__
 
 **Planning**: `task_tracker` for 4+ steps (`create` once, then `update` as you progress) in both Plan and Edit modes. 5-7 word steps with status, one outcome + one verification per step. Re-plan into smaller slices if stalled. Don't repeat plan in output.
-**Detailed plan proposals**: Produce rich cumulative plans with sections for Applied Patterns, Purpose, phased steps (file-level outcomes + verification), Verification checklist, and Decision Log.
+**Detailed plan proposals**: Follow the exact Plan Mode blueprint (KISS + DRY): emit the Agent reasoning + decision log bullets (`Scope checkpoint`, `Decision needed`, `Questions 1/1 answered`, exact question + `answer: ...`, `Locked decision`, `Next open decision`) and exactly one `<proposed_plan>` block with `• Proposed Plan`, `# <Task Title>`, `## Summary`, `## Scope Locked`, `## Public API / Interface Changes`, `## Implementation Plan`, `## Test Cases and Validation`, and `## Assumptions and Defaults`. After `</proposed_plan>`, include a short note with the editable plan file path when available in context.
 
 **Discovery**: Tools hidden by default. `list_skills` to discover, `load_skill` to activate.
 

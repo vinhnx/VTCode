@@ -303,29 +303,22 @@ pub(super) async fn run_interaction_loop_impl(
             InlineLoopAction::Exit(reason) => {
                 return Ok(InteractionOutcome::Exit { reason });
             }
-            InlineLoopAction::PlanApproved {
-                auto_accept,
-                clear_context,
-            } => {
-                ctx.renderer.line(
-                    MessageStyle::Info,
-                    if clear_context {
-                        "Plan approved. Clearing context and auto-accepting edits..."
-                    } else if auto_accept {
-                        "Plan approved with auto-accept. Starting execution..."
-                    } else {
-                        "Plan approved. Starting execution with manual approval..."
-                    },
-                )?;
-                return Ok(InteractionOutcome::PlanApproved {
-                    auto_accept,
-                    clear_context,
-                });
+            InlineLoopAction::PlanApproved { auto_accept } => {
+                let mode = if auto_accept {
+                    "auto-accept edits"
+                } else {
+                    "manual edit approvals"
+                };
+                let message = format!(
+                    "Plan approved. Switching to Edit Mode and starting execution ({mode})."
+                );
+                ctx.renderer.line(MessageStyle::Info, &message)?;
+                return Ok(InteractionOutcome::PlanApproved { auto_accept });
             }
             InlineLoopAction::PlanEditRequested => {
                 ctx.renderer.line(
                     MessageStyle::Info,
-                    "Returning to plan mode. Continue refining your plan.",
+                    "Staying in Plan Mode. Continue refining the plan.",
                 )?;
                 continue;
             }

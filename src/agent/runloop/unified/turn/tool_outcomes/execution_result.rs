@@ -303,6 +303,20 @@ fn extract_patch_target_path_from_error(error_msg: &str) -> Option<String> {
 }
 
 fn fallback_from_error(tool_name: &str, error_msg: &str) -> Option<(String, serde_json::Value)> {
+    if tool_name == tool_names::UNIFIED_SEARCH
+        && error_msg
+            .to_ascii_lowercase()
+            .contains("invalid action: read")
+    {
+        return Some((
+            tool_names::UNIFIED_SEARCH.to_string(),
+            serde_json::json!({
+                "action": "list",
+                "path": "."
+            }),
+        ));
+    }
+
     if matches!(
         tool_name,
         tool_names::UNIFIED_FILE | tool_names::READ_FILE | "read file" | "repo_browser.read_file"
@@ -979,6 +993,22 @@ mod tests {
             Some((
                 tool_names::READ_PTY_SESSION.to_string(),
                 serde_json::json!({"session_id":"run-ab12"}),
+            ))
+        );
+    }
+
+    #[test]
+    fn fallback_from_error_recovers_unified_search_invalid_read_action() {
+        let error = "Tool execution failed: Invalid action: read";
+        let fallback = fallback_from_error(tool_names::UNIFIED_SEARCH, error);
+        assert_eq!(
+            fallback,
+            Some((
+                tool_names::UNIFIED_SEARCH.to_string(),
+                serde_json::json!({
+                    "action": "list",
+                    "path": "."
+                }),
             ))
         );
     }

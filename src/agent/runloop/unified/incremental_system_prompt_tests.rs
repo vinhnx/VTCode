@@ -329,6 +329,8 @@ async fn test_plan_mode_notice_appended() {
     assert!(prompt.contains(vtcode_core::prompts::system::PLAN_MODE_READ_ONLY_HEADER));
     assert!(prompt.contains(vtcode_core::prompts::system::PLAN_MODE_EXIT_INSTRUCTION_LINE));
     assert!(prompt.contains(vtcode_core::prompts::system::PLAN_MODE_PLAN_QUALITY_LINE));
+    assert!(prompt.contains("Scope checkpoint"));
+    assert!(prompt.contains("• Proposed Plan"));
     assert!(prompt.contains(vtcode_core::prompts::system::PLAN_MODE_NO_AUTO_EXIT_LINE));
     assert!(prompt.contains(vtcode_core::prompts::system::PLAN_MODE_TASK_TRACKER_LINE));
 }

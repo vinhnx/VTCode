@@ -406,7 +406,10 @@ mod tests {
         assert_eq!(read_outcome.normalized_tool_name, tools::UNIFIED_FILE);
 
         let list_err = registry
-            .preflight_validate_call("repo_browser.list_files", &json!({"path": "vtcode-core/src"}))
+            .preflight_validate_call(
+                "repo_browser.list_files",
+                &json!({"path": "vtcode-core/src"}),
+            )
             .expect_err("repo_browser.list_files alias should be rejected");
         assert!(list_err.to_string().contains("Unknown tool"));
 

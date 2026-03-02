@@ -186,9 +186,7 @@ fn is_command_tool(name: &str) -> bool {
 
 fn extract_pty_stream_command(tool_name: &str, args: &Value) -> Option<String> {
     let command_value = match tool_name {
-        tools::RUN_PTY_CMD | "shell" => {
-            args.get("command").or_else(|| args.get("raw_command"))
-        }
+        tools::RUN_PTY_CMD | "shell" => args.get("command").or_else(|| args.get("raw_command")),
         tools::UNIFIED_EXEC | "exec_pty_cmd" | "exec" => {
             let action = args.get("action").and_then(Value::as_str).or_else(|| {
                 if args.get("command").is_some()

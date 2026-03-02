@@ -125,19 +125,11 @@ impl<'a> InlineEventContext<'a> {
                 use vtcode_tui::PlanConfirmationResult;
                 // Handle plan confirmation result (Claude Code style HITL)
                 match result {
-                    PlanConfirmationResult::Execute => InlineLoopAction::PlanApproved {
-                        auto_accept: false,
-                        clear_context: false,
-                    },
-                    PlanConfirmationResult::AutoAccept => InlineLoopAction::PlanApproved {
-                        auto_accept: true,
-                        clear_context: false,
-                    },
-                    PlanConfirmationResult::ClearContextAutoAccept => {
-                        InlineLoopAction::PlanApproved {
-                            auto_accept: true,
-                            clear_context: true,
-                        }
+                    PlanConfirmationResult::Execute => {
+                        InlineLoopAction::PlanApproved { auto_accept: false }
+                    }
+                    PlanConfirmationResult::AutoAccept => {
+                        InlineLoopAction::PlanApproved { auto_accept: true }
                     }
                     PlanConfirmationResult::EditPlan => InlineLoopAction::PlanEditRequested,
                     PlanConfirmationResult::Cancel => InlineLoopAction::Continue,

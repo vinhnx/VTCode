@@ -36,8 +36,6 @@ pub enum InlineListSelection {
 
     /// Plan confirmation dialog result (human-in-the-loop flow)
     PlanApprovalExecute,
-    /// Clear conversation context and auto-accept edits
-    PlanApprovalClearContextAutoAccept,
     /// Return to planning to edit the plan
     PlanApprovalEditPlan,
     /// Cancel execution and stay in plan mode

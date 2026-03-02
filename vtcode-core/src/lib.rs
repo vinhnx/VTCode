@@ -366,7 +366,9 @@ mod tests {
             "path": "."
         });
 
-        let result = registry.execute_tool(tools::UNIFIED_SEARCH, list_args).await;
+        let result = registry
+            .execute_tool(tools::UNIFIED_SEARCH, list_args)
+            .await;
         assert!(result.is_ok());
 
         let response: serde_json::Value = result.expect("Failed to execute unified_search:list");

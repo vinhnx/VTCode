@@ -11,6 +11,9 @@ use crate::agent::runloop::welcome::SessionBootstrap;
 const PLAN_MODE_MIN_TOOL_CALLS_PER_TURN: usize = 48;
 const CODE_CHANGE_SNAPSHOT_TIMEOUT_MS: u64 = 120;
 const DIRECT_TOOL_FOLLOW_UP_DIRECTIVE: &str = "For this direct shell command follow-up, keep the response concise and action-oriented: 1) one short line summarizing the command result, 2) one short line with the exact next action. Avoid extra explanation unless there is an error.";
+const PLAN_APPROVED_EXECUTION_DIRECTIVE: &str = "Plan was approved. Start implementation immediately: execute the plan step by step beginning with the first pending step. Do not ask for another implementation confirmation.";
+const PLAN_APPROVED_EXECUTION_INPUT: &str = "Implement the approved plan now.";
+const MAX_PLAN_SEED_BYTES: usize = 16_000;
 
 fn resolve_effective_turn_timeout_secs(
     configured_turn_timeout_secs: u64,
@@ -162,6 +165,109 @@ async fn capture_code_change_snapshot(
             None
         }
     }
+}
+
+fn merge_plan_seed(
+    plan_content: Option<String>,
+    tracker_content: Option<String>,
+) -> Option<String> {
+    match (plan_content, tracker_content) {
+        (Some(plan), Some(tracker)) => {
+            let plan_trimmed = plan.trim();
+            let tracker_trimmed = tracker.trim();
+            if plan_trimmed.is_empty() {
+                Some(tracker_trimmed.to_string())
+            } else if tracker_trimmed.is_empty() {
+                Some(plan_trimmed.to_string())
+            } else {
+                Some(format!("{plan_trimmed}\n\n{tracker_trimmed}\n"))
+            }
+        }
+        (Some(plan), None) => {
+            let trimmed = plan.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            }
+        }
+        (None, Some(tracker)) => {
+            let trimmed = tracker.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            }
+        }
+        (None, None) => None,
+    }
+}
+
+async fn load_active_plan_seed(
+    tool_registry: &vtcode_core::tools::registry::ToolRegistry,
+) -> Option<String> {
+    let plan_state = tool_registry.plan_mode_state();
+    let plan_file = plan_state.get_plan_file().await?;
+    let plan_content = tokio::fs::read_to_string(&plan_file).await.ok();
+    let tracker_file = plan_file
+        .file_stem()
+        .and_then(|stem| stem.to_str())
+        .map(|stem| plan_file.with_file_name(format!("{stem}.tasks.md")));
+    let tracker_content = if let Some(path) = tracker_file {
+        if path.exists() {
+            tokio::fs::read_to_string(path).await.ok()
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    let merged = merge_plan_seed(plan_content, tracker_content)?;
+    if merged.len() > MAX_PLAN_SEED_BYTES {
+        let truncated = merged
+            .char_indices()
+            .nth(MAX_PLAN_SEED_BYTES)
+            .map(|(idx, _)| merged[..idx].to_string())
+            .unwrap_or(merged);
+        return Some(format!("{truncated}\n\n[plan context truncated]"));
+    }
+
+    Some(merged)
+}
+
+async fn force_reload_workspace_config_for_execution(
+    workspace: &std::path::Path,
+    runtime_cfg: &CoreAgentConfig,
+    vt_cfg: &mut Option<VTCodeConfig>,
+    tool_registry: &mut vtcode_core::tools::registry::ToolRegistry,
+    async_mcp_manager: Option<&crate::agent::runloop::unified::async_mcp_manager::AsyncMcpManager>,
+) -> Result<()> {
+    crate::agent::runloop::unified::turn::workspace::refresh_vt_config(
+        workspace,
+        runtime_cfg,
+        vt_cfg,
+    )
+    .await?;
+
+    if let Some(cfg) = vt_cfg.as_ref() {
+        crate::agent::runloop::unified::turn::workspace::apply_workspace_config_to_registry(
+            tool_registry,
+            cfg,
+        )?;
+
+        if let Some(mcp_manager) = async_mcp_manager {
+            let desired_policy =
+                crate::agent::runloop::unified::async_mcp_manager::approval_policy_from_human_in_the_loop(
+                    cfg.security.human_in_the_loop,
+                );
+            if mcp_manager.approval_policy() != desired_policy {
+                mcp_manager.set_approval_policy(desired_policy);
+            }
+        }
+    }
+
+    Ok(())
 }
 
 fn build_exit_header_context_fast(
@@ -464,34 +570,46 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                     "__direct_tool_follow_up__".to_string()
                 }
                 InteractionOutcome::Continue { input } => input,
-                InteractionOutcome::PlanApproved {
-                    auto_accept,
-                    clear_context,
-                } => {
-                    handle.set_editing_mode(vtcode_tui::EditingMode::Edit);
+                InteractionOutcome::PlanApproved { auto_accept } => {
+                    let plan_seed = load_active_plan_seed(&tool_registry).await;
+                    crate::agent::runloop::unified::plan_mode_state::transition_to_edit_mode(
+                        &tool_registry,
+                        &mut session_stats,
+                        &handle,
+                        true,
+                    )
+                    .await;
                     handle.set_skip_confirmations(auto_accept);
-                    if auto_accept {
+                    renderer.line(MessageStyle::Info, "Executing approved plan...")?;
+
+                    if let Err(err) = force_reload_workspace_config_for_execution(
+                        config.workspace.as_path(),
+                        &config,
+                        &mut vt_cfg,
+                        &mut tool_registry,
+                        async_mcp_manager.as_deref(),
+                    )
+                    .await
+                    {
+                        tracing::warn!(
+                            "Failed to reload workspace configuration at plan approval: {}",
+                            err
+                        );
                         renderer.line(
-                            vtcode_core::utils::ansi::MessageStyle::Info,
-                            "Auto-accept mode enabled for this session.",
+                            MessageStyle::Error,
+                            &format!("Failed to reload configuration: {}", err),
                         )?;
                     }
-                    if clear_context {
-                        conversation_history.clear();
-                        {
-                            let mut ledger = decision_ledger.write().await;
-                            *ledger = vtcode_core::core::decision_tracker::DecisionTracker::new();
-                        }
-                        session_stats =
-                            crate::agent::runloop::unified::state::SessionStats::default();
-                        vtcode_core::utils::transcript::clear();
-                        renderer.clear_screen();
-                        renderer.line(
-                            vtcode_core::utils::ansi::MessageStyle::Info,
-                            "Cleared conversation history.",
-                        )?;
+
+                    let mut execution_directive = PLAN_APPROVED_EXECUTION_DIRECTIVE.to_string();
+                    if let Some(seed) = plan_seed {
+                        execution_directive.push_str("\n\nApproved plan context:\n");
+                        execution_directive.push_str(&seed);
                     }
-                    continue;
+                    conversation_history.push(vtcode_core::llm::provider::Message::system(
+                        execution_directive,
+                    ));
+                    PLAN_APPROVED_EXECUTION_INPUT.to_string()
                 }
             };
             if next_turn_input.trim().is_empty() {
@@ -729,19 +847,6 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                 },
             });
 
-            if session_stats.take_context_clear_request() {
-                conversation_history.clear();
-                {
-                    let mut ledger = decision_ledger.write().await;
-                    *ledger = vtcode_core::core::decision_tracker::DecisionTracker::new();
-                }
-                session_stats = crate::agent::runloop::unified::state::SessionStats::default();
-                vtcode_core::utils::transcript::clear();
-                renderer.clear_screen();
-                renderer.line(MessageStyle::Info, "Cleared conversation history.")?;
-                handle.set_editing_mode(vtcode_tui::EditingMode::Edit);
-                handle.set_skip_confirmations(true);
-            }
             last_activity_time = Some(Instant::now());
             vtcode_core::tools::cache::FILE_CACHE
                 .check_pressure_and_evict()

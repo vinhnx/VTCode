@@ -156,20 +156,12 @@ async fn handle_pending_confirmation(
         Ok(outcome) => {
             if matches!(
                 outcome,
-                PlanConfirmationOutcome::Execute
-                    | PlanConfirmationOutcome::AutoAccept
-                    | PlanConfirmationOutcome::ClearContextAutoAccept
+                PlanConfirmationOutcome::Execute | PlanConfirmationOutcome::AutoAccept
             ) {
                 transition_to_edit_mode(ctx.tool_registry, ctx.session_stats, ctx.handle, true)
                     .await;
-                ctx.handle.set_skip_confirmations(matches!(
-                    outcome,
-                    PlanConfirmationOutcome::AutoAccept
-                        | PlanConfirmationOutcome::ClearContextAutoAccept
-                ));
-                if matches!(outcome, PlanConfirmationOutcome::ClearContextAutoAccept) {
-                    ctx.session_stats.request_context_clear();
-                }
+                ctx.handle
+                    .set_skip_confirmations(matches!(outcome, PlanConfirmationOutcome::AutoAccept));
                 tracing::info!(
                     target: "vtcode.plan_mode",
                     "User approved plan execution, transitioning to coder profile (mutating tools enabled)"

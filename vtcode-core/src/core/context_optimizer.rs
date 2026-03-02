@@ -332,7 +332,9 @@ mod tests {
             .collect();
         let result = json!({"matches": matches});
 
-        let optimized = optimizer.optimize_result(tools::UNIFIED_SEARCH, result).await;
+        let optimized = optimizer
+            .optimize_result(tools::UNIFIED_SEARCH, result)
+            .await;
 
         let opt_matches = optimized["matches"].as_array().unwrap();
         assert_eq!(opt_matches.len(), MAX_GREP_RESULTS);
@@ -349,7 +351,9 @@ mod tests {
         ];
         let result = json!({"matches": matches});
 
-        let optimized = optimizer.optimize_result(tools::UNIFIED_SEARCH, result).await;
+        let optimized = optimizer
+            .optimize_result(tools::UNIFIED_SEARCH, result)
+            .await;
         let opt_matches = optimized["matches"].as_array().unwrap();
         assert_eq!(opt_matches.len(), 2);
         assert_eq!(optimized["total"], 2);
@@ -363,7 +367,9 @@ mod tests {
         let files: Vec<_> = (0..100).map(|i| json!(format!("file{}.rs", i))).collect();
         let result = json!({"files": files});
 
-        let optimized = optimizer.optimize_result(tools::UNIFIED_SEARCH, result).await;
+        let optimized = optimizer
+            .optimize_result(tools::UNIFIED_SEARCH, result)
+            .await;
 
         assert_eq!(optimized["total_files"], 100);
         assert!(optimized["sample"].is_array());

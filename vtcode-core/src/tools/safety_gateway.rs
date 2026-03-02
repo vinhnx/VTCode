@@ -17,8 +17,8 @@ use serde_json::Value;
 use thiserror::Error;
 use tokio::sync::Mutex;
 
-use crate::config::constants::tools;
 use crate::config::CommandsConfig;
+use crate::config::constants::tools;
 use crate::dotfile_protection::{
     AccessContext, AccessType, DotfileGuardian, ProtectionDecision, get_global_guardian,
 };
@@ -775,8 +775,11 @@ impl SafetyGateway {
             tool_name
         };
 
-        let mut ctx =
-            ToolRiskContext::new(risk_tool_name.to_string(), source, self.config.workspace_trust);
+        let mut ctx = ToolRiskContext::new(
+            risk_tool_name.to_string(),
+            source,
+            self.config.workspace_trust,
+        );
 
         // Set flags based on tool type
         if self.is_mutating_call(tool_name, args) {

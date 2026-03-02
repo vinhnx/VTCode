@@ -1,8 +1,7 @@
-//! Plan confirmation HITL tool for exit_plan_mode
+//! Plan confirmation HITL flow for Plan -> Edit execution.
 //!
-//! This module handles the "Execute After Confirmation" pattern from Claude Code's
-//! plan mode workflow. When the agent calls `exit_plan_mode`, this shows the user
-//! an Implementation Blueprint panel and waits for confirmation before proceeding.
+//! This implementation renders the proposed plan directly in the transcript and
+//! captures inline typed choices (1/2/3/4 or feedback text), without modal/palette UI.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -13,8 +12,8 @@ use tokio::sync::Notify;
 use tokio::task;
 
 use vtcode_tui::{
-    InlineEvent, InlineHandle, InlineListSelection, InlineSession, PlanConfirmationResult,
-    PlanContent,
+    InlineEvent, InlineHandle, InlineListSelection, InlineMessageKind, InlineSession,
+    PlanConfirmationResult, PlanContent,
 };
 
 use super::state::{CtrlCSignal, CtrlCState};
@@ -26,18 +25,176 @@ pub enum PlanConfirmationOutcome {
     Execute,
     /// User approved with auto-accept enabled for future confirmations
     AutoAccept,
-    /// User approved with context clear and auto-accept enabled
-    ClearContextAutoAccept,
     /// User wants to edit the plan
     EditPlan,
     /// User cancelled
     Cancel,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ParsedPlanChoice {
+    AutoAccept,
+    ManualApprove,
+    StayInPlanMode,
+    Revise,
+}
+
+fn line_count(text: &str) -> usize {
+    text.lines().count().max(1)
+}
+
+fn append_message(handle: &InlineHandle, kind: InlineMessageKind, text: impl Into<String>) {
+    let text = text.into();
+    handle.append_pasted_message(kind, text.clone(), line_count(&text));
+}
+
+fn normalize_choice_text(text: &str) -> String {
+    text.chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() || ch.is_ascii_whitespace() {
+                ch.to_ascii_lowercase()
+            } else {
+                ' '
+            }
+        })
+        .collect::<String>()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn parse_plan_choice(input: &str) -> (ParsedPlanChoice, Option<String>) {
+    let trimmed = input.trim();
+    if trimmed.is_empty() {
+        return (ParsedPlanChoice::Revise, None);
+    }
+
+    let parse_numbered = |choice_number: char| -> Option<Option<String>> {
+        let mut chars = trimmed.chars();
+        let first = chars.next()?;
+        if first != choice_number {
+            return None;
+        }
+        let rest = chars.as_str().trim_start_matches(['.', ')', ':', '-', ' ']);
+        if rest.is_empty() {
+            Some(None)
+        } else {
+            Some(Some(rest.to_string()))
+        }
+    };
+
+    if parse_numbered('1').is_some() {
+        return (ParsedPlanChoice::AutoAccept, None);
+    }
+    if parse_numbered('2').is_some() {
+        return (ParsedPlanChoice::ManualApprove, None);
+    }
+    if parse_numbered('3').is_some() {
+        return (ParsedPlanChoice::StayInPlanMode, None);
+    }
+    if let Some(feedback) = parse_numbered('4') {
+        return (ParsedPlanChoice::Revise, feedback);
+    }
+
+    let normalized = normalize_choice_text(trimmed);
+    let auto_accept_aliases = [
+        "yes",
+        "y",
+        "continue",
+        "go",
+        "start",
+        "implement",
+        "execute",
+        "auto accept",
+        "auto accept edits",
+        "yes auto accept edits",
+    ];
+    if auto_accept_aliases.contains(&normalized.as_str()) {
+        return (ParsedPlanChoice::AutoAccept, None);
+    }
+
+    let manual_aliases = [
+        "manual",
+        "manually approve edits",
+        "manual approve edits",
+        "yes manually approve edits",
+        "approve manually",
+    ];
+    if manual_aliases.contains(&normalized.as_str()) {
+        return (ParsedPlanChoice::ManualApprove, None);
+    }
+
+    let stay_aliases = [
+        "no",
+        "stay in plan mode",
+        "keep in plan mode",
+        "keep planning",
+        "continue planning",
+        "stay in plan",
+    ];
+    if stay_aliases.contains(&normalized.as_str()) {
+        return (ParsedPlanChoice::StayInPlanMode, None);
+    }
+
+    let revise_aliases = [
+        "revise",
+        "feedback",
+        "edit plan",
+        "revise plan",
+        "type feedback to revise the plan",
+    ];
+    if revise_aliases.contains(&normalized.as_str()) {
+        return (ParsedPlanChoice::Revise, None);
+    }
+
+    (ParsedPlanChoice::Revise, Some(trimmed.to_string()))
+}
+
+fn render_confirmation_prompt(handle: &InlineHandle, plan: &PlanContent) {
+    append_message(handle, InlineMessageKind::Info, "Ready to code?");
+    append_message(
+        handle,
+        InlineMessageKind::Info,
+        "A plan is ready to execute. Would you like to proceed?",
+    );
+
+    if !plan.raw_content.trim().is_empty() {
+        append_message(handle, InlineMessageKind::Agent, plan.raw_content.clone());
+    } else if !plan.summary.trim().is_empty() {
+        append_message(handle, InlineMessageKind::Agent, plan.summary.clone());
+    }
+
+    if let Some(path) = plan.file_path.as_deref()
+        && !path.trim().is_empty()
+    {
+        append_message(
+            handle,
+            InlineMessageKind::Info,
+            format!("Plan file: {path}"),
+        );
+    }
+
+    append_message(
+        handle,
+        InlineMessageKind::Info,
+        "1. Yes, auto-accept edits (Recommended)",
+    );
+    append_message(
+        handle,
+        InlineMessageKind::Info,
+        "2. Yes, manually approve edits",
+    );
+    append_message(handle, InlineMessageKind::Info, "3. No, stay in Plan mode");
+    append_message(
+        handle,
+        InlineMessageKind::Info,
+        "4. Type feedback to revise the plan",
+    );
+}
+
 /// Execute the plan confirmation HITL flow after exit_plan_mode tool.
 ///
-/// This shows the Implementation Blueprint panel with the plan summary
-/// and waits for user to choose: Execute or Stay in Plan Mode.
+/// The plan is rendered as static transcript markdown plus an inline 4-way choice list.
 pub(crate) async fn execute_plan_confirmation(
     handle: &InlineHandle,
     session: &mut InlineSession,
@@ -45,14 +202,12 @@ pub(crate) async fn execute_plan_confirmation(
     ctrl_c_state: &Arc<CtrlCState>,
     ctrl_c_notify: &Arc<Notify>,
 ) -> Result<PlanConfirmationOutcome> {
-    // Show the plan confirmation modal
-    handle.show_plan_confirmation(plan_content);
+    render_confirmation_prompt(handle, &plan_content);
     handle.force_redraw();
     task::yield_now().await;
 
     loop {
         if ctrl_c_state.is_cancel_requested() {
-            handle.close_modal();
             handle.force_redraw();
             task::yield_now().await;
             tokio::time::sleep(Duration::from_millis(100)).await;
@@ -66,7 +221,6 @@ pub(crate) async fn execute_plan_confirmation(
         };
 
         let Some(event) = maybe_event else {
-            handle.close_modal();
             handle.force_redraw();
             task::yield_now().await;
             tokio::time::sleep(Duration::from_millis(100)).await;
@@ -83,7 +237,6 @@ pub(crate) async fn execute_plan_confirmation(
                     ctrl_c_state.register_signal()
                 };
                 ctrl_c_notify.notify_waiters();
-                handle.close_modal();
                 handle.force_redraw();
                 task::yield_now().await;
                 tokio::time::sleep(Duration::from_millis(100)).await;
@@ -93,63 +246,46 @@ pub(crate) async fn execute_plan_confirmation(
                     CtrlCSignal::Cancel => return Ok(PlanConfirmationOutcome::Cancel),
                 }
             }
+            InlineEvent::Submit(text) | InlineEvent::QueueSubmit(text) => {
+                ctrl_c_state.disarm_exit();
+                let (choice, feedback) = parse_plan_choice(&text);
+                if let Some(feedback) = feedback
+                    && !feedback.trim().is_empty()
+                {
+                    handle.set_input(feedback);
+                }
+                return Ok(match choice {
+                    ParsedPlanChoice::AutoAccept => PlanConfirmationOutcome::AutoAccept,
+                    ParsedPlanChoice::ManualApprove => PlanConfirmationOutcome::Execute,
+                    ParsedPlanChoice::StayInPlanMode | ParsedPlanChoice::Revise => {
+                        PlanConfirmationOutcome::EditPlan
+                    }
+                });
+            }
             InlineEvent::PlanConfirmation(result) => {
                 ctrl_c_state.disarm_exit();
-                handle.close_modal();
-                handle.force_redraw();
-                task::yield_now().await;
-                tokio::time::sleep(Duration::from_millis(100)).await;
-
                 return Ok(match result {
                     PlanConfirmationResult::Execute => PlanConfirmationOutcome::Execute,
                     PlanConfirmationResult::AutoAccept => PlanConfirmationOutcome::AutoAccept,
-                    PlanConfirmationResult::ClearContextAutoAccept => {
-                        PlanConfirmationOutcome::ClearContextAutoAccept
-                    }
                     PlanConfirmationResult::EditPlan => PlanConfirmationOutcome::EditPlan,
                     PlanConfirmationResult::Cancel => PlanConfirmationOutcome::Cancel,
                 });
             }
-            // Handle direct list modal submissions (when plan approval selections are chosen)
             InlineEvent::ListModalSubmit(selection) => {
                 ctrl_c_state.disarm_exit();
-                handle.close_modal();
-                handle.force_redraw();
-                task::yield_now().await;
-                tokio::time::sleep(Duration::from_millis(100)).await;
-
                 return Ok(match selection {
                     InlineListSelection::PlanApprovalExecute => PlanConfirmationOutcome::Execute,
-                    InlineListSelection::PlanApprovalClearContextAutoAccept => {
-                        PlanConfirmationOutcome::ClearContextAutoAccept
-                    }
                     InlineListSelection::PlanApprovalAutoAccept => {
                         PlanConfirmationOutcome::AutoAccept
                     }
-                    InlineListSelection::PlanApprovalEditPlan => PlanConfirmationOutcome::EditPlan,
-                    InlineListSelection::PlanApprovalCancel => PlanConfirmationOutcome::Cancel,
-                    _ => PlanConfirmationOutcome::Cancel, // Unknown selection = cancel
+                    InlineListSelection::PlanApprovalEditPlan
+                    | InlineListSelection::PlanApprovalCancel => PlanConfirmationOutcome::EditPlan,
+                    _ => PlanConfirmationOutcome::Cancel,
                 });
             }
-            InlineEvent::ListModalCancel | InlineEvent::Cancel => {
+            InlineEvent::ListModalCancel | InlineEvent::Cancel | InlineEvent::Exit => {
                 ctrl_c_state.disarm_exit();
-                handle.close_modal();
-                handle.force_redraw();
-                task::yield_now().await;
-                tokio::time::sleep(Duration::from_millis(100)).await;
                 return Ok(PlanConfirmationOutcome::Cancel);
-            }
-            InlineEvent::Exit => {
-                ctrl_c_state.disarm_exit();
-                handle.close_modal();
-                handle.force_redraw();
-                task::yield_now().await;
-                tokio::time::sleep(Duration::from_millis(100)).await;
-                return Ok(PlanConfirmationOutcome::Cancel);
-            }
-            InlineEvent::Submit(_) | InlineEvent::QueueSubmit(_) => {
-                // Ignore text input while modal is shown.
-                continue;
             }
             _ => {}
         }
@@ -169,13 +305,6 @@ pub(crate) fn plan_confirmation_outcome_to_json(outcome: &PlanConfirmationOutcom
             "action": "execute",
             "auto_accept": true,
             "message": "User approved with auto-accept. Proceed with implementation."
-        }),
-        PlanConfirmationOutcome::ClearContextAutoAccept => json!({
-            "status": "approved",
-            "action": "execute",
-            "auto_accept": true,
-            "clear_context": true,
-            "message": "User approved with context clear and auto-accept. Proceed with implementation."
         }),
         PlanConfirmationOutcome::EditPlan => json!({
             "status": "edit_requested",

@@ -299,13 +299,6 @@ pub(crate) fn show_plan_confirmation_modal(
 ) {
     use crate::ui::tui::types::{InlineListItem, InlineListSelection};
 
-    let context_usage = format!(
-        "{} used",
-        extract_context_usage_percent(session.input_status_right.as_deref())
-            .map(|value| format!("{value}%"))
-            .unwrap_or_else(|| "--".to_string())
-    );
-
     let mut lines: Vec<String> = plan
         .raw_content
         .lines()
@@ -328,15 +321,7 @@ pub(crate) fn show_plan_confirmation_modal(
     // Four-option confirmation menu
     let items = vec![
         InlineListItem {
-            title: format!("Yes, clear context ({context_usage}) and auto-accept edits"),
-            subtitle: Some("Reset conversation history and execute immediately.".to_string()),
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::PlanApprovalClearContextAutoAccept),
-            search_value: None,
-        },
-        InlineListItem {
-            title: "Yes, auto-accept edits".to_string(),
+            title: "Yes, auto-accept edits (Recommended)".to_string(),
             subtitle: Some("Keep context and execute with auto-approval.".to_string()),
             badge: None,
             indent: 0,
@@ -352,6 +337,14 @@ pub(crate) fn show_plan_confirmation_modal(
             search_value: None,
         },
         InlineListItem {
+            title: "No, stay in Plan mode".to_string(),
+            subtitle: Some("Keep planning without executing yet.".to_string()),
+            badge: None,
+            indent: 0,
+            selection: Some(InlineListSelection::PlanApprovalCancel),
+            search_value: None,
+        },
+        InlineListItem {
             title: "Type feedback to revise the plan".to_string(),
             subtitle: Some("Return to plan mode and refine the plan.".to_string()),
             badge: None,
@@ -361,10 +354,7 @@ pub(crate) fn show_plan_confirmation_modal(
         },
     ];
 
-    let list_state = ModalListState::new(
-        items,
-        Some(InlineListSelection::PlanApprovalClearContextAutoAccept),
-    );
+    let list_state = ModalListState::new(items, Some(InlineListSelection::PlanApprovalAutoAccept));
 
     let state = ModalState {
         title: "Ready to code?".to_string(),
@@ -382,28 +372,6 @@ pub(crate) fn show_plan_confirmation_modal(
     session.cursor_visible = false;
     session.modal = Some(state);
     mark_dirty(session);
-}
-
-fn extract_context_usage_percent(status_line: Option<&str>) -> Option<u8> {
-    let status_line = status_line?;
-    let words: Vec<&str> = status_line.split_whitespace().collect();
-    if words.len() < 2 {
-        return None;
-    }
-
-    for pair in words.windows(2) {
-        let candidate = pair[0].trim_end_matches('%');
-        let next = pair[1].trim_matches(|ch: char| ch == ',' || ch == '.');
-        if !next.eq_ignore_ascii_case("context") {
-            continue;
-        }
-
-        if let Ok(percent) = candidate.parse::<u8>() {
-            return Some(percent.min(100));
-        }
-    }
-
-    None
 }
 
 #[allow(dead_code)]

@@ -9,8 +9,6 @@ pub(crate) enum InlineLoopAction {
     PlanApproved {
         /// If true, auto-accept file edits without prompting
         auto_accept: bool,
-        /// If true, clear conversation context before continuing
-        clear_context: bool,
     },
     /// User wants to return to plan mode to edit the plan
     PlanEditRequested,

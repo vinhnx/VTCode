@@ -25,9 +25,7 @@ pub async fn handle_manage_mcp(
         McpCommandAction::EditConfig | McpCommandAction::Login(_) | McpCommandAction::Logout(_)
     ) {
         super::activation::ensure_mcp_activated(&mut ctx).await?;
-        if !super::activation::try_attach_ready_mcp(&mut ctx).await?
-            && requires_live_tools
-        {
+        if !super::activation::try_attach_ready_mcp(&mut ctx).await? && requires_live_tools {
             ctx.renderer.line(
                 MessageStyle::Info,
                 "MCP is initializing asynchronously. Run the command again in a moment.",
