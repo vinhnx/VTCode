@@ -245,16 +245,6 @@ pub(crate) async fn initialize_session_ui(
         }
     }
 
-    if let Some(mcp_manager) = &session_state.async_mcp_manager {
-        let mcp_status = mcp_manager.get_status().await;
-        if mcp_status.is_initializing() {
-            renderer.line(
-                MessageStyle::Info,
-                "MCP is still initializing in the background...",
-            )?;
-        }
-    }
-
     handle.set_theme(theme_spec.clone());
     palettes::apply_prompt_style(&handle);
     handle.set_placeholder(default_placeholder.clone());
