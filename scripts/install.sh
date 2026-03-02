@@ -3,7 +3,7 @@ set -eu
 
 # VT Code Installer - macOS & Linux
 # Usage: curl -fsSL https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.sh | bash
-#        curl -fsSL https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.sh | bash -s v0.85.0
+#        curl -fsSL https://raw.githubusercontent.com/vinhnx/vtcode/main/scripts/install.sh | bash -s 0.85.0
 
 VERSION="${1:-latest}"
 INSTALL_DIR="${VTCode_INSTALL_DIR:-$HOME/.local/bin}"
@@ -54,15 +54,15 @@ fetch_latest_version() {
     while [ $attempt -le $max_attempts ]; do
         # Use GitHub API to get latest release
         release_json=$(curl -fsSL --connect-timeout 10 --max-time 30 \
-            "https://api.github.com/repos/vinhnx/vtcode/releases/latest" 2>/dev/null) || true
+            "https://api.github.com/repos/vinhnx/VTCode/releases/latest" 2>/dev/null) || true
         
         # Try multiple parsing methods (jq preferred, then grep/sed fallback)
         if command -v jq >/dev/null 2>&1; then
             version=$(echo "$release_json" | jq -r '.tag_name // empty' 2>/dev/null | sed 's/^v//')
         else
             # Fallback: grep for tag_name field, extract version
-            version=$(echo "$release_json" | grep -o '"tag_name"[[:space:]]*:[[:space:]]*"v[^"]*"' \
-                | head -1 | sed 's/.*"v//' | tr -d '"' | tr -d ' ')
+            version=$(echo "$release_json" | grep -o '"tag_name"[[:space:]]*:[[:space:]]*"[^"]*"' \
+                | head -1 | sed 's/.*://' | tr -d '"' | tr -d ' ' | sed 's/^v//')
         fi
         
         # Validate version format (should be like "0.85.2")
@@ -82,7 +82,7 @@ fetch_latest_version() {
         [ $attempt -le $max_attempts ] && sleep 2
     done
     
-    die "Failed to fetch latest version from GitHub API. Try specifying a version: bash install.sh v0.85.2"
+    die "Failed to fetch latest version from GitHub API. Try specifying a version: bash install.sh 0.85.2"
 }
 
 # Detect platform
@@ -152,7 +152,7 @@ main() {
     
     # Build download URL
     asset="vtcode-${resolved_version}-${platform}.tar.gz"
-    url="https://github.com/vinhnx/vtcode/releases/download/v${resolved_version}/${asset}"
+    url="https://github.com/vinhnx/VTCode/releases/download/${resolved_version}/${asset}"
     
     # Create temp directory
     tmp_dir=$(mktemp -d)
