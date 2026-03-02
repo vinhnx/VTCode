@@ -92,7 +92,12 @@
     "unified_search",
     "web_fetch",
     "write file",
-    "write_file"
+    "write_file",
+    "cargo_check",
+    "cargo_test",
+    "git_status",
+    "git_diff",
+    "git_log"
   ],
   "policies": {
     "apply_patch": "allow",
@@ -186,7 +191,12 @@
     "switch_edit_mode": "prompt",
     "switch_plan_mode": "prompt",
     "switch_to_edit_mode": "prompt",
-    "switch_to_plan_mode": "prompt"
+    "switch_to_plan_mode": "prompt",
+    "cargo_check": "allow",
+    "cargo_test": "allow",
+    "git_status": "allow",
+    "git_diff": "allow",
+    "git_log": "allow"
   },
   "constraints": {},
   "mcp": {

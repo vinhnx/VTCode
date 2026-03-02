@@ -60,6 +60,7 @@ impl McpInitStatus {
         }
     }
 
+    #[allow(dead_code)]
     pub fn is_initializing(&self) -> bool {
         matches!(self, McpInitStatus::Initializing { .. })
     }
