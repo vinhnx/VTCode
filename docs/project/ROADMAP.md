@@ -127,7 +127,7 @@ This document outlines planned enhancements and features for the vtcode coding a
 -   **Research-preview Context Management** - Sophisticated conversation handling
 -   **Novel Tool Design** - Innovative interface patterns
 -   **LLM Architecture Experiments** - Comparative model evaluation
--   **Human-Agent Teaming** - Enhanced collaboration patterns
+-   **Human-Agent Collaboration** - Enhanced collaboration patterns
 
 ## Implementation Notes
 

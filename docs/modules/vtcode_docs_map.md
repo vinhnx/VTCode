@@ -574,6 +574,11 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: anstyle-git Syntax, anstyle-ls Syntax, Git Config Color Syntax, Vtcode Integration Points, Cheat Sheet: Common Patterns
   - **User Questions**: "What can you tell me about Quick Reference: Anstyle Crates?", "How does anstyle-git Syntax work?", "How does anstyle-ls Syntax work?"
 
+- **File**: `docs/project/TODO.md`
+  - **Content**: Rust Fuzz Book
+  - **Topics**: Applied: Default Status Line Items Pattern (Codex PR #12015), Plan: Apply Data-Oriented Design to vtcode, [Requirements](#requirements), [Installing](#installing), [Upgrading](#upgrading)
+  - **User Questions**: "What can you tell me about Rust Fuzz Book?", "How does Applied: Default Status Line Items Pattern (Codex PR #12015) work?", "How does Plan: Apply Data-Oriented Design to vtcode work?"
+
 - **File**: `docs/features/SHELL_SNAPSHOT.md`
   - **Content**: Shell Environment Snapshot
   - **Topics**: Problem, Solution, Usage, Architecture, Excluded Environment Variables

@@ -269,14 +269,14 @@ fn get_optional_api_key_with_fallback(env_var: &str, config_value: Option<&Strin
 /// Get Gemini API key with secure fallback
 fn get_gemini_api_key(sources: &ApiKeySources) -> Result<String> {
     // Try primary Gemini environment variable
-    if let Ok(key) = env::var(&sources.gemini_env)
+    if let Some(key) = read_env_var(&sources.gemini_env)
         && !key.is_empty()
     {
         return Ok(key);
     }
 
     // Try Google API key as fallback (for backward compatibility)
-    if let Ok(key) = env::var("GOOGLE_API_KEY")
+    if let Some(key) = read_env_var("GOOGLE_API_KEY")
         && !key.is_empty()
     {
         return Ok(key);

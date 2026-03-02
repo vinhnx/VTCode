@@ -205,7 +205,6 @@ Last reviewed: 2026-02-16
 | Configuration   | B+      | Expand precedence/override edge-case tests.                                | active improvement |
 | Security        | B+      | Add sandbox boundary integration tests.                                    | active improvement |
 | MCP Integration | B+      | Complete OAuth and lifecycle negative-path tests.                          | active improvement |
-| Subagent System | B       | Add custom-loading and isolation tests.                                    | active improvement |
 | PTY/Exec        | B       | Expand PTY regression coverage for shell-init and cross-platform behavior. | active improvement |
 | Tree-Sitter / Safety | B+      | Expand bash safety tests with obfuscation patterns.                       | maintenance        |
 | TUI                 | B       | Add higher-level integration tests for modal flows and queue editing.      | active improvement |
