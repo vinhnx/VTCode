@@ -348,6 +348,10 @@ fn should_exit_plan_mode_from_user_text(text: &str) -> bool {
     // These are common in TUI flows and should reliably trigger Plan Mode exit.
     let direct_commands = [
         "implement",
+        "yes",
+        "continue",
+        "go",
+        "start",
         "implement now",
         "start implementing",
         "start implementation",
@@ -611,6 +615,15 @@ mod tests {
     fn detects_short_implement_variants() {
         assert!(should_exit_plan_mode_from_user_text("Implement now"));
         assert!(should_exit_plan_mode_from_user_text("Start implementing"));
+    }
+
+    #[test]
+    fn detects_direct_confirmation_aliases_as_execute_intent() {
+        assert!(should_exit_plan_mode_from_user_text("yes"));
+        assert!(should_exit_plan_mode_from_user_text("continue"));
+        assert!(should_exit_plan_mode_from_user_text("go"));
+        assert!(should_exit_plan_mode_from_user_text("start"));
+        assert!(should_exit_plan_mode_from_user_text("yes!"));
     }
 
     #[test]
