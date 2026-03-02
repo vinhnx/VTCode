@@ -130,6 +130,26 @@ pub fn append_notes(existing: Option<String>, append: Option<&str>) -> Option<St
     }
 }
 
+pub fn append_notes_section(markdown: &mut String, notes: Option<&str>) {
+    if let Some(text) = notes {
+        let trimmed = text.trim();
+        if !trimmed.is_empty() {
+            markdown.push_str("\n## Notes\n\n");
+            markdown.push_str(trimmed);
+            markdown.push('\n');
+        }
+    }
+}
+
+pub fn is_bulk_sync_update(
+    items: Option<&[String]>,
+    index: Option<usize>,
+    index_path: Option<&str>,
+    status: Option<&str>,
+) -> bool {
+    items.is_some() && ((index.is_none() && index_path.is_none()) || status.is_none())
+}
+
 #[derive(Default)]
 pub struct TaskCounts {
     pub total: usize,
@@ -190,6 +210,25 @@ mod tests {
     fn append_notes_joins_with_single_newline() {
         let merged = append_notes(Some("left".to_string()), Some("right"));
         assert_eq!(merged, Some("left\nright".to_string()));
+    }
+
+    #[test]
+    fn append_notes_section_ignores_blank_notes() {
+        let mut markdown = "# Title\n".to_string();
+        append_notes_section(&mut markdown, Some("   "));
+        assert_eq!(markdown, "# Title\n");
+    }
+
+    #[test]
+    fn is_bulk_sync_update_requires_items_and_missing_single_item_fields() {
+        let items = vec!["Step".to_string()];
+        assert!(is_bulk_sync_update(Some(&items), None, None, None));
+        assert!(!is_bulk_sync_update(
+            Some(&items),
+            Some(1),
+            None,
+            Some("completed")
+        ));
     }
 
     #[test]

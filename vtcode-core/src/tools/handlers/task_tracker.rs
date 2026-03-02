@@ -12,20 +12,23 @@
 //! - `list`: Show the current task checklist and its status
 //! - `add`: Add a new item to an existing checklist
 
+use super::plan_mode::PlanModeState;
+use super::plan_task_tracker::{PlanTaskTrackerArgs, PlanTaskTrackerTool};
 use std::str::FromStr;
 
 use crate::config::constants::tools;
 use crate::tools::handlers::task_tracking::{
-    TaskCounts, TaskTrackingStatus, append_notes, parse_marked_status_prefix, parse_status_prefix,
+    TaskCounts, TaskTrackingStatus, append_notes, append_notes_section, is_bulk_sync_update,
+    parse_marked_status_prefix, parse_status_prefix,
 };
 use crate::utils::file_utils::{
     ensure_dir_exists, read_file_with_context, write_file_with_context,
 };
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -60,9 +63,23 @@ impl TaskChecklist {
                 item.description
             ));
         }
-        if let Some(ref notes) = self.notes {
-            md.push_str(&format!("\n## Notes\n\n{}\n", notes));
+        append_notes_section(&mut md, self.notes.as_deref());
+        md
+    }
+
+    fn to_plan_markdown(&self) -> String {
+        let mut md = format!("# {}\n\n## Plan of Work\n\n", self.title);
+        for item in &self.items {
+            let trimmed = item.description.trim_start();
+            let indent = &item.description[..item.description.len() - trimmed.len()];
+            md.push_str(&format!(
+                "{}- {} {}\n",
+                indent,
+                item.status.plan_checkbox(),
+                trimmed
+            ));
         }
+        append_notes_section(&mut md, self.notes.as_deref());
         md
     }
 
@@ -133,6 +150,135 @@ fn parse_input_items(items: &[String]) -> Vec<TaskItem> {
         .collect()
 }
 
+fn parse_single_index_from_path(index_path: &str) -> Result<usize> {
+    let mut parts = index_path.trim().split('.');
+    let first = parts.next().context("index_path cannot be empty")?;
+    if parts.next().is_some() {
+        bail!(
+            "Hierarchical index_path '{}' requires Plan Mode support. Use 'index' in Edit mode or switch to Plan Mode.",
+            index_path
+        );
+    }
+    let parsed = first
+        .parse::<usize>()
+        .with_context(|| format!("Invalid index_path '{}': expected integer", index_path))?;
+    if parsed == 0 {
+        bail!("index_path must be >= 1");
+    }
+    Ok(parsed)
+}
+
+fn parse_plan_mirror_markdown(content: &str) -> Option<TaskChecklist> {
+    let mut title = String::new();
+    let mut items = Vec::new();
+    let mut notes_lines = Vec::new();
+    let mut in_notes = false;
+    let mut idx = 1usize;
+
+    for raw in content.lines() {
+        let trimmed = raw.trim();
+
+        if title.is_empty()
+            && let Some(rest) = trimmed.strip_prefix("# ")
+        {
+            title = rest.trim().to_string();
+            continue;
+        }
+
+        if trimmed == "## Notes" {
+            in_notes = true;
+            continue;
+        }
+
+        if let Some(header) = trimmed.strip_prefix("## ") {
+            let lowered = header.trim().to_ascii_lowercase();
+            in_notes = lowered == "notes";
+            continue;
+        }
+
+        if in_notes {
+            notes_lines.push(raw.to_string());
+            continue;
+        }
+
+        let Some(rest) = trimmed
+            .strip_prefix("- ")
+            .or_else(|| trimmed.strip_prefix("* "))
+            .or_else(|| trimmed.strip_prefix("+ "))
+        else {
+            continue;
+        };
+
+        if let Some((status, description)) = parse_marked_status_prefix(rest) {
+            let leading_spaces = raw.chars().take_while(|c| *c == ' ').count();
+            let description = format!("{}{}", " ".repeat(leading_spaces), description.trim());
+            items.push(TaskItem {
+                index: idx,
+                description,
+                status,
+            });
+            idx += 1;
+        }
+    }
+
+    if title.is_empty() && items.is_empty() {
+        return None;
+    }
+
+    let notes = if notes_lines.is_empty() {
+        None
+    } else {
+        Some(notes_lines.join("\n").trim().to_string())
+    };
+
+    Some(TaskChecklist {
+        title,
+        items,
+        notes,
+    })
+}
+
+fn newer_source(
+    global_modified: Option<std::time::SystemTime>,
+    plan_modified: Option<std::time::SystemTime>,
+    plan_mode: bool,
+) -> TrackerSource {
+    if plan_mode {
+        return if plan_modified.is_some() {
+            TrackerSource::Plan
+        } else {
+            TrackerSource::Global
+        };
+    }
+
+    match (global_modified, plan_modified) {
+        (Some(global), Some(plan)) => {
+            if global > plan {
+                TrackerSource::Global
+            } else if plan > global {
+                TrackerSource::Plan
+            } else {
+                TrackerSource::Global
+            }
+        }
+        (Some(_), None) => TrackerSource::Global,
+        (None, Some(_)) => TrackerSource::Plan,
+        (None, None) => {
+            if plan_mode {
+                TrackerSource::Plan
+            } else {
+                TrackerSource::Global
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TrackerSource {
+    Global,
+    Plan,
+}
+
 /// Arguments for the task_tracker tool
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TaskTrackerArgs {
@@ -151,6 +297,10 @@ pub struct TaskTrackerArgs {
     #[serde(default)]
     pub index: Option<usize>,
 
+    /// Hierarchical index path for update (Plan Mode, optional)
+    #[serde(default)]
+    pub index_path: Option<String>,
+
     /// New status for the item (required for `update`)
     #[serde(default)]
     pub status: Option<String>,
@@ -158,6 +308,10 @@ pub struct TaskTrackerArgs {
     /// Description for a new item (required for `add`)
     #[serde(default)]
     pub description: Option<String>,
+
+    /// Optional parent path for add in Plan Mode (example: "2")
+    #[serde(default)]
+    pub parent_index_path: Option<String>,
 
     /// Optional notes to append
     #[serde(default)]
@@ -167,13 +321,15 @@ pub struct TaskTrackerArgs {
 /// Task Tracker tool state
 pub struct TaskTrackerTool {
     workspace_root: PathBuf,
+    plan_mode_state: PlanModeState,
     checklist: Arc<RwLock<Option<TaskChecklist>>>,
 }
 
 impl TaskTrackerTool {
-    pub fn new(workspace_root: PathBuf) -> Self {
+    pub fn new(workspace_root: PathBuf, plan_mode_state: PlanModeState) -> Self {
         Self {
             workspace_root,
+            plan_mode_state,
             checklist: Arc::new(RwLock::new(None)),
         }
     }
@@ -184,6 +340,12 @@ impl TaskTrackerTool {
 
     fn task_file(&self) -> PathBuf {
         self.tasks_dir().join("current_task.md")
+    }
+
+    async fn plan_task_file(&self) -> Option<PathBuf> {
+        let plan_file = self.plan_mode_state.get_plan_file().await?;
+        let stem = plan_file.file_stem()?.to_str()?;
+        Some(plan_file.with_file_name(format!("{stem}.tasks.md")))
     }
 
     async fn save_checklist(&self, checklist: &TaskChecklist) -> Result<()> {
@@ -198,13 +360,50 @@ impl TaskTrackerTool {
         Ok(())
     }
 
-    async fn load_checklist(&self) -> Result<Option<TaskChecklist>> {
+    async fn save_plan_mirror_to_file(
+        &self,
+        tracker_file: &Path,
+        checklist: &TaskChecklist,
+    ) -> Result<()> {
+        if let Some(parent) = tracker_file.parent() {
+            ensure_dir_exists(parent).await.with_context(|| {
+                format!(
+                    "Failed to create plan tracker directory: {}",
+                    parent.display()
+                )
+            })?;
+        }
+        write_file_with_context(
+            tracker_file,
+            &checklist.to_plan_markdown(),
+            "plan task tracker file",
+        )
+        .await
+        .with_context(|| {
+            format!(
+                "Failed to write plan task tracker file: {}",
+                tracker_file.display()
+            )
+        })?;
+        Ok(())
+    }
+
+    async fn save_plan_mirror(&self, checklist: &TaskChecklist) -> Result<()> {
+        let Some(tracker_file) = self.plan_task_file().await else {
+            return Ok(());
+        };
+        self.save_plan_mirror_to_file(&tracker_file, checklist)
+            .await?;
+        Ok(())
+    }
+
+    async fn load_global_checklist(&self) -> Result<Option<TaskChecklist>> {
         let file = self.task_file();
         if !file.exists() {
             return Ok(None);
         }
         let content = read_file_with_context(&file, "task checklist").await?;
-        // Parse markdown back into checklist
+
         let mut title = String::new();
         let mut items = Vec::new();
         let mut notes_lines = Vec::new();
@@ -254,20 +453,113 @@ impl TaskTrackerTool {
         }))
     }
 
-    async fn ensure_checklist_loaded(&self) -> Result<()> {
-        {
-            let guard = self.checklist.read().await;
-            if guard.is_some() {
-                return Ok(());
+    async fn load_plan_checklist_from(&self, tracker_file: &Path) -> Result<Option<TaskChecklist>> {
+        if !tracker_file.exists() {
+            return Ok(None);
+        }
+        let content = read_file_with_context(tracker_file, "plan task tracker file").await?;
+        Ok(parse_plan_mirror_markdown(&content))
+    }
+
+    async fn load_preferred_checklist(&self) -> Result<Option<TaskChecklist>> {
+        let task_file = self.task_file();
+        let plan_file = self.plan_task_file().await;
+
+        let global_exists = task_file.exists();
+        let plan_exists = plan_file.as_ref().is_some_and(|path| path.exists());
+
+        if !global_exists && !plan_exists {
+            return Ok(None);
+        }
+
+        let selected = if global_exists && plan_exists {
+            let global_modified = std::fs::metadata(&task_file)
+                .ok()
+                .and_then(|meta| meta.modified().ok());
+            let plan_modified = plan_file
+                .as_ref()
+                .and_then(|path| std::fs::metadata(path).ok())
+                .and_then(|meta| meta.modified().ok());
+            newer_source(
+                global_modified,
+                plan_modified,
+                self.plan_mode_state.is_active(),
+            )
+        } else if plan_exists {
+            TrackerSource::Plan
+        } else {
+            TrackerSource::Global
+        };
+
+        let loaded = match selected {
+            TrackerSource::Global => self.load_global_checklist().await?,
+            TrackerSource::Plan => {
+                if let Some(path) = plan_file.as_ref() {
+                    self.load_plan_checklist_from(path).await?
+                } else {
+                    None
+                }
+            }
+        };
+
+        if let Some(checklist) = loaded.as_ref() {
+            match selected {
+                TrackerSource::Global => {
+                    if let Some(path) = plan_file.as_ref() {
+                        self.save_plan_mirror_to_file(path, checklist).await?;
+                    }
+                }
+                TrackerSource::Plan => {
+                    self.save_checklist(checklist).await?;
+                }
             }
         }
 
-        let loaded = self.load_checklist().await?;
+        Ok(loaded)
+    }
+
+    async fn ensure_checklist_loaded(&self) -> Result<()> {
+        let loaded = self.load_preferred_checklist().await?;
         let mut guard = self.checklist.write().await;
-        if guard.is_none() {
-            *guard = loaded;
-        }
+        *guard = loaded;
         Ok(())
+    }
+
+    async fn persist_edit_mode_snapshot(&self, checklist: &TaskChecklist) -> Result<()> {
+        self.save_checklist(checklist).await?;
+        self.save_plan_mirror(checklist).await?;
+        Ok(())
+    }
+
+    async fn persist_and_build_view(&self, checklist: &TaskChecklist) -> Result<(Value, Value)> {
+        self.persist_edit_mode_snapshot(checklist).await?;
+        Ok((checklist.summary(), checklist.view()))
+    }
+
+    fn to_plan_args(args: &TaskTrackerArgs) -> PlanTaskTrackerArgs {
+        PlanTaskTrackerArgs {
+            action: args.action.clone(),
+            title: args.title.clone(),
+            items: args.items.clone(),
+            index: args.index,
+            index_path: args
+                .index_path
+                .clone()
+                .or_else(|| args.index.map(|value| value.to_string())),
+            status: args.status.clone(),
+            description: args.description.clone(),
+            parent_index_path: args.parent_index_path.clone(),
+            notes: args.notes.clone(),
+        }
+    }
+
+    async fn execute_in_plan_mode(&self, args: &TaskTrackerArgs) -> Result<Value> {
+        let plan_tool = PlanTaskTrackerTool::new(self.plan_mode_state.clone());
+        let mapped = Self::to_plan_args(args);
+        let output = plan_tool.execute(serde_json::to_value(mapped)?).await?;
+        self.ensure_checklist_loaded().await?;
+
+        Ok(output)
     }
 
     async fn handle_create(&self, args: &TaskTrackerArgs) -> Result<Value> {
@@ -334,9 +626,7 @@ impl TaskTrackerTool {
         };
 
         drop(guard);
-        self.save_checklist(&checklist).await?;
-        let summary = checklist.summary();
-        let view = checklist.view();
+        let (summary, view) = self.persist_and_build_view(&checklist).await?;
         let mut guard = self.checklist.write().await;
         *guard = Some(checklist);
 
@@ -352,7 +642,12 @@ impl TaskTrackerTool {
     async fn handle_update(&self, args: &TaskTrackerArgs) -> Result<Value> {
         self.ensure_checklist_loaded().await?;
         let mut guard = self.checklist.write().await;
-        if args.items.is_some() && (args.index.is_none() || args.status.is_none()) {
+        if is_bulk_sync_update(
+            args.items.as_deref(),
+            args.index,
+            args.index_path.as_deref(),
+            args.status.as_deref(),
+        ) {
             let input_items = args.items.as_deref().unwrap_or(&[]);
             let items = parse_input_items(input_items);
             if items.is_empty() {
@@ -375,10 +670,8 @@ impl TaskTrackerTool {
             checklist.items = items;
             checklist.notes = append_notes(checklist.notes.take(), args.notes.as_deref());
             let snapshot = checklist.clone();
-            let summary = snapshot.summary();
-            let view = snapshot.view();
             drop(guard);
-            self.save_checklist(&snapshot).await?;
+            let (summary, view) = self.persist_and_build_view(&snapshot).await?;
             return Ok(json!({
                 "status": "updated",
                 "message": "Checklist synchronized from provided items.",
@@ -391,9 +684,16 @@ impl TaskTrackerTool {
             .as_mut()
             .context("No active checklist. Use action='create' first.")?;
 
-        let index = args.index.context(
-            "'index' is required for 'update' (1-indexed), or provide 'items' for bulk sync",
-        )?;
+        let index = match (args.index, args.index_path.as_deref()) {
+            (Some(idx), _) => idx,
+            (None, Some(path)) => parse_single_index_from_path(path)?,
+            (None, None) => {
+                bail!(
+                    "'index' is required for 'update' (1-indexed), or provide 'index_path' for adaptive mode, or 'items' for bulk sync"
+                )
+            }
+        };
+
         let status_str = args
             .status
             .as_deref()
@@ -401,7 +701,6 @@ impl TaskTrackerTool {
 
         let new_status = TaskStatus::from_str(status_str)?;
 
-        // Find position first to avoid borrow conflicts
         let item_count = checklist.items.len();
         let pos = checklist
             .items
@@ -414,11 +713,11 @@ impl TaskTrackerTool {
         let old_status = checklist.items[pos].status.to_string();
         checklist.items[pos].status = new_status;
         let new_status_str = checklist.items[pos].status.to_string();
+        checklist.notes = append_notes(checklist.notes.take(), args.notes.as_deref());
+
         let snapshot = checklist.clone();
-        let summary = snapshot.summary();
-        let view = snapshot.view();
         drop(guard);
-        self.save_checklist(&snapshot).await?;
+        let (summary, view) = self.persist_and_build_view(&snapshot).await?;
 
         Ok(json!({
             "status": "updated",
@@ -446,6 +745,14 @@ impl TaskTrackerTool {
     }
 
     async fn handle_add(&self, args: &TaskTrackerArgs) -> Result<Value> {
+        if let Some(parent_path) = args.parent_index_path.as_deref()
+            && !parent_path.trim().is_empty()
+        {
+            bail!(
+                "'parent_index_path' is only supported for hierarchical Plan Mode updates. Use Plan Mode or omit parent_index_path in Edit mode."
+            );
+        }
+
         self.ensure_checklist_loaded().await?;
         let mut guard = self.checklist.write().await;
         let checklist = guard
@@ -466,10 +773,8 @@ impl TaskTrackerTool {
 
         checklist.notes = append_notes(checklist.notes.take(), args.notes.as_deref());
         let snapshot = checklist.clone();
-        let summary = snapshot.summary();
-        let view = snapshot.view();
         drop(guard);
-        self.save_checklist(&snapshot).await?;
+        let (summary, view) = self.persist_and_build_view(&snapshot).await?;
 
         Ok(json!({
             "status": "added",
@@ -485,6 +790,10 @@ impl Tool for TaskTrackerTool {
     async fn execute(&self, args: Value) -> Result<Value> {
         let args: TaskTrackerArgs = serde_json::from_value(args)
             .context("Invalid task_tracker arguments. Required: {\"action\": \"create|update|list|add\", ...}")?;
+
+        if self.plan_mode_state.is_active() {
+            return self.execute_in_plan_mode(&args).await;
+        }
 
         match args.action.as_str() {
             "create" => self.handle_create(&args).await,
@@ -503,7 +812,7 @@ impl Tool for TaskTrackerTool {
     }
 
     fn description(&self) -> &'static str {
-        "Track task progress with a structured checklist. Use for complex multi-step work to avoid losing track of progress. Actions: create (new checklist), update (change item status), list (show progress), add (append item)."
+        "Adaptive task tracker for both Plan and Edit modes. Uses one checklist API (`create|update|list|add`) and mirrors tracker state between `.vtcode/tasks/current_task.md` and active plan sidecar files when available."
     }
 
     fn parameter_schema(&self) -> Option<Value> {
@@ -522,11 +831,15 @@ impl Tool for TaskTrackerTool {
                 "items": {
                     "type": "array",
                     "items": { "type": "string" },
-                    "description": "List of task descriptions (used with 'create'; also supports bulk 'update' sync with optional [x]/[~]/[!]/[ ] prefixes)."
+                    "description": "List of task descriptions (used with 'create'; also supports bulk 'update' sync with optional [x]/[~]/[!]/[ ] prefixes and indentation for hierarchy in Plan Mode)."
                 },
                 "index": {
                     "type": "integer",
-                    "description": "1-indexed item number to update (used with single-item 'update')."
+                    "description": "1-indexed item number to update (flat mode)."
+                },
+                "index_path": {
+                    "type": "string",
+                    "description": "Hierarchical index path for update in Plan Mode (example: '2.1'). Single value (e.g. '2') also works in Edit mode."
                 },
                 "status": {
                     "type": "string",
@@ -536,6 +849,10 @@ impl Tool for TaskTrackerTool {
                 "description": {
                     "type": "string",
                     "description": "Description for a new item (used with 'add')."
+                },
+                "parent_index_path": {
+                    "type": "string",
+                    "description": "Optional parent path for add in Plan Mode (example: '2')."
                 },
                 "notes": {
                     "type": "string",
@@ -561,6 +878,7 @@ impl Tool for TaskTrackerTool {
                     "then": {
                         "anyOf": [
                             { "required": ["index", "status"] },
+                            { "required": ["index_path", "status"] },
                             { "required": ["items"] }
                         ]
                     }
@@ -579,7 +897,7 @@ impl Tool for TaskTrackerTool {
     }
 
     fn is_mutating(&self) -> bool {
-        false // Writes to .vtcode/tasks/ only, not user code
+        false // Writes tracker artifacts only (.vtcode/tasks and .vtcode/plans)
     }
 
     fn is_parallel_safe(&self) -> bool {
@@ -592,10 +910,16 @@ mod tests {
     use super::*;
     use tempfile::TempDir;
 
+    fn setup_tool(temp: &TempDir) -> (PlanModeState, TaskTrackerTool) {
+        let state = PlanModeState::new(temp.path().to_path_buf());
+        let tool = TaskTrackerTool::new(temp.path().to_path_buf(), state.clone());
+        (state, tool)
+    }
+
     #[tokio::test]
     async fn test_create_checklist() {
         let temp = TempDir::new().unwrap();
-        let tool = TaskTrackerTool::new(temp.path().to_path_buf());
+        let (_state, tool) = setup_tool(&temp);
 
         let result = tool
             .execute(json!({
@@ -615,7 +939,7 @@ mod tests {
     #[tokio::test]
     async fn test_update_item() {
         let temp = TempDir::new().unwrap();
-        let tool = TaskTrackerTool::new(temp.path().to_path_buf());
+        let (_state, tool) = setup_tool(&temp);
 
         tool.execute(json!({
             "action": "create",
@@ -642,7 +966,7 @@ mod tests {
     #[tokio::test]
     async fn test_add_item() {
         let temp = TempDir::new().unwrap();
-        let tool = TaskTrackerTool::new(temp.path().to_path_buf());
+        let (_state, tool) = setup_tool(&temp);
 
         tool.execute(json!({
             "action": "create",
@@ -667,7 +991,7 @@ mod tests {
     #[tokio::test]
     async fn test_create_is_idempotent_for_same_structure() {
         let temp = TempDir::new().unwrap();
-        let tool = TaskTrackerTool::new(temp.path().to_path_buf());
+        let (_state, tool) = setup_tool(&temp);
 
         tool.execute(json!({
             "action": "create",
@@ -701,7 +1025,7 @@ mod tests {
     #[tokio::test]
     async fn test_update_supports_bulk_item_sync() {
         let temp = TempDir::new().unwrap();
-        let tool = TaskTrackerTool::new(temp.path().to_path_buf());
+        let (_state, tool) = setup_tool(&temp);
 
         tool.execute(json!({
             "action": "create",
@@ -728,7 +1052,7 @@ mod tests {
     #[tokio::test]
     async fn test_list_empty() {
         let temp = TempDir::new().unwrap();
-        let tool = TaskTrackerTool::new(temp.path().to_path_buf());
+        let (_state, tool) = setup_tool(&temp);
 
         let result = tool.execute(json!({"action": "list"})).await.unwrap();
         assert_eq!(result["status"], "empty");
@@ -738,9 +1062,8 @@ mod tests {
     async fn test_persistence_across_loads() {
         let temp = TempDir::new().unwrap();
 
-        // Create with one tool instance
         {
-            let tool = TaskTrackerTool::new(temp.path().to_path_buf());
+            let (_state, tool) = setup_tool(&temp);
             tool.execute(json!({
                 "action": "create",
                 "title": "Persist Test",
@@ -758,12 +1081,132 @@ mod tests {
             .unwrap();
         }
 
-        // Load with fresh tool instance
-        let tool2 = TaskTrackerTool::new(temp.path().to_path_buf());
+        let (_state, tool2) = setup_tool(&temp);
         let result = tool2.execute(json!({"action": "list"})).await.unwrap();
 
         assert_eq!(result["status"], "ok");
         assert_eq!(result["checklist"]["total"], 2);
         assert_eq!(result["checklist"]["completed"], 1);
+    }
+
+    #[tokio::test]
+    async fn test_plan_mode_task_tracker_delegates_and_mirrors_global() {
+        let temp = TempDir::new().unwrap();
+        let (state, tool) = setup_tool(&temp);
+
+        let plans_dir = state.plans_dir();
+        std::fs::create_dir_all(&plans_dir).unwrap();
+        let plan_file = plans_dir.join("adaptive.md");
+        std::fs::write(&plan_file, "# Adaptive\n").unwrap();
+        state.set_plan_file(Some(plan_file)).await;
+        state.enable();
+
+        let created = tool
+            .execute(json!({
+                "action": "create",
+                "title": "Adaptive Plan",
+                "items": ["Root task", "  Child task"]
+            }))
+            .await
+            .unwrap();
+
+        assert_eq!(created["status"], "created");
+        assert_eq!(created["checklist"]["total"], 2);
+
+        let task_file = temp.path().join(".vtcode/tasks/current_task.md");
+        let persisted = std::fs::read_to_string(task_file).unwrap();
+        assert!(persisted.contains("Root task"));
+        assert!(persisted.contains("Child task"));
+    }
+
+    #[tokio::test]
+    async fn test_plan_mode_mirror_preserves_notes() {
+        let temp = TempDir::new().unwrap();
+        let (state, tool) = setup_tool(&temp);
+
+        let plans_dir = state.plans_dir();
+        std::fs::create_dir_all(&plans_dir).unwrap();
+        let plan_file = plans_dir.join("notes.md");
+        std::fs::write(&plan_file, "# Notes\n").unwrap();
+        state.set_plan_file(Some(plan_file)).await;
+        state.enable();
+
+        tool.execute(json!({
+            "action": "create",
+            "items": ["Root task"],
+            "notes": "Keep this note"
+        }))
+        .await
+        .unwrap();
+
+        let task_file = temp.path().join(".vtcode/tasks/current_task.md");
+        let persisted = std::fs::read_to_string(task_file).unwrap();
+        assert!(persisted.contains("## Notes"));
+        assert!(persisted.contains("Keep this note"));
+    }
+
+    #[tokio::test]
+    async fn test_edit_mode_prefers_newer_plan_mirror_when_present() {
+        let temp = TempDir::new().unwrap();
+        let (state, tool) = setup_tool(&temp);
+
+        let plans_dir = state.plans_dir();
+        std::fs::create_dir_all(&plans_dir).unwrap();
+        let plan_file = plans_dir.join("freshness.md");
+        std::fs::write(&plan_file, "# Freshness\n").unwrap();
+        state.set_plan_file(Some(plan_file.clone())).await;
+
+        let global_file = temp.path().join(".vtcode/tasks/current_task.md");
+        std::fs::create_dir_all(global_file.parent().unwrap()).unwrap();
+        std::fs::write(&global_file, "# Freshness\n\n- [ ] stale global\n").unwrap();
+
+        std::thread::sleep(std::time::Duration::from_millis(15));
+
+        let sidecar = plans_dir.join("freshness.tasks.md");
+        std::fs::write(
+            &sidecar,
+            "# Freshness\n\n## Plan of Work\n\n- [x] newer plan\n",
+        )
+        .unwrap();
+
+        let listed = tool.execute(json!({"action": "list"})).await.unwrap();
+        assert_eq!(listed["status"], "ok");
+        assert_eq!(listed["checklist"]["completed"], 1);
+        assert_eq!(listed["checklist"]["pending"], 0);
+
+        let global_synced = std::fs::read_to_string(global_file).unwrap();
+        assert!(global_synced.contains("newer plan"));
+    }
+
+    #[tokio::test]
+    async fn test_plan_mode_prefers_plan_sidecar_even_if_global_is_newer() {
+        let temp = TempDir::new().unwrap();
+        let (state, tool) = setup_tool(&temp);
+
+        let plans_dir = state.plans_dir();
+        std::fs::create_dir_all(&plans_dir).unwrap();
+        let plan_file = plans_dir.join("plan-primary.md");
+        std::fs::write(&plan_file, "# Plan Primary\n").unwrap();
+        state.set_plan_file(Some(plan_file.clone())).await;
+        state.enable();
+
+        let global_file = temp.path().join(".vtcode/tasks/current_task.md");
+        std::fs::create_dir_all(global_file.parent().unwrap()).unwrap();
+        std::fs::write(&global_file, "# Plan Primary\n\n- [x] global newer\n").unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(15));
+
+        let sidecar = plans_dir.join("plan-primary.tasks.md");
+        std::fs::write(
+            &sidecar,
+            "# Plan Primary\n\n## Plan of Work\n\n- [ ] plan source\n",
+        )
+        .unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(15));
+        std::fs::write(&global_file, "# Plan Primary\n\n- [x] global newest\n").unwrap();
+
+        let listed = tool.execute(json!({"action": "list"})).await.unwrap();
+        assert_eq!(listed["status"], "ok");
+        assert_eq!(listed["checklist"]["pending"], 1);
+        assert_eq!(listed["checklist"]["completed"], 0);
     }
 }

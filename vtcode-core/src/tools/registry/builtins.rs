@@ -86,7 +86,10 @@ pub(super) fn builtin_tool_registrations(
         ToolRegistration::from_tool_instance(
             tools::TASK_TRACKER,
             CapabilityLevel::Basic,
-            TaskTrackerTool::new(plan_state.workspace_root().unwrap_or_else(PathBuf::new)),
+            TaskTrackerTool::new(
+                plan_state.workspace_root().unwrap_or_else(PathBuf::new),
+                plan_state.clone(),
+            ),
         )
         .with_aliases(["plan_manager", "track_tasks", "checklist"]),
         ToolRegistration::from_tool_instance(

@@ -67,10 +67,10 @@ impl ToolRegistry {
         use crate::config::constants::tools;
         use crate::tools::names::canonical_tool_name;
 
-        // Enforce plan/task tracker mode split across all execution paths.
+        // Keep adaptive task tracker available in all modes; retain plan alias.
         let canonical = canonical_tool_name(tool_name);
         match canonical.as_ref() {
-            tools::TASK_TRACKER => return false,
+            tools::TASK_TRACKER => return true,
             tools::PLAN_TASK_TRACKER => return true,
             _ => {}
         }
@@ -212,12 +212,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn plan_mode_enforces_tracker_split() -> Result<()> {
+    async fn plan_mode_allows_adaptive_task_tracker_and_plan_alias() -> Result<()> {
         let temp_dir = TempDir::new()?;
         let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
         registry.enable_plan_mode();
 
-        assert!(!registry.is_plan_mode_allowed(tools::TASK_TRACKER, &json!({"action": "list"})));
+        assert!(registry.is_plan_mode_allowed(tools::TASK_TRACKER, &json!({"action": "list"})));
         assert!(
             registry.is_plan_mode_allowed(tools::PLAN_TASK_TRACKER, &json!({"action": "list"}))
         );

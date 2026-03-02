@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::collections::{HashMap, HashSet};
@@ -221,6 +221,7 @@ pub(crate) async fn execute_request_user_input_tool(
 
 fn normalize_request_user_input_args(args: &Value) -> Result<NormalizedRequestUserInput> {
     let parsed: RequestUserInputArgs = serde_json::from_value(args.clone())?;
+    validate_questions(&parsed.questions)?;
     Ok(NormalizedRequestUserInput {
         args: parsed,
         wizard_mode: WizardModalMode::MultiStep,
@@ -301,7 +302,8 @@ fn resolve_question_options(
     let mut provided_signature_counts: HashMap<String, usize> = HashMap::new();
     for question in questions {
         if let Some(options) = question.options.as_ref() {
-            let signature = options_signature(options);
+            let sanitized = sanitize_provided_options(options);
+            let signature = options_signature(&sanitized);
             if !signature.is_empty() {
                 *provided_signature_counts.entry(signature).or_insert(0) += 1;
             }
@@ -312,23 +314,23 @@ fn resolve_question_options(
         .iter()
         .map(|question| match question.options.clone() {
             Some(provided_options) => {
-                let signature = options_signature(&provided_options);
+                let sanitized = sanitize_provided_options(&provided_options);
+                let signature = options_signature(&sanitized);
                 let repeated_signature = provided_signature_counts
                     .get(&signature)
                     .copied()
                     .unwrap_or(0)
                     > 1;
-                if should_regenerate_provided_options(
-                    question,
-                    &provided_options,
-                    repeated_signature,
-                ) {
-                    generate_suggested_options(question).or(Some(provided_options))
+                if should_regenerate_provided_options(question, &sanitized, repeated_signature) {
+                    generate_suggested_options(question)
+                        .or_else(|| Some(generic_planning_options()))
                 } else {
-                    Some(provided_options)
+                    Some(sanitized)
                 }
             }
-            None => generate_suggested_options(question),
+            None => {
+                generate_suggested_options(question).or_else(|| Some(generic_planning_options()))
+            }
         })
         .collect()
 }
@@ -338,7 +340,7 @@ fn should_regenerate_provided_options(
     options: &[RequestUserInputOption],
     repeated_signature: bool,
 ) -> bool {
-    if options.is_empty() || options.len() > 3 {
+    if options.len() < 2 || options.len() > 3 {
         return true;
     }
 
@@ -479,7 +481,7 @@ fn generate_suggested_options(
             priority_selection_options(&local_context, &global_context)
         }
         QuestionIntent::GenericImprovement => generic_improvement_options(),
-        QuestionIntent::GenericPlanning => Vec::new(),
+        QuestionIntent::GenericPlanning => generic_planning_options(),
     };
 
     if options.is_empty() {
@@ -664,6 +666,29 @@ fn generic_improvement_options() -> Vec<RequestUserInputOption> {
     ]
 }
 
+fn generic_planning_options() -> Vec<RequestUserInputOption> {
+    vec![
+        RequestUserInputOption {
+            label: "Proceed with best default".to_string(),
+            description:
+                "Continue with the most conservative implementation path and document assumptions explicitly."
+                    .to_string(),
+        },
+        RequestUserInputOption {
+            label: "Constrain scope first".to_string(),
+            description:
+                "Lock a tighter MVP boundary before implementation to reduce risk and rework."
+                    .to_string(),
+        },
+        RequestUserInputOption {
+            label: "Surface key tradeoffs".to_string(),
+            description:
+                "Clarify the highest-impact tradeoff first so plan and execution stay aligned."
+                    .to_string(),
+        },
+    ]
+}
+
 fn priority_selection_options(
     local_context: &str,
     global_context: &str,
@@ -842,6 +867,111 @@ fn append_domain_priority_options(options: &mut Vec<RequestUserInputOption>, con
 
 fn contains_any(text: &str, needles: &[&str]) -> bool {
     needles.iter().any(|needle| text.contains(needle))
+}
+
+fn sanitize_provided_options(options: &[RequestUserInputOption]) -> Vec<RequestUserInputOption> {
+    let mut seen_labels = HashSet::new();
+    let mut sanitized = Vec::new();
+
+    for option in options {
+        let label = option.label.trim();
+        let description = option.description.trim();
+        if label.is_empty() || description.is_empty() {
+            continue;
+        }
+
+        if is_other_option_label(label) {
+            continue;
+        }
+
+        let normalized = normalize_option_text(label);
+        if normalized.is_empty() || !seen_labels.insert(normalized) {
+            continue;
+        }
+
+        sanitized.push(RequestUserInputOption {
+            label: label.to_string(),
+            description: description.to_string(),
+        });
+
+        if sanitized.len() == 3 {
+            break;
+        }
+    }
+
+    sanitized
+}
+
+fn is_other_option_label(label: &str) -> bool {
+    let normalized = normalize_option_text(label);
+    normalized == "other" || normalized.starts_with("other ")
+}
+
+fn validate_questions(questions: &[RequestUserInputQuestion]) -> Result<()> {
+    if questions.is_empty() || questions.len() > 3 {
+        bail!("questions must contain 1 to 3 entries");
+    }
+
+    for question in questions {
+        if !is_snake_case(&question.id) {
+            bail!(
+                "question id '{}' must be snake_case (letters, digits, underscore)",
+                question.id
+            );
+        }
+
+        let header = question.header.trim();
+        if header.is_empty() {
+            bail!("question header cannot be empty");
+        }
+        if header.chars().count() > 12 {
+            bail!(
+                "question header '{}' must be 12 characters or fewer",
+                header
+            );
+        }
+
+        let prompt = question.question.trim();
+        if prompt.is_empty() {
+            bail!("question prompt cannot be empty");
+        }
+        if prompt.contains('\n') {
+            bail!(
+                "question '{}' must be a single sentence on one line",
+                question.id
+            );
+        }
+    }
+
+    Ok(())
+}
+
+fn is_snake_case(value: &str) -> bool {
+    let mut chars = value.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+    if !first.is_ascii_lowercase() {
+        return false;
+    }
+
+    let mut last_was_underscore = false;
+    for ch in chars {
+        if ch == '_' {
+            if last_was_underscore {
+                return false;
+            }
+            last_was_underscore = true;
+            continue;
+        }
+
+        if !ch.is_ascii_lowercase() && !ch.is_ascii_digit() {
+            return false;
+        }
+        last_was_underscore = false;
+    }
+
+    !last_was_underscore
 }
 
 fn push_unique_option(options: &mut Vec<RequestUserInputOption>, label: &str, description: &str) {
@@ -1177,7 +1307,7 @@ mod tests {
     }
 
     #[test]
-    fn keeps_freeform_only_when_no_suggestions_apply() {
+    fn falls_back_to_generic_options_when_no_suggestions_apply() {
         let question = RequestUserInputQuestion {
             id: "env".to_string(),
             header: "Env".to_string(),
@@ -1188,8 +1318,9 @@ mod tests {
         };
 
         let items = build_question_items(&question);
-        assert_eq!(items.len(), 1);
-        assert_eq!(items[0].title, "Enter your response...");
+        assert_eq!(items.len(), 4);
+        assert!(items[0].title.contains("(Recommended)"));
+        assert!(items[3].title.contains("Other"));
     }
 
     #[test]
@@ -1232,5 +1363,66 @@ mod tests {
         });
         let result = normalize_request_user_input_args(&legacy_args);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn normalize_rejects_non_snake_case_ids() {
+        let args = json!({
+            "questions": [
+                {
+                    "id": "GoalQuestion",
+                    "header": "Goal",
+                    "question": "What outcome matters most?"
+                }
+            ]
+        });
+
+        let result = normalize_request_user_input_args(&args);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn normalize_rejects_headers_over_twelve_chars() {
+        let args = json!({
+            "questions": [
+                {
+                    "id": "goal",
+                    "header": "HeaderTooLong",
+                    "question": "What outcome matters most?"
+                }
+            ]
+        });
+
+        let result = normalize_request_user_input_args(&args);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn sanitize_provided_options_drops_other_and_duplicates() {
+        let options = vec![
+            RequestUserInputOption {
+                label: "A (Recommended)".to_string(),
+                description: "Choice A".to_string(),
+            },
+            RequestUserInputOption {
+                label: "Other".to_string(),
+                description: "Custom response".to_string(),
+            },
+            RequestUserInputOption {
+                label: "A".to_string(),
+                description: "Duplicate A".to_string(),
+            },
+            RequestUserInputOption {
+                label: "B".to_string(),
+                description: "Choice B".to_string(),
+            },
+        ];
+
+        let sanitized = sanitize_provided_options(&options);
+        let labels = sanitized
+            .iter()
+            .map(|option| option.label.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(labels, vec!["A (Recommended)", "B"]);
     }
 }

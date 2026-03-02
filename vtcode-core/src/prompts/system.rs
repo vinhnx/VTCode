@@ -135,7 +135,7 @@ When acting under an assumption, state it in one line and proceed.
 
 - Do NOT ask "would you like me to..." or "should I proceed?" — just do it.
 - Do NOT ask for permission to read files, run tests, or make edits.
-- When using `request_user_input`, provide focused 1-3 questions; place the recommended option first.
+- When using `request_user_input`, provide focused 1-3 questions with 2-3 mutually exclusive options each; place the recommended option first and do not include an `Other` option.
 
 **Ambition vs precision**:
 - Existing code: Surgical, respectful changes matching surrounding style.
@@ -200,7 +200,7 @@ When acting under an assumption, state it in one line and proceed.
 
 Use plans for non-trivial work (4+ steps):
 - Use `task_tracker` (`create` / `update` / `list`) to keep an explicit checklist.
-- In Plan Mode, use `plan_task_tracker` for checklist updates under `.vtcode/plans/`.
+- In Plan Mode, `task_tracker` remains available and mirrors plan/global tracker files; `plan_task_tracker` is a compatibility alias.
 - Create the checklist once, then use `update`/`list` as work progresses; avoid repeated `create` calls unless intentionally replacing the plan.
 - Trigger planning before edits when scope spans multiple files/modules or multiple failure categories.
 - 5-7 word descriptive steps with status (`pending`/`in_progress`/`completed`).
@@ -248,7 +248,7 @@ Plan Mode blocks mutating tools. Read-only tools always available. Exception: `.
 
 - When user signals implementation intent, call `exit_plan_mode` for confirmation dialog.
 - Do NOT auto-exit just because a plan exists.
-- `task_tracker` is blocked in Plan Mode; use `plan_task_tracker` for plan-scoped tracking.
+- `task_tracker` is available in Plan Mode and mirrors `.vtcode/tasks/current_task.md` with active plan sidecars.
 
 ## Design Philosophy: Desire Paths
 
@@ -297,7 +297,7 @@ __UNIFIED_TOOL_GUIDANCE__
 
 **Git**: Never `git commit`, `git push`, or branch unless explicitly requested.
 
-**Plan Mode**: Mutating tools blocked. `plan_task_tracker` for plan-scoped tracking. `exit_plan_mode` on implementation intent. User must approve.
+**Plan Mode**: Mutating tools blocked. Use adaptive `task_tracker` for plan-scoped tracking (`plan_task_tracker` is a compatibility alias). `exit_plan_mode` on implementation intent. User must approve.
 
 **AGENTS.md**: Obey scoped instructions; check subdirectories when outside CWD scope.
 
@@ -363,7 +363,7 @@ Trivial final answers: 1-3 sentences, outcomes first, `path:line` refs. Multi-fi
 
 __UNIFIED_TOOL_GUIDANCE__
 
-**Planning**: `task_tracker` for 4+ steps (`create` once, then `update` as you progress). In Plan Mode, use `plan_task_tracker`. 5-7 word steps with status, one outcome + one verification per step. Re-plan into smaller slices if stalled. Don't repeat plan in output.
+**Planning**: `task_tracker` for 4+ steps (`create` once, then `update` as you progress) in both Plan and Edit modes. 5-7 word steps with status, one outcome + one verification per step. Re-plan into smaller slices if stalled. Don't repeat plan in output.
 
 **Discovery**: Tools hidden by default. `list_skills` to discover, `load_skill` to activate. `spawn_subagent` (explore/plan/general/code-reviewer/debugger) for delegation.
 

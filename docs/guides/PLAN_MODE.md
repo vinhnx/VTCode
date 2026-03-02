@@ -14,7 +14,7 @@ In Plan Mode, the agent **cannot**:
 - Run shell commands or tests
 - Execute any mutating operations
 
-`task_tracker` is unavailable in Plan Mode. Use `plan_task_tracker` for plan-scoped checklist updates under `.vtcode/plans/`. Plan output should use `<proposed_plan>...</proposed_plan>`.
+`task_tracker` is available in Plan Mode and mirrors checklist state between `.vtcode/tasks/current_task.md` and active plan sidecar files under `.vtcode/plans/`. `plan_task_tracker` remains available as a compatibility alias. Plan output should use `<proposed_plan>...</proposed_plan>`.
 
 ## Benefits
 

@@ -151,7 +151,7 @@ pub(crate) fn should_expose_tool_in_mode(
     }
 
     if name == tool_names::TASK_TRACKER {
-        return !plan_mode;
+        return true;
     }
 
     true
@@ -215,7 +215,7 @@ mod tests {
     }
 
     #[test]
-    fn filter_tools_for_mode_hides_task_tracker_in_plan_mode() {
+    fn filter_tools_for_mode_keeps_task_tracker_in_plan_mode() {
         let tools = Arc::new(vec![
             function_tool(tool_names::UNIFIED_SEARCH),
             function_tool(tool_names::PLAN_TASK_TRACKER),
@@ -233,7 +233,7 @@ mod tests {
         assert!(names.contains(&tool_names::UNIFIED_SEARCH));
         assert!(names.contains(&tool_names::PLAN_TASK_TRACKER));
         assert!(names.contains(&tool_names::REQUEST_USER_INPUT));
-        assert!(!names.contains(&tool_names::TASK_TRACKER));
+        assert!(names.contains(&tool_names::TASK_TRACKER));
     }
 
     #[test]

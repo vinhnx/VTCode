@@ -136,10 +136,10 @@ pub fn unified_exec_action(args: &Value) -> Option<&str> {
         if args.get("command").is_some()
             || args.get("cmd").is_some()
             || args.get("raw_command").is_some()
+            // Check for indexed command arguments (command.0, command.1, etc.)
+            || args.get("command.0").is_some()
+            || args.get("command.1").is_some()
         {
-            Some("run")
-        // Check for indexed command arguments (command.0, command.1, etc.)
-        } else if args.get("command.0").is_some() || args.get("command.1").is_some() {
             Some("run")
         } else if args.get("code").is_some() {
             Some("code")

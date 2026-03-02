@@ -296,7 +296,7 @@ fn normalize_turn_balancer_tool_name(name: &str) -> Cow<'_, str> {
 
 fn navigation_loop_guidance(plan_mode: bool) -> &'static str {
     if plan_mode {
-        "WARNING: Too many read/search steps in Plan Mode without an actionable output. Stop browsing, summarize key findings, then update `plan_task_tracker` with concrete steps (files + outcome + verification), or ask one blocking question."
+        "WARNING: Too many read/search steps in Plan Mode without an actionable output. Stop browsing, summarize key findings, then update `task_tracker` with concrete steps (files + outcome + verification), or ask one blocking question."
     } else {
         "WARNING: Too many read/search steps without edits or execution. Summarize findings and propose the next concrete edit/action, or explain the blocker."
     }
@@ -474,16 +474,16 @@ mod tests {
     }
 
     #[test]
-    fn navigation_loop_guidance_mentions_plan_tracker_in_plan_mode() {
+    fn navigation_loop_guidance_mentions_task_tracker_in_plan_mode() {
         let guidance = navigation_loop_guidance(true);
-        assert!(guidance.contains("plan_task_tracker"));
+        assert!(guidance.contains("task_tracker"));
     }
 
     #[test]
     fn navigation_loop_guidance_uses_generic_text_outside_plan_mode() {
         let guidance = navigation_loop_guidance(false);
         assert!(guidance.contains("read/search"));
-        assert!(!guidance.contains("plan_task_tracker"));
+        assert!(!guidance.contains("task_tracker"));
     }
 
     #[test]

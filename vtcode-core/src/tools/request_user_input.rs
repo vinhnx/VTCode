@@ -73,8 +73,8 @@ impl Tool for RequestUserInputTool {
                             },
                             "options": {
                                 "type": "array",
-                                "description": "Optional 1-3 mutually exclusive choices. Put the recommended option first and suffix its label with \"(Recommended)\". Do not include an \"Other\" option; the UI provides that automatically. If omitted, the UI may auto-suggest options using question text and hints.",
-                                "minItems": 1,
+                                "description": "Optional 2-3 mutually exclusive choices. Put the recommended option first and suffix its label with \"(Recommended)\". Do not include an \"Other\" option; the UI provides that automatically. If omitted, the UI auto-suggests options using question text and hints.",
+                                "minItems": 2,
                                 "maxItems": 3,
                                 "items": {
                                     "type": "object",
