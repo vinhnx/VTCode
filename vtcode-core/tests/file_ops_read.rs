@@ -31,14 +31,15 @@ async fn read_file_returns_base64_for_images() {
     assert_eq!(value["success"].as_bool(), Some(true));
     assert_eq!(value["binary"].as_bool(), Some(true));
     assert_eq!(value["encoding"].as_str(), Some("base64"));
+    // Metadata fields are in metadata.data
     assert_eq!(
-        value["metadata"]
+        value["metadata"]["data"]
             .get("content_kind")
             .and_then(|v| v.as_str()),
         Some("image")
     );
     assert_eq!(
-        value["metadata"].get("mime_type").and_then(|v| v.as_str()),
+        value["metadata"]["data"].get("mime_type").and_then(|v| v.as_str()),
         Some("image/png")
     );
 
@@ -64,14 +65,15 @@ async fn read_file_reports_text_metadata() {
     assert_eq!(value["success"].as_bool(), Some(true));
     assert_eq!(value["content_kind"].as_str(), Some("text"));
     assert_eq!(value["encoding"].as_str(), Some("utf8"));
+    // Metadata fields are in metadata.data
     assert_eq!(
-        value["metadata"]
+        value["metadata"]["data"]
             .get("content_kind")
             .and_then(|v| v.as_str()),
         Some("text")
     );
     assert_eq!(
-        value["metadata"].get("encoding").and_then(|v| v.as_str()),
+        value["metadata"]["data"].get("encoding").and_then(|v| v.as_str()),
         Some("utf8")
     );
 }

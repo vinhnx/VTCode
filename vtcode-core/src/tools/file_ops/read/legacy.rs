@@ -1,9 +1,8 @@
 use super::FileOpsTool;
 use super::is_image_path;
-use crate::tools::builder::ToolResponseBuilder;
 use crate::tools::error_helpers::with_file_context;
 use crate::tools::types::Input;
-use crate::utils::image_processing::read_image_file;
+use crate::utils::image_processing::read_image_file_any_path;
 use anyhow::{Result, anyhow};
 use base64::Engine;
 use serde_json::{Value, json};
@@ -26,23 +25,16 @@ impl FileOpsTool {
         }
 
         if is_image_path(file_path) {
-            let image_data = read_image_file::<&str>(file_path.to_string_lossy().as_ref()).await?;
-            let builder = ToolResponseBuilder::new("read_file")
-                .success()
-                .message(format!(
-                    "Successfully read image file {}",
-                    self.workspace_relative_display(file_path)
-                ))
-                .content(image_data.base64_data.clone())
-                .data("size_bytes", json!(image_data.size))
-                .data("content_kind", json!("image"))
-                .data("encoding", json!("base64"))
-                .data("mime_type", json!(image_data.mime_type))
-                .field("binary", json!(true));
-
+            let image_data = read_image_file_any_path::<&Path>(file_path).await?;
+            let metadata = json!({
+                "size_bytes": image_data.size,
+                "content_kind": "image",
+                "encoding": "base64",
+                "mime_type": image_data.mime_type,
+            });
             return Ok((
-                image_data.base64_data,
-                builder.build_json()["metadata"].clone(),
+                image_data.base64_data.clone(),
+                metadata,
                 false,
             ));
         }

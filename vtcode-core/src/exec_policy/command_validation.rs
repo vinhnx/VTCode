@@ -679,29 +679,37 @@ fn validate_git_commit(args: &[String]) -> Result<()> {
 
 fn validate_git_reset(args: &[String], confirm: bool) -> Result<()> {
     // Block destructive reset modes
-    if args
+    let is_destructive = args
         .iter()
-        .any(|a| a == "--hard" || a == "--merge" || a == "--keep")
-    {
-        // Require explicit confirmation to perform destructive resets
-        if !confirm {
-            return Err(anyhow!(
-                "git reset with --hard, --merge, or --keep is potentially destructive. Set `confirm=true` to proceed."
-            ));
-        }
+        .any(|a| a == "--hard" || a == "--merge" || a == "--keep");
+    
+    if is_destructive && !confirm {
+        return Err(anyhow!(
+            "git reset with --hard, --merge, or --keep is potentially destructive. Set `confirm=true` to proceed."
+        ));
     }
 
-    // Allow safe flags: --soft, --mixed, --unstage
+    // Allow safe flags: --soft, --mixed, --unstage, and destructive ones with confirmation
     let safe_modes = ["--soft", "--mixed", "--unstage"];
+    let allowed_destructive: Vec<&str> = if confirm {
+        vec!["--hard", "--merge", "--keep"]
+    } else {
+        vec![]
+    };
+    
     for arg in args {
-        if arg.starts_with('-') && !safe_modes.iter().any(|m| arg.contains(m)) {
-            match arg.as_str() {
-                "-q" | "--quiet" | "-p" | "--patch" => continue,
-                _ => {
-                    return Err(anyhow!(
-                        "unsupported git reset flag '{}'. Use --soft or --mixed modes.",
-                        arg
-                    ));
+        if arg.starts_with('-') {
+            let is_safe = safe_modes.iter().any(|m| arg.contains(m));
+            let is_allowed_destructive = allowed_destructive.iter().any(|m| arg.contains(m));
+            if !is_safe && !is_allowed_destructive {
+                match arg.as_str() {
+                    "-q" | "--quiet" | "-p" | "--patch" => continue,
+                    _ => {
+                        return Err(anyhow!(
+                            "unsupported git reset flag '{}'. Use --soft, --mixed, or --hard (with confirm) modes.",
+                            arg
+                        ));
+                    }
                 }
             }
         }

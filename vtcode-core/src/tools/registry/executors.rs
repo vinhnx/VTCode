@@ -2228,7 +2228,31 @@ fn parse_command_parts(
                 .collect::<Result<Vec<_>>>()?;
             (parts, None)
         }
-        _ => return Err(anyhow!("{}", missing_error)),
+        _ => {
+            // Try indexed arguments (command.0, command.1, etc.)
+            let mut indexed_parts = Vec::new();
+            let mut index = 0;
+            while let Some(value) = payload.get(&format!("command.{}", index)) {
+                if let Some(part) = value.as_str() {
+                    indexed_parts.push(part.to_string());
+                }
+                index += 1;
+            }
+            // Also try 1-based indexing
+            if indexed_parts.is_empty() {
+                index = 1;
+                while let Some(value) = payload.get(&format!("command.{}", index)) {
+                    if let Some(part) = value.as_str() {
+                        indexed_parts.push(part.to_string());
+                    }
+                    index += 1;
+                }
+            }
+            if indexed_parts.is_empty() {
+                return Err(anyhow!("{}", missing_error));
+            }
+            (indexed_parts, None)
+        }
     };
 
     if let Some(args_value) = payload.get("args")

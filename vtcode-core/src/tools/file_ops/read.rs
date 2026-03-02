@@ -344,7 +344,11 @@ impl FileOpsTool {
                             .content(content)
                             .field("path", json!(requested_path.clone()))
                             .field("no_spool", json!(true))
-                            .data("size_bytes", json!(size_bytes));
+                            .field("content_kind", json!("text"))
+                            .field("encoding", json!("utf8"))
+                            .data("size_bytes", json!(size_bytes))
+                            .data("content_kind", json!("text"))
+                            .data("encoding", json!("utf8"));
 
                         if let Some(plan) = spool_plan {
                             let has_more = lines_returned >= plan.limit;
@@ -418,10 +422,16 @@ impl FileOpsTool {
                 .field("path", json!(self.workspace_relative_display(&canonical)))
                 .field("no_spool", json!(true));
 
-            // Merge legacy metadata
+            // Merge legacy metadata - extract actual data fields, not wrapper structure
             if let Some(obj) = metadata.as_object() {
+                // Handle flat metadata structure (direct key-value pairs)
                 for (k, v) in obj {
-                    builder = builder.data(k, v.clone());
+                    match k.as_str() {
+                        "size_bytes" | "content_kind" | "encoding" | "mime_type" | "is_truncated" => {
+                            builder = builder.data(k.clone(), v.clone());
+                        }
+                        _ => {}
+                    }
                 }
             }
 
