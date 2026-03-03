@@ -15,7 +15,7 @@ use crate::agent::runloop::slash_commands::ThemePaletteMode;
 use crate::agent::runloop::tui_compat::{inline_theme_from_core_styles, to_tui_appearance};
 use crate::agent::runloop::ui::build_inline_header_context;
 use crate::agent::runloop::unified::settings_interactive::{
-    SettingsPaletteState, apply_settings_action, show_settings_palette,
+    SettingsPaletteState, apply_settings_action, parent_view_path, show_settings_palette,
 };
 use crate::agent::runloop::welcome::SessionBootstrap;
 
@@ -44,6 +44,7 @@ pub(crate) enum ActivePalette {
     },
     Settings {
         state: Box<SettingsPaletteState>,
+        esc_armed: bool,
     },
 }
 
@@ -278,7 +279,10 @@ pub(crate) async fn handle_palette_selection(
                 Ok(None)
             }
         }
-        ActivePalette::Settings { mut state } => {
+        ActivePalette::Settings {
+            mut state,
+            esc_armed: _,
+        } => {
             let normalized_selection = normalize_config_selection(&selection);
 
             if let InlineListSelection::ConfigAction(action) = &selection {
@@ -301,7 +305,10 @@ pub(crate) async fn handle_palette_selection(
             }
 
             if show_settings_palette(renderer, state.as_ref(), Some(normalized_selection))? {
-                Ok(Some(ActivePalette::Settings { state }))
+                Ok(Some(ActivePalette::Settings {
+                    state,
+                    esc_armed: false,
+                }))
             } else {
                 Ok(None)
             }
@@ -342,6 +349,10 @@ pub(crate) fn handle_palette_preview(
                 original_theme_id,
             }))
         }
+        ActivePalette::Settings { state, .. } => Ok(Some(ActivePalette::Settings {
+            state,
+            esc_armed: false,
+        })),
         other => Ok(Some(other)),
     }
 }
@@ -364,7 +375,7 @@ pub(crate) fn handle_palette_cancel(
     palette: ActivePalette,
     renderer: &mut AnsiRenderer,
     handle: &InlineHandle,
-) -> Result<()> {
+) -> Result<Option<ActivePalette>> {
     match palette {
         ActivePalette::Theme {
             mode,
@@ -384,19 +395,40 @@ pub(crate) fn handle_palette_cancel(
             if !renderer.supports_inline_ui() {
                 renderer.line(MessageStyle::Info, message)?;
             }
+            Ok(None)
         }
         ActivePalette::Sessions { .. } => {
             if !renderer.supports_inline_ui() {
                 renderer.line(MessageStyle::Info, "Closed session browser.")?;
             }
+            Ok(None)
         }
-        ActivePalette::Settings { .. } => {
-            if !renderer.supports_inline_ui() {
-                renderer.line(MessageStyle::Info, "Closed interactive settings.")?;
+        ActivePalette::Settings {
+            mut state,
+            esc_armed,
+        } => {
+            if esc_armed {
+                return Ok(None);
+            }
+
+            let Some(current_path) = state.view_path.clone() else {
+                if !renderer.supports_inline_ui() {
+                    renderer.line(MessageStyle::Info, "Closed interactive settings.")?;
+                }
+                return Ok(None);
+            };
+
+            state.view_path = parent_view_path(&current_path);
+            if show_settings_palette(renderer, state.as_ref(), None)? {
+                Ok(Some(ActivePalette::Settings {
+                    state,
+                    esc_armed: true,
+                }))
+            } else {
+                Ok(None)
             }
         }
     }
-    Ok(())
 }
 
 pub(crate) fn format_duration_label(duration: Duration) -> String {

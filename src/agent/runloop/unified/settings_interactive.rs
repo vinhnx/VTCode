@@ -12,7 +12,7 @@ use vtcode_core::utils::ansi::AnsiRenderer;
 use vtcode_tui::{InlineListItem, InlineListSearchConfig, InlineListSelection};
 
 const SETTINGS_TITLE: &str = "VT Code Settings";
-const SETTINGS_HINT: &str = "↑/↓ select • Enter/Space apply • ←/→ adjust • Auto-save on change • Esc close • Type to filter";
+const SETTINGS_HINT: &str = "↑/↓ select • Enter apply • ←/→ adjust • Auto-save on change • Esc parent (double Esc closes) • Type to filter";
 const SETTINGS_SEARCH_LABEL: &str = "Filter settings";
 const SETTINGS_SEARCH_PLACEHOLDER: &str = "path, key, or description";
 const ACTION_RELOAD: &str = "settings:reload";
@@ -185,14 +185,12 @@ pub(crate) fn apply_settings_action(
     if let Some(path) = action.strip_prefix(ACTION_PREFIX_ARRAY_ADD) {
         mutate_draft_and_persist(state, |draft| add_array_item(draft, path))?;
         outcome.saved = true;
-        outcome.message = Some(format!("Added an item to {} and saved.", path));
         return Ok(outcome);
     }
 
     if let Some(path) = action.strip_prefix(ACTION_PREFIX_ARRAY_POP) {
         mutate_draft_and_persist(state, |draft| pop_array_item(draft, path))?;
         outcome.saved = true;
-        outcome.message = Some(format!("Removed last item from {} and saved.", path));
         return Ok(outcome);
     }
 
@@ -214,7 +212,6 @@ pub(crate) fn apply_settings_action(
             apply_scalar_operation(draft, path, operation)
         })?;
         outcome.saved = true;
-        outcome.message = Some(format!("Updated {} and saved.", path));
         return Ok(outcome);
     }
 
@@ -329,15 +326,12 @@ fn item_for_value(label: &str, path: &str, value: &TomlValue) -> InlineListItem 
         .unwrap_or_default();
 
     let summary = summarize_value(value);
-    let mut subtitle_parts = vec![format!("{} = {}", path, summary)];
-    if !description.is_empty() {
-        subtitle_parts.push(description);
-    }
+    let subtitle = setting_subtitle(path, &summary, &description, false);
 
     match value {
         TomlValue::Boolean(_) => InlineListItem {
             title: label.to_string(),
-            subtitle: Some(subtitle_parts.join(" • ")),
+            subtitle: Some(subtitle),
             badge: Some("Toggle".to_string()),
             indent: 0,
             selection: Some(InlineListSelection::ConfigAction(format!(
@@ -348,7 +342,7 @@ fn item_for_value(label: &str, path: &str, value: &TomlValue) -> InlineListItem 
         },
         TomlValue::Integer(_) | TomlValue::Float(_) => InlineListItem {
             title: label.to_string(),
-            subtitle: Some(subtitle_parts.join(" • ")),
+            subtitle: Some(setting_subtitle(path, &summary, &description, true)),
             badge: Some("Number".to_string()),
             indent: 0,
             selection: Some(InlineListSelection::ConfigAction(format!(
@@ -361,7 +355,7 @@ fn item_for_value(label: &str, path: &str, value: &TomlValue) -> InlineListItem 
             let has_options = resolve_cycle_options(path, current).len() > 1;
             InlineListItem {
                 title: label.to_string(),
-                subtitle: Some(subtitle_parts.join(" • ")),
+                subtitle: Some(setting_subtitle(path, &summary, &description, has_options)),
                 badge: Some(if has_options {
                     "Cycle".to_string()
                 } else {
@@ -381,7 +375,7 @@ fn item_for_value(label: &str, path: &str, value: &TomlValue) -> InlineListItem 
             title: label.to_string(),
             subtitle: Some(format!(
                 "{} • {} entries",
-                subtitle_parts.join(" • "),
+                setting_subtitle(path, &summary, &description, false),
                 entries.len()
             )),
             badge: Some("Array".to_string()),
@@ -396,7 +390,7 @@ fn item_for_value(label: &str, path: &str, value: &TomlValue) -> InlineListItem 
             title: label.to_string(),
             subtitle: Some(format!(
                 "{} • {} keys",
-                subtitle_parts.join(" • "),
+                setting_subtitle(path, &summary, &description, false),
                 table.len()
             )),
             badge: Some("Section".to_string()),
@@ -409,13 +403,26 @@ fn item_for_value(label: &str, path: &str, value: &TomlValue) -> InlineListItem 
         },
         _ => InlineListItem {
             title: label.to_string(),
-            subtitle: Some(subtitle_parts.join(" • ")),
+            subtitle: Some(setting_subtitle(path, &summary, &description, false)),
             badge: Some("Value".to_string()),
             indent: 0,
             selection: None,
             search_value: Some(search_value(path, label, doc)),
         },
     }
+}
+
+fn setting_subtitle(path: &str, summary: &str, description: &str, adjustable: bool) -> String {
+    let value_display = if adjustable {
+        format!("<- {} ->", summary)
+    } else {
+        summary.to_string()
+    };
+    let mut parts = vec![format!("{} = {}", path, value_display)];
+    if !description.is_empty() {
+        parts.push(description.to_string());
+    }
+    parts.join(" • ")
 }
 
 fn section_item(label: &str) -> InlineListItem {
@@ -624,6 +631,21 @@ fn extract_comma_options(value: &str) -> Vec<String> {
 
 fn normalize_field_path(path: &str) -> String {
     ARRAY_INDEX_RE.replace_all(path, "[]").to_string()
+}
+
+pub(crate) fn parent_view_path(path: &str) -> Option<String> {
+    if path.is_empty() {
+        return None;
+    }
+
+    if path.ends_with(']')
+        && let Some(start) = path.rfind('[')
+    {
+        let parent = &path[..start];
+        return (!parent.is_empty()).then(|| parent.to_string());
+    }
+
+    path.rfind('.').map(|idx| path[..idx].to_string())
 }
 
 fn parse_path_tokens(path: &str) -> Result<Vec<PathToken>> {
@@ -1078,6 +1100,19 @@ mod tests {
         assert_eq!(
             normalize_field_path("commands.allow_list[12]"),
             "commands.allow_list[]"
+        );
+    }
+
+    #[test]
+    fn parent_view_path_handles_nested_segments() {
+        assert_eq!(parent_view_path("agent"), None);
+        assert_eq!(
+            parent_view_path("agent.vibe_coding"),
+            Some("agent".to_string())
+        );
+        assert_eq!(
+            parent_view_path("hooks.lifecycle.pre_tool_use[0].hooks[2]"),
+            Some("hooks.lifecycle.pre_tool_use[0].hooks".to_string())
         );
     }
 
