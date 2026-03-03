@@ -12,5 +12,5 @@ fn help_includes_responses_models_list() {
     let mut out: Vec<u8> = Vec::new();
     cmd.write_long_help(&mut out).unwrap();
     let s = String::from_utf8(out).unwrap();
-    assert!(s.contains("gpt-oss-20b"));
+    assert!(s.contains(vtcode_core::config::constants::models::openai::GPT_5));
 }

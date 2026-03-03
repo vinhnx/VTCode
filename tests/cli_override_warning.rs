@@ -47,7 +47,7 @@ async fn cli_override_with_responses_model_no_warn() {
         "--workspace",
         workspace.to_str().unwrap(),
         "--model",
-        "gpt-oss-20b",
+        vtcode_core::config::constants::models::openai::GPT_5,
         "--config",
         "prompt_cache.providers.openai.prompt_cache_retention=24h",
     ])

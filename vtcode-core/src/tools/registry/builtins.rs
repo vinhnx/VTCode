@@ -108,6 +108,8 @@ pub(super) fn builtin_tool_registrations(
             ToolRegistry::unified_search_executor,
         )
         .with_aliases([
+            tools::GREP_FILE,
+            tools::LIST_FILES,
             "grep",
             "search text",
             "list files",

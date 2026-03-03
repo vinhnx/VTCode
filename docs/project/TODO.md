@@ -106,8 +106,6 @@ improve /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-llm
 
 ---
 
-check if /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/src/version.rs and /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/src/process_hardening.rs dead?
-
 ---
 
 extract /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/src/acp to module /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-acp-client
@@ -116,6 +114,13 @@ extract /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/src/acp to module 
 
 improve /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/src
 
-review and modularize
+review and modularize every component in src/ to ensure single responsibility, clear separation of concerns, and maintainable code structure. Identify any files that contain multiple distinct functionalities and refactor them into smaller, focused modules. For example, if a file contains both API client logic and business logic, separate these into an API client module and a service layer module. Ensure that each module has a clear purpose and that related functions and types are grouped together logically. This will improve code readability, facilitate easier testing, and enhance maintainability as the codebase grows.
 
 ---
+
+remove /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/src/skills-enhanced
+
+--
+
+remove /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/src/main_modular.rs and /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/src/process_hardening.rs and
+check if /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/src/version.rs and /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/src/process_hardening.rs dead?
