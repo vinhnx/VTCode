@@ -240,13 +240,6 @@ https://docs.litellm.ai/docs/
 
 ---
 
-handle auto suggest and higlight commands, @files, code text ansi in user chat input
-
-1. suggest: '/Users/vinhnguyenxuan/Desktop/Screenshot 2026-03-02 at 2.48.34 PM.png'
-2. highlight: '/Users/vinhnguyenxuan/Desktop/Screenshot 2026-03-02 at 2.49.11 PM.png'
-
----
-
 make plan mode workflow follow this structure prompt and blueprint. the the final proposed plan should be in the exact format of the plan blueprint, and the reasoning and decision log should follow the structure of the reasoning + decision log blueprint.
 
 ### 1) Agent reasoning + decision log blueprint
