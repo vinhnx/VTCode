@@ -56,6 +56,20 @@ fn model_picker_lists_new_gemini_models() {
     assert!(has_model(options, ModelId::Gemini31ProPreview));
 }
 
+#[test]
+fn model_search_value_includes_provider_model_aliases() {
+    let value = super::rendering::model_search_value(
+        Provider::OpenAI,
+        "GPT-5.2",
+        "gpt-5.2",
+        Some("Latest frontier model"),
+    )
+    .to_ascii_lowercase();
+
+    assert!(value.contains("openai gpt-5.2"));
+    assert!(value.contains("openai/gpt-5.2"));
+}
+
 fn base_picker_state(current_provider: &str, current_model: &str) -> ModelPickerState {
     ModelPickerState {
         options: MODEL_OPTIONS.as_slice(),
