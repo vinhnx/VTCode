@@ -583,7 +583,18 @@ impl HuggingFaceProvider {
     }
 
     fn format_error(&self, status: StatusCode, body: &str) -> LLMError {
-        let message = format!("HuggingFace API error ({}): {}", status, body);
+        let message = if body.contains("\"code\":\"model_not_supported\"")
+            && body.contains(models::huggingface::STEP_3_5_FLASH_BASE)
+        {
+            format!(
+                "HuggingFace API error ({}): Step 3.5 Flash requires the '{}' provider. \
+Enable that provider in your HuggingFace Inference Providers settings, or switch to another model.",
+                status,
+                models::huggingface::STEP_3_5_FLASH_PROVIDER
+            )
+        } else {
+            format!("HuggingFace API error ({}): {}", status, body)
+        };
 
         LLMError::Provider {
             message: format_llm_error(PROVIDER_NAME, &message),
