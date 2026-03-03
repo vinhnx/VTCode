@@ -26,6 +26,31 @@ use super::{
 use crate::config::constants::ui;
 
 impl Session {
+    pub(crate) fn inline_lists_visible(&self) -> bool {
+        self.inline_lists_visible
+    }
+
+    pub(crate) fn ensure_inline_lists_visible_for_trigger(&mut self) {
+        if self.inline_lists_visible {
+            return;
+        }
+        self.inline_lists_visible = true;
+        self.mark_dirty();
+    }
+
+    pub(crate) fn toggle_inline_lists_visibility(&mut self) {
+        self.inline_lists_visible = !self.inline_lists_visible;
+        if !self.inline_lists_visible {
+            if self.file_palette_active {
+                self.close_file_palette();
+            }
+            if self.history_picker_state.active {
+                self.history_picker_state.cancel(&mut self.input_manager);
+            }
+        }
+        self.mark_dirty();
+    }
+
     /// Get the next revision counter for message tracking
     pub(crate) fn next_revision(&mut self) -> u64 {
         self.line_revision_counter = self.line_revision_counter.wrapping_add(1);
@@ -228,6 +253,7 @@ impl Session {
         selected: Option<InlineListSelection>,
         search: Option<InlineListSearchConfig>,
     ) {
+        self.ensure_inline_lists_visible_for_trigger();
         let mut list_state = ModalListState::new(items, selected.clone());
         let search_state = search.map(ModalSearchState::from);
         if let Some(search) = &search_state {
@@ -259,6 +285,7 @@ impl Session {
         search: Option<InlineListSearchConfig>,
         mode: WizardModalMode,
     ) {
+        self.ensure_inline_lists_visible_for_trigger();
         let wizard = WizardModalState::new(title, steps, current_step, search, mode);
         self.wizard_modal = Some(wizard);
         self.input_enabled = false;

@@ -1,10 +1,79 @@
 use super::*;
-use crate::ui::tui::session::inline_list::{InlineListRow, render_inline_list};
+use crate::ui::tui::session::inline_list::InlineListRow;
+use crate::ui::tui::session::list_panel::{
+    SharedListPanelSections, SharedListPanelStyles, SharedListWidgetModel, fixed_section_rows,
+    render_shared_list_panel, rows_to_u16, split_bottom_list_panel,
+};
+
+struct HistoryPickerPanelModel {
+    entries: Vec<String>,
+    selected: Option<usize>,
+    offset: usize,
+    visible_rows: usize,
+    base_style: Style,
+}
+
+impl SharedListWidgetModel for HistoryPickerPanelModel {
+    fn rows(&self, width: u16) -> Vec<(InlineListRow, u16)> {
+        if self.entries.is_empty() {
+            return vec![(
+                InlineListRow::single(
+                    Line::from(Span::styled(
+                        "No history matches".to_owned(),
+                        self.base_style
+                            .add_modifier(Modifier::DIM | Modifier::ITALIC),
+                    )),
+                    self.base_style.add_modifier(Modifier::DIM),
+                ),
+                1_u16,
+            )];
+        }
+
+        self.entries
+            .iter()
+            .map(|content| {
+                let max_chars = width as usize;
+                let item_len = content.chars().count();
+                let truncated = if item_len > max_chars {
+                    let kept = max_chars.saturating_sub(1);
+                    let text: String = content.chars().take(kept).collect();
+                    format!("{text}…")
+                } else {
+                    content.clone()
+                };
+                (
+                    InlineListRow::single(
+                        Line::from(vec![Span::styled(truncated, self.base_style)]),
+                        self.base_style,
+                    ),
+                    1_u16,
+                )
+            })
+            .collect()
+    }
+
+    fn selected(&self) -> Option<usize> {
+        self.selected
+    }
+
+    fn set_selected(&mut self, selected: Option<usize>) {
+        self.selected = selected;
+    }
+
+    fn set_scroll_offset(&mut self, offset: usize) {
+        self.offset = offset;
+    }
+
+    fn set_viewport_rows(&mut self, rows: u16) {
+        self.visible_rows = rows as usize;
+    }
+}
 
 pub fn split_inline_history_picker_area(session: &mut Session, area: Rect) -> (Rect, Option<Rect>) {
     if area.height == 0
         || area.width == 0
         || session.modal.is_some()
+        || !session.inline_lists_visible()
         || session.file_palette_active
         || !session.history_picker_state.active
     {
@@ -12,33 +81,30 @@ pub fn split_inline_history_picker_area(session: &mut Session, area: Rect) -> (R
         return (area, None);
     }
 
-    let instruction_rows = 1_u16;
+    let fixed_rows = fixed_section_rows(1, 1, true);
     let list_rows = if session.history_picker_state.matches.is_empty() {
         1_u16
     } else {
-        session
-            .history_picker_state
-            .matches
-            .len()
-            .min(ui::INLINE_LIST_MAX_ROWS)
-            .min(u16::MAX as usize) as u16
+        rows_to_u16(
+            session
+                .history_picker_state
+                .matches
+                .len()
+                .min(ui::INLINE_LIST_MAX_ROWS),
+        )
     };
-    let desired_height = instruction_rows.saturating_add(list_rows);
-    let max_panel_height = area.height.saturating_sub(1);
-    if max_panel_height <= instruction_rows {
+    let (transcript_area, panel_area) = split_bottom_list_panel(area, fixed_rows, list_rows);
+    if panel_area.is_none() {
         session.history_picker_state.visible_rows = 0;
-        return (area, None);
+        return (transcript_area, None);
     }
-
-    let panel_height = desired_height.min(max_panel_height);
-    let chunks =
-        Layout::vertical([Constraint::Min(1), Constraint::Length(panel_height)]).split(area);
-    (chunks[0], Some(chunks[1]))
+    (transcript_area, panel_area)
 }
 
 pub fn render_history_picker(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
     if area.height == 0
         || area.width == 0
+        || !session.inline_lists_visible()
         || !session.history_picker_state.active
         || session.modal.is_some()
         || session.file_palette_active
@@ -49,94 +115,59 @@ pub fn render_history_picker(session: &mut Session, frame: &mut Frame<'_>, area:
 
     frame.render_widget(Clear, area);
 
-    let (query, matches_len, selected_idx, matches) = {
+    let (query, selected_idx, current_offset, matches) = {
         let picker = &session.history_picker_state;
         (
             picker.search_query.clone(),
-            picker.matches.len(),
             picker.list_state.selected(),
+            picker.list_state.offset(),
             picker.matches.clone(),
         )
     };
-
-    let layout = Layout::vertical([Constraint::Length(1), Constraint::Min(1)]).split(area);
-    if layout.len() < 2 {
-        session.history_picker_state.visible_rows = 0;
-        return;
-    }
-
-    let title = if query.is_empty() {
-        "History (Ctrl+R) · Enter Accept · Esc Cancel".to_owned()
+    let default_style = default_style(session);
+    let filter_text = if query.is_empty() {
+        "Filter: (type to search)".to_owned()
     } else {
-        format!(
-            "History (Ctrl+R) · Enter Accept · Esc Cancel · filter: {}",
-            query
-        )
+        format!("Filter: {}", query)
     };
-    frame.render_widget(
-        Paragraph::new(Line::from(Span::styled(
-            title,
-            default_style(session).add_modifier(Modifier::DIM),
-        )))
-        .wrap(Wrap { trim: true }),
-        layout[0],
-    );
-
-    let list_area = layout[1];
-    if list_area.height == 0 || list_area.width == 0 {
-        session.history_picker_state.visible_rows = 0;
-        return;
-    }
-
-    let visible_rows = (list_area.height as usize).min(ui::INLINE_LIST_MAX_ROWS);
-    session.history_picker_state.visible_rows = visible_rows;
-
-    let rendered_rows = if matches_len == 0 {
-        vec![(
-            InlineListRow::single(
-                Line::from(Span::styled(
-                    "No history matches".to_owned(),
-                    default_style(session).add_modifier(Modifier::DIM | Modifier::ITALIC),
-                )),
-                default_style(session).add_modifier(Modifier::DIM),
-            ),
-            1_u16,
-        )]
-    } else {
-        matches
-            .into_iter()
-            .take(visible_rows)
-            .map(|item| {
-                let max_chars = list_area.width as usize;
-                let item_len = item.content.chars().count();
-                let truncated = if item_len > max_chars {
-                    let kept = max_chars.saturating_sub(1);
-                    let content: String = item.content.chars().take(kept).collect();
-                    format!("{content}…")
-                } else {
-                    item.content
-                };
-                (
-                    InlineListRow::single(
-                        Line::from(vec![Span::styled(truncated, default_style(session))]),
-                        default_style(session),
-                    ),
-                    1_u16,
-                )
-            })
-            .collect::<Vec<_>>()
+    let sections = SharedListPanelSections {
+        header: vec![Line::from(Span::styled(
+            "History".to_owned(),
+            default_style,
+        ))],
+        info: vec![Line::from(Span::styled(
+            "Ctrl+R open • Enter accept • Esc cancel".to_owned(),
+            default_style,
+        ))],
+        search: Some(Line::from(Span::styled(filter_text, default_style))),
     };
 
-    let selected = selected_idx.filter(|index| *index < rendered_rows.len());
-    let widget_state = render_inline_list(
+    let entries = matches
+        .into_iter()
+        .map(|item| item.content)
+        .collect::<Vec<_>>();
+    let mut panel_model = HistoryPickerPanelModel {
+        entries,
+        selected: selected_idx,
+        offset: current_offset,
+        visible_rows: 0,
+        base_style: default_style,
+    };
+
+    render_shared_list_panel(
         frame,
-        list_area,
-        rendered_rows,
-        selected,
-        Some(modal_list_highlight_style(session)),
+        area,
+        sections,
+        SharedListPanelStyles {
+            base_style: default_style,
+            selected_style: Some(modal_list_highlight_style(session)),
+            text_style: default_style,
+        },
+        &mut panel_model,
     );
 
     let picker = &mut session.history_picker_state;
-    picker.list_state.select(widget_state.selected);
-    *picker.list_state.offset_mut() = widget_state.scroll_offset_index();
+    picker.visible_rows = panel_model.visible_rows.min(ui::INLINE_LIST_MAX_ROWS);
+    picker.list_state.select(panel_model.selected);
+    *picker.list_state.offset_mut() = panel_model.offset;
 }

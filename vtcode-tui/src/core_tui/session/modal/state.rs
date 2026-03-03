@@ -84,7 +84,17 @@ pub struct ModalListState {
     pub filter_query: Option<String>,
     pub viewport_rows: Option<u16>,
     pub compact_rows: bool,
+    density_behavior: ModalListDensityBehavior,
 }
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ModalListDensityBehavior {
+    Adjustable,
+    FixedComfortable,
+}
+
+const CONFIG_LIST_NAVIGATION_HINT: &str =
+    "Navigation: ↑/↓ select • Space/Enter apply • ←/→ change value • Esc close";
 
 #[derive(Clone)]
 pub struct ModalListItem {
@@ -204,6 +214,9 @@ impl ModalState {
         let previous_selection = list.current_selection();
         match key.code {
             KeyCode::Char('d') | KeyCode::Char('D') if modifiers.alt => {
+                if !list.supports_density_toggle() {
+                    return ModalListKeyResult::HandledNoRedraw;
+                }
                 list.toggle_row_density();
                 ModalListKeyResult::Redraw
             }
@@ -463,6 +476,10 @@ impl ModalListState {
                 .as_ref()
                 .is_some_and(|subtitle| !subtitle.trim().is_empty())
         });
+        let density_behavior = Self::density_behavior_for_items(&converted);
+        let is_model_picker_list = Self::is_model_picker_list(&converted);
+        let compact_rows =
+            Self::initial_compact_rows(density_behavior, has_two_line_items, is_model_picker_list);
         let mut modal_state = Self {
             visible_indices: (0..converted.len()).collect(),
             items: converted,
@@ -471,10 +488,57 @@ impl ModalListState {
             filter_terms: Vec::new(),
             filter_query: None,
             viewport_rows: None,
-            compact_rows: has_two_line_items,
+            compact_rows,
+            density_behavior,
         };
         modal_state.select_initial(selected);
         modal_state
+    }
+
+    fn density_behavior_for_items(items: &[ModalListItem]) -> ModalListDensityBehavior {
+        if items
+            .iter()
+            .any(|item| matches!(item.selection, Some(InlineListSelection::ConfigAction(_))))
+        {
+            ModalListDensityBehavior::FixedComfortable
+        } else {
+            ModalListDensityBehavior::Adjustable
+        }
+    }
+
+    fn initial_compact_rows(
+        density_behavior: ModalListDensityBehavior,
+        has_two_line_items: bool,
+        is_model_picker_list: bool,
+    ) -> bool {
+        if is_model_picker_list {
+            return false;
+        }
+        match density_behavior {
+            ModalListDensityBehavior::FixedComfortable => false,
+            ModalListDensityBehavior::Adjustable => has_two_line_items,
+        }
+    }
+
+    fn is_model_picker_list(items: &[ModalListItem]) -> bool {
+        let mut has_model_selection = false;
+        for item in items {
+            let Some(selection) = item.selection.as_ref() else {
+                continue;
+            };
+            match selection {
+                InlineListSelection::Model(_)
+                | InlineListSelection::DynamicModel(_)
+                | InlineListSelection::RefreshDynamicModels
+                | InlineListSelection::Reasoning(_)
+                | InlineListSelection::DisableReasoning
+                | InlineListSelection::CustomModel => {
+                    has_model_selection = true;
+                }
+                _ => return false,
+            }
+        }
+        has_model_selection
     }
 
     pub fn current_selection(&self) -> Option<InlineListSelection> {
@@ -787,6 +851,21 @@ impl ModalListState {
 
     pub(super) fn compact_rows(&self) -> bool {
         self.compact_rows
+    }
+
+    pub(super) fn supports_density_toggle(&self) -> bool {
+        matches!(self.density_behavior, ModalListDensityBehavior::Adjustable)
+    }
+
+    pub(super) fn non_filter_summary_text(&self, footer_hint: Option<&str>) -> Option<String> {
+        match self.density_behavior {
+            ModalListDensityBehavior::FixedComfortable => {
+                Some(CONFIG_LIST_NAVIGATION_HINT.to_owned())
+            }
+            ModalListDensityBehavior::Adjustable => footer_hint
+                .filter(|hint| !hint.is_empty())
+                .map(ToOwned::to_owned),
+        }
     }
 
     pub fn toggle_row_density(&mut self) {

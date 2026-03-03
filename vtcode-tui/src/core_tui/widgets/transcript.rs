@@ -111,7 +111,7 @@ impl<'a> Widget for TranscriptWidget<'a> {
             viewport_rows,
         );
 
-        // Check if we need to mutate the lines (fill empty space or add queue overlay)
+        // Check if we need to mutate the lines (fill empty space or add overlays)
         let fill_count = viewport_rows.saturating_sub(cached_lines.len());
         let needs_mutation = fill_count > 0 || !self.session.queued_inputs.is_empty();
 

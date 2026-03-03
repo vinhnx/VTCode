@@ -8,8 +8,8 @@ use crate::llm::providers::anthropic_types::{
     CacheControl, ImageSource,
 };
 use crate::llm::providers::common::normalize_reasoning_detail_object;
+use hashbrown::HashSet;
 use serde_json::{Value, json};
-use std::collections::HashSet;
 
 pub(crate) fn hoist_largest_user_message(messages: &mut Vec<Message>) {
     let mut max_len = 0;
@@ -170,9 +170,10 @@ fn build_reasoning_blocks(msg: &Message) -> Vec<AnthropicContentBlock> {
                 let signature = normalized
                     .get("signature")
                     .and_then(|t| t.as_str())
-                    .unwrap_or("")
-                    .to_string();
-                if !thinking.is_empty() && !signature.is_empty() {
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                    .map(str::to_owned);
+                if !thinking.is_empty() && signature.is_some() {
                     blocks.push(AnthropicContentBlock::Thinking {
                         thinking,
                         signature,
@@ -380,7 +381,7 @@ mod tests {
                 ..
             } => {
                 assert_eq!(thinking, "trace");
-                assert_eq!(signature, "sig_123");
+                assert_eq!(signature.as_deref(), Some("sig_123"));
             }
             other => panic!("expected thinking block, got {other:?}"),
         }

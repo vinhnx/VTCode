@@ -522,6 +522,82 @@ fn list_modal_space_no_longer_submits_config_action() {
 }
 
 #[test]
+fn list_modal_alt_d_does_not_toggle_density_for_config_actions() {
+    let mut modal = ModalState {
+        title: "Config".to_owned(),
+        lines: vec![],
+        footer_hint: None,
+        list: Some(ModalListState::new(
+            vec![InlineListItem {
+                title: "Autonomous mode".to_owned(),
+                subtitle: Some("agent.autonomous_mode = on".to_owned()),
+                badge: Some("Toggle".to_owned()),
+                indent: 0,
+                selection: Some(InlineListSelection::ConfigAction(
+                    "agent.autonomous_mode:toggle".to_owned(),
+                )),
+                search_value: None,
+            }],
+            None,
+        )),
+        secure_prompt: None,
+        is_plan_confirmation: false,
+        restore_input: true,
+        restore_cursor: true,
+        search: None,
+    };
+
+    assert!(
+        !modal
+            .list
+            .as_ref()
+            .expect("config list should exist")
+            .compact_rows()
+    );
+
+    let result = modal.handle_list_key_event(
+        &KeyEvent::new(KeyCode::Char('d'), KeyModifiers::ALT),
+        ModalKeyModifiers {
+            alt: true,
+            ..ModalKeyModifiers::default()
+        },
+    );
+
+    assert!(matches!(result, ModalListKeyResult::HandledNoRedraw));
+    assert!(
+        !modal
+            .list
+            .as_ref()
+            .expect("config list should exist")
+            .compact_rows()
+    );
+}
+
+#[test]
+fn model_list_defaults_to_comfortable_density() {
+    let list = ModalListState::new(
+        vec![InlineListItem {
+            title: "gpt-5".to_owned(),
+            subtitle: Some("High-quality general reasoning model".to_owned()),
+            badge: Some("Default".to_owned()),
+            indent: 0,
+            selection: Some(InlineListSelection::Model(0)),
+            search_value: Some("gpt-5".to_owned()),
+        }],
+        None,
+    );
+
+    assert!(
+        !list.compact_rows(),
+        "model picker should default to comfortable row density"
+    );
+    assert!(
+        list.supports_density_toggle(),
+        "model picker density should remain adjustable"
+    );
+}
+
+#[test]
 fn list_modal_cancel_emits_event() {
     let mut modal = sample_list_modal();
     if let Some(search) = modal.search.as_mut() {

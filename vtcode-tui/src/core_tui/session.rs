@@ -38,6 +38,7 @@ mod impl_style;
 mod inline_list;
 mod input;
 mod input_manager;
+mod list_panel;
 mod message;
 pub mod modal;
 pub mod mouse_selection;
@@ -180,6 +181,7 @@ pub struct Session {
     // --- Palette Management ---
     pub(crate) file_palette: Option<FilePalette>,
     pub(crate) file_palette_active: bool,
+    pub(crate) inline_lists_visible: bool,
 
     // --- Thinking Indicator ---
     pub(crate) thinking_spinner: ThinkingSpinner,

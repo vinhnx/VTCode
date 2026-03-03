@@ -58,24 +58,6 @@ https://docs.litellm.ai/docs/
 
 ---
 
-for the all base inline list presentation. move the inline list to move below the chat user input area. remove the bottom status view and move the inline list there. this way, the inline list will be more visible and easier to access while still keeping the chat interface clean and focused on the conversation. toggle the inline list with a keyboard shortcut (e.g., Ctrl+I) to show/hide it as needed, allowing users to quickly reference available commands without cluttering the main chat area.
-
-reference:
-
-```
-------
-› /
-----
-  /model         choose what model and reasoning effort to use
-  /permissions   choose what Codex is allowed to do
-  /experimental  toggle experimental features
-  /skills        use skills to improve how Codex performs specific tasks
-  /review        review my current changes and find issues
-  /rename        rename the current thread
-  /new           start a new chat during a conversation
-  /resume        resume a saved chat
-```
-
 ---
 
 improve vtcode-tui/src/ui/markdown.rs
@@ -129,6 +111,19 @@ check if /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/src/version.rs an
 
 handle prompt caching
 
-```
+---
 
-```
+for /config modal, handle fuzzy search for all possible keys in the config, and also support searching for values. For example, if user types "editor", it should show all config keys that contain "editor" as well as any keys that have values containing "editor" such as "external_editor": "code --wait". This will make it easier for users to find the config options they want to change without needing to remember the exact key names.
+
+---
+
+remove /plan and /agent
+commands and logic
+
+---
+
+for main / slash filter implement fuzzy search
+
+---
+
+improve /doctor command logic and features

@@ -109,16 +109,14 @@ impl Session {
             return;
         }
 
-        let Some(queue_lines) = self.queue_overlay_lines(content_width) else {
-            return;
-        };
-
-        let queue_visible = queue_lines.len().min(visible_lines.len());
-        let start = visible_lines.len().saturating_sub(queue_visible);
-        let slice_start = queue_lines.len().saturating_sub(queue_visible);
-        let overlay = &queue_lines[slice_start..];
-        for (target, source) in visible_lines[start..].iter_mut().zip(overlay.iter()) {
-            *target = source.clone();
+        if let Some(queue_lines) = self.queue_overlay_lines(content_width) {
+            let queue_visible = queue_lines.len().min(visible_lines.len());
+            let start = visible_lines.len().saturating_sub(queue_visible);
+            let slice_start = queue_lines.len().saturating_sub(queue_visible);
+            let overlay = &queue_lines[slice_start..];
+            for (target, source) in visible_lines[start..].iter_mut().zip(overlay.iter()) {
+                *target = source.clone();
+            }
         }
     }
 

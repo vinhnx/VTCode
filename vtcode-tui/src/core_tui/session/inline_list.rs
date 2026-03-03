@@ -41,12 +41,20 @@ pub(crate) fn selection_padding() -> String {
     " ".repeat(selection_padding_width())
 }
 
-pub(crate) fn render_inline_list(
+#[derive(Clone, Copy)]
+pub(crate) struct InlineListRenderOptions {
+    pub base_style: Style,
+    pub selected_style: Option<Style>,
+    pub scroll_padding: u16,
+    pub infinite_scrolling: bool,
+}
+
+pub(crate) fn render_inline_list_with_options(
     frame: &mut Frame<'_>,
     area: Rect,
     rows: Vec<(InlineListRow, u16)>,
     selected: Option<usize>,
-    selected_style: Option<Style>,
+    options: InlineListRenderOptions,
 ) -> WidgetListState {
     let item_count = rows.len();
     let mut widget_state = WidgetListState::default();
@@ -56,14 +64,17 @@ pub(crate) fn render_inline_list(
         let (base_row, height) = &rows[context.index];
         let mut row = base_row.clone();
         if context.is_selected
-            && let Some(style) = selected_style
+            && let Some(style) = options.selected_style
         {
             row.style = style;
         }
         (row, *height)
     });
 
-    let widget = ListView::new(builder, item_count).infinite_scrolling(false);
+    let widget = ListView::new(builder, item_count)
+        .style(options.base_style)
+        .scroll_padding(options.scroll_padding)
+        .infinite_scrolling(options.infinite_scrolling);
     frame.render_stateful_widget(widget, area, &mut widget_state);
     widget_state
 }

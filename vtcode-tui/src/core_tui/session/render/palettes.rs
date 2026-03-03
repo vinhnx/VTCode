@@ -1,5 +1,9 @@
 use super::*;
-use crate::ui::tui::session::inline_list::{InlineListRow, render_inline_list, selection_padding};
+use crate::ui::tui::session::inline_list::{InlineListRow, selection_padding};
+use crate::ui::tui::session::list_panel::{
+    SharedListPanelSections, SharedListPanelStyles, StaticRowsListPanelModel, fixed_section_rows,
+    render_shared_list_panel, rows_to_u16, split_bottom_list_panel,
+};
 
 #[derive(Clone)]
 struct FilePaletteRenderRow {
@@ -13,6 +17,7 @@ pub fn split_inline_file_palette_area(session: &mut Session, area: Rect) -> (Rec
     if area.height == 0
         || area.width == 0
         || session.modal.is_some()
+        || !session.inline_lists_visible()
         || session.history_picker_state.active
         || !session.file_palette_active
     {
@@ -23,11 +28,12 @@ pub fn split_inline_file_palette_area(session: &mut Session, area: Rect) -> (Rec
         return (area, None);
     };
 
-    let instruction_rows = if palette.has_files() {
+    let info_rows = if palette.has_files() {
         file_palette_instructions(session, palette).len()
     } else {
         1
     };
+    let fixed_rows = fixed_section_rows(1, info_rows, palette.has_files());
 
     let list_rows = if palette.has_files() {
         let mut rows = palette.current_page_items().len().max(1);
@@ -39,21 +45,12 @@ pub fn split_inline_file_palette_area(session: &mut Session, area: Rect) -> (Rec
         1
     };
 
-    let instruction_rows = instruction_rows.min(u16::MAX as usize) as u16;
-    let desired_height = instruction_rows.saturating_add(list_rows.min(u16::MAX as usize) as u16);
-    let max_panel_height = area.height.saturating_sub(1);
-    if max_panel_height <= instruction_rows {
-        return (area, None);
-    }
-
-    let panel_height = desired_height.min(max_panel_height);
-    let chunks =
-        Layout::vertical([Constraint::Min(1), Constraint::Length(panel_height)]).split(area);
-    (chunks[0], Some(chunks[1]))
+    split_bottom_list_panel(area, fixed_rows, rows_to_u16(list_rows))
 }
 
 pub fn render_file_palette(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
     if !session.file_palette_active
+        || !session.inline_lists_visible()
         || area.height == 0
         || area.width == 0
         || session.modal.is_some()
@@ -78,34 +75,6 @@ pub fn render_file_palette(session: &mut Session, frame: &mut Frame<'_>, area: R
     }
 
     let instructions = file_palette_instructions(session, palette);
-    let instruction_rows = instructions.len().min(u16::MAX as usize) as u16;
-    let layout = if instruction_rows == 0 {
-        Layout::vertical([Constraint::Min(1)]).split(area)
-    } else {
-        Layout::vertical([Constraint::Length(instruction_rows), Constraint::Min(1)]).split(area)
-    };
-
-    if layout.is_empty() {
-        return;
-    }
-
-    let list_area = if instruction_rows == 0 {
-        layout[0]
-    } else {
-        frame.render_widget(
-            Paragraph::new(instructions).wrap(Wrap { trim: true }),
-            layout[0],
-        );
-        if layout.len() < 2 {
-            return;
-        }
-        layout[1]
-    };
-
-    if list_area.width == 0 || list_area.height == 0 {
-        return;
-    }
-
     let rows = build_file_palette_rows(session, palette);
     let item_count = rows.len();
     if item_count == 0 {
@@ -137,12 +106,34 @@ pub fn render_file_palette(session: &mut Session, frame: &mut Frame<'_>, area: R
         })
         .collect::<Vec<_>>();
 
-    let _ = render_inline_list(
-        frame,
-        list_area,
-        rendered_rows,
+    let filter = palette.filter_query();
+    let search_line = if filter.is_empty() {
+        "Filter: (type @path in input)".to_owned()
+    } else {
+        format!("Filter: {}", filter)
+    };
+    let sections = SharedListPanelSections {
+        header: vec![Line::from(Span::styled("Files".to_owned(), default_style))],
+        info: instructions,
+        search: Some(Line::from(Span::styled(search_line, default_style))),
+    };
+    let mut model = StaticRowsListPanelModel {
+        rows: rendered_rows,
         selected,
-        Some(highlight_style),
+        offset: 0,
+        visible_rows: 0,
+    };
+
+    render_shared_list_panel(
+        frame,
+        area,
+        sections,
+        SharedListPanelStyles {
+            base_style: default_style,
+            selected_style: Some(highlight_style),
+            text_style: default_style,
+        },
+        &mut model,
     );
 }
 
@@ -231,18 +222,4 @@ fn file_palette_instructions(session: &Session, palette: &FilePalette) -> Vec<Li
     }
 
     lines
-}
-
-pub(super) fn has_input_status(session: &Session) -> bool {
-    let left_present = session
-        .input_status_left
-        .as_ref()
-        .is_some_and(|value| !value.trim().is_empty());
-    if left_present {
-        return true;
-    }
-    session
-        .input_status_right
-        .as_ref()
-        .is_some_and(|value| !value.trim().is_empty())
 }

@@ -196,7 +196,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
         }
     }
 
-    if session.handle_file_palette_key(&key) {
+    if session.inline_lists_visible() && session.handle_file_palette_key(&key) {
         return None;
     }
 
@@ -218,7 +218,7 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
     }
 
     // Handle history picker if active
-    if session.history_picker_state.active {
+    if session.inline_lists_visible() && session.history_picker_state.active {
         let history = input_history_entries(session);
         let handled = history_picker::handle_history_picker_key(
             &key,
@@ -230,6 +230,11 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
             session.mark_dirty();
             return None;
         }
+    }
+
+    if is_inline_lists_toggle_shortcut(&key, has_control, has_alt, has_command) {
+        session.toggle_inline_lists_visibility();
+        return None;
     }
 
     // Legacy reverse search handling (kept for backward compatibility)
@@ -663,10 +668,31 @@ pub(super) fn open_history_picker(session: &mut Session) {
         return;
     }
 
+    session.ensure_inline_lists_visible_for_trigger();
     session.history_picker_state.open(&session.input_manager);
     let history = input_history_entries(session);
     session.history_picker_state.update_search(&history);
     session.mark_dirty();
+}
+
+fn is_inline_lists_toggle_shortcut(
+    key: &KeyEvent,
+    has_control: bool,
+    has_alt: bool,
+    has_command: bool,
+) -> bool {
+    if !has_control || has_alt || has_command {
+        return false;
+    }
+
+    matches!(
+        key.code,
+        KeyCode::Char('i')
+            | KeyCode::Char('I')
+            | KeyCode::Char('/')
+            | KeyCode::Char('?')
+            | KeyCode::Char('\u{1f}')
+    )
 }
 
 fn quick_help_lines() -> Vec<String> {
@@ -674,6 +700,7 @@ fn quick_help_lines() -> Vec<String> {
         "Ctrl+A / Ctrl+E: Move to start/end of line.".to_string(),
         "Ctrl+W: Delete previous word.".to_string(),
         "Ctrl+U / Ctrl+K: Delete to start/end of line.".to_string(),
+        "Ctrl+I or Ctrl+/: Toggle inline lists.".to_string(),
         "Alt+Left / Alt+Right: Move by word.".to_string(),
         "Ctrl+Z (Unix): Suspend VT Code; use `fg` to resume.".to_string(),
         "Esc: Close this overlay.".to_string(),

@@ -1,14 +1,15 @@
 use ratatui::crossterm::event::{KeyCode, KeyEvent};
-use ratatui::{
-    prelude::*,
-    widgets::{Clear, Paragraph, Wrap},
-};
+use ratatui::{prelude::*, widgets::Clear};
 
 use crate::config::constants::ui;
 use crate::ui::search::fuzzy_score;
 
 use super::super::types::InlineTextStyle;
-use super::inline_list::{InlineListRow, render_inline_list, selection_padding};
+use super::inline_list::{InlineListRow, selection_padding};
+use super::list_panel::{
+    SharedListPanelSections, SharedListPanelStyles, StaticRowsListPanelModel, fixed_section_rows,
+    render_shared_list_panel, rows_to_u16, split_bottom_list_panel,
+};
 use super::{
     Session, ratatui_color_from_ansi, ratatui_style_from_inline,
     slash_palette::{self, SlashPaletteUpdate, command_prefix, command_range},
@@ -18,6 +19,7 @@ pub(crate) fn split_inline_slash_area(session: &mut Session, area: Rect) -> (Rec
     if area.height == 0
         || area.width == 0
         || session.modal.is_some()
+        || !session.inline_lists_visible()
         || session.file_palette_active
         || session.history_picker_state.active
     {
@@ -31,28 +33,29 @@ pub(crate) fn split_inline_slash_area(session: &mut Session, area: Rect) -> (Rec
         return (area, None);
     }
 
-    let instruction_rows = slash_palette_instructions(session)
-        .len()
-        .min(u16::MAX as usize) as u16;
-    let desired_list_rows = suggestions
-        .len()
-        .min(ui::INLINE_LIST_MAX_ROWS)
-        .min(u16::MAX as usize) as u16;
-    let desired_height = instruction_rows.saturating_add(desired_list_rows.max(1));
-    let max_panel_height = area.height.saturating_sub(1);
-    if max_panel_height <= instruction_rows {
+    let info_rows = slash_palette_instructions(session).len();
+    let has_search_row = command_prefix(
+        session.input_manager.content(),
+        session.input_manager.cursor(),
+    )
+    .is_some();
+    let fixed_rows = fixed_section_rows(1, info_rows, has_search_row);
+    let desired_list_rows = rows_to_u16(suggestions.len().min(ui::INLINE_LIST_MAX_ROWS));
+    let (transcript_area, panel_area) =
+        split_bottom_list_panel(area, fixed_rows, desired_list_rows);
+    if panel_area.is_none() {
         session.slash_palette.clear_visible_rows();
-        return (area, None);
+        return (transcript_area, None);
     }
-
-    let panel_height = desired_height.min(max_panel_height);
-    let chunks =
-        Layout::vertical([Constraint::Min(1), Constraint::Length(panel_height)]).split(area);
-    (chunks[0], Some(chunks[1]))
+    (transcript_area, panel_area)
 }
 
 pub fn render_slash_palette(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
-    if area.height == 0 || area.width == 0 || session.modal.is_some() {
+    if area.height == 0
+        || area.width == 0
+        || session.modal.is_some()
+        || !session.inline_lists_visible()
+    {
         session.slash_palette.clear_visible_rows();
         return;
     }
@@ -63,41 +66,6 @@ pub fn render_slash_palette(session: &mut Session, frame: &mut Frame<'_>, area: 
     }
 
     frame.render_widget(Clear, area);
-
-    let instructions = slash_palette_instructions(session);
-    let instruction_rows = instructions.len().min(u16::MAX as usize) as u16;
-    let layout = if instruction_rows == 0 {
-        Layout::vertical([Constraint::Min(1)]).split(area)
-    } else {
-        Layout::vertical([Constraint::Length(instruction_rows), Constraint::Min(1)]).split(area)
-    };
-
-    if layout.is_empty() {
-        session.slash_palette.clear_visible_rows();
-        return;
-    }
-
-    let list_area = if instruction_rows == 0 {
-        layout[0]
-    } else {
-        let text_area = layout[0];
-        let paragraph = Paragraph::new(instructions).wrap(Wrap { trim: true });
-        frame.render_widget(paragraph, text_area);
-        if layout.len() < 2 {
-            session.slash_palette.clear_visible_rows();
-            return;
-        }
-        layout[1]
-    };
-
-    if list_area.height == 0 || list_area.width == 0 {
-        session.slash_palette.clear_visible_rows();
-        return;
-    }
-
-    session
-        .slash_palette
-        .set_visible_rows((list_area.height as usize).min(ui::INLINE_LIST_MAX_ROWS));
 
     let rows = slash_rows(session);
     let item_count = rows.len();
@@ -125,36 +93,65 @@ pub fn render_slash_palette(session: &mut Session, frame: &mut Frame<'_>, area: 
         })
         .collect::<Vec<_>>();
 
-    let selected = session
-        .slash_palette
-        .list_state_mut()
-        .selected()
-        .filter(|index| *index < item_count);
-    let widget_state = render_inline_list(
-        frame,
-        list_area,
-        rendered_rows,
+    let (selected, offset) = {
+        let list_state = session.slash_palette.list_state_mut();
+        (
+            list_state.selected().filter(|index| *index < item_count),
+            list_state.offset(),
+        )
+    };
+    let search_line = command_prefix(
+        session.input_manager.content(),
+        session.input_manager.cursor(),
+    )
+    .map(|prefix| {
+        let filter = prefix.trim_start_matches('/');
+        if filter.is_empty() {
+            "Filter: (type to narrow commands)".to_owned()
+        } else {
+            format!("Filter: {}", filter)
+        }
+    });
+    let sections = SharedListPanelSections {
+        header: vec![Line::from(Span::styled(
+            "Slash Commands".to_owned(),
+            default_style,
+        ))],
+        info: slash_palette_instructions(session),
+        search: search_line.map(|value| Line::from(Span::styled(value, default_style))),
+    };
+    let mut model = StaticRowsListPanelModel {
+        rows: rendered_rows,
         selected,
-        Some(highlight_style),
+        offset,
+        visible_rows: 0,
+    };
+    render_shared_list_panel(
+        frame,
+        area,
+        sections,
+        SharedListPanelStyles {
+            base_style: default_style,
+            selected_style: Some(highlight_style),
+            text_style: default_style,
+        },
+        &mut model,
     );
-    let selected_index = widget_state.selected;
+
+    session
+        .slash_palette
+        .set_visible_rows(model.visible_rows.min(ui::INLINE_LIST_MAX_ROWS));
 
     let list_state = session.slash_palette.list_state_mut();
-    list_state.select(selected_index);
-    *list_state.offset_mut() = widget_state.scroll_offset_index();
+    list_state.select(model.selected);
+    *list_state.offset_mut() = model.offset;
 }
 
 fn slash_palette_instructions(session: &Session) -> Vec<Line<'static>> {
-    vec![
-        Line::from(Span::styled(
-            ui::SLASH_PALETTE_HINT_PRIMARY.to_owned(),
-            session.styles.default_style(),
-        )),
-        Line::from(Span::styled(
-            ui::SLASH_PALETTE_HINT_SECONDARY.to_owned(),
-            session.styles.default_style().add_modifier(Modifier::DIM),
-        )),
-    ]
+    vec![Line::from(Span::styled(
+        "Navigation: ↑/↓ select • Enter apply • Esc dismiss".to_owned(),
+        session.styles.default_style(),
+    ))]
 }
 
 pub(super) fn handle_slash_palette_change(session: &mut Session) {
@@ -182,6 +179,7 @@ pub(super) fn update_slash_suggestions(session: &mut Session) {
         clear_slash_suggestions(session);
         return;
     };
+    session.ensure_inline_lists_visible_for_trigger();
 
     match session
         .slash_palette
@@ -201,6 +199,7 @@ pub(crate) fn slash_navigation_available(session: &Session) -> bool {
     )
     .is_some();
     session.input_enabled
+        && session.inline_lists_visible()
         && !session.slash_palette.is_empty()
         && has_prefix
         && session.modal.is_none()
@@ -553,5 +552,20 @@ mod tests {
 
         session.set_input("/add-dir ~/tmp".to_string());
         assert!(!should_submit_immediately_from_palette(&session));
+    }
+
+    #[test]
+    fn slash_palette_instructions_hide_filter_hint_row() {
+        let session = Session::new(InlineTheme::default(), None, 20);
+        let instructions = slash_palette_instructions(&session);
+
+        assert_eq!(instructions.len(), 1);
+        let text: String = instructions[0]
+            .spans
+            .iter()
+            .map(|span| span.content.clone().into_owned())
+            .collect();
+        assert!(text.contains("Navigation:"));
+        assert!(!text.contains("Type to filter slash commands"));
     }
 }

@@ -13,6 +13,7 @@ use ratatui::{
     text::{Line, Span},
 };
 use std::path::PathBuf;
+use std::sync::atomic::AtomicUsize;
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
 
@@ -446,6 +447,30 @@ fn control_l_submits_clear_command() {
 }
 
 #[test]
+fn control_slash_toggles_inline_list_visibility() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    assert!(session.inline_lists_visible());
+
+    let _ = session.process_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::CONTROL));
+    assert!(!session.inline_lists_visible());
+
+    let _ = session.process_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::CONTROL));
+    assert!(session.inline_lists_visible());
+}
+
+#[test]
+fn control_i_toggles_inline_list_visibility() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    assert!(session.inline_lists_visible());
+
+    let _ = session.process_key(KeyEvent::new(KeyCode::Char('i'), KeyModifiers::CONTROL));
+    assert!(!session.inline_lists_visible());
+
+    let _ = session.process_key(KeyEvent::new(KeyCode::Char('i'), KeyModifiers::CONTROL));
+    assert!(session.inline_lists_visible());
+}
+
+#[test]
 fn tab_queues_submission() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
 
@@ -527,6 +552,42 @@ fn slash_palette_hides_entries_for_unmatched_keyword() {
         session.slash_palette.suggestions().is_empty(),
         "slash palette should hide entries for unmatched /zzzz"
     );
+}
+
+#[test]
+fn slash_trigger_auto_shows_inline_lists() {
+    let mut session = session_with_slash_palette_commands();
+    let _ = session.process_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::CONTROL));
+    assert!(!session.inline_lists_visible());
+
+    let _ = session.process_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
+    assert!(session.inline_lists_visible());
+}
+
+#[test]
+fn history_picker_trigger_auto_shows_inline_lists() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    let _ = session.process_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::CONTROL));
+    assert!(!session.inline_lists_visible());
+
+    let _ = session.process_key(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::CONTROL));
+    assert!(session.inline_lists_visible());
+    assert!(session.history_picker_state.active);
+}
+
+#[test]
+fn file_palette_trigger_auto_shows_inline_lists() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.handle_command(InlineCommand::LoadFilePalette {
+        files: vec!["src/main.rs".to_string()],
+        workspace: PathBuf::from("."),
+    });
+    let _ = session.process_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::CONTROL));
+    assert!(!session.inline_lists_visible());
+
+    session.handle_command(InlineCommand::SetInput("@src".to_string()));
+    assert!(session.inline_lists_visible());
+    assert!(session.file_palette_active);
 }
 
 #[test]
@@ -885,6 +946,60 @@ fn request_user_input_step(question_id: &str, label: &str) -> WizardStep {
         freeform_label: None,
         freeform_placeholder: None,
     }
+}
+
+#[test]
+fn show_list_modal_uses_bottom_inline_panel_min_height() {
+    let mut session = Session::new(InlineTheme::default(), None, 30);
+    let item = InlineListItem {
+        title: "Option A".to_string(),
+        subtitle: Some("Select this option".to_string()),
+        badge: None,
+        indent: 0,
+        selection: Some(InlineListSelection::SlashCommand("a".to_string())),
+        search_value: Some("Option A".to_string()),
+    };
+    session.handle_command(InlineCommand::ShowListModal {
+        title: "Pick one".to_string(),
+        lines: vec!["Choose an option".to_string()],
+        items: vec![item],
+        selected: None,
+        search: None,
+    });
+
+    let input_width = VIEW_WIDTH.saturating_sub(2);
+    let base_input_height =
+        Session::input_block_height_for_lines(session.desired_input_lines(input_width));
+
+    let backend = TestBackend::new(VIEW_WIDTH, 30);
+    let mut terminal = Terminal::new(backend).expect("failed to create test terminal");
+    terminal
+        .draw(|frame| session.render(frame))
+        .expect("failed to render list modal");
+
+    assert!(
+        session.input_height >= base_input_height + ui::INLINE_LIST_PANEL_MIN_HEIGHT,
+        "list modal should reserve min panel height below input"
+    );
+}
+
+#[test]
+fn render_always_reserves_input_status_row() {
+    let mut session = Session::new(InlineTheme::default(), None, 30);
+    let input_width = VIEW_WIDTH.saturating_sub(2);
+    let base_input_height =
+        Session::input_block_height_for_lines(session.desired_input_lines(input_width));
+
+    let backend = TestBackend::new(VIEW_WIDTH, 30);
+    let mut terminal = Terminal::new(backend).expect("failed to create test terminal");
+    terminal
+        .draw(|frame| session.render(frame))
+        .expect("failed to render session");
+
+    assert!(
+        session.input_height >= base_input_height + ui::INLINE_INPUT_STATUS_HEIGHT,
+        "input should always reserve persistent status row"
+    );
 }
 
 #[test]
@@ -1762,6 +1877,79 @@ fn queued_inputs_overlay_bottom_rows() {
     assert!(
         footer.iter().any(|line| line.contains(hint)),
         "hint line should show how to edit queue"
+    );
+}
+
+#[test]
+fn running_activity_not_overlaid_above_queue_lines() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.handle_command(InlineCommand::SetQueuedInputs {
+        entries: vec![
+            "first queued message".to_string(),
+            "second queued message".to_string(),
+        ],
+    });
+    session.handle_command(InlineCommand::SetInputStatus {
+        left: Some("Running command: test".to_string()),
+        right: None,
+    });
+
+    let mut visible = vec![Line::default(); 6];
+    session.overlay_queue_lines(&mut visible, VIEW_WIDTH);
+    let rendered: Vec<String> = visible.iter().map(line_text).collect();
+
+    assert!(
+        !rendered
+            .iter()
+            .any(|line| line.contains("Running command: test")),
+        "running status should not be overlaid in transcript"
+    );
+    assert!(
+        rendered
+            .iter()
+            .any(|line| line.contains("↳ second queued message")),
+        "latest queued message should remain visible"
+    );
+    assert!(
+        rendered
+            .iter()
+            .any(|line| line.contains("↳ first queued message")),
+        "older queued message should remain visible"
+    );
+}
+
+#[test]
+fn running_activity_not_overlaid_without_queue() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.handle_command(InlineCommand::SetInputStatus {
+        left: Some("Running tool: grep".to_string()),
+        right: None,
+    });
+
+    let mut visible = vec![Line::default(); 3];
+    session.overlay_queue_lines(&mut visible, VIEW_WIDTH);
+    let rendered: Vec<String> = visible.iter().map(line_text).collect();
+
+    assert!(
+        !rendered
+            .iter()
+            .any(|line| line.contains("Running tool: grep")),
+        "running status should render only in bottom input status row"
+    );
+}
+
+#[test]
+fn pty_busy_state_does_not_overlay_transcript_status() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.active_pty_sessions = Some(Arc::new(AtomicUsize::new(1)));
+
+    let mut visible = vec![Line::default(); 2];
+    session.overlay_queue_lines(&mut visible, VIEW_WIDTH);
+    let rendered: Vec<String> = visible.iter().map(line_text).collect();
+
+    assert!(
+        !rendered.iter().any(|line| line.contains("Running...")),
+        "busy PTY state should not inject transcript status overlay"
     );
 }
 

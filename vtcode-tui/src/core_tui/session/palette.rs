@@ -32,6 +32,7 @@ impl Session {
             {
                 palette.set_filter(query);
                 if !self.file_palette_active {
+                    self.ensure_inline_lists_visible_for_trigger();
                     self.file_palette_active = true;
                     self.needs_full_clear = true;
                     self.mark_dirty();

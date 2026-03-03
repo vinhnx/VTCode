@@ -31,6 +31,20 @@ fn list_desired_rows(list: &ModalListState) -> usize {
     list.visible_indices.len().clamp(1, list_row_cap(list))
 }
 
+fn modal_title_text(session: &Session) -> &str {
+    let title = session
+        .wizard_modal
+        .as_ref()
+        .map(|wizard| wizard.title.as_str())
+        .or_else(|| session.modal.as_ref().map(|modal| modal.title.as_str()))
+        .unwrap_or("");
+    if title.trim().is_empty() {
+        "Modal"
+    } else {
+        title
+    }
+}
+
 fn wizard_step_has_inline_custom_editor(
     wizard: &crate::ui::tui::session::modal::WizardModalState,
 ) -> bool {
@@ -99,7 +113,7 @@ pub fn split_inline_modal_area(session: &Session, area: Rect) -> (Rect, Option<R
                 .len()
                 .min(MAX_INLINE_INSTRUCTION_ROWS),
         );
-        lines
+        lines.saturating_add(1) // title row
     } else if let Some(modal) = session.modal.as_ref() {
         let mut lines = modal.lines.len().clamp(1, MAX_INLINE_INSTRUCTION_ROWS);
         if modal.search.is_some() {
@@ -113,7 +127,7 @@ pub fn split_inline_modal_area(session: &Session, area: Rect) -> (Rect, Option<R
         } else {
             lines = lines.saturating_add(1);
         }
-        lines
+        lines.saturating_add(1) // title row
     } else {
         return (area, None);
     };
@@ -164,12 +178,22 @@ pub fn render_modal(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
     }
 
     let styles = modal_render_styles(session);
+    let title = modal_title_text(session).to_owned();
+    let chunks = Layout::vertical([Constraint::Length(1), Constraint::Min(0)]).split(area);
+    let title_area = chunks[0];
+    let body_area = chunks[1];
+    frame.render_widget(Clear, title_area);
+    frame.render_widget(
+        Paragraph::new(Line::from(Span::styled(title, styles.title))).wrap(Wrap { trim: true }),
+        title_area,
+    );
+
     if let Some(wizard) = session.wizard_modal.as_mut() {
-        frame.render_widget(Clear, area);
-        if area.width == 0 || area.height == 0 {
+        frame.render_widget(Clear, body_area);
+        if body_area.width == 0 || body_area.height == 0 {
             return;
         }
-        render_wizard_modal_body(frame, area, wizard, &styles);
+        render_wizard_modal_body(frame, body_area, wizard, &styles);
         return;
     }
 
@@ -177,13 +201,13 @@ pub fn render_modal(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
         return;
     };
 
-    frame.render_widget(Clear, area);
-    if area.width == 0 || area.height == 0 {
+    frame.render_widget(Clear, body_area);
+    if body_area.width == 0 || body_area.height == 0 {
         return;
     }
     render_modal_body(
         frame,
-        area,
+        body_area,
         ModalBodyContext {
             instructions: &modal.lines,
             footer_hint: modal.footer_hint.as_deref(),
@@ -206,7 +230,7 @@ fn modal_render_styles(session: &Session) -> ModalRenderStyles {
         selectable: default_style(session),
         detail: default_style(session).add_modifier(Modifier::DIM),
         search_match: accent_style(session).add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
-        title: Style::default().add_modifier(Modifier::BOLD),
+        title: accent_style(session).add_modifier(Modifier::BOLD),
         divider: default_style(session).add_modifier(Modifier::DIM | Modifier::ITALIC),
         instruction_border: border_style(session),
         instruction_title: session.section_title_style(),
@@ -251,5 +275,31 @@ fn remove_trailing_empty_tool_line(session: &mut Session) {
     if should_remove {
         session.lines.pop();
         invalidate_scroll_metrics(session);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ui::tui::InlineTheme;
+
+    #[test]
+    fn modal_title_text_uses_modal_title_and_fallback() {
+        let mut session = Session::new(InlineTheme::default(), None, 20);
+        assert_eq!(modal_title_text(&session), "Modal");
+
+        session.show_modal("Config".to_owned(), vec![], None);
+        assert_eq!(modal_title_text(&session), "Config");
+    }
+
+    #[test]
+    fn modal_title_style_is_accent_and_bold() {
+        let session = Session::new(InlineTheme::default(), None, 20);
+        let styles = modal_render_styles(&session);
+
+        assert_eq!(
+            styles.title,
+            accent_style(&session).add_modifier(Modifier::BOLD)
+        );
     }
 }

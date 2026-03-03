@@ -187,6 +187,45 @@ impl Widget for &mut SessionWidget<'_> {
             .layout_mode
             .unwrap_or_else(|| self.session.resolved_layout_mode(area));
 
+        if let (Some(header_area), Some(transcript_area)) = (self.header_area, self.transcript_area)
+        {
+            self.session.poll_log_entries();
+
+            if header_area.width > 0 && header_area.height > 0 {
+                let header_lines = if let Some(lines) = self.header_lines.as_ref() {
+                    lines.clone()
+                } else {
+                    self.session.header_lines()
+                };
+                HeaderWidget::new(self.session)
+                    .lines(header_lines)
+                    .render(header_area, buf);
+            }
+
+            if transcript_area.width > 0 && transcript_area.height > 0 {
+                apply_view_rows(self.session, transcript_area.height);
+                let has_logs =
+                    self.session.show_logs && self.session.has_logs() && mode.show_logs_panel();
+                if has_logs {
+                    let chunks =
+                        Layout::vertical([Constraint::Percentage(70), Constraint::Percentage(30)])
+                            .split(transcript_area);
+                    TranscriptWidget::new(self.session).render(chunks[0], buf);
+                    self.render_logs(chunks[1], buf, mode);
+                } else {
+                    TranscriptWidget::new(self.session).render(transcript_area, buf);
+                }
+            }
+
+            if let Some(sidebar_area) = self.navigation_area
+                && sidebar_area.width > 0
+                && sidebar_area.height > 0
+            {
+                self.render_sidebar(sidebar_area, buf, mode);
+            }
+            return;
+        }
+
         // Reserve input height so transcript/header never render under input
         let layout_height = area.height.saturating_sub(self.session.input_height);
         let layout_area = Rect::new(area.x, area.y, area.width, layout_height);

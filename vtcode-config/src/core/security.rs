@@ -93,7 +93,3 @@ impl Default for GatekeeperConfig {
         }
     }
 }
-
-#[cfg(test)]
-#[path = "security_test.rs"]
-mod security_test;

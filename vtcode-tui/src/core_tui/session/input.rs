@@ -200,23 +200,20 @@ impl Session {
             return;
         }
 
-        self.set_input_area(Some(area));
-
         let mut input_area = area;
         let mut status_area = None;
-        let mut status_line = None;
-
-        // Always split the status row from the input area when there is enough
-        // height.  This prevents the input block from visually jumping when the
-        // status text appears/disappears during agent execution (the layout in
-        // impl_render.rs always reserves 1 row for the status line).
-        if area.height >= 2 {
-            let block_height = area.height.saturating_sub(1).max(1);
-            input_area.height = block_height;
-            let status_rect = Rect::new(area.x, area.y + block_height, area.width, 1);
-            status_area = Some(status_rect);
-            status_line = self.render_input_status_line(area.width);
+        if area.height > ui::INLINE_INPUT_STATUS_HEIGHT {
+            let block_height = area.height.saturating_sub(ui::INLINE_INPUT_STATUS_HEIGHT);
+            input_area.height = block_height.max(1);
+            status_area = Some(Rect::new(
+                area.x,
+                area.y + block_height,
+                area.width,
+                ui::INLINE_INPUT_STATUS_HEIGHT,
+            ));
         }
+
+        self.set_input_area(Some(input_area));
 
         let background_style = self.styles.input_background_style();
         let shell_mode_title = self.shell_mode_border_title();
@@ -257,11 +254,14 @@ impl Session {
             }
         }
 
-        if let (Some(status_rect), Some(line)) = (status_area, status_line) {
-            let paragraph = Paragraph::new(line)
+        if let Some(status_area) = status_area {
+            let status_line = self
+                .render_input_status_line(status_area.width)
+                .unwrap_or_default();
+            let status = Paragraph::new(status_line)
                 .style(self.styles.default_style())
                 .wrap(Wrap { trim: false });
-            frame.render_widget(paragraph, status_rect);
+            frame.render_widget(status, status_area);
         }
     }
 

@@ -1,7 +1,11 @@
 use crate::config::constants::ui;
 use crate::ui::markdown::render_markdown;
 use crate::ui::tui::session::inline_list::{
-    InlineListRow, render_inline_list, row_height, selection_padding, selection_padding_width,
+    InlineListRenderOptions, InlineListRow, render_inline_list_with_options, row_height,
+    selection_padding, selection_padding_width,
+};
+use crate::ui::tui::session::list_panel::{
+    SharedListPanelSections, SharedListPanelStyles, SharedListWidgetModel, render_shared_list_panel,
 };
 use crate::ui::tui::types::{InlineListSelection, SecurePromptConfig};
 use ratatui::{
@@ -14,6 +18,19 @@ use super::layout::{ModalBodyContext, ModalRenderStyles, ModalSection};
 use super::state::{ModalListState, ModalSearchState, WizardModalState, WizardStepState};
 use crate::ui::tui::session::wrapping;
 use std::mem;
+
+fn modal_text_area_aligned_with_list(area: Rect) -> Rect {
+    let gutter = selection_padding_width().min(area.width as usize) as u16;
+    if gutter == 0 || area.width <= gutter {
+        area
+    } else {
+        Rect {
+            x: area.x.saturating_add(gutter),
+            width: area.width.saturating_sub(gutter),
+            ..area
+        }
+    }
+}
 
 fn markdown_to_plain_lines(text: &str) -> Vec<String> {
     let mut lines = render_markdown(text)
@@ -101,6 +118,71 @@ pub struct ModalInlineEditor {
     active: bool,
 }
 
+struct ModalListPanelModel<'a> {
+    list: &'a mut ModalListState,
+    styles: &'a ModalRenderStyles,
+    inline_editor: Option<&'a ModalInlineEditor>,
+}
+
+impl SharedListWidgetModel for ModalListPanelModel<'_> {
+    fn rows(&self, width: u16) -> Vec<(InlineListRow, u16)> {
+        if self.list.visible_indices.is_empty() {
+            return vec![(
+                InlineListRow::single(
+                    Line::from(Span::styled(
+                        ui::MODAL_LIST_NO_RESULTS_MESSAGE.to_owned(),
+                        self.styles.detail,
+                    )),
+                    self.styles.detail,
+                ),
+                1_u16,
+            )];
+        }
+
+        let selection_gutter = selection_padding_width() as u16;
+        let content_width = width.saturating_sub(selection_gutter) as usize;
+        self.list
+            .visible_indices
+            .iter()
+            .enumerate()
+            .map(|(visible_index, &item_index)| {
+                let lines = modal_list_item_lines(
+                    self.list,
+                    visible_index,
+                    item_index,
+                    self.styles,
+                    content_width,
+                    self.inline_editor,
+                );
+                (
+                    InlineListRow {
+                        lines: lines.clone(),
+                        style: self.styles.selectable,
+                    },
+                    row_height(&lines),
+                )
+            })
+            .collect()
+    }
+
+    fn selected(&self) -> Option<usize> {
+        self.list.list_state.selected()
+    }
+
+    fn set_selected(&mut self, selected: Option<usize>) {
+        self.list.list_state.select(selected);
+    }
+
+    fn set_scroll_offset(&mut self, offset: usize) {
+        *self.list.list_state.offset_mut() = offset;
+    }
+
+    fn set_viewport_rows(&mut self, rows: u16) {
+        self.list.set_viewport_rows(rows);
+        self.list.ensure_visible(rows);
+    }
+}
+
 pub fn render_modal_list(
     frame: &mut Frame<'_>,
     area: Rect,
@@ -114,73 +196,27 @@ pub fn render_modal_list(
     }
 
     let summary = modal_list_summary_line(list, styles, footer_hint);
-    let (list_area, summary_area) = if summary.is_some() && area.height > 1 {
-        let chunks = Layout::vertical([Constraint::Min(1), Constraint::Length(1)]).split(area);
-        (chunks[0], Some(chunks[1]))
-    } else {
-        (area, None)
+    let mut panel_model = ModalListPanelModel {
+        list,
+        styles,
+        inline_editor,
     };
-
-    if let (Some(line), Some(summary_area)) = (summary, summary_area) {
-        frame.render_widget(Paragraph::new(line).wrap(Wrap { trim: true }), summary_area);
-    }
-
-    if list.visible_indices.is_empty() {
-        list.list_state.select(None);
-        *list.list_state.offset_mut() = 0;
-        let message = Paragraph::new(Line::from(Span::styled(
-            ui::MODAL_LIST_NO_RESULTS_MESSAGE.to_owned(),
-            styles.detail,
-        )))
-        .wrap(Wrap { trim: true });
-        frame.render_widget(message, list_area);
-        return;
-    }
-
-    let viewport_rows = list_area.height;
-    list.set_viewport_rows(viewport_rows);
-    list.ensure_visible(viewport_rows);
-    let selection_gutter = selection_padding_width() as u16;
-    let content_width = list_area.width.saturating_sub(selection_gutter) as usize;
-    let rendered_items = list
-        .visible_indices
-        .iter()
-        .enumerate()
-        .map(|(visible_index, &item_index)| {
-            let lines = modal_list_item_lines(
-                list,
-                visible_index,
-                item_index,
-                styles,
-                content_width,
-                inline_editor,
-            );
-            (
-                InlineListRow {
-                    lines: lines.clone(),
-                    style: styles.selectable,
-                },
-                row_height(&lines),
-            )
-        })
-        .collect::<Vec<_>>();
-
-    let item_count = rendered_items.len();
-    let selected = list
-        .list_state
-        .selected()
-        .filter(|index| *index < item_count);
-
-    let widget_state = render_inline_list(
+    let sections = SharedListPanelSections {
+        header: Vec::new(),
+        info: summary.into_iter().collect(),
+        search: None,
+    };
+    render_shared_list_panel(
         frame,
-        list_area,
-        rendered_items,
-        selected,
-        Some(styles.highlight),
+        area,
+        sections,
+        SharedListPanelStyles {
+            base_style: styles.selectable,
+            selected_style: Some(styles.highlight),
+            text_style: styles.detail,
+        },
+        &mut panel_model,
     );
-
-    list.list_state.select(widget_state.selected);
-    *list.list_state.offset_mut() = widget_state.scroll_offset_index();
 }
 
 /// Render wizard tabs header showing steps with completion status
@@ -193,6 +229,25 @@ pub fn render_wizard_tabs(
     styles: &ModalRenderStyles,
 ) {
     if area.height == 0 || area.width == 0 {
+        return;
+    }
+
+    if steps.len() <= 1 {
+        let label = steps
+            .first()
+            .map(|step| {
+                if step.completed {
+                    format!("✔ {}", step.title)
+                } else {
+                    step.title.clone()
+                }
+            })
+            .unwrap_or_default();
+        frame.render_widget(
+            Paragraph::new(Line::from(Span::styled(label, styles.highlight)))
+                .wrap(Wrap { trim: true }),
+            area,
+        );
         return;
     }
 
@@ -214,8 +269,8 @@ pub fn render_wizard_tabs(
 
     let tabs = Tabs::new(titles)
         .select(Some(current_step))
-        .divider(" ")
-        .padding("← ", " →")
+        .divider(" │ ")
+        .padding("", "")
         .highlight_style(styles.highlight);
 
     frame.render_widget(tabs, area);
@@ -256,12 +311,17 @@ pub fn render_wizard_modal_body(
     }
 
     let is_multistep = wizard.mode == crate::ui::tui::types::WizardModalMode::MultiStep;
+    let text_alignment_fn: fn(Rect) -> Rect = if is_multistep {
+        |rect| rect
+    } else {
+        modal_text_area_aligned_with_list
+    };
+    let content_width = text_alignment_fn(area).width.max(1) as usize;
     let current_step_state = wizard.steps.get(wizard.current_step);
     let inline_editor = current_step_state.and_then(inline_editor_for_step);
     let has_notes = current_step_state.is_some_and(|s| s.notes_active || !s.notes.is_empty())
         && inline_editor.is_none();
     let instruction_lines = wizard.instruction_lines();
-    let content_width = area.width.max(1) as usize;
     let header_lines = if is_multistep {
         render_markdown_lines_for_modal(
             wizard.question_header().as_str(),
@@ -279,69 +339,7 @@ pub fn render_wizard_modal_body(
         })
         .unwrap_or_else(|| vec![Line::default()]);
 
-    // Layout: [Header (1)] [Search (optional)] [Question (2)] [List] [Notes?] [Instructions?]
-    let mut constraints = Vec::new();
-    if is_multistep {
-        constraints.push(Constraint::Length(
-            header_lines.len().min(u16::MAX as usize) as u16,
-        ));
-    } else {
-        constraints.push(Constraint::Length(1));
-    }
-    if wizard.search.is_some() {
-        constraints.push(Constraint::Length(3));
-    }
-    constraints.push(Constraint::Length(
-        question_lines.len().max(1).min(u16::MAX as usize) as u16,
-    ));
-    constraints.push(Constraint::Min(3));
-    if has_notes {
-        constraints.push(Constraint::Length(1));
-    }
-    if !instruction_lines.is_empty() {
-        constraints.push(Constraint::Length(
-            instruction_lines.len().min(u16::MAX as usize) as u16,
-        ));
-    }
-
-    let chunks = Layout::vertical(constraints).split(area);
-
-    let mut idx = 0;
-    if is_multistep {
-        let header = Paragraph::new(header_lines).wrap(Wrap { trim: false });
-        frame.render_widget(header, chunks[idx]);
-    } else {
-        render_wizard_tabs(
-            frame,
-            chunks[idx],
-            &wizard.steps,
-            wizard.current_step,
-            styles,
-        );
-    }
-    idx += 1;
-
-    if let Some(search) = wizard.search.as_ref() {
-        render_modal_search(frame, chunks[idx], search, styles);
-        idx += 1;
-    }
-
-    let question = Paragraph::new(question_lines).wrap(Wrap { trim: false });
-    frame.render_widget(question, chunks[idx]);
-    idx += 1;
-
-    if let Some(step) = wizard.steps.get_mut(wizard.current_step) {
-        render_modal_list(
-            frame,
-            chunks[idx],
-            &mut step.list,
-            styles,
-            None,
-            inline_editor.as_ref(),
-        );
-    }
-    idx += 1;
-
+    let mut info_lines = question_lines;
     if let Some(step) = wizard.steps.get(wizard.current_step)
         && has_notes
     {
@@ -359,19 +357,65 @@ pub fn render_wizard_modal_body(
         if step.notes_active {
             spans.push(Span::styled("▌", styles.highlight));
         }
-
-        let notes = Paragraph::new(Line::from(spans));
-        frame.render_widget(notes, chunks[idx]);
-        idx += 1;
+        info_lines.push(Line::from(spans));
     }
 
-    if !instruction_lines.is_empty() && idx < chunks.len() {
-        let lines = instruction_lines
+    info_lines.extend(
+        instruction_lines
             .into_iter()
-            .map(|line| Line::from(Span::styled(line, styles.hint)))
-            .collect::<Vec<_>>();
-        let instructions = Paragraph::new(lines);
-        frame.render_widget(instructions, chunks[idx]);
+            .map(|line| Line::from(Span::styled(line, styles.hint))),
+    );
+
+    // Layout: [Header] [Info] [Main content list] [Search?]
+    let mut constraints = Vec::new();
+    if is_multistep {
+        constraints.push(Constraint::Length(
+            header_lines.len().min(u16::MAX as usize) as u16,
+        ));
+    } else {
+        constraints.push(Constraint::Length(1));
+    }
+    constraints.push(Constraint::Length(
+        info_lines.len().max(1).min(u16::MAX as usize) as u16,
+    ));
+    constraints.push(Constraint::Min(3));
+    if wizard.search.is_some() {
+        constraints.push(Constraint::Length(1));
+    }
+
+    let chunks = Layout::vertical(constraints).split(area);
+
+    let mut idx = 0;
+    if is_multistep {
+        let header_area = text_alignment_fn(chunks[idx]);
+        let header = Paragraph::new(header_lines).wrap(Wrap { trim: false });
+        frame.render_widget(header, header_area);
+    } else {
+        let tabs_area = text_alignment_fn(chunks[idx]);
+        render_wizard_tabs(frame, tabs_area, &wizard.steps, wizard.current_step, styles);
+    }
+    idx += 1;
+
+    let info = Paragraph::new(info_lines).wrap(Wrap { trim: false });
+    frame.render_widget(info, text_alignment_fn(chunks[idx]));
+    idx += 1;
+
+    if let Some(step) = wizard.steps.get_mut(wizard.current_step) {
+        render_modal_list(
+            frame,
+            chunks[idx],
+            &mut step.list,
+            styles,
+            None,
+            inline_editor.as_ref(),
+        );
+    }
+    idx += 1;
+
+    if let Some(search) = wizard.search.as_ref()
+        && idx < chunks.len()
+    {
+        render_modal_search(frame, text_alignment_fn(chunks[idx]), search, styles);
     }
 }
 
@@ -382,25 +426,7 @@ fn modal_list_summary_line(
     footer_hint: Option<&str>,
 ) -> Option<Line<'static>> {
     if !list.filter_active() {
-        if list
-            .items
-            .iter()
-            .any(|item| matches!(item.selection, Some(InlineListSelection::ConfigAction(_))))
-        {
-            return Some(Line::from(Span::styled(
-                "Navigation: ↑/↓ select • Space/Enter apply • ←/→ change value • Esc close",
-                styles.hint,
-            )));
-        }
-        let density = if list.compact_rows() {
-            "Density: Compact"
-        } else {
-            "Density: Comfortable"
-        };
-        let message = match footer_hint {
-            Some(hint) if !hint.is_empty() => format!("{} • Alt+D {}", hint, density),
-            _ => format!("Alt+D {}", density),
-        };
+        let message = list.non_filter_summary_text(footer_hint)?;
         return Some(Line::from(Span::styled(message, styles.hint)));
     }
 
@@ -473,9 +499,6 @@ pub fn render_modal_body(frame: &mut Frame<'_>, area: Rect, context: ModalBodyCo
         .instructions
         .iter()
         .any(|line| !line.trim().is_empty());
-    if context.search.is_some() {
-        sections.push(ModalSection::Search);
-    }
     if has_instructions {
         sections.push(ModalSection::Instructions);
     }
@@ -484,6 +507,9 @@ pub fn render_modal_body(frame: &mut Frame<'_>, area: Rect, context: ModalBodyCo
     }
     if context.list.is_some() {
         sections.push(ModalSection::List);
+    }
+    if context.search.is_some() {
+        sections.push(ModalSection::Search);
     }
 
     if sections.is_empty() {
@@ -670,7 +696,18 @@ fn render_modal_instructions(
         )
     }));
 
-    let _ = render_inline_list(frame, area, rendered_items, None, None);
+    let _ = render_inline_list_with_options(
+        frame,
+        area,
+        rendered_items,
+        None,
+        InlineListRenderOptions {
+            base_style: styles.instruction_body,
+            selected_style: None,
+            scroll_padding: ui::INLINE_LIST_SCROLL_PADDING,
+            infinite_scrolling: false,
+        },
+    );
 }
 
 fn render_modal_search(
@@ -1036,5 +1073,60 @@ mod tests {
         assert!(text.contains("Navigation:"));
         assert!(!text.contains("Alt+D"));
         assert!(!text.contains("Density:"));
+    }
+
+    #[test]
+    fn non_config_list_summary_omits_density_hint() {
+        let list = ModalListState::new(
+            vec![InlineListItem {
+                title: "gpt-5".to_string(),
+                subtitle: Some("General reasoning".to_string()),
+                badge: None,
+                indent: 0,
+                selection: Some(InlineListSelection::Model(0)),
+                search_value: Some("gpt-5".to_string()),
+            }],
+            None,
+        );
+
+        let styles = ModalRenderStyles {
+            border: Style::default(),
+            highlight: Style::default(),
+            badge: Style::default(),
+            header: Style::default(),
+            selectable: Style::default(),
+            detail: Style::default(),
+            search_match: Style::default(),
+            title: Style::default(),
+            divider: Style::default(),
+            instruction_border: Style::default(),
+            instruction_title: Style::default(),
+            instruction_bullet: Style::default(),
+            instruction_body: Style::default(),
+            hint: Style::default(),
+        };
+
+        let summary = modal_list_summary_line(&list, &styles, None);
+        assert!(summary.is_none(), "density summary should be hidden");
+    }
+
+    #[test]
+    fn modal_text_area_alignment_reserves_selection_gutter() {
+        let area = Rect::new(10, 3, 20, 4);
+        let aligned = modal_text_area_aligned_with_list(area);
+        let gutter = selection_padding_width() as u16;
+
+        assert_eq!(aligned.x, area.x + gutter);
+        assert_eq!(aligned.width, area.width - gutter);
+        assert_eq!(aligned.y, area.y);
+        assert_eq!(aligned.height, area.height);
+    }
+
+    #[test]
+    fn modal_text_area_alignment_keeps_narrow_areas_unchanged() {
+        let gutter = selection_padding_width() as u16;
+        let area = Rect::new(2, 1, gutter, 2);
+        let aligned = modal_text_area_aligned_with_list(area);
+        assert_eq!(aligned, area);
     }
 }

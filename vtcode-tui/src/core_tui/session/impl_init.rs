@@ -144,6 +144,7 @@ impl Session {
             // --- Palette Management ---
             file_palette: None,
             file_palette_active: false,
+            inline_lists_visible: true,
 
             // --- Thinking Indicator ---
             thinking_spinner: ThinkingSpinner::new(),
