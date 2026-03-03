@@ -17,6 +17,13 @@ pub(super) fn parse_skill_command(input: &str) -> Result<Option<SkillCommandActi
         return Ok(Some(SkillCommandAction::Interactive));
     }
 
+    if matches!(
+        rest,
+        "manager" | "--manager" | "interactive" | "--interactive"
+    ) {
+        return Ok(Some(SkillCommandAction::Interactive));
+    }
+
     if rest == "list" || rest == "--list" || rest == "-l" {
         return Ok(Some(SkillCommandAction::List { query: None }));
     }
@@ -155,6 +162,19 @@ mod tests {
     fn test_parse_skills_list_default() {
         let result = parse_skill_command("/skills").unwrap();
         assert!(matches!(result, Some(SkillCommandAction::Interactive)));
+    }
+
+    #[test]
+    fn test_parse_skills_manager_aliases() {
+        for input in [
+            "/skills manager",
+            "/skills --manager",
+            "/skills interactive",
+            "/skills --interactive",
+        ] {
+            let result = parse_skill_command(input).unwrap();
+            assert!(matches!(result, Some(SkillCommandAction::Interactive)));
+        }
     }
 
     #[test]

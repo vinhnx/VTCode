@@ -271,10 +271,10 @@ fn show_skills_list_modal(ctx: &mut SlashCommandContext<'_>, entries: &[Interact
     });
 
     ctx.renderer.show_list_modal(
-        "Skills",
+        "Skills Manager",
         vec![
+            "Manage skills interactively.".to_string(),
             "Browse skills and press Enter for actions.".to_string(),
-            "Choose a skill to enable/disable or inspect details.".to_string(),
         ],
         items,
         selected,

@@ -69,7 +69,7 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
         },
         SlashCommandInfo {
             name: "skills",
-            description: "Manage skills and plugins (usage: /skills list|load|unload|use)",
+            description: "Open interactive skills manager (usage: /skills, /skills manager)",
         },
         // Status and diagnostics
         SlashCommandInfo {
@@ -87,7 +87,7 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
         // Integrations
         SlashCommandInfo {
             name: "mcp",
-            description: "Manage MCP providers (/mcp status|list|tools|config|repair|diagnose)",
+            description: "Open interactive MCP manager (usage: /mcp, optional subcommands still supported)",
         },
         // Session management
         SlashCommandInfo {

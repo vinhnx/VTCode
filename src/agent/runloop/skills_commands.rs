@@ -87,6 +87,10 @@ pub async fn handle_skill_command(
         SkillCommandAction::Help => {
             let help_text = r#"Skills Commands:
 
+Interactive:
+  /skills                                Open interactive skills manager in TUI
+  /skills manager                        Alias for interactive skills manager
+
 Authoring:
   /skills --create <name> [--path <dir>]   Create new skill from template
   /skills --validate <name>               Validate skill structure

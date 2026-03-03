@@ -469,6 +469,8 @@ fn should_submit_immediately_from_palette(session: &Session) -> bool {
             | "/status"
             | "/doctor"
             | "/model"
+            | "/mcp"
+            | "/skills"
             | "/new"
             | "/git"
             | "/docs"
@@ -536,6 +538,12 @@ mod tests {
         assert!(should_submit_immediately_from_palette(&session));
 
         session.set_input("/history".to_string());
+        assert!(should_submit_immediately_from_palette(&session));
+
+        session.set_input("/mcp".to_string());
+        assert!(should_submit_immediately_from_palette(&session));
+
+        session.set_input("/skills".to_string());
         assert!(should_submit_immediately_from_palette(&session));
     }
 
