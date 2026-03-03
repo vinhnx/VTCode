@@ -107,12 +107,14 @@ pub fn render_history_picker(session: &mut Session, frame: &mut Frame<'_>, area:
             .into_iter()
             .take(visible_rows)
             .map(|item| {
-                let max_chars = list_area.width.saturating_sub(2) as usize;
-                let content: String = item.content.chars().take(max_chars).collect();
-                let truncated = if item.content.chars().count() > max_chars {
+                let max_chars = list_area.width as usize;
+                let item_len = item.content.chars().count();
+                let truncated = if item_len > max_chars {
+                    let kept = max_chars.saturating_sub(1);
+                    let content: String = item.content.chars().take(kept).collect();
                     format!("{content}…")
                 } else {
-                    content
+                    item.content
                 };
                 (
                     InlineListRow::single(

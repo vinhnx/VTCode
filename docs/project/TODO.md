@@ -2663,25 +2663,17 @@ Type "continue" to retry with a different strategy.
 
 ---
 
+support litellm
 https://github.com/majiayu000/litellm-rs
 
 https://docs.litellm.ai/docs/
 
 ---
 
-auto suggest and higlight commands in chat input
+handle auto suggest and higlight commands, @files, code text ansi in user chat input
 
 1. suggest: '/Users/vinhnguyenxuan/Desktop/Screenshot 2026-03-02 at 2.48.34 PM.png'
 2. highlight: '/Users/vinhnguyenxuan/Desktop/Screenshot 2026-03-02 at 2.49.11 PM.png'
-
----
-
-fix git diff show red/green ansi color to not override to code blocks in markdown rendering.
-'/Users/vinhnguyenxuan/Desktop/Screenshot 2026-03-02 at 5.04.19 PM.png'
-
-```
-
-```
 
 ---
 
@@ -3286,10 +3278,3 @@ for minimax-m2.5 try anthropic api, if it works apply to anthropic provider fix 
 ---
 
 for plan mode, change plan file save to /tmp with option to let user save/edit in disk. remove .vtcode/plan for better user access and management.
-
----
-
-in /settings interactive, check for vtcode.toml, if a config has mutiple value
-
-1. update vtcode.toml with comments for possible values and descriptions to guide users in customizing their settings. This will make it easier for users to understand the impact of each setting and how to configure them according to their needs.
-2. change settings management to be more interactive, allowing users to navigate through different settings categories, view current values, and modify them with guided prompts and explanations. This will enhance user experience and make it easier for users to customize their VT Code environment without needing to manually edit configuration files.

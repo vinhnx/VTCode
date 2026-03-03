@@ -1,5 +1,5 @@
 use super::*;
-use crate::ui::tui::session::inline_list::{InlineListRow, render_inline_list};
+use crate::ui::tui::session::inline_list::{InlineListRow, render_inline_list, selection_padding};
 
 #[derive(Clone)]
 struct FilePaletteRenderRow {
@@ -114,8 +114,7 @@ pub fn render_file_palette(session: &mut Session, frame: &mut Frame<'_>, area: R
 
     let default_style = default_style(session);
     let highlight_style = modal_list_highlight_style(session);
-    let selected_prefix = ui::MODAL_LIST_HIGHLIGHT_FULL.to_owned();
-    let unselected_prefix = " ".repeat(selected_prefix.chars().count());
+    let unselected_prefix = selection_padding();
 
     let selected = rows.iter().position(|row| row.selectable && row.selected);
     let rendered_rows = rows

@@ -130,7 +130,10 @@ impl MoonshotProvider {
         if let Some(effort) = request.reasoning_effort
             && self.supports_reasoning_effort(&request.model)
         {
-            payload.insert("reasoning_effort".to_string(), Value::String(effort.as_str().to_string()));
+            payload.insert(
+                "reasoning_effort".to_string(),
+                Value::String(effort.as_str().to_string()),
+            );
         }
 
         if request.stream {

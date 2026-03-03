@@ -1,3 +1,4 @@
+use crate::config::constants::ui;
 use ratatui::{
     prelude::*,
     widgets::{Paragraph, Widget, Wrap},
@@ -30,6 +31,14 @@ impl Widget for InlineListRow {
 
 pub(crate) fn row_height(lines: &[Line<'_>]) -> u16 {
     lines.len().max(1).min(u16::MAX as usize) as u16
+}
+
+pub(crate) fn selection_padding_width() -> usize {
+    ui::MODAL_LIST_HIGHLIGHT_SYMBOL.chars().count().max(1)
+}
+
+pub(crate) fn selection_padding() -> String {
+    " ".repeat(selection_padding_width())
 }
 
 pub(crate) fn render_inline_list(

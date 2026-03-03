@@ -22,6 +22,7 @@ mod prompts;
 mod request_user_input;
 pub(crate) mod run_loop_context;
 pub mod session_setup;
+pub(crate) mod settings_interactive;
 mod shell;
 pub mod state;
 mod status_line;

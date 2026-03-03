@@ -319,10 +319,10 @@ impl ModalState {
                 }
             }
             KeyCode::Char(' ') if !modifiers.control && !modifiers.alt && !modifiers.command => {
-                if let Some(selection) = list.current_selection() {
-                    if matches!(selection, InlineListSelection::ConfigAction(_)) {
-                        return ModalListKeyResult::Submit(InlineEvent::ListModalSubmit(selection));
-                    }
+                if let Some(selection) = list.current_selection()
+                    && matches!(selection, InlineListSelection::ConfigAction(_))
+                {
+                    return ModalListKeyResult::Submit(InlineEvent::ListModalSubmit(selection));
                 }
                 ModalListKeyResult::NotHandled
             }

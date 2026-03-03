@@ -14,7 +14,10 @@ use crate::agent::runloop::unified::tool_routing::{ToolPermissionFlow, ensure_to
 use crate::hooks::lifecycle::SessionEndReason;
 
 use super::{SlashCommandContext, SlashCommandControl};
-use crate::agent::runloop::unified::palettes::{ActivePalette, show_config_palette};
+use crate::agent::runloop::unified::palettes::ActivePalette;
+use crate::agent::runloop::unified::settings_interactive::{
+    create_settings_palette_state, show_settings_palette,
+};
 use crate::agent::runloop::unified::turn::config_modal::load_config_modal_content;
 #[path = "activation.rs"]
 mod activation;
@@ -101,20 +104,6 @@ pub async fn handle_show_config(mut ctx: SlashCommandContext<'_>) -> Result<Slas
         return Ok(SlashCommandControl::Continue);
     }
 
-    if ctx.renderer.supports_inline_ui() {
-        let workspace_path = ctx.config.workspace.clone();
-        let vt_snapshot = ctx.vt_cfg.clone();
-        if show_config_palette(ctx.renderer, &workspace_path, &vt_snapshot, None)? {
-            *ctx.palette_state = Some(ActivePalette::Config {
-                workspace: workspace_path,
-                vt_snapshot: Box::new(vt_snapshot),
-                selected: None,
-            });
-        }
-
-        return Ok(SlashCommandControl::Continue);
-    }
-
     let workspace_path = ctx.config.workspace.clone();
     let vt_snapshot = ctx.vt_cfg.clone();
     match load_config_modal_content(workspace_path, vt_snapshot).await {
@@ -132,6 +121,32 @@ pub async fn handle_show_config(mut ctx: SlashCommandContext<'_>) -> Result<Slas
             )?;
         }
     }
+    Ok(SlashCommandControl::Continue)
+}
+
+pub async fn handle_show_settings(mut ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
+    if !ui::ensure_selection_ui_available(&mut ctx, "configuring settings")? {
+        return Ok(SlashCommandControl::Continue);
+    }
+
+    if !ctx.renderer.supports_inline_ui() {
+        ctx.renderer.line(
+            MessageStyle::Info,
+            "Interactive settings require inline UI; use /config to inspect effective values.",
+        )?;
+        return Ok(SlashCommandControl::Continue);
+    }
+
+    let workspace_path = ctx.config.workspace.clone();
+    let vt_snapshot = ctx.vt_cfg.clone();
+    let settings_state = create_settings_palette_state(&workspace_path, &vt_snapshot)?;
+
+    if show_settings_palette(ctx.renderer, &settings_state, None)? {
+        *ctx.palette_state = Some(ActivePalette::Settings {
+            state: Box::new(settings_state),
+        });
+    }
+
     Ok(SlashCommandControl::Continue)
 }
 

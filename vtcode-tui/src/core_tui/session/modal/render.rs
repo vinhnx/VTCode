@@ -1,6 +1,8 @@
 use crate::config::constants::ui;
 use crate::ui::markdown::render_markdown;
-use crate::ui::tui::session::inline_list::{InlineListRow, render_inline_list, row_height};
+use crate::ui::tui::session::inline_list::{
+    InlineListRow, render_inline_list, row_height, selection_padding, selection_padding_width,
+};
 use crate::ui::tui::types::{InlineListSelection, SecurePromptConfig};
 use ratatui::{
     prelude::*,
@@ -128,7 +130,7 @@ pub fn render_modal_list(
     let viewport_rows = list_area.height;
     list.set_viewport_rows(viewport_rows);
     list.ensure_visible(viewport_rows);
-    let selection_gutter = ui::MODAL_LIST_HIGHLIGHT_FULL.chars().count() as u16;
+    let selection_gutter = selection_padding_width() as u16;
     let content_width = list_area.width.saturating_sub(selection_gutter) as usize;
     let rendered_items = list
         .visible_indices
@@ -802,7 +804,7 @@ pub fn modal_list_item_lines(
     }
 
     let indent = "  ".repeat(item.indent as usize);
-    let selection_padding = " ".repeat(ui::MODAL_LIST_HIGHLIGHT_FULL.chars().count());
+    let selection_padding = selection_padding();
 
     let mut primary_spans = Vec::new();
     if !selection_padding.is_empty() {

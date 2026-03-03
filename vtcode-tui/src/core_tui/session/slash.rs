@@ -8,7 +8,7 @@ use crate::config::constants::ui;
 use crate::ui::search::fuzzy_score;
 
 use super::super::types::InlineTextStyle;
-use super::inline_list::{InlineListRow, render_inline_list};
+use super::inline_list::{InlineListRow, render_inline_list, selection_padding};
 use super::{
     Session, ratatui_color_from_ansi, ratatui_style_from_inline,
     slash_palette::{self, SlashPaletteUpdate, command_prefix, command_range},
@@ -105,7 +105,7 @@ pub fn render_slash_palette(session: &mut Session, frame: &mut Frame<'_>, area: 
     let highlight_style = slash_highlight_style(session);
     let name_style = slash_name_style(session);
     let description_style = slash_description_style(session);
-    let prefix = " ".repeat(ui::MODAL_LIST_HIGHLIGHT_FULL.chars().count());
+    let prefix = selection_padding();
 
     let rendered_rows = rows
         .into_iter()
