@@ -3278,3 +3278,11 @@ implement interactive skills setup in /skill command to let users choose from a 
 ---
 
 also apply to /mcp command to manage mcp in an interactive way through a user-friendly interface rather than relying solely on command-line inputs.
+
+---
+
+for minimax-m2.5 try anthropic api, if it works apply to anthropic provider fix https://platform.minimax.io/docs/api-reference/text-anthropic-api if applicable
+
+---
+
+for plan mode, change plan file save to /tmp with option to let user save/edit in disk. remove .vtcode/plan for better user access and management.

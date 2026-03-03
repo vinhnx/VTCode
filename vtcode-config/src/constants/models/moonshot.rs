@@ -1,7 +1,8 @@
-// Legacy Moonshot direct API models (kept for compatibility with tests)
-pub const DEFAULT_MODEL: &str = "kimi-latest";
-pub const SUPPORTED_MODELS: &[&str] = &[MINIMAX_M2_5, QWEN3_CODER_NEXT];
+// Moonshot.ai models
+// Kimi K2.5 - Latest flagship model with enhanced reasoning
+// https://platform.moonshot.ai/docs/guide/kimi-k2-5-quickstart
+pub const DEFAULT_MODEL: &str = KIMI_K2_5;
+pub const SUPPORTED_MODELS: &[&str] = &[KIMI_K2_5];
 pub const REASONING_MODELS: &[&str] = &[];
 
-pub const MINIMAX_M2_5: &str = "MiniMaxAI/MiniMax-M2.5";
-pub const QWEN3_CODER_NEXT: &str = "qwen3-coder-next";
+pub const KIMI_K2_5: &str = "kimi-k2.5";

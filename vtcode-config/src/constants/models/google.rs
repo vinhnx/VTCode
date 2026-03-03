@@ -6,8 +6,6 @@ pub const SUPPORTED_MODELS: &[&str] = &[
     "gemini-3.1-pro-preview-customtools", // Optimized for custom tools & bash
     "gemini-3-flash-preview",             // Fast version of Gemini 3 Pro with 3-level thinking
     "gemini-3-pro-image-preview",         // Image generation model with 4K resolution
-    "gemini-1.5-pro",
-    "gemini-1.5-flash",
 ];
 
 /// Models that support thinking/reasoning capability with configurable thinking_level
@@ -18,8 +16,6 @@ pub const REASONING_MODELS: &[&str] = &[
     "gemini-3.1-pro-preview",
     "gemini-3.1-pro-preview-customtools",
     "gemini-3-flash-preview",
-    "gemini-1.5-pro",
-    "gemini-1.5-flash",
 ];
 
 /// Models that support Gemini 3 extended thinking levels (minimal, medium)
@@ -36,8 +32,6 @@ pub const CACHING_MODELS: &[&str] = &[
     "gemini-3.1-pro-preview",
     "gemini-3.1-pro-preview-customtools",
     "gemini-3-flash-preview",
-    "gemini-1.5-pro",
-    "gemini-1.5-flash",
 ];
 
 /// Models that support code execution (Python)
@@ -47,8 +41,6 @@ pub const CODE_EXECUTION_MODELS: &[&str] = &[
     "gemini-3.1-pro-preview",
     "gemini-3.1-pro-preview-customtools",
     "gemini-3-flash-preview",
-    "gemini-1.5-pro",
-    "gemini-1.5-flash",
 ];
 
 // Convenience constants for commonly used models

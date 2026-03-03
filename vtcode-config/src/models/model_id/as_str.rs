@@ -24,19 +24,14 @@ impl ModelId {
             // Anthropic models
             ModelId::ClaudeOpus46 => models::CLAUDE_OPUS_4_6,
             ModelId::ClaudeSonnet46 => models::CLAUDE_SONNET_4_6,
-            ModelId::ClaudeOpus45 => models::CLAUDE_OPUS_4_5,
-            ModelId::ClaudeOpus41 => models::CLAUDE_OPUS_4_1,
-            ModelId::ClaudeSonnet45 => models::CLAUDE_SONNET_4_5,
             ModelId::ClaudeHaiku45 => models::CLAUDE_HAIKU_4_5,
-            ModelId::ClaudeSonnet4 => models::CLAUDE_SONNET_4_5_20250929,
             // DeepSeek models
             ModelId::DeepSeekChat => models::DEEPSEEK_CHAT,
             ModelId::DeepSeekReasoner => models::DEEPSEEK_REASONER,
             // Z.AI models
             ModelId::ZaiGlm5 => models::zai::GLM_5,
             // Moonshot models
-            ModelId::MoonshotMinimaxM25 => models::moonshot::MINIMAX_M2_5,
-            ModelId::MoonshotQwen3CoderNext => models::moonshot::QWEN3_CODER_NEXT,
+            ModelId::MoonshotKimiK25 => models::moonshot::KIMI_K2_5,
             // Ollama models
             ModelId::OllamaGptOss20b => models::ollama::GPT_OSS_20B,
             ModelId::OllamaGptOss20bCloud => models::ollama::GPT_OSS_20B_CLOUD,
@@ -45,14 +40,10 @@ impl ModelId {
             ModelId::OllamaQwen3CoderNext => models::ollama::QWEN3_CODER_NEXT,
             ModelId::OllamaDeepseekV32Cloud => models::ollama::DEEPSEEK_V32_CLOUD,
             ModelId::OllamaQwen3Next80bCloud => models::ollama::QWEN3_NEXT_80B_CLOUD,
-            ModelId::OllamaMistralLarge3675bCloud => models::ollama::MISTRAL_LARGE_3_675B_CLOUD,
             ModelId::OllamaGlm5Cloud => models::ollama::GLM_5_CLOUD,
             ModelId::OllamaGemini3FlashPreviewCloud => models::ollama::GEMINI_3_FLASH_PREVIEW_CLOUD,
-            ModelId::OllamaQwen3Coder480bCloud => models::ollama::QWEN3_CODER_480B_CLOUD,
-            ModelId::OllamaDevstral2123bCloud => models::ollama::DEVSTRAL_2_123B_CLOUD,
             ModelId::OllamaMinimaxM2Cloud => models::ollama::MINIMAX_M2_CLOUD,
             ModelId::OllamaMinimaxM25Cloud => models::ollama::MINIMAX_M25_CLOUD,
-            ModelId::OllamaNemotron3Nano30bCloud => models::ollama::NEMOTRON_3_NANO_30B_CLOUD,
             // Hugging Face models
             ModelId::HuggingFaceDeepseekV32 => models::huggingface::DEEPSEEK_V32,
             ModelId::HuggingFaceOpenAIGptOss20b => models::huggingface::OPENAI_GPT_OSS_20B,
@@ -71,7 +62,6 @@ impl ModelId {
             }
             // MiniMax models
             ModelId::MinimaxM25 => models::minimax::MINIMAX_M2_5,
-            ModelId::MinimaxM2 => models::minimax::MINIMAX_M2,
             // OpenRouter models
             ModelId::OpenRouterMinimaxM25 => "minimax/minimax-m2.5",
             ModelId::OpenRouterQwen3CoderNext => "qwen/qwen3-coder-next",

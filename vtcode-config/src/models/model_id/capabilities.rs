@@ -48,12 +48,8 @@ impl ModelId {
             ModelId::GPT52 | ModelId::GPT5 => Some(ModelId::GPT5Mini),
             ModelId::DeepSeekReasoner => Some(ModelId::DeepSeekChat),
             ModelId::ZaiGlm5 => Some(ModelId::OllamaGlm5Cloud),
-            ModelId::ClaudeOpus46
-            | ModelId::ClaudeSonnet46
-            | ModelId::ClaudeOpus45
-            | ModelId::ClaudeOpus41 => Some(ModelId::ClaudeSonnet45),
-            ModelId::ClaudeSonnet4 => Some(ModelId::ClaudeSonnet45),
-            ModelId::MinimaxM25 => Some(ModelId::MinimaxM2),
+            ModelId::ClaudeOpus46 | ModelId::ClaudeSonnet46 => Some(ModelId::ClaudeSonnet46),
+            ModelId::MinimaxM25 => None,
             _ => None,
         };
 
@@ -88,7 +84,6 @@ impl ModelId {
                 | ModelId::GPT53Codex
                 | ModelId::ClaudeOpus46
                 | ModelId::ClaudeSonnet46
-                | ModelId::ClaudeOpus41
                 | ModelId::DeepSeekReasoner
                 | ModelId::ZaiGlm5
                 | ModelId::OpenRouterStepfunStep35FlashFree
@@ -131,10 +126,6 @@ impl ModelId {
                 | ModelId::GPT53Codex
                 | ModelId::ClaudeOpus46
                 | ModelId::ClaudeSonnet46
-                | ModelId::ClaudeOpus45
-                | ModelId::ClaudeOpus41
-                | ModelId::ClaudeSonnet45
-                | ModelId::ClaudeSonnet4
                 | ModelId::DeepSeekReasoner
                 | ModelId::ZaiGlm5
                 | ModelId::OpenRouterStepfunStep35FlashFree
@@ -178,9 +169,7 @@ impl ModelId {
             | ModelId::OpenAIGptOss120b => "5",
             // Anthropic generations
             ModelId::ClaudeOpus46 | ModelId::ClaudeSonnet46 => "4.6",
-            ModelId::ClaudeOpus45 | ModelId::ClaudeSonnet45 | ModelId::ClaudeHaiku45 => "4.5",
-            ModelId::ClaudeOpus41 => "4.1",
-            ModelId::ClaudeSonnet4 => "4",
+            ModelId::ClaudeHaiku45 => "4.5",
             // DeepSeek generations
             ModelId::DeepSeekChat | ModelId::DeepSeekReasoner => "V3.2-Exp",
             // Z.AI generations
@@ -192,19 +181,14 @@ impl ModelId {
             ModelId::OllamaQwen3CoderNext => "qwen3-coder-next:cloud",
             ModelId::OllamaDeepseekV32Cloud => "deepseek-v3.2",
             ModelId::OllamaQwen3Next80bCloud => "qwen3-next",
-            ModelId::OllamaMistralLarge3675bCloud => "mistral-large-3",
-            ModelId::OllamaQwen3Coder480bCloud => "qwen3",
-            ModelId::OllamaDevstral2123bCloud => "devstral-2",
             ModelId::OllamaMinimaxM2Cloud => "minimax-m2",
-            ModelId::OllamaNemotron3Nano30bCloud => "nemotron-3",
             ModelId::OllamaGlm5Cloud => "glm-5",
             ModelId::OllamaMinimaxM25Cloud => "minimax-m2.5",
             ModelId::OllamaGemini3FlashPreviewCloud => "gemini-3",
             // MiniMax models
             ModelId::MinimaxM25 => "M2.5",
-            ModelId::MinimaxM2 => "m2",
             // Moonshot models
-            ModelId::MoonshotMinimaxM25 | ModelId::OpenRouterMinimaxM25 => "M2.5",
+            ModelId::MoonshotKimiK25 => "k2.5",
             // Hugging Face generations
             ModelId::HuggingFaceDeepseekV32 => "V3.2-Exp",
             ModelId::HuggingFaceOpenAIGptOss20b => "oss",
@@ -213,9 +197,9 @@ impl ModelId {
             ModelId::HuggingFaceDeepseekV32Novita => "v3.2",
             ModelId::HuggingFaceXiaomiMimoV2FlashNovita => "v2-flash",
             ModelId::HuggingFaceGlm5Novita => "5",
-            ModelId::HuggingFaceQwen3CoderNextNovita
-            | ModelId::OpenRouterQwen3CoderNext
-            | ModelId::MoonshotQwen3CoderNext => "qwen3-coder-next",
+            ModelId::HuggingFaceQwen3CoderNextNovita | ModelId::OpenRouterQwen3CoderNext => {
+                "qwen3-coder-next"
+            }
             _ => "unknown",
         }
     }

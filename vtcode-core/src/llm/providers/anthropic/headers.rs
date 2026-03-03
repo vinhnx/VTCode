@@ -73,8 +73,7 @@ pub fn combined_beta_header_value(
 
     pieces.push("output-64k-2025-02-19".to_owned());
 
-    if config.model == models::anthropic::CLAUDE_SONNET_4_5
-        || config.model == models::anthropic::CLAUDE_SONNET_4_5_20250929
+    if config.model == models::anthropic::CLAUDE_SONNET_4_6
         || config.model == models::anthropic::CLAUDE_OPUS_4_6
     {
         pieces.push("context-1m-2025-08-07".to_owned());

@@ -28,7 +28,6 @@ pub struct MoonshotProvider {
     http_client: HttpClient,
     base_url: String,
     model: String,
-    model_behavior: Option<ModelConfig>,
 }
 
 impl MoonshotProvider {
@@ -52,7 +51,6 @@ impl MoonshotProvider {
             http_client,
             base_url,
             model,
-            model_behavior: None,
         }
     }
 
@@ -63,7 +61,7 @@ impl MoonshotProvider {
         _prompt_cache: Option<PromptCachingConfig>,
         timeouts: Option<TimeoutsConfig>,
         _anthropic: Option<AnthropicConfig>,
-        model_behavior: Option<ModelConfig>,
+        _model_behavior: Option<ModelConfig>,
     ) -> Self {
         let api_key_value = api_key.unwrap_or_default();
         let model_value = resolve_model(model, "kimi-latest");
@@ -73,7 +71,7 @@ impl MoonshotProvider {
             model_value,
             base_url,
             timeouts,
-            model_behavior,
+            _model_behavior,
         )
     }
 
@@ -82,7 +80,7 @@ impl MoonshotProvider {
         model: String,
         base_url: Option<String>,
         timeouts: Option<TimeoutsConfig>,
-        model_behavior: Option<ModelConfig>,
+        _model_behavior: Option<ModelConfig>,
     ) -> Self {
         use crate::llm::http_client::HttpClientFactory;
 
@@ -97,7 +95,6 @@ impl MoonshotProvider {
                 Some(env_vars::MOONSHOT_BASE_URL),
             ),
             model,
-            model_behavior,
         }
     }
 
@@ -129,11 +126,18 @@ impl MoonshotProvider {
             );
         }
 
+        // Add reasoning_effort for Kimi K2 Thinking model
+        if let Some(effort) = request.reasoning_effort
+            && self.supports_reasoning_effort(&request.model)
+        {
+            payload.insert("reasoning_effort".to_string(), Value::String(effort.as_str().to_string()));
+        }
+
         if request.stream {
             payload.insert("stream".to_string(), Value::Bool(true));
         }
 
-        // Add tools if present (was previously missing — Moonshot supports function calling)
+        // Add tools if present (Moonshot supports function calling)
         if let Some(tools) = &request.tools
             && let Some(serialized_tools) = super::common::serialize_tools_openai_format(tools)
         {
@@ -157,18 +161,12 @@ impl LLMProvider for MoonshotProvider {
         "moonshot"
     }
 
-    fn supports_reasoning(&self, _model: &str) -> bool {
-        self.model_behavior
-            .as_ref()
-            .and_then(|b| b.model_supports_reasoning)
-            .unwrap_or(false)
+    fn supports_reasoning(&self, model: &str) -> bool {
+        model.contains("k2-thinking") || model.contains("kimi-k2-thinking")
     }
 
-    fn supports_reasoning_effort(&self, _model: &str) -> bool {
-        self.model_behavior
-            .as_ref()
-            .and_then(|b| b.model_supports_reasoning_effort)
-            .unwrap_or(false)
+    fn supports_reasoning_effort(&self, model: &str) -> bool {
+        model.contains("k2-thinking") || model.contains("kimi-k2-thinking")
     }
 
     async fn generate(&self, mut request: LLMRequest) -> Result<LLMResponse, LLMError> {
