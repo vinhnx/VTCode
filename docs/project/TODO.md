@@ -59,3 +59,7 @@ support litellm
 https://github.com/majiayu000/litellm-rs
 
 https://docs.litellm.ai/docs/
+
+---
+
+implement interactive /skills maanger in tui similiar to /mcp manager.
