@@ -139,10 +139,12 @@ fn myers_diff(old: &[char], new: &[char]) -> Vec<Edit> {
     v[max_d] = 0;
 
     for d in 0..=max_d {
+        let d_i32 = d as i32;
+        let row_start = d * row_len;
         for k in (-(d as i32)..=(d as i32)).step_by(2) {
             let k_idx = (k + max_d as i32) as usize;
 
-            let x = if k == -(d as i32) || (k != d as i32 && v[k_idx - 1] < v[k_idx + 1]) {
+            let x = if k == -d_i32 || (k != d_i32 && v[k_idx - 1] < v[k_idx + 1]) {
                 v[k_idx + 1]
             } else {
                 v[k_idx - 1] + 1
@@ -157,7 +159,7 @@ fn myers_diff(old: &[char], new: &[char]) -> Vec<Edit> {
             }
 
             v[k_idx] = x;
-            v_index[d * row_len + k_idx] = x;
+            v_index[row_start + k_idx] = x;
 
             if x >= n && y >= m {
                 return backtrack_myers(old, new, &v_index, d, k, max_d);
@@ -192,11 +194,11 @@ fn backtrack_myers(
         }
 
         let k_idx = (k + max_d as i32) as usize;
+        let prev_row_start = (cur_d - 1) * row_len;
 
         let prev_k = if k == -(cur_d as i32)
             || (k != cur_d as i32
-                && v_index[(cur_d - 1) * row_len + k_idx - 1]
-                    < v_index[(cur_d - 1) * row_len + k_idx + 1])
+                && v_index[prev_row_start + k_idx - 1] < v_index[prev_row_start + k_idx + 1])
         {
             k + 1
         } else {
@@ -204,7 +206,7 @@ fn backtrack_myers(
         };
 
         let prev_k_idx = (prev_k + max_d as i32) as usize;
-        let prev_x_val = v_index[(cur_d - 1) * row_len + prev_k_idx];
+        let prev_x_val = v_index[prev_row_start + prev_k_idx];
         let prev_y = (prev_x_val as i32 - prev_k) as usize;
 
         let (move_x, move_y) = if prev_k == k + 1 {

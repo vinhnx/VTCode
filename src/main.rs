@@ -231,7 +231,7 @@ async fn run() -> Result<()> {
 
     // Add note about slash commands - use static string directly
     cmd = cmd.after_help(
-        "\n\nSlash commands (type / in chat):\n  /init     - Reconfigure provider, model, and settings\n  /config   - Open interactive settings manager\n  /status   - Show current configuration\n  /doctor   - Diagnose setup issues\n  /update   - Check for VT Code updates\n  /plan     - Toggle read-only planning mode\n  /theme    - Switch UI theme\n  /history  - Open command history picker\n  /help     - Show all slash commands",
+        "\n\nSlash commands (type / in chat):\n  /init     - Reconfigure provider, model, and settings\n  /config   - Open interactive settings manager\n  /status   - Show current configuration\n  /doctor   - Diagnose setup issues\n  /update   - Check for VT Code updates (use --list, --pin, --channel)\n  /plan     - Toggle read-only planning mode\n  /theme    - Switch UI theme\n  /history  - Open command history picker\n  /help     - Show all slash commands",
     );
 
     // Parse arguments using the augmented command

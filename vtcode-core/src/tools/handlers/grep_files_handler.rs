@@ -127,15 +127,15 @@ impl GrepFilesHandler {
                         }
 
                         if regex.is_match(line) {
+                            // Use slice operations instead of index-based ranges
+                            // to eliminate bounds checks
+                            let start = idx.saturating_sub(context_before);
                             let context_before_lines: Vec<String> =
-                                (idx.saturating_sub(context_before)..idx)
-                                    .map(|i| lines[i].to_string())
-                                    .collect();
+                                lines[start..idx].iter().map(|s| s.to_string()).collect();
 
-                            let context_after_lines: Vec<String> = ((idx + 1)
-                                ..(idx + 1 + context_after).min(lines.len()))
-                                .map(|i| lines[i].to_string())
-                                .collect();
+                            let end = (idx + 1 + context_after).min(lines.len());
+                            let context_after_lines: Vec<String> =
+                                lines[idx + 1..end].iter().map(|s| s.to_string()).collect();
 
                             matches.push(GrepMatch {
                                 file: file_path.to_string_lossy().to_string(),

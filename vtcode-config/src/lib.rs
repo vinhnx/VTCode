@@ -44,6 +44,7 @@ pub mod status_line;
 pub mod telemetry;
 pub mod timeouts;
 pub mod types;
+pub mod update;
 
 pub use acp::{
     AgentClientProtocolConfig, AgentClientProtocolTransport, AgentClientProtocolZedConfig,

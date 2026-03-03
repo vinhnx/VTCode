@@ -50,6 +50,7 @@ fs2 = "0.4"
 mimalloc = { version = "0.1", default-features = false }
 rustc-hash = "2.1"
 keyring = "3"
+libloading = "0.8"
 
 [workspace.package]
 version = "0.85.3"
@@ -261,6 +262,11 @@ windows-sys = { version = "0.61", features = [
 
 [package.metadata.cargo-machete]
 ignored = ["anstyle-crossterm"]
+
+[package.metadata.unmaintained]
+# Ignore known unmaintained packages (add packages as needed)
+# Example: ignore = ["some-crate"]
+ignore = []
 
 [package.metadata.docs.rs]
 all-features = true

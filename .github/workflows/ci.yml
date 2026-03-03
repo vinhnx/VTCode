@@ -141,6 +141,21 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo clippy --locked
 
+  # Check for unmaintained dependencies.
+  # See docs/guides/cargo-unmaintained.md for more information.
+  unmaintained:
+    name: Check Unmaintained Dependencies
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install cargo-unmaintained
+        run: cargo install cargo-unmaintained
+      - name: Check for unmaintained dependencies
+        run: cargo unmaintained --no-warnings
+
   # Run markdownlint on all markdown files in the repository.
   lint-markdown:
     name: Check Markdown

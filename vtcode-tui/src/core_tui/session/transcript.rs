@@ -116,9 +116,10 @@ impl TranscriptReflowCache {
             0
         };
 
-        for i in self.row_offsets.len()..self.messages.len() {
+        let start = self.row_offsets.len();
+        for message in self.messages.iter().skip(start) {
             self.row_offsets.push(current_offset);
-            current_offset += self.messages[i].lines.len();
+            current_offset += message.lines.len();
         }
 
         self.total_rows = current_offset;

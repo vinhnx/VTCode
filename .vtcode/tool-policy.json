@@ -31,13 +31,11 @@
     "file_op",
     "get_errors",
     "grep",
-    "grep_file",
     "implement_plan",
     "list errors",
     "list files",
     "list pty sessions",
     "list tools",
-    "list_files",
     "list_pty_sessions",
     "mode_edit",
     "mode_plan",
@@ -81,7 +79,12 @@
     "unified_file",
     "unified_search",
     "write file",
-    "write_file"
+    "write_file",
+    "cargo_check",
+    "cargo_test",
+    "git_status",
+    "git_diff",
+    "git_log"
   ],
   "policies": {
     "apply_patch": "allow",
@@ -163,8 +166,11 @@
     "switch_plan_mode": "prompt",
     "switch_to_edit_mode": "prompt",
     "switch_to_plan_mode": "prompt",
-    "grep_file": "prompt",
-    "list_files": "prompt"
+    "cargo_check": "allow",
+    "cargo_test": "allow",
+    "git_status": "allow",
+    "git_diff": "allow",
+    "git_log": "allow"
   },
   "constraints": {},
   "mcp": {

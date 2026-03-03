@@ -57,8 +57,8 @@ impl PatternDetector {
         let mut sequence_map: HashMap<Vec<&str>, Vec<&ToolEvent>> = HashMap::new();
 
         // Slide window and extract sequences.
-        for i in 0..=(self.events.len() - self.sequence_length) {
-            let window = &self.events[i..i + self.sequence_length];
+        // Use .windows() iterator for bounds-check-free iteration
+        for window in self.events.windows(self.sequence_length) {
             let seq: Vec<&str> = window.iter().map(|e| e.tool_name.as_str()).collect();
 
             // Reserve or get the vector once, then push window events into it.

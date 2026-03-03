@@ -759,3 +759,123 @@ See all responses
 ```
 
 ```
+
+---
+
+# Enable End-to-End Streaming LLM Message Output (TUI + Event Stream)
+
+## Summary
+
+Implement true incremental streaming for assistant/reasoning output in VT Code’s unified turn loop so
+that:
+
+1. Users see live token/reasoning updates in the terminal UI.
+2. Harness/Open Responses logs receive incremental ThreadEvent::ItemStarted/ItemUpdated/ItemCompleted
+   events for streamed assistant and reasoning items.
+3. Existing retry/fallback behavior (stream -> non-stream retries, timeout handling) remains intact.
+
+The current gap is in src/agent/runloop/unified/turn/turn_processing/llm_request.rs, where
+AgentEvent::OutputDelta and AgentEvent::ThinkingDelta are ignored.
+
+## Public/API Surface Changes
+
+- No external CLI/API schema changes.
+- Internal API extension:
+    - Add a stream progress callback hook to the unified streaming renderer path in src/agent/
+      runloop/unified/ui_interaction.rs and src/agent/runloop/unified/ui_interaction_stream.rs.
+    - Introduce an internal event enum for streaming progress (token delta, reasoning delta,
+      reasoning stage, completion).
+- ThreadEvent schema is unchanged; we only emit existing event types more fully.
+
+## Implementation Plan
+
+1. Add streaming progress hook in ui_interaction_stream
+
+- Extend streaming function to optionally notify caller on:
+    - visible assistant delta
+    - reasoning delta
+    - reasoning stage updates
+    - completion with final response
+- Keep existing rendering logic unchanged (markdown streaming, duplicate suppression, spinner
+  transitions).
+- Ensure hook is non-blocking from caller perspective (simple callback invocation; no async in
+  callback).
+
+2. Wire execute_llm_request streaming branch to shared streaming renderer
+
+- In llm_request.rs, replace the current controller event-sink path that drops deltas with the
+  callback-enabled stream_and_render_response_with_options(...) path.
+- Preserve:
+    - timeout wrapping (tokio::time::timeout)
+    - retry loop semantics
+    - use_streaming fallback behavior
+    - telemetry recording and response_streamed propagation.
+- Set response_streamed=true when at least one output token was rendered (existing emitted_tokens
+  behavior).
+
+3. Add harness streaming item emitter (assistant + reasoning)
+
+- Add a small local helper in llm_request.rs for per-attempt streaming item state:
+    - assistant item: started/updated/completed with cumulative text
+    - reasoning item: started/updated/completed with cumulative text + current stage
+- Emit via ctx.harness_emitter using existing ThreadEvent item variants and ThreadItemDetails::
+  {AgentMessage, Reasoning}.
+- Use deterministic per-attempt IDs:
+    - {turn_id}-assistant-stream-{attempt}
+    - {turn_id}-reasoning-stream-{attempt}
+- On streaming error/timeout before completion:
+    - close active stream items for that attempt with ItemCompleted (prevents dangling open items in
+      logs).
+- On successful completion:
+    - finalize active stream items once (no duplicate completion).
+
+4. Keep final history behavior unchanged
+
+- Continue using existing handle_assistant_response(..., response_streamed) behavior so conversation
+  history remains canonical.
+- Avoid double-rendering in UI by preserving response_streamed gating.
+- Do not refactor unrelated turn-loop logic.
+
+- Ensure plan-mode/proposed-plan stripping behavior is unchanged.
+- Ensure no new unsafe usage is introduced in this change.
+
+## Test Cases and Scenarios
+
+1. Streaming callback coverage (ui_interaction_stream tests)
+
+- Token + reasoning + stage + completed events are emitted in expected order.
+- Empty token deltas do not emit spurious callback events.
+- Completion without deltas still emits completion callback.
+
+2. Unified turn streaming behavior (llm_request tests)
+
+- When provider streams deltas:
+    - response_streamed == true
+    - final response content is correct
+    - no duplicate final UI render path is triggered.
+- When stream fails and retries:
+    - attempt stream items are closed
+    - next attempt can start fresh item IDs.
+
+3. Harness/Open Responses emission path
+
+- With harness enabled, streamed assistant output produces:
+    - item.started -> item.updated (>=1) -> item.completed for agent message.
+- Streamed reasoning produces equivalent reasoning item events with stage updates reflected.
+- Open Responses integration receives incremental output/reasoning deltas from these item updates
+  (indirect validation via emitted OR event log containing delta events).
+
+4. Regression checks
+
+- Non-streaming path still renders final response.
+- Existing retry/backoff and timeout metrics still recorded.
+- Existing turn.completed/turn.failed event emission remains unchanged.
+
+## Assumptions and Defaults
+
+- Scope is the unified runloop path (current default VT Code runtime), not legacy runner internals.
+- “Support streaming output” means both interactive terminal output and structured harness/Open
+  Responses incremental events.
+- Existing ThreadEvent schemas remain authoritative; no schema/version bump is required.
+- If provider does not stream or streaming is disabled after retries, behavior remains final-message-
+  only for that attempt.

@@ -156,6 +156,7 @@ signal-hook = "0.4"
 rand = "0.10"
 rustc-hash = { workspace = true }
 arc-swap = "1.7"
+libloading = { workspace = true }
 
 lsp-types = "0.97.0"
 notify-rust = { version = "4.12", optional = true }

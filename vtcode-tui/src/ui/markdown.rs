@@ -612,22 +612,21 @@ fn render_table(
     }
 
     // Calculate column widths
-    let mut col_widths: Vec<usize> = Vec::new();
+    // Pre-allocate based on known maximum to avoid bounds checks
+    let max_cols = table
+        .headers
+        .len()
+        .max(table.rows.iter().map(|r| r.len()).max().unwrap_or(0));
+    let mut col_widths: Vec<usize> = vec![0; max_cols];
 
-    // Check headers
+    // Check headers - use direct indexing since we pre-allocated
     for (i, cell) in table.headers.iter().enumerate() {
-        if i >= col_widths.len() {
-            col_widths.push(0);
-        }
         col_widths[i] = max(col_widths[i], cell.width());
     }
 
-    // Check rows
+    // Check rows - use direct indexing since we pre-allocated
     for row in &table.rows {
         for (i, cell) in row.iter().enumerate() {
-            if i >= col_widths.len() {
-                col_widths.push(0);
-            }
             col_widths[i] = max(col_widths[i], cell.width());
         }
     }

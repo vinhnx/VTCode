@@ -178,6 +178,11 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: Overview, Key Features, Usage, Generated Content Structure, Example Output
   - **User Questions**: "What can you tell me about Agent Initialization Guide?", "How does Overview work?", "How does Key Features work?"
 
+- **File**: `docs/guides/cargo-unmaintained.md`
+  - **Content**: Cargo-Unmaintained
+  - **Topics**: Overview, Usage, Configuration, Exit Codes, Common Options
+  - **User Questions**: "What can you tell me about Cargo-Unmaintained?", "How does Overview work?", "How does Usage work?"
+
 - **File**: `docs/guides/status-line.md`
   - **Content**: Configuring the inline status line
   - **Topics**: Available modes, Command payload structure, Example script
@@ -282,6 +287,11 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Content**: VT Code Terminal Optimization Guide
   - **Topics**: Table of Contents, Theme and Appearance, Line Break Options, Vim Mode, Notification Setup
   - **User Questions**: "What can you tell me about VT Code Terminal Optimization Guide?", "How does Table of Contents work?", "How does Theme and Appearance work?"
+
+- **File**: `docs/guides/UPDATE_SYSTEM.md`
+  - **Content**: VT Code Update System Guide
+  - **Topics**: Overview, Release Channels, Version Pinning, Configuration File, CLI Reference
+  - **User Questions**: "What can you tell me about VT Code Update System Guide?", "How does Overview work?", "How does Release Channels work?"
 
 - **File**: `docs/guides/zed-acp.md`
   - **Content**: Zed Agent Client Protocol Integration
@@ -548,6 +558,11 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Content**: Native Installers
   - **Topics**: macOS & Linux (Shell), Windows (PowerShell)
   - **User Questions**: "What can you tell me about Native Installers?", "How does macOS & Linux (Shell) work?", "How does Windows (PowerShell) work?"
+
+- **File**: `docs/skills/NATIVE_PLUGIN_GUIDE.md`
+  - **Content**: Native Plugin System for VT Code
+  - **Topics**: Overview, What are Native Plugins?, Plugin Architecture, Plugin ABI, Creating a Plugin
+  - **User Questions**: "What can you tell me about Native Plugin System for VT Code?", "How does Overview work?", "How does What are Native Plugins? work?"
 
 - **File**: `docs/protocols/OPEN_RESPONSES.md`
   - **Content**: Open Responses Specification Conformance

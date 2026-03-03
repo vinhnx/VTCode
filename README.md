@@ -156,6 +156,7 @@ VT Code follows the [Command Line Interface Guidelines](https://clig.dev/) and s
 - **Lifecycle Hooks**: Execute custom shell commands in response to agent events for context enrichment, policy enforcement, and automation ([docs](./docs/guides/lifecycle-hooks.md))
 - **Context Management**: Advanced token budget tracking and context curation
 - **TUI Interface**: Rich terminal user interface with real-time streaming
+- **Auto-Update System**: Built-in update manager with release channels, version pinning, and mirror support ([docs](./docs/guides/UPDATE_SYSTEM.md))
 
 ### Security & Safety
 
@@ -181,6 +182,7 @@ See [Security Model](./docs/security/SECURITY_MODEL.md) and [Sandbox Deep Dive](
     - [Interactive mode](./docs/user-guide/interactive-mode.md)
     - [Command line interface](./docs/user-guide/commands.md)
 - [Configuration](./docs/config/CONFIGURATION_PRECEDENCE.md)
+- [**Update System**](./docs/guides/UPDATE_SYSTEM.md) - Release channels, version pinning, and update management
 - [**AI Provider Setup**](./docs/providers/PROVIDER_GUIDES.md) - Complete guides for configuring different LLM providers:
     - [OpenAI, Anthropic, Google Gemini](./docs/user-guide/getting-started.md#configure-your-llm-provider)
     - [OpenRouter](./docs/providers/openrouter.md)

@@ -468,6 +468,24 @@ pub enum Commands {
         /// Force update even if on latest version
         #[arg(long)]
         force: bool,
+        /// List available versions
+        #[arg(long)]
+        list: bool,
+        /// Number of versions to list (default: 10)
+        #[arg(long, default_value_t = 10)]
+        limit: usize,
+        /// Pin to a specific version
+        #[arg(long, value_name = "VERSION")]
+        pin: Option<String>,
+        /// Unpin version
+        #[arg(long)]
+        unpin: bool,
+        /// Set release channel (stable, beta, nightly)
+        #[arg(long, value_name = "CHANNEL")]
+        channel: Option<String>,
+        /// Show current update configuration
+        #[arg(long)]
+        show_config: bool,
     },
 
     /// Start Anthropic API compatibility server

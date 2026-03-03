@@ -21,10 +21,12 @@ impl ResumeSession {
     }
 
     pub fn from_listing(listing: &SessionListing, is_fork: bool) -> Self {
-        let history_source = if !listing.snapshot.messages.is_empty() {
-            listing.snapshot.messages.iter()
-        } else if let Some(progress) = &listing.snapshot.progress {
+        let history_source = if let Some(progress) = &listing.snapshot.progress
+            && !progress.recent_messages.is_empty()
+        {
             progress.recent_messages.iter()
+        } else if !listing.snapshot.messages.is_empty() {
+            listing.snapshot.messages.iter()
         } else {
             [].iter()
         };

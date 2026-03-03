@@ -6,7 +6,7 @@ use crate::skills::discovery::{DiscoveryResult, SkillDiscovery};
 use crate::skills::model::{SkillErrorInfo, SkillLoadOutcome, SkillMetadata, SkillScope};
 use crate::skills::system::system_cache_root_dir;
 use crate::skills::types::{Skill, SkillContext, SkillManifest};
-use anyhow::Result;
+use anyhow::{Context, Result};
 use dunce::canonicalize as normalize_path;
 use std::collections::{HashSet, VecDeque};
 use std::fs;
@@ -25,6 +25,7 @@ pub struct SkillRoot {
     pub path: PathBuf,
     pub scope: SkillScope,
     pub is_tool_root: bool,
+    pub is_plugin_root: bool,
 }
 
 pub fn load_skills(config: &SkillLoaderConfig) -> SkillLoadOutcome {
@@ -106,21 +107,39 @@ fn skill_roots_with_home_dir(
             path: project_root.join(".agents/skills"),
             scope: SkillScope::Repo,
             is_tool_root: false,
+            is_plugin_root: false,
         });
         roots.push(SkillRoot {
             path: project_root.join(".codex/skills"),
             scope: SkillScope::Repo,
             is_tool_root: false,
+            is_plugin_root: false,
         });
         roots.push(SkillRoot {
             path: project_root.join(".vtcode/skills"),
             scope: SkillScope::Repo,
             is_tool_root: false,
+            is_plugin_root: false,
         });
         roots.push(SkillRoot {
             path: project_root.join("skills"),
             scope: SkillScope::Repo,
             is_tool_root: false,
+            is_plugin_root: false,
+        });
+
+        // Plugin roots (native code plugins)
+        roots.push(SkillRoot {
+            path: project_root.join(".agents/plugins"),
+            scope: SkillScope::Repo,
+            is_tool_root: false,
+            is_plugin_root: true,
+        });
+        roots.push(SkillRoot {
+            path: project_root.join(".vtcode/plugins"),
+            scope: SkillScope::Repo,
+            is_tool_root: false,
+            is_plugin_root: true,
         });
 
         // Tool roots
@@ -128,11 +147,13 @@ fn skill_roots_with_home_dir(
             path: project_root.join("tools"),
             scope: SkillScope::Repo,
             is_tool_root: true,
+            is_plugin_root: false,
         });
         roots.push(SkillRoot {
             path: project_root.join("vendor/tools"),
             scope: SkillScope::Repo,
             is_tool_root: true,
+            is_plugin_root: false,
         });
     }
 
@@ -142,11 +163,20 @@ fn skill_roots_with_home_dir(
             path: home.join("skills"),
             scope: SkillScope::User,
             is_tool_root: false,
+            is_plugin_root: false,
         });
         roots.push(SkillRoot {
             path: home.join("tools"),
             scope: SkillScope::User,
             is_tool_root: true,
+            is_plugin_root: false,
+        });
+        // User plugins
+        roots.push(SkillRoot {
+            path: home.join(".vtcode/plugins"),
+            scope: SkillScope::User,
+            is_tool_root: false,
+            is_plugin_root: true,
         });
     }
 
@@ -155,6 +185,7 @@ fn skill_roots_with_home_dir(
         path: system_cache_root_dir(&config.codex_home),
         scope: SkillScope::System,
         is_tool_root: false,
+        is_plugin_root: false,
     });
 
     roots
@@ -199,6 +230,13 @@ fn discover_skills_under_root(root: &SkillRoot, outcome: &mut SkillLoadOutcome) 
                     && let Ok(Some(tool_meta)) = try_load_tool_from_dir(&path, root.scope)
                 {
                     outcome.skills.push(tool_meta);
+                }
+
+                // If this is a plugin root, check for native plugin directory structure
+                if root.is_plugin_root
+                    && let Ok(Some(plugin_meta)) = try_load_plugin_from_dir(&path, root.scope)
+                {
+                    outcome.skills.push(plugin_meta);
                 }
                 continue;
             }
@@ -333,6 +371,50 @@ fn tool_config_to_metadata(config: &CliToolConfig, scope: SkillScope) -> Result<
     })
 }
 
+fn try_load_plugin_from_dir(path: &Path, scope: SkillScope) -> Result<Option<SkillMetadata>> {
+    // Check if it's a native plugin directory (has plugin.json)
+    let plugin_json_path = path.join("plugin.json");
+    if !plugin_json_path.exists() {
+        return Ok(None);
+    }
+
+    // Read and parse plugin metadata
+    let plugin_json_content =
+        std::fs::read_to_string(&plugin_json_path).context("Failed to read plugin.json")?;
+
+    let plugin_metadata: crate::skills::native_plugin::PluginMetadata =
+        serde_json::from_str(&plugin_json_content).context("Invalid plugin.json format")?;
+
+    // Validate that the plugin has a corresponding dynamic library
+    let lib_name =
+        crate::skills::native_plugin::PluginLoader::new().library_filename(&plugin_metadata.name);
+
+    if !path.join(&lib_name).exists() {
+        // Try alternative library names
+        let alternatives = vec![
+            format!("lib{}.dylib", plugin_metadata.name),
+            format!("{}.dylib", plugin_metadata.name),
+            format!("lib{}.so", plugin_metadata.name),
+            format!("{}.so", plugin_metadata.name),
+            format!("{}.dll", plugin_metadata.name),
+        ];
+
+        let has_lib = alternatives.iter().any(|alt| path.join(alt).exists());
+        if !has_lib {
+            return Ok(None); // No library found, skip this plugin
+        }
+    }
+
+    Ok(Some(SkillMetadata {
+        name: plugin_metadata.name.clone(),
+        description: plugin_metadata.description.clone(),
+        short_description: None,
+        path: path.to_path_buf(),
+        scope,
+        manifest: None, // Native plugins don't have SKILL.md manifest
+    }))
+}
+
 pub fn load_skill_resources(skill_path: &Path) -> Result<Vec<crate::skills::types::SkillResource>> {
     let mut resources = Vec::new();
     let resource_dir = skill_path.join("scripts");
@@ -455,26 +537,49 @@ fn is_executable_file(path: &Path) -> bool {
 }
 
 /// Enhanced skill variant for unified handling
-#[derive(Debug, Clone)]
 pub enum EnhancedSkill {
     /// Traditional instruction-based skill
     Traditional(Box<Skill>),
     /// CLI-based tool skill
     CliTool(Box<CliToolBridge>),
+    /// Native code plugin skill
+    NativePlugin(Box<dyn crate::skills::native_plugin::NativePluginTrait>),
+}
+
+impl std::fmt::Debug for EnhancedSkill {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Traditional(skill) => f.debug_tuple("Traditional").field(skill).finish(),
+            Self::CliTool(tool) => f.debug_tuple("CliTool").field(tool).finish(),
+            Self::NativePlugin(plugin) => f.debug_tuple("NativePlugin").field(plugin).finish(),
+        }
+    }
 }
 
 /// High-level loader that provides discovery and validation features
 pub struct EnhancedSkillLoader {
     workspace_root: PathBuf,
     discovery: SkillDiscovery,
+    plugin_loader: crate::skills::native_plugin::PluginLoader,
 }
 
 impl EnhancedSkillLoader {
     /// Create a new enhanced loader for workspace
     pub fn new(workspace_root: PathBuf) -> Self {
+        let mut plugin_loader = crate::skills::native_plugin::PluginLoader::new();
+
+        // Add trusted plugin directories
+        plugin_loader
+            // User plugins
+            .add_trusted_dir(dirs::home_dir().unwrap_or_default().join(".vtcode/plugins"))
+            // Project plugins
+            .add_trusted_dir(workspace_root.join(".vtcode/plugins"))
+            .add_trusted_dir(workspace_root.join(".agents/plugins"));
+
         Self {
             workspace_root,
             discovery: SkillDiscovery::new(),
+            plugin_loader,
         }
     }
 
@@ -505,7 +610,34 @@ impl EnhancedSkillLoader {
             }
         }
 
+        // Try native plugins - discover plugin directories and load on demand
+        // First, find the plugin directory by scanning trusted directories
+        for plugin_dir in self.get_plugin_directories() {
+            if !plugin_dir.exists() {
+                continue;
+            }
+
+            // Check if this directory contains the requested plugin
+            let plugin_json = plugin_dir.join("plugin.json");
+            if let Ok(content) = std::fs::read_to_string(&plugin_json) {
+                if let Ok(metadata) =
+                    serde_json::from_str::<crate::skills::native_plugin::PluginMetadata>(&content)
+                {
+                    if metadata.name == name {
+                        // Load the plugin
+                        let plugin = self.plugin_loader.load_plugin(&plugin_dir)?;
+                        return Ok(EnhancedSkill::NativePlugin(plugin));
+                    }
+                }
+            }
+        }
+
         Err(anyhow::anyhow!("Skill '{}' not found", name))
+    }
+
+    /// Get all trusted plugin directories
+    fn get_plugin_directories(&self) -> Vec<std::path::PathBuf> {
+        self.plugin_loader.trusted_dirs().to_vec()
     }
 
     /// Generate a comprehensive container validation report

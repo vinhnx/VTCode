@@ -119,6 +119,7 @@ pub mod locations;
 pub mod manager;
 pub mod manifest;
 pub mod model;
+pub mod native_plugin;
 pub mod prompt_integration;
 pub mod render;
 pub mod skill_file_tracker;
@@ -161,6 +162,10 @@ pub use file_references::FileReferenceValidator;
 pub use loader::{
     EnhancedSkill, EnhancedSkillLoader, SkillLoaderConfig, SkillRoot, detect_skill_mentions,
     discover_skill_metadata_lightweight, load_skill_resources, load_skills,
+};
+pub use native_plugin::{
+    NativePlugin, NativePluginTrait, PluginContext, PluginLoader, PluginMetadata, PluginResult,
+    PLUGIN_ABI_VERSION, validate_plugin_structure,
 };
 
 pub use injection::{SkillInjections, build_skill_injections};

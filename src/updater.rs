@@ -4,6 +4,7 @@ use std::env;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 use tracing::{debug, info};
+use vtcode_config::update::{UpdateConfig, ReleaseChannel};
 use vtcode_core::utils::file_utils::{ensure_dir_exists_sync, write_file_with_context_sync};
 
 const REPO_OWNER: &str = "vinhnx";
@@ -15,6 +16,7 @@ const CURL_INSTALL_COMMAND: &str =
 /// Auto-updater for VT Code binary from GitHub Releases
 pub struct Updater {
     current_version: Version,
+    config: UpdateConfig,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -60,16 +62,34 @@ pub enum InstallOutcome {
 }
 
 impl Updater {
-    /// Create a new updater instance
+    /// Create a new updater instance with default config
     pub fn new(current_version_str: &str) -> Result<Self> {
         let current_version = Version::parse(current_version_str)
             .with_context(|| format!("Invalid version format: {}", current_version_str))?;
+        
+        let config = UpdateConfig::load()
+            .unwrap_or_else(|e| {
+                debug!("Failed to load update config, using defaults: {}", e);
+                UpdateConfig::default()
+            });
 
-        Ok(Self { current_version })
+        Ok(Self { current_version, config })
+    }
+    
+    /// Create a new updater instance with custom config
+    pub fn with_config(current_version_str: &str, config: UpdateConfig) -> Result<Self> {
+        let current_version = Version::parse(current_version_str)
+            .with_context(|| format!("Invalid version format: {}", current_version_str))?;
+
+        Ok(Self { current_version, config })
     }
 
     pub fn current_version(&self) -> &Version {
         &self.current_version
+    }
+    
+    pub fn config(&self) -> &UpdateConfig {
+        &self.config
     }
 
     pub fn release_url(version: &Version) -> String {
@@ -78,7 +98,13 @@ impl Updater {
 
     /// Check for updates without cache throttling.
     pub async fn check_for_updates(&self) -> Result<Option<UpdateInfo>> {
-        debug!("Checking for VT Code updates...");
+        debug!("Checking for VT Code updates (channel: {})...", self.config.channel);
+
+        // Check if version is pinned
+        if let Some(pinned_version) = self.config.pinned_version() {
+            debug!("Version pinned to {}, skipping update check", pinned_version);
+            return Ok(None);
+        }
 
         let latest = self.fetch_latest_release().await?;
 
@@ -304,6 +330,82 @@ impl Updater {
         .context("Failed to record update check timestamp")?;
         Ok(())
     }
+    
+    /// List available versions from GitHub Releases
+    pub async fn list_versions(&self, limit: usize) -> Result<Vec<VersionInfo>> {
+        debug!("Fetching available versions (limit: {})...", limit);
+        
+        let url = format!("https://api.github.com/repos/{REPO_SLUG}/releases?per_page={}", limit);
+        
+        let client = reqwest::Client::builder()
+            .user_agent("vtcode-updater")
+            .build()
+            .context("Failed to create HTTP client")?;
+        
+        let response = client
+            .get(&url)
+            .timeout(Duration::from_secs(8))
+            .send()
+            .await
+            .context("Failed to fetch releases from GitHub")?
+            .error_for_status()
+            .context("GitHub API returned non-success status")?;
+        
+        let json = response
+            .json::<serde_json::Value>()
+            .await
+            .context("Failed to parse GitHub API response")?;
+        
+        let versions = json
+            .as_array()
+            .context("Expected array of releases")?
+            .iter()
+            .filter_map(|release| {
+                let tag_name = release.get("tag_name")?.as_str()?;
+                let version_str = tag_name.trim_start_matches('v');
+                let version = Version::parse(version_str).ok()?;
+                let is_prerelease = release.get("prerelease").and_then(|v| v.as_bool()).unwrap_or(false);
+                let published_at = release.get("published_at")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string());
+                
+                Some(VersionInfo {
+                    version,
+                    tag: tag_name.to_string(),
+                    is_prerelease,
+                    published_at,
+                })
+            })
+            .collect();
+        
+        Ok(versions)
+    }
+    
+    /// Pin to a specific version
+    pub fn pin_version(&mut self, version: Version, reason: Option<String>, auto_unpin: bool) -> Result<()> {
+        self.config.set_pin(version, reason, auto_unpin);
+        self.config.save()
+            .context("Failed to save update config after pinning version")?;
+        Ok(())
+    }
+    
+    /// Unpin version
+    pub fn unpin_version(&mut self) -> Result<()> {
+        self.config.clear_pin();
+        self.config.save()
+            .context("Failed to save update config after unpinning version")?;
+        Ok(())
+    }
+    
+    /// Check if currently pinned
+    pub fn is_pinned(&self) -> bool {
+        self.config.is_pinned()
+    }
+    
+    /// Get current pinned version
+    pub fn pinned_version(&self) -> Option<&Version> {
+        self.config.pinned_version()
+    }
 
     /// Get VT Code cache directory
     fn get_cache_dir() -> Result<PathBuf> {
@@ -325,6 +427,14 @@ pub struct UpdateInfo {
     pub tag: String,
     pub download_url: String,
     pub release_notes: String,
+}
+
+/// Information about an available version
+pub struct VersionInfo {
+    pub version: Version,
+    pub tag: String,
+    pub is_prerelease: bool,
+    pub published_at: Option<String>,
 }
 
 impl UpdateInfo {

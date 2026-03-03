@@ -42,7 +42,7 @@ body = """
 {% endfor %}\
 
 ### Contributors
-{% set contributors = commits | map(attribute="remote.username") | unique | filter %}\
+{% set contributors = commits | map(attribute="remote.username") | unique | filter(attribute="self") %}\
 {% if contributors | length > 0 %}\
 {% for contributor in contributors %}@{{ contributor }} {% endfor %}\
 {% else %}\

@@ -540,12 +540,11 @@ fn murmur3_32(data: &[u8], seed: u32) -> u32 {
 
     let mut hash = seed;
     let len = data.len();
-    let chunks = len / 4;
 
-    // Process 4-byte chunks
-    for i in 0..chunks {
-        let idx = i * 4;
-        let mut k = u32::from_le_bytes([data[idx], data[idx + 1], data[idx + 2], data[idx + 3]]);
+    // Process 4-byte chunks using chunks_exact iteration.
+    let mut chunks = data.chunks_exact(4);
+    for chunk in &mut chunks {
+        let mut k = u32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
         k = k.wrapping_mul(C1);
         k = k.rotate_left(R1);
         k = k.wrapping_mul(C2);
@@ -555,7 +554,7 @@ fn murmur3_32(data: &[u8], seed: u32) -> u32 {
     }
 
     // Process remaining bytes
-    let tail = &data[chunks * 4..];
+    let tail = chunks.remainder();
     let mut k1: u32 = 0;
     match tail.len() {
         3 => {

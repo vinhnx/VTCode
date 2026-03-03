@@ -361,8 +361,10 @@ impl EntityResolver {
 
 /// Calculate Levenshtein distance between two strings
 fn levenshtein_distance(a: &str, b: &str) -> usize {
-    let a_len = a.chars().count();
-    let b_len = b.chars().count();
+    let a_chars: Vec<char> = a.chars().collect();
+    let b_chars: Vec<char> = b.chars().collect();
+    let a_len = a_chars.len();
+    let b_len = b_chars.len();
 
     if a_len == 0 {
         return b_len;
@@ -371,29 +373,24 @@ fn levenshtein_distance(a: &str, b: &str) -> usize {
         return a_len;
     }
 
-    let mut matrix = vec![vec![0; b_len + 1]; a_len + 1];
-
-    for (i, row) in matrix.iter_mut().enumerate().take(a_len + 1) {
-        row[0] = i;
-    }
-    for (j, col) in matrix[0].iter_mut().enumerate().take(b_len + 1) {
-        *col = j;
-    }
-
-    let a_chars: Vec<char> = a.chars().collect();
-    let b_chars: Vec<char> = b.chars().collect();
+    // Keep only two rows to reduce memory traffic and allocations.
+    let mut prev_row: Vec<usize> = (0..=b_len).collect();
+    let mut curr_row = vec![0usize; b_len + 1];
 
     for (i, a_char) in a_chars.iter().enumerate() {
-        for (j, b_char) in b_chars.iter().enumerate() {
-            let cost = if a_char == b_char { 0 } else { 1 };
+        curr_row[0] = i + 1;
 
-            matrix[i + 1][j + 1] = (matrix[i][j + 1] + 1)
-                .min(matrix[i + 1][j] + 1)
-                .min(matrix[i][j] + cost);
+        for (j, b_char) in b_chars.iter().enumerate() {
+            let cost = usize::from(a_char != b_char);
+            curr_row[j + 1] = (prev_row[j + 1] + 1)
+                .min(curr_row[j] + 1)
+                .min(prev_row[j] + cost);
         }
+
+        std::mem::swap(&mut prev_row, &mut curr_row);
     }
 
-    matrix[a_len][b_len]
+    prev_row[b_len]
 }
 
 #[cfg(test)]
