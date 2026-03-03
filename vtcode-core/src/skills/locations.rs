@@ -6,7 +6,7 @@
 use crate::skills::manifest::parse_skill_file;
 use crate::skills::types::SkillContext;
 use anyhow::Result;
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::path::{Path, PathBuf};
 use tracing::{debug, info, warn};
 

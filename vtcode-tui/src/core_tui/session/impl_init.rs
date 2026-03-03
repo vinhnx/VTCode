@@ -172,7 +172,7 @@ impl Session {
 
             // --- Performance Caching ---
             header_lines_cache: None,
-            header_height_cache: std::collections::HashMap::new(),
+            header_height_cache: hashbrown::HashMap::new(),
             queued_inputs_preview_cache: None,
 
             // --- Terminal Title ---

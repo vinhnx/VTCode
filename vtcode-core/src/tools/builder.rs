@@ -4,7 +4,7 @@
 //! support for dual-channel output, structured metadata, and standardized error reporting.
 
 use serde_json::{Value, json};
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::path::PathBuf;
 
 use crate::tools::result::{ToolMetadataBuilder, ToolResult};

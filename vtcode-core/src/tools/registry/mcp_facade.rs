@@ -204,7 +204,7 @@ impl ToolRegistry {
 
             let mcp_index = self.mcp_tool_index.read().await;
             // Convert FxHashMap to std HashMap for policy manager API compatibility
-            let std_index: std::collections::HashMap<String, Vec<String>> = mcp_index
+            let std_index: hashbrown::HashMap<String, Vec<String>> = mcp_index
                 .iter()
                 .map(|(k, v)| (k.clone(), v.clone()))
                 .collect();

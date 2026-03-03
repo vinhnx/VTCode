@@ -7,7 +7,7 @@
 use crate::config::constants::tools;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::fmt;
 use std::time::SystemTime;
 

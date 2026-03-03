@@ -3,7 +3,7 @@
 //! This module provides resiliency patterns for tool execution,
 //! including consecutive failure tracking and backoff mechanisms.
 
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::time::Duration;
 
 use super::timeout::{AdaptiveTimeoutTuning, ToolLatencyStats, ToolTimeoutCategory};

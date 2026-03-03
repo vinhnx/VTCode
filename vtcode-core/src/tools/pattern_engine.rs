@@ -4,7 +4,8 @@
 //! predicts user intent based on action history.
 
 use crate::tools::improvement_algorithms::jaro_winkler_similarity;
-use std::collections::{HashMap, VecDeque};
+use hashbrown::HashMap;
+use std::collections::VecDeque;
 use std::sync::{Arc, RwLock};
 
 /// Single execution event
@@ -141,7 +142,7 @@ impl PatternEngine {
         let avg_quality = events.iter().map(|e| e.quality_score).sum::<f32>() / total as f32;
         let avg_duration = events.iter().map(|e| e.duration_ms).sum::<u64>() / total as u64;
 
-        let unique_tools: std::collections::HashSet<_> =
+        let unique_tools: hashbrown::HashSet<_> =
             events.iter().map(|e| &e.tool_name).collect();
 
         ExecutionSummary {
@@ -205,7 +206,7 @@ impl PatternEngine {
         }
 
         // Check for convergence (different tools, similar quality)
-        let different_tools: std::collections::HashSet<_> =
+        let different_tools: hashbrown::HashSet<_> =
             events.iter().map(|e| &e.tool_name).collect();
 
         if different_tools.len() > 1 && events.len() >= 3 {

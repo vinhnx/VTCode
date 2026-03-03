@@ -3,7 +3,7 @@
 //! This module tracks command execution performance, cache efficiency,
 //! and resource usage for optimization and monitoring.
 
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 

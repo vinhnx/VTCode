@@ -10,7 +10,7 @@ use async_trait::async_trait;
 use reqwest::header::{ACCEPT, HeaderMap, HeaderValue, USER_AGENT};
 use serde::Deserialize;
 use serde_json::{Value, json};
-use std::collections::HashSet;
+use hashbrown::HashSet;
 use std::fs;
 use std::path::Path;
 

@@ -54,7 +54,7 @@ impl ToolMetrics {
 /// ToolRegistry improvement extension (migrated to UnifiedCache)
 pub struct ToolRegistryImprovement {
     pattern_engine: Arc<PatternEngine>,
-    tool_metrics: Arc<parking_lot::RwLock<std::collections::HashMap<String, ToolMetrics>>>,
+    tool_metrics: Arc<parking_lot::RwLock<hashbrown::HashMap<String, ToolMetrics>>>,
     result_cache: Arc<parking_lot::RwLock<UnifiedCache<ToolResultKey, String>>>,
     obs_context: Arc<ObservabilityContext>,
 }
@@ -64,7 +64,7 @@ impl ToolRegistryImprovement {
     pub fn new(obs_context: Arc<ObservabilityContext>) -> Self {
         Self {
             pattern_engine: Arc::new(PatternEngine::new(1000, 20)),
-            tool_metrics: Arc::new(parking_lot::RwLock::new(std::collections::HashMap::new())),
+            tool_metrics: Arc::new(parking_lot::RwLock::new(hashbrown::HashMap::new())),
             result_cache: Arc::new(parking_lot::RwLock::new(UnifiedCache::new(
                 10000,
                 DEFAULT_CACHE_TTL,

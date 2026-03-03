@@ -10,3 +10,4 @@ crate-type = ["cdylib"]
 zed_extension_api = "0.1.0"
 serde = { version = "1.0", features = ["derive"] }
 toml = "0.8"
+hashbrown = { version = "0.15", features = ["serde"] }

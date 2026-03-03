@@ -3,7 +3,7 @@
 //! These tests verify that MCP integration works correctly with real MCP servers.
 //! They test the complete flow from configuration loading to tool execution.
 
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::path::PathBuf;
 use tempfile::TempDir;
 use tokio::process::Command;

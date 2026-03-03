@@ -3,7 +3,7 @@
 //! This module provides comprehensive timeout detection capabilities with intelligent
 //! retry mechanisms to ensure the agent can continue operations without manual intervention.
 
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::sync::Arc;
 
 use std::time::{Duration, Instant};

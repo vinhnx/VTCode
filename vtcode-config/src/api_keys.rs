@@ -87,7 +87,7 @@ fn inferred_api_key_env(provider: &str) -> &'static str {
 
 #[cfg(test)]
 mod test_env_overrides {
-    use std::collections::HashMap;
+    use hashbrown::HashMap;
     use std::sync::{LazyLock, Mutex};
 
     static OVERRIDES: LazyLock<Mutex<HashMap<String, Option<String>>>> =

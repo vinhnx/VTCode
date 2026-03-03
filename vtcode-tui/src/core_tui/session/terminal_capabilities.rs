@@ -8,7 +8,7 @@ use std::env;
 
 #[cfg(test)]
 mod test_env_overrides {
-    use std::collections::HashMap;
+    use hashbrown::HashMap;
     use std::sync::{LazyLock, Mutex};
 
     static OVERRIDES: LazyLock<Mutex<HashMap<String, Option<String>>>> =

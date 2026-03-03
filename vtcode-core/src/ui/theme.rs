@@ -3,7 +3,7 @@ use anyhow::{Context, Result, anyhow};
 use catppuccin::PALETTE;
 use once_cell::sync::Lazy;
 use parking_lot::RwLock;
-use std::collections::HashMap;
+use hashbrown::HashMap;
 
 use crate::config::constants::{defaults, ui};
 

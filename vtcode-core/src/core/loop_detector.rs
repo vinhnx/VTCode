@@ -3,7 +3,8 @@
 //! Detects when the agent is stuck in repetitive patterns and suggests intervention.
 
 use crate::config::constants::{defaults, tools};
-use std::collections::{HashMap, HashSet, VecDeque};
+use hashbrown::{HashMap, HashSet};
+use std::collections::VecDeque;
 use std::time::Instant;
 
 // Separate limits for different operation types to reduce false positives

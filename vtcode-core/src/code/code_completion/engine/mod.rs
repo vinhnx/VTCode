@@ -7,7 +7,7 @@ pub use suggestions::CompletionSuggestion;
 use crate::code::code_completion::context::CompletionContext;
 use crate::code::code_completion::learning::CompletionLearningData;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 

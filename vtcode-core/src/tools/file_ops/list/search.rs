@@ -186,7 +186,7 @@ impl FileOpsTool {
             .await
             .context("grep_file search failed for find_content")?;
 
-        let mut seen_paths = std::collections::HashSet::with_capacity(result.matches.len());
+        let mut seen_paths = hashbrown::HashSet::with_capacity(result.matches.len());
         let mut items = Vec::with_capacity(result.matches.len());
 
         for entry in result.matches {

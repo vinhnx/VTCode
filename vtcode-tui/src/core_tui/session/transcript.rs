@@ -4,7 +4,7 @@
 //! with performance optimizations for large transcripts.
 
 use ratatui::prelude::*;
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::sync::Arc;
 
 use super::Session;

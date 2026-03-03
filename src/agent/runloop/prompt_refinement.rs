@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use hashbrown::HashSet;
 
 use super::{
     MAX_REFINED_WORD_MULTIPLIER, MIN_KEYWORD_LENGTH, MIN_KEYWORD_OVERLAP_RATIO,

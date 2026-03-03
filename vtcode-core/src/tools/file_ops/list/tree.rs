@@ -3,7 +3,7 @@ use crate::tools::traits::FileTool;
 use crate::tools::types::ListInput;
 use anyhow::{Result, anyhow};
 use serde_json::{Value, json};
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::path::Path;
 use tokio::fs;
 use walkdir::WalkDir;

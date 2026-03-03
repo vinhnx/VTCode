@@ -1,7 +1,7 @@
 use super::AgentRunner;
 use crate::llm::provider::{FunctionDefinition, LLMRequest, ToolDefinition};
 use anyhow::{Result, anyhow};
-use std::collections::HashSet;
+use hashbrown::HashSet;
 
 impl AgentRunner {
     /// Build universal ToolDefinitions for the current agent.

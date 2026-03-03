@@ -118,7 +118,7 @@ impl ContextOptimizer {
             && let Some(matches) = obj.get("matches").and_then(|v| v.as_array())
         {
             // Deduplicate by path + line to reduce noisy repeats
-            let mut seen = std::collections::HashSet::new();
+            let mut seen = hashbrown::HashSet::new();
             let mut deduped = Vec::with_capacity(matches.len());
             for m in matches {
                 let path = m

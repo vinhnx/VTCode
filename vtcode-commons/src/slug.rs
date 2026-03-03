@@ -110,7 +110,7 @@ mod tests {
     #[test]
     fn test_uniqueness() {
         let slugs: Vec<String> = (0..100).map(|_| create()).collect();
-        let unique_count = slugs.iter().collect::<std::collections::HashSet<_>>().len();
+        let unique_count = slugs.iter().collect::<hashbrown::HashSet<_>>().len();
         assert!(unique_count > 50, "Expected mostly unique slugs");
     }
 }

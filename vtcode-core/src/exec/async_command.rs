@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::ffi::OsString;
 use std::path::PathBuf;
 use std::pin::Pin;

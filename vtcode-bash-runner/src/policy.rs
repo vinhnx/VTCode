@@ -1,6 +1,6 @@
 use crate::executor::{CommandCategory, CommandInvocation};
 use anyhow::{Result, bail};
-use std::collections::HashSet;
+use hashbrown::HashSet;
 use std::path::Path;
 use std::sync::Arc;
 use vtcode_commons::WorkspacePaths;

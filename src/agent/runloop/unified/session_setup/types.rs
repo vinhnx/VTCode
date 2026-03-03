@@ -7,7 +7,7 @@ use crate::agent::runloop::unified::tool_call_safety::ToolCallSafetyValidator;
 use crate::agent::runloop::unified::tool_catalog::ToolCatalogState;
 use crate::agent::runloop::welcome::SessionBootstrap;
 use crate::hooks::lifecycle::LifecycleHookEngine;
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::sync::Arc;
 use tokio::sync::{Notify, RwLock};
 use vtcode_core::acp::ToolPermissionCache;

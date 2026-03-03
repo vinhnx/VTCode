@@ -23,8 +23,9 @@ use anyhow::{Context, Result, anyhow};
 use chrono;
 use futures::future::BoxFuture;
 use serde_json::{Value, json};
+use hashbrown::HashMap;
 use std::{
-    collections::{BTreeSet, HashMap},
+    collections::BTreeSet,
     path::{Path, PathBuf},
     time::{Duration, Instant, SystemTime},
 };

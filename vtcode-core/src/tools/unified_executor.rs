@@ -12,7 +12,7 @@
 //! - Centralized telemetry and audit logging
 //! - Trust level enforcement across all execution paths
 
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::time::{Duration, Instant};
 
 use anyhow::Result;

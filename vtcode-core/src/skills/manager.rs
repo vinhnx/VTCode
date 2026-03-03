@@ -3,7 +3,7 @@ use crate::skills::model::SkillLoadOutcome;
 use crate::skills::system::install_system_skills;
 use crate::skills::types::Skill;
 use anyhow::Result;
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 use std::sync::RwLock;

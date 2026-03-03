@@ -9,7 +9,8 @@ use anyhow::{Context, Result};
 use dialoguer::console::style;
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashMap, HashSet};
+use hashbrown::{HashMap, HashSet};
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use crate::config::constants::tools;

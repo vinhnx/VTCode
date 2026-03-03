@@ -4,7 +4,7 @@
 //! the Agent Skills specification requirements.
 
 use regex::Regex;
-use std::collections::HashSet;
+use hashbrown::HashSet;
 use std::path::{Path, PathBuf};
 
 /// Validates that file references in skill instructions follow the Agent Skills spec

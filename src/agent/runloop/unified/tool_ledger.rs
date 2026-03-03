@@ -13,7 +13,7 @@ pub(crate) async fn record_outcome_for_decision(
     let outcome = if success {
         DecisionOutcome::Success {
             result: "OK".to_string(),
-            metrics: std::collections::HashMap::new(),
+            metrics: hashbrown::HashMap::new(),
         }
     } else {
         DecisionOutcome::Failure {

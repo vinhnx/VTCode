@@ -362,7 +362,7 @@ impl SkillManager {
 
     async fn list_skills_with_origin(&self) -> Result<Vec<SkillEntry>> {
         let mut entries = Vec::new();
-        let mut seen = std::collections::HashSet::new();
+        let mut seen = hashbrown::HashSet::new();
 
         let primary = self
             .read_skills_from_dir(&self.skills_dir)
@@ -424,7 +424,7 @@ impl SkillManager {
     pub async fn check_skill_compatibility(
         &self,
         name: &str,
-        tool_versions: std::collections::HashMap<String, crate::exec::ToolVersion>,
+        tool_versions: hashbrown::HashMap<String, crate::exec::ToolVersion>,
     ) -> Result<crate::exec::CompatibilityReport> {
         let skill = self.load_skill(name).await?;
         let checker = crate::exec::SkillCompatibilityChecker::new(

@@ -3,7 +3,7 @@
 //! Provides a production-ready cache for tool results, pattern data, and LLM responses.
 //! Includes metrics collection and optional logging.
 
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::{Duration, Instant};

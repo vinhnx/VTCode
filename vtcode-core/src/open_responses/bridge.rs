@@ -24,8 +24,8 @@ use vtcode_exec_events::{
 pub struct ResponseBuilder {
     response: Response,
     next_output_index: usize,
-    item_id_to_index: std::collections::HashMap<String, usize>,
-    active_items: std::collections::HashMap<String, ActiveItemState>,
+    item_id_to_index: hashbrown::HashMap<String, usize>,
+    active_items: hashbrown::HashMap<String, ActiveItemState>,
 }
 
 /// State for an active (in-progress) streaming item.
@@ -44,8 +44,8 @@ impl ResponseBuilder {
         Self {
             response,
             next_output_index: 0,
-            item_id_to_index: std::collections::HashMap::new(),
-            active_items: std::collections::HashMap::new(),
+            item_id_to_index: hashbrown::HashMap::new(),
+            active_items: hashbrown::HashMap::new(),
         }
     }
 

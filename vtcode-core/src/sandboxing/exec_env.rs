@@ -1,6 +1,6 @@
 //! Command specification and execution environment types.
 
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::path::PathBuf;
 use std::time::Duration;
 

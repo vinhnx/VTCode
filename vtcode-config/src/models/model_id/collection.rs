@@ -1,5 +1,5 @@
 use crate::models::Provider;
-use std::collections::HashSet;
+use hashbrown::HashSet;
 
 use super::ModelId;
 

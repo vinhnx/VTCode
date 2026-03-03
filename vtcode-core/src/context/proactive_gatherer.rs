@@ -4,7 +4,7 @@
 //! to minimize token usage while maximizing relevance.
 
 use anyhow::{Context as AnyhowContext, Result};
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::RwLock;

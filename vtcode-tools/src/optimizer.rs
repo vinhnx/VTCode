@@ -8,7 +8,7 @@
 
 use crate::patterns::DetectedPattern;
 use serde_json::json;
-use std::collections::HashMap;
+use hashbrown::HashMap;
 
 /// An optimization recommendation.
 #[derive(Clone, Debug)]

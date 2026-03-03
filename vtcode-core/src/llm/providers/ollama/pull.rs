@@ -4,7 +4,7 @@ use ratatui::crossterm::{
     style::{PrintStyledContent, Stylize},
     terminal::{Clear, ClearType},
 };
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::io;
 use std::io::Write;
 

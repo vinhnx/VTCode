@@ -2266,7 +2266,10 @@ version = "0.15.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9229cfe53dfd69f0609a49f65461bd93001ea1ef889cd5529dd176593f5338a1"
 dependencies = [
+ "allocator-api2",
+ "equivalent",
  "foldhash 0.1.5",
+ "serde",
 ]
 
 [[package]]
@@ -6236,6 +6239,7 @@ dependencies = [
  "dirs",
  "dotenvy",
  "futures",
+ "hashbrown 0.15.5",
  "home",
  "indexmap 2.13.0",
  "insta",
@@ -6286,6 +6290,7 @@ dependencies = [
  "anyhow",
  "chrono",
  "futures-util",
+ "hashbrown 0.15.5",
  "reqwest 0.12.28",
  "serde",
  "serde_json",
@@ -6301,6 +6306,7 @@ version = "0.85.3"
 dependencies = [
  "anyhow",
  "assert_fs",
+ "hashbrown 0.15.5",
  "libc",
  "lru",
  "nix 0.31.2",
@@ -6326,6 +6332,7 @@ dependencies = [
  "base64",
  "futures",
  "glob",
+ "hashbrown 0.15.5",
  "left-right",
  "once_cell",
  "rand 0.10.0",
@@ -6350,6 +6357,7 @@ dependencies = [
  "directories",
  "dirs",
  "dotenvy",
+ "hashbrown 0.15.5",
  "hostname",
  "indexmap 2.13.0",
  "keyring",
@@ -6410,6 +6418,7 @@ dependencies = [
  "futures",
  "futures-lite",
  "glob",
+ "hashbrown 0.15.5",
  "humantime",
  "iana-time-zone",
  "include_dir",
@@ -6495,6 +6504,7 @@ name = "vtcode-exec-events"
 version = "0.85.3"
 dependencies = [
  "chrono",
+ "hashbrown 0.15.5",
  "log",
  "schemars 1.2.1",
  "serde",
@@ -6525,6 +6535,7 @@ name = "vtcode-indexer"
 version = "0.85.3"
 dependencies = [
  "anyhow",
+ "hashbrown 0.15.5",
  "ignore",
  "regex",
  "serde",
@@ -6581,6 +6592,7 @@ dependencies = [
  "async-trait",
  "chrono",
  "criterion",
+ "hashbrown 0.15.5",
  "serde_json",
  "tokio",
  "vtcode-acp-client",
@@ -6603,6 +6615,7 @@ dependencies = [
  "color-eyre",
  "crossterm",
  "futures",
+ "hashbrown 0.15.5",
  "human-panic",
  "humantime",
  "insta",

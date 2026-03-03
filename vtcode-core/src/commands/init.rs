@@ -822,7 +822,7 @@ fn unique_preserving_order(values: &[String]) -> Vec<String> {
     // Using functional approach: fold to accumulate unique values
     // This follows the functional paradigm by avoiding mutable state
     // outside of the accumulator function
-    use std::collections::HashSet;
+    use hashbrown::HashSet;
     values
         .iter()
         .fold(

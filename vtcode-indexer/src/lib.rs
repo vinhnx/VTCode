@@ -9,7 +9,7 @@ use anyhow::Result;
 use ignore::{Walk, WalkBuilder};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::fs;
 use std::io::{BufWriter, ErrorKind, Write};
 use std::path::{Path, PathBuf};

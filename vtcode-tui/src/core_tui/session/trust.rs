@@ -1,5 +1,5 @@
 use crate::ui::tui::types::TrustMode;
-use std::collections::{HashMap, HashSet};
+use hashbrown::{HashMap, HashSet};
 
 #[allow(dead_code)]
 #[derive(Debug, Clone)]

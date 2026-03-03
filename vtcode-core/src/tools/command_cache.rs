@@ -4,7 +4,7 @@ use crate::cache::{CacheKey, EvictionPolicy, UnifiedCache};
 use crate::tools::shell::ShellOutput;
 use once_cell::sync::Lazy;
 use parking_lot::Mutex;
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::path::{Path, PathBuf};
 use tokio::sync::{Mutex as TokioMutex, oneshot};
 use vtcode_config::CommandCacheConfig;

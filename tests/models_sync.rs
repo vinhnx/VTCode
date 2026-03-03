@@ -1,7 +1,7 @@
 use serde_json::Value;
 /// Integration test to ensure constants.rs stays in sync with docs/models.json
 /// This test enforces the "Always check ./docs/models.json" rule from the project guidelines.
-use std::collections::HashSet;
+use hashbrown::HashSet;
 use std::fs;
 use vtcode_core::config::constants::{model_helpers, models};
 

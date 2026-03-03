@@ -27,7 +27,7 @@ use async_stream::try_stream;
 use async_trait::async_trait;
 use reqwest::Client as HttpClient;
 use serde_json::{Map, Value, json};
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tracing;

@@ -3,7 +3,7 @@
 //! This module provides connection pooling and parallel initialization
 //! for MCP providers to eliminate sequential connection bottlenecks.
 
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{RwLock, Semaphore};

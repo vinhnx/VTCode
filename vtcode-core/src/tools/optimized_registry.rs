@@ -3,7 +3,7 @@
 use anyhow::Result;
 use parking_lot::RwLock;
 use serde_json::Value;
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::sync::Arc;
 use tokio::sync::Semaphore;
 

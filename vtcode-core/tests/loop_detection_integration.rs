@@ -1,6 +1,6 @@
 use anyhow::Result;
 use serde_json::json;
-use std::collections::HashMap;
+use hashbrown::HashMap;
 
 use vtcode_core::tools::autonomous_executor::AutonomousExecutor;
 

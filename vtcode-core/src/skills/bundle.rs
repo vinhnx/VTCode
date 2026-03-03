@@ -8,7 +8,7 @@
 //! - Versioned storage layout
 
 use anyhow::{Context, Result, bail};
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};

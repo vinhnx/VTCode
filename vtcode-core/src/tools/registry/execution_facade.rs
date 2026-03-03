@@ -4,7 +4,7 @@ use anyhow::{Context, Result, anyhow};
 use once_cell::sync::Lazy;
 use serde_json::{Value, json};
 use std::cell::RefCell;
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::sync::Mutex;
 use std::time::{Duration, Instant, SystemTime};
 use tokio::task::Id as TokioTaskId;

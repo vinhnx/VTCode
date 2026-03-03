@@ -140,7 +140,7 @@ pub type RateLimiter = PerToolRateLimiter;
 /// instead we rely on `once_cell::sync::Lazy` which is already a transitive
 /// dependency of the project.
 use once_cell::sync::Lazy;
-use std::collections::HashMap;
+use hashbrown::HashMap;
 
 pub static GLOBAL_RATE_LIMITER: Lazy<Mutex<RateLimiterInner>> =
     Lazy::new(|| Mutex::new(RateLimiterInner::new()));

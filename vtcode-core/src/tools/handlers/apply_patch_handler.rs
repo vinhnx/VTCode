@@ -4,7 +4,7 @@
 //! Supports both freeform and JSON function call formats.
 
 use std::collections::BTreeMap;
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 

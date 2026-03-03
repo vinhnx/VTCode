@@ -6,7 +6,7 @@ use agent_client_protocol as acp;
 use anyhow::Result;
 use futures::StreamExt;
 use serde_json::json;
-use std::collections::HashSet;
+use hashbrown::HashSet;
 use std::sync::Arc;
 use tracing::warn;
 use vtcode_core::llm::factory::ProviderConfig;

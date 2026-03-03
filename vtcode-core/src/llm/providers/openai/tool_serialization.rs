@@ -4,7 +4,7 @@
 
 use crate::llm::provider;
 use serde_json::{Value, json};
-use std::collections::HashSet;
+use hashbrown::HashSet;
 
 pub fn serialize_tools(tools: &[provider::ToolDefinition], model: &str) -> Option<Value> {
     if tools.is_empty() {

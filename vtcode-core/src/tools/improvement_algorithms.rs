@@ -232,7 +232,7 @@ impl PatternDetector {
         let different_tools = recent
             .iter()
             .map(|r| &r.0)
-            .collect::<std::collections::HashSet<_>>()
+            .collect::<hashbrown::HashSet<_>>()
             .len()
             > 1;
         let quality_consistent = {

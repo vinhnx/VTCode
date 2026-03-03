@@ -6,7 +6,7 @@
 /// This module uses a generic `PermissionCache<K>` to eliminate duplicate code
 /// between file-based and tool-based permission caching.
 use std::borrow::Borrow;
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::hash::Hash;
 use std::path::PathBuf;
 

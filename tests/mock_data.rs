@@ -109,7 +109,7 @@ pub struct MockFileSystem;
 
 impl MockFileSystem {
     pub fn rust_source_file() -> &'static str {
-        r#"use std::collections::HashMap;
+        r#"use hashbrown::HashMap;
 
 fn main() {
     println!("Hello, world!");

@@ -85,7 +85,7 @@ tokio = { version = "1.0", features = ["macros"] }
     env.create_test_file(
         "src/main.rs",
         r#"
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use serde::{Serialize, Deserialize};
 
 #[derive(Serialize, Deserialize, Debug)]

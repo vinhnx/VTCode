@@ -5,7 +5,7 @@
 //!
 //! Supports Agent Trace attribution tracking for AI-generated code.
 
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 

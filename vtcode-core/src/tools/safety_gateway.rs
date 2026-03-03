@@ -8,7 +8,7 @@
 //!
 //! This provides consistent safety decisions across all tool execution paths.
 
-use std::collections::HashSet;
+use hashbrown::HashSet;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 

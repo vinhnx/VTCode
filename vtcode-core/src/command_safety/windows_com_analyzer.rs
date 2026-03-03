@@ -7,7 +7,7 @@
 //! - Method invocation patterns
 //! - Execution scope and privilege context
 
-use std::collections::HashMap;
+use hashbrown::HashMap;
 
 /// COM object risk level
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]

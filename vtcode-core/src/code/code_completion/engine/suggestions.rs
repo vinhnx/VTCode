@@ -1,7 +1,7 @@
 use super::CompletionKind;
 use crate::code::code_completion::context::CompletionContext;
 use crate::code::code_completion::learning::CompletionLearningData;
-use std::collections::HashMap;
+use hashbrown::HashMap;
 
 /// Code completion suggestion with metadata
 #[derive(Debug, Clone)]

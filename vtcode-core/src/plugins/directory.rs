@@ -3,7 +3,7 @@
 //! Provides utilities for creating and validating plugin directory structures
 //! according to VT Code's plugin system specification.
 
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::path::{Path, PathBuf};
 
 use tokio::fs;

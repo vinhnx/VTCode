@@ -115,7 +115,7 @@ mod http_client_pool {
     use crate::config::TimeoutsConfig;
     use once_cell::sync::Lazy;
     use reqwest::Client as HttpClient;
-    use std::collections::HashMap;
+    use hashbrown::HashMap;
     use std::sync::{Arc, RwLock};
     use std::time::Duration;
 

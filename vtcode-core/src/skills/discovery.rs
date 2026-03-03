@@ -11,7 +11,7 @@ use crate::skills::manifest::parse_skill_file;
 use crate::skills::types::{SkillContext, SkillManifest, SkillVariety};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::path::{Path, PathBuf};
 use tracing::{debug, info, warn};
 

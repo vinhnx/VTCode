@@ -4,7 +4,7 @@
 //! advertisement, typically served at `/.well-known/agent-card.json`.
 
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use hashbrown::HashMap;
 
 /// A2A Protocol version
 pub const A2A_PROTOCOL_VERSION: &str = "1.0";

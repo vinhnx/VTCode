@@ -7,7 +7,7 @@
 //! Best for read-heavy workloads with infrequent writes (caches, registries).
 
 use left_right::{Absorb, ReadHandleFactory, WriteHandle};
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::hash::Hash;
 use std::sync::Mutex;
 

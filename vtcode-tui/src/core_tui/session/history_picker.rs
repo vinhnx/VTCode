@@ -137,7 +137,7 @@ impl HistoryPickerState {
         self.matches.sort_by(|a, b| b.score.cmp(&a.score));
 
         // Deduplicate by content (keep highest scored entry for each unique command)
-        let mut seen = std::collections::HashSet::new();
+        let mut seen = hashbrown::HashSet::new();
         self.matches.retain(|m| seen.insert(m.content.clone()));
 
         // Limit to reasonable number

@@ -5,7 +5,7 @@
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::path::PathBuf;
 
 pub use crate::skills::model::{SkillErrorInfo, SkillMetadata, SkillScope};

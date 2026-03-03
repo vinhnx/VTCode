@@ -8,7 +8,7 @@ use crate::utils::file_utils::{
 };
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::path::PathBuf;
 
 /// Justification provided by the agent for executing a high-risk tool

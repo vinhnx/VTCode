@@ -1,7 +1,7 @@
 use crate::agent::runloop::unified::turn::context::TurnHandlerOutcome;
 use anyhow::Result;
 use call::{handle_preparsed_tool_call, handle_tool_call, push_invalid_tool_args_response};
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 use vtcode_core::llm::provider as uni;

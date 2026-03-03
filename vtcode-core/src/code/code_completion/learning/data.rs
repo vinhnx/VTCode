@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use hashbrown::HashMap;
 
 /// Learning data for improving completion suggestions
 #[derive(Debug, Clone, Default)]

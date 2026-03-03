@@ -65,7 +65,7 @@ pub struct Request {
 
     /// Logit bias for token sampling.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub logit_bias: Option<std::collections::HashMap<String, f64>>,
+    pub logit_bias: Option<hashbrown::HashMap<String, f64>>,
 
     /// Whether to return log probabilities.
     #[serde(skip_serializing_if = "Option::is_none")]

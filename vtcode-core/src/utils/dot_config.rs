@@ -3,7 +3,7 @@
 pub use crate::config::WorkspaceTrustLevel;
 use crate::config::constants::defaults;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 use tokio::fs;

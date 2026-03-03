@@ -3,7 +3,7 @@
 //! Analyzes tool call sequences to detect patterns, anomalies, and trends.
 
 use serde_json::{Value, json};
-use std::collections::HashMap;
+use hashbrown::HashMap;
 
 /// A single tool call event.
 #[derive(Clone, Debug)]
@@ -134,7 +134,7 @@ impl PatternDetector {
             .events
             .iter()
             .map(|e| &e.tool_name)
-            .collect::<std::collections::HashSet<_>>()
+            .collect::<hashbrown::HashSet<_>>()
             .len() as f64;
         features.push(unique_tools);
 

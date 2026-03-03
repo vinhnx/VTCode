@@ -1,6 +1,6 @@
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::sync::{Arc, OnceLock};
 
 /// Cache key combining documentation mode ordinal and optional capability level ordinal

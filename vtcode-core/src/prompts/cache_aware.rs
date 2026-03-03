@@ -53,7 +53,7 @@ pub fn sort_tool_definitions(mut tools: Vec<ToolDefinition>) -> Vec<ToolDefiniti
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
+    use hashbrown::HashSet;
 
     use super::PRIORITY_TOOLS;
     use super::sort_tool_definitions;

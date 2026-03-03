@@ -3,7 +3,7 @@
 use crate::error::{AcpError, AcpResult};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 

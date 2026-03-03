@@ -58,7 +58,7 @@ pub use utils::{
 
 use anyhow::{Result, anyhow};
 pub use rmcp::model::ElicitationAction;
-use std::collections::HashMap;
+use hashbrown::HashMap;
 
 /// MCP protocol version constants
 pub const LATEST_PROTOCOL_VERSION: &str = "2024-11-05";

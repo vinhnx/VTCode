@@ -315,7 +315,7 @@ impl McpClient {
     pub async fn get_prompt(
         &self,
         prompt_name: &str,
-        arguments: Option<std::collections::HashMap<String, String>>,
+        arguments: Option<hashbrown::HashMap<String, String>>,
     ) -> Result<McpPromptDetail> {
         let provider = self.resolve_provider_for_prompt(prompt_name).await?;
         let provider_name = provider.name.clone();

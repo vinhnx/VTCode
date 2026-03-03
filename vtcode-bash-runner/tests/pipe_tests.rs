@@ -3,7 +3,7 @@
 //! These tests verify the async pipe spawning functionality works correctly
 //! across different platforms.
 
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::path::Path;
 
 use vtcode_bash_runner::{

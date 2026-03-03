@@ -8,7 +8,7 @@ use crate::config::core::{AnthropicConfig, ModelConfig, OpenAIConfig, PromptCach
 use crate::config::models::{ModelId, Provider};
 use crate::ctx_err;
 use crate::llm::provider::{LLMError, LLMProvider};
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::str::FromStr;
 
 type ProviderFactory = Box<dyn Fn(ProviderConfig) -> Box<dyn LLMProvider> + Send + Sync>;

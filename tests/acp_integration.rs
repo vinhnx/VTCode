@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::sync::{Arc, Mutex};
 
 use agent_client_protocol as acp;

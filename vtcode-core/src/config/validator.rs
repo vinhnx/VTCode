@@ -4,7 +4,7 @@
 
 use anyhow::{Context, Result, bail};
 use serde_json::Value as JsonValue;
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::path::Path;
 
 use crate::config::api_keys::ApiKeySources;

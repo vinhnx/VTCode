@@ -8,7 +8,7 @@
 ///
 /// This prevents tool drift where tools are added/removed in one place but not others,
 /// which can lead to inconsistent behavior across different agent client interfaces.
-use std::collections::{HashMap, HashSet};
+use hashbrown::{HashMap, HashSet};
 
 #[test]
 fn test_all_tools_have_policies() {

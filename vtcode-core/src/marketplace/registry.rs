@@ -1,6 +1,6 @@
 //! Marketplace registry for managing known marketplaces
 
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::path::PathBuf;
 
 use crate::utils::file_utils::{parse_json_with_context, read_json_file};

@@ -1,6 +1,6 @@
 use crate::agent::runloop::unified::state::SessionStats;
 use crate::agent::runloop::unified::tool_call_safety::ToolCallSafetyValidator;
-use std::collections::HashSet;
+use hashbrown::HashSet;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;

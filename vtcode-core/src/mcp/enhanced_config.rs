@@ -254,7 +254,7 @@ mod tests {
         McpClientConfig, McpProviderConfig, McpServerConfig, McpStdioServerConfig,
         McpTransportConfig,
     };
-    use std::collections::HashMap;
+    use hashbrown::HashMap;
 
     fn create_test_config() -> McpClientConfig {
         McpClientConfig {

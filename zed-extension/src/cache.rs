@@ -2,7 +2,7 @@
 ///
 /// Implements intelligent caching for workspace analysis, file content, and command results.
 /// Provides cache invalidation strategies and memory-efficient storage.
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::sync::Arc;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};

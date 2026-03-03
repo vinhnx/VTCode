@@ -4,7 +4,7 @@
 //! across different auth methods specified in the ACP protocol.
 
 use anyhow::Result;
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use vtcode_acp_client::AuthMethod;
 
 /// Handles authentication based on the auth method type

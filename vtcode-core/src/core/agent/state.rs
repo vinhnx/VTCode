@@ -2,7 +2,7 @@ use crate::core::agent::task::{TaskOutcome, TaskResults};
 use crate::exec::events::ThreadEvent;
 use crate::gemini::{Content, Part};
 use crate::llm::provider::Message;
-use std::collections::{HashMap, HashSet};
+use hashbrown::{HashMap, HashSet};
 use std::time::Duration;
 
 use crate::core::agent::conversation::build_messages_from_conversation;

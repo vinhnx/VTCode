@@ -7,7 +7,7 @@
 //! - Access methods (Get-Item, Set-Item, New-ItemProperty, etc.)
 //! - Privilege levels required
 
-use std::collections::HashMap;
+use hashbrown::HashMap;
 
 /// Registry access risk level
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]

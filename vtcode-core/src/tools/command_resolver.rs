@@ -2,7 +2,7 @@
 //! Maps command names to their actual filesystem paths
 //! Used by policy evaluator to validate and log command locations
 
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::path::PathBuf;
 use tracing::{debug, warn};
 

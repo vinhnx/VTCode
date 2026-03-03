@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use hashbrown::HashMap;
 
 use vtcode_core::config::mcp::{
     McpClientConfig, McpProviderConfig, McpStdioServerConfig, McpTransportConfig,

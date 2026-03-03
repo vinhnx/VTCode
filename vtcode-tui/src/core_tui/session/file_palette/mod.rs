@@ -26,7 +26,7 @@ pub struct FilePalette {
     current_page: usize,
     filter_query: String,
     workspace_root: PathBuf,
-    filter_cache: std::collections::HashMap<String, Vec<FileEntry>>,
+    filter_cache: hashbrown::HashMap<String, Vec<FileEntry>>,
     #[allow(dead_code)]
     file_colorizer: FileColorizer,
 }
@@ -40,7 +40,7 @@ impl FilePalette {
             current_page: 0,
             filter_query: String::new(),
             workspace_root,
-            filter_cache: std::collections::HashMap::new(),
+            filter_cache: hashbrown::HashMap::new(),
             file_colorizer: FileColorizer::new(),
         }
     }

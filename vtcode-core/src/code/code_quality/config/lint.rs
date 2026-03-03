@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use hashbrown::HashMap;
 
 /// Supported language for linting tools
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -4,7 +4,7 @@ pub mod feedback;
 pub use data::CompletionLearningData;
 pub use feedback::FeedbackProcessor;
 
-use std::collections::HashMap;
+use hashbrown::HashMap;
 
 /// Learning system for improving completion suggestions
 pub struct LearningSystem {

@@ -5,7 +5,7 @@
 
 use crate::utils::current_timestamp;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use hashbrown::HashMap;
 
 use crate::tools::result_metadata::ResultMetadata;
 

@@ -3,7 +3,7 @@ mod hook_messages;
 mod limit_prompts;
 mod permission_prompt;
 
-use std::collections::HashSet;
+use hashbrown::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
 

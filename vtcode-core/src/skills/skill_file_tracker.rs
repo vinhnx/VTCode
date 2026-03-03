@@ -6,7 +6,7 @@
 use crate::tools::file_tracker::FileTracker;
 use anyhow::Result;
 use regex::Regex;
-use std::collections::HashSet;
+use hashbrown::HashSet;
 use std::path::PathBuf;
 
 /// Generic file tracker that works with any skill output

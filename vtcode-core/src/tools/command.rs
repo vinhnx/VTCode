@@ -11,7 +11,7 @@ use crate::tools::path_env;
 use crate::tools::shell::resolve_fallback_shell;
 use anyhow::{Result, anyhow};
 #[cfg(test)]
-use std::collections::HashMap;
+use hashbrown::HashMap;
 #[cfg(test)]
 use std::ffi::OsString;
 use std::path::PathBuf;

@@ -49,7 +49,7 @@ pub(crate) struct InteractionLoopContext<'a> {
     pub approval_recorder: &'a Arc<vtcode_core::tools::ApprovalRecorder>,
     pub tool_permission_cache: &'a Arc<tokio::sync::RwLock<vtcode_core::acp::ToolPermissionCache>>,
     pub loaded_skills:
-        &'a Arc<tokio::sync::RwLock<std::collections::HashMap<String, vtcode_core::skills::Skill>>>,
+        &'a Arc<tokio::sync::RwLock<hashbrown::HashMap<String, vtcode_core::skills::Skill>>>,
     pub default_placeholder: &'a mut Option<String>,
     pub follow_up_placeholder: &'a mut Option<String>,
     pub checkpoint_manager: Option<&'a vtcode_core::core::agent::snapshots::SnapshotManager>,

@@ -1,5 +1,5 @@
 use once_cell::sync::Lazy;
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 use tracing::warn;

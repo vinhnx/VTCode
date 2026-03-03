@@ -8,7 +8,7 @@ use crate::llm::provider::{LLMError, LLMRequest, LLMResponse, Message, ToolDefin
 use async_trait::async_trait;
 use reqwest::{Client as HttpClient, StatusCode};
 use serde_json::Value;
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::sync::{Arc, LazyLock, Mutex};
 use std::time::Duration;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};

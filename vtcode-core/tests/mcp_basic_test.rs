@@ -2,7 +2,7 @@
 //!
 //! These tests verify that MCP configuration and basic functionality work correctly.
 
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use vtcode_core::config::mcp::{
     McpClientConfig, McpProviderConfig, McpStdioServerConfig, McpTransportConfig, McpUiConfig,
     McpUiMode,

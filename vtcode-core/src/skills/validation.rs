@@ -13,7 +13,7 @@ use crate::utils::file_utils::read_file_with_context_sync;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::{Instant, SystemTime};
 use tracing::info;

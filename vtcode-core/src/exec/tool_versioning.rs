@@ -9,7 +9,7 @@
 use anyhow::{Result, anyhow};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::fmt::Write;
 use tracing::debug;
 

@@ -23,7 +23,7 @@
 //! - Observability hooks for cache operations
 
 use crate::tools::improvements_errors::{EventType, ObservabilityContext};
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
 use tracing::warn;
@@ -137,7 +137,7 @@ impl<K: Clone + Eq + std::hash::Hash + std::fmt::Debug, V: Clone + std::fmt::Deb
         });
 
         // Check if key already exists - if so, just update (no eviction needed)
-        if let std::collections::hash_map::Entry::Occupied(mut e) = entries.entry(key.clone()) {
+        if let hashbrown::hash_map::Entry::Occupied(mut e) = entries.entry(key.clone()) {
             e.insert(CacheEntry::new(value, self.default_ttl));
             return Ok(());
         }
@@ -176,7 +176,7 @@ impl<K: Clone + Eq + std::hash::Hash + std::fmt::Debug, V: Clone + std::fmt::Deb
         };
 
         // Check if key already exists - if so, just update (no eviction needed)
-        if let std::collections::hash_map::Entry::Occupied(mut e) = entries.entry(key.clone()) {
+        if let hashbrown::hash_map::Entry::Occupied(mut e) = entries.entry(key.clone()) {
             e.insert(new_entry);
             return Ok(());
         }

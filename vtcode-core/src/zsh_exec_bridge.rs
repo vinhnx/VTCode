@@ -3,7 +3,7 @@ use anyhow::Result;
 use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
 #[cfg(not(unix))]
-use std::collections::HashMap;
+use hashbrown::HashMap;
 #[cfg(not(unix))]
 use std::path::Path;
 
@@ -42,7 +42,7 @@ mod unix_impl {
     };
     use anyhow::{Context, Result, bail};
     use parking_lot::Mutex;
-    use std::collections::HashMap;
+    use hashbrown::HashMap;
     use std::fs;
     use std::io::{ErrorKind, Read, Write};
     use std::os::unix::net::{UnixListener, UnixStream};

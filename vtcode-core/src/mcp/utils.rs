@@ -6,7 +6,7 @@ use iana_time_zone::get_timezone;
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use rmcp::model::Implementation;
 use serde_json::{Map, Value};
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::env;
 #[cfg(test)]
 use std::sync::{LazyLock, Mutex};

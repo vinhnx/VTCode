@@ -5,7 +5,7 @@
 //! - Parent death signal (PR_SET_PDEATHSIG on Linux)
 //! - Sandbox identification markers for downstream tools
 
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::path::Path;
 
 /// Environment variables that should be filtered from sandboxed processes.

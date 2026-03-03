@@ -10,7 +10,7 @@ use std::collections::VecDeque;
 
 use crate::tools::result_metadata::EnhancedToolResult;
 use crate::tools::tool_effectiveness::ToolEffectiveness;
-use std::collections::HashMap;
+use hashbrown::HashMap;
 
 /// A record of a single tool execution
 #[derive(Debug, Clone, Serialize, Deserialize)]

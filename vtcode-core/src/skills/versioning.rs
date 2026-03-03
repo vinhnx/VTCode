@@ -11,7 +11,7 @@ use crate::utils::file_utils::{
 };
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::path::{Path, PathBuf};
 use tracing::{debug, info, warn};
 

@@ -13,7 +13,7 @@
 
 use super::{Summarizer, truncate_to_tokens};
 use anyhow::Result;
-use std::collections::HashMap;
+use hashbrown::HashMap;
 
 /// Summarizer for grep_file results
 pub struct GrepSummarizer {
@@ -144,7 +144,7 @@ struct ListStats {
 fn parse_grep_output(output: &str) -> GrepStats {
     let mut stats = GrepStats::default();
     let mut file_matches: HashMap<String, usize> = HashMap::new();
-    let mut symbols_set: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut symbols_set: hashbrown::HashSet<String> = hashbrown::HashSet::new();
 
     for line in output.lines() {
         stats.total_matches += 1;
@@ -210,7 +210,7 @@ fn parse_list_output(output: &str) -> ListStats {
 }
 
 /// Extract potential symbols (function names, types) from code line
-fn extract_symbols(line: &str, symbols: &mut std::collections::HashSet<String>) {
+fn extract_symbols(line: &str, symbols: &mut hashbrown::HashSet<String>) {
     // Look for function definitions: "fn name(" or "async fn name("
     if let Some(fn_pos) = line.find("fn ") {
         let after_fn = &line[fn_pos + 3..];
@@ -309,7 +309,7 @@ src/tools/list.rs:23:    // comment
 
     #[test]
     fn test_symbol_extraction() {
-        let mut symbols = std::collections::HashSet::new();
+        let mut symbols = hashbrown::HashSet::new();
 
         extract_symbols("    pub fn execute_grep(pattern: &str)", &mut symbols);
         assert!(symbols.contains("execute_grep()"));

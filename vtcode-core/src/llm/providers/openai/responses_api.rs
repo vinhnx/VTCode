@@ -7,7 +7,7 @@ use crate::llm::providers::common::append_normalized_reasoning_detail_items;
 use crate::llm::providers::openai::types::OpenAIResponsesPayload;
 use crate::prompts::system::default_system_prompt;
 use serde_json::{Value, json};
-use std::collections::HashSet;
+use hashbrown::HashSet;
 
 fn parse_responses_tool_call(item: &Value) -> Option<ToolCall> {
     let call_id = item.get("id").and_then(|v| v.as_str()).unwrap_or("");

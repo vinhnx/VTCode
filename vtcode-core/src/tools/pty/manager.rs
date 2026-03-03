@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -24,7 +24,7 @@ use super::session::PtySessionHandle;
 use super::types::{PtyCommandRequest, PtyCommandResult};
 
 use once_cell::sync::Lazy;
-use std::collections::hash_map::Entry;
+use hashbrown::hash_map::Entry;
 
 /// Per-workspace command locks to serialize long-running toolchain commands.
 /// Keyed by canonicalized workspace path to prevent lockfile contention.
@@ -513,7 +513,7 @@ if output.len() > max_tokens * 4 {
 
         // Use entry API to avoid double lookup
         let mut sessions = self.inner.sessions.lock();
-        use std::collections::hash_map::Entry;
+        use hashbrown::hash_map::Entry;
         let entry = match sessions.entry(session_id.clone()) {
             Entry::Occupied(_) => {
                 return Err(anyhow!("PTY session '{}' already exists", session_id));

@@ -1,6 +1,6 @@
 use anyhow::Result;
 use chrono::{DateTime, Local};
-use std::collections::HashSet;
+use hashbrown::HashSet;
 
 use vtcode_core::config::mcp::McpTransportConfig;
 use vtcode_core::tools::registry::ToolRegistry;

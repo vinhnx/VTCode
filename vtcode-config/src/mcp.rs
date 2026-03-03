@@ -1,6 +1,7 @@
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashMap};
+use hashbrown::HashMap;
+use std::collections::BTreeMap;
 
 /// Top-level MCP configuration
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]

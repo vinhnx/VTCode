@@ -19,7 +19,7 @@ pub(crate) async fn run_doctor_diagnostics(
     loaded_skills: Option<
         &std::sync::Arc<
             tokio::sync::RwLock<
-                std::collections::HashMap<String, vtcode_core::skills::types::Skill>,
+                hashbrown::HashMap<String, vtcode_core::skills::types::Skill>,
             >,
         >,
     >,

@@ -66,7 +66,7 @@ pub struct SlashCommandContext<'a> {
     pub approval_recorder: Option<&'a vtcode_core::tools::ApprovalRecorder>,
     pub tool_permission_cache: &'a Arc<RwLock<vtcode_core::acp::ToolPermissionCache>>,
     pub loaded_skills:
-        &'a Arc<RwLock<std::collections::HashMap<String, vtcode_core::skills::types::Skill>>>,
+        &'a Arc<RwLock<hashbrown::HashMap<String, vtcode_core::skills::types::Skill>>>,
     pub checkpoint_manager: Option<&'a vtcode_core::core::agent::snapshots::SnapshotManager>,
 }
 

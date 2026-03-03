@@ -7,7 +7,7 @@
 /// 4. No tools are silently dropped or hidden
 ///
 /// Run with: cargo test --test tool_discovery_audit_test -- --nocapture
-use std::collections::{HashMap, HashSet};
+use hashbrown::{HashMap, HashSet};
 
 #[derive(Debug, Clone)]
 struct ToolAuditEntry {

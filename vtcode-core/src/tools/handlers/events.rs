@@ -6,7 +6,7 @@
 //! - Failure events with errors
 //! - Patch-specific events for apply_patch
 
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 

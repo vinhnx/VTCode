@@ -3,7 +3,7 @@
 //! Tests for MCP (Model Context Protocol) functionality including
 //! configuration loading, provider setup, and tool execution.
 
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::mcp::{
     McpAllowListConfig, McpAllowListRules, McpClientConfig, McpProviderConfig,

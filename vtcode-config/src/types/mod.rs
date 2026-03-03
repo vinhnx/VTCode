@@ -4,7 +4,8 @@ use crate::constants::reasoning;
 use crate::core::PromptCachingConfig;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
-use std::collections::{BTreeMap, HashMap};
+use hashbrown::HashMap;
+use std::collections::BTreeMap;
 use std::fmt;
 use std::path::PathBuf;
 

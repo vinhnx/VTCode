@@ -7,7 +7,7 @@
 //! - Version compatibility predictions
 
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::fmt::Write;
 use std::time::Duration;
 use tracing::debug;

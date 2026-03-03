@@ -48,6 +48,7 @@ rand = "0.10"
 semver = "1.0"
 fs2 = "0.4"
 mimalloc = { version = "0.1", default-features = false }
+hashbrown = { version = "0.15", features = ["serde"] }
 rustc-hash = "2.1"
 keyring = "3"
 libloading = "0.8"
@@ -152,6 +153,7 @@ url = "2.5"
 shell-words = "1.1"
 dialoguer = "0.12.0"
 crossterm = { workspace = true }
+hashbrown = { workspace = true }
 ratatui = { version = "0.30", default-features = false, features = [
     "crossterm",
 ] }

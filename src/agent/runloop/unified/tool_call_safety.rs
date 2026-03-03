@@ -5,7 +5,7 @@
 
 use anyhow::anyhow;
 use serde_json::{Map, Value};
-use std::collections::HashSet;
+use hashbrown::HashSet;
 use thiserror::Error;
 use vtcode_core::tools::{
     RiskLevel, SafetyDecision, SafetyError as GatewaySafetyError, SafetyGateway,

@@ -6,7 +6,7 @@
 //!
 //! Inspired by codex-rs/utils/pty pipe spawning patterns.
 
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::io::{self, ErrorKind};
 use std::path::Path;
 use std::process::Stdio;
@@ -291,7 +291,7 @@ async fn spawn_process_internal(opts: PipeSpawnOptions) -> Result<SpawnedProcess
 /// # Example
 /// ```ignore
 /// use vtcode_bash_runner::pipe::spawn_process;
-/// use std::collections::HashMap;
+/// use hashbrown::HashMap;
 /// use std::path::Path;
 ///
 /// let env: HashMap<String, String> = std::env::vars().collect();

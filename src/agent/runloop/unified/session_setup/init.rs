@@ -16,7 +16,7 @@ use crate::agent::runloop::unified::tool_catalog::ToolCatalogState;
 use crate::agent::runloop::welcome::prepare_session_bootstrap;
 use crate::workspace_trust;
 use anyhow::{Context, Result};
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;

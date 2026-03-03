@@ -7,7 +7,7 @@
 //! - Model family resolution
 
 use chrono::Utc;
-use std::collections::HashSet;
+use hashbrown::HashSet;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;

@@ -1,4 +1,5 @@
-use std::collections::{HashMap, VecDeque};
+use hashbrown::HashMap;
+use std::collections::VecDeque;
 use std::hash::Hash;
 use std::sync::Arc;
 use std::time::{Duration, Instant};

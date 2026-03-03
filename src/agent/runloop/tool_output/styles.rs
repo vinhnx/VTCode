@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use hashbrown::HashMap;
 
 use anstyle::{AnsiColor, Color, Effects, Style as AnsiStyle};
 use vtcode_commons::diff_paths::{

@@ -26,7 +26,7 @@ use vtcode_tui::InlineHandle;
 use super::async_mcp_manager::{AsyncMcpManager, McpInitStatus};
 use super::state::{CtrlCState, SessionStats};
 
-type LoadedSkillsMap = std::collections::HashMap<String, vtcode_core::skills::types::Skill>;
+type LoadedSkillsMap = hashbrown::HashMap<String, vtcode_core::skills::types::Skill>;
 
 pub(crate) struct SessionStatusContext<'a> {
     pub config: &'a CoreAgentConfig,

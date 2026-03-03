@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use hashbrown::HashMap;
 /// Workspace Context Management
 ///
 /// Provides rich workspace structure and file context for VT Code commands.

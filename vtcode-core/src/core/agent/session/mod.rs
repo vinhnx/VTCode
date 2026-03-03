@@ -94,7 +94,7 @@ pub struct SessionConstraints {
     pub max_context_tokens: usize,
 }
 
-use std::collections::HashMap;
+use hashbrown::HashMap;
 
 impl AgentSessionState {
     pub fn new(

@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use hashbrown::HashSet;
 use std::io::{self, Write};
 use std::str::FromStr;
 

@@ -2,7 +2,7 @@ use crate::config::constants::prompt_cache;
 use crate::config::core::PromptCachingConfig;
 use crate::llm::provider::{Message, MessageContent, MessageRole};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::fmt::Write;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};

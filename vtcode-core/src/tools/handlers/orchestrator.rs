@@ -6,7 +6,7 @@
 //! - Retry logic for sandbox escalation
 //! - Tool runtime abstraction
 
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -439,7 +439,7 @@ fn to_canonical_sandbox_policy(policy: &SandboxPolicy) -> super::sandboxing::San
 
 /// Approval caching utilities
 pub mod approval_cache {
-    use std::collections::HashSet;
+    use hashbrown::HashSet;
     use std::hash::Hash;
     use std::sync::RwLock;
 

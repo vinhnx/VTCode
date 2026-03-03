@@ -1,6 +1,6 @@
 use crate::agent::runloop::ResumeSession;
 use anyhow::{Context, Result};
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::{info, warn};

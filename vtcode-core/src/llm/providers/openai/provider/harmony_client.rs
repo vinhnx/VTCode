@@ -12,7 +12,7 @@ use openai_harmony::chat::{
 };
 use openai_harmony::{HarmonyEncodingName, load_harmony_encoding};
 use serde_json::{Value, json};
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use tokio::task::spawn_blocking;
 
 impl OpenAIProvider {

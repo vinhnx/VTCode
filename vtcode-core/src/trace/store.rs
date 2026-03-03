@@ -236,7 +236,7 @@ pub struct TraceIndex {
     /// Version of the index format.
     pub version: String,
     /// Mapping from file path to trace filenames containing that path.
-    pub files: std::collections::HashMap<String, Vec<String>>,
+    pub files: hashbrown::HashMap<String, Vec<String>>,
 }
 
 impl TraceIndex {
@@ -244,7 +244,7 @@ impl TraceIndex {
     pub fn new() -> Self {
         Self {
             version: AGENT_TRACE_VERSION.to_string(),
-            files: std::collections::HashMap::new(),
+            files: hashbrown::HashMap::new(),
         }
     }
 

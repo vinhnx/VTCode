@@ -3,7 +3,7 @@
 //! Manages task lifecycle, storage, and queries for the A2A protocol.
 //! Provides an in-memory store with support for concurrent access.
 
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 

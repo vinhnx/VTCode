@@ -4,7 +4,7 @@
 //! `ApprovalCtx`, `Approvable`) together with the sandbox orchestration traits
 //! and helpers (`Sandboxable`, `ToolRuntime`, `SandboxAttempt`, etc.).
 
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::fmt::Debug;
 use std::future::Future;
 use std::hash::Hash;

@@ -203,7 +203,7 @@ impl GeminiProvider {
         }
 
         let tools: Option<Vec<Tool>> = request.tools.as_ref().map(|definitions| {
-            let mut seen = std::collections::HashSet::new();
+            let mut seen = hashbrown::HashSet::new();
             definitions
                 .iter()
                 .filter_map(|tool| {

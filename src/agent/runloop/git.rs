@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use std::collections::{HashMap, HashSet};
+use hashbrown::{HashMap, HashSet};
 use std::io::{self, Write};
 use std::path::Path;
 use std::path::PathBuf;
@@ -227,7 +227,7 @@ pub(crate) async fn confirm_changes_with_git_diff(
 #[cfg(test)]
 mod tests {
     use super::{CodeChangeDelta, FileStat, compute_session_code_change_delta};
-    use std::collections::HashMap;
+    use hashbrown::HashMap;
     use std::path::PathBuf;
 
     #[test]

@@ -10,7 +10,7 @@
 //! - LOW: Information gathering, configuration changes (relatively safe)
 
 use once_cell::sync::Lazy;
-use std::collections::HashMap;
+use hashbrown::HashMap;
 
 /// Severity level of a cmdlet
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

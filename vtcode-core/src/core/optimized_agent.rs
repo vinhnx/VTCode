@@ -2,7 +2,8 @@
 
 use anyhow::{Result, anyhow};
 use serde_json::Value;
-use std::collections::{HashMap, VecDeque};
+use hashbrown::HashMap;
+use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::{RwLock, mpsc};

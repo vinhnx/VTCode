@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::path::PathBuf;
 use tokio::process::Command;
 use vtcode_config::mcp::{McpProviderConfig, McpStdioServerConfig, McpTransportConfig};

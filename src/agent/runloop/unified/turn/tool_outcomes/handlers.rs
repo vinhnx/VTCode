@@ -2064,7 +2064,8 @@ mod tests {
     use crate::agent::runloop::unified::turn::tool_outcomes::helpers::LoopTracker;
     use anyhow::anyhow;
     use serde_json::json;
-    use std::collections::{BTreeMap, BTreeSet, HashMap};
+    use hashbrown::HashMap;
+use std::collections::{BTreeMap, BTreeSet};
     use std::sync::Arc;
     use std::time::Instant;
     use tokio::sync::{Notify, RwLock};

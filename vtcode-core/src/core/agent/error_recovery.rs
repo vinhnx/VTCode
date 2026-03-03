@@ -159,16 +159,16 @@ impl ErrorRecoveryState {
     }
 
     fn detect_error_patterns(&self) -> Vec<ErrorPattern> {
-        let mut tool_errors: std::collections::HashMap<
+        let mut tool_errors: hashbrown::HashMap<
             String,
-            (usize, String, std::collections::HashSet<ErrorType>),
-        > = std::collections::HashMap::new();
+            (usize, String, hashbrown::HashSet<ErrorType>),
+        > = hashbrown::HashMap::new();
 
         for error in &self.recent_errors {
             let entry = tool_errors.entry(error.tool_name.clone()).or_insert((
                 0,
                 error.error_message.clone(),
-                std::collections::HashSet::new(),
+                hashbrown::HashSet::new(),
             ));
             entry.0 += 1;
             entry.2.insert(error.error_type);

@@ -5,7 +5,7 @@ use rmcp::model::{
     InitializeResult, Prompt, ReadResourceRequestParams, Resource, Tool,
 };
 use serde_json::{Map, Value};
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::ffi::OsString;
 use std::path::PathBuf;
 use std::sync::Arc;

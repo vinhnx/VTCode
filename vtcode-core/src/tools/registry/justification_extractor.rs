@@ -118,7 +118,7 @@ impl JustificationExtractor {
 mod tests {
     use super::*;
     use crate::core::decision_tracker::{Action, DecisionContext, DecisionOutcome};
-    use std::collections::HashMap;
+    use hashbrown::HashMap;
     use std::time::{SystemTime, UNIX_EPOCH};
 
     fn create_test_decision(reasoning: &str) -> Decision {

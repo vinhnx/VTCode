@@ -26,6 +26,7 @@ vtcode-core = { path = "../vtcode-core", version = "0.85.3", default-features = 
 vtcode-acp-client = { path = "../vtcode-acp-client", version = "0.85.3" }
 anyhow = { workspace = true }
 async-trait = "0.1"
+hashbrown = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
 chrono = { version = "0.4", features = ["serde"] }

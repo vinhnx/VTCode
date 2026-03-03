@@ -30,7 +30,7 @@ const SECONDS_PER_DAY: u64 = 24 * 60 * 60;
 
 #[cfg(test)]
 mod test_env_overrides {
-    use std::collections::HashMap;
+    use hashbrown::HashMap;
     use std::ffi::OsString;
     use std::sync::{LazyLock, Mutex};
 

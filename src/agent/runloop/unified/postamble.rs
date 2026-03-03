@@ -72,7 +72,7 @@ pub(crate) fn print_exit_summary(data: ExitSummaryData) {
 }
 
 fn aggregate_tokens(
-    usage: &std::collections::HashMap<String, vtcode_core::core::telemetry::ModelUsageStats>,
+    usage: &hashbrown::HashMap<String, vtcode_core::core::telemetry::ModelUsageStats>,
 ) -> (u64, u64) {
     usage.values().fold((0, 0), |(p, c), s| {
         (
@@ -83,7 +83,7 @@ fn aggregate_tokens(
 }
 
 fn top_model(
-    usage: &std::collections::HashMap<String, vtcode_core::core::telemetry::ModelUsageStats>,
+    usage: &hashbrown::HashMap<String, vtcode_core::core::telemetry::ModelUsageStats>,
 ) -> Option<(&String, &vtcode_core::core::telemetry::ModelUsageStats)> {
     usage.iter().max_by_key(|(_, s)| s.api_time)
 }

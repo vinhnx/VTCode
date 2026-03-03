@@ -30,7 +30,7 @@ use crate::config::constants::tools;
 use crate::gemini::FunctionDeclaration;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, json};
-use std::collections::HashMap;
+use hashbrown::HashMap;
 
 /// Documentation mode for tools
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

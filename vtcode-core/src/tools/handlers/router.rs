@@ -7,7 +7,7 @@
 //!
 //! This module bridges LLM outputs to tool execution.
 
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::sync::Arc;
 
 use async_trait::async_trait;

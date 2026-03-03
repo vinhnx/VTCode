@@ -4,7 +4,8 @@
 //! and contextual understanding.
 
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, VecDeque};
+use hashbrown::HashMap;
+use std::collections::VecDeque;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 

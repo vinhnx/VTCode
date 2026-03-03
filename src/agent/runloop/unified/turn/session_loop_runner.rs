@@ -133,7 +133,7 @@ fn emit_turn_execution_metrics(turn_metrics: TurnExecutionMetrics) {
 async fn capture_code_change_snapshot(
     workspace: &std::path::Path,
     phase: &str,
-) -> Option<std::collections::HashMap<std::path::PathBuf, crate::agent::runloop::git::FileStat>> {
+) -> Option<hashbrown::HashMap<std::path::PathBuf, crate::agent::runloop::git::FileStat>> {
     let workspace_path = workspace.to_path_buf();
     let phase_label = phase.to_string();
     match tokio::time::timeout(

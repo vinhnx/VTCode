@@ -13,7 +13,7 @@
 //! - System utilities (read-only)
 
 use super::safe_command_registry::CommandRule;
-use std::collections::HashMap;
+use hashbrown::HashMap;
 
 /// Database of command rules by category
 #[derive(Clone)]

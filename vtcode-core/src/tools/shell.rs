@@ -56,7 +56,7 @@ impl Default for SystemExecutor {
 #[async_trait::async_trait]
 impl CommandExecutor for SystemExecutor {
     async fn execute(&self, command_str: &str, cwd: &Path) -> Result<ShellOutput> {
-        let mut tags = std::collections::HashMap::new();
+        let mut tags = hashbrown::HashMap::new();
         tags.insert("subsystem".to_string(), "shell".to_string());
         tags.insert("program".to_string(), self.shell.clone());
         perf::record_value("vtcode.perf.spawn_count", 1.0, tags);
@@ -157,7 +157,7 @@ impl CommandExecutor for SnapshotExecutor {
     async fn execute(&self, command_str: &str, cwd: &Path) -> Result<ShellOutput> {
         let snapshot = self.get_snapshot().await?;
 
-        let mut tags = std::collections::HashMap::new();
+        let mut tags = hashbrown::HashMap::new();
         tags.insert("subsystem".to_string(), "shell_snapshot".to_string());
         tags.insert("program".to_string(), self.shell.clone());
         perf::record_value("vtcode.perf.spawn_count", 1.0, tags);

@@ -17,7 +17,7 @@ use futures::StreamExt;
 use reqwest::Client as HttpClient;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
-use std::collections::HashMap;
+use hashbrown::HashMap;
 
 pub mod client;
 pub mod parser;

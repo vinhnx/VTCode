@@ -397,7 +397,7 @@ impl ToolPolicyGateway {
 
     pub async fn update_mcp_tools(
         &mut self,
-        mcp_tool_index: &std::collections::HashMap<String, Vec<String>>,
+        mcp_tool_index: &hashbrown::HashMap<String, Vec<String>>,
     ) -> Result<Option<McpAllowListConfig>> {
         if let Some(policy_manager) = self.tool_policy.as_mut() {
             policy_manager.update_mcp_tools(mcp_tool_index).await?;

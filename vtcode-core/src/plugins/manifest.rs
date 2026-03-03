@@ -3,7 +3,7 @@
 //! This module implements the VT Code plugin manifest format
 //! with support for commands, agents, skills, hooks, MCP, and LSP servers.
 
-use std::collections::HashMap;
+use hashbrown::HashMap;
 
 use serde::{Deserialize, Serialize};
 

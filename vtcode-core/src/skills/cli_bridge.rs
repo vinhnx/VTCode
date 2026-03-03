@@ -58,7 +58,7 @@ pub struct CliToolConfig {
     pub supports_json: bool,
 
     /// Environment variables to set
-    pub environment: Option<std::collections::HashMap<String, String>>,
+    pub environment: Option<hashbrown::HashMap<String, String>>,
 
     /// Working directory for execution
     pub working_dir: Option<PathBuf>,

@@ -2,7 +2,7 @@
 ///
 /// Tracks token cost of search results to enable intelligent caching,
 /// sampling, and summarization of expensive searches in large codebases.
-use std::collections::HashMap;
+use hashbrown::HashMap;
 
 /// Metrics for a single search operation
 #[derive(Debug, Clone)]

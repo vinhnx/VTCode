@@ -10,7 +10,7 @@
 //! - `ToolOutput` for structured tool results
 //! - `ToolInvocation` for execution context
 
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 

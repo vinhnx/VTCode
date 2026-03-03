@@ -1,7 +1,7 @@
 //! Trace generation from file changes and session data.
 
 use crate::tools::handlers::turn_diff_tracker::{FileChange, FileChangeKind, TurnDiffTracker};
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::path::{Path, PathBuf};
 use vtcode_exec_events::trace::{
     Contributor, RelatedResource, TraceConversation, TraceFile, TraceMetadata, TraceRange,

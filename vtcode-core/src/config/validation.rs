@@ -3,7 +3,7 @@
 /// Provides comprehensive validation of VTCodeConfig at startup to catch
 /// common configuration errors early and provide helpful error messages.
 use anyhow::{Context, Result, bail};
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::path::Path;
 use std::sync::OnceLock;
 

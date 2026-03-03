@@ -210,7 +210,7 @@ pub struct Session {
 
     // --- Performance Caching ---
     pub(crate) header_lines_cache: Option<Vec<Line<'static>>>,
-    pub(crate) header_height_cache: std::collections::HashMap<u16, u16>,
+    pub(crate) header_height_cache: hashbrown::HashMap<u16, u16>,
     pub(crate) queued_inputs_preview_cache: Option<Vec<String>>,
 
     // --- Terminal Title ---

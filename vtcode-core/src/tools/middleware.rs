@@ -232,7 +232,7 @@ struct CacheEntry {
     note = "Use async_middleware::AsyncCachingMiddleware instead"
 )]
 pub struct CachingMiddleware {
-    cache: Arc<std::sync::Mutex<std::collections::HashMap<String, CacheEntry>>>,
+    cache: Arc<std::sync::Mutex<hashbrown::HashMap<String, CacheEntry>>>,
     /// Maximum age of cache entries in seconds (default: 300 = 5 minutes)
     max_age_secs: u64,
     /// Maximum number of entries to retain (evict oldest when exceeded)
@@ -244,7 +244,7 @@ pub struct CachingMiddleware {
 impl CachingMiddleware {
     pub fn new() -> Self {
         Self {
-            cache: Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
+            cache: Arc::new(std::sync::Mutex::new(hashbrown::HashMap::new())),
             max_age_secs: 300, // 5 minutes default
             max_entries: 256,
             max_value_bytes: 512 * 1024, // 512KB default guardrail to avoid caching huge outputs

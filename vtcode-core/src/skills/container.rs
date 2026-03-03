@@ -7,7 +7,7 @@
 //! multiple turns for state preservation.
 
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use hashbrown::HashSet;
 
 /// Skill source type (Anthropic-managed or custom)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

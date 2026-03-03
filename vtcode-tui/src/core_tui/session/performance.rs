@@ -4,7 +4,7 @@
 //! Migrated to use UnifiedCache for consistency.
 
 use crate::cache::{CacheKey, EvictionPolicy, UnifiedCache, DEFAULT_CACHE_TTL};
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::hash::Hash;
 use std::sync::Arc;
 use std::time::{Duration, Instant};

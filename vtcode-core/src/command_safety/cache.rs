@@ -3,7 +3,7 @@
 //! Caches safety decisions to avoid re-evaluating the same commands.
 //! Implements LRU eviction when cache exceeds size limit.
 
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 

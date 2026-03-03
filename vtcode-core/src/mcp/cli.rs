@@ -8,7 +8,7 @@ use crate::config::mcp::{
 use anyhow::{Context, Result, anyhow, bail};
 use clap::{ArgGroup, Args, Subcommand};
 use serde_json::json;
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::path::{Path, PathBuf};
 use tokio::fs;
 

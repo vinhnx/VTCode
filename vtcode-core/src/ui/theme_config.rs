@@ -209,12 +209,12 @@ pub struct FileColors {
 
     /// Custom colors for file extensions
     #[serde(default)]
-    pub extensions: std::collections::HashMap<String, String>,
+    pub extensions: hashbrown::HashMap<String, String>,
 }
 
 impl Default for FileColors {
     fn default() -> Self {
-        let mut extensions = std::collections::HashMap::new();
+        let mut extensions = hashbrown::HashMap::new();
         extensions.insert("rs".into(), "cyan".into());
         extensions.insert("js".into(), "cyan".into());
         extensions.insert("ts".into(), "cyan".into());
@@ -346,7 +346,7 @@ impl ThemeConfig {
     /// Convert file colors to anstyle::Style
     pub fn parse_file_styles(&self) -> Result<ParsedFileColors> {
         let parser = CachedStyleParser::default();
-        let mut extension_styles = std::collections::HashMap::new();
+        let mut extension_styles = hashbrown::HashMap::new();
         for (ext, color_str) in &self.files.extensions {
             let style = parser.parse_flexible(color_str).with_context(|| {
                 format!(
@@ -407,7 +407,7 @@ pub struct ParsedFileColors {
     pub symlink: AnsiStyle,
     pub executable: AnsiStyle,
     pub regular: AnsiStyle,
-    pub extensions: std::collections::HashMap<String, AnsiStyle>,
+    pub extensions: hashbrown::HashMap<String, AnsiStyle>,
 }
 
 #[cfg(test)]

@@ -4,7 +4,7 @@
 //! This allows vtcode to respect user's file listing color preferences.
 
 use anstyle::Style as AnsiStyle;
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::env;
 use std::path::Path;
 

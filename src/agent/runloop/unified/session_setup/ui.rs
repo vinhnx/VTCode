@@ -16,7 +16,7 @@ use crate::ide_context::IdeContextBridge;
 use crate::main_helpers::{runtime_archive_session_id, runtime_debug_log_path};
 use anyhow::{Context, Result};
 use chrono::Local;
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::sync::Arc;
 use tokio::sync::Notify;
 use tracing::warn;

@@ -17,7 +17,7 @@
 //! cargo clean    ✗ dangerous (destructive)
 //! ```
 
-use std::collections::HashMap;
+use hashbrown::HashMap;
 
 /// Result of a command safety check
 #[derive(Debug, Clone, PartialEq, Eq)]

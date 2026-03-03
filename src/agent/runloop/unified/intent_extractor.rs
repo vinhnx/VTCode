@@ -1,6 +1,6 @@
 /// Extract user intent/action suggestion from a user prompt
 /// Used to display dynamic spinner messages instead of hardcoded "Thinking..."
-use std::collections::HashMap;
+use hashbrown::HashMap;
 
 /// Action verb mappings with word boundary awareness
 struct ActionMatcher {

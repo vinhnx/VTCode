@@ -19,7 +19,7 @@ use reqwest::Client as HttpClient;
 use reqwest::StatusCode;
 use reqwest::header::HeaderMap;
 use serde_json::{Value, json};
-use std::collections::{HashMap, HashSet};
+use hashbrown::{HashMap, HashSet};
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
@@ -106,7 +106,7 @@ impl OpenAIProvider {
         base_url: String,
         _timeouts: TimeoutsConfig,
     ) -> Self {
-        use std::collections::HashMap;
+        use hashbrown::HashMap;
         use std::sync::Arc;
         use std::sync::Mutex;
 

@@ -3,7 +3,7 @@
 use anstyle::Reset;
 use serde::Serialize;
 use std::cmp::min;
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::fmt::Write;
 
 use crate::ui::theme;

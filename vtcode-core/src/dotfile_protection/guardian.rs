@@ -3,7 +3,7 @@
 //! Provides comprehensive protection decisions for dotfile access,
 //! integrating audit logging, backup management, and cascade prevention.
 
-use std::collections::HashSet;
+use hashbrown::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 

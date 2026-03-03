@@ -3,7 +3,7 @@
 //! Executes shell commands with sandbox support, timeout handling,
 //! and environment policy management.
 
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::path::Path;
 use std::time::Duration;
 

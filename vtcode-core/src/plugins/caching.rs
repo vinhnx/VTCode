@@ -3,7 +3,7 @@
 //! Implements the caching mechanism for plugins to ensure security and verification
 //! as described in the VT Code plugin reference.
 
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::path::{Path, PathBuf};
 
 use tokio::fs;

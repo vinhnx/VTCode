@@ -33,7 +33,7 @@ impl WorkExecutor for LocalExecutor {
 /// Registry of available executors keyed by logical target.
 #[derive(Default, Clone)]
 pub struct ExecutorRegistry {
-    executors: std::collections::HashMap<String, Arc<dyn WorkExecutor>>,
+    executors: hashbrown::HashMap<String, Arc<dyn WorkExecutor>>,
 }
 
 impl ExecutorRegistry {

@@ -35,7 +35,7 @@ use crate::utils::async_utils;
 use crate::utils::file_utils::{ensure_dir_exists, write_file_with_context};
 use anyhow::{Context, Result};
 use serde_json::Value;
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::ffi::OsString;
 use std::path::PathBuf;
 use std::sync::Arc;
