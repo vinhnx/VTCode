@@ -69,6 +69,7 @@ impl ModelId {
             ModelId::Gemini3FlashPreview
                 | ModelId::OpenRouterStepfunStep35FlashFree
                 | ModelId::OllamaGemini3FlashPreviewCloud
+                | ModelId::HuggingFaceStep35Flash
         )
     }
 
@@ -107,6 +108,7 @@ impl ModelId {
                 | ModelId::GPT5Nano
                 | ModelId::ClaudeHaiku45
                 | ModelId::DeepSeekChat
+                | ModelId::HuggingFaceStep35Flash
         )
     }
 
@@ -197,6 +199,7 @@ impl ModelId {
             ModelId::HuggingFaceDeepseekV32Novita => "v3.2",
             ModelId::HuggingFaceXiaomiMimoV2FlashNovita => "v2-flash",
             ModelId::HuggingFaceGlm5Novita => "5",
+            ModelId::HuggingFaceStep35Flash => "3.5",
             ModelId::HuggingFaceQwen3CoderNextNovita | ModelId::OpenRouterQwen3CoderNext => {
                 "qwen3-coder-next"
             }

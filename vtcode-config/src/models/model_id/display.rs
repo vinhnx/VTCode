@@ -50,6 +50,7 @@ impl ModelId {
             ModelId::HuggingFaceGlm5Novita => "GLM-5 (Novita)",
             ModelId::HuggingFaceQwen3CoderNextNovita => "Qwen3-Coder-Next (Novita)",
             ModelId::HuggingFaceQwen35397BA17BTogether => "Qwen3.5-397B-A17B (Together)",
+            ModelId::HuggingFaceStep35Flash => "Step 3.5 Flash (HF)",
             ModelId::OpenRouterMinimaxM25 => "MiniMax-M2.5 (OpenRouter)",
             ModelId::OpenRouterQwen3CoderNext => "Qwen3-Coder-Next (OpenRouter)",
             // MiniMax models

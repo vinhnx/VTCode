@@ -59,6 +59,7 @@ impl ModelId {
             ModelId::HuggingFaceGlm5Novita,
             ModelId::HuggingFaceQwen3CoderNextNovita,
             ModelId::HuggingFaceQwen35397BA17BTogether,
+            ModelId::HuggingFaceStep35Flash,
             ModelId::OpenRouterMinimaxM25,
             ModelId::OpenRouterQwen3CoderNext,
         ];

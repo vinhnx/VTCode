@@ -19,6 +19,7 @@ pub const SUPPORTED_MODELS: &[&str] = &[
     ZAI_GLM_5_NOVITA,
     // Together inference provider models
     QWEN3_5_397B_A17B_TOGETHER,
+    STEP_3_5_FLASH,
 ];
 
 // Recommended conversational LLMs
@@ -29,6 +30,7 @@ pub const QWEN3_4B_THINKING_2507: &str = "Qwen/Qwen3-4B-Thinking-2507";
 pub const QWEN25_7B_INSTRUCT_1M: &str = "Qwen/Qwen2.5-7B-Instruct-1M";
 pub const QWEN25_CODER_32B_INSTRUCT: &str = "Qwen/Qwen2.5-Coder-32B-Instruct";
 pub const DEEPSEEK_R1: &str = "deepseek-ai/DeepSeek-R1";
+pub const STEP_3_5_FLASH: &str = "stepfun-ai/Step-3.5-Flash:fastest";
 
 // Additional supported models
 pub const DEEPSEEK_V32: &str = "deepseek-ai/DeepSeek-V3.2:huggingface";
@@ -55,4 +57,5 @@ pub const REASONING_MODELS: &[&str] = &[
     XIAOMI_MIMO_V2_FLASH_NOVITA,
     QWEN3_CODER_NEXT_NOVITA,
     QWEN3_5_397B_A17B_TOGETHER,
+    STEP_3_5_FLASH,
 ];

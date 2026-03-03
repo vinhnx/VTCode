@@ -8,6 +8,7 @@ use tokio::sync::Notify;
 use crate::agent::runloop::unified::plan_blocks::{
     ProposedPlanStreamParser, extract_proposed_plan,
 };
+use crate::agent::runloop::unified::turn::harmony::strip_harmony_syntax;
 use vtcode_core::llm::error_display;
 use vtcode_core::llm::provider::{self as uni, LLMStreamEvent};
 use vtcode_core::llm::providers::clean_reasoning_text;
@@ -129,6 +130,108 @@ impl StreamingReasoningState {
     }
 }
 
+fn flush_pending_reasoning_delta(
+    provider_name: &str,
+    renderer: &mut AnsiRenderer,
+    reasoning_state: &mut StreamingReasoningState,
+    on_progress: &mut Option<&mut (dyn FnMut(StreamProgressEvent) + Send)>,
+    pending_delta: &mut String,
+) -> Result<bool, uni::LLMError> {
+    if pending_delta.is_empty() {
+        return Ok(false);
+    }
+
+    let delta = std::mem::take(pending_delta);
+    if let Some(callback) = on_progress.as_deref_mut() {
+        callback(StreamProgressEvent::ReasoningDelta(delta.clone()));
+    }
+
+    reasoning_state
+        .handle_delta(renderer, &delta)
+        .map_err(|err| map_render_error(provider_name, err))
+}
+
+fn flush_pending_reasoning(
+    provider_name: &str,
+    renderer: &mut AnsiRenderer,
+    reasoning_state: &mut StreamingReasoningState,
+    on_progress: &mut Option<&mut (dyn FnMut(StreamProgressEvent) + Send)>,
+    pending_delta: &mut String,
+    pending_render_bytes: &mut usize,
+    last_render_at: &mut Instant,
+    reasoning_emitted: &mut bool,
+) -> Result<(), uni::LLMError> {
+    let rendered = flush_pending_reasoning_delta(
+        provider_name,
+        renderer,
+        reasoning_state,
+        on_progress,
+        pending_delta,
+    )?;
+    if rendered {
+        *reasoning_emitted = true;
+    }
+    *pending_render_bytes = 0;
+    *last_render_at = Instant::now();
+    Ok(())
+}
+
+fn stream_markdown_with_provider_error(
+    provider_name: &str,
+    renderer: &mut AnsiRenderer,
+    text: &str,
+    previous_line_count: usize,
+) -> Result<usize, uni::LLMError> {
+    renderer
+        .stream_markdown_response(text, previous_line_count)
+        .map_err(|err| map_render_error(provider_name, err))
+}
+
+const HARMONY_MARKERS: &[&str] = &[
+    "<|start|>",
+    "<|channel|>",
+    "<|message|>",
+    "<|call|>",
+    "<|return|>",
+    "<|end|>",
+];
+
+const HARMONY_TERMINATORS: &[&str] = &["<|call|>", "<|return|>", "<|end|>"];
+
+fn contains_harmony_marker(text: &str) -> bool {
+    text.contains("<|") || HARMONY_MARKERS.iter().any(|marker| text.contains(marker))
+}
+
+fn incomplete_harmony_block_start(raw: &str) -> Option<usize> {
+    let start_pos = raw.rfind("<|start|>")?;
+    let tail = &raw[start_pos..];
+    let has_terminator = HARMONY_TERMINATORS
+        .iter()
+        .any(|terminator| tail.contains(terminator));
+    if has_terminator {
+        None
+    } else {
+        Some(start_pos)
+    }
+}
+
+fn sanitize_harmony_stream_text(raw: &str) -> String {
+    let stable_raw = if let Some(start_pos) = incomplete_harmony_block_start(raw) {
+        &raw[..start_pos]
+    } else {
+        raw
+    };
+    strip_harmony_syntax(stable_raw)
+}
+
+fn sanitize_harmony_final_text(text: String) -> String {
+    if contains_harmony_marker(&text) {
+        strip_harmony_syntax(&text)
+    } else {
+        text
+    }
+}
+
 pub(crate) async fn stream_and_render_response_with_options_impl(
     provider: &dyn uni::LLMProvider,
     request: uni::LLMRequest,
@@ -150,6 +253,9 @@ pub(crate) async fn stream_and_render_response_with_options_impl(
     }
 
     let supports_streaming_markdown = renderer.supports_streaming_markdown();
+    // Keep live streaming focused on assistant message tokens; reasoning deltas are streamed
+    // only when inline markdown streaming is available and reasoning output is visible.
+    let stream_reasoning_deltas = supports_streaming_markdown && renderer.reasoning_visible();
     let stream_future = provider.stream(request);
     tokio::pin!(stream_future);
 
@@ -186,17 +292,20 @@ pub(crate) async fn stream_and_render_response_with_options_impl(
         }
     };
     let mut emitted_tokens = false;
-    let mut reasoning_state = StreamingReasoningState::new(supports_streaming_markdown);
+    let mut reasoning_state = StreamingReasoningState::new(stream_reasoning_deltas);
     let mut spinner_message_updated = false;
     let mut reasoning_accumulated = String::new();
     let mut pending_content = String::new();
     let mut content_suppressed = false;
     const MAX_PENDING_CONTENT_BYTES: usize = 4_096;
     const STREAM_RENDER_MIN_INTERVAL: Duration = Duration::from_millis(16);
-    const STREAM_RENDER_MIN_BYTES: usize = 32;
     const STREAM_RENDER_MAX_BYTES: usize = 384;
+    const REASONING_RENDER_MAX_BYTES: usize = 256;
     let mut pending_render_bytes = 0usize;
     let mut last_render_at = Instant::now();
+    let mut pending_reasoning_delta = String::new();
+    let mut pending_reasoning_render_bytes = 0usize;
+    let mut last_reasoning_render_at = Instant::now();
 
     let mut suppress_reasoning_due_to_duplication = false;
     let mut plan_parser = options
@@ -207,6 +316,9 @@ pub(crate) async fn stream_and_render_response_with_options_impl(
     let mut reasoning_token_count = 0;
     let mut last_progress_update = std::time::Instant::now();
     let mut reasoning_emitted = false;
+    let mut harmony_stream_mode = false;
+    let mut harmony_raw_stream = String::new();
+    let mut harmony_visible_stream = String::new();
 
     loop {
         if ctrl_c_state.is_cancel_requested() || ctrl_c_state.is_exit_requested() {
@@ -239,11 +351,36 @@ pub(crate) async fn stream_and_render_response_with_options_impl(
         match event_result {
             Ok(LLMStreamEvent::Token { delta }) => {
                 token_count += 1;
-                let visible_delta = if let Some(parser) = plan_parser.as_mut() {
+                let mut visible_delta = if let Some(parser) = plan_parser.as_mut() {
                     parser.consume(&delta)
                 } else {
                     delta
                 };
+
+                if !harmony_stream_mode && contains_harmony_marker(&visible_delta) {
+                    harmony_stream_mode = true;
+                }
+                if harmony_stream_mode {
+                    harmony_raw_stream.push_str(&visible_delta);
+                    let sanitized = sanitize_harmony_stream_text(&harmony_raw_stream);
+                    let prefix_len = common_prefix_len(&harmony_visible_stream, &sanitized);
+                    visible_delta = sanitized.get(prefix_len..).unwrap_or_default().to_string();
+                    harmony_visible_stream = sanitized;
+                    aggregated = harmony_visible_stream.clone();
+                }
+
+                if stream_reasoning_deltas && !pending_reasoning_delta.is_empty() {
+                    flush_pending_reasoning(
+                        provider_name,
+                        renderer,
+                        &mut reasoning_state,
+                        &mut on_progress,
+                        &mut pending_reasoning_delta,
+                        &mut pending_reasoning_render_bytes,
+                        &mut last_reasoning_render_at,
+                        &mut reasoning_emitted,
+                    )?;
+                }
                 if !reasoning_emitted && reasoning_token_count > 0 && !reasoning_state.is_deferred()
                 {
                     let rendered = reasoning_state
@@ -281,18 +418,22 @@ pub(crate) async fn stream_and_render_response_with_options_impl(
                     continue;
                 }
 
-                aggregated.push_str(&visible_delta);
+                if !harmony_stream_mode {
+                    aggregated.push_str(&visible_delta);
+                }
                 if supports_streaming_markdown {
                     pending_render_bytes = pending_render_bytes.saturating_add(visible_delta.len());
                     let should_render_now = !emitted_tokens
                         || visible_delta.contains('\n')
                         || pending_render_bytes >= STREAM_RENDER_MAX_BYTES
-                        || (pending_render_bytes >= STREAM_RENDER_MIN_BYTES
-                            && last_render_at.elapsed() >= STREAM_RENDER_MIN_INTERVAL);
+                        || last_render_at.elapsed() >= STREAM_RENDER_MIN_INTERVAL;
                     if should_render_now {
-                        rendered_line_count = renderer
-                            .stream_markdown_response(&aggregated, rendered_line_count)
-                            .map_err(|err| map_render_error(provider_name, err))?;
+                        rendered_line_count = stream_markdown_with_provider_error(
+                            provider_name,
+                            renderer,
+                            &aggregated,
+                            rendered_line_count,
+                        )?;
                         emitted_tokens = true;
                         pending_render_bytes = 0;
                         last_render_at = Instant::now();
@@ -313,21 +454,47 @@ pub(crate) async fn stream_and_render_response_with_options_impl(
                 }
                 finish_spinner(&mut spinner_active, false);
                 reasoning_accumulated.push_str(&delta);
-                if let Some(callback) = on_progress.as_deref_mut() {
-                    callback(StreamProgressEvent::ReasoningDelta(delta.clone()));
-                }
-                let rendered = reasoning_state
-                    .handle_delta(renderer, &delta)
-                    .map_err(|err| map_render_error(provider_name, err))?;
-                if rendered {
-                    reasoning_emitted = true;
+                if stream_reasoning_deltas {
+                    pending_reasoning_delta.push_str(&delta);
+                    pending_reasoning_render_bytes =
+                        pending_reasoning_render_bytes.saturating_add(delta.len());
+                    let should_render_now = !reasoning_emitted
+                        || delta.contains('\n')
+                        || pending_reasoning_render_bytes >= REASONING_RENDER_MAX_BYTES
+                        || last_reasoning_render_at.elapsed() >= STREAM_RENDER_MIN_INTERVAL;
+                    if should_render_now {
+                        flush_pending_reasoning(
+                            provider_name,
+                            renderer,
+                            &mut reasoning_state,
+                            &mut on_progress,
+                            &mut pending_reasoning_delta,
+                            &mut pending_reasoning_render_bytes,
+                            &mut last_reasoning_render_at,
+                            &mut reasoning_emitted,
+                        )?;
+                    }
                 }
             }
             Ok(LLMStreamEvent::ReasoningStage { stage }) => {
-                if let Some(callback) = on_progress.as_deref_mut() {
-                    callback(StreamProgressEvent::ReasoningStage(stage.clone()));
+                if stream_reasoning_deltas && !pending_reasoning_delta.is_empty() {
+                    flush_pending_reasoning(
+                        provider_name,
+                        renderer,
+                        &mut reasoning_state,
+                        &mut on_progress,
+                        &mut pending_reasoning_delta,
+                        &mut pending_reasoning_render_bytes,
+                        &mut last_reasoning_render_at,
+                        &mut reasoning_emitted,
+                    )?;
                 }
-                spinner.set_reasoning_stage(Some(stage));
+                if stream_reasoning_deltas {
+                    if let Some(callback) = on_progress.as_deref_mut() {
+                        callback(StreamProgressEvent::ReasoningStage(stage.clone()));
+                    }
+                    spinner.set_reasoning_stage(Some(stage));
+                }
             }
             Ok(LLMStreamEvent::Completed { response }) => {
                 final_response = Some(*response);
@@ -343,6 +510,19 @@ pub(crate) async fn stream_and_render_response_with_options_impl(
     }
 
     finish_spinner(&mut spinner_active, false);
+
+    if stream_reasoning_deltas && !pending_reasoning_delta.is_empty() {
+        let rendered = flush_pending_reasoning_delta(
+            provider_name,
+            renderer,
+            &mut reasoning_state,
+            &mut on_progress,
+            &mut pending_reasoning_delta,
+        )?;
+        if rendered {
+            reasoning_emitted = true;
+        }
+    }
 
     if let Some(parser) = plan_parser.as_mut() {
         let trailing_plan_parse = parser.finish();
@@ -364,9 +544,12 @@ pub(crate) async fn stream_and_render_response_with_options_impl(
             } else {
                 aggregated.push_str(&trailing_plan_parse.stripped_text);
                 if supports_streaming_markdown {
-                    rendered_line_count = renderer
-                        .stream_markdown_response(&aggregated, rendered_line_count)
-                        .map_err(|err| map_render_error(provider_name, err))?;
+                    rendered_line_count = stream_markdown_with_provider_error(
+                        provider_name,
+                        renderer,
+                        &aggregated,
+                        rendered_line_count,
+                    )?;
                     emitted_tokens = true;
                 }
             }
@@ -374,9 +557,12 @@ pub(crate) async fn stream_and_render_response_with_options_impl(
     }
 
     if supports_streaming_markdown && pending_render_bytes > 0 {
-        rendered_line_count = renderer
-            .stream_markdown_response(&aggregated, rendered_line_count)
-            .map_err(|err| map_render_error(provider_name, err))?;
+        rendered_line_count = stream_markdown_with_provider_error(
+            provider_name,
+            renderer,
+            &aggregated,
+            rendered_line_count,
+        )?;
         emitted_tokens = true;
     }
 
@@ -434,9 +620,12 @@ pub(crate) async fn stream_and_render_response_with_options_impl(
                 } else {
                     rendered_line_count
                 };
-                renderer
-                    .stream_markdown_response(&aggregated, prev_count)
-                    .map_err(|err| map_render_error(provider_name, err))?;
+                let _ = stream_markdown_with_provider_error(
+                    provider_name,
+                    renderer,
+                    &aggregated,
+                    prev_count,
+                )?;
                 emitted_tokens = true;
             }
             if reasoning_prefix && (reasoning_state.rendered_reasoning() || reasoning_emitted) {
@@ -454,6 +643,7 @@ pub(crate) async fn stream_and_render_response_with_options_impl(
     } else {
         response.content.clone()
     };
+    let content_for_render = content_for_render.map(sanitize_harmony_final_text);
     let has_renderable_content = content_for_render
         .as_deref()
         .map(|content| !content.trim().is_empty())
@@ -493,9 +683,12 @@ pub(crate) async fn stream_and_render_response_with_options_impl(
                     } else {
                         rendered_line_count
                     };
-                    renderer
-                        .stream_markdown_response(content, prev_count)
-                        .map_err(|err| map_render_error(provider_name, err))?;
+                    let _ = stream_markdown_with_provider_error(
+                        provider_name,
+                        renderer,
+                        content,
+                        prev_count,
+                    )?;
                 } else {
                     renderer
                         .line(MessageStyle::Response, content)
@@ -533,9 +726,12 @@ pub(crate) async fn stream_and_render_response_with_options_impl(
         let reasoning_trimmed = clean_reasoning_text(reasoning.trim());
         if !reasoning_trimmed.is_empty() {
             if supports_streaming_markdown {
-                renderer
-                    .stream_markdown_response(&reasoning_trimmed, 0)
-                    .map_err(|err| map_render_error(provider_name, err))?;
+                let _ = stream_markdown_with_provider_error(
+                    provider_name,
+                    renderer,
+                    &reasoning_trimmed,
+                    0,
+                )?;
             } else {
                 renderer
                     .line(MessageStyle::Response, &reasoning_trimmed)

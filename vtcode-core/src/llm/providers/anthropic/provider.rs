@@ -336,6 +336,10 @@ impl LLMProvider for AnthropicProvider {
         "anthropic"
     }
 
+    fn supports_streaming(&self) -> bool {
+        true
+    }
+
     fn supports_reasoning(&self, model: &str) -> bool {
         // Codex-inspired robustness: Setting model_supports_reasoning to false
         // does NOT disable it for known reasoning models.

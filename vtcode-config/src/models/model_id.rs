@@ -72,6 +72,8 @@ pub enum ModelId {
     HuggingFaceQwen3CoderNextNovita,
     /// Qwen3.5-397B-A17B via Together inference provider on Hugging Face router
     HuggingFaceQwen35397BA17BTogether,
+    /// Step 3.5 Flash via Hugging Face router
+    HuggingFaceStep35Flash,
 
     /// GLM-5 - Flagship Z.ai foundation model for complex systems
     ZaiGlm5,

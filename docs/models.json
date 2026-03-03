@@ -525,6 +525,26 @@
           "structured_output": true,
           "reasoning_effort": true
         }
+      },
+      "stepfun-ai/Step-3.5-Flash:fastest": {
+        "id": "stepfun-ai/Step-3.5-Flash:fastest",
+        "name": "Step 3.5 Flash",
+        "description": "Step 3.5 Flash flagship model via HuggingFace router. Supports streaming and fast inference.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 256000,
+        "capabilities": {
+          "structured_output": true,
+          "streaming": true
+        }
       }
     }
   },
