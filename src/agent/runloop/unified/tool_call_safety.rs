@@ -182,9 +182,20 @@ impl ToolCallSafetyValidator {
     /// Check if tool is destructive
     #[allow(dead_code)]
     pub fn is_destructive(&self, tool_name: &str) -> bool {
-        self.destructive_tools.contains(tool_name)
+        let normalized = tool_name.trim().to_ascii_lowercase();
+
+        // Alias-only read operations can be misclassified without action args.
+        // Keep these explicitly non-destructive for simple name checks.
+        if matches!(
+            normalized.as_str(),
+            "read_file" | "grep_file" | "list_files"
+        ) {
+            return false;
+        }
+
+        self.destructive_tools.contains(normalized.as_str())
             || vtcode_core::tools::tool_intent::classify_tool_intent(
-                tool_name,
+                normalized.as_str(),
                 &Value::Object(Map::new()),
             )
             .destructive
