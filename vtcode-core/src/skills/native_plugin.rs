@@ -110,7 +110,7 @@ pub struct PluginResultFFI {
 }
 
 /// Native plugin trait for type-erased plugin operations
-pub trait NativePluginTrait: Send + Sync {
+pub trait NativePluginTrait: Send + Sync + std::fmt::Debug {
     /// Get plugin metadata
     fn metadata(&self) -> &PluginMetadata;
 
