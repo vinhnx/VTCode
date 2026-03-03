@@ -45,16 +45,8 @@ pub enum ModelId {
     ClaudeOpus46,
     /// Claude Sonnet 4.6 - Balanced flagship Anthropic model with extended thinking
     ClaudeSonnet46,
-    /// Claude Opus 4.5 - Latest flagship Anthropic model with exceptional reasoning (2025-11-01)
-    ClaudeOpus45,
-    /// Claude Opus 4.1 - Previous most capable Anthropic model (2025-08-05)
-    ClaudeOpus41,
-    /// Claude Sonnet 4.5 - Latest balanced Anthropic model (2025-10-15)
-    ClaudeSonnet45,
     /// Claude Haiku 4.5 - Latest efficient Anthropic model (2025-10-15)
     ClaudeHaiku45,
-    /// Claude Sonnet 4 - Previous balanced Anthropic model (2025-05-14)
-    ClaudeSonnet4,
 
     // DeepSeek models
     /// DeepSeek V3.2 Chat - Fast non-thinking mode
@@ -85,10 +77,8 @@ pub enum ModelId {
     ZaiGlm5,
 
     // Moonshot models
-    /// MiniMax-M2.5 - MiniMax model served via Moonshot API
-    MoonshotMinimaxM25,
-    /// Qwen3-Coder-Next - Qwen3 Coder Next model served via Moonshot API
-    MoonshotQwen3CoderNext,
+    /// Kimi K2.5 - Moonshot.ai's flagship reasoning model
+    MoonshotKimiK25,
 
     // Ollama models
     /// GPT-OSS 20B - Open-weight GPT-OSS 20B model served via Ollama locally
@@ -105,12 +95,6 @@ pub enum ModelId {
     OllamaDeepseekV32Cloud,
     /// Qwen3 Next 80B Cloud - Next-generation Qwen3 80B via Ollama Cloud
     OllamaQwen3Next80bCloud,
-    /// Mistral Large 3 675B Cloud - Mistral Large 3 reasoning model via Ollama Cloud
-    OllamaMistralLarge3675bCloud,
-    /// Qwen3 Coder 480B Cloud - Cloud-hosted Qwen3 Coder model served via Ollama Cloud
-    OllamaQwen3Coder480bCloud,
-    /// Devstral 2 123B Cloud - Mistral Devstral 2 123B model via Ollama Cloud
-    OllamaDevstral2123bCloud,
     /// MiniMax-M2 Cloud - Cloud-hosted MiniMax-M2 model served via Ollama Cloud
     OllamaMinimaxM2Cloud,
     /// GLM-5 Cloud - Cloud-hosted GLM-5 model served via Ollama Cloud
@@ -119,24 +103,12 @@ pub enum ModelId {
     OllamaMinimaxM25Cloud,
     /// Gemini 3 Flash Preview Cloud - Google Gemini 3 Flash Preview via Ollama Cloud
     OllamaGemini3FlashPreviewCloud,
-    /// Nemotron-3-Nano 30B Cloud - NVIDIA Nemotron-3-Nano 30B via Ollama Cloud
-    OllamaNemotron3Nano30bCloud,
 
     // MiniMax models
     /// MiniMax-M2.5 - Latest MiniMax model with further improvements in reasoning and coding
     MinimaxM25,
-    /// MiniMax-M2 - MiniMax reasoning-focused model
-    MinimaxM2,
 
     // OpenRouter models
-    /// Qwen3 Max - Flagship Qwen3 mixture for general reasoning
-    OpenRouterQwen3Max,
-    /// Qwen3 235B A22B - Mixture-of-experts Qwen3 235B general model
-    OpenRouterQwen3235bA22b,
-    /// Qwen3 235B A22B Instruct 2507 - Instruction-tuned Qwen3 235B A22B
-    OpenRouterQwen3235bA22b2507,
-    /// Qwen3 235B A22B Thinking 2507 - Deliberative Qwen3 235B A22B reasoning release
-    OpenRouterQwen3235bA22bThinking2507,
     /// Qwen3 32B - Dense 32B Qwen3 deployment
     OpenRouterQwen332b,
     /// Qwen3 30B A3B - Active-parameter 30B Qwen3 model
@@ -199,16 +171,10 @@ pub enum ModelId {
     OpenRouterAnthropicClaudeSonnet46,
     /// Claude Haiku 4.5 - Anthropic Claude Haiku 4.5 listing
     OpenRouterAnthropicClaudeHaiku45,
-    /// Claude Opus 4.1 - Anthropic Claude Opus 4.1 listing
-    OpenRouterAnthropicClaudeOpus41,
-    /// Amazon Nova 2 Lite - Amazon Nova 2 Lite model via OpenRouter
-    OpenRouterAmazonNova2LiteV1,
     /// Mistral Large 3 2512 - Mistral Large 3 2512 model via OpenRouter
     OpenRouterMistralaiMistralLarge2512,
     /// DeepSeek V3.1 Nex N1 - Nex AGI DeepSeek V3.1 Nex N1 model via OpenRouter
     OpenRouterNexAgiDeepseekV31NexN1,
-    /// OpenAI o1-pro - OpenAI o1-pro advanced reasoning model via OpenRouter
-    OpenRouterOpenAIO1Pro,
     /// Step 3.5 Flash (free) - StepFun's most capable open-source reasoning model via OpenRouter
     OpenRouterStepfunStep35FlashFree,
     /// GLM-5 - Z.AI GLM-5 flagship foundation model via OpenRouter

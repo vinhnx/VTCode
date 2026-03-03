@@ -70,12 +70,11 @@ pub const BETA_CONTEXT_1M: &str = "context-1m-2025-08-07";
 
 /// Models that support context awareness (budget tracking in prompts)
 /// Context awareness: model tracks remaining token budget throughout conversation
-/// Currently: Claude Sonnet 4.5, Claude Haiku 4.5
+/// Currently: Claude Sonnet 4.6, Claude Haiku 4.5
 pub const CONTEXT_AWARE_MODELS: &[&str] = &[
-    "claude-sonnet-4-5",
-    "claude-sonnet-4-5-20250514",
+    "claude-sonnet-4-6",
     "claude-haiku-4-5",
-    "claude-haiku-4-5-20250514",
+    "claude-haiku-4-5-20251001",
 ];
 
 /// Check if a model supports context awareness
@@ -86,10 +85,8 @@ pub fn supports_context_awareness(model: &str) -> bool {
 /// Models eligible for 1M context window (beta)
 /// Requires usage tier 4 or custom rate limits
 pub const EXTENDED_CONTEXT_ELIGIBLE_MODELS: &[&str] = &[
-    "claude-sonnet-4",
-    "claude-sonnet-4-5",
-    "claude-sonnet-4-20250514",
-    "claude-sonnet-4-5-20250514",
+    "claude-sonnet-4-6",
+    "claude-opus-4-6",
 ];
 
 /// Check if a model is eligible for 1M context window

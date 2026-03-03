@@ -27,19 +27,14 @@ impl ModelId {
             // Anthropic models
             ModelId::ClaudeOpus46,
             ModelId::ClaudeSonnet46,
-            ModelId::ClaudeOpus45,
-            ModelId::ClaudeOpus41,
-            ModelId::ClaudeSonnet45,
             ModelId::ClaudeHaiku45,
-            ModelId::ClaudeSonnet4,
             // DeepSeek models
             ModelId::DeepSeekChat,
             ModelId::DeepSeekReasoner,
             // Z.AI models
             ModelId::ZaiGlm5,
             // Moonshot models
-            ModelId::MoonshotMinimaxM25,
-            ModelId::MoonshotQwen3CoderNext,
+            ModelId::MoonshotKimiK25,
             // Ollama models
             ModelId::OllamaGptOss20b,
             ModelId::OllamaGptOss20bCloud,
@@ -48,17 +43,12 @@ impl ModelId {
             ModelId::OllamaQwen3CoderNext,
             ModelId::OllamaDeepseekV32Cloud,
             ModelId::OllamaQwen3Next80bCloud,
-            ModelId::OllamaMistralLarge3675bCloud,
-            ModelId::OllamaQwen3Coder480bCloud,
             ModelId::OllamaGlm5Cloud,
             ModelId::OllamaGemini3FlashPreviewCloud,
-            ModelId::OllamaDevstral2123bCloud,
             ModelId::OllamaMinimaxM2Cloud,
             ModelId::OllamaMinimaxM25Cloud,
-            ModelId::OllamaNemotron3Nano30bCloud,
             // MiniMax models
             ModelId::MinimaxM25,
-            ModelId::MinimaxM2,
             // Hugging Face models
             ModelId::HuggingFaceDeepseekV32,
             ModelId::HuggingFaceOpenAIGptOss20b,

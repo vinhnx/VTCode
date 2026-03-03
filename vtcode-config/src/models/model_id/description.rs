@@ -40,18 +40,8 @@ impl ModelId {
             ModelId::ClaudeSonnet46 => {
                 "Balanced flagship model for coding with extended and adaptive thinking support"
             }
-            ModelId::ClaudeOpus45 => {
-                "Latest flagship Anthropic model with exceptional reasoning capabilities"
-            }
-            ModelId::ClaudeOpus41 => {
-                "Latest flagship Anthropic model with exceptional reasoning capabilities"
-            }
-            ModelId::ClaudeSonnet45 => "Latest balanced Anthropic model for general tasks",
             ModelId::ClaudeHaiku45 => {
                 "Latest efficient Anthropic model optimized for low-latency agent workflows"
-            }
-            ModelId::ClaudeSonnet4 => {
-                "Previous balanced Anthropic model maintained for compatibility"
             }
             // DeepSeek models
             ModelId::DeepSeekChat => {
@@ -86,9 +76,6 @@ impl ModelId {
             ModelId::OllamaQwen3Next80bCloud => {
                 "Qwen3 Next generation 80B model via Ollama Cloud with improved reasoning and long context"
             }
-            ModelId::OllamaMistralLarge3675bCloud => {
-                "Mistral Large 3 675B reasoning model via Ollama Cloud for complex problem-solving"
-            }
             ModelId::OllamaGlm5Cloud => "Cloud-hosted GLM-5 model served via Ollama Cloud",
             ModelId::OllamaMinimaxM25Cloud => {
                 "Exceptional multilingual capabilities to elevate code engineering"
@@ -96,26 +83,13 @@ impl ModelId {
             ModelId::OllamaGemini3FlashPreviewCloud => {
                 "Gemini 3 Flash offers frontier intelligence built for speed at a fraction of the cost."
             }
-            ModelId::OllamaDevstral2123bCloud => {
-                "Mistral Devstral 2 123B cloud deployment via Ollama for advanced coding workflows"
-            }
-            ModelId::OllamaNemotron3Nano30bCloud => {
-                "NVIDIA Nemotron-3-Nano 30B brings efficient excellence to code"
-            }
-            ModelId::OllamaQwen3Coder480bCloud => {
-                "Cloud-hosted Qwen3 Coder 480B model accessed through Ollama Cloud for coding tasks"
-            }
             ModelId::OllamaMinimaxM2Cloud => {
                 "Cloud-hosted MiniMax-M2 model accessed through Ollama Cloud for reasoning tasks"
             }
             ModelId::MinimaxM25 => {
                 "Latest MiniMax-M2.5 model with further improvements in reasoning and coding"
             }
-            ModelId::MinimaxM2 => {
-                "MiniMax-M2 via Anthropic-compatible API with reasoning and tool use"
-            }
-            ModelId::MoonshotMinimaxM25 => "MiniMax-M2.5 served via Moonshot API",
-            ModelId::MoonshotQwen3CoderNext => "Qwen3 Coder Next model served via Moonshot API",
+            ModelId::MoonshotKimiK25 => "Kimi K2.5 - Moonshot.ai's flagship reasoning model",
             ModelId::HuggingFaceDeepseekV32 => {
                 "DeepSeek-V3.2 via Hugging Face router for advanced reasoning"
             }

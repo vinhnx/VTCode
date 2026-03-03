@@ -22,11 +22,7 @@ impl ModelId {
             // Anthropic models
             ModelId::ClaudeOpus46 => "Claude Opus 4.6",
             ModelId::ClaudeSonnet46 => "Claude Sonnet 4.6",
-            ModelId::ClaudeOpus45 => "Claude Opus 4.5",
-            ModelId::ClaudeOpus41 => "Claude Opus 4.1",
-            ModelId::ClaudeSonnet45 => "Claude Sonnet 4.5",
             ModelId::ClaudeHaiku45 => "Claude Haiku 4.5",
-            ModelId::ClaudeSonnet4 => "Claude Sonnet 4",
             // DeepSeek models
             ModelId::DeepSeekChat => "DeepSeek V3.2 Chat",
             ModelId::DeepSeekReasoner => "DeepSeek V3.2 Reasoner",
@@ -40,14 +36,10 @@ impl ModelId {
             ModelId::OllamaQwen3CoderNext => "Qwen3-Coder-Next (cloud)",
             ModelId::OllamaDeepseekV32Cloud => "DeepSeek V3.2 (cloud)",
             ModelId::OllamaQwen3Next80bCloud => "Qwen3 Next 80B (cloud)",
-            ModelId::OllamaMistralLarge3675bCloud => "Mistral Large 3 675B (cloud)",
-            ModelId::OllamaQwen3Coder480bCloud => "Qwen3 Coder 480B (cloud)",
             ModelId::OllamaGemini3FlashPreviewCloud => "Gemini 3 Flash Preview (cloud)",
-            ModelId::OllamaDevstral2123bCloud => "Devstral 2 123B (cloud)",
             ModelId::OllamaMinimaxM2Cloud => "MiniMax-M2 (cloud)",
             ModelId::OllamaGlm5Cloud => "GLM-5 (cloud)",
             ModelId::OllamaMinimaxM25Cloud => "MiniMax-M2.5 (cloud)",
-            ModelId::OllamaNemotron3Nano30bCloud => "Nemotron-3-Nano 30B (cloud)",
             // Hugging Face models
             ModelId::HuggingFaceDeepseekV32 => "DeepSeek V3.2 (HF)",
             ModelId::HuggingFaceOpenAIGptOss20b => "GPT-OSS 20B (HF)",
@@ -62,9 +54,8 @@ impl ModelId {
             ModelId::OpenRouterQwen3CoderNext => "Qwen3-Coder-Next (OpenRouter)",
             // MiniMax models
             ModelId::MinimaxM25 => "MiniMax-M2.5",
-            ModelId::MinimaxM2 => "MiniMax-M2",
-            ModelId::MoonshotMinimaxM25 => "MiniMax-M2.5 (Moonshot)",
-            ModelId::MoonshotQwen3CoderNext => "Qwen3-Coder-Next (Moonshot)",
+            // Moonshot models
+            ModelId::MoonshotKimiK25 => "Kimi K2.5 (Moonshot)",
             // OpenRouter models
             _ => unreachable!(),
         }

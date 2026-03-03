@@ -323,20 +323,19 @@ fn test_reexported_model_id_provider_types() {
 #[test]
 fn test_moonshot_and_openrouter_minimax_variants() {
     assert_eq!(
-        models::moonshot::MINIMAX_M2_5.parse::<ModelId>().unwrap(),
-        ModelId::MoonshotMinimaxM25
+        models::moonshot::KIMI_K2_5.parse::<ModelId>().unwrap(),
+        ModelId::MoonshotKimiK25
     );
     assert_eq!(
-        models::moonshot::QWEN3_CODER_NEXT
-            .parse::<ModelId>()
-            .unwrap(),
-        ModelId::MoonshotQwen3CoderNext
+        models::moonshot::KIMI_K2_THINKING.parse::<ModelId>().unwrap(),
+        ModelId::MoonshotKimiK2Thinking
     );
     assert_eq!(
         "minimax/minimax-m2.5".parse::<ModelId>().unwrap(),
         ModelId::OpenRouterMinimaxM25
     );
-    assert_eq!(ModelId::MoonshotMinimaxM25.provider(), Provider::Moonshot);
+    assert_eq!(ModelId::MoonshotKimiK25.provider(), Provider::Moonshot);
+    assert_eq!(ModelId::MoonshotKimiK2Thinking.provider(), Provider::Moonshot);
     assert_eq!(
         ModelId::OpenRouterMinimaxM25.provider(),
         Provider::OpenRouter
