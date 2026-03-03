@@ -343,7 +343,7 @@ pub struct MinimaxProviderConfig;
 impl ProviderConfig for MinimaxProviderConfig {
     const PROVIDER_KEY: &'static str = "minimax";
     const DISPLAY_NAME: &'static str = "Minimax";
-    const DEFAULT_MODEL: &'static str = "abab5.5-chat";
+    const DEFAULT_MODEL: &'static str = crate::config::constants::models::minimax::DEFAULT_MODEL;
     const API_BASE_URL: &'static str = crate::config::constants::urls::MINIMAX_API_BASE;
     const BASE_URL_ENV_VAR: Option<&'static str> =
         Some(crate::config::constants::env_vars::MINIMAX_BASE_URL);
