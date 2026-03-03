@@ -559,6 +559,11 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: macOS & Linux (Shell), Windows (PowerShell)
   - **User Questions**: "What can you tell me about Native Installers?", "How does macOS & Linux (Shell) work?", "How does Windows (PowerShell) work?"
 
+- **File**: `docs/skills/NATIVE_PLUGIN_IMPLEMENTATION.md`
+  - **Content**: Native Plugin System Implementation Summary
+  - **Topics**: Overview, What Was Implemented, How to Use, Testing, Build Verification
+  - **User Questions**: "What can you tell me about Native Plugin System Implementation Summary?", "How does Overview work?", "How does What Was Implemented work?"
+
 - **File**: `docs/skills/NATIVE_PLUGIN_GUIDE.md`
   - **Content**: Native Plugin System for VT Code
   - **Topics**: Overview, What are Native Plugins?, Plugin Architecture, Plugin ABI, Creating a Plugin

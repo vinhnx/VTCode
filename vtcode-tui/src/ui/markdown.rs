@@ -611,20 +611,17 @@ fn render_table(
         return lines;
     }
 
-    // Calculate column widths
-    // Pre-allocate based on known maximum to avoid bounds checks
+    // Calculate column widths.
     let max_cols = table
         .headers
         .len()
         .max(table.rows.iter().map(|r| r.len()).max().unwrap_or(0));
     let mut col_widths: Vec<usize> = vec![0; max_cols];
 
-    // Check headers - use direct indexing since we pre-allocated
     for (i, cell) in table.headers.iter().enumerate() {
         col_widths[i] = max(col_widths[i], cell.width());
     }
 
-    // Check rows - use direct indexing since we pre-allocated
     for row in &table.rows {
         for (i, cell) in row.iter().enumerate() {
             col_widths[i] = max(col_widths[i], cell.width());

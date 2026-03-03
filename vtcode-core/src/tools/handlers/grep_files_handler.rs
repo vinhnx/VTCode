@@ -127,8 +127,6 @@ impl GrepFilesHandler {
                         }
 
                         if regex.is_match(line) {
-                            // Use slice operations instead of index-based ranges
-                            // to eliminate bounds checks
                             let start = idx.saturating_sub(context_before);
                             let context_before_lines: Vec<String> =
                                 lines[start..idx].iter().map(|s| s.to_string()).collect();

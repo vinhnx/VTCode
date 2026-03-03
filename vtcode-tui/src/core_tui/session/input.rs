@@ -78,7 +78,6 @@ fn tokenize_input(content: &str) -> Vec<InputToken> {
     {
         let mut i = 0;
         while i < len {
-            // i and i + 1 are bounds-checked before indexed access below.
             if chars[i] == '/'
                 && (i == 0 || chars[i - 1].is_whitespace())
                 && i + 1 < len
