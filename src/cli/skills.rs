@@ -124,6 +124,9 @@ pub async fn handle_skills_list(options: &SkillsCommandOptions) -> Result<()> {
                         vtcode_core::skills::loader::EnhancedSkill::CliTool(_) => {
                             // CLI tools handled separately below
                         }
+                        vtcode_core::skills::loader::EnhancedSkill::NativePlugin(_) => {
+                            // Native plugins handled separately below
+                        }
                     }
                 }
                 Err(_) => {
@@ -212,6 +215,11 @@ pub async fn handle_skills_load(
         vtcode_core::skills::loader::EnhancedSkill::CliTool(bridge) => {
             println!("Loaded CLI tool skill: {}", bridge.config.name);
             println!("  Description: {}", bridge.config.description);
+        }
+        vtcode_core::skills::loader::EnhancedSkill::NativePlugin(plugin) => {
+            let meta = plugin.metadata();
+            println!("Loaded native plugin: {}", meta.name);
+            println!("  Description: {}", meta.description);
         }
     }
 
@@ -327,6 +335,13 @@ pub async fn handle_skills_info(options: &SkillsCommandOptions, name: &str) -> R
             println!("Description: {}", bridge.config.description);
             println!("\n--- Tool Configuration ---");
             println!("Tool available for execution");
+        }
+        vtcode_core::skills::loader::EnhancedSkill::NativePlugin(plugin) => {
+            let meta = plugin.metadata();
+            println!("Native Plugin: {}", meta.name);
+            println!("Description: {}", meta.description);
+            println!("\n--- Plugin Configuration ---");
+            println!("Native plugin available for execution");
         }
     }
 

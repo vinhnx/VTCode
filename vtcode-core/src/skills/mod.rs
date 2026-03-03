@@ -119,6 +119,7 @@ pub mod locations;
 pub mod manager;
 pub mod manifest;
 pub mod model;
+#[allow(unsafe_code)]
 pub mod native_plugin;
 pub mod prompt_integration;
 pub mod render;
@@ -164,8 +165,8 @@ pub use loader::{
     discover_skill_metadata_lightweight, load_skill_resources, load_skills,
 };
 pub use native_plugin::{
-    NativePlugin, NativePluginTrait, PluginContext, PluginLoader, PluginMetadata, PluginResult,
-    PLUGIN_ABI_VERSION, validate_plugin_structure,
+    NativePlugin, NativePluginTrait, PLUGIN_ABI_VERSION, PluginContext, PluginLoader,
+    PluginMetadata, PluginResult, validate_plugin_structure,
 };
 
 pub use injection::{SkillInjections, build_skill_injections};

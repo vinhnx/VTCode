@@ -380,7 +380,7 @@ fn try_load_plugin_from_dir(path: &Path, scope: SkillScope) -> Result<Option<Ski
 
     // Read and parse plugin metadata
     let plugin_json_content =
-        std::fs::read_to_string(&plugin_json_path).context("Failed to read plugin.json")?;
+        fs::read_to_string(&plugin_json_path).context("Failed to read plugin.json")?;
 
     let plugin_metadata: crate::skills::native_plugin::PluginMetadata =
         serde_json::from_str(&plugin_json_content).context("Invalid plugin.json format")?;
@@ -619,7 +619,7 @@ impl EnhancedSkillLoader {
 
             // Check if this directory contains the requested plugin
             let plugin_json = plugin_dir.join("plugin.json");
-            if let Ok(content) = std::fs::read_to_string(&plugin_json) {
+            if let Ok(content) = fs::read_to_string(&plugin_json) {
                 if let Ok(metadata) =
                     serde_json::from_str::<crate::skills::native_plugin::PluginMetadata>(&content)
                 {
@@ -636,7 +636,7 @@ impl EnhancedSkillLoader {
     }
 
     /// Get all trusted plugin directories
-    fn get_plugin_directories(&self) -> Vec<std::path::PathBuf> {
+    fn get_plugin_directories(&self) -> Vec<PathBuf> {
         self.plugin_loader.trusted_dirs().to_vec()
     }
 

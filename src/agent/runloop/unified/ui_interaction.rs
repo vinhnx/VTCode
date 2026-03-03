@@ -550,6 +550,13 @@ pub(crate) struct StreamSpinnerOptions {
     pub strip_proposed_plan_blocks: bool,
 }
 
+#[derive(Debug, Clone)]
+pub(crate) enum StreamProgressEvent {
+    OutputDelta(String),
+    ReasoningDelta(String),
+    ReasoningStage(String),
+}
+
 #[allow(dead_code)]
 pub(crate) async fn stream_and_render_response(
     provider: &dyn uni::LLMProvider,
@@ -580,6 +587,29 @@ pub(crate) async fn stream_and_render_response_with_options(
     ctrl_c_notify: &Arc<Notify>,
     options: StreamSpinnerOptions,
 ) -> Result<(uni::LLMResponse, bool), uni::LLMError> {
+    stream_and_render_response_with_options_and_progress(
+        provider,
+        request,
+        spinner,
+        renderer,
+        ctrl_c_state,
+        ctrl_c_notify,
+        options,
+        None,
+    )
+    .await
+}
+
+pub(crate) async fn stream_and_render_response_with_options_and_progress(
+    provider: &dyn uni::LLMProvider,
+    request: uni::LLMRequest,
+    spinner: &PlaceholderSpinner,
+    renderer: &mut AnsiRenderer,
+    ctrl_c_state: &Arc<CtrlCState>,
+    ctrl_c_notify: &Arc<Notify>,
+    options: StreamSpinnerOptions,
+    on_progress: Option<&mut (dyn FnMut(StreamProgressEvent) + Send)>,
+) -> Result<(uni::LLMResponse, bool), uni::LLMError> {
     super::ui_interaction_stream::stream_and_render_response_with_options_impl(
         provider,
         request,
@@ -588,6 +618,7 @@ pub(crate) async fn stream_and_render_response_with_options(
         ctrl_c_state,
         ctrl_c_notify,
         options,
+        on_progress,
     )
     .await
 }

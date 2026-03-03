@@ -224,6 +224,14 @@ Shortcuts:
                             ),
                         })
                     }
+                    vtcode_core::skills::loader::EnhancedSkill::NativePlugin(_) => {
+                        Ok(SkillCommandOutcome::Error {
+                            message: format!(
+                                "Skill '{}' is a native plugin, not a traditional skill",
+                                name
+                            ),
+                        })
+                    }
                 },
                 Err(e) => Ok(SkillCommandOutcome::Error {
                     message: format!("Failed to load skill '{}': {}", name, e),
@@ -267,6 +275,15 @@ Shortcuts:
                         output.push_str("Tool available for execution");
                         Ok(SkillCommandOutcome::Handled { message: output })
                     }
+                    vtcode_core::skills::loader::EnhancedSkill::NativePlugin(plugin) => {
+                        let meta = plugin.metadata();
+                        let mut output = String::new();
+                        output.push_str(&format!("Native Plugin: {}\n", meta.name));
+                        output.push_str(&format!("Description: {}\n", meta.description));
+                        output.push_str("\n--- Plugin Configuration ---\n");
+                        output.push_str("Native plugin available for execution");
+                        Ok(SkillCommandOutcome::Handled { message: output })
+                    }
                 },
                 Err(e) => Ok(SkillCommandOutcome::Error {
                     message: format!("Failed to load skill '{}': {}", name, e),
@@ -285,6 +302,11 @@ Shortcuts:
                 vtcode_core::skills::loader::EnhancedSkill::CliTool(_) => {
                     Ok(SkillCommandOutcome::Error {
                         message: format!("Skill '{}' is a CLI tool, not a traditional skill", name),
+                    })
+                }
+                vtcode_core::skills::loader::EnhancedSkill::NativePlugin(_) => {
+                    Ok(SkillCommandOutcome::Error {
+                        message: format!("Skill '{}' is a native plugin, not a traditional skill", name),
                     })
                 }
             },

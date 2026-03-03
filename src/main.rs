@@ -553,10 +553,25 @@ async fn run() -> Result<()> {
         Some(Commands::AnthropicApi { port, host }) => {
             cli::handle_anthropic_api_command(core_cfg.clone(), *port, host.clone()).await?;
         }
-        Some(Commands::Update { check, force }) => {
+        Some(Commands::Update {
+            check,
+            force,
+            list,
+            limit,
+            pin,
+            unpin,
+            channel,
+            show_config,
+        }) => {
             let options = cli::update::UpdateCommandOptions {
                 check_only: *check,
                 force: *force,
+                list: *list,
+                limit: *limit,
+                pin: pin.clone(),
+                unpin: *unpin,
+                channel: channel.clone(),
+                show_config: *show_config,
             };
             cli::update::handle_update_command(options).await?;
         }

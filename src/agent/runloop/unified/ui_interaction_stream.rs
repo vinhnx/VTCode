@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use anyhow::Result;
 use futures::StreamExt;
@@ -13,7 +14,7 @@ use vtcode_core::llm::providers::clean_reasoning_text;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use super::state::CtrlCState;
-use super::ui_interaction::{PlaceholderSpinner, StreamSpinnerOptions};
+use super::ui_interaction::{PlaceholderSpinner, StreamProgressEvent, StreamSpinnerOptions};
 use super::ui_interaction_stream_helpers::{
     common_prefix_len, map_render_error, reasoning_matches_content,
 };
@@ -28,12 +29,12 @@ struct StreamingReasoningState {
 }
 
 impl StreamingReasoningState {
-    fn new(_inline_enabled: bool) -> Self {
+    fn new(inline_enabled: bool) -> Self {
         Self {
             buffered: String::new(),
-            render_inline: false,
+            render_inline: inline_enabled,
             render_output: true,
-            defer_rendering: true,
+            defer_rendering: !inline_enabled,
             started: false,
             rendered_any: false,
         }
@@ -45,6 +46,7 @@ impl StreamingReasoningState {
             return Ok(false);
         }
 
+        self.started = true;
         renderer.inline_with_style(MessageStyle::Reasoning, delta)?;
         self.rendered_any = true;
         Ok(true)
@@ -135,6 +137,7 @@ pub(crate) async fn stream_and_render_response_with_options_impl(
     ctrl_c_state: &Arc<CtrlCState>,
     ctrl_c_notify: &Arc<Notify>,
     options: StreamSpinnerOptions,
+    mut on_progress: Option<&mut (dyn FnMut(StreamProgressEvent) + Send)>,
 ) -> Result<(uni::LLMResponse, bool), uni::LLMError> {
     let provider_name = provider.name();
 
@@ -189,6 +192,11 @@ pub(crate) async fn stream_and_render_response_with_options_impl(
     let mut pending_content = String::new();
     let mut content_suppressed = false;
     const MAX_PENDING_CONTENT_BYTES: usize = 4_096;
+    const STREAM_RENDER_MIN_INTERVAL: Duration = Duration::from_millis(16);
+    const STREAM_RENDER_MIN_BYTES: usize = 32;
+    const STREAM_RENDER_MAX_BYTES: usize = 384;
+    let mut pending_render_bytes = 0usize;
+    let mut last_render_at = Instant::now();
 
     let mut suppress_reasoning_due_to_duplication = false;
     let mut plan_parser = options
@@ -258,27 +266,37 @@ pub(crate) async fn stream_and_render_response_with_options_impl(
                 if visible_delta.is_empty() {
                     continue;
                 }
-                if !reasoning_accumulated.trim().is_empty() && !emitted_tokens {
+                if let Some(callback) = on_progress.as_deref_mut() {
+                    callback(StreamProgressEvent::OutputDelta(visible_delta.clone()));
+                }
+                if !supports_streaming_markdown
+                    && !reasoning_accumulated.trim().is_empty()
+                    && !emitted_tokens
+                {
                     pending_content.push_str(&visible_delta);
                     if pending_content.len() >= MAX_PENDING_CONTENT_BYTES {
                         aggregated.push_str(&pending_content);
                         pending_content.clear();
-                        if supports_streaming_markdown {
-                            rendered_line_count = renderer
-                                .stream_markdown_response(&aggregated, rendered_line_count)
-                                .map_err(|err| map_render_error(provider_name, err))?;
-                            emitted_tokens = true;
-                        }
                     }
                     continue;
                 }
 
                 aggregated.push_str(&visible_delta);
                 if supports_streaming_markdown {
-                    rendered_line_count = renderer
-                        .stream_markdown_response(&aggregated, rendered_line_count)
-                        .map_err(|err| map_render_error(provider_name, err))?;
-                    emitted_tokens = true;
+                    pending_render_bytes = pending_render_bytes.saturating_add(visible_delta.len());
+                    let should_render_now = !emitted_tokens
+                        || visible_delta.contains('\n')
+                        || pending_render_bytes >= STREAM_RENDER_MAX_BYTES
+                        || (pending_render_bytes >= STREAM_RENDER_MIN_BYTES
+                            && last_render_at.elapsed() >= STREAM_RENDER_MIN_INTERVAL);
+                    if should_render_now {
+                        rendered_line_count = renderer
+                            .stream_markdown_response(&aggregated, rendered_line_count)
+                            .map_err(|err| map_render_error(provider_name, err))?;
+                        emitted_tokens = true;
+                        pending_render_bytes = 0;
+                        last_render_at = Instant::now();
+                    }
                 }
             }
             Ok(LLMStreamEvent::Reasoning { delta }) => {
@@ -295,6 +313,9 @@ pub(crate) async fn stream_and_render_response_with_options_impl(
                 }
                 finish_spinner(&mut spinner_active, false);
                 reasoning_accumulated.push_str(&delta);
+                if let Some(callback) = on_progress.as_deref_mut() {
+                    callback(StreamProgressEvent::ReasoningDelta(delta.clone()));
+                }
                 let rendered = reasoning_state
                     .handle_delta(renderer, &delta)
                     .map_err(|err| map_render_error(provider_name, err))?;
@@ -303,6 +324,9 @@ pub(crate) async fn stream_and_render_response_with_options_impl(
                 }
             }
             Ok(LLMStreamEvent::ReasoningStage { stage }) => {
+                if let Some(callback) = on_progress.as_deref_mut() {
+                    callback(StreamProgressEvent::ReasoningStage(stage.clone()));
+                }
                 spinner.set_reasoning_stage(Some(stage));
             }
             Ok(LLMStreamEvent::Completed { response }) => {
@@ -323,17 +347,19 @@ pub(crate) async fn stream_and_render_response_with_options_impl(
     if let Some(parser) = plan_parser.as_mut() {
         let trailing_plan_parse = parser.finish();
         if !trailing_plan_parse.stripped_text.is_empty() {
-            if !reasoning_accumulated.trim().is_empty() && !emitted_tokens {
+            if let Some(callback) = on_progress.as_deref_mut() {
+                callback(StreamProgressEvent::OutputDelta(
+                    trailing_plan_parse.stripped_text.clone(),
+                ));
+            }
+            if !supports_streaming_markdown
+                && !reasoning_accumulated.trim().is_empty()
+                && !emitted_tokens
+            {
                 pending_content.push_str(&trailing_plan_parse.stripped_text);
                 if pending_content.len() >= MAX_PENDING_CONTENT_BYTES {
                     aggregated.push_str(&pending_content);
                     pending_content.clear();
-                    if supports_streaming_markdown {
-                        rendered_line_count = renderer
-                            .stream_markdown_response(&aggregated, rendered_line_count)
-                            .map_err(|err| map_render_error(provider_name, err))?;
-                        emitted_tokens = true;
-                    }
                 }
             } else {
                 aggregated.push_str(&trailing_plan_parse.stripped_text);
@@ -345,6 +371,13 @@ pub(crate) async fn stream_and_render_response_with_options_impl(
                 }
             }
         }
+    }
+
+    if supports_streaming_markdown && pending_render_bytes > 0 {
+        rendered_line_count = renderer
+            .stream_markdown_response(&aggregated, rendered_line_count)
+            .map_err(|err| map_render_error(provider_name, err))?;
+        emitted_tokens = true;
     }
 
     let response = match final_response {

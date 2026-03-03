@@ -1,16 +1,16 @@
 use anyhow::Result;
 use serde_json::json;
 use std::fmt::Write as _;
-use std::sync::Arc;
-use std::sync::Mutex;
 use std::time::{Duration, Instant};
 use tokio::task;
 #[cfg(debug_assertions)]
 use tracing::debug;
 use vtcode_config::constants::context::TOKEN_BUDGET_HIGH_THRESHOLD;
-use vtcode_config::constants::defaults::{DEFAULT_MAX_CONVERSATION_TURNS, DEFAULT_MAX_TOOL_LOOPS};
-use vtcode_config::context::default_max_context_tokens;
 use vtcode_core::config::OpenAIPromptCacheKeyMode;
+use vtcode_core::exec::events::{
+    AgentMessageItem, ItemCompletedEvent, ItemStartedEvent, ItemUpdatedEvent, ReasoningItem,
+    ThreadEvent, ThreadItem, ThreadItemDetails,
+};
 use vtcode_core::llm::provider::{self as uni, ParallelToolConfig};
 use vtcode_core::prompts::upsert_harness_limits_section;
 use vtcode_core::turn_metadata;
@@ -19,12 +19,9 @@ use crate::agent::runloop::unified::extract_action_from_messages;
 use crate::agent::runloop::unified::reasoning::resolve_reasoning_visibility;
 use crate::agent::runloop::unified::turn::context::TurnProcessingContext;
 use crate::agent::runloop::unified::turn::turn_helpers::supports_responses_chaining;
-
-struct UnsafeSendContext {
-    handle: usize,
-}
-unsafe impl Send for UnsafeSendContext {}
-unsafe impl Sync for UnsafeSendContext {}
+use crate::agent::runloop::unified::ui_interaction::{
+    StreamProgressEvent, StreamSpinnerOptions, stream_and_render_response_with_options_and_progress,
+};
 
 /// Delegate LLM retryability checks to the canonical [`vtcode_commons::ErrorCategory`] classifier.
 #[cfg(test)]
@@ -51,6 +48,158 @@ const STREAM_TIMEOUT_FALLBACK_PROVIDERS: &[&str] = &[
 
 const RECENT_TOOL_RESPONSE_WINDOW: usize = 10;
 const TOOL_RETRY_MAX_CHARS: usize = 1200;
+
+#[derive(Default)]
+struct StreamItemBuffer {
+    started: bool,
+    text: String,
+}
+
+struct HarnessStreamingBridge<'a> {
+    emitter:
+        Option<&'a crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter>,
+    assistant_item_id: String,
+    reasoning_item_id: String,
+    assistant: StreamItemBuffer,
+    reasoning: StreamItemBuffer,
+    reasoning_stage: Option<String>,
+}
+
+impl<'a> HarnessStreamingBridge<'a> {
+    fn new(
+        emitter: Option<
+            &'a crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter,
+        >,
+        turn_id: &str,
+        step: usize,
+        attempt: usize,
+    ) -> Self {
+        Self {
+            emitter,
+            assistant_item_id: format!("{turn_id}-step-{step}-assistant-stream-{attempt}"),
+            reasoning_item_id: format!("{turn_id}-step-{step}-reasoning-stream-{attempt}"),
+            assistant: StreamItemBuffer::default(),
+            reasoning: StreamItemBuffer::default(),
+            reasoning_stage: None,
+        }
+    }
+
+    fn on_progress(&mut self, event: StreamProgressEvent) {
+        match event {
+            StreamProgressEvent::OutputDelta(delta) => self.push_assistant_delta(&delta),
+            StreamProgressEvent::ReasoningDelta(delta) => self.push_reasoning_delta(&delta),
+            StreamProgressEvent::ReasoningStage(stage) => self.update_reasoning_stage(stage),
+        }
+    }
+
+    fn abort(&mut self) {
+        self.complete_open_items();
+    }
+
+    fn push_assistant_delta(&mut self, delta: &str) {
+        if delta.is_empty() {
+            return;
+        }
+        self.assistant.text.push_str(delta);
+        if !self.assistant.started {
+            self.assistant.started = true;
+            self.emit_item_started(ThreadItem {
+                id: self.assistant_item_id.clone(),
+                details: ThreadItemDetails::AgentMessage(AgentMessageItem {
+                    text: self.assistant.text.clone(),
+                }),
+            });
+            return;
+        }
+
+        self.emit_item_updated(ThreadItem {
+            id: self.assistant_item_id.clone(),
+            details: ThreadItemDetails::AgentMessage(AgentMessageItem {
+                text: self.assistant.text.clone(),
+            }),
+        });
+    }
+
+    fn push_reasoning_delta(&mut self, delta: &str) {
+        if delta.is_empty() {
+            return;
+        }
+        self.reasoning.text.push_str(delta);
+        if !self.reasoning.started {
+            self.reasoning.started = true;
+            self.emit_item_started(ThreadItem {
+                id: self.reasoning_item_id.clone(),
+                details: ThreadItemDetails::Reasoning(ReasoningItem {
+                    text: self.reasoning.text.clone(),
+                    stage: self.reasoning_stage.clone(),
+                }),
+            });
+            return;
+        }
+
+        self.emit_item_updated(ThreadItem {
+            id: self.reasoning_item_id.clone(),
+            details: ThreadItemDetails::Reasoning(ReasoningItem {
+                text: self.reasoning.text.clone(),
+                stage: self.reasoning_stage.clone(),
+            }),
+        });
+    }
+
+    fn update_reasoning_stage(&mut self, stage: String) {
+        self.reasoning_stage = Some(stage);
+        if !self.reasoning.started {
+            return;
+        }
+        self.emit_item_updated(ThreadItem {
+            id: self.reasoning_item_id.clone(),
+            details: ThreadItemDetails::Reasoning(ReasoningItem {
+                text: self.reasoning.text.clone(),
+                stage: self.reasoning_stage.clone(),
+            }),
+        });
+    }
+
+    fn complete_open_items(&mut self) {
+        if self.assistant.started {
+            self.assistant.started = false;
+            self.emit_item_completed(ThreadItem {
+                id: self.assistant_item_id.clone(),
+                details: ThreadItemDetails::AgentMessage(AgentMessageItem {
+                    text: self.assistant.text.clone(),
+                }),
+            });
+        }
+        if self.reasoning.started {
+            self.reasoning.started = false;
+            self.emit_item_completed(ThreadItem {
+                id: self.reasoning_item_id.clone(),
+                details: ThreadItemDetails::Reasoning(ReasoningItem {
+                    text: self.reasoning.text.clone(),
+                    stage: self.reasoning_stage.clone(),
+                }),
+            });
+        }
+    }
+
+    fn emit_item_started(&self, item: ThreadItem) {
+        if let Some(emitter) = self.emitter {
+            let _ = emitter.emit(ThreadEvent::ItemStarted(ItemStartedEvent { item }));
+        }
+    }
+
+    fn emit_item_updated(&self, item: ThreadItem) {
+        if let Some(emitter) = self.emitter {
+            let _ = emitter.emit(ThreadEvent::ItemUpdated(ItemUpdatedEvent { item }));
+        }
+    }
+
+    fn emit_item_completed(&self, item: ThreadItem) {
+        if let Some(emitter) = self.emitter {
+            let _ = emitter.emit(ThreadEvent::ItemCompleted(ItemCompletedEvent { item }));
+        }
+    }
+}
 
 fn supports_streaming_timeout_fallback(provider_name: &str) -> bool {
     STREAM_TIMEOUT_FALLBACK_PROVIDERS
@@ -611,61 +760,47 @@ pub(crate) async fn execute_llm_request(
         let has_post_tool_context = has_recent_tool_responses(&request.messages);
 
         let step_result = if use_streaming {
-            let state = ::vtcode_core::core::agent::session::AgentSessionState::new(
-                "chat_session".to_string(),
-                DEFAULT_MAX_CONVERSATION_TURNS,
-                DEFAULT_MAX_TOOL_LOOPS,
-                default_max_context_tokens(),
+            let mut stream_bridge = HarnessStreamingBridge::new(
+                ctx.harness_emitter,
+                &ctx.harness_state.turn_id.0,
+                step_count,
+                attempt + 1,
             );
-
-            let mut controller =
-                ::vtcode_core::core::agent::session::controller::AgentSessionController::new(
-                    state, None, None,
-                );
-
-            let send_ctx = UnsafeSendContext {
-                handle: ctx.handle as *const ::vtcode_tui::InlineHandle
-                    as *mut ::vtcode_tui::InlineHandle as usize,
+            let stream_options = StreamSpinnerOptions {
+                defer_finish: has_tools,
+                strip_proposed_plan_blocks: plan_mode,
             };
-
-            let event_sink = Arc::new(Mutex::new(Box::new(
-                move |event: ::vtcode_core::core::agent::events::AgentEvent| unsafe {
-                    use ::vtcode_core::core::agent::events::AgentEvent;
-                    match event {
-                        AgentEvent::OutputDelta { .. } => {}
-                        AgentEvent::ThinkingDelta { .. } => {}
-                        AgentEvent::ThinkingStage { stage } => {
-                            let h: &mut ::vtcode_tui::InlineHandle =
-                                &mut *(send_ctx.handle as *mut ::vtcode_tui::InlineHandle);
-                            h.set_input_status(Some(stage), None);
-                        }
-                        _ => {}
-                    }
-                },
-            )
-                as Box<dyn FnMut(::vtcode_core::core::agent::events::AgentEvent) + Send>));
-
-            controller.set_event_handler(event_sink);
-
-            let mut steering = None;
-            let res = tokio::time::timeout(
-                Duration::from_secs(request_timeout_secs),
-                controller.run_turn(
-                    ctx.provider_client,
-                    request.clone(),
-                    &mut steering,
-                    Some(Duration::from_secs(request_timeout_secs)),
-                ),
-            )
-            .await;
+            let mut progress = |event: StreamProgressEvent| stream_bridge.on_progress(event);
+            let stream_future = stream_and_render_response_with_options_and_progress(
+                &**ctx.provider_client,
+                request.clone(),
+                &_spinner,
+                ctx.renderer,
+                ctx.ctrl_c_state,
+                ctx.ctrl_c_notify,
+                stream_options,
+                Some(&mut progress),
+            );
+            let res =
+                tokio::time::timeout(Duration::from_secs(request_timeout_secs), stream_future)
+                    .await;
 
             match res {
-                Ok(Ok((response, _content, _reasoning))) => Ok((response, false)),
-                Ok(Err(err)) => Err(anyhow::anyhow!(err.to_string())),
-                Err(_) => Err(anyhow::anyhow!(
-                    "LLM request timed out after {} seconds",
-                    request_timeout_secs
-                )),
+                Ok(Ok((response, emitted_tokens))) => {
+                    stream_bridge.complete_open_items();
+                    Ok((response, emitted_tokens))
+                }
+                Ok(Err(err)) => {
+                    stream_bridge.abort();
+                    Err(anyhow::Error::new(err))
+                }
+                Err(_) => {
+                    stream_bridge.abort();
+                    Err(anyhow::anyhow!(
+                        "LLM request timed out after {} seconds",
+                        request_timeout_secs
+                    ))
+                }
             }
         } else if ctx.ctrl_c_state.is_cancel_requested() || ctx.ctrl_c_state.is_exit_requested() {
             Err(anyhow::Error::new(uni::LLMError::Provider {
@@ -938,6 +1073,7 @@ pub(crate) async fn execute_llm_request(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tempfile::TempDir;
 
     #[test]
     fn retryable_llm_error_includes_internal_server_error_message() {
@@ -1163,5 +1299,101 @@ mod tests {
         assert_eq!(prompt.matches("[Harness Limits]").count(), 1);
         assert!(prompt.contains("- max_tool_calls_per_turn: 7"));
         assert!(prompt.contains("[Other]\nkeep"));
+    }
+
+    #[test]
+    fn harness_streaming_bridge_emits_incremental_agent_and_reasoning_items() {
+        let tmp = TempDir::new().expect("temp dir");
+        let path = tmp.path().join("harness.jsonl");
+        let emitter =
+            crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter::new(path)
+                .expect("harness emitter");
+
+        let mut bridge = HarnessStreamingBridge::new(Some(&emitter), "turn_123", 1, 1);
+        bridge.on_progress(StreamProgressEvent::ReasoningStage("analysis".to_string()));
+        bridge.on_progress(StreamProgressEvent::ReasoningDelta("think".to_string()));
+        bridge.on_progress(StreamProgressEvent::OutputDelta("hello".to_string()));
+        bridge.on_progress(StreamProgressEvent::OutputDelta(" world".to_string()));
+        bridge.complete_open_items();
+
+        let payload = std::fs::read_to_string(tmp.path().join("harness.jsonl")).expect("log");
+        let mut saw_assistant_started = false;
+        let mut saw_assistant_updated = false;
+        let mut saw_assistant_completed = false;
+        let mut saw_reasoning_started = false;
+        let mut saw_reasoning_completed = false;
+
+        for line in payload.lines() {
+            let value: serde_json::Value = serde_json::from_str(line).expect("json");
+            let event = value.get("event").expect("event");
+            let event_type = event
+                .get("type")
+                .and_then(|kind| kind.as_str())
+                .unwrap_or_default();
+            let item_type = event
+                .get("item")
+                .and_then(|item| item.get("type"))
+                .and_then(|kind| kind.as_str())
+                .unwrap_or_default();
+            let item_text = event
+                .get("item")
+                .and_then(|item| item.get("text"))
+                .and_then(|text| text.as_str())
+                .unwrap_or_default();
+
+            if event_type == "item.started" && item_type == "agent_message" {
+                saw_assistant_started = item_text == "hello";
+            }
+            if event_type == "item.updated" && item_type == "agent_message" {
+                saw_assistant_updated = item_text == "hello world";
+            }
+            if event_type == "item.completed" && item_type == "agent_message" {
+                saw_assistant_completed = item_text == "hello world";
+            }
+            if event_type == "item.started" && item_type == "reasoning" {
+                saw_reasoning_started = item_text == "think";
+            }
+            if event_type == "item.completed" && item_type == "reasoning" {
+                let stage = event
+                    .get("item")
+                    .and_then(|item| item.get("stage"))
+                    .and_then(|stage| stage.as_str())
+                    .unwrap_or_default();
+                saw_reasoning_completed = item_text == "think" && stage == "analysis";
+            }
+        }
+
+        assert!(saw_assistant_started);
+        assert!(saw_assistant_updated);
+        assert!(saw_assistant_completed);
+        assert!(saw_reasoning_started);
+        assert!(saw_reasoning_completed);
+    }
+
+    #[test]
+    fn harness_streaming_bridge_abort_closes_open_items() {
+        let tmp = TempDir::new().expect("temp dir");
+        let path = tmp.path().join("harness.jsonl");
+        let emitter =
+            crate::agent::runloop::unified::inline_events::harness::HarnessEventEmitter::new(path)
+                .expect("harness emitter");
+
+        let mut bridge = HarnessStreamingBridge::new(Some(&emitter), "turn_456", 3, 2);
+        bridge.on_progress(StreamProgressEvent::OutputDelta("partial".to_string()));
+        bridge.abort();
+
+        let payload = std::fs::read_to_string(tmp.path().join("harness.jsonl")).expect("log");
+        let completed_count = payload
+            .lines()
+            .filter_map(|line| serde_json::from_str::<serde_json::Value>(line).ok())
+            .filter(|value| {
+                value
+                    .get("event")
+                    .and_then(|event| event.get("type"))
+                    .and_then(|kind| kind.as_str())
+                    == Some("item.completed")
+            })
+            .count();
+        assert_eq!(completed_count, 1, "abort should close active stream item");
     }
 }

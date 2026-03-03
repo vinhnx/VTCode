@@ -40,10 +40,8 @@ use anyhow::{Context, Result, anyhow};
 use libloading::{Library, Symbol};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
-use std::ptr::NonNull;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, info, warn};
 
 /// Current plugin ABI version
 /// Increment this when breaking changes are made to the plugin interface
@@ -230,7 +228,7 @@ impl NativePlugin {
 
         // Free the allocated memory (plugin is responsible for allocation)
         // We need a separate FFI function for this
-        #[allow(unused_extern_crates)]
+        #[allow(unused_extern_crates, dead_code)]
         unsafe extern "C" {
             fn vtcode_plugin_free_string(ptr: *const libc::c_char);
         }
