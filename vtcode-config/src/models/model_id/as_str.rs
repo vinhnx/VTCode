@@ -60,6 +60,7 @@ impl ModelId {
             ModelId::HuggingFaceQwen35397BA17BTogether => {
                 models::huggingface::QWEN3_5_397B_A17B_TOGETHER
             }
+            ModelId::HuggingFaceStep35Flash => models::huggingface::STEP_3_5_FLASH,
             // MiniMax models
             ModelId::MinimaxM25 => models::minimax::MINIMAX_M2_5,
             // OpenRouter models

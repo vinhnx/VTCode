@@ -31,7 +31,7 @@ struct StagedReasoningProvider {
 #[derive(Clone)]
 struct ReasoningThenChunkedContentProvider {
     chunks: Vec<String>,
-    reasoning: String,
+    reasoning_chunks: Vec<String>,
 }
 
 #[async_trait::async_trait]
@@ -195,7 +195,7 @@ impl uni::LLMProvider for ReasoningThenChunkedContentProvider {
             tool_calls: None,
             usage: None,
             finish_reason: uni::FinishReason::Stop,
-            reasoning: Some(self.reasoning.clone()),
+            reasoning: Some(self.reasoning_chunks.concat()),
             reasoning_details: None,
             organization_id: None,
             request_id: None,
@@ -205,10 +205,12 @@ impl uni::LLMProvider for ReasoningThenChunkedContentProvider {
 
     async fn stream(&self, request: uni::LLMRequest) -> Result<uni::LLMStream, uni::LLMError> {
         let response = self.generate(request).await?;
-        let mut events = Vec::with_capacity(self.chunks.len() + 2);
-        events.push(Ok(uni::LLMStreamEvent::Reasoning {
-            delta: self.reasoning.clone(),
-        }));
+        let mut events = Vec::with_capacity(self.reasoning_chunks.len() + self.chunks.len() + 1);
+        for chunk in &self.reasoning_chunks {
+            events.push(Ok(uni::LLMStreamEvent::Reasoning {
+                delta: chunk.clone(),
+            }));
+        }
         for chunk in &self.chunks {
             events.push(Ok(uni::LLMStreamEvent::Token {
                 delta: chunk.clone(),
@@ -403,8 +405,10 @@ async fn emits_progress_events_for_stream_deltas() {
         stage: "analysis".to_string(),
     };
     let request = build_request();
-    let spinner = build_spinner();
-    let mut renderer = AnsiRenderer::stdout();
+    let (tx, _rx) = mpsc::unbounded_channel::<InlineCommand>();
+    let handle = InlineHandle::new_for_tests(tx);
+    let spinner = PlaceholderSpinner::new(&handle, None, None, "");
+    let mut renderer = AnsiRenderer::with_inline_ui(handle.clone(), Default::default());
     let ctrl_c_state = super::state::CtrlCState::new();
     let ctrl_c_notify = Arc::new(Notify::new());
     let mut events: Vec<StreamProgressEvent> = Vec::new();
@@ -436,10 +440,96 @@ async fn emits_progress_events_for_stream_deltas() {
 }
 
 #[tokio::test]
+async fn skips_reasoning_progress_events_when_streaming_is_unavailable() {
+    let provider = StagedReasoningProvider {
+        content: "final content".to_string(),
+        reasoning: "thinking".to_string(),
+        stage: "analysis".to_string(),
+    };
+    let request = build_request();
+    let spinner = build_spinner();
+    let mut renderer = AnsiRenderer::stdout();
+    let ctrl_c_state = super::state::CtrlCState::new();
+    let ctrl_c_notify = Arc::new(Notify::new());
+    let mut events: Vec<StreamProgressEvent> = Vec::new();
+    let mut callback = |event: StreamProgressEvent| events.push(event);
+
+    let (_resp, _emitted) = stream_and_render_response_with_options_and_progress(
+        &provider,
+        request,
+        &spinner,
+        &mut renderer,
+        &Arc::new(ctrl_c_state),
+        &ctrl_c_notify,
+        StreamSpinnerOptions::default(),
+        Some(&mut callback),
+    )
+    .await
+    .expect("stream should succeed");
+
+    assert!(
+        !events
+            .iter()
+            .any(|event| matches!(event, StreamProgressEvent::ReasoningStage(_))),
+        "reasoning stage deltas should not stream when inline reasoning streaming is unavailable"
+    );
+    assert!(
+        !events
+            .iter()
+            .any(|event| matches!(event, StreamProgressEvent::ReasoningDelta(_))),
+        "reasoning deltas should not stream when inline reasoning streaming is unavailable"
+    );
+    assert!(events.iter().any(
+        |event| matches!(event, StreamProgressEvent::OutputDelta(delta) if delta == "final content")
+    ));
+}
+
+#[tokio::test]
+async fn suppresses_harmony_tool_call_wire_text_from_output_deltas() {
+    let provider = ReasoningThenChunkedContentProvider {
+        chunks: vec![
+            "<|start|>assistant<|channel|>commentary to=functions.unified_search <|constrain|>json<|message|>{\"pattern\":\"runloop\"}<|call|>".to_string(),
+            "<|start|>assistant<|channel|>final<|message|>safe answer<|end|>".to_string(),
+        ],
+        reasoning_chunks: vec![],
+    };
+    let request = build_request();
+    let spinner = build_spinner();
+    let mut renderer = AnsiRenderer::stdout();
+    let ctrl_c_state = super::state::CtrlCState::new();
+    let ctrl_c_notify = Arc::new(Notify::new());
+    let mut events: Vec<StreamProgressEvent> = Vec::new();
+    let mut callback = |event: StreamProgressEvent| events.push(event);
+
+    let (_resp, _emitted) = stream_and_render_response_with_options_and_progress(
+        &provider,
+        request,
+        &spinner,
+        &mut renderer,
+        &Arc::new(ctrl_c_state),
+        &ctrl_c_notify,
+        StreamSpinnerOptions::default(),
+        Some(&mut callback),
+    )
+    .await
+    .expect("stream should succeed");
+
+    let output_deltas: Vec<&str> = events
+        .iter()
+        .filter_map(|event| match event {
+            StreamProgressEvent::OutputDelta(delta) => Some(delta.as_str()),
+            _ => None,
+        })
+        .collect();
+
+    assert_eq!(output_deltas, vec!["safe answer"]);
+}
+
+#[tokio::test]
 async fn inline_streams_small_content_deltas_after_reasoning() {
     let provider = ReasoningThenChunkedContentProvider {
         chunks: vec!["hello ".to_string(), "world".to_string()],
-        reasoning: "thinking".to_string(),
+        reasoning_chunks: vec!["thinking".to_string()],
     };
     let request = build_request();
     let (tx, mut rx) = mpsc::unbounded_channel::<InlineCommand>();
@@ -484,7 +574,7 @@ async fn inline_streams_small_content_deltas_after_reasoning() {
 async fn inline_streams_reasoning_deltas_live() {
     let provider = ReasoningThenChunkedContentProvider {
         chunks: vec!["done".to_string()],
-        reasoning: "thinking".to_string(),
+        reasoning_chunks: vec!["thinking".to_string()],
     };
     let request = build_request();
     let (tx, mut rx) = mpsc::unbounded_channel::<InlineCommand>();
@@ -528,7 +618,7 @@ async fn inline_streams_reasoning_deltas_live() {
 async fn inline_batches_many_token_deltas_for_performance() {
     let provider = ReasoningThenChunkedContentProvider {
         chunks: vec!["x".to_string(); 600],
-        reasoning: "thinking".to_string(),
+        reasoning_chunks: vec!["thinking".to_string()],
     };
     let request = build_request();
     let (tx, mut rx) = mpsc::unbounded_channel::<InlineCommand>();
@@ -566,5 +656,48 @@ async fn inline_batches_many_token_deltas_for_performance() {
         replace_last_agent_updates < 300,
         "expected batched updates for 600 deltas, got {} replace operations",
         replace_last_agent_updates
+    );
+}
+
+#[tokio::test]
+async fn inline_batches_many_reasoning_deltas_for_performance() {
+    let provider = ReasoningThenChunkedContentProvider {
+        chunks: vec!["done".to_string()],
+        reasoning_chunks: vec!["x".to_string(); 600],
+    };
+    let request = build_request();
+    let (tx, mut rx) = mpsc::unbounded_channel::<InlineCommand>();
+    let handle = InlineHandle::new_for_tests(tx);
+    let spinner = PlaceholderSpinner::new(&handle, None, None, "");
+    let mut renderer = AnsiRenderer::with_inline_ui(handle.clone(), Default::default());
+    let ctrl_c_state = super::state::CtrlCState::new();
+    let ctrl_c_notify = Arc::new(Notify::new());
+
+    let (_resp, _emitted) = stream_and_render_response(
+        &provider,
+        request,
+        &spinner,
+        &mut renderer,
+        &Arc::new(ctrl_c_state),
+        &ctrl_c_notify,
+    )
+    .await
+    .expect("stream should succeed");
+
+    let mut policy_inline_updates = 0usize;
+    while let Ok(command) = rx.try_recv() {
+        if let InlineCommand::Inline {
+            kind: vtcode_tui::InlineMessageKind::Policy,
+            ..
+        } = command
+        {
+            policy_inline_updates += 1;
+        }
+    }
+
+    assert!(
+        policy_inline_updates < 300,
+        "expected batched reasoning updates for 600 deltas, got {} inline updates",
+        policy_inline_updates
     );
 }

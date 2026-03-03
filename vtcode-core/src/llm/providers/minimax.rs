@@ -333,4 +333,19 @@ mod tests {
 
         assert_eq!(provider.model_id(), models::minimax::DEFAULT_MODEL);
     }
+
+    #[test]
+    fn minimax_provider_supports_streaming() {
+        let provider = MinimaxProvider::from_config(
+            Some("test-key".to_string()),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        );
+
+        assert!(provider.supports_streaming());
+    }
 }
