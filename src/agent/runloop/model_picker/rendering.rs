@@ -19,14 +19,13 @@ pub(super) use prompts::{
 
 pub(super) const CLOSE_THEME_MESSAGE: &str =
     "Close the active model picker before selecting a theme.";
-const STEP_ONE_TITLE: &str = "Model picker #1";
-const STEP_TWO_TITLE: &str = "Model picker #2";
+const STEP_ONE_TITLE: &str = "Model";
+const STEP_TWO_TITLE: &str = "Reasoning";
 
 pub(super) const CUSTOM_PROVIDER_TITLE: &str = "Custom provider + model";
 pub(super) const CUSTOM_PROVIDER_SUBTITLE: &str =
     "Provide the provider name and model identifier manually.";
 const CUSTOM_PROVIDER_BADGE: &str = "Manual";
-const PROVIDER_BADGE: &str = "Provider";
 const REASONING_BADGE: &str = "Reasoning";
 const REASONING_OFF_BADGE: &str = "No reasoning";
 const CURRENT_BADGE: &str = "Current";
@@ -38,6 +37,9 @@ pub(super) fn render_step_one_inline(
     options: &[ModelOption],
     _current_reasoning: ReasoningEffortLevel,
     dynamic_models: &DynamicModelRegistry,
+    selected: Option<InlineListSelection>,
+    current_provider: &str,
+    current_model: &str,
 ) -> Result<()> {
     let mut items = Vec::new();
     for provider in picker_provider_order() {
@@ -54,51 +56,44 @@ pub(super) fn render_step_one_inline(
             continue;
         }
 
-        items.push(InlineListItem {
-            title: provider.label().to_string(),
-            subtitle: None,
-            badge: Some(PROVIDER_BADGE.to_string()),
-            indent: 0,
-            selection: None,
-            search_value: Some(provider.label().to_string()),
-        });
-
         for (idx, option) in &provider_models {
             let badge = option
                 .supports_reasoning
                 .then(|| REASONING_BADGE.to_string());
             items.push(InlineListItem {
-                title: option.display.to_string(),
-                subtitle: Some(option.description.to_string()),
+                title: format!("{} · {}", provider.label(), option.display),
+                subtitle: Some(option.id.to_string()),
                 badge,
-                indent: 1,
+                indent: 0,
                 selection: Some(InlineListSelection::Model(*idx)),
-                search_value: Some(format!("{} {}", provider.label(), option.display)),
+                search_value: Some(format!(
+                    "{} {} {} {}",
+                    provider.label(),
+                    option.display,
+                    option.id,
+                    option.description
+                )),
             });
         }
 
         if provider.is_dynamic() {
-            let subtitle = if provider.is_local() {
-                format!("Locally available {} model", provider.label())
-            } else {
-                format!("Available {} model", provider.label())
-            };
             for entry_index in &dynamic_indexes {
                 if let Some(detail) = dynamic_models.detail(*entry_index) {
                     items.push(InlineListItem {
-                        title: detail.model_display.clone(),
-                        subtitle: Some(subtitle.to_string()),
+                        title: format!("{} · {}", provider.label(), detail.model_display),
+                        subtitle: Some(detail.model_id.clone()),
                         badge: if provider.is_local() {
                             Some("Local".to_string())
                         } else {
                             None
                         },
-                        indent: 1,
+                        indent: 0,
                         selection: Some(InlineListSelection::DynamicModel(*entry_index)),
                         search_value: Some(format!(
-                            "{} {}",
+                            "{} {} {}",
                             provider.label(),
-                            detail.model_display
+                            detail.model_display,
+                            detail.model_id
                         )),
                     });
                 }
@@ -108,8 +103,8 @@ pub(super) fn render_step_one_inline(
                 items.push(InlineListItem {
                     title: format!("{} cache notice", provider.label()),
                     subtitle: Some(warning.to_string()),
-                    badge: Some("Info".to_string()),
-                    indent: 1,
+                    badge: Some("Action".to_string()),
+                    indent: 0,
                     selection: Some(InlineListSelection::RefreshDynamicModels),
                     search_value: Some(format!("{} cache", provider.label())),
                 });
@@ -118,43 +113,23 @@ pub(super) fn render_step_one_inline(
             if dynamic_indexes.is_empty()
                 && let Some(error) = dynamic_models.error_for(provider)
             {
-                let instructions = provider.local_install_instructions().unwrap_or("");
                 items.push(InlineListItem {
-                    title: format!("{} server unreachable", provider.label()),
-                    subtitle: Some(format!("{error}\n{instructions}")),
-                    badge: Some("Info".to_string()),
-                    indent: 1,
-                    selection: Some(InlineListSelection::CustomModel),
+                    title: format!("{} unavailable", provider.label()),
+                    subtitle: Some(error.to_string()),
+                    badge: Some("Action".to_string()),
+                    indent: 0,
+                    selection: Some(InlineListSelection::RefreshDynamicModels),
                     search_value: Some(format!("{} setup", provider.label().to_ascii_lowercase())),
                 });
             }
-        } else if provider == Provider::HuggingFace {
-            items.push(InlineListItem {
-                title: "Hugging Face Inference Providers".to_string(),
-                subtitle: Some(
-                    "OpenAI-compatible router. Docs: https://huggingface.co/docs/inference-providers"
-                        .to_string(),
-                ),
-                badge: Some("Docs".to_string()),
-                indent: 1,
-                selection: None,
-                search_value: Some("huggingface docs".to_string()),
-            });
-            items.push(InlineListItem {
-                title: "Set HF_TOKEN in environment".to_string(),
-                subtitle: Some("Required for Hugging Face router authentication".to_string()),
-                badge: Some("Tip".to_string()),
-                indent: 1,
-                selection: None,
-                search_value: Some("huggingface hf_token".to_string()),
-            });
+        } else if provider == Provider::HuggingFace && provider_models.is_empty() {
             items.push(InlineListItem {
                 title: "Custom Hugging Face model".to_string(),
                 subtitle: Some(
                     "Enter any HF model id (e.g., huggingface <org>/<model>)".to_string(),
                 ),
                 badge: Some("Custom".to_string()),
-                indent: 1,
+                indent: 0,
                 selection: Some(InlineListSelection::CustomModel),
                 search_value: Some("huggingface custom".to_string()),
             });
@@ -181,13 +156,22 @@ pub(super) fn render_step_one_inline(
         search_value: Some("custom provider".to_string()),
     });
 
-    let lines = vec![];
+    let current_line = if current_provider.trim().is_empty() || current_model.trim().is_empty() {
+        "Pick a model provider and model id.".to_string()
+    } else {
+        format!("Current: {} / {}", current_provider, current_model)
+    };
+
+    let lines = vec![
+        current_line,
+        "↑/↓ select • Enter choose • Esc cancel • Type to filter".to_string(),
+    ];
 
     let search = InlineListSearchConfig {
-        label: "Search models or providers".to_string(),
-        placeholder: Some("Filter models/providers".to_string()),
+        label: "Search models".to_string(),
+        placeholder: Some("Type provider, model name, or id".to_string()),
     };
-    renderer.show_list_modal(STEP_ONE_TITLE, lines, items, None, Some(search));
+    renderer.show_list_modal(STEP_ONE_TITLE, lines, items, selected, Some(search));
 
     Ok(())
 }

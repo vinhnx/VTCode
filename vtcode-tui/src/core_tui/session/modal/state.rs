@@ -6,7 +6,6 @@ use crate::ui::tui::types::{
 };
 use ratatui::crossterm::event::{KeyCode, KeyEvent};
 use ratatui::widgets::ListState;
-use tui_popup::PopupState;
 
 #[derive(Clone)]
 pub struct ModalState {
@@ -16,8 +15,6 @@ pub struct ModalState {
     pub list: Option<ModalListState>,
     pub secure_prompt: Option<SecurePromptConfig>,
     pub is_plan_confirmation: bool,
-    #[allow(dead_code)]
-    pub popup_state: PopupState,
     #[allow(dead_code)]
     pub restore_input: bool,
     #[allow(dead_code)]
@@ -321,6 +318,14 @@ impl ModalState {
                     ModalListKeyResult::HandledNoRedraw
                 }
             }
+            KeyCode::Char(' ') if !modifiers.control && !modifiers.alt && !modifiers.command => {
+                if let Some(selection) = list.current_selection() {
+                    if matches!(selection, InlineListSelection::ConfigAction(_)) {
+                        return ModalListKeyResult::Submit(InlineEvent::ListModalSubmit(selection));
+                    }
+                }
+                ModalListKeyResult::NotHandled
+            }
             KeyCode::Esc => ModalListKeyResult::Cancel(InlineEvent::ListModalCancel),
             KeyCode::Char(ch) if modifiers.control || modifiers.alt => match ch {
                 'n' | 'N' | 'j' | 'J' => {
@@ -461,6 +466,11 @@ impl ModalListState {
             .iter()
             .filter(|item| item.selection.is_some())
             .count();
+        let has_two_line_items = converted.iter().any(|item| {
+            item.subtitle
+                .as_ref()
+                .is_some_and(|subtitle| !subtitle.trim().is_empty())
+        });
         let mut modal_state = Self {
             visible_indices: (0..converted.len()).collect(),
             items: converted,
@@ -469,7 +479,7 @@ impl ModalListState {
             filter_terms: Vec::new(),
             filter_query: None,
             viewport_rows: None,
-            compact_rows: false,
+            compact_rows: has_two_line_items,
         };
         modal_state.select_initial(selected);
         modal_state

@@ -60,6 +60,47 @@ fn model_picker_lists_new_gemini_models() {
     assert!(has_model(options, ModelId::Gemini31ProPreview));
 }
 
+fn base_picker_state(current_provider: &str, current_model: &str) -> ModelPickerState {
+    ModelPickerState {
+        options: MODEL_OPTIONS.as_slice(),
+        step: PickerStep::AwaitModel,
+        inline_enabled: true,
+        current_reasoning: ReasoningEffortLevel::Medium,
+        current_provider: current_provider.to_string(),
+        current_model: current_model.to_string(),
+        selection: None,
+        selected_reasoning: None,
+        pending_api_key: None,
+        workspace: None,
+        dynamic_models: DynamicModelRegistry::default(),
+        plain_mode_active: false,
+    }
+}
+
+#[test]
+fn preferred_model_selection_matches_current_static_model() {
+    let model_id = ModelId::ClaudeOpus41.as_str();
+    let picker = base_picker_state("anthropic", model_id);
+
+    let selection = picker.preferred_model_selection();
+    let Some(InlineListSelection::Model(index)) = selection else {
+        panic!("expected static model selection, got {selection:?}");
+    };
+
+    let option = picker
+        .options
+        .get(index)
+        .expect("selected index should be valid");
+    assert_eq!(option.provider, Provider::Anthropic);
+    assert_eq!(option.id, model_id);
+}
+
+#[test]
+fn preferred_model_selection_returns_none_for_unknown_model() {
+    let picker = base_picker_state("anthropic", "does-not-exist");
+    assert_eq!(picker.preferred_model_selection(), None);
+}
+
 #[test]
 fn read_workspace_env_returns_value_when_present() -> Result<()> {
     let dir = tempdir()?;

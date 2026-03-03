@@ -37,26 +37,6 @@ TranscriptWidget::new(self.session)
     .render(transcript_area, buf);
 ```
 
-### FilePaletteWidget
-
-**Current:**
-```rust
-FilePaletteWidget {
-    session: self.session,
-    palette,
-    viewport,
-}.render(viewport, buf);
-```
-
-**Improved:**
-```rust
-FilePaletteWidget::new(self.session, palette)
-    .viewport(viewport)
-    .show_loading(true)
-    .highlight_style(accent_style)
-    .render(viewport, buf);
-```
-
 ## Implementation Template
 
 ```rust

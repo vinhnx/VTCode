@@ -28,17 +28,18 @@ use crate::agent::runloop::welcome::SessionBootstrap;
 
 use super::display::persist_theme_preference;
 
-const THEME_PALETTE_TITLE: &str = "Theme picker";
+const THEME_PALETTE_TITLE: &str = "Theme";
 const THEME_ACTIVE_BADGE: &str = "Active";
-const THEME_SELECT_HINT: &str = "Use ↑/↓ to choose a theme, Enter to apply, Esc to cancel.";
+const THEME_SELECT_HINT: &str =
+    "↑/↓ choose • Enter apply • Esc cancel • Type to filter by name or id";
 const THEME_SEARCH_LABEL: &str = "Search themes";
-const THEME_SEARCH_PLACEHOLDER: &str = "Filter themes (fuzzy)";
+const THEME_SEARCH_PLACEHOLDER: &str = "Type theme name or id";
 const SESSIONS_PALETTE_TITLE: &str = "Archived sessions";
 const SESSIONS_HINT_PRIMARY: &str = "Use ↑/↓ to browse sessions.";
 const SESSIONS_HINT_SECONDARY: &str = "Enter to resume session • Esc to close.";
 const SESSIONS_LATEST_BADGE: &str = "Latest";
 const CONFIG_PALETTE_TITLE: &str = "VT Code Configuration";
-const CONFIG_HINT: &str = "↑/↓ select • ←/→ change <value> • Enter apply • Esc close";
+const CONFIG_HINT: &str = "↑/↓ select • Space/Enter apply • ←/→ change value • Esc close";
 
 #[derive(Clone)]
 pub(crate) enum ActivePalette {
@@ -86,7 +87,7 @@ pub(crate) fn show_theme_palette(
         };
         items.push(InlineListItem {
             title: label.to_string(),
-            subtitle: Some(format!("ID: {} ({})", id, scheme_hint)),
+            subtitle: Some(format!("id: {} • {}", id, scheme_hint)),
             badge,
             indent: 0,
             selection: Some(InlineListSelection::Theme(id.to_string())),
@@ -99,10 +100,7 @@ pub(crate) fn show_theme_palette(
         return Ok(false);
     }
 
-    let lines = vec![
-        format!("Current theme: {}", current_label),
-        hint.to_string(),
-    ];
+    let lines = vec![format!("Active theme: {}", current_label), hint.to_string()];
     renderer.show_list_modal(
         title,
         lines,
@@ -140,6 +138,7 @@ pub(crate) fn show_config_palette(
         search_value: Some("reload refresh config settings vtcode.toml".to_string()),
     });
 
+    items.push(config_section_item("Agent and execution"));
     items.push(config_toggle_item(
         "Autonomous mode",
         "agent.autonomous_mode",
@@ -210,6 +209,8 @@ pub(crate) fn show_config_palette(
         "ui.show_turn_timer",
         config.ui.show_turn_timer,
     ));
+
+    items.push(config_section_item("Display and notifications"));
     if cfg!(debug_assertions) {
         items.push(config_toggle_item(
             "Show diagnostics in transcript",
@@ -298,6 +299,7 @@ pub(crate) fn show_config_palette(
         config.ui.safe_colors_only,
     ));
 
+    items.push(config_section_item("Modes and policy"));
     items.push(config_cycle_item(
         "Tool output mode",
         "ui.tool_output_mode",
@@ -390,89 +392,48 @@ pub(crate) fn show_config_palette(
         &config.agent.theme,
     ));
 
+    items.push(config_section_item("Limits and sizing"));
     items.push(config_number_item(
         "Context tokens",
         "context.max_context_tokens",
         config.context.max_context_tokens as i64,
-        "Enter to increase by 1024",
-    ));
-    items.push(config_number_item_dec(
-        "Context tokens",
-        "context.max_context_tokens",
-        config.context.max_context_tokens as i64,
-        "Enter to decrease by 1024",
+        "← decrease by 1024 • Enter/→ increase by 1024",
     ));
     items.push(config_number_item(
         "Context trim %",
         "context.trim_to_percent",
         config.context.trim_to_percent as i64,
-        "Enter to increase by 1",
-    ));
-    items.push(config_number_item_dec(
-        "Context trim %",
-        "context.trim_to_percent",
-        config.context.trim_to_percent as i64,
-        "Enter to decrease by 1",
+        "← decrease by 1 • Enter/→ increase by 1",
     ));
     items.push(config_number_item(
         "Max conversation turns",
         "agent.max_conversation_turns",
         config.agent.max_conversation_turns as i64,
-        "Enter to increase by 1",
-    ));
-    items.push(config_number_item_dec(
-        "Max conversation turns",
-        "agent.max_conversation_turns",
-        config.agent.max_conversation_turns as i64,
-        "Enter to decrease by 1",
+        "← decrease by 1 • Enter/→ increase by 1",
     ));
     items.push(config_number_item(
         "Inline viewport rows",
         "ui.inline_viewport_rows",
         config.ui.inline_viewport_rows as i64,
-        "Enter to increase by 1",
-    ));
-    items.push(config_number_item_dec(
-        "Inline viewport rows",
-        "ui.inline_viewport_rows",
-        config.ui.inline_viewport_rows as i64,
-        "Enter to decrease by 1",
+        "← decrease by 1 • Enter/→ increase by 1",
     ));
     items.push(config_number_item(
         "PTY default rows",
         "pty.default_rows",
         config.pty.default_rows as i64,
-        "Enter to increase by 1",
-    ));
-    items.push(config_number_item_dec(
-        "PTY default rows",
-        "pty.default_rows",
-        config.pty.default_rows as i64,
-        "Enter to decrease by 1",
+        "← decrease by 1 • Enter/→ increase by 1",
     ));
     items.push(config_number_item(
         "PTY default cols",
         "pty.default_cols",
         config.pty.default_cols as i64,
-        "Enter to increase by 1",
-    ));
-    items.push(config_number_item_dec(
-        "PTY default cols",
-        "pty.default_cols",
-        config.pty.default_cols as i64,
-        "Enter to decrease by 1",
+        "← decrease by 1 • Enter/→ increase by 1",
     ));
     items.push(config_number_item(
         "PTY timeout (sec)",
         "pty.command_timeout_seconds",
         config.pty.command_timeout_seconds as i64,
-        "Enter to increase by 1",
-    ));
-    items.push(config_number_item_dec(
-        "PTY timeout (sec)",
-        "pty.command_timeout_seconds",
-        config.pty.command_timeout_seconds as i64,
-        "Enter to decrease by 1",
+        "← decrease by 1 • Enter/→ increase by 1",
     ));
     items.push(config_number_item(
         "Minimum contrast",
@@ -481,9 +442,13 @@ pub(crate) fn show_config_palette(
         "Enter to cycle 1.0 / 3.0 / 4.5 / 7.0",
     ));
 
+    items.push(config_section_item("Read-only"));
     items.push(InlineListItem {
         title: "Default model".to_string(),
-        subtitle: Some(config.agent.default_model.clone()),
+        subtitle: Some(format!(
+            "agent.default_model = {}",
+            config.agent.default_model
+        )),
         badge: Some("Read-only".to_string()),
         indent: 0,
         selection: None,
@@ -491,19 +456,26 @@ pub(crate) fn show_config_palette(
     });
 
     let lines = vec![source_label, CONFIG_HINT.to_string()];
-    let search = InlineListSearchConfig {
-        label: "Search settings or keys".to_string(),
-        placeholder: Some("Filter config options (fuzzy)".to_string()),
-    };
-    renderer.show_list_modal(CONFIG_PALETTE_TITLE, lines, items, selected, Some(search));
+    renderer.show_list_modal(CONFIG_PALETTE_TITLE, lines, items, selected, None);
 
     Ok(true)
+}
+
+fn config_section_item(label: &str) -> InlineListItem {
+    InlineListItem {
+        title: label.to_string(),
+        subtitle: None,
+        badge: None,
+        indent: 0,
+        selection: None,
+        search_value: None,
+    }
 }
 
 fn config_toggle_item(label: &str, key: &str, enabled: bool) -> InlineListItem {
     InlineListItem {
         title: label.to_string(),
-        subtitle: Some(if enabled { "on" } else { "off" }.to_string()),
+        subtitle: Some(format!("{key} = {}", if enabled { "on" } else { "off" })),
         badge: Some("Toggle".to_string()),
         indent: 0,
         selection: Some(InlineListSelection::ConfigAction(format!("{}:toggle", key))),
@@ -514,7 +486,7 @@ fn config_toggle_item(label: &str, key: &str, enabled: bool) -> InlineListItem {
 fn config_cycle_item(label: &str, key: &str, value: &str) -> InlineListItem {
     InlineListItem {
         title: label.to_string(),
-        subtitle: Some(format!("← {} →", value)),
+        subtitle: Some(format!("{key} = {value} (←/→)")),
         badge: Some("Cycle".to_string()),
         indent: 0,
         selection: Some(InlineListSelection::ConfigAction(format!("{}:cycle", key))),
@@ -525,21 +497,10 @@ fn config_cycle_item(label: &str, key: &str, value: &str) -> InlineListItem {
 fn config_number_item(label: &str, key: &str, value: i64, hint: &str) -> InlineListItem {
     InlineListItem {
         title: label.to_string(),
-        subtitle: Some(format!("{} ({})", value, hint)),
+        subtitle: Some(format!("{key} = {value} ({hint})")),
         badge: Some("Number".to_string()),
         indent: 0,
         selection: Some(InlineListSelection::ConfigAction(format!("{}:inc", key))),
-        search_value: Some(config_search_value(label, key)),
-    }
-}
-
-fn config_number_item_dec(label: &str, key: &str, value: i64, hint: &str) -> InlineListItem {
-    InlineListItem {
-        title: format!("{} (decrease)", label),
-        subtitle: Some(format!("{} ({})", value, hint)),
-        badge: Some("Number".to_string()),
-        indent: 0,
-        selection: Some(InlineListSelection::ConfigAction(format!("{}:dec", key))),
         search_value: Some(config_search_value(label, key)),
     }
 }
@@ -1231,10 +1192,12 @@ pub(crate) async fn handle_palette_selection(
             if let InlineListSelection::ConfigAction(action) = selection
                 && let Some(updated_key) = apply_config_action(&action)?
             {
-                renderer.line(
-                    MessageStyle::Info,
-                    &format!("Saved {} to vtcode.toml", updated_key),
-                )?;
+                if !renderer.supports_inline_ui() {
+                    renderer.line(
+                        MessageStyle::Info,
+                        &format!("Saved {} to vtcode.toml", updated_key),
+                    )?;
+                }
             }
 
             if let Ok(runtime_manager) = ConfigManager::load() {
@@ -1349,6 +1312,10 @@ fn normalize_config_selection(selection: InlineListSelection) -> Option<InlineLi
             let normalized = action.replace(":cycle_prev", ":cycle");
             Some(InlineListSelection::ConfigAction(normalized))
         }
+        InlineListSelection::ConfigAction(action) if action.ends_with(":dec") => {
+            let normalized = action.replace(":dec", ":inc");
+            Some(InlineListSelection::ConfigAction(normalized))
+        }
         value => Some(value),
     }
 }
@@ -1374,13 +1341,19 @@ pub(crate) fn handle_palette_cancel(
             let message = match mode {
                 ThemePaletteMode::Select => "Theme selection cancelled.",
             };
-            renderer.line(MessageStyle::Info, message)?;
+            if !renderer.supports_inline_ui() {
+                renderer.line(MessageStyle::Info, message)?;
+            }
         }
         ActivePalette::Sessions { .. } => {
-            renderer.line(MessageStyle::Info, "Closed session browser.")?;
+            if !renderer.supports_inline_ui() {
+                renderer.line(MessageStyle::Info, "Closed session browser.")?;
+            }
         }
         ActivePalette::Config { .. } => {
-            renderer.line(MessageStyle::Info, "Closed configuration settings.")?;
+            if !renderer.supports_inline_ui() {
+                renderer.line(MessageStyle::Info, "Closed configuration settings.")?;
+            }
         }
     }
     Ok(())
@@ -1407,4 +1380,34 @@ pub(crate) fn apply_prompt_style(handle: &InlineHandle) {
     let styles = theme::active_styles();
     let style = convert_style(styles.primary);
     handle.set_prompt("".to_string(), style);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn normalize_config_selection_maps_cycle_prev_to_cycle() {
+        let selection = InlineListSelection::ConfigAction("ui.display_mode:cycle_prev".to_string());
+        let normalized = normalize_config_selection(selection);
+        assert_eq!(
+            normalized,
+            Some(InlineListSelection::ConfigAction(
+                "ui.display_mode:cycle".to_string()
+            ))
+        );
+    }
+
+    #[test]
+    fn normalize_config_selection_maps_dec_to_inc() {
+        let selection =
+            InlineListSelection::ConfigAction("context.max_context_tokens:dec".to_string());
+        let normalized = normalize_config_selection(selection);
+        assert_eq!(
+            normalized,
+            Some(InlineListSelection::ConfigAction(
+                "context.max_context_tokens:inc".to_string()
+            ))
+        );
+    }
 }

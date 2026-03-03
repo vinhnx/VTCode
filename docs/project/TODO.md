@@ -3250,3 +3250,39 @@ ilure rate by 50%** (measured via integration test pass rate).## Scope Locked
   metadata2. `vtcode-core/src/retry.rs` — New mod
 
 step in the tui
+
+---
+
+implement interactive skills setup in /skill command to let users choose from a list of available skills, view details about each skill, and select which ones to enable for their session. This will enhance user control and customization of the agent's capabilities.
+│
+│ Skills Commands: │
+│ Authoring: │
+│ /skills --create <name> [--path <dir>] Create new skill from template │
+│ /skills --validate <name> Validate skill structure │
+│ /skills --package <name> Package skill to .skill file │
+│ Management: │
+│ /skills --list [query] List available skills (optional sea│
+│ rch) │
+│ /skills --search <query> Search for skills by name/descripti│
+│ on │
+│ /skills --load <name> Load skill into session │
+│ /skills --unload <name> Unload skill from session │
+│ /skills --info <name> Show skill details │
+│ /skills --use <name> <input> Execute skill with input │
+│ /skills --regenerate-index Regenerate skills index file │
+│ Shortcuts: │
+│ /skills -l [query], /skills -s <query>, /skills -h, /skills --regen
+
+==> instead of manually typing commands to manage skills, users can interactively browse and select skills from a list, view their descriptions and details, and enable or disable them for their session with simple key presses. This will make it easier for users to customize their agent's capabilities without needing to remember specific command syntax.
+
+---
+
+also apply to /mcp command to manage mcp in an interactive way through a user-friendly interface rather than relying solely on command-line inputs.
+
+---
+
+/file commandcbrower doesn't work. it doesn't show up inline list
+
+---
+
+for /settings list, implement space/enter to toggle option and remove/disable fuzzy search.

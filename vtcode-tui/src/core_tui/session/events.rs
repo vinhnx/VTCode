@@ -6,6 +6,15 @@ use super::super::types::ContentPart;
 use crate::ui::tui::InlineSegment;
 use crate::ui::tui::session::modal::{ModalKeyModifiers, ModalListKeyResult};
 
+fn input_history_entries(session: &Session) -> Vec<(String, Vec<ContentPart>)> {
+    session
+        .input_manager
+        .history()
+        .iter()
+        .map(|entry| (entry.content().to_string(), entry.attachment_elements()))
+        .collect()
+}
+
 #[allow(dead_code)]
 pub(super) fn handle_event(
     session: &mut Session,
@@ -204,29 +213,13 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
         && matches!(key.code, KeyCode::Char('r') | KeyCode::Char('R'))
         && !session.history_picker_state.active
     {
-        // Open the history picker
-        session.history_picker_state.open(&session.input_manager);
-        // Get history with attachments for fuzzy search
-        let history: Vec<(String, Vec<ContentPart>)> = session
-            .input_manager
-            .history()
-            .iter()
-            .map(|entry| (entry.content().to_string(), entry.attachment_elements()))
-            .collect();
-        session.history_picker_state.update_search(&history);
-        session.mark_dirty();
+        open_history_picker(session);
         return None;
     }
 
     // Handle history picker if active
     if session.history_picker_state.active {
-        // Get history with attachments for search updates
-        let history: Vec<(String, Vec<ContentPart>)> = session
-            .input_manager
-            .history()
-            .iter()
-            .map(|entry| (entry.content().to_string(), entry.attachment_elements()))
-            .collect();
+        let history = input_history_entries(session);
         let handled = history_picker::handle_history_picker_key(
             &key,
             &mut session.history_picker_state,
@@ -665,6 +658,17 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
     }
 }
 
+pub(super) fn open_history_picker(session: &mut Session) {
+    if session.history_picker_state.active {
+        return;
+    }
+
+    session.history_picker_state.open(&session.input_manager);
+    let history = input_history_entries(session);
+    session.history_picker_state.update_search(&history);
+    session.mark_dirty();
+}
+
 fn quick_help_lines() -> Vec<String> {
     vec![
         "Ctrl+A / Ctrl+E: Move to start/end of line.".to_string(),
@@ -810,73 +814,5 @@ pub(super) fn handle_diff_preview_key(
             None
         }
         _ => None,
-    }
-}
-
-#[allow(dead_code)]
-pub(super) fn handle_file_palette_key(session: &mut Session, key: &KeyEvent) -> bool {
-    if !session.file_palette_active {
-        return false;
-    }
-
-    let Some(palette) = session.file_palette.as_mut() else {
-        return false;
-    };
-
-    match key.code {
-        KeyCode::Up => {
-            palette.move_selection_up();
-            session.mark_dirty();
-            true
-        }
-        KeyCode::Down => {
-            palette.move_selection_down();
-            session.mark_dirty();
-            true
-        }
-        KeyCode::PageUp => {
-            palette.page_up();
-            session.mark_dirty();
-            true
-        }
-        KeyCode::PageDown => {
-            palette.page_down();
-            session.mark_dirty();
-            true
-        }
-        KeyCode::Home => {
-            palette.move_to_first();
-            session.mark_dirty();
-            true
-        }
-        KeyCode::End => {
-            palette.move_to_last();
-            session.mark_dirty();
-            true
-        }
-        KeyCode::Esc => {
-            command::close_file_palette(session);
-            session.mark_dirty();
-            true
-        }
-        KeyCode::Tab => {
-            if let Some(entry) = palette.get_selected() {
-                let path = entry.relative_path.clone();
-                command::insert_file_reference(session, &path);
-                command::close_file_palette(session);
-                session.mark_dirty();
-            }
-            true
-        }
-        KeyCode::Enter => {
-            if let Some(entry) = palette.get_selected() {
-                let path = entry.relative_path.clone();
-                command::insert_file_reference(session, &path);
-                command::close_file_palette(session);
-                session.mark_dirty();
-            }
-            true
-        }
-        _ => false,
     }
 }

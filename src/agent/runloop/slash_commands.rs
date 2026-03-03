@@ -57,6 +57,7 @@ pub enum SlashCommandOutcome {
     StartResumePalette {
         limit: usize,
     },
+    StartHistoryPicker,
     StartFileBrowser {
         initial_filter: Option<String>,
     },
@@ -345,6 +346,13 @@ pub async fn handle_slash_command(
             }
         },
         "resume" => handle_resume_command(args, renderer).await,
+        "history" => {
+            if !args.is_empty() {
+                renderer.line(MessageStyle::Error, "Usage: /history")?;
+                return Ok(SlashCommandOutcome::Handled);
+            }
+            Ok(SlashCommandOutcome::StartHistoryPicker)
+        }
         "new" => {
             if !args.is_empty() {
                 renderer.line(MessageStyle::Error, "Usage: /new")?;

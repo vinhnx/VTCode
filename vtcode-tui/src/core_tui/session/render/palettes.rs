@@ -1,84 +1,63 @@
 use super::*;
+use crate::ui::tui::session::inline_list::{InlineListRow, render_inline_list};
 
-/// Generic palette rendering helper to avoid duplication
-struct PaletteRenderParams<F>
-where
-    F: for<'a> Fn(&Session, &'a str, bool) -> ListItem<'static>,
-{
-    is_active: bool,
-    title: String,
-    items: Vec<(usize, String, bool)>, // (index, display_text, is_selected)
-    instructions: Vec<Line<'static>>,
-    has_more: bool,
-    more_text: String,
-    render_item: F,
+#[derive(Clone)]
+struct FilePaletteRenderRow {
+    text: String,
+    style: Style,
+    selectable: bool,
+    selected: bool,
 }
 
-fn render_palette_generic<F>(
-    session: &mut Session,
-    frame: &mut Frame<'_>,
-    viewport: Rect,
-    params: PaletteRenderParams<F>,
-) where
-    F: for<'a> Fn(&Session, &'a str, bool) -> ListItem<'static>,
-{
-    if !params.is_active || viewport.height == 0 || viewport.width == 0 || session.modal.is_some() {
-        return;
+pub fn split_inline_file_palette_area(session: &mut Session, area: Rect) -> (Rect, Option<Rect>) {
+    if area.height == 0
+        || area.width == 0
+        || session.modal.is_some()
+        || session.history_picker_state.active
+        || !session.file_palette_active
+    {
+        return (area, None);
     }
 
-    if params.items.is_empty() {
-        return;
+    let Some(palette) = session.file_palette.as_ref() else {
+        return (area, None);
+    };
+
+    let instruction_rows = if palette.has_files() {
+        file_palette_instructions(session, palette).len()
+    } else {
+        1
+    };
+
+    let list_rows = if palette.has_files() {
+        let mut rows = palette.current_page_items().len().max(1);
+        if palette.has_more_items() {
+            rows += 1;
+        }
+        rows.min(ui::INLINE_LIST_MAX_ROWS)
+    } else {
+        1
+    };
+
+    let instruction_rows = instruction_rows.min(u16::MAX as usize) as u16;
+    let desired_height = instruction_rows.saturating_add(list_rows.min(u16::MAX as usize) as u16);
+    let max_panel_height = area.height.saturating_sub(1);
+    if max_panel_height <= instruction_rows {
+        return (area, None);
     }
 
-    let modal_height =
-        params.items.len() + params.instructions.len() + 2 + if params.has_more { 1 } else { 0 };
-    let area = compute_modal_area(viewport, modal_height, 0, 0, true);
-
-    frame.render_widget(Clear, area);
-    let block = Block::bordered()
-        .title(params.title)
-        .border_type(terminal_capabilities::get_border_type())
-        .style(default_style(session))
-        .border_style(border_style(session));
-    let inner = block.inner(area);
-    frame.render_widget(block, area);
-
-    if inner.height == 0 || inner.width == 0 {
-        return;
-    }
-
-    let layout = ModalListLayout::new(inner, params.instructions.len());
-    if let Some(text_area) = layout.text_area {
-        let paragraph = Paragraph::new(params.instructions).wrap(Wrap { trim: true });
-        frame.render_widget(paragraph, text_area);
-    }
-
-    let mut list_items: Vec<ListItem> = params
-        .items
-        .iter()
-        .map(|(_, display_text, is_selected)| {
-            (params.render_item)(session, display_text.as_str(), *is_selected)
-        })
-        .collect();
-
-    if params.has_more {
-        let continuation_style =
-            default_style(session).add_modifier(Modifier::DIM | Modifier::ITALIC);
-        list_items.push(ListItem::new(Line::from(Span::styled(
-            params.more_text,
-            continuation_style,
-        ))));
-    }
-
-    let list = List::new(list_items)
-        .style(default_style(session))
-        .highlight_symbol(ui::MODAL_LIST_HIGHLIGHT_FULL)
-        .repeat_highlight_symbol(true);
-    frame.render_widget(list, layout.list_area);
+    let panel_height = desired_height.min(max_panel_height);
+    let chunks =
+        Layout::vertical([Constraint::Min(1), Constraint::Length(panel_height)]).split(area);
+    (chunks[0], Some(chunks[1]))
 }
 
-pub fn render_file_palette(session: &mut Session, frame: &mut Frame<'_>, viewport: Rect) {
-    if !session.file_palette_active {
+pub fn render_file_palette(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
+    if !session.file_palette_active
+        || area.height == 0
+        || area.width == 0
+        || session.modal.is_some()
+    {
         return;
     }
 
@@ -86,110 +65,131 @@ pub fn render_file_palette(session: &mut Session, frame: &mut Frame<'_>, viewpor
         return;
     };
 
-    if viewport.height == 0 || viewport.width == 0 || session.modal.is_some() {
-        return;
-    }
+    frame.render_widget(Clear, area);
 
-    // Show loading state if no files loaded yet
     if !palette.has_files() {
-        render_file_palette_loading(session, frame, viewport);
+        let loading = Paragraph::new(Line::from(Span::styled(
+            "Loading workspace files...".to_owned(),
+            default_style(session).add_modifier(Modifier::DIM),
+        )))
+        .wrap(Wrap { trim: true });
+        frame.render_widget(loading, area);
         return;
     }
-
-    let items = palette.current_page_items();
-    if items.is_empty() && palette.filter_query().is_empty() {
-        return;
-    }
-
-    // Convert items to generic format
-    let generic_items: Vec<(usize, String, bool)> = items
-        .iter()
-        .map(|(idx, entry, selected)| {
-            let display = if entry.is_dir {
-                format!("{}/ ", entry.display_name)
-            } else {
-                entry.display_name.clone()
-            };
-            (*idx, display, *selected)
-        })
-        .collect();
-
-    let title = format!(
-        "File Browser (Page {}/{})",
-        palette.current_page_number(),
-        palette.total_pages()
-    );
 
     let instructions = file_palette_instructions(session, palette);
-    let has_more = palette.has_more_items();
-    let more_text = format!(
-        "  ... ({} more items)",
-        palette
-            .total_items()
-            .saturating_sub(palette.current_page_number() * 20)
-    );
+    let instruction_rows = instructions.len().min(u16::MAX as usize) as u16;
+    let layout = if instruction_rows == 0 {
+        Layout::vertical([Constraint::Min(1)]).split(area)
+    } else {
+        Layout::vertical([Constraint::Length(instruction_rows), Constraint::Min(1)]).split(area)
+    };
 
-    // Render using generic helper
-    render_palette_generic(
-        session,
+    if layout.is_empty() {
+        return;
+    }
+
+    let list_area = if instruction_rows == 0 {
+        layout[0]
+    } else {
+        frame.render_widget(
+            Paragraph::new(instructions).wrap(Wrap { trim: true }),
+            layout[0],
+        );
+        if layout.len() < 2 {
+            return;
+        }
+        layout[1]
+    };
+
+    if list_area.width == 0 || list_area.height == 0 {
+        return;
+    }
+
+    let rows = build_file_palette_rows(session, palette);
+    let item_count = rows.len();
+    if item_count == 0 {
+        return;
+    }
+
+    let default_style = default_style(session);
+    let highlight_style = modal_list_highlight_style(session);
+    let selected_prefix = ui::MODAL_LIST_HIGHLIGHT_FULL.to_owned();
+    let unselected_prefix = " ".repeat(selected_prefix.chars().count());
+
+    let selected = rows.iter().position(|row| row.selectable && row.selected);
+    let rendered_rows = rows
+        .into_iter()
+        .map(|row| {
+            (
+                InlineListRow::single(
+                    Line::from(vec![
+                        Span::styled(unselected_prefix.clone(), default_style),
+                        Span::styled(row.text, row.style),
+                    ]),
+                    if row.selectable {
+                        default_style
+                    } else {
+                        default_style.add_modifier(Modifier::DIM)
+                    },
+                ),
+                1_u16,
+            )
+        })
+        .collect::<Vec<_>>();
+
+    let _ = render_inline_list(
         frame,
-        viewport,
-        PaletteRenderParams {
-            is_active: true, // is_active already checked above
-            title,
-            items: generic_items,
-            instructions,
-            has_more,
-            more_text,
-            render_item: |session, display_text: &str, is_selected| {
-                let base_style = if is_selected {
-                    modal_list_highlight_style(session)
-                } else {
-                    default_style(session)
-                };
-
-                // Apply file-specific styling
-                let mut style = base_style;
-
-                // Add icon prefix based on file type
-                let (prefix, is_dir) = if display_text.ends_with("/ ") {
-                    ("↳  ", true)
-                } else {
-                    ("  · ", false)
-                };
-
-                if is_dir {
-                    style = style.add_modifier(Modifier::BOLD);
-                }
-
-                let display = format!("{}{}", prefix, display_text.trim_end_matches("/ "));
-                ListItem::new(Line::from(display).style(style))
-            },
-        },
+        list_area,
+        rendered_rows,
+        selected,
+        Some(highlight_style),
     );
 }
 
-fn render_file_palette_loading(session: &Session, frame: &mut Frame<'_>, viewport: Rect) {
-    let modal_height = 3;
-    let area = compute_modal_area(viewport, modal_height, 0, 0, true);
+fn build_file_palette_rows(session: &Session, palette: &FilePalette) -> Vec<FilePaletteRenderRow> {
+    let mut rows = Vec::new();
+    let default = default_style(session);
 
-    frame.render_widget(Clear, area);
-    let block = Block::bordered()
-        .title("File Browser")
-        .border_type(terminal_capabilities::get_border_type())
-        .style(default_style(session))
-        .border_style(border_style(session));
-    let inner = block.inner(area);
-    frame.render_widget(block, area);
+    for (_global_idx, entry, selected) in palette.current_page_items() {
+        let mut style = default;
+        let prefix = if entry.is_dir {
+            style = style.add_modifier(Modifier::BOLD);
+            "↳  "
+        } else {
+            "  · "
+        };
 
-    if inner.height > 0 && inner.width > 0 {
-        let loading_text = vec![Line::from(Span::styled(
-            "Loading workspace files...".to_owned(),
-            default_style(session).add_modifier(Modifier::DIM),
-        ))];
-        let paragraph = Paragraph::new(loading_text).wrap(Wrap { trim: true });
-        frame.render_widget(paragraph, inner);
+        rows.push(FilePaletteRenderRow {
+            text: format!("{}{}", prefix, entry.display_name),
+            style,
+            selectable: true,
+            selected,
+        });
     }
+
+    if rows.is_empty() {
+        rows.push(FilePaletteRenderRow {
+            text: "No matching files".to_owned(),
+            style: default.add_modifier(Modifier::DIM),
+            selectable: false,
+            selected: false,
+        });
+    }
+
+    if palette.has_more_items() {
+        let remaining = palette
+            .total_items()
+            .saturating_sub(palette.current_page_number() * 20);
+        rows.push(FilePaletteRenderRow {
+            text: format!("  ... ({} more items)", remaining),
+            style: default.add_modifier(Modifier::DIM | Modifier::ITALIC),
+            selectable: false,
+            selected: false,
+        });
+    }
+
+    rows
 }
 
 fn file_palette_instructions(session: &Session, palette: &FilePalette) -> Vec<Line<'static>> {

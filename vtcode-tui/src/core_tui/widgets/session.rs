@@ -5,8 +5,7 @@ use ratatui::{
 };
 
 use super::{
-    FilePaletteWidget, FooterWidget, HeaderWidget, LayoutMode, Panel, SidebarWidget,
-    TranscriptWidget, footer_hints,
+    FooterWidget, HeaderWidget, LayoutMode, Panel, SidebarWidget, TranscriptWidget, footer_hints,
 };
 use crate::ui::tui::session::{Session, render::apply_view_rows};
 
@@ -192,7 +191,6 @@ impl Widget for &mut SessionWidget<'_> {
         let layout_height = area.height.saturating_sub(self.session.input_height);
         let layout_area = Rect::new(area.x, area.y, area.width, layout_height);
         if layout_area.height == 0 || layout_area.width == 0 {
-            self.render_overlays(area, buf);
             return;
         }
 
@@ -245,9 +243,6 @@ impl Widget for &mut SessionWidget<'_> {
         if mode.show_footer() && layout.footer.height > 0 {
             self.render_footer(layout.footer, buf, mode);
         }
-
-        // Render overlays (modals, palettes, etc.)
-        self.render_overlays(area, buf);
     }
 }
 
@@ -347,25 +342,6 @@ impl<'a> SessionWidget<'a> {
         }
 
         footer.render(area, buf);
-    }
-
-    fn render_overlays(&mut self, viewport: Rect, buf: &mut Buffer) {
-        // Render file palette using builder pattern
-        if self.session.file_palette_active
-            && let Some(palette) = self.session.file_palette.as_ref()
-        {
-            FilePaletteWidget::new(self.session, palette, viewport).render(viewport, buf);
-        }
-
-        // Render history picker using builder pattern
-        if self.session.history_picker_state.active {
-            super::HistoryPickerWidget::new(
-                self.session,
-                &self.session.history_picker_state,
-                viewport,
-            )
-            .render(buf);
-        }
     }
 }
 

@@ -1,0 +1,60 @@
+use ratatui::{
+    prelude::*,
+    widgets::{Paragraph, Widget, Wrap},
+};
+use tui_widget_list::{ListBuilder, ListState as WidgetListState, ListView};
+
+#[derive(Clone)]
+pub(crate) struct InlineListRow {
+    pub lines: Vec<Line<'static>>,
+    pub style: Style,
+}
+
+impl InlineListRow {
+    pub(crate) fn single(line: Line<'static>, style: Style) -> Self {
+        Self {
+            lines: vec![line],
+            style,
+        }
+    }
+}
+
+impl Widget for InlineListRow {
+    fn render(self, area: Rect, buf: &mut Buffer) {
+        Paragraph::new(self.lines)
+            .style(self.style)
+            .wrap(Wrap { trim: false })
+            .render(area, buf);
+    }
+}
+
+pub(crate) fn row_height(lines: &[Line<'_>]) -> u16 {
+    lines.len().max(1).min(u16::MAX as usize) as u16
+}
+
+pub(crate) fn render_inline_list(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    rows: Vec<(InlineListRow, u16)>,
+    selected: Option<usize>,
+    selected_style: Option<Style>,
+) -> WidgetListState {
+    let item_count = rows.len();
+    let mut widget_state = WidgetListState::default();
+    widget_state.select(selected.filter(|index| *index < item_count));
+
+    let builder = ListBuilder::new(move |context| {
+        let (base_row, height) = &rows[context.index];
+        let mut row = base_row.clone();
+        if context.is_selected
+            && let Some(style) = selected_style
+        {
+            row.style = style;
+        }
+        (row, *height)
+    });
+
+    let widget = ListView::new(builder, item_count).infinite_scrolling(false);
+    frame.render_stateful_widget(widget, area, &mut widget_state);
+    widget_state
+}

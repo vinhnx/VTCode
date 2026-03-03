@@ -1,24 +1,25 @@
 use ratatui::crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
-    buffer::Buffer,
     prelude::*,
-    widgets::{Clear, Paragraph, Widget, Wrap},
+    widgets::{Clear, Paragraph, Wrap},
 };
-use tui_widget_list::{ListBuilder, ListState as WidgetListState, ListView};
 
 use crate::config::constants::ui;
 use crate::ui::search::fuzzy_score;
 
 use super::super::types::InlineTextStyle;
+use super::inline_list::{InlineListRow, render_inline_list};
 use super::{
     Session, ratatui_color_from_ansi, ratatui_style_from_inline,
     slash_palette::{self, SlashPaletteUpdate, command_prefix, command_range},
 };
 
-const MAX_SLASH_LIST_ROWS: usize = 10;
-
 pub(crate) fn split_inline_slash_area(session: &mut Session, area: Rect) -> (Rect, Option<Rect>) {
-    if area.height == 0 || area.width == 0 || session.modal.is_some() || session.file_palette_active
+    if area.height == 0
+        || area.width == 0
+        || session.modal.is_some()
+        || session.file_palette_active
+        || session.history_picker_state.active
     {
         session.slash_palette.clear_visible_rows();
         return (area, None);
@@ -35,7 +36,7 @@ pub(crate) fn split_inline_slash_area(session: &mut Session, area: Rect) -> (Rec
         .min(u16::MAX as usize) as u16;
     let desired_list_rows = suggestions
         .len()
-        .min(MAX_SLASH_LIST_ROWS)
+        .min(ui::INLINE_LIST_MAX_ROWS)
         .min(u16::MAX as usize) as u16;
     let desired_height = instruction_rows.saturating_add(desired_list_rows.max(1));
     let max_panel_height = area.height.saturating_sub(1);
@@ -96,7 +97,7 @@ pub fn render_slash_palette(session: &mut Session, frame: &mut Frame<'_>, area: 
 
     session
         .slash_palette
-        .set_visible_rows((list_area.height as usize).min(MAX_SLASH_LIST_ROWS));
+        .set_visible_rows((list_area.height as usize).min(ui::INLINE_LIST_MAX_ROWS));
 
     let rows = slash_rows(session);
     let item_count = rows.len();
@@ -104,67 +105,43 @@ pub fn render_slash_palette(session: &mut Session, frame: &mut Frame<'_>, area: 
     let highlight_style = slash_highlight_style(session);
     let name_style = slash_name_style(session);
     let description_style = slash_description_style(session);
-    let selected_prefix = ui::MODAL_LIST_HIGHLIGHT_FULL.to_owned();
-    let unselected_prefix = " ".repeat(selected_prefix.chars().count());
+    let prefix = " ".repeat(ui::MODAL_LIST_HIGHLIGHT_FULL.chars().count());
 
-    let mut widget_state = WidgetListState::default();
-    widget_state.select(
-        session
-            .slash_palette
-            .list_state_mut()
-            .selected()
-            .filter(|index| *index < item_count),
+    let rendered_rows = rows
+        .into_iter()
+        .map(|row| {
+            (
+                InlineListRow::single(
+                    Line::from(vec![
+                        Span::styled(prefix.clone(), default_style),
+                        Span::styled(format!("/{}", row.name), name_style),
+                        Span::raw(" "),
+                        Span::styled(row.description, description_style),
+                    ]),
+                    default_style,
+                ),
+                1_u16,
+            )
+        })
+        .collect::<Vec<_>>();
+
+    let selected = session
+        .slash_palette
+        .list_state_mut()
+        .selected()
+        .filter(|index| *index < item_count);
+    let widget_state = render_inline_list(
+        frame,
+        list_area,
+        rendered_rows,
+        selected,
+        Some(highlight_style),
     );
-
-    let builder = ListBuilder::new(move |context| {
-        let row = &rows[context.index];
-        let line = Line::from(vec![
-            Span::styled(
-                if context.is_selected {
-                    selected_prefix.clone()
-                } else {
-                    unselected_prefix.clone()
-                },
-                default_style,
-            ),
-            Span::styled(format!("/{}", row.name), name_style),
-            Span::raw(" "),
-            Span::styled(row.description.clone(), description_style),
-        ]);
-        (
-            SlashListViewItem {
-                line,
-                style: if context.is_selected {
-                    highlight_style
-                } else {
-                    default_style
-                },
-            },
-            1,
-        )
-    });
-
-    let list = ListView::new(builder, item_count).infinite_scrolling(false);
-    frame.render_stateful_widget(list, list_area, &mut widget_state);
+    let selected_index = widget_state.selected;
 
     let list_state = session.slash_palette.list_state_mut();
-    list_state.select(widget_state.selected);
+    list_state.select(selected_index);
     *list_state.offset_mut() = widget_state.scroll_offset_index();
-}
-
-#[derive(Clone)]
-struct SlashListViewItem {
-    line: Line<'static>,
-    style: Style,
-}
-
-impl Widget for SlashListViewItem {
-    fn render(self, area: Rect, buf: &mut Buffer) {
-        Paragraph::new(self.line)
-            .style(self.style)
-            .wrap(Wrap { trim: false })
-            .render(area, buf);
-    }
 }
 
 fn slash_palette_instructions(session: &Session) -> Vec<Line<'static>> {
@@ -181,19 +158,6 @@ fn slash_palette_instructions(session: &Session) -> Vec<Line<'static>> {
 }
 
 pub(super) fn handle_slash_palette_change(session: &mut Session) {
-    // session.recalculate_transcript_rows(); // This method was removed from session.rs, need to check where it went.
-    // It was moved to render.rs as `recalculate_transcript_rows`.
-    // But render.rs functions are not methods on Session anymore.
-    // So I need to call `render::recalculate_transcript_rows(session)`.
-    // But I can't import `render` here easily if it's a sibling module.
-    // `use super::render;`
-    // I'll add the import later. For now I'll use the fully qualified path or assume I'll fix imports.
-    // Actually, `recalculate_transcript_rows` is likely `pub(super)` in `render.rs`.
-    // I'll check `render.rs` exports.
-
-    // For now, I'll comment it out and fix it in a separate step or assume `render` is available.
-    // Wait, I can't leave broken code.
-    // I'll assume `crate::ui::tui::session::render::recalculate_transcript_rows(session)` works.
     crate::ui::tui::session::render::recalculate_transcript_rows(session);
     session.enforce_scroll_bounds();
     session.mark_dirty();
@@ -241,6 +205,7 @@ pub(crate) fn slash_navigation_available(session: &Session) -> bool {
         && has_prefix
         && session.modal.is_none()
         && !session.file_palette_active
+        && !session.history_picker_state.active
 }
 
 pub(super) fn move_slash_selection_up(session: &mut Session) -> bool {
@@ -512,6 +477,7 @@ fn should_submit_immediately_from_palette(session: &Session) -> bool {
             | "/settings"
             | "/help"
             | "/clear"
+            | "/history"
             | "/exit"
     )
 }
@@ -567,6 +533,9 @@ mod tests {
         assert!(should_submit_immediately_from_palette(&session));
 
         session.set_input("   /status   ".to_string());
+        assert!(should_submit_immediately_from_palette(&session));
+
+        session.set_input("/history".to_string());
         assert!(should_submit_immediately_from_palette(&session));
     }
 

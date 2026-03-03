@@ -95,6 +95,10 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
             description: "List recent archived sessions (usage: /resume [limit])",
         },
         SlashCommandInfo {
+            name: "history",
+            description: "Open command history picker (usage: /history, same as Ctrl+R)",
+        },
+        SlashCommandInfo {
             name: "clear",
             description: "Clear visible screen (usage: /clear [new])",
         },
@@ -277,5 +281,11 @@ mod tests {
     fn fuzzy_matches_handle_non_contiguous_sequences() {
         let names = names_for("sts");
         assert!(names.contains(&"status"));
+    }
+
+    #[test]
+    fn prefix_matches_include_history_command() {
+        let names = names_for("his");
+        assert_eq!(names, vec!["history"]);
     }
 }

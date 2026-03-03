@@ -46,8 +46,8 @@ pub use oauth::{handle_oauth_login, handle_oauth_logout, handle_show_auth_status
 pub use share_log::handle_share_log;
 pub use skills::handle_manage_skills;
 pub use ui::{
-    handle_start_file_browser, handle_start_model_selection, handle_start_resume_palette,
-    handle_start_theme_palette, handle_theme_changed,
+    handle_start_file_browser, handle_start_history_picker, handle_start_model_selection,
+    handle_start_resume_palette, handle_start_theme_palette, handle_theme_changed,
 };
 pub use update::handle_update;
 pub use workspace::{
@@ -96,23 +96,12 @@ pub(super) fn persist_mode_settings(
     Ok(())
 }
 
-pub async fn handle_show_config(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
-    if ctx.renderer.supports_inline_ui() {
-        if ctx.model_picker_state.is_some() {
-            ctx.renderer.line(
-                MessageStyle::Error,
-                "Close the active model picker before viewing configuration.",
-            )?;
-            return Ok(SlashCommandControl::Continue);
-        }
-        if ctx.palette_state.is_some() {
-            ctx.renderer.line(
-                MessageStyle::Error,
-                "Another selection modal is already open. Press Esc to dismiss it before starting a new one.",
-            )?;
-            return Ok(SlashCommandControl::Continue);
-        }
+pub async fn handle_show_config(mut ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
+    if !ui::ensure_selection_ui_available(&mut ctx, "viewing configuration")? {
+        return Ok(SlashCommandControl::Continue);
+    }
 
+    if ctx.renderer.supports_inline_ui() {
         let workspace_path = ctx.config.workspace.clone();
         let vt_snapshot = ctx.vt_cfg.clone();
         if show_config_palette(ctx.renderer, &workspace_path, &vt_snapshot, None)? {
@@ -123,21 +112,6 @@ pub async fn handle_show_config(ctx: SlashCommandContext<'_>) -> Result<SlashCom
             });
         }
 
-        return Ok(SlashCommandControl::Continue);
-    }
-
-    if ctx.model_picker_state.is_some() {
-        ctx.renderer.line(
-            MessageStyle::Error,
-            "Close the active model picker before viewing configuration.",
-        )?;
-        return Ok(SlashCommandControl::Continue);
-    }
-    if ctx.palette_state.is_some() {
-        ctx.renderer.line(
-            MessageStyle::Error,
-            "Another selection modal is already open. Press Esc to dismiss it before starting a new one.",
-        )?;
         return Ok(SlashCommandControl::Continue);
     }
 

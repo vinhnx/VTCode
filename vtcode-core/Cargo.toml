@@ -109,7 +109,6 @@ ratatui = { version = "0.30", default-features = false, features = [
     "unstable-rendered-line-info",
     "unstable-widget-ref",
 ] }
-tui-popup = "0.7"
 better-panic = "0.3"
 
 perg = "0.8.0"

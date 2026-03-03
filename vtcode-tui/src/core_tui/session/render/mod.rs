@@ -3,31 +3,25 @@
 use anstyle::Color as AnsiColorEnum;
 use ratatui::{
     prelude::*,
-    widgets::{Block, Clear, List, ListItem, Paragraph, Wrap},
+    widgets::{Block, Clear, Paragraph, Wrap},
 };
 use unicode_width::UnicodeWidthStr;
 
 use super::super::style::ratatui_style_from_inline;
 use super::super::types::{InlineMessageKind, InlineTextStyle};
 use super::terminal_capabilities;
-use super::{
-    Session,
-    file_palette::FilePalette,
-    message::MessageLine,
-    modal::{
-        ModalBodyContext, ModalListLayout, ModalRenderStyles, compute_modal_area,
-        render_modal_body, render_wizard_modal_body,
-    },
-    text_utils,
-};
+use super::{Session, file_palette::FilePalette, message::MessageLine, text_utils};
 use crate::config::constants::ui;
 
+mod history_picker;
 mod modal_renderer;
 mod palettes;
 mod spans;
 
+pub use history_picker::{render_history_picker, split_inline_history_picker_area};
 pub use modal_renderer::render_modal;
-pub use palettes::render_file_palette;
+pub use modal_renderer::split_inline_modal_area;
+pub use palettes::{render_file_palette, split_inline_file_palette_area};
 use spans::{accent_style, border_style, default_style, invalidate_scroll_metrics, text_fallback};
 
 pub(super) fn render_message_spans(session: &Session, index: usize) -> Vec<Span<'static>> {
@@ -99,24 +93,54 @@ pub fn render(session: &mut Session, frame: &mut Frame<'_>) {
     if session.show_logs {
         let split = Layout::vertical([Constraint::Percentage(70), Constraint::Percentage(30)])
             .split(transcript_area);
+        let (transcript_body, modal_area) = split_inline_modal_area(session, split[0]);
+        let (transcript_body, file_palette_area) =
+            split_inline_file_palette_area(session, transcript_body);
+        let (transcript_body, history_picker_area) =
+            split_inline_history_picker_area(session, transcript_body);
         let (transcript_body, slash_area) =
-            super::slash::split_inline_slash_area(session, split[0]);
+            super::slash::split_inline_slash_area(session, transcript_body);
         render_transcript(session, frame, transcript_body);
+        if let Some(modal_area) = modal_area {
+            render_modal(session, frame, modal_area);
+        } else if session.modal.is_some() || session.wizard_modal.is_some() {
+            render_modal(session, frame, size);
+        }
+        if let Some(file_palette_area) = file_palette_area {
+            render_file_palette(session, frame, file_palette_area);
+        }
+        if let Some(history_picker_area) = history_picker_area {
+            render_history_picker(session, frame, history_picker_area);
+        }
         if let Some(slash_area) = slash_area {
             super::slash::render_slash_palette(session, frame, slash_area);
         }
         render_log_view(session, frame, split[1]);
     } else {
+        let (transcript_body, modal_area) = split_inline_modal_area(session, transcript_area);
+        let (transcript_body, file_palette_area) =
+            split_inline_file_palette_area(session, transcript_body);
+        let (transcript_body, history_picker_area) =
+            split_inline_history_picker_area(session, transcript_body);
         let (transcript_body, slash_area) =
-            super::slash::split_inline_slash_area(session, transcript_area);
+            super::slash::split_inline_slash_area(session, transcript_body);
         render_transcript(session, frame, transcript_body);
+        if let Some(modal_area) = modal_area {
+            render_modal(session, frame, modal_area);
+        } else if session.modal.is_some() || session.wizard_modal.is_some() {
+            render_modal(session, frame, size);
+        }
+        if let Some(file_palette_area) = file_palette_area {
+            render_file_palette(session, frame, file_palette_area);
+        }
+        if let Some(history_picker_area) = history_picker_area {
+            render_history_picker(session, frame, history_picker_area);
+        }
         if let Some(slash_area) = slash_area {
             super::slash::render_slash_palette(session, frame, slash_area);
         }
     }
     session.render_input(frame, input_area);
-    render_modal(session, frame, size);
-    render_file_palette(session, frame, size);
 }
 
 fn render_log_view(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {

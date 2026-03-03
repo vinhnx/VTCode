@@ -99,6 +99,7 @@ pub enum InlineCommand {
         files: Vec<String>,
         workspace: std::path::PathBuf,
     },
+    OpenHistoryPicker,
     ClearScreen,
     SuspendEventLoop,
     ResumeEventLoop,
@@ -379,6 +380,10 @@ impl InlineHandle {
 
     pub fn load_file_palette(&self, files: Vec<String>, workspace: std::path::PathBuf) {
         self.send_command(InlineCommand::LoadFilePalette { files, workspace });
+    }
+
+    pub fn open_history_picker(&self) {
+        self.send_command(InlineCommand::OpenHistoryPicker);
     }
 
     /// Show plan confirmation dialog for implementation blueprint review

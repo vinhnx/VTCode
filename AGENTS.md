@@ -127,6 +127,14 @@ cargo clippy --workspace --all-targets -- -D warnings && cargo fmt --check && ca
 2. Don't skip quality gate
 3. Don't assume `RwLock` is faster — benchmark; `Mutex` often wins
 
+### Slash Commands & Inline List UI
+
+- Register new slash command metadata in `vtcode-core/src/ui/slash.rs` (`SLASH_COMMANDS`) so it appears in the `/` suggestion list.
+- Wire command parsing and outcome routing end-to-end: `src/agent/runloop/slash_commands.rs` -> `src/agent/runloop/unified/turn/session/slash_commands/mod.rs` -> concrete handler in `.../slash_commands/ui.rs` (or relevant handler module).
+- For picker/selection UX, use shared inline list flows (`ShowListModal` / `ShowWizardModal` / shared inline events) instead of introducing new popup/overlay widget implementations.
+- Keep slash behavior consistent: if a command should execute immediately from slash selection, update the immediate-submit matcher in `vtcode-tui/src/core_tui/session/slash.rs`.
+- Add focused tests when touching this path (at minimum: `vtcode-core` slash suggestion tests and `vtcode-tui` slash/session tests).
+
 ## Agent Execution Guidelines
 
 ### Task Execution

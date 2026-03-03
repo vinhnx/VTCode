@@ -1,7 +1,119 @@
 use super::*;
+use crate::ui::tui::session::modal::{
+    ModalBodyContext, ModalListState, ModalRenderStyles, render_modal_body,
+    render_wizard_modal_body,
+};
 
-pub fn render_modal(session: &mut Session, frame: &mut Frame<'_>, viewport: Rect) {
-    if viewport.width == 0 || viewport.height == 0 {
+const MAX_INLINE_MODAL_HEIGHT: u16 = 20;
+const MAX_INLINE_MODAL_HEIGHT_MULTILINE: u16 = 32;
+const MAX_INLINE_INSTRUCTION_ROWS: usize = 6;
+
+fn list_has_two_line_items(list: &ModalListState) -> bool {
+    list.visible_indices.iter().any(|&index| {
+        list.items.get(index).is_some_and(|item| {
+            item.subtitle
+                .as_ref()
+                .is_some_and(|subtitle| !subtitle.trim().is_empty())
+        })
+    })
+}
+
+fn list_row_cap(list: &ModalListState) -> usize {
+    if list_has_two_line_items(list) {
+        ui::INLINE_LIST_MAX_ROWS_MULTILINE
+    } else {
+        ui::INLINE_LIST_MAX_ROWS
+    }
+}
+
+fn list_desired_rows(list: &ModalListState) -> usize {
+    list.visible_indices.len().clamp(1, list_row_cap(list))
+}
+
+pub fn split_inline_modal_area(session: &Session, area: Rect) -> (Rect, Option<Rect>) {
+    if area.width == 0 || area.height == 0 {
+        return (area, None);
+    }
+
+    let multiline_list_present = if let Some(wizard) = session.wizard_modal.as_ref() {
+        wizard
+            .steps
+            .get(wizard.current_step)
+            .is_some_and(|step| list_has_two_line_items(&step.list))
+    } else if let Some(modal) = session.modal.as_ref() {
+        modal.list.as_ref().is_some_and(list_has_two_line_items)
+    } else {
+        false
+    };
+
+    let desired_lines = if let Some(wizard) = session.wizard_modal.as_ref() {
+        let mut lines = 0usize;
+        lines = lines.saturating_add(1); // tabs/header
+        if wizard.search.is_some() {
+            lines = lines.saturating_add(1);
+        }
+        lines = lines.saturating_add(2); // question and spacing
+        let list_rows = wizard
+            .steps
+            .get(wizard.current_step)
+            .map(|step| list_desired_rows(&step.list))
+            .unwrap_or(1);
+        lines = lines.saturating_add(list_rows);
+        if wizard
+            .steps
+            .get(wizard.current_step)
+            .is_some_and(|step| step.notes_active || !step.notes.is_empty())
+        {
+            lines = lines.saturating_add(1);
+        }
+        lines = lines.saturating_add(
+            wizard
+                .instruction_lines()
+                .len()
+                .min(MAX_INLINE_INSTRUCTION_ROWS),
+        );
+        lines
+    } else if let Some(modal) = session.modal.as_ref() {
+        let mut lines = modal.lines.len().clamp(1, MAX_INLINE_INSTRUCTION_ROWS);
+        if modal.search.is_some() {
+            lines = lines.saturating_add(1);
+        }
+        if modal.secure_prompt.is_some() {
+            lines = lines.saturating_add(2);
+        }
+        if let Some(list) = modal.list.as_ref() {
+            lines = lines.saturating_add(list_desired_rows(list));
+        } else {
+            lines = lines.saturating_add(1);
+        }
+        lines
+    } else {
+        return (area, None);
+    };
+
+    let max_panel_height = area.height.saturating_sub(1);
+    if max_panel_height == 0 {
+        return (area, None);
+    }
+
+    let min_height = ui::MODAL_MIN_HEIGHT.min(max_panel_height).max(1);
+    let modal_height_cap = if multiline_list_present {
+        MAX_INLINE_MODAL_HEIGHT_MULTILINE
+    } else {
+        MAX_INLINE_MODAL_HEIGHT
+    };
+    let capped_max = modal_height_cap.min(max_panel_height).max(min_height);
+    let desired_height = (desired_lines.min(u16::MAX as usize) as u16)
+        .max(min_height)
+        .min(capped_max);
+
+    let chunks =
+        Layout::vertical([Constraint::Min(1), Constraint::Length(desired_height)]).split(area);
+    (chunks[0], Some(chunks[1]))
+}
+
+pub fn render_modal(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
+    if area.width == 0 || area.height == 0 {
         return;
     }
 
@@ -26,45 +138,11 @@ pub fn render_modal(session: &mut Session, frame: &mut Frame<'_>, viewport: Rect
 
     let styles = modal_render_styles(session);
     if let Some(wizard) = session.wizard_modal.as_mut() {
-        let _is_multistep = wizard.mode == crate::ui::tui::types::WizardModalMode::MultiStep;
-        let mut width_lines = Vec::new();
-        width_lines.push(wizard.question_header());
-        if let Some(step) = wizard.steps.get(wizard.current_step) {
-            width_lines.push(step.question.clone());
-        }
-        if let Some(notes) = wizard.notes_line() {
-            width_lines.push(notes);
-        }
-        width_lines.extend(wizard.instruction_lines());
-
-        let text_lines = width_lines.len();
-        let search_lines = wizard.search.as_ref().map(|_| 3).unwrap_or(0);
-        let area = compute_modal_area(viewport, text_lines, 0, search_lines, true);
-
-        let block = Block::bordered()
-            .title(Line::styled(wizard.title.clone(), styles.title))
-            .border_type(terminal_capabilities::get_border_type())
-            .border_style(styles.border);
-
         frame.render_widget(Clear, area);
-        frame.render_widget(block, area);
-
-        if area.width <= 2 || area.height <= 2 {
+        if area.width == 0 || area.height == 0 {
             return;
         }
-
-        let inner = Rect {
-            x: area.x.saturating_add(1),
-            y: area.y.saturating_add(1),
-            width: area.width.saturating_sub(2),
-            height: area.height.saturating_sub(2),
-        };
-
-        if inner.width == 0 || inner.height == 0 {
-            return;
-        }
-
-        render_wizard_modal_body(frame, inner, wizard, &styles);
+        render_wizard_modal_body(frame, area, wizard, &styles);
         return;
     }
 
@@ -72,42 +150,13 @@ pub fn render_modal(session: &mut Session, frame: &mut Frame<'_>, viewport: Rect
         return;
     };
 
-    let prompt_lines = if modal.secure_prompt.is_some() { 2 } else { 0 };
-    let search_lines = modal.search.as_ref().map(|_| 3).unwrap_or(0);
-    let area = compute_modal_area(
-        viewport,
-        modal.lines.len(),
-        prompt_lines,
-        search_lines,
-        modal.list.is_some(),
-    );
-
-    let block = Block::bordered()
-        .title(Line::styled(modal.title.clone(), styles.title))
-        .border_type(terminal_capabilities::get_border_type())
-        .border_style(styles.border);
-
     frame.render_widget(Clear, area);
-    frame.render_widget(block, area);
-
-    if area.width <= 2 || area.height <= 2 {
+    if area.width == 0 || area.height == 0 {
         return;
     }
-
-    let inner = Rect {
-        x: area.x.saturating_add(1),
-        y: area.y.saturating_add(1),
-        width: area.width.saturating_sub(2),
-        height: area.height.saturating_sub(2),
-    };
-
-    if inner.width == 0 || inner.height == 0 {
-        return;
-    }
-
     render_modal_body(
         frame,
-        inner,
+        area,
         ModalBodyContext {
             instructions: &modal.lines,
             footer_hint: modal.footer_hint.as_deref(),
@@ -125,9 +174,9 @@ fn modal_render_styles(session: &Session) -> ModalRenderStyles {
     ModalRenderStyles {
         border: border_style(session),
         highlight: modal_list_highlight_style(session),
-        badge: session.section_title_style().add_modifier(Modifier::DIM),
-        header: session.section_title_style(),
-        selectable: default_style(session).add_modifier(Modifier::BOLD),
+        badge: border_style(session).add_modifier(Modifier::DIM | Modifier::BOLD),
+        header: accent_style(session).add_modifier(Modifier::BOLD),
+        selectable: default_style(session),
         detail: default_style(session).add_modifier(Modifier::DIM),
         search_match: accent_style(session).add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
         title: Style::default().add_modifier(Modifier::BOLD),

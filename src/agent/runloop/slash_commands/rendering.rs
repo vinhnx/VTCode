@@ -150,6 +150,10 @@ pub(super) fn render_help(
             MessageStyle::Info,
             "  Ctrl+R – Reverse search command history",
         )?;
+        renderer.line(
+            MessageStyle::Info,
+            "  /history – Open command history picker",
+        )?;
         renderer.line(MessageStyle::Info, "  Ctrl+V – Paste image from clipboard")?;
         renderer.line(
             MessageStyle::Info,

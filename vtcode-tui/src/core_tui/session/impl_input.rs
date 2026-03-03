@@ -8,6 +8,7 @@ impl Session {
     pub fn set_input(&mut self, text: impl Into<String>) {
         self.input_manager.set_content(text.into());
         self.input_compact_mode = self.input_compact_placeholder().is_some();
+        self.check_file_reference_trigger();
         self.mark_dirty();
     }
 
@@ -133,6 +134,7 @@ impl Session {
                     self.input_compact_mode = self.input_compact_placeholder().is_some();
                     self.scroll_manager.set_offset(0);
                     slash::update_slash_suggestions(self);
+                    self.check_file_reference_trigger();
                 }
             }
             InlineCommand::ClearInput => {
@@ -171,6 +173,9 @@ impl Session {
             }
             InlineCommand::LoadFilePalette { files, workspace } => {
                 self.load_file_palette(files, workspace);
+            }
+            InlineCommand::OpenHistoryPicker => {
+                events::open_history_picker(self);
             }
             InlineCommand::ClearScreen => {
                 self.clear_screen();

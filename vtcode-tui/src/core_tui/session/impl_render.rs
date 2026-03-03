@@ -48,7 +48,12 @@ impl Session {
         let _available_width = main_area.width;
         let _horizontal_minimum = ui::INLINE_CONTENT_MIN_WIDTH + ui::INLINE_NAVIGATION_MIN_WIDTH;
 
-        let (transcript_area, slash_area) = slash::split_inline_slash_area(self, main_area);
+        let (transcript_area, modal_area) = render::split_inline_modal_area(self, main_area);
+        let (transcript_area, file_palette_area) =
+            render::split_inline_file_palette_area(self, transcript_area);
+        let (transcript_area, history_picker_area) =
+            render::split_inline_history_picker_area(self, transcript_area);
+        let (transcript_area, slash_area) = slash::split_inline_slash_area(self, transcript_area);
         let navigation_area = Rect::new(main_area.x, main_area.y, 0, 0); // No navigation area since timeline pane is removed
 
         // Use SessionWidget for buffer-based rendering (header, transcript, overlays)
@@ -63,11 +68,20 @@ impl Session {
         // Note: header, transcript, and overlays are handled by SessionWidget
         // Timeline pane has been removed, so no navigation rendering
         self.render_input(frame, input_area);
-        render::render_modal(self, frame, viewport);
+        if let Some(modal_area) = modal_area {
+            render::render_modal(self, frame, modal_area);
+        } else {
+            render::render_modal(self, frame, viewport);
+        }
+        if let Some(file_palette_area) = file_palette_area {
+            render::render_file_palette(self, frame, file_palette_area);
+        }
+        if let Some(history_picker_area) = history_picker_area {
+            render::render_history_picker(self, frame, history_picker_area);
+        }
         if let Some(slash_area) = slash_area {
             slash::render_slash_palette(self, frame, slash_area);
         }
-        render::render_file_palette(self, frame, viewport);
 
         // Render diff preview modal if active
         if self.diff_preview.is_some() {

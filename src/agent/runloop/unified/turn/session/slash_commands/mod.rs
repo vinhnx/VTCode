@@ -88,6 +88,7 @@ pub async fn handle_outcome(
         SlashCommandOutcome::StartResumePalette { limit } => {
             handlers::handle_start_resume_palette(ctx, limit).await
         }
+        SlashCommandOutcome::StartHistoryPicker => handlers::handle_start_history_picker(ctx).await,
         SlashCommandOutcome::StartFileBrowser { initial_filter } => {
             handlers::handle_start_file_browser(ctx, initial_filter).await
         }

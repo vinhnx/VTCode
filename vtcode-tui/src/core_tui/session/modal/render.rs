@@ -1,16 +1,15 @@
 use crate::config::constants::ui;
 use crate::ui::markdown::render_markdown;
-use crate::ui::tui::types::SecurePromptConfig;
+use crate::ui::tui::session::inline_list::{InlineListRow, render_inline_list, row_height};
+use crate::ui::tui::types::{InlineListSelection, SecurePromptConfig};
 use ratatui::{
     prelude::*,
-    widgets::{Block, List, ListItem, Paragraph, Tabs, Wrap},
+    widgets::{Paragraph, Tabs, Wrap},
 };
-use tui_widget_list::{ListBuilder, ListState as WidgetListState, ListView};
 use unicode_width::UnicodeWidthStr;
 
 use super::layout::{ModalBodyContext, ModalRenderStyles, ModalSection};
 use super::state::{ModalListState, ModalSearchState, WizardModalState, WizardStepState};
-use crate::ui::tui::session::terminal_capabilities;
 use crate::ui::tui::session::wrapping;
 use std::mem;
 
@@ -91,21 +90,6 @@ fn render_markdown_lines_for_modal(text: &str, width: usize, style: Style) -> Ve
     }
 }
 
-#[derive(Clone)]
-struct ModalListViewItem {
-    lines: Vec<Line<'static>>,
-    style: Style,
-}
-
-impl Widget for ModalListViewItem {
-    fn render(self, area: Rect, buf: &mut Buffer) {
-        Paragraph::new(self.lines)
-            .style(self.style)
-            .wrap(Wrap { trim: false })
-            .render(area, buf);
-    }
-}
-
 pub fn render_modal_list(
     frame: &mut Frame<'_>,
     area: Rect,
@@ -113,6 +97,22 @@ pub fn render_modal_list(
     styles: &ModalRenderStyles,
     footer_hint: Option<&str>,
 ) {
+    if area.width == 0 || area.height == 0 {
+        return;
+    }
+
+    let summary = modal_list_summary_line(list, styles, footer_hint);
+    let (list_area, summary_area) = if summary.is_some() && area.height > 1 {
+        let chunks = Layout::vertical([Constraint::Min(1), Constraint::Length(1)]).split(area);
+        (chunks[0], Some(chunks[1]))
+    } else {
+        (area, None)
+    };
+
+    if let (Some(line), Some(summary_area)) = (summary, summary_area) {
+        frame.render_widget(Paragraph::new(line).wrap(Wrap { trim: true }), summary_area);
+    }
+
     if list.visible_indices.is_empty() {
         list.list_state.select(None);
         *list.list_state.offset_mut() = 0;
@@ -120,17 +120,16 @@ pub fn render_modal_list(
             ui::MODAL_LIST_NO_RESULTS_MESSAGE.to_owned(),
             styles.detail,
         )))
-        .block(modal_list_block(list, styles, footer_hint))
         .wrap(Wrap { trim: true });
-        frame.render_widget(message, area);
+        frame.render_widget(message, list_area);
         return;
     }
 
-    let block = modal_list_block(list, styles, footer_hint);
-    let viewport_rows = area.height.saturating_sub(2);
+    let viewport_rows = list_area.height;
     list.set_viewport_rows(viewport_rows);
     list.ensure_visible(viewport_rows);
-    let content_width = area.width.saturating_sub(4) as usize;
+    let selection_gutter = ui::MODAL_LIST_HIGHLIGHT_FULL.chars().count() as u16;
+    let content_width = list_area.width.saturating_sub(selection_gutter) as usize;
     let rendered_items = list
         .visible_indices
         .iter()
@@ -139,37 +138,28 @@ pub fn render_modal_list(
             let lines =
                 modal_list_item_lines(list, visible_index, item_index, styles, content_width);
             (
-                ModalListViewItem {
+                InlineListRow {
                     lines: lines.clone(),
                     style: styles.selectable,
                 },
-                lines.len().max(1).min(u16::MAX as usize) as u16,
+                row_height(&lines),
             )
         })
         .collect::<Vec<_>>();
 
-    let mut widget_state = WidgetListState::default();
-    widget_state.select(
-        list.list_state
-            .selected()
-            .filter(|index| *index < rendered_items.len()),
-    );
-
-    let highlight_style = styles.highlight;
     let item_count = rendered_items.len();
-    let builder = ListBuilder::new(move |context| {
-        let (base_item, height) = &rendered_items[context.index];
-        let mut item = base_item.clone();
-        if context.is_selected {
-            item.style = highlight_style;
-        }
-        (item, *height)
-    });
+    let selected = list
+        .list_state
+        .selected()
+        .filter(|index| *index < item_count);
 
-    let widget = ListView::new(builder, item_count)
-        .block(block)
-        .infinite_scrolling(false);
-    frame.render_stateful_widget(widget, area, &mut widget_state);
+    let widget_state = render_inline_list(
+        frame,
+        list_area,
+        rendered_items,
+        selected,
+        Some(styles.highlight),
+    );
 
     list.list_state.select(widget_state.selected);
     *list.list_state.offset_mut() = widget_state.scroll_offset_index();
@@ -336,20 +326,6 @@ pub fn render_wizard_modal_body(
     }
 }
 
-fn modal_list_block(
-    list: &ModalListState,
-    styles: &ModalRenderStyles,
-    footer_hint: Option<&str>,
-) -> Block<'static> {
-    let mut block = Block::bordered()
-        .border_type(terminal_capabilities::get_border_type())
-        .border_style(styles.border);
-    if let Some(summary) = modal_list_summary_line(list, styles, footer_hint) {
-        block = block.title_bottom(summary);
-    }
-    block
-}
-
 #[allow(clippy::const_is_empty)]
 fn modal_list_summary_line(
     list: &ModalListState,
@@ -357,6 +333,16 @@ fn modal_list_summary_line(
     footer_hint: Option<&str>,
 ) -> Option<Line<'static>> {
     if !list.filter_active() {
+        if list
+            .items
+            .iter()
+            .any(|item| matches!(item.selection, Some(InlineListSelection::ConfigAction(_))))
+        {
+            return Some(Line::from(Span::styled(
+                "Navigation: ↑/↓ select • Space/Enter apply • ←/→ change value • Esc close",
+                styles.hint,
+            )));
+        }
         let density = if list.compact_rows() {
             "Density: Compact"
         } else {
@@ -458,14 +444,19 @@ pub fn render_modal_body(frame: &mut Frame<'_>, area: Rect, context: ModalBodyCo
     let mut constraints = Vec::new();
     for section in &sections {
         match section {
-            ModalSection::Search => constraints.push(Constraint::Length(3.min(area.height))),
+            ModalSection::Search => constraints.push(Constraint::Length(1.min(area.height))),
             ModalSection::Instructions => {
-                let visible_rows = context.instructions.len().max(1) as u16;
-                let height = visible_rows.saturating_add(2);
+                let visible_rows = context.instructions.len().clamp(1, 6) as u16;
+                let instruction_title_rows = if ui::MODAL_INSTRUCTIONS_TITLE.is_empty() {
+                    0
+                } else {
+                    1
+                };
+                let height = visible_rows.saturating_add(instruction_title_rows);
                 constraints.push(Constraint::Length(height.min(area.height)));
             }
-            ModalSection::Prompt => constraints.push(Constraint::Length(3.min(area.height))),
-            ModalSection::List => constraints.push(Constraint::Min(3)),
+            ModalSection::Prompt => constraints.push(Constraint::Length(2.min(area.height))),
+            ModalSection::List => constraints.push(Constraint::Min(1)),
         }
     }
 
@@ -551,22 +542,22 @@ fn render_modal_instructions(
         return;
     }
 
-    let mut items = Vec::new();
+    let mut items: Vec<Vec<Line<'static>>> = Vec::new();
     let mut first_content_rendered = false;
-    let content_width = area.width.saturating_sub(4) as usize;
+    let content_width = area.width.saturating_sub(2) as usize;
     let bullet_prefix = format!("{} ", ui::MODAL_INSTRUCTIONS_BULLET);
     let bullet_indent = " ".repeat(UnicodeWidthStr::width(bullet_prefix.as_str()));
 
     for line in instructions {
         let trimmed = line.trim();
         if trimmed.is_empty() {
-            items.push(ListItem::new(Line::default()));
+            items.push(vec![Line::default()]);
             continue;
         }
 
         let wrapped = wrap_instruction_lines(trimmed, content_width);
         if wrapped.is_empty() {
-            items.push(ListItem::new(Line::default()));
+            items.push(vec![Line::default()]);
             continue;
         }
 
@@ -580,7 +571,7 @@ fn render_modal_instructions(
                 };
                 lines.push(Line::from(Span::styled(segment, style)));
             }
-            items.push(ListItem::new(lines));
+            items.push(lines);
             first_content_rendered = true;
         } else {
             let mut lines = Vec::new();
@@ -597,29 +588,39 @@ fn render_modal_instructions(
                     ]));
                 }
             }
-            items.push(ListItem::new(lines));
+            items.push(lines);
         }
     }
 
     if items.is_empty() {
-        items.push(ListItem::new(Line::default()));
+        items.push(vec![Line::default()]);
     }
 
-    let block = Block::bordered()
-        .title(Span::styled(
-            ui::MODAL_INSTRUCTIONS_TITLE.to_owned(),
-            styles.instruction_title,
-        ))
-        .border_type(terminal_capabilities::get_border_type())
-        .border_style(styles.instruction_border);
+    let mut rendered_items = Vec::new();
+    if !ui::MODAL_INSTRUCTIONS_TITLE.is_empty() {
+        rendered_items.push((
+            InlineListRow::single(
+                Line::from(Span::styled(
+                    ui::MODAL_INSTRUCTIONS_TITLE.to_owned(),
+                    styles.instruction_title,
+                )),
+                styles.instruction_title,
+            ),
+            1_u16,
+        ));
+    }
 
-    let widget = List::new(items)
-        .block(block)
-        .style(styles.instruction_body)
-        .highlight_symbol("")
-        .repeat_highlight_symbol(false);
+    rendered_items.extend(items.into_iter().map(|lines| {
+        (
+            InlineListRow {
+                lines: lines.clone(),
+                style: styles.instruction_body,
+            },
+            row_height(&lines),
+        )
+    }));
 
-    frame.render_widget(widget, area);
+    let _ = render_inline_list(frame, area, rendered_items, None, None);
 }
 
 fn render_modal_search(
@@ -632,24 +633,20 @@ fn render_modal_search(
         return;
     }
 
-    let mut spans = Vec::new();
+    let mut line = vec![Span::styled(format!("{}: ", search.label), styles.header)];
     if search.query.is_empty() {
         if let Some(placeholder) = &search.placeholder {
-            spans.push(Span::styled(placeholder.clone(), styles.detail));
+            line.push(Span::styled(
+                placeholder.clone(),
+                styles.detail.add_modifier(Modifier::ITALIC),
+            ));
         }
     } else {
-        spans.push(Span::styled(search.query.clone(), styles.selectable));
+        line.push(Span::styled(search.query.clone(), styles.selectable));
+        line.push(Span::styled(" • Esc clears", styles.hint));
     }
-    spans.push(Span::styled("▌".to_owned(), styles.highlight));
-
-    let block = Block::bordered()
-        .title(Span::styled(search.label.clone(), styles.header))
-        .border_type(terminal_capabilities::get_border_type())
-        .border_style(styles.border);
-
-    let paragraph = Paragraph::new(Line::from(spans))
-        .block(block)
-        .wrap(Wrap { trim: true });
+    line.push(Span::styled("▌".to_owned(), styles.highlight));
+    let paragraph = Paragraph::new(Line::from(line)).wrap(Wrap { trim: true });
     frame.render_widget(paragraph, area);
 }
 
@@ -781,37 +778,7 @@ pub(super) fn highlight_segments(
     segments
 }
 
-pub fn modal_list_items(
-    list: &ModalListState,
-    styles: &ModalRenderStyles,
-    content_width: usize,
-) -> Vec<ListItem<'static>> {
-    list.visible_indices
-        .iter()
-        .enumerate()
-        .map(|(visible_index, &index)| {
-            modal_list_item(list, visible_index, index, styles, content_width)
-        })
-        .collect()
-}
-
-fn modal_list_item(
-    list: &ModalListState,
-    visible_index: usize,
-    item_index: usize,
-    styles: &ModalRenderStyles,
-    content_width: usize,
-) -> ListItem<'static> {
-    ListItem::new(modal_list_item_lines(
-        list,
-        visible_index,
-        item_index,
-        styles,
-        content_width,
-    ))
-}
-
-fn modal_list_item_lines(
+pub fn modal_list_item_lines(
     list: &ModalListState,
     _visible_index: usize,
     item_index: usize,
@@ -835,8 +802,12 @@ fn modal_list_item_lines(
     }
 
     let indent = "  ".repeat(item.indent as usize);
+    let selection_padding = " ".repeat(ui::MODAL_LIST_HIGHLIGHT_FULL.chars().count());
 
     let mut primary_spans = Vec::new();
+    if !selection_padding.is_empty() {
+        primary_spans.push(Span::raw(selection_padding.clone()));
+    }
 
     if !indent.is_empty() {
         primary_spans.push(Span::raw(indent.clone()));
@@ -844,7 +815,10 @@ fn modal_list_item_lines(
 
     if let Some(badge) = &item.badge {
         let badge_label = format!("[{}]", badge);
-        primary_spans.push(Span::styled(badge_label, styles.badge));
+        primary_spans.push(Span::styled(
+            badge_label,
+            modal_badge_style(badge.as_str(), styles),
+        ));
         primary_spans.push(Span::raw(" "));
     }
 
@@ -873,6 +847,9 @@ fn modal_list_item_lines(
 
         for wrapped in wrapped_lines {
             let mut secondary_spans = Vec::new();
+            if !selection_padding.is_empty() {
+                secondary_spans.push(Span::raw(selection_padding.clone()));
+            }
             if !indent.is_empty() {
                 secondary_spans.push(Span::raw(indent.clone()));
             }
@@ -893,9 +870,18 @@ fn modal_list_item_lines(
     lines
 }
 
+fn modal_badge_style(badge: &str, styles: &ModalRenderStyles) -> Style {
+    match badge {
+        "Active" | "Action" => styles.header.add_modifier(Modifier::BOLD),
+        "Read-only" => styles.detail.add_modifier(Modifier::ITALIC),
+        _ => styles.badge,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ui::tui::InlineListItem;
 
     fn line_text(line: &Line<'_>) -> String {
         line.spans
@@ -931,5 +917,46 @@ mod tests {
         assert!(rendered.contains("Goal"));
         assert!(!rendered.contains("### Goal"));
         assert!(rendered.contains("Reduce prompt size"));
+    }
+
+    #[test]
+    fn config_list_summary_uses_navigation_hint_instead_of_density() {
+        let list = ModalListState::new(
+            vec![InlineListItem {
+                title: "Autonomous mode".to_string(),
+                subtitle: Some("agent.autonomous_mode = on".to_string()),
+                badge: Some("Toggle".to_string()),
+                indent: 0,
+                selection: Some(InlineListSelection::ConfigAction(
+                    "agent.autonomous_mode:toggle".to_string(),
+                )),
+                search_value: None,
+            }],
+            None,
+        );
+
+        let styles = ModalRenderStyles {
+            border: Style::default(),
+            highlight: Style::default(),
+            badge: Style::default(),
+            header: Style::default(),
+            selectable: Style::default(),
+            detail: Style::default(),
+            search_match: Style::default(),
+            title: Style::default(),
+            divider: Style::default(),
+            instruction_border: Style::default(),
+            instruction_title: Style::default(),
+            instruction_bullet: Style::default(),
+            instruction_body: Style::default(),
+            hint: Style::default(),
+        };
+
+        let summary = modal_list_summary_line(&list, &styles, None)
+            .expect("expected summary line for config list");
+        let text = line_text(&summary);
+        assert!(text.contains("Navigation:"));
+        assert!(!text.contains("Alt+D"));
+        assert!(!text.contains("Density:"));
     }
 }

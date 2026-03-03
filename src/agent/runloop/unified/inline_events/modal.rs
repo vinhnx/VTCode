@@ -227,7 +227,9 @@ impl<'a> ModelPickerCoordinator<'a> {
             }
             ModelPickerProgress::Cancelled => {
                 *self.state = None;
-                renderer.line(MessageStyle::Info, "Model picker cancelled.")?;
+                if !renderer.supports_inline_ui() {
+                    renderer.line(MessageStyle::Info, "Model picker cancelled.")?;
+                }
             }
             ModelPickerProgress::Completed(selection) => {
                 let Some(picker_state) = self.state.take() else {
@@ -260,7 +262,9 @@ impl<'a> ModelPickerCoordinator<'a> {
 
     fn handle_cancel(&mut self, renderer: &mut AnsiRenderer) -> Result<bool> {
         if self.state.take().is_some() {
-            renderer.line(MessageStyle::Info, "Model picker cancelled.")?;
+            if !renderer.supports_inline_ui() {
+                renderer.line(MessageStyle::Info, "Model picker cancelled.")?;
+            }
             return Ok(true);
         }
 

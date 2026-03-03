@@ -33,6 +33,8 @@ impl Session {
                 palette.set_filter(query);
                 if !self.file_palette_active {
                     self.file_palette_active = true;
+                    self.needs_full_clear = true;
+                    self.mark_dirty();
                 }
             } else if self.file_palette_active {
                 self.close_file_palette();
@@ -43,6 +45,7 @@ impl Session {
     /// Close the file palette and clean up resources
     pub(super) fn close_file_palette(&mut self) {
         self.file_palette_active = false;
+        self.needs_full_clear = true;
 
         // Clean up resources when closing to free memory
         if let Some(palette) = self.file_palette.as_mut() {

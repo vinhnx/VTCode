@@ -20,7 +20,7 @@ default_model = "MiniMax-M2.5"
 #   default_model = "zai-org/GLM-5:novita"
 
 # Visual theme for the terminal interface
-theme = "apple-classic"
+theme = "adventure-time"
 
 # Temperature for main LLM responses (0.0-1.0)
 # Lower values = more deterministic, higher values = more creative
@@ -58,7 +58,7 @@ include_working_directory = true
 # Toggle during session with Shift+Tab or /plan command
 default_editing_mode = "edit"
 require_plan_confirmation = true
-autonomous_mode = false
+autonomous_mode = true
 credential_storage_mode = "keyring"
 
 [agent.small_model]
@@ -315,6 +315,7 @@ resume_edit_mode = "prompt"
 coder_mode = "prompt"
 "/plan_off" = "prompt"
 "/edit" = "prompt"
+load_skill_resource = "allow"
 
 [security.gatekeeper]
 warn_on_quarantine = true

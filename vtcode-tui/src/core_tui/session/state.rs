@@ -24,7 +24,6 @@ use super::{
     modal::{ModalListState, ModalSearchState, ModalState, WizardModalState},
 };
 use crate::config::constants::ui;
-use tui_popup::PopupState;
 
 impl Session {
     /// Get the next revision counter for message tracking
@@ -209,7 +208,6 @@ impl Session {
             search: None,
             secure_prompt,
             is_plan_confirmation: false,
-            popup_state: PopupState::default(),
             restore_input: true,
             restore_cursor: true,
         };
@@ -243,7 +241,6 @@ impl Session {
             search: search_state,
             secure_prompt: None,
             is_plan_confirmation: false,
-            popup_state: PopupState::default(),
             restore_input: true,
             restore_cursor: true,
         };

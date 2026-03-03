@@ -12,6 +12,7 @@ use ratatui::{
     style::{Color, Modifier},
     text::{Line, Span},
 };
+use std::path::PathBuf;
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
 
@@ -141,6 +142,19 @@ fn file_palette_insertion_uses_at_alias_in_input() {
 
     assert_eq!(session.input_manager.content(), "check @src/main.rs ");
     assert_eq!(session.cursor(), "check @src/main.rs ".len());
+}
+
+#[test]
+fn set_input_command_activates_file_palette_for_at_query() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    session.handle_command(InlineCommand::LoadFilePalette {
+        files: vec!["src/main.rs".to_string()],
+        workspace: PathBuf::from("."),
+    });
+
+    assert!(!session.file_palette_active);
+    session.handle_command(InlineCommand::SetInput("@src".to_string()));
+    assert!(session.file_palette_active);
 }
 
 #[test]

@@ -7,7 +7,6 @@ use crate::ui::tui::{
 };
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::style::{Modifier, Style};
-use tui_popup::PopupState;
 
 fn base_item(title: &str) -> InlineListItem {
     InlineListItem {
@@ -49,7 +48,6 @@ fn sample_list_modal() -> ModalState {
         list: Some(list_state),
         secure_prompt: None,
         is_plan_confirmation: false,
-        popup_state: PopupState::default(),
         restore_input: true,
         restore_cursor: true,
         search: Some(search_state),
@@ -369,7 +367,6 @@ fn sample_list_modal_with_count(count: usize) -> ModalState {
         list: Some(ModalListState::new(items, None)),
         secure_prompt: None,
         is_plan_confirmation: false,
-        popup_state: PopupState::default(),
         restore_input: true,
         restore_cursor: true,
         search: None,
@@ -474,6 +471,45 @@ fn list_modal_submit_emits_event() {
     match result {
         ModalListKeyResult::Submit(InlineEvent::ListModalSubmit(selection)) => {
             assert_eq!(selection, InlineListSelection::Model(0));
+        }
+        other => panic!("unexpected result: {:?}", other),
+    }
+}
+
+#[test]
+fn list_modal_space_submits_config_action_without_search() {
+    let mut modal = ModalState {
+        title: "Config".to_owned(),
+        lines: vec![],
+        footer_hint: None,
+        list: Some(ModalListState::new(
+            vec![InlineListItem {
+                title: "Autonomous mode".to_owned(),
+                subtitle: Some("agent.autonomous_mode = on".to_owned()),
+                badge: Some("Toggle".to_owned()),
+                indent: 0,
+                selection: Some(InlineListSelection::ConfigAction(
+                    "agent.autonomous_mode:toggle".to_owned(),
+                )),
+                search_value: None,
+            }],
+            None,
+        )),
+        secure_prompt: None,
+        is_plan_confirmation: false,
+        restore_input: true,
+        restore_cursor: true,
+        search: None,
+    };
+
+    let key = KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE);
+    let result = modal.handle_list_key_event(&key, ModalKeyModifiers::default());
+
+    match result {
+        ModalListKeyResult::Submit(InlineEvent::ListModalSubmit(
+            InlineListSelection::ConfigAction(action),
+        )) => {
+            assert_eq!(action, "agent.autonomous_mode:toggle");
         }
         other => panic!("unexpected result: {:?}", other),
     }

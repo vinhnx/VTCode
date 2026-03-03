@@ -19,6 +19,7 @@ use super::events::{EventChannels, EventListener, ScrollAccumulator, TerminalEve
 fn has_active_navigation_ui(session: &Session) -> bool {
     session.modal.is_some()
         || session.file_palette_active
+        || session.history_picker_state.active
         || crate::ui::tui::session::slash::slash_navigation_available(session)
 }
 

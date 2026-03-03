@@ -4,7 +4,6 @@ use crate::ui::FileColorizer;
 
 mod filtering;
 mod navigation;
-mod palette_item;
 mod references;
 
 pub use references::extract_file_reference;

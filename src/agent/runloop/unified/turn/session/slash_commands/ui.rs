@@ -14,6 +14,27 @@ use crate::agent::runloop::unified::state::ModelPickerTarget;
 
 use super::{SlashCommandContext, SlashCommandControl};
 
+pub(super) fn ensure_selection_ui_available(
+    ctx: &mut SlashCommandContext<'_>,
+    activity: &str,
+) -> Result<bool> {
+    if ctx.model_picker_state.is_some() {
+        ctx.renderer.line(
+            MessageStyle::Error,
+            &format!("Close the active model picker before {}.", activity),
+        )?;
+        return Ok(false);
+    }
+    if ctx.palette_state.is_some() {
+        ctx.renderer.line(
+            MessageStyle::Error,
+            "Another selection modal is already open. Press Esc to dismiss it before starting a new one.",
+        )?;
+        return Ok(false);
+    }
+    Ok(true)
+}
+
 pub async fn handle_theme_changed(
     ctx: SlashCommandContext<'_>,
     theme_id: String,
@@ -27,21 +48,10 @@ pub async fn handle_theme_changed(
 }
 
 pub async fn handle_start_theme_palette(
-    ctx: SlashCommandContext<'_>,
+    mut ctx: SlashCommandContext<'_>,
     mode: crate::agent::runloop::slash_commands::ThemePaletteMode,
 ) -> Result<SlashCommandControl> {
-    if ctx.model_picker_state.is_some() {
-        ctx.renderer.line(
-            MessageStyle::Error,
-            "Close the active model picker before selecting a theme.",
-        )?;
-        return Ok(SlashCommandControl::Continue);
-    }
-    if ctx.palette_state.is_some() {
-        ctx.renderer.line(
-            MessageStyle::Error,
-            "Another selection modal is already open. Press Esc to dismiss it before starting a new one.",
-        )?;
+    if !ensure_selection_ui_available(&mut ctx, "selecting a theme")? {
         return Ok(SlashCommandControl::Continue);
     }
     if show_theme_palette(ctx.renderer, mode)? {
@@ -54,21 +64,10 @@ pub async fn handle_start_theme_palette(
 }
 
 pub async fn handle_start_resume_palette(
-    ctx: SlashCommandContext<'_>,
+    mut ctx: SlashCommandContext<'_>,
     limit: usize,
 ) -> Result<SlashCommandControl> {
-    if ctx.model_picker_state.is_some() {
-        ctx.renderer.line(
-            MessageStyle::Error,
-            "Close the active model picker before browsing sessions.",
-        )?;
-        return Ok(SlashCommandControl::Continue);
-    }
-    if ctx.palette_state.is_some() {
-        ctx.renderer.line(
-            MessageStyle::Error,
-            "Another selection modal is already open. Press Esc to close it before continuing.",
-        )?;
+    if !ensure_selection_ui_available(&mut ctx, "browsing sessions")? {
         return Ok(SlashCommandControl::Continue);
     }
     match session_archive::list_recent_sessions(limit).await {
@@ -87,34 +86,40 @@ pub async fn handle_start_resume_palette(
     Ok(SlashCommandControl::Continue)
 }
 
+pub async fn handle_start_history_picker(
+    mut ctx: SlashCommandContext<'_>,
+) -> Result<SlashCommandControl> {
+    if !ctx.renderer.supports_inline_ui() {
+        ctx.renderer.line(
+            MessageStyle::Info,
+            "Command history picker is available in inline UI only. Use /resume for archived sessions.",
+        )?;
+        return Ok(SlashCommandControl::Continue);
+    }
+
+    if !ensure_selection_ui_available(&mut ctx, "opening command history")? {
+        return Ok(SlashCommandControl::Continue);
+    }
+
+    ctx.handle.open_history_picker();
+    Ok(SlashCommandControl::Continue)
+}
+
 pub async fn handle_start_file_browser(
-    ctx: SlashCommandContext<'_>,
+    mut ctx: SlashCommandContext<'_>,
     initial_filter: Option<String>,
 ) -> Result<SlashCommandControl> {
-    if ctx.model_picker_state.is_some() {
-        ctx.renderer.line(
-            MessageStyle::Error,
-            "Close the active model picker before opening file browser.",
-        )?;
+    if !ensure_selection_ui_available(&mut ctx, "opening file browser")? {
         return Ok(SlashCommandControl::Continue);
     }
-    if ctx.palette_state.is_some() {
-        ctx.renderer.line(
-            MessageStyle::Error,
-            "Another selection modal is already open. Press Esc to dismiss it before starting a new one.",
-        )?;
-        return Ok(SlashCommandControl::Continue);
-    }
+    // Ensure stale inline modal state cannot overlap with the file palette overlay.
+    ctx.handle.close_modal();
     ctx.handle.force_redraw();
     if let Some(filter) = initial_filter {
         ctx.handle.set_input(format!("@{}", filter));
     } else {
         ctx.handle.set_input("@".to_string());
     }
-    ctx.renderer.line(
-        MessageStyle::Info,
-        "File browser activated. Use arrow keys to navigate, Enter to select, Esc to close.",
-    )?;
     Ok(SlashCommandControl::Continue)
 }
 
@@ -141,7 +146,15 @@ pub(super) async fn start_model_picker(
         .map(|cfg| cfg.agent.reasoning_effort)
         .unwrap_or(ctx.config.reasoning_effort);
     let workspace_hint = Some(ctx.config.workspace.clone());
-    match ModelPickerState::new(ctx.renderer, reasoning, workspace_hint).await {
+    match ModelPickerState::new(
+        ctx.renderer,
+        reasoning,
+        workspace_hint,
+        ctx.config.provider.clone(),
+        ctx.config.model.clone(),
+    )
+    .await
+    {
         Ok(ModelPickerStart::InProgress(picker)) => {
             *ctx.model_picker_state = Some(picker);
         }

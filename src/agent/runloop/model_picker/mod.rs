@@ -1,6 +1,7 @@
 use anyhow::{Context, Result, anyhow};
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 
 use crate::agent::runloop::tui_compat::from_tui_reasoning;
 use vtcode::interactive_list::SelectionInterrupted;
@@ -55,6 +56,8 @@ pub struct ModelPickerState {
     step: PickerStep,
     inline_enabled: bool,
     current_reasoning: ReasoningEffortLevel,
+    current_provider: String,
+    current_model: String,
     selection: Option<SelectionDetail>,
     selected_reasoning: Option<ReasoningEffortLevel>,
     pending_api_key: Option<String>,
@@ -77,6 +80,8 @@ impl ModelPickerState {
         renderer: &mut AnsiRenderer,
         current_reasoning: ReasoningEffortLevel,
         workspace: Option<PathBuf>,
+        current_provider: String,
+        current_model: String,
     ) -> Result<ModelPickerStart> {
         let options = MODEL_OPTIONS.as_slice();
         let inline_enabled = renderer.supports_inline_ui();
@@ -87,6 +92,8 @@ impl ModelPickerState {
             step: PickerStep::AwaitModel,
             inline_enabled,
             current_reasoning,
+            current_provider,
+            current_model,
             selection: None,
             selected_reasoning: None,
             pending_api_key: None,
@@ -96,7 +103,15 @@ impl ModelPickerState {
         };
 
         if inline_enabled {
-            render_step_one_inline(renderer, options, current_reasoning, &state.dynamic_models)?;
+            render_step_one_inline(
+                renderer,
+                options,
+                current_reasoning,
+                &state.dynamic_models,
+                state.preferred_model_selection(),
+                &state.current_provider,
+                &state.current_model,
+            )?;
         }
 
         if !inline_enabled {
@@ -186,6 +201,9 @@ impl ModelPickerState {
                 self.options,
                 self.current_reasoning,
                 &self.dynamic_models,
+                self.preferred_model_selection(),
+                &self.current_provider,
+                &self.current_model,
             )?;
         } else if self.plain_mode_active {
             renderer.line(MessageStyle::Info, "Refreshing local model inventory...")?;
@@ -211,7 +229,9 @@ impl ModelPickerState {
             return Ok(ModelPickerProgress::InProgress);
         }
         if is_cancel_command(trimmed) {
-            renderer.line(MessageStyle::Info, "Model picker cancelled.")?;
+            if !self.inline_enabled {
+                renderer.line(MessageStyle::Info, "Model picker cancelled.")?;
+            }
             return Ok(ModelPickerProgress::Cancelled);
         }
 
@@ -423,6 +443,33 @@ impl ModelPickerState {
         };
 
         self.process_model_selection(renderer, selection)
+    }
+
+    fn preferred_model_selection(&self) -> Option<InlineListSelection> {
+        let provider_key = self.current_provider.trim().to_ascii_lowercase();
+        let model_key = self.current_model.trim();
+        if provider_key.is_empty() || model_key.is_empty() {
+            return None;
+        }
+
+        if let Some((index, _)) = self.options.iter().enumerate().find(|(_, option)| {
+            option.provider.to_string() == provider_key && option.id.eq_ignore_ascii_case(model_key)
+        }) {
+            return Some(InlineListSelection::Model(index));
+        }
+
+        let Ok(provider) = Provider::from_str(provider_key.as_str()) else {
+            return None;
+        };
+        for entry_index in self.dynamic_models.indexes_for(provider) {
+            if let Some(detail) = self.dynamic_models.detail(entry_index)
+                && detail.model_id.eq_ignore_ascii_case(model_key)
+            {
+                return Some(InlineListSelection::DynamicModel(entry_index));
+            }
+        }
+
+        None
     }
 }
 

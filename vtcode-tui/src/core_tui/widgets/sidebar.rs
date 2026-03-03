@@ -2,8 +2,9 @@ use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Layout, Rect},
     text::{Line, Span},
-    widgets::{Clear, List, ListItem, Paragraph, Widget, Wrap},
+    widgets::{Clear, Paragraph, StatefulWidget, Widget, Wrap},
 };
+use tui_widget_list::{ListBuilder, ListState as WidgetListState, ListView};
 
 use super::layout_mode::LayoutMode;
 use super::panel::{Panel, PanelStyles};
@@ -11,6 +12,35 @@ use crate::ui::tui::session::styling::SessionStyles;
 
 /// Ellipsis character used to indicate truncated text (consistent with line_truncation module).
 const ELLIPSIS: &str = "…";
+
+#[derive(Clone)]
+struct SidebarListItem {
+    line: Line<'static>,
+}
+
+impl Widget for SidebarListItem {
+    fn render(self, area: Rect, buf: &mut Buffer) {
+        Paragraph::new(self.line)
+            .wrap(Wrap { trim: false })
+            .render(area, buf);
+    }
+}
+
+fn render_static_list(lines: Vec<Line<'static>>, area: Rect, buf: &mut Buffer) {
+    if area.width == 0 || area.height == 0 || lines.is_empty() {
+        return;
+    }
+
+    let rows = lines
+        .into_iter()
+        .map(|line| (SidebarListItem { line }, 1_u16))
+        .collect::<Vec<_>>();
+    let count = rows.len();
+    let builder = ListBuilder::new(move |context| rows[context.index].clone());
+    let widget = ListView::new(builder, count).infinite_scrolling(false);
+    let mut state = WidgetListState::default();
+    StatefulWidget::render(widget, area, buf, &mut state);
+}
 
 /// Sidebar section types for organizing content
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -110,25 +140,23 @@ impl<'a> SidebarWidget<'a> {
             let empty_text = Paragraph::new("No queued items").style(self.styles.muted_style());
             empty_text.render(inner, buf);
         } else {
-            let items: Vec<ListItem> = self
+            let lines = self
                 .queue_items
                 .iter()
                 .enumerate()
                 .map(|(i, item)| {
                     let prefix = format!("{}. ", i + 1);
-                    let line = Line::from(vec![
+                    Line::from(vec![
                         Span::styled(prefix, self.styles.accent_style()),
                         Span::styled(
                             truncate_string(item, inner.width.saturating_sub(4) as usize),
                             self.styles.default_style(),
                         ),
-                    ]);
-                    ListItem::new(line)
+                    ])
                 })
                 .collect();
 
-            let list = List::new(items);
-            list.render(inner, buf);
+            render_static_list(lines, inner, buf);
         }
     }
 
@@ -167,23 +195,21 @@ impl<'a> SidebarWidget<'a> {
             let empty_text = Paragraph::new("No recent tools").style(self.styles.muted_style());
             empty_text.render(inner, buf);
         } else {
-            let items: Vec<ListItem> = self
+            let lines = self
                 .recent_tools
                 .iter()
                 .map(|tool| {
-                    let line = Line::from(Span::styled(
+                    Line::from(Span::styled(
                         format!(
                             "▸ {}",
                             truncate_string(tool, inner.width.saturating_sub(3) as usize)
                         ),
                         self.styles.default_style(),
-                    ));
-                    ListItem::new(line)
+                    ))
                 })
                 .collect();
 
-            let list = List::new(items);
-            list.render(inner, buf);
+            render_static_list(lines, inner, buf);
         }
     }
 }
