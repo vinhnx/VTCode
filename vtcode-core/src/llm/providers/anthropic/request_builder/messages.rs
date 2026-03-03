@@ -7,6 +7,7 @@ use crate::llm::providers::anthropic_types::{
     AnthropicContentBlock, AnthropicMessage, AnthropicToolResultBlock, AnthropicToolUseBlock,
     CacheControl, ImageSource,
 };
+use crate::llm::providers::common::normalize_reasoning_detail_object;
 use serde_json::{Value, json};
 use std::collections::HashSet;
 
@@ -156,13 +157,17 @@ fn build_reasoning_blocks(msg: &Message) -> Vec<AnthropicContentBlock> {
 
     if let Some(details) = &msg.reasoning_details {
         for detail in details {
-            if detail.get("type").and_then(|t| t.as_str()) == Some("thinking") {
-                let thinking = detail
+            let Some(normalized) = normalize_reasoning_detail_object(detail) else {
+                continue;
+            };
+
+            if normalized.get("type").and_then(|t| t.as_str()) == Some("thinking") {
+                let thinking = normalized
                     .get("thinking")
                     .and_then(|t| t.as_str())
                     .unwrap_or("")
                     .to_string();
-                let signature = detail
+                let signature = normalized
                     .get("signature")
                     .and_then(|t| t.as_str())
                     .unwrap_or("")
@@ -174,8 +179,8 @@ fn build_reasoning_blocks(msg: &Message) -> Vec<AnthropicContentBlock> {
                         cache_control: None,
                     });
                 }
-            } else if detail.get("type").and_then(|t| t.as_str()) == Some("redacted_thinking") {
-                let data = detail
+            } else if normalized.get("type").and_then(|t| t.as_str()) == Some("redacted_thinking") {
+                let data = normalized
                     .get("data")
                     .and_then(|d| d.as_str())
                     .unwrap_or("")
@@ -350,5 +355,34 @@ pub fn tool_result_blocks(content: &str) -> Vec<Value> {
         vec![json!({"type": "text", "text": text})]
     } else {
         vec![json!({"type": "text", "text": content})]
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::build_reasoning_blocks;
+    use crate::llm::provider::Message;
+    use crate::llm::providers::anthropic_types::AnthropicContentBlock;
+    use serde_json::json;
+
+    #[test]
+    fn build_reasoning_blocks_decodes_stringified_json_detail() {
+        let message = Message::assistant(String::new()).with_reasoning_details(Some(vec![json!(
+            r#"{"type":"thinking","thinking":"trace","signature":"sig_123"}"#
+        )]));
+
+        let blocks = build_reasoning_blocks(&message);
+        assert_eq!(blocks.len(), 1);
+        match &blocks[0] {
+            AnthropicContentBlock::Thinking {
+                thinking,
+                signature,
+                ..
+            } => {
+                assert_eq!(thinking, "trace");
+                assert_eq!(signature, "sig_123");
+            }
+            other => panic!("expected thinking block, got {other:?}"),
+        }
     }
 }

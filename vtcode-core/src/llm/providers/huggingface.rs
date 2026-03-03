@@ -22,7 +22,8 @@ use reqwest::{Client as HttpClient, Response, StatusCode};
 use serde_json::{Value, json};
 
 use super::common::{
-    map_finish_reason_common, override_base_url, parse_response_openai_format, resolve_model,
+    is_minimax_m2_model, map_finish_reason_common, normalize_reasoning_detail_objects,
+    override_base_url, parse_response_openai_format, resolve_model,
 };
 use super::error_handling::{format_network_error, format_parse_error};
 
@@ -235,6 +236,20 @@ impl HuggingFaceProvider {
                     "tool_call_id".to_owned(),
                     Value::String(tool_call_id.clone()),
                 );
+            }
+
+            if message.role == MessageRole::Assistant
+                && is_minimax_m2_model(&request.model)
+                && let Some(reasoning_details) = &message.reasoning_details
+                && !reasoning_details.is_empty()
+            {
+                let normalized_details = normalize_reasoning_detail_objects(reasoning_details);
+                if !normalized_details.is_empty() {
+                    message_map.insert(
+                        "reasoning_details".to_owned(),
+                        Value::Array(normalized_details),
+                    );
+                }
             }
 
             messages.push(Value::Object(message_map));
@@ -1058,6 +1073,13 @@ impl HuggingFaceProvider {
                                     }
                                 }
 
+                                if let Some(reasoning_details) = delta_obj
+                                    .get("reasoning_details")
+                                    .and_then(|details| details.as_array())
+                                {
+                                    aggregator.set_reasoning_details(reasoning_details);
+                                }
+
                                 if let Some(tool_calls_arr) = delta_obj.get("tool_calls").and_then(|tc| tc.as_array()) {
                                     aggregator.handle_tool_calls(tool_calls_arr);
                                     telemetry.on_tool_call_delta();
@@ -1108,5 +1130,53 @@ impl LLMClient for HuggingFaceProvider {
 
     fn model_id(&self) -> &str {
         &self.model
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::HuggingFaceProvider;
+    use crate::llm::provider::{LLMRequest, Message};
+    use crate::llm::providers::common::{is_minimax_m2_model, normalize_reasoning_detail_object};
+    use serde_json::json;
+
+    #[test]
+    fn minimax_model_detection_handles_variants() {
+        assert!(is_minimax_m2_model("MiniMaxAI/MiniMax-M2.5:novita"));
+        assert!(is_minimax_m2_model("minimax-m2.5"));
+        assert!(!is_minimax_m2_model("deepseek-r1"));
+    }
+
+    #[test]
+    fn normalize_reasoning_detail_decodes_stringified_object() {
+        let parsed = normalize_reasoning_detail_object(&json!(
+            "{\"type\":\"reasoning.text\",\"text\":\"step\"}"
+        ))
+        .expect("expected a parsed reasoning detail object");
+        assert!(parsed.is_object());
+        assert_eq!(parsed["type"], "reasoning.text");
+    }
+
+    #[test]
+    fn serialize_messages_normalizes_minimax_reasoning_details() {
+        let provider = HuggingFaceProvider::with_model(
+            "test-key".to_string(),
+            "MiniMaxAI/MiniMax-M2.5:novita".to_string(),
+        );
+        let request = LLMRequest {
+            model: "MiniMaxAI/MiniMax-M2.5:novita".to_string(),
+            messages: vec![
+                Message::assistant("answer".to_string()).with_reasoning_details(Some(vec![json!(
+                    "{\"type\":\"reasoning.text\",\"text\":\"chain\"}"
+                )])),
+            ],
+            ..Default::default()
+        };
+
+        let messages = provider
+            .serialize_messages_huggingface_chat(&request)
+            .expect("message serialization should succeed");
+        assert!(messages[0]["reasoning_details"].is_array());
+        assert!(messages[0]["reasoning_details"][0].is_object());
     }
 }

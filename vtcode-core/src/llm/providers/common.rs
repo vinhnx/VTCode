@@ -149,6 +149,54 @@ pub fn serialize_message_content_openai_for_role(
     }
 }
 
+/// Returns true when the model identifier points to MiniMax M2 family models.
+/// Works across direct model ids and provider-qualified ids.
+#[inline]
+pub fn is_minimax_m2_model(model: &str) -> bool {
+    model.to_ascii_lowercase().contains("minimax-m2")
+}
+
+/// Normalizes a reasoning detail into an object payload.
+/// Accepts native objects or stringified JSON objects, and rejects everything else.
+pub fn normalize_reasoning_detail_object(detail: &Value) -> Option<Value> {
+    match detail {
+        Value::Object(_) => Some(detail.clone()),
+        Value::String(text) => {
+            let trimmed = text.trim();
+            if trimmed.is_empty() {
+                return None;
+            }
+
+            if (trimmed.starts_with('{') || trimmed.starts_with('['))
+                && let Ok(parsed) = serde_json::from_str::<Value>(trimmed)
+                && parsed.is_object()
+            {
+                return Some(parsed);
+            }
+
+            None
+        }
+        _ => None,
+    }
+}
+
+#[inline]
+pub fn normalize_reasoning_detail_objects(details: &[Value]) -> Vec<Value> {
+    details
+        .iter()
+        .filter_map(normalize_reasoning_detail_object)
+        .collect()
+}
+
+#[inline]
+pub fn append_normalized_reasoning_detail_items(input: &mut Vec<Value>, details: &[Value]) {
+    for item in details {
+        if let Some(normalized) = normalize_reasoning_detail_object(item) {
+            input.push(normalized);
+        }
+    }
+}
+
 pub fn resolve_model(model: Option<String>, default_model: &str) -> String {
     model
         .filter(|value| !value.trim().is_empty())
@@ -753,6 +801,87 @@ pub fn parse_usage_openai_format(
         })
 }
 
+#[inline]
+pub fn serialize_reasoning_detail_values(details: &[Value]) -> Option<Vec<String>> {
+    let normalized = details
+        .iter()
+        .filter_map(|item| match item {
+            Value::Null => None,
+            Value::String(text) => {
+                if text.trim().is_empty() {
+                    None
+                } else {
+                    Some(text.clone())
+                }
+            }
+            _ => Some(item.to_string()),
+        })
+        .collect::<Vec<_>>();
+    if normalized.is_empty() {
+        None
+    } else {
+        Some(normalized)
+    }
+}
+
+pub fn serialize_reasoning_details_field(details: &Value) -> Option<Vec<String>> {
+    match details {
+        Value::Array(items) => serialize_reasoning_detail_values(items),
+        Value::Object(_) => Some(vec![details.to_string()]),
+        Value::String(text) => {
+            if text.trim().is_empty() {
+                None
+            } else {
+                Some(vec![text.clone()])
+            }
+        }
+        _ => None,
+    }
+}
+
+fn reasoning_text_from_detail_value(detail: &Value) -> Option<String> {
+    if let Some(text) = detail.get("text").and_then(|text| text.as_str()) {
+        return Some(text.to_string());
+    }
+
+    detail
+        .as_str()
+        .and_then(|raw| serde_json::from_str::<Value>(raw).ok())
+        .and_then(|parsed| {
+            parsed
+                .get("text")
+                .and_then(|text| text.as_str())
+                .map(str::to_owned)
+        })
+}
+
+pub fn extract_reasoning_text_from_detail_values(details: &[Value]) -> Option<String> {
+    let joined = details
+        .iter()
+        .filter_map(reasoning_text_from_detail_value)
+        .collect::<Vec<_>>()
+        .join("\n\n");
+    if joined.is_empty() {
+        None
+    } else {
+        Some(joined)
+    }
+}
+
+pub fn extract_reasoning_text_from_serialized_details(details: &[String]) -> Option<String> {
+    let joined = details
+        .iter()
+        .filter_map(|detail| serde_json::from_str::<Value>(detail).ok())
+        .filter_map(|detail| reasoning_text_from_detail_value(&detail))
+        .collect::<Vec<_>>()
+        .join("\n\n");
+    if joined.is_empty() {
+        None
+    } else {
+        Some(joined)
+    }
+}
+
 /// Parses OpenAI-compatible response format.
 /// Used by DeepSeek, Moonshot, and other OpenAI-compatible providers.
 ///
@@ -825,6 +954,8 @@ where
         })
         .filter(|calls| !calls.is_empty());
 
+    let native_reasoning_details_json = message.get("reasoning_details");
+
     // Extract reasoning using custom extractor if provided
     let (mut reasoning, reasoning_details) = if let Some(extractor) = extract_reasoning {
         // Extractor should return (reasoning, reasoning_details)
@@ -840,13 +971,17 @@ where
             .and_then(|rc| rc.as_str())
             .map(|s| s.to_string());
 
-        let reasoning_details = message
-            .get("reasoning_details")
-            .and_then(|rd| rd.as_str())
-            .map(|s| vec![s.to_string()]);
+        let reasoning_details =
+            native_reasoning_details_json.and_then(serialize_reasoning_details_field);
 
         (reasoning, reasoning_details)
     };
+
+    if reasoning.is_none()
+        && let Some(details) = native_reasoning_details_json.and_then(|value| value.as_array())
+    {
+        reasoning = extract_reasoning_text_from_detail_values(details);
+    }
 
     // Fallback: If no reasoning was found natively, try extracting from content
     if reasoning.is_none()
@@ -900,4 +1035,98 @@ pub fn make_anthropic_thinking_config(config: &crate::config::core::AnthropicCon
             "budget_tokens": config.interleaved_thinking_budget_tokens
         }
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        extract_reasoning_text_from_detail_values, extract_reasoning_text_from_serialized_details,
+        is_minimax_m2_model, normalize_reasoning_detail_object, parse_response_openai_format,
+    };
+    use serde_json::{Value, json};
+
+    #[test]
+    fn minimax_m2_model_detection_handles_variants() {
+        assert!(is_minimax_m2_model("MiniMax-M2.5"));
+        assert!(is_minimax_m2_model("minimax/minimax-m2.5"));
+        assert!(is_minimax_m2_model("MiniMaxAI/MiniMax-M2.5:novita"));
+        assert!(!is_minimax_m2_model("gpt-5"));
+    }
+
+    #[test]
+    fn normalize_reasoning_detail_object_decodes_stringified_json_object() {
+        let normalized = normalize_reasoning_detail_object(&json!(
+            r#"{"type":"reasoning.text","id":"r1","text":"trace"}"#
+        ))
+        .expect("normalized object");
+        assert!(normalized.is_object());
+        assert_eq!(normalized["type"], "reasoning.text");
+    }
+
+    #[test]
+    fn normalize_reasoning_detail_object_rejects_plain_text() {
+        assert!(normalize_reasoning_detail_object(&json!("plain-text")).is_none());
+    }
+
+    #[test]
+    fn parse_openai_response_preserves_array_reasoning_details() {
+        let response_json = json!({
+            "choices": [{
+                "message": {
+                    "content": "done",
+                    "reasoning_details": [{
+                        "type": "reasoning.text",
+                        "text": "step one"
+                    }]
+                },
+                "finish_reason": "stop"
+            }],
+            "usage": {
+                "prompt_tokens": 1,
+                "completion_tokens": 1,
+                "total_tokens": 2
+            }
+        });
+
+        let parsed = parse_response_openai_format::<fn(&Value, &Value) -> Option<String>>(
+            response_json,
+            "test",
+            "test-model".to_string(),
+            false,
+            None,
+        )
+        .expect("response should parse");
+
+        assert_eq!(parsed.reasoning.as_deref(), Some("step one"));
+        assert!(parsed.reasoning_details.is_some());
+        let first_detail = parsed
+            .reasoning_details
+            .as_ref()
+            .and_then(|details| details.first())
+            .expect("reasoning detail should exist");
+        let parsed_detail: Value =
+            serde_json::from_str(first_detail).expect("reasoning detail should be json");
+        assert_eq!(parsed_detail["type"], "reasoning.text");
+    }
+
+    #[test]
+    fn extract_reasoning_text_from_detail_values_handles_stringified_json() {
+        let details = vec![json!(r#"{"type":"reasoning.text","text":"trace one"}"#)];
+        assert_eq!(
+            extract_reasoning_text_from_detail_values(&details).as_deref(),
+            Some("trace one")
+        );
+    }
+
+    #[test]
+    fn extract_reasoning_text_from_serialized_details_handles_json_items() {
+        let details = vec![
+            json!({"type":"reasoning.text","text":"first"}).to_string(),
+            json!({"type":"reasoning.text","text":"second"}).to_string(),
+        ];
+        assert_eq!(
+            extract_reasoning_text_from_serialized_details(&details).as_deref(),
+            Some("first\n\nsecond")
+        );
+    }
 }

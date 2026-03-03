@@ -33,7 +33,11 @@ pub use url::{base_url_to_host_root, is_openai_compatible_base_url};
 
 use semver::Version;
 
-use super::common::{override_base_url, parse_client_prompt_common, resolve_model};
+use super::common::{
+    extract_reasoning_text_from_detail_values, extract_reasoning_text_from_serialized_details,
+    is_minimax_m2_model, override_base_url, parse_client_prompt_common, resolve_model,
+    serialize_reasoning_detail_values,
+};
 use super::error_handling::{format_network_error, format_parse_error};
 
 // ============================================================================
@@ -435,6 +439,7 @@ impl OllamaProvider {
     ) -> Result<OllamaChatRequest, LLMError> {
         let mut messages = Vec::new();
         let mut tool_names: HashMap<String, String> = HashMap::new();
+        let minimax_tool_followup_compat = Self::minimax_tool_followup_compat_mode(request);
 
         if let Some(system) = &request.system_prompt
             && !system.trim().is_empty()
@@ -457,11 +462,17 @@ impl OllamaProvider {
                         .tool_call_id
                         .as_ref()
                         .and_then(|id| tool_names.get(id).cloned());
+                    let tool_name = tool_name.or_else(|| message.origin_tool.clone());
+                    let tool_call_id = if minimax_tool_followup_compat && tool_name.is_some() {
+                        None
+                    } else {
+                        message.tool_call_id.clone()
+                    };
                     messages.push(OllamaChatMessage {
                         role: "tool".to_string(),
                         content: Some(content_text),
                         tool_calls: None,
-                        tool_call_id: message.tool_call_id.clone(),
+                        tool_call_id,
                         tool_name,
                         images: None,
                     });
@@ -582,6 +593,9 @@ impl OllamaProvider {
 
     fn think_value(request: &LLMRequest) -> Option<Value> {
         let model_id = request.model.as_str();
+        if Self::minimax_tool_followup_compat_mode(request) {
+            return None;
+        }
         if !models::ollama::REASONING_MODELS.contains(&model_id) {
             return None;
         }
@@ -593,6 +607,14 @@ impl OllamaProvider {
         } else {
             Some(Value::Bool(true))
         }
+    }
+
+    fn minimax_tool_followup_compat_mode(request: &LLMRequest) -> bool {
+        is_minimax_m2_model(&request.model)
+            && request
+                .messages
+                .iter()
+                .any(|message| message.role == MessageRole::Tool || message.has_tool_calls())
     }
 
     fn convert_tool_calls(
@@ -673,6 +695,7 @@ impl OllamaProvider {
         content: Option<String>,
         tool_calls: Option<Vec<ToolCall>>,
         reasoning: Option<String>,
+        reasoning_details: Option<Vec<String>>,
         model: String,
         finish_reason: Option<&str>,
         prompt_tokens: Option<u32>,
@@ -690,7 +713,7 @@ impl OllamaProvider {
             usage: Self::usage_from_counts(prompt_tokens, completion_tokens),
             finish_reason: finish,
             reasoning,
-            reasoning_details: None,
+            reasoning_details,
             tool_references: Vec::new(),
             request_id: None,
             organization_id: None,
@@ -708,18 +731,29 @@ impl OllamaProvider {
             });
         }
 
-        let (content, reasoning, tool_calls) = if let Some(message) = parsed.message {
-            let content = message
-                .content
-                .and_then(|value| (!value.is_empty()).then_some(value));
-            let reasoning = message
-                .thinking
-                .and_then(|value| (!value.is_empty()).then_some(value));
-            let tool_calls = Self::convert_tool_calls(message.tool_calls)?;
-            (content, reasoning, tool_calls)
-        } else {
-            (None, None, None)
-        };
+        let (content, reasoning, tool_calls, native_reasoning_details) =
+            if let Some(message) = parsed.message {
+                let content = message
+                    .content
+                    .and_then(|value| (!value.is_empty()).then_some(value));
+                let reasoning = message
+                    .thinking
+                    .and_then(|value| (!value.is_empty()).then_some(value));
+                let tool_calls = Self::convert_tool_calls(message.tool_calls)?;
+                let native_reasoning_details = message.reasoning_details.filter(|d| !d.is_empty());
+                (content, reasoning, tool_calls, native_reasoning_details)
+            } else {
+                (None, None, None, None)
+            };
+
+        let reasoning = reasoning.or_else(|| {
+            native_reasoning_details
+                .as_deref()
+                .and_then(extract_reasoning_text_from_detail_values)
+        });
+        let reasoning_details = native_reasoning_details
+            .as_deref()
+            .and_then(serialize_reasoning_detail_values);
 
         // Fallback: Extract reasoning from content if not provided natively
         // This handles MiniMax-M2.5 cloud models that use <think></think> tags
@@ -746,6 +780,7 @@ impl OllamaProvider {
             final_content,
             tool_calls,
             final_reasoning,
+            reasoning_details,
             model,
             parsed.done_reason.as_deref(),
             parsed.prompt_eval_count,
@@ -882,6 +917,8 @@ struct OllamaResponseMessage {
     content: Option<String>,
     #[serde(default)]
     thinking: Option<String>,
+    #[serde(default)]
+    reasoning_details: Option<Vec<Value>>,
     #[serde(default)]
     tool_calls: Option<Vec<OllamaResponseToolCall>>,
 }
@@ -1065,6 +1102,10 @@ impl LLMProvider for OllamaProvider {
                     }
 
                     if let Some(message) = parsed.message {
+                        if let Some(reasoning_details) = message.reasoning_details.as_deref() {
+                            aggregator.set_reasoning_details(reasoning_details);
+                        }
+
                         let has_explicit_thinking = message
                             .thinking
                             .as_ref()
@@ -1128,6 +1169,11 @@ impl LLMProvider for OllamaProvider {
             }
             if let Some(fr) = finish_reason {
                 response.finish_reason = crate::llm::providers::common::map_finish_reason_common(&fr);
+            }
+            if response.reasoning.is_none()
+                && let Some(details) = response.reasoning_details.as_ref()
+            {
+                response.reasoning = extract_reasoning_text_from_serialized_details(details);
             }
 
             yield LLMStreamEvent::Completed { response: Box::new(response) };
@@ -1199,7 +1245,9 @@ impl LLMClient for OllamaProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::types::ReasoningEffortLevel;
     use crate::llm::provider::{ContentPart, Message, MessageContent};
+    use serde_json::json;
 
     fn test_provider() -> OllamaProvider {
         OllamaProvider::from_config(
@@ -1251,5 +1299,113 @@ mod tests {
         let message = &payload.messages[0];
         assert_eq!(message.content.as_deref(), Some("no images"));
         assert!(message.images.is_none());
+    }
+
+    #[test]
+    fn build_payload_minimax_tool_followup_omits_tool_call_id() {
+        let provider = test_provider();
+        let tool_call_id = "direct_run_pty_cmd_1".to_string();
+        let request = LLMRequest {
+            model: models::ollama::MINIMAX_M25_CLOUD.to_string(),
+            messages: vec![
+                Message::assistant_with_tools(
+                    String::new(),
+                    vec![ToolCall::function(
+                        tool_call_id.clone(),
+                        "run_pty_cmd".to_string(),
+                        "{\"command\":\"cargo fmt\"}".to_string(),
+                    )],
+                ),
+                Message::tool_response(
+                    tool_call_id,
+                    "{\"output\":\"\",\"exit_code\":0}".to_string(),
+                ),
+            ],
+            reasoning_effort: Some(ReasoningEffortLevel::Low),
+            ..Default::default()
+        };
+
+        let payload = provider.build_payload(&request, false).unwrap();
+        assert_eq!(payload.messages.len(), 2);
+        assert_eq!(payload.messages[1].role, "tool");
+        assert_eq!(
+            payload.messages[1].tool_name.as_deref(),
+            Some("run_pty_cmd")
+        );
+        assert!(payload.messages[1].tool_call_id.is_none());
+        assert!(payload.think.is_none());
+    }
+
+    #[test]
+    fn build_payload_non_minimax_tool_followup_keeps_tool_call_id() {
+        let provider = test_provider();
+        let tool_call_id = "direct_run_pty_cmd_1".to_string();
+        let request = LLMRequest {
+            model: models::ollama::GPT_OSS_20B_CLOUD.to_string(),
+            messages: vec![
+                Message::assistant_with_tools(
+                    String::new(),
+                    vec![ToolCall::function(
+                        tool_call_id.clone(),
+                        "run_pty_cmd".to_string(),
+                        "{\"command\":\"cargo fmt\"}".to_string(),
+                    )],
+                ),
+                Message::tool_response(
+                    tool_call_id.clone(),
+                    "{\"output\":\"\",\"exit_code\":0}".to_string(),
+                ),
+            ],
+            reasoning_effort: Some(ReasoningEffortLevel::Low),
+            ..Default::default()
+        };
+
+        let payload = provider.build_payload(&request, false).unwrap();
+        assert_eq!(payload.messages.len(), 2);
+        assert_eq!(payload.messages[1].role, "tool");
+        assert_eq!(
+            payload.messages[1].tool_name.as_deref(),
+            Some("run_pty_cmd")
+        );
+        assert_eq!(
+            payload.messages[1].tool_call_id.as_deref(),
+            Some(tool_call_id.as_str())
+        );
+        assert_eq!(payload.think, Some(Value::String("low".to_string())));
+    }
+
+    #[test]
+    fn response_payload_preserves_reasoning_details() {
+        let parsed = OllamaChatResponse {
+            message: Some(OllamaResponseMessage {
+                role: Some("assistant".to_string()),
+                content: Some("answer".to_string()),
+                thinking: None,
+                reasoning_details: Some(vec![json!({
+                    "type": "reasoning.text",
+                    "text": "step one"
+                })]),
+                tool_calls: None,
+            }),
+            done: true,
+            done_reason: Some("stop".to_string()),
+            prompt_eval_count: Some(1),
+            eval_count: Some(2),
+            error: None,
+        };
+
+        let response = OllamaProvider::response_from_chat_payload("test-model".to_string(), parsed)
+            .expect("response should parse");
+        assert_eq!(response.reasoning.as_deref(), Some("step one"));
+        assert!(response.reasoning_details.is_some());
+
+        let first_detail = response
+            .reasoning_details
+            .as_ref()
+            .and_then(|details| details.first())
+            .expect("reasoning detail should exist");
+        let parsed_detail: Value =
+            serde_json::from_str(first_detail).expect("reasoning detail should be json");
+        assert_eq!(parsed_detail["type"], "reasoning.text");
     }
 }

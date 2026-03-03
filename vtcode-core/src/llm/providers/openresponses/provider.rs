@@ -8,7 +8,9 @@ use crate::llm::provider::{
     FinishReason, LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent,
     Message, ToolCall,
 };
-use crate::llm::providers::common::serialize_message_content_openai;
+use crate::llm::providers::common::{
+    append_normalized_reasoning_detail_items, serialize_message_content_openai,
+};
 use crate::llm::providers::shared::parse_compacted_output_messages;
 use anyhow::Result;
 use async_stream::try_stream;
@@ -195,9 +197,7 @@ impl OpenResponsesProvider {
 
         for (i, message) in request.messages.iter().enumerate() {
             if let Some(reasoning_details) = &message.reasoning_details {
-                for item in reasoning_details {
-                    input.push(item.clone());
-                }
+                append_normalized_reasoning_detail_items(&mut input, reasoning_details);
             }
 
             let role = match message.role.as_generic_str() {
@@ -1021,6 +1021,34 @@ mod tests {
         assert_eq!(
             input[0].get("encrypted_content").and_then(Value::as_str),
             Some("opaque_state")
+        );
+    }
+
+    #[test]
+    fn native_payload_normalizes_stringified_reasoning_details_items() {
+        let provider = test_provider("https://api.openresponses.com/v1");
+        let message = Message::assistant(String::new()).with_reasoning_details(Some(vec![
+            json!(r#"{"type":"compaction","id":"cmp_1","encrypted_content":"opaque_state"}"#),
+            json!("not-json"),
+        ]));
+        let request = LLMRequest {
+            model: "gpt-5".to_string(),
+            messages: vec![message],
+            ..Default::default()
+        };
+
+        let payload = provider
+            .build_native_payload(&request, false)
+            .expect("native payload should serialize");
+        let input = payload
+            .get("input")
+            .and_then(Value::as_array)
+            .expect("input should be an array");
+
+        assert_eq!(input.len(), 1);
+        assert_eq!(
+            input[0].get("type").and_then(Value::as_str),
+            Some("compaction")
         );
     }
 

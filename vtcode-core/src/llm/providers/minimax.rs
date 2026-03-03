@@ -7,7 +7,7 @@ use crate::llm::client::LLMClient;
 use crate::llm::error_display;
 use crate::llm::provider::{
     FinishReason, LLMError, LLMProvider, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent,
-    MessageRole, ToolCall,
+    MessageRole,
 };
 use crate::llm::types as llm_types;
 use async_stream::try_stream;
@@ -16,7 +16,10 @@ use futures::StreamExt;
 use reqwest::Client as HttpClient;
 use serde_json::Value;
 
-use super::common::{override_base_url, resolve_model, serialize_message_content_openai_for_role};
+use super::common::{
+    is_minimax_m2_model, normalize_reasoning_detail_objects, override_base_url,
+    parse_response_openai_format, resolve_model, serialize_message_content_openai_for_role,
+};
 use super::error_handling::{format_network_error, format_parse_error};
 
 pub struct MinimaxProvider {
@@ -144,10 +147,7 @@ impl MinimaxProvider {
                 && let Some(reasoning_details) = &message.reasoning_details
                 && !reasoning_details.is_empty()
             {
-                let normalized_details: Vec<Value> = reasoning_details
-                    .iter()
-                    .filter_map(normalize_reasoning_detail_for_minimax)
-                    .collect();
+                let normalized_details = normalize_reasoning_detail_objects(reasoning_details);
                 if !normalized_details.is_empty() {
                     message_obj["reasoning_details"] = Value::Array(normalized_details);
                 }
@@ -258,92 +258,7 @@ fn normalize_openai_base_url(base_url: &str) -> String {
 }
 
 fn should_enable_reasoning_split(model: &str) -> bool {
-    model.to_ascii_lowercase().contains("minimax-m2")
-}
-
-fn normalize_reasoning_detail_for_minimax(detail: &Value) -> Option<Value> {
-    match detail {
-        Value::Object(_) => Some(detail.clone()),
-        Value::String(text) => {
-            let trimmed = text.trim();
-            if trimmed.is_empty() {
-                return None;
-            }
-
-            if (trimmed.starts_with('{') || trimmed.starts_with('['))
-                && let Ok(parsed) = serde_json::from_str::<Value>(trimmed)
-                && parsed.is_object()
-            {
-                return Some(parsed);
-            }
-
-            None
-        }
-        _ => None,
-    }
-}
-
-impl MinimaxProvider {
-    fn parse_tool_calls_from_message(
-        &self,
-        message: &Value,
-    ) -> Result<Option<Vec<ToolCall>>, LLMError> {
-        let Some(tool_calls) = message.get("tool_calls").and_then(|v| v.as_array()) else {
-            return Ok(None);
-        };
-
-        if tool_calls.is_empty() {
-            return Ok(None);
-        }
-
-        let mut converted = Vec::new();
-        for tc in tool_calls {
-            let id = tc
-                .get("id")
-                .and_then(|v| v.as_str())
-                .map(|s| s.to_string())
-                .unwrap_or_default();
-
-            let _call_type = tc
-                .get("type")
-                .and_then(|v| v.as_str())
-                .map(|s| s.to_string())
-                .unwrap_or_else(|| "function".to_string());
-
-            if let Some(func) = tc.get("function") {
-                let name = func
-                    .get("name")
-                    .and_then(|v| v.as_str())
-                    .map(|s| s.to_string())
-                    .unwrap_or_default();
-
-                let arguments = func
-                    .get("arguments")
-                    .map(|v| {
-                        if let Some(s) = v.as_str() {
-                            s.to_string()
-                        } else {
-                            v.to_string()
-                        }
-                    })
-                    .unwrap_or_default();
-
-                converted.push(ToolCall::function(id, name, arguments));
-            }
-        }
-
-        Ok(Some(converted))
-    }
-
-    fn parse_finish_reason(&self, finish_reason: Option<&str>) -> FinishReason {
-        match finish_reason {
-            Some("stop") | None => FinishReason::Stop,
-            Some("length") => FinishReason::Length,
-            Some("tool_calls") => FinishReason::ToolCalls,
-            Some("content_filter") => FinishReason::ContentFilter,
-            Some(other) => FinishReason::Error(other.to_string()),
-        }
-    }
+    is_minimax_m2_model(model)
 }
 
 #[async_trait]
@@ -407,110 +322,18 @@ impl LLMProvider for MinimaxProvider {
             });
         }
 
-        let json: Value = response
+        let response_json: Value = response
             .json()
             .await
             .map_err(|e| format_parse_error("MiniMax", &e))?;
 
-        let choice = json
-            .get("choices")
-            .and_then(|c| c.as_array())
-            .and_then(|c| c.first())
-            .ok_or_else(|| LLMError::Provider {
-                message: "Invalid response from MiniMax: missing choices".to_string(),
-                metadata: None,
-            })?;
-
-        let message = choice.get("message").ok_or_else(|| LLMError::Provider {
-            message: "Invalid response from MiniMax: missing message".to_string(),
-            metadata: None,
-        })?;
-
-        let native_reasoning_details_json = message
-            .get("reasoning_details")
-            .and_then(|rd| rd.as_array())
-            .filter(|details| !details.is_empty());
-
-        // First, check for native reasoning_details field (OpenAI-compatible API format)
-        let native_reasoning = native_reasoning_details_json.and_then(|details| {
-            let joined = details
-                .iter()
-                .filter_map(|d| d.get("text").and_then(|t| t.as_str()))
-                .collect::<Vec<_>>()
-                .join("\n\n");
-            if joined.is_empty() {
-                None
-            } else {
-                Some(joined)
-            }
-        });
-
-        let native_reasoning_details = native_reasoning_details_json.map(|details| {
-            details
-                .iter()
-                .map(|detail| {
-                    detail
-                        .as_str()
-                        .map(ToOwned::to_owned)
-                        .unwrap_or_else(|| detail.to_string())
-                })
-                .collect::<Vec<_>>()
-        });
-
-        let content_text = message
-            .get("content")
-            .and_then(|c| c.as_str())
-            .map(|s| s.to_string());
-
-        // Extract reasoning: prefer native field, fallback to <think></think> tags
-        let (reasoning, final_content) = if let Some(reasoning_str) = native_reasoning {
-            // Native reasoning_details found, use it
-            (Some(reasoning_str), content_text)
-        } else if let Some(ref content) = content_text {
-            // Fallback: extract from <think></think> tags in content
-            let (reasoning_parts, cleaned_content) =
-                crate::llm::utils::extract_reasoning_content(content);
-            if reasoning_parts.is_empty() {
-                (None, content_text)
-            } else {
-                (
-                    Some(reasoning_parts.join("\n\n")),
-                    cleaned_content.or(content_text),
-                )
-            }
-        } else {
-            (None, None)
-        };
-
-        let tool_calls = self.parse_tool_calls_from_message(message)?;
-
-        let finish_reason =
-            self.parse_finish_reason(choice.get("finish_reason").and_then(|v| v.as_str()));
-
-        let usage = json.get("usage").map(|u| crate::llm::provider::Usage {
-            prompt_tokens: u.get("prompt_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
-            completion_tokens: u
-                .get("completion_tokens")
-                .and_then(|v| v.as_u64())
-                .unwrap_or(0) as u32,
-            total_tokens: u.get("total_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
-            cached_prompt_tokens: None,
-            cache_creation_tokens: None,
-            cache_read_tokens: None,
-        });
-
-        Ok(LLMResponse {
-            content: final_content,
-            tool_calls,
+        parse_response_openai_format::<fn(&Value, &Value) -> Option<String>>(
+            response_json,
+            "MiniMax",
             model,
-            usage,
-            finish_reason,
-            reasoning,
-            reasoning_details: native_reasoning_details,
-            tool_references: Vec::new(),
-            request_id: None,
-            organization_id: None,
-        })
+            false,
+            None,
+        )
     }
 
     async fn stream(&self, mut request: LLMRequest) -> Result<LLMStream, LLMError> {
@@ -649,11 +472,9 @@ impl LLMClient for MinimaxProvider {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        MinimaxProvider, normalize_openai_base_url, normalize_reasoning_detail_for_minimax,
-        should_enable_reasoning_split,
-    };
+    use super::{MinimaxProvider, normalize_openai_base_url, should_enable_reasoning_split};
     use crate::llm::provider::{LLMRequest, Message};
+    use crate::llm::providers::common::normalize_reasoning_detail_object;
     use serde_json::json;
 
     #[test]
@@ -742,6 +563,6 @@ mod tests {
 
     #[test]
     fn normalize_reasoning_detail_rejects_non_object_strings() {
-        assert!(normalize_reasoning_detail_for_minimax(&json!("plain text")).is_none());
+        assert!(normalize_reasoning_detail_object(&json!("plain text")).is_none());
     }
 }

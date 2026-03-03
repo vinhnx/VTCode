@@ -3,6 +3,7 @@ use crate::llm::provider::{
     ContentPart, FinishReason, LLMError, LLMRequest, LLMResponse, MessageContent, MessageRole,
     ToolCall, Usage,
 };
+use crate::llm::providers::common::append_normalized_reasoning_detail_items;
 use crate::llm::providers::openai::types::OpenAIResponsesPayload;
 use crate::prompts::system::default_system_prompt;
 use serde_json::{Value, json};
@@ -348,9 +349,7 @@ pub fn build_standard_responses_payload(
             MessageRole::Assistant => {
                 // Inject any persisted reasoning items from previous turns
                 if let Some(reasoning_details) = &msg.reasoning_details {
-                    for item in reasoning_details {
-                        input.push(item.clone());
-                    }
+                    append_normalized_reasoning_detail_items(&mut input, reasoning_details);
                 }
 
                 let mut content_parts = Vec::new();
@@ -483,9 +482,7 @@ pub fn build_codex_responses_payload(
                 // Codex models experience ~30% performance degradation when reasoning traces
                 // are dropped (vs ~3% for standard GPT-5). Always preserve reasoning continuity.
                 if let Some(reasoning_details) = &msg.reasoning_details {
-                    for item in reasoning_details {
-                        input.push(item.clone());
-                    }
+                    append_normalized_reasoning_detail_items(&mut input, reasoning_details);
                 }
 
                 let mut content_parts = Vec::new();
@@ -576,4 +573,47 @@ pub fn build_codex_responses_payload(
         input,
         instructions: Some(instructions),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{build_codex_responses_payload, build_standard_responses_payload};
+    use crate::llm::provider::{LLMRequest, Message};
+    use serde_json::json;
+
+    #[test]
+    fn standard_payload_normalizes_stringified_reasoning_details_items() {
+        let request = LLMRequest {
+            model: "gpt-5".to_string(),
+            messages: vec![
+                Message::assistant("answer".to_string()).with_reasoning_details(Some(vec![
+                    json!(r#"{"type":"compaction","id":"cmp_1","encrypted_content":"opaque"}"#),
+                    json!("plain-text"),
+                ])),
+            ],
+            ..Default::default()
+        };
+
+        let payload = build_standard_responses_payload(&request).expect("payload should build");
+        assert_eq!(payload.input.len(), 2);
+        assert_eq!(payload.input[0]["type"], "compaction");
+    }
+
+    #[test]
+    fn codex_payload_normalizes_stringified_reasoning_details_items() {
+        let request = LLMRequest {
+            model: "gpt-5-codex".to_string(),
+            messages: vec![
+                Message::assistant("answer".to_string()).with_reasoning_details(Some(vec![
+                    json!(r#"{"type":"compaction","id":"cmp_1","encrypted_content":"opaque"}"#),
+                    json!("plain-text"),
+                ])),
+            ],
+            ..Default::default()
+        };
+
+        let payload = build_codex_responses_payload(&request).expect("payload should build");
+        assert_eq!(payload.input.len(), 2);
+        assert_eq!(payload.input[0]["type"], "compaction");
+    }
 }

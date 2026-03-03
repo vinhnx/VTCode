@@ -3278,11 +3278,3 @@ implement interactive skills setup in /skill command to let users choose from a 
 ---
 
 also apply to /mcp command to manage mcp in an interactive way through a user-friendly interface rather than relying solely on command-line inputs.
-
----
-
-/file commandcbrower doesn't work. it doesn't show up inline list
-
----
-
-for /settings list, implement space/enter to toggle option and remove/disable fuzzy search.

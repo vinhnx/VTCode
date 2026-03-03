@@ -137,6 +137,13 @@ impl LLMProvider for OpenRouterProvider {
                                                 yield ev;
                                             }
                                         }
+
+                                        if let Some(reasoning_details) = delta
+                                            .get("reasoning_details")
+                                            .and_then(|v| v.as_array())
+                                        {
+                                            aggregator.set_reasoning_details(reasoning_details);
+                                        }
                                     }
                                 }
                             }

@@ -369,7 +369,7 @@ Trivial final answers: 1-3 sentences, outcomes first, `path:line` refs. Multi-fi
 - Apply Zen + Hickey defaults: explicit/readable/simple code, avoid temporal coupling, and redesign if hard to explain.
 - Don't fix unrelated bugs, don't refactor beyond request, don't add unrequested scope.
 - When genuinely uncertain, use `request_user_input` rather than guessing; if unavailable, fall back to this prompt's standard decision policy and state assumptions explicitly.
-
+ƒ
 ## Validation
 
 - Verify at least once per completed slice and before concluding. Never claim "tested/passed" unless you actually ran the command.

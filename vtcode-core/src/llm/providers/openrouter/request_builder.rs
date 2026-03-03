@@ -3,7 +3,10 @@ use serde_json::{Value, json};
 use crate::config::models::Provider;
 use crate::llm::error_display;
 use crate::llm::provider::{LLMError, LLMProvider, LLMRequest, MessageRole};
-use crate::llm::providers::common::serialize_message_content_openai_for_role;
+use crate::llm::providers::common::{
+    is_minimax_m2_model, normalize_reasoning_detail_objects,
+    serialize_message_content_openai_for_role,
+};
 use crate::llm::rig_adapter::reasoning_parameters_for;
 
 use super::OpenRouterProvider;
@@ -57,7 +60,15 @@ impl OpenRouterProvider {
                 if let Some(reasoning_details) = &msg.reasoning_details
                     && !reasoning_details.is_empty()
                 {
-                    message["reasoning_details"] = Value::Array(reasoning_details.clone());
+                    if is_minimax_m2_model(resolved_model) {
+                        let normalized_details =
+                            normalize_reasoning_detail_objects(reasoning_details);
+                        if !normalized_details.is_empty() {
+                            message["reasoning_details"] = Value::Array(normalized_details);
+                        }
+                    } else {
+                        message["reasoning_details"] = Value::Array(reasoning_details.clone());
+                    }
                 }
             }
 
@@ -144,5 +155,32 @@ impl OpenRouterProvider {
         }
 
         Ok(provider_request)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::llm::providers::common::{is_minimax_m2_model, normalize_reasoning_detail_object};
+    use serde_json::json;
+
+    #[test]
+    fn openrouter_minimax_model_detection_handles_variants() {
+        assert!(is_minimax_m2_model("minimax/minimax-m2.5"));
+        assert!(is_minimax_m2_model("MiniMax-M2.5"));
+        assert!(!is_minimax_m2_model("openai/gpt-5"));
+    }
+
+    #[test]
+    fn normalize_reasoning_detail_for_minimax_decodes_stringified_object() {
+        let parsed = normalize_reasoning_detail_object(&json!(
+            r#"{"type":"reasoning.text","id":"r1","text":"trace"}"#
+        ));
+        assert!(parsed.as_ref().is_some_and(|value| value.is_object()));
+        assert_eq!(parsed.expect("parsed")["type"], json!("reasoning.text"));
+    }
+
+    #[test]
+    fn normalize_reasoning_detail_for_minimax_rejects_plain_text() {
+        assert!(normalize_reasoning_detail_object(&json!("hello")).is_none());
     }
 }
