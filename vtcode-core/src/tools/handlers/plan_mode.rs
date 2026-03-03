@@ -4,7 +4,7 @@
 //! similar to Claude Code's plan mode implementation. The agent can:
 //! - Enter plan mode to switch to read-only exploration
 //! - Exit plan mode (triggering plan review) to start implementation
-//! - Write plans to `.vtcode/plans/` directory
+//! - Write plans to `/tmp/vtcode-plans/` by default (with optional custom path)
 //!
 //! Based on insights from Claude Code's plan mode implementation:
 //! - Plan files are written to a dedicated directory
@@ -75,9 +75,11 @@ impl PlanModeState {
         }
     }
 
-    /// Get the plans directory path
+    /// Get the plans directory path (ephemeral by default)
     pub fn plans_dir(&self) -> PathBuf {
-        self.workspace_root.join(".vtcode").join("plans")
+        std::env::temp_dir()
+            .join("vtcode-plans")
+            .join(workspace_slug_for_tmp(&self.workspace_root))
     }
 
     /// Set the current plan file
@@ -123,6 +125,10 @@ pub struct EnterPlanModeArgs {
     #[serde(default)]
     pub plan_name: Option<String>,
 
+    /// Optional: Explicit output path for the plan file (absolute or workspace-relative)
+    #[serde(default)]
+    pub plan_path: Option<String>,
+
     /// Optional: Initial description of what you're planning
     #[serde(default)]
     pub description: Option<String>,
@@ -160,6 +166,30 @@ impl EnterPlanModeTool {
                 vtcode_commons::slug::create_timestamped()
             }
         }
+    }
+}
+
+fn workspace_slug_for_tmp(workspace_root: &Path) -> String {
+    let fallback = "workspace".to_string();
+    let candidate = workspace_root
+        .file_name()
+        .and_then(|name| name.to_str())
+        .map(|name| name.to_string())
+        .unwrap_or(fallback);
+    let sanitized = candidate
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' {
+                ch
+            } else {
+                '-'
+            }
+        })
+        .collect::<String>();
+    if sanitized.trim_matches('-').is_empty() {
+        "workspace".to_string()
+    } else {
+        sanitized
     }
 }
 
@@ -286,6 +316,7 @@ impl Tool for EnterPlanModeTool {
         let args: EnterPlanModeArgs = serde_json::from_value(args).unwrap_or(EnterPlanModeArgs {
             plan_name: None,
             description: None,
+            plan_path: None,
         });
 
         // Check if already in plan mode
@@ -300,10 +331,28 @@ impl Tool for EnterPlanModeTool {
         // Enable plan mode
         self.state.enable();
 
-        // Create plans directory and plan file
-        let plans_dir = self.state.ensure_plans_dir().await?;
+        // Resolve target plan path. Defaults to /tmp, but allows explicit custom location.
         let plan_name = self.generate_plan_name(args.plan_name.as_deref());
-        let plan_file = plans_dir.join(format!("{}.md", plan_name));
+        let plan_file = if let Some(raw_path) = args.plan_path.as_deref() {
+            let trimmed = raw_path.trim();
+            let resolved = if Path::new(trimmed).is_absolute() {
+                PathBuf::from(trimmed)
+            } else {
+                self.state
+                    .workspace_root()
+                    .unwrap_or_else(|| PathBuf::from("."))
+                    .join(trimmed)
+            };
+            if let Some(parent) = resolved.parent() {
+                ensure_dir_exists(parent).await.with_context(|| {
+                    format!("Failed to create plan directory: {}", parent.display())
+                })?;
+            }
+            resolved
+        } else {
+            let plans_dir = self.state.ensure_plans_dir().await?;
+            plans_dir.join(format!("{}.md", plan_name))
+        };
         let workspace_root = self
             .state
             .workspace_root()
@@ -312,9 +361,7 @@ impl Tool for EnterPlanModeTool {
 
         // Create initial plan file using the canonical blueprint structure.
         let initial_content = format!(
-            r#"# {}
-
-• Scope checkpoint: [what is locked] / [what remains open].
+            r#"• Scope checkpoint: [what is locked] / [what remains open].
 • Decision needed: [single high-impact choice] and why it affects
 implementation.
 
@@ -350,9 +397,9 @@ drafting final plan."
 
 ## Implementation Plan
 
-1. [Step] -> files: [paths] -> verify: [check]
-2. [Step] -> files: [paths] -> verify: [check]
-3. [Step] -> files: [paths] -> verify: [check]
+1. [Step] → files: [paths] → verify: [check]
+2. [Step] → files: [paths] → verify: [check]
+3. [Step] → files: [paths] → verify: [check]
 
 ## Test Cases and Validation
 
@@ -369,12 +416,20 @@ drafting final plan."
 
 </proposed_plan>
 
-> Note: Edit this plan directly at `{}`.
+Ready to code?
 
----
-*Plan created: {}*
+A plan is ready to execute. Would you like to proceed?
+
+1. Yes, auto-accept edits (Recommended)
+   Execute with auto-approval.
+2. Yes, manually approve edits
+   Confirm each edit before applying.
+3. Type feedback to revise the plan
+   Return to plan mode and refine the plan.
+
+> Plan file: `{}`
+> Plan created: {}
 "#,
-            plan_name.replace('-', " ").to_uppercase(),
             plan_name.replace('-', " ").to_uppercase(),
             args.description
                 .as_deref()
@@ -430,6 +485,10 @@ drafting final plan."
                 "plan_name": {
                     "type": "string",
                     "description": "Optional name for the plan file (e.g., 'add-auth-middleware'). Defaults to timestamp-based name."
+                },
+                "plan_path": {
+                    "type": "string",
+                    "description": "Optional explicit plan file path. Use this to persist plans in a custom workspace path instead of the default /tmp location."
                 },
                 "description": {
                     "type": "string",

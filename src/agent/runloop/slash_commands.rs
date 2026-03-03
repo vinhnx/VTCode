@@ -128,6 +128,7 @@ pub enum SlashCommandOutcome {
 
 #[derive(Clone, Debug)]
 pub enum McpCommandAction {
+    Interactive,
     Overview,
     ListProviders,
     ListTools,

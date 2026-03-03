@@ -28,6 +28,8 @@ async fn regenerate_skills_index_best_effort(workspace: &std::path::Path) {
 /// Skill-related command actions
 #[derive(Clone, Debug)]
 pub enum SkillCommandAction {
+    /// Open interactive skill manager
+    Interactive,
     /// Show help
     Help,
     /// List available skills
@@ -79,6 +81,9 @@ pub async fn handle_skill_command(
     let mut loader = EnhancedSkillLoader::new(workspace.clone());
 
     match action {
+        SkillCommandAction::Interactive => Ok(SkillCommandOutcome::Handled {
+            message: "Interactive skills manager is available in TUI sessions. Use /skills in inline mode to browse and toggle skills.".to_string(),
+        }),
         SkillCommandAction::Help => {
             let help_text = r#"Skills Commands:
 

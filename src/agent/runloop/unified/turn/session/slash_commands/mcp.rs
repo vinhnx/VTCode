@@ -1,5 +1,6 @@
 use anyhow::Result;
 use vtcode_core::utils::ansi::MessageStyle;
+use vtcode_tui::{InlineEvent, InlineListItem, InlineListSelection};
 
 use crate::agent::runloop::slash_commands::McpCommandAction;
 use crate::agent::runloop::unified::async_mcp_manager::McpInitStatus;
@@ -11,10 +12,28 @@ use crate::agent::runloop::unified::mcp_support::{
 
 use super::{SlashCommandContext, SlashCommandControl};
 
+const MCP_ACTION_PREFIX: &str = "mcp.action.";
+const MCP_ACTION_BACK: &str = "mcp.action.back";
+
 pub async fn handle_manage_mcp(
     mut ctx: SlashCommandContext<'_>,
     action: McpCommandAction,
 ) -> Result<SlashCommandControl> {
+    if matches!(action, McpCommandAction::Interactive) {
+        run_interactive_mcp_manager(&mut ctx).await?;
+        ctx.renderer.line_if_not_empty(MessageStyle::Output)?;
+        return Ok(SlashCommandControl::Continue);
+    }
+
+    execute_mcp_action(&mut ctx, action).await?;
+    ctx.renderer.line_if_not_empty(MessageStyle::Output)?;
+    Ok(SlashCommandControl::Continue)
+}
+
+async fn execute_mcp_action(
+    ctx: &mut SlashCommandContext<'_>,
+    action: McpCommandAction,
+) -> Result<()> {
     let requires_live_tools = matches!(
         action,
         McpCommandAction::ListTools | McpCommandAction::RefreshTools | McpCommandAction::Repair
@@ -24,19 +43,19 @@ pub async fn handle_manage_mcp(
         action,
         McpCommandAction::EditConfig | McpCommandAction::Login(_) | McpCommandAction::Logout(_)
     ) {
-        super::activation::ensure_mcp_activated(&mut ctx).await?;
-        if !super::activation::try_attach_ready_mcp(&mut ctx).await? && requires_live_tools {
+        super::activation::ensure_mcp_activated(ctx).await?;
+        if !super::activation::try_attach_ready_mcp(ctx).await? && requires_live_tools {
             ctx.renderer.line(
                 MessageStyle::Info,
                 "MCP is initializing asynchronously. Run the command again in a moment.",
             )?;
-            ctx.renderer.line_if_not_empty(MessageStyle::Output)?;
-            return Ok(SlashCommandControl::Continue);
+            return Ok(());
         }
     }
 
     let manager = ctx.async_mcp_manager.map(|m| m.as_ref());
     match action {
+        McpCommandAction::Interactive => {}
         McpCommandAction::Overview => {
             display_mcp_status(
                 ctx.renderer,
@@ -55,7 +74,7 @@ pub async fn handle_manage_mcp(
         }
         McpCommandAction::RefreshTools => {
             refresh_mcp_tools(ctx.renderer, ctx.tool_registry).await?;
-            sync_mcp_context_files_if_ready(&ctx).await?;
+            sync_mcp_context_files_if_ready(ctx).await?;
         }
         McpCommandAction::ShowConfig => {
             display_mcp_config_summary(
@@ -77,7 +96,7 @@ pub async fn handle_manage_mcp(
                 ctx.vt_cfg.as_ref(),
             )
             .await?;
-            sync_mcp_context_files_if_ready(&ctx).await?;
+            sync_mcp_context_files_if_ready(ctx).await?;
         }
         McpCommandAction::Diagnose => {
             diagnose_mcp(
@@ -97,8 +116,206 @@ pub async fn handle_manage_mcp(
             render_mcp_login_guidance(ctx.renderer, name, false)?;
         }
     }
-    ctx.renderer.line_if_not_empty(MessageStyle::Output)?;
-    Ok(SlashCommandControl::Continue)
+    Ok(())
+}
+
+async fn run_interactive_mcp_manager(ctx: &mut SlashCommandContext<'_>) -> Result<()> {
+    if !ctx.renderer.supports_inline_ui() {
+        execute_mcp_action(ctx, McpCommandAction::Overview).await?;
+        return Ok(());
+    }
+
+    loop {
+        show_mcp_actions_modal(ctx);
+        let Some(selection) = wait_for_list_modal_selection(ctx).await else {
+            return Ok(());
+        };
+
+        let InlineListSelection::ConfigAction(action) = selection else {
+            continue;
+        };
+        if action == MCP_ACTION_BACK {
+            return Ok(());
+        }
+
+        let Some(action_key) = action.strip_prefix(MCP_ACTION_PREFIX) else {
+            continue;
+        };
+        let mapped = match action_key {
+            "status" => McpCommandAction::Overview,
+            "providers" => McpCommandAction::ListProviders,
+            "tools" => McpCommandAction::ListTools,
+            "refresh" => McpCommandAction::RefreshTools,
+            "config" => McpCommandAction::ShowConfig,
+            "edit" => McpCommandAction::EditConfig,
+            "repair" => McpCommandAction::Repair,
+            "diagnose" => McpCommandAction::Diagnose,
+            _ => continue,
+        };
+        execute_mcp_action(ctx, mapped).await?;
+    }
+}
+
+fn show_mcp_actions_modal(ctx: &mut SlashCommandContext<'_>) {
+    let items = vec![
+        InlineListItem {
+            title: "Status overview".to_string(),
+            subtitle: Some("Show MCP runtime status and health".to_string()),
+            badge: Some("Recommended".to_string()),
+            indent: 0,
+            selection: Some(InlineListSelection::ConfigAction(format!(
+                "{}status",
+                MCP_ACTION_PREFIX
+            ))),
+            search_value: Some("status overview health".to_string()),
+        },
+        InlineListItem {
+            title: "List providers".to_string(),
+            subtitle: Some("Show configured MCP providers".to_string()),
+            badge: None,
+            indent: 0,
+            selection: Some(InlineListSelection::ConfigAction(format!(
+                "{}providers",
+                MCP_ACTION_PREFIX
+            ))),
+            search_value: Some("providers list".to_string()),
+        },
+        InlineListItem {
+            title: "List tools".to_string(),
+            subtitle: Some("Show tools exposed by active providers".to_string()),
+            badge: None,
+            indent: 0,
+            selection: Some(InlineListSelection::ConfigAction(format!(
+                "{}tools",
+                MCP_ACTION_PREFIX
+            ))),
+            search_value: Some("tools list".to_string()),
+        },
+        InlineListItem {
+            title: "Refresh tools".to_string(),
+            subtitle: Some("Reload tool metadata from providers".to_string()),
+            badge: None,
+            indent: 0,
+            selection: Some(InlineListSelection::ConfigAction(format!(
+                "{}refresh",
+                MCP_ACTION_PREFIX
+            ))),
+            search_value: Some("refresh reload".to_string()),
+        },
+        InlineListItem {
+            title: "Show config".to_string(),
+            subtitle: Some("Display effective MCP configuration".to_string()),
+            badge: None,
+            indent: 0,
+            selection: Some(InlineListSelection::ConfigAction(format!(
+                "{}config",
+                MCP_ACTION_PREFIX
+            ))),
+            search_value: Some("config show".to_string()),
+        },
+        InlineListItem {
+            title: "Edit config guidance".to_string(),
+            subtitle: Some("Show how to edit MCP config files".to_string()),
+            badge: None,
+            indent: 0,
+            selection: Some(InlineListSelection::ConfigAction(format!(
+                "{}edit",
+                MCP_ACTION_PREFIX
+            ))),
+            search_value: Some("edit config".to_string()),
+        },
+        InlineListItem {
+            title: "Repair runtime".to_string(),
+            subtitle: Some("Restart providers and repair MCP runtime".to_string()),
+            badge: None,
+            indent: 0,
+            selection: Some(InlineListSelection::ConfigAction(format!(
+                "{}repair",
+                MCP_ACTION_PREFIX
+            ))),
+            search_value: Some("repair fix runtime".to_string()),
+        },
+        InlineListItem {
+            title: "Diagnose".to_string(),
+            subtitle: Some("Run deeper diagnostics for MCP issues".to_string()),
+            badge: None,
+            indent: 0,
+            selection: Some(InlineListSelection::ConfigAction(format!(
+                "{}diagnose",
+                MCP_ACTION_PREFIX
+            ))),
+            search_value: Some("diagnose diagnostics".to_string()),
+        },
+        InlineListItem {
+            title: "Back".to_string(),
+            subtitle: Some("Close interactive MCP manager".to_string()),
+            badge: None,
+            indent: 0,
+            selection: Some(InlineListSelection::ConfigAction(
+                MCP_ACTION_BACK.to_string(),
+            )),
+            search_value: Some("back close".to_string()),
+        },
+    ];
+
+    ctx.renderer.show_list_modal(
+        "MCP",
+        vec![
+            "Manage MCP providers and tools interactively.".to_string(),
+            "Use Enter to run an action, Esc to close.".to_string(),
+        ],
+        items,
+        Some(InlineListSelection::ConfigAction(format!(
+            "{}status",
+            MCP_ACTION_PREFIX
+        ))),
+        None,
+    );
+}
+
+async fn wait_for_list_modal_selection(
+    ctx: &mut SlashCommandContext<'_>,
+) -> Option<InlineListSelection> {
+    loop {
+        if ctx.ctrl_c_state.is_cancel_requested() {
+            ctx.handle.close_modal();
+            ctx.handle.force_redraw();
+            return None;
+        }
+
+        let notify = ctx.ctrl_c_notify.clone();
+        let maybe_event = tokio::select! {
+            _ = notify.notified() => None,
+            event = ctx.session.next_event() => event,
+        };
+
+        let Some(event) = maybe_event else {
+            ctx.handle.close_modal();
+            ctx.handle.force_redraw();
+            return None;
+        };
+
+        match event {
+            InlineEvent::ListModalSubmit(selection) => {
+                ctx.handle.close_modal();
+                ctx.handle.force_redraw();
+                return Some(selection);
+            }
+            InlineEvent::ListModalCancel | InlineEvent::Cancel | InlineEvent::Exit => {
+                ctx.handle.close_modal();
+                ctx.handle.force_redraw();
+                return None;
+            }
+            InlineEvent::Interrupt => {
+                ctx.ctrl_c_state.register_signal();
+                ctx.ctrl_c_notify.notify_waiters();
+                ctx.handle.close_modal();
+                ctx.handle.force_redraw();
+                return None;
+            }
+            _ => continue,
+        }
+    }
 }
 
 async fn sync_mcp_context_files_if_ready(ctx: &SlashCommandContext<'_>) -> Result<()> {

@@ -27,8 +27,6 @@ pub struct RecoveryOption {
     pub title: String,
     pub subtitle: String,
     pub badge: Option<String>,
-    #[allow(dead_code)]
-    pub action: RecoveryAction,
 }
 
 #[derive(Debug, Clone)]
@@ -38,6 +36,12 @@ pub enum RecoveryAction {
     SaveAndExit,
     Continue,
 }
+
+const RECOVERY_TAB_ID: &str = "recovery";
+const CHOICE_RETRY_ALL: &str = "retry_all";
+const CHOICE_CONTINUE: &str = "continue";
+const CHOICE_SKIP: &str = "skip";
+const CHOICE_SAVE_EXIT: &str = "save_exit";
 
 #[derive(Debug, Deserialize)]
 struct RecoveryPromptArgs {
@@ -146,7 +150,7 @@ impl RecoveryPromptBuilder {
         }
 
         let tabs = vec![RecoveryTabInternal {
-            id: "recovery".to_string(),
+            id: RECOVERY_TAB_ID.to_string(),
             title: "Recovery Options".to_string(),
             items,
         }];
@@ -158,7 +162,7 @@ impl RecoveryPromptBuilder {
             "allow_freeform": true,
             "freeform_label": "Provide custom guidance",
             "freeform_placeholder": "Describe what you'd like me to do next...",
-            "default_tab_id": "recovery",
+            "default_tab_id": RECOVERY_TAB_ID,
             "default_choice_id": default_choice_id
         })
     }
@@ -354,32 +358,28 @@ pub fn build_recovery_prompt_from_diagnostics(
 
     if !diagnostics.open_circuits.is_empty() {
         builder = builder.add_recommendation(RecoveryOption {
-            id: "retry_all".to_string(),
+            id: CHOICE_RETRY_ALL.to_string(),
             title: "Reset All & Retry".to_string(),
             subtitle: "Clear all circuit breakers and try again".to_string(),
             badge: Some("Recommended".to_string()),
-            action: RecoveryAction::ResetAllCircuits,
         });
     }
 
-    for (id, title, subtitle, action) in [
+    for (id, title, subtitle) in [
         (
-            "continue",
+            CHOICE_CONTINUE,
             "Continue Anyway",
             "Ignore circuit breakers and proceed",
-            RecoveryAction::Continue,
         ),
         (
-            "skip",
+            CHOICE_SKIP,
             "Skip This Step",
             "Move on to the next part of the task",
-            RecoveryAction::SkipStep,
         ),
         (
-            "save_exit",
+            CHOICE_SAVE_EXIT,
             "Save Progress & Exit",
             "Write task summary and end session",
-            RecoveryAction::SaveAndExit,
         ),
     ] {
         builder = builder.add_recommendation(RecoveryOption {
@@ -387,7 +387,6 @@ pub fn build_recovery_prompt_from_diagnostics(
             title: title.to_string(),
             subtitle: subtitle.to_string(),
             badge: None,
-            action,
         });
     }
 
@@ -433,24 +432,28 @@ fn build_error_summary(diagnostics: &RecoveryDiagnostics) -> String {
     summary
 }
 
+fn action_from_choice_id(choice_id: &str) -> Option<RecoveryAction> {
+    match choice_id {
+        CHOICE_RETRY_ALL => Some(RecoveryAction::ResetAllCircuits),
+        CHOICE_CONTINUE => Some(RecoveryAction::Continue),
+        CHOICE_SKIP => Some(RecoveryAction::SkipStep),
+        CHOICE_SAVE_EXIT => Some(RecoveryAction::SaveAndExit),
+        _ => None,
+    }
+}
+
 pub fn parse_recovery_response(response: &Value) -> Option<RecoveryAction> {
     let choice_id = response.get("choice_id")?.as_str()?;
     let tab_id = response
         .get("tab_id")
         .and_then(|v| v.as_str())
-        .unwrap_or("recovery");
+        .unwrap_or(RECOVERY_TAB_ID);
 
-    if tab_id != "recovery" {
+    if tab_id != RECOVERY_TAB_ID {
         return None;
     }
 
-    match choice_id {
-        "retry_all" => Some(RecoveryAction::ResetAllCircuits),
-        "continue" => Some(RecoveryAction::Continue),
-        "skip" => Some(RecoveryAction::SkipStep),
-        "save_exit" => Some(RecoveryAction::SaveAndExit),
-        _ => None,
-    }
+    action_from_choice_id(choice_id)
 }
 
 #[cfg(test)]
@@ -536,14 +539,12 @@ mod tests {
                 title: "Reset All & Retry".to_string(),
                 subtitle: "Clear all circuit breakers and try again".to_string(),
                 badge: Some("Recommended".to_string()),
-                action: RecoveryAction::ResetAllCircuits,
             })
             .add_recommendation(RecoveryOption {
                 id: "continue".to_string(),
                 title: "Continue Anyway".to_string(),
                 subtitle: "Ignore and proceed".to_string(),
                 badge: None,
-                action: RecoveryAction::Continue,
             })
             .build();
 

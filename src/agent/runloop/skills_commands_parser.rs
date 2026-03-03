@@ -14,7 +14,7 @@ pub(super) fn parse_skill_command(input: &str) -> Result<Option<SkillCommandActi
     let rest = trimmed[7..].trim();
 
     if rest.is_empty() {
-        return Ok(Some(SkillCommandAction::Help));
+        return Ok(Some(SkillCommandAction::Interactive));
     }
 
     if rest == "list" || rest == "--list" || rest == "-l" {
@@ -154,7 +154,7 @@ mod tests {
     #[test]
     fn test_parse_skills_list_default() {
         let result = parse_skill_command("/skills").unwrap();
-        assert!(matches!(result, Some(SkillCommandAction::Help)));
+        assert!(matches!(result, Some(SkillCommandAction::Interactive)));
     }
 
     #[test]

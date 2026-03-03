@@ -62,23 +62,58 @@ fn circuit_breaker_default_blocked(
     ctx: &mut TurnProcessingContext<'_>,
     tool_call_id: &str,
     canonical_tool_name: &str,
-    block_reason: String,
+    fallback_tool: Option<String>,
+    fallback_tool_args: Option<Value>,
 ) -> ValidationResult {
     let parts = ctx.parts_mut();
     push_tool_response(
         parts.state.working_history,
         tool_call_id.to_string(),
-        build_failure_error_content(
+        build_validation_error_content_with_fallback(
             format!(
                 "Tool '{}' is temporarily disabled due to high failure rate (Circuit Breaker OPEN).",
                 canonical_tool_name
             ),
             "circuit_breaker",
+            fallback_tool,
+            fallback_tool_args,
         ),
     );
-    ValidationResult::Outcome(TurnHandlerOutcome::Break(TurnLoopResult::Blocked {
-        reason: Some(block_reason),
-    }))
+    ValidationResult::Blocked
+}
+
+fn recovery_fallback_for_tool(tool_name: &str, args: &Value) -> Option<(String, Value)> {
+    match tool_name {
+        tool_names::UNIFIED_SEARCH | "list files" | "search text" => Some((
+            tool_names::UNIFIED_SEARCH.to_string(),
+            json!({
+                "action": "list",
+                "path": args.get("path").and_then(|v| v.as_str()).unwrap_or(".")
+            }),
+        )),
+        tool_names::READ_FILE | "read file" | "repo_browser.read_file" => {
+            let parent_path = args
+                .get("path")
+                .and_then(|v| v.as_str())
+                .and_then(|path| std::path::Path::new(path).parent())
+                .and_then(|path| path.to_str())
+                .unwrap_or(".");
+            Some((
+                tool_names::UNIFIED_SEARCH.to_string(),
+                json!({
+                    "action": "list",
+                    "path": parent_path
+                }),
+            ))
+        }
+        _ => Some((
+            tool_names::UNIFIED_SEARCH.to_string(),
+            json!({
+                "action": "list",
+                "path": "."
+            }),
+        )),
+    }
 }
 
 /// Attempt interactive recovery when a circuit breaker blocks a tool.
@@ -87,12 +122,13 @@ fn circuit_breaker_default_blocked(
 /// Returns `Some(result)` to use as the validation result directly.
 ///
 /// When no prompt is shown (full_auto, cooldown, or prompt failure), returns
-/// the default circuit-breaker-blocked outcome that breaks the turn loop.
+/// the default circuit-breaker-blocked outcome while allowing autonomous recovery.
 async fn try_interactive_circuit_recovery(
     ctx: &mut TurnProcessingContext<'_>,
     tool_call_id: &str,
     canonical_tool_name: &str,
-    block_reason: &str,
+    fallback_tool: Option<String>,
+    fallback_tool_args: Option<Value>,
 ) -> anyhow::Result<Option<ValidationResult>> {
     use crate::agent::runloop::unified::turn::recovery_flow::{self, RecoveryAction};
 
@@ -102,7 +138,8 @@ async fn try_interactive_circuit_recovery(
             ctx,
             tool_call_id,
             canonical_tool_name,
-            block_reason.to_string(),
+            fallback_tool,
+            fallback_tool_args,
         )));
     }
 
@@ -135,7 +172,8 @@ async fn try_interactive_circuit_recovery(
             ctx,
             tool_call_id,
             canonical_tool_name,
-            block_reason.to_string(),
+            fallback_tool,
+            fallback_tool_args,
         )));
     };
 
@@ -1002,20 +1040,7 @@ fn task_tracker_create_signature(tool_name: &str, args: &Value) -> Option<String
         return None;
     }
 
-    let mut normalized = serde_json::Map::new();
-    normalized.insert("action".to_string(), Value::String("create".to_string()));
-    if let Some(title) = args.get("title").and_then(Value::as_str) {
-        normalized.insert("title".to_string(), Value::String(title.to_string()));
-    }
-    if let Some(items) = args.get("items").and_then(Value::as_array) {
-        normalized.insert("items".to_string(), Value::Array(items.clone()));
-    }
-    if let Some(notes) = args.get("notes") {
-        normalized.insert("notes".to_string(), notes.clone());
-    }
-
-    let serialized = serde_json::to_string(&Value::Object(normalized)).ok()?;
-    Some(format!("task_tracker::create::{serialized}"))
+    Some("task_tracker::create".to_string())
 }
 
 fn enforce_duplicate_task_tracker_create_guard<'a>(
@@ -1361,7 +1386,11 @@ pub(crate) async fn handle_single_tool_call<'a, 'b, 'tool>(
     // 1. Validate (Circuit Breaker, Rate Limit, Loop Detection, Safety, Permission)
     let prepared = match validate_tool_call(t_ctx.ctx, &tool_call_id, tool_name, &args_val).await? {
         ValidationResult::Outcome(outcome) => return Ok(Some(outcome)),
-        ValidationResult::Handled => return Ok(None),
+        ValidationResult::Handled => {
+            let parts = t_ctx.ctx.parts_mut();
+            parts.state.harness_state.reset_blocked_tool_call_streak();
+            return Ok(None);
+        }
         ValidationResult::Blocked => {
             if let Some(outcome) =
                 enforce_blocked_tool_call_guard(t_ctx.ctx, &tool_call_id, tool_name, &args_val)
@@ -1568,17 +1597,31 @@ pub(crate) async fn validate_tool_call<'a>(
     };
     if circuit_breaker_blocked {
         let display_tool = tool_action_label(&canonical_tool_name, args_val);
+        let (fallback_tool, fallback_tool_args) =
+            recovery_fallback_for_tool(&canonical_tool_name, &effective_args)
+                .map(|(tool, args)| (Some(tool), Some(args)))
+                .unwrap_or((None, None));
         let block_reason = format!(
-            "Circuit breaker stopped '{}' due to high failure rate. Wait before retrying or use a different tool.",
+            "Circuit breaker blocked '{}' due to high failure rate. Switching to autonomous fallback strategy.",
             display_tool
         );
         tracing::warn!(tool = %canonical_tool_name, "Circuit breaker open, tool disabled");
 
         // In interactive mode, attempt recovery prompt; None = user chose to proceed.
-        if let Some(result) =
-            try_interactive_circuit_recovery(ctx, tool_call_id, &canonical_tool_name, &block_reason)
-                .await?
+        if let Some(result) = try_interactive_circuit_recovery(
+            ctx,
+            tool_call_id,
+            &canonical_tool_name,
+            fallback_tool,
+            fallback_tool_args,
+        )
+        .await?
         {
+            let parts = ctx.parts_mut();
+            parts
+                .state
+                .working_history
+                .push(uni::Message::system(block_reason));
             return Ok(result);
         }
     }
@@ -1613,7 +1656,7 @@ pub(crate) async fn validate_tool_call<'a>(
             tracing::warn!(tool = %loop_tool_key, "Loop detector blocked tool");
             let display_tool = tool_action_label(&canonical_tool_name, args_val);
             let block_reason = format!(
-                "Loop detector stopped repeated '{}' calls for this turn.\nType \"continue\" to retry with a different strategy.",
+                "Loop detector stopped repeated '{}' calls for this turn. Switching to autonomous fallback strategy.",
                 display_tool
             );
             // Ensure no orphan PTY processes keep running after a hard loop-detection stop.
@@ -1723,18 +1766,27 @@ pub(crate) async fn validate_tool_call<'a>(
             );
             {
                 let parts = ctx.parts_mut();
+                let (fallback_tool, fallback_tool_args) =
+                    recovery_fallback_for_tool(&canonical_tool_name, &effective_args)
+                        .map(|(tool, args)| (Some(tool), Some(args)))
+                        .unwrap_or((None, None));
                 push_tool_response(
                     parts.state.working_history,
                     tool_call_id.to_string(),
-                    build_failure_error_content(error_msg, "loop_detection"),
+                    build_validation_error_content_with_fallback(
+                        error_msg,
+                        "loop_detection",
+                        fallback_tool,
+                        fallback_tool_args,
+                    ),
                 );
+                parts
+                    .state
+                    .working_history
+                    .push(uni::Message::system(block_reason));
             }
 
-            return Ok(ValidationResult::Outcome(TurnHandlerOutcome::Break(
-                TurnLoopResult::Blocked {
-                    reason: Some(block_reason),
-                },
-            )));
+            return Ok(ValidationResult::Blocked);
         } else {
             tracing::warn!(tool = %loop_tool_key, warning = %warning, "Loop detector warning");
         }

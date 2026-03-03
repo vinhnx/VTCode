@@ -1,4 +1,4 @@
-//! Plan-mode scoped task tracker persisted under `.vtcode/plans/`.
+//! Plan-mode scoped task tracker persisted next to the active plan file.
 //!
 //! This tracker is intended for Plan Mode only and writes a sidecar markdown
 //! file next to the active plan file (`<plan>.tasks.md`).

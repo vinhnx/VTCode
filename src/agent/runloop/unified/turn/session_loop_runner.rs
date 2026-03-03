@@ -55,9 +55,11 @@ fn build_partial_timeout_messages(
             .to_string()
     };
 
-    let include_continue_nudge = plan_mode_active && had_tool_activity && timed_out_during_request;
-    if include_continue_nudge {
-        timeout_note.push_str(" Nudge with \"continue\" to resume from the stalled turn.");
+    let include_autonomous_recovery_note =
+        plan_mode_active && had_tool_activity && timed_out_during_request;
+    if include_autonomous_recovery_note {
+        timeout_note
+            .push_str(" Autonomous recovery will retry with an adjusted strategy when possible.");
     }
 
     let renderer_message = format!(
@@ -73,8 +75,9 @@ fn build_partial_timeout_messages(
         "Turn timed out after {} seconds in phase {:?} after partial tool execution (calls={}, active_pty_before_cancel={})",
         timeout_secs, timed_out_phase, attempted_tool_calls, active_pty_sessions_before_cancel
     );
-    if include_continue_nudge {
-        error_message.push_str(" Nudge with \"continue\" to resume from the stalled turn.");
+    if include_autonomous_recovery_note {
+        error_message
+            .push_str(" Autonomous recovery will retry with an adjusted strategy when possible.");
     }
 
     (renderer_message, error_message)
@@ -1078,26 +1081,26 @@ mod tests {
     }
 
     #[test]
-    fn plan_mode_requesting_partial_timeout_includes_continue_nudge() {
+    fn plan_mode_requesting_partial_timeout_includes_autonomous_recovery_note() {
         let (timeout_message, timeout_error_message) =
             build_partial_timeout_messages(660, TurnPhase::Requesting, 25, 0, true, true);
-        assert!(timeout_message.contains("Nudge with \"continue\""));
-        assert!(timeout_error_message.contains("Nudge with \"continue\""));
+        assert!(timeout_message.contains("Autonomous recovery"));
+        assert!(timeout_error_message.contains("Autonomous recovery"));
     }
 
     #[test]
-    fn edit_mode_requesting_partial_timeout_omits_continue_nudge() {
+    fn edit_mode_requesting_partial_timeout_omits_autonomous_recovery_note() {
         let (timeout_message, timeout_error_message) =
             build_partial_timeout_messages(660, TurnPhase::Requesting, 25, 0, false, true);
-        assert!(!timeout_message.contains("Nudge with \"continue\""));
-        assert!(!timeout_error_message.contains("Nudge with \"continue\""));
+        assert!(!timeout_message.contains("Autonomous recovery"));
+        assert!(!timeout_error_message.contains("Autonomous recovery"));
     }
 
     #[test]
-    fn requesting_timeout_without_tool_activity_omits_continue_nudge() {
+    fn requesting_timeout_without_tool_activity_omits_autonomous_recovery_note() {
         let (timeout_message, timeout_error_message) =
             build_partial_timeout_messages(660, TurnPhase::Requesting, 0, 0, true, false);
-        assert!(!timeout_message.contains("Nudge with \"continue\""));
-        assert!(!timeout_error_message.contains("Nudge with \"continue\""));
+        assert!(!timeout_message.contains("Autonomous recovery"));
+        assert!(!timeout_error_message.contains("Autonomous recovery"));
     }
 }

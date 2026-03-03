@@ -179,6 +179,9 @@ fn path_targets_plan_artifact(path: &str) -> bool {
     normalized == ".vtcode/plans"
         || normalized.starts_with(".vtcode/plans/")
         || normalized.contains("/.vtcode/plans/")
+        || normalized == "/tmp/vtcode-plans"
+        || normalized.starts_with("/tmp/vtcode-plans/")
+        || normalized.contains("/tmp/vtcode-plans/")
 }
 
 fn is_plan_artifact_write(name: &str, args: &serde_json::Value) -> bool {
@@ -260,7 +263,7 @@ pub(crate) fn update_repetition_tracker(
         loop_tracker.consecutive_mutations = 0;
         loop_tracker.consecutive_navigations = 0;
     } else if is_plan_artifact_write(name, args) {
-        // Plan artifact writes in .vtcode/plans are allowed in Plan Mode and
+        // Plan artifact writes in dedicated plan storage are allowed in Plan Mode and
         // should not trigger anti-blind-editing verification pressure.
         loop_tracker.consecutive_navigations = 0;
     } else {

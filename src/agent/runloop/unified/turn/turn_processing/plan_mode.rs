@@ -1,7 +1,9 @@
 use vtcode_core::llm::provider as uni;
 
 use crate::agent::runloop::unified::turn::context::TurnProcessingResult;
-use crate::agent::runloop::unified::turn::turn_processing::extract_interview_questions;
+use crate::agent::runloop::unified::turn::turn_processing::{
+    build_interview_args_from_text, extract_interview_questions,
+};
 
 const MIN_PLAN_MODE_TURNS_BEFORE_INTERVIEW: usize = 1;
 const PLAN_MODE_REMINDER: &str = vtcode_core::prompts::system::PLAN_MODE_IMPLEMENT_REMINDER;
@@ -111,7 +113,12 @@ pub(crate) fn maybe_force_plan_mode_interview(
     if response_has_plan {
         if !session_stats.plan_mode_interview_shown() && allow_interview {
             let stripped = strip_assistant_text(processing_result);
-            return inject_plan_mode_interview(stripped, session_stats, conversation_len);
+            return inject_plan_mode_interview(
+                stripped,
+                session_stats,
+                conversation_len,
+                response_text,
+            );
         }
 
         return maybe_append_plan_mode_reminder(processing_result);
@@ -148,7 +155,12 @@ pub(crate) fn maybe_force_plan_mode_interview(
             return processing_result;
         }
 
-        return inject_plan_mode_interview(processing_result, session_stats, conversation_len);
+        return inject_plan_mode_interview(
+            processing_result,
+            session_stats,
+            conversation_len,
+            response_text,
+        );
     }
 
     let explicit_questions = response_text
@@ -180,7 +192,12 @@ pub(crate) fn maybe_force_plan_mode_interview(
         return processing_result;
     }
 
-    inject_plan_mode_interview(processing_result, session_stats, conversation_len)
+    inject_plan_mode_interview(
+        processing_result,
+        session_stats,
+        conversation_len,
+        response_text,
+    )
 }
 
 fn default_plan_mode_interview_args() -> serde_json::Value {
@@ -251,10 +268,13 @@ fn inject_plan_mode_interview(
     processing_result: TurnProcessingResult,
     session_stats: &mut crate::agent::runloop::unified::state::SessionStats,
     conversation_len: usize,
+    response_text: Option<&str>,
 ) -> TurnProcessingResult {
     use vtcode_core::config::constants::tools;
 
-    let args = default_plan_mode_interview_args();
+    let args = response_text
+        .and_then(build_interview_args_from_text)
+        .unwrap_or_else(default_plan_mode_interview_args);
     let args_json = serde_json::to_string(&args).unwrap_or_else(|_| "{}".to_string());
     let call_id = format!("call_plan_interview_{}", conversation_len);
     let call = uni::ToolCall::function(call_id, tools::REQUEST_USER_INPUT.to_string(), args_json);

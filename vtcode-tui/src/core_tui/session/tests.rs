@@ -760,13 +760,14 @@ fn plan_confirmation_modal_matches_four_way_gate_copy() {
         .list
         .as_ref()
         .expect("plan confirmation should include list options");
-    assert_eq!(list.items.len(), 4);
+    assert_eq!(list.items.len(), 3);
 
-    assert_eq!(list.items[0].title, "Yes, auto-accept edits (Recommended)");
+    assert_eq!(list.items[0].title, "Yes, auto-accept edits");
     assert_eq!(
         list.items[0].subtitle.as_deref(),
-        Some("Keep context and execute with auto-approval.")
+        Some("Execute with auto-approval.")
     );
+    assert_eq!(list.items[0].badge.as_deref(), Some("Recommended"));
 
     assert_eq!(list.items[1].title, "Yes, manually approve edits");
     assert_eq!(
@@ -774,15 +775,9 @@ fn plan_confirmation_modal_matches_four_way_gate_copy() {
         Some("Keep context and confirm each edit before applying.")
     );
 
-    assert_eq!(list.items[2].title, "No, stay in Plan mode");
+    assert_eq!(list.items[2].title, "Type feedback to revise the plan");
     assert_eq!(
         list.items[2].subtitle.as_deref(),
-        Some("Keep planning without executing yet.")
-    );
-
-    assert_eq!(list.items[3].title, "Type feedback to revise the plan");
-    assert_eq!(
-        list.items[3].subtitle.as_deref(),
         Some("Return to plan mode and refine the plan.")
     );
 }

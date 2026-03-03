@@ -46,7 +46,7 @@ pub async fn handle_toggle_plan_mode(
         )?;
         ctx.renderer.line(
             MessageStyle::Output,
-            "  Mutating tools are blocked; optional plan-file writes under `.vtcode/plans/` remain allowed.",
+            "  Mutating tools are blocked; optional plan-file writes under `/tmp/vtcode-plans/` (or an explicit custom plan path) remain allowed.",
         )?;
         ctx.renderer.line(MessageStyle::Output, "")?;
         ctx.renderer.line(

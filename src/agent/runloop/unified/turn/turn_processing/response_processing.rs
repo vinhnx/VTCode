@@ -152,7 +152,7 @@ pub(crate) fn process_llm_response(
     Ok(TurnProcessingResult::Empty)
 }
 
-fn build_interview_args_from_text(text: &str) -> Option<serde_json::Value> {
+pub(crate) fn build_interview_args_from_text(text: &str) -> Option<serde_json::Value> {
     let mut questions = extract_interview_questions(text);
     if questions.is_empty()
         && let Some(synthesized) = synthesize_alignment_question(text)

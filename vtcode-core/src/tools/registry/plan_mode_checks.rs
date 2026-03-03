@@ -57,7 +57,7 @@ impl ToolRegistry {
     /// Check if a tool is allowed to run in plan mode without switching modes.
     ///
     /// Returns true for non-mutating tools and plan-safe exceptions like
-    /// writing to `.vtcode/plans/` or read-only unified tool actions.
+    /// writing to active plan storage (`/tmp/vtcode-plans/` by default) or read-only unified tool actions.
     pub fn is_plan_mode_allowed(&self, tool_name: &str, args: &Value) -> bool {
         use crate::config::constants::tools;
         use crate::tools::names::canonical_tool_name;
@@ -90,7 +90,7 @@ impl ToolRegistry {
     }
 
     /// Check if a tool operation is targeting the plans directory.
-    /// In plan mode, writes to .vtcode/plans/ are allowed for the agent to write its plan.
+    /// In plan mode, writes to active plan storage are allowed for the agent to write its plan.
     pub(super) fn is_plan_file_operation(&self, tool_name: &str, args: &Value) -> bool {
         use crate::config::constants::tools as tool_names;
         use crate::tools::names::canonical_tool_name;
@@ -116,6 +116,8 @@ impl ToolRegistry {
             .get("path")
             .or_else(|| args.get("file_path"))
             .or_else(|| args.get("filePath"))
+            .or_else(|| args.get("destination"))
+            .or_else(|| args.get("destination_path"))
             .and_then(|v| v.as_str());
 
         let Some(path_str) = path_str else {
@@ -123,8 +125,7 @@ impl ToolRegistry {
         };
         let path = std::path::Path::new(path_str);
 
-        // Check if the path is within .vtcode/plans/
-        // Handle both absolute and relative paths
+        // Legacy workspace-scoped plan path (.vtcode/plans/) compatibility.
         let plans_suffix = std::path::Path::new(".vtcode").join("plans");
 
         // Check if path contains .vtcode/plans/
@@ -137,10 +138,19 @@ impl ToolRegistry {
             return true;
         }
 
-        // Check absolute path against workspace root
+        // Check absolute legacy path against workspace root
         let workspace = self.inventory.workspace_root();
         let plans_dir = workspace.join(".vtcode").join("plans");
         if path.starts_with(&plans_dir) {
+            return true;
+        }
+
+        // Default ephemeral plan storage path under /tmp.
+        if path_str.contains("/tmp/vtcode-plans/") || path_str.contains("\\tmp\\vtcode-plans\\") {
+            return true;
+        }
+        let tmp_plans = std::env::temp_dir().join("vtcode-plans");
+        if path.starts_with(&tmp_plans) {
             return true;
         }
 

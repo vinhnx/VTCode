@@ -81,7 +81,7 @@ const UNIFIED_TOOL_GUIDANCE: &str = r#"**Search & exploration**:
 /// Shared Plan Mode header used by both static and incremental prompt builders.
 pub const PLAN_MODE_READ_ONLY_HEADER: &str = "# PLAN MODE (READ-ONLY)";
 /// Shared Plan Mode notice line describing strict read-only enforcement.
-pub const PLAN_MODE_READ_ONLY_NOTICE_LINE: &str = "Plan Mode is active. Mutating tools are blocked except for optional plan artifact writes under `.vtcode/plans/`.";
+pub const PLAN_MODE_READ_ONLY_NOTICE_LINE: &str = "Plan Mode is active. Mutating tools are blocked except for optional plan artifact writes under `/tmp/vtcode-plans/` (or an explicit custom plan path).";
 /// Shared Plan Mode instruction line for transitioning to implementation.
 pub const PLAN_MODE_EXIT_INSTRUCTION_LINE: &str =
     "Call `exit_plan_mode` when ready to transition to implementation.";

@@ -35,7 +35,6 @@ pub enum PlanConfirmationOutcome {
 enum ParsedPlanChoice {
     AutoAccept,
     ManualApprove,
-    StayInPlanMode,
     Revise,
 }
 
@@ -89,8 +88,8 @@ fn parse_plan_choice(input: &str) -> (ParsedPlanChoice, Option<String>) {
     if parse_numbered('2').is_some() {
         return (ParsedPlanChoice::ManualApprove, None);
     }
-    if parse_numbered('3').is_some() {
-        return (ParsedPlanChoice::StayInPlanMode, None);
+    if let Some(feedback) = parse_numbered('3') {
+        return (ParsedPlanChoice::Revise, feedback);
     }
     if let Some(feedback) = parse_numbered('4') {
         return (ParsedPlanChoice::Revise, feedback);
@@ -108,6 +107,14 @@ fn parse_plan_choice(input: &str) -> (ParsedPlanChoice, Option<String>) {
         "auto accept",
         "auto accept edits",
         "yes auto accept edits",
+        "option 1",
+        "choice 1",
+        "1",
+        // Backward-compatible aliases from the removed clear-context option.
+        "clear context",
+        "reset context",
+        "clear context auto accept",
+        "reset conversation history",
     ];
     if auto_accept_aliases.contains(&normalized.as_str()) {
         return (ParsedPlanChoice::AutoAccept, None);
@@ -119,29 +126,33 @@ fn parse_plan_choice(input: &str) -> (ParsedPlanChoice, Option<String>) {
         "manual approve edits",
         "yes manually approve edits",
         "approve manually",
+        "option 2",
+        "choice 2",
+        "2",
     ];
     if manual_aliases.contains(&normalized.as_str()) {
         return (ParsedPlanChoice::ManualApprove, None);
     }
 
-    let stay_aliases = [
+    let revise_aliases = [
         "no",
         "stay in plan mode",
         "keep in plan mode",
         "keep planning",
         "continue planning",
         "stay in plan",
-    ];
-    if stay_aliases.contains(&normalized.as_str()) {
-        return (ParsedPlanChoice::StayInPlanMode, None);
-    }
-
-    let revise_aliases = [
         "revise",
         "feedback",
         "edit plan",
         "revise plan",
         "type feedback to revise the plan",
+        "option 3",
+        "choice 3",
+        "3",
+        // Backward-compatible aliases from the previous 4-option prompt.
+        "option 4",
+        "choice 4",
+        "4",
     ];
     if revise_aliases.contains(&normalized.as_str()) {
         return (ParsedPlanChoice::Revise, None);
@@ -158,10 +169,15 @@ fn render_confirmation_prompt(handle: &InlineHandle, plan: &PlanContent) {
         "A plan is ready to execute. Would you like to proceed?",
     );
 
-    if !plan.raw_content.trim().is_empty() {
-        append_message(handle, InlineMessageKind::Agent, plan.raw_content.clone());
-    } else if !plan.summary.trim().is_empty() {
+    // Keep confirmation compact to avoid duplicating the already-rendered plan content.
+    if !plan.summary.trim().is_empty() {
         append_message(handle, InlineMessageKind::Agent, plan.summary.clone());
+    } else if !plan.title.trim().is_empty() {
+        append_message(
+            handle,
+            InlineMessageKind::Info,
+            format!("Plan: {}", plan.title),
+        );
     }
 
     if let Some(path) = plan.file_path.as_deref()
@@ -182,13 +198,27 @@ fn render_confirmation_prompt(handle: &InlineHandle, plan: &PlanContent) {
     append_message(
         handle,
         InlineMessageKind::Info,
-        "2. Yes, manually approve edits",
+        "   Execute with auto-approval.",
     );
-    append_message(handle, InlineMessageKind::Info, "3. No, stay in Plan mode");
     append_message(
         handle,
         InlineMessageKind::Info,
-        "4. Type feedback to revise the plan",
+        "2. Yes, manually approve edits",
+    );
+    append_message(
+        handle,
+        InlineMessageKind::Info,
+        "   Keep context and confirm each edit before applying.",
+    );
+    append_message(
+        handle,
+        InlineMessageKind::Info,
+        "3. Type feedback to revise the plan",
+    );
+    append_message(
+        handle,
+        InlineMessageKind::Info,
+        "   Return to plan mode and refine the plan.",
     );
 }
 
@@ -257,9 +287,7 @@ pub(crate) async fn execute_plan_confirmation(
                 return Ok(match choice {
                     ParsedPlanChoice::AutoAccept => PlanConfirmationOutcome::AutoAccept,
                     ParsedPlanChoice::ManualApprove => PlanConfirmationOutcome::Execute,
-                    ParsedPlanChoice::StayInPlanMode | ParsedPlanChoice::Revise => {
-                        PlanConfirmationOutcome::EditPlan
-                    }
+                    ParsedPlanChoice::Revise => PlanConfirmationOutcome::EditPlan,
                 });
             }
             InlineEvent::PlanConfirmation(result) => {

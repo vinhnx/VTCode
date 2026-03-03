@@ -42,9 +42,9 @@ pub(crate) fn show_plan_confirmation_modal(session: &mut Session, plan: PlanCont
 
     let items = vec![
         InlineListItem {
-            title: "Yes, auto-accept edits (Recommended)".to_string(),
-            subtitle: Some("Keep context and execute with auto-approval.".to_string()),
-            badge: None,
+            title: "Yes, auto-accept edits".to_string(),
+            subtitle: Some("Execute with auto-approval.".to_string()),
+            badge: Some("Recommended".to_string()),
             indent: 0,
             selection: Some(InlineListSelection::PlanApprovalAutoAccept),
             search_value: None,
@@ -55,14 +55,6 @@ pub(crate) fn show_plan_confirmation_modal(session: &mut Session, plan: PlanCont
             badge: None,
             indent: 0,
             selection: Some(InlineListSelection::PlanApprovalExecute),
-            search_value: None,
-        },
-        InlineListItem {
-            title: "No, stay in Plan mode".to_string(),
-            subtitle: Some("Keep planning without executing yet.".to_string()),
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::PlanApprovalCancel),
             search_value: None,
         },
         InlineListItem {

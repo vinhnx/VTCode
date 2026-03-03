@@ -11,7 +11,7 @@ pub(super) fn handle_mcp_command(
 ) -> Result<SlashCommandOutcome> {
     if args.is_empty() {
         return Ok(SlashCommandOutcome::ManageMcp {
-            action: McpCommandAction::Overview,
+            action: McpCommandAction::Interactive,
         });
     }
 
@@ -28,7 +28,7 @@ pub(super) fn handle_mcp_command(
 
     if tokens.is_empty() {
         return Ok(SlashCommandOutcome::ManageMcp {
-            action: McpCommandAction::Overview,
+            action: McpCommandAction::Interactive,
         });
     }
 

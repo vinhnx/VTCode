@@ -167,6 +167,18 @@ impl AnthropicProvider {
             }
         }
 
+        fn is_official_minimax_host(url: &str) -> bool {
+            let lower = url.to_ascii_lowercase();
+            [
+                "://api.minimax.io",
+                "://platform.minimax.io",
+                "api.minimax.io",
+                "platform.minimax.io",
+            ]
+            .iter()
+            .any(|marker| lower.contains(marker))
+        }
+
         let resolved = base_url
             .and_then(|value| sanitize(&value))
             .or_else(|| {
@@ -195,11 +207,21 @@ impl AnthropicProvider {
             normalized = normalized[..pos + 3].to_string();
         }
 
-        if !normalized.ends_with("/v1") {
-            normalized = format!("{}/v1", normalized);
+        let mut without_v1 = normalized.trim_end_matches('/').to_string();
+        if without_v1.ends_with("/v1") {
+            without_v1 = without_v1
+                .trim_end_matches("/v1")
+                .trim_end_matches('/')
+                .to_string();
         }
 
-        normalized
+        if is_official_minimax_host(&without_v1)
+            && !without_v1.to_ascii_lowercase().contains("/anthropic")
+        {
+            without_v1 = format!("{}/anthropic", without_v1.trim_end_matches('/'));
+        }
+
+        format!("{}/v1", without_v1.trim_end_matches('/'))
     }
 
     fn requires_tool_search_beta(&self, request: &LLMRequest) -> bool {
@@ -527,5 +549,58 @@ impl LLMClient for AnthropicProvider {
 
     fn model_id(&self) -> &str {
         &self.model
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::AnthropicProvider;
+
+    #[test]
+    fn resolve_minimax_base_url_defaults_to_anthropic_v1() {
+        assert_eq!(
+            AnthropicProvider::resolve_minimax_base_url(None),
+            "https://api.minimax.io/anthropic/v1"
+        );
+    }
+
+    #[test]
+    fn resolve_minimax_base_url_normalizes_root_host_to_anthropic_v1() {
+        assert_eq!(
+            AnthropicProvider::resolve_minimax_base_url(Some("https://api.minimax.io".to_string())),
+            "https://api.minimax.io/anthropic/v1"
+        );
+        assert_eq!(
+            AnthropicProvider::resolve_minimax_base_url(Some(
+                "https://api.minimax.io/v1".to_string()
+            )),
+            "https://api.minimax.io/anthropic/v1"
+        );
+    }
+
+    #[test]
+    fn resolve_minimax_base_url_keeps_explicit_anthropic_path() {
+        assert_eq!(
+            AnthropicProvider::resolve_minimax_base_url(Some(
+                "https://api.minimax.io/anthropic".to_string()
+            )),
+            "https://api.minimax.io/anthropic/v1"
+        );
+        assert_eq!(
+            AnthropicProvider::resolve_minimax_base_url(Some(
+                "https://api.minimax.io/anthropic/v1/messages".to_string()
+            )),
+            "https://api.minimax.io/anthropic/v1"
+        );
+    }
+
+    #[test]
+    fn resolve_minimax_base_url_respects_custom_proxy_path() {
+        assert_eq!(
+            AnthropicProvider::resolve_minimax_base_url(Some(
+                "https://proxy.example.com/minimax/v1".to_string()
+            )),
+            "https://proxy.example.com/minimax/v1"
+        );
     }
 }
