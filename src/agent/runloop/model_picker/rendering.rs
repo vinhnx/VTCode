@@ -32,6 +32,32 @@ const CURRENT_BADGE: &str = "Current";
 
 pub(super) const KEEP_CURRENT_DESCRIPTION: &str = "Retain the existing reasoning configuration.";
 
+pub(super) fn model_search_value(
+    provider: Provider,
+    model_display: &str,
+    model_id: &str,
+    description: Option<&str>,
+) -> String {
+    let provider_label = provider.label();
+    let provider_key = provider.to_string();
+    let provider_model_name = format!("{provider_key} {model_display}");
+    let provider_model_id = format!("{provider_key}/{model_id}");
+    let mut value = format!(
+        "{} {} {} {} {} {}",
+        provider_label,
+        provider_key,
+        model_display,
+        model_id,
+        provider_model_name,
+        provider_model_id
+    );
+    if let Some(description_text) = description {
+        value.push(' ');
+        value.push_str(description_text);
+    }
+    value
+}
+
 pub(super) fn render_step_one_inline(
     renderer: &mut AnsiRenderer,
     options: &[ModelOption],
@@ -66,12 +92,11 @@ pub(super) fn render_step_one_inline(
                 badge,
                 indent: 0,
                 selection: Some(InlineListSelection::Model(*idx)),
-                search_value: Some(format!(
-                    "{} {} {} {}",
-                    provider.label(),
+                search_value: Some(model_search_value(
+                    provider,
                     option.display,
                     option.id,
-                    option.description
+                    Some(option.description),
                 )),
             });
         }
@@ -89,11 +114,11 @@ pub(super) fn render_step_one_inline(
                         },
                         indent: 0,
                         selection: Some(InlineListSelection::DynamicModel(*entry_index)),
-                        search_value: Some(format!(
-                            "{} {} {}",
-                            provider.label(),
-                            detail.model_display,
-                            detail.model_id
+                        search_value: Some(model_search_value(
+                            provider,
+                            &detail.model_display,
+                            &detail.model_id,
+                            None,
                         )),
                     });
                 }
