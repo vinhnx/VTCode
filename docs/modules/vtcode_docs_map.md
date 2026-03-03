@@ -514,6 +514,11 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: Purpose, File Index, Cross-References, Navigation, Maintaining Freshness
   - **User Questions**: "What can you tell me about Harness Engineering Knowledge Base?", "How does Purpose work?", "How does File Index work?"
 
+- **File**: `docs/project/TODO.md`
+  - **Content**: How to avoid bounds checks in Rust (without unsafe!)
+  - **Topics**: What are bounds checks?, Do bounds checks actually slow you down?, Try it yourself!, Let’s see some bounds checks, Help the optimizer
+  - **User Questions**: "What can you tell me about How to avoid bounds checks in Rust (without unsafe!)?", "How does What are bounds checks? work?", "How does Do bounds checks actually slow you down? work?"
+
 - **File**: `docs/huggingface/index.md`
   - **Content**: Hugging Face Inference Providers Integrations
   - **Topics**: Featured Integrations, About This Directory, Overview, Configuration, Resources
@@ -603,10 +608,6 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Content**: Styling Quick Start Guide
   - **Topics**: For CLI Output, For TUI Widgets, Unified Theme, Color Reference, Common Patterns
   - **User Questions**: "What can you tell me about Styling Quick Start Guide?", "How does For CLI Output work?", "How does For TUI Widgets work?"
-
-- **File**: `docs/project/TODO.md`
-  - **Content**: TODO.md
-  - **User Questions**: "What can you tell me about TODO.md?"
 
 - **File**: `docs/harness/TECH_DEBT_TRACKER.md`
   - **Content**: Tech Debt Tracker

@@ -37,6 +37,8 @@ pub fn classify_tool_intent(tool_name: &str, args: &Value) -> ToolIntent {
     } else {
         match tool {
             tools::READ_FILE
+            | tools::GREP_FILE
+            | tools::LIST_FILES
             | tools::UNIFIED_SEARCH
             | tools::ENTER_PLAN_MODE
             | tools::EXIT_PLAN_MODE
@@ -481,5 +483,17 @@ mod tests {
         assert_eq!(normalized["pattern"], "needle");
         assert_eq!(normalized["path"], ".");
         assert_eq!(normalized["action"], "grep");
+    }
+
+    #[test]
+    fn legacy_search_aliases_are_readonly() {
+        let grep_intent =
+            classify_tool_intent(tools::GREP_FILE, &json!({"pattern": "needle", "path": "."}));
+        assert!(!grep_intent.mutating);
+        assert!(!grep_intent.destructive);
+
+        let list_intent = classify_tool_intent(tools::LIST_FILES, &json!({"path": "."}));
+        assert!(!list_intent.mutating);
+        assert!(!list_intent.destructive);
     }
 }
