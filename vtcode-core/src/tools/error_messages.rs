@@ -95,7 +95,7 @@ pub mod agent_execution {
              1. Call `exit_plan_mode` tool to show the user your plan for approval\n\
              2. Wait for user to confirm (they will see the Implementation Blueprint)\n\
              3. After approval, mutating tools will be enabled\n\n\
-             DO NOT retry this tool or use /plan off. The proper workflow is to call `exit_plan_mode`.",
+             Fallback if automatic Plan->Edit switching keeps failing: manually switch using `/plan off` or `/mode` (or `Shift+Tab`/`Alt+M` in interactive mode).",
             tool_name
         )
     }
@@ -177,6 +177,10 @@ mod tests {
         let plan_mode_msg = agent_execution::plan_mode_denial_message("write_file");
         assert!(agent_execution::is_plan_mode_denial(&plan_mode_msg));
         assert!(plan_mode_msg.contains("exit_plan_mode"));
+        assert!(plan_mode_msg.contains("/plan off"));
+        assert!(plan_mode_msg.contains("/mode"));
+        assert!(plan_mode_msg.contains("Shift+Tab"));
+        assert!(!plan_mode_msg.contains("DO NOT retry this tool or use /plan off"));
 
         let loop_msg =
             agent_execution::loop_detection_block_message("read_file", 3, Some("base error"));

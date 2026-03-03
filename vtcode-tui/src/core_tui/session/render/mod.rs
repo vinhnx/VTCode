@@ -100,7 +100,10 @@ pub fn render(session: &mut Session, frame: &mut Frame<'_>) {
             split_inline_history_picker_area(session, transcript_body);
         let (transcript_body, slash_area) =
             super::slash::split_inline_slash_area(session, transcript_body);
-        render_transcript(session, frame, transcript_body);
+        let interactive_bottom_buffer = transcript_area
+            .height
+            .saturating_sub(transcript_body.height);
+        render_transcript(session, frame, transcript_body, interactive_bottom_buffer);
         if let Some(modal_area) = modal_area {
             render_modal(session, frame, modal_area);
         } else if session.modal.is_some() || session.wizard_modal.is_some() {
@@ -124,7 +127,10 @@ pub fn render(session: &mut Session, frame: &mut Frame<'_>) {
             split_inline_history_picker_area(session, transcript_body);
         let (transcript_body, slash_area) =
             super::slash::split_inline_slash_area(session, transcript_body);
-        render_transcript(session, frame, transcript_body);
+        let interactive_bottom_buffer = transcript_area
+            .height
+            .saturating_sub(transcript_body.height);
+        render_transcript(session, frame, transcript_body, interactive_bottom_buffer);
         if let Some(modal_area) = modal_area {
             render_modal(session, frame, modal_area);
         } else if session.modal.is_some() || session.wizard_modal.is_some() {
@@ -188,7 +194,12 @@ pub fn apply_transcript_width(session: &mut Session, width: u16) {
     }
 }
 
-fn render_transcript(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
+fn render_transcript(
+    session: &mut Session,
+    frame: &mut Frame<'_>,
+    area: Rect,
+    interactive_bottom_buffer: u16,
+) {
     if area.height == 0 || area.width == 0 {
         return;
     }
@@ -211,7 +222,8 @@ fn render_transcript(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
     apply_transcript_width(session, content_width);
 
     let viewport_rows = inner.height as usize;
-    let padding = usize::from(ui::INLINE_TRANSCRIPT_BOTTOM_PADDING);
+    let padding = usize::from(ui::INLINE_TRANSCRIPT_BOTTOM_PADDING)
+        .saturating_add(usize::from(interactive_bottom_buffer));
     let effective_padding = padding.min(viewport_rows.saturating_sub(1));
 
     // Skip expensive total_rows calculation if only scrolling (no content change)

@@ -60,13 +60,29 @@ https://github.com/majiayu000/litellm-rs
 
 https://docs.litellm.ai/docs/
 
----
-
-implement interactive /skills maanger in tui similiar to /mcp manager.
-
 --
 
 idea: show a info to let user manually switch to edit mode for full tools set, as a fallback if the agent's auto switch from plan -> edit
 mode systematically fall.
 
 ---
+
+update /status info
+
+example:
+
+```
+  Version: {current version here}
+  Session ID: {current session id here}
+  Directory: {current working directory here}
+
+  Model: {current model here}
+  IDE: {determine IDE and version here}
+  Terminal: {determine terminal and version here}
+  MCP servers: {list MCP servers and versions here}
+  Skills: {list agent skills here}
+  Memory: project ({AGENTS.md})
+  Setting sources: User settings, Project local settings {vtcode.toml}, .vtcode path}
+```
+
+

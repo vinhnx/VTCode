@@ -101,7 +101,6 @@ pub async fn handle_outcome(
         SlashCommandOutcome::GenerateAgentFile { overwrite } => {
             handlers::handle_generate_agent_file(ctx, overwrite).await
         }
-        SlashCommandOutcome::ShowConfig => handlers::handle_show_config(ctx).await,
         SlashCommandOutcome::ShowSettings => handlers::handle_show_settings(ctx).await,
         SlashCommandOutcome::ExecuteTool { name, args } => {
             handlers::handle_execute_tool(ctx, name, args).await

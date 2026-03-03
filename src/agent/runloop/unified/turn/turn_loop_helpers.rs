@@ -1,5 +1,6 @@
 use anyhow::Result;
 
+use crate::agent::runloop::unified::plan_mode_state::short_confirmation_hint_with_fallback;
 use crate::agent::runloop::unified::turn::context::TurnLoopResult;
 use crate::agent::runloop::unified::turn::turn_helpers::{display_error, display_status};
 use crate::agent::runloop::unified::turn::turn_loop::TurnLoopContext;
@@ -71,6 +72,7 @@ const PLAN_MODE_MIN_TOOL_LOOPS: usize = 40;
 const PLAN_MODE_MAX_TOOL_LOOP_LIMIT_ABSOLUTE_CAP: usize = 240;
 const PLAN_MODE_TOOL_LOOP_CAP_MULTIPLIER: usize = 6;
 const PLAN_MODE_MAX_TOOL_LOOP_INCREMENT_PER_PROMPT: usize = 80;
+const PLAN_MODE_EXIT_TRIGGER_STATUS: &str = "Plan Mode: implementation intent detected from your message. Running `exit_plan_mode` for plan confirmation; once approved, VT Code will switch to Edit Mode and execute.";
 
 fn configured_tool_loop_base_limit(ctx: &TurnLoopContext<'_>) -> usize {
     let configured = ctx
@@ -266,13 +268,12 @@ pub(super) async fn maybe_handle_plan_mode_exit_trigger(
 
     if !should_exit_plan {
         if is_short_confirmation_intent(&text) {
-            display_status(
-                ctx.renderer,
-                "Plan Mode: type `implement` (or `yes`/`continue`/`go`/`start`) to execute, or say `stay in plan mode` to revise.",
-            )?;
+            display_status(ctx.renderer, &short_confirmation_hint_with_fallback())?;
         }
         return Ok(false);
     }
+
+    display_status(ctx.renderer, PLAN_MODE_EXIT_TRIGGER_STATUS)?;
 
     use crate::agent::runloop::unified::tool_pipeline::run_tool_call;
     use crate::agent::runloop::unified::turn::tool_outcomes::helpers::{
@@ -569,9 +570,9 @@ pub(super) async fn maybe_handle_tool_loop_limit(
 #[cfg(test)]
 mod tests {
     use super::{
-        PLAN_MODE_MIN_TOOL_LOOPS, clamp_tool_loop_increment, extract_turn_config,
-        should_exit_plan_mode_from_confirmation, should_exit_plan_mode_from_user_text,
-        tool_loop_hard_cap,
+        PLAN_MODE_EXIT_TRIGGER_STATUS, PLAN_MODE_MIN_TOOL_LOOPS, clamp_tool_loop_increment,
+        extract_turn_config, should_exit_plan_mode_from_confirmation,
+        should_exit_plan_mode_from_user_text, tool_loop_hard_cap,
     };
     use vtcode_core::config::loader::VTCodeConfig;
     use vtcode_core::llm::provider as uni;
@@ -680,6 +681,13 @@ mod tests {
         ];
         assert!(!should_exit_plan_mode_from_confirmation("yes", &history));
         assert!(!should_exit_plan_mode_from_confirmation("start", &history));
+    }
+
+    #[test]
+    fn plan_mode_exit_trigger_status_mentions_exit_tool_and_transition() {
+        assert!(PLAN_MODE_EXIT_TRIGGER_STATUS.contains("exit_plan_mode"));
+        assert!(PLAN_MODE_EXIT_TRIGGER_STATUS.contains("Edit Mode"));
+        assert!(PLAN_MODE_EXIT_TRIGGER_STATUS.contains("implementation intent"));
     }
 
     #[test]

@@ -55,6 +55,7 @@ The VT Code terminal UI includes an interactive mode that combines keyboard-firs
 - The agent emits planning output in `<proposed_plan>...</proposed_plan>` blocks.
 - `task_tracker` works in Plan Mode and mirrors checklist state with plan sidecars; `plan_task_tracker` remains as a compatibility alias.
 - After a plan is emitted, VT Code shows an implementation choice: switch to Edit mode and execute, or continue planning.
+- If automatic Plan->Edit switching fails, manually switch with `/plan off` or `/mode`, or use `Shift+Tab`/`Alt+M`.
 
 ## Vim Editor Mode
 

@@ -475,8 +475,6 @@ fn should_submit_immediately_from_palette(session: &Session) -> bool {
             | "/git"
             | "/docs"
             | "/copy"
-            | "/config"
-            | "/settings"
             | "/help"
             | "/clear"
             | "/history"

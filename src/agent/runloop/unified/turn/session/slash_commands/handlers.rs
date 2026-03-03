@@ -18,7 +18,6 @@ use crate::agent::runloop::unified::palettes::ActivePalette;
 use crate::agent::runloop::unified::settings_interactive::{
     create_settings_palette_state, show_settings_palette,
 };
-use crate::agent::runloop::unified::turn::config_modal::load_config_modal_content;
 #[path = "activation.rs"]
 mod activation;
 #[path = "apps.rs"]
@@ -97,31 +96,6 @@ pub(super) fn persist_mode_settings(
     }
 
     Ok(())
-}
-
-pub async fn handle_show_config(mut ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
-    if !ui::ensure_selection_ui_available(&mut ctx, "viewing configuration")? {
-        return Ok(SlashCommandControl::Continue);
-    }
-
-    let workspace_path = ctx.config.workspace.clone();
-    let vt_snapshot = ctx.vt_cfg.clone();
-    match load_config_modal_content(workspace_path, vt_snapshot).await {
-        Ok(content) => {
-            ctx.renderer
-                .line(MessageStyle::Info, &content.source_label)?;
-            for line in &content.config_lines {
-                ctx.renderer.line(MessageStyle::Info, line)?;
-            }
-        }
-        Err(err) => {
-            ctx.renderer.line(
-                MessageStyle::Error,
-                &format!("Failed to load configuration for display: {}", err),
-            )?;
-        }
-    }
-    Ok(SlashCommandControl::Continue)
 }
 
 pub async fn handle_show_settings(mut ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {

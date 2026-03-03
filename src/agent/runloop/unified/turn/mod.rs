@@ -1,4 +1,3 @@
-mod config_modal;
 pub(crate) mod context;
 mod finalization;
 pub(crate) mod guards;

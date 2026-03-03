@@ -192,6 +192,13 @@ fn maybe_force_plan_mode_interview_appends_reminder_when_plan_ready() {
 }
 
 #[test]
+fn plan_mode_reminder_includes_manual_switch_fallback() {
+    assert!(PLAN_MODE_REMINDER.contains("/plan off"));
+    assert!(PLAN_MODE_REMINDER.contains("/mode"));
+    assert!(PLAN_MODE_REMINDER.contains("Shift+Tab"));
+}
+
+#[test]
 fn maybe_force_plan_mode_interview_does_not_duplicate_reminder() {
     let mut stats = SessionStats::default();
     let text = format!(

@@ -45,7 +45,7 @@ vtcode --permission-mode plan
 2. **Describe your goal**: Explain what you want to build or change
 3. **Iterate on the plan**: Ask clarifying questions, explore files, refine the approach
 4. **Review the plan**: The agent emits a structured reasoning + decision log, then one `<proposed_plan>` block
-5. **Choose next action**: Use the implementation prompt to switch to Edit mode or continue planning
+5. **Choose next action**: Use the implementation prompt to switch to Edit mode or continue planning (fallback: manually switch with `/plan off` or `/mode`, or `Shift+Tab`/`Alt+M`)
 6. **Execute the plan**: If approved, coding proceeds in Edit mode
 
 ## Plan Output Format

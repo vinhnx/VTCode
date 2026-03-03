@@ -93,7 +93,7 @@ pub const PLAN_MODE_NO_AUTO_EXIT_LINE: &str = "Do not auto-exit Plan Mode just b
 pub const PLAN_MODE_TASK_TRACKER_LINE: &str =
     "`task_tracker` remains available in Plan Mode (`plan_task_tracker` is a compatibility alias).";
 /// Shared reminder appended when presenting plans while still in Plan Mode.
-pub const PLAN_MODE_IMPLEMENT_REMINDER: &str = "• Still in Plan Mode (read-only). Say “implement” to execute, or “stay in plan mode” to revise.";
+pub const PLAN_MODE_IMPLEMENT_REMINDER: &str = "• Still in Plan Mode (read-only). Say “implement” to execute, or “stay in plan mode” to revise. If automatic Plan->Edit switching fails, manually switch with `/plan off` or `/mode` (or press `Shift+Tab`/`Alt+M` in interactive mode).";
 
 /// DEFAULT SYSTEM PROMPT (v6.0 - Harness-engineered, provider-agnostic)
 /// Incorporates harness engineering patterns:

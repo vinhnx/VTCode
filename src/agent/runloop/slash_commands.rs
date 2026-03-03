@@ -46,7 +46,6 @@ pub enum SlashCommandOutcome {
         force: bool,
     },
 
-    ShowConfig,
     ShowSettings,
     Exit,
     NewSession,
@@ -253,8 +252,7 @@ pub async fn handle_slash_command(
                 prompt: prompt_text.to_string(),
             })
         }
-        "config" => Ok(SlashCommandOutcome::ShowConfig),
-        "settings" | "setttings" => Ok(SlashCommandOutcome::ShowSettings),
+        "config" | "settings" | "setttings" => Ok(SlashCommandOutcome::ShowSettings),
         "clear" => match args {
             "" => Ok(SlashCommandOutcome::ClearScreen),
             "new" | "--new" | "fresh" | "--fresh" => Ok(SlashCommandOutcome::ClearConversation),

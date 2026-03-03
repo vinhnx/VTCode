@@ -9,6 +9,7 @@ use vtcode_core::tools::registry::labels::tool_action_label;
 use vtcode_core::utils::ansi::MessageStyle;
 
 use crate::agent::runloop::mcp_events;
+use crate::agent::runloop::unified::plan_mode_state::plan_mode_still_active_hint_with_fallback;
 use crate::agent::runloop::unified::tool_output_handler::handle_pipeline_output_from_turn_ctx;
 use crate::agent::runloop::unified::tool_pipeline::{ToolExecutionStatus, ToolPipelineOutcome};
 use crate::agent::runloop::unified::turn::turn_helpers::display_status;
@@ -909,7 +910,7 @@ async fn handle_plan_mode_auto_exit<'a, 'b>(
         let parts = t_ctx.ctx.parts_mut();
         display_status(
             parts.ui.renderer,
-            "Plan Mode still active. Call `exit_plan_mode` to review the plan or refine the plan before retrying.",
+            &plan_mode_still_active_hint_with_fallback(),
         )?;
         return Ok(None);
     }
