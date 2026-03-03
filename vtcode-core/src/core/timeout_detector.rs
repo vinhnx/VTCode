@@ -280,7 +280,7 @@ impl TimeoutDetector {
             use std::time::SystemTime;
             let seed = SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
+                .unwrap_or_default()
                 .as_nanos() as u64;
             let jitter_factor = (seed % 100) as f64 / 100.0; // 0.0 to 1.0
             let jitter_ms = (delay.as_millis() as f64 * 0.1 * jitter_factor) as u64; // 10% jitter

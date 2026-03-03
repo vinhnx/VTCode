@@ -700,7 +700,9 @@ fn append_text(text: &str, ctx: &mut MarkdownContext<'_>) {
             start = idx + 1;
             // Skip consecutive newlines (one blank line per sequence)
             while chars.peek().is_some_and(|&(_, c)| c == '\n') {
-                let (_, c) = chars.next().expect("peeked");
+                let Some((_, c)) = chars.next() else {
+                    break;
+                };
                 start += c.len_utf8();
             }
         }

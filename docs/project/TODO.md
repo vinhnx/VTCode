@@ -6,10 +6,6 @@ NOTE: use deepwiki mcp to reference from codex https://deepwiki.com/openai/codex
 
 ---
 
-Analyze the codebase to identify and improve panic-prone code patterns including force unwraps (!), force try, expect() calls, implicitly unwrapped optionals, and fatalError usages. For each occurrence, assess whether it can be replaced with safer alternatives such as guard statements, optional binding, custom error handling, Result types, or default values. Provide refactored code examples for each improvement, explain the potential runtime failures being prevented, and suggest coding standards to minimize future unsafe patterns. Include analysis of any custom panic handlers or recovery mechanisms that could be implemented.
-
----
-
 Perform a comprehensive review and optimization of the vtcode agent harness, prioritizing execution speed, computational efficiency, context and token economy. Refactor the tool call architecture to minimize overhead and latency, while implementing robust error handling strategies to significantly reduce the agent's error rate and ensure reliable, effective performance.
 
 ---
@@ -60,149 +56,66 @@ https://github.com/majiayu000/litellm-rs
 
 https://docs.litellm.ai/docs/
 
---
-
-idea: show a info to let user manually switch to edit mode for full tools set, as a fallback if the agent's auto switch from plan -> edit
-mode systematically fall.
-
 ---
 
-update /status info
+for the all base inline list presentation. move the inline list to move below the chat user input area. remove the bottom status view and move the inline list there. this way, the inline list will be more visible and easier to access while still keeping the chat interface clean and focused on the conversation. toggle the inline list with a keyboard shortcut (e.g., Ctrl+I) to show/hide it as needed, allowing users to quickly reference available commands without cluttering the main chat area.
 
-example:
+reference:
 
 ```
-  Version: {current version here}
-  Session ID: {current session id here}
-  Directory: {current working directory here}
-
-  Model: {current model here}
-  IDE: {determine IDE and version here}
-  Terminal: {determine terminal and version here}
-  MCP servers: {list MCP servers and versions here}
-  Skills: {list agent skills here}
-  Memory: project ({AGENTS.md})
-  Setting sources: User settings, Project local settings {vtcode.toml}, .vtcode path}
+------
+› /
+----
+  /model         choose what model and reasoning effort to use
+  /permissions   choose what Codex is allowed to do
+  /experimental  toggle experimental features
+  /skills        use skills to improve how Codex performs specific tasks
+  /review        review my current changes and find issues
+  /rename        rename the current thread
+  /new           start a new chat during a conversation
+  /resume        resume a saved chat
 ```
 
 ---
 
-```
-
-  # Context-Aware LLM Interview Generation for Plan Mode (Codex-Parity)
-
-  ## Summary
-
-  Adopt Codex’s model-driven interview pattern in VT Code: questions/options are primarily LLM-
-  generated from exploration context, with deterministic heuristic fallback. Keep strict iterative Plan
-  Mode gating so <proposed_plan> is blocked until interview answers close material decisions.
-
-  ## Public API / Interface Changes
-
-  1. New interview synthesis context type (src/agent/runloop/unified/turn/turn_processing/plan_mode.rs
-     or sibling module)
-
-  - InterviewResearchContext:
-  - discovery_tools_used: Vec<String>
-  - recent_files_or_symbols: Vec<String>
-  - risk_hints: Vec<String>
-  - open_decision_hints: Vec<String>
-  - goal_hints: Vec<String>
-  - verification_hints: Vec<String>
-
-  2. New async interview synthesis helper in turn processing layer
-
-  - synthesize_plan_mode_interview_args(...) -> Result<Option<serde_json::Value>>
-  - Input: InterviewResearchContext, recent assistant text, current user request.
-  - Output: request_user_input-compatible payload (questions[1..=3], each with 2-3 options, recommended
-    first).
-
-  3. maybe_force_plan_mode_interview signature becomes async and accepts synthesis dependencies
-
-  - Provider client handle + minimal prompt builder input.
-  - Returns same TurnProcessingResult, but can now synthesize dynamic args before injecting tool call.
-
-  ## Implementation Plan
-
-  1. Build heuristic research-context extractor.
-
-  - Parse last N user/assistant/tool messages from working_history.
-  - Extract structured hints:
-  - scope candidates (files/symbols/paths from discovery output),
-  - risk/constraint phrases,
-  - unresolved-decision markers (Decision needed, Next open decision, explicit “unclear/unknown” cues),
-  - validation signal gaps (no concrete command/check).
-  - Reuse existing helper families in response_processing.rs (extract_analysis_hints, question
-    normalization) instead of duplicating logic.
-
-  2. Add dedicated LLM synthesis pass (hybrid approach).
-
-  - When Plan Mode interview injection is required and model did not already emit valid
-    request_user_input, run a compact synthesis call:
-  - System instruction: generate 1-3 interview questions, each with 2-3 meaningful mutually exclusive
-    options, recommended first, no “Other”.
-  - Ground synthesis on InterviewResearchContext.
-  - Validate generated JSON against existing request_user_input constraints (snake_case ids, header
-    length, one-line question, option count).
-  - If synthesis fails or invalid -> fallback to deterministic heuristic templates.
-
-  3. Replace static default interview payload.
-
-  - Remove unconditional default_plan_mode_interview_args() usage in forced injection path.
-  - New forced injection precedence:
-
-  1. Use valid model-emitted request_user_input call as-is.
-  2. Else use synthesized LLM interview args from research context.
-  3. Else use deterministic heuristic fallback payload.
-
-  - Keep current behavior that strips/suppresses assistant text when forcing interview.
-
-  4. Preserve Codex-like model-driven behavior in prompts.
-
-  - Update Plan Mode prompt section (vtcode-core/src/prompts/system.rs) to explicitly require:
-  - exploration-first fact gathering,
-  - request_user_input for non-discoverable decisions,
-  - context-shaped options (tradeoff-oriented, not generic),
-  - iterative questioning until decision-complete before final <proposed_plan>.
-  - Remove Plan-Mode ambiguity from generic “act without asking” language by adding explicit Plan Mode
-    override.
-
-  5. Keep strict iterative gating always-on in Plan Mode.
-
-  - No config toggle.
-  - Continue enforcing follow-up interviews when unresolved decision markers remain or interview
-    assumption section.
-  ## Test Cases and Validation
-
-  1. Unit tests: context extractor
-
-  - Discovery-heavy history yields file/symbol hints.
-
-  2. Unit tests: synthesis pipeline
-
-
-  3. Unit tests: Plan Mode gating
-
-  - With unresolved decision markers, <proposed_plan> triggers follow-up interview.
-  - After answered interview + resolved markers, <proposed_plan> is allowed.
-  - Cancelled interview re-prompts on next eligible turn.
-  - Recommended option remains first.
-
-  - cargo nextest run -p vtcode-core
-  - cargo nextest run -p vtcode-tui
-  - cargo clippy --workspace --all-targets -- -D warnings
-
-  ## Assumptions and Defaults
-
-  1. Codex parity means model-driven interview generation first, heuristics second (not static
-     defaults).
-  2. Additional synthesis pass is acceptable for Plan Mode latency because it runs only when forced-
-     interview is needed.
-  3. Existing request_user_input schema and UI wizard remain unchanged; only generation/gating logic
-     changes.
-  4. Enforcement remains always-on in Plan Mode as requested (no feature flag rollout).
-```
+improve vtcode-tui/src/ui/markdown.rs
 
 ---
 
-convert minimax to use anthropic api https://platform.minimax.io/docs/api-reference/text-anthropic-api
+improve /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-core/src/llm module
+
+---
+
+maybe move /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-core/src/llm to /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-llm?
+
+---
+
+merge /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-core/src/exec and /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-core/src/exec_policy?
+
+=--
+
+more /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-core/src/gemini and /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-core/src/anthropic_api into unified provider-agnostic places and unify with other provider.
+
+---
+
+improve /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-indexer
+
+---
+
+improve /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-llm
+
+---
+
+check if /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/src/version.rs and /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/src/process_hardening.rs dead?
+
+---
+
+extract /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/src/acp to module /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-acp-client
+
+---
+
+improve /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/src
+
+review and modularize
+
+---

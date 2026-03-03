@@ -26,21 +26,39 @@ fn main() {
 fn generate_placeholder_artifacts() {
     use std::path::PathBuf;
 
-    let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
+    let out_dir = match env::var("OUT_DIR") {
+        Ok(path) => PathBuf::from(path),
+        Err(error) => {
+            eprintln!("warning: OUT_DIR not set during docs.rs placeholder generation: {error}");
+            return;
+        }
+    };
 
     // Write empty files to prevent "file not found" errors during docs.rs build
-    fs::write(
+    if let Err(error) = fs::write(
         out_dir.join("openrouter_model_variants.rs"),
         "// Placeholder for docs.rs build\n",
-    )
-    .unwrap();
-    fs::write(out_dir.join("openrouter_constants.rs"), "    // Placeholder for docs.rs build\n    pub const DEFAULT_MODEL: &str = \"openrouter/auto\";\n    pub const SUPPORTED_MODELS: &[&str] = &[];\n    pub const REASONING_MODELS: &[&str] = &[];\n    pub const TOOL_UNAVAILABLE_MODELS: &[&str] = &[];\n    pub mod vendor {\n        pub mod openrouter {\n            pub const MODELS: &[&str] = &[];\n        }\n    }\n").unwrap();
-    fs::write(
+    ) {
+        eprintln!("warning: failed to write placeholder variants: {error}");
+    }
+    if let Err(error) = fs::write(
+        out_dir.join("openrouter_constants.rs"),
+        "    // Placeholder for docs.rs build\n    pub const DEFAULT_MODEL: &str = \"openrouter/auto\";\n    pub const SUPPORTED_MODELS: &[&str] = &[];\n    pub const REASONING_MODELS: &[&str] = &[];\n    pub const TOOL_UNAVAILABLE_MODELS: &[&str] = &[];\n    pub mod vendor {\n        pub mod openrouter {\n            pub const MODELS: &[&str] = &[];\n        }\n    }\n",
+    ) {
+        eprintln!("warning: failed to write placeholder constants: {error}");
+    }
+    if let Err(error) = fs::write(
         out_dir.join("openrouter_aliases.rs"),
         "// Placeholder for docs.rs build\n",
-    )
-    .unwrap();
-    fs::write(out_dir.join("openrouter_metadata.rs"), "// Placeholder for docs.rs build\n#[derive(Clone, Copy)]\npub struct Entry {\n    pub variant: super::ModelId,\n    pub id: &'static str,\n    pub vendor: &'static str,\n    pub display: &'static str,\n    pub description: &'static str,\n    pub efficient: bool,\n    pub top_tier: bool,\n    pub generation: &'static str,\n    pub reasoning: bool,\n    pub tool_call: bool,\n}\n\npub const ENTRIES: &[Entry] = &[];\n\n#[derive(Clone, Copy)]\npub struct VendorModels {\n    pub vendor: &'static str,\n    pub models: &'static [super::ModelId],\n}\n\npub const VENDOR_MODELS: &[VendorModels] = &[];\n\npub fn metadata_for(_model: super::ModelId) -> Option<super::OpenRouterMetadata> { None }\n\npub fn parse_model(_value: &str) -> Option<super::ModelId> { None }\n\npub fn vendor_groups() -> &'static [VendorModels] { VENDOR_MODELS }\n").unwrap();
+    ) {
+        eprintln!("warning: failed to write placeholder aliases: {error}");
+    }
+    if let Err(error) = fs::write(
+        out_dir.join("openrouter_metadata.rs"),
+        "// Placeholder for docs.rs build\n#[derive(Clone, Copy)]\npub struct Entry {\n    pub variant: super::ModelId,\n    pub id: &'static str,\n    pub vendor: &'static str,\n    pub display: &'static str,\n    pub description: &'static str,\n    pub efficient: bool,\n    pub top_tier: bool,\n    pub generation: &'static str,\n    pub reasoning: bool,\n    pub tool_call: bool,\n}\n\npub const ENTRIES: &[Entry] = &[];\n\n#[derive(Clone, Copy)]\npub struct VendorModels {\n    pub vendor: &'static str,\n    pub models: &'static [super::ModelId],\n}\n\npub const VENDOR_MODELS: &[VendorModels] = &[];\n\npub fn metadata_for(_model: super::ModelId) -> Option<super::OpenRouterMetadata> { None }\n\npub fn parse_model(_value: &str) -> Option<super::ModelId> { None }\n\npub fn vendor_groups() -> &'static [VendorModels] { VENDOR_MODELS }\n",
+    ) {
+        eprintln!("warning: failed to write placeholder metadata: {error}");
+    }
 }
 
 fn generate_artifacts() -> Result<()> {
@@ -444,7 +462,7 @@ fn to_module_name(vendor: &str) -> String {
     if output.is_empty() {
         return "vendor".to_string();
     }
-    if output.chars().next().unwrap().is_ascii_digit() {
+    if output.chars().next().is_some_and(|ch| ch.is_ascii_digit()) {
         format!("vendor_{output}")
     } else {
         output

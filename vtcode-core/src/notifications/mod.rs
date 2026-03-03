@@ -149,11 +149,10 @@ impl NotificationManager {
 
     /// Send a notification for an event
     pub async fn send_notification(&self, event: NotificationEvent) -> Result<()> {
-        let config = self
-            .config
-            .read()
-            .expect("notification config lock poisoned")
-            .clone();
+        let config = match self.config.read() {
+            Ok(config) => config.clone(),
+            Err(poisoned) => poisoned.into_inner().clone(),
+        };
 
         // Check if terminal notifications are enabled globally first
         if !config.terminal_notifications_enabled {
@@ -363,37 +362,37 @@ impl NotificationManager {
 
     /// Update the notification configuration
     pub async fn update_config(&self, new_config: NotificationConfig) {
-        let mut config = self
-            .config
-            .write()
-            .expect("notification config lock poisoned");
+        let mut config = match self.config.write() {
+            Ok(config) => config,
+            Err(poisoned) => poisoned.into_inner(),
+        };
         *config = new_config;
     }
 
     /// Synchronously update notification configuration.
     pub fn update_config_sync(&self, new_config: NotificationConfig) {
-        let mut config = self
-            .config
-            .write()
-            .expect("notification config lock poisoned");
+        let mut config = match self.config.write() {
+            Ok(config) => config,
+            Err(poisoned) => poisoned.into_inner(),
+        };
         *config = new_config;
     }
 
     /// Get the current notification configuration
     pub async fn get_config(&self) -> NotificationConfig {
-        let config = self
-            .config
-            .read()
-            .expect("notification config lock poisoned");
+        let config = match self.config.read() {
+            Ok(config) => config,
+            Err(poisoned) => poisoned.into_inner(),
+        };
         config.clone()
     }
 
     /// Get the current notification configuration synchronously.
     pub fn get_config_sync(&self) -> NotificationConfig {
-        let config = self
-            .config
-            .read()
-            .expect("notification config lock poisoned");
+        let config = match self.config.read() {
+            Ok(config) => config,
+            Err(poisoned) => poisoned.into_inner(),
+        };
         config.clone()
     }
 

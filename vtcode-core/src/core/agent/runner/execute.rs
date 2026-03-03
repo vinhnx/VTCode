@@ -423,14 +423,17 @@ impl AgentRunner {
                     .await?;
                 }
 
+                let had_effective_pty_tool_call =
+                    effective_tool_calls.as_ref().is_some_and(|calls| {
+                        calls.iter().any(|tc| {
+                            tc.function.as_ref().map(|f| f.name.as_str()) == Some("run_pty_command")
+                        })
+                    });
                 let had_tool_call = response
                     .tool_calls
                     .as_ref()
                     .is_some_and(|tc| !tc.is_empty())
-                    || (effective_tool_calls.as_ref().is_some()
-                        && effective_tool_calls.as_ref().unwrap().iter().any(|tc| {
-                            tc.function.as_ref().map(|f| f.name.as_str()) == Some("run_pty_command")
-                        }));
+                    || had_effective_pty_tool_call;
                 if had_tool_call {
                     let loops = controller.state.register_tool_loop();
                     if loops >= controller.state.constraints.max_tool_loops {

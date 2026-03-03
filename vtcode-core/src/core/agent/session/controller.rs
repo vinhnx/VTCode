@@ -77,7 +77,10 @@ impl AgentSessionController {
         self.emit_legacy(&event);
 
         if let Some(sink) = &self.event_sink {
-            let mut callback = sink.lock().expect("mutex poisoned");
+            let mut callback = match sink.lock() {
+                Ok(guard) => guard,
+                Err(poisoned) => poisoned.into_inner(),
+            };
             callback(event);
         }
     }

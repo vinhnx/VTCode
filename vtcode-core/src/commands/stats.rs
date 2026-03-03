@@ -129,10 +129,9 @@ fn display_json_stats(config: &AgentConfig, metrics: &PerformanceMetrics) {
         }
     });
 
-    println!(
-        "{}",
-        serde_json::to_string_pretty(&stats).expect("failed to format stats")
-    );
+    let rendered = serde_json::to_string_pretty(&stats)
+        .unwrap_or_else(|error| format!(r#"{{"error":"failed to format stats: {}"}}"#, error));
+    println!("{}", rendered);
 }
 
 fn display_html_stats(config: &AgentConfig, metrics: &PerformanceMetrics) {

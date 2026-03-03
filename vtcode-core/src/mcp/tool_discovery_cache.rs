@@ -146,12 +146,12 @@ impl ToolDiscoveryCache {
         };
 
         let bloom_filter = BloomFilter::new(config.expected_tool_count, config.false_positive_rate);
-        let cache_size = NonZeroUsize::new(capacity).unwrap_or(NonZeroUsize::new(100).unwrap());
+        let cache_size = NonZeroUsize::new(capacity).or(NonZeroUsize::new(100));
 
         Self {
             inner: Arc::new(RwLock::new(DiscoveryCacheInner {
                 bloom_filter,
-                detailed_cache: LruCache::new(cache_size),
+                detailed_cache: LruCache::new(cache_size.unwrap_or(NonZeroUsize::MIN)),
                 all_tools_cache: FxHashMap::default(),
                 last_refresh: FxHashMap::default(),
             })),

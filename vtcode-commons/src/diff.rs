@@ -66,6 +66,8 @@ pub fn compute_diff_chunks<'a>(old: &'a str, new: &'a str) -> Vec<Chunk<'a>> {
     if !old_middle.is_empty() || !new_middle.is_empty() {
         let old_chars: Vec<char> = old_middle.chars().collect();
         let new_chars: Vec<char> = new_middle.chars().collect();
+        let old_byte_starts: Vec<usize> = old_middle.char_indices().map(|(idx, _)| idx).collect();
+        let new_byte_starts: Vec<usize> = new_middle.char_indices().map(|(idx, _)| idx).collect();
         let edits = myers_diff(&old_chars, &new_chars);
 
         let mut old_pos = 0;
@@ -78,15 +80,23 @@ pub fn compute_diff_chunks<'a>(old: &'a str, new: &'a str) -> Vec<Chunk<'a>> {
                     new_pos += 1;
                 }
                 Edit::Delete => {
-                    let ch = old_chars[old_pos];
-                    let byte_start = old_middle.char_indices().nth(old_pos).unwrap().0;
+                    let Some(ch) = old_chars.get(old_pos).copied() else {
+                        break;
+                    };
+                    let Some(byte_start) = old_byte_starts.get(old_pos).copied() else {
+                        break;
+                    };
                     let byte_end = byte_start + ch.len_utf8();
                     result.push(Chunk::Delete(&old_middle[byte_start..byte_end]));
                     old_pos += 1;
                 }
                 Edit::Insert => {
-                    let ch = new_chars[new_pos];
-                    let byte_start = new_middle.char_indices().nth(new_pos).unwrap().0;
+                    let Some(ch) = new_chars.get(new_pos).copied() else {
+                        break;
+                    };
+                    let Some(byte_start) = new_byte_starts.get(new_pos).copied() else {
+                        break;
+                    };
                     let byte_end = byte_start + ch.len_utf8();
                     result.push(Chunk::Insert(&new_middle[byte_start..byte_end]));
                     new_pos += 1;
@@ -421,7 +431,9 @@ fn encode_line_list<'a>(
         let token = if let Some(&value) = map.get(line) {
             value
         } else {
-            let ch = next_token_char(next_codepoint).expect("exceeded diff token capacity");
+            let Some(ch) = next_token_char(next_codepoint) else {
+                break;
+            };
             map.insert(line, ch);
             ch
         };

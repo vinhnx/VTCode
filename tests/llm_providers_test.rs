@@ -48,7 +48,7 @@ fn test_provider_auto_detection() {
 
     // Test Anthropic models
     assert_eq!(
-        factory.provider_from_model(models::CLAUDE_SONNET_4_5),
+        factory.provider_from_model(models::CLAUDE_SONNET_4_6),
         Some("anthropic".to_string())
     );
     assert_eq!(
@@ -76,7 +76,7 @@ fn test_provider_auto_detection() {
         Some("openrouter".to_string())
     );
     assert_eq!(
-        factory.provider_from_model(models::OPENROUTER_ANTHROPIC_CLAUDE_SONNET_4_5),
+        factory.provider_from_model("anthropic/claude-sonnet-4.6"),
         Some("openrouter".to_string())
     );
 
@@ -101,7 +101,7 @@ fn infer_provider_respects_override_and_model() {
     let provider = infer_provider(Some("openai"), "gemini-3-flash-preview");
     assert_eq!(provider, Some(Provider::OpenAI));
 
-    let provider = infer_provider(None, models::CLAUDE_SONNET_4_5);
+    let provider = infer_provider(None, models::CLAUDE_SONNET_4_6);
     assert_eq!(provider, Some(Provider::Anthropic));
 
     let provider = infer_provider(None, "unknown-model");
@@ -119,7 +119,7 @@ fn test_provider_creation() {
     assert!(openai.is_ok());
 
     let anthropic = create_provider_for_model(
-        models::CLAUDE_SONNET_4_5,
+        models::CLAUDE_SONNET_4_6,
         "test_key".to_string(),
         None,
         None,
@@ -164,7 +164,7 @@ fn test_unified_client_creation() {
     }
 
     let anthropic_client = create_provider_for_model(
-        models::CLAUDE_SONNET_4_5,
+        models::CLAUDE_SONNET_4_6,
         "test_key".to_string(),
         None,
         None,
@@ -242,18 +242,15 @@ fn test_provider_supported_models() {
 
     let anthropic = AnthropicProvider::new("test_key".to_string());
     let anthropic_models = anthropic.supported_models();
-    assert!(anthropic_models.contains(&models::CLAUDE_SONNET_4_5.to_string()));
+    assert!(anthropic_models.contains(&models::CLAUDE_SONNET_4_6.to_string()));
     assert!(anthropic_models.contains(&models::CLAUDE_HAIKU_4_5.to_string()));
-    assert!(anthropic_models.contains(&models::CLAUDE_SONNET_4_5_20250929.to_string()));
-    assert!(anthropic_models.contains(&"claude-opus-4-1-20250805".to_string()));
+    assert!(anthropic_models.contains(&models::CLAUDE_OPUS_4_6.to_string()));
     assert!(anthropic_models.len() >= 3);
 
     let openrouter = OpenRouterProvider::new("test_key".to_string());
     let openrouter_models = openrouter.supported_models();
     assert!(openrouter_models.contains(&models::OPENROUTER_QWEN3_CODER.to_string()));
-    assert!(
-        openrouter_models.contains(&models::OPENROUTER_ANTHROPIC_CLAUDE_SONNET_4_5.to_string())
-    );
+    assert!(openrouter_models.contains(&"anthropic/claude-sonnet-4.6".to_string()));
     assert!(openrouter_models.len() >= 2);
 
     let moonshot = MoonshotProvider::new("test_key".to_string());
@@ -313,7 +310,7 @@ fn test_request_validation() {
 
     let valid_anthropic_request = LLMRequest {
         messages: vec![Message::user("test".to_string())],
-        model: models::CLAUDE_SONNET_4_5.to_string(),
+        model: models::CLAUDE_SONNET_4_6.to_string(),
         verbosity: Some(VerbosityLevel::default()),
         ..Default::default()
     };
@@ -353,7 +350,7 @@ fn test_anthropic_tool_message_handling() {
 
     let request = LLMRequest {
         messages: vec![tool_message],
-        model: models::CLAUDE_SONNET_4_5.to_string(),
+        model: models::CLAUDE_SONNET_4_6.to_string(),
         verbosity: Some(VerbosityLevel::default()),
         ..Default::default()
     };

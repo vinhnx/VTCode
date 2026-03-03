@@ -147,9 +147,9 @@ pub fn update_tool_calls(builders: &mut Vec<ToolCallBuilder>, deltas: &[Value]) 
         if builders.len() <= index {
             builders.resize_with(index + 1, ToolCallBuilder::default);
         }
-        let builder = builders
-            .get_mut(index)
-            .expect("tool call builder must exist after resize");
+        let Some(builder) = builders.get_mut(index) else {
+            continue;
+        };
 
         builder.apply_delta(delta);
     }

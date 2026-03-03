@@ -713,6 +713,11 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: Overview, New Commands, Architecture, File Structure, API Reference
   - **User Questions**: "What can you tell me about Zed Extension File Search Integration?", "How does Overview work?", "How does New Commands work?"
 
+- **File**: `docs/harness/ZEN_ALIGNMENT.md`
+  - **Content**: Zen Alignment for VT Code
+  - **Topics**: Scope, Full Principle Mapping (All 19), Baseline Metrics (2026-03-03), Rollout, Verification Commands
+  - **User Questions**: "What can you tell me about Zen Alignment for VT Code?", "How does Scope work?", "How does Full Principle Mapping (All 19) work?"
+
 - **File**: `docs/ansi/ANSTYLE_CROSSTERM_IMPROVEMENTS.md`
   - **Content**: anstyle-crossterm Integration Improvements
   - **Topics**: Overview, Key Improvements, Color Mapping Behavior, Architecture Flow, Usage Patterns

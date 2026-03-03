@@ -53,7 +53,7 @@ impl TagStreamSanitizer {
                 for pair in REASONING_TAGS {
                     if let Some(pos) = chunk_str[current_pos..].find(pair.0) {
                         let absolute_pos = current_pos + pos;
-                        if found_start.is_none() || absolute_pos < found_start.unwrap().0 {
+                        if found_start.is_none_or(|(best_pos, _)| absolute_pos < best_pos) {
                             found_start = Some((absolute_pos, pair));
                         }
                     }
@@ -89,7 +89,9 @@ impl TagStreamSanitizer {
                 }
 
                 // Found a start tag!
-                let (start_pos, pair) = found_start.unwrap();
+                let Some((start_pos, pair)) = found_start else {
+                    break;
+                };
 
                 // Yield text before the tag.
                 if start_pos > current_pos {
@@ -108,7 +110,10 @@ impl TagStreamSanitizer {
                 current_pos = start_pos + pair.0.len();
             } else {
                 // We are in a reasoning block. Look for the closing tag.
-                let (_, close_tag) = self.active_tag_pair.unwrap();
+                let Some((_, close_tag)) = self.active_tag_pair else {
+                    self.in_reasoning = false;
+                    continue;
+                };
                 if let Some(pos) = chunk_str[current_pos..].find(close_tag) {
                     let absolute_pos = current_pos + pos;
 

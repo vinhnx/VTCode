@@ -104,7 +104,7 @@ impl ConfigBuilder {
             current = current
                 .get_mut(*part)
                 .and_then(|v| v.as_table_mut())
-                .expect("Value must be a table");
+                .unwrap_or_else(|| unreachable!("inserted table should remain a table"));
         }
     }
 }

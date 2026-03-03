@@ -19,9 +19,7 @@ fn test_model_string_conversion() {
     // Anthropic models
     assert_eq!(ModelId::ClaudeOpus46.as_str(), models::CLAUDE_OPUS_4_6);
     assert_eq!(ModelId::ClaudeSonnet46.as_str(), models::CLAUDE_SONNET_4_6);
-    assert_eq!(ModelId::ClaudeSonnet45.as_str(), models::CLAUDE_SONNET_4_5);
     assert_eq!(ModelId::ClaudeHaiku45.as_str(), models::CLAUDE_HAIKU_4_5);
-    assert_eq!(ModelId::ClaudeOpus41.as_str(), models::CLAUDE_OPUS_4_1);
     // DeepSeek models
     assert_eq!(ModelId::DeepSeekChat.as_str(), models::DEEPSEEK_CHAT);
     assert_eq!(
@@ -76,16 +74,12 @@ fn test_model_from_string() {
     );
     // Anthropic models
     assert_eq!(
-        models::CLAUDE_SONNET_4_5.parse::<ModelId>().unwrap(),
-        ModelId::ClaudeSonnet45
+        models::CLAUDE_SONNET_4_6.parse::<ModelId>().unwrap(),
+        ModelId::ClaudeSonnet46
     );
     assert_eq!(
         models::CLAUDE_HAIKU_4_5.parse::<ModelId>().unwrap(),
         ModelId::ClaudeHaiku45
-    );
-    assert_eq!(
-        models::CLAUDE_OPUS_4_1.parse::<ModelId>().unwrap(),
-        ModelId::ClaudeOpus41
     );
     assert_eq!(
         models::CLAUDE_OPUS_4_6.parse::<ModelId>().unwrap(),
@@ -155,7 +149,6 @@ fn test_model_providers() {
     assert_eq!(ModelId::GPT5.provider(), Provider::OpenAI);
     assert_eq!(ModelId::ClaudeOpus46.provider(), Provider::Anthropic);
     assert_eq!(ModelId::ClaudeSonnet46.provider(), Provider::Anthropic);
-    assert_eq!(ModelId::ClaudeSonnet45.provider(), Provider::Anthropic);
     assert_eq!(ModelId::ClaudeHaiku45.provider(), Provider::Anthropic);
     assert_eq!(ModelId::DeepSeekChat.provider(), Provider::DeepSeek);
     assert_eq!(ModelId::ZaiGlm5.provider(), Provider::ZAI);
@@ -176,7 +169,7 @@ fn test_provider_defaults() {
     );
     assert_eq!(
         ModelId::default_orchestrator_for_provider(Provider::Anthropic),
-        ModelId::ClaudeOpus45
+        ModelId::ClaudeOpus46
     );
     assert_eq!(
         ModelId::default_orchestrator_for_provider(Provider::DeepSeek),
@@ -235,7 +228,7 @@ fn test_model_variants() {
     // Top tier models
     assert!(ModelId::GPT5.is_top_tier());
     assert!(ModelId::ClaudeOpus46.is_top_tier());
-    assert!(ModelId::ClaudeSonnet45.is_top_tier());
+    assert!(ModelId::ClaudeSonnet46.is_top_tier());
     assert!(ModelId::DeepSeekReasoner.is_top_tier());
     assert!(ModelId::ZaiGlm5.is_top_tier());
     assert!(ModelId::Gemini3FlashPreview.is_top_tier());
@@ -255,9 +248,7 @@ fn test_model_generation() {
     // Anthropic generations
     assert_eq!(ModelId::ClaudeOpus46.generation(), "4.6");
     assert_eq!(ModelId::ClaudeSonnet46.generation(), "4.6");
-    assert_eq!(ModelId::ClaudeSonnet45.generation(), "4.5");
     assert_eq!(ModelId::ClaudeHaiku45.generation(), "4.5");
-    assert_eq!(ModelId::ClaudeOpus41.generation(), "4.1");
 
     // DeepSeek generations
     assert_eq!(ModelId::DeepSeekChat.generation(), "V3.2-Exp");
@@ -280,7 +271,6 @@ fn test_models_for_provider() {
     let anthropic_models = ModelId::models_for_provider(Provider::Anthropic);
     assert!(anthropic_models.contains(&ModelId::ClaudeOpus46));
     assert!(anthropic_models.contains(&ModelId::ClaudeSonnet46));
-    assert!(anthropic_models.contains(&ModelId::ClaudeSonnet45));
     assert!(anthropic_models.contains(&ModelId::ClaudeHaiku45));
     assert!(!anthropic_models.contains(&ModelId::GPT5));
 
@@ -304,10 +294,11 @@ fn test_fallback_models() {
     let fallbacks = ModelId::fallback_models();
     assert!(!fallbacks.is_empty());
     assert!(fallbacks.contains(&ModelId::Gemini3FlashPreview));
+    assert!(fallbacks.contains(&ModelId::GPT52));
     assert!(fallbacks.contains(&ModelId::GPT5));
-    assert!(fallbacks.contains(&ModelId::ClaudeOpus41));
+    assert!(fallbacks.contains(&ModelId::OpenAIGptOss20b));
+    assert!(fallbacks.contains(&ModelId::ClaudeOpus46));
     assert!(fallbacks.contains(&ModelId::ClaudeSonnet46));
-    assert!(fallbacks.contains(&ModelId::ClaudeSonnet45));
     assert!(fallbacks.contains(&ModelId::DeepSeekReasoner));
     assert!(fallbacks.contains(&ModelId::ZaiGlm5));
 }
@@ -327,20 +318,10 @@ fn test_moonshot_and_openrouter_minimax_variants() {
         ModelId::MoonshotKimiK25
     );
     assert_eq!(
-        models::moonshot::KIMI_K2_THINKING
-            .parse::<ModelId>()
-            .unwrap(),
-        ModelId::MoonshotKimiK2Thinking
-    );
-    assert_eq!(
         "minimax/minimax-m2.5".parse::<ModelId>().unwrap(),
         ModelId::OpenRouterMinimaxM25
     );
     assert_eq!(ModelId::MoonshotKimiK25.provider(), Provider::Moonshot);
-    assert_eq!(
-        ModelId::MoonshotKimiK2Thinking.provider(),
-        Provider::Moonshot
-    );
     assert_eq!(
         ModelId::OpenRouterMinimaxM25.provider(),
         Provider::OpenRouter

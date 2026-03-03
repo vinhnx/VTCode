@@ -871,7 +871,9 @@ impl LLMProvider for OpenResponsesProvider {
                                             "id": event.get("item_id"),
                                             "function": { "arguments": delta }
                                         }]);
-                                        aggregator.handle_tool_calls(tc_json.as_array().unwrap());
+                                        if let Some(tool_calls) = tc_json.as_array() {
+                                            aggregator.handle_tool_calls(tool_calls);
+                                        }
                                     }
                                 }
                                 "response.reasoning.delta" => {

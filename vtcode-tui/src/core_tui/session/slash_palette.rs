@@ -159,14 +159,12 @@ impl SlashPalette {
     }
 
     pub fn update(&mut self, prefix: Option<&str>, limit: usize) -> SlashPaletteUpdate {
-        if prefix.is_none() {
+        let Some(prefix) = prefix else {
             if self.clear_internal() {
                 return SlashPaletteUpdate::Cleared;
             }
             return SlashPaletteUpdate::NoChange;
-        }
-
-        let prefix = prefix.unwrap();
+        };
         let mut new_suggestions = Vec::new();
 
         // Handle regular slash commands

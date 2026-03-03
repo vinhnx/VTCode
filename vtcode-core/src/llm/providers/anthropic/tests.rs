@@ -11,11 +11,11 @@ mod capabilities_tests {
     #[test]
     fn test_supports_structured_output() {
         assert!(supports_structured_output(
-            models::CLAUDE_SONNET_4_5,
+            models::CLAUDE_SONNET_4_6,
             models::anthropic::DEFAULT_MODEL
         ));
         assert!(supports_structured_output(
-            models::CLAUDE_OPUS_4_1_20250805,
+            models::CLAUDE_OPUS_4_6,
             models::anthropic::DEFAULT_MODEL
         ));
         assert!(supports_structured_output(
@@ -31,7 +31,7 @@ mod capabilities_tests {
     #[test]
     fn test_supports_vision() {
         assert!(supports_vision(
-            models::CLAUDE_SONNET_4_5,
+            models::CLAUDE_SONNET_4_6,
             models::anthropic::DEFAULT_MODEL
         ));
         assert!(supports_vision(
@@ -50,12 +50,8 @@ mod capabilities_tests {
             models::CLAUDE_OPUS_4_6,
             models::anthropic::DEFAULT_MODEL
         ));
-        assert!(supports_effort(
-            models::CLAUDE_OPUS_4_5,
-            models::anthropic::DEFAULT_MODEL
-        ));
         assert!(!supports_effort(
-            models::CLAUDE_SONNET_4_5,
+            models::CLAUDE_SONNET_4_6,
             models::anthropic::DEFAULT_MODEL
         ));
     }
@@ -120,7 +116,7 @@ mod validation_tests {
     fn test_validate_empty_messages() {
         let request = LLMRequest {
             messages: vec![],
-            model: models::CLAUDE_SONNET_4_5.to_string(),
+            model: models::CLAUDE_SONNET_4_6.to_string(),
             ..Default::default()
         };
         let config = AnthropicConfig::default();
@@ -177,7 +173,7 @@ mod validation_tests {
     fn test_validate_effort_rejects_unsupported_models() {
         let request = LLMRequest {
             messages: vec![crate::llm::provider::Message::user("hi".to_string())],
-            model: models::CLAUDE_SONNET_4_5.to_string(),
+            model: models::CLAUDE_SONNET_4_6.to_string(),
             effort: Some("medium".to_string()),
             ..Default::default()
         };
@@ -190,7 +186,7 @@ mod validation_tests {
         let config = AnthropicConfig::default();
         let request = LLMRequest {
             messages: vec![crate::llm::provider::Message::user("hi".to_string())],
-            model: models::CLAUDE_OPUS_4_5.to_string(),
+            model: models::CLAUDE_SONNET_4_6.to_string(),
             effort: Some("max".to_string()),
             ..Default::default()
         };
@@ -350,7 +346,7 @@ mod request_builder_tests {
     #[test]
     fn test_convert_to_anthropic_format_adds_top_level_cache_control() {
         let request = LLMRequest {
-            model: models::CLAUDE_SONNET_4_5.to_string(),
+            model: models::CLAUDE_SONNET_4_6.to_string(),
             messages: vec![Message::user("hello".to_string())],
             ..Default::default()
         };
@@ -372,7 +368,7 @@ mod request_builder_tests {
     #[test]
     fn test_convert_to_anthropic_format_reuses_last_explicit_ttl_for_automatic_cache() {
         let request = LLMRequest {
-            model: models::CLAUDE_SONNET_4_5.to_string(),
+            model: models::CLAUDE_SONNET_4_6.to_string(),
             system_prompt: Some(Arc::new("system prompt".to_string())),
             messages: vec![Message::user("hello".to_string())],
             ..Default::default()
@@ -401,7 +397,7 @@ mod request_builder_tests {
     #[test]
     fn test_convert_to_anthropic_format_skips_automatic_cache_when_slots_exhausted() {
         let request = LLMRequest {
-            model: models::CLAUDE_SONNET_4_5.to_string(),
+            model: models::CLAUDE_SONNET_4_6.to_string(),
             system_prompt: Some(Arc::new("stable system".to_string())),
             tools: Some(Arc::new(vec![ToolDefinition::function(
                 "do_work".to_string(),

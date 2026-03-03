@@ -4,7 +4,9 @@ pub(super) fn normalize_tool_output(mut val: Value) -> Value {
     if !val.is_object() {
         return json!({ "success": true, "result": val });
     }
-    let obj = val.as_object_mut().unwrap();
+    let Some(obj) = val.as_object_mut() else {
+        return json!({ "success": true, "result": val });
+    };
     obj.entry("success").or_insert(json!(true));
     let is_command_like_output = is_command_like_output(obj);
     let is_git_diff_output = obj

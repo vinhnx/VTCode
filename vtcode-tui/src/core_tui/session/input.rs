@@ -828,7 +828,7 @@ fn compact_image_label(content: &str) -> Option<String> {
 }
 
 static IMAGE_PATH_INLINE_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(
+    match Regex::new(
         r#"(?ix)
         (?:^|[\s\(\[\{<\"'`])
         (
@@ -842,8 +842,10 @@ static IMAGE_PATH_INLINE_REGEX: LazyLock<Regex> = LazyLock::new(|| {
             [^\n]*?
             \.(?:png|jpe?g|gif|bmp|webp|tiff?|svg)
         )"#,
-    )
-    .expect("Failed to compile inline image path regex")
+    ) {
+        Ok(regex) => regex,
+        Err(error) => panic!("Failed to compile inline image path regex: {error}"),
+    }
 });
 
 fn compact_image_placeholders(content: &str) -> Option<String> {
@@ -969,6 +971,17 @@ pub struct InputWidgetData {
     pub default_style: Style,
 }
 
+fn render_fake_cursor(buf: &mut Buffer, cursor_x: u16, cursor_y: u16) {
+    if let Some(cell) = buf.cell_mut((cursor_x, cursor_y)) {
+        let mut style = cell.style();
+        style = style.add_modifier(Modifier::REVERSED);
+        cell.set_style(style);
+        if cell.symbol().is_empty() {
+            cell.set_symbol(" ");
+        }
+    }
+}
+
 #[cfg(test)]
 mod input_highlight_tests {
     use super::*;
@@ -1035,16 +1048,5 @@ mod input_highlight_tests {
         assert_eq!(tokens[0].0, InputTokenKind::SlashCommand);
         assert_eq!(tokens[2].0, InputTokenKind::FileReference);
         assert_eq!(tokens[4].0, InputTokenKind::InlineCode);
-    }
-}
-
-fn render_fake_cursor(buf: &mut Buffer, cursor_x: u16, cursor_y: u16) {
-    if let Some(cell) = buf.cell_mut((cursor_x, cursor_y)) {
-        let mut style = cell.style();
-        style = style.add_modifier(Modifier::REVERSED);
-        cell.set_style(style);
-        if cell.symbol().is_empty() {
-            cell.set_symbol(" ");
-        }
     }
 }

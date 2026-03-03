@@ -69,11 +69,34 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Check tracked file sizes
-        run: python3 scripts/check_large_files.py 400000 --allow "resources/vhs/*.gif"
+        run: python3 scripts/check_large_files.py 400000
       - name: Check markdown documentation location
         run: python3 scripts/check_markdown_location.py
       - name: Check core docs link integrity
         run: python3 scripts/check_docs_links.py
+
+  zen-governance:
+    name: Zen Governance (Warn)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - name: Rust file length baseline
+        run: python3 scripts/check_rust_file_length.py --mode warn --max-lines 500
+      - name: unwrap/expect baseline
+        run: python3 scripts/check_no_unwrap_expect_prod.py --mode warn --allowlist scripts/zen_allowlist.txt
+      - name: allowlist hygiene baseline
+        run: python3 scripts/check_zen_allowlist.py --mode warn --allowlist scripts/zen_allowlist.txt
+
+  unwrap-expect-enforcement:
+    name: Unwrap/Expect Enforcement
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - name: Enforce production unwrap/expect policy
+        run: python3 scripts/check_no_unwrap_expect_prod.py --mode enforce --allowlist scripts/zen_allowlist.txt
 
   # Lint the formatting of the codebase.
   formatting:

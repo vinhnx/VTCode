@@ -99,7 +99,7 @@ impl ActionMatcher {
             // Try exact word matches
             if let Some(&action) = self.verbs.get(word) {
                 let match_len = word.len();
-                if best_match.is_none() || match_len > best_match.unwrap().1 {
+                if best_match.is_none_or(|(_, best_len)| match_len > best_len) {
                     best_match = Some((action, match_len));
                 }
             }
@@ -109,7 +109,7 @@ impl ActionMatcher {
                 let phrase = format!("{} {}", word, next);
                 if let Some(&action) = self.verbs.get(phrase.as_str()) {
                     let match_len = phrase.len();
-                    if best_match.is_none() || match_len > best_match.unwrap().1 {
+                    if best_match.is_none_or(|(_, best_len)| match_len > best_len) {
                         best_match = Some((action, match_len));
                     }
                 }

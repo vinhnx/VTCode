@@ -108,7 +108,7 @@ impl BestMatchesList {
             self.matches.push(Reverse((score, path.to_string())));
             Some(score)
         } else {
-            let min_score = self.matches.peek().unwrap().0.0;
+            let min_score = self.matches.peek().map(|entry| entry.0.0).unwrap_or(0);
             if score > min_score {
                 self.matches.pop();
                 self.matches.push(Reverse((score, path.to_string())));

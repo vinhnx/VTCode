@@ -231,14 +231,20 @@ impl PiiTokenizer {
 
     /// Clear all stored tokens (for security).
     pub fn clear_tokens(&self) {
-        let mut inner = self.inner.lock().expect("PiiTokenizer lock poisoned");
+        let mut inner = match self.inner.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => poisoned.into_inner(),
+        };
         inner.token_store.clear();
         debug!("Cleared all PII tokens");
     }
 
     /// Get audit trail of tokenized data.
     pub fn audit_trail(&self) -> Result<Vec<(String, PiiType, String)>> {
-        let inner = self.inner.lock().expect("PiiTokenizer lock poisoned");
+        let inner = self
+            .inner
+            .lock()
+            .map_err(|e| anyhow::anyhow!("Failed to acquire token store lock: {}", e))?;
         Ok(inner
             .token_store
             .values()

@@ -134,7 +134,13 @@ mod http_client_pool {
                 HttpClient::builder()
                     .timeout(Duration::from_secs(30))
                     .build()
-                    .expect("Failed to build HTTP client"),
+                    .unwrap_or_else(|error| {
+                        tracing::warn!(
+                            error = %error,
+                            "Failed to build 30s timeout HTTP client; falling back to default client"
+                        );
+                        HttpClient::new()
+                    }),
             ),
         );
 
@@ -144,7 +150,13 @@ mod http_client_pool {
                 HttpClient::builder()
                     .timeout(Duration::from_secs(120))
                     .build()
-                    .expect("Failed to build HTTP client"),
+                    .unwrap_or_else(|error| {
+                        tracing::warn!(
+                            error = %error,
+                            "Failed to build 120s timeout HTTP client; falling back to default client"
+                        );
+                        HttpClient::new()
+                    }),
             ),
         );
 

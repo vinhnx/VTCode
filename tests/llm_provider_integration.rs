@@ -23,7 +23,7 @@ fn test_provider_factory() {
         Some("openai".to_string())
     );
     assert_eq!(
-        factory.provider_from_model(models::CLAUDE_SONNET_4_5),
+        factory.provider_from_model(models::CLAUDE_SONNET_4_6),
         Some("anthropic".to_string())
     );
     assert_eq!(
@@ -47,7 +47,7 @@ fn test_provider_creation() {
     assert!(openai.is_ok());
 
     let anthropic = create_provider_for_model(
-        models::CLAUDE_SONNET_4_5,
+        models::CLAUDE_SONNET_4_6,
         "test_key".to_string(),
         None,
         None,
@@ -66,7 +66,7 @@ fn test_unified_client_creation() {
     assert!(openai_client.is_ok());
 
     let anthropic_client = create_provider_for_model(
-        models::CLAUDE_SONNET_4_5,
+        models::CLAUDE_SONNET_4_6,
         "test_key".to_string(),
         None,
         None,
@@ -108,7 +108,7 @@ fn test_provider_supported_models() {
 
     let anthropic = AnthropicProvider::new("test_key".to_string());
     let anthropic_models = anthropic.supported_models();
-    assert!(anthropic_models.contains(&models::CLAUDE_SONNET_4_5.to_string()));
+    assert!(anthropic_models.contains(&models::CLAUDE_SONNET_4_6.to_string()));
     assert!(anthropic_models.contains(&"claude-sonnet-4-20250514".to_string()));
 }
 

@@ -470,19 +470,23 @@ fn parse_retention_duration(input: &str) -> anyhow::Result<Duration> {
     }
 
     // Strict format: number + unit (s|m|h|d)
-    let re = Regex::new(r"^(\d+)([smhdSMHD])$").unwrap();
+    let re =
+        Regex::new(r"^(\d+)([smhdSMHD])$").context("Failed to compile retention format regex")?;
     let caps = re
         .captures(input)
         .ok_or_else(|| anyhow::anyhow!("Invalid retention format; use <number>[s|m|h|d]"))?;
 
-    let value_str = caps.get(1).unwrap().as_str();
+    let value_str = caps
+        .get(1)
+        .map(|m| m.as_str())
+        .ok_or_else(|| anyhow::anyhow!("Retention value capture missing"))?;
     let unit = caps
         .get(2)
-        .unwrap()
-        .as_str()
+        .map(|m| m.as_str())
+        .ok_or_else(|| anyhow::anyhow!("Retention unit capture missing"))?
         .chars()
         .next()
-        .unwrap()
+        .ok_or_else(|| anyhow::anyhow!("Retention unit is empty"))?
         .to_ascii_lowercase();
     let value: u64 = value_str
         .parse()

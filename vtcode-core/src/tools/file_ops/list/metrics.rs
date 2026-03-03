@@ -173,18 +173,19 @@ impl FileOpsTool {
                 .and_then(|value| value.as_u64())
                 .unwrap_or(0)
         );
-        output
-            .as_object_mut()
-            .expect("largest_files output must be an object")
-            .entry("message")
-            .and_modify(|value| {
-                if let Some(existing) = value.as_str() {
-                    *value = json!(format!("{existing} {note}"));
-                } else {
-                    *value = json!(note.clone());
-                }
-            })
-            .or_insert_with(|| json!(note));
+        if let Some(obj) = output.as_object_mut() {
+            obj.entry("message".to_string())
+                .and_modify(|value| {
+                    if let Some(existing) = value.as_str() {
+                        *value = json!(format!("{existing} {note}"));
+                    } else {
+                        *value = json!(note.clone());
+                    }
+                })
+                .or_insert_with(|| json!(note));
+        } else {
+            tracing::warn!("largest_files output was not an object; skipped message merge");
+        }
 
         Ok(output)
     }

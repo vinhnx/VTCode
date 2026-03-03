@@ -11,6 +11,7 @@ use crate::gemini::streaming::{
 use anyhow::{Context, Result};
 use reqwest::Client as ReqwestClient;
 use std::time::Instant;
+use tracing::warn;
 
 #[derive(Clone)]
 pub struct Client {
@@ -37,7 +38,10 @@ impl Client {
             .connect_timeout(config.connect_timeout)
             .user_agent(&config.user_agent)
             .build()
-            .expect("Failed to build HTTP client");
+            .unwrap_or_else(|error| {
+                warn!(error = %error, "Failed to build Gemini HTTP client; using default client");
+                ReqwestClient::new()
+            });
 
         Self {
             api_key,

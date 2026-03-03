@@ -152,7 +152,13 @@ impl AsyncProcessRunner {
         };
 
         let (timed_out, cancelled, status) = match completion {
-            Completion::Finished => (false, false, exit_status.expect("status captured")),
+            Completion::Finished => {
+                let status = match exit_status {
+                    Some(status) => status,
+                    None => wait_future.await?,
+                };
+                (false, false, status)
+            }
             Completion::TimedOut => {
                 kill_child(shared_child.clone()).await?;
                 let status = wait_future.await?;

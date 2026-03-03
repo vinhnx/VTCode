@@ -579,7 +579,8 @@ fn build_quick_start_section(analysis: &ProjectAnalysis) -> String {
         );
     }
 
-    render_section("Quick start", lines).expect("Failed to render Quick start section")
+    render_section("Quick start", lines)
+        .unwrap_or_else(|| "## Quick start\n\nInstall dependencies and run the standard build before starting new work.\n".to_string())
 }
 
 fn build_architecture_section(analysis: &ProjectAnalysis) -> String {
@@ -640,7 +641,8 @@ fn build_architecture_section(analysis: &ProjectAnalysis) -> String {
         );
     }
 
-    render_section("Architecture & layout", lines).unwrap()
+    render_section("Architecture & layout", lines)
+        .unwrap_or_else(|| "## Architecture & layout\n\nReview the repository layout to understand module boundaries before editing.\n".to_string())
 }
 
 fn build_code_style_section(analysis: &ProjectAnalysis) -> String {
@@ -666,7 +668,8 @@ fn build_code_style_section(analysis: &ProjectAnalysis) -> String {
         );
     }
 
-    render_section("Code style", lines).unwrap()
+    render_section("Code style", lines)
+        .unwrap_or_else(|| "## Code style\n\nMatch the surrounding style and keep commits free of formatting noise.\n".to_string())
 }
 
 fn build_testing_section(analysis: &ProjectAnalysis) -> String {
@@ -711,7 +714,9 @@ fn build_testing_section(analysis: &ProjectAnalysis) -> String {
         lines.push("Run the project's automated checks before submitting changes.".to_owned());
     }
 
-    render_section("Testing", lines).unwrap()
+    render_section("Testing", lines).unwrap_or_else(|| {
+        "## Testing\n\nRun the project's automated checks before submitting changes.\n".to_string()
+    })
 }
 
 fn build_pr_guidelines_section(analysis: &ProjectAnalysis) -> Option<String> {

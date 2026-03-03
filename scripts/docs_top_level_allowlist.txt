@@ -1,8 +1,10 @@
 # Allowed markdown files directly under docs/
 # Keep this list minimal; prefer domain subdirectories and docs/archive for one-off reports.
 docs/ARCHITECTURE.md
+docs/COMPATIBILITY.md
 docs/CODE_OF_CONDUCT.md
 docs/CONTRIBUTING.md
 docs/FAQ.md
 docs/INDEX.md
 docs/README.md
+docs/SECURITY.md

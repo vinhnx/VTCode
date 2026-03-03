@@ -174,12 +174,8 @@ impl SkillCompatibilityChecker {
                     debug!("Tool {} version {} is compatible", dep.name, dep.version);
                 }
                 VersionCompatibility::Warning(msg) => {
-                    report.warnings.push(msg);
-                    debug!(
-                        "Compatibility warning for {}: {}",
-                        dep.name,
-                        report.warnings.last().unwrap()
-                    );
+                    report.warnings.push(msg.clone());
+                    debug!("Compatibility warning for {}: {}", dep.name, msg);
                 }
                 VersionCompatibility::RequiresMigration => {
                     report.compatible = false;
@@ -195,12 +191,8 @@ impl SkillCompatibilityChecker {
                 }
                 VersionCompatibility::Incompatible(msg) => {
                     report.compatible = false;
-                    report.errors.push(msg);
-                    debug!(
-                        "Incompatibility error for {}: {}",
-                        dep.name,
-                        report.errors.last().unwrap()
-                    );
+                    report.errors.push(msg.clone());
+                    debug!("Incompatibility error for {}: {}", dep.name, msg);
                 }
             }
         }

@@ -664,8 +664,19 @@ impl ClientHandler for LoggingClientHandler {
     }
 
     fn get_info(&self) -> rmcp::model::ClientInfo {
-        convert_to_rmcp(self.initialize_params.clone())
-            .expect("initialize params conversion should not fail")
+        convert_to_rmcp(self.initialize_params.clone()).unwrap_or_else(|error| {
+            warn!(
+                provider = self.provider.as_str(),
+                error = %error,
+                "Failed to convert MCP initialize params; using fallback client info"
+            );
+            rmcp::model::ClientInfo {
+                protocol_version: Default::default(),
+                capabilities: Default::default(),
+                client_info: super::utils::build_client_implementation(),
+                meta: None,
+            }
+        })
     }
 }
 

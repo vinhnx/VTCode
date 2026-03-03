@@ -472,12 +472,8 @@ impl AgentBehaviorAnalyzer {
         output.push_str("## Skill Statistics\n");
         let _ = writeln!(output, "Total skills: {}", self.skill_stats.total_skills);
         let _ = writeln!(output, "Reused skills: {}", self.skill_stats.reused_skills);
-        if !self.skill_stats.most_effective_skills.is_empty() {
-            let _ = writeln!(
-                output,
-                "Top skill: {}",
-                self.skill_stats.most_effective_skills.first().unwrap()
-            );
+        if let Some(top_skill) = self.skill_stats.most_effective_skills.first() {
+            let _ = writeln!(output, "Top skill: {}", top_skill);
         }
 
         output.push_str("\n## Tool Statistics\n");

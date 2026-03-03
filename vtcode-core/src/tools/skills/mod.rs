@@ -338,11 +338,10 @@ impl Tool for ListSkillsTool {
         });
 
         // Add context message for queries
-        if query.is_some() || variety_filter.is_some() {
-            response
-                .as_object_mut()
-                .unwrap()
-                .insert("filter_applied".to_string(), serde_json::json!(true));
+        if (query.is_some() || variety_filter.is_some())
+            && let Some(response_object) = response.as_object_mut()
+        {
+            response_object.insert("filter_applied".to_string(), serde_json::json!(true));
         }
 
         Ok(response)

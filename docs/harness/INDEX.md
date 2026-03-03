@@ -13,6 +13,7 @@ The principle: if an agent cannot complete a task autonomously from information 
 | [INDEX.md](INDEX.md)                                       | This file. Entry point to the harness knowledge base.                                                   |
 | [CORE_BELIEFS.md](CORE_BELIEFS.md)                         | Agent-first operating principles. The "why" behind every decision.                                      |
 | [ARCHITECTURAL_INVARIANTS.md](ARCHITECTURAL_INVARIANTS.md) | Mechanical enforcement rules. Each invariant includes violation detection and remediation instructions. |
+| [ZEN_ALIGNMENT.md](ZEN_ALIGNMENT.md)                       | Full (all-19) Zen principle mapping and staged enforcement rollout.                                       |
 | [QUALITY_SCORE.md](QUALITY_SCORE.md)                       | Quality grading (A/B/C/D) for each VT Code domain across 5 dimensions.                                  |
 | [EXEC_PLANS.md](EXEC_PLANS.md)                             | Execution plan methodology. Template and guidelines for self-contained design documents.                |
 | [TECH_DEBT_TRACKER.md](TECH_DEBT_TRACKER.md)               | Known technical debt items with priority (P0–P3) and review cadence.                                    |
@@ -31,8 +32,9 @@ The principle: if an agent cannot complete a task autonomously from information 
 | AGENTS.md                | `AGENTS.md` (root)                        | Top-level map. Points agents to this directory for deeper context.                  |
 | Architecture Guide       | `docs/ARCHITECTURE.md`                    | System design reference. Harness docs cover process; architecture covers structure. |
 | Configuration Precedence | `docs/config/CONFIGURATION_PRECEDENCE.md` | Config invariants in `ARCHITECTURAL_INVARIANTS.md` reference this.                  |
-| Security Model           | `docs/SECURITY.md`                        | Security invariants reference the security docs.                                    |
-| MCP Integration          | `docs/mcp/00_START_HERE.md`               | MCP domain quality score references this.                                           |
+| Security Model           | `docs/security/SECURITY_MODEL.md`         | Security invariants reference the security docs.                                    |
+| MCP Integration          | `docs/mcp/MCP_INTEGRATION_GUIDE.md`       | MCP domain quality score references this.                                           |
+| Zen Principle Mapping    | `docs/harness/ZEN_ALIGNMENT.md`           | Additive enforcement mapping between Zen principles and VT Code controls.           |
 | Process Hardening        | `docs/development/PROCESS_HARDENING.md`               | Security domain quality score references this.                                      |
 | Provider Guides          | `docs/providers/PROVIDER_GUIDES.md`                 | LLM domain quality score references this.                                           |
 
@@ -45,6 +47,7 @@ AGENTS.md (root)          ← Start here. The map.
   │   ├── INDEX.md
   │   ├── CORE_BELIEFS.md
   │   ├── ARCHITECTURAL_INVARIANTS.md
+  │   ├── ZEN_ALIGNMENT.md
   │   ├── QUALITY_SCORE.md
   │   ├── EXEC_PLANS.md
   │   ├── TECH_DEBT_TRACKER.md

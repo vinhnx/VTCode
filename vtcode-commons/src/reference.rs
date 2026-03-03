@@ -84,7 +84,10 @@ impl<Event> MemoryTelemetry<Event> {
 
     /// Returns the recorded events, draining the internal buffer.
     pub fn take(&self) -> Vec<Event> {
-        let mut events = self.events.lock().expect("telemetry poisoned");
+        let mut events = match self.events.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => poisoned.into_inner(),
+        };
         std::mem::take(&mut *events)
     }
 }
@@ -94,7 +97,10 @@ where
     Event: Clone + Send + Sync,
 {
     fn record(&self, event: &Event) -> Result<()> {
-        let mut events = self.events.lock().expect("telemetry poisoned");
+        let mut events = match self.events.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => poisoned.into_inner(),
+        };
         events.push(event.clone());
         Ok(())
     }
@@ -120,14 +126,20 @@ impl MemoryErrorReporter {
 
     /// Returns the captured error messages, draining the buffer.
     pub fn take(&self) -> Vec<String> {
-        let mut messages = self.messages.lock().expect("reporter poisoned");
+        let mut messages = match self.messages.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => poisoned.into_inner(),
+        };
         std::mem::take(&mut *messages)
     }
 }
 
 impl ErrorReporter for MemoryErrorReporter {
     fn capture(&self, error: &Error) -> Result<()> {
-        let mut messages = self.messages.lock().expect("reporter poisoned");
+        let mut messages = match self.messages.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => poisoned.into_inner(),
+        };
         messages.push(format!("{error:?}"));
         Ok(())
     }

@@ -412,7 +412,7 @@ impl SkillValidator {
             };
         }
 
-        match parse_skill_file(skill_file.parent().unwrap()) {
+        match parse_skill_file(skill_file.parent().unwrap_or_else(|| Path::new("."))) {
             Ok((manifest, _instructions)) => {
                 if let Err(err) = manifest.validate() {
                     let mut details = serde_json::Map::new();
@@ -423,7 +423,8 @@ impl SkillValidator {
                     );
                     details.insert(
                         "version".to_string(),
-                        serde_json::to_value(&manifest.version).unwrap(),
+                        serde_json::to_value(&manifest.version)
+                            .unwrap_or_else(|_| Value::String("unknown".to_string())),
                     );
                     return CheckResult {
                         name: "skill_file_valid".to_string(),
@@ -473,11 +474,12 @@ impl SkillValidator {
                 );
                 details.insert(
                     "version".to_string(),
-                    serde_json::to_value(&manifest.version).unwrap(),
+                    serde_json::to_value(&manifest.version)
+                        .unwrap_or_else(|_| Value::String("unknown".to_string())),
                 );
                 details.insert(
                     "warnings".to_string(),
-                    serde_json::to_value(&warnings).unwrap(),
+                    serde_json::to_value(&warnings).unwrap_or_else(|_| Value::Array(vec![])),
                 );
 
                 CheckResult {
@@ -503,7 +505,23 @@ impl SkillValidator {
         let start_time = Instant::now();
         let mut issues = vec![];
 
-        for entry in std::fs::read_dir(scripts_dir).unwrap().flatten() {
+        let entries = match std::fs::read_dir(scripts_dir) {
+            Ok(entries) => entries,
+            Err(error) => {
+                return CheckResult {
+                    name: "scripts_valid".to_string(),
+                    status: CheckStatus::Failed,
+                    message: format!(
+                        "Failed to read scripts directory {}: {}",
+                        scripts_dir.display(),
+                        error
+                    ),
+                    details: None,
+                    execution_time_ms: start_time.elapsed().as_millis() as u64,
+                };
+            }
+        };
+        for entry in entries.flatten() {
             let path = entry.path();
             if path.is_file() {
                 // Check file size
@@ -559,7 +577,7 @@ impl SkillValidator {
             name: "scripts_valid".to_string(),
             status,
             message,
-            details: Some(serde_json::to_value(&issues).unwrap()),
+            details: Some(serde_json::to_value(&issues).unwrap_or_else(|_| Value::Array(vec![]))),
             execution_time_ms: start_time.elapsed().as_millis() as u64,
         }
     }
@@ -592,7 +610,23 @@ impl SkillValidator {
 
         let mut issues = vec![];
 
-        for entry in std::fs::read_dir(dir_path).unwrap().flatten() {
+        let entries = match std::fs::read_dir(dir_path) {
+            Ok(entries) => entries,
+            Err(error) => {
+                return CheckResult {
+                    name: format!("resource_{}", resource_type),
+                    status: CheckStatus::Failed,
+                    message: format!(
+                        "Failed to read resource directory {}: {}",
+                        dir_path.display(),
+                        error
+                    ),
+                    details: None,
+                    execution_time_ms: start_time.elapsed().as_millis() as u64,
+                };
+            }
+        };
+        for entry in entries.flatten() {
             let path = entry.path();
             if path.is_file() {
                 // Check file size
@@ -628,7 +662,7 @@ impl SkillValidator {
             name: format!("resource_{}", resource_type),
             status,
             message,
-            details: Some(serde_json::to_value(&issues).unwrap()),
+            details: Some(serde_json::to_value(&issues).unwrap_or_else(|_| Value::Array(vec![]))),
             execution_time_ms: start_time.elapsed().as_millis() as u64,
         }
     }

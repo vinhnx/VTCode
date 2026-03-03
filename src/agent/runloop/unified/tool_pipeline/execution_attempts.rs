@@ -94,15 +94,9 @@ async fn execute_tool_with_timeout_ref_mode(
     max_tool_retries: usize,
     prevalidated: bool,
 ) -> ToolExecutionStatus {
-    let mut local_progress_reporter = None;
-    let progress_reporter = if let Some(reporter) = progress_reporter {
-        reporter
-    } else {
-        local_progress_reporter = Some(ProgressReporter::new());
-        local_progress_reporter
-            .as_ref()
-            .expect("local reporter exists")
-    };
+    let created_local_reporter = progress_reporter.is_none();
+    let fallback_progress_reporter = ProgressReporter::new();
+    let progress_reporter = progress_reporter.unwrap_or(&fallback_progress_reporter);
 
     let timeout_category = registry.timeout_category_for(name).await;
     let timeout_ceiling = registry
@@ -134,8 +128,8 @@ async fn execute_tool_with_timeout_ref_mode(
     )
     .await;
 
-    if let Some(ref local_reporter) = local_progress_reporter {
-        local_reporter.complete().await;
+    if created_local_reporter {
+        fallback_progress_reporter.complete().await;
     }
     result
 }
