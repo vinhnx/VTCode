@@ -63,3 +63,8 @@ https://docs.litellm.ai/docs/
 ---
 
 implement interactive /skills maanger in tui similiar to /mcp manager.
+
+--
+
+idea: show a info to let user manually switch to edit mode for full tools set, as a fallback if the agent's auto switch from plan -> edit
+mode systematically fall.
