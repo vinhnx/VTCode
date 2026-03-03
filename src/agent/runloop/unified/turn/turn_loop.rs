@@ -308,6 +308,7 @@ pub async fn run_turn_loop(
     use crate::agent::runloop::unified::turn::turn_processing::{
         HandleTurnProcessingResultParams, execute_llm_request, handle_turn_processing_result,
         maybe_force_plan_mode_interview, process_llm_response,
+        should_attempt_dynamic_interview_generation, synthesize_plan_mode_interview_args,
     };
 
     // Initialize the outcome result
@@ -541,14 +542,38 @@ pub async fn run_turn_loop(
                 return Err(err);
             }
         };
-        {
+        if turn_config.request_user_input_enabled {
+            let should_attempt_synthesis = {
+                let parts = turn_processing_ctx.parts_mut();
+                parts.state.session_stats.is_plan_mode()
+                    && should_attempt_dynamic_interview_generation(
+                        &processing_result,
+                        response.content.as_deref(),
+                        parts.state.session_stats,
+                    )
+            };
+            let synthesized_interview_args = if should_attempt_synthesis {
+                let parts = turn_processing_ctx.parts_mut();
+                synthesize_plan_mode_interview_args(
+                    parts.llm.provider_client,
+                    &active_model,
+                    parts.state.working_history,
+                    response.content.as_deref(),
+                    parts.state.session_stats,
+                )
+                .await
+            } else {
+                None
+            };
+
             let parts = turn_processing_ctx.parts_mut();
-            if parts.state.session_stats.is_plan_mode() && turn_config.request_user_input_enabled {
+            if parts.state.session_stats.is_plan_mode() {
                 processing_result = maybe_force_plan_mode_interview(
                     processing_result,
                     response.content.as_deref(),
                     parts.state.session_stats,
                     parts.state.working_history.len(),
+                    synthesized_interview_args,
                 );
             }
         }

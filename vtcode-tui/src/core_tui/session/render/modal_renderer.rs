@@ -3,6 +3,7 @@ use crate::ui::tui::session::modal::{
     ModalBodyContext, ModalListState, ModalRenderStyles, render_modal_body,
     render_wizard_modal_body,
 };
+use crate::ui::tui::types::InlineListSelection;
 
 const MAX_INLINE_MODAL_HEIGHT: u16 = 20;
 const MAX_INLINE_MODAL_HEIGHT_MULTILINE: u16 = 32;
@@ -28,6 +29,31 @@ fn list_row_cap(list: &ModalListState) -> usize {
 
 fn list_desired_rows(list: &ModalListState) -> usize {
     list.visible_indices.len().clamp(1, list_row_cap(list))
+}
+
+fn wizard_step_has_inline_custom_editor(
+    wizard: &crate::ui::tui::session::modal::WizardModalState,
+) -> bool {
+    let Some(step) = wizard.steps.get(wizard.current_step) else {
+        return false;
+    };
+    let Some(selected_visible) = step.list.list_state.selected() else {
+        return false;
+    };
+    let Some(&item_index) = step.list.visible_indices.get(selected_visible) else {
+        return false;
+    };
+    let Some(item) = step.list.items.get(item_index) else {
+        return false;
+    };
+    matches!(
+        item.selection.as_ref(),
+        Some(InlineListSelection::RequestUserInputAnswer {
+            selected,
+            other,
+            ..
+        }) if selected.is_empty() && other.is_some()
+    )
 }
 
 pub fn split_inline_modal_area(session: &Session, area: Rect) -> (Rect, Option<Rect>) {
@@ -63,6 +89,7 @@ pub fn split_inline_modal_area(session: &Session, area: Rect) -> (Rect, Option<R
             .steps
             .get(wizard.current_step)
             .is_some_and(|step| step.notes_active || !step.notes.is_empty())
+            && !wizard_step_has_inline_custom_editor(wizard)
         {
             lines = lines.saturating_add(1);
         }

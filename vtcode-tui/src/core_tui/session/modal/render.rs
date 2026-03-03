@@ -92,12 +92,22 @@ fn render_markdown_lines_for_modal(text: &str, width: usize, style: Style) -> Ve
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct ModalInlineEditor {
+    item_index: usize,
+    label: String,
+    text: String,
+    placeholder: Option<String>,
+    active: bool,
+}
+
 pub fn render_modal_list(
     frame: &mut Frame<'_>,
     area: Rect,
     list: &mut ModalListState,
     styles: &ModalRenderStyles,
     footer_hint: Option<&str>,
+    inline_editor: Option<&ModalInlineEditor>,
 ) {
     if area.width == 0 || area.height == 0 {
         return;
@@ -137,8 +147,14 @@ pub fn render_modal_list(
         .iter()
         .enumerate()
         .map(|(visible_index, &item_index)| {
-            let lines =
-                modal_list_item_lines(list, visible_index, item_index, styles, content_width);
+            let lines = modal_list_item_lines(
+                list,
+                visible_index,
+                item_index,
+                styles,
+                content_width,
+                inline_editor,
+            );
             (
                 InlineListRow {
                     lines: lines.clone(),
@@ -205,6 +221,28 @@ pub fn render_wizard_tabs(
     frame.render_widget(tabs, area);
 }
 
+fn inline_editor_for_step(step: &WizardStepState) -> Option<ModalInlineEditor> {
+    let selected_visible = step.list.list_state.selected()?;
+    let item_index = *step.list.visible_indices.get(selected_visible)?;
+    let item = step.list.items.get(item_index)?;
+
+    match item.selection.as_ref() {
+        Some(InlineListSelection::RequestUserInputAnswer {
+            selected, other, ..
+        }) if selected.is_empty() && other.is_some() => Some(ModalInlineEditor {
+            item_index,
+            label: step
+                .freeform_label
+                .clone()
+                .unwrap_or_else(|| "Custom note".to_string()),
+            text: step.notes.clone(),
+            placeholder: step.freeform_placeholder.clone(),
+            active: step.notes_active,
+        }),
+        _ => None,
+    }
+}
+
 /// Render wizard modal body including tabs, question, and list
 #[allow(dead_code)]
 pub fn render_wizard_modal_body(
@@ -219,7 +257,9 @@ pub fn render_wizard_modal_body(
 
     let is_multistep = wizard.mode == crate::ui::tui::types::WizardModalMode::MultiStep;
     let current_step_state = wizard.steps.get(wizard.current_step);
-    let has_notes = current_step_state.is_some_and(|s| s.notes_active || !s.notes.is_empty());
+    let inline_editor = current_step_state.and_then(inline_editor_for_step);
+    let has_notes = current_step_state.is_some_and(|s| s.notes_active || !s.notes.is_empty())
+        && inline_editor.is_none();
     let instruction_lines = wizard.instruction_lines();
     let content_width = area.width.max(1) as usize;
     let header_lines = if is_multistep {
@@ -291,12 +331,19 @@ pub fn render_wizard_modal_body(
     idx += 1;
 
     if let Some(step) = wizard.steps.get_mut(wizard.current_step) {
-        render_modal_list(frame, chunks[idx], &mut step.list, styles, None);
+        render_modal_list(
+            frame,
+            chunks[idx],
+            &mut step.list,
+            styles,
+            None,
+            inline_editor.as_ref(),
+        );
     }
     idx += 1;
 
     if let Some(step) = wizard.steps.get(wizard.current_step)
-        && (step.notes_active || !step.notes.is_empty())
+        && has_notes
     {
         let label_text = step.freeform_label.as_deref().unwrap_or("›");
         let mut spans = vec![Span::styled(format!("{} ", label_text), styles.header)];
@@ -490,6 +537,7 @@ pub fn render_modal_body(frame: &mut Frame<'_>, area: Rect, context: ModalBodyCo
                         list_state,
                         context.styles,
                         context.footer_hint,
+                        None,
                     );
                 }
             }
@@ -786,6 +834,7 @@ pub fn modal_list_item_lines(
     item_index: usize,
     styles: &ModalRenderStyles,
     content_width: usize,
+    inline_editor: Option<&ModalInlineEditor>,
 ) -> Vec<Line<'static>> {
     let item = match list.items.get(item_index) {
         Some(i) => i,
@@ -864,6 +913,33 @@ pub fn modal_list_item_lines(
             secondary_spans.extend(subtitle_spans);
             lines.push(Line::from(secondary_spans));
         }
+    }
+
+    if let Some(editor) = inline_editor
+        && editor.item_index == item_index
+    {
+        let mut editor_spans = Vec::new();
+        if !selection_padding.is_empty() {
+            editor_spans.push(Span::raw(selection_padding.clone()));
+        }
+        if !indent.is_empty() {
+            editor_spans.push(Span::raw(indent.clone()));
+        }
+
+        editor_spans.push(Span::styled(format!("{} ", editor.label), styles.header));
+        if editor.text.is_empty() {
+            if let Some(placeholder) = editor.placeholder.as_ref() {
+                editor_spans.push(Span::styled(placeholder.clone(), styles.detail));
+            }
+        } else {
+            editor_spans.push(Span::styled(editor.text.clone(), styles.selectable));
+        }
+
+        if editor.active {
+            editor_spans.push(Span::styled("▌", styles.highlight));
+        }
+
+        lines.push(Line::from(editor_spans));
     }
 
     if !list.compact_rows() && item.selection.is_some() {

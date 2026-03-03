@@ -25,6 +25,10 @@ pub(crate) struct SessionStats {
     plan_mode_interview_pending: bool,
     /// Number of plan-mode turns observed since entering plan mode
     plan_mode_turns: usize,
+    /// Number of completed plan-mode interview cycles
+    plan_mode_interview_cycles_completed: usize,
+    /// Whether the latest plan-mode interview cycle was cancelled/incomplete
+    plan_mode_last_interview_cancelled: bool,
     /// Autonomous mode - auto-approve safe tools with reduced HITL prompts
     pub autonomous_mode: bool,
     #[allow(dead_code)]
@@ -96,6 +100,8 @@ impl SessionStats {
             self.plan_mode_interview_shown = false;
             self.plan_mode_interview_pending = false;
             self.plan_mode_turns = 0;
+            self.plan_mode_interview_cycles_completed = 0;
+            self.plan_mode_last_interview_cancelled = false;
             self.tools.clear();
             self.clear_previous_response_chain();
         }
@@ -112,6 +118,7 @@ impl SessionStats {
         self.editing_mode
     }
 
+    #[cfg(test)]
     pub(crate) fn plan_mode_interview_shown(&self) -> bool {
         self.plan_mode_interview_shown
     }
@@ -135,6 +142,36 @@ impl SessionStats {
 
     pub(crate) fn mark_plan_mode_interview_pending(&mut self) {
         self.plan_mode_interview_pending = true;
+    }
+
+    pub(crate) fn clear_plan_mode_interview_pending(&mut self) {
+        self.plan_mode_interview_pending = false;
+    }
+
+    pub(crate) fn record_plan_mode_interview_result(
+        &mut self,
+        answered_questions: usize,
+        cancelled: bool,
+    ) {
+        let answered_questions = answered_questions.min(3);
+        self.plan_mode_last_interview_cancelled = cancelled || answered_questions == 0;
+        self.plan_mode_interview_pending = false;
+
+        if !self.plan_mode_last_interview_cancelled {
+            self.plan_mode_interview_cycles_completed =
+                self.plan_mode_interview_cycles_completed.saturating_add(1);
+            self.plan_mode_interview_shown = true;
+        } else {
+            self.plan_mode_interview_shown = false;
+        }
+    }
+
+    pub(crate) fn plan_mode_interview_cycles_completed(&self) -> usize {
+        self.plan_mode_interview_cycles_completed
+    }
+
+    pub(crate) fn plan_mode_last_interview_cancelled(&self) -> bool {
+        self.plan_mode_last_interview_cancelled
     }
 
     pub(crate) fn register_follow_up_prompt(&mut self, input: &str) -> bool {
@@ -388,5 +425,32 @@ mod tests {
         assert!(!stats.register_follow_up_prompt("run tests and summarize"));
         assert!(!stats.turn_stalled());
         assert_eq!(stats.turn_stall_reason(), None);
+    }
+
+    #[test]
+    fn plan_mode_interview_result_updates_cycle_metrics() {
+        let mut stats = SessionStats::default();
+        stats.set_plan_mode(true);
+
+        stats.record_plan_mode_interview_result(2, false);
+        assert_eq!(stats.plan_mode_interview_cycles_completed(), 1);
+        assert!(!stats.plan_mode_last_interview_cancelled());
+
+        stats.record_plan_mode_interview_result(0, true);
+        assert_eq!(stats.plan_mode_interview_cycles_completed(), 1);
+        assert!(stats.plan_mode_last_interview_cancelled());
+    }
+
+    #[test]
+    fn entering_plan_mode_resets_interview_cycle_metrics() {
+        let mut stats = SessionStats::default();
+        stats.set_plan_mode(true);
+        stats.record_plan_mode_interview_result(1, false);
+        assert_eq!(stats.plan_mode_interview_cycles_completed(), 1);
+
+        stats.set_plan_mode(false);
+        stats.set_plan_mode(true);
+        assert_eq!(stats.plan_mode_interview_cycles_completed(), 0);
+        assert!(!stats.plan_mode_last_interview_cancelled());
     }
 }

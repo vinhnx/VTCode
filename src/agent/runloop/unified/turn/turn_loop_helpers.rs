@@ -1,6 +1,8 @@
 use anyhow::Result;
 
-use crate::agent::runloop::unified::plan_mode_state::short_confirmation_hint_with_fallback;
+use crate::agent::runloop::unified::plan_mode_state::{
+    plan_mode_still_active_hint_with_fallback, short_confirmation_hint_with_fallback,
+};
 use crate::agent::runloop::unified::turn::context::TurnLoopResult;
 use crate::agent::runloop::unified::turn::turn_helpers::{display_error, display_status};
 use crate::agent::runloop::unified::turn::turn_loop::TurnLoopContext;
@@ -45,7 +47,11 @@ pub(super) fn extract_turn_config(
                 DEFAULT_MAX_REPEATED_TOOL_CALLS
             },
             max_session_turns: cfg.agent.max_conversation_turns,
-            request_user_input_enabled: cfg.chat.ask_questions.enabled,
+            request_user_input_enabled: if plan_mode_active {
+                true
+            } else {
+                cfg.chat.ask_questions.enabled
+            },
         })
         .unwrap_or(PrecomputedTurnConfig {
             max_tool_loops: if plan_mode_active {
@@ -73,6 +79,14 @@ const PLAN_MODE_MAX_TOOL_LOOP_LIMIT_ABSOLUTE_CAP: usize = 240;
 const PLAN_MODE_TOOL_LOOP_CAP_MULTIPLIER: usize = 6;
 const PLAN_MODE_MAX_TOOL_LOOP_INCREMENT_PER_PROMPT: usize = 80;
 const PLAN_MODE_EXIT_TRIGGER_STATUS: &str = "Plan Mode: implementation intent detected from your message. Running `exit_plan_mode` for plan confirmation; once approved, VT Code will switch to Edit Mode and execute.";
+const PLAN_MODE_EXIT_SWITCHED_CONTINUE_STATUS: &str =
+    "Plan Mode disabled. Continuing this turn in Edit Mode to execute your implementation request.";
+
+fn plan_mode_fully_disabled(ctx: &TurnLoopContext<'_>) -> bool {
+    !ctx.session_stats.is_plan_mode()
+        && !ctx.tool_registry.is_plan_mode()
+        && !ctx.tool_registry.plan_mode_state().is_active()
+}
 
 fn configured_tool_loop_base_limit(ctx: &TurnLoopContext<'_>) -> usize {
     let configured = ctx
@@ -311,8 +325,14 @@ pub(super) async fn maybe_handle_plan_mode_exit_trigger(
 
     match outcome {
         Ok(_pipe_outcome) => {
-            *result = TurnLoopResult::Completed;
-            Ok(true)
+            if !plan_mode_fully_disabled(ctx) {
+                display_status(ctx.renderer, &plan_mode_still_active_hint_with_fallback())?;
+                *result = TurnLoopResult::Completed;
+                return Ok(true);
+            }
+
+            display_status(ctx.renderer, PLAN_MODE_EXIT_SWITCHED_CONTINUE_STATUS)?;
+            Ok(false)
         }
         Err(err) => {
             display_error(ctx.renderer, "Failed to exit Plan Mode", &err)?;
@@ -570,9 +590,10 @@ pub(super) async fn maybe_handle_tool_loop_limit(
 #[cfg(test)]
 mod tests {
     use super::{
-        PLAN_MODE_EXIT_TRIGGER_STATUS, PLAN_MODE_MIN_TOOL_LOOPS, clamp_tool_loop_increment,
-        extract_turn_config, should_exit_plan_mode_from_confirmation,
-        should_exit_plan_mode_from_user_text, tool_loop_hard_cap,
+        PLAN_MODE_EXIT_SWITCHED_CONTINUE_STATUS, PLAN_MODE_EXIT_TRIGGER_STATUS,
+        PLAN_MODE_MIN_TOOL_LOOPS, clamp_tool_loop_increment, extract_turn_config,
+        should_exit_plan_mode_from_confirmation, should_exit_plan_mode_from_user_text,
+        tool_loop_hard_cap,
     };
     use vtcode_core::config::loader::VTCodeConfig;
     use vtcode_core::llm::provider as uni;
@@ -691,6 +712,12 @@ mod tests {
     }
 
     #[test]
+    fn plan_mode_exit_switched_continue_status_mentions_edit_mode_and_turn_continuation() {
+        assert!(PLAN_MODE_EXIT_SWITCHED_CONTINUE_STATUS.contains("Edit Mode"));
+        assert!(PLAN_MODE_EXIT_SWITCHED_CONTINUE_STATUS.contains("Continuing this turn"));
+    }
+
+    #[test]
     fn tool_loop_hard_cap_scales_and_bounds() {
         assert_eq!(tool_loop_hard_cap(20, false), 60);
         assert_eq!(tool_loop_hard_cap(40, false), 120);
@@ -723,5 +750,14 @@ mod tests {
         cfg.tools.max_tool_loops = 20;
         let turn_cfg = extract_turn_config(Some(&cfg), false);
         assert_eq!(turn_cfg.max_tool_loops, 20);
+    }
+
+    #[test]
+    fn extract_turn_config_forces_request_user_input_in_plan_mode() {
+        let mut cfg = VTCodeConfig::default();
+        cfg.chat.ask_questions.enabled = false;
+
+        let turn_cfg = extract_turn_config(Some(&cfg), true);
+        assert!(turn_cfg.request_user_input_enabled);
     }
 }
