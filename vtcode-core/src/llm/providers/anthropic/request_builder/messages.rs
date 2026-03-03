@@ -1,3 +1,5 @@
+use hashbrown::HashSet;
+
 use crate::config::core::AnthropicPromptCacheSettings;
 use crate::llm::error_display;
 use crate::llm::provider::{
@@ -8,7 +10,6 @@ use crate::llm::providers::anthropic_types::{
     CacheControl, ImageSource,
 };
 use crate::llm::providers::common::normalize_reasoning_detail_object;
-use hashbrown::HashSet;
 use serde_json::{Value, json};
 
 pub(crate) fn hoist_largest_user_message(messages: &mut Vec<Message>) {

@@ -1,6 +1,6 @@
 use ratatui::{
     prelude::*,
-    widgets::{Block, Borders, Paragraph, Wrap},
+    widgets::{Paragraph, Wrap},
 };
 
 use super::inline_list::{InlineListRenderOptions, InlineListRow, render_inline_list_with_options};
@@ -51,15 +51,12 @@ pub(crate) fn split_bottom_list_panel(
         return (area, None);
     }
 
-    let border_rows = 2_u16;
     let max_panel_height = area.height.saturating_sub(1);
-    if max_panel_height <= fixed_rows.saturating_add(border_rows) {
+    if max_panel_height <= fixed_rows {
         return (area, None);
     }
 
-    let desired_height = fixed_rows
-        .saturating_add(desired_list_rows.max(1))
-        .saturating_add(border_rows);
+    let desired_height = fixed_rows.saturating_add(desired_list_rows.max(1));
     let panel_height = desired_height.min(max_panel_height);
     let chunks =
         Layout::vertical([Constraint::Min(1), Constraint::Length(panel_height)]).split(area);
@@ -100,15 +97,7 @@ pub(crate) fn render_shared_list_panel<M: SharedListWidgetModel>(
     if area.width == 0 || area.height == 0 {
         return;
     }
-
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .border_style(styles.text_style.add_modifier(Modifier::DIM));
-    frame.render_widget(block.clone(), area);
-    let inner = block.inner(area);
-    if inner.width == 0 || inner.height == 0 {
-        return;
-    }
+    let inner = area;
 
     let mut constraints = Vec::new();
     let header_rows = rows_to_u16(sections.header.len());

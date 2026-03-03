@@ -32,17 +32,16 @@ fn list_desired_rows(list: &ModalListState) -> usize {
 }
 
 fn modal_title_text(session: &Session) -> &str {
-    let title = session
+    session
         .wizard_modal
         .as_ref()
         .map(|wizard| wizard.title.as_str())
         .or_else(|| session.modal.as_ref().map(|modal| modal.title.as_str()))
-        .unwrap_or("");
-    if title.trim().is_empty() {
-        "Modal"
-    } else {
-        title
-    }
+        .unwrap_or("")
+}
+
+fn modal_has_title(session: &Session) -> bool {
+    !modal_title_text(session).trim().is_empty()
 }
 
 fn wizard_step_has_inline_custom_editor(
@@ -113,7 +112,10 @@ pub fn split_inline_modal_area(session: &Session, area: Rect) -> (Rect, Option<R
                 .len()
                 .min(MAX_INLINE_INSTRUCTION_ROWS),
         );
-        lines.saturating_add(1) // title row
+        if modal_has_title(session) {
+            lines = lines.saturating_add(1); // title row
+        }
+        lines
     } else if let Some(modal) = session.modal.as_ref() {
         let mut lines = modal.lines.len().clamp(1, MAX_INLINE_INSTRUCTION_ROWS);
         if modal.search.is_some() {
@@ -127,7 +129,10 @@ pub fn split_inline_modal_area(session: &Session, area: Rect) -> (Rect, Option<R
         } else {
             lines = lines.saturating_add(1);
         }
-        lines.saturating_add(1) // title row
+        if modal_has_title(session) {
+            lines = lines.saturating_add(1); // title row
+        }
+        lines
     } else {
         return (area, None);
     };
@@ -178,15 +183,19 @@ pub fn render_modal(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
     }
 
     let styles = modal_render_styles(session);
-    let title = modal_title_text(session).to_owned();
-    let chunks = Layout::vertical([Constraint::Length(1), Constraint::Min(0)]).split(area);
-    let title_area = chunks[0];
-    let body_area = chunks[1];
-    frame.render_widget(Clear, title_area);
-    frame.render_widget(
-        Paragraph::new(Line::from(Span::styled(title, styles.title))).wrap(Wrap { trim: true }),
-        title_area,
-    );
+    let title = modal_title_text(session).trim().to_owned();
+    let body_area = if title.is_empty() {
+        area
+    } else {
+        let chunks = Layout::vertical([Constraint::Length(1), Constraint::Min(0)]).split(area);
+        let title_area = chunks[0];
+        frame.render_widget(Clear, title_area);
+        frame.render_widget(
+            Paragraph::new(Line::from(Span::styled(title, styles.title))).wrap(Wrap { trim: true }),
+            title_area,
+        );
+        chunks[1]
+    };
 
     if let Some(wizard) = session.wizard_modal.as_mut() {
         frame.render_widget(Clear, body_area);
@@ -284,9 +293,9 @@ mod tests {
     use crate::ui::tui::InlineTheme;
 
     #[test]
-    fn modal_title_text_uses_modal_title_and_fallback() {
+    fn modal_title_text_uses_modal_title_and_empty_default() {
         let mut session = Session::new(InlineTheme::default(), None, 20);
-        assert_eq!(modal_title_text(&session), "Modal");
+        assert_eq!(modal_title_text(&session), "");
 
         session.show_modal("Config".to_owned(), vec![], None);
         assert_eq!(modal_title_text(&session), "Config");

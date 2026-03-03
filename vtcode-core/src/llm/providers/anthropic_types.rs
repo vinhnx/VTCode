@@ -65,7 +65,8 @@ pub enum AnthropicContentBlock {
     #[serde(rename = "thinking")]
     Thinking {
         thinking: String,
-        signature: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        signature: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
         cache_control: Option<CacheControl>,
     },
@@ -327,4 +328,39 @@ pub struct CountTokensRequest {
 #[derive(Debug, Deserialize)]
 pub struct CountTokensResponse {
     pub input_tokens: u32,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{AnthropicContentBlock, AnthropicStreamEvent};
+
+    #[test]
+    fn stream_content_block_start_thinking_allows_missing_signature() {
+        let payload = r#"{
+            "type": "content_block_start",
+            "index": 0,
+            "content_block": {
+                "type": "thinking",
+                "thinking": "Drafting plan"
+            }
+        }"#;
+
+        let event: AnthropicStreamEvent =
+            serde_json::from_str(payload).expect("should deserialize thinking block");
+        match event {
+            AnthropicStreamEvent::ContentBlockStart {
+                content_block:
+                    AnthropicContentBlock::Thinking {
+                        thinking,
+                        signature,
+                        ..
+                    },
+                ..
+            } => {
+                assert_eq!(thinking, "Drafting plan");
+                assert!(signature.is_none());
+            }
+            other => panic!("expected thinking content_block_start, got {other:?}"),
+        }
+    }
 }
