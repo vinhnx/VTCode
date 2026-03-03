@@ -840,45 +840,73 @@ pub fn serialize_reasoning_details_field(details: &Value) -> Option<Vec<String>>
 }
 
 fn reasoning_text_from_detail_value(detail: &Value) -> Option<String> {
-    if let Some(text) = detail.get("text").and_then(|text| text.as_str()) {
-        return Some(text.to_string());
-    }
+    let normalized = match detail {
+        Value::Object(_) => detail.clone(),
+        Value::String(raw) => {
+            let trimmed = raw.trim();
+            if (trimmed.starts_with('{') || trimmed.starts_with('['))
+                && let Ok(parsed) = serde_json::from_str::<Value>(trimmed)
+            {
+                parsed
+            } else {
+                return None;
+            }
+        }
+        _ => return None,
+    };
 
-    detail
-        .as_str()
-        .and_then(|raw| serde_json::from_str::<Value>(raw).ok())
-        .and_then(|parsed| {
-            parsed
-                .get("text")
-                .and_then(|text| text.as_str())
-                .map(str::to_owned)
-        })
+    crate::llm::providers::extract_reasoning_trace(&normalized).and_then(|trace| {
+        let cleaned = crate::llm::providers::clean_reasoning_text(trace.trim());
+        if cleaned.is_empty() {
+            None
+        } else {
+            Some(cleaned)
+        }
+    })
 }
 
 pub fn extract_reasoning_text_from_detail_values(details: &[Value]) -> Option<String> {
-    let joined = details
-        .iter()
-        .filter_map(reasoning_text_from_detail_value)
-        .collect::<Vec<_>>()
-        .join("\n\n");
-    if joined.is_empty() {
+    let mut fragments = Vec::new();
+    for detail in details {
+        let Some(text) = reasoning_text_from_detail_value(detail) else {
+            continue;
+        };
+        if fragments
+            .last()
+            .is_none_or(|existing: &String| existing != &text)
+        {
+            fragments.push(text);
+        }
+    }
+
+    if fragments.is_empty() {
         None
     } else {
-        Some(joined)
+        Some(fragments.join("\n\n"))
     }
 }
 
 pub fn extract_reasoning_text_from_serialized_details(details: &[String]) -> Option<String> {
-    let joined = details
-        .iter()
-        .filter_map(|detail| serde_json::from_str::<Value>(detail).ok())
-        .filter_map(|detail| reasoning_text_from_detail_value(&detail))
-        .collect::<Vec<_>>()
-        .join("\n\n");
-    if joined.is_empty() {
+    let mut fragments = Vec::new();
+    for detail in details {
+        let Ok(parsed) = serde_json::from_str::<Value>(detail) else {
+            continue;
+        };
+        let Some(text) = reasoning_text_from_detail_value(&parsed) else {
+            continue;
+        };
+        if fragments
+            .last()
+            .is_none_or(|existing: &String| existing != &text)
+        {
+            fragments.push(text);
+        }
+    }
+
+    if fragments.is_empty() {
         None
     } else {
-        Some(joined)
+        Some(fragments.join("\n\n"))
     }
 }
 

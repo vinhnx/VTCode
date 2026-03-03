@@ -16,6 +16,7 @@ use vtcode_core::prompts::upsert_harness_limits_section;
 use vtcode_core::turn_metadata;
 
 use crate::agent::runloop::unified::extract_action_from_messages;
+use crate::agent::runloop::unified::reasoning::resolve_reasoning_visibility;
 use crate::agent::runloop::unified::turn::context::TurnProcessingContext;
 use crate::agent::runloop::unified::turn::turn_helpers::supports_responses_chaining;
 
@@ -351,6 +352,11 @@ pub(crate) async fn execute_llm_request(
         let parts = ctx.parts_mut();
         uni::get_cached_capabilities(&**parts.llm.provider_client, active_model)
     };
+    ctx.renderer
+        .set_reasoning_visible(resolve_reasoning_visibility(
+            ctx.vt_cfg,
+            capabilities.reasoning,
+        ));
     let mut use_streaming = capabilities.streaming;
     let reasoning_effort = {
         let parts = ctx.parts_mut();

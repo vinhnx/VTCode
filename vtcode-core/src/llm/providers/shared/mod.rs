@@ -1,6 +1,7 @@
 use crate::llm::error_display;
 use crate::llm::provider::{LLMError, LLMResponse, Message, MessageRole, ToolCall};
 pub use crate::llm::providers::ReasoningBuffer;
+use crate::llm::providers::common::extract_reasoning_text_from_serialized_details;
 mod tag_sanitizer;
 use crate::llm::providers::split_reasoning_from_text;
 use serde_json::{Map, Value};
@@ -454,6 +455,22 @@ impl StreamAggregator {
             }
         }
 
+        let reasoning_details = if self.reasoning_details.is_empty() {
+            None
+        } else {
+            Some(self.reasoning_details)
+        };
+        let mut reasoning = if self.reasoning.is_empty() {
+            self.reasoning_buffer.finalize()
+        } else {
+            Some(self.reasoning)
+        };
+        if reasoning.is_none() {
+            reasoning = reasoning_details
+                .as_ref()
+                .and_then(|details| extract_reasoning_text_from_serialized_details(details));
+        }
+
         LLMResponse {
             content: if self.content.is_empty() {
                 None
@@ -464,16 +481,8 @@ impl StreamAggregator {
             model: self.model,
             usage: self.usage,
             finish_reason: self.finish_reason,
-            reasoning: if self.reasoning.is_empty() {
-                self.reasoning_buffer.finalize()
-            } else {
-                Some(self.reasoning)
-            },
-            reasoning_details: if self.reasoning_details.is_empty() {
-                None
-            } else {
-                Some(self.reasoning_details)
-            },
+            reasoning,
+            reasoning_details,
             tool_references: Vec::new(),
             request_id: None,
             organization_id: None,
@@ -941,5 +950,18 @@ mod tests {
         assert_eq!(parsed[0].role, MessageRole::Tool);
         assert_eq!(parsed[0].tool_call_id.as_deref(), Some("call_42"));
         assert_eq!(parsed[0].content.as_text(), "done");
+    }
+
+    #[test]
+    fn stream_aggregator_derives_reasoning_from_details_when_missing() {
+        let mut aggregator = StreamAggregator::new("test-model".to_string());
+        aggregator.set_reasoning_details(&[json!({
+            "type": "reasoning.text",
+            "text": "step one"
+        })]);
+
+        let response = aggregator.finalize();
+        assert_eq!(response.reasoning.as_deref(), Some("step one"));
+        assert!(response.reasoning_details.is_some());
     }
 }

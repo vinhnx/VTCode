@@ -12,6 +12,9 @@
 
 use once_cell::sync::Lazy;
 use regex::Regex;
+use vtcode_core::config::ReasoningDisplayMode;
+use vtcode_core::config::loader::VTCodeConfig;
+use vtcode_core::llm::provider as uni;
 
 static RUSHING_PATTERNS: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"(?i)(wrapping up|running out of time|quick summary|to conclude|finishing up|just to be safe|that.?s it|time to stop)").unwrap()
@@ -24,6 +27,33 @@ static UNCERTAIN_PATTERNS: Lazy<Regex> = Lazy::new(|| {
 static COMPLEXITY_AVOIDANCE_PATTERNS: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"(?i)(too complex|too many|let.?s skip|for now|we can worry about|later)").unwrap()
 });
+
+/// Returns whether the active provider/model pair supports reasoning traces.
+pub(crate) fn model_supports_reasoning(provider: &dyn uni::LLMProvider, model: &str) -> bool {
+    uni::get_cached_capabilities(provider, model).reasoning
+}
+
+/// Resolve runtime reasoning visibility with provider/model capability gating.
+///
+/// Reasoning output is always hidden when the model does not support reasoning traces.
+pub(crate) fn resolve_reasoning_visibility(
+    config: Option<&VTCodeConfig>,
+    supports_reasoning: bool,
+) -> bool {
+    if !supports_reasoning {
+        return false;
+    }
+
+    let Some(cfg) = config else {
+        return true;
+    };
+
+    match cfg.ui.reasoning_display_mode {
+        ReasoningDisplayMode::Always => true,
+        ReasoningDisplayMode::Hidden => false,
+        ReasoningDisplayMode::Toggle => cfg.ui.reasoning_visible_default,
+    }
+}
 
 /// Detects if reasoning text indicates the agent is giving up on a task.
 ///
@@ -157,5 +187,38 @@ mod tests {
         let analysis = analyze_reasoning("Let me continue with the next step");
         assert!(!analysis.has_concerns());
         assert_eq!(analysis.priority_concern(), None);
+    }
+
+    #[test]
+    fn resolve_reasoning_visibility_requires_capability() {
+        let mut cfg = VTCodeConfig::default();
+        cfg.ui.reasoning_display_mode = ReasoningDisplayMode::Always;
+        cfg.ui.reasoning_visible_default = true;
+
+        assert!(!resolve_reasoning_visibility(Some(&cfg), false));
+        assert!(!resolve_reasoning_visibility(None, false));
+    }
+
+    #[test]
+    fn resolve_reasoning_visibility_honors_display_mode() {
+        let mut cfg = VTCodeConfig::default();
+
+        cfg.ui.reasoning_display_mode = ReasoningDisplayMode::Always;
+        assert!(resolve_reasoning_visibility(Some(&cfg), true));
+
+        cfg.ui.reasoning_display_mode = ReasoningDisplayMode::Hidden;
+        assert!(!resolve_reasoning_visibility(Some(&cfg), true));
+
+        cfg.ui.reasoning_display_mode = ReasoningDisplayMode::Toggle;
+        cfg.ui.reasoning_visible_default = true;
+        assert!(resolve_reasoning_visibility(Some(&cfg), true));
+
+        cfg.ui.reasoning_visible_default = false;
+        assert!(!resolve_reasoning_visibility(Some(&cfg), true));
+    }
+
+    #[test]
+    fn resolve_reasoning_visibility_defaults_to_enabled_without_config() {
+        assert!(resolve_reasoning_visibility(None, true));
     }
 }

@@ -5,6 +5,9 @@ use crate::agent::runloop::tui_compat::{
     to_tui_slash_commands, to_tui_surface,
 };
 use crate::agent::runloop::ui::{build_inline_header_context, render_session_banner};
+use crate::agent::runloop::unified::reasoning::{
+    model_supports_reasoning, resolve_reasoning_visibility,
+};
 use crate::agent::runloop::unified::turn::utils::render_hook_messages;
 use crate::agent::runloop::unified::turn::workspace::load_workspace_files;
 use crate::agent::runloop::unified::{context_manager, palettes, state};
@@ -127,13 +130,10 @@ pub(crate) async fn initialize_session_ui(
     transcript::set_inline_handle(Arc::new(handle.clone()));
     let mut ide_context_bridge = IdeContextBridge::from_env();
     let mut renderer = AnsiRenderer::with_inline_ui(handle.clone(), highlight_config);
+    let supports_reasoning =
+        model_supports_reasoning(&*session_state.provider_client, &config.model);
+    renderer.set_reasoning_visible(resolve_reasoning_visibility(vt_cfg, supports_reasoning));
     if let Some(cfg) = vt_cfg {
-        let reasoning_visible = match cfg.ui.reasoning_display_mode {
-            vtcode_core::config::ReasoningDisplayMode::Always => true,
-            vtcode_core::config::ReasoningDisplayMode::Hidden => false,
-            vtcode_core::config::ReasoningDisplayMode::Toggle => cfg.ui.reasoning_visible_default,
-        };
-        renderer.set_reasoning_visible(reasoning_visible);
         renderer.set_screen_reader_mode(cfg.ui.screen_reader_mode);
         renderer.set_show_diagnostics_in_transcript(cfg.ui.show_diagnostics_in_transcript);
     }
@@ -161,7 +161,7 @@ pub(crate) async fn initialize_session_ui(
     });
 
     transcript::clear();
-    render_resume_state_if_present(&mut renderer, resume_state)?;
+    render_resume_state_if_present(&mut renderer, resume_state, supports_reasoning)?;
 
     let workspace_label = config
         .workspace
@@ -323,6 +323,7 @@ pub(crate) async fn initialize_session_ui(
 fn render_resume_state_if_present(
     renderer: &mut AnsiRenderer,
     resume_state: Option<&ResumeSession>,
+    supports_reasoning: bool,
 ) -> Result<()> {
     let Some(session) = resume_state else {
         return Ok(());
@@ -358,7 +359,7 @@ fn render_resume_state_if_present(
 
     if !session.history.is_empty() {
         renderer.line(MessageStyle::Info, "Conversation history:")?;
-        let lines = build_structured_resume_lines(&session.history);
+        let lines = build_structured_resume_lines(&session.history, supports_reasoning);
         render_resume_lines(renderer, &lines)?;
     } else if !session.snapshot.transcript.is_empty() {
         renderer.line(
@@ -394,7 +395,10 @@ fn render_resume_lines(renderer: &mut AnsiRenderer, lines: &[ResumeRenderLine]) 
     Ok(())
 }
 
-fn build_structured_resume_lines(history: &[uni::Message]) -> Vec<ResumeRenderLine> {
+fn build_structured_resume_lines(
+    history: &[uni::Message],
+    supports_reasoning: bool,
+) -> Vec<ResumeRenderLine> {
     let mut lines = Vec::new();
     let mut tool_name_by_call_id: HashMap<String, String> = HashMap::new();
 
@@ -445,14 +449,28 @@ fn build_structured_resume_lines(history: &[uni::Message]) -> Vec<ResumeRenderLi
                     }
                 }
 
-                if let Some(reasoning) = message.reasoning.as_deref()
-                    && !reasoning.trim().is_empty()
-                {
+                let reasoning_text = if supports_reasoning {
+                    message
+                        .reasoning
+                        .as_deref()
+                        .map(str::trim)
+                        .filter(|text| !text.is_empty())
+                        .map(str::to_string)
+                        .or_else(|| {
+                            message
+                                .reasoning_details
+                                .as_deref()
+                                .and_then(
+                                    vtcode_core::llm::providers::common::extract_reasoning_text_from_detail_values,
+                                )
+                        })
+                } else {
+                    None
+                };
+
+                if let Some(reasoning) = reasoning_text {
                     rendered_any = true;
-                    lines.push(ResumeRenderLine::new(
-                        MessageStyle::Reasoning,
-                        reasoning.trim().to_string(),
-                    ));
+                    lines.push(ResumeRenderLine::new(MessageStyle::Reasoning, reasoning));
                 }
 
                 if let Some(content) = project_content_text(&message.content) {
@@ -742,7 +760,7 @@ mod tests {
             tool_response,
         ];
 
-        let lines = build_structured_resume_lines(&history);
+        let lines = build_structured_resume_lines(&history, true);
 
         assert!(lines.iter().any(|line| {
             line.style == MessageStyle::User && line.text.contains("run cargo fmt")
@@ -777,6 +795,30 @@ mod tests {
         assert_eq!(
             infer_legacy_line_style("Tool [tool_call_id: call_1]:"),
             MessageStyle::ToolOutput
+        );
+    }
+
+    #[test]
+    fn structured_resume_lines_fallback_to_reasoning_details() {
+        let assistant =
+            uni::Message::assistant("done".to_string()).with_reasoning_details(Some(vec![
+                serde_json::json!(r#"{"type":"reasoning.text","text":"detail trace"}"#),
+            ]));
+        let lines = build_structured_resume_lines(&[assistant], true);
+        assert!(lines.iter().any(|line| {
+            line.style == MessageStyle::Reasoning && line.text.contains("detail trace")
+        }));
+    }
+
+    #[test]
+    fn structured_resume_lines_hide_reasoning_when_unsupported() {
+        let mut assistant = uni::Message::assistant("done".to_string());
+        assistant.reasoning = Some("trace".to_string());
+        let lines = build_structured_resume_lines(&[assistant], false);
+        assert!(
+            !lines
+                .iter()
+                .any(|line| line.style == MessageStyle::Reasoning)
         );
     }
 }

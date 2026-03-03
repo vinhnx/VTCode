@@ -388,6 +388,9 @@ impl<'a> TurnProcessingContext<'a> {
         response_streamed: bool,
     ) -> anyhow::Result<()> {
         let mut text = text;
+        let detail_reasoning = reasoning_details.as_deref().and_then(
+            vtcode_core::llm::providers::common::extract_reasoning_text_from_serialized_details,
+        );
         if should_suppress_redundant_diff_recap(self.working_history, &text) {
             text.clear();
         }
@@ -397,6 +400,7 @@ impl<'a> TurnProcessingContext<'a> {
             if !text.trim().is_empty() {
                 self.renderer.line(MessageStyle::Response, &text)?;
             }
+            let mut rendered_reasoning = Vec::new();
 
             for segment in &reasoning {
                 if let Some(stage) = &segment.stage {
@@ -410,20 +414,43 @@ impl<'a> TurnProcessingContext<'a> {
                     if !duplicates_content {
                         let cleaned_for_display =
                             vtcode_core::llm::providers::clean_reasoning_text(reasoning_text);
+                        if cleaned_for_display.trim().is_empty() {
+                            continue;
+                        }
                         self.renderer
                             .line(MessageStyle::Reasoning, &cleaned_for_display)?;
+                        rendered_reasoning.push(cleaned_for_display);
                     }
+                }
+            }
+
+            if let Some(detail_text) = detail_reasoning.as_deref() {
+                let cleaned_detail = vtcode_core::llm::providers::clean_reasoning_text(detail_text);
+                let duplicates_content =
+                    !text.trim().is_empty() && reasoning_duplicates_content(&cleaned_detail, &text);
+                let duplicates_rendered = rendered_reasoning.iter().any(|existing: &String| {
+                    reasoning_duplicates_content(existing, &cleaned_detail)
+                        || reasoning_duplicates_content(&cleaned_detail, existing)
+                });
+                if !cleaned_detail.is_empty() && !duplicates_content && !duplicates_rendered {
+                    self.renderer
+                        .line(MessageStyle::Reasoning, &cleaned_detail)?;
                 }
             }
             // Clear reasoning stage after rendering
             self.handle.set_reasoning_stage(None);
         }
 
-        let combined_reasoning = reasoning
+        let mut combined_reasoning = reasoning
             .iter()
             .map(|s| s.text.clone())
             .collect::<Vec<_>>()
             .join("\n");
+        if combined_reasoning.trim().is_empty()
+            && let Some(detail_text) = detail_reasoning.as_deref()
+        {
+            combined_reasoning = detail_text.to_string();
+        }
         let msg = uni::Message::assistant(text.clone());
         let mut msg_with_reasoning = if !combined_reasoning.is_empty() {
             if reasoning_duplicates_content(&combined_reasoning, &text) {
