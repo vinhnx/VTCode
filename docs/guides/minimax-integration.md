@@ -8,6 +8,7 @@ VT Code supports MiniMax models through the Anthropic-compatible API. You can us
 ## Overview
 
 MiniMax provides an Anthropic API-compatible endpoint that allows seamless integration with tools built for Anthropic's API. VT Code automatically detects when you're using MiniMax models and routes requests to the appropriate endpoint.
+When using the `minimax` provider alias, VT Code sends requests through the Anthropic Messages API (`/v1/messages`) rather than OpenAI-style `/chat/completions`.
 
 ## Quick Start
 
