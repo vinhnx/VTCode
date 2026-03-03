@@ -318,14 +318,6 @@ impl ModalState {
                     ModalListKeyResult::HandledNoRedraw
                 }
             }
-            KeyCode::Char(' ') if !modifiers.control && !modifiers.alt && !modifiers.command => {
-                if let Some(selection) = list.current_selection()
-                    && matches!(selection, InlineListSelection::ConfigAction(_))
-                {
-                    return ModalListKeyResult::Submit(InlineEvent::ListModalSubmit(selection));
-                }
-                ModalListKeyResult::NotHandled
-            }
             KeyCode::Esc => ModalListKeyResult::Cancel(InlineEvent::ListModalCancel),
             KeyCode::Char(ch) if modifiers.control || modifiers.alt => match ch {
                 'n' | 'N' | 'j' | 'J' => {

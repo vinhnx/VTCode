@@ -176,7 +176,10 @@ impl<'a> PaletteCoordinator<'a> {
 
     fn handle_cancel(&mut self, renderer: &mut AnsiRenderer) -> Result<()> {
         if let Some(active) = self.state.take() {
-            handle_palette_cancel(active, renderer, self.handle)?;
+            let restore = handle_palette_cancel(active, renderer, self.handle)?;
+            if let Some(state) = restore {
+                *self.state = Some(state);
+            }
         }
 
         Ok(())

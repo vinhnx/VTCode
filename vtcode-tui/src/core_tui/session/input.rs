@@ -28,17 +28,160 @@ struct InputLineBuffer {
     text: String,
     prefix_width: u16,
     text_width: u16,
+    /// Character index in the original input where this buffer's text starts.
+    char_start: usize,
 }
 
 impl InputLineBuffer {
-    fn new(prefix: String, prefix_width: u16) -> Self {
+    fn new(prefix: String, prefix_width: u16, char_start: usize) -> Self {
         Self {
             prefix,
             text: String::new(),
             prefix_width,
             text_width: 0,
+            char_start,
         }
     }
+}
+
+/// Token type for syntax highlighting in the input field.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum InputTokenKind {
+    Normal,
+    SlashCommand,
+    FileReference,
+    InlineCode,
+}
+
+/// A contiguous range of characters sharing the same token kind.
+struct InputToken {
+    kind: InputTokenKind,
+    /// Start char index (inclusive).
+    start: usize,
+    /// End char index (exclusive).
+    end: usize,
+}
+
+/// Tokenize input text into styled regions for syntax highlighting.
+fn tokenize_input(content: &str) -> Vec<InputToken> {
+    let chars: Vec<char> = content.chars().collect();
+    let len = chars.len();
+    if len == 0 {
+        return Vec::new();
+    }
+
+    // Assign a token kind to each character position.
+    let mut kinds = vec![InputTokenKind::Normal; len];
+
+    // 1. Slash commands: `/word` at the start or after whitespace.
+    //    Mark the leading `/` and subsequent non-whitespace chars.
+    {
+        let mut i = 0;
+        while i < len {
+            if chars[i] == '/'
+                && (i == 0 || chars[i - 1].is_whitespace())
+                && i + 1 < len
+                && chars[i + 1].is_alphanumeric()
+            {
+                let start = i;
+                i += 1;
+                while i < len && !chars[i].is_whitespace() {
+                    i += 1;
+                }
+                for kind in &mut kinds[start..i] {
+                    *kind = InputTokenKind::SlashCommand;
+                }
+                continue;
+            }
+            i += 1;
+        }
+    }
+
+    // 2. @file references: `@` at word boundary followed by non-whitespace.
+    {
+        let mut i = 0;
+        while i < len {
+            if chars[i] == '@'
+                && (i == 0 || chars[i - 1].is_whitespace())
+                && i + 1 < len
+                && !chars[i + 1].is_whitespace()
+            {
+                let start = i;
+                i += 1;
+                while i < len && !chars[i].is_whitespace() {
+                    i += 1;
+                }
+                for kind in &mut kinds[start..i] {
+                    *kind = InputTokenKind::FileReference;
+                }
+                continue;
+            }
+            i += 1;
+        }
+    }
+
+    // 3. Inline code: backtick-delimited spans (single or triple).
+    {
+        let mut i = 0;
+        while i < len {
+            if chars[i] == '`' {
+                let tick_start = i;
+                let mut tick_len = 0;
+                while i < len && chars[i] == '`' {
+                    tick_len += 1;
+                    i += 1;
+                }
+                // Find matching closing backticks.
+                let mut found = false;
+                let content_start = i;
+                while i <= len.saturating_sub(tick_len) {
+                    if chars[i] == '`' {
+                        let mut close_len = 0;
+                        while i < len && chars[i] == '`' {
+                            close_len += 1;
+                            i += 1;
+                        }
+                        if close_len == tick_len {
+                            for kind in &mut kinds[tick_start..i] {
+                                *kind = InputTokenKind::InlineCode;
+                            }
+                            found = true;
+                            break;
+                        }
+                    } else {
+                        i += 1;
+                    }
+                }
+                if !found {
+                    i = content_start;
+                }
+                continue;
+            }
+            i += 1;
+        }
+    }
+
+    // Coalesce adjacent chars with the same kind into tokens.
+    let mut tokens = Vec::new();
+    let mut cur_kind = kinds[0];
+    let mut cur_start = 0;
+    for (i, kind) in kinds.iter().enumerate().skip(1) {
+        if *kind != cur_kind {
+            tokens.push(InputToken {
+                kind: cur_kind,
+                start: cur_start,
+                end: i,
+            });
+            cur_kind = *kind;
+            cur_start = i;
+        }
+    }
+    tokens.push(InputToken {
+        kind: cur_kind,
+        start: cur_start,
+        end: len,
+    });
+    tokens
 }
 
 struct InputLayout {
@@ -165,6 +308,7 @@ impl Session {
         let mut buffers = vec![InputLineBuffer::new(
             self.prompt_prefix.clone(),
             prompt_display_width,
+            0,
         )];
         let secure_prompt_active = self.secure_prompt_active();
         let mut cursor_line_idx = 0usize;
@@ -172,6 +316,7 @@ impl Session {
         let input_content = self.input_manager.content();
         let cursor_pos = self.input_manager.cursor();
         let mut cursor_set = cursor_pos == 0;
+        let mut char_idx: usize = 0;
 
         for (idx, ch) in input_content.char_indices() {
             if !cursor_set
@@ -185,9 +330,11 @@ impl Session {
 
             if ch == '\n' {
                 let end = idx + ch.len_utf8();
+                char_idx += 1;
                 buffers.push(InputLineBuffer::new(
                     indent_prefix.clone(),
                     prompt_display_width,
+                    char_idx,
                 ));
                 if !cursor_set && cursor_pos == end {
                     cursor_line_idx = buffers.len() - 1;
@@ -209,6 +356,7 @@ impl Session {
                     buffers.push(InputLineBuffer::new(
                         indent_prefix.clone(),
                         prompt_display_width,
+                        char_idx,
                     ));
                 }
             }
@@ -217,6 +365,8 @@ impl Session {
                 current.text.push(display_ch);
                 current.text_width = current.text_width.saturating_add(char_width);
             }
+
+            char_idx += 1;
 
             let end = idx + ch.len_utf8();
             if !cursor_set
@@ -311,7 +461,18 @@ impl Session {
 
         let accent_style =
             ratatui_style_from_inline(&self.styles.accent_inline_style(), self.theme.foreground);
+        let slash_style = accent_style
+            .fg(Color::Yellow)
+            .add_modifier(Modifier::BOLD);
+        let file_ref_style = accent_style
+            .fg(Color::Cyan)
+            .add_modifier(Modifier::UNDERLINED);
+        let code_style = accent_style
+            .fg(Color::Green)
+            .add_modifier(Modifier::BOLD);
+
         let layout = self.input_layout(width, prompt_display_width);
+        let tokens = tokenize_input(self.input_manager.content());
         let total_lines = layout.buffers.len();
         let visible_limit = max_visible_lines.max(1);
         let mut start = total_lines.saturating_sub(visible_limit);
@@ -326,7 +487,36 @@ impl Session {
             let mut spans = Vec::new();
             spans.push(Span::styled(buffer.prefix.clone(), prompt_style));
             if !buffer.text.is_empty() {
-                spans.push(Span::styled(buffer.text.clone(), accent_style));
+                let buf_chars: Vec<char> = buffer.text.chars().collect();
+                let buf_len = buf_chars.len();
+                let buf_start = buffer.char_start;
+                let buf_end = buf_start + buf_len;
+
+                let mut pos = 0usize;
+                for token in &tokens {
+                    if token.end <= buf_start || token.start >= buf_end {
+                        continue;
+                    }
+                    let seg_start = token.start.max(buf_start).saturating_sub(buf_start);
+                    let seg_end = token.end.min(buf_end).saturating_sub(buf_start);
+                    if seg_start > pos {
+                        let text: String = buf_chars[pos..seg_start].iter().collect();
+                        spans.push(Span::styled(text, accent_style));
+                    }
+                    let text: String = buf_chars[seg_start..seg_end].iter().collect();
+                    let style = match token.kind {
+                        InputTokenKind::SlashCommand => slash_style,
+                        InputTokenKind::FileReference => file_ref_style,
+                        InputTokenKind::InlineCode => code_style,
+                        InputTokenKind::Normal => accent_style,
+                    };
+                    spans.push(Span::styled(text, style));
+                    pos = seg_end;
+                }
+                if pos < buf_len {
+                    let text: String = buf_chars[pos..].iter().collect();
+                    spans.push(Span::styled(text, accent_style));
+                }
             }
             lines.push(Line::from(spans));
         }
@@ -781,6 +971,75 @@ pub struct InputWidgetData {
     pub use_fake_cursor: bool,
     pub background_style: Style,
     pub default_style: Style,
+}
+
+#[cfg(test)]
+mod input_highlight_tests {
+    use super::*;
+
+    fn kinds(input: &str) -> Vec<(InputTokenKind, String)> {
+        tokenize_input(input)
+            .into_iter()
+            .map(|t| {
+                let text: String = input.chars().skip(t.start).take(t.end - t.start).collect();
+                (t.kind, text)
+            })
+            .collect()
+    }
+
+    #[test]
+    fn slash_command_at_start() {
+        let tokens = kinds("/use skill-name");
+        assert_eq!(tokens[0].0, InputTokenKind::SlashCommand);
+        assert_eq!(tokens[0].1, "/use");
+        assert_eq!(tokens[1].0, InputTokenKind::Normal);
+    }
+
+    #[test]
+    fn slash_command_with_following_text() {
+        let tokens = kinds("/doctor hello");
+        assert_eq!(tokens[0].0, InputTokenKind::SlashCommand);
+        assert_eq!(tokens[0].1, "/doctor");
+        assert_eq!(tokens[1].0, InputTokenKind::Normal);
+    }
+
+    #[test]
+    fn at_file_reference() {
+        let tokens = kinds("check @src/main.rs please");
+        assert_eq!(tokens[0].0, InputTokenKind::Normal);
+        assert_eq!(tokens[1].0, InputTokenKind::FileReference);
+        assert_eq!(tokens[1].1, "@src/main.rs");
+        assert_eq!(tokens[2].0, InputTokenKind::Normal);
+    }
+
+    #[test]
+    fn inline_backtick_code() {
+        let tokens = kinds("run `cargo test` now");
+        assert_eq!(tokens[0].0, InputTokenKind::Normal);
+        assert_eq!(tokens[1].0, InputTokenKind::InlineCode);
+        assert_eq!(tokens[1].1, "`cargo test`");
+        assert_eq!(tokens[2].0, InputTokenKind::Normal);
+    }
+
+    #[test]
+    fn no_false_slash_mid_word() {
+        let tokens = kinds("path/to/file");
+        assert_eq!(tokens.len(), 1);
+        assert_eq!(tokens[0].0, InputTokenKind::Normal);
+    }
+
+    #[test]
+    fn empty_input() {
+        assert!(tokenize_input("").is_empty());
+    }
+
+    #[test]
+    fn mixed_tokens() {
+        let tokens = kinds("/use @file.rs `code`");
+        assert_eq!(tokens[0].0, InputTokenKind::SlashCommand);
+        assert_eq!(tokens[2].0, InputTokenKind::FileReference);
+        assert_eq!(tokens[4].0, InputTokenKind::InlineCode);
+    }
 }
 
 fn render_fake_cursor(buf: &mut Buffer, cursor_x: u16, cursor_y: u16) {

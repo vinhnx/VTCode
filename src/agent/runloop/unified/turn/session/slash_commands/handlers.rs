@@ -144,6 +144,7 @@ pub async fn handle_show_settings(mut ctx: SlashCommandContext<'_>) -> Result<Sl
     if show_settings_palette(ctx.renderer, &settings_state, None)? {
         *ctx.palette_state = Some(ActivePalette::Settings {
             state: Box::new(settings_state),
+            esc_armed: false,
         });
     }
 

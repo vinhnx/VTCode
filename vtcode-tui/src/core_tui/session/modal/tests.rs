@@ -477,7 +477,7 @@ fn list_modal_submit_emits_event() {
 }
 
 #[test]
-fn list_modal_space_submits_config_action_without_search() {
+fn list_modal_space_no_longer_submits_config_action() {
     let mut modal = ModalState {
         title: "Config".to_owned(),
         lines: vec![],
@@ -505,14 +505,7 @@ fn list_modal_space_submits_config_action_without_search() {
     let key = KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE);
     let result = modal.handle_list_key_event(&key, ModalKeyModifiers::default());
 
-    match result {
-        ModalListKeyResult::Submit(InlineEvent::ListModalSubmit(
-            InlineListSelection::ConfigAction(action),
-        )) => {
-            assert_eq!(action, "agent.autonomous_mode:toggle");
-        }
-        other => panic!("unexpected result: {:?}", other),
-    }
+    assert!(matches!(result, ModalListKeyResult::NotHandled));
 }
 
 #[test]
