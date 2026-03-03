@@ -13,8 +13,8 @@ const MAX_COMMAND_TOOL_CALLS: usize = 5; // shell, run_pty_cmd
 const MAX_OTHER_TOOL_CALLS: usize = 3; // Other tools (default)
 const DETECTION_WINDOW: usize = 10;
 const HARD_LIMIT_MULTIPLIER: usize = 2; // Hard stop at 2x soft limit
-const MAX_SIMILAR_READ_TARGET_CALLS: usize = 8;
-const MAX_SIMILAR_READ_TARGET_VARIANTS: usize = 3;
+const MAX_SIMILAR_READ_TARGET_CALLS: usize = 5;
+const MAX_SIMILAR_READ_TARGET_VARIANTS: usize = 5;
 const LEGACY_GREP_FILE: &str = "grep_file";
 const LEGACY_LIST_FILES: &str = "list_files";
 const LEGACY_SEARCH_TOOLS: &str = "search_tools";
@@ -31,7 +31,9 @@ fn base_tool_name(tool_name: &str) -> &str {
 }
 
 /// Normalize tool arguments for consistent loop detection.
-/// This ensures path variations like ".", "", "./" are treated as the same root path.
+/// This ensures path variations like ".", "", "./" are treated as the same root path,
+/// and read-file parameter aliases (offset_lines, max_lines, chunk_lines, line_start/line_end, etc.)
+/// are collapsed to canonical keys so the model can't evade detection by cycling parameter names.
 fn normalize_args_for_detection(tool_name: &str, args: &serde_json::Value) -> serde_json::Value {
     let base_name = base_tool_name(tool_name);
     if let Some(obj) = args.as_object() {
@@ -47,13 +49,68 @@ fn normalize_args_for_detection(tool_name: &str, args: &serde_json::Value) -> se
                 let trimmed = path.trim();
                 let only_root_markers = trimmed.trim_matches(|c| c == '.' || c == '/').is_empty();
                 if trimmed.is_empty() || only_root_markers {
-                    // Normalize any root-only path markers (., /, ././, //, etc.) to the same key
                     normalized.insert("path".into(), serde_json::json!("__ROOT__"));
                 }
             } else {
-                // No path = root
                 normalized.insert("path".into(), serde_json::json!("__ROOT__"));
             }
+        }
+
+        // For read-file tools: normalize parameter aliases so cycling through
+        // offset_lines/line_start, max_lines/chunk_lines/limit_lines/limit, encoding, action
+        // all hash to the same canonical form.
+        let is_read_tool = base_name == tools::READ_FILE
+            || (base_name == tools::UNIFIED_FILE && tool_name.ends_with("::read"));
+        if is_read_tool {
+            // Normalize path aliases to "path"
+            for alias in ["file_path", "filepath", "target_path"] {
+                if let Some(val) = normalized.remove(alias) {
+                    if !normalized.contains_key("path") {
+                        normalized.insert("path".into(), val);
+                    }
+                }
+            }
+
+            // Normalize offset aliases to "offset"
+            // line_start=N → offset=N, offset_lines=N → offset=N
+            for alias in ["offset_lines", "line_start", "offset_bytes"] {
+                if let Some(val) = normalized.remove(alias) {
+                    if !normalized.contains_key("offset") {
+                        normalized.insert("offset".into(), val);
+                    }
+                }
+            }
+
+            // Normalize limit aliases to "limit"
+            // max_lines, chunk_lines, limit_lines, page_size_lines, line_end → limit
+            if let Some(line_end) = normalized.remove("line_end") {
+                // line_start/line_end → offset + limit
+                if !normalized.contains_key("limit") {
+                    let start = normalized
+                        .get("offset")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(1);
+                    let end = line_end.as_u64().unwrap_or(start);
+                    let limit = end.saturating_sub(start).saturating_add(1);
+                    normalized.insert("limit".into(), serde_json::json!(limit));
+                }
+            }
+            for alias in [
+                "max_lines",
+                "chunk_lines",
+                "limit_lines",
+                "page_size_lines",
+            ] {
+                if let Some(val) = normalized.remove(alias) {
+                    if !normalized.contains_key("limit") {
+                        normalized.insert("limit".into(), val);
+                    }
+                }
+            }
+
+            // Remove noise params that don't change semantic intent
+            normalized.remove("encoding");
+            normalized.remove("action");
         }
 
         serde_json::Value::Object(normalized)
@@ -209,7 +266,19 @@ impl LoopDetector {
         }
 
         const MAX_NAVIGATION_ONLY_STREAK: usize = 6;
+        const NAVIGATION_HARD_STOP_STREAK: usize = 10;
         if self.readonly_streak >= MAX_NAVIGATION_ONLY_STREAK {
+            if self.readonly_streak >= NAVIGATION_HARD_STOP_STREAK {
+                // Escalate to hard limit after sustained navigation-only usage
+                let hard_limit = self.get_limit_for_tool(tool_name) * HARD_LIMIT_MULTIPLIER;
+                self.tool_counts.insert(tool_name.to_string(), hard_limit);
+                return Some(format!(
+                    "HARD STOP: {} consecutive exploration calls without taking action (edit/exec). \
+                     Execution halted. Stop reading and provide a concrete answer with the information already collected.",
+                    self.readonly_streak
+                ));
+            }
+
             let msg = format!(
                 "Navigation Loop Detected: {} consecutive exploration calls without taking action (edit/exec).\n\n\
                  **Action Bias Required**: Stop reading and start implementing. If you are stuck, perform a ROOT CAUSE analysis or ask for human steering.",
@@ -864,6 +933,70 @@ mod tests {
         }
 
         assert!(!detector.is_hard_limit_exceeded(&read_tool));
+    }
+
+    #[test]
+    fn test_read_file_alias_cycling_triggers_identical_detection() {
+        // Simulates the exact failure from the transcript: LLM cycles through
+        // offset_lines, max_lines, chunk_lines, line_start/line_end, encoding
+        // for the same file. Normalization should collapse them to identical hashes.
+        let mut detector = LoopDetector::with_max_repeated_calls(3);
+
+        let call1 = json!({"path": "docs/README.md", "max_lines": 200});
+        let call2 = json!({"path": "docs/README.md", "offset_lines": 1, "limit": 200});
+        let call3 = json!({"path": "docs/README.md", "chunk_lines": 200});
+
+        // After normalization, all three should have: {path: "docs/README.md", offset: 1, limit: 200}
+        let n1 = normalize_args_for_detection(tools::READ_FILE, &call1);
+        let n2 = normalize_args_for_detection(tools::READ_FILE, &call2);
+        let n3 = normalize_args_for_detection(tools::READ_FILE, &call3);
+
+        // Verify aliases are normalized
+        assert!(n1.get("max_lines").is_none(), "max_lines should be removed");
+        assert!(
+            n2.get("offset_lines").is_none(),
+            "offset_lines should be removed"
+        );
+        assert!(
+            n3.get("chunk_lines").is_none(),
+            "chunk_lines should be removed"
+        );
+        assert_eq!(n1.get("limit"), n2.get("limit"));
+        assert_eq!(n2.get("limit"), n3.get("limit"));
+
+        // All three should trigger identical-call detection by call 3
+        assert!(detector.record_call(tools::READ_FILE, &call1).is_none());
+        assert!(detector.record_call(tools::READ_FILE, &call2).is_none());
+
+        let warning = detector.record_call(tools::READ_FILE, &call3);
+        assert!(warning.is_some(), "Third aliased call should be detected");
+        assert!(warning.unwrap().contains("HARD STOP"));
+    }
+
+    #[test]
+    fn test_read_file_encoding_and_action_are_stripped() {
+        let with_encoding = json!({"path": "foo.rs", "encoding": "utf-8", "offset_lines": 1, "max_lines": 200});
+        let without_encoding = json!({"path": "foo.rs", "offset_lines": 1, "max_lines": 200});
+
+        let n1 = normalize_args_for_detection(tools::READ_FILE, &with_encoding);
+        let n2 = normalize_args_for_detection(tools::READ_FILE, &without_encoding);
+
+        assert!(n1.get("encoding").is_none());
+        assert_eq!(n1, n2);
+    }
+
+    #[test]
+    fn test_line_start_line_end_normalized_to_offset_limit() {
+        let args = json!({"path": "foo.rs", "line_start": 1, "line_end": 200});
+        let normalized = normalize_args_for_detection(tools::READ_FILE, &args);
+
+        assert!(normalized.get("line_start").is_none());
+        assert!(normalized.get("line_end").is_none());
+        assert_eq!(normalized.get("offset").and_then(|v| v.as_u64()), Some(1));
+        assert_eq!(
+            normalized.get("limit").and_then(|v| v.as_u64()),
+            Some(200)
+        );
     }
 
     #[test]
