@@ -1,6 +1,6 @@
 [package]
 name = "vtcode-exec-events"
-version = "0.85.2"
+version = "0.85.3"
 edition = "2024"
 rust-version = "1.88"
 description = "Structured execution telemetry event schema used across VT Code crates."
@@ -29,7 +29,7 @@ schemars = { workspace = true, optional = true, features = [
 ] }
 uuid = { version = "1.21", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
-vtcode-commons = { path = "../vtcode-commons", version = "0.85.2" }
+vtcode-commons = { path = "../vtcode-commons", version = "0.85.3" }
 
 [lints]
 workspace = true

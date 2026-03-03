@@ -1,6 +1,6 @@
 [package]
 name = "vtcode-tools"
-version = "0.85.2"
+version = "0.85.3"
 edition = "2024"
 rust-version = "1.88"
 authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
@@ -21,9 +21,9 @@ policies = []
 examples = []
 
 [dependencies]
-vtcode-commons = { path = "../vtcode-commons", version = "0.85.2" }
-vtcode-core = { path = "../vtcode-core", version = "0.85.2", default-features = false }
-vtcode-acp-client = { path = "../vtcode-acp-client", version = "0.85.2" }
+vtcode-commons = { path = "../vtcode-commons", version = "0.85.3" }
+vtcode-core = { path = "../vtcode-core", version = "0.85.3", default-features = false }
+vtcode-acp-client = { path = "../vtcode-acp-client", version = "0.85.3" }
 anyhow = { workspace = true }
 async-trait = "0.1"
 serde_json = { workspace = true }
