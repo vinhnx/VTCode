@@ -291,15 +291,20 @@ pub(crate) async fn execute_llm_request(
         turn_timeout_secs,
     ) = {
         let parts = ctx.parts_mut();
+        let plan_mode = parts.state.session_stats.is_plan_mode();
         (
             parts.llm.provider_client.name().to_string(),
-            parts.state.session_stats.is_plan_mode(),
-            parts
-                .llm
-                .vt_cfg
-                .as_ref()
-                .map(|cfg| cfg.chat.ask_questions.enabled)
-                .unwrap_or(true),
+            plan_mode,
+            if plan_mode {
+                true
+            } else {
+                parts
+                    .llm
+                    .vt_cfg
+                    .as_ref()
+                    .map(|cfg| cfg.chat.ask_questions.enabled)
+                    .unwrap_or(true)
+            },
             parts
                 .llm
                 .provider_client

@@ -239,24 +239,35 @@ fn wizard_multistep_ctrl_n_advances_without_completion() {
 }
 
 #[test]
-fn wizard_notes_input_sets_other_answer() {
+fn wizard_inline_custom_note_sets_other_answer_and_submits_on_enter() {
     let steps = vec![WizardStep {
         title: "Q1".to_owned(),
         question: "Pick".to_owned(),
-        items: vec![InlineListItem {
-            title: "None of the above".to_owned(),
-            selection: Some(InlineListSelection::RequestUserInputAnswer {
-                question_id: "q1".to_owned(),
-                selected: vec!["None of the above".to_owned()],
-                other: None,
-            }),
-            ..base_item("None of the above")
-        }],
+        items: vec![
+            InlineListItem {
+                title: "Option A".to_owned(),
+                selection: Some(InlineListSelection::RequestUserInputAnswer {
+                    question_id: "q1".to_owned(),
+                    selected: vec!["Option A".to_owned()],
+                    other: None,
+                }),
+                ..base_item("Option A")
+            },
+            InlineListItem {
+                title: "Custom note".to_owned(),
+                selection: Some(InlineListSelection::RequestUserInputAnswer {
+                    question_id: "q1".to_owned(),
+                    selected: vec![],
+                    other: Some(String::new()),
+                }),
+                ..base_item("Custom note")
+            },
+        ],
         completed: false,
         answer: None,
-        allow_freeform: false,
-        freeform_label: None,
-        freeform_placeholder: None,
+        allow_freeform: true,
+        freeform_label: Some("Custom note".to_string()),
+        freeform_placeholder: Some("Type your response...".to_string()),
     }];
 
     let mut wizard = WizardModalState::new(
@@ -267,7 +278,9 @@ fn wizard_notes_input_sets_other_answer() {
         WizardModalMode::MultiStep,
     );
 
-    let result = wizard.handle_key_event(&make_key(KeyCode::Tab), ModalKeyModifiers::default());
+    let result = wizard.handle_key_event(&make_key(KeyCode::Down), ModalKeyModifiers::default());
+    assert!(matches!(result, ModalListKeyResult::Redraw));
+    let result = wizard.handle_key_event(&make_key(KeyCode::Enter), ModalKeyModifiers::default());
     assert!(matches!(result, ModalListKeyResult::Redraw));
 
     let result =

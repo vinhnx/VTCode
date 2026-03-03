@@ -20,6 +20,7 @@ fn maybe_force_plan_mode_interview_inserts_tool_call() {
         Some("Proceeding without explicit questions."),
         &mut stats,
         1,
+        None,
     );
 
     match result {
@@ -59,6 +60,7 @@ fn maybe_force_plan_mode_interview_includes_distinct_question_options() {
         Some("Proceeding without explicit questions."),
         &mut stats,
         1,
+        None,
     );
 
     let tool_calls = match result {
@@ -117,6 +119,7 @@ fn maybe_force_plan_mode_interview_skips_when_questions_present() {
         Some("What should I do next?"),
         &mut stats,
         2,
+        None,
     );
 
     match result {
@@ -147,6 +150,7 @@ fn maybe_force_plan_mode_interview_marks_shown_when_plan_present() {
         Some("<proposed_plan>\nPlan content\n</proposed_plan>"),
         &mut stats,
         1,
+        None,
     );
 
     match result {
@@ -163,6 +167,49 @@ fn maybe_force_plan_mode_interview_marks_shown_when_plan_present() {
 }
 
 #[test]
+fn maybe_force_plan_mode_interview_does_not_duplicate_existing_interview_when_plan_present() {
+    let mut stats = SessionStats::default();
+    stats.record_tool(tools::READ_FILE);
+    stats.increment_plan_mode_turns();
+
+    let processing_result = TurnProcessingResult::ToolCalls {
+        tool_calls: vec![uni::ToolCall::function(
+            "call_interview_existing".to_string(),
+            tools::REQUEST_USER_INPUT.to_string(),
+            "{}".to_string(),
+        )],
+        assistant_text: "<proposed_plan>\nPlan content\n</proposed_plan>".to_string(),
+        reasoning: Vec::new(),
+        reasoning_details: None,
+    };
+
+    let result = maybe_force_plan_mode_interview(
+        processing_result,
+        Some("<proposed_plan>\nPlan content\n</proposed_plan>"),
+        &mut stats,
+        7,
+        None,
+    );
+
+    match result {
+        TurnProcessingResult::ToolCalls { tool_calls, .. } => {
+            let interview_calls = tool_calls
+                .iter()
+                .filter(|call| {
+                    call.function
+                        .as_ref()
+                        .map(|func| func.name.as_str())
+                        .unwrap_or("")
+                        == tools::REQUEST_USER_INPUT
+                })
+                .count();
+            assert_eq!(interview_calls, 1);
+        }
+        _ => panic!("Expected tool calls with single forced interview"),
+    }
+}
+
+#[test]
 fn maybe_force_plan_mode_interview_appends_reminder_when_plan_ready() {
     let mut stats = SessionStats::default();
     let processing_result = TurnProcessingResult::TextResponse {
@@ -174,13 +221,14 @@ fn maybe_force_plan_mode_interview_appends_reminder_when_plan_ready() {
 
     stats.record_tool(tools::READ_FILE);
     stats.increment_plan_mode_turns();
-    stats.mark_plan_mode_interview_shown();
+    stats.record_plan_mode_interview_result(2, false);
 
     let result = maybe_force_plan_mode_interview(
         processing_result,
         Some("<proposed_plan>\nPlan content\n</proposed_plan>"),
         &mut stats,
         2,
+        None,
     );
 
     match result {
@@ -214,9 +262,10 @@ fn maybe_force_plan_mode_interview_does_not_duplicate_reminder() {
 
     stats.record_tool(tools::READ_FILE);
     stats.increment_plan_mode_turns();
-    stats.mark_plan_mode_interview_shown();
+    stats.record_plan_mode_interview_result(2, false);
 
-    let result = maybe_force_plan_mode_interview(processing_result, Some(&text), &mut stats, 3);
+    let result =
+        maybe_force_plan_mode_interview(processing_result, Some(&text), &mut stats, 3, None);
 
     match result {
         TurnProcessingResult::TextResponse { text, .. } => {
@@ -248,6 +297,7 @@ fn maybe_force_plan_mode_interview_defers_when_tool_calls_present() {
         Some("Going to read files."),
         &mut stats,
         3,
+        None,
     );
 
     match result {
@@ -289,6 +339,7 @@ fn maybe_force_plan_mode_interview_strips_interview_from_mixed_tool_calls() {
         Some("Going to read files."),
         &mut stats,
         3,
+        None,
     );
 
     match result {
@@ -303,5 +354,181 @@ fn maybe_force_plan_mode_interview_strips_interview_from_mixed_tool_calls() {
             assert!(stats.plan_mode_interview_pending());
         }
         _ => panic!("Expected tool calls with interview stripped"),
+    }
+}
+
+#[test]
+fn maybe_force_plan_mode_interview_reopens_when_open_decision_markers_exist() {
+    let mut stats = SessionStats::default();
+    stats.record_tool(tools::READ_FILE);
+    stats.increment_plan_mode_turns();
+    stats.record_plan_mode_interview_result(1, false);
+
+    let processing_result = TurnProcessingResult::TextResponse {
+        text: "<proposed_plan>\nPlan content\n</proposed_plan>".to_string(),
+        reasoning: Vec::new(),
+        reasoning_details: None,
+        proposed_plan: None,
+    };
+
+    let result = maybe_force_plan_mode_interview(
+        processing_result,
+        Some("<proposed_plan>\nPlan content\n</proposed_plan>\n\n- Next open decision: TBD"),
+        &mut stats,
+        4,
+        None,
+    );
+
+    match result {
+        TurnProcessingResult::ToolCalls { tool_calls, .. } => {
+            let name = tool_calls
+                .last()
+                .and_then(|call| call.function.as_ref())
+                .map(|func| func.name.as_str())
+                .unwrap_or("");
+            assert_eq!(name, tools::REQUEST_USER_INPUT);
+        }
+        _ => panic!("Expected follow-up interview tool call"),
+    }
+}
+
+#[test]
+fn maybe_force_plan_mode_interview_clears_stale_pending_when_decisions_closed() {
+    let mut stats = SessionStats::default();
+    stats.record_tool(tools::READ_FILE);
+    stats.increment_plan_mode_turns();
+    stats.record_plan_mode_interview_result(2, false);
+    stats.mark_plan_mode_interview_pending();
+
+    let processing_result = TurnProcessingResult::TextResponse {
+        text: "Decisions are closed and we can proceed.".to_string(),
+        reasoning: Vec::new(),
+        reasoning_details: None,
+        proposed_plan: None,
+    };
+
+    let result = maybe_force_plan_mode_interview(
+        processing_result,
+        Some("Decisions are closed and we can proceed."),
+        &mut stats,
+        5,
+        None,
+    );
+
+    match result {
+        TurnProcessingResult::TextResponse { text, .. } => {
+            assert_eq!(text, "Decisions are closed and we can proceed.");
+            assert!(!stats.plan_mode_interview_pending());
+        }
+        _ => panic!("Expected text response without extra interview"),
+    }
+}
+
+#[test]
+fn should_attempt_dynamic_interview_generation_skips_when_interview_already_called() {
+    let mut stats = SessionStats::default();
+    stats.record_tool(tools::READ_FILE);
+    stats.increment_plan_mode_turns();
+
+    let processing_result = TurnProcessingResult::ToolCalls {
+        tool_calls: vec![uni::ToolCall::function(
+            "call_interview".to_string(),
+            tools::REQUEST_USER_INPUT.to_string(),
+            "{}".to_string(),
+        )],
+        assistant_text: String::new(),
+        reasoning: Vec::new(),
+        reasoning_details: None,
+    };
+
+    assert!(!should_attempt_dynamic_interview_generation(
+        &processing_result,
+        Some("Need clarification."),
+        &stats,
+    ));
+}
+
+#[test]
+fn collect_interview_research_context_includes_custom_note_policy() {
+    let stats = SessionStats::default();
+    let context = collect_interview_research_context(
+        &[uni::Message::assistant(
+            "Decision needed: choose validation scope".to_string(),
+        )],
+        Some("- Next open decision: TBD"),
+        &stats,
+    );
+
+    assert!(
+        context
+            .custom_note_policy
+            .to_ascii_lowercase()
+            .contains("custom")
+    );
+    assert!(
+        context
+            .custom_note_policy
+            .to_ascii_lowercase()
+            .contains("free-form")
+    );
+}
+
+#[test]
+fn collect_interview_research_context_extracts_recent_paths_and_symbols() {
+    let stats = SessionStats::default();
+    let context = collect_interview_research_context(
+        &[uni::Message::assistant(
+            "Focus files:\n- src/agent/runloop/unified/turn/turn_loop.rs\n- SessionStats::record_plan_mode_interview_result".to_string(),
+        )],
+        None,
+        &stats,
+    );
+
+    assert!(
+        context
+            .recent_targets
+            .iter()
+            .any(|line| line.contains("turn_loop.rs"))
+    );
+    assert!(
+        context
+            .recent_targets
+            .iter()
+            .any(|line| line.contains("SessionStats::record_plan_mode_interview_result"))
+    );
+}
+
+#[test]
+fn maybe_force_plan_mode_interview_reprompts_after_cancelled_cycle() {
+    let mut stats = SessionStats::default();
+    stats.record_tool(tools::READ_FILE);
+    stats.increment_plan_mode_turns();
+    stats.record_plan_mode_interview_result(0, true);
+
+    let processing_result = TurnProcessingResult::TextResponse {
+        text: "Continuing planning.".to_string(),
+        reasoning: Vec::new(),
+        reasoning_details: None,
+        proposed_plan: None,
+    };
+
+    let result = maybe_force_plan_mode_interview(
+        processing_result,
+        Some("Continuing planning."),
+        &mut stats,
+        6,
+        None,
+    );
+
+    match result {
+        TurnProcessingResult::ToolCalls { tool_calls, .. } => {
+            let name = tool_calls
+                .last()
+                .and_then(|call| call.function.as_ref())
+                .map(|func| func.name.as_str())
+                .unwrap_or("");
+            assert_eq!(name, tools::REQUEST_USER_INPUT);
+        }
+        _ => panic!("Expected interview to re-open after cancellation"),
     }
 }

@@ -87,6 +87,8 @@ pub const PLAN_MODE_EXIT_INSTRUCTION_LINE: &str =
     "Call `exit_plan_mode` when ready to transition to implementation.";
 /// Shared Plan Mode instruction line enforcing detailed cumulative plan structure.
 pub const PLAN_MODE_PLAN_QUALITY_LINE: &str = "Follow the exact Plan Mode blueprint (KISS + DRY): emit the Agent reasoning + decision log with bullets `Scope checkpoint`, `Decision needed`, `Questions 1/1 answered`, exact question text + `answer: ...`, `Locked decision`, and `Next open decision`; then emit exactly one `<proposed_plan>` block with `• Proposed Plan`, `# <Task Title>`, `## Summary`, `## Scope Locked`, `## Public API / Interface Changes`, `## Implementation Plan`, `## Test Cases and Validation`, and `## Assumptions and Defaults`. After `</proposed_plan>`, include a short note with the editable plan file path when the path is available in context.";
+/// Shared Plan Mode policy line requiring context-aware interview closure before final plans.
+pub const PLAN_MODE_INTERVIEW_POLICY_LINE: &str = "In Plan Mode, prefer model-generated `request_user_input` interview questions informed by discovered repository context, keep custom notes/free-form responses available as first-class input, and continue interviewing until material scope/decomposition/verification decisions are closed before finalizing `<proposed_plan>`.";
 /// Shared Plan Mode guard line requiring explicit transition from planning to execution.
 pub const PLAN_MODE_NO_AUTO_EXIT_LINE: &str = "Do not auto-exit Plan Mode just because a plan exists; wait for explicit implementation intent.";
 /// Shared Plan Mode task-tracking line clarifying availability and aliasing.
@@ -142,6 +144,8 @@ You are VT Code, a semantic coding agent created by Vinh Nguyen (@vinhnx). Preci
 
 **Default: act without asking.** You are fully autonomous.
 
+**Plan Mode override**: In Plan Mode, use `request_user_input` for material unknowns/tradeoffs and continue interview rounds until scope, decomposition, and verification decisions are closed before final `<proposed_plan>`.
+
 **Act** when:
 - There is a safe, conventional default (matches repo patterns)
 - Changes are reversible and workspace-local
@@ -156,7 +160,7 @@ When acting under an assumption, state it in one line and proceed.
 
 - Do NOT ask "would you like me to..." or "should I proceed?" — just do it.
 - Do NOT ask for permission to read files, run tests, or make edits.
-- When using `request_user_input`, provide focused 1-3 questions with 2-3 mutually exclusive options each; place the recommended option first and do not include an `Other` option.
+- When using `request_user_input`, provide focused 1-3 questions with 2-3 mutually exclusive options each and place the recommended option first; users can always add custom notes/free-form responses, so treat options as guidance anchors rather than an exhaustive list.
 
 **Ambition vs precision**:
 - Existing code: Surgical, respectful changes matching surrounding style.
@@ -363,6 +367,7 @@ Trivial final answers: 1-3 sentences, outcomes first, `path:line` refs. Multi-fi
 ## Decision Policy & Execution
 
 - **Default: act without asking.** Resolve tasks fully; don't ask permission on intermediate steps.
+- **Plan Mode override**: Use `request_user_input` iteratively for material unknowns and close scope/decomposition/verification decisions before final `<proposed_plan>`.
 - When stuck, pivot to alternative approach. Fix root cause.
 - Existing codebases: surgical, respectful. New work: ambitious, creative.
 - Keep code consistent with surrounding patterns. Prefer KISS and DRY over clever abstractions.
@@ -601,9 +606,11 @@ pub async fn compose_system_instruction_text(
         );
 
         if cfg.chat.ask_questions.enabled {
-            instruction.push_str("- **request_user_input tool**: Enabled in Plan mode only\n");
+            instruction.push_str(
+                "- **request_user_input tool**: Enabled in Plan mode (strictly enforced)\n",
+            );
         } else {
-            instruction.push_str("- **request_user_input tool**: Disabled\n");
+            instruction.push_str("- **request_user_input tool**: Disabled in Edit mode; Plan mode still enforces interview tool availability\n");
         }
 
         if cfg.mcp.enabled {

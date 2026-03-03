@@ -883,6 +883,26 @@ impl WizardModalState {
             }
         }
 
+        if let Some(step) = self.steps.get_mut(self.current_step)
+            && !step.notes_active
+            && Self::step_selected_custom_note_item_index(step).is_some()
+        {
+            match key.code {
+                KeyCode::Char(ch) if !modifiers.control && !modifiers.alt && !modifiers.command => {
+                    step.notes_active = true;
+                    step.notes.push(ch);
+                    return ModalListKeyResult::Redraw;
+                }
+                KeyCode::Backspace => {
+                    if step.notes.pop().is_some() {
+                        step.notes_active = true;
+                        return ModalListKeyResult::Redraw;
+                    }
+                }
+                _ => {}
+            }
+        }
+
         // Search handling (if enabled)
         if let Some(search) = self.search.as_mut()
             && let Some(step) = self.steps.get_mut(self.current_step)
@@ -1002,7 +1022,10 @@ impl WizardModalState {
                             ModalListKeyResult::Redraw
                         }
                         KeyCode::Tab => {
-                            if self.search.is_none() && step.allow_freeform {
+                            if self.search.is_none()
+                                && (step.allow_freeform
+                                    || Self::step_selected_custom_note_item_index(step).is_some())
+                            {
                                 step.notes_active = !step.notes_active;
                                 ModalListKeyResult::Redraw
                             } else {
@@ -1079,6 +1102,29 @@ impl WizardModalState {
             .is_some_and(|step| step.completed)
     }
 
+    fn step_selected_custom_note_item_index(step: &WizardStepState) -> Option<usize> {
+        let selected_visible = step.list.list_state.selected()?;
+        let item_index = *step.list.visible_indices.get(selected_visible)?;
+        let item = step.list.items.get(item_index)?;
+        match item.selection.as_ref() {
+            Some(InlineListSelection::RequestUserInputAnswer {
+                selected, other, ..
+            }) if selected.is_empty() && other.is_some() => Some(item_index),
+            _ => None,
+        }
+    }
+
+    fn current_step_selected_custom_note_item_index(&self) -> Option<usize> {
+        self.steps
+            .get(self.current_step)
+            .and_then(Self::step_selected_custom_note_item_index)
+    }
+
+    fn current_step_requires_custom_note_input(&self) -> bool {
+        self.current_step_selected_custom_note_item_index()
+            .is_some()
+    }
+
     fn current_step_supports_notes(&self) -> bool {
         self.steps
             .get(self.current_step)
@@ -1131,12 +1177,19 @@ impl WizardModalState {
             Some(s) => s,
             None => return Vec::new(),
         };
+        let custom_note_selected = self.current_step_requires_custom_note_input();
 
         if self.notes_active() {
-            vec!["tab or esc to clear notes | enter to submit answer".to_string()]
+            if custom_note_selected {
+                vec!["type custom note | enter to continue | esc to clear".to_string()]
+            } else {
+                vec!["tab or esc to clear notes | enter to submit answer".to_string()]
+            }
         } else {
             let mut lines = Vec::new();
-            if step.allow_freeform {
+            if custom_note_selected {
+                lines.push("type custom note | enter to continue".to_string());
+            } else if step.allow_freeform {
                 lines.push("tab to add notes | enter to submit answer".to_string());
             } else {
                 lines.push("enter to submit answer".to_string());
@@ -1163,6 +1216,14 @@ impl WizardModalState {
     }
 
     fn submit_current_selection(&mut self) -> ModalListKeyResult {
+        if self.current_step_requires_custom_note_input()
+            && let Some(step) = self.steps.get_mut(self.current_step)
+            && step.notes.trim().is_empty()
+        {
+            step.notes_active = true;
+            return ModalListKeyResult::Redraw;
+        }
+
         let Some(selection) = self.current_selection() else {
             return ModalListKeyResult::HandledNoRedraw;
         };

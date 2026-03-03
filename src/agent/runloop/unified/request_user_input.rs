@@ -228,8 +228,8 @@ fn normalize_request_user_input_args(args: &Value) -> Result<NormalizedRequestUs
         current_step: 0,
         title_override: None,
         allow_freeform: true,
-        freeform_label: None,
-        freeform_placeholder: None,
+        freeform_label: Some("Custom note".to_string()),
+        freeform_placeholder: Some("Type your response...".to_string()),
     })
 }
 
@@ -268,8 +268,10 @@ fn build_question_items_with_options(
 
         // Keep free-form input explicit when choices are present.
         items.push(InlineListItem {
-            title: format!("{}. Other (type custom response)", options.len() + 1),
-            subtitle: Some("Use notes to provide your own response".to_string()),
+            title: format!("{}. Custom note (inline)", options.len() + 1),
+            subtitle: Some(
+                "Type your custom response inline, then press Enter to continue".to_string(),
+            ),
             badge: None,
             indent: 0,
             selection: Some(InlineListSelection::RequestUserInputAnswer {
@@ -277,7 +279,7 @@ fn build_question_items_with_options(
                 selected: vec![],
                 other: Some(String::new()),
             }),
-            search_value: Some("other custom response free text".to_string()),
+            search_value: Some("custom note other custom response free text".to_string()),
         });
         items
     } else {
@@ -1268,7 +1270,7 @@ mod tests {
     }
 
     #[test]
-    fn option_questions_add_explicit_other_choice() {
+    fn option_questions_add_explicit_custom_note_choice() {
         let question = RequestUserInputQuestion {
             id: "scope".to_string(),
             header: "Scope".to_string(),
@@ -1289,7 +1291,7 @@ mod tests {
 
         let items = build_question_items(&question);
         assert_eq!(items.len(), 3);
-        assert!(items[2].title.contains("Other"));
+        assert!(items[2].title.contains("Custom note"));
 
         let selection = items[2]
             .selection
@@ -1320,7 +1322,7 @@ mod tests {
         let items = build_question_items(&question);
         assert_eq!(items.len(), 4);
         assert!(items[0].title.contains("(Recommended)"));
-        assert!(items[3].title.contains("Other"));
+        assert!(items[3].title.contains("Custom note"));
     }
 
     #[test]
@@ -1344,6 +1346,11 @@ mod tests {
         assert_eq!(normalized.wizard_mode, WizardModalMode::MultiStep);
         assert_eq!(normalized.current_step, 0);
         assert_eq!(normalized.title_override, None);
+        assert_eq!(normalized.freeform_label.as_deref(), Some("Custom note"));
+        assert_eq!(
+            normalized.freeform_placeholder.as_deref(),
+            Some("Type your response...")
+        );
     }
 
     #[test]

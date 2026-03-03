@@ -90,6 +90,57 @@ const MAX_ERROR_MESSAGE_CHARS: usize = 420;
 const MAX_FALLBACK_ARGS_PREVIEW_CHARS: usize = 140;
 const MAX_FALLBACK_ARGS_INLINE_CHARS: usize = 240;
 
+fn request_user_input_result_stats(output: &serde_json::Value) -> (usize, bool) {
+    let cancelled = output
+        .get("cancelled")
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false);
+    if cancelled {
+        return (0, true);
+    }
+
+    let Some(answers) = output.get("answers").and_then(serde_json::Value::as_object) else {
+        return (0, true);
+    };
+
+    let answered_questions = answers
+        .values()
+        .filter(|answer| {
+            let selected_count = answer
+                .get("selected")
+                .and_then(serde_json::Value::as_array)
+                .map_or(0, Vec::len);
+            let has_other = answer
+                .get("other")
+                .and_then(serde_json::Value::as_str)
+                .map(|text| !text.trim().is_empty())
+                .unwrap_or(false);
+            selected_count > 0 || has_other
+        })
+        .count();
+    let cancelled = answered_questions == 0;
+    (answered_questions, cancelled)
+}
+
+fn record_request_user_input_interview_result(
+    ctx: &mut TurnProcessingContext<'_>,
+    tool_name: &str,
+    output: Option<&serde_json::Value>,
+) {
+    if tool_name != tool_names::REQUEST_USER_INPUT {
+        return;
+    }
+
+    let (answered_questions, cancelled) = output
+        .map(request_user_input_result_stats)
+        .unwrap_or((0, true));
+    let parts = ctx.parts_mut();
+    parts
+        .state
+        .session_stats
+        .record_plan_mode_interview_result(answered_questions, cancelled);
+}
+
 fn truncate_text_for_model(value: &str, max_chars: usize) -> (String, bool) {
     let total_chars = value.chars().count();
     if total_chars <= max_chars {
@@ -650,6 +701,8 @@ async fn handle_success<'a>(
     // Run post-tool hooks
     run_post_tool_hooks(t_ctx.ctx, tool_name, args_val, output).await?;
 
+    record_request_user_input_interview_result(t_ctx.ctx, tool_name, Some(output));
+
     Ok(())
 }
 
@@ -718,6 +771,8 @@ async fn handle_failure<'a>(
     }
 
     push_tool_error_response(t_ctx, tool_call_id, tool_name, error_msg, "execution").await;
+
+    record_request_user_input_interview_result(t_ctx.ctx, tool_name, None);
 
     // Handle auto-exit from Plan Mode if applicable
     if should_auto_exit
@@ -792,6 +847,8 @@ async fn handle_timeout(
 
     push_tool_error_response(t_ctx, tool_call_id, tool_name, error_msg, "timeout").await;
 
+    record_request_user_input_interview_result(t_ctx.ctx, tool_name, None);
+
     Ok(())
 }
 
@@ -850,6 +907,8 @@ async fn handle_cancelled(
             error_content.to_string(),
         );
     }
+
+    record_request_user_input_interview_result(t_ctx.ctx, tool_name, None);
 
     Ok(())
 }
