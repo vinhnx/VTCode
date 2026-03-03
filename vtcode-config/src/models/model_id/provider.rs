@@ -19,9 +19,9 @@ impl ModelId {
             | ModelId::GPT53Codex
             | ModelId::OpenAIGptOss20b
             | ModelId::OpenAIGptOss120b => Provider::OpenAI,
-            ModelId::ClaudeOpus46
-            | ModelId::ClaudeSonnet46
-            | ModelId::ClaudeHaiku45 => Provider::Anthropic,
+            ModelId::ClaudeOpus46 | ModelId::ClaudeSonnet46 | ModelId::ClaudeHaiku45 => {
+                Provider::Anthropic
+            }
             ModelId::DeepSeekChat | ModelId::DeepSeekReasoner => Provider::DeepSeek,
             ModelId::HuggingFaceDeepseekV32
             | ModelId::HuggingFaceOpenAIGptOss20b
