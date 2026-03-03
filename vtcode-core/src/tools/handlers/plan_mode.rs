@@ -416,16 +416,7 @@ drafting final plan."
 
 </proposed_plan>
 
-Ready to code?
-
-A plan is ready to execute. Would you like to proceed?
-
-1. Yes, auto-accept edits (Recommended)
-   Execute with auto-approval.
-2. Yes, manually approve edits
-   Confirm each edit before applying.
-3. Type feedback to revise the plan
-   Return to plan mode and refine the plan.
+> Plan confirmation is shown as an interactive list in the TUI when you exit Plan Mode.
 
 > Plan file: `{}`
 > Plan created: {}

@@ -1,7 +1,7 @@
 //! Plan confirmation HITL flow for Plan -> Edit execution.
 //!
-//! This implementation renders the proposed plan directly in the transcript and
-//! captures inline typed choices (1/2/3/4 or feedback text), without modal/palette UI.
+//! This implementation uses the TUI plan confirmation modal/list widget when available,
+//! with typed input parsing as a compatibility fallback.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -189,36 +189,10 @@ fn render_confirmation_prompt(handle: &InlineHandle, plan: &PlanContent) {
             format!("Plan file: {path}"),
         );
     }
-
     append_message(
         handle,
         InlineMessageKind::Info,
-        "1. Yes, auto-accept edits (Recommended)",
-    );
-    append_message(
-        handle,
-        InlineMessageKind::Info,
-        "   Execute with auto-approval.",
-    );
-    append_message(
-        handle,
-        InlineMessageKind::Info,
-        "2. Yes, manually approve edits",
-    );
-    append_message(
-        handle,
-        InlineMessageKind::Info,
-        "   Keep context and confirm each edit before applying.",
-    );
-    append_message(
-        handle,
-        InlineMessageKind::Info,
-        "3. Type feedback to revise the plan",
-    );
-    append_message(
-        handle,
-        InlineMessageKind::Info,
-        "   Return to plan mode and refine the plan.",
+        "Use the confirmation list to choose auto-accept, manual approve, or revise.",
     );
 }
 
@@ -232,6 +206,7 @@ pub(crate) async fn execute_plan_confirmation(
     ctrl_c_state: &Arc<CtrlCState>,
     ctrl_c_notify: &Arc<Notify>,
 ) -> Result<PlanConfirmationOutcome> {
+    handle.show_plan_confirmation(plan_content.clone());
     render_confirmation_prompt(handle, &plan_content);
     handle.force_redraw();
     task::yield_now().await;
