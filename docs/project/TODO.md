@@ -32,29 +32,6 @@ Review each tool's prompt and response structure to ensure conciseness while mai
 
 ---
 
-implement realtime status line config, also add /statusline command to show it
-
-```
-Configure Status Line
-  Select which items to display in the status lin
-
-  Type to search
-  >
-› [x] current-dir           Current working dire…
-  [x] git-branch            Current Git branch (…
-  [ ] model-name            Current model name
-  [ ] model-with-reasoning  Current model name w…
-  [ ] project-root          Project root directo…
-  [ ] context-remaining     Percentage of contex…
-  [ ] context-used          Percentage of contex…
-  [ ] five-hour-limit       Remaining usage on 5…
-
-  ~/project/path · feat/awesome-feature
-  Use ↑↓ to navigate, ←→ to move, space to select,
-```
-
----
-
 Implement a comprehensive solution to resolve the escape key conflict in external editor functionality and expand configurable editor support. First, modify the crossterm event handling system to implement context-aware escape key detection that distinguishes between escape key presses intended for normal mode navigation and those that should trigger rewind functionality. Consider implementing either a configurable double-escape mechanism where a single press exits external editor mode while a double-press triggers rewind, or introduce an alternative keybinding such as Ctrl+Shift+R or F5 for rewind that does not conflict with escape behavior. Ensure VTCode/ANSI escape sequence parsing correctly identifies the source of escape key events. Second, expand the external editor configuration system to include a user-customizable editor preference setting stored in the application configuration. This setting should accept any valid shell command or path to an executable, and the system should parse this command to launch the specified editor when Ctrl+E is triggered. Implement support for launching common editors including Visual Studio Code (code command), Zed (zed command), TextEdit (open command on macOS), Sublime Text (subl command), TextMate (mate command), Emacs (emacsclient or emacs command), Neovim (nvim or vim command), Nano (nano command), and any other editor specified via custom command. The implementation should handle platform-specific editor detection, manage editor process spawning and termination, capture editor output, and properly restore focus to the main application after the external editor session completes. Include error handling for cases where the specified editor is not installed or the command fails to execute.
 
 ---
