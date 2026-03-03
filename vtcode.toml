@@ -9,7 +9,7 @@ provider = "huggingface"
 api_key_env = "HF_TOKEN"
 
 # Default model to use when no specific model is specified
-default_model = "MiniMaxAI/MiniMax-M2.5:novita"
+default_model = "stepfun-ai/Step-3.5-Flash:featherless-ai"
 
 # Personal/local overrides should live in user config, not workspace config:
 #   ~/.vtcode/vtcode.toml
