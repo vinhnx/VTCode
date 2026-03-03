@@ -5,6 +5,33 @@ All notable changes to vtcode will be documented in this file.
 # Changelog
 
 All notable changes to vtcode will be documented in this file.
+## 0.85.3 - 2026-03-03
+
+### Highlights
+#### Features
+
+- **Native Plugin System**: Implement native code plugin support using libloading for high-performance, pre-compiled skills
+  - Add `vtcode-core/src/skills/native_plugin.rs` with PluginLoader, NativePlugin, and NativePluginTrait
+  - Support for dynamic library loading (.dylib, .so, .dll) with platform-specific handling
+  - Plugin ABI with version checking and metadata validation
+  - Trusted directory model for secure plugin discovery
+  - Integration with EnhancedSkill enum for unified skill handling
+  - Comprehensive documentation and example plugin (hello-world)
+- Add libloading 0.8 dependency to workspace and vtcode-core
+
+### Documentation
+
+- Add Native Plugin Guide (`docs/skills/NATIVE_PLUGIN_GUIDE.md`) - Complete user guide for plugin development
+- Add Native Plugin Implementation Summary (`docs/skills/NATIVE_PLUGIN_IMPLEMENTATION.md`) - Technical implementation details
+- Add example plugin with tests (`examples/plugins/hello-world/`)
+
+### Other Changes
+
+- Update SkillRoot structure with is_plugin_root field for plugin directory detection
+- Add plugin discovery to skill loading system
+- Add plugin validation and safety checks
+- Update CHANGELOG with plugin feature
+
 ## 0.85.2 - 2026-03-02
 
 ### Highlights

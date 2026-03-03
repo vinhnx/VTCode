@@ -108,6 +108,12 @@ impl GrepFilesHandler {
         let context_after = args.context_after.unwrap_or(0).min(MAX_CONTEXT_LINES);
 
         let mut matches = Vec::new();
+        let to_owned_lines = |slice: &[&str]| {
+            slice
+                .iter()
+                .map(|line| (*line).to_owned())
+                .collect::<Vec<_>>()
+        };
 
         // Collect files to search
         let files = self.collect_files(search_path, args).await?;
@@ -128,12 +134,10 @@ impl GrepFilesHandler {
 
                         if regex.is_match(line) {
                             let start = idx.saturating_sub(context_before);
-                            let context_before_lines: Vec<String> =
-                                lines[start..idx].iter().map(|s| s.to_string()).collect();
+                            let context_before_lines = to_owned_lines(&lines[start..idx]);
 
                             let end = (idx + 1 + context_after).min(lines.len());
-                            let context_after_lines: Vec<String> =
-                                lines[idx + 1..end].iter().map(|s| s.to_string()).collect();
+                            let context_after_lines = to_owned_lines(&lines[idx + 1..end]);
 
                             matches.push(GrepMatch {
                                 file: file_path.to_string_lossy().to_string(),
