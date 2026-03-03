@@ -6334,6 +6334,7 @@ dependencies = [
  "glob",
  "hashbrown 0.15.5",
  "left-right",
+ "memchr",
  "once_cell",
  "rand 0.10.0",
  "ratatui",

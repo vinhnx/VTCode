@@ -1,5 +1,7 @@
 //! ANSI escape sequence parser and utilities
 
+use memchr::memchr;
+
 const ESC: u8 = 0x1b;
 const BEL: u8 = 0x07;
 const DEL: u8 = 0x7f;
@@ -176,25 +178,29 @@ pub fn strip_ansi(text: &str) -> String {
     let mut i = 0;
 
     while i < bytes.len() {
-        if bytes[i] == ESC
-            && let Some(len) = parse_ansi_sequence_bytes(&bytes[i..])
-        {
-            i += len;
-            continue;
+        let next_esc = memchr(ESC, &bytes[i..]).map_or(bytes.len(), |offset| i + offset);
+        while i < next_esc {
+            if bytes[i] == b'\n' || bytes[i] == b'\r' || bytes[i] == b'\t' {
+                output.push(bytes[i]);
+                i += 1;
+            } else if bytes[i] < 32 || bytes[i] == DEL {
+                i += 1;
+            } else {
+                output.push(bytes[i]);
+                i += 1;
+            }
         }
-        if bytes[i] == ESC {
-            // Incomplete/unterminated control sequence at end of available text.
+
+        if i >= bytes.len() {
             break;
         }
 
-        if bytes[i] == b'\n' || bytes[i] == b'\r' || bytes[i] == b'\t' {
-            output.push(bytes[i]);
-            i += 1;
-        } else if bytes[i] < 32 || bytes[i] == DEL {
-            i += 1;
+        if let Some(len) = parse_ansi_sequence_bytes(&bytes[i..]) {
+            i += len;
+            continue;
         } else {
-            output.push(bytes[i]);
-            i += 1;
+            // Incomplete/unterminated control sequence at end of available text.
+            break;
         }
     }
 
@@ -244,26 +250,24 @@ pub fn parse_ansi_sequence(text: &str) -> Option<usize> {
 pub fn strip_ansi_ascii_only(text: &str) -> String {
     let mut output = String::with_capacity(text.len());
     let bytes = text.as_bytes();
-    let mut i = 0;
-    let mut last_valid = 0;
+    let mut search_start = 0;
+    let mut copy_start = 0;
 
-    while i < bytes.len() {
-        if (bytes[i] == ESC || parse_c1_at(bytes, i).is_some())
-            && let Some(len) = parse_ansi_sequence_bytes(&bytes[i..])
-        {
-            if last_valid < i {
-                output.push_str(&text[last_valid..i]);
+    while let Some(offset) = memchr(ESC, &bytes[search_start..]) {
+        let esc_index = search_start + offset;
+        if let Some(len) = parse_ansi_sequence_bytes(&bytes[esc_index..]) {
+            if copy_start < esc_index {
+                output.push_str(&text[copy_start..esc_index]);
             }
-            i += len;
-            last_valid = i;
-            continue;
+            copy_start = esc_index + len;
+            search_start = copy_start;
+        } else {
+            search_start = esc_index + 1;
         }
-
-        i += 1;
     }
 
-    if last_valid < text.len() {
-        output.push_str(&text[last_valid..]);
+    if copy_start < text.len() {
+        output.push_str(&text[copy_start..]);
     }
 
     output
@@ -322,6 +326,12 @@ mod tests {
     fn incomplete_sequence_drops_tail() {
         let input = "text\x1b[31";
         assert_eq!(strip_ansi(input), "text");
+    }
+
+    #[test]
+    fn ascii_only_incomplete_sequence_keeps_tail() {
+        let input = "text\x1b[31";
+        assert_eq!(strip_ansi_ascii_only(input), input);
     }
 
     #[test]

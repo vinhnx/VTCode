@@ -1,4 +1,4 @@
-use memchr::memmem;
+use memchr::{memchr, memmem};
 use serde_json::Value;
 
 use crate::agent::runloop::text_tools::canonical::{
@@ -166,7 +166,7 @@ pub(crate) fn detect_textual_tool_call(text: &str) -> Option<(String, Value)> {
                 let after_name = &tail[name_len..];
 
                 // Use memchr to search for the opening parenthesis
-                let paren_pos = memmem::find(after_name.as_bytes(), b"(");
+                let paren_pos = memchr(b'(', after_name.as_bytes());
                 let paren_offset = if let Some(pos) = paren_pos {
                     pos
                 } else {
