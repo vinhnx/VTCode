@@ -10,7 +10,7 @@ use tokio::task;
 use vtcode_core::core::agent::error_recovery::{ErrorType, RecoveryDiagnostics};
 use vtcode_tui::{
     InlineEvent, InlineHandle, InlineListItem, InlineListSearchConfig, InlineListSelection,
-    InlineSession, WizardStep,
+    InlineSession,
 };
 
 use crate::agent::runloop::unified::state::{CtrlCSignal, CtrlCState};
@@ -58,7 +58,6 @@ struct RecoveryPromptArgs {
 #[derive(Debug, Clone, Deserialize)]
 struct RecoveryTabArgs {
     id: String,
-    title: String,
     items: Vec<RecoveryItemArgs>,
 }
 
@@ -90,6 +89,23 @@ fn find_default_choice_selection(
         }
         None
     })
+}
+
+fn split_question_lines(question: &str) -> Vec<String> {
+    let mut lines = question
+        .lines()
+        .map(|line| line.trim_end().to_string())
+        .collect::<Vec<_>>();
+
+    while lines.last().is_some_and(|line| line.trim().is_empty()) {
+        lines.pop();
+    }
+
+    if lines.is_empty() {
+        vec![String::new()]
+    } else {
+        lines
+    }
 }
 
 impl RecoveryPromptBuilder {
@@ -192,62 +208,50 @@ pub async fn execute_recovery_prompt(
         .title
         .unwrap_or_else(|| "Circuit Breaker Activated".to_string());
     let current_step = resolve_current_step(&parsed.tabs, parsed.default_tab_id.as_deref());
-    let default_tab_id = parsed.tabs.get(current_step).map(|tab| tab.id.as_str());
+    let Some(tab) = parsed.tabs.get(current_step) else {
+        return Ok(json!({ "cancelled": true, "error": "Invalid tab index" }));
+    };
 
-    let steps: Vec<WizardStep> = parsed
-        .tabs
+    let items: Vec<InlineListItem> = tab
+        .items
         .iter()
-        .map(|tab| {
-            let items: Vec<InlineListItem> = tab
-                .items
-                .iter()
-                .map(|item| InlineListItem {
-                    title: item.title.clone(),
-                    subtitle: item.subtitle.clone(),
-                    badge: item.badge.clone(),
-                    indent: 0,
-                    selection: Some(InlineListSelection::AskUserChoice {
-                        tab_id: tab.id.clone(),
-                        choice_id: item.id.clone(),
-                        text: None,
-                    }),
-                    search_value: Some(format!(
-                        "{} {} {}",
-                        item.title,
-                        item.subtitle.clone().unwrap_or_default(),
-                        item.badge.clone().unwrap_or_default()
-                    )),
-                })
-                .collect();
-
-            let answer = if default_tab_id == Some(tab.id.as_str()) {
-                parsed
-                    .default_choice_id
-                    .as_deref()
-                    .and_then(|choice_id| find_default_choice_selection(&items, choice_id))
-            } else {
-                None
-            };
-
-            WizardStep {
-                title: tab.title.clone(),
-                question: parsed.question.clone(),
-                items,
-                completed: answer.is_some(),
-                answer,
-                allow_freeform: true, // Recovery prompts often allow custom guidance
-                freeform_label: Some("Provide custom guidance".to_string()),
-                freeform_placeholder: Some("Describe what you'd like me to do next...".to_string()),
-            }
+        .map(|item| InlineListItem {
+            title: item.title.clone(),
+            subtitle: item.subtitle.clone(),
+            badge: item.badge.clone(),
+            indent: 0,
+            selection: Some(InlineListSelection::AskUserChoice {
+                tab_id: tab.id.clone(),
+                choice_id: item.id.clone(),
+                text: None,
+            }),
+            search_value: Some(format!(
+                "{} {} {}",
+                item.title,
+                item.subtitle.clone().unwrap_or_default(),
+                item.badge.clone().unwrap_or_default()
+            )),
         })
         .collect();
+
+    let selected = parsed
+        .default_choice_id
+        .as_deref()
+        .and_then(|choice_id| find_default_choice_selection(&items, choice_id))
+        .or_else(|| items.first().and_then(|item| item.selection.clone()));
 
     let search = Some(InlineListSearchConfig {
         label: "Search".to_string(),
         placeholder: Some("Filter options...".to_string()),
     });
 
-    handle.show_tabbed_list_modal(title, steps, current_step, search);
+    handle.show_list_modal(
+        title,
+        split_question_lines(&parsed.question),
+        items,
+        selected,
+        search,
+    );
     handle.force_redraw();
     task::yield_now().await;
 
@@ -297,16 +301,16 @@ pub async fn execute_recovery_prompt(
                     }
                 }));
             }
-            InlineEvent::WizardModalSubmit(mut selections) => {
+            InlineEvent::ListModalSubmit(selection) => {
                 (*ctrl_c_state).disarm_exit();
                 handle.close_modal();
                 handle.force_redraw();
                 task::yield_now().await;
                 tokio::time::sleep(Duration::from_millis(100)).await;
 
-                if let Some(InlineListSelection::AskUserChoice {
+                if let InlineListSelection::AskUserChoice {
                     tab_id, choice_id, ..
-                }) = selections.pop()
+                } = selection
                 {
                     return Ok(json!({
                         "tab_id": tab_id,
@@ -316,7 +320,7 @@ pub async fn execute_recovery_prompt(
 
                 return Ok(json!({"cancelled": true}));
             }
-            InlineEvent::WizardModalCancel | InlineEvent::ListModalCancel | InlineEvent::Cancel => {
+            InlineEvent::ListModalCancel | InlineEvent::Cancel => {
                 (*ctrl_c_state).disarm_exit();
                 handle.close_modal();
                 handle.force_redraw();
@@ -345,8 +349,8 @@ pub fn build_recovery_prompt_from_diagnostics(
 ) -> RecoveryPromptBuilder {
     let summary = format!(
         "Multiple tools are experiencing failures:\n\n\
-         **Open Circuits ({})**: {}\n\n\
-         **Recent Errors**:\n{}\n\n\
+         Open Circuits ({}): {}\n\n\
+         Recent Errors:\n{}\n\n\
          How would you like to proceed?",
         diagnostics.open_circuits.len(),
         diagnostics.open_circuits.join(", "),
@@ -414,7 +418,7 @@ fn build_error_summary(diagnostics: &RecoveryDiagnostics) -> String {
             ErrorType::Other => "Other",
         };
         summary.push_str(&format!(
-            "{}. **{}** ({}) - {}\n",
+            "{}. {} ({}) - {}\n",
             i + 1,
             error.tool_name,
             error_type,
@@ -465,7 +469,6 @@ mod tests {
         let tabs = vec![
             RecoveryTabArgs {
                 id: "a".to_string(),
-                title: "A".to_string(),
                 items: vec![RecoveryItemArgs {
                     id: "1".to_string(),
                     title: "one".to_string(),
@@ -475,7 +478,6 @@ mod tests {
             },
             RecoveryTabArgs {
                 id: "b".to_string(),
-                title: "B".to_string(),
                 items: vec![RecoveryItemArgs {
                     id: "2".to_string(),
                     title: "two".to_string(),
