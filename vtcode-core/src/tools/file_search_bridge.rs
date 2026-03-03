@@ -98,8 +98,8 @@ pub fn search_files(
 ) -> Result<FileSearchResults> {
     let cancel = cancel_flag.unwrap_or_else(|| Arc::new(AtomicBool::new(false)));
 
-    let limit = NonZero::new(config.max_results).unwrap_or(NonZero::new(100).unwrap());
-    let threads = NonZero::new(config.num_threads).unwrap_or(NonZero::new(1).unwrap());
+    let limit = NonZero::new(config.max_results).unwrap_or(NonZero::<usize>::MIN);
+    let threads = NonZero::new(config.num_threads).unwrap_or(NonZero::<usize>::MIN);
 
     file_search_run(vtcode_file_search::FileSearchConfig {
         pattern_text: config.pattern,

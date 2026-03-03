@@ -17,18 +17,21 @@ use std::sync::Mutex;
 use std::sync::OnceLock;
 
 /// Lazy-initialized tree-sitter bash parser (wrapped in Mutex for mutation)
-static BASH_PARSER: OnceLock<Mutex<tree_sitter::Parser>> = OnceLock::new();
+static BASH_PARSER: OnceLock<Result<Mutex<tree_sitter::Parser>, String>> = OnceLock::new();
 
 /// Gets or initializes the bash parser
-fn get_bash_parser() -> &'static Mutex<tree_sitter::Parser> {
-    BASH_PARSER.get_or_init(|| {
-        let mut parser = tree_sitter::Parser::new();
-        let lang: tree_sitter::Language = tree_sitter_bash::LANGUAGE.into();
-        parser
-            .set_language(&lang)
-            .expect("Failed to load bash grammar");
-        Mutex::new(parser)
-    })
+fn get_bash_parser() -> Result<&'static Mutex<tree_sitter::Parser>, String> {
+    BASH_PARSER
+        .get_or_init(|| {
+            let mut parser = tree_sitter::Parser::new();
+            let lang: tree_sitter::Language = tree_sitter_bash::LANGUAGE.into();
+            parser
+                .set_language(&lang)
+                .map_err(|e| format!("Failed to load bash grammar: {e}"))?;
+            Ok(Mutex::new(parser))
+        })
+        .as_ref()
+        .map_err(Clone::clone)
 }
 
 /// Parses a shell script into individual commands using tree-sitter bash grammar
@@ -67,7 +70,7 @@ pub fn parse_shell_commands_tree_sitter(script: &str) -> Result<Vec<Vec<String>>
 
 /// Parses shell script using tree-sitter bash grammar
 fn parse_with_tree_sitter(script: &str) -> Result<Vec<Vec<String>>, String> {
-    let parser_guard = get_bash_parser();
+    let parser_guard = get_bash_parser()?;
     let mut parser = parser_guard
         .lock()
         .map_err(|e| format!("Failed to lock parser: {}", e))?;

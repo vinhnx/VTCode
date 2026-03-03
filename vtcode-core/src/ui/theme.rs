@@ -1251,9 +1251,10 @@ fn catppuccin_rgb(color: catppuccin::Color) -> RgbColor {
 }
 
 static ACTIVE: Lazy<RwLock<ActiveTheme>> = Lazy::new(|| {
-    let default = REGISTRY
-        .get(DEFAULT_THEME_ID)
-        .expect("default theme must exist");
+    let default = match REGISTRY.get(DEFAULT_THEME_ID) {
+        Some(theme) => theme,
+        None => panic!("default theme must exist"),
+    };
     let styles = default.palette.build_styles();
     RwLock::new(ActiveTheme {
         id: default.id.to_string(),

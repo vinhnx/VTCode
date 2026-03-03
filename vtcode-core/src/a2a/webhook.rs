@@ -23,13 +23,20 @@ impl Default for WebhookNotifier {
 }
 
 impl WebhookNotifier {
+    fn build_http_client() -> Client {
+        match Client::builder().timeout(Duration::from_secs(10)).build() {
+            Ok(client) => client,
+            Err(error) => {
+                warn!(error = %error, "Failed to configure webhook HTTP client; using default client");
+                Client::new()
+            }
+        }
+    }
+
     /// Create a new webhook notifier with default settings
     pub fn new() -> Self {
         Self {
-            client: Client::builder()
-                .timeout(Duration::from_secs(10))
-                .build()
-                .expect("Failed to create HTTP client"),
+            client: Self::build_http_client(),
             max_retries: 3,
             retry_delay_ms: 1000,
         }
@@ -38,10 +45,7 @@ impl WebhookNotifier {
     /// Create a webhook notifier with custom settings
     pub fn with_settings(max_retries: u32, retry_delay_ms: u64) -> Self {
         Self {
-            client: Client::builder()
-                .timeout(Duration::from_secs(10))
-                .build()
-                .expect("Failed to create HTTP client"),
+            client: Self::build_http_client(),
             max_retries,
             retry_delay_ms,
         }

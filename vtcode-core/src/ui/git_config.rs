@@ -156,8 +156,10 @@ impl GitColorConfig {
         let section_start = section_re.find(content)?.end();
 
         // Find the next section or end of file
-        static OPEN_BRACKET_RE: Lazy<regex::Regex> =
-            Lazy::new(|| regex::Regex::new(r"\[").unwrap());
+        static OPEN_BRACKET_RE: Lazy<regex::Regex> = Lazy::new(|| match regex::Regex::new(r"\[") {
+            Ok(regex) => regex,
+            Err(error) => panic!("open bracket regex must compile: {error}"),
+        });
         let section_end =
             if let Some(next_section) = OPEN_BRACKET_RE.find(&content[section_start..]) {
                 section_start + next_section.start()

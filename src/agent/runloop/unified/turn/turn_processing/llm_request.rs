@@ -763,7 +763,7 @@ pub(crate) async fn execute_llm_request(
                 tracing::warn!(
                     target: "vtcode.llm.retry",
                     error = %msg,
-                    category = %last_error_category.as_ref().unwrap().user_label(),
+                    category = %category.user_label(),
                     retryable = is_retryable,
                     attempt = attempt + 1,
                     max_retries,

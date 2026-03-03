@@ -12,3 +12,10 @@
 # Allow the pre-built Zed extension binary, which is required for the
 # integration tests and kept under 1 MB.
 zed-extension/extension.wasm=1_000_000
+
+# Keep changelog history available while capping growth.
+CHANGELOG.md=600_000
+
+# Project branding assets required by README/docs.
+resources/gif/vtcode.gif=2_000_000
+resources/logo/vtcode_logo.png=1_200_000

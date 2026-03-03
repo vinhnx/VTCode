@@ -287,7 +287,9 @@ fn find_raw_image_path_matches(
             }
         }
 
-        let ch = input[pos..].chars().next().unwrap();
+        let Some(ch) = input[pos..].chars().next() else {
+            break;
+        };
         if ch.is_ascii_whitespace() {
             if let Some(start) = token_start.take() {
                 collect_unquoted_match(input, start, pos, protected_ranges, &mut matches);
@@ -321,14 +323,16 @@ fn find_raw_image_path_matches(
 }
 
 static DATA_IMAGE_URL_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(
+    match Regex::new(
         r#"(?ix)
         (?:^|[\s\(\[\{<\"'`])
         (
             data:image/[a-z0-9+\-\.]+;base64,[a-z0-9+/=]+
         )"#,
-    )
-    .expect("Failed to compile data image regex")
+    ) {
+        Ok(regex) => regex,
+        Err(error) => panic!("Failed to compile data image regex: {error}"),
+    }
 });
 
 fn find_data_url_matches(input: &str, protected_ranges: &[(usize, usize)]) -> Vec<DataUrlMatch> {
@@ -357,7 +361,7 @@ fn find_data_url_matches(input: &str, protected_ranges: &[(usize, usize)]) -> Ve
 }
 
 static ABSOLUTE_IMAGE_PATH_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(
+    match Regex::new(
         r#"(?ix)
         (?:^|[\s\(\[\{<\"'`])
         (
@@ -365,8 +369,10 @@ static ABSOLUTE_IMAGE_PATH_REGEX: LazyLock<Regex> = LazyLock::new(|| {
             [^\n]*?
             \.(?:png|jpe?g|gif|bmp|webp|tiff?|svg)
         )"#,
-    )
-    .expect("Failed to compile absolute image path regex")
+    ) {
+        Ok(regex) => regex,
+        Err(error) => panic!("Failed to compile absolute image path regex: {error}"),
+    }
 });
 
 fn add_spacey_absolute_path_matches(

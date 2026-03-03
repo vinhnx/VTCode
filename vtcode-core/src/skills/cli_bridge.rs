@@ -320,7 +320,7 @@ impl CliToolBridge {
                     if let Some(s) = value.as_str() {
                         cmd.arg(format!("--{}", key));
                         cmd.arg(s);
-                    } else if value.is_boolean() && value.as_bool().unwrap() {
+                    } else if value.as_bool().is_some_and(|flag| flag) {
                         cmd.arg(format!("--{}", key));
                     }
                 }
@@ -387,7 +387,11 @@ impl CliToolBridge {
 
         let mut skill = Skill::new(
             manifest,
-            self.config.executable_path.parent().unwrap().to_path_buf(),
+            self.config
+                .executable_path
+                .parent()
+                .unwrap_or_else(|| Path::new("."))
+                .to_path_buf(),
             self.instructions.clone(),
         )?;
 
@@ -491,13 +495,13 @@ fn discover_tools_in_directory(dir: &Path) -> Result<Vec<CliToolConfig>> {
             }
 
             // Look for accompanying README
-            let readme_path = dir.join(format!(
-                "{}.md",
-                path.file_stem().unwrap().to_str().unwrap()
-            ));
+            let Some(stem) = path.file_stem().and_then(|stem| stem.to_str()) else {
+                continue;
+            };
+            let readme_path = dir.join(format!("{stem}.md"));
 
             let config = CliToolConfig {
-                name: path.file_stem().unwrap().to_str().unwrap().to_string(),
+                name: stem.to_string(),
                 description: format!("CLI tool: {}", path.display()),
                 executable_path: path.clone(),
                 readme_path: if readme_path.exists() {
@@ -527,7 +531,8 @@ trait PathExt {
 impl PathExt for PathBuf {
     fn expand_home(&self) -> Result<PathBuf> {
         if let Some(home) = std::env::var("HOME").ok().filter(|_| self.starts_with("~")) {
-            return Ok(PathBuf::from(home).join(self.strip_prefix("~").unwrap()));
+            let stripped = self.strip_prefix("~").unwrap_or(self);
+            return Ok(PathBuf::from(home).join(stripped));
         }
         Ok(self.clone())
     }

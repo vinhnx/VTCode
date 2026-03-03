@@ -71,6 +71,9 @@ impl ToolRegistry {
         };
 
         let optimization_config = vtcode_config::OptimizationConfig::default();
+        let hot_cache_size =
+            std::num::NonZeroUsize::new(optimization_config.tool_registry.hot_cache_size)
+                .unwrap_or(std::num::NonZeroUsize::MIN);
 
         let registry = Self {
             inventory,
@@ -98,10 +101,7 @@ impl ToolRegistry {
             active_pty_sessions: Arc::new(RwLock::new(None)),
 
             memory_pool: Arc::new(MemoryPool::from_config(&optimization_config.memory_pool)),
-            hot_tool_cache: Arc::new(parking_lot::RwLock::new(lru::LruCache::new(
-                std::num::NonZeroUsize::new(optimization_config.tool_registry.hot_cache_size)
-                    .unwrap(),
-            ))),
+            hot_tool_cache: Arc::new(parking_lot::RwLock::new(lru::LruCache::new(hot_cache_size))),
             optimization_config,
 
             output_spooler: Arc::new(ToolOutputSpooler::new(&workspace_root)),

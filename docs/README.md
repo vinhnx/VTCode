@@ -67,7 +67,7 @@ New to VT Code? Start with installation and basic usage:
 
 - **[Getting Started](./user-guide/getting-started.md)** - Installation, configuration, and first steps
 - **[Interactive Mode Reference](./user-guide/interactive-mode.md)** - Keyboard shortcuts and terminal workflows
-- [Decision Ledger](./context/DECISION_LEDGER.md) - How decisions are tracked and injected
+- [Decision Ledger](./context/context_engineering.md#4-decision-ledger-structured-note-taking) - How decisions are tracked and injected
 - **[Configuration Guide](./config/config.md)** - Comprehensive configuration options
 - **[Status Line Configuration](./guides/status-line.md)** - Customize the inline prompt footer
 - **[Responses API & Reasoning Models](./guides/responses-api-reasoning.md)** - Align reasoning-centric prompts with the OpenAI Responses API
@@ -81,7 +81,6 @@ Contributing to VT Code? Understand the architecture and development processes:
 - **[Development Guide](./development/README.md)** - Development environment setup
 - **[Tool Reference](./tools/TOOL_SPECS.md)** - Technical reference for built-in tools
 - **[Code Standards](../.github/copilot-instructions.md)** - Coding guidelines and best practices
-- **[Codex Cloud Setup](./guides/codex-cloud-setup.md)** - Configure Codex Cloud environments for VT Code
 - **[Memory Management](./guides/memory-management.md)** - Tune VT Code's AGENTS.md hierarchy for reliable prompts
 
 ### For Organizations
@@ -89,7 +88,7 @@ Contributing to VT Code? Understand the architecture and development processes:
 Deploying VT Code in production? Focus on enterprise features:
 
 - **[Security Model](./security/SECURITY_MODEL.md)** - Multi-layered security architecture
-- **[Security Audit](./security/SECURITY_AUDIT.md)** - Vulnerability analysis and recommendations
+- **[Security Documentation Index](./security/SECURITY_DOCUMENTATION_INDEX.md)** - Security document map and references
 - **[Process Hardening](./development/PROCESS_HARDENING.md)** - Security controls and runtime hardening
 - **[Performance Analysis](./benchmarks/README.md)** - Optimization and benchmarking
 - **[Provider Guides](./providers/PROVIDER_GUIDES.md)** - LLM provider integration guides
@@ -139,9 +138,9 @@ VT Code implements a **multi-layered security model** to protect against prompt 
 - **File Size Limits** - Configurable resource constraints
 - **API Key Security** - Secure credential management
 
-**[Security Quick Reference](./security/SECURITY_QUICK_REFERENCE.md)** - Security at a glance
+**[Security Documentation Index](./security/SECURITY_DOCUMENTATION_INDEX.md)** - Security docs at a glance
 **[Security Model](./security/SECURITY_MODEL.md)** - Complete security architecture
-**[Security Audit](./security/SECURITY_AUDIT.md)** - Vulnerability analysis and testing
+**[Security Web Fetch](./security/SECURITY_WEB_FETCH.md)** - Web fetch security model and controls
 **[Security Guide](./guides/security.md)** - Best practices and configuration
 **[Tool Policies](./modules/vtcode_tools_policy.md)** - Command execution policies
 
@@ -157,7 +156,7 @@ VT Code implements a **multi-layered security model** to protect against prompt 
 
 1. **[Architecture Overview](./ARCHITECTURE.md)** - Understand the system design
 2. **[Development Setup](./development/README.md)** - Configure development environment
-3. **[Decision Ledger](./context/DECISION_LEDGER.md)** - Learn decision tracking and context engineering
+3. **[Decision Ledger](./context/context_engineering.md#4-decision-ledger-structured-note-taking)** - Learn decision tracking and context engineering
 
 ### For Organizations
 

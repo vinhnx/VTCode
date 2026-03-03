@@ -21,16 +21,19 @@ impl SkillFileTracker {
         let file_tracker = FileTracker::new(workspace_root.clone());
 
         // Common file patterns in skill output
-        let patterns = vec![
+        let patterns = [
             // Pattern: "file.ext", 'file.ext', or just file.ext
-            Regex::new("['\"]?([\\w.-]+\\.(?:pdf|xlsx|csv|docx|png|jpg|json|xml|txt|md))['\"]?").unwrap(),
+            "['\"]?([\\w.-]+\\.(?:pdf|xlsx|csv|docx|png|jpg|json|xml|txt|md))['\"]?",
             // Pattern: path/to/file.ext
-            Regex::new("['\"]?([\\w/\\\\.-]+\\.(?:pdf|xlsx|csv|docx|png|jpg|json|xml|txt|md))['\"]?").unwrap(),
+            "['\"]?([\\w/\\\\.-]+\\.(?:pdf|xlsx|csv|docx|png|jpg|json|xml|txt|md))['\"]?",
             // Pattern: Generated: filename
-            Regex::new("(?:[Gg]enerated|[Cc]reated):\\s*([\\w.-]+\\.(?:pdf|xlsx|csv|docx|png|jpg|json|xml|txt|md))").unwrap(),
+            "(?:[Gg]enerated|[Cc]reated):\\s*([\\w.-]+\\.(?:pdf|xlsx|csv|docx|png|jpg|json|xml|txt|md))",
             // Pattern: Output saved to filename
-            Regex::new("[Oo]utput (?:saved|written) to:?(?:\\s*)([\\w.-]+\\.(?:pdf|xlsx|csv|docx|png|jpg|json|xml|txt|md))").unwrap(),
-        ];
+            "[Oo]utput (?:saved|written) to:?(?:\\s*)([\\w.-]+\\.(?:pdf|xlsx|csv|docx|png|jpg|json|xml|txt|md))",
+        ]
+        .into_iter()
+        .filter_map(|pattern| Regex::new(pattern).ok())
+        .collect();
 
         Self {
             workspace_root,

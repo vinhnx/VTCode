@@ -15,11 +15,9 @@ fn has_model(options: &[ModelOption], model: ModelId) -> bool {
 #[test]
 fn model_picker_lists_new_anthropic_models() {
     let options = MODEL_OPTIONS.as_slice();
-    assert!(has_model(options, ModelId::ClaudeOpus41));
+    assert!(has_model(options, ModelId::ClaudeOpus46));
     assert!(has_model(options, ModelId::ClaudeSonnet46));
-    assert!(has_model(options, ModelId::ClaudeSonnet45));
     assert!(has_model(options, ModelId::ClaudeHaiku45));
-    assert!(has_model(options, ModelId::ClaudeSonnet4));
 
     // OpenRouter variants
     assert!(has_model(
@@ -46,12 +44,10 @@ fn model_picker_lists_new_ollama_cloud_models() {
     assert!(has_model(options, ModelId::OllamaQwen3CoderNext));
     assert!(has_model(options, ModelId::OllamaDeepseekV32Cloud));
     assert!(has_model(options, ModelId::OllamaQwen3Next80bCloud));
-    assert!(has_model(options, ModelId::OllamaMistralLarge3675bCloud));
-    assert!(has_model(options, ModelId::OllamaQwen3Coder480bCloud));
     assert!(has_model(options, ModelId::OllamaGlm5Cloud));
     assert!(has_model(options, ModelId::OllamaMinimaxM25Cloud));
     assert!(has_model(options, ModelId::OllamaGemini3FlashPreviewCloud));
-    assert!(has_model(options, ModelId::MinimaxM2));
+    assert!(has_model(options, ModelId::MinimaxM25));
 }
 
 #[test]
@@ -79,7 +75,7 @@ fn base_picker_state(current_provider: &str, current_model: &str) -> ModelPicker
 
 #[test]
 fn preferred_model_selection_matches_current_static_model() {
-    let model_id = ModelId::ClaudeOpus41.as_str();
+    let model_id = ModelId::ClaudeOpus46.as_str();
     let picker = base_picker_state("anthropic", model_id);
 
     let selection = picker.preferred_model_selection();

@@ -8,6 +8,7 @@ Last reviewed: 2026-02-16
 
 - [Documentation Hub](README.md) - Main user/developer overview.
 - [Harness Index](harness/INDEX.md) - Agent operating model, quality scoring, and debt tracking.
+- [Zen Alignment](harness/ZEN_ALIGNMENT.md) - Full all-19 principle mapping and rollout.
 - [Architecture](ARCHITECTURE.md) - System structure and crate boundaries.
 - [Contributing](CONTRIBUTING.md) - Contribution workflow and standards.
 
@@ -18,7 +19,7 @@ Last reviewed: 2026-02-16
 - [Provider Guides](providers/PROVIDER_GUIDES.md) - LLM provider setup and behavior.
 - [Security Model](security/SECURITY_MODEL.md) - Security architecture.
 - [Process Hardening](development/PROCESS_HARDENING.md) - Runtime hardening controls.
-- [MCP Start Here](mcp/00_START_HERE.md) - MCP integration onboarding.
+- [MCP Integration Guide](mcp/MCP_INTEGRATION_GUIDE.md) - MCP integration onboarding.
 - [Testing Guide](development/testing.md) - Test strategy and commands.
 
 ## Engineering References

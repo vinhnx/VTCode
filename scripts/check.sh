@@ -83,6 +83,20 @@ run_structured_logging_lint() {
     fi
 }
 
+# Run Zen governance checks (unwrap/expect enforced, other checks warning-only)
+run_zen_governance() {
+    print_status "Running Zen governance checks (unwrap/expect enforce mode)..."
+    if python3 scripts/check_rust_file_length.py --mode warn --max-lines 500 \
+        && python3 scripts/check_no_unwrap_expect_prod.py --mode enforce --allowlist scripts/zen_allowlist.txt \
+        && python3 scripts/check_zen_allowlist.py --mode warn --allowlist scripts/zen_allowlist.txt; then
+        print_success "Zen governance checks completed."
+        return 0
+    else
+        print_error "Zen governance checks failed unexpectedly."
+        return 1
+    fi
+}
+
 # Main function
 main() {
     local failed_checks=0
@@ -107,6 +121,7 @@ main() {
     # Run all checks
     run_rustfmt || ((failed_checks++))
     run_structured_logging_lint || ((failed_checks++))
+    run_zen_governance || ((failed_checks++))
     run_clippy || ((failed_checks++))
     run_build || ((failed_checks++))
     run_tests || ((failed_checks++))
@@ -164,9 +179,13 @@ case "${1:-}" in
         echo "  test    - Run tests"
         echo "  build   - Build the project"
         echo "  docs    - Generate documentation"
+        echo "  zen     - Run Zen governance checks (warn mode)"
         echo "  help    - Show this help message"
         echo ""
         echo "If no command is specified, runs all checks."
+        ;;
+    "zen")
+        run_zen_governance
         ;;
     *)
         main

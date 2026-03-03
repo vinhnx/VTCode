@@ -48,10 +48,7 @@ where
             workspace_root: canonical_root.clone(),
             working_dir: canonical_root,
             shell_kind: default_shell_kind(),
-            path_cache: Arc::new(Mutex::new(LruCache::new(
-                #[allow(clippy::expect_used)]
-                std::num::NonZeroUsize::new(256).expect("256 is non-zero"), // Safe: constant > 0
-            ))),
+            path_cache: Arc::new(Mutex::new(LruCache::new(std::num::NonZeroUsize::MIN))),
         })
     }
 

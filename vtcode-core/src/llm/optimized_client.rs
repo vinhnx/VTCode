@@ -325,7 +325,7 @@ impl OptimizedLLMClient {
             connection_pool: Arc::new(ConnectionPool::new(pool_size)),
             request_batcher: Arc::new(RequestBatcher::new(Duration::from_millis(100), 10)),
             response_cache: Arc::new(RwLock::new(lru::LruCache::new(
-                std::num::NonZeroUsize::new(cache_size).unwrap(),
+                std::num::NonZeroUsize::new(cache_size).unwrap_or(std::num::NonZeroUsize::MIN),
             ))),
             rate_limiter: Arc::new(RateLimiter::new(requests_per_second, burst_capacity)),
             metrics: Arc::new(RwLock::new(ClientMetrics::default())),

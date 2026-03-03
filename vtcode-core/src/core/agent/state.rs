@@ -653,15 +653,10 @@ pub fn remove_orphan_outputs(messages: &mut Vec<Message>) {
     // - Don't have a tool_call_id (not a tool response)
     // - Have a tool_call_id that matches an existing call
     messages.retain(|msg| {
-        if msg
-            .tool_call_id
-            .as_ref()
-            .is_some_and(|id| orphan_ids.contains(id))
+        if let Some(tool_call_id) = msg.tool_call_id.as_ref()
+            && orphan_ids.contains(tool_call_id)
         {
-            tracing::warn!(
-                "Removing orphan output for call {}",
-                msg.tool_call_id.as_ref().unwrap()
-            );
+            tracing::warn!("Removing orphan output for call {}", tool_call_id);
             return false;
         }
         true

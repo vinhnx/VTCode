@@ -33,8 +33,9 @@ impl Default for SystemPromptCache {
 
 impl SystemPromptCache {
     pub fn new() -> Self {
+        let cache_size = NonZeroUsize::new(MAX_CACHE_SIZE).unwrap_or(NonZeroUsize::MIN);
         Self {
-            entries: Mutex::new(LruCache::new(NonZeroUsize::new(MAX_CACHE_SIZE).unwrap())),
+            entries: Mutex::new(LruCache::new(cache_size)),
         }
     }
 

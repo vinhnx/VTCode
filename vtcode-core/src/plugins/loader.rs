@@ -174,7 +174,12 @@ impl PluginLoader {
         );
 
         let manifest_path = install_dir.join(".vtcode-plugin/plugin.json");
-        fs::create_dir_all(manifest_path.parent().unwrap()).await?;
+        let manifest_parent = manifest_path.parent().ok_or_else(|| {
+            PluginError::LoadingError(
+                "Failed to resolve parent directory for plugin manifest path".to_string(),
+            )
+        })?;
+        fs::create_dir_all(manifest_parent).await?;
         fs::write(&manifest_path, placeholder_manifest)
             .await
             .map_err(|e| {
@@ -215,7 +220,12 @@ impl PluginLoader {
         );
 
         let manifest_path = install_dir.join(".vtcode-plugin/plugin.json");
-        fs::create_dir_all(manifest_path.parent().unwrap()).await?;
+        let manifest_parent = manifest_path.parent().ok_or_else(|| {
+            PluginError::LoadingError(
+                "Failed to resolve parent directory for plugin manifest path".to_string(),
+            )
+        })?;
+        fs::create_dir_all(manifest_parent).await?;
         fs::write(&manifest_path, placeholder_manifest)
             .await
             .map_err(|e| {

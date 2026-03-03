@@ -107,7 +107,7 @@ impl AsyncToolPipeline {
             batch_processor: Arc::new(BatchProcessor::new(batch_size, batch_timeout)),
             execution_semaphore: Arc::new(Semaphore::new(max_concurrent_tools)),
             result_cache: Arc::new(RwLock::new(lru::LruCache::new(
-                std::num::NonZeroUsize::new(cache_size).unwrap(),
+                std::num::NonZeroUsize::new(cache_size).unwrap_or(std::num::NonZeroUsize::MIN),
             ))),
             metrics: Arc::new(RwLock::new(PipelineMetrics::default())),
             shutdown_tx: None,
@@ -221,7 +221,10 @@ impl AsyncToolPipeline {
             let metrics_ref = Arc::clone(metrics);
 
             let handle = tokio::spawn(async move {
-                let _permit = semaphore.acquire().await.unwrap();
+                let Ok(_permit) = semaphore.acquire().await else {
+                    error!("Pipeline semaphore closed before request execution");
+                    return Ok(());
+                };
                 Self::execute_single_request(request, cache, metrics_ref).await
             });
 

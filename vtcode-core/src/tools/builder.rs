@@ -131,7 +131,9 @@ impl ToolResponseBuilder {
             "status": if self.success { "success" } else { "error" },
         });
 
-        let obj = res.as_object_mut().unwrap();
+        let Some(obj) = res.as_object_mut() else {
+            return res;
+        };
 
         if let Some(msg) = self.message {
             obj.insert("message".to_string(), json!(msg));

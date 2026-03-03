@@ -186,7 +186,7 @@ impl EnhancedToolResult {
             metadata,
             timestamp: SystemTime::now()
                 .duration_since(SystemTime::UNIX_EPOCH)
-                .unwrap()
+                .unwrap_or_default()
                 .as_secs(),
             tool_name,
             from_cache: false,
@@ -199,7 +199,7 @@ impl EnhancedToolResult {
             metadata,
             timestamp: SystemTime::now()
                 .duration_since(SystemTime::UNIX_EPOCH)
-                .unwrap()
+                .unwrap_or_default()
                 .as_secs(),
             tool_name,
             from_cache: true,

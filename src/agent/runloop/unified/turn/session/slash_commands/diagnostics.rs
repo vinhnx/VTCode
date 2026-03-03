@@ -12,9 +12,12 @@ pub async fn handle_show_status(ctx: SlashCommandContext<'_>) -> Result<SlashCom
         ctx.renderer,
         crate::agent::runloop::unified::ui_interaction::SessionStatusContext {
             config: ctx.config,
+            vt_cfg: ctx.vt_cfg.as_ref(),
             message_count: ctx.conversation_history.len(),
             stats: ctx.session_stats,
             available_tools: tool_count,
+            async_mcp_manager: ctx.async_mcp_manager.map(|manager| manager.as_ref()),
+            loaded_skills: ctx.loaded_skills,
         },
     )
     .await?;

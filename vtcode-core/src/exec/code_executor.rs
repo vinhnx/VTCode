@@ -211,7 +211,7 @@ impl CodeExecutor {
         // Use a unique temp file name based on timestamp
         let timestamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_default()
             .as_micros();
         let ext = match self.language {
             Language::Python3 => "py",

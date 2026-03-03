@@ -48,8 +48,12 @@ impl FileReferenceValidator {
     /// - `assets/image.png`
     fn extract_references(&self, instructions: &str) -> HashSet<String> {
         let mut references = HashSet::new();
-        let md_link_regex = Regex::new(r"\[.*?\]\((.*?)\)").unwrap();
-        let plain_path_regex = Regex::new(r"\b(scripts|references|assets)/[^\s\),\]]+").unwrap();
+        let Ok(md_link_regex) = Regex::new(r"\[.*?\]\((.*?)\)") else {
+            return references;
+        };
+        let Ok(plain_path_regex) = Regex::new(r"\b(scripts|references|assets)/[^\s\),\]]+") else {
+            return references;
+        };
 
         // Extract markdown links
         for cap in md_link_regex.captures_iter(instructions) {

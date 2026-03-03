@@ -192,9 +192,9 @@ fn backwards_compatibility_constants() {
     // Ensure old constant names still work
     assert!(!models::GEMINI_3_FLASH_PREVIEW.is_empty());
     assert!(!models::GPT_5.is_empty());
-    assert!(!models::CLAUDE_SONNET_4_5.is_empty());
+    assert!(!models::CLAUDE_SONNET_4_6.is_empty());
     assert!(!models::CLAUDE_HAIKU_4_5.is_empty());
-    assert!(!models::CLAUDE_SONNET_4_5_20250929.is_empty());
+    assert!(!models::CLAUDE_OPUS_4_6.is_empty());
 
     // Test that backwards compatibility constants match the new structure
     assert_eq!(
@@ -203,15 +203,12 @@ fn backwards_compatibility_constants() {
     );
     assert_eq!(models::GPT_5, models::openai::GPT_5);
     assert_eq!(
-        models::CLAUDE_SONNET_4_5,
-        models::anthropic::CLAUDE_SONNET_4_5
+        models::CLAUDE_SONNET_4_6,
+        models::anthropic::CLAUDE_SONNET_4_6
     );
     assert_eq!(
         models::CLAUDE_HAIKU_4_5,
         models::anthropic::CLAUDE_HAIKU_4_5
     );
-    assert_eq!(
-        models::CLAUDE_SONNET_4_5_20250929,
-        models::anthropic::CLAUDE_SONNET_4_5_20250929
-    );
+    assert_eq!(models::CLAUDE_OPUS_4_6, models::anthropic::CLAUDE_OPUS_4_6);
 }

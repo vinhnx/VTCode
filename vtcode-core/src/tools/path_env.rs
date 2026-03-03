@@ -6,14 +6,20 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 
 /// Regex pattern for Unix-style environment variables: $VAR or ${VAR}
-static UNIX_ENV_PATTERN: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"\$([A-Za-z_][A-Za-z0-9_]*)|\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
-        .expect("valid unix env regex")
-});
+static UNIX_ENV_PATTERN: Lazy<Regex> =
+    Lazy::new(
+        || match Regex::new(r"\$([A-Za-z_][A-Za-z0-9_]*)|\$\{([A-Za-z_][A-Za-z0-9_]*)\}") {
+            Ok(regex) => regex,
+            Err(error) => panic!("valid unix env regex must compile: {error}"),
+        },
+    );
 
 /// Regex pattern for Windows-style environment variables: %VAR%
 static WINDOWS_ENV_PATTERN: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"%([A-Za-z_][A-Za-z0-9_]*)%").expect("valid windows env regex"));
+    Lazy::new(|| match Regex::new(r"%([A-Za-z_][A-Za-z0-9_]*)%") {
+        Ok(regex) => regex,
+        Err(error) => panic!("valid windows env regex must compile: {error}"),
+    });
 
 /// Expand environment variables and home directory within a path entry.
 fn expand_entry(entry: &str, workspace_root: &Path) -> Option<PathBuf> {

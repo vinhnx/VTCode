@@ -4,6 +4,8 @@ Mechanical enforcement rules for VT Code. These are not suggestions — they are
 
 Each invariant includes a **remediation** instruction so agents can fix violations without asking for help.
 
+For additive principle mapping and staged rollout policy, see [ZEN_ALIGNMENT.md](ZEN_ALIGNMENT.md).
+
 ---
 
 ## 1. Layer Dependency Rules

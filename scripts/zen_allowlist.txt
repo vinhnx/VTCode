@@ -1,0 +1,27 @@
+# Zen governance allowlist
+# Format:
+#   path/glob.rs | rationale
+#   path/glob.rs:123 | rationale
+# Keep rules scoped and remove them once the underlying code is refactored.
+
+# Intentional startup/static regex initialization in production paths.
+src/agent/runloop/unified/reasoning.rs | static regex initialization at module load for runtime heuristics
+src/agent/runloop/unified/settings_interactive.rs | static regex initialization for config-path parsing hot path
+src/agent/runloop/unified/turn/session/slash_command_handler.rs | static regex used for slash command image path parsing
+src/agent/runloop/unified/turn/session/tool_dispatch.rs | startup-validated regex for direct tool command parsing
+
+# NonZero constants and low-level parser defaults pending refactor.
+vtcode-core/src/tools/grep_file.rs | non-zero constant construction currently uses unwrap for compile-time invariant
+vtcode-tui/src/core_tui/session/wrapping.rs | regex construction currently assumes valid hardcoded pattern
+
+# Intentional compile-time/static regex and registry invariants in production paths.
+vtcode-commons/src/at_pattern.rs:10 | hardcoded regex literal compiled at startup; failure indicates programmer error
+vtcode-core/src/tools/path_env.rs:11 | hardcoded unix env regex compiled once at startup
+vtcode-core/src/tools/path_env.rs:16 | hardcoded windows env regex compiled once at startup
+vtcode-core/src/ui/git_config.rs:160 | hardcoded git-config regex literal compiled once at startup
+vtcode-core/src/ui/theme.rs:1256 | default theme id must exist in built-in static registry
+vtcode-core/src/utils/at_pattern.rs:333 | hardcoded data image regex literal compiled at startup
+vtcode-core/src/utils/at_pattern.rs:371 | hardcoded absolute image regex literal compiled at startup
+vtcode-tui/src/core_tui/session/input.rs:846 | hardcoded inline image regex literal compiled once at startup
+vtcode-tui/src/ui/theme.rs:1247 | default theme id must exist in built-in static registry
+vtcode-tui/src/ui/theme.rs:1387 | known theme suite ids in static order must map to labels

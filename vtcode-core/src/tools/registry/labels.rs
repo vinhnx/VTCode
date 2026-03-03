@@ -84,7 +84,9 @@ fn humanize_tool_name(name: &str) -> String {
         return replaced;
     }
     let mut chars = replaced.chars();
-    let first = chars.next().unwrap();
+    let Some(first) = chars.next() else {
+        return String::new();
+    };
     let mut result = first.to_uppercase().collect::<String>();
     result.push_str(&chars.collect::<String>());
     result

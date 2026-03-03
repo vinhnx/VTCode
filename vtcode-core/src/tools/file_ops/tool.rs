@@ -62,7 +62,9 @@ impl Tool for FileOpsTool {
 
         // Normalize path: strip /workspace prefix if present (common LLM pattern)
         if input.path.starts_with("/workspace/") {
-            input.path = input.path.strip_prefix("/workspace/").unwrap().to_string();
+            if let Some(stripped) = input.path.strip_prefix("/workspace/") {
+                input.path = stripped.to_string();
+            }
         } else if input.path == "/workspace" {
             input.path = ".".to_string();
         }

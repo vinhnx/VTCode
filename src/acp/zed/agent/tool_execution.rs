@@ -31,7 +31,11 @@ impl ZedAgent {
                     tool_call_id: call.id.clone(),
                     llm_response: json!({
                         TOOL_RESPONSE_KEY_STATUS: TOOL_ERROR_LABEL,
-                        TOOL_RESPONSE_KEY_TOOL: call.function.as_ref().expect("Tool call must have function").name,
+                        TOOL_RESPONSE_KEY_TOOL: call
+                            .function
+                            .as_ref()
+                            .map(|function| function.name.as_str())
+                            .unwrap_or("unknown"),
                         TOOL_RESPONSE_KEY_MESSAGE: "Client connection unavailable",
                     })
                     .to_string(),
@@ -42,10 +46,18 @@ impl ZedAgent {
         let mut results = Vec::with_capacity(calls.len()); // Pre-allocate for all tool call results
 
         for call in calls {
-            let func_ref = call
-                .function
-                .as_ref()
-                .expect("Tool call must have function");
+            let Some(func_ref) = call.function.as_ref() else {
+                results.push(ToolCallResult {
+                    tool_call_id: call.id.clone(),
+                    llm_response: json!({
+                        TOOL_RESPONSE_KEY_STATUS: TOOL_ERROR_LABEL,
+                        TOOL_RESPONSE_KEY_TOOL: "unknown",
+                        TOOL_RESPONSE_KEY_MESSAGE: "Malformed tool call: missing function payload",
+                    })
+                    .to_string(),
+                });
+                continue;
+            };
             let tool_descriptor = self.acp_tool_registry.lookup(&func_ref.name);
             let args_value_result: Result<Value, _> = serde_json::from_str(&func_ref.arguments);
             let args_value_for_input = args_value_result.as_ref().ok().cloned();

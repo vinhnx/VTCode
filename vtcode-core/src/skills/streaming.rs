@@ -508,7 +508,7 @@ impl StreamingSkillExecutor {
                     if let Some(s) = value.as_str() {
                         cmd.arg(format!("--{}", key));
                         cmd.arg(s);
-                    } else if value.is_boolean() && value.as_bool().unwrap() {
+                    } else if value.as_bool().is_some_and(|flag| flag) {
                         cmd.arg(format!("--{}", key));
                     }
                 }

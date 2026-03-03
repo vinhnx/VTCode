@@ -187,8 +187,8 @@ See [Security Model](./docs/security/SECURITY_MODEL.md) and [Sandbox Deep Dive](
     - [Ollama](./docs/providers/ollama.md)
     - [LM Studio](./docs/providers/lmstudio.md)
 - [**Context Engineering**](./docs/context/context_engineering.md)
-    - [Token budget management](./docs/context/context_engineering_implementation.md#token-budget-tracking--attention-management)
-    - [Dynamic context curation](./docs/context/context_engineering_implementation.md#phase-2-dynamic-context-curation)
+    - [Token budget management](./docs/context/context_engineering.md#3-token-budget-management)
+    - [Dynamic context curation](./docs/context/context_engineering.md#2-just-in-time-context-loading)
 - [**Agent Skills**](./docs/skills/SKILLS_GUIDE.md) - Comprehensive skills location system with multi-location support, precedence handling, and the [open Agent Skills standard](http://agentskills.io/).
     - [**Standard Compliance**](./docs/skills/AGENT_SKILLS_SPEC_IMPLEMENTATION.md) - How VT Code implements the Agent Skills standard
 - [**Code Intelligence**](./docs/user-guide/tree-sitter-integration.md)
@@ -209,12 +209,12 @@ See [Security Model](./docs/security/SECURITY_MODEL.md) and [Sandbox Deep Dive](
     - [Rendering Best Practices](./docs/guides/terminal-rendering-best-practices.md) - Widget rendering and display optimization
 - [**Ratatui Integration**](./docs/README.md) - Complete integration of Ratatui FAQ best practices
     - [Summary](./docs/README.md) - Overview of all improvements
-    - [FAQ Integration](./docs/tui/RATATUI_FAQ_INTEGRATION.md) - Mapping of FAQ topics to code
+    - [FAQ Integration](./docs/styling/RATATUI_FAQ_INTEGRATION.md) - Mapping of FAQ topics to code
     - [Async Improvements](./docs/README.md) - Tokio best practices applied
 - [**Architecture**](./docs/ARCHITECTURE.md)
 - [**Security**](./docs/security/SECURITY_MODEL.md)
     - [Security Model](./docs/security/SECURITY_MODEL.md)
-    - [Security Audit](./docs/security/SECURITY_AUDIT.md)
+    - [Security Documentation Index](./docs/security/SECURITY_DOCUMENTATION_INDEX.md)
     - [Tool Policies](./docs/modules/vtcode_tools_policy.md)
 - [**Anthropic API Compatibility**](./docs/a2a/a2a-protocol.md) - Documentation for Anthropic Messages API compatibility server
 

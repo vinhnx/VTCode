@@ -582,11 +582,7 @@ impl HuggingFaceProvider {
     fn parse_responses_api_format(json: &Value, model: String) -> Result<LLMResponse, LLMError> {
         let convenience_text = json.get("output_text").and_then(|t| t.as_str());
 
-        let json_obj = if json.get("response").is_some() {
-            json.get("response").unwrap()
-        } else {
-            json
-        };
+        let json_obj = json.get("response").unwrap_or(json);
 
         let output = json_obj.get("output").and_then(|v| v.as_array());
 

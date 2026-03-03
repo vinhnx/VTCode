@@ -262,12 +262,14 @@ impl PromptCache {
         }
 
         // Find the oldest entry
-        let oldest_key = self
+        let Some(oldest_key) = self
             .cache
             .iter()
             .min_by_key(|(_, entry)| entry.last_used)
             .map(|(key, _)| key.clone())
-            .unwrap();
+        else {
+            return Ok(());
+        };
 
         self.cache.remove(&oldest_key);
         self.dirty = true;
@@ -279,7 +281,7 @@ impl PromptCache {
     fn current_timestamp() -> u64 {
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_default()
             .as_secs()
     }
 }

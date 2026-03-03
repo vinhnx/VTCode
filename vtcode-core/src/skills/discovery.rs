@@ -243,11 +243,11 @@ impl SkillDiscovery {
                         Ok((manifest, _instructions)) => {
                             skills.push(SkillContext::MetadataOnly(manifest, path.to_path_buf()));
                             stats.skills_found += 1;
-                            info!(
-                                "Discovered skill: {} from {}",
-                                skills.last().unwrap().manifest().name,
-                                path.display()
-                            );
+                            let skill_name = skills
+                                .last()
+                                .map(|ctx| ctx.manifest().name.clone())
+                                .unwrap_or_else(|| "<unknown>".to_string());
+                            info!("Discovered skill: {} from {}", skill_name, path.display());
                         }
                         Err(e) => {
                             warn!("Failed to parse skill from {}: {}", path.display(), e);
@@ -434,7 +434,8 @@ impl SkillDiscovery {
         if path.starts_with("~") {
             // Expand home directory
             if let Ok(home) = std::env::var("HOME") {
-                return PathBuf::from(home).join(path.strip_prefix("~").unwrap());
+                let stripped = path.strip_prefix("~").unwrap_or(path);
+                return PathBuf::from(home).join(stripped);
             }
         }
 

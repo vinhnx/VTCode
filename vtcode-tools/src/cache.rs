@@ -138,11 +138,14 @@ impl<V: Send + Sync> LruCache<V> {
                     GetOutcome::Expired
                 } else {
                     // Valid hit - update access and return value.
-                    let entry = entries.get_mut(key).unwrap();
-                    entry.update_access();
-                    GetOutcome::Hit {
-                        value: Arc::clone(&entry.value),
-                        access_count: entry.access_count,
+                    if let Some(entry) = entries.get_mut(key) {
+                        entry.update_access();
+                        GetOutcome::Hit {
+                            value: Arc::clone(&entry.value),
+                            access_count: entry.access_count,
+                        }
+                    } else {
+                        GetOutcome::Miss
                     }
                 }
             } else {
