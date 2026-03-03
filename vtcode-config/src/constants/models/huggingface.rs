@@ -30,7 +30,10 @@ pub const QWEN3_4B_THINKING_2507: &str = "Qwen/Qwen3-4B-Thinking-2507";
 pub const QWEN25_7B_INSTRUCT_1M: &str = "Qwen/Qwen2.5-7B-Instruct-1M";
 pub const QWEN25_CODER_32B_INSTRUCT: &str = "Qwen/Qwen2.5-Coder-32B-Instruct";
 pub const DEEPSEEK_R1: &str = "deepseek-ai/DeepSeek-R1";
-pub const STEP_3_5_FLASH: &str = "stepfun-ai/Step-3.5-Flash:fastest";
+pub const STEP_3_5_FLASH_BASE: &str = "stepfun-ai/Step-3.5-Flash";
+pub const STEP_3_5_FLASH_PROVIDER: &str = "featherless-ai";
+pub const STEP_3_5_FLASH: &str = "stepfun-ai/Step-3.5-Flash:featherless-ai";
+pub const STEP_3_5_FLASH_LEGACY_FASTEST: &str = "stepfun-ai/Step-3.5-Flash:fastest";
 
 // Additional supported models
 pub const DEEPSEEK_V32: &str = "deepseek-ai/DeepSeek-V3.2:huggingface";

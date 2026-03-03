@@ -111,7 +111,27 @@ impl HuggingFaceProvider {
     }
 
     fn normalize_model_id(&self, model: &str) -> Result<String, LLMError> {
+        let model = model.trim();
         let lower = model.to_ascii_lowercase();
+
+        if lower.starts_with(&models::huggingface::STEP_3_5_FLASH_BASE.to_ascii_lowercase()) {
+            if !model.contains(':') {
+                return Ok(format!(
+                    "{}:{}",
+                    models::huggingface::STEP_3_5_FLASH_BASE,
+                    models::huggingface::STEP_3_5_FLASH_PROVIDER
+                ));
+            }
+            if let Some((base, provider)) = model.rsplit_once(':')
+                && provider.eq_ignore_ascii_case("fastest")
+            {
+                return Ok(format!(
+                    "{}:{}",
+                    base,
+                    models::huggingface::STEP_3_5_FLASH_PROVIDER
+                ));
+            }
+        }
 
         if lower.contains("minimax-m2") && !model.contains(':') {
             return Err(LLMError::Provider {
@@ -1174,5 +1194,29 @@ mod tests {
             .expect("message serialization should succeed");
         assert!(messages[0]["reasoning_details"].is_array());
         assert!(messages[0]["reasoning_details"][0].is_object());
+    }
+
+    #[test]
+    fn normalize_step35_flash_provider_suffix() {
+        let provider = HuggingFaceProvider::with_model(
+            "test-key".to_string(),
+            "stepfun-ai/Step-3.5-Flash".to_string(),
+        );
+
+        let normalized = provider
+            .normalize_model_id("stepfun-ai/Step-3.5-Flash")
+            .expect("normalization should succeed");
+        assert_eq!(
+            normalized,
+            "stepfun-ai/Step-3.5-Flash:featherless-ai".to_string()
+        );
+
+        let normalized_legacy = provider
+            .normalize_model_id("stepfun-ai/Step-3.5-Flash:fastest")
+            .expect("legacy suffix normalization should succeed");
+        assert_eq!(
+            normalized_legacy,
+            "stepfun-ai/Step-3.5-Flash:featherless-ai".to_string()
+        );
     }
 }

@@ -85,7 +85,12 @@ impl FromStr for ModelId {
             s if s == models::huggingface::QWEN3_5_397B_A17B_TOGETHER => {
                 Ok(ModelId::HuggingFaceQwen35397BA17BTogether)
             }
-            s if s == models::huggingface::STEP_3_5_FLASH => Ok(ModelId::HuggingFaceStep35Flash),
+            s if s == models::huggingface::STEP_3_5_FLASH
+                || s == models::huggingface::STEP_3_5_FLASH_BASE
+                || s == models::huggingface::STEP_3_5_FLASH_LEGACY_FASTEST =>
+            {
+                Ok(ModelId::HuggingFaceStep35Flash)
+            }
             "minimax/minimax-m2.5" => Ok(ModelId::OpenRouterMinimaxM25),
             "qwen/qwen3-coder-next" => Ok(ModelId::OpenRouterQwen3CoderNext),
             _ => {

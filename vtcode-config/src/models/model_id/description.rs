@@ -114,7 +114,7 @@ impl ModelId {
                 "Qwen3.5-397B-A17B via Together inference provider on HuggingFace router. Vision-language model with linear attention and sparse MoE, 1M context window."
             }
             ModelId::HuggingFaceStep35Flash => {
-                "Step 3.5 Flash flagship model via HuggingFace router. Supports streaming and fast inference."
+                "Step 3.5 Flash flagship model via HuggingFace router (featherless-ai provider). Supports streaming and fast inference."
             }
             ModelId::OpenRouterMinimaxM25 => "MiniMax-M2.5 flagship model via OpenRouter",
             ModelId::OpenRouterQwen3CoderNext => {
