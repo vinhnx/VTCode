@@ -35,8 +35,10 @@ pub(crate) use handlers_batch::{
 pub(crate) enum ValidationResult {
     /// Proceed with execution
     Proceed(PreparedToolCall),
-    /// Tool was blocked or handled internally (e.g. error pushed to history), skip execution but continue turn
+    /// Tool was blocked by policy/guardrails, skip execution and track blocked-call guard
     Blocked,
+    /// Tool call was intentionally handled (for example, user-selected skip) and should not count as blocked
+    Handled,
     /// Stop turn/loop with a specific outcome (e.g. Exit or Cancel)
     Outcome(TurnHandlerOutcome),
 }
@@ -54,6 +56,121 @@ const TOOL_BUDGET_WARNING_THRESHOLD: f64 = 0.75;
 
 fn build_failure_error_content(error: String, failure_kind: &'static str) -> String {
     super::execution_result::build_error_content(error, None, None, failure_kind).to_string()
+}
+
+fn circuit_breaker_default_blocked(
+    ctx: &mut TurnProcessingContext<'_>,
+    tool_call_id: &str,
+    canonical_tool_name: &str,
+    block_reason: String,
+) -> ValidationResult {
+    let parts = ctx.parts_mut();
+    push_tool_response(
+        parts.state.working_history,
+        tool_call_id.to_string(),
+        build_failure_error_content(
+            format!(
+                "Tool '{}' is temporarily disabled due to high failure rate (Circuit Breaker OPEN).",
+                canonical_tool_name
+            ),
+            "circuit_breaker",
+        ),
+    );
+    ValidationResult::Outcome(TurnHandlerOutcome::Break(TurnLoopResult::Blocked {
+        reason: Some(block_reason),
+    }))
+}
+
+/// Attempt interactive recovery when a circuit breaker blocks a tool.
+///
+/// Returns `None` if the user chose to proceed (retry/continue the tool call).
+/// Returns `Some(result)` to use as the validation result directly.
+///
+/// When no prompt is shown (full_auto, cooldown, or prompt failure), returns
+/// the default circuit-breaker-blocked outcome that breaks the turn loop.
+async fn try_interactive_circuit_recovery(
+    ctx: &mut TurnProcessingContext<'_>,
+    tool_call_id: &str,
+    canonical_tool_name: &str,
+    block_reason: &str,
+) -> anyhow::Result<Option<ValidationResult>> {
+    use crate::agent::runloop::unified::turn::recovery_flow::{self, RecoveryAction};
+
+    // Gate: only prompt in interactive mode with cooldown respected
+    if ctx.full_auto || !ctx.error_recovery.read().await.can_prompt_user() {
+        return Ok(Some(circuit_breaker_default_blocked(
+            ctx,
+            tool_call_id,
+            canonical_tool_name,
+            block_reason.to_string(),
+        )));
+    }
+
+    // Build diagnostics & prompt
+    let prompt_args = {
+        let open_circuits = ctx.circuit_breaker.get_open_circuits();
+        let diagnostics = ctx
+            .error_recovery
+            .read()
+            .await
+            .get_diagnostics(&open_circuits, 10);
+        recovery_flow::build_recovery_prompt_from_diagnostics(&diagnostics).build()
+    };
+    ctx.error_recovery.write().await.mark_prompt_shown();
+
+    let action = recovery_flow::execute_recovery_prompt(
+        ctx.handle,
+        ctx.session,
+        &prompt_args,
+        ctx.ctrl_c_state,
+        ctx.ctrl_c_notify,
+    )
+    .await
+    .ok()
+    .and_then(|r| recovery_flow::parse_recovery_response(&r));
+
+    let Some(action) = action else {
+        // Cancelled or unparseable — fall back to default blocked
+        return Ok(Some(circuit_breaker_default_blocked(
+            ctx,
+            tool_call_id,
+            canonical_tool_name,
+            block_reason.to_string(),
+        )));
+    };
+
+    match action {
+        RecoveryAction::ResetAllCircuits => {
+            ctx.circuit_breaker.reset_all();
+            ctx.error_recovery.write().await.clear_circuit_events();
+            tracing::info!("Recovery: user chose Reset All & Retry");
+            Ok(None)
+        }
+        RecoveryAction::Continue => {
+            tracing::info!(action = ?action, "Recovery: user chose to continue");
+            Ok(None)
+        }
+        RecoveryAction::SkipStep => {
+            tracing::info!("Recovery: user chose Skip This Step");
+            let parts = ctx.parts_mut();
+            push_tool_response(
+                parts.state.working_history,
+                tool_call_id.to_string(),
+                serde_json::json!({
+                    "skipped": true,
+                    "reason": "Skipped by user via recovery wizard. Try a different approach."
+                })
+                .to_string(),
+            );
+            Ok(Some(ValidationResult::Handled))
+        }
+        RecoveryAction::SaveAndExit => {
+            tracing::info!("Recovery: user chose Save & Exit");
+            Ok(Some(ValidationResult::Outcome(TurnHandlerOutcome::Break(
+                TurnLoopResult::Exit,
+            ))))
+        }
+    }
 }
 
 fn build_validation_error_content_with_fallback(
@@ -1244,6 +1361,7 @@ pub(crate) async fn handle_single_tool_call<'a, 'b, 'tool>(
     // 1. Validate (Circuit Breaker, Rate Limit, Loop Detection, Safety, Permission)
     let prepared = match validate_tool_call(t_ctx.ctx, &tool_call_id, tool_name, &args_val).await? {
         ValidationResult::Outcome(outcome) => return Ok(Some(outcome)),
+        ValidationResult::Handled => return Ok(None),
         ValidationResult::Blocked => {
             if let Some(outcome) =
                 enforce_blocked_tool_call_guard(t_ctx.ctx, &tool_call_id, tool_name, &args_val)
@@ -1455,25 +1573,14 @@ pub(crate) async fn validate_tool_call<'a>(
             display_tool
         );
         tracing::warn!(tool = %canonical_tool_name, "Circuit breaker open, tool disabled");
+
+        // In interactive mode, attempt recovery prompt; None = user chose to proceed.
+        if let Some(result) =
+            try_interactive_circuit_recovery(ctx, tool_call_id, &canonical_tool_name, &block_reason)
+                .await?
         {
-            let parts = ctx.parts_mut();
-            push_tool_response(
-                parts.state.working_history,
-                tool_call_id.to_string(),
-                build_failure_error_content(
-                    format!(
-                        "Tool '{}' is temporarily disabled due to high failure rate (Circuit Breaker OPEN).",
-                        canonical_tool_name
-                    ),
-                    "circuit_breaker",
-                ),
-            );
+            return Ok(result);
         }
-        return Ok(ValidationResult::Outcome(TurnHandlerOutcome::Break(
-            TurnLoopResult::Blocked {
-                reason: Some(block_reason),
-            },
-        )));
     }
 
     // Phase 4 Check: Adaptive Rate Limiter

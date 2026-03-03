@@ -520,7 +520,14 @@ pub(crate) async fn execute_llm_request(
         attempts_made = attempt + 1;
         if attempt > 0 {
             use crate::agent::runloop::unified::turn::turn_helpers::calculate_backoff;
-            let delay = calculate_backoff(attempt - 1, 500, 10_000);
+            // Use category-aware backoff: rate limits get longer base delays,
+            // timeouts get moderate delays, network errors use standard exponential.
+            let (base_ms, max_ms) = match last_error_category {
+                Some(vtcode_commons::ErrorCategory::RateLimit) => (1000, 30_000),
+                Some(vtcode_commons::ErrorCategory::Timeout) => (1000, 15_000),
+                _ => (500, 10_000),
+            };
+            let delay = calculate_backoff(attempt - 1, base_ms, max_ms);
             let delay_secs = delay.as_secs_f64();
             let reason_hint = last_error_category
                 .as_ref()
@@ -761,6 +768,19 @@ pub(crate) async fn execute_llm_request(
                 if !crate::agent::runloop::unified::turn::turn_helpers::should_continue_operation(
                     ctx.ctrl_c_state,
                 ) {
+                    llm_result = Err(err);
+                    _spinner.finish();
+                    break;
+                }
+
+                // Fail-fast for permanent errors: don't waste retry budget
+                // on authentication failures, resource exhaustion, or policy violations.
+                if category.is_permanent() {
+                    tracing::info!(
+                        target: "vtcode.llm.retry",
+                        category = %category.user_label(),
+                        "Permanent error detected; skipping remaining retries"
+                    );
                     llm_result = Err(err);
                     _spinner.finish();
                     break;

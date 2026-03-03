@@ -64,20 +64,20 @@ fn normalize_args_for_detection(tool_name: &str, args: &serde_json::Value) -> se
         if is_read_tool {
             // Normalize path aliases to "path"
             for alias in ["file_path", "filepath", "target_path"] {
-                if let Some(val) = normalized.remove(alias) {
-                    if !normalized.contains_key("path") {
-                        normalized.insert("path".into(), val);
-                    }
+                if let Some(val) = normalized.remove(alias)
+                    && !normalized.contains_key("path")
+                {
+                    normalized.insert("path".into(), val);
                 }
             }
 
             // Normalize offset aliases to "offset"
             // line_start=N → offset=N, offset_lines=N → offset=N
             for alias in ["offset_lines", "line_start", "offset_bytes"] {
-                if let Some(val) = normalized.remove(alias) {
-                    if !normalized.contains_key("offset") {
-                        normalized.insert("offset".into(), val);
-                    }
+                if let Some(val) = normalized.remove(alias)
+                    && !normalized.contains_key("offset")
+                {
+                    normalized.insert("offset".into(), val);
                 }
             }
 
@@ -95,16 +95,11 @@ fn normalize_args_for_detection(tool_name: &str, args: &serde_json::Value) -> se
                     normalized.insert("limit".into(), serde_json::json!(limit));
                 }
             }
-            for alias in [
-                "max_lines",
-                "chunk_lines",
-                "limit_lines",
-                "page_size_lines",
-            ] {
-                if let Some(val) = normalized.remove(alias) {
-                    if !normalized.contains_key("limit") {
-                        normalized.insert("limit".into(), val);
-                    }
+            for alias in ["max_lines", "chunk_lines", "limit_lines", "page_size_lines"] {
+                if let Some(val) = normalized.remove(alias)
+                    && !normalized.contains_key("limit")
+                {
+                    normalized.insert("limit".into(), val);
                 }
             }
 
@@ -456,6 +451,15 @@ impl LoopDetector {
         self.tool_counts.clear();
         self.last_warning = None;
         self.norm_cache.clear();
+        self.readonly_streak = 0;
+    }
+
+    /// Reset only the read-only streak counter without clearing tool call history.
+    /// Used during stall recovery to allow the agent to try a different strategy
+    /// while still detecting re-entry into the same looping pattern.
+    pub fn reset_readonly_streak(&mut self) {
+        self.readonly_streak = 0;
+        self.last_warning = None;
     }
 
     /// Get limit for a specific tool.
@@ -975,7 +979,8 @@ mod tests {
 
     #[test]
     fn test_read_file_encoding_and_action_are_stripped() {
-        let with_encoding = json!({"path": "foo.rs", "encoding": "utf-8", "offset_lines": 1, "max_lines": 200});
+        let with_encoding =
+            json!({"path": "foo.rs", "encoding": "utf-8", "offset_lines": 1, "max_lines": 200});
         let without_encoding = json!({"path": "foo.rs", "offset_lines": 1, "max_lines": 200});
 
         let n1 = normalize_args_for_detection(tools::READ_FILE, &with_encoding);
@@ -993,10 +998,7 @@ mod tests {
         assert!(normalized.get("line_start").is_none());
         assert!(normalized.get("line_end").is_none());
         assert_eq!(normalized.get("offset").and_then(|v| v.as_u64()), Some(1));
-        assert_eq!(
-            normalized.get("limit").and_then(|v| v.as_u64()),
-            Some(200)
-        );
+        assert_eq!(normalized.get("limit").and_then(|v| v.as_u64()), Some(200));
     }
 
     #[test]

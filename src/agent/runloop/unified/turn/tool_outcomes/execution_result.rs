@@ -706,6 +706,16 @@ async fn handle_failure<'a>(
         );
     }
 
+    // Record genuine tool errors for recovery diagnostics (skip policy denials)
+    if !is_plan_mode_denial && !blocked_or_denied_failure {
+        let mut recovery = t_ctx.ctx.error_recovery.write().await;
+        recovery.record_error(
+            tool_name,
+            error_str.clone(),
+            vtcode_core::core::agent::error_recovery::ErrorType::ToolExecution,
+        );
+    }
+
     push_tool_error_response(t_ctx, tool_call_id, tool_name, error_msg, "execution").await;
 
     // Handle auto-exit from Plan Mode if applicable
@@ -771,6 +781,13 @@ async fn handle_timeout(
     );
     let error_msg = format!("Tool '{}' timed out: {}", tool_name, sanitized);
     tracing::debug!(tool = %tool_name, error = %error.message, "Tool timed out");
+
+    // Record the timeout for recovery diagnostics
+    t_ctx.ctx.error_recovery.write().await.record_error(
+        tool_name,
+        error.message.clone(),
+        vtcode_core::core::agent::error_recovery::ErrorType::Timeout,
+    );
 
     push_tool_error_response(t_ctx, tool_call_id, tool_name, error_msg, "timeout").await;
 

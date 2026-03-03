@@ -8,7 +8,6 @@ use tokio::sync::Notify;
 use tokio::task;
 
 use vtcode_core::core::agent::error_recovery::{ErrorType, RecoveryDiagnostics};
-use vtcode_core::tools::circuit_breaker::ToolCircuitDiagnostics;
 use vtcode_tui::{
     InlineEvent, InlineHandle, InlineListItem, InlineListSearchConfig, InlineListSelection,
     InlineSession, WizardStep,
@@ -16,33 +15,26 @@ use vtcode_tui::{
 
 use crate::agent::runloop::unified::state::{CtrlCSignal, CtrlCState};
 
-#[allow(dead_code)]
 pub struct RecoveryPromptBuilder {
     pub title: String,
     pub summary: String,
     pub recommendations: Vec<RecoveryOption>,
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct RecoveryOption {
     pub id: String,
     pub title: String,
     pub subtitle: String,
     pub badge: Option<String>,
+    #[allow(dead_code)]
     pub action: RecoveryAction,
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub enum RecoveryAction {
-    RetryTool { tool_name: String },
     ResetAllCircuits,
     SkipStep,
-    TryAlternative,
-    ShowErrorLog,
-    RunDiagnostics,
-    CallDebugAgent,
     SaveAndExit,
     Continue,
 }
@@ -96,7 +88,6 @@ fn find_default_choice_selection(
     })
 }
 
-#[allow(dead_code)]
 impl RecoveryPromptBuilder {
     pub fn new(title: String) -> Self {
         Self {
@@ -173,7 +164,6 @@ impl RecoveryPromptBuilder {
     }
 }
 
-#[allow(dead_code)]
 pub async fn execute_recovery_prompt(
     handle: &InlineHandle,
     session: &mut InlineSession,
@@ -346,13 +336,9 @@ pub async fn execute_recovery_prompt(
     }
 }
 
-#[allow(dead_code)]
 pub fn build_recovery_prompt_from_diagnostics(
     diagnostics: &RecoveryDiagnostics,
-    _circuit_diagnostics: &[ToolCircuitDiagnostics],
 ) -> RecoveryPromptBuilder {
-    let mut builder = RecoveryPromptBuilder::new("Circuit Breaker Activated".to_string());
-
     let summary = format!(
         "Multiple tools are experiencing failures:\n\n\
          **Open Circuits ({})**: {}\n\n\
@@ -363,10 +349,11 @@ pub fn build_recovery_prompt_from_diagnostics(
         build_error_summary(diagnostics)
     );
 
-    let mut recommendations = Vec::new();
+    let mut builder =
+        RecoveryPromptBuilder::new("Circuit Breaker Activated".to_string()).with_summary(summary);
 
     if !diagnostics.open_circuits.is_empty() {
-        recommendations.push(RecoveryOption {
+        builder = builder.add_recommendation(RecoveryOption {
             id: "retry_all".to_string(),
             title: "Reset All & Retry".to_string(),
             subtitle: "Clear all circuit breakers and try again".to_string(),
@@ -375,72 +362,38 @@ pub fn build_recovery_prompt_from_diagnostics(
         });
     }
 
-    recommendations.push(RecoveryOption {
-        id: "continue".to_string(),
-        title: "Continue Anyway".to_string(),
-        subtitle: "Ignore circuit breakers and proceed".to_string(),
-        badge: None,
-        action: RecoveryAction::Continue,
-    });
-
-    recommendations.push(RecoveryOption {
-        id: "skip".to_string(),
-        title: "Skip This Step".to_string(),
-        subtitle: "Move on to the next part of the task".to_string(),
-        badge: None,
-        action: RecoveryAction::SkipStep,
-    });
-
-    recommendations.push(RecoveryOption {
-        id: "alternative".to_string(),
-        title: "Try Different Approach".to_string(),
-        subtitle: "Suggest an alternative strategy".to_string(),
-        badge: None,
-        action: RecoveryAction::TryAlternative,
-    });
-
-    recommendations.push(RecoveryOption {
-        id: "show_errors".to_string(),
-        title: "Show Error Log".to_string(),
-        subtitle: "View detailed error history".to_string(),
-        badge: None,
-        action: RecoveryAction::ShowErrorLog,
-    });
-
-    recommendations.push(RecoveryOption {
-        id: "diagnostics".to_string(),
-        title: "Run Diagnostics".to_string(),
-        subtitle: "Check tool health and configuration".to_string(),
-        badge: None,
-        action: RecoveryAction::RunDiagnostics,
-    });
-
-    recommendations.push(RecoveryOption {
-        id: "debug_agent".to_string(),
-        title: "Call Debug Agent".to_string(),
-        subtitle: "Spawn specialist to investigate issues".to_string(),
-        badge: None,
-        action: RecoveryAction::CallDebugAgent,
-    });
-
-    recommendations.push(RecoveryOption {
-        id: "save_exit".to_string(),
-        title: "Save Progress & Exit".to_string(),
-        subtitle: "Write task summary and end session".to_string(),
-        badge: None,
-        action: RecoveryAction::SaveAndExit,
-    });
-
-    builder = builder.with_summary(summary);
-
-    for rec in recommendations {
-        builder = builder.add_recommendation(rec);
+    for (id, title, subtitle, action) in [
+        (
+            "continue",
+            "Continue Anyway",
+            "Ignore circuit breakers and proceed",
+            RecoveryAction::Continue,
+        ),
+        (
+            "skip",
+            "Skip This Step",
+            "Move on to the next part of the task",
+            RecoveryAction::SkipStep,
+        ),
+        (
+            "save_exit",
+            "Save Progress & Exit",
+            "Write task summary and end session",
+            RecoveryAction::SaveAndExit,
+        ),
+    ] {
+        builder = builder.add_recommendation(RecoveryOption {
+            id: id.to_string(),
+            title: title.to_string(),
+            subtitle: subtitle.to_string(),
+            badge: None,
+            action,
+        });
     }
 
     builder
 }
 
-#[allow(dead_code)]
 fn build_error_summary(diagnostics: &RecoveryDiagnostics) -> String {
     if diagnostics.recent_errors.is_empty() {
         return "No recent errors recorded.".to_string();
@@ -480,7 +433,6 @@ fn build_error_summary(diagnostics: &RecoveryDiagnostics) -> String {
     summary
 }
 
-#[allow(dead_code)]
 pub fn parse_recovery_response(response: &Value) -> Option<RecoveryAction> {
     let choice_id = response.get("choice_id")?.as_str()?;
     let tab_id = response
@@ -496,10 +448,6 @@ pub fn parse_recovery_response(response: &Value) -> Option<RecoveryAction> {
         "retry_all" => Some(RecoveryAction::ResetAllCircuits),
         "continue" => Some(RecoveryAction::Continue),
         "skip" => Some(RecoveryAction::SkipStep),
-        "alternative" => Some(RecoveryAction::TryAlternative),
-        "show_errors" => Some(RecoveryAction::ShowErrorLog),
-        "diagnostics" => Some(RecoveryAction::RunDiagnostics),
-        "debug_agent" => Some(RecoveryAction::CallDebugAgent),
         "save_exit" => Some(RecoveryAction::SaveAndExit),
         _ => None,
     }
@@ -601,5 +549,14 @@ mod tests {
 
         assert_eq!(prompt["default_tab_id"], "recovery");
         assert_eq!(prompt["default_choice_id"], "retry_all");
+    }
+
+    #[test]
+    fn parse_recovery_response_rejects_unimplemented_choices() {
+        let legacy_choice = json!({
+            "tab_id": "recovery",
+            "choice_id": "alternative",
+        });
+        assert!(parse_recovery_response(&legacy_choice).is_none());
     }
 }

@@ -93,6 +93,7 @@ pub(crate) async fn handle_tool_call_batch_parsed<'a, 'b>(
         match validate_tool_call(t_ctx.ctx, &parsed_call.tool_call.id, tool_name, &args_val).await?
         {
             ValidationResult::Outcome(outcome) => return Ok(Some(outcome)),
+            ValidationResult::Handled => continue,
             ValidationResult::Blocked => {
                 if let Some(outcome) = super::enforce_blocked_tool_call_guard(
                     t_ctx.ctx,

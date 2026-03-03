@@ -19,6 +19,8 @@ pub struct RecentError {
     pub timestamp: Instant,
     pub error_message: String,
     pub error_type: ErrorType,
+    /// Canonical error category for consistent retry/recovery decisions.
+    pub category: Option<vtcode_commons::ErrorCategory>,
 }
 
 // Re-export the canonical ErrorType from core::error_recovery
@@ -78,11 +80,23 @@ impl ErrorRecoveryState {
     }
 
     pub fn record_error(&mut self, tool_name: &str, error_message: String, error_type: ErrorType) {
+        let category = vtcode_commons::classify_error_message(&error_message);
+        self.record_error_with_category(tool_name, error_message, error_type, Some(category));
+    }
+
+    pub fn record_error_with_category(
+        &mut self,
+        tool_name: &str,
+        error_message: String,
+        error_type: ErrorType,
+        category: Option<vtcode_commons::ErrorCategory>,
+    ) {
         self.recent_errors.push_front(RecentError {
             tool_name: tool_name.to_string(),
             timestamp: Instant::now(),
             error_message,
             error_type,
+            category,
         });
 
         if self.recent_errors.len() > DEFAULT_MAX_RECENT_ERRORS {

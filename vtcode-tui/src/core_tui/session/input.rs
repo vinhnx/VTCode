@@ -461,15 +461,11 @@ impl Session {
 
         let accent_style =
             ratatui_style_from_inline(&self.styles.accent_inline_style(), self.theme.foreground);
-        let slash_style = accent_style
-            .fg(Color::Yellow)
-            .add_modifier(Modifier::BOLD);
+        let slash_style = accent_style.fg(Color::Yellow).add_modifier(Modifier::BOLD);
         let file_ref_style = accent_style
             .fg(Color::Cyan)
             .add_modifier(Modifier::UNDERLINED);
-        let code_style = accent_style
-            .fg(Color::Green)
-            .add_modifier(Modifier::BOLD);
+        let code_style = accent_style.fg(Color::Green).add_modifier(Modifier::BOLD);
 
         let layout = self.input_layout(width, prompt_display_width);
         let tokens = tokenize_input(self.input_manager.content());
