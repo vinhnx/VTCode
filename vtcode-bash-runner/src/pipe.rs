@@ -15,6 +15,7 @@ use std::sync::Mutex as StdMutex;
 use std::sync::atomic::AtomicBool;
 
 use anyhow::{Context, Result};
+use bytes::Bytes;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::process::Command;
 use tokio::sync::{broadcast, mpsc, oneshot};
@@ -51,7 +52,7 @@ impl ChildTerminator for PipeChildTerminator {
 }
 
 /// Read from an async reader and send chunks to a broadcast channel.
-async fn read_output_stream<R>(mut reader: R, output_tx: broadcast::Sender<Vec<u8>>)
+async fn read_output_stream<R>(mut reader: R, output_tx: broadcast::Sender<Bytes>)
 where
     R: AsyncRead + Unpin,
 {
@@ -60,7 +61,7 @@ where
         match reader.read(&mut buf).await {
             Ok(0) => break,
             Ok(n) => {
-                let _ = output_tx.send(buf[..n].to_vec());
+                let _ = output_tx.send(Bytes::copy_from_slice(&buf[..n]));
             }
             Err(ref e) if e.kind() == ErrorKind::Interrupted => continue,
             Err(_) => break,
@@ -191,7 +192,7 @@ async fn spawn_process_internal(opts: PipeSpawnOptions) -> Result<SpawnedProcess
     let stderr = child.stderr.take();
 
     let (writer_tx, mut writer_rx) = mpsc::channel::<Vec<u8>>(128);
-    let (output_tx, _) = broadcast::channel::<Vec<u8>>(256);
+    let (output_tx, _) = broadcast::channel::<Bytes>(256);
     let initial_output_rx = output_tx.subscribe();
 
     // Spawn writer task

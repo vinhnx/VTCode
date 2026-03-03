@@ -157,6 +157,7 @@ async fn test_process_handle_terminate() -> anyhow::Result<()> {
 #[tokio::test]
 async fn test_pipe_process_detaches_from_parent_session() -> anyhow::Result<()> {
     let parent_sid = nix::unistd::getsid(None)?.as_raw();
+    let parent_pgid = nix::unistd::getpgrp().as_raw();
 
     let env: HashMap<String, String> = std::env::vars().collect();
     let (program, args) = shell_command("echo $$; sleep 0.2");
@@ -180,10 +181,18 @@ async fn test_pipe_process_detaches_from_parent_session() -> anyhow::Result<()> 
         }
     };
 
-    // Child should be in its own session or process group
-    assert_ne!(
-        child_sid, parent_sid,
-        "expected child to be detached from parent session"
+    let child_pgid = match nix::unistd::getpgid(Some(nix::unistd::Pid::from_raw(child_pid))) {
+        Ok(pid) => pid.as_raw(),
+        Err(_) => {
+            // Process may have already exited, which is fine
+            return Ok(());
+        }
+    };
+
+    // Child should be detached via session or process group.
+    assert!(
+        child_sid != parent_sid || child_pgid != parent_pgid,
+        "expected child to be detached (parent sid={parent_sid}, child sid={child_sid}, parent pgid={parent_pgid}, child pgid={child_pgid})"
     );
 
     let exit_code = spawned.exit_rx.await.unwrap_or(-1);

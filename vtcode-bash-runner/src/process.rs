@@ -11,6 +11,7 @@ use std::sync::Arc;
 use std::sync::Mutex as StdMutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 
+use bytes::Bytes;
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio::task::{AbortHandle, JoinHandle};
 
@@ -48,7 +49,7 @@ impl fmt::Debug for PtyHandles {
 /// - Clean up via `terminate()`
 pub struct ProcessHandle {
     writer_tx: mpsc::Sender<Vec<u8>>,
-    output_tx: broadcast::Sender<Vec<u8>>,
+    output_tx: broadcast::Sender<Bytes>,
     killer: StdMutex<Option<Box<dyn ChildTerminator>>>,
     reader_handle: StdMutex<Option<JoinHandle<()>>>,
     reader_abort_handles: StdMutex<Vec<AbortHandle>>,
@@ -74,8 +75,8 @@ impl ProcessHandle {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         writer_tx: mpsc::Sender<Vec<u8>>,
-        output_tx: broadcast::Sender<Vec<u8>>,
-        initial_output_rx: broadcast::Receiver<Vec<u8>>,
+        output_tx: broadcast::Sender<Bytes>,
+        initial_output_rx: broadcast::Receiver<Bytes>,
         killer: Box<dyn ChildTerminator>,
         reader_handle: JoinHandle<()>,
         reader_abort_handles: Vec<AbortHandle>,
@@ -84,7 +85,7 @@ impl ProcessHandle {
         exit_status: Arc<AtomicBool>,
         exit_code: Arc<StdMutex<Option<i32>>>,
         pty_handles: Option<PtyHandles>,
-    ) -> (Self, broadcast::Receiver<Vec<u8>>) {
+    ) -> (Self, broadcast::Receiver<Bytes>) {
         (
             Self {
                 writer_tx,
@@ -117,7 +118,7 @@ impl ProcessHandle {
     ///
     /// Multiple receivers can be created; each receives all output from the
     /// point of subscription.
-    pub fn output_receiver(&self) -> broadcast::Receiver<Vec<u8>> {
+    pub fn output_receiver(&self) -> broadcast::Receiver<Bytes> {
         self.output_tx.subscribe()
     }
 
@@ -216,7 +217,7 @@ pub struct SpawnedProcess {
     /// Handle for interacting with the process.
     pub session: ProcessHandle,
     /// Receiver for stdout/stderr output chunks.
-    pub output_rx: broadcast::Receiver<Vec<u8>>,
+    pub output_rx: broadcast::Receiver<Bytes>,
     /// Receiver for exit code (receives once when process exits).
     pub exit_rx: oneshot::Receiver<i32>,
 }
@@ -234,7 +235,7 @@ impl SpawnedProcess {
 ///
 /// This is useful for tests and simple use cases where you want all output.
 pub async fn collect_output_until_exit(
-    mut output_rx: broadcast::Receiver<Vec<u8>>,
+    mut output_rx: broadcast::Receiver<Bytes>,
     exit_rx: oneshot::Receiver<i32>,
     timeout_ms: u64,
 ) -> (Vec<u8>, i32) {

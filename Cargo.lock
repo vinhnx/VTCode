@@ -6306,6 +6306,7 @@ version = "0.85.3"
 dependencies = [
  "anyhow",
  "assert_fs",
+ "bytes",
  "hashbrown 0.15.5",
  "libc",
  "lru",
