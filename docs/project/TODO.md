@@ -202,3 +202,7 @@ example:
      changes.
   4. Enforcement remains always-on in Plan Mode as requested (no feature flag rollout).
 ```
+
+---
+
+convert minimax to use anthropic api https://platform.minimax.io/docs/api-reference/text-anthropic-api
