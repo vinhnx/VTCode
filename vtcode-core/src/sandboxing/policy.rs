@@ -121,6 +121,20 @@ pub const DEFAULT_SENSITIVE_PATHS: &[&str] = &[
     "~/.netrc",
 ];
 
+#[cfg(windows)]
+const USERPROFILE_READ_ROOT_EXCLUSIONS: &[&str] = &[
+    ".ssh",
+    ".gnupg",
+    ".aws",
+    ".azure",
+    ".kube",
+    ".docker",
+    ".config",
+    ".npm",
+    ".pki",
+    ".terraform.d",
+];
+
 /// Sensitive path entry for blocking access to credential locations.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct SensitivePath {
@@ -174,16 +188,45 @@ impl SensitivePath {
     /// Check if a given path matches this sensitive path pattern.
     pub fn matches(&self, path: &Path) -> bool {
         let expanded = self.expand_path();
+        #[cfg(windows)]
+        {
+            let path_norm = normalize_windows_path(path);
+            let expanded_norm = normalize_windows_path(&expanded);
+            let mut expanded_prefix = expanded_norm.clone();
+            if !expanded_prefix.ends_with('/') {
+                expanded_prefix.push('/');
+            }
+            return path_norm == expanded_norm || path_norm.starts_with(&expanded_prefix);
+        }
         path.starts_with(&expanded)
     }
 }
 
+#[cfg(windows)]
+fn normalize_windows_path(path: &Path) -> String {
+    path.to_string_lossy().replace('\\', "/").to_ascii_lowercase()
+}
+
 /// Get the default sensitive paths as SensitivePath entries.
 pub fn default_sensitive_paths() -> Vec<SensitivePath> {
-    DEFAULT_SENSITIVE_PATHS
+    let paths: Vec<SensitivePath> = DEFAULT_SENSITIVE_PATHS
         .iter()
         .map(|p| SensitivePath::new(*p))
-        .collect()
+        .collect();
+
+    #[cfg(windows)]
+    {
+        let mut paths = paths;
+        for entry in USERPROFILE_READ_ROOT_EXCLUSIONS {
+            let path = format!("~/{}", entry);
+            if !paths.iter().any(|existing| existing.path == path) {
+                paths.push(SensitivePath::new(path));
+            }
+        }
+        return paths;
+    }
+
+    paths
 }
 
 /// Resource limits for sandboxed execution.
@@ -972,6 +1015,31 @@ mod tests {
         assert!(path_strings.contains(&"~/.ssh"));
         assert!(path_strings.contains(&"~/.aws"));
         assert!(path_strings.contains(&"~/.kube"));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn test_windows_userprofile_root_exclusions_are_in_defaults() {
+        let paths = default_sensitive_paths();
+        let path_strings: Vec<&str> = paths.iter().map(|p| p.path.as_str()).collect();
+
+        for entry in USERPROFILE_READ_ROOT_EXCLUSIONS {
+            let expected = format!("~/{}", entry);
+            assert!(
+                path_strings.contains(&expected.as_str()),
+                "missing expected default sensitive path: {expected}"
+            );
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn test_sensitive_path_matching_is_case_insensitive_on_windows() {
+        let sp = SensitivePath::new("~/.aws");
+        let home = dirs::home_dir().expect("home dir");
+        let mixed_case_candidate = home.join(".AWS").join("credentials");
+
+        assert!(sp.matches(&mixed_case_candidate));
     }
 
     #[test]
