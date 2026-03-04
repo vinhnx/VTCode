@@ -80,12 +80,11 @@ fn extract_git_diff_cache_target(tool_name: &str, args: &Value) -> Option<String
     extract_git_diff_path_target(&parts)
 }
 
-fn command_parts_for_cache(tool_name: &str, args: &Value) -> Option<Vec<String>> {
+pub(super) fn stream_command_parts(tool_name: &str, args: &Value) -> Option<Vec<String>> {
     match tool_name {
         tools::RUN_PTY_CMD | "shell" => {
-            let mut parts = command_value_to_parts(args.get("command")?)?;
-            append_args(&mut parts, args.get("args"));
-            if parts.is_empty() { None } else { Some(parts) }
+            let command_value = args.get("command").or_else(|| args.get("raw_command"))?;
+            collect_command_parts(command_value, args)
         }
         tools::UNIFIED_EXEC | "exec_pty_cmd" | "exec" => {
             let action = args.get("action").and_then(Value::as_str).unwrap_or("run");
@@ -96,12 +95,25 @@ fn command_parts_for_cache(tool_name: &str, args: &Value) -> Option<Vec<String>>
                 .get("command")
                 .or_else(|| args.get("cmd"))
                 .or_else(|| args.get("raw_command"))?;
-            let mut parts = command_value_to_parts(command_value)?;
-            append_args(&mut parts, args.get("args"));
-            if parts.is_empty() { None } else { Some(parts) }
+            collect_command_parts(command_value, args)
         }
         _ => None,
     }
+}
+
+fn command_parts_for_cache(tool_name: &str, args: &Value) -> Option<Vec<String>> {
+    match tool_name {
+        // Keep cache behavior strict for run_pty/shell: only "command" is accepted
+        // (no raw_command fallback) to avoid broadening cacheability semantics.
+        tools::RUN_PTY_CMD | "shell" => collect_command_parts(args.get("command")?, args),
+        _ => stream_command_parts(tool_name, args),
+    }
+}
+
+fn collect_command_parts(command_value: &Value, args: &Value) -> Option<Vec<String>> {
+    let mut parts = command_value_to_parts(command_value)?;
+    append_args(&mut parts, args.get("args"));
+    if parts.is_empty() { None } else { Some(parts) }
 }
 
 fn command_value_to_parts(value: &Value) -> Option<Vec<String>> {
@@ -217,7 +229,7 @@ mod tests {
     use serde_json::json;
     use vtcode_core::config::constants::tools;
 
-    use super::{cache_target_path, is_tool_cacheable};
+    use super::{cache_target_path, is_tool_cacheable, stream_command_parts};
 
     #[test]
     fn caches_path_scoped_git_diff_run_pty() {
@@ -284,5 +296,32 @@ mod tests {
             cache_target_path(tools::RUN_PTY_CMD, &args),
             "dir with space/file.rs"
         );
+    }
+
+    #[test]
+    fn stream_command_parts_supports_raw_command_for_run_pty() {
+        let args = json!({
+            "raw_command": "cargo check -p vtcode-core"
+        });
+
+        assert_eq!(
+            stream_command_parts(tools::RUN_PTY_CMD, &args),
+            Some(vec![
+                "cargo".to_string(),
+                "check".to_string(),
+                "-p".to_string(),
+                "vtcode-core".to_string()
+            ])
+        );
+    }
+
+    #[test]
+    fn stream_command_parts_skips_non_run_unified_exec() {
+        let args = json!({
+            "action": "poll",
+            "session_id": "run-123"
+        });
+
+        assert_eq!(stream_command_parts(tools::UNIFIED_EXEC, &args), None);
     }
 }

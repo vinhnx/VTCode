@@ -386,9 +386,7 @@ async fn apply_post_execution_side_effects(
                 .log_tool_call(turn_index, name, args_val, pipeline_outcome.command_success);
             if pipeline_outcome.command_success {
                 let mut cache = ctx.tool_result_cache.write().await;
-                for path in pipeline_outcome.modified_files() {
-                    cache.invalidate_for_path(path);
-                }
+                cache.invalidate_for_paths(pipeline_outcome.modified_files().iter());
             }
         } else {
             if let Some(files) = pipeline_outcome.modified_files_mut() {

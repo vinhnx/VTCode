@@ -60,7 +60,7 @@ pub(crate) async fn handle_tool_execution_result(
             });
 
             // Build a small RunLoopContext to reuse the generic `handle_pipeline_output`
-            let (_any_write, mod_files, last_stdout) = crate::agent::runloop::unified::tool_output_handler::handle_pipeline_output_from_turn_ctx(
+            let (mod_files, last_stdout) = crate::agent::runloop::unified::tool_output_handler::handle_pipeline_output_from_turn_ctx(
                 ctx,
                 tool_name,
                 args_val,

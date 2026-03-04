@@ -6,14 +6,16 @@ use tracing::warn;
 use vtcode_core::config::constants::tools;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::tools::registry::{ToolProgressCallback, ToolRegistry};
-use vtcode_core::tools::result_cache::ToolResultCache;
+use vtcode_core::tools::result_cache::{ToolCacheKey, ToolResultCache};
 
 use crate::agent::runloop::tool_output::resolve_stdout_tail_limit;
 use crate::agent::runloop::unified::progress::ProgressReporter;
 use crate::agent::runloop::unified::state::CtrlCState;
 use crate::agent::runloop::unified::ui_interaction::PlaceholderSpinner;
 
-use super::cache::{cache_target_path, create_enhanced_cache_key, is_tool_cacheable};
+use super::cache::{
+    cache_target_path, create_enhanced_cache_key, is_tool_cacheable, stream_command_parts,
+};
 use super::execution_attempts::execute_tool_with_timeout_ref_prevalidated;
 use super::execution_helpers::{
     build_tool_status_message, is_loop_detection_status, parse_cached_output,
@@ -44,6 +46,25 @@ impl Drop for ProgressCallbackGuard<'_> {
     }
 }
 
+#[derive(Clone, Copy)]
+enum CacheLookupPhase {
+    Initial,
+    LoopDetection,
+}
+
+impl CacheLookupPhase {
+    fn malformed_entry_log(self) -> &'static str {
+        match self {
+            Self::Initial => "Discarding malformed cached output",
+            Self::LoopDetection => "Discarding malformed cached output after loop detection",
+        }
+    }
+
+    fn should_log_miss(self) -> bool {
+        matches!(self, Self::Initial)
+    }
+}
+
 pub(super) async fn execute_with_cache_and_streaming(
     registry: &mut ToolRegistry,
     tool_result_cache: &Arc<tokio::sync::RwLock<ToolResultCache>>,
@@ -58,17 +79,19 @@ pub(super) async fn execute_with_cache_and_streaming(
     let is_cacheable_tool = is_tool_cacheable(name, args_val);
     let cache_target = cache_target_path(name, args_val);
 
-    if let Some(cached_status) = try_cache_hit(
-        registry,
-        tool_result_cache,
-        name,
-        args_val,
-        &cache_target,
-        is_cacheable_tool,
-    )
-    .await
-    {
-        return cached_status;
+    if is_cacheable_tool {
+        if let Some(cached_status) = lookup_cached_status(
+            registry,
+            tool_result_cache,
+            name,
+            args_val,
+            &cache_target,
+            CacheLookupPhase::Initial,
+        )
+        .await
+        {
+            return cached_status;
+        }
     }
 
     handle.force_redraw();
@@ -125,12 +148,13 @@ pub(super) async fn execute_with_cache_and_streaming(
     }
 
     let outcome = if is_cacheable_tool && is_loop_detection_status(&outcome) {
-        match try_loop_detection_cache_hit(
+        match lookup_cached_status(
             registry,
             tool_result_cache,
             name,
             args_val,
             &cache_target,
+            CacheLookupPhase::LoopDetection,
         )
         .await
         {
@@ -152,9 +176,8 @@ pub(super) async fn execute_with_cache_and_streaming(
     {
         tool_spinner.finish();
         if is_cacheable_tool && should_cache_success_output(name, output, *command_success) {
-            let workspace_path = registry.workspace_root().to_string_lossy().to_string();
-            let cache_key =
-                create_enhanced_cache_key(name, args_val, &cache_target, &workspace_path);
+            let (_, cache_key) =
+                workspace_scoped_cache_key(registry, name, args_val, &cache_target);
             let output_json = serde_json::to_string(output).unwrap_or_else(|_| "{}".to_string());
             let mut cache = tool_result_cache.write().await;
             cache.insert_arc(cache_key, Arc::new(output_json));
@@ -205,93 +228,30 @@ fn is_command_tool(name: &str) -> bool {
 }
 
 fn extract_pty_stream_command(tool_name: &str, args: &Value) -> Option<String> {
-    let command_value = match tool_name {
-        tools::RUN_PTY_CMD | "shell" => args.get("command").or_else(|| args.get("raw_command")),
-        tools::UNIFIED_EXEC | "exec_pty_cmd" | "exec" => {
-            let action = args.get("action").and_then(Value::as_str).or_else(|| {
-                if args.get("command").is_some()
-                    || args.get("cmd").is_some()
-                    || args.get("raw_command").is_some()
-                {
-                    Some("run")
-                } else {
-                    None
-                }
-            });
-            if action == Some("run") {
-                args.get("command")
-                    .or_else(|| args.get("cmd"))
-                    .or_else(|| args.get("raw_command"))
-            } else {
-                None
-            }
-        }
-        _ => None,
-    }?;
-
-    let command = command_value_to_string(command_value)?;
-    match extract_command_args_suffix(args) {
-        Some(suffix) => Some(format!("{} {}", command, suffix)),
-        None => Some(command),
-    }
+    stream_command_parts(tool_name, args).map(|parts| parts.join(" "))
 }
 
-fn command_value_to_string(value: &Value) -> Option<String> {
-    if let Some(command) = value.as_str() {
-        let normalized = command.split_whitespace().collect::<Vec<_>>().join(" ");
-        if normalized.is_empty() {
-            None
-        } else {
-            Some(normalized)
-        }
-    } else if let Some(parts) = value.as_array() {
-        let joined = parts
-            .iter()
-            .filter_map(Value::as_str)
-            .map(str::trim)
-            .filter(|part| !part.is_empty())
-            .collect::<Vec<_>>()
-            .join(" ");
-        if joined.is_empty() {
-            None
-        } else {
-            Some(joined)
-        }
-    } else {
-        None
-    }
+fn workspace_scoped_cache_key(
+    registry: &ToolRegistry,
+    name: &str,
+    args_val: &Value,
+    cache_target: &str,
+) -> (String, ToolCacheKey) {
+    let workspace_path = registry.workspace_root().to_string_lossy().to_string();
+    let cache_key = create_enhanced_cache_key(name, args_val, cache_target, &workspace_path);
+    (workspace_path, cache_key)
 }
 
-fn extract_command_args_suffix(args: &Value) -> Option<String> {
-    let arg_values = args.get("args")?.as_array()?;
-    let suffix = arg_values
-        .iter()
-        .filter_map(Value::as_str)
-        .map(str::trim)
-        .filter(|part| !part.is_empty())
-        .collect::<Vec<_>>()
-        .join(" ");
-    if suffix.is_empty() {
-        None
-    } else {
-        Some(suffix)
-    }
-}
-
-async fn try_cache_hit(
+async fn lookup_cached_status(
     registry: &ToolRegistry,
     tool_result_cache: &Arc<tokio::sync::RwLock<ToolResultCache>>,
     name: &str,
     args_val: &Value,
     cache_target: &str,
-    is_cacheable_tool: bool,
+    phase: CacheLookupPhase,
 ) -> Option<ToolExecutionStatus> {
-    if !is_cacheable_tool {
-        return None;
-    }
-
-    let workspace_path = registry.workspace_root().to_string_lossy().to_string();
-    let cache_key = create_enhanced_cache_key(name, args_val, cache_target, &workspace_path);
+    let (workspace_path, cache_key) =
+        workspace_scoped_cache_key(registry, name, args_val, cache_target);
     let cached_output = {
         let cache = tool_result_cache.read().await;
         cache.get(&cache_key)
@@ -318,58 +278,20 @@ async fn try_cache_hit(
                     target: "vtcode.performance.cache",
                     tool = name,
                     error = %error,
-                    "Discarding malformed cached output"
+                    "{}",
+                    phase.malformed_entry_log()
                 );
                 let mut cache = tool_result_cache.write().await;
-                cache.invalidate_for_path(cache_target);
+                cache.invalidate_key(&cache_key);
             }
         }
-    } else {
+    } else if phase.should_log_miss() {
         tracing::debug!(
             target: "vtcode.performance.cache",
             "Cache miss for tool: {} (workspace: {})",
             name,
             workspace_path
         );
-    }
-    None
-}
-
-async fn try_loop_detection_cache_hit(
-    registry: &ToolRegistry,
-    tool_result_cache: &Arc<tokio::sync::RwLock<ToolResultCache>>,
-    name: &str,
-    args_val: &Value,
-    cache_target: &str,
-) -> Option<ToolExecutionStatus> {
-    let workspace_path = registry.workspace_root().to_string_lossy().to_string();
-    let cache_key = create_enhanced_cache_key(name, args_val, cache_target, &workspace_path);
-    let cached_output = {
-        let cache = tool_result_cache.read().await;
-        cache.get(&cache_key)
-    };
-    if let Some(cached_output) = cached_output {
-        match parse_cached_output(&cached_output) {
-            Ok(cached_json) => {
-                return Some(ToolExecutionStatus::Success {
-                    output: cached_json,
-                    stdout: None,
-                    modified_files: vec![],
-                    command_success: true,
-                    has_more: false,
-                });
-            }
-            Err(error) => {
-                warn!(
-                    target: "vtcode.performance.cache",
-                    tool = name,
-                    error = %error,
-                    "Discarding malformed cached output after loop detection"
-                );
-                let mut cache = tool_result_cache.write().await;
-                cache.invalidate_for_path(cache_target);
-            }
-        }
     }
     None
 }

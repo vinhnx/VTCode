@@ -3,16 +3,13 @@
 //! Caches results from read-only tools (grep, list_files, ast analysis) within a session
 //! to avoid re-running identical queries.
 //!
-//! **Enhanced with fuzzy matching** (migrated from smart_cache.rs):
-//! - Exact match caching for identical queries
-//! - Fuzzy matching for similar queries (optional)
+//! Uses exact-match caching for identical queries.
 /// Deduplication to prevent redundant tool calls
 use crate::cache::{CacheKey as UnifiedCacheKey, DEFAULT_CACHE_TTL, EvictionPolicy, UnifiedCache};
 use serde_json::Value;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
-use std::time::Duration;
 
 /// Identifies a cached tool result
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
@@ -67,101 +64,33 @@ impl ToolCacheKey {
     }
 }
 
-/// Cached tool result - using String directly as the cache value
-pub type ToolCacheValue = String;
-
-/// Fuzzy matching utility for finding similar cache entries
-pub struct FuzzyMatcher;
-
-impl FuzzyMatcher {
-    /// Calculate similarity between two JSON values (0.0 = completely different, 1.0 = identical)
-    pub fn similarity(a: &Value, b: &Value) -> f32 {
-        let a_str = Self::canonicalize(a);
-        let b_str = Self::canonicalize(b);
-
-        let min_len = a_str.len().min(b_str.len());
-        if min_len == 0 {
-            return 0.0;
-        }
-
-        let matches = a_str
-            .chars()
-            .zip(b_str.chars())
-            .filter(|(x, y)| x == y)
-            .count();
-
-        matches as f32 / min_len as f32
-    }
-
-    /// Normalize JSON for comparison (sorted keys, stable format)
-    fn canonicalize(value: &Value) -> String {
-        match value {
-            Value::Object(map) => {
-                let mut keys: Vec<_> = map.keys().collect();
-                keys.sort();
-                let parts: Vec<String> = keys
-                    .iter()
-                    .map(|k| format!("{}:{:?}", k, map[*k]))
-                    .collect();
-                format!("{{{}}}", parts.join(","))
-            }
-            Value::Array(arr) => {
-                let parts: Vec<String> = arr.iter().map(|v| format!("{:?}", v)).collect();
-                format!("[{}]", parts.join(","))
-            }
-            v => format!("{:?}", v),
-        }
-    }
-}
-
-/// Tool result cache with LRU eviction and optional fuzzy matching
+/// Tool result cache with LRU eviction
 pub struct ToolResultCache {
     inner: UnifiedCache<ToolCacheKey, String>,
-    fuzzy_threshold: Option<f32>, // None = disabled, Some(0.0-1.0) = enabled
 }
 
 impl ToolResultCache {
-    /// Create a new cache with specified capacity (fuzzy matching disabled)
+    /// Create a new cache with specified capacity.
     pub fn new(capacity: usize) -> Self {
         Self {
             inner: UnifiedCache::new(capacity, DEFAULT_CACHE_TTL, EvictionPolicy::Lru),
-            fuzzy_threshold: None,
         }
     }
 
-    /// Create with custom TTL (fuzzy matching disabled)
-    pub fn with_ttl(capacity: usize, ttl_secs: u64) -> Self {
-        Self {
-            inner: UnifiedCache::new(capacity, Duration::from_secs(ttl_secs), EvictionPolicy::Lru),
-            fuzzy_threshold: None,
-        }
-    }
-
-    /// Create with fuzzy matching enabled (threshold: 0.0-1.0, typically 0.8)
-    /// Higher threshold = stricter matching (0.8 = 80% similarity required)
-    pub fn with_fuzzy_matching(capacity: usize, fuzzy_threshold: f32) -> Self {
-        Self {
-            inner: UnifiedCache::new(capacity, DEFAULT_CACHE_TTL, EvictionPolicy::Lru),
-            fuzzy_threshold: Some(fuzzy_threshold.clamp(0.0, 1.0)),
-        }
-    }
-
-    /// Check if fuzzy matching is enabled
-    pub fn is_fuzzy_enabled(&self) -> bool {
-        self.fuzzy_threshold.is_some()
+    fn insert_owned(&mut self, key: ToolCacheKey, output: String) {
+        let size_bytes = size_of_val(&output) as u64;
+        self.inner.insert(key, output, size_bytes);
     }
 
     /// Insert a result into the cache
     pub fn insert(&mut self, key: ToolCacheKey, output: String) {
-        let size_bytes = size_of_val(&output) as u64;
-        self.inner.insert(key, output, size_bytes);
+        self.insert_owned(key, output);
     }
 
     /// Insert an Arc-wrapped result into the cache to avoid cloning when the caller
     /// already has an Arc<String> available.
     pub fn insert_arc(&mut self, key: ToolCacheKey, output: Arc<String>) {
-        let size_bytes = size_of_val(&**output) as u64;
-        self.inner.insert(key, (*output).clone(), size_bytes);
+        self.insert_owned(key, (*output).clone());
     }
 
     /// Retrieve a result if cached and fresh - now returns zero-copy Arc by default
@@ -183,10 +112,38 @@ impl ToolResultCache {
     /// - Before: Full cache clear on any file change → 90% hit rate drop
     /// - After: Selective removal → 10-15% hit rate impact only
     pub fn invalidate_for_path(&mut self, path: &str) {
-        // Cache keys follow format: "tool:hash:path"
-        // We need to match entries whose target_path starts with the given path
-        // Use contains-based matching to find path component
-        self.inner.invalidate_containing(path);
+        self.inner
+            .remove_where(|key| key.target_path.starts_with(path));
+    }
+
+    /// Invalidate a single cache entry by exact key.
+    pub fn invalidate_key(&mut self, key: &ToolCacheKey) {
+        self.inner.remove(key);
+    }
+
+    /// Invalidate cache entries for multiple paths.
+    ///
+    /// This keeps invalidation policy centralized in one place and avoids
+    /// duplicating path-iteration logic at call sites.
+    pub fn invalidate_for_paths<I, S>(&mut self, paths: I)
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<str>,
+    {
+        let path_prefixes: Vec<String> = paths
+            .into_iter()
+            .map(|path| path.as_ref().trim().to_string())
+            .filter(|path| !path.is_empty())
+            .collect();
+        if path_prefixes.is_empty() {
+            return;
+        }
+
+        self.inner.remove_where(|key| {
+            path_prefixes
+                .iter()
+                .any(|prefix| key.target_path.starts_with(prefix))
+        });
     }
 
     /// Clear entire cache
@@ -288,6 +245,41 @@ mod tests {
         assert!(cache.get(&key1).is_none());
         assert_eq!(cache.get(&key2).unwrap().as_ref(), "out2");
         assert_eq!(cache.get(&key3).unwrap().as_ref(), "out3");
+    }
+
+    #[test]
+    fn invalidates_exact_key_only() {
+        let mut cache = ToolResultCache::new(10);
+
+        let key1 = ToolCacheKey::new("tool", "p1", "/workspace/file.rs");
+        let key2 = ToolCacheKey::new("tool", "p2", "/workspace/file.rs");
+
+        cache.insert(key1.clone(), "out1".to_string());
+        cache.insert(key2.clone(), "out2".to_string());
+
+        cache.invalidate_key(&key1);
+
+        assert!(cache.get(&key1).is_none());
+        assert_eq!(cache.get(&key2).unwrap().as_ref(), "out2");
+    }
+
+    #[test]
+    fn invalidates_multiple_paths() {
+        let mut cache = ToolResultCache::new(10);
+
+        let key1 = ToolCacheKey::new("tool", "p1", "/workspace/file1.rs");
+        let key2 = ToolCacheKey::new("tool", "p2", "/workspace/file2.rs");
+        let key3 = ToolCacheKey::new("tool", "p3", "/workspace/file3.rs");
+
+        cache.insert(key1.clone(), "out1".to_string());
+        cache.insert(key2.clone(), "out2".to_string());
+        cache.insert(key3.clone(), "out3".to_string());
+
+        cache.invalidate_for_paths(["/workspace/file1.rs", "/workspace/file3.rs"]);
+
+        assert!(cache.get(&key1).is_none());
+        assert!(cache.get(&key3).is_none());
+        assert_eq!(cache.get(&key2).unwrap().as_ref(), "out2");
     }
 
     #[test]

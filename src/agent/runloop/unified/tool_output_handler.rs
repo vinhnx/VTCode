@@ -1,16 +1,10 @@
-#![allow(clippy::too_many_arguments)]
 use crate::agent::runloop::mcp_events::McpPanelState;
 use crate::agent::runloop::unified::state::SessionStats;
-use crate::agent::runloop::unified::tool_output_helpers::{
-    check_write_effect_common, render_error_common, render_tool_output_common,
-};
 use anyhow::Result;
 use std::path::PathBuf;
-use std::sync::Arc;
-use tokio::sync::RwLock;
+use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::config::loader::VTCodeConfig;
-use vtcode_core::core::decision_tracker::DecisionTracker;
-use vtcode_core::tools::result_cache::ToolResultCache;
+use vtcode_core::tools::tool_intent;
 use vtcode_core::utils::ansi::AnsiRenderer;
 use vtcode_core::utils::ansi::MessageStyle;
 
@@ -31,80 +25,181 @@ fn record_mcp_success_event(
     mcp_panel_state.add_event(mcp_event);
 }
 
-fn compute_last_tool_stdout(command_success: bool, stdout: &Option<String>) -> Option<String> {
-    if command_success {
-        stdout.clone()
-    } else {
-        None
-    }
+fn collect_modified_files(modified_files: &[String]) -> Vec<PathBuf> {
+    modified_files.iter().map(PathBuf::from).collect()
 }
 
-async fn collect_modified_files_and_invalidate_cache(
-    modified_files: &[String],
-    tool_result_cache: Option<&Arc<RwLock<ToolResultCache>>>,
-) -> Vec<PathBuf> {
-    let turn_modified_files: Vec<PathBuf> = modified_files.iter().map(PathBuf::from).collect();
-    if let Some(cache_arc) = tool_result_cache {
-        let mut cache = cache_arc.write().await;
-        for file in modified_files {
-            cache.invalidate_for_path(file);
+fn is_run_pty_tool(name: &str, args_val: &serde_json::Value) -> bool {
+    if matches!(name, tool_names::RUN_PTY_CMD | "shell") {
+        return true;
+    }
+    if name == tool_names::UNIFIED_EXEC {
+        return tool_intent::unified_exec_action(args_val).unwrap_or("run") == "run";
+    }
+    false
+}
+
+fn compact_run_completion_line(
+    output: &serde_json::Value,
+    command_success: bool,
+) -> Option<String> {
+    if let Some(exit_code) = output.get("exit_code").and_then(serde_json::Value::as_i64) {
+        if exit_code == 0 {
+            return Some("✓ run completed (exit code: 0)".to_string());
         }
+        return Some(format!("✗ run error, exit code: {}", exit_code));
     }
-    turn_modified_files
+
+    if output.get("is_exited").and_then(serde_json::Value::as_bool) == Some(true) {
+        if command_success {
+            return Some("✓ done".to_string());
+        }
+        return Some("✗ failed".to_string());
+    }
+
+    None
 }
 
-pub(crate) async fn handle_pipeline_output(
-    ctx: &mut RunLoopContext<'_>,
+fn is_git_diff_payload(output: &serde_json::Value) -> bool {
+    output
+        .get("content_type")
+        .and_then(serde_json::Value::as_str)
+        .is_some_and(|content_type| content_type == "git_diff")
+}
+
+fn has_renderable_stream_content(output: &serde_json::Value) -> bool {
+    ["output", "stdout", "stderr"].iter().any(|key| {
+        output
+            .get(*key)
+            .and_then(serde_json::Value::as_str)
+            .is_some_and(|s| !s.trim().is_empty())
+    })
+}
+
+async fn render_tool_output_common(
+    renderer: &mut AnsiRenderer,
     name: &str,
     args_val: &serde_json::Value,
-    outcome: &ToolPipelineOutcome,
+    output: &serde_json::Value,
+    command_success: bool,
     vt_config: Option<&VTCodeConfig>,
-) -> Result<(bool, Vec<PathBuf>, Option<String>)> {
-    let mut any_write_effect = false;
-    let mut turn_modified_files: Vec<PathBuf> = Vec::new();
-    let mut last_tool_stdout: Option<String> = None;
+) -> Result<()> {
+    let inline_run_tool = renderer.supports_inline_ui() && is_run_pty_tool(name, args_val);
+    let git_diff_payload = is_git_diff_payload(output);
 
-    match &outcome.status {
-        ToolExecutionStatus::Success {
-            output,
-            stdout,
-            modified_files,
-            command_success,
-            has_more: _,
-        } => {
-            // Record tool usage (session stats)
-            ctx.session_stats.record_tool(name);
-
-            // Handle MCP events and rendering
-            if let Some(tool_name) = name.strip_prefix("mcp_") {
-                record_mcp_success_event(ctx.mcp_panel_state, tool_name, args_val);
-            } else {
-                render_tool_output_common(
-                    ctx.renderer,
-                    name,
-                    args_val,
-                    output,
-                    *command_success,
-                    vt_config,
-                )
-                .await?;
+    if inline_run_tool && !git_diff_payload {
+        let has_stream_content = has_renderable_stream_content(output);
+        if !has_stream_content {
+            if command_success {
+                renderer.line(MessageStyle::ToolDetail, "(no output)")?;
+            } else if let Some(completion) = compact_run_completion_line(output, command_success) {
+                renderer.line(MessageStyle::ToolDetail, &completion)?;
             }
-
-            last_tool_stdout = compute_last_tool_stdout(*command_success, stdout);
-
-            // Check for write effects and handle modified files
-            any_write_effect |= check_write_effect_common(name);
-
-            if !modified_files.is_empty() {
-                turn_modified_files.extend(
-                    collect_modified_files_and_invalidate_cache(
-                        modified_files,
-                        Some(ctx.tool_result_cache),
-                    )
-                    .await,
-                );
-            }
+            return Ok(());
         }
+    }
+
+    // Inline PTY streaming already renders a "• Ran <command>" header. Avoid duplicating
+    // it for git_diff payloads in post-tool summary rendering.
+    if !(inline_run_tool && git_diff_payload) {
+        let stream_label =
+            crate::agent::runloop::unified::tool_summary::stream_label_from_output(
+                output,
+                command_success,
+            );
+        crate::agent::runloop::unified::tool_summary::render_tool_call_summary(
+            renderer,
+            name,
+            args_val,
+            stream_label,
+        )?;
+    }
+
+    crate::agent::runloop::tool_output::render_tool_output(renderer, Some(name), output, vt_config)
+        .await
+}
+
+fn render_error_common(
+    renderer: &mut AnsiRenderer,
+    name: &str,
+    error: &str,
+    error_type: &str,
+) -> Result<()> {
+    let err_msg = format!("Tool '{}' {}: {}", name, error_type, error);
+    renderer.line(vtcode_core::utils::ansi::MessageStyle::Error, &err_msg)?;
+    Ok(())
+}
+
+#[derive(Default)]
+struct OutcomeState {
+    turn_modified_files: Vec<PathBuf>,
+    last_tool_stdout: Option<String>,
+}
+
+impl OutcomeState {
+    fn into_tuple(self) -> (Vec<PathBuf>, Option<String>) {
+        (self.turn_modified_files, self.last_tool_stdout)
+    }
+}
+
+struct OutcomeContext<'a> {
+    session_stats: &'a mut SessionStats,
+    renderer: &'a mut AnsiRenderer,
+    mcp_panel_state: &'a mut McpPanelState,
+    vt_config: Option<&'a VTCodeConfig>,
+}
+
+struct SuccessPayload<'a> {
+    output: &'a serde_json::Value,
+    stdout: &'a Option<String>,
+    modified_files: &'a [String],
+    command_success: bool,
+}
+
+async fn handle_success_common(
+    ctx: &mut OutcomeContext<'_>,
+    name: &str,
+    args_val: &serde_json::Value,
+    payload: SuccessPayload<'_>,
+    state: &mut OutcomeState,
+) -> Result<()> {
+    ctx.session_stats.record_tool(name);
+
+    if let Some(tool_name) = name.strip_prefix("mcp_") {
+        record_mcp_success_event(ctx.mcp_panel_state, tool_name, args_val);
+    } else {
+        render_tool_output_common(
+            ctx.renderer,
+            name,
+            args_val,
+            payload.output,
+            payload.command_success,
+            ctx.vt_config,
+        )
+        .await?;
+    }
+
+    state.last_tool_stdout = if payload.command_success {
+        payload.stdout.clone()
+    } else {
+        None
+    };
+
+    if !payload.modified_files.is_empty() {
+        state
+            .turn_modified_files
+            .extend(collect_modified_files(payload.modified_files));
+    }
+
+    Ok(())
+}
+
+fn handle_non_success_common(
+    ctx: &mut OutcomeContext<'_>,
+    name: &str,
+    status: &ToolExecutionStatus,
+) -> Result<()> {
+    match status {
         ToolExecutionStatus::Failure { error } => {
             render_error_common(ctx.renderer, name, &error.to_string(), "failure")?;
         }
@@ -115,34 +210,19 @@ pub(crate) async fn handle_pipeline_output(
             ctx.renderer
                 .line(MessageStyle::Info, "Tool execution cancelled")?;
         }
+        ToolExecutionStatus::Success { .. } => {}
     }
 
-    Ok((any_write_effect, turn_modified_files, last_tool_stdout))
+    Ok(())
 }
 
-// Minimal adapter that uses only the renderer and a subset of control structures
-// This helps other parts of the codebase call into the same rendering logic without
-// needing to construct a full RunLoopContext.
-#[allow(dead_code)]
-pub(crate) async fn handle_pipeline_output_renderer(
-    renderer: &mut AnsiRenderer,
-    session_stats: &mut SessionStats,
-    mcp_panel_state: &mut McpPanelState,
-    tool_result_cache: Option<&Arc<RwLock<ToolResultCache>>>,
-    _decision_ledger: Option<&Arc<RwLock<DecisionTracker>>>,
+async fn process_outcome_common(
+    ctx: &mut OutcomeContext<'_>,
     name: &str,
     args_val: &serde_json::Value,
     outcome: &ToolPipelineOutcome,
-    vt_config: Option<&VTCodeConfig>,
-) -> Result<(bool, Vec<PathBuf>, Option<String>)> {
-    use crate::agent::runloop::tool_output::render_tool_output;
-    use crate::agent::runloop::unified::tool_summary::{
-        render_tool_call_summary, stream_label_from_output,
-    };
-
-    let mut any_write_effect = false;
-    let mut turn_modified_files: Vec<PathBuf> = Vec::new();
-    let mut last_tool_stdout: Option<String> = None;
+) -> Result<OutcomeState> {
+    let mut state = OutcomeState::default();
 
     match &outcome.status {
         ToolExecutionStatus::Success {
@@ -152,41 +232,41 @@ pub(crate) async fn handle_pipeline_output_renderer(
             command_success,
             has_more: _,
         } => {
-            // Record tool usage
-            session_stats.record_tool(name);
-
-            if let Some(tool_name) = name.strip_prefix("mcp_") {
-                record_mcp_success_event(mcp_panel_state, tool_name, args_val);
-            } else {
-                let stream_label = stream_label_from_output(output, *command_success);
-                render_tool_call_summary(renderer, name, args_val, stream_label)?;
-            }
-
-            render_tool_output(renderer, Some(name), output, vt_config).await?;
-
-            last_tool_stdout = compute_last_tool_stdout(*command_success, stdout);
-
-            any_write_effect |= check_write_effect_common(name);
-
-            if !modified_files.is_empty() {
-                turn_modified_files.extend(
-                    collect_modified_files_and_invalidate_cache(modified_files, tool_result_cache)
-                        .await,
-                );
-            }
+            handle_success_common(
+                ctx,
+                name,
+                args_val,
+                SuccessPayload {
+                    output,
+                    stdout,
+                    modified_files,
+                    command_success: *command_success,
+                },
+                &mut state,
+            )
+            .await?;
         }
-        ToolExecutionStatus::Failure { error } => {
-            render_error_common(renderer, name, &error.to_string(), "failure")?;
-        }
-        ToolExecutionStatus::Timeout { error } => {
-            render_error_common(renderer, name, &error.message, "timed out")?;
-        }
-        ToolExecutionStatus::Cancelled => {
-            renderer.line(MessageStyle::Info, "Tool execution cancelled")?;
-        }
+        _ => handle_non_success_common(ctx, name, &outcome.status)?,
     }
 
-    Ok((any_write_effect, turn_modified_files, last_tool_stdout))
+    Ok(state)
+}
+
+pub(crate) async fn handle_pipeline_output(
+    ctx: &mut RunLoopContext<'_>,
+    name: &str,
+    args_val: &serde_json::Value,
+    outcome: &ToolPipelineOutcome,
+    vt_config: Option<&VTCodeConfig>,
+) -> Result<(Vec<PathBuf>, Option<String>)> {
+    let mut output_ctx = OutcomeContext {
+        session_stats: ctx.session_stats,
+        renderer: ctx.renderer,
+        mcp_panel_state: ctx.mcp_panel_state,
+        vt_config,
+    };
+    let state = process_outcome_common(&mut output_ctx, name, args_val, outcome).await?;
+    Ok(state.into_tuple())
 }
 
 // Adapter for TurnLoopContext (to avoid duplication when handling tool output in the turn loop)
@@ -196,7 +276,7 @@ pub(crate) async fn handle_pipeline_output_from_turn_ctx(
     args_val: &serde_json::Value,
     outcome: &ToolPipelineOutcome,
     vt_config: Option<&VTCodeConfig>,
-) -> Result<(bool, Vec<PathBuf>, Option<String>)> {
+) -> Result<(Vec<PathBuf>, Option<String>)> {
     let mut run_ctx = ctx.as_run_loop_context();
     handle_pipeline_output(&mut run_ctx, name, args_val, outcome, vt_config).await
 }
@@ -211,10 +291,11 @@ mod tests {
     use tokio::sync::RwLock;
     use vtcode_core::acp::ToolPermissionCache;
     use vtcode_core::config::loader::VTCodeConfig;
+    use vtcode_core::core::decision_tracker::DecisionTracker;
     use vtcode_core::core::trajectory::TrajectoryLogger;
     use vtcode_core::tools::ApprovalRecorder;
     use vtcode_core::tools::registry::ToolRegistry;
-    use vtcode_core::tools::result_cache::ToolCacheKey;
+    use vtcode_core::tools::result_cache::{ToolCacheKey, ToolResultCache};
     use vtcode_core::ui::theme;
     use vtcode_tui::{SessionOptions, spawn_session_with_options};
 
@@ -230,22 +311,13 @@ mod tests {
 
     // Use Tokio runtime for async test blocks
     #[tokio::test]
-    async fn test_renderer_records_tool_and_invalidates_cache_on_modified_file() {
+    async fn test_renderer_records_tool_and_collects_modified_files() {
         // Setup a stdout renderer
         let mut renderer = vtcode_core::utils::ansi::AnsiRenderer::stdout();
 
         // Prepare session stats and mcp state
         let mut stats = SessionStats::default();
         let mut mcp = McpPanelState::default();
-
-        // Initialize a small cache and insert an entry for /tmp/foo.txt
-        let cache = Arc::new(RwLock::new(ToolResultCache::new(8)));
-        let key = ToolCacheKey::new("read_file", "{}", "/tmp/foo.txt");
-        {
-            let mut c = cache.write().await;
-            c.insert_arc(key.clone(), Arc::new("{}".to_string()));
-            assert!(c.get(&key).is_some());
-        }
 
         // Create an outcome that indicates write to /tmp/foo.txt
         let output_json = serde_json::json!({"result":"ok"});
@@ -257,20 +329,23 @@ mod tests {
             has_more: false,
         });
 
-        // Invoke the renderer adapter
-        let (_any_write, mod_files, _last_stdout) = handle_pipeline_output_renderer(
-            &mut renderer,
-            &mut stats,
-            &mut mcp,
-            Some(&cache),
-            None,
-            "write_file",
-            &serde_json::json!({}),
-            &outcome,
-            None::<&VTCodeConfig>,
-        )
-        .await
-        .expect("render should succeed");
+        // Invoke the shared outcome processor via a minimal output context.
+        let mut output_ctx = OutcomeContext {
+            session_stats: &mut stats,
+            renderer: &mut renderer,
+            mcp_panel_state: &mut mcp,
+            vt_config: None::<&VTCodeConfig>,
+        };
+        let (mod_files, _last_stdout) =
+            process_outcome_common(
+                &mut output_ctx,
+                "write_file",
+                &serde_json::json!({}),
+                &outcome,
+            )
+            .await
+            .expect("render should succeed")
+            .into_tuple();
 
         // Confirm the function recorded the tool call
         let recorded = stats.sorted_tools();
@@ -278,12 +353,6 @@ mod tests {
 
         // Confirm the modified files list contains our path
         assert_eq!(mod_files, vec![PathBuf::from("/tmp/foo.txt")]);
-
-        // Ensure cache invalidation removed the entry
-        {
-            let c = cache.write().await;
-            assert!(c.get(&key).is_none());
-        }
     }
 
     #[tokio::test]
@@ -293,7 +362,6 @@ mod tests {
         // Note: tests involving `apply_turn_outcome` live in `turn/turn_loop.rs` and can be added there
         let mut stats = SessionStats::default();
         let mut mcp = McpPanelState::new(32, true); // enabled
-        let cache = Arc::new(RwLock::new(ToolResultCache::new(8)));
 
         let output_json = serde_json::json!({"exit_code":0});
         let outcome = ToolPipelineOutcome::from_status(ToolExecutionStatus::Success {
@@ -304,26 +372,29 @@ mod tests {
             has_more: false,
         });
 
-        let (_any_write, _mod_files, _last_stdout) = handle_pipeline_output_renderer(
-            &mut renderer,
-            &mut stats,
-            &mut mcp,
-            Some(&cache),
-            None,
-            "mcp_example",
-            &serde_json::json!({}),
-            &outcome,
-            None::<&VTCodeConfig>,
-        )
-        .await
-        .expect("render should succeed");
+        let mut output_ctx = OutcomeContext {
+            session_stats: &mut stats,
+            renderer: &mut renderer,
+            mcp_panel_state: &mut mcp,
+            vt_config: None::<&VTCodeConfig>,
+        };
+        let (_mod_files, _last_stdout) =
+            process_outcome_common(
+                &mut output_ctx,
+                "mcp_example",
+                &serde_json::json!({}),
+                &outcome,
+            )
+            .await
+            .expect("render should succeed")
+            .into_tuple();
 
         // Ensure mcp panel recorded an event
         assert!(mcp.event_count() > 0);
     }
 
     #[tokio::test]
-    async fn test_handle_pipeline_output_invalidates_cache_and_records_stats() {
+    async fn test_handle_pipeline_output_collects_modified_files_and_records_stats() {
         if !stdin().is_terminal() {
             eprintln!("Skipping TUI-dependent test in non-interactive environment");
             return;
@@ -389,7 +460,7 @@ mod tests {
             has_more: false,
         });
 
-        let (any_write, mod_files, _last_stdout) = handle_pipeline_output(
+        let (mod_files, _last_stdout) = handle_pipeline_output(
             &mut ctx,
             "read_file",
             &serde_json::json!({}),
@@ -399,13 +470,12 @@ mod tests {
         .await
         .expect("handle should succeed");
 
-        assert!(!any_write); // read_file not write
         assert_eq!(mod_files, vec![PathBuf::from("/tmp/foo.txt")]);
 
-        // Ensure cache invalidated
+        // Cache invalidation is handled in execution side-effects, not output rendering.
         {
             let c = cache.write().await;
-            assert!(c.get(&key).is_none());
+            assert!(c.get(&key).is_some());
         }
 
         // Ensure session stats were updated
@@ -473,7 +543,7 @@ mod tests {
             has_more: false,
         });
 
-        let (_any_write, _mod_files, _last_stdout) = handle_pipeline_output(
+        let (_mod_files, _last_stdout) = handle_pipeline_output(
             &mut ctx,
             "mcp_example",
             &serde_json::json!({}),

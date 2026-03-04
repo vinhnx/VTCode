@@ -342,6 +342,14 @@ where
         }
     }
 
+    /// Remove a single cache entry by exact key.
+    pub fn remove(&self, key: &K) {
+        let Ok(mut inner) = self.inner.write() else {
+            return;
+        };
+        Self::remove_inner(&mut inner, key);
+    }
+
     /// Get current size
     pub fn len(&self) -> usize {
         self.inner
@@ -363,20 +371,7 @@ where
     /// // Only removes entries for that specific file, not entire cache
     /// ```
     pub fn invalidate_prefix(&self, prefix: &str) {
-        let Ok(mut inner) = self.inner.write() else {
-            return;
-        };
-
-        let keys_to_remove: Vec<K> = inner
-            .entries
-            .keys()
-            .filter(|key| key.to_cache_key().starts_with(prefix))
-            .cloned()
-            .collect();
-
-        for key in keys_to_remove {
-            Self::remove_inner(&mut inner, &key);
-        }
+        self.remove_where(|key| key.to_cache_key().starts_with(prefix));
     }
 
     /// Invalidate entries for a specific target path (e.g., file path)
@@ -399,20 +394,7 @@ where
     /// // Only removes entries for that specific file
     /// ```
     pub fn invalidate_suffix(&self, suffix: &str) {
-        let Ok(mut inner) = self.inner.write() else {
-            return;
-        };
-
-        let keys_to_remove: Vec<K> = inner
-            .entries
-            .keys()
-            .filter(|key| key.to_cache_key().ends_with(suffix))
-            .cloned()
-            .collect();
-
-        for key in keys_to_remove {
-            Self::remove_inner(&mut inner, &key);
-        }
+        self.remove_where(|key| key.to_cache_key().ends_with(suffix));
     }
 
     /// Invalidate cache entries containing a substring (selective eviction)
@@ -423,20 +405,32 @@ where
     /// // Removes entries where the cache key contains this path
     /// ```
     pub fn invalidate_containing(&self, substring: &str) {
+        self.remove_where(|key| key.to_cache_key().contains(substring));
+    }
+
+    /// Remove all entries that satisfy a predicate.
+    ///
+    /// Returns the number of removed entries.
+    pub fn remove_where<F>(&self, mut predicate: F) -> usize
+    where
+        F: FnMut(&K) -> bool,
+    {
         let Ok(mut inner) = self.inner.write() else {
-            return;
+            return 0;
         };
 
         let keys_to_remove: Vec<K> = inner
             .entries
             .keys()
-            .filter(|key| key.to_cache_key().contains(substring))
+            .filter(|key| predicate(key))
             .cloned()
             .collect();
 
+        let removed_count = keys_to_remove.len();
         for key in keys_to_remove {
             Self::remove_inner(&mut inner, &key);
         }
+        removed_count
     }
 
     /// Get total memory used by cache in bytes

@@ -694,7 +694,7 @@ async fn handle_success<'a>(
     let vt_cfg = turn_loop_ctx.vt_cfg;
 
     // Handle UI output and file modifications
-    let (_any_write, mod_files, _last_stdout) = handle_pipeline_output_from_turn_ctx(
+    let (mod_files, _last_stdout) = handle_pipeline_output_from_turn_ctx(
         &mut turn_loop_ctx,
         tool_name,
         args_val,

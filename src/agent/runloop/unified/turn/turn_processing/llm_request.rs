@@ -472,7 +472,11 @@ fn emit_llm_retry_metrics(
     });
 }
 
-#[derive(Clone)]
+fn switch_to_non_streaming_retry_mode(use_streaming: &mut bool, stream_fallback_used: &mut bool) {
+    *use_streaming = false;
+    *stream_fallback_used = true;
+}
+
 struct TurnRequestSnapshot {
     provider_name: String,
     plan_mode: bool,
@@ -487,7 +491,6 @@ struct TurnRequestSnapshot {
     execution: TurnExecutionSnapshot,
 }
 
-#[derive(Clone)]
 struct PromptAssemblyInput<'a> {
     step_count: usize,
     active_model: &'a str,
@@ -519,6 +522,7 @@ fn capture_turn_request_snapshot(
         openai_prompt_cache_key_mode,
         prompt_cache_shaping_mode,
         full_auto,
+        capabilities,
     ) = {
         let parts = ctx.parts_mut();
         let prompt_cache_config = &parts.llm.config.prompt_cache;
@@ -563,11 +567,8 @@ fn capture_turn_request_snapshot(
                 .clone(),
             prompt_cache_shaping_mode,
             parts.state.full_auto,
+            uni::get_cached_capabilities(&**parts.llm.provider_client, active_model),
         )
-    };
-    let capabilities = {
-        let parts = ctx.parts_mut();
-        uni::get_cached_capabilities(&**parts.llm.provider_client, active_model)
     };
 
     TurnRequestSnapshot {
@@ -691,6 +692,19 @@ fn interrupted_provider_error(provider_name: &str) -> anyhow::Error {
         ),
         metadata: None,
     })
+}
+
+fn update_previous_response_chain_after_success(
+    session_stats: &mut crate::agent::runloop::unified::state::SessionStats,
+    provider_name: &str,
+    active_model: &str,
+    response_request_id: Option<&str>,
+) {
+    if supports_responses_chaining(provider_name) {
+        session_stats.set_previous_response_chain(provider_name, active_model, response_request_id);
+    } else {
+        session_stats.clear_previous_response_chain();
+    }
 }
 
 async fn build_turn_request(
@@ -823,7 +837,7 @@ pub(crate) async fn execute_llm_request(
         step_count,
         active_model,
         &turn_snapshot,
-        parallel_cfg_opt.clone(),
+        parallel_cfg_opt,
         use_streaming,
     )
     .await?;
@@ -1034,15 +1048,12 @@ pub(crate) async fn execute_llm_request(
 
         match step_result {
             Ok((response, response_streamed)) => {
-                if supports_responses_chaining(&turn_snapshot.provider_name) {
-                    ctx.session_stats.set_previous_response_chain(
-                        &turn_snapshot.provider_name,
-                        active_model,
-                        response.request_id.as_deref(),
-                    );
-                } else {
-                    ctx.session_stats.clear_previous_response_chain();
-                }
+                update_previous_response_chain_after_success(
+                    ctx.session_stats,
+                    &turn_snapshot.provider_name,
+                    active_model,
+                    response.request_id.as_deref(),
+                );
                 llm_result = Ok((response, response_streamed));
                 _spinner.finish();
                 break;
@@ -1102,8 +1113,10 @@ pub(crate) async fn execute_llm_request(
                         && supports_streaming_timeout_fallback(&turn_snapshot.provider_name)
                         && is_stream_timeout_error(&msg)
                     {
-                        use_streaming = false;
-                        stream_fallback_used = true;
+                        switch_to_non_streaming_retry_mode(
+                            &mut use_streaming,
+                            &mut stream_fallback_used,
+                        );
                         crate::agent::runloop::unified::turn::turn_helpers::display_status(
                             ctx.renderer,
                             "Streaming timed out; retrying with non-streaming for this provider.",
@@ -1118,8 +1131,10 @@ pub(crate) async fn execute_llm_request(
                 // the tool messages. Works for all providers, not just MiniMax.
                 if has_post_tool_context && attempt < max_retries - 1 {
                     if use_streaming {
-                        use_streaming = false;
-                        stream_fallback_used = true;
+                        switch_to_non_streaming_retry_mode(
+                            &mut use_streaming,
+                            &mut stream_fallback_used,
+                        );
                         crate::agent::runloop::unified::turn::turn_helpers::display_status(
                             ctx.renderer,
                             &format!(
