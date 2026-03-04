@@ -23,7 +23,7 @@ const ACTION_PREFIX_ARRAY_POP: &str = "settings:array_pop:";
 const ACTION_PREFIX_SET: &str = "settings:set:";
 
 const FIELD_REFERENCE_MARKDOWN: &str =
-    include_str!("../../../../../docs/config/CONFIG_FIELD_REFERENCE.md");
+    include_str!("../../../../docs/config/CONFIG_FIELD_REFERENCE.md");
 
 #[derive(Clone)]
 pub(crate) struct SettingsPaletteState {
