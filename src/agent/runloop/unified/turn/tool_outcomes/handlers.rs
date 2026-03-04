@@ -1660,18 +1660,27 @@ pub(crate) async fn validate_tool_call<'a>(
                 display_tool
             );
             // Ensure no orphan PTY processes keep running after a hard loop-detection stop.
-            let maybe_spooled = {
+            let tool_registry = {
                 let parts = ctx.parts_mut();
-                parts.tool.tool_registry.terminate_all_pty_sessions();
+                parts.tool.tool_registry.clone()
+            };
+            if let Err(err) = tool_registry.terminate_all_pty_sessions_async().await {
+                tracing::warn!(
+                    error = %err,
+                    "Failed to terminate all PTY sessions after loop detector block"
+                );
+            }
+            {
+                let parts = ctx.parts_mut();
                 parts.ui.handle.set_input_status(None, None);
                 parts.ui.input_status_state.left = None;
                 parts.ui.input_status_state.right = None;
-                parts.tool.tool_registry.find_recent_spooled_output(
-                    &canonical_tool_name,
-                    &effective_args,
-                    Duration::from_secs(120),
-                )
-            };
+            }
+            let maybe_spooled = tool_registry.find_recent_spooled_output(
+                &canonical_tool_name,
+                &effective_args,
+                Duration::from_secs(120),
+            );
             if let Some(mut spooled) = maybe_spooled {
                 if let Some(obj) = spooled.as_object_mut() {
                     obj.remove("output");

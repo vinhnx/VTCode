@@ -409,7 +409,6 @@ pub fn graceful_kill_process_group(
 /// Gracefully terminate a process group with default settings.
 ///
 /// Uses SIGTERM and the default grace period (500ms).
-#[cfg(unix)]
 pub fn graceful_kill_process_group_default(pid: u32) -> GracefulTerminationResult {
     graceful_kill_process_group(
         pid,
@@ -418,14 +417,14 @@ pub fn graceful_kill_process_group_default(pid: u32) -> GracefulTerminationResul
     )
 }
 
-/// Graceful termination with defaults on non-Unix.
-#[cfg(not(unix))]
-pub fn graceful_kill_process_group_default(pid: u32) -> GracefulTerminationResult {
-    graceful_kill_process_group(
-        pid,
-        KillSignal::Term,
-        std::time::Duration::from_millis(DEFAULT_GRACEFUL_TIMEOUT_MS),
-    )
+/// Async-safe wrapper for graceful process-group termination.
+///
+/// This offloads the synchronous graceful-kill loop to Tokio's blocking pool so
+/// async runtime threads are not occupied by polling sleeps.
+pub async fn graceful_kill_process_group_default_async(pid: u32) -> GracefulTerminationResult {
+    tokio::task::spawn_blocking(move || graceful_kill_process_group_default(pid))
+        .await
+        .unwrap_or(GracefulTerminationResult::Error)
 }
 
 #[cfg(test)]
@@ -504,6 +503,19 @@ mod tests {
         #[cfg(not(unix))]
         {
             // On non-Unix, behavior varies
+            let _ = result;
+        }
+    }
+
+    #[tokio::test]
+    async fn test_graceful_kill_nonexistent_process_async() {
+        let result = graceful_kill_process_group_default_async(2_000_000_000).await;
+        #[cfg(unix)]
+        {
+            assert_eq!(result, GracefulTerminationResult::AlreadyExited);
+        }
+        #[cfg(not(unix))]
+        {
             let _ = result;
         }
     }

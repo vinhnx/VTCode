@@ -5,7 +5,7 @@ use tokio::sync::Notify;
 use tracing::warn;
 use vtcode_core::config::constants::tools;
 use vtcode_core::config::loader::VTCodeConfig;
-use vtcode_core::tools::registry::ToolRegistry;
+use vtcode_core::tools::registry::{ToolProgressCallback, ToolRegistry};
 use vtcode_core::tools::result_cache::ToolResultCache;
 
 use crate::agent::runloop::tool_output::resolve_stdout_tail_limit;
@@ -20,6 +20,29 @@ use super::execution_helpers::{
 };
 use super::pty_stream::PtyStreamRuntime;
 use super::status::ToolExecutionStatus;
+
+struct ProgressCallbackGuard<'a> {
+    registry: &'a ToolRegistry,
+    previous: Option<Option<ToolProgressCallback>>,
+}
+
+impl<'a> ProgressCallbackGuard<'a> {
+    fn replace(registry: &'a ToolRegistry, callback: ToolProgressCallback) -> Self {
+        let previous = registry.replace_progress_callback(Some(callback));
+        Self {
+            registry,
+            previous: Some(previous),
+        }
+    }
+}
+
+impl Drop for ProgressCallbackGuard<'_> {
+    fn drop(&mut self) {
+        if let Some(previous) = self.previous.take() {
+            let _ = self.registry.replace_progress_callback(previous);
+        }
+    }
+}
 
 pub(super) async fn execute_with_cache_and_streaming(
     registry: &mut ToolRegistry,
@@ -71,7 +94,7 @@ pub(super) async fn execute_with_cache_and_streaming(
         tools::RUN_PTY_CMD | tools::UNIFIED_EXEC | tools::SEND_PTY_INPUT
     );
     let mut pty_stream_runtime: Option<PtyStreamRuntime> = None;
-    let previous_progress_callback = if should_stream_pty {
+    let _progress_callback_guard = if should_stream_pty {
         let stream_command = extract_pty_stream_command(name, args_val);
         let tail_limit = resolve_stdout_tail_limit(vt_cfg);
         let (runtime, callback) = PtyStreamRuntime::start(
@@ -81,7 +104,7 @@ pub(super) async fn execute_with_cache_and_streaming(
             stream_command,
         );
         pty_stream_runtime = Some(runtime);
-        Some(registry.replace_progress_callback(Some(callback)))
+        Some(ProgressCallbackGuard::replace(registry, callback))
     } else {
         None
     };
@@ -97,9 +120,6 @@ pub(super) async fn execute_with_cache_and_streaming(
     )
     .await;
 
-    if let Some(previous) = previous_progress_callback {
-        let _ = registry.replace_progress_callback(previous);
-    }
     if let Some(runtime) = pty_stream_runtime {
         runtime.shutdown().await;
     }
@@ -135,8 +155,8 @@ pub(super) async fn execute_with_cache_and_streaming(
             let workspace_path = registry.workspace_root().to_string_lossy().to_string();
             let cache_key =
                 create_enhanced_cache_key(name, args_val, &cache_target, &workspace_path);
-            let mut cache = tool_result_cache.write().await;
             let output_json = serde_json::to_string(output).unwrap_or_else(|_| "{}".to_string());
+            let mut cache = tool_result_cache.write().await;
             cache.insert_arc(cache_key, Arc::new(output_json));
         }
     }
@@ -356,10 +376,15 @@ async fn try_loop_detection_cache_hit(
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
     use serde_json::json;
     use vtcode_core::config::constants::tools;
+    use vtcode_core::tools::registry::ToolRegistry;
 
-    use super::{extract_pty_stream_command, should_cache_success_output};
+    use super::{ProgressCallbackGuard, extract_pty_stream_command, should_cache_success_output};
+    use tempfile::TempDir;
 
     #[test]
     fn extracts_command_for_run_pty_cmd() {
@@ -401,6 +426,40 @@ mod tests {
             extract_pty_stream_command(tools::RUN_PTY_CMD, &args),
             Some("cargo check -p vtcode-core".to_string())
         );
+    }
+
+    #[tokio::test]
+    async fn progress_callback_guard_restores_previous_on_drop() {
+        let temp_dir = TempDir::new().expect("create temp dir");
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+
+        let first_hits = Arc::new(AtomicUsize::new(0));
+        let first_hits_clone = Arc::clone(&first_hits);
+        registry.set_progress_callback(Arc::new(move |_, _| {
+            let _ = first_hits_clone.fetch_add(1, Ordering::SeqCst);
+        }));
+
+        let second_hits = Arc::new(AtomicUsize::new(0));
+        let second_hits_clone = Arc::clone(&second_hits);
+
+        {
+            let _guard = ProgressCallbackGuard::replace(
+                &registry,
+                Arc::new(move |_, _| {
+                    let _ = second_hits_clone.fetch_add(1, Ordering::SeqCst);
+                }),
+            );
+
+            if let Some(current) = registry.progress_callback() {
+                current("run_pty_cmd", "chunk");
+            }
+            assert_eq!(second_hits.load(Ordering::SeqCst), 1);
+        }
+
+        if let Some(current) = registry.progress_callback() {
+            current("run_pty_cmd", "chunk");
+        }
+        assert_eq!(first_hits.load(Ordering::SeqCst), 1);
     }
 
     #[test]

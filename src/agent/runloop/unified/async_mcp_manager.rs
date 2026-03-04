@@ -146,6 +146,13 @@ impl AsyncMcpManager {
             return Ok(());
         }
 
+        if let Ok(guard) = self.init_task.lock()
+            && let Some(existing_task) = guard.as_ref()
+            && !existing_task.is_finished()
+        {
+            return Ok(());
+        }
+
         // Clone what we need for the async task
         let config = self.config.clone();
         let status = Arc::clone(&self.status);
@@ -395,6 +402,46 @@ mod tests {
             message: "Connection failed".to_string(),
         };
         assert_eq!(error_status.to_string(), "MCP error: Connection failed");
+    }
+
+    #[tokio::test]
+    async fn test_start_initialization_skips_when_task_already_running() {
+        let mut config = McpClientConfig::default();
+        config.enabled = true;
+        let event_callback: Arc<dyn Fn(McpEvent) + Send + Sync> = Arc::new(|_event| {});
+        let manager = AsyncMcpManager::new(config, true, AskForApproval::OnRequest, event_callback);
+
+        let blocker = tokio::spawn(async {
+            tokio::time::sleep(Duration::from_secs(60)).await;
+        });
+        let blocker_id = blocker.id();
+        if let Ok(mut guard) = manager.init_task.lock() {
+            *guard = Some(blocker);
+        }
+
+        manager
+            .start_initialization()
+            .expect("start should succeed");
+
+        if let Ok(mut guard) = manager.init_task.lock() {
+            let task = guard
+                .as_ref()
+                .expect("running init task should still be present");
+            assert_eq!(
+                task.id(),
+                blocker_id,
+                "start_initialization should not replace a running init task"
+            );
+            assert!(
+                !task.is_finished(),
+                "existing task should still be running after skipped start"
+            );
+            if let Some(task) = guard.take() {
+                task.abort();
+            }
+        } else {
+            panic!("failed to lock init_task");
+        }
     }
 
     #[tokio::test]

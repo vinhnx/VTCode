@@ -102,6 +102,11 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: Overview, Problem Statement, Solution, Usage, Backward Compatibility
   - **User Questions**: "What can you tell me about TUI-Only Tool Permission Refactoring?", "How does Overview work?", "How does Problem Statement work?"
 
+- **File**: `docs/development/async-performance-audit.md`
+  - **Content**: VT Code Async Performance Audit
+  - **Topics**: Audit Rubric, Findings (Prioritized), Implemented Batch (Runtime-Critical), Validation, Next Batch (Recommended)
+  - **User Questions**: "What can you tell me about VT Code Async Performance Audit?", "How does Audit Rubric work?", "How does Findings (Prioritized) work?"
+
 - **File**: `docs/development/COMMAND_SECURITY_MODEL.md`
   - **Content**: VT Code Command Security Model
   - **Topics**: Overview, Design Philosophy, Architecture, Safe Commands (Enabled by Default), Dangerous Commands (Always Denied)

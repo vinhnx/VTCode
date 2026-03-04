@@ -89,4 +89,14 @@ impl PtySessionManager {
         self.manager.terminate_all_sessions();
         self.active_sessions.store(0, Ordering::SeqCst);
     }
+
+    pub async fn terminate_all_async(&self) -> Result<()> {
+        let session_manager = self.clone();
+        tokio::task::spawn_blocking(move || session_manager.terminate_all())
+            .await
+            .map_err(|join_err| {
+                anyhow!("terminate_all_pty_sessions task failed to join: {join_err}")
+            })?;
+        Ok(())
+    }
 }

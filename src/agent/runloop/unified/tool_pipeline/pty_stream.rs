@@ -893,9 +893,31 @@ impl PtyStreamRuntime {
     }
 }
 
+impl Drop for PtyStreamRuntime {
+    fn drop(&mut self) {
+        self.active.store(false, Ordering::Relaxed);
+        let _ = self.sender.take();
+        if let Some(task) = self.task.take() {
+            task.abort();
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tokio::sync::oneshot;
+    use tokio::time::timeout;
+
+    struct DropNotifier(Option<oneshot::Sender<()>>);
+
+    impl Drop for DropNotifier {
+        fn drop(&mut self) {
+            if let Some(tx) = self.0.take() {
+                let _ = tx.send(());
+            }
+        }
+    }
 
     fn flatten_text(segments: &[InlineSegment]) -> String {
         segments
@@ -1119,5 +1141,32 @@ mod tests {
                 .any(|segment| !segment.text.trim().is_empty() && segment.style.color.is_some()),
             "expected syntax-highlighted continuation segments"
         );
+    }
+
+    #[tokio::test]
+    async fn pty_stream_runtime_drop_aborts_background_task() {
+        let (drop_tx, drop_rx) = oneshot::channel();
+        let notifier = DropNotifier(Some(drop_tx));
+        let task = tokio::spawn(async move {
+            let _notifier = notifier;
+            std::future::pending::<()>().await;
+        });
+        let active = Arc::new(AtomicBool::new(true));
+        let runtime = PtyStreamRuntime {
+            sender: None,
+            task: Some(task),
+            active: Arc::clone(&active),
+        };
+
+        drop(runtime);
+
+        assert!(
+            !active.load(Ordering::Relaxed),
+            "drop should mark stream runtime inactive"
+        );
+        timeout(Duration::from_millis(300), drop_rx)
+            .await
+            .expect("background task should be aborted on drop")
+            .expect("drop notifier should signal when task future is dropped");
     }
 }

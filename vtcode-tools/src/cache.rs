@@ -3,7 +3,7 @@
 //! Provides a production-ready cache for tool results, pattern data, and LLM responses.
 //! Includes metrics collection and optional logging.
 
-use hashbrown::HashMap;
+use hashbrown::{HashMap, HashSet};
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -217,41 +217,56 @@ impl<V: Send + Sync> LruCache<V> {
 
     /// Insert an Arc-wrapped value into the cache to avoid extra cloning.
     pub async fn insert_arc(&self, key: String, value: Arc<V>) {
-        let mut entries = self.entries.write().await;
+        let capacity_evicted = {
+            let mut entries = self.entries.write().await;
+            let mut evicted: Option<String> = None;
 
-        // If at capacity and key doesn't exist, evict LRU entry.
-        if entries.len() >= self.capacity && !entries.contains_key(&key) {
-            let mut order = self.access_order.write().await;
-            if let Some(lru_key) = order.front().cloned() {
-                entries.remove(&lru_key);
-                self.observer
-                    .on_evict(&lru_key, EvictionReason::Capacity)
-                    .await;
-                let mut stats = self.stats.write().await;
-                stats.evictions += 1;
-                order.pop_front();
+            // If at capacity and key doesn't exist, evict LRU entry.
+            if entries.len() >= self.capacity && !entries.contains_key(&key) {
+                let mut order = self.access_order.write().await;
+                if let Some(lru_key) = order.pop_front() {
+                    entries.remove(&lru_key);
+                    evicted = Some(lru_key);
+                }
             }
-        }
 
-        let entry = CacheEntry {
-            value: value.clone(),
-            inserted_at: Instant::now(),
-            accessed_at: Instant::now(),
-            access_count: 0,
+            let entry = CacheEntry {
+                value: Arc::clone(&value),
+                inserted_at: Instant::now(),
+                accessed_at: Instant::now(),
+                access_count: 0,
+            };
+
+            entries.insert(key.clone(), entry);
+            let mut order = self.access_order.write().await;
+            order.retain(|existing| existing != &key);
+            order.push_back(key);
+            evicted
         };
 
-        entries.insert(key.clone(), entry);
-        let mut order = self.access_order.write().await;
-        order.push_back(key);
+        // Avoid awaiting external observer hooks while cache locks are held.
+        if let Some(evicted_key) = capacity_evicted {
+            self.observer
+                .on_evict(&evicted_key, EvictionReason::Capacity)
+                .await;
+            let mut stats = self.stats.write().await;
+            stats.evictions += 1;
+        }
     }
 
     /// Remove a specific key.
     pub async fn remove(&self, key: &str) -> Option<Arc<V>> {
-        let mut entries = self.entries.write().await;
-        let mut order = self.access_order.write().await;
-        order.retain(|k| k != key);
-        self.observer.on_evict(key, EvictionReason::Manual).await;
-        entries.remove(key).map(|e| e.value)
+        let removed = {
+            let mut entries = self.entries.write().await;
+            let mut order = self.access_order.write().await;
+            order.retain(|k| k != key);
+            entries.remove(key).map(|e| e.value)
+        };
+
+        if removed.is_some() {
+            self.observer.on_evict(key, EvictionReason::Manual).await;
+        }
+        removed
     }
 
     /// Clear all entries.
@@ -291,27 +306,37 @@ impl<V: Send + Sync> LruCache<V> {
 
     /// Remove expired entries.
     pub async fn prune_expired(&self) {
-        let mut entries = self.entries.write().await;
-        let mut order = self.access_order.write().await;
+        let expired = {
+            let mut entries = self.entries.write().await;
+            let mut order = self.access_order.write().await;
 
-        let expired: Vec<_> = entries
-            .iter()
-            .filter(|(_, entry)| entry.is_expired(self.ttl))
-            .map(|(k, _)| k.clone())
-            .collect();
+            let mut expired = Vec::new();
+            entries.retain(|key, entry| {
+                let keep = !entry.is_expired(self.ttl);
+                if !keep {
+                    expired.push(key.clone());
+                }
+                keep
+            });
 
-        let mut expired_count = 0usize;
-        for key in expired {
-            entries.remove(&key);
-            order.retain(|k| k != &key);
-            self.observer.on_evict(&key, EvictionReason::Expired).await;
-            expired_count += 1;
+            if !expired.is_empty() {
+                let expired_set: HashSet<_> = expired.iter().cloned().collect();
+                order.retain(|k| !expired_set.contains(k));
+            }
+
+            expired
+        };
+
+        if expired.is_empty() {
+            return;
         }
 
-        if expired_count > 0 {
-            let mut stats = self.stats.write().await;
-            stats.expirations += expired_count as u64;
+        for key in &expired {
+            self.observer.on_evict(key, EvictionReason::Expired).await;
         }
+
+        let mut stats = self.stats.write().await;
+        stats.expirations += expired.len() as u64;
     }
 }
 

@@ -20,6 +20,26 @@ use vtcode_core::utils::ansi::AnsiRenderer;
 use vtcode_core::utils::session_archive::SessionArchive;
 use vtcode_tui::{InlineHandle, InlineSession};
 
+pub(crate) struct BackgroundTaskGuard {
+    handle: Option<tokio::task::JoinHandle<()>>,
+}
+
+impl BackgroundTaskGuard {
+    pub(crate) fn new(handle: tokio::task::JoinHandle<()>) -> Self {
+        Self {
+            handle: Some(handle),
+        }
+    }
+}
+
+impl Drop for BackgroundTaskGuard {
+    fn drop(&mut self) {
+        if let Some(handle) = self.handle.take() {
+            handle.abort();
+        }
+    }
+}
+
 pub(crate) struct ToolExecutionContext {
     pub tool_result_cache: Arc<RwLock<ToolResultCache>>,
     pub tool_permission_cache: Arc<RwLock<ToolPermissionCache>>,
@@ -73,6 +93,7 @@ pub(crate) struct SessionUISetup {
     pub follow_up_placeholder: Option<String>,
     pub next_checkpoint_turn: usize,
     pub ui_redraw_batcher: crate::agent::runloop::unified::turn::utils::UIRedrawBatcher,
+    pub file_palette_task_guard: BackgroundTaskGuard,
 }
 
 #[allow(dead_code)]

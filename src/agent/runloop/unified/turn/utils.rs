@@ -131,9 +131,13 @@ impl UIRedrawBatcher {
     #[allow(dead_code)]
     pub fn force_redraw(&self) {
         self.handle.force_redraw();
-        // Reset counters
-        let _ = self.pending_redraws.try_lock(); // Clear pending count
-        let _ = self.last_redraw_time.try_lock(); // Update last redraw time
+        // Reset counters best-effort without blocking.
+        if let Ok(mut pending) = self.pending_redraws.try_lock() {
+            *pending = 0;
+        }
+        if let Ok(mut last_redraw) = self.last_redraw_time.try_lock() {
+            *last_redraw = Instant::now();
+        }
     }
 
     /// Set minimum batch interval
@@ -146,6 +150,14 @@ impl UIRedrawBatcher {
     #[allow(dead_code)]
     pub fn set_max_batch_size(&mut self, size: usize) {
         self.max_batch_size = size;
+    }
+}
+
+impl Drop for UIRedrawBatcher {
+    fn drop(&mut self) {
+        if let Some(task) = self.auto_flush_task.take() {
+            task.abort();
+        }
     }
 }
 

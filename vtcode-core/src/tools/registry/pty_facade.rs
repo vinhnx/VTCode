@@ -39,6 +39,10 @@ impl ToolRegistry {
         self.pty_sessions.terminate_all();
     }
 
+    pub async fn terminate_all_pty_sessions_async(&self) -> Result<()> {
+        self.pty_sessions.terminate_all_async().await
+    }
+
     /// Set the active PTY sessions counter for tracking
     pub fn set_active_pty_sessions(&self, counter: Arc<std::sync::atomic::AtomicUsize>) {
         if let Ok(mut guard) = self.active_pty_sessions.write() {
