@@ -23,9 +23,6 @@ unset MALLOCSTACKTOOLSDIR
 unset MallocErrorAbort
 unset MallocNanoZone
 
-echo "VTCODE - Debug Mode (Fast Build)"
-echo "=================================="
-
 # Load .env for local development if present
 if [[ -f ".env" ]]; then
   set -a
@@ -58,7 +55,7 @@ if [[ ! -f "Cargo.toml" ]]; then
 fi
 
 # Build and run in debug mode (much faster)
-echo "Building vtcode in debug mode..."
+echo "Building VT Code in debug mode..."
 
 # Try building with sccache first, fall back to regular cargo if sccache fails
 # Show build progress with cargo's default terminal output

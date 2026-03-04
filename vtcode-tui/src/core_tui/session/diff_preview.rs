@@ -16,7 +16,7 @@ use crate::ui::tui::session::Session;
 use crate::ui::tui::types::{DiffPreviewState, TrustMode};
 use crate::utils::diff::{DiffBundle, DiffLineKind, DiffOptions, compute_diff_with_theme};
 use crate::utils::diff_styles::{
-    DiffColorLevel, DiffColorPalette, DiffLineType, DiffTheme, diff_add_bg, diff_del_bg,
+    DiffColorPalette, DiffLineType, content_background, current_diff_render_style_context,
     style_gutter, style_line_bg, style_sign,
 };
 
@@ -26,8 +26,6 @@ pub fn render_diff_preview(session: &Session, frame: &mut Frame<'_>, area: Rect)
     };
 
     let palette = DiffColorPalette::default();
-    let diff_theme = DiffTheme::detect();
-    let color_level = DiffColorLevel::detect();
     let diff_bundle = compute_diff_with_theme(
         &preview.before,
         &preview.after,
@@ -48,15 +46,7 @@ pub fn render_diff_preview(session: &Session, frame: &mut Frame<'_>, area: Rect)
     .split(area);
 
     render_file_header(frame, chunks[0], preview, &palette, additions, deletions);
-    render_diff_content(
-        frame,
-        chunks[1],
-        preview,
-        &palette,
-        &diff_bundle,
-        diff_theme,
-        color_level,
-    );
+    render_diff_content(frame, chunks[1], preview, &diff_bundle);
     render_controls(frame, chunks[2], preview);
 }
 
@@ -160,12 +150,10 @@ fn render_diff_content(
     frame: &mut Frame<'_>,
     area: Rect,
     preview: &DiffPreviewState,
-    _palette: &DiffColorPalette,
     diff_bundle: &DiffBundle,
-    diff_theme: DiffTheme,
-    color_level: DiffColorLevel,
 ) {
     let language = detect_language(&preview.file_path);
+    let style_context = current_diff_render_style_context();
 
     let mut lines: Vec<Line> = Vec::new();
     let max_display = area.height.saturating_sub(1) as usize;
@@ -199,20 +187,10 @@ fn render_diff_content(
                 DiffLineKind::Deletion => DiffLineType::Delete,
             };
 
-            let gutter_style = style_gutter(line_type, diff_theme, color_level);
-            let sign_style = style_sign(line_type, diff_theme, color_level);
-            let line_bg = style_line_bg(line_type, diff_theme, color_level);
-            let content_bg = match line_type {
-                DiffLineType::Context => None,
-                DiffLineType::Insert => Some(ratatui_color_from_ansi(diff_add_bg(
-                    diff_theme,
-                    color_level,
-                ))),
-                DiffLineType::Delete => Some(ratatui_color_from_ansi(diff_del_bg(
-                    diff_theme,
-                    color_level,
-                ))),
-            };
+            let gutter_style = style_gutter(line_type);
+            let sign_style = style_sign(line_type);
+            let line_bg = style_line_bg(line_type, style_context);
+            let content_bg = content_background(line_type, style_context);
 
             let prefix = match line_type {
                 DiffLineType::Insert => "+",
