@@ -215,9 +215,7 @@ user_setting = 1
             result
                 .find("vtcode_setting")
                 .expect("missing VT Code setting")
-                < result
-                    .find("user_setting")
-                    .expect("missing user setting")
+                < result.find("user_setting").expect("missing user setting")
         );
     }
 

@@ -262,12 +262,7 @@ mod tests {
     #[test]
     fn non_windows_terminal_keeps_ansi16() {
         assert_eq!(
-            diff_color_level_for_terminal(
-                DiffColorLevel::Ansi16,
-                Some("WezTerm"),
-                false,
-                false
-            ),
+            diff_color_level_for_terminal(DiffColorLevel::Ansi16, Some("WezTerm"), false, false),
             DiffColorLevel::Ansi16
         );
     }
