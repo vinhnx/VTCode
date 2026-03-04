@@ -5,11 +5,11 @@ use vtcode_core::config::constants::tools;
 use vtcode_core::tools::ToolRegistry;
 
 #[tokio::test]
-async fn preflight_rejects_removed_grep_file_alias() -> Result<()> {
+async fn preflight_accepts_grep_file_alias_and_normalizes_to_unified_search() -> Result<()> {
     let temp_dir = TempDir::new()?;
     let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
 
-    let err = registry
+    let outcome = registry
         .preflight_validate_call(
             "grep_file",
             &json!({
@@ -17,8 +17,9 @@ async fn preflight_rejects_removed_grep_file_alias() -> Result<()> {
                 "path": "."
             }),
         )
-        .expect_err("grep_file alias should be rejected");
-    assert!(err.to_string().contains("Unknown tool"));
+        .expect("grep_file alias should resolve");
+    assert_eq!(outcome.normalized_tool_name, tools::UNIFIED_SEARCH);
+    assert!(outcome.readonly_classification);
     Ok(())
 }
 

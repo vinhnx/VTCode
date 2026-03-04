@@ -194,7 +194,7 @@ impl GitColorConfig {
                         | "white"
                 )
             })
-            .unwrap_or("normal");
+            ?;
 
         Some(crate::utils::style_helpers::style_from_color_name(
             color_name,

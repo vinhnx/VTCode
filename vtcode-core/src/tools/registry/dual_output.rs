@@ -108,6 +108,106 @@ impl ToolRegistry {
                     _ => Ok(SplitToolResult::simple(tool_name, ui_content)),
                 }
             }
+            tools::UNIFIED_FILE => {
+                match tool_intent::unified_file_action(&args).unwrap_or("read") {
+                    "read" => {
+                        let mut metadata = args.clone();
+                        if let Value::Object(map) = &mut metadata
+                            && !map.contains_key("file_path")
+                        {
+                            let inferred_path = args
+                                .get("path")
+                                .or_else(|| args.get("file_path"))
+                                .or_else(|| args.get("filepath"))
+                                .or_else(|| args.get("target_path"))
+                                .and_then(Value::as_str)
+                                .map(str::to_string);
+                            if let Some(path) = inferred_path {
+                                map.insert("file_path".to_string(), Value::String(path));
+                            }
+                        }
+
+                        let summarizer = ReadSummarizer::default();
+                        match summarizer.summarize(&ui_content, Some(&metadata)) {
+                            Ok(llm_content) => {
+                                debug!(
+                                    tool = tools::UNIFIED_FILE,
+                                    action = "read",
+                                    ui_tokens = %summarizer.estimate_savings(&ui_content, &llm_content).1,
+                                    llm_tokens = %summarizer.estimate_savings(&ui_content, &llm_content).0,
+                                    savings_pct = %summarizer.estimate_savings(&ui_content, &llm_content).2,
+                                    "Applied unified_file read summarization"
+                                );
+                                Ok(SplitToolResult::new(tool_name, llm_content, ui_content))
+                            }
+                            Err(e) => {
+                                warn!(
+                                    tool = tools::UNIFIED_FILE,
+                                    action = "read",
+                                    error = %e,
+                                    "Failed to summarize unified_file read output, using simple result"
+                                );
+                                Ok(SplitToolResult::simple(tool_name, ui_content))
+                            }
+                        }
+                    }
+                    "write" | "edit" | "patch" | "move" | "copy" | "delete" => {
+                        let summarizer = EditSummarizer::default();
+                        match summarizer.summarize(&ui_content, None) {
+                            Ok(llm_content) => {
+                                debug!(
+                                    tool = tools::UNIFIED_FILE,
+                                    action = "mutate",
+                                    ui_tokens = %summarizer.estimate_savings(&ui_content, &llm_content).1,
+                                    llm_tokens = %summarizer.estimate_savings(&ui_content, &llm_content).0,
+                                    savings_pct = %summarizer.estimate_savings(&ui_content, &llm_content).2,
+                                    "Applied unified_file mutation summarization"
+                                );
+                                Ok(SplitToolResult::new(tool_name, llm_content, ui_content))
+                            }
+                            Err(e) => {
+                                warn!(
+                                    tool = tools::UNIFIED_FILE,
+                                    action = "mutate",
+                                    error = %e,
+                                    "Failed to summarize unified_file mutation output, using simple result"
+                                );
+                                Ok(SplitToolResult::simple(tool_name, ui_content))
+                            }
+                        }
+                    }
+                    _ => Ok(SplitToolResult::simple(tool_name, ui_content)),
+                }
+            }
+            tools::UNIFIED_EXEC => match tool_intent::unified_exec_action(&args).unwrap_or("run") {
+                "run" | "code" => {
+                    let summarizer = BashSummarizer::default();
+                    let metadata = args.as_object().map(|_| args.clone());
+                    match summarizer.summarize(&ui_content, metadata.as_ref()) {
+                        Ok(llm_content) => {
+                            debug!(
+                                tool = tools::UNIFIED_EXEC,
+                                action = "run",
+                                ui_tokens = %summarizer.estimate_savings(&ui_content, &llm_content).1,
+                                llm_tokens = %summarizer.estimate_savings(&ui_content, &llm_content).0,
+                                savings_pct = %summarizer.estimate_savings(&ui_content, &llm_content).2,
+                                "Applied unified_exec summarization"
+                            );
+                            Ok(SplitToolResult::new(tool_name, llm_content, ui_content))
+                        }
+                        Err(e) => {
+                            warn!(
+                                tool = tools::UNIFIED_EXEC,
+                                action = "run",
+                                error = %e,
+                                "Failed to summarize unified_exec output, using simple result"
+                            );
+                            Ok(SplitToolResult::simple(tool_name, ui_content))
+                        }
+                    }
+                }
+                _ => Ok(SplitToolResult::simple(tool_name, ui_content)),
+            },
             tools::READ_FILE => {
                 // Apply read file summarization
                 let summarizer = ReadSummarizer::default();

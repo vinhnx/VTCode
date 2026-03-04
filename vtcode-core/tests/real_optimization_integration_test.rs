@@ -79,7 +79,7 @@ async fn test_optimization_config_integration() -> Result<()> {
 
     // Check default optimization config
     let config = registry.optimization_config();
-    assert!(!config.tool_registry.use_optimized_registry);
+    assert!(config.tool_registry.use_optimized_registry);
     assert!(config.memory_pool.enabled); // Default is enabled
 
     println!("✅ Optimization config integration is working!");

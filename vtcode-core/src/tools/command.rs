@@ -100,6 +100,12 @@ impl CommandTool {
             .await?;
 
         if !eval_result.allowed {
+            if !policy_allowed {
+                return Err(anyhow!(
+                    "command '{}' is not permitted by the execution policy",
+                    program
+                ));
+            }
             // If unified evaluator denied, still allow explicitly confirmed risky commands
             // when they are permitted by the configured policy.
             let allow_confirmed_risky = risky_command
@@ -374,15 +380,12 @@ mod tests {
     async fn prepare_invocation_respects_shell_override_and_login_false() {
         let cwd = std::env::current_dir().expect("current dir");
         let tool = CommandTool::new(cwd);
-        let mut input = make_input(vec!["my-build"]);
+        let mut input = make_input(vec!["ls"]);
         input.shell = Some("/bin/sh".to_string());
         input.login = Some(false);
         let invocation = tool.prepare_invocation(&input).await.expect("invocation");
         assert_eq!(invocation.program, "/bin/sh".to_owned());
-        assert_eq!(
-            invocation.args,
-            vec!["-c".to_owned(), "my-build".to_owned()]
-        );
+        assert_eq!(invocation.args, vec!["-c".to_owned(), "ls".to_owned()]);
     }
 
     #[test]
@@ -429,15 +432,15 @@ mod tests {
     #[tokio::test]
     async fn prepare_invocation_uses_shell_for_command_execution() {
         let tool = make_tool();
-        let input = make_input(vec!["srt", "run"]);
+        let input = make_input(vec!["cargo", "check"]);
         let invocation = tool.prepare_invocation(&input).await.expect("invocation");
         let shell = resolve_fallback_shell();
         assert_eq!(invocation.program, shell);
         assert_eq!(
             invocation.args,
-            vec!["-lc".to_owned(), "srt run".to_owned()]
+            vec!["-lc".to_owned(), "cargo check".to_owned()]
         );
-        assert_eq!(invocation.display, "srt run");
+        assert_eq!(invocation.display, "cargo check");
     }
 
     #[tokio::test]
@@ -472,11 +475,16 @@ mod tests {
             .prepare_invocation(&input)
             .await
             .expect("extra path should allow command");
+        let shell = resolve_fallback_shell();
+        assert_eq!(invocation.program, shell);
         assert_eq!(
-            invocation.program,
-            binary_path.to_string_lossy().into_owned()
+            invocation.args,
+            vec!["-lc".to_owned(), "fake-extra".to_owned()]
         );
-        assert!(invocation.args.is_empty());
+        assert_eq!(
+            tool.extra_path_entries,
+            vec![binary_path.parent().expect("parent").to_path_buf()]
+        );
     }
 
     #[tokio::test]

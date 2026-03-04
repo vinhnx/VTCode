@@ -49,6 +49,7 @@ pub fn supports_parallel_tool_config(_model: &str) -> bool {
 pub fn effective_context_size(model: &str) -> usize {
     match model {
         m if m.contains("claude-sonnet-4-6")
+            || m.contains("claude-sonnet-4-5")
             || m.contains("claude-opus-4-6")
             || m.contains("claude-haiku-4-5") =>
         {
@@ -73,6 +74,7 @@ pub fn supports_structured_output(model: &str, default_model: &str) -> bool {
         || requested == models::anthropic::CLAUDE_HAIKU_4_5
         || requested == models::anthropic::CLAUDE_HAIKU_4_5_20251001
         || requested.contains("claude-3-7-sonnet")
+        || requested.contains("claude-3-5-sonnet")
         || requested.contains("claude-haiku-4-5")
 }
 
@@ -84,6 +86,7 @@ pub fn supports_vision(model: &str, default_model: &str) -> bool {
     };
 
     requested.contains("claude-3")
+        || requested.contains("claude-4-sonnet")
         || requested.contains("claude-4-6")
         || requested == models::anthropic::CLAUDE_SONNET_4_6
         || requested == models::anthropic::CLAUDE_OPUS_4_6

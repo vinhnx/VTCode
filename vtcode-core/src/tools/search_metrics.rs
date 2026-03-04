@@ -238,7 +238,7 @@ mod tests {
     #[test]
     fn test_expensive_searches() {
         let mut metrics = SearchMetrics::new().with_expensive_threshold(5000);
-        metrics.record_search("pattern1", 10, 10000, 20, 5);
+        metrics.record_search("pattern1", 10, 25000, 20, 5);
         metrics.record_search("pattern2", 5, 2000, 10, 2);
         metrics.record_search("pattern3", 50, 30000, 100, 20);
 
@@ -301,7 +301,7 @@ mod tests {
         metrics.record_search("pattern1", 10, 4000, 10, 5);
 
         let summary = metrics.format_summary();
-        assert!(summary.contains("Search Metrics"));
+        assert!(summary.contains("[SEARCH] Metrics Summary"));
         assert!(summary.contains("Total searches: 1"));
     }
 

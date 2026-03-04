@@ -207,6 +207,7 @@ pub fn find_family_for_model(slug: &str) -> ModelFamily {
         return model_family!(
             slug, "gpt-5", Provider::OpenAI,
             context_window: Some(DEFAULT_CONTEXT_WINDOW),
+            supports_thinking: true,
             supports_parallel_tool_calls: true,
         );
     }

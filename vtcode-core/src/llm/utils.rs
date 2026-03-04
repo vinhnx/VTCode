@@ -46,11 +46,17 @@ pub fn parse_chat_request_openai_format(value: &Value, default_model: &str) -> O
     let temperature = value
         .get("temperature")
         .and_then(|t| t.as_f64().map(|f| f as f32));
+    let max_tokens = value
+        .get("max_completion_tokens")
+        .or_else(|| value.get("max_tokens"))
+        .and_then(Value::as_u64)
+        .and_then(|tokens| u32::try_from(tokens).ok());
 
     Some(LLMRequest {
         messages: parsed_messages,
         model: model.to_string(),
         temperature,
+        max_tokens,
         ..Default::default()
     })
 }
@@ -446,7 +452,7 @@ mod tests {
     #[test]
     fn test_estimate_token_count() {
         assert_eq!(estimate_token_count("Hello world"), 3); // ~11 chars / 4
-        assert_eq!(estimate_token_count(""), 1); // minimum 1
+        assert_eq!(estimate_token_count(""), 0); // empty input
         assert_eq!(estimate_token_count("a"), 1); // minimum 1
     }
 

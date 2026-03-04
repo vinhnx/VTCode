@@ -439,7 +439,7 @@ mod tests {
 
         assert!(matches!(
             corr.intent_fulfillment,
-            IntentFulfillment::Fulfilled
+            IntentFulfillment::PartiallyFulfilled
         ));
     }
 

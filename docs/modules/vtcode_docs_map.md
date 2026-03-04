@@ -273,6 +273,11 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: When Should VT Code Use Async?, Architecture: Async vs. Synchronous Paths, Key Async Patterns in VT Code, Anti-Patterns to Avoid, Integration with Event Loop
   - **User Questions**: "What can you tell me about VT Code Async Architecture Guide?", "How does When Should VT Code Use Async? work?", "How does Architecture: Async vs. Synchronous Paths work?"
 
+- **File**: `docs/guides/code-organization-patterns.md`
+  - **Content**: VT Code Code Organization Patterns
+  - **Topics**: Scope Rules, Shared Ownership Rules, Background Task Lifecycle, Channel Boundaries, Error Boundary Conventions
+  - **User Questions**: "What can you tell me about VT Code Code Organization Patterns?", "How does Scope Rules work?", "How does Shared Ownership Rules work?"
+
 - **File**: `docs/guides/hooks-guide.md`
   - **Content**: VT Code Hooks System Documentation
   - **Topics**: Overview, Configuration, Hook Events, Hook Matching, Hook Scripts

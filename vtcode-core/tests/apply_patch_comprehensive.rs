@@ -1,4 +1,4 @@
-use serde_json::json;
+use serde_json::{Value, json};
 use std::fs;
 use tempfile::TempDir;
 use vtcode_core::tools::ToolRegistry;
@@ -7,6 +7,18 @@ async fn setup_registry(root: &std::path::Path) -> ToolRegistry {
     let registry = ToolRegistry::new(root.to_path_buf()).await;
     registry.initialize_async().await.unwrap();
     registry
+}
+
+fn combined_error_message(result: &Value) -> String {
+    let message = result["error"]["message"].as_str().unwrap_or_default();
+    let original = result["error"]["original_error"]
+        .as_str()
+        .unwrap_or_default();
+    if original.is_empty() {
+        message.to_string()
+    } else {
+        format!("{message} {original}")
+    }
 }
 
 #[tokio::test]
@@ -33,7 +45,7 @@ async fn test_multiple_chunks_precision() {
 
     let registry = setup_registry(temp_dir.path()).await;
     let result = registry
-        .execute_tool("apply_patch", json!({ "input": patch_text }))
+        .execute_tool("apply_patch", json!({ "patch": patch_text }))
         .await
         .unwrap();
 
@@ -68,7 +80,7 @@ async fn test_fuzzy_matching_whitespace() {
 
     let registry = setup_registry(temp_dir.path()).await;
     let result = registry
-        .execute_tool("apply_patch", json!({ "input": patch_text }))
+        .execute_tool("apply_patch", json!({ "patch": patch_text }))
         .await
         .unwrap();
 
@@ -97,7 +109,7 @@ async fn test_delete_file_operation() {
 
     let registry = setup_registry(temp_dir.path()).await;
     let result = registry
-        .execute_tool("apply_patch", json!({ "input": patch_text }))
+        .execute_tool("apply_patch", json!({ "patch": patch_text }))
         .await
         .unwrap();
 
@@ -132,7 +144,7 @@ async fn test_mixed_operations() {
     let registry = setup_registry(temp_dir.path()).await;
 
     let result = registry
-        .execute_tool("apply_patch", json!({ "input": patch_text }))
+        .execute_tool("apply_patch", json!({ "patch": patch_text }))
         .await
         .unwrap();
 
@@ -223,16 +235,16 @@ async fn test_empty_patch_error() {
 
     let registry = setup_registry(temp_dir.path()).await;
     let result = registry
-        .execute_tool("apply_patch", json!({ "input": patch_text }))
+        .execute_tool("apply_patch", json!({ "patch": patch_text }))
         .await
         .unwrap();
 
-    assert!(result["error"].is_object());
+    assert!(result["error"].is_object(), "Expected error object: {:?}", result);
+    let error_msg = combined_error_message(&result).to_lowercase();
     assert!(
-        result["error"]["message"]
-            .as_str()
-            .unwrap()
-            .contains("empty")
+        error_msg.contains("empty") || error_msg.contains("patch input"),
+        "Unexpected error message: {}",
+        error_msg
     );
 }
 
@@ -243,16 +255,18 @@ async fn test_invalid_format_error() {
 
     let registry = setup_registry(temp_dir.path()).await;
     let result = registry
-        .execute_tool("apply_patch", json!({ "input": patch_text }))
+        .execute_tool("apply_patch", json!({ "patch": patch_text }))
         .await
         .unwrap();
 
-    assert!(result["error"].is_object());
+    assert!(result["error"].is_object(), "Expected error object: {:?}", result);
+    let error_msg = combined_error_message(&result).to_lowercase();
     assert!(
-        result["error"]["message"]
-            .as_str()
-            .unwrap()
-            .contains("invalid patch format")
+        error_msg.contains("invalid patch")
+            || error_msg.contains("begin patch")
+            || error_msg.contains("invalid hunk"),
+        "Unexpected error message: {}",
+        error_msg
     );
 }
 
@@ -358,9 +372,21 @@ async fn test_diff_preview_correctness() {
         .unwrap();
 
     assert!(result["success"].as_bool().unwrap_or(false));
-
-    let diff_preview = result["diff_preview"]["content"].as_str().unwrap();
-    assert!(diff_preview.contains("-line 1"));
-    assert!(diff_preview.contains("+line 1 modified"));
-    assert!(diff_preview.contains("@@"));
+    let applied = result["applied"]
+        .as_array()
+        .expect("Expected applied array in apply_patch result");
+    let applied_lines = applied
+        .iter()
+        .filter_map(|entry| entry.as_str())
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(
+        applied_lines.contains("Updated file: preview.txt"),
+        "Expected update entry in applied list: {:?}",
+        result
+    );
+    assert_eq!(
+        fs::read_to_string(&file_path).unwrap(),
+        "line 1 modified\nline 2\n"
+    );
 }

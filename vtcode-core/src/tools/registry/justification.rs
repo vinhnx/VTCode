@@ -53,7 +53,7 @@ impl ToolJustification {
         let mut lines = vec![];
 
         lines.push(String::new());
-        lines.push("Agent ".to_owned());
+        lines.push("Agent Reasoning:".to_owned());
 
         // Wrap reason text if needed - iterate directly without collecting
         for line in self.reason.lines() {
@@ -167,7 +167,7 @@ impl JustificationManager {
 
     /// Record user approval decision
     pub fn record_decision(&self, tool_name: &str, approved: bool, reason: Option<String>) {
-        if let Ok(mut patterns) = self.patterns.lock() {
+        let should_persist = if let Ok(mut patterns) = self.patterns.lock() {
             let pattern = patterns
                 .entry(tool_name.to_owned())
                 .or_insert_with(|| ApprovalPattern {
@@ -186,8 +186,13 @@ impl JustificationManager {
 
             pattern.last_decision = Some(approved);
             pattern.recent_reason = reason;
+            true
+        } else {
+            false
+        };
 
-            // Persist to disk
+        // Persist to disk after releasing the lock.
+        if should_persist {
             let _ = self.persist_patterns();
         }
     }
@@ -259,13 +264,13 @@ mod tests {
     fn test_approval_pattern_calculation() {
         let mut pattern = ApprovalPattern {
             tool_name: "read_file".to_owned(),
-            approve_count: 8,
-            deny_count: 2,
+            approve_count: 9,
+            deny_count: 1,
             last_decision: Some(true),
             recent_reason: None,
         };
 
-        assert_eq!(pattern.approval_rate(), 0.8);
+        assert_eq!(pattern.approval_rate(), 0.9);
         assert!(pattern.has_high_approval_rate());
 
         pattern.approve_count = 3;

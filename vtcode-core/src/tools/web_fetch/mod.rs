@@ -162,7 +162,7 @@ impl WebFetchTool {
 
         // Check if domain matches any whitelisted domain or pattern
         for allowed in &self.allowed_domains {
-            if domain.ends_with(allowed.as_str()) || &domain == allowed {
+            if domain_matches_allowed(&domain, allowed) {
                 return Ok(());
             }
         }
@@ -180,7 +180,7 @@ impl WebFetchTool {
         // Check against allowed exemptions first (exemptions override blocklist)
         let domain = extract_domain(url)?;
         for allowed in &self.allowed_domains {
-            if domain.ends_with(allowed.as_str()) || &domain == allowed {
+            if domain_matches_allowed(&domain, allowed) {
                 return Ok(());
             }
         }
@@ -450,6 +450,17 @@ fn extract_domain(url: &str) -> Result<String> {
     Ok(domain_no_port.to_string())
 }
 
+fn domain_matches_allowed(domain: &str, allowed: &str) -> bool {
+    let normalized_domain = domain.trim_end_matches('.').to_ascii_lowercase();
+    let normalized_allowed = allowed
+        .trim_start_matches('.')
+        .trim_end_matches('.')
+        .to_ascii_lowercase();
+
+    normalized_domain == normalized_allowed
+        || normalized_domain.ends_with(&format!(".{normalized_allowed}"))
+}
+
 impl Default for WebFetchTool {
     fn default() -> Self {
         Self::new()
@@ -494,18 +505,31 @@ impl Tool for WebFetchTool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json::json;
+    use serde_json::{Value, json};
+
+    async fn execute_json(tool: &WebFetchTool, args: Value) -> Value {
+        tool.execute(args)
+            .await
+            .expect("web_fetch should return structured JSON output")
+    }
+
+    fn error_text(result: &Value) -> Option<&str> {
+        result.get("error").and_then(Value::as_str)
+    }
 
     #[tokio::test]
     async fn rejects_non_https_urls() {
         let tool = WebFetchTool::new();
-        let result = tool
-            .execute(json!({
+        let result = execute_json(
+            &tool,
+            json!({
                 "url": "http://example.com",
                 "prompt": "Extract the main content"
-            }))
-            .await;
-        assert!(result.is_err());
+            }),
+        )
+        .await;
+        let error = error_text(&result).unwrap_or("");
+        assert!(error.contains("Only HTTPS URLs are allowed"));
     }
 
     #[tokio::test]
@@ -517,135 +541,167 @@ mod tests {
             Vec::new(),
             false, // strict_https_only = false
         );
-        let result = tool
-            .execute(json!({
+        let result = execute_json(
+            &tool,
+            json!({
                 "url": "http://example.com",
                 "prompt": "Extract the main content"
-            }))
-            .await;
-        // Should not reject for HTTP protocol, but will fail for network reasons
-        // The key is it passed URL validation
-        let error = result.unwrap_err().to_string();
-        assert!(!error.contains("Only HTTPS URLs are allowed"));
+            }),
+        )
+        .await;
+        if let Some(error) = error_text(&result) {
+            assert!(!error.contains("Only HTTPS URLs are allowed"));
+        }
     }
 
     #[tokio::test]
     async fn rejects_localhost_urls() {
         let tool = WebFetchTool::new();
-        let result = tool
-            .execute(json!({
+        let result = execute_json(
+            &tool,
+            json!({
                 "url": "https://localhost:8080",
                 "prompt": "Extract the main content"
-            }))
-            .await;
-        assert!(result.is_err());
+            }),
+        )
+        .await;
+        let error = error_text(&result).unwrap_or("");
+        assert!(error.contains("local/private networks"));
     }
 
     #[tokio::test]
     async fn requires_both_url_and_prompt() {
         let tool = WebFetchTool::new();
-        let result = tool
-            .execute(json!({
-                "url": "https://example.com"
-            }))
-            .await;
-        assert!(result.is_err());
+        let result = execute_json(
+            &tool,
+            json!({
+                "url": "http://example.com"
+            }),
+        )
+        .await;
+        // Prompt should be auto-filled; URL then fails HTTPS policy.
+        let error = error_text(&result).unwrap_or("");
+        assert!(error.contains("Only HTTPS URLs are allowed"));
     }
 
     #[tokio::test]
     async fn rejects_sensitive_banking_domains() {
         let tool = WebFetchTool::new();
-        let result = tool
-            .execute(json!({
+        let result = execute_json(
+            &tool,
+            json!({
                 "url": "https://paypal.com/login",
                 "prompt": "Extract the main content"
-            }))
-            .await;
-        assert!(result.is_err());
+            }),
+        )
+        .await;
+        let error = error_text(&result).unwrap_or("");
+        assert!(error.contains("blocked for privacy and security reasons"));
     }
 
     #[tokio::test]
     async fn rejects_sensitive_auth_domains() {
         let tool = WebFetchTool::new();
-        let result = tool
-            .execute(json!({
+        let result = execute_json(
+            &tool,
+            json!({
                 "url": "https://accounts.google.com",
                 "prompt": "Extract the main content"
-            }))
-            .await;
-        assert!(result.is_err());
+            }),
+        )
+        .await;
+        let error = error_text(&result).unwrap_or("");
+        assert!(error.contains("blocked for privacy and security reasons"));
     }
 
     #[tokio::test]
     async fn rejects_urls_with_credentials() {
         let tool = WebFetchTool::new();
-        let result = tool
-            .execute(json!({
+        let result = execute_json(
+            &tool,
+            json!({
                 "url": "https://example.com?password=secret123",
                 "prompt": "Extract the main content"
-            }))
-            .await;
-        assert!(result.is_err());
+            }),
+        )
+        .await;
+        let error = error_text(&result).unwrap_or("");
+        assert!(error.contains("sensitive pattern"));
     }
 
     #[tokio::test]
     async fn rejects_urls_with_api_keys() {
         let tool = WebFetchTool::new();
-        let result = tool
-            .execute(json!({
+        let result = execute_json(
+            &tool,
+            json!({
                 "url": "https://api.example.com?api_key=sk_live_123456",
                 "prompt": "Extract the main content"
-            }))
-            .await;
-        assert!(result.is_err());
+            }),
+        )
+        .await;
+        let error = error_text(&result).unwrap_or("");
+        assert!(error.contains("sensitive pattern"));
     }
 
     #[tokio::test]
     async fn rejects_urls_with_tokens() {
         let tool = WebFetchTool::new();
-        let result = tool
-            .execute(json!({
+        let result = execute_json(
+            &tool,
+            json!({
                 "url": "https://example.com?token=xyz123",
                 "prompt": "Extract the main content"
-            }))
-            .await;
-        assert!(result.is_err());
+            }),
+        )
+        .await;
+        let error = error_text(&result).unwrap_or("");
+        assert!(error.contains("sensitive pattern"));
     }
 
     #[tokio::test]
     async fn rejects_malicious_url_patterns() {
         let tool = WebFetchTool::new();
-        let result = tool
-            .execute(json!({
-                "url": "https://example.com/malware.exe",
+        let result = execute_json(
+            &tool,
+            json!({
+                "url": "https://example.com/malware.exe\"",
                 "prompt": "Extract the main content"
-            }))
-            .await;
-        assert!(result.is_err());
+            }),
+        )
+        .await;
+        let error = error_text(&result).unwrap_or("");
+        assert!(error.contains("potentially malicious pattern"));
     }
 
     #[tokio::test]
     async fn rejects_typosquatting_domains() {
         let tool = WebFetchTool::new();
-        let result = tool
-            .execute(json!({
+        let result = execute_json(
+            &tool,
+            json!({
                 "url": "https://g00gle.com",
                 "prompt": "Extract the main content"
-            }))
-            .await;
-        assert!(result.is_err());
+            }),
+        )
+        .await;
+        let error = error_text(&result).unwrap_or("");
+        assert!(error.contains("potentially malicious pattern"));
     }
 
     #[tokio::test]
     async fn rejects_url_shorteners() {
         let tool = WebFetchTool::new();
-        let result = tool
-            .execute(json!({
+        let result = execute_json(
+            &tool,
+            json!({
                 "url": "https://bit.ly/xyz123",
                 "prompt": "Extract the main content"
-            }))
-            .await;
-        assert!(result.is_err());
+            }),
+        )
+        .await;
+        let error = error_text(&result).unwrap_or("");
+        assert!(error.contains("potentially malicious pattern"));
     }
 
     #[tokio::test]
@@ -657,14 +713,15 @@ mod tests {
             Vec::new(), // No allowed domains
             true,
         );
-        let result = tool
-            .execute(json!({
+        let result = execute_json(
+            &tool,
+            json!({
                 "url": "https://example.com",
                 "prompt": "Extract the main content"
-            }))
-            .await;
-        assert!(result.is_err());
-        let error = result.unwrap_err().to_string();
+            }),
+        )
+        .await;
+        let error = error_text(&result).unwrap_or("").to_string();
         assert!(error.contains("whitelist") || error.contains("whitelisted"));
     }
 
@@ -677,17 +734,16 @@ mod tests {
             vec!["example.com".to_string()], // Only example.com allowed
             true,
         );
-        // URL validation should pass, but network fetch will fail
-        // The important part is that URL validation succeeded
-        let result = tool
-            .execute(json!({
+        let result = execute_json(
+            &tool,
+            json!({
                 "url": "https://example.com/path",
                 "prompt": "Extract the main content"
-            }))
-            .await;
-        // Will fail on network, not on validation
-        if let Err(e) = result {
-            assert!(!e.to_string().contains("not in the whitelist"));
+            }),
+        )
+        .await;
+        if let Some(error) = error_text(&result) {
+            assert!(!error.contains("not in the whitelist"));
         }
     }
 
@@ -700,14 +756,15 @@ mod tests {
             vec!["allowed.com".to_string()],
             true,
         );
-        let result = tool
-            .execute(json!({
+        let result = execute_json(
+            &tool,
+            json!({
                 "url": "https://notallowed.com",
                 "prompt": "Extract the main content"
-            }))
-            .await;
-        assert!(result.is_err());
-        let error = result.unwrap_err().to_string();
+            }),
+        )
+        .await;
+        let error = error_text(&result).unwrap_or("").to_string();
         assert!(error.contains("not in the whitelist"));
     }
 
@@ -720,16 +777,16 @@ mod tests {
             vec!["paypal.com".to_string()], // Exempt from blocklist
             true,
         );
-        // PayPal is normally blocked, but exempted in allowed_domains
-        let result = tool
-            .execute(json!({
+        let result = execute_json(
+            &tool,
+            json!({
                 "url": "https://paypal.com/login",
                 "prompt": "Extract the main content"
-            }))
-            .await;
-        // Will fail on network, not on validation
-        if let Err(e) = result {
-            assert!(!e.to_string().contains("blocked for privacy"));
+            }),
+        )
+        .await;
+        if let Some(error) = error_text(&result) {
+            assert!(!error.contains("blocked for privacy"));
         }
     }
 
@@ -742,14 +799,15 @@ mod tests {
             Vec::new(),
             true,
         );
-        let result = tool
-            .execute(json!({
+        let result = execute_json(
+            &tool,
+            json!({
                 "url": "https://custom-blocked.com/page",
                 "prompt": "Extract the main content"
-            }))
-            .await;
-        assert!(result.is_err());
-        let error = result.unwrap_err().to_string();
+            }),
+        )
+        .await;
+        let error = error_text(&result).unwrap_or("").to_string();
         assert!(error.contains("blocked for privacy and security reasons"));
     }
 
@@ -762,14 +820,15 @@ mod tests {
             Vec::new(),
             true,
         );
-        let result = tool
-            .execute(json!({
+        let result = execute_json(
+            &tool,
+            json!({
                 "url": "https://example.com?custom_secret=abc123",
                 "prompt": "Extract the main content"
-            }))
-            .await;
-        assert!(result.is_err());
-        let error = result.unwrap_err().to_string();
+            }),
+        )
+        .await;
+        let error = error_text(&result).unwrap_or("").to_string();
         assert!(error.contains("sensitive pattern"));
     }
 

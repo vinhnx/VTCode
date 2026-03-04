@@ -425,15 +425,8 @@ impl FileOpsTool {
 
             // Merge legacy metadata - extract actual data fields, not wrapper structure
             if let Some(obj) = metadata.as_object() {
-                // Handle flat metadata structure (direct key-value pairs)
                 for (k, v) in obj {
-                    match k.as_str() {
-                        "size_bytes" | "content_kind" | "encoding" | "mime_type"
-                        | "is_truncated" => {
-                            builder = builder.data(k.clone(), v.clone());
-                        }
-                        _ => {}
-                    }
+                    builder = builder.data(k.clone(), v.clone());
                 }
             }
 

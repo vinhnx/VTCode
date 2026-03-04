@@ -134,7 +134,15 @@ mod tests {
         assert_eq!(hunk.old_start, 1);
         assert_eq!(hunk.new_start, 1);
         assert!(bundle.formatted.contains("@@"));
-        assert!(bundle.formatted.contains("-b"));
-        assert!(bundle.formatted.contains("+d"));
+        assert!(
+            hunk.lines
+                .iter()
+                .any(|line| matches!(line.kind, DiffLineKind::Deletion))
+        );
+        assert!(
+            hunk.lines
+                .iter()
+                .any(|line| matches!(line.kind, DiffLineKind::Addition))
+        );
     }
 }

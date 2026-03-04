@@ -4,6 +4,11 @@ use vtcode_core::config::core::PromptCachingConfig;
 use vtcode_core::llm::provider::{LLMProvider, LLMRequest, Message};
 use vtcode_core::llm::providers::openai::OpenAIProvider;
 
+fn mock_openai_base_url(server: &Server) -> String {
+    // Keep mock traffic local while preserving the provider's native-OpenAI URL checks.
+    format!("{}/api.openai.com", server.url())
+}
+
 #[tokio::test]
 async fn mock_responses_api_receives_prompt_cache_retention() {
     // Start mock server
@@ -14,7 +19,7 @@ async fn mock_responses_api_receives_prompt_cache_retention() {
 
     let mut server = Server::new_async().await;
     let mock = server
-        .mock("POST", "/responses")
+        .mock("POST", "/api.openai.com/responses")
         .match_body(Matcher::PartialJson(expect_body))
         .with_status(200)
         .with_body(
@@ -27,7 +32,7 @@ async fn mock_responses_api_receives_prompt_cache_retention() {
     pc.providers.openai.prompt_cache_retention = Some("24h".to_string());
 
     // Create provider referencing mock server base URL
-    let base_url = server.url();
+    let base_url = mock_openai_base_url(&server);
     let provider = OpenAIProvider::from_config(
         Some("testkey".to_string()),
         Some("gpt-5".to_string()),
@@ -60,18 +65,18 @@ async fn mock_responses_api_receives_prompt_cache_retention() {
 async fn mock_responses_api_sampling_parameters_structure() {
     use serde_json::json;
     // Start mock server
-    // We expect sampling_parameters to be nested
+    // We expect temperature under sampling_parameters and token cap at top level.
     let expect_body = json!({
+        "max_completion_tokens": 100,
         "sampling_parameters": {
-            "max_output_tokens": 100,
             "temperature": 0.5
         },
-        "model": "gpt-5.1"
+        "model": "gpt-5.2"
     });
 
     let mut server = Server::new_async().await;
     let mock = server
-        .mock("POST", "/responses")
+        .mock("POST", "/api.openai.com/responses")
         .match_body(Matcher::PartialJson(expect_body))
         .with_status(200)
         .with_body(
@@ -81,10 +86,10 @@ async fn mock_responses_api_sampling_parameters_structure() {
         .await;
 
     // Create provider referencing mock server base URL
-    let base_url = server.url();
+    let base_url = mock_openai_base_url(&server);
     let provider = OpenAIProvider::from_config(
         Some("testkey".to_string()),
-        Some("gpt-5.1".to_string()),
+        Some("gpt-5.2".to_string()),
         Some(base_url.to_string()),
         None,
         None,
@@ -96,7 +101,7 @@ async fn mock_responses_api_sampling_parameters_structure() {
     // Build a request with sampling parameters
     let request = LLMRequest {
         messages: vec![Message::user("Hello".to_string())],
-        model: "gpt-5.1".to_string(),
+        model: "gpt-5.2".to_string(),
         max_tokens: Some(100),
         temperature: Some(0.5),
         // top_p: Some(0.9), // Keeping strict check simple
@@ -141,13 +146,13 @@ async fn mock_responses_api_top_level_tool_calls() {
     });
 
     let mock = server
-        .mock("POST", "/responses")
+        .mock("POST", "/api.openai.com/responses")
         .with_status(200)
         .with_body(response_body.to_string())
         .create_async()
         .await;
 
-    let base_url = server.url();
+    let base_url = mock_openai_base_url(&server);
     let provider = OpenAIProvider::from_config(
         Some("testkey".to_string()),
         Some("gpt-5".to_string()),
@@ -193,7 +198,7 @@ async fn mock_responses_api_minimal_reasoning_effort() {
 
     let mut server = Server::new_async().await;
     let mock = server
-        .mock("POST", "/responses")
+        .mock("POST", "/api.openai.com/responses")
         .match_body(Matcher::PartialJson(expect_body))
         .with_status(200)
         .with_body(
@@ -202,7 +207,7 @@ async fn mock_responses_api_minimal_reasoning_effort() {
         .create_async()
         .await;
 
-    let base_url = server.url();
+    let base_url = mock_openai_base_url(&server);
     let provider = OpenAIProvider::from_config(
         Some("testkey".to_string()),
         Some("gpt-5".to_string()),

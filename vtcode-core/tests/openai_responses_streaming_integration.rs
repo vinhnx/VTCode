@@ -4,6 +4,10 @@ use vtcode_core::config::core::PromptCachingConfig;
 use vtcode_core::llm::provider::{LLMProvider, LLMRequest, Message};
 use vtcode_core::llm::providers::openai::OpenAIProvider;
 
+fn mock_openai_base_url(server: &Server) -> String {
+    format!("{}/api.openai.com", server.url())
+}
+
 #[tokio::test]
 async fn mock_responses_api_streaming_includes_prompt_cache_retention() {
     let expect_body = json!({ "prompt_cache_retention": "48h", "stream": true });
@@ -11,7 +15,7 @@ async fn mock_responses_api_streaming_includes_prompt_cache_retention() {
     let mut server = Server::new_async().await;
 
     let mock = server
-        .mock("POST", "/responses")
+        .mock("POST", "/api.openai.com/responses")
         .match_body(Matcher::PartialJson(expect_body))
         .with_status(200)
         .with_body(
@@ -22,7 +26,7 @@ async fn mock_responses_api_streaming_includes_prompt_cache_retention() {
     let mut pc = PromptCachingConfig::default();
     pc.providers.openai.prompt_cache_retention = Some("48h".to_string());
 
-    let base_url = server.url();
+    let base_url = mock_openai_base_url(&server);
     let provider = OpenAIProvider::from_config(
         Some("key".to_string()),
         Some("gpt-5".to_string()),

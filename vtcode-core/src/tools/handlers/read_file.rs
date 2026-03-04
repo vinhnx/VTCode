@@ -156,8 +156,8 @@ impl BatchProgress {
         }
     }
 
-    pub fn file_started(&self, file_path: &str) {
-        let mut current = self.current_file.blocking_write();
+    pub async fn file_started(&self, file_path: &str) {
+        let mut current = self.current_file.write().await;
         *current = file_path.to_string();
     }
 
@@ -179,10 +179,10 @@ impl BatchProgress {
         }
     }
 
-    pub fn status_line(&self) -> (String, String) {
+    pub async fn status_line(&self) -> (String, String) {
         let completed = self.completed_files.load(Ordering::Relaxed);
         let total = self.total_files.load(Ordering::Relaxed);
-        let current = self.current_file.blocking_read();
+        let current = self.current_file.read().await;
         let file_name = PathBuf::from(current.as_str())
             .file_name()
             .map(|n| n.to_string_lossy().to_string())
@@ -268,7 +268,7 @@ impl ReadFileHandler {
                 let prog = progress.clone();
                 async move {
                     let _permit = sem.acquire().await.ok();
-                    prog.file_started(&req.file_path);
+                    prog.file_started(&req.file_path).await;
                     let result = self.read_single_batch_request(&req).await;
                     prog.file_completed();
                     result
@@ -941,7 +941,7 @@ mod tests {
         writeln!(temp, "gamma")?;
 
         let lines = read(temp.path(), 2, 2).await?;
-        assert_eq!(lines, vec!["L2: beta".to_string(), "L3: gamma".to_string()]);
+        assert_eq!(lines, vec!["beta".to_string(), "gamma".to_string()]);
         Ok(())
     }
 
@@ -960,8 +960,8 @@ mod tests {
         temp.as_file_mut().write_all(b"\xff\xfe\nplain\n")?;
 
         let lines = read(temp.path(), 1, 2).await?;
-        let expected_first = format!("L1: {}{}", '\u{FFFD}', '\u{FFFD}');
-        assert_eq!(lines, vec![expected_first, "L2: plain".to_string()]);
+        let expected_first = format!("{}{}", '\u{FFFD}', '\u{FFFD}');
+        assert_eq!(lines, vec![expected_first, "plain".to_string()]);
         Ok(())
     }
 
@@ -971,7 +971,7 @@ mod tests {
         write!(temp, "one\r\ntwo\r\n")?;
 
         let lines = read(temp.path(), 1, 2).await?;
-        assert_eq!(lines, vec!["L1: one".to_string(), "L2: two".to_string()]);
+        assert_eq!(lines, vec!["one".to_string(), "two".to_string()]);
         Ok(())
     }
 
@@ -983,10 +983,7 @@ mod tests {
         writeln!(temp, "third")?;
 
         let lines = read(temp.path(), 1, 2).await?;
-        assert_eq!(
-            lines,
-            vec!["L1: first".to_string(), "L2: second".to_string()]
-        );
+        assert_eq!(lines, vec!["first".to_string(), "second".to_string()]);
         Ok(())
     }
 
@@ -998,7 +995,7 @@ mod tests {
 
         let lines = read(temp.path(), 1, 1).await?;
         let expected = "x".repeat(MAX_LINE_LENGTH);
-        assert_eq!(lines, vec![format!("L1: {expected}")]);
+        assert_eq!(lines, vec![expected]);
         Ok(())
     }
 

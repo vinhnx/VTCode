@@ -165,10 +165,13 @@ mod tests {
                 .unwrap();
 
         let result = patch.apply(temp_dir.path()).await.unwrap();
-        assert_eq!(result, vec!["Added file: file.txt".to_string()]);
+        assert_eq!(
+            result,
+            vec!["[1/1] Added file: file.txt (8 bytes)".to_string()]
+        );
         let written = tokio::fs::read_to_string(temp_dir.path().join("file.txt"))
             .await
             .unwrap();
-        assert_eq!(written, "content");
+        assert_eq!(written, "content\n");
     }
 }

@@ -432,15 +432,18 @@ mod tests {
     fn test_error_handler() {
         let handler = ErrorHandler::new("test_provider");
 
-        let error = handler.handle_http_error(reqwest::StatusCode::UNAUTHORIZED, "Invalid API key");
+        let unauthorized =
+            handler.handle_http_error(reqwest::StatusCode::UNAUTHORIZED, "Invalid API key");
+        let rate_limited = handler.handle_http_error(reqwest::StatusCode::TOO_MANY_REQUESTS, "");
 
         assert!(matches!(
-            error,
-            LLMError::InvalidRequest {
+            unauthorized,
+            LLMError::Provider {
                 message: _,
                 metadata: _
             }
         ));
+        assert!(matches!(rate_limited, LLMError::RateLimit { metadata: _ }));
     }
 
     #[test]

@@ -76,6 +76,9 @@ pub struct AsyncToolPipeline {
 
     /// Shutdown signal
     shutdown_tx: Option<mpsc::Sender<()>>,
+
+    /// Background processing task lifecycle handle
+    processing_task: Option<tokio::task::JoinHandle<()>>,
 }
 
 /// Batch processor for grouping similar tool requests
@@ -85,7 +88,7 @@ pub struct BatchProcessor {
 }
 
 /// Pipeline performance metrics
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct PipelineMetrics {
     pub total_requests: u64,
     pub successful_executions: u64,
@@ -111,11 +114,16 @@ impl AsyncToolPipeline {
             ))),
             metrics: Arc::new(RwLock::new(PipelineMetrics::default())),
             shutdown_tx: None,
+            processing_task: None,
         }
     }
 
     /// Start the pipeline processing loop
     pub async fn start(&mut self) -> Result<()> {
+        if self.shutdown_tx.is_some() {
+            return Err(anyhow!("AsyncToolPipeline already started"));
+        }
+
         let (shutdown_tx, mut shutdown_rx) = mpsc::channel(1);
         self.shutdown_tx = Some(shutdown_tx);
 
@@ -126,7 +134,7 @@ impl AsyncToolPipeline {
         let metrics = Arc::clone(&self.metrics);
 
         // Main processing loop
-        tokio::spawn(async move {
+        let processing_task = tokio::spawn(async move {
             let mut batch_timer = tokio::time::interval(Duration::from_millis(50));
 
             loop {
@@ -147,6 +155,7 @@ impl AsyncToolPipeline {
                 }
             }
         });
+        self.processing_task = Some(processing_task);
 
         Ok(())
     }
@@ -160,6 +169,8 @@ impl AsyncToolPipeline {
             return Ok(request.call.id.clone());
         }
 
+        let request_id = request.call.id.clone();
+
         // Add to priority queue
         let mut queue = self.request_queue.write().await;
 
@@ -169,11 +180,11 @@ impl AsyncToolPipeline {
             .position(|r| r.priority < request.priority)
             .unwrap_or(queue.len());
 
-        queue.insert(insert_pos, request.clone());
+        queue.insert(insert_pos, request);
 
         self.metrics.write().await.total_requests += 1;
 
-        Ok(request.call.id)
+        Ok(request_id)
     }
 
     /// Process a batch of requests efficiently
@@ -241,7 +252,12 @@ impl AsyncToolPipeline {
         // Update batch efficiency metrics
         let batch_time = batch.created_at.elapsed();
         let mut metrics_guard = metrics.write().await;
-        metrics_guard.batch_efficiency = batch_size as f64 / batch_time.as_millis() as f64;
+        let batch_time_ms = batch_time.as_millis() as f64;
+        metrics_guard.batch_efficiency = if batch_time_ms > 0.0 {
+            batch_size as f64 / batch_time_ms
+        } else {
+            batch_size as f64
+        };
     }
 
     /// Execute a single tool request with caching and metrics
@@ -351,25 +367,23 @@ impl AsyncToolPipeline {
         if let Some(tx) = self.shutdown_tx.take() {
             let _ = tx.send(()).await;
         }
+        if let Some(handle) = self.processing_task.take() {
+            let _ = handle.await;
+        }
         Ok(())
+    }
+}
+
+impl Drop for AsyncToolPipeline {
+    fn drop(&mut self) {
+        if let Some(handle) = self.processing_task.take() {
+            handle.abort();
+        }
     }
 }
 
 impl BatchProcessor {
     pub fn new(batch_size: usize, _batch_timeout: Duration) -> Self {
         Self { batch_size }
-    }
-}
-
-impl Clone for PipelineMetrics {
-    fn clone(&self) -> Self {
-        Self {
-            total_requests: self.total_requests,
-            successful_executions: self.successful_executions,
-            failed_executions: self.failed_executions,
-            cache_hits: self.cache_hits,
-            avg_execution_time_ms: self.avg_execution_time_ms,
-            batch_efficiency: self.batch_efficiency,
-        }
     }
 }

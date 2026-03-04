@@ -118,16 +118,21 @@ impl ConfigBackupManager {
         backups.sort_by(|a, b| {
             let a_meta = fs::metadata(a).ok();
             let b_meta = fs::metadata(b).ok();
+            let a_modified = a_meta
+                .as_ref()
+                .and_then(|meta| meta.modified().ok())
+                .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
+            let b_modified = b_meta
+                .as_ref()
+                .and_then(|meta| meta.modified().ok())
+                .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
 
-            match (a_meta, b_meta) {
-                (Some(a_m), Some(b_m)) => b_m
-                    .modified()
-                    .unwrap_or_else(|_| std::time::SystemTime::now())
-                    .cmp(
-                        &a_m.modified()
-                            .unwrap_or_else(|_| std::time::SystemTime::now()),
-                    ),
-                _ => std::cmp::Ordering::Equal,
+            match b_modified.cmp(&a_modified) {
+                std::cmp::Ordering::Equal => b
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .cmp(&a.file_name().and_then(|name| name.to_str())),
+                other => other,
             }
         });
 
@@ -149,7 +154,7 @@ impl ConfigBackupManager {
 
     /// Generate a timestamped backup path
     fn generate_backup_path(&self, config_path: &Path) -> Result<PathBuf> {
-        let timestamp = Local::now().format("%Y%m%d_%H%M%S");
+        let timestamp = Local::now().format("%Y%m%d_%H%M%S_%6f");
 
         let config_name = config_path
             .file_name()
@@ -157,11 +162,16 @@ impl ConfigBackupManager {
             .to_string_lossy();
 
         let backup_name = format!("{}.vtcode_backup_{}", config_name, timestamp);
-
-        let backup_path = config_path
+        let parent = config_path
             .parent()
-            .context("Config file has no parent directory")?
-            .join(backup_name);
+            .context("Config file has no parent directory")?;
+
+        let mut backup_path = parent.join(&backup_name);
+        let mut collision_suffix: u32 = 0;
+        while backup_path.exists() {
+            collision_suffix += 1;
+            backup_path = parent.join(format!("{}_{}", backup_name, collision_suffix));
+        }
 
         Ok(backup_path)
     }

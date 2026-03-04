@@ -77,6 +77,7 @@ impl PtyScrollback {
             // Use String::clone_from pattern - push to pending first, then move to lines
             self.pending_lines.push_back(warning.clone());
             self.lines.push_back(warning);
+            self.trim_lines_to_limits();
         }
 
         // Check byte limit BEFORE processing to prevent memory explosion
@@ -92,6 +93,7 @@ impl PtyScrollback {
                 self.current_bytes += warning.len();
                 self.pending_lines.push_back(warning.clone());
                 self.lines.push_back(warning);
+                self.trim_lines_to_limits();
             }
 
             // Track metrics for dropped data
@@ -116,15 +118,7 @@ impl PtyScrollback {
                     self.pending_lines.push_back(complete.clone());
                     self.lines.push_back(complete);
 
-                    // Circular buffer: drop oldest lines when line capacity exceeded
-                    while self.lines.len() > self.capacity_lines {
-                        if let Some(oldest) = self.lines.pop_front() {
-                            self.current_bytes = self.current_bytes.saturating_sub(oldest.len());
-                        }
-                    }
-                    while self.pending_lines.len() > self.capacity_lines {
-                        self.pending_lines.pop_front();
-                    }
+                    self.trim_lines_to_limits();
                 }
             }
         } else {
@@ -145,15 +139,7 @@ impl PtyScrollback {
                     self.pending_lines.push_back(complete.clone());
                     self.lines.push_back(complete);
 
-                    // Circular buffer management
-                    while self.lines.len() > self.capacity_lines {
-                        if let Some(oldest) = self.lines.pop_front() {
-                            self.current_bytes = self.current_bytes.saturating_sub(oldest.len());
-                        }
-                    }
-                    while self.pending_lines.len() > self.capacity_lines {
-                        self.pending_lines.pop_front();
-                    }
+                    self.trim_lines_to_limits();
 
                     start = i + 1;
                 }
@@ -165,6 +151,21 @@ impl PtyScrollback {
                 self.partial.push_str(remaining);
                 self.pending_partial.push_str(remaining);
             }
+        }
+    }
+
+    fn trim_lines_to_limits(&mut self) {
+        while self.lines.len() > self.capacity_lines || self.current_bytes > self.max_bytes {
+            if let Some(oldest) = self.lines.pop_front() {
+                self.current_bytes = self.current_bytes.saturating_sub(oldest.len());
+            } else {
+                self.current_bytes = 0;
+                break;
+            }
+        }
+
+        while self.pending_lines.len() > self.capacity_lines {
+            self.pending_lines.pop_front();
         }
     }
 
@@ -405,7 +406,7 @@ mod unicode_optimization_tests {
         assert_eq!(scrollback.unicode_sessions, 1);
 
         // Test emoji
-        scrollback.push_text("[TEST]");
+        scrollback.push_text("🌍");
         assert!(scrollback.total_unicode_chars > 2);
         assert_eq!(scrollback.unicode_sessions, 2);
     }
@@ -464,11 +465,11 @@ mod unicode_optimization_tests {
 
         // Invalid UTF-8 through push_utf8
         scrollback.push_utf8(&mut vec![0xFF, 0xFE], false);
-        assert_eq!(scrollback.unicode_errors, 1);
+        assert_eq!(scrollback.unicode_errors, 2);
 
         // Should continue working after error
         scrollback.push_text("Still working");
-        assert_eq!(scrollback.unicode_errors, 1); // Error count unchanged
+        assert_eq!(scrollback.unicode_errors, 2); // Error count unchanged
         assert!(scrollback.snapshot().contains("Still working"));
     }
 }
@@ -502,10 +503,10 @@ mod unicode_tests {
     #[test]
     fn test_push_utf8_valid_emoji() {
         let mut scrollback = PtyScrollback::new(100, 1024 * 1024);
-        let mut buffer = "[TEST]".as_bytes().to_vec();
+        let mut buffer = "🌍".as_bytes().to_vec();
         scrollback.push_utf8(&mut buffer, false);
 
-        assert_eq!(scrollback.snapshot(), "[TEST]");
+        assert_eq!(scrollback.snapshot(), "🌍");
         assert_eq!(scrollback.unicode_errors, 0);
         assert_eq!(scrollback.utf8_buffer_remainder.len(), 0);
     }
@@ -516,8 +517,8 @@ mod unicode_tests {
         let mut buffer = vec![0xFF, 0xFE, 0xFD]; // Invalid UTF-8
         scrollback.push_utf8(&mut buffer, false);
 
-        assert_eq!(scrollback.snapshot(), "\u{FFFD}");
-        assert_eq!(scrollback.unicode_errors, 1);
+        assert_eq!(scrollback.snapshot(), "\u{FFFD}\u{FFFD}\u{FFFD}");
+        assert_eq!(scrollback.unicode_errors, 3);
         assert_eq!(buffer.len(), 0);
     }
 
@@ -545,7 +546,7 @@ mod unicode_tests {
         let mut buffer2 = vec![0x8C, 0x8D]; // Remaining emoji bytes
         scrollback.push_utf8(&mut buffer2, false);
 
-        assert_eq!(scrollback.snapshot(), "[T]");
+        assert_eq!(scrollback.snapshot(), "🌍");
         assert_eq!(scrollback.unicode_errors, 0);
         assert_eq!(scrollback.utf8_buffer_remainder.len(), 0);
     }
@@ -616,7 +617,7 @@ mod unicode_tests {
         scrollback.push_utf8(&mut buffer, false);
 
         let metrics = scrollback.metrics();
-        assert_eq!(metrics.unicode_errors, 1);
+        assert_eq!(metrics.unicode_errors, 2);
         assert_eq!(metrics.utf8_buffer_size, 0);
     }
 }

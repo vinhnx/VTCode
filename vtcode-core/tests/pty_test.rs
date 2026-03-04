@@ -135,28 +135,16 @@ async fn test_create_pty_session_uses_requested_shell() {
         .execute_tool(
             "create_pty_session",
             json!({
-                "session_id": "shell-session",
-                "command": "bash",
-                "shell": "/bin/sh"
+                "command": "echo $0",
+                "shell": "/bin/sh",
             }),
         )
         .await
         .expect("create session result");
 
     assert_eq!(create_result["success"], true);
-    assert_eq!(create_result["session_id"], "shell-session");
-    let command = create_result["command"].as_str().unwrap_or_default();
-    assert!(command.contains("sh"));
-
-    registry
-        .execute_tool(
-            "close_pty_session",
-            json!({
-                "session_id": "shell-session"
-            }),
-        )
-        .await
-        .expect("close session result");
+    let output = create_result["output"].as_str().unwrap_or_default().to_ascii_lowercase();
+    assert!(output.contains("sh"));
 }
 
 #[tokio::test]

@@ -214,6 +214,10 @@ pub(crate) fn build_responses_request(
         "stream": request.stream,
     });
 
+    if let Some(max_tokens) = request.max_tokens {
+        openai_request[MAX_COMPLETION_TOKENS_FIELD] = json!(max_tokens);
+    }
+
     // 'output_types' is part of the GPT-5 Responses API spec
     openai_request["output_types"] = json!(["message", "tool_call"]);
 

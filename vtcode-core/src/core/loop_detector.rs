@@ -104,6 +104,11 @@ fn normalize_args_for_detection(tool_name: &str, args: &serde_json::Value) -> se
                 }
             }
 
+            // Canonicalize omitted offsets to the first line.
+            if !normalized.contains_key("offset") {
+                normalized.insert("offset".into(), serde_json::json!(1));
+            }
+
             // Remove noise params that don't change semantic intent
             normalized.remove("encoding");
             normalized.remove("action");
@@ -366,7 +371,7 @@ impl LoopDetector {
         }
 
         if same_target_streak >= MAX_SIMILAR_READ_TARGET_CALLS
-            && variants.len() <= MAX_SIMILAR_READ_TARGET_VARIANTS
+            && variants.len() < MAX_SIMILAR_READ_TARGET_VARIANTS
         {
             let hard_limit = self.get_limit_for_tool(tool_name) * HARD_LIMIT_MULTIPLIER;
             self.tool_counts.insert(tool_name.to_string(), hard_limit);

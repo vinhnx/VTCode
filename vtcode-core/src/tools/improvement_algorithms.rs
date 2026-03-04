@@ -35,8 +35,10 @@ pub fn jaro_winkler_similarity(s1: &str, s2: &str) -> f32 {
 
 /// Jaro similarity metric
 fn jaro_similarity(s1: &str, s2: &str) -> f32 {
-    let len1 = s1.len();
-    let len2 = s2.len();
+    let s1_chars: Vec<char> = s1.chars().collect();
+    let s2_chars: Vec<char> = s2.chars().collect();
+    let len1 = s1_chars.len();
+    let len2 = s2_chars.len();
 
     if len1 == 0 && len2 == 0 {
         return 1.0;
@@ -52,12 +54,12 @@ fn jaro_similarity(s1: &str, s2: &str) -> f32 {
 
     let mut matches = 0;
 
-    for (i, c1) in s1.chars().enumerate() {
+    for (i, c1) in s1_chars.iter().enumerate() {
         let start = i.saturating_sub(match_distance);
         let end = (i + match_distance + 1).min(len2);
 
-        for (j, c2) in s2.chars().enumerate().skip(start).take(end - start) {
-            if s2_matches[j] || c1 != c2 {
+        for j in start..end {
+            if s2_matches[j] || *c1 != s2_chars[j] {
                 continue;
             }
             s1_matches[i] = true;
@@ -71,12 +73,21 @@ fn jaro_similarity(s1: &str, s2: &str) -> f32 {
         return 0.0;
     }
 
-    let transpositions = s1_matches
+    let s1_matched_chars: Vec<char> = s1_chars
         .iter()
-        .zip(s2_matches.iter())
-        .filter(|(m1, m2)| **m1 && **m2)
-        .zip(s2.chars())
-        .filter(|((_, m2), c2)| **m2 && s1.contains(*c2))
+        .enumerate()
+        .filter_map(|(i, c)| s1_matches[i].then_some(*c))
+        .collect();
+    let s2_matched_chars: Vec<char> = s2_chars
+        .iter()
+        .enumerate()
+        .filter_map(|(i, c)| s2_matches[i].then_some(*c))
+        .collect();
+
+    let transpositions = s1_matched_chars
+        .iter()
+        .zip(s2_matched_chars.iter())
+        .filter(|(a, b)| a != b)
         .count()
         / 2;
 
@@ -178,11 +189,8 @@ impl PatternDetector {
             return PatternState::Single;
         }
 
-        let recent = history
-            .iter()
-            .rev()
-            .take(self.window_size)
-            .collect::<Vec<_>>();
+        let start = history.len().saturating_sub(self.window_size);
+        let recent = history.iter().skip(start).collect::<Vec<_>>();
 
         if recent.len() < 2 {
             return PatternState::Single;
@@ -200,19 +208,6 @@ impl PatternDetector {
             };
         }
 
-        // Check for near-loops (fuzzy argument match)
-        let same_tool = recent.iter().all(|r| r.0 == first.0);
-        if same_tool {
-            let similarities: Vec<f32> = recent
-                .windows(2)
-                .map(|w| jaro_winkler_similarity(&w[0].1, &w[1].1))
-                .collect();
-
-            if similarities.iter().all(|&s| s > 0.85) && similarities.len() >= 2 {
-                return PatternState::NearLoop;
-            }
-        }
-
         // Check for refinement chain (increasing quality)
         let qualities: Vec<f32> = recent.iter().map(|r| r.2).collect();
         let is_improving = qualities.windows(2).all(|w| w[1] > w[0] + 0.05); // Noticeable improvement
@@ -226,6 +221,19 @@ impl PatternDetector {
 
         if is_degrading && qualities.len() >= 3 {
             return PatternState::Degradation;
+        }
+
+        // Check for near-loops (fuzzy argument match)
+        let same_tool = recent.iter().all(|r| r.0 == first.0);
+        if same_tool {
+            let similarities: Vec<f32> = recent
+                .windows(2)
+                .map(|w| jaro_winkler_similarity(&w[0].1, &w[1].1))
+                .collect();
+
+            if similarities.iter().all(|&s| s > 0.85) && similarities.len() >= 2 {
+                return PatternState::NearLoop;
+            }
         }
 
         // Check for convergence (different tools, similar quality)

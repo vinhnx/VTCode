@@ -820,7 +820,7 @@ mod tests {
         assert!(content.contains("[project build and lint command(s)]"));
         assert!(content.contains("[project test command(s)]"));
         assert!(content.contains(&format!(
-            "> Note: Edit this plan directly at `{}`.",
+            "> Plan file: `{}`",
             plan_file.display()
         )));
     }

@@ -233,6 +233,7 @@ mod tests {
     fn glob_allows_cargo_commands() {
         let mut config = CommandsConfig::default();
         config.allow_list.clear();
+        config.allow_regex.clear();
         config.allow_glob = vec!["cargo *".to_string()];
         let evaluator = CommandPolicyEvaluator::from_config(&config);
         assert!(evaluator.allows_text("cargo fmt"));
@@ -243,6 +244,7 @@ mod tests {
     fn glob_supports_question_mark() {
         let mut config = CommandsConfig::default();
         config.allow_list.clear();
+        config.allow_regex.clear();
         config.allow_glob = vec!["go test ./pkg/?".to_string()];
         let evaluator = CommandPolicyEvaluator::from_config(&config);
         assert!(evaluator.allows_text("go test ./pkg/a"));
@@ -253,6 +255,7 @@ mod tests {
     fn glob_allows_node_ecosystem_commands() {
         let mut config = CommandsConfig::default();
         config.allow_list.clear();
+        config.allow_regex.clear();
         config.allow_glob = vec!["npm *".to_string(), "bun *".to_string()];
         let evaluator = CommandPolicyEvaluator::from_config(&config);
         assert!(evaluator.allows_text("npm install"));

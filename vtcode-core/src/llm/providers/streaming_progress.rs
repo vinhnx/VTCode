@@ -89,8 +89,10 @@ impl StreamingProgressTracker {
             return false;
         }
 
-        let progress = elapsed.as_secs_f32() / self.total_timeout.as_secs_f32();
-        progress >= self.warning_threshold
+        let elapsed_progress = elapsed.as_secs_f32() / self.total_timeout.as_secs_f32();
+        let reported_progress =
+            f32::from(self.last_reported_progress.load(Ordering::Relaxed)) / 100.0;
+        elapsed_progress.max(reported_progress) >= self.warning_threshold
     }
 
     // Private: Report progress with clamping and threshold checking

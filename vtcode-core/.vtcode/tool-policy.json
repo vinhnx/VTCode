@@ -1,0 +1,312 @@
+{
+  "version": 1,
+  "available_tools": [
+    "/edit",
+    "/plan",
+    "/plan_off",
+    "apply patch",
+    "apply_patch",
+    "bash",
+    "checklist",
+    "close pty session",
+    "close_pty_session",
+    "coder_mode",
+    "container.exec",
+    "copy file",
+    "copy_file",
+    "create_file",
+    "create_pty_session",
+    "delete file",
+    "delete_file",
+    "edit file",
+    "edit_file",
+    "enter_plan",
+    "enter_plan_mode",
+    "exec code",
+    "execute_code",
+    "exit_plan",
+    "exit_plan_mode",
+    "fetch",
+    "file operation",
+    "file_op",
+    "get_errors",
+    "grep",
+    "grep_file",
+    "implement_plan",
+    "list errors",
+    "list files",
+    "list pty sessions",
+    "list tools",
+    "list_files",
+    "list_pty_sessions",
+    "mode_edit",
+    "mode_plan",
+    "move file",
+    "move_file",
+    "plan_checklist",
+    "plan_exit",
+    "plan_manager",
+    "plan_mode",
+    "plan_off",
+    "plan_on",
+    "plan_start",
+    "plan_task_tracker",
+    "plan_tasks",
+    "planner_mode",
+    "read file",
+    "read pty session",
+    "read_file",
+    "read_pty_session",
+    "repo_browser.read_file",
+    "repo_browser.write_file",
+    "request_user_input",
+    "resume_edit_mode",
+    "run code",
+    "run command",
+    "run command (pty)",
+    "run_pty_cmd",
+    "search text",
+    "send pty input",
+    "send_pty_input",
+    "show agent info",
+    "start_implementation",
+    "start_planning",
+    "switch_edit_mode",
+    "switch_plan_mode",
+    "switch_to_edit_mode",
+    "switch_to_plan_mode",
+    "task_tracker",
+    "track_tasks",
+    "unified_exec",
+    "unified_file",
+    "unified_search",
+    "write file",
+    "write_file"
+  ],
+  "policies": {
+    "unified_search": "allow",
+    "read_file": "allow",
+    "list_pty_sessions": "allow",
+    "read_pty_session": "allow",
+    "/edit": "allow",
+    "/plan": "allow",
+    "/plan_off": "allow",
+    "apply patch": "allow",
+    "apply_patch": "allow",
+    "bash": "allow",
+    "checklist": "allow",
+    "close pty session": "allow",
+    "close_pty_session": "allow",
+    "coder_mode": "allow",
+    "container.exec": "allow",
+    "copy file": "allow",
+    "copy_file": "allow",
+    "create_file": "allow",
+    "create_pty_session": "allow",
+    "delete file": "allow",
+    "delete_file": "allow",
+    "edit file": "allow",
+    "edit_file": "allow",
+    "enter_plan": "allow",
+    "enter_plan_mode": "allow",
+    "exec code": "allow",
+    "execute_code": "allow",
+    "exit_plan": "allow",
+    "exit_plan_mode": "allow",
+    "fetch": "allow",
+    "file operation": "allow",
+    "file_op": "allow",
+    "get_errors": "allow",
+    "grep": "allow",
+    "grep_file": "allow",
+    "implement_plan": "allow",
+    "list errors": "allow",
+    "list files": "allow",
+    "list pty sessions": "allow",
+    "list tools": "allow",
+    "list_files": "allow",
+    "mode_edit": "allow",
+    "mode_plan": "allow",
+    "move file": "allow",
+    "move_file": "allow",
+    "plan_checklist": "allow",
+    "plan_exit": "allow",
+    "plan_manager": "allow",
+    "plan_mode": "allow",
+    "plan_off": "allow",
+    "plan_on": "allow",
+    "plan_start": "allow",
+    "plan_task_tracker": "allow",
+    "plan_tasks": "allow",
+    "planner_mode": "allow",
+    "read file": "allow",
+    "read pty session": "allow",
+    "repo_browser.read_file": "allow",
+    "repo_browser.write_file": "allow",
+    "request_user_input": "allow",
+    "resume_edit_mode": "allow",
+    "run code": "allow",
+    "run command": "allow",
+    "run command (pty)": "allow",
+    "run_pty_cmd": "allow",
+    "search text": "allow",
+    "send pty input": "allow",
+    "send_pty_input": "allow",
+    "show agent info": "allow",
+    "start_implementation": "allow",
+    "start_planning": "allow",
+    "switch_edit_mode": "allow",
+    "switch_plan_mode": "allow",
+    "switch_to_edit_mode": "allow",
+    "switch_to_plan_mode": "allow",
+    "task_tracker": "allow",
+    "track_tasks": "allow",
+    "unified_exec": "allow",
+    "unified_file": "allow",
+    "write file": "allow",
+    "write_file": "allow"
+  },
+  "constraints": {},
+  "mcp": {
+    "allowlist": {
+      "enforce": true,
+      "default": {
+        "tools": null,
+        "resources": null,
+        "prompts": null,
+        "logging": [
+          "mcp.provider_initialized",
+          "mcp.provider_initialization_failed",
+          "mcp.tool_filtered",
+          "mcp.tool_execution",
+          "mcp.tool_failed",
+          "mcp.tool_denied"
+        ],
+        "configuration": {
+          "client": [
+            "max_concurrent_connections",
+            "request_timeout_seconds",
+            "retry_attempts",
+            "startup_timeout_seconds",
+            "tool_timeout_seconds",
+            "experimental_use_rmcp_client"
+          ],
+          "server": [
+            "enabled",
+            "bind_address",
+            "port",
+            "transport",
+            "name",
+            "version"
+          ],
+          "ui": [
+            "mode",
+            "max_events",
+            "show_provider_names"
+          ]
+        }
+      },
+      "providers": {
+        "context7": {
+          "tools": [
+            "search_*",
+            "fetch_*",
+            "list_*",
+            "context7_*",
+            "get_*"
+          ],
+          "resources": [
+            "docs::*",
+            "snippets::*",
+            "repositories::*",
+            "context7::*"
+          ],
+          "prompts": [
+            "context7::*",
+            "support::*",
+            "docs::*"
+          ],
+          "logging": [
+            "mcp.tool_execution",
+            "mcp.tool_failed",
+            "mcp.tool_denied",
+            "mcp.tool_filtered",
+            "mcp.provider_initialized"
+          ],
+          "configuration": {
+            "context7": [
+              "workspace",
+              "search_scope",
+              "max_results"
+            ],
+            "provider": [
+              "max_concurrent_requests"
+            ]
+          }
+        },
+        "sequential-thinking": {
+          "tools": [
+            "plan",
+            "critique",
+            "reflect",
+            "decompose",
+            "sequential_*"
+          ],
+          "resources": null,
+          "prompts": [
+            "sequential-thinking::*",
+            "plan",
+            "reflect",
+            "critique"
+          ],
+          "logging": [
+            "mcp.tool_execution",
+            "mcp.tool_failed",
+            "mcp.tool_denied",
+            "mcp.tool_filtered",
+            "mcp.provider_initialized"
+          ],
+          "configuration": {
+            "provider": [
+              "max_concurrent_requests"
+            ],
+            "sequencing": [
+              "max_depth",
+              "max_branches"
+            ]
+          }
+        },
+        "time": {
+          "tools": [
+            "get_*",
+            "list_*",
+            "convert_timezone",
+            "describe_timezone",
+            "time_*"
+          ],
+          "resources": [
+            "timezone:*",
+            "location:*"
+          ],
+          "prompts": null,
+          "logging": [
+            "mcp.tool_execution",
+            "mcp.tool_failed",
+            "mcp.tool_denied",
+            "mcp.tool_filtered",
+            "mcp.provider_initialized"
+          ],
+          "configuration": {
+            "provider": [
+              "max_concurrent_requests"
+            ],
+            "time": [
+              "local_timezone_override"
+            ]
+          }
+        }
+      }
+    },
+    "providers": {}
+  }
+}

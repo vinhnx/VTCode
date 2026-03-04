@@ -61,6 +61,7 @@ async fn test_optimized_tool_registry() -> Result<()> {
         .await;
 
     assert!(result.is_ok());
+    assert_eq!(registry.get_stats_snapshot().len(), 1);
 
     Ok(())
 }
@@ -115,6 +116,30 @@ async fn test_async_tool_pipeline() -> Result<()> {
 }
 
 #[tokio::test]
+async fn test_async_tool_pipeline_prevents_duplicate_start() -> Result<()> {
+    let mut pipeline = AsyncToolPipeline::new(2, 16, 2, Duration::from_millis(50));
+
+    pipeline.start().await?;
+    let second_start = pipeline.start().await;
+    assert!(second_start.is_err());
+
+    pipeline.shutdown().await?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_async_tool_pipeline_restart_after_shutdown() -> Result<()> {
+    let mut pipeline = AsyncToolPipeline::new(2, 16, 2, Duration::from_millis(50));
+
+    pipeline.start().await?;
+    pipeline.shutdown().await?;
+    pipeline.start().await?;
+    pipeline.shutdown().await?;
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn test_optimized_llm_client() -> Result<()> {
     let client = OptimizedLLMClient::new(
         4,    // pool_size
@@ -125,11 +150,16 @@ async fn test_optimized_llm_client() -> Result<()> {
 
     // Start client
     client.start().await?;
+    client.start().await?;
 
     // Test request (would need actual LLM request implementation)
     // For now, just verify client creation and metrics
     let metrics = client.get_metrics().await;
     assert_eq!(metrics.total_requests, 0);
+    client.shutdown().await?;
+    client.shutdown().await?;
+    client.start().await?;
+    client.shutdown().await?;
 
     Ok(())
 }

@@ -330,7 +330,7 @@ fn walk_directory(
 
                 if let Some(existing) = discovered
                     .get(&manifest.name)
-                    .filter(|e| e.location_type < location.location_type)
+                    .filter(|e| e.location_type > location.location_type)
                 {
                     // Existing skill has higher precedence, skip this one
                     stats.skips_due_to_precedence += 1;
@@ -404,7 +404,7 @@ impl SkillLocations {
                         // Check precedence
                         if let Some(_existing) = discovered
                             .get(&manifest.name)
-                            .filter(|e| e.location_type < location.location_type)
+                            .filter(|e| e.location_type > location.location_type)
                         {
                             stats.skips_due_to_precedence += 1;
                             continue;
@@ -504,7 +504,17 @@ impl std::fmt::Display for SkillLocationType {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::Path;
     use tempfile::TempDir;
+
+    fn create_test_skill(root: &Path, relative_dir: &str, name: &str) {
+        let skill_dir = root.join(relative_dir);
+        std::fs::create_dir_all(&skill_dir).unwrap();
+        let skill_md = format!(
+            "---\nname: {name}\ndescription: Test skill {name}\n---\n# {name}\n\nTest instructions.\n"
+        );
+        std::fs::write(skill_dir.join("SKILL.md"), skill_md).unwrap();
+    }
 
     #[test]
     fn test_skill_location_type_precedence() {
@@ -564,91 +574,72 @@ mod tests {
 
     #[tokio::test]
     async fn test_location_discovery() {
-        // Test with custom locations that exist in the current workspace
-        // Use the workspace root (where .agents/skills or .vtcode/skills actually is)
-        let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .unwrap()
-            .to_path_buf();
-        let agents_skills = workspace_root.join(".agents/skills");
-        let vtcode_skills = workspace_root.join(".vtcode/skills");
-        let claude_skills = workspace_root.join(".claude/skills");
-        let (project_location_type, project_skills) = if agents_skills.exists() {
-            (SkillLocationType::AgentsProject, agents_skills)
-        } else {
-            (SkillLocationType::VtcodeProject, vtcode_skills)
-        };
+        let temp_dir = TempDir::new().unwrap();
+        let project_skills = temp_dir.path().join(".agents/skills");
+        let claude_skills = temp_dir.path().join(".claude/skills");
 
-        println!("Testing with workspace root: {}", workspace_root.display());
-        println!("Project skills path: {}", project_skills.display());
-        println!("Claude skills path: {}", claude_skills.display());
-        println!("Project skills path exists: {}", project_skills.exists());
-        println!("Claude path exists: {}", claude_skills.exists());
+        create_test_skill(
+            &project_skills,
+            "docs/doc-generator",
+            "doc-generator",
+        );
+        create_test_skill(
+            &project_skills,
+            "spreadsheet-generator",
+            "spreadsheet-generator",
+        );
+        create_test_skill(
+            &project_skills,
+            "reports/pdf-report-generator",
+            "pdf-report-generator",
+        );
+        // Same manifest name in lower-precedence location should be ignored.
+        create_test_skill(&claude_skills, "doc-generator", "doc-generator");
 
         let locations = SkillLocations::with_locations(vec![
-            SkillLocation::new(project_location_type, project_skills, true),
+            SkillLocation::new(SkillLocationType::AgentsProject, project_skills, true),
             SkillLocation::new(SkillLocationType::ClaudeProject, claude_skills, true),
         ]);
 
         let discovered = locations.discover_skills().unwrap();
-
-        println!("Discovered {} skills from test locations", discovered.len());
-
-        // Should find at least the skills we moved to .agents/skills or .vtcode/skills
         let skill_names: Vec<String> = discovered
             .iter()
             .map(|d| d.skill_context.manifest().name.clone())
             .collect();
+        assert!(skill_names.contains(&"doc-generator".to_string()));
+        assert!(skill_names.contains(&"spreadsheet-generator".to_string()));
+        assert!(skill_names.contains(&"pdf-report-generator".to_string()));
 
-        println!("Found skills: {:?}", skill_names);
-
-        // Check for some of the skills we know should exist
-        assert!(
-            skill_names.contains(&"spreadsheet-generator".to_string())
-                || skill_names.contains(&"doc-generator".to_string())
-                || skill_names.contains(&"pdf-report-generator".to_string()),
-            "Should have found at least one of the VT Code skills"
-        );
+        let doc_generator = discovered
+            .iter()
+            .find(|d| d.skill_context.manifest().name == "doc-generator")
+            .expect("doc-generator should be discovered");
+        assert_eq!(doc_generator.location_type, SkillLocationType::AgentsProject);
     }
 
     #[test]
     fn test_full_integration() {
-        println!("Testing full VT Code skills location system integration...");
+        let temp_dir = TempDir::new().unwrap();
+        let agents_skills = temp_dir.path().join(".agents/skills");
+        let vtcode_skills = temp_dir.path().join(".vtcode/skills");
 
-        // Test with the actual workspace
-        let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .unwrap()
-            .to_path_buf();
-
-        // Test default locations
-        let locations = SkillLocations::default();
-        let discovered = locations.discover_skills().unwrap();
-
-        println!("Default locations discovered {} skills", discovered.len());
-
-        // Test specific project location
-        let agents_skills = workspace_root.join(".agents/skills");
-        let vtcode_skills = workspace_root.join(".vtcode/skills");
-        let (project_location_type, project_skills) = if agents_skills.exists() {
-            (SkillLocationType::AgentsProject, agents_skills)
-        } else {
-            (SkillLocationType::VtcodeProject, vtcode_skills)
-        };
-        let project_locations = SkillLocations::with_locations(vec![SkillLocation::new(
-            project_location_type,
-            project_skills,
-            true,
-        )]);
-
-        let project_discovered = project_locations.discover_skills().unwrap();
-        println!(
-            "Project location discovered {} skills",
-            project_discovered.len()
+        create_test_skill(&agents_skills, "doc-generator", "doc-generator");
+        create_test_skill(&agents_skills, "spreadsheet-generator", "spreadsheet-generator");
+        create_test_skill(
+            &agents_skills,
+            "pdf-report-generator",
+            "pdf-report-generator",
         );
+        // Lower-precedence duplicate should be overwritten by AgentsProject entry.
+        create_test_skill(&vtcode_skills, "doc-generator", "doc-generator");
 
-        // Verify we found the expected skills
-        let skill_names: Vec<String> = project_discovered
+        let locations = SkillLocations::with_locations(vec![
+            SkillLocation::new(SkillLocationType::VtcodeProject, vtcode_skills, true),
+            SkillLocation::new(SkillLocationType::AgentsProject, agents_skills, true),
+        ]);
+
+        let discovered = locations.discover_skills().unwrap();
+        let skill_names: Vec<String> = discovered
             .iter()
             .map(|d| d.skill_context.manifest().name.clone())
             .collect();
@@ -665,7 +656,10 @@ mod tests {
             skill_names.contains(&"pdf-report-generator".to_string()),
             "Should find pdf-report-generator"
         );
-
-        println!("Integration test passed! Found skills: {:?}", skill_names);
+        let doc_generator = discovered
+            .iter()
+            .find(|d| d.skill_context.manifest().name == "doc-generator")
+            .expect("doc-generator should be discovered");
+        assert_eq!(doc_generator.location_type, SkillLocationType::AgentsProject);
     }
 }

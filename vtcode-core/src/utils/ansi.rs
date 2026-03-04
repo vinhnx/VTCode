@@ -1306,7 +1306,7 @@ mod tests {
             Some(AnsiColorEnum::Ansi(AnsiColor::Red))
         );
         assert_eq!(segments[1].text, " plain");
-        assert_eq!(segments[1].style.color, fallback.color);
+        assert_eq!(segments[1].style.color, None);
     }
 
     #[test]

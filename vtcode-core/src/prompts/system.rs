@@ -1145,12 +1145,14 @@ mod tests {
 
     #[test]
     fn test_prompt_text_avoids_hardcoded_loop_thresholds() {
+        let specialized_prompt =
+            DEFAULT_SPECIALIZED_PROMPT.replace("__UNIFIED_TOOL_GUIDANCE__", UNIFIED_TOOL_GUIDANCE);
         assert!(!DEFAULT_SYSTEM_PROMPT.contains("stuck twice"));
         assert!(!MINIMAL_SYSTEM_PROMPT.contains("stuck twice"));
-        assert!(!DEFAULT_SPECIALIZED_PROMPT.contains("stuck twice"));
-        assert!(!DEFAULT_SPECIALIZED_PROMPT.contains("10+ calls without progress"));
-        assert!(!DEFAULT_SPECIALIZED_PROMPT.contains("Same tool+params twice"));
-        assert!(DEFAULT_SPECIALIZED_PROMPT.contains("runtime-configured"));
+        assert!(!specialized_prompt.contains("stuck twice"));
+        assert!(!specialized_prompt.contains("10+ calls without progress"));
+        assert!(!specialized_prompt.contains("Same tool+params twice"));
+        assert!(specialized_prompt.contains("runtime-configured"));
     }
 
     #[test]

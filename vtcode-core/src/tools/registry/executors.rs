@@ -2287,8 +2287,28 @@ fn normalized_shell_name(shell: &str) -> String {
 }
 
 fn build_shell_command_string(raw: Option<&str>, parts: &[String], _shell: &str) -> String {
-    raw.map(|s| s.to_string())
-        .unwrap_or_else(|| shell_words::join(parts.iter().map(|s| s.as_str())))
+    let fallback = || shell_words::join(parts.iter().map(|s| s.as_str()));
+
+    let Some(raw) = raw else {
+        return fallback();
+    };
+
+    // Preserve original shell syntax from `command` (operators, quoting), while still
+    // appending any separate `args` entries that were merged into `parts`.
+    let Ok(raw_parts) = shell_words::split(raw) else {
+        return fallback();
+    };
+
+    if parts.len() <= raw_parts.len() || !parts.starts_with(&raw_parts) {
+        return raw.to_string();
+    }
+
+    let suffix = shell_words::join(parts[raw_parts.len()..].iter().map(|s| s.as_str()));
+    if suffix.is_empty() {
+        raw.to_string()
+    } else {
+        format!("{} {}", raw, suffix)
+    }
 }
 
 #[cfg(test)]

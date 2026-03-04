@@ -2,10 +2,12 @@
 
 use anyhow::Result;
 use hashbrown::HashMap;
+use parking_lot::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
 use serde_json::Value;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tokio::sync::{RwLock, Semaphore};
+use tokio::sync::{RwLock, Semaphore, mpsc};
 use tracing::debug;
 
 use crate::llm::types::LLMError;
@@ -48,6 +50,15 @@ pub struct RequestBatcher {
 
     /// Maximum batch size
     max_batch_size: usize,
+
+    /// Guards against spawning duplicate processing loops.
+    processing_started: AtomicBool,
+
+    /// Shutdown signal sender for the background processing loop.
+    shutdown_tx: Mutex<Option<mpsc::Sender<()>>>,
+
+    /// Handle for the background processing loop task.
+    processing_task: Mutex<Option<tokio::task::JoinHandle<()>>>,
 }
 
 /// A request that can be batched with similar requests
@@ -104,7 +115,7 @@ pub struct TokenBucket {
 }
 
 /// Client performance metrics
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct ClientMetrics {
     pub total_requests: u64,
     pub cache_hits: u64,
@@ -169,6 +180,9 @@ impl RequestBatcher {
             pending_requests: Arc::new(RwLock::new(HashMap::new())),
             batch_interval,
             max_batch_size,
+            processing_started: AtomicBool::new(false),
+            shutdown_tx: Mutex::new(None),
+            processing_task: Mutex::new(None),
         }
     }
 
@@ -234,39 +248,76 @@ impl RequestBatcher {
 
     /// Start batch processing loop
     pub async fn start_processing(&self) {
+        if self.processing_started.swap(true, Ordering::SeqCst) {
+            return;
+        }
+
+        let (shutdown_tx, mut shutdown_rx) = mpsc::channel(1);
+        *self.shutdown_tx.lock() = Some(shutdown_tx);
+
         let pending_requests = Arc::clone(&self.pending_requests);
         let batch_interval = self.batch_interval;
 
-        tokio::spawn(async move {
+        let processing_task = tokio::spawn(async move {
             let mut interval = tokio::time::interval(batch_interval);
 
             loop {
-                interval.tick().await;
+                tokio::select! {
+                    _ = interval.tick() => {
+                        let batches_to_process = {
+                            let mut pending = pending_requests.write().await;
+                            let mut batches = Vec::new();
 
-                let batches_to_process = {
-                    let mut pending = pending_requests.write().await;
-                    let mut batches = Vec::new();
+                            for (key, requests) in pending.iter_mut() {
+                                if !requests.is_empty() {
+                                    batches.push((key.clone(), std::mem::take(requests)));
+                                }
+                            }
 
-                    for (key, requests) in pending.iter_mut() {
-                        if !requests.is_empty() {
-                            batches.push((key.clone(), std::mem::take(requests)));
+                            // Clean up empty entries
+                            pending.retain(|_, v| !v.is_empty());
+
+                            batches
+                        };
+
+                        // Process all batches concurrently
+                        for (_, batch) in batches_to_process {
+                            tokio::spawn(async move {
+                                Self::process_batch(batch).await;
+                            });
                         }
                     }
-
-                    // Clean up empty entries
-                    pending.retain(|_, v| !v.is_empty());
-
-                    batches
-                };
-
-                // Process all batches concurrently
-                for (_, batch) in batches_to_process {
-                    tokio::spawn(async move {
-                        Self::process_batch(batch).await;
-                    });
+                    _ = shutdown_rx.recv() => {
+                        debug!("LLM request batch processing shutdown requested");
+                        break;
+                    }
                 }
             }
         });
+        *self.processing_task.lock() = Some(processing_task);
+    }
+
+    pub async fn shutdown_processing(&self) {
+        let shutdown_tx = { self.shutdown_tx.lock().take() };
+        if let Some(tx) = shutdown_tx {
+            let _ = tx.send(()).await;
+        }
+
+        let handle = { self.processing_task.lock().take() };
+        if let Some(handle) = handle {
+            let _ = handle.await;
+        }
+
+        self.processing_started.store(false, Ordering::SeqCst);
+    }
+}
+
+impl Drop for RequestBatcher {
+    fn drop(&mut self) {
+        if let Some(handle) = self.processing_task.lock().take() {
+            handle.abort();
+        }
+        self.shutdown_tx.lock().take();
     }
 }
 
@@ -363,7 +414,7 @@ impl OptimizedLLMClient {
         let (response_tx, response_rx) = tokio::sync::oneshot::channel();
         let batched_request = BatchedRequest {
             id: uuid::Uuid::new_v4().to_string(),
-            request: request.clone(),
+            request,
             response_tx,
             submitted_at: start_time,
         };
@@ -429,23 +480,15 @@ impl OptimizedLLMClient {
         Ok(())
     }
 
+    pub async fn shutdown(&self) -> Result<()> {
+        self.request_batcher.shutdown_processing().await;
+        Ok(())
+    }
+
     /// Get current client metrics
     pub async fn get_metrics(&self) -> ClientMetrics {
         let mut metrics = self.metrics.read().await.clone();
         metrics.connection_pool_utilization = self.connection_pool.utilization().await;
         metrics
-    }
-}
-
-impl Clone for ClientMetrics {
-    fn clone(&self) -> Self {
-        Self {
-            total_requests: self.total_requests,
-            cache_hits: self.cache_hits,
-            batched_requests: self.batched_requests,
-            avg_response_time_ms: self.avg_response_time_ms,
-            connection_pool_utilization: self.connection_pool_utilization,
-            rate_limit_hits: self.rate_limit_hits,
-        }
     }
 }

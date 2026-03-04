@@ -85,9 +85,8 @@ impl OptimizedToolRegistry {
 
         let execution_time = start_time.elapsed();
 
-        // Update execution statistics asynchronously
-        self.record_execution_stats(tool_name, execution_time, result.is_ok())
-            .await;
+        // Record execution statistics inline to keep behavior deterministic.
+        self.record_execution_stats(tool_name, execution_time, result.is_ok());
 
         // Return memory to pool
         pool.return_string(result_string);
@@ -104,43 +103,37 @@ impl OptimizedToolRegistry {
     }
 
     /// Record execution statistics with minimal blocking
-    async fn record_execution_stats(
+    fn record_execution_stats(
         &self,
         tool_name: &str,
         execution_time: std::time::Duration,
         success: bool,
     ) {
-        // Use a separate task to avoid blocking the main execution path
-        let stats_arc = Arc::clone(&self.execution_stats);
-        let tool_name = tool_name.to_string();
+        let record = ToolExecutionRecord {
+            tool_name: tool_name.to_string(),
+            requested_name: String::new(), // Optimize: reuse from pool
+            is_mcp: false,
+            mcp_provider: None,
+            args: Value::Null,
+            result: if success {
+                Ok(Value::Null)
+            } else {
+                Err("Error".to_string())
+            },
+            timestamp: std::time::SystemTime::now(),
+            success,
+            context: crate::tools::registry::HarnessContextSnapshot::new(
+                "optimized".to_string(),
+                None,
+            ),
+            timeout_category: None,
+            base_timeout_ms: None,
+            adaptive_timeout_ms: None,
+            effective_timeout_ms: Some(execution_time.as_millis() as u64),
+            circuit_breaker: false,
+        };
 
-        tokio::spawn(async move {
-            let record = ToolExecutionRecord {
-                tool_name,
-                requested_name: String::new(), // Optimize: reuse from pool
-                is_mcp: false,
-                mcp_provider: None,
-                args: Value::Null,
-                result: if success {
-                    Ok(Value::Null)
-                } else {
-                    Err("Error".to_string())
-                },
-                timestamp: std::time::SystemTime::now(),
-                success,
-                context: crate::tools::registry::HarnessContextSnapshot::new(
-                    "optimized".to_string(),
-                    None,
-                ),
-                timeout_category: None,
-                base_timeout_ms: None,
-                adaptive_timeout_ms: None,
-                effective_timeout_ms: Some(execution_time.as_millis() as u64),
-                circuit_breaker: false,
-            };
-
-            stats_arc.write().push(record);
-        });
+        self.execution_stats.write().push(record);
     }
 
     /// Actual tool execution implementation

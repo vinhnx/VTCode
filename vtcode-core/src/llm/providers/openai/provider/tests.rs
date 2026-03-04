@@ -101,21 +101,20 @@ fn responses_payload_uses_function_wrapper() {
         .convert_to_openai_responses_format(&request)
         .expect("conversion should succeed");
 
-    let _instructions = payload
-        .get("instructions")
-        .and_then(Value::as_str)
-        .expect("instructions should be set");
-
     let tools = payload
         .get("tools")
         .and_then(Value::as_array)
         .expect("tools should exist on payload");
     let tool_object = tools[0].as_object().expect("tool entry should be object");
-    assert!(tool_object.contains_key("function"));
+    assert_eq!(
+        tool_object.get("type").and_then(Value::as_str),
+        Some("function")
+    );
     assert_eq!(
         tool_object.get("name").and_then(Value::as_str),
         Some("search_workspace")
     );
+    assert!(tool_object.contains_key("parameters"));
 }
 
 #[test]
@@ -588,9 +587,18 @@ fn test_parse_harmony_tool_call_from_text_container_exec() {
 
 #[test]
 fn chat_completions_uses_max_completion_tokens_field() {
-    let provider =
-        OpenAIProvider::with_model(String::new(), models::openai::DEFAULT_MODEL.to_string());
-    let request = sample_request(models::openai::DEFAULT_MODEL);
+    let provider = OpenAIProvider::from_config(
+        Some(String::new()),
+        Some(models::openai::DEFAULT_MODEL.to_string()),
+        Some("https://api.openai.com/v1".to_string()),
+        None,
+        None,
+        None,
+        None,
+        None,
+    );
+    let mut request = sample_request(models::openai::DEFAULT_MODEL);
+    request.max_tokens = Some(512);
 
     let payload = provider
         .convert_to_openai_format(&request)
@@ -606,8 +614,8 @@ fn chat_completions_uses_max_completion_tokens_field() {
 
 #[test]
 fn chat_completions_applies_temperature_independent_of_max_tokens() {
-    let provider = OpenAIProvider::with_model(String::new(), models::openai::GPT_5.to_string());
-    let mut request = sample_request(models::openai::GPT_5);
+    let provider = OpenAIProvider::with_model(String::new(), models::openai::GPT_5_2.to_string());
+    let mut request = sample_request(models::openai::GPT_5_2);
     request.temperature = Some(0.4);
 
     let payload = provider
