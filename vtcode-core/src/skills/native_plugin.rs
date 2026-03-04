@@ -140,19 +140,24 @@ impl std::fmt::Debug for NativePlugin {
     }
 }
 
+// Safety: `NativePlugin` is immutable after construction and keeps the backing
+// dynamic library handle alive, so moving across threads is safe.
 unsafe impl Send for NativePlugin {}
+// Safety: shared references do not allow mutation and function pointers are immutable.
 unsafe impl Sync for NativePlugin {}
 
 impl NativePlugin {
     /// Create a new native plugin from a loaded library
     pub fn new(library: Library, path: PathBuf) -> Result<Self> {
         // Verify ABI version
+        // Safety: symbol name and signature are defined by the plugin ABI.
         let version_fn: Symbol<unsafe extern "C" fn() -> u32> = unsafe {
             library
                 .get(b"vtcode_plugin_version\0")
                 .context("Failed to load vtcode_plugin_version symbol")?
         };
 
+        // Safety: function pointer loaded from the validated ABI symbol above.
         let abi_version = unsafe { version_fn() };
         if abi_version != PLUGIN_ABI_VERSION {
             return Err(anyhow!(
@@ -163,17 +168,20 @@ impl NativePlugin {
         }
 
         // Load metadata
+        // Safety: symbol name and signature are defined by the plugin ABI.
         let metadata_fn: Symbol<unsafe extern "C" fn() -> *const libc::c_char> = unsafe {
             library
                 .get(b"vtcode_plugin_metadata\0")
                 .context("Failed to load vtcode_plugin_metadata symbol")?
         };
 
+        // Safety: function pointer loaded from the validated ABI symbol above.
         let metadata_ptr = unsafe { metadata_fn() };
         if metadata_ptr.is_null() {
             return Err(anyhow!("Plugin metadata function returned null pointer"));
         }
 
+        // Safety: pointer was checked for null and must point to a valid C string per ABI.
         let metadata_json = unsafe { std::ffi::CStr::from_ptr(metadata_ptr) }
             .to_str()
             .context("Plugin metadata is not valid UTF-8")?;
@@ -182,6 +190,7 @@ impl NativePlugin {
             serde_json::from_str(metadata_json).context("Failed to parse plugin metadata JSON")?;
 
         // Load execute function
+        // Safety: symbol name and signature are defined by the plugin ABI.
         let execute_fn: Symbol<unsafe extern "C" fn(*const libc::c_char) -> *const libc::c_char> = unsafe {
             library
                 .get(b"vtcode_plugin_execute\0")
@@ -213,12 +222,14 @@ impl NativePlugin {
         let input_cstr = std::ffi::CString::new(input_json)
             .context("Failed to create C string from input JSON")?;
 
+        // Safety: the C string pointer is valid and `execute_fn` obeys plugin ABI.
         let result_ptr = unsafe { (self.execute_fn)(input_cstr.as_ptr()) };
 
         if result_ptr.is_null() {
             return Err(anyhow!("Plugin execute function returned null pointer"));
         }
 
+        // Safety: plugin ABI guarantees returned pointer references a valid C string.
         let result_json = unsafe { std::ffi::CStr::from_ptr(result_ptr) }
             .to_str()
             .context("Plugin result is not valid UTF-8")?;
@@ -305,10 +316,10 @@ impl PluginLoader {
         // - Verify ABI version compatibility
         // - Validate metadata format
         // - Future: support signature verification
-        let library = unsafe {
-            Library::new(&lib_path)
-                .context(format!("Failed to load dynamic library at {:?}", lib_path))?
-        };
+        // Safety: loading a dynamic library is inherently unsafe; path has been
+        // constrained to trusted directories before this point.
+        let library = unsafe { Library::new(&lib_path) }
+            .with_context(|| format!("Failed to load dynamic library at {:?}", lib_path))?;
 
         let plugin = NativePlugin::new(library, plugin_path.to_path_buf())?;
 
@@ -346,7 +357,7 @@ impl PluginLoader {
             path.starts_with(dir)
                 || path
                     .parent()
-                    .map_or(false, |parent| parent.starts_with(dir))
+                    .is_some_and(|parent| parent.starts_with(dir))
         })
     }
 
@@ -405,8 +416,8 @@ impl PluginLoader {
         let mut alternatives = Vec::new();
 
         // Try with and without "lib" prefix
-        if base_name.starts_with("lib") {
-            alternatives.push(base_name[3..].to_string());
+        if let Some(stripped) = base_name.strip_prefix("lib") {
+            alternatives.push(stripped.to_string());
         } else {
             alternatives.push(format!("lib{}", base_name));
         }

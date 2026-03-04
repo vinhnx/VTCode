@@ -1,12 +1,14 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 
 use crate::auth::migrate_custom_api_keys_to_keyring;
 use crate::defaults::{self};
 use crate::loader::config::VTCodeConfig;
-use crate::loader::layers::{ConfigLayerEntry, ConfigLayerSource, ConfigLayerStack};
+use crate::loader::layers::{
+    ConfigLayerEntry, ConfigLayerSource, ConfigLayerStack, LayerDisabledReason,
+};
 
 /// Configuration manager for loading and validating configurations
 #[derive(Clone)]
@@ -63,70 +65,49 @@ impl ConfigManager {
         #[cfg(unix)]
         {
             let system_config = PathBuf::from("/etc/vtcode/vtcode.toml");
-            if system_config.exists()
-                && let Ok(toml) = Self::load_toml_from_file(&system_config)
-            {
-                layer_stack.push(ConfigLayerEntry::new(
-                    ConfigLayerSource::System {
-                        file: system_config,
-                    },
-                    toml,
-                ));
+            if let Some(layer) = Self::load_optional_layer(ConfigLayerSource::System {
+                file: system_config,
+            }) {
+                layer_stack.push(layer);
             }
         }
 
         // 2. User home config (~/.vtcode/vtcode.toml)
         for home_config_path in defaults_provider.home_config_paths(&config_file_name) {
-            if home_config_path.exists()
-                && let Ok(toml) = Self::load_toml_from_file(&home_config_path)
-            {
-                layer_stack.push(ConfigLayerEntry::new(
-                    ConfigLayerSource::User {
-                        file: home_config_path,
-                    },
-                    toml,
-                ));
+            if let Some(layer) = Self::load_optional_layer(ConfigLayerSource::User {
+                file: home_config_path,
+            }) {
+                layer_stack.push(layer);
             }
         }
 
-        // 2. Project-specific config (.vtcode/projects/<project>/config/vtcode.toml)
+        // 3. Project-specific config (.vtcode/projects/<project>/config/vtcode.toml)
         if let Some(project_config_path) =
             Self::project_config_path(&config_dir, &workspace_root, &config_file_name)
-            && let Ok(toml) = Self::load_toml_from_file(&project_config_path)
+            && let Some(layer) = Self::load_optional_layer(ConfigLayerSource::Project {
+                file: project_config_path,
+            })
         {
-            layer_stack.push(ConfigLayerEntry::new(
-                ConfigLayerSource::Project {
-                    file: project_config_path,
-                },
-                toml,
-            ));
+            layer_stack.push(layer);
         }
 
-        // 3. Config directory fallback (.vtcode/vtcode.toml)
+        // 4. Config directory fallback (.vtcode/vtcode.toml)
         let fallback_path = config_dir.join(&config_file_name);
         let workspace_config_path = workspace_root.join(&config_file_name);
         if fallback_path.exists()
             && fallback_path != workspace_config_path
-            && let Ok(toml) = Self::load_toml_from_file(&fallback_path)
+            && let Some(layer) = Self::load_optional_layer(ConfigLayerSource::Workspace {
+                file: fallback_path,
+            })
         {
-            layer_stack.push(ConfigLayerEntry::new(
-                ConfigLayerSource::Workspace {
-                    file: fallback_path,
-                },
-                toml,
-            ));
+            layer_stack.push(layer);
         }
 
-        // 4. Workspace config (vtcode.toml in workspace root)
-        if workspace_config_path.exists()
-            && let Ok(toml) = Self::load_toml_from_file(&workspace_config_path)
-        {
-            layer_stack.push(ConfigLayerEntry::new(
-                ConfigLayerSource::Workspace {
-                    file: workspace_config_path.clone(),
-                },
-                toml,
-            ));
+        // 5. Workspace config (vtcode.toml in workspace root)
+        if let Some(layer) = Self::load_optional_layer(ConfigLayerSource::Workspace {
+            file: workspace_config_path.clone(),
+        }) {
+            layer_stack.push(layer);
         }
 
         // If no layers found, use default config
@@ -145,7 +126,15 @@ impl ConfigManager {
             });
         }
 
-        let effective_toml = layer_stack.effective_config();
+        if let Some((layer, error)) = layer_stack.first_layer_error() {
+            bail!(
+                "Configuration layer '{}' failed to load: {}",
+                layer.source.label(),
+                error.message
+            );
+        }
+
+        let effective_toml = layer_stack.effective_config_without_origins();
         let mut config: VTCodeConfig = effective_toml
             .try_into()
             .context("Failed to deserialize effective configuration")?;
@@ -157,13 +146,18 @@ impl ConfigManager {
         // Migrate any plain-text API keys from config to secure storage
         migrate_custom_api_keys_if_needed(&mut config)?;
 
-        let config_path = layer_stack.layers().last().and_then(|l| match &l.source {
-            ConfigLayerSource::User { file } => Some(file.clone()),
-            ConfigLayerSource::Project { file } => Some(file.clone()),
-            ConfigLayerSource::Workspace { file } => Some(file.clone()),
-            ConfigLayerSource::System { file } => Some(file.clone()),
-            ConfigLayerSource::Runtime => None,
-        });
+        let config_path = layer_stack
+            .layers()
+            .iter()
+            .rev()
+            .find(|layer| layer.is_enabled())
+            .and_then(|l| match &l.source {
+                ConfigLayerSource::User { file } => Some(file.clone()),
+                ConfigLayerSource::Project { file } => Some(file.clone()),
+                ConfigLayerSource::Workspace { file } => Some(file.clone()),
+                ConfigLayerSource::System { file } => Some(file.clone()),
+                ConfigLayerSource::Runtime => None,
+            });
 
         Ok(Self {
             config,
@@ -182,6 +176,42 @@ impl ConfigManager {
         Ok(value)
     }
 
+    fn load_optional_layer(source: ConfigLayerSource) -> Option<ConfigLayerEntry> {
+        let file = match &source {
+            ConfigLayerSource::System { file }
+            | ConfigLayerSource::User { file }
+            | ConfigLayerSource::Project { file }
+            | ConfigLayerSource::Workspace { file } => file,
+            ConfigLayerSource::Runtime => {
+                return Some(ConfigLayerEntry::new(
+                    source,
+                    toml::Value::Table(toml::Table::new()),
+                ));
+            }
+        };
+
+        if !file.exists() {
+            return None;
+        }
+
+        match Self::load_toml_from_file(file) {
+            Ok(toml) => Some(ConfigLayerEntry::new(source, toml)),
+            Err(error) => Some(Self::disabled_layer_from_error(source, error)),
+        }
+    }
+
+    fn disabled_layer_from_error(
+        source: ConfigLayerSource,
+        error: anyhow::Error,
+    ) -> ConfigLayerEntry {
+        let reason = if error.to_string().contains("parse") {
+            LayerDisabledReason::ParseError
+        } else {
+            LayerDisabledReason::LoadError
+        };
+        ConfigLayerEntry::disabled(source, reason, format!("{:#}", error))
+    }
+
     /// Load configuration from a specific file
     pub fn load_from_file(path: impl AsRef<Path>) -> Result<Self> {
         let path = path.as_ref();
@@ -197,42 +227,47 @@ impl ConfigManager {
         #[cfg(unix)]
         {
             let system_config = PathBuf::from("/etc/vtcode/vtcode.toml");
-            if system_config.exists()
-                && let Ok(toml) = Self::load_toml_from_file(&system_config)
-            {
-                layer_stack.push(ConfigLayerEntry::new(
-                    ConfigLayerSource::System {
-                        file: system_config,
-                    },
-                    toml,
-                ));
+            if let Some(layer) = Self::load_optional_layer(ConfigLayerSource::System {
+                file: system_config,
+            }) {
+                layer_stack.push(layer);
             }
         }
 
         // 2. User home config
         for home_config_path in defaults_provider.home_config_paths(&config_file_name) {
-            if home_config_path.exists()
-                && let Ok(toml) = Self::load_toml_from_file(&home_config_path)
-            {
-                layer_stack.push(ConfigLayerEntry::new(
-                    ConfigLayerSource::User {
-                        file: home_config_path,
-                    },
-                    toml,
-                ));
+            if let Some(layer) = Self::load_optional_layer(ConfigLayerSource::User {
+                file: home_config_path,
+            }) {
+                layer_stack.push(layer);
             }
         }
 
         // 3. The specific file provided (Workspace layer)
-        let toml = Self::load_toml_from_file(path)?;
-        layer_stack.push(ConfigLayerEntry::new(
-            ConfigLayerSource::Workspace {
-                file: path.to_path_buf(),
-            },
-            toml,
-        ));
+        match Self::load_toml_from_file(path) {
+            Ok(toml) => layer_stack.push(ConfigLayerEntry::new(
+                ConfigLayerSource::Workspace {
+                    file: path.to_path_buf(),
+                },
+                toml,
+            )),
+            Err(error) => layer_stack.push(Self::disabled_layer_from_error(
+                ConfigLayerSource::Workspace {
+                    file: path.to_path_buf(),
+                },
+                error,
+            )),
+        }
 
-        let effective_toml = layer_stack.effective_config();
+        if let Some((layer, error)) = layer_stack.first_layer_error() {
+            bail!(
+                "Configuration layer '{}' failed to load: {}",
+                layer.source.label(),
+                error.message
+            );
+        }
+
+        let effective_toml = layer_stack.effective_config_without_origins();
         let config: VTCodeConfig = effective_toml.try_into().with_context(|| {
             format!(
                 "Failed to parse effective config with file: {}",
@@ -264,6 +299,16 @@ impl ConfigManager {
     /// Get the configuration file path (if loaded from file)
     pub fn config_path(&self) -> Option<&Path> {
         self.config_path.as_deref()
+    }
+
+    /// Get the active workspace root for this manager.
+    pub fn workspace_root(&self) -> Option<&Path> {
+        self.workspace_root.as_deref()
+    }
+
+    /// Get the config filename used by this manager (usually `vtcode.toml`).
+    pub fn config_file_name(&self) -> &str {
+        &self.config_file_name
     }
 
     /// Get the configuration layer stack
@@ -378,6 +423,11 @@ impl ConfigManager {
             .file_name()
             .and_then(|name| name.to_str())
             .map(|name| name.to_string())
+    }
+
+    /// Resolve the current project name used for project-level config overlays.
+    pub fn current_project_name(workspace_root: &Path) -> Option<String> {
+        Self::identify_current_project(workspace_root)
     }
 
     /// Persist configuration to the manager's associated path or workspace

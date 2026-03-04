@@ -2,7 +2,7 @@ use anyhow::Result;
 use std::fs;
 use std::io::Write;
 use std::path::Path;
-use vtcode_core::config::{ConfigManager, VTCodeConfig};
+use vtcode_core::config::{ConfigReadRequest, ConfigService, VTCodeConfig};
 use vtcode_core::utils::colors::style;
 
 /// Handle the config command
@@ -49,10 +49,14 @@ pub async fn handle_config_command(output: Option<&Path>, use_home_dir: bool) ->
 fn generate_default_config() -> String {
     // Try to load existing configuration to preserve user settings
     let config = if Path::new("vtcode.toml").exists() {
-        // Load existing config to preserve user customizations
-        match ConfigManager::load_from_file("vtcode.toml") {
-            Ok(config_manager) => config_manager.config().clone(),
-            Err(_) => VTCodeConfig::default(), // Fall back to defaults if loading fails
+        let workspace = std::env::current_dir().unwrap_or_else(|_| ".".into());
+        match ConfigService::read(ConfigReadRequest {
+            workspace,
+            runtime_overrides: Vec::new(),
+        }) {
+            Ok(response) => serde_json::from_value::<VTCodeConfig>(response.effective_config)
+                .unwrap_or_else(|_| VTCodeConfig::default()),
+            Err(_) => VTCodeConfig::default(),
         }
     } else {
         // Use system defaults if no config file exists

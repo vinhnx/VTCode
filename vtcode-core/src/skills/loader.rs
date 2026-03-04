@@ -392,7 +392,7 @@ fn try_load_plugin_from_dir(path: &Path, scope: SkillScope) -> Result<Option<Ski
 
     if !path.join(&lib_name).exists() {
         // Try alternative library names
-        let alternatives = vec![
+        let alternatives = [
             format!("lib{}.dylib", plugin_metadata.name),
             format!("{}.dylib", plugin_metadata.name),
             format!("lib{}.so", plugin_metadata.name),
@@ -620,16 +620,14 @@ impl EnhancedSkillLoader {
 
             // Check if this directory contains the requested plugin
             let plugin_json = plugin_dir.join("plugin.json");
-            if let Ok(content) = fs::read_to_string(&plugin_json) {
-                if let Ok(metadata) =
+            if let Ok(content) = fs::read_to_string(&plugin_json)
+                && let Ok(metadata) =
                     serde_json::from_str::<crate::skills::native_plugin::PluginMetadata>(&content)
-                {
-                    if metadata.name == name {
-                        // Load the plugin
-                        let plugin = self.plugin_loader.load_plugin(&plugin_dir)?;
-                        return Ok(EnhancedSkill::NativePlugin(plugin));
-                    }
-                }
+                && metadata.name == name
+            {
+                // Load the plugin
+                let plugin = self.plugin_loader.load_plugin(&plugin_dir)?;
+                return Ok(EnhancedSkill::NativePlugin(plugin));
             }
         }
 

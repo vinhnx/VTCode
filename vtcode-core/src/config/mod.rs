@@ -5,6 +5,7 @@
 //! `vtcode_core::config`.
 
 pub mod acp;
+pub mod api;
 pub mod api_keys;
 pub mod constants;
 pub mod context;
@@ -24,6 +25,10 @@ pub use acp::{
     AgentClientProtocolConfig, AgentClientProtocolTransport, AgentClientProtocolZedConfig,
     AgentClientProtocolZedToolsConfig, AgentClientProtocolZedWorkspaceTrustMode,
     WorkspaceTrustLevel,
+};
+pub use api::{
+    ConfigLayerView, ConfigReadRequest, ConfigReadResponse, ConfigService, ConfigWriteRequest,
+    ConfigWriteResponse, ConfigWriteStrategy, ConfigWriteTarget, OverrideMetadata,
 };
 pub use api_keys::ApiKeySources;
 pub use context::{ContextFeaturesConfig, LedgerConfig};

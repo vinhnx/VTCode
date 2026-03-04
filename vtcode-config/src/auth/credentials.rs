@@ -9,6 +9,7 @@
 //! ```rust
 //! use vtcode_config::auth::credentials::{CredentialStorage, AuthCredentialsStoreMode};
 //!
+//! # fn example() -> anyhow::Result<()> {
 //! // Store a credential using the default mode (keyring)
 //! let storage = CredentialStorage::new("my_app", "api_key");
 //! storage.store("secret_api_key")?;
@@ -20,6 +21,8 @@
 //!
 //! // Delete the credential
 //! storage.clear()?;
+//! # Ok(())
+//! # }
 //! ```
 
 use anyhow::{Context, Result, anyhow};

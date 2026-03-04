@@ -73,9 +73,13 @@ pub use defaults::{
 pub use hooks::{
     HookCommandConfig, HookCommandKind, HookGroupConfig, HooksConfig, LifecycleHooksConfig,
 };
-pub use loader::layers::{ConfigLayerEntry, ConfigLayerSource, ConfigLayerStack};
+pub use loader::layers::{
+    ConfigLayerEntry, ConfigLayerLoadError, ConfigLayerMetadata, ConfigLayerSource,
+    ConfigLayerStack, LayerDisabledReason,
+};
 pub use loader::{
-    ConfigBuilder, ConfigManager, SyntaxHighlightingConfig, VTCodeConfig, merge_toml_values,
+    ConfigBuilder, ConfigManager, SyntaxHighlightingConfig, VTCodeConfig, fingerprint_str,
+    fingerprint_toml_value, merge_toml_values, merge_toml_values_with_origins,
 };
 pub use mcp::{
     McpAllowListConfig, McpAllowListRules, McpClientConfig, McpHttpServerConfig, McpProviderConfig,

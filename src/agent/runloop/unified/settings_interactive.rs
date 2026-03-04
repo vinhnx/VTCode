@@ -7,6 +7,7 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 use toml::Value as TomlValue;
 use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
+use vtcode_core::config::{ConfigReadRequest, ConfigService};
 use vtcode_core::ui::theme;
 use vtcode_core::utils::ansi::AnsiRenderer;
 use vtcode_tui::{InlineListItem, InlineListSearchConfig, InlineListSelection};
@@ -842,6 +843,20 @@ where
 }
 
 fn reload_state_from_disk(state: &mut SettingsPaletteState) -> Result<()> {
+    if let Ok(response) = ConfigService::read(ConfigReadRequest {
+        workspace: state.workspace.clone(),
+        runtime_overrides: Vec::new(),
+    }) && let Ok(config) = serde_json::from_value::<VTCodeConfig>(response.effective_config)
+    {
+        state.draft = config;
+        if state.source_path.exists() {
+            state.source_label = format!("Configuration source: {}", state.source_path.display());
+        } else {
+            state.source_label = no_config_source_label(&state.workspace);
+        }
+        return Ok(());
+    }
+
     if state.source_path.exists() {
         let manager = ConfigManager::load_from_file(&state.source_path)
             .with_context(|| format!("Failed to load {}", state.source_path.display()))?;

@@ -54,6 +54,41 @@ fn test_layered_config_loading() {
 
 #[test]
 #[serial]
+fn test_invalid_layer_is_reported_with_source_context() {
+    let workspace = assert_fs::TempDir::new().expect("failed to create workspace");
+    let workspace_root = workspace.path();
+
+    let home_dir = workspace_root.join("home");
+    fs::create_dir_all(&home_dir).expect("failed to create home dir");
+    let user_config_path = home_dir.join("vtcode.toml");
+    fs::write(&user_config_path, "[agent\nprovider = \"openai\"")
+        .expect("failed to write invalid user config");
+
+    let workspace_config_path = workspace_root.join("vtcode.toml");
+    fs::write(&workspace_config_path, "agent.provider = \"anthropic\"")
+        .expect("failed to write workspace config");
+
+    let static_paths = StaticWorkspacePaths::new(workspace_root, workspace_root.join(".vtcode"));
+    let provider = WorkspacePathsDefaults::new(Arc::new(static_paths))
+        .with_home_paths(vec![user_config_path.clone()]);
+
+    defaults::provider::with_config_defaults_provider_for_test(Arc::new(provider), || {
+        let result = ConfigManager::load_from_workspace(workspace_root);
+        assert!(result.is_err(), "expected load to fail for invalid layer");
+        let error = match result {
+            Ok(_) => String::new(),
+            Err(err) => format!("{:#}", err),
+        };
+        assert!(
+            error.contains(&user_config_path.display().to_string()),
+            "error should include invalid layer path, got: {}",
+            error
+        );
+    });
+}
+
+#[test]
+#[serial]
 fn test_config_builder_overrides() {
     let workspace = assert_fs::TempDir::new().expect("failed to create workspace");
     let workspace_root = workspace.path();
@@ -146,6 +181,42 @@ fn test_merge_toml_values() {
         tools.get("default_policy").unwrap().as_str().unwrap(),
         "prompt"
     );
+}
+
+#[test]
+fn test_merge_toml_values_with_origins_tracks_winning_layer() {
+    use crate::loader::layers::ConfigLayerMetadata;
+
+    let mut base = toml::from_str::<toml::Value>(
+        r#"
+            [agent]
+            provider = "openai"
+        "#,
+    )
+    .unwrap();
+
+    let overlay = toml::from_str::<toml::Value>(
+        r#"
+            [agent]
+            provider = "anthropic"
+        "#,
+    )
+    .unwrap();
+
+    let layer = ConfigLayerMetadata {
+        name: "workspace:/tmp/vtcode.toml".to_string(),
+        version: "abc123".to_string(),
+    };
+    let mut origins = hashbrown::HashMap::new();
+    merge_toml_values_with_origins(&mut base, &overlay, &mut origins, &layer);
+
+    assert_eq!(
+        base.get("agent")
+            .and_then(|agent| agent.get("provider"))
+            .and_then(toml::Value::as_str),
+        Some("anthropic")
+    );
+    assert_eq!(origins.get("agent.provider"), Some(&layer));
 }
 
 #[test]

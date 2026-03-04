@@ -378,9 +378,15 @@ default_tool_policy = "allow"
 
 Users can specify config values at multiple levels. Order of precedence is as follows:
 
-1. Workspace-level `vtcode.toml` (highest precedence in the workspace)
-2. User-level `$VTCODE_HOME/config.toml`
-3. Extension defaults (lowest precedence)
+1. Runtime overrides (`-c/--config key=value`) and explicit runtime flags (highest precedence)
+2. Workspace root `vtcode.toml`
+3. Workspace fallback `.vtcode/vtcode.toml`
+4. Project profile `.vtcode/projects/<project>/config/vtcode.toml`
+5. User-level `~/.vtcode/vtcode.toml`
+6. System-level `/etc/vtcode/vtcode.toml` (Unix)
+7. Built-in defaults (lowest precedence)
+
+Merge semantics are layered: tables merge recursively, while scalar and array values are replaced by higher-precedence layers.
 
 ### workspace-specific overrides
 

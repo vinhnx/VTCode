@@ -659,8 +659,10 @@ prompt_cache_key_mode = "off"
 
     #[test]
     fn provider_enablement_respects_global_and_provider_flags() {
-        let mut cfg = PromptCachingConfig::default();
-        cfg.enabled = true;
+        let mut cfg = PromptCachingConfig {
+            enabled: true,
+            ..PromptCachingConfig::default()
+        };
         cfg.providers.openai.enabled = true;
         assert!(cfg.is_provider_enabled("openai"));
 
@@ -670,8 +672,10 @@ prompt_cache_key_mode = "off"
 
     #[test]
     fn provider_enablement_handles_aliases_and_modes() {
-        let mut cfg = PromptCachingConfig::default();
-        cfg.enabled = true;
+        let mut cfg = PromptCachingConfig {
+            enabled: true,
+            ..PromptCachingConfig::default()
+        };
 
         cfg.providers.anthropic.enabled = true;
         assert!(cfg.is_provider_enabled("minimax"));

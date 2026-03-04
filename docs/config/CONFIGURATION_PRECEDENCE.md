@@ -4,22 +4,23 @@ This document summarizes how VT Code discovers configuration at startup and how 
 
 ## Resolution Order
 
-When the CLI starts it looks for `vtcode.toml` in the following locations. The first file that exists is loaded and validated.
+When the CLI starts it builds a **layer stack** and merges all present layers from lowest to highest precedence.
 
-1. **Workspace root** – `<workspace>/vtcode.toml`
-2. **Workspace-specific directory** – `<workspace>/.vtcode/vtcode.toml`
-3. **User home directory** – `~/.vtcode/vtcode.toml`
-4. **Project profile** – `<workspace>/.vtcode/<project>/vtcode.toml`
-5. **Built-in defaults** – if no file is found, the compiled default configuration is used
+1. **System** – `/etc/vtcode/vtcode.toml` (Unix)
+2. **User** – `~/.vtcode/vtcode.toml` (or configured home path)
+3. **Project profile** – `<workspace>/.vtcode/projects/<project>/config/vtcode.toml`
+4. **Workspace fallback** – `<workspace>/.vtcode/vtcode.toml` (when distinct from root file)
+5. **Workspace root** – `<workspace>/vtcode.toml`
+6. **Runtime overrides** – CLI `-c/--config key=value` and explicit runtime flags (highest precedence)
+7. **Built-in defaults** – used only when no config layer exists
 
-This precedence allows local overrides while still falling back to organization-level or user-level defaults.
+Tables are deep-merged recursively. Scalars and arrays are replaced by the higher-precedence layer.
 
 ### Inline CLI overrides
 
 Inspired by [OpenAI Codex CLI](https://github.com/openai/codex), VT Code now accepts
 `-c/--config key=value` overrides directly on the command line. These overrides
-apply **after** the configuration file is loaded, making them the highest
-precedence layer. Use multiple flags to set several keys during a single run.
+apply as a dedicated runtime layer above all file-based layers. Use multiple flags to set several keys during a single run.
 For example:
 
 ```
@@ -44,7 +45,9 @@ The CLI uses these defaults when generating sample configs (`vtcode init`) and w
 
 ## Validation
 
-Every configuration loaded from disk now goes through `VTCodeConfig::validate`. The validator performs:
+Every effective configuration goes through `VTCodeConfig::validate`. Loader errors are now layer-attributed: malformed layers are reported with their exact source path.
+
+The validator performs:
 
 -   Syntax highlighting checks (minimum file size, timeout, language entries)
 -   Context subsystem checks (ledger limits, token budget thresholds, curation limits)

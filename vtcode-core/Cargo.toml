@@ -215,6 +215,7 @@ mockito = "1.7"
 proptest = "1.10"
 criterion = "0.8"
 wiremock = "0.6.5"
+serial_test = "3.4"
 
 [[bench]]
 name = "tool_pipeline"

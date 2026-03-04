@@ -11,21 +11,16 @@ use std::fs;
 use std::path::PathBuf;
 
 /// Release channel for VT Code updates
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum ReleaseChannel {
     /// Stable releases (default)
+    #[default]
     Stable,
     /// Beta releases (pre-release testing)
     Beta,
     /// Nightly builds (bleeding edge)
     Nightly,
-}
-
-impl Default for ReleaseChannel {
-    fn default() -> Self {
-        Self::Stable
-    }
 }
 
 impl std::fmt::Display for ReleaseChannel {
@@ -167,7 +162,7 @@ impl UpdateConfig {
 
     /// Check if version is pinned
     pub fn is_pinned(&self) -> bool {
-        self.pin.as_ref().map_or(false, |p| p.version.is_some())
+        self.pin.as_ref().is_some_and(|p| p.version.is_some())
     }
 
     /// Get pinned version if set

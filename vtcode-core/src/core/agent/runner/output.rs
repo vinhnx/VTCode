@@ -140,25 +140,22 @@ mod tests {
 
     #[test]
     fn suppresses_stdout_message_when_both_streams_are_terminals() {
-        assert_eq!(
-            AgentRunner::should_print_final_message_to_stdout(true, true),
-            false
-        );
+        assert!(!AgentRunner::should_print_final_message_to_stdout(
+            true, true
+        ));
     }
 
     #[test]
     fn prints_stdout_message_when_stdout_is_not_terminal() {
-        assert_eq!(
-            AgentRunner::should_print_final_message_to_stdout(false, true),
-            true
-        );
+        assert!(AgentRunner::should_print_final_message_to_stdout(
+            false, true
+        ));
     }
 
     #[test]
     fn prints_stdout_message_when_stderr_is_not_terminal() {
-        assert_eq!(
-            AgentRunner::should_print_final_message_to_stdout(true, false),
-            true
-        );
+        assert!(AgentRunner::should_print_final_message_to_stdout(
+            true, false
+        ));
     }
 }
