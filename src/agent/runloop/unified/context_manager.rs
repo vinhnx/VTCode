@@ -311,6 +311,86 @@ impl ContextManager {
 
         Ok(system_prompt)
     }
+
+    /// Build a normalized, request-scoped message view without mutating session history.
+    ///
+    /// This keeps request assembly deterministic and trims no-op artifacts while preserving
+    /// tool-calling semantics.
+    pub(crate) fn normalize_history_for_request(
+        &self,
+        history: &[uni::Message],
+    ) -> Vec<uni::Message> {
+        if history.is_empty() {
+            return Vec::new();
+        }
+
+        let mut normalized = Vec::with_capacity(history.len());
+        for message in history {
+            if is_empty_context_message(message) {
+                continue;
+            }
+
+            if let Some(last) = normalized.last_mut()
+                && can_merge_consecutive_assistant_text(last, message)
+            {
+                append_assistant_text(last, message);
+                continue;
+            }
+
+            normalized.push(message.clone());
+        }
+
+        if normalized.is_empty() {
+            history.to_vec()
+        } else {
+            normalized
+        }
+    }
+}
+
+fn is_empty_context_message(message: &uni::Message) -> bool {
+    message.tool_calls.is_none()
+        && message.tool_call_id.is_none()
+        && message.reasoning.is_none()
+        && message.reasoning_details.is_none()
+        && message.content.trim().is_empty()
+}
+
+fn can_merge_consecutive_assistant_text(previous: &uni::Message, current: &uni::Message) -> bool {
+    if previous.role != uni::MessageRole::Assistant || current.role != uni::MessageRole::Assistant {
+        return false;
+    }
+
+    if previous.tool_calls.is_some()
+        || previous.tool_call_id.is_some()
+        || previous.reasoning.is_some()
+        || previous.reasoning_details.is_some()
+        || previous.origin_tool.is_some()
+        || current.tool_calls.is_some()
+        || current.tool_call_id.is_some()
+        || current.reasoning.is_some()
+        || current.reasoning_details.is_some()
+        || current.origin_tool.is_some()
+    {
+        return false;
+    }
+
+    matches!(previous.content, uni::MessageContent::Text(_))
+        && matches!(current.content, uni::MessageContent::Text(_))
+}
+
+fn append_assistant_text(previous: &mut uni::Message, current: &uni::Message) {
+    let uni::MessageContent::Text(previous_text) = &mut previous.content else {
+        return;
+    };
+    let uni::MessageContent::Text(current_text) = &current.content else {
+        return;
+    };
+
+    if !previous_text.is_empty() && !current_text.is_empty() {
+        previous_text.push('\n');
+    }
+    previous_text.push_str(current_text);
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

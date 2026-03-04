@@ -17,6 +17,73 @@ async fn pre_request_check_returns_proceed() {
 }
 
 #[test]
+fn normalize_history_for_request_drops_empty_noop_messages() {
+    let manager = ContextManager::new(
+        "sys".into(),
+        (),
+        Arc::new(RwLock::new(HashMap::new())),
+        None,
+    );
+    let history = vec![
+        uni::Message::user("hello".to_string()),
+        uni::Message::assistant("   ".to_string()),
+        uni::Message::assistant("world".to_string()),
+    ];
+
+    let normalized = manager.normalize_history_for_request(&history);
+    assert_eq!(normalized.len(), 2);
+    assert_eq!(normalized[0].content.as_text(), "hello");
+    assert_eq!(normalized[1].content.as_text(), "world");
+}
+
+#[test]
+fn normalize_history_for_request_merges_plain_assistant_text_messages() {
+    let manager = ContextManager::new(
+        "sys".into(),
+        (),
+        Arc::new(RwLock::new(HashMap::new())),
+        None,
+    );
+    let history = vec![
+        uni::Message::assistant("part one".to_string()),
+        uni::Message::assistant("part two".to_string()),
+        uni::Message::user("continue".to_string()),
+    ];
+
+    let normalized = manager.normalize_history_for_request(&history);
+    assert_eq!(normalized.len(), 2);
+    assert_eq!(normalized[0].content.as_text(), "part one\npart two");
+    assert_eq!(normalized[1].content.as_text(), "continue");
+}
+
+#[test]
+fn normalize_history_for_request_keeps_tool_sequences_intact() {
+    let manager = ContextManager::new(
+        "sys".into(),
+        (),
+        Arc::new(RwLock::new(HashMap::new())),
+        None,
+    );
+    let history = vec![
+        uni::Message::assistant_with_tools(
+            String::new(),
+            vec![uni::ToolCall::function(
+                "call_1".to_string(),
+                "read_file".to_string(),
+                "{}".to_string(),
+            )],
+        ),
+        uni::Message::tool_response("call_1".to_string(), "{\"ok\":true}".to_string()),
+        uni::Message::assistant("done".to_string()),
+    ];
+
+    let normalized = manager.normalize_history_for_request(&history);
+    assert_eq!(normalized.len(), 3);
+    assert!(normalized[0].tool_calls.is_some());
+    assert_eq!(normalized[1].role, uni::MessageRole::Tool);
+}
+
+#[test]
 fn test_pre_request_check_ignores_conversation_length() {
     use vtcode_config::core::AgentConfig;
     let manager = ContextManager::new(

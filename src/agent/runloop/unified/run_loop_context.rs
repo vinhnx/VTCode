@@ -32,6 +32,35 @@ pub enum TurnPhase {
     Finalizing,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TurnExecutionPhase {
+    Preparing,
+    Requesting,
+    ExecutingTools,
+    Finalizing,
+}
+
+impl From<TurnPhase> for TurnExecutionPhase {
+    fn from(value: TurnPhase) -> Self {
+        match value {
+            TurnPhase::Preparing => Self::Preparing,
+            TurnPhase::Requesting => Self::Requesting,
+            TurnPhase::ExecutingTools => Self::ExecutingTools,
+            TurnPhase::Finalizing => Self::Finalizing,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TurnExecutionSnapshot {
+    pub run_id: String,
+    pub turn_id: String,
+    pub phase: TurnExecutionPhase,
+    pub max_tool_calls: usize,
+    pub max_tool_wall_clock_secs: u64,
+    pub max_tool_retries: u32,
+}
+
 pub struct HarnessTurnState {
     #[allow(dead_code)]
     pub run_id: TurnRunId,
@@ -160,6 +189,17 @@ impl HarnessTurnState {
     pub fn set_phase(&mut self, phase: TurnPhase) {
         self.phase = phase;
     }
+
+    pub fn execution_snapshot(&self) -> TurnExecutionSnapshot {
+        TurnExecutionSnapshot {
+            run_id: self.run_id.0.clone(),
+            turn_id: self.turn_id.0.clone(),
+            phase: self.phase.into(),
+            max_tool_calls: self.max_tool_calls,
+            max_tool_wall_clock_secs: self.max_tool_wall_clock.as_secs(),
+            max_tool_retries: self.max_tool_retries,
+        }
+    }
 }
 
 #[allow(dead_code)]
@@ -232,7 +272,7 @@ pub(crate) struct TurnExecutionContext<'a> {
 
 #[cfg(test)]
 mod tests {
-    use super::{HarnessTurnState, TurnId, TurnPhase, TurnRunId};
+    use super::{HarnessTurnState, TurnExecutionPhase, TurnId, TurnPhase, TurnRunId};
 
     #[test]
     fn harness_state_tracks_phase_transitions() {
@@ -394,5 +434,25 @@ mod tests {
         state.reset_shell_command_run_streak();
         assert_eq!(state.consecutive_same_shell_command_runs, 0);
         assert!(state.last_shell_command_signature.is_none());
+    }
+
+    #[test]
+    fn harness_state_builds_execution_snapshot() {
+        let mut state = HarnessTurnState::new(
+            TurnRunId("run-9".to_string()),
+            TurnId("turn-3".to_string()),
+            6,
+            120,
+            2,
+        );
+        state.set_phase(TurnPhase::ExecutingTools);
+
+        let snapshot = state.execution_snapshot();
+        assert_eq!(snapshot.run_id, "run-9");
+        assert_eq!(snapshot.turn_id, "turn-3");
+        assert_eq!(snapshot.phase, TurnExecutionPhase::ExecutingTools);
+        assert_eq!(snapshot.max_tool_calls, 6);
+        assert_eq!(snapshot.max_tool_wall_clock_secs, 120);
+        assert_eq!(snapshot.max_tool_retries, 2);
     }
 }

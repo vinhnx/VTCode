@@ -1,6 +1,7 @@
 use anyhow::Result;
 use serde_json::json;
 use std::fmt::Write as _;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::task;
 #[cfg(debug_assertions)]
@@ -18,6 +19,7 @@ use vtcode_core::turn_metadata;
 use crate::agent::runloop::unified::extract_action_from_messages;
 use crate::agent::runloop::unified::incremental_system_prompt::PromptCacheShapingMode;
 use crate::agent::runloop::unified::reasoning::resolve_reasoning_visibility;
+use crate::agent::runloop::unified::run_loop_context::TurnExecutionSnapshot;
 use crate::agent::runloop::unified::turn::context::TurnProcessingContext;
 use crate::agent::runloop::unified::turn::turn_helpers::supports_responses_chaining;
 use crate::agent::runloop::unified::ui_interaction::{
@@ -470,14 +472,43 @@ fn emit_llm_retry_metrics(
     });
 }
 
-/// Execute an LLM request and return the response.
-pub(crate) async fn execute_llm_request(
-    ctx: &mut TurnProcessingContext<'_>,
+#[derive(Clone)]
+struct TurnRequestSnapshot {
+    provider_name: String,
+    plan_mode: bool,
+    full_auto: bool,
+    request_user_input_enabled: bool,
+    context_window_size: usize,
+    turn_timeout_secs: u64,
+    openai_prompt_cache_enabled: bool,
+    openai_prompt_cache_key_mode: OpenAIPromptCacheKeyMode,
+    prompt_cache_shaping_mode: PromptCacheShapingMode,
+    capabilities: uni::ProviderCapabilities,
+    execution: TurnExecutionSnapshot,
+}
+
+#[derive(Clone)]
+struct PromptAssemblyInput<'a> {
     step_count: usize,
+    active_model: &'a str,
+    turn: &'a TurnRequestSnapshot,
+}
+
+struct PromptAssemblyOutput {
+    system_prompt: String,
+    current_tools: Option<Arc<Vec<uni::ToolDefinition>>>,
+    has_tools: bool,
+}
+
+struct TurnRequestBuildResult {
+    request: uni::LLMRequest,
+    has_tools: bool,
+}
+
+fn capture_turn_request_snapshot(
+    ctx: &mut TurnProcessingContext<'_>,
     active_model: &str,
-    _max_tokens_opt: Option<u32>,
-    parallel_cfg_opt: Option<Box<ParallelToolConfig>>,
-) -> Result<(uni::LLMResponse, bool)> {
+) -> TurnRequestSnapshot {
     let (
         provider_name,
         plan_mode,
@@ -487,6 +518,7 @@ pub(crate) async fn execute_llm_request(
         openai_prompt_cache_enabled,
         openai_prompt_cache_key_mode,
         prompt_cache_shaping_mode,
+        full_auto,
     ) = {
         let parts = ctx.parts_mut();
         let prompt_cache_config = &parts.llm.config.prompt_cache;
@@ -499,6 +531,7 @@ pub(crate) async fn execute_llm_request(
         );
         let prompt_cache_shaping_mode =
             resolve_prompt_cache_shaping_mode(&provider_name, prompt_cache_config);
+
         (
             provider_name,
             plan_mode,
@@ -529,11 +562,33 @@ pub(crate) async fn execute_llm_request(
                 .prompt_cache_key_mode
                 .clone(),
             prompt_cache_shaping_mode,
+            parts.state.full_auto,
         )
     };
-    let request_timeout_secs =
-        llm_attempt_timeout_secs(turn_timeout_secs, plan_mode, &provider_name);
+    let capabilities = {
+        let parts = ctx.parts_mut();
+        uni::get_cached_capabilities(&**parts.llm.provider_client, active_model)
+    };
 
+    TurnRequestSnapshot {
+        provider_name,
+        plan_mode,
+        full_auto,
+        request_user_input_enabled,
+        context_window_size,
+        turn_timeout_secs,
+        openai_prompt_cache_enabled,
+        openai_prompt_cache_key_mode,
+        prompt_cache_shaping_mode,
+        capabilities,
+        execution: ctx.harness_state.execution_snapshot(),
+    }
+}
+
+async fn assemble_prompt(
+    ctx: &mut TurnProcessingContext<'_>,
+    input: PromptAssemblyInput<'_>,
+) -> Result<PromptAssemblyOutput> {
     let mut system_prompt = {
         let parts = ctx.parts_mut();
         parts
@@ -541,82 +596,50 @@ pub(crate) async fn execute_llm_request(
             .context_manager
             .build_system_prompt(
                 parts.state.working_history,
-                step_count,
+                input.step_count,
                 crate::agent::runloop::unified::context_manager::SystemPromptParams {
-                    full_auto: parts.state.full_auto,
-                    plan_mode,
-                    context_window_size: Some(context_window_size),
-                    prompt_cache_shaping_mode,
+                    full_auto: input.turn.full_auto,
+                    plan_mode: input.turn.plan_mode,
+                    context_window_size: Some(input.turn.context_window_size),
+                    prompt_cache_shaping_mode: input.turn.prompt_cache_shaping_mode,
                 },
             )
             .await?
     };
 
-    let (max_tool_calls, max_tool_wall_clock_secs, max_tool_retries) = {
-        let parts = ctx.parts_mut();
-        (
-            parts.state.harness_state.max_tool_calls,
-            parts.state.harness_state.max_tool_wall_clock.as_secs(),
-            parts.state.harness_state.max_tool_retries,
-        )
-    };
-
     upsert_harness_limits_section(
         &mut system_prompt,
-        max_tool_calls,
-        max_tool_wall_clock_secs,
-        max_tool_retries,
+        input.turn.execution.max_tool_calls,
+        input.turn.execution.max_tool_wall_clock_secs,
+        input.turn.execution.max_tool_retries,
     );
-
-    let capabilities = {
-        let parts = ctx.parts_mut();
-        uni::get_cached_capabilities(&**parts.llm.provider_client, active_model)
-    };
-    ctx.renderer
-        .set_reasoning_visible(resolve_reasoning_visibility(
-            ctx.vt_cfg,
-            capabilities.reasoning,
-        ));
-    let mut use_streaming = capabilities.streaming;
-    let reasoning_effort = {
-        let parts = ctx.parts_mut();
-        parts.llm.vt_cfg.as_ref().and_then(|cfg| {
-            if capabilities.reasoning_effort {
-                Some(cfg.agent.reasoning_effort)
-            } else {
-                None
-            }
-        })
-    };
-    let temperature = if reasoning_effort.is_some()
-        && matches!(provider_name.as_str(), "anthropic" | "minimax")
-    {
-        None
-    } else {
-        Some(0.7)
-    };
 
     let tool_snapshot = {
         let parts = ctx.parts_mut();
         parts
             .tool
             .tool_catalog
-            .filtered_snapshot_with_stats(parts.tool.tools, plan_mode, request_user_input_enabled)
+            .filtered_snapshot_with_stats(
+                parts.tool.tools,
+                input.turn.plan_mode,
+                input.turn.request_user_input_enabled,
+            )
             .await
     };
     let current_tools = tool_snapshot.snapshot;
     let has_tools = current_tools.is_some();
     emit_tool_catalog_cache_metrics(
         ctx,
-        step_count,
-        active_model,
+        input.step_count,
+        input.active_model,
         tool_snapshot.cache_hit,
-        plan_mode,
-        request_user_input_enabled,
+        input.turn.plan_mode,
+        input.turn.request_user_input_enabled,
         current_tools.as_ref().map_or(0, |defs| defs.len()),
     );
+
     if let Some(defs) = current_tools.as_ref()
-        && !prompt_cache_shaping_mode.is_enabled()
+        && !input.turn.prompt_cache_shaping_mode.is_enabled()
     {
         let _ = writeln!(
             system_prompt,
@@ -625,16 +648,100 @@ pub(crate) async fn execute_llm_request(
             defs.len()
         );
     }
-    let parallel_config = if has_tools && capabilities.parallel_tool_config {
-        parallel_cfg_opt.clone()
+
+    Ok(PromptAssemblyOutput {
+        system_prompt,
+        current_tools,
+        has_tools,
+    })
+}
+
+fn resolve_context_management(
+    ctx: &TurnProcessingContext<'_>,
+    active_model: &str,
+) -> Option<serde_json::Value> {
+    let harness_config = ctx.vt_cfg.map(|cfg| &cfg.agent.harness);
+    let auto_compaction_enabled = harness_config
+        .map(|cfg| cfg.auto_compaction_enabled)
+        .unwrap_or(false);
+    let supports_server_compaction = ctx
+        .provider_client
+        .supports_responses_compaction(active_model);
+    if auto_compaction_enabled && supports_server_compaction {
+        let context_size = ctx.provider_client.effective_context_size(active_model);
+        let configured_threshold =
+            harness_config.and_then(|cfg| cfg.auto_compaction_threshold_tokens);
+
+        resolve_compaction_threshold(configured_threshold, context_size).map(|compact_threshold| {
+            json!([{
+                "type": "compaction",
+                "compact_threshold": compact_threshold,
+            }])
+        })
     } else {
         None
+    }
+}
+
+fn interrupted_provider_error(provider_name: &str) -> anyhow::Error {
+    anyhow::Error::new(uni::LLMError::Provider {
+        message: vtcode_core::llm::error_display::format_llm_error(
+            provider_name,
+            "Interrupted by user",
+        ),
+        metadata: None,
+    })
+}
+
+async fn build_turn_request(
+    ctx: &mut TurnProcessingContext<'_>,
+    step_count: usize,
+    active_model: &str,
+    turn_snapshot: &TurnRequestSnapshot,
+    parallel_cfg_opt: Option<Box<ParallelToolConfig>>,
+    use_streaming: bool,
+) -> Result<TurnRequestBuildResult> {
+    let prompt_output = assemble_prompt(
+        ctx,
+        PromptAssemblyInput {
+            step_count,
+            active_model,
+            turn: turn_snapshot,
+        },
+    )
+    .await?;
+
+    let reasoning_effort = {
+        let parts = ctx.parts_mut();
+        parts.llm.vt_cfg.as_ref().and_then(|cfg| {
+            if turn_snapshot.capabilities.reasoning_effort {
+                Some(cfg.agent.reasoning_effort)
+            } else {
+                None
+            }
+        })
     };
-    let tool_choice = if has_tools {
+    let temperature = if reasoning_effort.is_some()
+        && matches!(
+            turn_snapshot.provider_name.as_str(),
+            "anthropic" | "minimax"
+        ) {
+        None
+    } else {
+        Some(0.7)
+    };
+    let parallel_config =
+        if prompt_output.has_tools && turn_snapshot.capabilities.parallel_tool_config {
+            parallel_cfg_opt
+        } else {
+            None
+        };
+    let tool_choice = if prompt_output.has_tools {
         Some(uni::ToolChoice::auto())
     } else {
         None
     };
+
     let metadata = match turn_metadata::build_turn_metadata_value_with_timeout(
         &ctx.config.workspace,
         std::time::Duration::from_millis(250),
@@ -648,46 +755,29 @@ pub(crate) async fn execute_llm_request(
         }
     };
     let prompt_cache_key = build_openai_prompt_cache_key(
-        openai_prompt_cache_enabled,
-        &openai_prompt_cache_key_mode,
+        turn_snapshot.openai_prompt_cache_enabled,
+        &turn_snapshot.openai_prompt_cache_key_mode,
         &ctx.harness_state.run_id.0,
     );
-    let previous_response_id = if supports_responses_chaining(&provider_name) {
+    let previous_response_id = if supports_responses_chaining(&turn_snapshot.provider_name) {
         ctx.session_stats
-            .previous_response_id_for(&provider_name, active_model)
+            .previous_response_id_for(&turn_snapshot.provider_name, active_model)
     } else {
         None
     };
-    let context_management = {
-        let harness_config = ctx.vt_cfg.map(|cfg| &cfg.agent.harness);
-        let auto_compaction_enabled = harness_config
-            .map(|cfg| cfg.auto_compaction_enabled)
-            .unwrap_or(false);
-        let supports_server_compaction = ctx
-            .provider_client
-            .supports_responses_compaction(active_model);
-        if auto_compaction_enabled && supports_server_compaction {
-            let context_size = ctx.provider_client.effective_context_size(active_model);
-            let configured_threshold =
-                harness_config.and_then(|cfg| cfg.auto_compaction_threshold_tokens);
-
-            resolve_compaction_threshold(configured_threshold, context_size).map(
-                |compact_threshold| {
-                    json!([{
-                        "type": "compaction",
-                        "compact_threshold": compact_threshold,
-                    }])
-                },
-            )
-        } else {
-            None
-        }
+    let context_management = resolve_context_management(ctx, active_model);
+    let normalized_messages = {
+        let parts = ctx.parts_mut();
+        parts
+            .llm
+            .context_manager
+            .normalize_history_for_request(parts.state.working_history)
     };
 
-    let mut request = uni::LLMRequest {
-        messages: ctx.working_history.to_vec(),
-        system_prompt: Some(std::sync::Arc::new(system_prompt)),
-        tools: current_tools,
+    let request = uni::LLMRequest {
+        messages: normalized_messages,
+        system_prompt: Some(Arc::new(prompt_output.system_prompt)),
+        tools: prompt_output.current_tools,
         model: active_model.to_string(),
         temperature,
         stream: use_streaming,
@@ -700,6 +790,45 @@ pub(crate) async fn execute_llm_request(
         prompt_cache_key,
         ..Default::default()
     };
+
+    Ok(TurnRequestBuildResult {
+        request,
+        has_tools: prompt_output.has_tools,
+    })
+}
+
+/// Execute an LLM request and return the response.
+pub(crate) async fn execute_llm_request(
+    ctx: &mut TurnProcessingContext<'_>,
+    step_count: usize,
+    active_model: &str,
+    _max_tokens_opt: Option<u32>,
+    parallel_cfg_opt: Option<Box<ParallelToolConfig>>,
+) -> Result<(uni::LLMResponse, bool)> {
+    let turn_snapshot = capture_turn_request_snapshot(ctx, active_model);
+    let request_timeout_secs = llm_attempt_timeout_secs(
+        turn_snapshot.turn_timeout_secs,
+        turn_snapshot.plan_mode,
+        &turn_snapshot.provider_name,
+    );
+
+    ctx.renderer
+        .set_reasoning_visible(resolve_reasoning_visibility(
+            ctx.vt_cfg,
+            turn_snapshot.capabilities.reasoning,
+        ));
+    let mut use_streaming = turn_snapshot.capabilities.streaming;
+    let initial_request = build_turn_request(
+        ctx,
+        step_count,
+        active_model,
+        &turn_snapshot,
+        parallel_cfg_opt.clone(),
+        use_streaming,
+    )
+    .await?;
+    let mut request = initial_request.request;
+    let has_tools = initial_request.has_tools;
     if let Err(err) = ctx.provider_client.as_ref().validate_request(&request) {
         return Err(anyhow::Error::new(err));
     }
@@ -752,13 +881,7 @@ pub(crate) async fn execute_llm_request(
                 _ = tokio::time::sleep(delay) => {}
                 _ = &mut cancel_notifier => {
                     if ctx.ctrl_c_state.is_cancel_requested() || ctx.ctrl_c_state.is_exit_requested() {
-                        llm_result = Err(anyhow::Error::new(uni::LLMError::Provider {
-                            message: vtcode_core::llm::error_display::format_llm_error(
-                                &provider_name,
-                                "Interrupted by user",
-                            ),
-                            metadata: None,
-                        }));
+                        llm_result = Err(interrupted_provider_error(&turn_snapshot.provider_name));
                         break;
                     }
                 }
@@ -817,7 +940,7 @@ pub(crate) async fn execute_llm_request(
             );
             let stream_options = StreamSpinnerOptions {
                 defer_finish: has_tools,
-                strip_proposed_plan_blocks: plan_mode,
+                strip_proposed_plan_blocks: turn_snapshot.plan_mode,
             };
             let mut progress = |event: StreamProgressEvent| stream_bridge.on_progress(event);
             let stream_future = stream_and_render_response_with_options_and_progress(
@@ -852,13 +975,7 @@ pub(crate) async fn execute_llm_request(
                 }
             }
         } else if ctx.ctrl_c_state.is_cancel_requested() || ctx.ctrl_c_state.is_exit_requested() {
-            Err(anyhow::Error::new(uni::LLMError::Provider {
-                message: vtcode_core::llm::error_display::format_llm_error(
-                    &provider_name,
-                    "Interrupted by user",
-                ),
-                metadata: None,
-            }))
+            Err(interrupted_provider_error(&turn_snapshot.provider_name))
         } else {
             let generate_future = tokio::time::timeout(
                 Duration::from_secs(request_timeout_secs),
@@ -877,13 +994,7 @@ pub(crate) async fn execute_llm_request(
                     )),
                 },
                 _ = &mut cancel_notifier => {
-                    Err(anyhow::Error::from(uni::LLMError::Provider {
-                        message: vtcode_core::llm::error_display::format_llm_error(
-                            &provider_name,
-                            "Interrupted by user",
-                        ),
-                        metadata: None,
-                    }))
+                    Err(interrupted_provider_error(&turn_snapshot.provider_name))
                 }
             };
 
@@ -923,9 +1034,9 @@ pub(crate) async fn execute_llm_request(
 
         match step_result {
             Ok((response, response_streamed)) => {
-                if supports_responses_chaining(&provider_name) {
+                if supports_responses_chaining(&turn_snapshot.provider_name) {
                     ctx.session_stats.set_previous_response_chain(
-                        &provider_name,
+                        &turn_snapshot.provider_name,
                         active_model,
                         response.request_id.as_deref(),
                     );
@@ -988,7 +1099,7 @@ pub(crate) async fn execute_llm_request(
                         )?;
                     }
                     if use_streaming
-                        && supports_streaming_timeout_fallback(&provider_name)
+                        && supports_streaming_timeout_fallback(&turn_snapshot.provider_name)
                         && is_stream_timeout_error(&msg)
                     {
                         use_streaming = false;
@@ -1013,7 +1124,7 @@ pub(crate) async fn execute_llm_request(
                             ctx.renderer,
                             &format!(
                                 "{} post-tool follow-up failed; retrying with non-streaming.",
-                                provider_name
+                                turn_snapshot.provider_name
                             ),
                         )?;
                         _spinner.finish();
@@ -1028,7 +1139,7 @@ pub(crate) async fn execute_llm_request(
                             ctx.renderer,
                             &format!(
                                 "{} follow-up still failed; retrying with compacted tool context.",
-                                provider_name
+                                turn_snapshot.provider_name
                             ),
                         )?;
                         _spinner.finish();
@@ -1068,7 +1179,7 @@ pub(crate) async fn execute_llm_request(
         ctx,
         step_count,
         active_model,
-        plan_mode,
+        turn_snapshot.plan_mode,
         attempts_made,
         max_retries,
         llm_result.is_ok(),
