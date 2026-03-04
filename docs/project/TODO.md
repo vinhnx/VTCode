@@ -54,12 +54,6 @@ https://docs.litellm.ai/docs/
 
 ---
 
----
-
-improve vtcode-tui/src/ui/markdown.rs
-
----
-
 improve /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/vtcode-core/src/llm module
 
 ---

@@ -158,6 +158,13 @@ fn handle_inline_command(
     Ok(())
 }
 
+pub(super) struct DriveRuntimeOptions {
+    pub(super) event_callback: Option<InlineEventCallback>,
+    pub(super) focus_callback: Option<FocusChangeCallback>,
+    pub(super) use_alternate_screen: bool,
+    pub(super) keyboard_flags: crossterm::event::KeyboardEnhancementFlags,
+}
+
 pub(super) async fn drive_terminal<B: Backend>(
     terminal: &mut Terminal<B>,
     session: &mut Session,
@@ -165,13 +172,13 @@ pub(super) async fn drive_terminal<B: Backend>(
     events: &UnboundedSender<InlineEvent>,
     inputs: &mut EventListener,
     event_channels: EventChannels,
-    event_callback: Option<InlineEventCallback>,
-    focus_callback: Option<FocusChangeCallback>,
-    use_alternate_screen: bool,
-    keyboard_flags: crossterm::event::KeyboardEnhancementFlags,
+    runtime_options: DriveRuntimeOptions,
 ) -> Result<()> {
     #[cfg(not(unix))]
-    let _ = (use_alternate_screen, keyboard_flags);
+    let _ = (
+        runtime_options.use_alternate_screen,
+        runtime_options.keyboard_flags,
+    );
 
     let mut cursor_steady = false;
     'main: loop {
@@ -242,7 +249,7 @@ pub(super) async fn drive_terminal<B: Backend>(
                     Some(TerminalEvent::Crossterm(event)) => {
                         // Record input for adaptive tick rate (switches to 16Hz)
                         event_channels.record_input();
-                        handle_focus_change_event(&event, focus_callback.as_ref());
+                        handle_focus_change_event(&event, runtime_options.focus_callback.as_ref());
 
                         #[cfg(unix)]
                         if is_suspend_shortcut(&event) {
@@ -251,8 +258,8 @@ pub(super) async fn drive_terminal<B: Backend>(
                                 session,
                                 inputs,
                                 &event_channels,
-                                use_alternate_screen,
-                                keyboard_flags,
+                                runtime_options.use_alternate_screen,
+                                runtime_options.keyboard_flags,
                             ) {
                                 tracing::warn!(%error, "failed to suspend inline session");
                             }
@@ -274,7 +281,10 @@ pub(super) async fn drive_terminal<B: Backend>(
                                 session.handle_event(
                                     event,
                                     events,
-                                    event_callback.as_ref().map(|callback| callback.as_ref()),
+                                    runtime_options
+                                        .event_callback
+                                        .as_ref()
+                                        .map(|callback| callback.as_ref()),
                                 );
                             }
 
@@ -282,7 +292,10 @@ pub(super) async fn drive_terminal<B: Backend>(
                             while let Ok(next_event) = inputs.try_recv() {
                                 match next_event {
                                     TerminalEvent::Crossterm(evt) => {
-                                        handle_focus_change_event(&evt, focus_callback.as_ref());
+                                        handle_focus_change_event(
+                                            &evt,
+                                            runtime_options.focus_callback.as_ref(),
+                                        );
                                         // Re-check modal state (it may have changed)
                                         let can_coalesce = !has_active_navigation_ui(session);
                                         let coalesced = can_coalesce
@@ -297,7 +310,10 @@ pub(super) async fn drive_terminal<B: Backend>(
                                             session.handle_event(
                                                 evt,
                                                 events,
-                                                event_callback.as_ref().map(|callback| callback.as_ref()),
+                                                runtime_options
+                                                    .event_callback
+                                                    .as_ref()
+                                                    .map(|callback| callback.as_ref()),
                                             );
                                         }
                                     }
