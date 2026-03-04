@@ -182,8 +182,13 @@ fn detect_terminal_notify_kind_from(
         return TerminalNotifyKind::Osc777;
     }
 
-    if term_program.contains("ghostty")
-        || term_program.contains("iterm")
+    // Ghostty doesn't officially support OSC 9 or OSC 777 notifications
+    // Use bell-only to avoid "unknown error" messages
+    if term_program.contains("ghostty") {
+        return TerminalNotifyKind::BellOnly;
+    }
+
+    if term_program.contains("iterm")
         || term_program.contains("wezterm")
         || term_program.contains("warp")
         || term_program.contains("apple_terminal")
@@ -218,6 +223,7 @@ mod redraw_tests {
             detect_terminal_notify_kind_from("xterm-kitty", "", false, false, false, false),
             TerminalNotifyKind::Osc777
         );
+        // Ghostty doesn't support OSC 9/777, use bell-only to avoid "unknown error"
         assert_eq!(
             detect_terminal_notify_kind_from(
                 "xterm-ghostty",
@@ -227,7 +233,7 @@ mod redraw_tests {
                 false,
                 false
             ),
-            TerminalNotifyKind::Osc9
+            TerminalNotifyKind::BellOnly
         );
         assert_eq!(
             detect_terminal_notify_kind_from(
