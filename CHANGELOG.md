@@ -2,6 +2,63 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.86.4 - 2026-03-04
+
+### Highlights
+#### Bug Fixes
+
+- Remove unused OpenRouter model variants and fix panic_hook warnings (d4afaa47) 
+- Update Cargo.toml to exclude all docs except CONFIG_FIELD_REFERENCE.md (6903748b) 
+### Other Changes
+#### Other
+
+- Enhance reasoning detail handling across providers and improve model detection (ef1f5a59) 
+- Refactor model constants and remove deprecated models; update provider configurations and capabilities (3ba46998) 
+- Update configuration for agent provider and API key; enhance user settings guidance (b11c56e0) 
+- Refactor model constants for clarity and update provider logic for consistency (cc37511d) 
+- Enhance reasoning visibility handling and integrate detailed reasoning extraction across modules (d1d19a58) 
+- Implement interactive settings manager and refactor related components (1f2d7f2a) 
+- Update code structure for improved readability and maintainability (2ea69033) 
+- Update TODO (86150ea2) 
+- Update TODO (c0e49629) 
+- Refactor settings handling and enhance input tokenization for improved functionality (52e07688) 
+- Adjust loop detection parameters and enhance normalization for read-file tools (c651bfaf) 
+- Standardize error handling policies and improve retry logic across components (e4c248c9) 
+- Refactor recovery flow and error handling for improved diagnostics and recovery strategies (7a036885) 
+- Implement interactive skills management and enhance plan mode functionality (a0d19bc4) 
+- Implement interactive skills manager in TUI similar to MCP manager (8a518681) 
+- Enhance plan confirmation flow with TUI integration and interactive options (affa91c7) 
+- Update TODO (45cc3a6a) 
+- Enhance interactive skills management with new commands and aliases (471cd578) 
+- Refactor slash commands and improve skills management interface (f0391983) 
+- Update TODO (c7c11e12) 
+- Update TODO (f03eb648) 
+- Enhance Plan Mode interview handling and UI adjustments (77b8c823) 
+- Update MiniMax provider to use Anthropic Messages API and adjust default model configuration (b21c5509) 
+- Refactor error handling and improve code safety across multiple modules (74ee2dea) 
+- Refactor TODO items for improved clarity and remove obsolete files (3ef5c370) 
+- Refactor tool intent classification and update tests for non-destructive tools (edb8b93f) 
+- Add native plugin support and enhance skill loading (8ba9fa9e) 
+- Refactor diff algorithms and improve bounds-checking in various modules (bcdaa19b) 
+- Add native plugin system implementation and documentation (0c0c856b) 
+- Add streaming progress events and enhance plugin handling in CLI (8ecb5670) 
+- Refactor TURN module and enhance UI interaction streaming (d20cb7dc) 
+- Update Hugging Face model constants and descriptions; normalize model ID handling for Step 3.5 Flash (261a6b0f) 
+- Enhance error formatting for unsupported models in HuggingFaceProvider (7703edd7) 
+- Add model_search_value function for generating model search strings (7ba202a8) 
+- Remove production.py and version.rs files from the project (f30fa2e2) 
+- Refactor recovery flow: streamline tab handling and improve question line processing (788d5300) 
+- Update default model in vtcode.toml to Step-3.5-Flash (915a20f3) 
+- Refactor code structure for improved readability and maintainability (43dd252e) 
+- Refactor imports and update theme in configuration (a9517434) 
+- Replace std::collections::HashMap with hashbrown::HashMap across the codebase for improved performance. (aa277f68) 
+- Add memchr dependency and update usage in ANSI parser (1b16a714) 
+- Add bytes dependency and update output handling in process and pipe modules (0fe2017e) 
+- Refactor imports and update configuration settings across multiple files (05d95e7b) 
+- Refactor caching implementation: migrate to UnifiedCache and remove deprecated LruCache (ba04ef9b) 
+- Fix path (cc0eaa6a) 
+### Contributors
+@vinhnx
 ## 0.86.3 - 2026-03-04
 
 ### Highlights
