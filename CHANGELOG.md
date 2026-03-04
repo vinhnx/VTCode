@@ -2,6 +2,41 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.86.5 - 2026-03-04
+
+### Highlights
+#### Bug Fixes
+
+- Update terminal notification handling for ghostty to use bell-only (ca512670) 
+#### Features
+
+- Add Windows user profile root exclusions and enhance sensitive path matching (0a024067) 
+- Add new tools and policies for cargo and git commands (110d0326) 
+- Implement continuation arguments for tool execution and enhance read chunk handling (19db1b72) 
+### Other Changes
+#### Other
+
+- Update API key and model provider in vtcode.toml (2939fceb) 
+- Implement task guards for background operations and improve async handling in various modules (23a114ab) 
+- Implement interactive diagnostics with quick and full options in the slash command (6876ae63) 
+- Implement Markdown parsing with support for lists, links, and tables (0ded92d5) 
+- Implement prompt cache shaping mode and enhance caching strategies (5f43940d) 
+- Implement history normalization for LLM requests and enhance execution context management (ad977a32) 
+- Refactor tool output helpers and improve cache management (3c825982) 
+- Refactor configuration layer loading and error handling; add support for tracking layer origins in merges; implement API for reading and writing configuration with version checks. (5fe3d2da) 
+- Refactor shell command building, update justification messages, enhance search metrics, improve web fetch domain matching, and adjust tool policies in configuration. (3c5d7600) 
+- Refactor code for improved readability and consistency across multiple files (adb2ad30) 
+#### Refactors
+
+- Streamline response handling and output printing in AgentRunner (d98a5e55) 
+- Simplify function output handling in HuggingFace and OpenAI providers (71381dd3) 
+- Enhance diff rendering styles and streamline background color handling (c85edbcf) 
+- Enhance color detection logic for terminal compatibility (af35cbf6) 
+- Update configuration section markers and adjust merging logic for user settings (79bce0e0) 
+- Enhance settings search functionality and improve nested key handling (81f799ca) 
+- Remove agent command and related logic, update slash command descriptions (d672e41a) 
+### Contributors
+@vinhnx
 ## 0.86.4 - 2026-03-04
 
 ### Highlights
