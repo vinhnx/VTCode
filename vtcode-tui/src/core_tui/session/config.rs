@@ -2,8 +2,8 @@
 //!
 //! Contains settings for customizable UI elements, colors, key bindings, and other preferences.
 
-use serde::{Deserialize, Serialize};
 use hashbrown::HashMap;
+use serde::{Deserialize, Serialize};
 use std::path::Path;
 
 /// Main configuration struct for TUI session preferences

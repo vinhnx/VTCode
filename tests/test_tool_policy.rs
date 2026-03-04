@@ -86,8 +86,7 @@ impl ToolPolicyManager {
 
     /// Update the tool list and save configuration
     pub fn update_available_tools(&mut self, tools: Vec<String>) -> Result<()> {
-        let current_tools: hashbrown::HashSet<_> =
-            self.config.available_tools.iter().collect();
+        let current_tools: hashbrown::HashSet<_> = self.config.available_tools.iter().collect();
         let new_tools: hashbrown::HashSet<_> = tools.iter().collect();
 
         // Add new tools as "prompt"

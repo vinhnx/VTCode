@@ -172,6 +172,7 @@ pub enum InlineEvent {
 }
 
 pub type InlineEventCallback = Arc<dyn Fn(&InlineEvent) + Send + Sync + 'static>;
+pub type FocusChangeCallback = Arc<dyn Fn(bool) + Send + Sync + 'static>;
 
 #[derive(Clone)]
 pub struct InlineHandle {

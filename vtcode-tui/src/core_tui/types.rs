@@ -10,7 +10,8 @@ pub use content::ContentPart;
 pub use diff::{DiffHunk, DiffPreviewState, TrustMode};
 pub use plan::{PlanConfirmationResult, PlanContent, PlanPhase, PlanStep};
 pub use protocol::{
-    InlineCommand, InlineEvent, InlineEventCallback, InlineHandle, InlineMessageKind, InlineSession,
+    FocusChangeCallback, InlineCommand, InlineEvent, InlineEventCallback, InlineHandle,
+    InlineMessageKind, InlineSession,
 };
 pub use selection::{
     InlineListItem, InlineListSearchConfig, InlineListSelection, SecurePromptConfig,

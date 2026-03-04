@@ -1,3 +1,4 @@
+use hashbrown::HashMap;
 /// ACP Permission caching - avoid re-prompting for same file in same session
 ///
 /// Caches file-level permission grants so the agent doesn't repeatedly
@@ -6,7 +7,6 @@
 /// This module uses a generic `PermissionCache<K>` to eliminate duplicate code
 /// between file-based and tool-based permission caching.
 use std::borrow::Borrow;
-use hashbrown::HashMap;
 use std::hash::Hash;
 use std::path::PathBuf;
 

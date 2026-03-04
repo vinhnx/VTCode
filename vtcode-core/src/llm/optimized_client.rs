@@ -1,8 +1,8 @@
 //! Optimized LLM client with connection pooling and request batching
 
 use anyhow::Result;
-use serde_json::Value;
 use hashbrown::HashMap;
+use serde_json::Value;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::{RwLock, Semaphore};

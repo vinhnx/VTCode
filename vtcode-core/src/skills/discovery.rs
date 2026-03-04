@@ -10,8 +10,8 @@ use crate::skills::cli_bridge::{CliToolBridge, CliToolConfig, discover_cli_tools
 use crate::skills::manifest::parse_skill_file;
 use crate::skills::types::{SkillContext, SkillManifest, SkillVariety};
 use anyhow::Result;
-use serde::{Deserialize, Serialize};
 use hashbrown::HashMap;
+use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use tracing::{debug, info, warn};
 

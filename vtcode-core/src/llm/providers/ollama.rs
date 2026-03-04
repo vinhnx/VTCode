@@ -14,10 +14,10 @@ use anyhow::Result;
 use async_stream::try_stream;
 use async_trait::async_trait;
 use futures::StreamExt;
+use hashbrown::HashMap;
 use reqwest::Client as HttpClient;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
-use hashbrown::HashMap;
 
 pub mod client;
 pub mod parser;

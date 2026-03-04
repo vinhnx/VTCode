@@ -506,14 +506,28 @@ delivery_mode = "hybrid"
 # Suppress notifications while terminal is focused
 suppress_when_focused = true
 
-# High-signal event toggles
-tool_failure = true
+# Failure/error notifications
+command_failure = false
+tool_failure = false
 error = true
+
+# Completion notifications
+# Legacy master toggle (fallback for split settings when unset)
 completion = true
+completion_success = false
+completion_failure = true
+
+# Human approval/interaction notifications
 hitl = true
+policy_approval = true
+request = false
 
 # Success notifications for tool call results
 tool_success = false
+
+# Repeated notification suppression
+repeat_window_seconds = 30
+max_identical_in_window = 1
 
 # Status line configuration
 [ui.status_line]

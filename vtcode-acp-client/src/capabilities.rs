@@ -7,9 +7,9 @@
 //!
 //! Reference: https://agentclientprotocol.com/llms.txt
 
+use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use hashbrown::HashMap;
 
 /// Current ACP protocol version supported by this implementation
 pub const PROTOCOL_VERSION: &str = "2025-01-01";

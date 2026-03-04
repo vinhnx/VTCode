@@ -7,10 +7,10 @@ use super::traits::Tool;
 use crate::tools::error_helpers::with_path_context;
 use anyhow::{Context, Result, anyhow};
 use async_trait::async_trait;
+use hashbrown::HashSet;
 use reqwest::header::{ACCEPT, HeaderMap, HeaderValue, USER_AGENT};
 use serde::Deserialize;
 use serde_json::{Value, json};
-use hashbrown::HashSet;
 use std::fs;
 use std::path::Path;
 

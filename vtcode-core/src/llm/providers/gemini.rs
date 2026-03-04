@@ -25,9 +25,9 @@ use crate::llm::provider::{
 use crate::llm::types as llm_types;
 use async_stream::try_stream;
 use async_trait::async_trait;
+use hashbrown::HashMap;
 use reqwest::Client as HttpClient;
 use serde_json::{Map, Value, json};
-use hashbrown::HashMap;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tracing;

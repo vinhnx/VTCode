@@ -23,8 +23,8 @@ use super::scrollback::PtyScrollback;
 use super::session::PtySessionHandle;
 use super::types::{PtyCommandRequest, PtyCommandResult};
 
-use once_cell::sync::Lazy;
 use hashbrown::hash_map::Entry;
+use once_cell::sync::Lazy;
 
 /// Per-workspace command locks to serialize long-running toolchain commands.
 /// Keyed by canonicalized workspace path to prevent lockfile contention.

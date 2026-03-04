@@ -3,9 +3,9 @@
 //! Defines core types for Anthropic Agent Skills integration, including
 //! skill metadata, manifest parsing, and resource management.
 
+use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
-use hashbrown::HashMap;
 use std::path::PathBuf;
 
 pub use crate::skills::model::{SkillErrorInfo, SkillMetadata, SkillScope};

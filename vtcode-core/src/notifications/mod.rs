@@ -4,9 +4,11 @@
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::RwLock;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::{Duration, Instant};
 
 use crate::config::loader::VTCodeConfig;
 use vtcode_config::NotificationDeliveryMode;
@@ -67,14 +69,18 @@ pub enum CompletionStatus {
 pub struct NotificationConfig {
     /// Enable command failure notifications
     pub command_failure_notifications: bool,
+    /// Enable tool failure notifications
+    pub tool_failure_notifications: bool,
     /// Enable error notifications
     pub error_notifications: bool,
     /// Enable policy approval request notifications
     pub policy_approval_notifications: bool,
     /// Enable human in the loop notifications
     pub hitl_notifications: bool,
-    /// Enable completion notifications
-    pub completion_notifications: bool,
+    /// Enable completion notifications for successful turns/tasks
+    pub completion_success_notifications: bool,
+    /// Enable completion notifications for partial/failure/cancelled turns/tasks
+    pub completion_failure_notifications: bool,
     /// Enable request notifications
     pub request_notifications: bool,
     /// Enable tool success notifications
@@ -85,21 +91,29 @@ pub struct NotificationConfig {
     pub suppress_when_focused: bool,
     /// Delivery mode for notifications.
     pub delivery_mode: NotificationDeliveryMode,
+    /// Time window for suppressing repeated identical notifications.
+    pub repeat_window_seconds: u64,
+    /// Maximum identical notifications allowed per suppression window.
+    pub max_identical_notifications_in_window: u32,
 }
 
 impl Default for NotificationConfig {
     fn default() -> Self {
         Self {
-            command_failure_notifications: true,
+            command_failure_notifications: false,
+            tool_failure_notifications: false,
             error_notifications: true,
             policy_approval_notifications: true,
             hitl_notifications: true,
-            completion_notifications: true,
-            request_notifications: true,
+            completion_success_notifications: false,
+            completion_failure_notifications: true,
+            request_notifications: false,
             tool_success_notifications: false,
             terminal_notifications_enabled: true,
             suppress_when_focused: true,
             delivery_mode: NotificationDeliveryMode::Hybrid,
+            repeat_window_seconds: 30,
+            max_identical_notifications_in_window: 1,
         }
     }
 }
@@ -109,18 +123,56 @@ impl NotificationConfig {
     pub fn from_vtcode_config(config: &VTCodeConfig) -> Self {
         let notifications = &config.ui.notifications;
         Self {
-            command_failure_notifications: notifications.tool_failure,
+            command_failure_notifications: notifications
+                .command_failure
+                .unwrap_or(notifications.tool_failure),
+            tool_failure_notifications: notifications.tool_failure,
             error_notifications: notifications.error,
-            policy_approval_notifications: notifications.hitl,
+            policy_approval_notifications: notifications
+                .policy_approval
+                .unwrap_or(notifications.hitl),
             hitl_notifications: notifications.hitl,
-            completion_notifications: notifications.completion,
-            request_notifications: notifications.hitl,
+            completion_success_notifications: notifications
+                .completion_success
+                .unwrap_or(notifications.completion),
+            completion_failure_notifications: notifications
+                .completion_failure
+                .unwrap_or(notifications.completion),
+            request_notifications: notifications.request.unwrap_or(notifications.hitl),
             tool_success_notifications: notifications.tool_success,
             terminal_notifications_enabled: notifications.enabled,
             suppress_when_focused: notifications.suppress_when_focused,
             delivery_mode: notifications.delivery_mode,
+            repeat_window_seconds: notifications.repeat_window_seconds,
+            max_identical_notifications_in_window: notifications.max_identical_in_window,
         }
     }
+}
+
+#[derive(Debug)]
+struct RepeatEntry {
+    window_start: Instant,
+    sent_in_window: u32,
+}
+
+impl RepeatEntry {
+    fn new(now: Instant) -> Self {
+        Self {
+            window_start: now,
+            sent_in_window: 0,
+        }
+    }
+}
+
+#[derive(Debug, Default)]
+struct RepeatSuppressionState {
+    entries: HashMap<String, RepeatEntry>,
+}
+
+#[derive(Debug)]
+enum RepeatDecision {
+    Deliver,
+    Suppress,
 }
 
 /// Notification manager that handles sending notifications
@@ -128,6 +180,7 @@ pub struct NotificationManager {
     config: Arc<RwLock<NotificationConfig>>,
     /// Track if the terminal is currently focused/active
     terminal_focused: Arc<AtomicBool>,
+    repeat_state: Arc<std::sync::Mutex<RepeatSuppressionState>>,
 }
 
 impl NotificationManager {
@@ -136,6 +189,7 @@ impl NotificationManager {
         Self {
             config: Arc::new(RwLock::new(NotificationConfig::default())),
             terminal_focused: Arc::new(AtomicBool::new(false)), // Start as not focused
+            repeat_state: Arc::new(std::sync::Mutex::new(RepeatSuppressionState::default())),
         }
     }
 
@@ -144,6 +198,7 @@ impl NotificationManager {
         Self {
             config: Arc::new(RwLock::new(config)),
             terminal_focused: Arc::new(AtomicBool::new(false)), // Start as not focused
+            repeat_state: Arc::new(std::sync::Mutex::new(RepeatSuppressionState::default())),
         }
     }
 
@@ -167,51 +222,83 @@ impl NotificationManager {
             return Ok(());
         }
 
-        match &event {
-            NotificationEvent::CommandFailure { .. } => {
-                if config.command_failure_notifications {
-                    self.send_notification_impl(&event, &config).await?;
-                }
+        if !self.event_enabled(&event, &config) {
+            return Ok(());
+        }
+
+        match self.repeat_decision(&event, &config) {
+            RepeatDecision::Deliver => {
+                self.send_notification_impl(&event, &config).await?;
             }
-            NotificationEvent::ToolFailure { .. } => {
-                if config.command_failure_notifications {
-                    // Using same config as command failures
-                    self.send_notification_impl(&event, &config).await?;
-                }
-            }
-            NotificationEvent::ToolSuccess { .. } => {
-                if config.tool_success_notifications {
-                    self.send_notification_impl(&event, &config).await?;
-                }
-            }
-            NotificationEvent::Error { .. } => {
-                if config.error_notifications {
-                    self.send_notification_impl(&event, &config).await?;
-                }
-            }
-            NotificationEvent::PolicyApprovalRequest { .. } => {
-                if config.policy_approval_notifications {
-                    self.send_notification_impl(&event, &config).await?;
-                }
-            }
-            NotificationEvent::HumanInTheLoop { .. } => {
-                if config.hitl_notifications {
-                    self.send_notification_impl(&event, &config).await?;
-                }
-            }
-            NotificationEvent::Completion { .. } => {
-                if config.completion_notifications {
-                    self.send_notification_impl(&event, &config).await?;
-                }
-            }
-            NotificationEvent::Request { .. } => {
-                if config.request_notifications {
-                    self.send_notification_impl(&event, &config).await?;
-                }
+            RepeatDecision::Suppress => {
+                return Ok(());
             }
         }
 
         Ok(())
+    }
+
+    fn event_enabled(&self, event: &NotificationEvent, config: &NotificationConfig) -> bool {
+        match event {
+            NotificationEvent::CommandFailure { .. } => config.command_failure_notifications,
+            NotificationEvent::ToolFailure { .. } => config.tool_failure_notifications,
+            NotificationEvent::ToolSuccess { .. } => config.tool_success_notifications,
+            NotificationEvent::Error { .. } => config.error_notifications,
+            NotificationEvent::PolicyApprovalRequest { .. } => config.policy_approval_notifications,
+            NotificationEvent::HumanInTheLoop { .. } => config.hitl_notifications,
+            NotificationEvent::Completion { status, .. } => match status {
+                CompletionStatus::Success => config.completion_success_notifications,
+                CompletionStatus::PartialSuccess
+                | CompletionStatus::Failure
+                | CompletionStatus::Cancelled => config.completion_failure_notifications,
+            },
+            NotificationEvent::Request { .. } => config.request_notifications,
+        }
+    }
+
+    fn repeat_decision(
+        &self,
+        event: &NotificationEvent,
+        config: &NotificationConfig,
+    ) -> RepeatDecision {
+        if config.repeat_window_seconds == 0 {
+            return RepeatDecision::Deliver;
+        }
+
+        let Some(fingerprint) = self.repeat_fingerprint(event) else {
+            return RepeatDecision::Deliver;
+        };
+
+        let window = Duration::from_secs(config.repeat_window_seconds.max(1));
+        let max_allowed = config.max_identical_notifications_in_window.max(1);
+        let now = Instant::now();
+
+        let mut state = match self.repeat_state.lock() {
+            Ok(state) => state,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+
+        if state.entries.len() > 1024 {
+            state
+                .entries
+                .retain(|_, entry| now.duration_since(entry.window_start) < window);
+        }
+
+        let entry = state
+            .entries
+            .entry(fingerprint)
+            .or_insert_with(|| RepeatEntry::new(now));
+
+        if now.duration_since(entry.window_start) >= window {
+            *entry = RepeatEntry::new(now);
+        }
+
+        if entry.sent_in_window < max_allowed {
+            entry.sent_in_window += 1;
+            RepeatDecision::Deliver
+        } else {
+            RepeatDecision::Suppress
+        }
     }
 
     /// Internal method to send the actual notification
@@ -220,35 +307,58 @@ impl NotificationManager {
         event: &NotificationEvent,
         config: &NotificationConfig,
     ) -> Result<()> {
-        // Check if terminal notifications are enabled
-        if !config.terminal_notifications_enabled {
-            return Ok(());
-        }
-
-        // Format the notification message based on the event type
         let message = self.format_notification_message(event);
+        self.send_message(&message, config).await
+    }
 
+    async fn send_message(&self, message: &str, config: &NotificationConfig) -> Result<()> {
         match config.delivery_mode {
             NotificationDeliveryMode::Terminal => {
-                self.send_terminal_bell(&message).await;
+                self.send_terminal_bell(message).await;
             }
             NotificationDeliveryMode::Hybrid => {
-                self.send_terminal_bell(&message).await;
-                self.send_rich_notification(&message).await;
+                self.send_terminal_bell(message).await;
+                self.send_rich_notification(message).await;
             }
             NotificationDeliveryMode::Desktop => {
                 #[cfg(feature = "desktop-notifications")]
                 {
-                    self.send_rich_notification(&message).await;
+                    self.send_rich_notification(message).await;
                 }
                 #[cfg(not(feature = "desktop-notifications"))]
                 {
-                    self.send_terminal_bell(&message).await;
+                    self.send_terminal_bell(message).await;
                 }
             }
         }
 
         Ok(())
+    }
+
+    fn repeat_fingerprint(&self, event: &NotificationEvent) -> Option<String> {
+        let event_type = match event {
+            NotificationEvent::CommandFailure { .. } => "command_failure",
+            NotificationEvent::ToolFailure { .. } => "tool_failure",
+            NotificationEvent::ToolSuccess { .. } => "tool_success",
+            NotificationEvent::Error { .. } => "error",
+            NotificationEvent::Completion { .. } => "completion",
+            NotificationEvent::Request { .. } => "request",
+            NotificationEvent::PolicyApprovalRequest { .. }
+            | NotificationEvent::HumanInTheLoop { .. } => {
+                return None;
+            }
+        };
+
+        let normalized_message = self.normalize_message(&self.format_notification_message(event));
+        Some(format!("{event_type}:{normalized_message}"))
+    }
+
+    fn normalize_message(&self, message: &str) -> String {
+        message
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ")
+            .to_ascii_lowercase()
     }
 
     /// Format a notification message based on the event
@@ -548,8 +658,13 @@ mod tests {
         let manager = NotificationManager::new();
         let config = manager.get_config().await;
 
-        assert!(config.command_failure_notifications);
+        assert!(!config.command_failure_notifications);
+        assert!(!config.tool_failure_notifications);
         assert!(config.error_notifications);
+        assert!(!config.completion_success_notifications);
+        assert!(config.completion_failure_notifications);
+        assert_eq!(config.repeat_window_seconds, 30);
+        assert_eq!(config.max_identical_notifications_in_window, 1);
     }
 
     #[tokio::test]
@@ -606,5 +721,53 @@ mod tests {
         // Verify the setting worked by checking the config
         let current_config = manager.get_config().await;
         assert!(!current_config.terminal_notifications_enabled);
+    }
+
+    #[test]
+    fn completion_notifications_are_split_by_status() {
+        let manager = NotificationManager::new();
+        let config = NotificationConfig {
+            completion_success_notifications: false,
+            completion_failure_notifications: true,
+            ..Default::default()
+        };
+
+        let success_event = NotificationEvent::Completion {
+            task: "turn".to_string(),
+            status: CompletionStatus::Success,
+            details: None,
+        };
+        let failure_event = NotificationEvent::Completion {
+            task: "turn".to_string(),
+            status: CompletionStatus::Failure,
+            details: None,
+        };
+
+        assert!(!manager.event_enabled(&success_event, &config));
+        assert!(manager.event_enabled(&failure_event, &config));
+    }
+
+    #[test]
+    fn repeat_suppression_limits_identical_notifications() {
+        let manager = NotificationManager::new();
+        let config = NotificationConfig {
+            repeat_window_seconds: 30,
+            max_identical_notifications_in_window: 1,
+            ..Default::default()
+        };
+        let event = NotificationEvent::ToolFailure {
+            tool_name: "read_file".to_string(),
+            error: "File not found".to_string(),
+            details: None,
+        };
+
+        assert!(matches!(
+            manager.repeat_decision(&event, &config),
+            RepeatDecision::Deliver
+        ));
+        assert!(matches!(
+            manager.repeat_decision(&event, &config),
+            RepeatDecision::Suppress
+        ));
     }
 }

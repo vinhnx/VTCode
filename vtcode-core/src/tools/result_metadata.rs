@@ -5,9 +5,9 @@
 //! and prioritize high-quality results in context windows.
 
 use crate::config::constants::tools;
+use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use hashbrown::HashMap;
 use std::fmt;
 use std::time::SystemTime;
 

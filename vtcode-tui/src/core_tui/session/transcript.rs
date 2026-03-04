@@ -3,8 +3,8 @@
 //! This module provides improved caching mechanisms for reflowing transcript content,
 //! with performance optimizations for large transcripts.
 
-use ratatui::prelude::*;
 use hashbrown::HashMap;
+use ratatui::prelude::*;
 use std::sync::Arc;
 
 use super::Session;

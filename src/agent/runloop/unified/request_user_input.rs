@@ -1,7 +1,7 @@
 use anyhow::{Context, Result, bail};
+use hashbrown::{HashMap, HashSet};
 use serde::Deserialize;
 use serde_json::{Value, json};
-use hashbrown::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::Notify;
 use tokio::task;

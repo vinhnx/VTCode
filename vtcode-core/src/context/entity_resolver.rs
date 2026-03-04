@@ -4,8 +4,8 @@
 //! "the sidebar" or "that button" to actual workspace entities (files, components, etc.)
 
 use anyhow::{Context, Result};
-use serde::{Deserialize, Serialize};
 use hashbrown::HashMap;
+use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};

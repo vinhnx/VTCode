@@ -1,10 +1,10 @@
+use hashbrown::HashMap;
 use ratatui::crossterm::{
     cursor::MoveToColumn,
     execute,
     style::{PrintStyledContent, Stylize},
     terminal::{Clear, ClearType},
 };
-use hashbrown::HashMap;
 use std::io;
 use std::io::Write;
 

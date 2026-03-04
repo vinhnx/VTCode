@@ -5,8 +5,8 @@
 use crate::skills::file_references::FileReferenceValidator;
 use crate::skills::types::SkillManifest;
 use anyhow::Context;
-use serde::{Deserialize, Serialize};
 use hashbrown::HashMap;
+use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};

@@ -3,6 +3,7 @@ use crate::agent::runloop::unified::state::{CtrlCSignal, CtrlCState};
 use std::sync::Arc;
 use tokio::sync::Notify;
 use tokio_util::sync::CancellationToken;
+use vtcode_core::notifications::set_global_terminal_focused;
 
 pub(crate) fn spawn_signal_handler(
     ctrl_c_state: Arc<CtrlCState>,
@@ -48,5 +49,6 @@ pub(crate) fn spawn_signal_handler(
 }
 
 fn emergency_terminal_cleanup() {
+    set_global_terminal_focused(false);
     let _ = vtcode_tui::panic_hook::restore_tui();
 }

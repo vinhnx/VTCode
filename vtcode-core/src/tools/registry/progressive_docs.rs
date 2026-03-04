@@ -28,9 +28,9 @@
 
 use crate::config::constants::tools;
 use crate::gemini::FunctionDeclaration;
+use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, json};
-use hashbrown::HashMap;
 
 /// Documentation mode for tools
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

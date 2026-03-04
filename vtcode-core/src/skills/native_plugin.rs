@@ -37,9 +37,9 @@
 //! ```
 
 use anyhow::{Context, Result, anyhow};
+use hashbrown::HashMap;
 use libloading::{Library, Symbol};
 use serde::{Deserialize, Serialize};
-use hashbrown::HashMap;
 use std::path::{Path, PathBuf};
 use tracing::{debug, info, warn};
 

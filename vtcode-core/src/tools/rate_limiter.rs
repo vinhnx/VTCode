@@ -134,13 +134,13 @@ impl RateLimiterInner {
 /// Public alias for benchmark compatibility
 pub type RateLimiter = PerToolRateLimiter;
 
+use hashbrown::HashMap;
 /// Global rate limiter instance used by all tools.
 ///
 /// The `lazy_static` pattern is avoided to keep the dependency surface low;
 /// instead we rely on `once_cell::sync::Lazy` which is already a transitive
 /// dependency of the project.
 use once_cell::sync::Lazy;
-use hashbrown::HashMap;
 
 pub static GLOBAL_RATE_LIMITER: Lazy<Mutex<RateLimiterInner>> =
     Lazy::new(|| Mutex::new(RateLimiterInner::new()));

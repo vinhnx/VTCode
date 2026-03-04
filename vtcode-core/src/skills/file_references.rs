@@ -3,8 +3,8 @@
 //! Validates file references in SKILL.md bodies to ensure they meet
 //! the Agent Skills specification requirements.
 
-use regex::Regex;
 use hashbrown::HashSet;
+use regex::Regex;
 use std::path::{Path, PathBuf};
 
 /// Validates that file references in skill instructions follow the Agent Skills spec

@@ -7,8 +7,8 @@
 //! - Redundancy elimination
 
 use crate::patterns::DetectedPattern;
-use serde_json::json;
 use hashbrown::HashMap;
+use serde_json::json;
 
 /// An optimization recommendation.
 #[derive(Clone, Debug)]

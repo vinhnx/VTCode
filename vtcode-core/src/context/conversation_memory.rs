@@ -3,8 +3,8 @@
 //! Tracks entities mentioned across conversation turns to enable pronoun resolution
 //! and contextual understanding.
 
-use serde::{Deserialize, Serialize};
 use hashbrown::HashMap;
+use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};

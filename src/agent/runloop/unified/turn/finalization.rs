@@ -3,6 +3,7 @@ use anyhow::Result;
 use std::io;
 use std::path::PathBuf;
 use vtcode_core::llm::provider as uni;
+use vtcode_core::notifications::set_global_terminal_focused;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::session_archive::{SessionArchive, SessionMessage};
 use vtcode_core::utils::transcript;
@@ -119,6 +120,7 @@ pub(super) async fn finalize_session(
     }
 
     handle.shutdown();
+    set_global_terminal_focused(false);
 
     // Give the TUI a brief moment to shut down cleanly before we forcefully restore
     // The TUI runs in a background task and may need a moment to clean up

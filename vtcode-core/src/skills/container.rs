@@ -6,8 +6,8 @@
 //! Up to 8 skills per container. Container IDs can be reused across
 //! multiple turns for state preservation.
 
-use serde::{Deserialize, Serialize};
 use hashbrown::HashSet;
+use serde::{Deserialize, Serialize};
 
 /// Skill source type (Anthropic-managed or custom)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

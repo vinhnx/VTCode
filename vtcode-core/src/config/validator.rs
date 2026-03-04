@@ -3,8 +3,8 @@
 //! Validates VTCodeConfig against actual provider models and API keys.
 
 use anyhow::{Context, Result, bail};
-use serde_json::Value as JsonValue;
 use hashbrown::HashMap;
+use serde_json::Value as JsonValue;
 use std::path::Path;
 
 use crate::config::api_keys::ApiKeySources;

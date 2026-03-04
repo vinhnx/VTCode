@@ -2,6 +2,7 @@ use super::rmcp_transport::create_stdio_transport_with_stderr;
 use super::{McpElicitationHandler, convert_to_rmcp, create_env_for_mcp_server};
 use anyhow::{Context, Result, anyhow};
 use futures::FutureExt;
+use hashbrown::HashMap;
 use jsonschema::Validator;
 use reqwest::header::HeaderMap;
 use rmcp::handler::client::ClientHandler;
@@ -18,7 +19,6 @@ use rmcp::transport::streamable_http_client::{
     StreamableHttpClientTransport, StreamableHttpClientTransportConfig,
 };
 use serde_json::{Value, json};
-use hashbrown::HashMap;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;

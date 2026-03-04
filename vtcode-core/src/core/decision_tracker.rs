@@ -1,7 +1,7 @@
 use crate::utils::current_timestamp;
+use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use hashbrown::HashMap;
 
 /// Represents a single decision made by the agent
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -4,8 +4,8 @@
 //! checks to `vtcode_core::tools::SafetyGateway` for single-source consistency.
 
 use anyhow::anyhow;
-use serde_json::{Map, Value};
 use hashbrown::HashSet;
+use serde_json::{Map, Value};
 use thiserror::Error;
 use vtcode_core::tools::{
     RiskLevel, SafetyDecision, SafetyError as GatewaySafetyError, SafetyGateway,

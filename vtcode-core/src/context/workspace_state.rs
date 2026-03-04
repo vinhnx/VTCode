@@ -3,8 +3,8 @@
 //! Tracks file activity, edits, and value changes to provide context for
 //! lazy/vague user requests.
 
-use serde::{Deserialize, Serialize};
 use hashbrown::{HashMap, HashSet};
+use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
 use std::time::Instant;

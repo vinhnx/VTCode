@@ -1,9 +1,9 @@
 //! Diff utilities for generating structured diffs.
 
 use anstyle::Reset;
+use hashbrown::HashMap;
 use serde::Serialize;
 use std::cmp::min;
-use hashbrown::HashMap;
 use std::fmt::Write;
 
 use crate::ui::theme;

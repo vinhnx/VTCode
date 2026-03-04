@@ -2,8 +2,8 @@ use super::FileOpsTool;
 use crate::tools::traits::FileTool;
 use crate::tools::types::ListInput;
 use anyhow::{Result, anyhow};
-use serde_json::{Value, json};
 use hashbrown::HashSet;
+use serde_json::{Value, json};
 use std::path::Path;
 use walkdir::WalkDir;
 

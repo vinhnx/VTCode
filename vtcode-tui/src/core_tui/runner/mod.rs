@@ -16,7 +16,10 @@ use crate::ui::tui::log::{clear_tui_log_sender, register_tui_log_sender, set_log
 
 use super::{
     session::{Session, config::AppearanceConfig},
-    types::{InlineCommand, InlineEvent, InlineEventCallback, InlineTheme, SlashCommandItem},
+    types::{
+        FocusChangeCallback, InlineCommand, InlineEvent, InlineEventCallback, InlineTheme,
+        SlashCommandItem,
+    },
 };
 
 mod drive;
@@ -43,6 +46,7 @@ pub struct TuiOptions {
     pub show_logs: bool,
     pub log_theme: Option<String>,
     pub event_callback: Option<InlineEventCallback>,
+    pub focus_callback: Option<FocusChangeCallback>,
     pub active_pty_sessions: Option<std::sync::Arc<std::sync::atomic::AtomicUsize>>,
     pub keyboard_protocol: crate::config::KeyboardProtocolConfig,
     pub workspace_root: Option<std::path::PathBuf>,
@@ -151,6 +155,7 @@ pub async fn run_tui(
         &mut input_listener,
         event_channels,
         options.event_callback,
+        options.focus_callback,
         surface.use_alternate(),
         keyboard_flags,
     )

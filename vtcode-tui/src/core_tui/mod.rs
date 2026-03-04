@@ -17,11 +17,11 @@ pub mod widgets;
 pub use style::{convert_style, theme_from_styles};
 pub use theme_parser::ThemeConfigParser;
 pub use types::{
-    ContentPart, DiffHunk, DiffPreviewState, EditingMode, InlineCommand, InlineEvent,
-    InlineEventCallback, InlineHandle, InlineHeaderContext, InlineHeaderHighlight, InlineListItem,
-    InlineListSearchConfig, InlineListSelection, InlineMessageKind, InlineSegment, InlineSession,
-    InlineTextStyle, InlineTheme, PlanConfirmationResult, PlanContent, PlanPhase, PlanStep,
-    SecurePromptConfig, SlashCommandItem, TrustMode, WizardModalMode, WizardStep,
+    ContentPart, DiffHunk, DiffPreviewState, EditingMode, FocusChangeCallback, InlineCommand,
+    InlineEvent, InlineEventCallback, InlineHandle, InlineHeaderContext, InlineHeaderHighlight,
+    InlineListItem, InlineListSearchConfig, InlineListSelection, InlineMessageKind, InlineSegment,
+    InlineSession, InlineTextStyle, InlineTheme, PlanConfirmationResult, PlanContent, PlanPhase,
+    PlanStep, SecurePromptConfig, SlashCommandItem, TrustMode, WizardModalMode, WizardStep,
 };
 
 use runner::{TuiOptions, run_tui};
@@ -67,6 +67,7 @@ pub fn spawn_session_with_prompts(
         surface_preference,
         inline_rows,
         event_callback,
+        None,
         active_pty_sessions,
         keyboard_protocol,
         workspace_root,
@@ -85,6 +86,7 @@ pub fn spawn_session_with_prompts_and_options(
     surface_preference: UiSurfacePreference,
     inline_rows: u16,
     event_callback: Option<InlineEventCallback>,
+    focus_callback: Option<FocusChangeCallback>,
     active_pty_sessions: Option<Arc<std::sync::atomic::AtomicUsize>>,
     keyboard_protocol: crate::config::KeyboardProtocolConfig,
     workspace_root: Option<std::path::PathBuf>,
@@ -117,6 +119,7 @@ pub fn spawn_session_with_prompts_and_options(
                 show_logs: log::is_tui_log_capture_enabled(),
                 log_theme: None,
                 event_callback,
+                focus_callback,
                 active_pty_sessions,
                 keyboard_protocol,
                 workspace_root,

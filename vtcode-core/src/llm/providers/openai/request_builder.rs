@@ -8,8 +8,8 @@ use crate::llm::error_display;
 use crate::llm::provider;
 use crate::llm::providers::common::serialize_message_content_openai;
 use crate::llm::rig_adapter::reasoning_parameters_for;
-use serde_json::{Value, json};
 use hashbrown::HashSet;
+use serde_json::{Value, json};
 
 use super::responses_api::build_standard_responses_payload;
 use super::tool_serialization;

@@ -6,8 +6,8 @@
 //! Based on: https://github.com/anthropics/skills/blob/main/spec/agent-skills-spec.md
 
 use anyhow::{Result, anyhow};
-use serde::{Deserialize, Serialize};
 use hashbrown::HashMap;
+use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};

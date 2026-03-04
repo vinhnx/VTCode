@@ -4,7 +4,9 @@ use std::sync::Arc;
 use crate::config::KeyboardProtocolConfig;
 use crate::core_tui::session::config::AppearanceConfig;
 
-use crate::{InlineEventCallback, InlineSession, InlineTheme, SlashCommandItem};
+use crate::{
+    FocusChangeCallback, InlineEventCallback, InlineSession, InlineTheme, SlashCommandItem,
+};
 
 /// Standalone surface preference for selecting inline vs alternate rendering.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -85,6 +87,7 @@ pub struct SessionOptions {
     pub surface_preference: SessionSurface,
     pub inline_rows: u16,
     pub event_callback: Option<InlineEventCallback>,
+    pub focus_callback: Option<FocusChangeCallback>,
     pub active_pty_sessions: Option<Arc<std::sync::atomic::AtomicUsize>>,
     pub keyboard_protocol: KeyboardProtocolSettings,
     pub workspace_root: Option<PathBuf>,
@@ -101,6 +104,7 @@ impl Default for SessionOptions {
             surface_preference: SessionSurface::Auto,
             inline_rows: crate::config::constants::ui::DEFAULT_INLINE_VIEWPORT_ROWS,
             event_callback: None,
+            focus_callback: None,
             active_pty_sessions: None,
             keyboard_protocol: KeyboardProtocolSettings::default(),
             workspace_root: None,
@@ -140,6 +144,7 @@ pub fn spawn_session_with_options(
         options.surface_preference.into(),
         options.inline_rows,
         options.event_callback,
+        options.focus_callback,
         options.active_pty_sessions,
         options.keyboard_protocol.into(),
         options.workspace_root,

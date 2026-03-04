@@ -2,8 +2,8 @@
 //!
 //! Analyzes tool call sequences to detect patterns, anomalies, and trends.
 
-use serde_json::{Value, json};
 use hashbrown::HashMap;
+use serde_json::{Value, json};
 
 /// A single tool call event.
 #[derive(Clone, Debug)]

@@ -7,9 +7,9 @@
 use crate::utils::error_messages::ERR_CREATE_POLICY_DIR;
 use anyhow::{Context, Result};
 use dialoguer::console::style;
+use hashbrown::{HashMap, HashSet};
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
-use hashbrown::{HashMap, HashSet};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 

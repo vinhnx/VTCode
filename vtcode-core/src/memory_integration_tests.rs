@@ -275,8 +275,7 @@ mod memory_integration {
         const _MESSAGE_SIZE: usize = 1000; // bytes per reflowed message
 
         // Simulate what TranscriptReflowCache does
-        let mut width_caches: hashbrown::HashMap<u16, Vec<Vec<String>>> =
-            hashbrown::HashMap::new();
+        let mut width_caches: hashbrown::HashMap<u16, Vec<Vec<String>>> = hashbrown::HashMap::new();
 
         // Simulate transcript with width changes
         let widths = vec![80, 100, 120, 140, 160, 180, 200]; // Various terminal widths

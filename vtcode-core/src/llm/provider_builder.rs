@@ -113,9 +113,9 @@ pub trait ProviderConfig {
 /// HTTP client pool to avoid creating new clients for each provider
 mod http_client_pool {
     use crate::config::TimeoutsConfig;
+    use hashbrown::HashMap;
     use once_cell::sync::Lazy;
     use reqwest::Client as HttpClient;
-    use hashbrown::HashMap;
     use std::sync::{Arc, RwLock};
     use std::time::Duration;
 

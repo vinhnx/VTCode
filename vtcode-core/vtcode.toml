@@ -521,11 +521,18 @@ color_scheme_mode = "auto"
 enabled = true
 delivery_mode = "hybrid"
 suppress_when_focused = true
-tool_failure = true
+command_failure = false
+tool_failure = false
 error = true
 completion = true
+completion_success = false
+completion_failure = true
 hitl = true
+policy_approval = true
+request = false
 tool_success = false
+repeat_window_seconds = 30
+max_identical_in_window = 1
 
 [ui.status_line]
 mode = "Auto"

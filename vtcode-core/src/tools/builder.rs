@@ -3,8 +3,8 @@
 //! Provides a consistent way to construct tool execution results with
 //! support for dual-channel output, structured metadata, and standardized error reporting.
 
-use serde_json::{Value, json};
 use hashbrown::HashMap;
+use serde_json::{Value, json};
 use std::path::PathBuf;
 
 use crate::tools::result::{ToolMetadataBuilder, ToolResult};

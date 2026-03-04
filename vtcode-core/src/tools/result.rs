@@ -6,8 +6,8 @@
 //!
 //! Expected savings: 20-30% on tool-heavy sessions (97% on tool output tokens)
 
-use serde::{Deserialize, Serialize};
 use hashbrown::HashMap;
+use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 use crate::utils::tokens::estimate_tokens;

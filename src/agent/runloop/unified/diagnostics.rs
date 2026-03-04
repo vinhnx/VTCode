@@ -18,9 +18,7 @@ pub(crate) async fn run_doctor_diagnostics(
     linked_directories: &[LinkedDirectory],
     loaded_skills: Option<
         &std::sync::Arc<
-            tokio::sync::RwLock<
-                hashbrown::HashMap<String, vtcode_core::skills::types::Skill>,
-            >,
+            tokio::sync::RwLock<hashbrown::HashMap<String, vtcode_core::skills::types::Skill>>,
         >,
     >,
 ) -> Result<()> {

@@ -10,7 +10,7 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, error::TryRecvError}
 
 use crate::ui::tui::{
     session::Session,
-    types::{InlineCommand, InlineEvent, InlineEventCallback},
+    types::{FocusChangeCallback, InlineCommand, InlineEvent, InlineEventCallback},
 };
 
 use super::events::{EventChannels, EventListener, ScrollAccumulator, TerminalEvent};
@@ -21,6 +21,21 @@ fn has_active_navigation_ui(session: &Session) -> bool {
         || session.file_palette_active
         || session.history_picker_state.active
         || crate::ui::tui::session::slash::slash_navigation_available(session)
+}
+
+fn handle_focus_change_event(
+    event: &crossterm::event::Event,
+    focus_callback: Option<&FocusChangeCallback>,
+) {
+    let Some(callback) = focus_callback else {
+        return;
+    };
+
+    match event {
+        crossterm::event::Event::FocusGained => callback(true),
+        crossterm::event::Event::FocusLost => callback(false),
+        _ => {}
+    }
 }
 
 #[cfg(unix)]
@@ -151,6 +166,7 @@ pub(super) async fn drive_terminal<B: Backend>(
     inputs: &mut EventListener,
     event_channels: EventChannels,
     event_callback: Option<InlineEventCallback>,
+    focus_callback: Option<FocusChangeCallback>,
     use_alternate_screen: bool,
     keyboard_flags: crossterm::event::KeyboardEnhancementFlags,
 ) -> Result<()> {
@@ -226,6 +242,7 @@ pub(super) async fn drive_terminal<B: Backend>(
                     Some(TerminalEvent::Crossterm(event)) => {
                         // Record input for adaptive tick rate (switches to 16Hz)
                         event_channels.record_input();
+                        handle_focus_change_event(&event, focus_callback.as_ref());
 
                         #[cfg(unix)]
                         if is_suspend_shortcut(&event) {
@@ -265,6 +282,7 @@ pub(super) async fn drive_terminal<B: Backend>(
                             while let Ok(next_event) = inputs.try_recv() {
                                 match next_event {
                                     TerminalEvent::Crossterm(evt) => {
+                                        handle_focus_change_event(&evt, focus_callback.as_ref());
                                         // Re-check modal state (it may have changed)
                                         let can_coalesce = !has_active_navigation_ui(session);
                                         let coalesced = can_coalesce

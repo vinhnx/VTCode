@@ -1,6 +1,6 @@
+use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use hashbrown::HashMap;
 
 /// Canonical tool call request used across tool execution layers.
 #[derive(Debug, Clone, Serialize, Deserialize)]

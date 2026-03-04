@@ -4,8 +4,8 @@
 //! select the best tool based on prior success rates and result quality.
 
 use crate::utils::current_timestamp;
-use serde::{Deserialize, Serialize};
 use hashbrown::HashMap;
+use serde::{Deserialize, Serialize};
 
 use crate::tools::result_metadata::ResultMetadata;
 

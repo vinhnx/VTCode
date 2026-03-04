@@ -3,8 +3,8 @@
 //! Implements the apply_patch tool using the Codex-style handler pattern.
 //! Supports both freeform and JSON function call formats.
 
-use std::collections::BTreeMap;
 use hashbrown::HashMap;
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 

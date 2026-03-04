@@ -1,9 +1,9 @@
 use anyhow::Result;
 #[cfg(not(unix))]
 use anyhow::anyhow;
-use serde::{Deserialize, Serialize};
 #[cfg(not(unix))]
 use hashbrown::HashMap;
+use serde::{Deserialize, Serialize};
 #[cfg(not(unix))]
 use std::path::Path;
 
@@ -41,8 +41,8 @@ mod unix_impl {
         ZSH_EXEC_BRIDGE_WRAPPER_SOCKET_ENV_VAR, ZSH_EXEC_WRAPPER_MODE_ENV_VAR,
     };
     use anyhow::{Context, Result, bail};
-    use parking_lot::Mutex;
     use hashbrown::HashMap;
+    use parking_lot::Mutex;
     use std::fs;
     use std::io::{ErrorKind, Read, Write};
     use std::os::unix::net::{UnixListener, UnixStream};

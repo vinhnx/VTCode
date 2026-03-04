@@ -14,6 +14,9 @@ impl ModelId {
             ModelId::Gemini31ProPreviewCustomTools => {
                 "Gemini 3.1 Pro variant optimized for agentic workflows using custom tools and bash"
             }
+            ModelId::Gemini31FlashLitePreview => {
+                "Most cost-efficient Gemini 3.1 model, offering fastest performance for high-frequency, lightweight tasks"
+            }
             ModelId::Gemini3FlashPreview => {
                 "Our most intelligent model built for speed, combining frontier intelligence with superior search and grounding"
             }

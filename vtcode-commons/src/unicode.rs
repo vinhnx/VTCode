@@ -1,7 +1,7 @@
 //! Unicode monitoring and validation utilities
 
-use once_cell::sync::Lazy;
 use hashbrown::HashMap;
+use once_cell::sync::Lazy;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::time::Instant;

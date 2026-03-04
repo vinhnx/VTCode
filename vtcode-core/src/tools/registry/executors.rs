@@ -22,8 +22,8 @@ use regex::Regex;
 use anyhow::{Context, Result, anyhow};
 use chrono;
 use futures::future::BoxFuture;
-use serde_json::{Value, json};
 use hashbrown::HashMap;
+use serde_json::{Value, json};
 use std::{
     collections::BTreeSet,
     path::{Path, PathBuf},

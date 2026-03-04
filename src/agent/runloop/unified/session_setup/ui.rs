@@ -24,12 +24,16 @@ use vtcode_core::config::constants::ui;
 use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::llm::provider as uni;
+use vtcode_core::notifications::set_global_terminal_focused;
 use vtcode_core::ui::slash::SLASH_COMMANDS;
 use vtcode_core::ui::theme;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::session_archive::{SessionArchive, SessionArchiveMetadata};
 use vtcode_core::utils::transcript;
-use vtcode_tui::{InlineEvent, InlineEventCallback, SessionOptions, spawn_session_with_options};
+use vtcode_tui::{
+    FocusChangeCallback, InlineEvent, InlineEventCallback, SessionOptions,
+    spawn_session_with_options,
+};
 
 pub(crate) async fn initialize_session_ui(
     config: &CoreAgentConfig,
@@ -90,6 +94,7 @@ pub(crate) async fn initialize_session_ui(
             }
         })
     };
+    let focus_callback: FocusChangeCallback = Arc::new(set_global_terminal_focused);
 
     let pty_counter = Arc::new(std::sync::atomic::AtomicUsize::new(0));
     session_state
@@ -103,6 +108,7 @@ pub(crate) async fn initialize_session_ui(
             surface_preference: to_tui_surface(config.ui_surface),
             inline_rows,
             event_callback: Some(interrupt_callback),
+            focus_callback: Some(focus_callback),
             active_pty_sessions: Some(pty_counter.clone()),
             keyboard_protocol: vt_cfg
                 .map(|cfg| to_tui_keyboard_protocol(cfg.ui.keyboard_protocol.clone()))
@@ -117,6 +123,7 @@ pub(crate) async fn initialize_session_ui(
         },
     )
     .context("failed to launch inline session")?;
+    set_global_terminal_focused(true);
     if skip_confirmations {
         session.set_skip_confirmations(true);
     }

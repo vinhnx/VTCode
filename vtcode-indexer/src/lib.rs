@@ -6,10 +6,10 @@
 //! so changes remain easy to audit in git.
 
 use anyhow::Result;
+use hashbrown::HashMap;
 use ignore::{Walk, WalkBuilder};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use hashbrown::HashMap;
 use std::fs;
 use std::io::{BufWriter, ErrorKind, Write};
 use std::path::{Path, PathBuf};

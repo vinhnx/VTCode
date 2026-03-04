@@ -37,9 +37,9 @@
 //! ```
 
 use chrono::{DateTime, Utc};
+use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use hashbrown::HashMap;
 use std::path::PathBuf;
 
 /// Current Agent Trace specification version.

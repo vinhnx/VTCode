@@ -12,6 +12,7 @@ impl ModelId {
             // Gemini models
             ModelId::Gemini31ProPreview => models::GEMINI_3_1_PRO_PREVIEW,
             ModelId::Gemini31ProPreviewCustomTools => models::GEMINI_3_1_PRO_PREVIEW_CUSTOMTOOLS,
+            ModelId::Gemini31FlashLitePreview => models::GEMINI_3_1_FLASH_LITE_PREVIEW,
             ModelId::Gemini3FlashPreview => models::GEMINI_3_FLASH_PREVIEW,
             // OpenAI models
             ModelId::GPT5 => models::GPT_5,

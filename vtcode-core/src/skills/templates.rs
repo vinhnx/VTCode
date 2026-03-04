@@ -4,8 +4,8 @@
 //! and standardization across the VT Code ecosystem.
 
 use anyhow::{Context, Result, anyhow};
-use serde::{Deserialize, Serialize};
 use hashbrown::HashMap;
+use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use tracing::{debug, info};
 

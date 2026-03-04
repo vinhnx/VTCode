@@ -8,9 +8,9 @@
 //!
 //! Reference: https://agentclientprotocol.com/llms.txt
 
+use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use hashbrown::HashMap;
 
 /// Session state enumeration
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

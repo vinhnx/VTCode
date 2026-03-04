@@ -6,8 +6,8 @@
 //! - Skill recommendations
 //! - Version compatibility predictions
 
-use serde::{Deserialize, Serialize};
 use hashbrown::HashMap;
+use serde::{Deserialize, Serialize};
 use std::fmt::Write;
 use std::time::Duration;
 use tracing::debug;

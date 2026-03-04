@@ -3,8 +3,8 @@
 //! Implements the Agent Card structure used for agent discovery and capability
 //! advertisement, typically served at `/.well-known/agent-card.json`.
 
-use serde::{Deserialize, Serialize};
 use hashbrown::HashMap;
+use serde::{Deserialize, Serialize};
 
 /// A2A Protocol version
 pub const A2A_PROTOCOL_VERSION: &str = "1.0";

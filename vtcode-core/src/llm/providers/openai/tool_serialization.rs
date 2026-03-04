@@ -3,8 +3,8 @@
 //! Keeps tool JSON shaping isolated from the main provider logic.
 
 use crate::llm::provider;
-use serde_json::{Value, json};
 use hashbrown::HashSet;
+use serde_json::{Value, json};
 
 pub fn serialize_tools(tools: &[provider::ToolDefinition], model: &str) -> Option<Value> {
     if tools.is_empty() {

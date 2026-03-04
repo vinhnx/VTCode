@@ -42,9 +42,9 @@ impl ModelId {
         }
 
         let direct = match self {
-            ModelId::Gemini31ProPreview | ModelId::Gemini31ProPreviewCustomTools => {
-                Some(ModelId::Gemini3FlashPreview)
-            }
+            ModelId::Gemini31ProPreview
+            | ModelId::Gemini31ProPreviewCustomTools
+            | ModelId::Gemini31FlashLitePreview => Some(ModelId::Gemini3FlashPreview),
             ModelId::GPT52 | ModelId::GPT5 => Some(ModelId::GPT5Mini),
             ModelId::DeepSeekReasoner => Some(ModelId::DeepSeekChat),
             ModelId::ZaiGlm5 => Some(ModelId::OllamaGlm5Cloud),
@@ -67,6 +67,7 @@ impl ModelId {
         matches!(
             self,
             ModelId::Gemini3FlashPreview
+                | ModelId::Gemini31FlashLitePreview
                 | ModelId::OpenRouterStepfunStep35FlashFree
                 | ModelId::OllamaGemini3FlashPreviewCloud
                 | ModelId::HuggingFaceStep35Flash
@@ -104,6 +105,7 @@ impl ModelId {
         matches!(
             self,
             ModelId::Gemini3FlashPreview
+                | ModelId::Gemini31FlashLitePreview
                 | ModelId::GPT5Mini
                 | ModelId::GPT5Nano
                 | ModelId::ClaudeHaiku45
@@ -123,6 +125,7 @@ impl ModelId {
                 | ModelId::Gemini31ProPreviewCustomTools
                 | ModelId::OpenRouterGoogleGemini31ProPreview
                 | ModelId::Gemini3FlashPreview
+                | ModelId::Gemini31FlashLitePreview
                 | ModelId::GPT5
                 | ModelId::GPT52
                 | ModelId::GPT53Codex
@@ -160,6 +163,7 @@ impl ModelId {
         match self {
             // Gemini generations
             ModelId::Gemini31ProPreview | ModelId::Gemini31ProPreviewCustomTools => "3.1",
+            ModelId::Gemini31FlashLitePreview => "3.1-lite",
             ModelId::Gemini3FlashPreview => "3",
             // OpenAI generations
             ModelId::GPT52 => "5.2",

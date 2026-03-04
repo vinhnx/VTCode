@@ -1,8 +1,8 @@
 //! Diff utilities for generating structured diffs.
 
+use hashbrown::HashMap;
 use serde::Serialize;
 use std::cmp::min;
-use hashbrown::HashMap;
 
 /// Represents a chunk of text in a diff (Equal, Delete, or Insert).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

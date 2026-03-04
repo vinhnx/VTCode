@@ -1,6 +1,6 @@
+use hashbrown::HashMap;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use hashbrown::HashMap;
 use std::collections::BTreeMap;
 
 /// Top-level MCP configuration

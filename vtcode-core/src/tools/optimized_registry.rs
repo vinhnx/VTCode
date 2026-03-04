@@ -1,9 +1,9 @@
 //! Optimized tool registry with reduced lock contention and improved caching
 
 use anyhow::Result;
+use hashbrown::HashMap;
 use parking_lot::RwLock;
 use serde_json::Value;
-use hashbrown::HashMap;
 use std::sync::Arc;
 use tokio::sync::Semaphore;
 

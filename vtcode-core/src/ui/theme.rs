@@ -1,9 +1,9 @@
 use anstyle::{Color, Effects, RgbColor, Style};
 use anyhow::{Context, Result, anyhow};
 use catppuccin::PALETTE;
+use hashbrown::HashMap;
 use once_cell::sync::Lazy;
 use parking_lot::RwLock;
-use hashbrown::HashMap;
 
 use crate::config::constants::{defaults, ui};
 

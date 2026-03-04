@@ -1,8 +1,8 @@
 // Placeholder module to fix compilation error
 // This module should be properly implemented later
 
-use serde::{Deserialize, Serialize};
 use hashbrown::HashMap;
+use serde::{Deserialize, Serialize};
 use std::path::Path;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

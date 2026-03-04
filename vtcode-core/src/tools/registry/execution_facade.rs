@@ -1,10 +1,10 @@
 //! Tool execution entrypoints for ToolRegistry.
 
 use anyhow::{Context, Result, anyhow};
+use hashbrown::HashMap;
 use once_cell::sync::Lazy;
 use serde_json::{Value, json};
 use std::cell::RefCell;
-use hashbrown::HashMap;
 use std::sync::Mutex;
 use std::time::{Duration, Instant, SystemTime};
 use tokio::task::Id as TokioTaskId;

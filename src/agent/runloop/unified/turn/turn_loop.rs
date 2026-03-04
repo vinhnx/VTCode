@@ -704,16 +704,6 @@ async fn emit_turn_outcome_notification(result: &TurnLoopResult) {
         TurnLoopResult::Exit => None,
     };
 
-    if matches!(result, TurnLoopResult::Aborted)
-        && let Err(err) = send_global_notification(NotificationEvent::Error {
-            message: "Turn aborted".to_string(),
-            context: Some("turn".to_string()),
-        })
-        .await
-    {
-        tracing::debug!(error = %err, "Failed to emit turn error notification");
-    }
-
     if let Some(notification) = event
         && let Err(err) = send_global_notification(notification).await
     {

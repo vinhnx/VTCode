@@ -1,9 +1,9 @@
 //! Agent discovery and registry functionality
 
 use crate::error::{AcpError, AcpResult};
+use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use hashbrown::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 

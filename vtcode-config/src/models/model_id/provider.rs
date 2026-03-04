@@ -11,6 +11,7 @@ impl ModelId {
         match self {
             ModelId::Gemini31ProPreview
             | ModelId::Gemini31ProPreviewCustomTools
+            | ModelId::Gemini31FlashLitePreview
             | ModelId::Gemini3FlashPreview => Provider::Gemini,
             ModelId::GPT5
             | ModelId::GPT52
@@ -50,7 +51,40 @@ impl ModelId {
             ModelId::OpenRouterMinimaxM25 | ModelId::OpenRouterQwen3CoderNext => {
                 Provider::OpenRouter
             }
-            _ => unreachable!(),
+            // OpenRouter models - explicitly handled even if openrouter_metadata() returns Some
+            ModelId::OpenRouterQwen332b
+            | ModelId::OpenRouterQwen330bA3b
+            | ModelId::OpenRouterQwen330bA3bInstruct2507
+            | ModelId::OpenRouterQwen330bA3bThinking2507
+            | ModelId::OpenRouterQwen314b
+            | ModelId::OpenRouterQwen38b
+            | ModelId::OpenRouterQwen3Next80bA3bInstruct
+            | ModelId::OpenRouterQwen3Next80bA3bThinking
+            | ModelId::OpenRouterQwen35Plus0215
+            | ModelId::OpenRouterQwen3Coder
+            | ModelId::OpenRouterQwen3CoderPlus
+            | ModelId::OpenRouterQwen3CoderFlash
+            | ModelId::OpenRouterQwen3Coder30bA3bInstruct
+            | ModelId::OpenRouterDeepseekChat
+            | ModelId::OpenRouterDeepSeekV32
+            | ModelId::OpenRouterDeepseekReasoner
+            | ModelId::OpenRouterDeepSeekV32Speciale
+            | ModelId::OpenRouterDeepSeekV32Exp
+            | ModelId::OpenRouterDeepSeekChatV31
+            | ModelId::OpenRouterDeepSeekR1
+            | ModelId::OpenRouterOpenAIGptOss120b
+            | ModelId::OpenRouterOpenAIGptOss120bFree
+            | ModelId::OpenRouterOpenAIGptOss20b
+            | ModelId::OpenRouterOpenAIGpt5
+            | ModelId::OpenRouterOpenAIGpt5Chat
+            | ModelId::OpenRouterGoogleGemini31ProPreview
+            | ModelId::OpenRouterAnthropicClaudeSonnet45
+            | ModelId::OpenRouterAnthropicClaudeSonnet46
+            | ModelId::OpenRouterAnthropicClaudeHaiku45
+            | ModelId::OpenRouterMistralaiMistralLarge2512
+            | ModelId::OpenRouterNexAgiDeepseekV31NexN1
+            | ModelId::OpenRouterStepfunStep35FlashFree
+            | ModelId::OpenRouterZaiGlm5 => Provider::OpenRouter,
         }
     }
 

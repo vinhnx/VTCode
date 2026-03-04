@@ -6,8 +6,8 @@
 //! - Artifact for task outputs
 
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
 use hashbrown::HashMap;
+use serde::{Deserialize, Serialize};
 
 // ============================================================================
 // Task State & Status

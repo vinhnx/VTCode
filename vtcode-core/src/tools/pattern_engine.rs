@@ -142,8 +142,7 @@ impl PatternEngine {
         let avg_quality = events.iter().map(|e| e.quality_score).sum::<f32>() / total as f32;
         let avg_duration = events.iter().map(|e| e.duration_ms).sum::<u64>() / total as u64;
 
-        let unique_tools: hashbrown::HashSet<_> =
-            events.iter().map(|e| &e.tool_name).collect();
+        let unique_tools: hashbrown::HashSet<_> = events.iter().map(|e| &e.tool_name).collect();
 
         ExecutionSummary {
             total_executions: total,
@@ -206,8 +205,7 @@ impl PatternEngine {
         }
 
         // Check for convergence (different tools, similar quality)
-        let different_tools: hashbrown::HashSet<_> =
-            events.iter().map(|e| &e.tool_name).collect();
+        let different_tools: hashbrown::HashSet<_> = events.iter().map(|e| &e.tool_name).collect();
 
         if different_tools.len() > 1 && events.len() >= 3 {
             let avg_quality = qualities.iter().sum::<f32>() / qualities.len() as f32;

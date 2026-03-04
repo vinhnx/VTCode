@@ -5,6 +5,7 @@ use super::OpenAIProvider;
 use crate::config::types::ReasoningEffortLevel;
 use crate::llm::error_display;
 use crate::llm::provider;
+use hashbrown::HashMap;
 use openai_harmony::chat::{
     Author as HarmonyAuthor, Content as HarmonyContent, Conversation, DeveloperContent,
     Message as HarmonyMessage, ReasoningEffort, Role as HarmonyRole, SystemContent,
@@ -12,7 +13,6 @@ use openai_harmony::chat::{
 };
 use openai_harmony::{HarmonyEncodingName, load_harmony_encoding};
 use serde_json::{Value, json};
-use hashbrown::HashMap;
 use tokio::task::spawn_blocking;
 
 impl OpenAIProvider {
