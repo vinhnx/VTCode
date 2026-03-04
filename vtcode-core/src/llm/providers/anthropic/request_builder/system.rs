@@ -2,11 +2,30 @@ use crate::llm::provider::LLMRequest;
 use crate::llm::providers::anthropic_types::CacheControl;
 use serde_json::{Value, json};
 
+pub(crate) struct SystemPromptBuildResult {
+    pub system_value: Option<Value>,
+    pub breakpoints_used: usize,
+    pub has_uncached_runtime_context: bool,
+}
+
+const RUNTIME_CONTEXT_SECTION_HEADER: &str = "[Runtime Context]";
+
+fn split_runtime_context_section(prompt: &str) -> Option<(String, String)> {
+    let marker = format!("\n{RUNTIME_CONTEXT_SECTION_HEADER}\n");
+    let split_at = prompt.rfind(&marker)?;
+    let (stable_prefix, runtime_section) = prompt.split_at(split_at);
+    let runtime_section = runtime_section.trim_start_matches('\n').trim().to_string();
+    if runtime_section.is_empty() || !runtime_section.contains("- turns:") {
+        return None;
+    }
+    Some((stable_prefix.trim().to_string(), runtime_section))
+}
+
 pub(crate) fn build_system_prompt(
     request: &LLMRequest,
     cache_control: &Option<CacheControl>,
     breakpoints_remaining: usize,
-) -> (Option<Value>, usize) {
+) -> SystemPromptBuildResult {
     let mut final_system_prompt = request
         .system_prompt
         .as_ref()
@@ -41,7 +60,47 @@ pub(crate) fn build_system_prompt(
     }
 
     if final_system_prompt.is_empty() {
-        return (None, 0);
+        return SystemPromptBuildResult {
+            system_value: None,
+            breakpoints_used: 0,
+            has_uncached_runtime_context: false,
+        };
+    }
+
+    if let Some((stable_prefix, runtime_section)) =
+        split_runtime_context_section(&final_system_prompt)
+    {
+        let should_cache_stable_prefix =
+            cache_control.is_some() && breakpoints_remaining > 0 && !stable_prefix.is_empty();
+        let mut blocks = Vec::new();
+
+        if !stable_prefix.is_empty() {
+            if should_cache_stable_prefix {
+                if let Some(cc) = cache_control.as_ref() {
+                    blocks.push(json!({
+                        "type": "text",
+                        "text": stable_prefix,
+                        "cache_control": cc
+                    }));
+                }
+            } else {
+                blocks.push(json!({
+                    "type": "text",
+                    "text": stable_prefix
+                }));
+            }
+        }
+
+        blocks.push(json!({
+            "type": "text",
+            "text": runtime_section
+        }));
+
+        return SystemPromptBuildResult {
+            system_value: Some(Value::Array(blocks)),
+            breakpoints_used: usize::from(should_cache_stable_prefix),
+            has_uncached_runtime_context: true,
+        };
     }
 
     let should_cache = cache_control.is_some() && breakpoints_remaining > 0;
@@ -52,11 +111,16 @@ pub(crate) fn build_system_prompt(
             "text": final_system_prompt.trim(),
             "cache_control": cc
         });
-        return (Some(Value::Array(vec![block])), 1);
+        return SystemPromptBuildResult {
+            system_value: Some(Value::Array(vec![block])),
+            breakpoints_used: 1,
+            has_uncached_runtime_context: false,
+        };
     }
 
-    (
-        Some(Value::String(final_system_prompt.trim().to_string())),
-        0,
-    )
+    SystemPromptBuildResult {
+        system_value: Some(Value::String(final_system_prompt.trim().to_string())),
+        breakpoints_used: 0,
+        has_uncached_runtime_context: false,
+    }
 }

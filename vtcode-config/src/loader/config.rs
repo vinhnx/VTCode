@@ -679,6 +679,10 @@ enable_auto_cleanup = true
 # Minimum quality threshold to keep cache entries
 min_quality_threshold = 0.7
 
+# Keep volatile runtime counters at the end of system prompts to improve provider-side prefix cache reuse
+# (disabled by default; opt in per workspace)
+cache_friendly_prompt_shaping = false
+
 # Prompt cache configuration for OpenAI
     [prompt_cache.providers.openai]
     enabled = true

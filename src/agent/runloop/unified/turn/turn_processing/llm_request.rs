@@ -6,7 +6,7 @@ use tokio::task;
 #[cfg(debug_assertions)]
 use tracing::debug;
 use vtcode_config::constants::context::TOKEN_BUDGET_HIGH_THRESHOLD;
-use vtcode_core::config::OpenAIPromptCacheKeyMode;
+use vtcode_core::config::{OpenAIPromptCacheKeyMode, PromptCachingConfig};
 use vtcode_core::exec::events::{
     AgentMessageItem, ItemCompletedEvent, ItemStartedEvent, ItemUpdatedEvent, ReasoningItem,
     ThreadEvent, ThreadItem, ThreadItemDetails,
@@ -16,6 +16,7 @@ use vtcode_core::prompts::upsert_harness_limits_section;
 use vtcode_core::turn_metadata;
 
 use crate::agent::runloop::unified::extract_action_from_messages;
+use crate::agent::runloop::unified::incremental_system_prompt::PromptCacheShapingMode;
 use crate::agent::runloop::unified::reasoning::resolve_reasoning_visibility;
 use crate::agent::runloop::unified::turn::context::TurnProcessingContext;
 use crate::agent::runloop::unified::turn::turn_helpers::supports_responses_chaining;
@@ -48,6 +49,51 @@ const STREAM_TIMEOUT_FALLBACK_PROVIDERS: &[&str] = &[
 
 const RECENT_TOOL_RESPONSE_WINDOW: usize = 10;
 const TOOL_RETRY_MAX_CHARS: usize = 1200;
+
+fn is_openai_prompt_cache_enabled(
+    provider_name: &str,
+    global_prompt_cache_enabled: bool,
+    openai_prompt_cache_enabled: bool,
+) -> bool {
+    provider_name.eq_ignore_ascii_case("openai")
+        && global_prompt_cache_enabled
+        && openai_prompt_cache_enabled
+}
+
+fn resolve_prompt_cache_shaping_mode(
+    provider_name: &str,
+    prompt_cache: &PromptCachingConfig,
+) -> PromptCacheShapingMode {
+    if !prompt_cache.cache_friendly_prompt_shaping
+        || !prompt_cache.is_provider_enabled(provider_name)
+    {
+        return PromptCacheShapingMode::Disabled;
+    }
+
+    if matches!(
+        provider_name.to_ascii_lowercase().as_str(),
+        "anthropic" | "minimax"
+    ) {
+        PromptCacheShapingMode::AnthropicBlockRuntimeContext
+    } else {
+        PromptCacheShapingMode::TrailingRuntimeContext
+    }
+}
+
+fn build_openai_prompt_cache_key(
+    openai_prompt_cache_enabled: bool,
+    prompt_cache_key_mode: &OpenAIPromptCacheKeyMode,
+    run_id: &str,
+) -> Option<String> {
+    if !openai_prompt_cache_enabled {
+        return None;
+    }
+
+    match prompt_cache_key_mode {
+        OpenAIPromptCacheKeyMode::Session => Some(format!("vtcode:openai:{run_id}")),
+        OpenAIPromptCacheKeyMode::Off => None,
+    }
+}
 
 #[derive(Default)]
 struct StreamItemBuffer {
@@ -438,11 +484,23 @@ pub(crate) async fn execute_llm_request(
         request_user_input_enabled,
         context_window_size,
         turn_timeout_secs,
+        openai_prompt_cache_enabled,
+        openai_prompt_cache_key_mode,
+        prompt_cache_shaping_mode,
     ) = {
         let parts = ctx.parts_mut();
+        let prompt_cache_config = &parts.llm.config.prompt_cache;
         let plan_mode = parts.state.session_stats.is_plan_mode();
+        let provider_name = parts.llm.provider_client.name().to_ascii_lowercase();
+        let openai_prompt_cache_enabled = is_openai_prompt_cache_enabled(
+            &provider_name,
+            prompt_cache_config.enabled,
+            prompt_cache_config.providers.openai.enabled,
+        );
+        let prompt_cache_shaping_mode =
+            resolve_prompt_cache_shaping_mode(&provider_name, prompt_cache_config);
         (
-            parts.llm.provider_client.name().to_string(),
+            provider_name,
             plan_mode,
             if plan_mode {
                 true
@@ -464,6 +522,13 @@ pub(crate) async fn execute_llm_request(
                 .as_ref()
                 .map(|cfg| cfg.optimization.agent_execution.max_execution_time_secs)
                 .unwrap_or(300),
+            openai_prompt_cache_enabled,
+            prompt_cache_config
+                .providers
+                .openai
+                .prompt_cache_key_mode
+                .clone(),
+            prompt_cache_shaping_mode,
         )
     };
     let request_timeout_secs =
@@ -481,6 +546,7 @@ pub(crate) async fn execute_llm_request(
                     full_auto: parts.state.full_auto,
                     plan_mode,
                     context_window_size: Some(context_window_size),
+                    prompt_cache_shaping_mode,
                 },
             )
             .await?
@@ -539,12 +605,6 @@ pub(crate) async fn execute_llm_request(
             .await
     };
     let current_tools = tool_snapshot.snapshot;
-    let openai_prompt_cache_enabled = {
-        let parts = ctx.parts_mut();
-        provider_name.eq_ignore_ascii_case("openai")
-            && parts.llm.config.prompt_cache.enabled
-            && parts.llm.config.prompt_cache.providers.openai.enabled
-    };
     let has_tools = current_tools.is_some();
     emit_tool_catalog_cache_metrics(
         ctx,
@@ -556,7 +616,7 @@ pub(crate) async fn execute_llm_request(
         current_tools.as_ref().map_or(0, |defs| defs.len()),
     );
     if let Some(defs) = current_tools.as_ref()
-        && !openai_prompt_cache_enabled
+        && !prompt_cache_shaping_mode.is_enabled()
     {
         let _ = writeln!(
             system_prompt,
@@ -587,22 +647,11 @@ pub(crate) async fn execute_llm_request(
             None
         }
     };
-    let prompt_cache_key = if openai_prompt_cache_enabled {
-        match ctx
-            .config
-            .prompt_cache
-            .providers
-            .openai
-            .prompt_cache_key_mode
-        {
-            OpenAIPromptCacheKeyMode::Session => {
-                Some(format!("vtcode:openai:{}", ctx.harness_state.run_id.0))
-            }
-            OpenAIPromptCacheKeyMode::Off => None,
-        }
-    } else {
-        None
-    };
+    let prompt_cache_key = build_openai_prompt_cache_key(
+        openai_prompt_cache_enabled,
+        &openai_prompt_cache_key_mode,
+        &ctx.harness_state.run_id.0,
+    );
     let previous_response_id = if supports_responses_chaining(&provider_name) {
         ctx.session_stats
             .previous_response_id_for(&provider_name, active_model)
@@ -1241,6 +1290,87 @@ mod tests {
     #[test]
     fn llm_attempt_timeout_respects_plan_mode_cap() {
         assert_eq!(llm_attempt_timeout_secs(1_200, true, "huggingface"), 120);
+    }
+
+    #[test]
+    fn openai_prompt_cache_enablement_requires_provider_and_flags() {
+        assert!(is_openai_prompt_cache_enabled("openai", true, true));
+        assert!(!is_openai_prompt_cache_enabled("openai", false, true));
+        assert!(!is_openai_prompt_cache_enabled("openai", true, false));
+        assert!(!is_openai_prompt_cache_enabled("anthropic", true, true));
+    }
+
+    #[test]
+    fn prompt_cache_shaping_mode_requires_global_opt_in_and_provider_cache() {
+        let mut cfg = PromptCachingConfig::default();
+        cfg.enabled = true;
+        cfg.cache_friendly_prompt_shaping = true;
+        cfg.providers.openai.enabled = true;
+
+        assert_eq!(
+            resolve_prompt_cache_shaping_mode("openai", &cfg),
+            PromptCacheShapingMode::TrailingRuntimeContext
+        );
+
+        cfg.cache_friendly_prompt_shaping = false;
+        assert_eq!(
+            resolve_prompt_cache_shaping_mode("openai", &cfg),
+            PromptCacheShapingMode::Disabled
+        );
+    }
+
+    #[test]
+    fn prompt_cache_shaping_mode_uses_block_mode_for_anthropic_family() {
+        let mut cfg = PromptCachingConfig::default();
+        cfg.enabled = true;
+        cfg.cache_friendly_prompt_shaping = true;
+        cfg.providers.anthropic.enabled = true;
+
+        assert_eq!(
+            resolve_prompt_cache_shaping_mode("anthropic", &cfg),
+            PromptCacheShapingMode::AnthropicBlockRuntimeContext
+        );
+        assert_eq!(
+            resolve_prompt_cache_shaping_mode("minimax", &cfg),
+            PromptCacheShapingMode::AnthropicBlockRuntimeContext
+        );
+    }
+
+    #[test]
+    fn prompt_cache_shaping_mode_respects_gemini_mode_off() {
+        let mut cfg = PromptCachingConfig::default();
+        cfg.enabled = true;
+        cfg.cache_friendly_prompt_shaping = true;
+        cfg.providers.gemini.enabled = true;
+        cfg.providers.gemini.mode = vtcode_core::config::core::GeminiPromptCacheMode::Off;
+
+        assert_eq!(
+            resolve_prompt_cache_shaping_mode("gemini", &cfg),
+            PromptCacheShapingMode::Disabled
+        );
+    }
+
+    #[test]
+    fn openai_prompt_cache_key_uses_stable_session_identifier() {
+        let run_id = "run-abc-123";
+        let first = build_openai_prompt_cache_key(true, &OpenAIPromptCacheKeyMode::Session, run_id);
+        let second =
+            build_openai_prompt_cache_key(true, &OpenAIPromptCacheKeyMode::Session, run_id);
+
+        assert_eq!(first, Some("vtcode:openai:run-abc-123".to_string()));
+        assert_eq!(first, second);
+    }
+
+    #[test]
+    fn openai_prompt_cache_key_honors_off_mode_or_disabled_cache() {
+        assert_eq!(
+            build_openai_prompt_cache_key(true, &OpenAIPromptCacheKeyMode::Off, "run-1"),
+            None
+        );
+        assert_eq!(
+            build_openai_prompt_cache_key(false, &OpenAIPromptCacheKeyMode::Session, "run-1"),
+            None
+        );
     }
 
     #[test]

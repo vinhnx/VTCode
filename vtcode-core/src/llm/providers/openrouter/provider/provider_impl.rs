@@ -75,7 +75,9 @@ impl LLMProvider for OpenRouterProvider {
             .await
             .map_err(|e| format_parse_error("OpenRouter", &e))?;
 
-        response_parser::parse_response(response_json, model)
+        let include_cache_metrics =
+            self.prompt_cache_enabled && self.prompt_cache_settings.report_savings;
+        response_parser::parse_response(response_json, model, include_cache_metrics)
     }
 
     async fn stream(&self, request: LLMRequest) -> Result<LLMStream, LLMError> {

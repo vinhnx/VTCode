@@ -33,6 +33,11 @@ pub struct PromptCachingConfig {
     #[serde(default = "default_min_quality_threshold")]
     pub min_quality_threshold: f64,
 
+    /// Enable prompt-shaping optimizations that improve provider-side cache locality.
+    /// When enabled, VT Code keeps volatile runtime context at the end of prompt text.
+    #[serde(default = "default_cache_friendly_prompt_shaping")]
+    pub cache_friendly_prompt_shaping: bool,
+
     /// Provider specific overrides
     #[serde(default)]
     pub providers: ProviderPromptCachingConfig,
@@ -47,6 +52,7 @@ impl Default for PromptCachingConfig {
             max_age_days: default_max_age_days(),
             enable_auto_cleanup: default_auto_cleanup(),
             min_quality_threshold: default_min_quality_threshold(),
+            cache_friendly_prompt_shaping: default_cache_friendly_prompt_shaping(),
             providers: ProviderPromptCachingConfig::default(),
         }
     }
@@ -60,6 +66,27 @@ impl PromptCachingConfig {
     /// - Falls back to the configured string when neither applies
     pub fn resolve_cache_dir(&self, workspace_root: Option<&Path>) -> PathBuf {
         resolve_path(&self.cache_dir, workspace_root)
+    }
+
+    /// Returns true when prompt caching is active for the given provider runtime name.
+    pub fn is_provider_enabled(&self, provider_name: &str) -> bool {
+        if !self.enabled {
+            return false;
+        }
+
+        match provider_name.to_ascii_lowercase().as_str() {
+            "openai" => self.providers.openai.enabled,
+            "anthropic" | "minimax" => self.providers.anthropic.enabled,
+            "gemini" => {
+                self.providers.gemini.enabled
+                    && !matches!(self.providers.gemini.mode, GeminiPromptCacheMode::Off)
+            }
+            "openrouter" => self.providers.openrouter.enabled,
+            "moonshot" => self.providers.moonshot.enabled,
+            "deepseek" => self.providers.deepseek.enabled,
+            "zai" => self.providers.zai.enabled,
+            _ => false,
+        }
     }
 }
 
@@ -363,6 +390,10 @@ fn default_min_quality_threshold() -> f64 {
     prompt_cache::DEFAULT_MIN_QUALITY_THRESHOLD
 }
 
+fn default_cache_friendly_prompt_shaping() -> bool {
+    prompt_cache::DEFAULT_CACHE_FRIENDLY_PROMPT_SHAPING
+}
+
 fn default_true() -> bool {
     true
 }
@@ -534,6 +565,10 @@ mod tests {
             (cfg.min_quality_threshold - prompt_cache::DEFAULT_MIN_QUALITY_THRESHOLD).abs()
                 < f64::EPSILON
         );
+        assert_eq!(
+            cfg.cache_friendly_prompt_shaping,
+            prompt_cache::DEFAULT_CACHE_FRIENDLY_PROMPT_SHAPING
+        );
         assert!(cfg.providers.openai.enabled);
         assert_eq!(
             cfg.providers.openai.min_prefix_tokens,
@@ -620,5 +655,29 @@ prompt_cache_key_mode = "off"
             parsed.providers.openai.prompt_cache_key_mode,
             OpenAIPromptCacheKeyMode::Off
         );
+    }
+
+    #[test]
+    fn provider_enablement_respects_global_and_provider_flags() {
+        let mut cfg = PromptCachingConfig::default();
+        cfg.enabled = true;
+        cfg.providers.openai.enabled = true;
+        assert!(cfg.is_provider_enabled("openai"));
+
+        cfg.enabled = false;
+        assert!(!cfg.is_provider_enabled("openai"));
+    }
+
+    #[test]
+    fn provider_enablement_handles_aliases_and_modes() {
+        let mut cfg = PromptCachingConfig::default();
+        cfg.enabled = true;
+
+        cfg.providers.anthropic.enabled = true;
+        assert!(cfg.is_provider_enabled("minimax"));
+
+        cfg.providers.gemini.enabled = true;
+        cfg.providers.gemini.mode = GeminiPromptCacheMode::Off;
+        assert!(!cfg.is_provider_enabled("gemini"));
     }
 }

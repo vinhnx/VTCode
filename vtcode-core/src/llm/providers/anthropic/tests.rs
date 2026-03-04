@@ -437,6 +437,46 @@ mod request_builder_tests {
     }
 
     #[test]
+    fn test_convert_to_anthropic_format_splits_runtime_context_without_caching_tail() {
+        let request = LLMRequest {
+            model: models::CLAUDE_SONNET_4_6.to_string(),
+            system_prompt: Some(Arc::new(
+                "stable system instructions\n[Runtime Context]\n- turns: 7\n- tool_calls: 3"
+                    .to_string(),
+            )),
+            messages: vec![Message::user("hello".to_string())],
+            ..Default::default()
+        };
+        let cache_settings = AnthropicPromptCacheSettings::default();
+        let anthropic_config = AnthropicConfig::default();
+        let ctx = RequestBuilderContext {
+            prompt_cache_enabled: true,
+            prompt_cache_settings: &cache_settings,
+            anthropic_config: &anthropic_config,
+            model: models::anthropic::DEFAULT_MODEL,
+        };
+
+        let payload = convert_to_anthropic_format(&request, &ctx).expect("payload conversion");
+
+        assert!(payload["system"].is_array());
+        assert_eq!(payload["system"][0]["cache_control"]["ttl"], "1h");
+        assert!(
+            payload["system"][0]["text"]
+                .as_str()
+                .unwrap_or("")
+                .contains("stable system")
+        );
+        assert!(
+            payload["system"][1]["text"]
+                .as_str()
+                .unwrap_or("")
+                .contains("[Runtime Context]")
+        );
+        assert!(payload["system"][1].get("cache_control").is_none());
+        assert!(payload.get("cache_control").is_none());
+    }
+
+    #[test]
     fn test_convert_to_anthropic_format_includes_native_web_search_tool() {
         let request = LLMRequest {
             model: models::CLAUDE_OPUS_4_6.to_string(),

@@ -2,11 +2,15 @@
 
 use crate::config::TimeoutsConfig;
 use crate::config::constants::{env_vars, models, urls};
-use crate::config::core::{AnthropicConfig, ModelConfig, PromptCachingConfig};
+use crate::config::core::{
+    AnthropicConfig, ModelConfig, OpenRouterPromptCacheSettings, PromptCachingConfig,
+};
 use crate::config::models::ModelId;
 use crate::llm::error_display;
 use crate::llm::provider::{LLMError, LLMRequest, Message, MessageRole, ToolChoice};
-use crate::llm::providers::common::{override_base_url, resolve_model};
+use crate::llm::providers::common::{
+    extract_prompt_cache_settings, override_base_url, resolve_model,
+};
 use reqwest::{Client as HttpClient, Response, StatusCode};
 use serde_json::Value;
 use std::borrow::Cow;
@@ -23,6 +27,8 @@ pub struct OpenRouterProvider {
     http_client: HttpClient,
     base_url: String,
     model: String,
+    prompt_cache_enabled: bool,
+    prompt_cache_settings: OpenRouterPromptCacheSettings,
     model_behavior: Option<ModelConfig>,
 }
 
@@ -55,6 +61,8 @@ impl OpenRouterProvider {
             http_client,
             base_url,
             model,
+            prompt_cache_enabled: false,
+            prompt_cache_settings: OpenRouterPromptCacheSettings::default(),
             model_behavior: None,
         }
     }
@@ -84,12 +92,17 @@ impl OpenRouterProvider {
     fn with_model_internal(
         api_key: String,
         model: String,
-        _prompt_cache: Option<PromptCachingConfig>,
+        prompt_cache: Option<PromptCachingConfig>,
         base_url: Option<String>,
         timeouts: TimeoutsConfig,
         model_behavior: Option<ModelConfig>,
     ) -> Self {
         use crate::llm::http_client::HttpClientFactory;
+        let (prompt_cache_enabled, prompt_cache_settings) = extract_prompt_cache_settings(
+            prompt_cache,
+            |p| &p.openrouter,
+            |cfg, settings| cfg.enabled && settings.enabled,
+        );
 
         Self {
             api_key,
@@ -100,6 +113,8 @@ impl OpenRouterProvider {
                 Some(env_vars::OPENROUTER_BASE_URL),
             ),
             model,
+            prompt_cache_enabled,
+            prompt_cache_settings,
             model_behavior,
         }
     }

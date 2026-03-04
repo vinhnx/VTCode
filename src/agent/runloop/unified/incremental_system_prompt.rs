@@ -27,6 +27,59 @@ fn append_plan_mode_notice(prompt: &mut String) {
     prompt.push('\n');
 }
 
+fn append_full_auto_notice(prompt: &mut String, plan_mode: bool) {
+    use std::fmt::Write;
+    if plan_mode {
+        let _ = writeln!(
+            prompt,
+            "\n# FULL-AUTO (PLAN MODE): Work autonomously within Plan Mode constraints."
+        );
+    } else {
+        let _ = writeln!(
+            prompt,
+            "\n# FULL-AUTO: Complete task autonomously until done or blocked."
+        );
+    }
+}
+
+fn append_token_warning_if_any(prompt: &mut String, context: &SystemPromptContext) {
+    use std::fmt::Write;
+    if context.supports_context_awareness
+        && let (Some(context_size), Some(used)) =
+            (context.context_window_size, context.current_token_usage)
+    {
+        let remaining = context_size.saturating_sub(used);
+        let guidance = context.token_budget_guidance;
+        if guidance.is_empty() {
+            let _ = writeln!(
+                prompt,
+                "<system_warning>Token usage: {}/{}; {} remaining.</system_warning>",
+                used, context_size, remaining
+            );
+        } else {
+            let _ = writeln!(
+                prompt,
+                "<system_warning>Token usage: {}/{}; {} remaining. {}</system_warning>",
+                used, context_size, remaining, guidance
+            );
+        }
+    }
+}
+
+fn append_context_metrics(prompt: &mut String, context: &SystemPromptContext) {
+    use std::fmt::Write;
+    let _ = writeln!(prompt, "- turns: {}", context.conversation_length);
+    let _ = writeln!(prompt, "- tool_calls: {}", context.tool_usage_count);
+    let _ = writeln!(prompt, "- errors: {}", context.error_count);
+    let _ = writeln!(
+        prompt,
+        "- token_usage: {:.2}%",
+        context.token_usage_ratio * 100.0
+    );
+    let _ = writeln!(prompt, "- full_auto: {}", context.full_auto);
+    append_token_warning_if_any(prompt, context);
+}
+
 /// Cached system prompt that avoids redundant rebuilding
 #[derive(Clone)]
 pub struct IncrementalSystemPrompt {
@@ -39,6 +92,20 @@ pub enum PromptAssemblyMode {
     #[default]
     AppendInstructions,
     BaseIncludesInstructions,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum PromptCacheShapingMode {
+    #[default]
+    Disabled,
+    TrailingRuntimeContext,
+    AnthropicBlockRuntimeContext,
+}
+
+impl PromptCacheShapingMode {
+    pub fn is_enabled(self) -> bool {
+        !matches!(self, Self::Disabled)
+    }
 }
 
 #[derive(Clone)]
@@ -179,87 +246,84 @@ impl IncrementalSystemPrompt {
             );
         }
 
-        // ...
-
-        // Concise retry/error context
-        if retry_attempts > 0 {
-            let _ = writeln!(
-                prompt,
-                "\n# Retry #{}: Try a different strategy, not the same steps.",
-                retry_attempts
-            );
-            let _ = writeln!(
-                prompt,
-                "# Re-plan now: use `task_tracker` to define composable slices (files + outcome + verify) before more mutating edits."
-            );
-        }
-        if context.error_count > 0 {
-            let _ = writeln!(
-                prompt,
-                "\n# {} errors: Check file paths, permissions, and tool args, then continue with smaller verified slices.",
-                context.error_count
-            );
-        }
-
-        let has_context = context.conversation_length > 0
-            || context.tool_usage_count > 0
-            || context.error_count > 0
-            || context.token_usage_ratio > 0.0
-            || context.full_auto
-            || context.plan_mode;
-
-        if has_context {
-            let _ = writeln!(prompt, "\n[Context]");
-            let _ = writeln!(prompt, "- turns: {}", context.conversation_length);
-            let _ = writeln!(prompt, "- tool_calls: {}", context.tool_usage_count);
-            let _ = writeln!(prompt, "- errors: {}", context.error_count);
-            let _ = writeln!(
-                prompt,
-                "- token_usage: {:.2}%",
-                context.token_usage_ratio * 100.0
-            );
-            let _ = writeln!(prompt, "- full_auto: {}", context.full_auto);
-
-            // Add system warning for context awareness models with token tracking
-            if context.supports_context_awareness
-                && let (Some(context_size), Some(used)) =
-                    (context.context_window_size, context.current_token_usage)
-            {
-                let remaining = context_size.saturating_sub(used);
-                let guidance = context.token_budget_guidance;
-
-                if guidance.is_empty() {
+        let cache_friendly_mode = context.prompt_cache_shaping_mode.is_enabled();
+        let mut deferred_runtime_context = String::new();
+        if cache_friendly_mode {
+            let has_runtime_context = retry_attempts > 0
+                || context.error_count > 0
+                || context.conversation_length > 0
+                || context.tool_usage_count > 0
+                || context.token_usage_ratio > 0.0;
+            if has_runtime_context {
+                let _ = writeln!(deferred_runtime_context, "\n[Runtime Context]");
+                if retry_attempts > 0 {
                     let _ = writeln!(
-                        prompt,
-                        "<system_warning>Token usage: {}/{}; {} remaining.</system_warning>",
-                        used, context_size, remaining
+                        deferred_runtime_context,
+                        "# Retry #{}: Try a different strategy, not the same steps.",
+                        retry_attempts
                     );
-                } else {
                     let _ = writeln!(
-                        prompt,
-                        "<system_warning>Token usage: {}/{}; {} remaining. {}</system_warning>",
-                        used, context_size, remaining, guidance
+                        deferred_runtime_context,
+                        "# Re-plan now: use `task_tracker` to define composable slices (files + outcome + verify) before more mutating edits."
                     );
                 }
+                if context.error_count > 0 {
+                    let _ = writeln!(
+                        deferred_runtime_context,
+                        "# {} errors: Check file paths, permissions, and tool args, then continue with smaller verified slices.",
+                        context.error_count
+                    );
+                }
+                append_context_metrics(&mut deferred_runtime_context, context);
             }
 
             if context.full_auto {
-                if context.plan_mode {
-                    let _ = writeln!(
-                        prompt,
-                        "\n# FULL-AUTO (PLAN MODE): Work autonomously within Plan Mode constraints."
-                    );
-                } else {
-                    let _ = writeln!(
-                        prompt,
-                        "\n# FULL-AUTO: Complete task autonomously until done or blocked."
-                    );
-                }
+                append_full_auto_notice(&mut prompt, context.plan_mode);
             }
 
-            // Always append runtime plan-mode guardrails when plan mode is active.
             if context.plan_mode {
                 append_plan_mode_notice(&mut prompt);
+            }
+        } else {
+            // Concise retry/error context
+            if retry_attempts > 0 {
+                let _ = writeln!(
+                    prompt,
+                    "\n# Retry #{}: Try a different strategy, not the same steps.",
+                    retry_attempts
+                );
+                let _ = writeln!(
+                    prompt,
+                    "# Re-plan now: use `task_tracker` to define composable slices (files + outcome + verify) before more mutating edits."
+                );
+            }
+            if context.error_count > 0 {
+                let _ = writeln!(
+                    prompt,
+                    "\n# {} errors: Check file paths, permissions, and tool args, then continue with smaller verified slices.",
+                    context.error_count
+                );
+            }
+
+            let has_context = context.conversation_length > 0
+                || context.tool_usage_count > 0
+                || context.error_count > 0
+                || context.token_usage_ratio > 0.0
+                || context.full_auto
+                || context.plan_mode;
+
+            if has_context {
+                let _ = writeln!(prompt, "\n[Context]");
+                append_context_metrics(&mut prompt, context);
+
+                if context.full_auto {
+                    append_full_auto_notice(&mut prompt, context.plan_mode);
+                }
+
+                // Always append runtime plan-mode guardrails when plan mode is active.
+                if context.plan_mode {
+                    append_plan_mode_notice(&mut prompt);
+                }
             }
         }
 
@@ -309,6 +373,14 @@ impl IncrementalSystemPrompt {
                     skill_names.len() - preview.len()
                 );
             }
+        }
+
+        if cache_friendly_mode && !deferred_runtime_context.trim().is_empty() {
+            let _ = writeln!(
+                prompt,
+                "\n{}",
+                deferred_runtime_context.trim_start_matches('\n')
+            );
         }
 
         prompt
@@ -409,6 +481,8 @@ pub struct SystemPromptContext {
     pub supports_context_awareness: bool,
     /// Actionable guidance based on token budget status
     pub token_budget_guidance: &'static str,
+    /// Runtime context shaping strategy used to improve prompt prefix cache locality.
+    pub prompt_cache_shaping_mode: PromptCacheShapingMode,
 }
 
 impl SystemPromptContext {
@@ -427,6 +501,7 @@ impl SystemPromptContext {
         self.current_token_usage.hash(&mut hasher);
         self.supports_context_awareness.hash(&mut hasher);
         self.token_budget_guidance.hash(&mut hasher);
+        self.prompt_cache_shaping_mode.hash(&mut hasher);
         // We use skill names and versions for hashing
         for skill in &self.discovered_skills {
             skill.name().hash(&mut hasher);

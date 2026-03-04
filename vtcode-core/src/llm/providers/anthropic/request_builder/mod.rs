@@ -17,7 +17,7 @@ use serde_json::Value;
 use super::capabilities::supports_effort;
 use super::prompt_cache::{get_messages_cache_ttl, get_tools_cache_ttl};
 use messages::{build_messages, hoist_largest_user_message};
-use system::build_system_prompt;
+use system::{SystemPromptBuildResult, build_system_prompt};
 use thinking::build_thinking_config;
 use tools::{append_structured_output_tool, build_tool_choice, build_tools};
 
@@ -78,8 +78,11 @@ pub fn convert_to_anthropic_format(
     let tools = build_tools(request, &tools_cache_control, &mut breakpoints_remaining);
     let tools_breakpoints_used = tools_breakpoints_before.saturating_sub(breakpoints_remaining);
 
-    let (system_value, breakpoints_used) =
-        build_system_prompt(request, &system_cache_control, breakpoints_remaining);
+    let SystemPromptBuildResult {
+        system_value,
+        breakpoints_used,
+        has_uncached_runtime_context,
+    } = build_system_prompt(request, &system_cache_control, breakpoints_remaining);
     breakpoints_remaining = breakpoints_remaining.saturating_sub(breakpoints_used);
 
     let messages_cache_control =
@@ -162,23 +165,25 @@ pub fn convert_to_anthropic_format(
         request.temperature
     };
 
-    let top_level_cache_control =
-        if ctx.prompt_cache_enabled && explicit_breakpoints_used < max_breakpoints {
-            let ttl = if messages_breakpoints_used > 0 {
-                messages_ttl
-            } else if breakpoints_used > 0 || tools_breakpoints_used > 0 {
-                tools_ttl
-            } else {
-                messages_ttl
-            };
-
-            Some(CacheControl {
-                control_type: "ephemeral".to_string(),
-                ttl: Some(ttl.to_string()),
-            })
+    let top_level_cache_control = if ctx.prompt_cache_enabled
+        && explicit_breakpoints_used < max_breakpoints
+        && !has_uncached_runtime_context
+    {
+        let ttl = if messages_breakpoints_used > 0 {
+            messages_ttl
+        } else if breakpoints_used > 0 || tools_breakpoints_used > 0 {
+            tools_ttl
         } else {
-            None
+            messages_ttl
         };
+
+        Some(CacheControl {
+            control_type: "ephemeral".to_string(),
+            ttl: Some(ttl.to_string()),
+        })
+    } else {
+        None
+    };
 
     let anthropic_request = AnthropicRequest {
         model: request.model.clone(),

@@ -16,6 +16,7 @@ async fn test_incremental_prompt_caching() {
         current_token_usage: None,
         supports_context_awareness: false,
         token_budget_guidance: "",
+        prompt_cache_shaping_mode: PromptCacheShapingMode::Disabled,
     };
 
     // First call - should build from scratch (includes context section)
@@ -69,6 +70,7 @@ async fn test_incremental_prompt_rebuild() {
         current_token_usage: None,
         supports_context_awareness: false,
         token_budget_guidance: "",
+        prompt_cache_shaping_mode: PromptCacheShapingMode::Disabled,
     };
     // Build initial prompt
     let _ = prompt_builder
@@ -121,6 +123,72 @@ async fn test_prompt_config_hash() {
 }
 
 #[tokio::test]
+async fn test_cache_friendly_mode_moves_volatile_context_to_runtime_section() {
+    let prompt_builder = IncrementalSystemPrompt::new();
+    let base_prompt = "Stable base prompt";
+
+    let context_a = SystemPromptContext {
+        conversation_length: 2,
+        tool_usage_count: 1,
+        error_count: 0,
+        token_usage_ratio: 0.12,
+        full_auto: false,
+        plan_mode: false,
+        discovered_skills: Vec::new(),
+        context_window_size: None,
+        current_token_usage: None,
+        supports_context_awareness: false,
+        token_budget_guidance: "",
+        prompt_cache_shaping_mode: PromptCacheShapingMode::TrailingRuntimeContext,
+    };
+    let context_b = SystemPromptContext {
+        conversation_length: 14,
+        tool_usage_count: 7,
+        error_count: 2,
+        token_usage_ratio: 0.71,
+        full_auto: false,
+        plan_mode: false,
+        discovered_skills: Vec::new(),
+        context_window_size: None,
+        current_token_usage: None,
+        supports_context_awareness: false,
+        token_budget_guidance: "",
+        prompt_cache_shaping_mode: PromptCacheShapingMode::TrailingRuntimeContext,
+    };
+
+    let prompt_a = prompt_builder
+        .get_system_prompt(
+            base_prompt,
+            1,
+            context_a.hash(),
+            0,
+            PromptAssemblyMode::AppendInstructions,
+            &context_a,
+            None,
+        )
+        .await;
+    let prompt_b = prompt_builder
+        .get_system_prompt(
+            base_prompt,
+            1,
+            context_b.hash(),
+            0,
+            PromptAssemblyMode::AppendInstructions,
+            &context_b,
+            None,
+        )
+        .await;
+
+    let marker = "\n[Runtime Context]\n";
+    let prefix_a = prompt_a.split(marker).next().unwrap_or("");
+    let prefix_b = prompt_b.split(marker).next().unwrap_or("");
+
+    assert!(prompt_a.contains("[Runtime Context]"));
+    assert!(prompt_b.contains("[Runtime Context]"));
+    assert_eq!(prefix_a, prefix_b);
+}
+
+#[tokio::test]
 async fn test_context_awareness_token_budget_warning() {
     let prompt_builder = IncrementalSystemPrompt::new();
     let base_prompt = "You are a helpful assistant.";
@@ -136,6 +204,7 @@ async fn test_context_awareness_token_budget_warning() {
         current_token_usage: Some(130_000),
         supports_context_awareness: true,
         token_budget_guidance: "WARNING: Update progress docs to preserve context.",
+        prompt_cache_shaping_mode: PromptCacheShapingMode::Disabled,
     };
 
     let prompt = prompt_builder
@@ -171,6 +240,7 @@ async fn test_context_awareness_token_budget_high() {
         current_token_usage: Some(176_000),
         supports_context_awareness: true,
         token_budget_guidance: "HIGH: Summarize key findings and prepare a handoff.",
+        prompt_cache_shaping_mode: PromptCacheShapingMode::Disabled,
     };
 
     let prompt = prompt_builder
@@ -206,6 +276,7 @@ async fn test_context_awareness_token_budget_critical() {
         current_token_usage: Some(190_000),
         supports_context_awareness: true,
         token_budget_guidance: "CRITICAL: Update artifacts and consider a new session.",
+        prompt_cache_shaping_mode: PromptCacheShapingMode::Disabled,
     };
 
     let prompt = prompt_builder
@@ -241,6 +312,7 @@ async fn test_context_awareness_normal_no_guidance() {
         current_token_usage: Some(20_000),
         supports_context_awareness: true,
         token_budget_guidance: "",
+        prompt_cache_shaping_mode: PromptCacheShapingMode::Disabled,
     };
 
     let prompt = prompt_builder
@@ -278,6 +350,7 @@ async fn test_non_context_aware_model_no_budget_tags() {
         current_token_usage: None,
         supports_context_awareness: false,
         token_budget_guidance: "",
+        prompt_cache_shaping_mode: PromptCacheShapingMode::Disabled,
     };
 
     let prompt = prompt_builder
@@ -312,6 +385,7 @@ async fn test_plan_mode_notice_appended() {
         current_token_usage: None,
         supports_context_awareness: false,
         token_budget_guidance: "",
+        prompt_cache_shaping_mode: PromptCacheShapingMode::Disabled,
     };
 
     let prompt = prompt_builder
@@ -351,6 +425,7 @@ async fn test_full_auto_is_constrained_in_plan_mode() {
         current_token_usage: None,
         supports_context_awareness: false,
         token_budget_guidance: "",
+        prompt_cache_shaping_mode: PromptCacheShapingMode::Disabled,
     };
 
     let prompt = prompt_builder

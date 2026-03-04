@@ -14,6 +14,7 @@ All prompt caching controls live under the `[prompt_cache]` section in `vtcode.t
 | `max_age_days`          | integer | Maximum age of an entry before automatic eviction.                                                        |
 | `enable_auto_cleanup`   | bool    | If `true`, stale entries are purged during startup and shutdown.                                          |
 | `min_quality_threshold` | float   | Minimum quality score a completion must meet before it is cached.                                         |
+| `cache_friendly_prompt_shaping` | bool | Opt-in prompt shaping that keeps volatile runtime context at the end of system prompts for better cache-prefix reuse. |
 
 ## Provider Overrides
 
@@ -59,23 +60,34 @@ Prompt caching on Responses-style providers only hits when the new request keeps
 -   Injecting new dynamic context above existing prompt items.
 
 To reduce avoidable misses, VT Code keeps tool ordering deterministic and defers MCP `tools/list_changed` refreshes to turn boundaries so an active turn sees a stable tool catalog.
+When `prompt_cache.cache_friendly_prompt_shaping = true`, VT Code applies provider-aware shaping:
+
+- OpenAI, Gemini, DeepSeek, OpenRouter, Moonshot, Z.AI: move volatile counters to a trailing `[Runtime Context]` block.
+- Anthropic and MiniMax: same trailing runtime block, plus Anthropic-format system prompt splitting so runtime context is sent as an uncached block.
+
+OpenAI additionally keeps `prompt_cache_key` stable per session (unless `prompt_cache_key_mode = "off"`).
 
 ### Anthropic (Claude)
 
 ```toml
 [prompt_cache.providers.anthropic]
 enabled = true
-default_ttl_seconds = 600
+tools_ttl_seconds = 3600
+messages_ttl_seconds = 300
 extended_ttl_seconds = 3600
-max_breakpoints = 6
+max_breakpoints = 4
 cache_system_messages = true
 cache_user_messages = true
+cache_tool_definitions = true
+min_message_length_for_cache = 256
 ```
 
--   `default_ttl_seconds` — TTL for ephemeral caches (values are emitted as `TTL"s"`).
+-   `tools_ttl_seconds` — TTL for tool definitions and system prompt cache hints.
+-   `messages_ttl_seconds` — TTL for user message cache hints.
 -   `extended_ttl_seconds` — optional longer-lived TTL. When present, VT Code automatically opts into Anthropic’s extended prompt caching beta header.
 -   `max_breakpoints` — maximum number of cache insertion points per request (tools, system prompt, user messages).
--   `cache_system_messages` / `cache_user_messages` — toggle cache hints for the respective message roles.
+-   `cache_system_messages` / `cache_user_messages` / `cache_tool_definitions` — toggle cache hints for each content type.
+-   `min_message_length_for_cache` — avoids setting cache hints on very short user messages.
 
 ### Gemini
 
@@ -103,14 +115,14 @@ report_savings = true
 -   `propagate_provider_capabilities` — pass provider cache instructions straight through to upstream models.
 -   `report_savings` — surface cache-hit metrics returned by OpenRouter alongside standard usage data.
 
-### xAI
+### Z.AI
 
 ```toml
-[prompt_cache.providers.xai]
+[prompt_cache.providers.zai]
 enabled = true
 ```
 
-xAI handles caching server-side. When the override is enabled, VT Code honours the upstream behaviour and surfaces usage metrics when available.
+Z.AI handles caching server-side. When the override is enabled, VT Code honors upstream behavior and surfaces usage metrics when available.
 
 ## Usage Telemetry
 
@@ -134,7 +146,7 @@ These metrics flow through `vtcode-core::llm::types::Usage` and appear anywhere 
 
 The prompt caching system is implemented as a multi-layered architecture:
 
-1. **Global Configuration Layer**: Managed in `vtcode-core/src/config/core/prompt_cache.rs` with global and per-provider settings
+1. **Global Configuration Layer**: Managed in `vtcode-config/src/core/prompt_cache.rs` with global and per-provider settings
 2. **Provider Integration Layer**: Each provider has specific cache control implementation in `vtcode-core/src/llm/providers/`
 3. **Local Caching Layer**: File-based caching engine in `vtcode-core/src/core/prompt_caching.rs` for optimized prompt storage
 4. **Runtime Integration**: Cache configuration flows through the provider factory to ensure proper initialization

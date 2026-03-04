@@ -330,6 +330,7 @@ python3 scripts/generate_config_field_reference.py
 | `prompt_cache.max_age_days` | `integer` | no | `30` | Maximum age (in days) before cached entries are purged |
 | `prompt_cache.max_entries` | `integer` | no | `1000` | Maximum number of cached prompt entries to retain on disk |
 | `prompt_cache.min_quality_threshold` | `number` | no | `0.7` | Minimum quality score required before persisting an entry |
+| `prompt_cache.cache_friendly_prompt_shaping` | `boolean` | no | `false` | Enable prompt-shaping optimizations that keep volatile runtime context at the end of prompts for better cache locality |
 | `prompt_cache.providers.anthropic.cache_system_messages` | `boolean` | no | `true` | Apply cache control to system prompts by default |
 | `prompt_cache.providers.anthropic.cache_tool_definitions` | `boolean` | no | `true` | Apply cache control to tool definitions by default Default: true (tools are typically stable and benefit from longer caching) |
 | `prompt_cache.providers.anthropic.cache_user_messages` | `boolean` | no | `true` | Apply cache control to user messages exceeding threshold |

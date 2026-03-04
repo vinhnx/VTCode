@@ -205,6 +205,7 @@ fn loader_loads_prompt_cache_retention_from_toml() {
     let contents = r#"
 [prompt_cache]
 enabled = true
+cache_friendly_prompt_shaping = true
 [prompt_cache.providers.openai]
 prompt_cache_retention = "24h"
 prompt_cache_key_mode = "off"
@@ -221,6 +222,7 @@ prompt_cache_key_mode = "off"
         config.prompt_cache.providers.openai.prompt_cache_key_mode,
         crate::core::OpenAIPromptCacheKeyMode::Off
     );
+    assert!(config.prompt_cache.cache_friendly_prompt_shaping);
 }
 
 #[test]

@@ -129,6 +129,7 @@ async fn build_system_prompt_with_empty_base_prompt_fails() {
         full_auto: false,
         plan_mode: false,
         context_window_size: None,
+        prompt_cache_shaping_mode: PromptCacheShapingMode::Disabled,
     };
 
     let result = manager.build_system_prompt(&[], 0, params).await;

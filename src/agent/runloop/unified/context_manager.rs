@@ -9,7 +9,8 @@ use vtcode_config::constants::context::{
 use vtcode_core::llm::provider as uni;
 
 use crate::agent::runloop::unified::incremental_system_prompt::{
-    IncrementalSystemPrompt, PromptAssemblyMode, SystemPromptConfig, SystemPromptContext,
+    IncrementalSystemPrompt, PromptAssemblyMode, PromptCacheShapingMode, SystemPromptConfig,
+    SystemPromptContext,
 };
 
 /// Parameters for building system prompts
@@ -18,6 +19,7 @@ pub(crate) struct SystemPromptParams {
     pub full_auto: bool,
     pub plan_mode: bool,
     pub context_window_size: Option<usize>,
+    pub prompt_cache_shaping_mode: PromptCacheShapingMode,
 }
 
 /// Statistics tracked incrementally to avoid re-scanning history
@@ -290,6 +292,7 @@ impl ContextManager {
             },
             supports_context_awareness,
             token_budget_guidance,
+            prompt_cache_shaping_mode: params.prompt_cache_shaping_mode,
         };
 
         // Use incremental builder to avoid redundant cloning and processing
