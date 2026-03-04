@@ -1943,7 +1943,11 @@ impl ToolRegistry {
             .and_then(|v| v.as_str())
             .ok_or_else(|| anyhow!("session_id is required for 'close_pty_session'"))?;
 
-        self.pty_manager().close_session(sid)?;
+        let sid_owned = sid.to_string();
+        let manager = self.pty_manager().clone();
+        tokio::task::spawn_blocking(move || manager.close_session(&sid_owned))
+            .await
+            .map_err(|join_err| anyhow!("close_pty_session task failed to join: {}", join_err))??;
         self.decrement_active_pty_sessions();
 
         Ok(json!({ "success": true, "session_id": sid }))

@@ -320,8 +320,12 @@ pub fn spawn_elapsed_time_updater(
     tokio::spawn(async move {
         let mut interval = tokio::time::interval(Duration::from_millis(interval_ms));
         let start = Instant::now();
+        let state = reporter.get_state();
         loop {
             interval.tick().await;
+            if state.is_complete() {
+                break;
+            }
             let elapsed = start.elapsed();
             let duration_str = if elapsed.as_secs() < 60 {
                 format!("{:.1}s", elapsed.as_secs_f64())

@@ -49,6 +49,45 @@ pub(crate) enum ToolPermissionFlow {
     Interrupted,
 }
 
+const APPROVAL_RECORD_TIMEOUT: Duration = Duration::from_millis(500);
+
+fn spawn_approval_record_task(
+    recorder: &vtcode_core::tools::ApprovalRecorder,
+    tool_name: &str,
+    approved: bool,
+) {
+    // Intentionally detached: approval-pattern persistence is non-critical for the
+    // current request path and bounded by a short timeout.
+    let recorder = recorder.clone();
+    let tool_name = tool_name.to_string();
+    tokio::spawn(async move {
+        match tokio::time::timeout(
+            APPROVAL_RECORD_TIMEOUT,
+            recorder.record_approval(&tool_name, approved, None),
+        )
+        .await
+        {
+            Ok(Ok(())) => {}
+            Ok(Err(err)) => {
+                tracing::debug!(
+                    tool = %tool_name,
+                    approved,
+                    error = %err,
+                    "Approval-pattern write failed"
+                );
+            }
+            Err(_) => {
+                tracing::debug!(
+                    tool = %tool_name,
+                    approved,
+                    timeout_ms = APPROVAL_RECORD_TIMEOUT.as_millis(),
+                    "Approval-pattern write timed out"
+                );
+            }
+        }
+    });
+}
+
 /// Context for tool permission checks to reduce argument count
 pub(crate) struct ToolPermissionsContext<'a, S: UiSession + ?Sized> {
     pub tool_registry: &'a ToolRegistry,
@@ -285,15 +324,7 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
 
             // Record approval decision for pattern learning (fire-and-forget)
             if let Some(recorder) = approval_recorder {
-                let tool_name_owned = tool_name.to_string();
-                let recorder_cloned = recorder.clone();
-                tokio::spawn(async move {
-                    let _ = tokio::time::timeout(
-                        Duration::from_millis(500),
-                        recorder_cloned.record_approval(&tool_name_owned, true, None),
-                    )
-                    .await;
-                });
+                spawn_approval_record_task(recorder, tool_name, true);
             }
 
             Ok(ToolPermissionFlow::Approved)
@@ -338,15 +369,7 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
 
             // Record approval decision for pattern learning
             if let Some(recorder) = approval_recorder {
-                let tool_name_owned = tool_name.to_string();
-                let recorder_cloned = recorder.clone();
-                tokio::spawn(async move {
-                    let _ = tokio::time::timeout(
-                        Duration::from_millis(500),
-                        recorder_cloned.record_approval(&tool_name_owned, true, None),
-                    )
-                    .await;
-                });
+                spawn_approval_record_task(recorder, tool_name, true);
             }
 
             Ok(ToolPermissionFlow::Approved)

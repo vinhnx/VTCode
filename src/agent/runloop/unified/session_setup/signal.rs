@@ -5,13 +5,33 @@ use tokio::sync::Notify;
 use tokio_util::sync::CancellationToken;
 use vtcode_core::notifications::set_global_terminal_focused;
 
+pub(crate) struct SignalHandlerGuard {
+    handle: Option<tokio::task::JoinHandle<()>>,
+}
+
+impl SignalHandlerGuard {
+    fn new(handle: tokio::task::JoinHandle<()>) -> Self {
+        Self {
+            handle: Some(handle),
+        }
+    }
+}
+
+impl Drop for SignalHandlerGuard {
+    fn drop(&mut self) {
+        if let Some(handle) = self.handle.take() {
+            handle.abort();
+        }
+    }
+}
+
 pub(crate) fn spawn_signal_handler(
     ctrl_c_state: Arc<CtrlCState>,
     ctrl_c_notify: Arc<Notify>,
     async_mcp_manager: Option<Arc<AsyncMcpManager>>,
     cancel_token: CancellationToken,
-) -> tokio::task::JoinHandle<()> {
-    tokio::spawn(async move {
+) -> SignalHandlerGuard {
+    let handle = tokio::spawn(async move {
         loop {
             tokio::select! {
                 _ = tokio::signal::ctrl_c() => {
@@ -45,7 +65,8 @@ pub(crate) fn spawn_signal_handler(
                 }
             }
         }
-    })
+    });
+    SignalHandlerGuard::new(handle)
 }
 
 fn emergency_terminal_cleanup() {

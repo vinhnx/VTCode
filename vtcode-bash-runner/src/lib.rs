@@ -63,7 +63,8 @@ pub use process::{
 // Process group utilities
 pub use process_group::{
     DEFAULT_GRACEFUL_TIMEOUT_MS, GracefulTerminationResult, KillSignal, detach_from_tty,
-    graceful_kill_process_group, graceful_kill_process_group_default, kill_child_process_group,
+    graceful_kill_process_group, graceful_kill_process_group_default,
+    graceful_kill_process_group_default_async, kill_child_process_group,
     kill_child_process_group_with_signal, kill_process_group, kill_process_group_by_pid,
     kill_process_group_by_pid_with_signal, kill_process_group_with_signal, set_parent_death_signal,
     set_process_group,

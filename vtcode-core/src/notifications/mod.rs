@@ -3,10 +3,10 @@
 //! human in the loop interactions, completion and requests.
 
 use anyhow::Result;
+use parking_lot::{Mutex, RwLock};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::sync::RwLock;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
@@ -180,7 +180,7 @@ pub struct NotificationManager {
     config: Arc<RwLock<NotificationConfig>>,
     /// Track if the terminal is currently focused/active
     terminal_focused: Arc<AtomicBool>,
-    repeat_state: Arc<std::sync::Mutex<RepeatSuppressionState>>,
+    repeat_state: Arc<Mutex<RepeatSuppressionState>>,
 }
 
 impl NotificationManager {
@@ -189,7 +189,7 @@ impl NotificationManager {
         Self {
             config: Arc::new(RwLock::new(NotificationConfig::default())),
             terminal_focused: Arc::new(AtomicBool::new(false)), // Start as not focused
-            repeat_state: Arc::new(std::sync::Mutex::new(RepeatSuppressionState::default())),
+            repeat_state: Arc::new(Mutex::new(RepeatSuppressionState::default())),
         }
     }
 
@@ -198,16 +198,13 @@ impl NotificationManager {
         Self {
             config: Arc::new(RwLock::new(config)),
             terminal_focused: Arc::new(AtomicBool::new(false)), // Start as not focused
-            repeat_state: Arc::new(std::sync::Mutex::new(RepeatSuppressionState::default())),
+            repeat_state: Arc::new(Mutex::new(RepeatSuppressionState::default())),
         }
     }
 
     /// Send a notification for an event
     pub async fn send_notification(&self, event: NotificationEvent) -> Result<()> {
-        let config = match self.config.read() {
-            Ok(config) => config.clone(),
-            Err(poisoned) => poisoned.into_inner().clone(),
-        };
+        let config = self.config.read().clone();
 
         // Check if terminal notifications are enabled globally first
         if !config.terminal_notifications_enabled {
@@ -273,10 +270,7 @@ impl NotificationManager {
         let max_allowed = config.max_identical_notifications_in_window.max(1);
         let now = Instant::now();
 
-        let mut state = match self.repeat_state.lock() {
-            Ok(state) => state,
-            Err(poisoned) => poisoned.into_inner(),
-        };
+        let mut state = self.repeat_state.lock();
 
         if state.entries.len() > 1024 {
             state
@@ -472,38 +466,23 @@ impl NotificationManager {
 
     /// Update the notification configuration
     pub async fn update_config(&self, new_config: NotificationConfig) {
-        let mut config = match self.config.write() {
-            Ok(config) => config,
-            Err(poisoned) => poisoned.into_inner(),
-        };
-        *config = new_config;
+        self.update_config_sync(new_config);
     }
 
     /// Synchronously update notification configuration.
     pub fn update_config_sync(&self, new_config: NotificationConfig) {
-        let mut config = match self.config.write() {
-            Ok(config) => config,
-            Err(poisoned) => poisoned.into_inner(),
-        };
+        let mut config = self.config.write();
         *config = new_config;
     }
 
     /// Get the current notification configuration
     pub async fn get_config(&self) -> NotificationConfig {
-        let config = match self.config.read() {
-            Ok(config) => config,
-            Err(poisoned) => poisoned.into_inner(),
-        };
-        config.clone()
+        self.get_config_sync()
     }
 
     /// Get the current notification configuration synchronously.
     pub fn get_config_sync(&self) -> NotificationConfig {
-        let config = match self.config.read() {
-            Ok(config) => config,
-            Err(poisoned) => poisoned.into_inner(),
-        };
-        config.clone()
+        self.config.read().clone()
     }
 
     /// Update the terminal focus state - true if terminal is focused/active, false otherwise

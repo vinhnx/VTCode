@@ -429,6 +429,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
         let mut next_checkpoint_turn = ui_setup.next_checkpoint_turn;
         let mut session_end_reason = ui_setup.session_end_reason;
         let _ui_redraw_batcher = ui_setup.ui_redraw_batcher;
+        let _file_palette_task_guard = ui_setup.file_palette_task_guard;
         let SessionState {
             session_bootstrap,
             mut provider_client,
@@ -702,7 +703,9 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                         let active_pty_sessions_before_cancel = tool_registry.active_pty_sessions();
                         let attempted_tool_calls = harness_state.tool_calls;
                         let timed_out_phase = harness_state.phase;
-                        tool_registry.terminate_all_pty_sessions();
+                        if let Err(err) = tool_registry.terminate_all_pty_sessions_async().await {
+                            tracing::warn!(error = %err, "Failed to terminate all PTY sessions after turn timeout");
+                        }
                         let execution_history_len_after_attempt =
                             tool_registry.execution_history_len();
                         handle.set_input_status(None, None);

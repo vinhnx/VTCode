@@ -1,4 +1,4 @@
-use super::types::{SessionState, SessionUISetup};
+use super::types::{BackgroundTaskGuard, SessionState, SessionUISetup};
 use crate::agent::runloop::ResumeSession;
 use crate::agent::runloop::tui_compat::{
     inline_theme_from_core_styles, to_tui_appearance, to_tui_keyboard_protocol,
@@ -152,7 +152,7 @@ pub(crate) async fn initialize_session_ui(
     let workspace_for_indexer = config.workspace.clone();
     let workspace_for_palette = config.workspace.clone();
     let handle_for_indexer = handle.clone();
-    let _file_palette_task = tokio::spawn(async move {
+    let file_palette_task_guard = BackgroundTaskGuard::new(tokio::spawn(async move {
         match load_workspace_files(workspace_for_indexer).await {
             Ok(files) => {
                 if !files.is_empty() {
@@ -165,7 +165,7 @@ pub(crate) async fn initialize_session_ui(
                 tracing::warn!("Failed to load workspace files for file palette: {}", err);
             }
         }
-    });
+    }));
 
     transcript::clear();
     render_resume_state_if_present(&mut renderer, resume_state, supports_reasoning)?;
@@ -324,6 +324,7 @@ pub(crate) async fn initialize_session_ui(
         follow_up_placeholder,
         next_checkpoint_turn,
         ui_redraw_batcher,
+        file_palette_task_guard,
     })
 }
 
