@@ -15,7 +15,8 @@ categories = ["command-line-utilities", "development-tools", "api-bindings"]
 exclude = [
     "target/",
     ".github/",
-    "docs/",
+    "docs/**",
+    "!docs/config/CONFIG_FIELD_REFERENCE.md",
     "scripts/",
     "screenshots/",
     "logs/",
