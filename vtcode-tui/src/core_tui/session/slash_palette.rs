@@ -1,7 +1,7 @@
 use ratatui::widgets::ListState;
 use unicode_segmentation::UnicodeSegmentation;
 
-use crate::ui::search::{fuzzy_match, normalize_query};
+use crate::ui::search::{fuzzy_score, normalize_query};
 use crate::ui::tui::types::SlashCommandItem;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -333,79 +333,57 @@ impl SlashPalette {
     }
 
     fn suggestions_for(&self, prefix: &str) -> Vec<SlashCommandItem> {
-        let trimmed = prefix.trim();
-        if trimmed.is_empty() {
-            return self.commands.clone();
+        struct ScoredCommand<'a> {
+            command: &'a SlashCommandItem,
+            name_match: bool,
+            name_prefix: bool,
+            name_pos: usize,
+            description_pos: usize,
+            name_score: u32,
+            description_score: u32,
         }
 
-        let query = trimmed.to_ascii_lowercase();
+        let normalized_query = normalize_query(prefix);
+        if normalized_query.is_empty() {
+            return self.commands.clone();
+        }
 
         let mut prefix_matches: Vec<&SlashCommandItem> = self
             .commands
             .iter()
-            .filter(|info| info.name.starts_with(query.as_str()))
+            .filter(|info| info.name.starts_with(normalized_query.as_str()))
             .collect();
-
         if !prefix_matches.is_empty() {
             prefix_matches.sort_by(|a, b| a.name.cmp(&b.name));
             return prefix_matches.into_iter().cloned().collect();
         }
 
-        let mut substring_matches: Vec<(&SlashCommandItem, usize)> = self
+        let mut scored: Vec<ScoredCommand<'_>> = self
             .commands
             .iter()
             .filter_map(|info| {
-                info.name
-                    .find(query.as_str())
-                    .map(|position| (info, position))
-            })
-            .collect();
-
-        if !substring_matches.is_empty() {
-            substring_matches.sort_by(|(a, pos_a), (b, pos_b)| {
-                (*pos_a, a.name.len(), a.name.as_str()).cmp(&(
-                    *pos_b,
-                    b.name.len(),
-                    b.name.as_str(),
-                ))
-            });
-            return substring_matches
-                .into_iter()
-                .map(|(info, _)| info.clone())
-                .collect();
-        }
-
-        let normalized_query = normalize_query(&query);
-        if normalized_query.is_empty() {
-            return self.commands.clone();
-        }
-
-        let mut scored: Vec<(&SlashCommandItem, usize, usize)> = self
-            .commands
-            .iter()
-            .filter_map(|info| {
-                let mut candidate = info.name.to_ascii_lowercase();
-                if !info.description.is_empty() {
-                    candidate.push(' ');
-                    candidate.push_str(info.description.to_ascii_lowercase().as_str());
-                }
-
-                if !fuzzy_match(&normalized_query, &candidate) {
+                let name_score = fuzzy_score(&normalized_query, info.name.as_str());
+                let description_score = fuzzy_score(&normalized_query, info.description.as_str());
+                if name_score.is_none() && description_score.is_none() {
                     return None;
                 }
 
-                let name_pos = info
-                    .name
-                    .to_ascii_lowercase()
-                    .find(query.as_str())
-                    .unwrap_or(usize::MAX);
-                let desc_pos = info
-                    .description
-                    .to_ascii_lowercase()
-                    .find(query.as_str())
-                    .unwrap_or(usize::MAX);
+                let name_lower = info.name.to_ascii_lowercase();
+                let description_lower = info.description.to_ascii_lowercase();
 
-                Some((info, name_pos, desc_pos))
+                Some(ScoredCommand {
+                    command: info,
+                    name_match: name_score.is_some(),
+                    name_prefix: name_lower.starts_with(normalized_query.as_str()),
+                    name_pos: name_lower
+                        .find(normalized_query.as_str())
+                        .unwrap_or(usize::MAX),
+                    description_pos: description_lower
+                        .find(normalized_query.as_str())
+                        .unwrap_or(usize::MAX),
+                    name_score: name_score.unwrap_or(0),
+                    description_score: description_score.unwrap_or(0),
+                })
             })
             .collect();
 
@@ -413,25 +391,36 @@ impl SlashPalette {
             return Vec::new();
         }
 
-        scored.sort_by(|(a, name_pos_a, desc_pos_a), (b, name_pos_b, desc_pos_b)| {
-            let score_a = (
-                *name_pos_a == usize::MAX,
-                *name_pos_a,
-                *desc_pos_a,
-                a.name.as_str(),
-            );
-            let score_b = (
-                *name_pos_b == usize::MAX,
-                *name_pos_b,
-                *desc_pos_b,
-                b.name.as_str(),
-            );
-            score_a.cmp(&score_b)
+        scored.sort_by(|left, right| {
+            (
+                !left.name_match,
+                !left.name_prefix,
+                left.name_pos == usize::MAX,
+                std::cmp::Reverse(left.name_score),
+                left.name_pos,
+                left.description_pos == usize::MAX,
+                std::cmp::Reverse(left.description_score),
+                left.description_pos,
+                left.command.name.len(),
+                left.command.name.as_str(),
+            )
+                .cmp(&(
+                    !right.name_match,
+                    !right.name_prefix,
+                    right.name_pos == usize::MAX,
+                    std::cmp::Reverse(right.name_score),
+                    right.name_pos,
+                    right.description_pos == usize::MAX,
+                    std::cmp::Reverse(right.description_score),
+                    right.description_pos,
+                    right.command.name.len(),
+                    right.command.name.as_str(),
+                ))
         });
 
         scored
             .into_iter()
-            .map(|(info, _, _)| info.clone())
+            .map(|info| info.command.clone())
             .collect()
     }
 
@@ -580,6 +569,38 @@ mod tests {
         assert!(command.name_segments[0].highlighted);
         assert_eq!(command.name_segments[0].content, "co");
         assert_eq!(command.name_segments[1].content, "mmand");
+    }
+
+    #[test]
+    fn update_matches_fuzzy_command_name() {
+        let mut palette = SlashPalette::with_commands(test_commands());
+
+        let update = palette.update(Some("sts"), 10);
+        assert!(matches!(update, SlashPaletteUpdate::Changed { .. }));
+
+        let names: Vec<String> = palette
+            .items()
+            .into_iter()
+            .filter_map(|item| item.command.map(|command| command.name))
+            .collect();
+
+        assert_eq!(names.first().map(String::as_str), Some("status"));
+    }
+
+    #[test]
+    fn update_matches_command_description() {
+        let mut palette = SlashPalette::with_commands(test_commands());
+
+        let update = palette.update(Some("terminal"), 10);
+        assert!(matches!(update, SlashPaletteUpdate::Changed { .. }));
+
+        let names: Vec<String> = palette
+            .items()
+            .into_iter()
+            .filter_map(|item| item.command.map(|command| command.name))
+            .collect();
+
+        assert_eq!(names.first().map(String::as_str), Some("command"));
     }
 
     #[test]

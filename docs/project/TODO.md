@@ -100,13 +100,4 @@ handle prompt caching
 
 ---
 
-remove /plan and /agent
-commands and logic
-
----
-
-for main / slash filter implement fuzzy search
-
----
-
 improve /doctor command logic and features

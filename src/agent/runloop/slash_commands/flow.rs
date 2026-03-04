@@ -199,27 +199,6 @@ pub(super) fn handle_plan_command(
     }
 }
 
-pub(super) fn handle_agent_command(
-    args: &str,
-    renderer: &mut AnsiRenderer,
-) -> Result<SlashCommandOutcome> {
-    let arg = args.trim().to_ascii_lowercase();
-    let enable = match arg.as_str() {
-        "" | "toggle" => None,
-        "on" | "enable" => Some(true),
-        "off" | "disable" => Some(false),
-        _ => {
-            renderer.line(
-                MessageStyle::Error,
-                "Usage: /agent [on|off] - Toggle Autonomous Mode (auto-approve safe tools)",
-            )?;
-            return Ok(SlashCommandOutcome::Handled);
-        }
-    };
-
-    Ok(SlashCommandOutcome::ToggleAutonomous { enable })
-}
-
 pub(super) fn handle_mode_command(
     args: &str,
     renderer: &mut AnsiRenderer,

@@ -150,9 +150,6 @@ pub async fn handle_outcome(
             }
             Ok(control)
         }
-        SlashCommandOutcome::ToggleAutonomous { enable } => {
-            handlers::handle_toggle_autonomous_mode(ctx, enable).await
-        }
         SlashCommandOutcome::CycleMode => handlers::handle_cycle_mode(ctx).await,
         SlashCommandOutcome::OAuthLogin { provider } => {
             handlers::handle_oauth_login(ctx, provider).await

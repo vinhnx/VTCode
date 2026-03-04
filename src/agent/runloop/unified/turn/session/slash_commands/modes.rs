@@ -94,66 +94,6 @@ pub async fn handle_toggle_plan_mode(
     Ok(SlashCommandControl::Continue)
 }
 
-pub async fn handle_toggle_autonomous_mode(
-    ctx: SlashCommandContext<'_>,
-    enable: Option<bool>,
-) -> Result<SlashCommandControl> {
-    let current = ctx.session_stats.is_autonomous_mode();
-    let new_state = match enable {
-        Some(value) => value,
-        None => !current,
-    };
-
-    if new_state == current {
-        ctx.renderer.line(
-            MessageStyle::Info,
-            if current {
-                "Autonomous Mode is already enabled."
-            } else {
-                "Autonomous Mode is already disabled."
-            },
-        )?;
-        return Ok(SlashCommandControl::Continue);
-    }
-
-    ctx.session_stats.set_autonomous_mode(new_state);
-    ctx.handle.set_autonomous_mode(new_state);
-
-    if new_state {
-        ctx.renderer
-            .line(MessageStyle::Info, "Autonomous Mode enabled")?;
-        ctx.renderer.line(
-            MessageStyle::Output,
-            "  The agent will work more autonomously with fewer confirmation prompts.",
-        )?;
-        ctx.renderer.line(
-            MessageStyle::Output,
-            "  Safe tools (read/search) are auto-approved. Use with caution.",
-        )?;
-    } else {
-        ctx.renderer
-            .line(MessageStyle::Info, "Autonomous Mode disabled")?;
-        ctx.renderer.line(
-            MessageStyle::Output,
-            "  Standard human-in-the-loop prompts are now active for all mutating actions.",
-        )?;
-    }
-
-    if let Err(err) = super::persist_mode_settings(
-        ctx.config.workspace.as_path(),
-        ctx.vt_cfg,
-        None,
-        Some(new_state),
-    ) {
-        ctx.renderer.line(
-            MessageStyle::Error,
-            &format!("Failed to persist autonomous mode preference: {}", err),
-        )?;
-    }
-
-    Ok(SlashCommandControl::Continue)
-}
-
 pub async fn handle_cycle_mode(ctx: SlashCommandContext<'_>) -> Result<SlashCommandControl> {
     let new_mode = ctx.session_stats.cycle_mode();
     if new_mode == EditingMode::Plan {

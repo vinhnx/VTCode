@@ -2,7 +2,6 @@ use ratatui::crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{prelude::*, widgets::Clear};
 
 use crate::config::constants::ui;
-use crate::ui::search::fuzzy_score;
 
 use super::super::types::InlineTextStyle;
 use super::inline_list::{InlineListRow, selection_padding};
@@ -330,7 +329,6 @@ pub(super) fn autocomplete_slash_suggestion(session: &mut Session) -> bool {
     };
 
     let prefix_text = command_prefix(input_content, cursor_pos).unwrap_or_default();
-
     if prefix_text.is_empty() {
         return false;
     }
@@ -340,26 +338,10 @@ pub(super) fn autocomplete_slash_suggestion(session: &mut Session) -> bool {
         return false;
     }
 
-    // Find the best fuzzy match from all suggestions
-    let mut best_match: Option<(usize, u32, String)> = None;
-
-    for (idx, suggestion) in suggestions.iter().enumerate() {
-        let command_name = match suggestion {
-            slash_palette::SlashPaletteSuggestion::Static(cmd) => cmd.name.to_string(),
-        };
-
-        if let Some(score) = fuzzy_score(&prefix_text, &command_name) {
-            if let Some((_, best_score, _)) = &best_match {
-                if score > *best_score {
-                    best_match = Some((idx, score, command_name));
-                }
-            } else {
-                best_match = Some((idx, score, command_name));
-            }
-        }
-    }
-
-    let Some((_, _, best_command)) = best_match else {
+    // suggestions() is already ranked by slash_palette fuzzy scoring.
+    let Some(best_command) = suggestions.first().map(|suggestion| match suggestion {
+        slash_palette::SlashPaletteSuggestion::Static(command) => command.name.as_str(),
+    }) else {
         return false;
     };
 

@@ -12,8 +12,8 @@ mod parsing;
 #[path = "slash_commands/rendering.rs"]
 mod rendering;
 use flow::{
-    handle_agent_command, handle_auth_command, handle_login_command, handle_logout_command,
-    handle_mode_command, handle_plan_command, handle_resume_command, handle_rewind_command,
+    handle_auth_command, handle_login_command, handle_logout_command, handle_mode_command,
+    handle_plan_command, handle_resume_command, handle_rewind_command,
 };
 use management::{handle_add_dir_command, handle_mcp_command};
 use parsing::{parse_session_log_export_format, split_command_and_args};
@@ -100,10 +100,6 @@ pub enum SlashCommandOutcome {
     TogglePlanMode {
         enable: Option<bool>,
         prompt: Option<String>,
-    },
-    /// /agent command - toggle autonomous mode (auto-approve safe tools)
-    ToggleAutonomous {
-        enable: Option<bool>,
     },
     /// /mode command - cycle through Edit → Plan → Edit
     CycleMode,
@@ -398,7 +394,6 @@ pub async fn handle_slash_command(
             }
         }
         "plan" => handle_plan_command(args, renderer),
-        "agent" => handle_agent_command(args, renderer),
         "mode" => handle_mode_command(args, renderer),
         "login" => handle_login_command(args, renderer),
         "logout" => handle_logout_command(args, renderer),

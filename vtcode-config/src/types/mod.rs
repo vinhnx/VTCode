@@ -376,7 +376,7 @@ pub enum ModelSelectionSource {
 ///
 /// Controls the initial mode when a session starts. This is a **configuration**
 /// enum for `default_editing_mode` in vtcode.toml. At runtime, the mode can be
-/// cycled (Edit → Plan → Edit) via Shift+Tab or /plan command.
+/// cycled (Edit → Plan → Edit) via Shift+Tab.
 ///
 /// Inspired by OpenAI Codex's emphasis on structured planning before execution,
 /// but provider-agnostic (works with Gemini, Anthropic, OpenAI, xAI, DeepSeek, etc.)

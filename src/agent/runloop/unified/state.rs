@@ -107,11 +107,6 @@ impl SessionStats {
         }
     }
 
-    /// Set autonomous mode
-    pub(crate) fn set_autonomous_mode(&mut self, enabled: bool) {
-        self.autonomous_mode = enabled;
-    }
-
     /// Cycle to the next mode: Edit → Plan → Edit
     pub(crate) fn cycle_mode(&mut self) -> EditingMode {
         self.editing_mode = self.editing_mode.next();
