@@ -819,10 +819,7 @@ mod tests {
         assert!(content.contains("## Test Cases and Validation"));
         assert!(content.contains("[project build and lint command(s)]"));
         assert!(content.contains("[project test command(s)]"));
-        assert!(content.contains(&format!(
-            "> Plan file: `{}`",
-            plan_file.display()
-        )));
+        assert!(content.contains(&format!("> Plan file: `{}`", plan_file.display())));
     }
 
     #[test]

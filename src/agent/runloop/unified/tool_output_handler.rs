@@ -102,11 +102,10 @@ async fn render_tool_output_common(
     // Inline PTY streaming already renders a "• Ran <command>" header. Avoid duplicating
     // it for git_diff payloads in post-tool summary rendering.
     if !(inline_run_tool && git_diff_payload) {
-        let stream_label =
-            crate::agent::runloop::unified::tool_summary::stream_label_from_output(
-                output,
-                command_success,
-            );
+        let stream_label = crate::agent::runloop::unified::tool_summary::stream_label_from_output(
+            output,
+            command_success,
+        );
         crate::agent::runloop::unified::tool_summary::render_tool_call_summary(
             renderer,
             name,
@@ -336,16 +335,15 @@ mod tests {
             mcp_panel_state: &mut mcp,
             vt_config: None::<&VTCodeConfig>,
         };
-        let (mod_files, _last_stdout) =
-            process_outcome_common(
-                &mut output_ctx,
-                "write_file",
-                &serde_json::json!({}),
-                &outcome,
-            )
-            .await
-            .expect("render should succeed")
-            .into_tuple();
+        let (mod_files, _last_stdout) = process_outcome_common(
+            &mut output_ctx,
+            "write_file",
+            &serde_json::json!({}),
+            &outcome,
+        )
+        .await
+        .expect("render should succeed")
+        .into_tuple();
 
         // Confirm the function recorded the tool call
         let recorded = stats.sorted_tools();
@@ -378,16 +376,15 @@ mod tests {
             mcp_panel_state: &mut mcp,
             vt_config: None::<&VTCodeConfig>,
         };
-        let (_mod_files, _last_stdout) =
-            process_outcome_common(
-                &mut output_ctx,
-                "mcp_example",
-                &serde_json::json!({}),
-                &outcome,
-            )
-            .await
-            .expect("render should succeed")
-            .into_tuple();
+        let (_mod_files, _last_stdout) = process_outcome_common(
+            &mut output_ctx,
+            "mcp_example",
+            &serde_json::json!({}),
+            &outcome,
+        )
+        .await
+        .expect("render should succeed")
+        .into_tuple();
 
         // Ensure mcp panel recorded an event
         assert!(mcp.event_count() > 0);

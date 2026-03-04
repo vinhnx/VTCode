@@ -177,24 +177,21 @@ impl GitColorConfig {
 
         // Parse color name but ignore effects (bold, dim, etc.) for consistent styling
         // Extract just the color name, ignoring any effects like "bold", "dim", etc.
-        let color_name = value
-            .split_whitespace()
-            .find(|word| {
-                matches!(
-                    word.to_lowercase().as_str(),
-                    "normal"
-                        | "black"
-                        | "red"
-                        | "green"
-                        | "yellow"
-                        | "blue"
-                        | "magenta"
-                        | "purple"
-                        | "cyan"
-                        | "white"
-                )
-            })
-            ?;
+        let color_name = value.split_whitespace().find(|word| {
+            matches!(
+                word.to_lowercase().as_str(),
+                "normal"
+                    | "black"
+                    | "red"
+                    | "green"
+                    | "yellow"
+                    | "blue"
+                    | "magenta"
+                    | "purple"
+                    | "cyan"
+                    | "white"
+            )
+        })?;
 
         Some(crate::utils::style_helpers::style_from_color_name(
             color_name,

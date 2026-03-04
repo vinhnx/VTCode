@@ -2,16 +2,13 @@ use super::MarkdownSegment;
 use regex::Regex;
 use std::sync::LazyLock;
 
-pub(crate) static COLON_LOCATION_SUFFIX_RE: LazyLock<Regex> =
-    LazyLock::new(|| {
-        Regex::new(r":\d+(?::\d+)?(?:[-–]\d+(?::\d+)?)?$")
-            .expect("invalid location suffix regex")
-    });
+pub(crate) static COLON_LOCATION_SUFFIX_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r":\d+(?::\d+)?(?:[-–]\d+(?::\d+)?)?$").expect("invalid location suffix regex")
+});
 
-pub(crate) static HASH_LOCATION_SUFFIX_RE: LazyLock<Regex> =
-    LazyLock::new(|| {
-        Regex::new(r"^L\d+(?:C\d+)?(?:-L\d+(?:C\d+)?)?$").expect("invalid hash location regex")
-    });
+pub(crate) static HASH_LOCATION_SUFFIX_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^L\d+(?:C\d+)?(?:-L\d+(?:C\d+)?)?$").expect("invalid hash location regex")
+});
 
 pub(crate) fn should_render_link_destination(dest_url: &str) -> bool {
     !is_local_path_like_link(dest_url)

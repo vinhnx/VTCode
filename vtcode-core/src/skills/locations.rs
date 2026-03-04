@@ -578,11 +578,7 @@ mod tests {
         let project_skills = temp_dir.path().join(".agents/skills");
         let claude_skills = temp_dir.path().join(".claude/skills");
 
-        create_test_skill(
-            &project_skills,
-            "docs/doc-generator",
-            "doc-generator",
-        );
+        create_test_skill(&project_skills, "docs/doc-generator", "doc-generator");
         create_test_skill(
             &project_skills,
             "spreadsheet-generator",
@@ -614,7 +610,10 @@ mod tests {
             .iter()
             .find(|d| d.skill_context.manifest().name == "doc-generator")
             .expect("doc-generator should be discovered");
-        assert_eq!(doc_generator.location_type, SkillLocationType::AgentsProject);
+        assert_eq!(
+            doc_generator.location_type,
+            SkillLocationType::AgentsProject
+        );
     }
 
     #[test]
@@ -624,7 +623,11 @@ mod tests {
         let vtcode_skills = temp_dir.path().join(".vtcode/skills");
 
         create_test_skill(&agents_skills, "doc-generator", "doc-generator");
-        create_test_skill(&agents_skills, "spreadsheet-generator", "spreadsheet-generator");
+        create_test_skill(
+            &agents_skills,
+            "spreadsheet-generator",
+            "spreadsheet-generator",
+        );
         create_test_skill(
             &agents_skills,
             "pdf-report-generator",
@@ -660,6 +663,9 @@ mod tests {
             .iter()
             .find(|d| d.skill_context.manifest().name == "doc-generator")
             .expect("doc-generator should be discovered");
-        assert_eq!(doc_generator.location_type, SkillLocationType::AgentsProject);
+        assert_eq!(
+            doc_generator.location_type,
+            SkillLocationType::AgentsProject
+        );
     }
 }

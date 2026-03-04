@@ -143,7 +143,10 @@ async fn test_create_pty_session_uses_requested_shell() {
         .expect("create session result");
 
     assert_eq!(create_result["success"], true);
-    let output = create_result["output"].as_str().unwrap_or_default().to_ascii_lowercase();
+    let output = create_result["output"]
+        .as_str()
+        .unwrap_or_default()
+        .to_ascii_lowercase();
     assert!(output.contains("sh"));
 }
 

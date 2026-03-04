@@ -239,7 +239,11 @@ async fn test_empty_patch_error() {
         .await
         .unwrap();
 
-    assert!(result["error"].is_object(), "Expected error object: {:?}", result);
+    assert!(
+        result["error"].is_object(),
+        "Expected error object: {:?}",
+        result
+    );
     let error_msg = combined_error_message(&result).to_lowercase();
     assert!(
         error_msg.contains("empty") || error_msg.contains("patch input"),
@@ -259,7 +263,11 @@ async fn test_invalid_format_error() {
         .await
         .unwrap();
 
-    assert!(result["error"].is_object(), "Expected error object: {:?}", result);
+    assert!(
+        result["error"].is_object(),
+        "Expected error object: {:?}",
+        result
+    );
     let error_msg = combined_error_message(&result).to_lowercase();
     assert!(
         error_msg.contains("invalid patch")

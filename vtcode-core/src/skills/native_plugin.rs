@@ -354,10 +354,7 @@ impl PluginLoader {
     /// Check if a path is in a trusted directory
     fn is_in_trusted_dir(&self, path: &Path) -> bool {
         self.trusted_dirs.iter().any(|dir| {
-            path.starts_with(dir)
-                || path
-                    .parent()
-                    .is_some_and(|parent| parent.starts_with(dir))
+            path.starts_with(dir) || path.parent().is_some_and(|parent| parent.starts_with(dir))
         })
     }
 

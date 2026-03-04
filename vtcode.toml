@@ -1562,6 +1562,7 @@ max_entries = 1000
 # Default: 0.7
 # Type: `number`
 min_quality_threshold = 0.7
+cache_friendly_prompt_shaping = false
 
 [prompt_cache.providers]
 [prompt_cache.providers.anthropic]
