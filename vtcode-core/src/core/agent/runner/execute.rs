@@ -346,19 +346,10 @@ impl AgentRunner {
                         .is_some_and(|tc| !tc.is_empty()),
                 );
 
-                if !response.content_text().trim().is_empty() {
-                    event_recorder.agent_message(&response.content_string());
-                    Self::print_compact_response(
-                        &self.agent_type,
-                        &response.content_string(),
-                        self.quiet,
-                    );
-                    self.runner_println(format_args!(
-                        "{} {} {}",
-                        agent_prefix,
-                        style("(ASSISTANT)").green().bold(),
-                        response.content_text().trim()
-                    ));
+                let response_text = response.content_string();
+                if !response_text.trim().is_empty() {
+                    event_recorder.agent_message(&response_text);
+                    self.emit_final_assistant_message(&self.agent_type, &response_text);
                 }
 
                 let mut effective_tool_calls = response.tool_calls.clone();

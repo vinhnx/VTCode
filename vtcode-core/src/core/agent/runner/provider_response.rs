@@ -168,16 +168,7 @@ impl AgentRunner {
                 if agent_message_streamed {
                     event_recorder.agent_message_stream_complete();
                 }
-                // Ensure the agent reply is always visible even if the TUI misses streaming updates
-                Self::print_compact_response(&self.agent_type, &aggregated_text, self.quiet);
-                if !self.quiet {
-                    println!(
-                        "{} {} {}",
-                        agent_prefix,
-                        style("(ASSISTANT)").green().bold(),
-                        aggregated_text.trim()
-                    );
-                }
+                self.emit_final_assistant_message(&self.agent_type, &aggregated_text);
             } else if agent_message_streamed {
                 event_recorder.agent_message_stream_complete();
             }

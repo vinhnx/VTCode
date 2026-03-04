@@ -165,6 +165,111 @@ pub fn finalize_tool_calls(builders: Vec<ToolCallBuilder>) -> Option<Vec<ToolCal
     if calls.is_empty() { None } else { Some(calls) }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum FunctionOutputContentItem {
+    InputText { text: String },
+    InputImage { image_url: String },
+}
+
+impl FunctionOutputContentItem {
+    fn from_value(value: &Value) -> Option<Self> {
+        let item_type = value.get("type").and_then(Value::as_str)?;
+        match item_type {
+            "input_text" | "output_text" => Some(Self::InputText {
+                text: value.get("text").and_then(Value::as_str)?.to_string(),
+            }),
+            "input_image" => Some(Self::InputImage {
+                image_url: value.get("image_url").and_then(Value::as_str)?.to_string(),
+            }),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn to_function_output_json(&self) -> Value {
+        match self {
+            Self::InputText { text } => serde_json::json!({
+                "type": "input_text",
+                "text": text
+            }),
+            Self::InputImage { image_url } => serde_json::json!({
+                "type": "input_image",
+                "image_url": image_url
+            }),
+        }
+    }
+
+    pub(crate) fn to_tool_result_json(&self) -> Value {
+        match self {
+            Self::InputText { text } => serde_json::json!({
+                "type": "output_text",
+                "text": text
+            }),
+            Self::InputImage { image_url } => serde_json::json!({
+                "type": "input_image",
+                "image_url": image_url
+            }),
+        }
+    }
+}
+
+fn parse_function_output_content_items_array(items: &[Value]) -> Option<Vec<FunctionOutputContentItem>> {
+    items
+        .iter()
+        .map(FunctionOutputContentItem::from_value)
+        .collect::<Option<Vec<_>>>()
+}
+
+pub(crate) fn parse_function_output_content_items_value(
+    value: &Value,
+) -> Option<Vec<FunctionOutputContentItem>> {
+    match value {
+        Value::Array(items) => parse_function_output_content_items_array(items),
+        Value::Object(obj) => ["content_items", "content", "output", "body"]
+            .iter()
+            .find_map(|key| obj.get(*key))
+            .and_then(parse_function_output_content_items_value),
+        Value::String(text) => parse_function_output_content_items_text(text),
+        Value::Null | Value::Bool(_) | Value::Number(_) => None,
+    }
+}
+
+pub(crate) fn parse_function_output_content_items_text(
+    text: &str,
+) -> Option<Vec<FunctionOutputContentItem>> {
+    let trimmed = text.trim();
+    if !(trimmed.starts_with('[') || trimmed.starts_with('{')) {
+        return None;
+    }
+    let parsed: Value = serde_json::from_str(trimmed).ok()?;
+    parse_function_output_content_items_value(&parsed)
+}
+
+fn text_from_function_output_items(items: &[FunctionOutputContentItem]) -> Option<String> {
+    let mut text = String::new();
+    for item in items {
+        match item {
+            FunctionOutputContentItem::InputText { text: segment } => text.push_str(segment),
+            FunctionOutputContentItem::InputImage { .. } => return None,
+        }
+    }
+    Some(text)
+}
+
+fn function_output_value_to_history_text(value: &Value) -> String {
+    if let Some(text) = value.as_str() {
+        return text.to_string();
+    }
+    if let Some(items) = parse_function_output_content_items_value(value)
+        && let Some(text) = text_from_function_output_items(&items)
+    {
+        return text;
+    }
+    if let Some(text) = value.get("content").and_then(Value::as_str) {
+        return text.to_string();
+    }
+    value.to_string()
+}
+
 fn append_output_item_text(value: &Value, text: &mut String) {
     if let Some(part_text) = value.get("text").and_then(Value::as_str) {
         text.push_str(part_text);
@@ -344,12 +449,7 @@ pub(crate) fn parse_compacted_output_messages(output: &[Value]) -> Vec<Message> 
                 if let Some(call_id) = call_id {
                     let output_text = item
                         .get("output")
-                        .map(|value| {
-                            value
-                                .as_str()
-                                .map(ToOwned::to_owned)
-                                .unwrap_or_else(|| value.to_string())
-                        })
+                        .map(function_output_value_to_history_text)
                         .unwrap_or_default();
                     messages.push(Message::tool_response(call_id.to_string(), output_text));
                 } else {
