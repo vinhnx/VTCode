@@ -177,7 +177,6 @@ pub mod circuit_breaker;
 pub mod golden_path_orchestrator;
 pub mod health;
 pub mod improvement_algorithms;
-pub mod improvements_cache; // Deprecated - use crate::cache::UnifiedCache instead
 pub mod improvements_config;
 pub mod improvements_errors;
 pub mod improvements_registry_ext;

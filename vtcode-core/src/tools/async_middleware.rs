@@ -283,7 +283,7 @@ impl AsyncMiddleware for AsyncLoggingMiddleware {
 
 /// Async caching middleware with UnifiedCache (migrated from LruCache)
 pub struct AsyncCachingMiddleware {
-    cache: Arc<parking_lot::Mutex<crate::cache::UnifiedCache<AsyncCacheKey, String>>>,
+    cache: Arc<crate::cache::UnifiedCache<AsyncCacheKey, String>>,
     obs_context: Arc<ObservabilityContext>,
 }
 
@@ -309,7 +309,7 @@ impl AsyncCachingMiddleware {
         );
 
         Self {
-            cache: Arc::new(parking_lot::Mutex::new(cache)),
+            cache: Arc::new(cache),
             obs_context,
         }
     }
@@ -351,7 +351,7 @@ impl AsyncMiddleware for AsyncCachingMiddleware {
         ));
 
         // Check cache (migrated to UnifiedCache)
-        if let Some(cached) = self.cache.lock().get_owned(&key) {
+        if let Some(cached) = self.cache.get_owned(&key) {
             self.obs_context.event(
                 crate::tools::EventType::CacheHit,
                 "cache",
@@ -376,7 +376,7 @@ impl AsyncMiddleware for AsyncCachingMiddleware {
             && let Some(ref output) = result.output
         {
             let size = output.len() as u64;
-            self.cache.lock().insert(key, output.clone(), size);
+            self.cache.insert(key, output.clone(), size);
         }
 
         result
