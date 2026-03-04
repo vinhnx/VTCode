@@ -1,6 +1,6 @@
 [package]
 name = "vtcode-acp-client"
-version = "0.86.0"
+version = "0.86.1"
 edition = "2024"
 rust-version = "1.88"
 authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]

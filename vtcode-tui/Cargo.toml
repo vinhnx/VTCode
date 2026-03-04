@@ -1,6 +1,6 @@
 [package]
 name = "vtcode-tui"
-version = "0.86.0"
+version = "0.86.1"
 edition = "2024"
 rust-version = "1.88"
 authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
@@ -57,7 +57,7 @@ tui-shimmer = "0.1.3"
 tui-widget-list = "0.15"
 unicode-segmentation = "1.11"
 unicode-width = { workspace = true }
-vtcode-commons = { path = "../vtcode-commons", version = "0.86.0" }
+vtcode-commons = { path = "../vtcode-commons", version = "0.86.1" }
 
 [dev-dependencies]
 insta = "1.39"

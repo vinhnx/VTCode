@@ -1,6 +1,6 @@
 [package]
 name = "vtcode-config"
-version = "0.86.0"
+version = "0.86.1"
 edition = "2024"
 rust-version = "1.88"
 authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
@@ -37,7 +37,7 @@ thiserror = { workspace = true }
 toml_edit = "0.24.0"
 tracing = "0.1"
 urlencoding = "2.1"
-vtcode-commons = { path = "../vtcode-commons", version = "0.86.0" }
+vtcode-commons = { path = "../vtcode-commons", version = "0.86.1" }
 dotenvy = "0.15"
 schemars = { workspace = true, optional = true, features = ["indexmap2"] }
 

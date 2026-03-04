@@ -1,6 +1,6 @@
 [package]
 name = "vtcode-indexer"
-version = "0.86.0"
+version = "0.86.1"
 edition = "2024"
 rust-version = "1.88"
 authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
@@ -24,7 +24,7 @@ hashbrown = { workspace = true }
 regex = "1.12"
 serde = { version = "1.0", features = ["derive"] }
 ignore = "0.4"                                     # Respect .gitignore, .ignore, etc.
-vtcode-commons = { path = "../vtcode-commons", version = "0.86.0" }
+vtcode-commons = { path = "../vtcode-commons", version = "0.86.1" }
 
 [dev-dependencies]
 tempfile = "3.25"

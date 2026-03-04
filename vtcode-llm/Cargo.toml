@@ -1,6 +1,6 @@
 [package]
 name = "vtcode-llm"
-version = "0.86.0"
+version = "0.86.1"
 edition = "2024"
 rust-version = "1.88"
 authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
@@ -38,8 +38,8 @@ mock = ["dep:async-trait"]
 [dependencies]
 anyhow = "1.0"
 async-trait = { version = "0.1", optional = true }
-vtcode-commons = { path = "../vtcode-commons", version = "0.86.0" }
-vtcode-core = { path = "../vtcode-core", version = "0.86.0", default-features = false }
+vtcode-commons = { path = "../vtcode-commons", version = "0.86.1" }
+vtcode-core = { path = "../vtcode-core", version = "0.86.1", default-features = false }
 
 [dev-dependencies]
 futures = "0.3"
