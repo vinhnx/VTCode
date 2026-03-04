@@ -8,12 +8,14 @@ use parking_lot::Mutex;
 use path_clean::PathClean;
 use shell_escape::escape;
 use std::fs;
+use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use vtcode_commons::WorkspacePaths;
 
 /// LRU cache for canonicalized paths to reduce fs::canonicalize() calls
 type PathCache = Arc<Mutex<LruCache<PathBuf, PathBuf>>>;
+const PATH_CACHE_CAPACITY: usize = 256;
 
 pub struct BashRunner<E, P> {
     executor: E,
@@ -48,7 +50,9 @@ where
             workspace_root: canonical_root.clone(),
             working_dir: canonical_root,
             shell_kind: default_shell_kind(),
-            path_cache: Arc::new(Mutex::new(LruCache::new(std::num::NonZeroUsize::MIN))),
+            path_cache: Arc::new(Mutex::new(LruCache::new(
+                NonZeroUsize::new(PATH_CACHE_CAPACITY).unwrap_or(NonZeroUsize::MIN),
+            ))),
         })
     }
 
