@@ -6615,6 +6615,7 @@ dependencies = [
  "catppuccin",
  "chrono",
  "color-eyre",
+ "criterion",
  "crossterm",
  "futures",
  "hashbrown 0.15.5",

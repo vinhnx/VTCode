@@ -60,7 +60,12 @@ unicode-width = { workspace = true }
 vtcode-commons = { path = "../vtcode-commons", version = "0.86.4" }
 
 [dev-dependencies]
+criterion = "0.8"
 insta = "1.39"
+
+[[bench]]
+name = "markdown_render"
+harness = false
 
 [lints]
 workspace = true

@@ -29,7 +29,7 @@ mod surface;
 mod terminal_io;
 mod terminal_modes;
 
-use drive::drive_terminal;
+use drive::{DriveRuntimeOptions, drive_terminal};
 use events::{EventListener, spawn_event_loop};
 use signal::SignalCleanupGuard;
 use surface::TerminalSurface;
@@ -154,10 +154,12 @@ pub async fn run_tui(
         &events,
         &mut input_listener,
         event_channels,
-        options.event_callback,
-        options.focus_callback,
-        surface.use_alternate(),
-        keyboard_flags,
+        DriveRuntimeOptions {
+            event_callback: options.event_callback,
+            focus_callback: options.focus_callback,
+            use_alternate_screen: surface.use_alternate(),
+            keyboard_flags,
+        },
     )
     .await;
 
