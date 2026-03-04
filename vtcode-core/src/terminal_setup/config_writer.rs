@@ -24,8 +24,8 @@ pub enum ConfigFormat {
 }
 
 /// Markers for identifying VT Code-managed configuration sections
-pub const VTCODE_BEGIN_MARKER: &str = "# BEGIN VTCODE CONFIGURATION";
-pub const VTCODE_END_MARKER: &str = "# END VTCODE CONFIGURATION";
+pub const VTCODE_BEGIN_MARKER: &str = "BEGIN VTCODE CONFIGURATION";
+pub const VTCODE_END_MARKER: &str = "END VTCODE CONFIGURATION";
 
 /// Safe atomic configuration file writer
 pub struct ConfigWriter;
@@ -89,8 +89,9 @@ impl ConfigWriter {
             // File is empty, just use the VT Code section
             vtcode_section
         } else {
-            // Append VT Code section at the end
-            format!("{}\n\n{}", cleaned.trim_end(), vtcode_section)
+            // Prepend VT Code section so user-defined settings stay authoritative.
+            // Most terminal configs resolve duplicate keys as "last value wins".
+            format!("{}\n\n{}", vtcode_section, cleaned.trim_start())
         };
 
         Ok(merged)
@@ -130,11 +131,11 @@ impl ConfigWriter {
         };
 
         let header = format!(
-            "{} BEGIN VTCODE CONFIGURATION\n{} VT Code-managed section - auto-generated\n{} Do not edit manually",
-            comment_prefix, comment_prefix, comment_prefix
+            "{} {}\n{} VT Code-managed section - auto-generated\n{} Do not edit manually",
+            comment_prefix, VTCODE_BEGIN_MARKER, comment_prefix, comment_prefix
         );
 
-        let footer = format!("{} END VTCODE CONFIGURATION", comment_prefix);
+        let footer = format!("{} {}", comment_prefix, VTCODE_END_MARKER);
 
         format!("{}\n{}\n{}", header, content.trim(), footer)
     }
@@ -210,6 +211,14 @@ user_setting = 1
         assert!(result.contains("vtcode_setting"));
         assert!(result.contains(VTCODE_BEGIN_MARKER));
         assert!(result.contains(VTCODE_END_MARKER));
+        assert!(
+            result
+                .find("vtcode_setting")
+                .expect("missing VT Code setting")
+                < result
+                    .find("user_setting")
+                    .expect("missing user setting")
+        );
     }
 
     #[test]
