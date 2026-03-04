@@ -23,6 +23,7 @@ static DEBUG_MODE: AtomicBool = AtomicBool::new(cfg!(debug_assertions));
 static COLOR_EYRE_ENABLED: AtomicBool = AtomicBool::new(cfg!(debug_assertions));
 static SHOW_DIAGNOSTICS: AtomicBool = AtomicBool::new(false);
 static PANIC_HOOK_ONCE: Once = Once::new();
+#[cfg(debug_assertions)]
 static COLOR_EYRE_SETUP_ONCE: Once = Once::new();
 #[cfg(debug_assertions)]
 static COLOR_EYRE_PANIC_HOOK: std::sync::OnceLock<color_eyre::config::PanicHook> =
@@ -71,12 +72,12 @@ fn is_color_eyre_enabled() -> bool {
 }
 
 /// Install color-eyre's eyre hook for richer top-level error rendering in dev/debug mode.
+#[cfg(debug_assertions)]
 fn maybe_prepare_color_eyre_hooks() {
-    if !cfg!(debug_assertions) || !is_color_eyre_enabled() {
+    if !is_color_eyre_enabled() {
         return;
     }
 
-    #[cfg(debug_assertions)]
     COLOR_EYRE_SETUP_ONCE.call_once(|| {
         let hooks = color_eyre::config::HookBuilder::default().try_into_hooks();
         match hooks {
