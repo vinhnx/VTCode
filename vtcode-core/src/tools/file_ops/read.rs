@@ -6,6 +6,9 @@ mod segments;
 use crate::telemetry::perf::PerfSpan;
 use crate::tools::builder::ToolResponseBuilder;
 use crate::tools::cache::{FILE_CACHE, file_read_cache_config};
+use crate::tools::continuation::{
+    DEFAULT_NEXT_READ_LIMIT, NEXT_READ_PROMPT, ReadChunkContinuationArgs,
+};
 use crate::tools::handlers::read_file::{ReadFileArgs, ReadFileHandler};
 use crate::tools::traits::FileTool;
 use crate::tools::types::{Input, PathArgs};
@@ -14,7 +17,7 @@ use serde_json::{Value, json};
 use std::path::Path;
 use std::time::UNIX_EPOCH;
 
-const SPOOL_CHUNK_DEFAULT_LIMIT_LINES: usize = 40;
+const SPOOL_CHUNK_DEFAULT_LIMIT_LINES: usize = DEFAULT_NEXT_READ_LIMIT;
 const SPOOL_CHUNK_MAX_LIMIT_LINES: usize = 50;
 const SPOOL_CHUNK_SENTINEL_MAX_TOKENS: usize = 4096;
 
@@ -356,22 +359,20 @@ impl FileOpsTool {
 
                             builder = builder
                                 .field("spool_chunked", json!(true))
-                                .field("chunk_limit", json!(plan.limit))
-                                .field("lines_returned", json!(lines_returned))
-                                .field("has_more", json!(has_more))
-                                .field("next_offset", json!(next_offset));
+                                .field("lines_returned", json!(lines_returned));
                             if has_more {
+                                builder = builder.field("has_more", json!(true));
                                 builder = builder.field(
                                     "next_read_args",
-                                    json!({
-                                        "path": requested_path.clone(),
-                                        "offset": next_offset,
-                                        "limit": plan.limit
-                                    }),
+                                    ReadChunkContinuationArgs::new(
+                                        requested_path.clone(),
+                                        next_offset,
+                                        plan.limit,
+                                    )
+                                    .to_value(),
                                 );
-                                builder = builder
-                                    .field("follow_up_prompt", json!("Use `next_read_args`."))
-                                    .field("preferred_next_action", json!("read_file.next_chunk"));
+                                builder =
+                                    builder.field("follow_up_prompt", json!(NEXT_READ_PROMPT));
                             }
                         }
 
@@ -817,10 +818,8 @@ mod read_tests {
         let result = file_ops.read_file(args).await.unwrap();
         assert_eq!(result["success"], true);
         assert_eq!(result["spool_chunked"], true);
-        assert_eq!(result["chunk_limit"], SPOOL_CHUNK_DEFAULT_LIMIT_LINES);
         assert_eq!(result["lines_returned"], SPOOL_CHUNK_DEFAULT_LIMIT_LINES);
         assert_eq!(result["has_more"], true);
-        assert_eq!(result["next_offset"], SPOOL_CHUNK_DEFAULT_LIMIT_LINES + 1);
         assert_eq!(
             result["next_read_args"],
             json!({
@@ -829,11 +828,46 @@ mod read_tests {
                 "limit": SPOOL_CHUNK_DEFAULT_LIMIT_LINES
             })
         );
+        assert!(result.get("chunk_limit").is_none());
+        assert!(result.get("next_offset").is_none());
+        assert!(result.get("preferred_next_action").is_none());
         assert!(
             result["follow_up_prompt"]
                 .as_str()
                 .unwrap_or_default()
                 .contains("next_read_args")
         );
+    }
+
+    #[tokio::test]
+    async fn test_spool_file_last_chunk_omits_continuation_fields() {
+        let temp_dir = TempDir::new().unwrap();
+        let workspace_root = temp_dir.path().to_path_buf();
+        let spool_dir = workspace_root.join(".vtcode/context/tool_outputs");
+        fs::create_dir_all(&spool_dir).unwrap();
+        let spool_file = spool_dir.join("unified_exec_999.txt");
+        let spool_content = (1..=5)
+            .map(|i| format!("line{i}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        fs::write(&spool_file, spool_content).unwrap();
+
+        let grep_manager = std::sync::Arc::new(GrepSearchManager::new(workspace_root.clone()));
+        let file_ops = FileOpsTool::new(workspace_root, grep_manager);
+
+        let args = json!({
+            "path": ".vtcode/context/tool_outputs/unified_exec_999.txt"
+        });
+
+        let result = file_ops.read_file(args).await.unwrap();
+        assert_eq!(result["success"], true);
+        assert_eq!(result["spool_chunked"], true);
+        assert_eq!(result["lines_returned"], 5);
+        assert!(result.get("has_more").is_none());
+        assert!(result.get("next_read_args").is_none());
+        assert!(result.get("follow_up_prompt").is_none());
+        assert!(result.get("chunk_limit").is_none());
+        assert!(result.get("next_offset").is_none());
+        assert!(result.get("preferred_next_action").is_none());
     }
 }

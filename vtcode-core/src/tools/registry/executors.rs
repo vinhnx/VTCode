@@ -6,6 +6,7 @@ use crate::sandboxing::{
     ResourceLimits, SandboxManager, SandboxPermissions, SandboxPolicy, SandboxTransformError,
     SeccompProfile, SensitivePath, WritableRoot, default_sensitive_paths,
 };
+use crate::tools::continuation::{NEXT_CONTINUE_PROMPT, PtyContinuationArgs};
 use crate::tools::file_tracker::FileTracker;
 use crate::tools::registry::declarations::{
     UnifiedExecAction, UnifiedFileAction, UnifiedSearchAction,
@@ -873,8 +874,13 @@ fn build_read_pty_fallback_args(args: &Value, error_message: &str) -> Option<Val
 const DEFAULT_INSPECT_HEAD_LINES: usize = 30;
 const DEFAULT_INSPECT_TAIL_LINES: usize = 30;
 const DEFAULT_INSPECT_MAX_MATCHES: usize = 200;
-const PTY_CONTINUATION_PROMPT: &str = "Use `next_poll_args`.";
-const PTY_PREFERRED_NEXT_ACTION: &str = "unified_exec.continue";
+
+fn attach_pty_continuation(response: &mut Value, session_id: &str, include_follow_up_prompt: bool) {
+    if include_follow_up_prompt {
+        response["follow_up_prompt"] = json!(NEXT_CONTINUE_PROMPT);
+    }
+    response["next_continue_args"] = PtyContinuationArgs::new(session_id).to_value();
+}
 
 fn clamp_inspect_lines(value: Option<u64>, default: usize) -> usize {
     value.map(|v| v as usize).unwrap_or(default).min(5_000)
@@ -1656,15 +1662,7 @@ impl ToolRegistry {
             response["truncated"] = json!(true);
         }
         if truncated || exit_code.is_none() {
-            response["follow_up_prompt"] = json!(PTY_CONTINUATION_PROMPT);
-            response["next_poll_args"] = json!({
-                "session_id": session_id
-            });
-            response["next_continue_args"] = json!({
-                "action": "continue",
-                "session_id": session_id
-            });
-            response["preferred_next_action"] = json!(PTY_PREFERRED_NEXT_ACTION);
+            attach_pty_continuation(&mut response, &session_id, true);
         }
         if is_git_diff {
             response["no_spool"] = json!(true);
@@ -1741,15 +1739,7 @@ impl ToolRegistry {
             response["truncated"] = json!(true);
         }
         if truncated || capture.exit_code.is_none() {
-            response["follow_up_prompt"] = json!(PTY_CONTINUATION_PROMPT);
-            response["next_poll_args"] = json!({
-                "session_id": sid
-            });
-            response["next_continue_args"] = json!({
-                "action": "continue",
-                "session_id": sid
-            });
-            response["preferred_next_action"] = json!(PTY_PREFERRED_NEXT_ACTION);
+            attach_pty_continuation(&mut response, sid, true);
         }
 
         Ok(response)
@@ -1804,14 +1794,7 @@ impl ToolRegistry {
             response["exit_code"] = json!(code);
             self.decrement_active_pty_sessions();
         } else {
-            response["next_poll_args"] = json!({
-                "session_id": sid
-            });
-            response["next_continue_args"] = json!({
-                "action": "continue",
-                "session_id": sid
-            });
-            response["preferred_next_action"] = json!(PTY_PREFERRED_NEXT_ACTION);
+            attach_pty_continuation(&mut response, sid, false);
         }
 
         Ok(response)
@@ -2572,7 +2555,9 @@ mod pty_output_filter_tests {
 
 #[cfg(test)]
 mod pty_context_tests {
-    use super::{attach_pty_response_context, build_session_command_display};
+    use super::{
+        attach_pty_continuation, attach_pty_response_context, build_session_command_display,
+    };
     use crate::tools::types::VTCodePtySession;
     use serde_json::json;
 
@@ -2615,6 +2600,33 @@ mod pty_context_tests {
         assert_eq!(response["rows"], 30);
         assert_eq!(response["cols"], 120);
         assert_eq!(response["is_exited"], false);
+    }
+
+    #[test]
+    fn attach_pty_continuation_compacts_next_continue_args() {
+        let mut response = json!({ "output": "ok" });
+        attach_pty_continuation(&mut response, "run-123", true);
+
+        assert_eq!(response["follow_up_prompt"], "Use `next_continue_args`.");
+        assert!(response.get("next_poll_args").is_none());
+        assert_eq!(
+            response["next_continue_args"],
+            json!({ "session_id": "run-123" })
+        );
+        assert!(response.get("preferred_next_action").is_none());
+    }
+
+    #[test]
+    fn attach_pty_continuation_can_skip_follow_up_prompt() {
+        let mut response = json!({ "output": "ok" });
+        attach_pty_continuation(&mut response, "run-123", false);
+
+        assert!(response.get("follow_up_prompt").is_none());
+        assert!(response.get("next_poll_args").is_none());
+        assert_eq!(
+            response["next_continue_args"],
+            json!({ "session_id": "run-123" })
+        );
     }
 }
 

@@ -4,6 +4,7 @@ use anyhow::Result;
 use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::notifications::{notify_tool_failure, notify_tool_success};
+use vtcode_core::tools::continuation::{PtyContinuationArgs, ReadChunkContinuationArgs};
 use vtcode_core::tools::error_messages::agent_execution;
 use vtcode_core::tools::registry::labels::tool_action_label;
 use vtcode_core::utils::ansi::MessageStyle;
@@ -505,18 +506,22 @@ pub(crate) async fn handle_tool_execution_result<'a>(
 pub(super) fn maybe_inline_spooled(_tool_name: &str, output: &serde_json::Value) -> String {
     let mut sanitized = output.clone();
     if let Some(obj) = sanitized.as_object_mut() {
-        let next_poll_args = obj
-            .get("next_poll_args")
-            .and_then(serde_json::Value::as_object)
-            .cloned();
+        if let Some(next_continue) = obj
+            .get_mut("next_continue_args")
+            .and_then(serde_json::Value::as_object_mut)
+            && next_continue
+                .get("action")
+                .and_then(serde_json::Value::as_str)
+                .is_some_and(|action| action == "continue")
+        {
+            next_continue.remove("action");
+        }
         let next_continue_args = obj
             .get("next_continue_args")
-            .and_then(serde_json::Value::as_object)
-            .cloned();
+            .and_then(PtyContinuationArgs::from_value);
         let next_read_args = obj
             .get("next_read_args")
-            .and_then(serde_json::Value::as_object)
-            .cloned();
+            .and_then(ReadChunkContinuationArgs::from_value);
 
         obj.remove("message");
         obj.remove("metadata");
@@ -564,34 +569,37 @@ pub(super) fn maybe_inline_spooled(_tool_name: &str, output: &serde_json::Value)
         }
 
         obj.remove("follow_up_prompt");
-        if next_poll_args.is_some() || next_continue_args.is_some() || next_read_args.is_some() {
+        obj.remove("next_poll_args");
+        if next_continue_args.is_some() || next_read_args.is_some() {
             obj.remove("has_more");
-        }
-
-        if let Some(next_poll) = next_poll_args.as_ref()
-            && let Some(next_session_id) = next_poll.get("session_id")
-            && obj.get("session_id") == Some(next_session_id)
-        {
-            obj.remove("session_id");
+            obj.remove("preferred_next_action");
         }
         if let Some(next_continue) = next_continue_args.as_ref()
-            && let Some(next_session_id) = next_continue.get("session_id")
-            && obj.get("session_id") == Some(next_session_id)
+            && obj
+                .get("session_id")
+                .and_then(serde_json::Value::as_str)
+                .is_some_and(|session_id| session_id == next_continue.session_id.as_str())
         {
             obj.remove("session_id");
-        }
-        if next_continue_args.is_some() {
-            obj.remove("next_poll_args");
         }
 
         if let Some(next_read) = next_read_args.as_ref() {
-            if let Some(next_offset) = next_read.get("offset")
-                && obj.get("next_offset") == Some(next_offset)
+            if obj
+                .get("spool_path")
+                .and_then(serde_json::Value::as_str)
+                .is_some_and(|spool_path| spool_path == next_read.path.as_str())
+            {
+                obj.remove("spool_path");
+            }
+            if obj
+                .get("next_offset")
+                .is_some_and(|next_offset| *next_offset == serde_json::json!(next_read.offset))
             {
                 obj.remove("next_offset");
             }
-            if let Some(next_limit) = next_read.get("limit")
-                && obj.get("chunk_limit") == Some(next_limit)
+            if obj
+                .get("chunk_limit")
+                .is_some_and(|chunk_limit| *chunk_limit == serde_json::json!(next_read.limit))
             {
                 obj.remove("chunk_limit");
             }
@@ -626,24 +634,25 @@ pub(super) fn maybe_inline_spooled(_tool_name: &str, output: &serde_json::Value)
         obj.remove("cols");
         obj.remove("wall_time");
 
-        let process_session_id = obj.get("session_id").or_else(|| {
-            next_poll_args
-                .as_ref()
-                .and_then(|next_poll| next_poll.get("session_id"))
-                .or_else(|| {
-                    next_continue_args
-                        .as_ref()
-                        .and_then(|next_continue| next_continue.get("session_id"))
-                })
-        });
+        let process_session_id = obj
+            .get("session_id")
+            .and_then(serde_json::Value::as_str)
+            .or_else(|| {
+                next_continue_args
+                    .as_ref()
+                    .map(|next_continue| next_continue.session_id.as_str())
+            });
         if matches!(
-            (obj.get("process_id"), process_session_id),
+            (
+                obj.get("process_id").and_then(serde_json::Value::as_str),
+                process_session_id
+            ),
             (Some(process_id), Some(session_id)) if process_id == session_id
         ) {
             obj.remove("process_id");
         }
 
-        if next_poll_args.is_some() || next_continue_args.is_some() {
+        if next_continue_args.is_some() {
             obj.remove("command");
             if obj
                 .get("is_exited")
@@ -1236,7 +1245,8 @@ mod tests {
                 "auto_recovered": false,
                 "query_truncated": false,
                 "stdout": "tail",
-                "next_poll_args": {
+                "next_continue_args": {
+                    "action": "continue",
                     "session_id": "run-1"
                 }
             }),
@@ -1266,9 +1276,11 @@ mod tests {
         assert!(parsed.get("auto_recovered").is_none());
         assert!(parsed.get("query_truncated").is_none());
         assert!(parsed.get("stdout").is_none());
+        assert!(parsed.get("next_poll_args").is_none());
+        assert!(parsed.get("preferred_next_action").is_none());
         assert!(parsed.get("session_id").is_none());
         assert_eq!(
-            parsed.get("next_poll_args"),
+            parsed.get("next_continue_args"),
             Some(&serde_json::json!({"session_id":"run-1"}))
         );
     }
@@ -1298,6 +1310,13 @@ mod tests {
         assert!(parsed.get("has_more").is_none());
         assert!(parsed.get("next_offset").is_none());
         assert!(parsed.get("chunk_limit").is_none());
+        assert!(parsed.get("spool_path").is_none());
+        assert_eq!(
+            parsed.get("path"),
+            Some(&serde_json::json!(
+                ".vtcode/context/tool_outputs/unified_exec_1.txt"
+            ))
+        );
         assert_eq!(
             parsed.get("next_read_args"),
             Some(&serde_json::json!({

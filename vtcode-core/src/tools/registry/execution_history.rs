@@ -12,6 +12,7 @@ use std::time::{Duration, SystemTime};
 use serde_json::{Value, json};
 
 use crate::config::constants::{defaults, tools};
+use crate::tools::continuation::read_chunk_progress_from_result;
 use crate::tools::tool_intent;
 
 /// Snapshot of harness context for execution records.
@@ -240,13 +241,6 @@ fn paths_match(record_path: &str, expected_path: &str) -> bool {
     }
 }
 
-fn value_to_usize(value: &Value) -> Option<usize> {
-    value
-        .as_u64()
-        .and_then(|n| usize::try_from(n).ok())
-        .or_else(|| value.as_str().and_then(|s| s.parse::<usize>().ok()))
-}
-
 fn is_read_file_style_record(record: &ToolExecutionRecord) -> bool {
     if is_read_file_tool_name(&record.tool_name) {
         return true;
@@ -471,15 +465,9 @@ impl ToolExecutionHistory {
                 continue;
             }
 
-            let Some(next_offset) = result.get("next_offset").and_then(value_to_usize) else {
-                continue;
-            };
-            let chunk_limit = result
-                .get("chunk_limit")
-                .and_then(value_to_usize)
-                .unwrap_or(40)
-                .max(1);
-            return Some((next_offset.max(1), chunk_limit));
+            if let Some(progress) = read_chunk_progress_from_result(result) {
+                return Some(progress);
+            }
         }
         None
     }
@@ -760,8 +748,11 @@ mod tests {
             "success": true,
             "spool_chunked": true,
             "has_more": true,
-            "next_offset": 41,
-            "chunk_limit": 40
+            "next_read_args": {
+                "path": ".vtcode/context/tool_outputs/unified_exec_123.txt",
+                "offset": 41,
+                "limit": 40
+            }
         });
 
         history.add_record(ToolExecutionRecord::success(
@@ -797,8 +788,11 @@ mod tests {
             "success": true,
             "spool_chunked": true,
             "has_more": true,
-            "next_offset": 81,
-            "chunk_limit": 40
+            "next_read_args": {
+                "path": ".vtcode/context/tool_outputs/unified_exec_456.txt",
+                "offset": 81,
+                "limit": 40
+            }
         });
 
         history.add_record(ToolExecutionRecord::success(
@@ -837,8 +831,11 @@ mod tests {
             "success": true,
             "spool_chunked": true,
             "has_more": true,
-            "next_offset": 41,
-            "chunk_limit": 40
+            "next_read_args": {
+                "path": rel_path,
+                "offset": 41,
+                "limit": 40
+            }
         });
 
         history.add_record(ToolExecutionRecord::success(
@@ -869,8 +866,11 @@ mod tests {
             "success": true,
             "spool_chunked": true,
             "has_more": true,
-            "next_offset": 121,
-            "chunk_limit": 40
+            "next_read_args": {
+                "path": path,
+                "offset": 121,
+                "limit": 40
+            }
         });
 
         history.add_record(ToolExecutionRecord::success(
@@ -890,5 +890,37 @@ mod tests {
 
         let found = history.find_recent_read_file_spool_progress(path, Duration::from_secs(60));
         assert_eq!(found, Some((121, 40)));
+    }
+
+    #[test]
+    fn finds_recent_read_file_spool_progress_from_legacy_top_level_fields() {
+        let history = ToolExecutionHistory::new(10);
+        let path = ".vtcode/context/tool_outputs/unified_exec_legacy.txt";
+        let args = json!({"path": path});
+        let result = json!({
+            "success": true,
+            "spool_chunked": true,
+            "has_more": true,
+            "next_offset": 33,
+            "chunk_limit": 32
+        });
+
+        history.add_record(ToolExecutionRecord::success(
+            "read_file".to_string(),
+            "read_file".to_string(),
+            false,
+            None,
+            args,
+            result,
+            make_snapshot(),
+            None,
+            None,
+            None,
+            None,
+            false,
+        ));
+
+        let found = history.find_recent_read_file_spool_progress(path, Duration::from_secs(60));
+        assert_eq!(found, Some((33, 32)));
     }
 }

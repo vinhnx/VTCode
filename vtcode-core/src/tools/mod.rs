@@ -130,6 +130,7 @@ pub mod command;
 pub mod command_cache;
 pub mod command_policy;
 pub mod command_resolver;
+pub mod continuation;
 pub mod editing;
 pub mod error_context;
 pub mod error_helpers;
