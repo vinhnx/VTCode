@@ -45,15 +45,57 @@ impl DiffColorLevel {
     pub fn detect() -> Self {
         let colorterm = std::env::var("COLORTERM").unwrap_or_default();
         let term = std::env::var("TERM").unwrap_or_default();
+        let term_program = std::env::var("TERM_PROGRAM").ok();
+        let has_wt_session = std::env::var_os("WT_SESSION").is_some();
+        let has_force_color_override = std::env::var_os("FORCE_COLOR").is_some();
 
-        if colorterm.contains("truecolor") || colorterm.contains("24bit") {
-            Self::TrueColor
-        } else if term.contains("256") {
-            Self::Ansi256
-        } else {
-            Self::Ansi16
-        }
+        diff_color_level_for_terminal(
+            base_diff_color_level(&colorterm, &term),
+            term_program.as_deref(),
+            has_wt_session,
+            has_force_color_override,
+        )
     }
+}
+
+fn base_diff_color_level(colorterm: &str, term: &str) -> DiffColorLevel {
+    let colorterm = colorterm.to_ascii_lowercase();
+    let term = term.to_ascii_lowercase();
+
+    if colorterm.contains("truecolor") || colorterm.contains("24bit") {
+        DiffColorLevel::TrueColor
+    } else if term.contains("256") {
+        DiffColorLevel::Ansi256
+    } else {
+        DiffColorLevel::Ansi16
+    }
+}
+
+fn diff_color_level_for_terminal(
+    base_level: DiffColorLevel,
+    term_program: Option<&str>,
+    has_wt_session: bool,
+    has_force_color_override: bool,
+) -> DiffColorLevel {
+    if has_force_color_override {
+        return base_level;
+    }
+
+    if has_wt_session || (base_level == DiffColorLevel::Ansi16 && is_windows_terminal(term_program))
+    {
+        return DiffColorLevel::TrueColor;
+    }
+
+    base_level
+}
+
+fn is_windows_terminal(term_program: Option<&str>) -> bool {
+    let Some(program) = term_program else {
+        return false;
+    };
+
+    let normalized = program.trim().to_ascii_lowercase();
+    normalized.contains("windows_terminal") || normalized.contains("windows terminal")
 }
 
 // ── Truecolor palette (WCAG AA compliant) ──────────────────────────────────
@@ -194,5 +236,76 @@ mod tests {
         let del = diff_del_bg(DiffTheme::Dark, DiffColorLevel::Ansi16);
         assert_eq!(add, Color::Ansi(AnsiColor::Green));
         assert_eq!(del, Color::Ansi(AnsiColor::Red));
+    }
+
+    #[test]
+    fn wt_session_promotes_ansi16_to_truecolor() {
+        assert_eq!(
+            diff_color_level_for_terminal(DiffColorLevel::Ansi16, None, true, false),
+            DiffColorLevel::TrueColor
+        );
+    }
+
+    #[test]
+    fn windows_terminal_term_program_promotes_ansi16_to_truecolor() {
+        assert_eq!(
+            diff_color_level_for_terminal(
+                DiffColorLevel::Ansi16,
+                Some("Windows_Terminal"),
+                false,
+                false
+            ),
+            DiffColorLevel::TrueColor
+        );
+    }
+
+    #[test]
+    fn non_windows_terminal_keeps_ansi16() {
+        assert_eq!(
+            diff_color_level_for_terminal(
+                DiffColorLevel::Ansi16,
+                Some("WezTerm"),
+                false,
+                false
+            ),
+            DiffColorLevel::Ansi16
+        );
+    }
+
+    #[test]
+    fn force_color_keeps_ansi16_when_wt_session_exists() {
+        assert_eq!(
+            diff_color_level_for_terminal(DiffColorLevel::Ansi16, None, true, true),
+            DiffColorLevel::Ansi16
+        );
+    }
+
+    #[test]
+    fn force_color_keeps_ansi256_when_wt_session_exists() {
+        assert_eq!(
+            diff_color_level_for_terminal(DiffColorLevel::Ansi256, None, true, true),
+            DiffColorLevel::Ansi256
+        );
+    }
+
+    #[test]
+    fn base_level_detects_truecolor_from_colorterm() {
+        assert_eq!(
+            base_diff_color_level("truecolor", "xterm-256color"),
+            DiffColorLevel::TrueColor
+        );
+    }
+
+    #[test]
+    fn base_level_detects_ansi256_from_term() {
+        assert_eq!(
+            base_diff_color_level("", "xterm-256color"),
+            DiffColorLevel::Ansi256
+        );
+    }
+
+    #[test]
+    fn base_level_falls_back_to_ansi16() {
+        assert_eq!(base_diff_color_level("", "xterm"), DiffColorLevel::Ansi16);
     }
 }
