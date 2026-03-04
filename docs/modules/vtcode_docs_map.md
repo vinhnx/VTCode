@@ -624,10 +624,6 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: For CLI Output, For TUI Widgets, Unified Theme, Color Reference, Common Patterns
   - **User Questions**: "What can you tell me about Styling Quick Start Guide?", "How does For CLI Output work?", "How does For TUI Widgets work?"
 
-- **File**: `docs/project/TODO.md`
-  - **Content**: TODO.md
-  - **User Questions**: "What can you tell me about TODO.md?"
-
 - **File**: `docs/harness/TECH_DEBT_TRACKER.md`
   - **Content**: Tech Debt Tracker
   - **Topics**: Priority Levels, Status Values, Debt Items, How to Add a New Item, How to Resolve an Item
@@ -747,6 +743,11 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Content**: anstyle-parse Integration Guide
   - **Topics**: Step 1: Add Dependency, Step 2: Create Parser Wrapper Module, Step 3: Update Module Exports, Step 4: Replace Manual Parser in PTY, Step 5: Update ANSI Stripping
   - **User Questions**: "What can you tell me about anstyle-parse Integration Guide?", "How does Step 1: Add Dependency work?", "How does Step 2: Create Parser Wrapper Module work?"
+
+- **File**: `docs/project/TODO.md`
+  - **Content**: rust performance optimization
+  - **Topics**: [What is Async Programming and why would you do it?](#what-is-async-programming-and-why-would-you-do-it), [Hello, world!](#hello-world), [Development of Async Rust](#development-of-async-rust), [Concurrency and parallelism](#concurrency-and-parallelism), [Correctness and safety](#correctness-and-safety)
+  - **User Questions**: "What can you tell me about rust performance optimization?", "How does [What is Async Programming and why would you do it?](#what-is-async-programming-and-why-would-you-do-it) work?", "How does [Hello, world!](#hello-world) work?"
 
 - **File**: `docs/project/ROADMAP.md`
   - **Content**: vtcode Development Roadmap
