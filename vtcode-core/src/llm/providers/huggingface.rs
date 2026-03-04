@@ -13,7 +13,9 @@ use crate::llm::provider::{
     LLMError, LLMErrorMetadata, LLMProvider, LLMRequest, LLMResponse, LLMStream, LLMStreamEvent,
     MessageRole, ToolDefinition,
 };
-use crate::llm::providers::shared::{NoopStreamTelemetry, StreamTelemetry};
+use crate::llm::providers::shared::{
+    NoopStreamTelemetry, StreamTelemetry, function_output_value_from_message_content,
+};
 use crate::llm::types as llm_types;
 use async_stream::try_stream;
 use async_trait::async_trait;
@@ -513,15 +515,7 @@ impl HuggingFaceProvider {
                     input.push(json!({
                         "type": "function_call_output",
                         "call_id": msg.tool_call_id.clone().unwrap_or_default(),
-                        "output": match &msg.content {
-                            crate::llm::provider::MessageContent::Text(text) => text.clone(),
-                            crate::llm::provider::MessageContent::Parts(parts) => {
-                                parts.iter().filter_map(|p| match p {
-                                    crate::llm::provider::ContentPart::Text { text } => Some(text.as_str()),
-                                    _ => None
-                                }).collect::<Vec<_>>().join("")
-                            }
-                        }
+                        "output": function_output_value_from_message_content(&msg.content)
                     }));
                 }
             }

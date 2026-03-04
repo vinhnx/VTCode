@@ -5,6 +5,7 @@ use crate::llm::provider::{
 };
 use crate::llm::providers::common::append_normalized_reasoning_detail_items;
 use crate::llm::providers::openai::types::OpenAIResponsesPayload;
+use crate::llm::providers::shared::tool_result_content_from_message_content;
 use crate::prompts::system::default_system_prompt;
 use hashbrown::HashSet;
 use serde_json::{Value, json};
@@ -399,14 +400,7 @@ pub fn build_standard_responses_payload(
                     continue;
                 }
 
-                let mut tool_content = Vec::new();
-                let content_text = msg.content.as_text();
-                if !content_text.trim().is_empty() {
-                    tool_content.push(json!({
-                        "type": "output_text",
-                        "text": content_text
-                    }));
-                }
+                let tool_content = tool_result_content_from_message_content(&msg.content);
 
                 let mut tool_result = json!({
                     "type": "tool_result",
@@ -532,14 +526,7 @@ pub fn build_codex_responses_payload(
                     continue;
                 }
 
-                let mut tool_content = Vec::new();
-                let content_text = msg.content.as_text();
-                if !content_text.trim().is_empty() {
-                    tool_content.push(json!({
-                        "type": "output_text",
-                        "text": content_text
-                    }));
-                }
+                let tool_content = tool_result_content_from_message_content(&msg.content);
 
                 let mut tool_result = json!({
                     "type": "tool_result",
@@ -578,8 +565,32 @@ pub fn build_codex_responses_payload(
 #[cfg(test)]
 mod tests {
     use super::{build_codex_responses_payload, build_standard_responses_payload};
-    use crate::llm::provider::{LLMRequest, Message};
+    use crate::llm::provider::{LLMRequest, Message, ToolCall};
     use serde_json::json;
+
+    fn assert_multimodal_tool_result(payload: super::OpenAIResponsesPayload) {
+        let tool_msg = payload
+            .input
+            .iter()
+            .find(|item| item.get("role").and_then(serde_json::Value::as_str) == Some("tool"))
+            .expect("tool message should exist");
+        let tool_result_content = tool_msg
+            .get("content")
+            .and_then(serde_json::Value::as_array)
+            .and_then(|items| items.first())
+            .and_then(|result| result.get("content"))
+            .and_then(serde_json::Value::as_array)
+            .expect("tool_result content should be an array");
+
+        assert_eq!(tool_result_content.len(), 2);
+        assert_eq!(tool_result_content[0]["type"], "output_text");
+        assert_eq!(tool_result_content[0]["text"], "inline image note");
+        assert_eq!(tool_result_content[1]["type"], "input_image");
+        assert_eq!(
+            tool_result_content[1]["image_url"],
+            "data:image/png;base64,abc"
+        );
+    }
 
     #[test]
     fn standard_payload_normalizes_stringified_reasoning_details_items() {
@@ -615,5 +626,57 @@ mod tests {
         let payload = build_codex_responses_payload(&request).expect("payload should build");
         assert_eq!(payload.input.len(), 2);
         assert_eq!(payload.input[0]["type"], "compaction");
+    }
+
+    #[test]
+    fn standard_payload_preserves_multimodal_tool_result_content() {
+        let request = LLMRequest {
+            model: "gpt-5".to_string(),
+            messages: vec![
+                Message::assistant_with_tools(
+                    String::new(),
+                    vec![ToolCall::function(
+                        "call_1".to_string(),
+                        "view_image".to_string(),
+                        "{\"path\":\"./img.png\"}".to_string(),
+                    )],
+                ),
+                Message::tool_response(
+                    "call_1".to_string(),
+                    r#"[{"type":"input_text","text":"inline image note"},{"type":"input_image","image_url":"data:image/png;base64,abc"}]"#
+                        .to_string(),
+                ),
+            ],
+            ..Default::default()
+        };
+
+        let payload = build_standard_responses_payload(&request).expect("payload should build");
+        assert_multimodal_tool_result(payload);
+    }
+
+    #[test]
+    fn codex_payload_preserves_multimodal_tool_result_content() {
+        let request = LLMRequest {
+            model: "gpt-5-codex".to_string(),
+            messages: vec![
+                Message::assistant_with_tools(
+                    String::new(),
+                    vec![ToolCall::function(
+                        "call_1".to_string(),
+                        "view_image".to_string(),
+                        "{\"path\":\"./img.png\"}".to_string(),
+                    )],
+                ),
+                Message::tool_response(
+                    "call_1".to_string(),
+                    r#"[{"type":"input_text","text":"inline image note"},{"type":"input_image","image_url":"data:image/png;base64,abc"}]"#
+                        .to_string(),
+                ),
+            ],
+            ..Default::default()
+        };
+
+        let payload = build_codex_responses_payload(&request).expect("payload should build");
+        assert_multimodal_tool_result(payload);
     }
 }

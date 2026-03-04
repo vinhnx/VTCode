@@ -204,7 +204,9 @@ impl SensitivePath {
 
 #[cfg(windows)]
 fn normalize_windows_path(path: &Path) -> String {
-    path.to_string_lossy().replace('\\', "/").to_ascii_lowercase()
+    path.to_string_lossy()
+        .replace('\\', "/")
+        .to_ascii_lowercase()
 }
 
 /// Get the default sensitive paths as SensitivePath entries.

@@ -1,5 +1,7 @@
 use crate::llm::error_display;
-use crate::llm::provider::{LLMError, LLMResponse, Message, MessageRole, ToolCall};
+use crate::llm::provider::{
+    ContentPart, LLMError, LLMResponse, Message, MessageContent, MessageRole, ToolCall,
+};
 pub use crate::llm::providers::ReasoningBuffer;
 use crate::llm::providers::common::extract_reasoning_text_from_serialized_details;
 mod tag_sanitizer;
@@ -212,7 +214,9 @@ impl FunctionOutputContentItem {
     }
 }
 
-fn parse_function_output_content_items_array(items: &[Value]) -> Option<Vec<FunctionOutputContentItem>> {
+fn parse_function_output_content_items_array(
+    items: &[Value],
+) -> Option<Vec<FunctionOutputContentItem>> {
     items
         .iter()
         .map(FunctionOutputContentItem::from_value)
@@ -242,6 +246,86 @@ pub(crate) fn parse_function_output_content_items_text(
     }
     let parsed: Value = serde_json::from_str(trimmed).ok()?;
     parse_function_output_content_items_value(&parsed)
+}
+
+fn function_output_items_from_parts(parts: &[ContentPart]) -> Vec<FunctionOutputContentItem> {
+    let mut items = Vec::new();
+    for part in parts {
+        match part {
+            ContentPart::Text { text } => {
+                if text.trim().is_empty() {
+                    continue;
+                }
+                items.push(FunctionOutputContentItem::InputText { text: text.clone() });
+            }
+            ContentPart::Image {
+                data, mime_type, ..
+            } => {
+                items.push(FunctionOutputContentItem::InputImage {
+                    image_url: format!("data:{};base64,{}", mime_type, data),
+                });
+            }
+            ContentPart::File { .. } => {}
+        }
+    }
+    items
+}
+
+fn function_output_value_from_items(items: Vec<FunctionOutputContentItem>) -> Value {
+    if items.is_empty() {
+        return Value::String(String::new());
+    }
+    let has_image = items
+        .iter()
+        .any(|item| matches!(item, FunctionOutputContentItem::InputImage { .. }));
+    if has_image {
+        return Value::Array(
+            items
+                .iter()
+                .map(FunctionOutputContentItem::to_function_output_json)
+                .collect(),
+        );
+    }
+    Value::String(text_from_function_output_items(&items).unwrap_or_default())
+}
+
+pub(crate) fn function_output_value_from_message_content(content: &MessageContent) -> Value {
+    match content {
+        MessageContent::Text(text) => {
+            if let Some(items) = parse_function_output_content_items_text(text) {
+                return function_output_value_from_items(items);
+            }
+            Value::String(text.clone())
+        }
+        MessageContent::Parts(parts) => {
+            let items = function_output_items_from_parts(parts);
+            function_output_value_from_items(items)
+        }
+    }
+}
+
+pub(crate) fn tool_result_content_from_message_content(content: &MessageContent) -> Vec<Value> {
+    match content {
+        MessageContent::Text(text) => {
+            if text.trim().is_empty() {
+                return Vec::new();
+            }
+            if let Some(items) = parse_function_output_content_items_text(text) {
+                return items
+                    .iter()
+                    .map(FunctionOutputContentItem::to_tool_result_json)
+                    .collect();
+            }
+            vec![serde_json::json!({
+                "type": "output_text",
+                "text": text
+            })]
+        }
+        MessageContent::Parts(parts) => function_output_items_from_parts(parts)
+            .iter()
+            .map(FunctionOutputContentItem::to_tool_result_json)
+            .collect(),
+    }
 }
 
 fn text_from_function_output_items(items: &[FunctionOutputContentItem]) -> Option<String> {
@@ -404,7 +488,7 @@ fn parse_message_item(item: &Value) -> Option<Message> {
         }
         _ => Some(Message {
             role: MessageRole::Assistant,
-            content: crate::llm::provider::MessageContent::text(content),
+            content: MessageContent::text(content),
             ..Message::default()
         }),
     }
@@ -1008,6 +1092,55 @@ mod tests {
         assert!(parsed[0].tool_calls.is_some());
         assert_eq!(parsed[1].role, MessageRole::Tool);
         assert_eq!(parsed[1].tool_call_id.as_deref(), Some("call_1"));
+    }
+
+    #[test]
+    fn parse_compacted_output_messages_serializes_multimodal_function_output() {
+        let output = vec![json!({
+            "type": "function_call_output",
+            "call_id": "call_1",
+            "output": [
+                { "type": "input_text", "text": "inline image note" },
+                { "type": "input_image", "image_url": "data:image/png;base64,abc" }
+            ]
+        })];
+
+        let parsed = parse_compacted_output_messages(&output);
+        assert_eq!(parsed.len(), 1);
+        assert_eq!(parsed[0].role, MessageRole::Tool);
+        assert_eq!(parsed[0].tool_call_id.as_deref(), Some("call_1"));
+        let text = parsed[0].content.as_text();
+        assert!(text.contains("\"input_image\""));
+        assert!(text.contains("inline image note"));
+    }
+
+    #[test]
+    fn tool_result_content_parses_multimodal_tool_output_text() {
+        let content = MessageContent::Text(
+            r#"[{"type":"input_text","text":"note"},{"type":"input_image","image_url":"data:image/png;base64,abc"}]"#
+                .to_string(),
+        );
+        let parts = tool_result_content_from_message_content(&content);
+        assert_eq!(parts.len(), 2);
+        assert_eq!(parts[0]["type"], "output_text");
+        assert_eq!(parts[0]["text"], "note");
+        assert_eq!(parts[1]["type"], "input_image");
+        assert_eq!(parts[1]["image_url"], "data:image/png;base64,abc");
+    }
+
+    #[test]
+    fn function_output_value_parses_multimodal_tool_output_text() {
+        let content = MessageContent::Text(
+            r#"[{"type":"input_text","text":"note"},{"type":"input_image","image_url":"data:image/png;base64,abc"}]"#
+                .to_string(),
+        );
+        let output = function_output_value_from_message_content(&content);
+        let items = output.as_array().expect("expected array output");
+        assert_eq!(items.len(), 2);
+        assert_eq!(items[0]["type"], "input_text");
+        assert_eq!(items[0]["text"], "note");
+        assert_eq!(items[1]["type"], "input_image");
+        assert_eq!(items[1]["image_url"], "data:image/png;base64,abc");
     }
 
     #[test]

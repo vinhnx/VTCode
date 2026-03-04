@@ -11,7 +11,9 @@ use crate::llm::provider::{
 use crate::llm::providers::common::{
     append_normalized_reasoning_detail_items, serialize_message_content_openai,
 };
-use crate::llm::providers::shared::parse_compacted_output_messages;
+use crate::llm::providers::shared::{
+    function_output_value_from_message_content, parse_compacted_output_messages,
+};
 use anyhow::Result;
 use async_stream::try_stream;
 use async_trait::async_trait;
@@ -282,13 +284,13 @@ impl OpenResponsesProvider {
 
             if let Some(tool_call_id) = &message.tool_call_id {
                 // If this message is a tool output, add it as FunctionCallOutput
-                input.push(Self::output_item_to_value(
-                    OutputItem::completed_function_call_output(
-                        format!("fco_{i}"),
-                        Some(tool_call_id.clone()),
-                        message.content.as_text(),
-                    ),
-                )?);
+                input.push(json!({
+                    "type": "function_call_output",
+                    "id": format!("fco_{i}"),
+                    "status": "completed",
+                    "call_id": tool_call_id,
+                    "output": function_output_value_from_message_content(&message.content),
+                }));
             }
         }
 
@@ -1095,5 +1097,55 @@ mod tests {
                     .flatten()
                     .any(|part| part.get("text").and_then(Value::as_str) == Some("/tmp/work"))
         }));
+    }
+
+    #[test]
+    fn native_payload_preserves_multimodal_tool_output_items() {
+        let provider = test_provider("https://api.openresponses.com/v1");
+        let request = LLMRequest {
+            model: "gpt-5".to_string(),
+            messages: vec![
+                Message::assistant_with_tools(
+                    String::new(),
+                    vec![ToolCall::function(
+                        "call_1".to_string(),
+                        "view_image".to_string(),
+                        "{\"path\":\"./img.png\"}".to_string(),
+                    )],
+                ),
+                Message::tool_response(
+                    "call_1".to_string(),
+                    r#"[{"type":"input_text","text":"inline image note"},{"type":"input_image","image_url":"data:image/png;base64,abc"}]"#
+                        .to_string(),
+                ),
+            ],
+            ..Default::default()
+        };
+
+        let payload = provider
+            .build_native_payload(&request, false)
+            .expect("native payload should serialize");
+        let input = payload
+            .get("input")
+            .and_then(Value::as_array)
+            .expect("input should be an array");
+
+        let function_call_output = input
+            .iter()
+            .find(|item| {
+                item.get("type").and_then(Value::as_str) == Some("function_call_output")
+                    && item.get("call_id").and_then(Value::as_str) == Some("call_1")
+            })
+            .expect("function_call_output item should exist");
+
+        let output_items = function_call_output
+            .get("output")
+            .and_then(Value::as_array)
+            .expect("multimodal output should be serialized as an array");
+        assert_eq!(output_items.len(), 2);
+        assert_eq!(output_items[0]["type"], "input_text");
+        assert_eq!(output_items[0]["text"], "inline image note");
+        assert_eq!(output_items[1]["type"], "input_image");
+        assert_eq!(output_items[1]["image_url"], "data:image/png;base64,abc");
     }
 }
