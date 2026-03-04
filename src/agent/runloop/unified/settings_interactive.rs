@@ -14,7 +14,7 @@ use vtcode_tui::{InlineListItem, InlineListSearchConfig, InlineListSelection};
 const SETTINGS_TITLE: &str = "VT Code Settings";
 const SETTINGS_HINT: &str = "↑/↓ select • Enter apply • ←/→ adjust • Auto-save on change • Esc parent (double Esc closes) • Type to filter";
 const SETTINGS_SEARCH_LABEL: &str = "Filter settings";
-const SETTINGS_SEARCH_PLACEHOLDER: &str = "path, key, or description";
+const SETTINGS_SEARCH_PLACEHOLDER: &str = "path, key, value, or description";
 const ACTION_RELOAD: &str = "settings:reload";
 const ACTION_OPEN_ROOT: &str = "settings:open_root";
 const ACTION_PREFIX_OPEN: &str = "settings:open:";
@@ -246,8 +246,7 @@ fn build_settings_items(
     } else {
         items.push(section_item("Categories"));
         if let TomlValue::Table(table) = draft {
-            let mut keys: Vec<&String> = table.keys().collect();
-            keys.sort();
+            let keys = sorted_table_keys(table);
             for key in keys {
                 let Some(value) = table.get(key) else {
                     continue;
@@ -267,17 +266,66 @@ fn build_settings_items(
                 });
             }
         }
+
+        items.push(section_item("All settings"));
+        if let TomlValue::Table(table) = draft {
+            let keys = sorted_table_keys(table);
+            for key in keys {
+                let Some(value) = table.get(key) else {
+                    continue;
+                };
+                if let TomlValue::Table(child_table) = value {
+                    for child_key in sorted_table_keys(child_table) {
+                        let Some(child_value) = child_table.get(child_key) else {
+                            continue;
+                        };
+                        let child_path = format!("{key}.{child_key}");
+                        append_flat_settings_items(&mut items, &child_path, child_value, 0);
+                    }
+                } else {
+                    append_flat_settings_items(&mut items, key, value, 0);
+                }
+            }
+        }
     }
 
     Ok(items)
 }
 
+fn append_flat_settings_items(
+    items: &mut Vec<InlineListItem>,
+    path: &str,
+    value: &TomlValue,
+    depth: usize,
+) {
+    let mut item = item_for_value(path, path, value);
+    item.indent = depth.min(u8::MAX as usize) as u8;
+    items.push(item);
+
+    match value {
+        TomlValue::Table(table) => {
+            for key in sorted_table_keys(table) {
+                let Some(child) = table.get(key) else {
+                    continue;
+                };
+                let child_path = format!("{}.{}", path, key);
+                append_flat_settings_items(items, &child_path, child, depth.saturating_add(1));
+            }
+        }
+        TomlValue::Array(entries) => {
+            for (index, child) in entries.iter().enumerate() {
+                let child_path = format!("{}[{}]", path, index);
+                append_flat_settings_items(items, &child_path, child, depth.saturating_add(1));
+            }
+        }
+        _ => {}
+    }
+}
+
 fn append_node_items(items: &mut Vec<InlineListItem>, path: &str, node: &TomlValue) -> Result<()> {
     match node {
         TomlValue::Table(table) => {
-            let mut keys: Vec<&String> = table.keys().collect();
-            keys.sort();
-            for key in keys {
+            for key in sorted_table_keys(table) {
                 let Some(value) = table.get(key) else {
                     continue;
                 };
@@ -338,7 +386,7 @@ fn item_for_value(label: &str, path: &str, value: &TomlValue) -> InlineListItem 
                 "{}{}:toggle",
                 ACTION_PREFIX_SET, path
             ))),
-            search_value: Some(search_value(path, label, doc)),
+            search_value: Some(search_value_with_content(path, label, value, doc)),
         },
         TomlValue::Integer(_) | TomlValue::Float(_) => InlineListItem {
             title: label.to_string(),
@@ -349,7 +397,7 @@ fn item_for_value(label: &str, path: &str, value: &TomlValue) -> InlineListItem 
                 "{}{}:inc",
                 ACTION_PREFIX_SET, path
             ))),
-            search_value: Some(search_value(path, label, doc)),
+            search_value: Some(search_value_with_content(path, label, value, doc)),
         },
         TomlValue::String(current) => {
             let has_options = resolve_cycle_options(path, current).len() > 1;
@@ -368,7 +416,7 @@ fn item_for_value(label: &str, path: &str, value: &TomlValue) -> InlineListItem 
                         ACTION_PREFIX_SET, path
                     ))
                 }),
-                search_value: Some(search_value(path, label, doc)),
+                search_value: Some(search_value_with_content(path, label, value, doc)),
             }
         }
         TomlValue::Array(entries) => InlineListItem {
@@ -384,7 +432,7 @@ fn item_for_value(label: &str, path: &str, value: &TomlValue) -> InlineListItem 
                 "{}{}",
                 ACTION_PREFIX_OPEN, path
             ))),
-            search_value: Some(search_value(path, label, doc)),
+            search_value: Some(search_value_with_content(path, label, value, doc)),
         },
         TomlValue::Table(table) => InlineListItem {
             title: label.to_string(),
@@ -399,7 +447,7 @@ fn item_for_value(label: &str, path: &str, value: &TomlValue) -> InlineListItem 
                 "{}{}",
                 ACTION_PREFIX_OPEN, path
             ))),
-            search_value: Some(search_value(path, label, doc)),
+            search_value: Some(search_value_with_content(path, label, value, doc)),
         },
         _ => InlineListItem {
             title: label.to_string(),
@@ -407,7 +455,7 @@ fn item_for_value(label: &str, path: &str, value: &TomlValue) -> InlineListItem 
             badge: Some("Value".to_string()),
             indent: 0,
             selection: None,
-            search_value: Some(search_value(path, label, doc)),
+            search_value: Some(search_value_with_content(path, label, value, doc)),
         },
     }
 }
@@ -447,8 +495,23 @@ fn action_item(title: &str, subtitle: &str, badge: Option<&str>, action: &str) -
     }
 }
 
-fn search_value(path: &str, label: &str, doc: Option<&FieldDoc>) -> String {
+fn search_value_with_content(
+    path: &str,
+    label: &str,
+    value: &TomlValue,
+    doc: Option<&FieldDoc>,
+) -> String {
     let mut parts = vec![path.to_string(), label.to_string()];
+
+    // Add the actual value content for searching
+    match value {
+        TomlValue::String(s) => parts.push(s.clone()),
+        TomlValue::Integer(n) => parts.push(n.to_string()),
+        TomlValue::Float(f) => parts.push(f.to_string()),
+        TomlValue::Boolean(b) => parts.push(b.to_string()),
+        _ => {}
+    }
+
     if let Some(doc) = doc {
         if !doc.description.is_empty() {
             parts.push(doc.description.clone());
@@ -458,6 +521,12 @@ fn search_value(path: &str, label: &str, doc: Option<&FieldDoc>) -> String {
         }
     }
     parts.join(" ").to_ascii_lowercase()
+}
+
+fn sorted_table_keys(table: &toml::map::Map<String, TomlValue>) -> Vec<&String> {
+    let mut keys: Vec<&String> = table.keys().collect();
+    keys.sort();
+    keys
 }
 
 fn count_leaf_entries(value: &TomlValue) -> usize {
@@ -1119,5 +1188,60 @@ mod tests {
     #[test]
     fn parse_field_docs_has_known_entry() {
         assert!(FIELD_DOCS.lookup("agent.provider").is_some());
+    }
+
+    #[test]
+    fn root_settings_items_include_nested_keys_for_global_search() {
+        let state = SettingsPaletteState {
+            workspace: PathBuf::from("."),
+            source_path: PathBuf::from("vtcode.toml"),
+            source_label: "test".to_string(),
+            draft: VTCodeConfig::default(),
+            view_path: None,
+        };
+        let draft: TomlValue = toml::from_str(
+            r#"
+            [tools.editor]
+            external_editor = "code --wait"
+            [agent]
+            quiet = true
+            "#,
+        )
+        .expect("valid draft value");
+
+        let items = build_settings_items(&state, &draft).expect("settings items");
+        assert!(items.iter().any(|item| item.title == "tools.editor"));
+        assert!(
+            items
+                .iter()
+                .any(|item| item.title == "tools.editor.external_editor")
+        );
+    }
+
+    #[test]
+    fn root_settings_search_value_includes_scalar_value_content() {
+        let state = SettingsPaletteState {
+            workspace: PathBuf::from("."),
+            source_path: PathBuf::from("vtcode.toml"),
+            source_label: "test".to_string(),
+            draft: VTCodeConfig::default(),
+            view_path: None,
+        };
+        let draft: TomlValue = toml::from_str(
+            r#"
+            [tools.editor]
+            external_editor = "code --wait"
+            "#,
+        )
+        .expect("valid draft value");
+
+        let items = build_settings_items(&state, &draft).expect("settings items");
+        let entry = items
+            .iter()
+            .find(|item| item.title == "tools.editor.external_editor")
+            .expect("flattened key should be present");
+        let search_value = entry.search_value.as_deref().expect("search value");
+        assert!(search_value.contains("external_editor"));
+        assert!(search_value.contains("code --wait"));
     }
 }
