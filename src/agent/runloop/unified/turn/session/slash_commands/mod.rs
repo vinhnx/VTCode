@@ -116,7 +116,10 @@ pub async fn handle_outcome(
         SlashCommandOutcome::ShowStatus => handlers::handle_show_status(ctx).await,
         SlashCommandOutcome::ManageMcp { action } => handlers::handle_manage_mcp(ctx, action).await,
 
-        SlashCommandOutcome::RunDoctor => handlers::handle_run_doctor(ctx).await,
+        SlashCommandOutcome::StartDoctorInteractive => {
+            handlers::handle_start_doctor_interactive(ctx).await
+        }
+        SlashCommandOutcome::RunDoctor { quick } => handlers::handle_run_doctor(ctx, quick).await,
         SlashCommandOutcome::Update {
             check_only,
             install,

@@ -74,7 +74,7 @@ pub static SLASH_COMMANDS: Lazy<Vec<SlashCommandInfo>> = Lazy::new(|| {
         },
         SlashCommandInfo {
             name: "doctor",
-            description: "Run installation and configuration diagnostics",
+            description: "Run installation and configuration diagnostics (interactive in inline UI; usage: /doctor [--quick|--full])",
         },
         SlashCommandInfo {
             name: "update",

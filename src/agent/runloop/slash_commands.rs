@@ -69,7 +69,10 @@ pub enum SlashCommandOutcome {
     ManageMcp {
         action: McpCommandAction,
     },
-    RunDoctor,
+    StartDoctorInteractive,
+    RunDoctor {
+        quick: bool,
+    },
     Update {
         check_only: bool,
         install: bool,
@@ -272,13 +275,14 @@ pub async fn handle_slash_command(
             Ok(SlashCommandOutcome::CopyLatestAssistantReply)
         }
         "status" => Ok(SlashCommandOutcome::ShowStatus),
-        "doctor" => {
-            if !args.is_empty() {
-                renderer.line(MessageStyle::Error, "Usage: /doctor")?;
-                return Ok(SlashCommandOutcome::Handled);
+        "doctor" => match parse_doctor_args(args, renderer.supports_inline_ui()) {
+            Ok(DoctorCommand::Interactive) => Ok(SlashCommandOutcome::StartDoctorInteractive),
+            Ok(DoctorCommand::Run { quick }) => Ok(SlashCommandOutcome::RunDoctor { quick }),
+            Err(message) => {
+                renderer.line(MessageStyle::Error, &message)?;
+                Ok(SlashCommandOutcome::Handled)
             }
-            Ok(SlashCommandOutcome::RunDoctor)
-        }
+        },
         "update" => match parse_update_args(args) {
             Ok((check_only, install, force)) => Ok(SlashCommandOutcome::Update {
                 check_only,
@@ -451,4 +455,83 @@ fn parse_update_args(args: &str) -> std::result::Result<(bool, bool, bool), Stri
     }
 
     Ok((check_only, install, force))
+}
+
+#[derive(Debug)]
+enum DoctorCommand {
+    Interactive,
+    Run { quick: bool },
+}
+
+fn parse_doctor_args(
+    args: &str,
+    supports_inline_ui: bool,
+) -> std::result::Result<DoctorCommand, String> {
+    let mut quick = false;
+    let mut full = false;
+
+    for token in args.split_whitespace() {
+        match token.to_ascii_lowercase().as_str() {
+            "--quick" | "-q" | "quick" => quick = true,
+            "--full" | "full" => full = true,
+            "" => {}
+            _ => {
+                return Err(
+                    "Usage: /doctor [--quick|--full]\nExamples: /doctor, /doctor --quick"
+                        .to_string(),
+                );
+            }
+        }
+    }
+
+    if quick && full {
+        return Err("Use either --quick or --full, not both.".to_string());
+    }
+
+    if !quick && !full && supports_inline_ui {
+        return Ok(DoctorCommand::Interactive);
+    }
+
+    Ok(DoctorCommand::Run { quick })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{DoctorCommand, parse_doctor_args, parse_update_args};
+
+    #[test]
+    fn parse_doctor_defaults_to_full_mode() {
+        let mode = parse_doctor_args("", false).expect("should parse");
+        assert!(matches!(mode, DoctorCommand::Run { quick: false }));
+    }
+
+    #[test]
+    fn parse_doctor_defaults_to_interactive_when_inline_ui_available() {
+        let mode = parse_doctor_args("", true).expect("should parse");
+        assert!(matches!(mode, DoctorCommand::Interactive));
+    }
+
+    #[test]
+    fn parse_doctor_quick_aliases() {
+        let mode = parse_doctor_args("--quick", true).expect("should parse");
+        assert!(matches!(mode, DoctorCommand::Run { quick: true }));
+
+        let mode = parse_doctor_args("-q", true).expect("should parse");
+        assert!(matches!(mode, DoctorCommand::Run { quick: true }));
+
+        let mode = parse_doctor_args("quick", true).expect("should parse");
+        assert!(matches!(mode, DoctorCommand::Run { quick: true }));
+    }
+
+    #[test]
+    fn parse_doctor_rejects_conflicting_flags() {
+        let err = parse_doctor_args("--quick --full", true).expect_err("must reject");
+        assert!(err.contains("either --quick or --full"));
+    }
+
+    #[test]
+    fn parse_update_rejects_conflicting_modes() {
+        let err = parse_update_args("check install").expect_err("must reject");
+        assert!(err.contains("either 'check' or 'install'"));
+    }
 }

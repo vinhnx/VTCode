@@ -97,7 +97,3 @@ review and modularize every component in src/ to ensure single responsibility, c
 ---
 
 handle prompt caching
-
----
-
-improve /doctor command logic and features

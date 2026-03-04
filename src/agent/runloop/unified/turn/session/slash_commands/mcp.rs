@@ -1,6 +1,6 @@
 use anyhow::Result;
 use vtcode_core::utils::ansi::MessageStyle;
-use vtcode_tui::{InlineEvent, InlineListItem, InlineListSelection};
+use vtcode_tui::{InlineListItem, InlineListSelection};
 
 use crate::agent::runloop::slash_commands::McpCommandAction;
 use crate::agent::runloop::unified::async_mcp_manager::McpInitStatus;
@@ -127,7 +127,7 @@ async fn run_interactive_mcp_manager(ctx: &mut SlashCommandContext<'_>) -> Resul
 
     loop {
         show_mcp_actions_modal(ctx);
-        let Some(selection) = wait_for_list_modal_selection(ctx).await else {
+        let Some(selection) = super::ui::wait_for_list_modal_selection(ctx).await else {
             return Ok(());
         };
 
@@ -271,51 +271,6 @@ fn show_mcp_actions_modal(ctx: &mut SlashCommandContext<'_>) {
         ))),
         None,
     );
-}
-
-async fn wait_for_list_modal_selection(
-    ctx: &mut SlashCommandContext<'_>,
-) -> Option<InlineListSelection> {
-    loop {
-        if ctx.ctrl_c_state.is_cancel_requested() {
-            ctx.handle.close_modal();
-            ctx.handle.force_redraw();
-            return None;
-        }
-
-        let notify = ctx.ctrl_c_notify.clone();
-        let maybe_event = tokio::select! {
-            _ = notify.notified() => None,
-            event = ctx.session.next_event() => event,
-        };
-
-        let Some(event) = maybe_event else {
-            ctx.handle.close_modal();
-            ctx.handle.force_redraw();
-            return None;
-        };
-
-        match event {
-            InlineEvent::ListModalSubmit(selection) => {
-                ctx.handle.close_modal();
-                ctx.handle.force_redraw();
-                return Some(selection);
-            }
-            InlineEvent::ListModalCancel | InlineEvent::Cancel | InlineEvent::Exit => {
-                ctx.handle.close_modal();
-                ctx.handle.force_redraw();
-                return None;
-            }
-            InlineEvent::Interrupt => {
-                ctx.ctrl_c_state.register_signal();
-                ctx.ctrl_c_notify.notify_waiters();
-                ctx.handle.close_modal();
-                ctx.handle.force_redraw();
-                return None;
-            }
-            _ => continue,
-        }
-    }
 }
 
 async fn sync_mcp_context_files_if_ready(ctx: &SlashCommandContext<'_>) -> Result<()> {

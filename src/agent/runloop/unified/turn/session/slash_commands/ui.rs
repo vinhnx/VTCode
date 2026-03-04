@@ -2,6 +2,7 @@ use anyhow::Result;
 use vtcode_core::ui::theme;
 use vtcode_core::utils::ansi::MessageStyle;
 use vtcode_core::utils::session_archive;
+use vtcode_tui::{InlineEvent, InlineListSelection};
 
 use crate::agent::runloop::model_picker::{ModelPickerStart, ModelPickerState};
 use crate::agent::runloop::tui_compat::inline_theme_from_core_styles;
@@ -33,6 +34,51 @@ pub(super) fn ensure_selection_ui_available(
         return Ok(false);
     }
     Ok(true)
+}
+
+pub(super) async fn wait_for_list_modal_selection(
+    ctx: &mut SlashCommandContext<'_>,
+) -> Option<InlineListSelection> {
+    loop {
+        if ctx.ctrl_c_state.is_cancel_requested() {
+            ctx.handle.close_modal();
+            ctx.handle.force_redraw();
+            return None;
+        }
+
+        let notify = ctx.ctrl_c_notify.clone();
+        let maybe_event = tokio::select! {
+            _ = notify.notified() => None,
+            event = ctx.session.next_event() => event,
+        };
+
+        let Some(event) = maybe_event else {
+            ctx.handle.close_modal();
+            ctx.handle.force_redraw();
+            return None;
+        };
+
+        match event {
+            InlineEvent::ListModalSubmit(selection) => {
+                ctx.handle.close_modal();
+                ctx.handle.force_redraw();
+                return Some(selection);
+            }
+            InlineEvent::ListModalCancel | InlineEvent::Cancel | InlineEvent::Exit => {
+                ctx.handle.close_modal();
+                ctx.handle.force_redraw();
+                return None;
+            }
+            InlineEvent::Interrupt => {
+                ctx.ctrl_c_state.register_signal();
+                ctx.ctrl_c_notify.notify_waiters();
+                ctx.handle.close_modal();
+                ctx.handle.force_redraw();
+                return None;
+            }
+            _ => continue,
+        }
+    }
 }
 
 pub async fn handle_theme_changed(

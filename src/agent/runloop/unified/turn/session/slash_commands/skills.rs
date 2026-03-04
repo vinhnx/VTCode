@@ -8,8 +8,7 @@ use vtcode_core::skills::loader::EnhancedSkillLoader;
 use vtcode_core::tools::ToolRegistration;
 use vtcode_core::utils::ansi::MessageStyle;
 use vtcode_tui::{
-    InlineEvent, InlineListItem, InlineListSearchConfig, InlineListSelection, WizardModalMode,
-    WizardStep,
+    InlineListItem, InlineListSearchConfig, InlineListSelection, WizardModalMode, WizardStep,
 };
 
 use crate::agent::runloop::unified::turn::utils::{
@@ -179,7 +178,7 @@ async fn run_interactive_skills_manager(
 
     loop {
         show_skills_manager_actions_modal(ctx);
-        let Some(selection) = wait_for_list_modal_selection(ctx).await else {
+        let Some(selection) = super::ui::wait_for_list_modal_selection(ctx).await else {
             return Ok(SlashCommandControl::Continue);
         };
 
@@ -325,7 +324,7 @@ async fn run_skill_browser(ctx: &mut SlashCommandContext<'_>) -> Result<()> {
         }
 
         show_skills_list_modal(ctx, &entries);
-        let Some(selection) = wait_for_list_modal_selection(ctx).await else {
+        let Some(selection) = super::ui::wait_for_list_modal_selection(ctx).await else {
             return Ok(());
         };
 
@@ -348,7 +347,7 @@ async fn run_skill_browser(ctx: &mut SlashCommandContext<'_>) -> Result<()> {
         };
 
         show_skill_actions_modal(ctx, &entry);
-        let Some(skill_action) = wait_for_list_modal_selection(ctx).await else {
+        let Some(skill_action) = super::ui::wait_for_list_modal_selection(ctx).await else {
             continue;
         };
         let InlineListSelection::ConfigAction(skill_action) = skill_action else {
@@ -482,7 +481,7 @@ async fn pick_skill_name(
     }
 
     show_skill_picker_modal(ctx, title, description, &filtered);
-    let Some(selection) = wait_for_list_modal_selection(ctx).await else {
+    let Some(selection) = super::ui::wait_for_list_modal_selection(ctx).await else {
         return Ok(None);
     };
 
@@ -959,49 +958,4 @@ fn show_skill_actions_modal(ctx: &mut SlashCommandContext<'_>, entry: &Interacti
         default_selection,
         None,
     );
-}
-
-async fn wait_for_list_modal_selection(
-    ctx: &mut SlashCommandContext<'_>,
-) -> Option<InlineListSelection> {
-    loop {
-        if ctx.ctrl_c_state.is_cancel_requested() {
-            ctx.handle.close_modal();
-            ctx.handle.force_redraw();
-            return None;
-        }
-
-        let notify = ctx.ctrl_c_notify.clone();
-        let maybe_event = tokio::select! {
-            _ = notify.notified() => None,
-            event = ctx.session.next_event() => event,
-        };
-
-        let Some(event) = maybe_event else {
-            ctx.handle.close_modal();
-            ctx.handle.force_redraw();
-            return None;
-        };
-
-        match event {
-            InlineEvent::ListModalSubmit(selection) => {
-                ctx.handle.close_modal();
-                ctx.handle.force_redraw();
-                return Some(selection);
-            }
-            InlineEvent::ListModalCancel | InlineEvent::Cancel | InlineEvent::Exit => {
-                ctx.handle.close_modal();
-                ctx.handle.force_redraw();
-                return None;
-            }
-            InlineEvent::Interrupt => {
-                ctx.ctrl_c_state.register_signal();
-                ctx.ctrl_c_notify.notify_waiters();
-                ctx.handle.close_modal();
-                ctx.handle.force_redraw();
-                return None;
-            }
-            _ => continue,
-        }
-    }
 }
