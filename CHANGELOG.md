@@ -2,6 +2,27 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.86.6 - 2026-03-05
+
+### Highlights
+#### Documentation
+
+- Update documentation structure and add Development Setup guide (7b38475a) 
+### Other Changes
+#### Other
+
+- Refactor Cargo.toml files to use workspace dependencies and update versioning scheme (a7bf7eea) 
+- Add MCP requirements enforcement and update related configurations (1f39beec) 
+#### Refactors
+
+- Modularize components in src/ for improved readability and maintainability (f405950c) 
+- Enhance plugin ABI with safety checks and optional deallocator (ef02885a) 
+- Integrate unicode-width for text display handling (f7251f5f) 
+- Implement schema command for runtime tool introspection and add input validation (8d2900a1) 
+- Improve visual distinction between assistant agent and PTY output messages (387a45c7) 
+- Update PTY fallback handling for consistent terminal output (ed0fa6c9) 
+### Contributors
+@vinhnx
 ## 0.86.5 - 2026-03-04
 
 ### Highlights
