@@ -1,5 +1,6 @@
 //! CLI commands for managing Model Context Protocol providers.
 
+use crate::cli::input_hardening::validate_agent_safe_text;
 use crate::config::VTCodeConfig;
 use crate::config::loader::ConfigManager;
 use crate::config::mcp::{
@@ -181,7 +182,7 @@ async fn run_add(add_args: AddArgs) -> Result<()> {
         AddMcpTransportArgs {
             streamable_http: Some(http),
             ..
-        } => build_http_transport(http),
+        } => build_http_transport(http)?,
         _ => bail!("either --command or --url must be provided"),
     };
 
@@ -396,7 +397,14 @@ fn build_stdio_transport(args: AddMcpStdioArgs) -> Result<McpTransportConfig> {
     let command_bin = command_parts
         .next()
         .ok_or_else(|| anyhow!("command is required when using stdio transport"))?;
+    validate_agent_safe_text("command", &command_bin)?;
     let command_args: Vec<String> = command_parts.collect();
+    for arg in &command_args {
+        validate_agent_safe_text("command argument", arg)?;
+    }
+    if let Some(working_directory) = args.working_directory.as_deref() {
+        validate_agent_safe_text("working_directory", working_directory)?;
+    }
 
     let transport = McpStdioServerConfig {
         command: command_bin,
@@ -407,7 +415,11 @@ fn build_stdio_transport(args: AddMcpStdioArgs) -> Result<McpTransportConfig> {
     Ok(McpTransportConfig::Stdio(transport))
 }
 
-fn build_http_transport(args: AddMcpStreamableHttpArgs) -> McpTransportConfig {
+fn build_http_transport(args: AddMcpStreamableHttpArgs) -> Result<McpTransportConfig> {
+    validate_agent_safe_text("url", &args.url)?;
+    if let Some(env_var) = args.bearer_token_env_var.as_deref() {
+        validate_agent_safe_text("bearer_token_env_var", env_var)?;
+    }
     let headers = args.header.into_iter().collect::<HashMap<_, _>>();
     let env_headers = args.env_header.into_iter().collect::<HashMap<_, _>>();
     let default_config = McpHttpServerConfig::default();
@@ -419,7 +431,7 @@ fn build_http_transport(args: AddMcpStreamableHttpArgs) -> McpTransportConfig {
         env_http_headers: env_headers,
     };
 
-    McpTransportConfig::Http(transport)
+    Ok(McpTransportConfig::Http(transport))
 }
 
 fn upsert_provider(config: &mut VTCodeConfig, provider: McpProviderConfig) -> bool {
@@ -515,10 +527,13 @@ fn parse_env_pair(raw: &str) -> Result<(String, String), String> {
         .next()
         .map(str::to_owned)
         .ok_or_else(|| "entries must be in KEY=VALUE form".to_owned())?;
+    validate_agent_safe_text("env key", key).map_err(|err| err.to_string())?;
+    validate_agent_safe_text("env value", &value).map_err(|err| err.to_string())?;
     Ok((key.to_owned(), value))
 }
 
 fn validate_provider_name(name: &str) -> Result<()> {
+    validate_agent_safe_text("provider name", name)?;
     let is_valid = !name.is_empty()
         && name
             .chars()
@@ -625,5 +640,29 @@ fn print_http_table(rows: &[[String; 5]]) {
             protocol_w = widths[3],
             status_w = widths[4],
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{parse_env_pair, validate_provider_name};
+
+    #[test]
+    fn parse_env_pair_accepts_valid_input() {
+        let parsed = parse_env_pair("FOO=bar").expect("valid env pair");
+        assert_eq!(parsed.0, "FOO");
+        assert_eq!(parsed.1, "bar");
+    }
+
+    #[test]
+    fn parse_env_pair_rejects_control_chars() {
+        let err = parse_env_pair("FOO=bad\u{0000}value").expect_err("nul must be rejected");
+        assert!(err.contains("U+0000"));
+    }
+
+    #[test]
+    fn validate_provider_name_rejects_control_chars() {
+        let err = validate_provider_name("bad\u{0007}name").expect_err("control chars rejected");
+        assert!(err.to_string().contains("U+0007"));
     }
 }

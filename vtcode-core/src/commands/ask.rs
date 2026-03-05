@@ -1,5 +1,6 @@
 //! Ask command implementation - single prompt without tools
 
+use crate::cli::input_hardening::validate_agent_safe_text;
 use crate::config::models::ModelId;
 use crate::config::types::AgentConfig;
 use crate::gemini::models::SystemInstruction;
@@ -21,6 +22,7 @@ pub async fn handle_ask_command(
         .map_err(|_| anyhow::anyhow!("Invalid model: {}", config.model))?;
     let mut client = make_client(config.api_key.clone(), model_id)?;
     let prompt_text = prompt.join(" ");
+    validate_agent_safe_text("prompt", &prompt_text)?;
 
     if config.verbose {
         eprintln!("Sending prompt to {}: {}", config.model, prompt_text);

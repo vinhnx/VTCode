@@ -204,6 +204,12 @@ impl AgentRunner {
         self.quiet = quiet;
     }
 
+    /// Enable read-only plan mode for the underlying tool registry.
+    pub fn enable_plan_mode(&self) {
+        self.tool_registry.enable_plan_mode();
+        self.tool_registry.plan_mode_state().enable();
+    }
+
     /// Attach a callback that will be invoked for each structured event as it is recorded.
     pub fn set_event_handler<F>(&mut self, handler: F)
     where

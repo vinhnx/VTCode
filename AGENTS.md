@@ -125,6 +125,13 @@ cargo clippy --workspace --all-targets -- -D warnings && cargo fmt --check && ca
 
 **Performance**: Single codegen unit, strict Clippy, no `expect_used`/`unwrap_used`.
 
+## Agent-First CLI Invariants
+
+- Prefer machine-readable output for automation (`vtcode ask --output-format json`, `vtcode exec --json`).
+- Introspect tool schemas at runtime before generating tool calls (`vtcode schema tools`).
+- Use `vtcode exec --dry-run` before mutation-oriented autonomous tasks.
+- Assume agent-generated input can be adversarial; keep input validation strict for CLI/MCP fields.
+
 **Pitfalls**:
 
 1. Don't assume paths — validate boundaries

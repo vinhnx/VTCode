@@ -153,8 +153,8 @@ This document serves as an index of all VT Code documentation. When users ask qu
 
 - **File**: `docs/user-guide/exec-mode.md`
   - **Content**: Exec Mode Automation
-  - **Topics**: Launching exec mode, Structured event stream, Resuming sessions
-  - **User Questions**: "What can you tell me about Exec Mode Automation?", "How does Launching exec mode work?", "How does Structured event stream work?"
+  - **Topics**: Launching exec mode, Dry-run mode, Structured event stream, Resuming sessions
+  - **User Questions**: "What can you tell me about Exec Mode Automation?", "How does Launching exec mode work?", "How does Dry-run mode work?"
 
 - **File**: `docs/user-guide/getting-started.md`
   - **Content**: Getting Started with VT Code
@@ -878,7 +878,7 @@ This document serves as an index of all VT Code documentation. When users ask qu
 
 - **File**: `docs/user-guide/commands.md`
   - **Content**: Command Reference
-  - **Topics**: grep_file (ripgrep-like), File operations, Quick Actions in Chat Input, stats (session metrics), update (binary updates)
+  - **Topics**: grep_file (ripgrep-like), File operations, Quick Actions in Chat Input, stats (session metrics), schema (runtime tool introspection)
   - **User Questions**: "What can you tell me about Command Reference?", "How does grep_file (ripgrep-like) work?", "How does File operations work?"
 
 - **File**: `docs/user-guide/interactive-mode.md`

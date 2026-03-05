@@ -4,6 +4,7 @@
 
 pub mod args;
 pub mod commands;
+pub mod input_hardening;
 pub mod man_pages;
 
 pub mod a2a;

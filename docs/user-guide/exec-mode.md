@@ -17,6 +17,17 @@ allowances or confirmation dialogs, so ensure the allow list covers every tool i
 `--last-message-file` or persist the raw JSON stream with `--events`. Use `--json` when you want to see the live JSONL feed on
 stdout.
 
+## Dry-run mode
+
+Use `--dry-run` to force read-only execution while still allowing the agent to analyze and plan:
+
+```bash
+vtcode exec --dry-run "identify required code changes for adding OAuth refresh token support"
+```
+
+In dry-run mode, VT Code enables plan/read-only enforcement for tool calls. Mutating operations are blocked, and the run reports what
+would be changed rather than applying edits.
+
 ## Structured event stream
 
 Use `vtcode exec --json` to emit JSON Lines that match the non-interactive Codex schema:

@@ -93,6 +93,33 @@ Display current configuration, available tools, and live performance metrics for
 session. Use `--format` to choose `text`, `json`, or `html` output and `--detailed` to list each
 tool.
 
+## schema (runtime tool introspection)
+
+Inspect VT Code's built-in tool schemas at runtime so automation can discover exact tool names and
+input parameters without relying on stale docs.
+
+### Usage
+
+```bash
+# Full JSON document (default)
+vtcode schema tools
+
+# Compact schema descriptions for tighter context windows
+vtcode schema tools --mode minimal
+
+# NDJSON output for streaming parsers
+vtcode schema tools --format ndjson
+
+# Filter to specific tools
+vtcode schema tools --name unified_search --name unified_file
+```
+
+### Options
+
+- `--mode` — `minimal`, `progressive` (default), or `full`
+- `--format` — `json` (default) or `ndjson`
+- `--name` — repeatable exact tool-name filter
+
 ## update (binary updates)
 
 Check for and install binary updates of VT Code from GitHub Releases. Updates are downloaded and verified against checksums for security.

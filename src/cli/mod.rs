@@ -18,6 +18,7 @@ pub use vtcode_core::mcp::cli::handle_mcp_command;
 pub mod analyze;
 pub mod benchmark;
 pub mod exec;
+pub mod schema;
 pub mod skills;
 pub mod skills_ref;
 pub mod update;
@@ -71,6 +72,10 @@ pub async fn handle_exec_command(
     prompt: Option<String>,
 ) -> Result<()> {
     exec::handle_exec_command(&core_cfg, cfg, options, prompt).await
+}
+
+pub async fn handle_schema_command(command: vtcode_core::cli::args::SchemaCommands) -> Result<()> {
+    schema::handle_schema_command(command).await
 }
 
 pub async fn handle_analyze_command(

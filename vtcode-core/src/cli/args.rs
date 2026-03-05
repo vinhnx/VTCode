@@ -267,6 +267,43 @@ pub enum AskOutputFormat {
     Json,
 }
 
+/// Output format options for the `schema` command.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, ValueEnum)]
+pub enum SchemaOutputFormat {
+    /// Emit one JSON document with all selected schemas.
+    Json,
+    /// Emit one JSON object per line.
+    Ndjson,
+}
+
+/// Documentation detail level for the `schema` command.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, ValueEnum)]
+pub enum SchemaMode {
+    /// Minimal descriptions and compact parameter metadata.
+    Minimal,
+    /// Balanced descriptions for agent discovery.
+    Progressive,
+    /// Full descriptions and full parameter metadata.
+    Full,
+}
+
+/// Schema-focused subcommands.
+#[derive(Subcommand, Debug, Clone)]
+pub enum SchemaCommands {
+    /// List built-in VT Code tool schemas.
+    Tools {
+        /// Documentation detail level for tool descriptions.
+        #[arg(long, value_enum, default_value_t = SchemaMode::Progressive)]
+        mode: SchemaMode,
+        /// Output format for schema payloads.
+        #[arg(long, value_enum, default_value_t = SchemaOutputFormat::Json)]
+        format: SchemaOutputFormat,
+        /// Filter by tool name (repeatable).
+        #[arg(long = "name", value_name = "TOOL")]
+        names: Vec<String>,
+    },
+}
+
 /// Available commands
 #[derive(Subcommand, Debug, Clone)]
 pub enum Commands {
@@ -295,6 +332,9 @@ pub enum Commands {
         /// Emit structured JSON events to stdout (one per line)
         #[arg(long)]
         json: bool,
+        /// Run in read-only dry-run mode (blocks mutating tool calls)
+        #[arg(long)]
+        dry_run: bool,
         /// Optional path to write the JSONL transcript
         #[arg(long, value_name = "PATH", value_hint = ValueHint::FilePath)]
         events: Option<PathBuf>,
@@ -304,6 +344,12 @@ pub enum Commands {
         /// Prompt to execute. Use `-` to force reading from stdin.
         #[arg(value_name = "PROMPT")]
         prompt: Option<String>,
+    },
+
+    /// Runtime schema introspection for built-in tools
+    Schema {
+        #[command(subcommand)]
+        command: SchemaCommands,
     },
 
     /// Verbose interactive chat with debug output

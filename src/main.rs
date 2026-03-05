@@ -97,6 +97,7 @@ async fn configure_debug_session_routing(
             Some(Commands::ChatVerbose) => "chat-verbose",
             Some(Commands::Ask { .. }) => "ask",
             Some(Commands::Exec { .. }) => "exec",
+            Some(Commands::Schema { .. }) => "schema",
             Some(Commands::Benchmark { .. }) => "benchmark",
             Some(Commands::Analyze { .. }) => "analyze",
             Some(Commands::AgentClientProtocol { .. }) => "acp",
@@ -411,16 +412,21 @@ async fn run() -> Result<()> {
         }
         Some(Commands::Exec {
             json,
+            dry_run,
             events,
             last_message_file,
             prompt,
         }) => {
             let options = cli::ExecCommandOptions {
                 json: *json,
+                dry_run: *dry_run,
                 events_path: events.clone(),
                 last_message_file: last_message_file.clone(),
             };
             cli::handle_exec_command(core_cfg.clone(), cfg, options, prompt.clone()).await?;
+        }
+        Some(Commands::Schema { command }) => {
+            cli::handle_schema_command(command.clone()).await?;
         }
         Some(Commands::ChatVerbose) => {
             // Reuse chat path; verbose behavior is handled in the module if applicable

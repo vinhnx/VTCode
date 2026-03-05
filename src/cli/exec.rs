@@ -2,6 +2,7 @@ use anyhow::{Context, Result, bail};
 use std::io::{self, Read};
 use std::path::PathBuf;
 use std::str::FromStr;
+use vtcode_core::cli::input_hardening::validate_agent_safe_text;
 use vtcode_core::config::VTCodeConfig;
 use vtcode_core::config::WorkspaceTrustLevel;
 use vtcode_core::config::models::ModelId;
@@ -21,17 +22,27 @@ const EXEC_SESSION_PREFIX: &str = "exec-task";
 const EXEC_TASK_ID: &str = "exec-task";
 const EXEC_TASK_TITLE: &str = "Exec Task";
 const EXEC_TASK_INSTRUCTIONS: &str = "You are running vtcode in non-interactive exec mode. Complete the task autonomously using the configured full-auto tool allowlist. Do not request additional user input, confirmations, or allowances—operate solely with the provided information and available tools. Provide a concise summary of the outcome when finished.";
+const EXEC_TASK_INSTRUCTIONS_DRY_RUN: &str = "You are running vtcode in non-interactive exec dry-run mode. Plan and validate the approach in read-only mode without mutating files, running mutating commands, or requesting additional user input. If the task requires mutations, explain what would be changed and why.";
 
 #[derive(Debug, Clone)]
 pub struct ExecCommandOptions {
     pub json: bool,
+    pub dry_run: bool,
     pub events_path: Option<PathBuf>,
     pub last_message_file: Option<PathBuf>,
 }
 
+fn task_instructions(dry_run: bool) -> &'static str {
+    if dry_run {
+        EXEC_TASK_INSTRUCTIONS_DRY_RUN
+    } else {
+        EXEC_TASK_INSTRUCTIONS
+    }
+}
+
 fn resolve_prompt(prompt_arg: Option<String>, quiet: bool) -> Result<String> {
-    match prompt_arg {
-        Some(p) if p != "-" => Ok(p),
+    let prompt = match prompt_arg {
+        Some(p) if p != "-" => p,
         maybe_dash => {
             let force_stdin = matches!(maybe_dash.as_deref(), Some("-"));
             if io::stdin().is_tty_ext() && !force_stdin {
@@ -48,9 +59,12 @@ fn resolve_prompt(prompt_arg: Option<String>, quiet: bool) -> Result<String> {
                 .read_to_string(&mut buffer)
                 .context("Failed to read prompt from stdin")?;
             validate_non_empty(&buffer, "Prompt via stdin")?;
-            Ok(buffer)
+            buffer
         }
-    }
+    };
+
+    validate_agent_safe_text("prompt", &prompt)?;
+    Ok(prompt)
 }
 
 // OPTIMIZATION: Use inline hint for hot path
@@ -146,6 +160,9 @@ async fn handle_exec_command_impl(
         .await
         .context("Failed to apply workspace configuration to exec runner")?;
     runner.enable_full_auto(&automation_cfg.allowed_tools).await;
+    if options.dry_run {
+        runner.enable_plan_mode();
+    }
     runner.set_quiet(options.json);
     if options.json {
         runner.set_event_handler(|event| match serde_json::to_string(event) {
@@ -159,7 +176,7 @@ async fn handle_exec_command_impl(
         id: EXEC_TASK_ID.into(),
         title: EXEC_TASK_TITLE.into(),
         description: prompt.trim().to_string(),
-        instructions: Some(EXEC_TASK_INSTRUCTIONS.into()),
+        instructions: Some(task_instructions(options.dry_run).into()),
     };
 
     let max_retries = vt_cfg.agent.max_task_retries;
@@ -199,6 +216,7 @@ async fn handle_exec_command_impl(
 
         eprintln!("{}", style("[OUTCOME]").magenta().bold());
         eprintln!("  {:16} {}", "outcome", result.outcome);
+        eprintln!("  {:16} {}", "dry_run", options.dry_run);
         eprintln!("  {:16} {}", "turns", result.turns_executed);
         eprintln!("  {:16} {}", "duration_ms", result.total_duration_ms);
         eprintln!("  {:16} {}", "avg_turn_ms", avg_display);
@@ -251,4 +269,22 @@ async fn handle_exec_command_impl(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::task_instructions;
+
+    #[test]
+    fn dry_run_instructions_are_read_only_focused() {
+        let instructions = task_instructions(true);
+        assert!(instructions.contains("read-only"));
+        assert!(instructions.contains("without mutating files"));
+    }
+
+    #[test]
+    fn normal_exec_instructions_do_not_use_dry_run_wording() {
+        let instructions = task_instructions(false);
+        assert!(!instructions.contains("dry-run mode"));
+    }
 }
