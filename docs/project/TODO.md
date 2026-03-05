@@ -96,10 +96,3 @@ https://sw.kovidgoyal.net/kitty/graphics-protocol/
 2. consider showing image as popup and on demand only to save memory and reduce token usage, instead of embedding image data directly in the prompt or response.
 3. suggestion, when an image is detected in the chat user input. show as a [image #N] tag in the user prompt, similiar to [pasted text #N] for pasted text. then the agent can choose to request the image data if needed, and the system can provide the image data in a separate tool call or context update, rather than embedding it directly in the prompt. This would allow for more efficient handling of images without bloating the prompt with large base64 data.
 4. also allow keyboard shortcut to view the image in a popup viewer, so that users can easily view the image without it taking up space in the main chat interface. like keyboard and click on the [image #N] tag to open the image in a popup.
-
----
-
-increase assistant agent message ansi brighter.
-current it look identical to PTY output message " All checks passed. No changes required." '/Users/vinhnguyenxuan/Desktop/Screenshot 2026-03-05 at 9.16.19 PM.png'
-
-make sure PTY output message is dimmer and assistant agent message is brighter, so that it's easier to visually distinguish between the two types of messages in the chat interface. This will improve readability and help users quickly identify which messages are from the assistant agent versus which are outputs from PTY commands. Consider using different ANSI color codes or brightness levels to achieve this visual distinction effectively.
