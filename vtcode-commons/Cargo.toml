@@ -1,11 +1,11 @@
 [package]
 name = "vtcode-commons"
-version = "0.86.5"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
 rust-version = "1.88"
 authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
 description = "Shared traits for paths, telemetry, and error reporting reused across VT Code component extractions"
-license = "MIT"
+license.workspace = true
 readme = "README.md"
 homepage = "https://github.com/vinhnx/vtcode"
 repository = "https://github.com/vinhnx/vtcode"
@@ -22,30 +22,30 @@ rustdoc-args = ["--cfg", "docsrs"]
 default = []
 
 [dependencies]
-anyhow = "1"
+anyhow = { workspace = true }
 hashbrown = { workspace = true }
 rand = { workspace = true }
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
+reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-tokio = { version = "1.48", features = ["fs", "io-util"] }
-tracing = "0.1"
-anstyle = "1.0"
+tokio = { workspace = true, features = ["fs", "io-util"] }
+tracing = { workspace = true }
+anstyle = { workspace = true }
 anstyle-query = "1.0"
-anstyle-crossterm = "4.0"
-futures = "0.3"
+anstyle-crossterm = { workspace = true }
+futures = { workspace = true }
 base64 = { workspace = true }
 glob = "0.3"
-once_cell = "1.19"
-sha2 = "0.10"
+once_cell = { workspace = true }
+sha2 = { workspace = true }
 thiserror = { workspace = true }
 regex = { workspace = true }
-ratatui = { version = "0.30", default-features = false, features = ["crossterm"] }
+ratatui = { workspace = true }
 left-right = "0.11.7"
-memchr = "2.7"
+memchr = { workspace = true }
 
 [dev-dependencies]
-tokio = { version = "1.48", features = ["fs", "io-util", "macros", "rt"] }
+tokio = { workspace = true, features = ["fs", "io-util", "macros", "rt"] }
 
 [lints]
 workspace = true

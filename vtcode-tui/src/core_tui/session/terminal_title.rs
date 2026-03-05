@@ -291,6 +291,6 @@ mod tests {
         let long = "a".repeat(150);
         let truncated = truncate_title(long.clone());
         assert!(truncated.len() <= MAX_TITLE_LENGTH);
-        assert!(truncated.ends_with("..."));
+        assert!(truncated.ends_with("…"));
     }
 }

@@ -1,9 +1,9 @@
 [package]
 name = "vtcode-file-search"
-version = "0.86.5"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
 rust-version = "1.88"
-license = "MIT"
+license.workspace = true
 readme = "README.md"
 description = "Fast, parallel fuzzy file search library for VT Code"
 repository = "https://github.com/vinhnx/vtcode"
@@ -19,7 +19,7 @@ path = "src/lib.rs"
 [dependencies]
 anyhow = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
-ignore = "0.4"
+ignore = { workspace = true }
 nucleo-matcher = "0.3"
 vtcode-commons = { path = "../vtcode-commons", version = "0.86.5" }
 serde = { workspace = true, features = ["derive"] }

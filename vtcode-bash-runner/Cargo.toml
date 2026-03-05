@@ -1,10 +1,10 @@
 [package]
 name = "vtcode-bash-runner"
-version = "0.86.5"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
 rust-version = "1.88"
 description = "Cross-platform shell execution helpers extracted from VT Code"
-license = "MIT"
+license.workspace = true
 readme = "README.md"
 repository = "https://github.com/vinhnx/vtcode"
 documentation = "https://docs.rs/vtcode-bash-runner"
@@ -21,14 +21,14 @@ serde-errors = ["dep:serde"]
 exec-events = ["dep:vtcode-exec-events"]
 
 [dependencies]
-anyhow = "1.0"
+anyhow = { workspace = true }
 bytes = "1.11"
 hashbrown = { workspace = true }
 lru = "0.16"
 parking_lot = "0.12"
-path-clean = "1.0"
+path-clean = { workspace = true }
 shell-escape = "0.1"
-tokio = { version = "1.49", features = [
+tokio = { workspace = true, features = [
     "sync",
     "macros",
     "rt",
@@ -38,11 +38,11 @@ tokio = { version = "1.49", features = [
     "rt-multi-thread",
 ] }
 vtcode-commons = { path = "../vtcode-commons", version = "0.86.5" }
-serde = { version = "1.0", features = ["derive"], optional = true }
+serde = { workspace = true, features = ["derive"], optional = true }
 vtcode-exec-events = { path = "../vtcode-exec-events", version = "0.86.5", optional = true }
 
 [target.'cfg(unix)'.dependencies]
-libc = "0.2"
+libc = { workspace = true }
 nix = { version = "0.31", features = ["user", "signal", "process"] }
 
 [target.'cfg(windows)'.dependencies]
@@ -56,7 +56,7 @@ winapi = { version = "0.3", features = [
 workspace = true
 
 [dev-dependencies]
-assert_fs = "1.1"
+assert_fs = { workspace = true }
 tokio-test = "0.4"
 
 [[example]]

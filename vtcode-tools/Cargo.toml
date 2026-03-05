@@ -1,11 +1,11 @@
 [package]
 name = "vtcode-tools"
-version = "0.86.5"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
 rust-version = "1.88"
 authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
 description = "Prototype extraction of VT Code's modular tool registry"
-license = "MIT"
+license.workspace = true
 publish = false
 categories = ["development-tools"]
 keywords = ["vtcode", "tools", "registry", "modular", "ai-tools"]
@@ -25,19 +25,19 @@ vtcode-commons = { path = "../vtcode-commons", version = "0.86.5" }
 vtcode-core = { path = "../vtcode-core", version = "0.86.5", default-features = false }
 vtcode-acp-client = { path = "../vtcode-acp-client", version = "0.86.5" }
 anyhow = { workspace = true }
-async-trait = "0.1"
+async-trait = { workspace = true }
 hashbrown = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
-chrono = { version = "0.4", features = ["serde"] }
+chrono = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }
-async-trait = "0.1"
+async-trait = { workspace = true }
 serde_json = { workspace = true }
-assert_fs = "1.1"
+assert_fs = { workspace = true }
 tokio = { workspace = true }
-criterion = "0.8"
+criterion = { workspace = true }
 
 [lints]
 workspace = true

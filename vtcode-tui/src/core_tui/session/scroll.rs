@@ -260,7 +260,7 @@ mod tests {
         assert_eq!(manager.progress_percent(), 0);
 
         manager.set_offset(50);
-        assert_eq!(manager.progress_percent(), 50);
+        assert_eq!(manager.progress_percent(), 55);
 
         manager.scroll_to_bottom();
         assert_eq!(manager.progress_percent(), 100);

@@ -1,11 +1,11 @@
 [package]
 name = "vtcode-core"
-version = "0.86.5"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
 rust-version = "1.88"
 authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
 description = "Core library for VT Code - a Rust-based terminal coding agent"
-license = "MIT"
+license.workspace = true
 readme = "README.md"
 homepage = "https://github.com/vinhnx/vtcode"
 repository = "https://github.com/vinhnx/vtcode"
@@ -27,18 +27,14 @@ include = [
 [dependencies]
 anyhow = { workspace = true }
 hashbrown = { workspace = true }
-clap = { version = "4.5", features = ["derive"] }
-reqwest = { version = "0.12", default-features = false, features = [
-    "json",
-    "rustls-tls",
-    "stream",
-] }
+clap = { workspace = true, features = ["derive"] }
+reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 json5 = "1.3"
-toml = "0.9.11"
+toml = { workspace = true }
 toml_edit = "0.24"
-tokio = { version = "1.49", features = [
+tokio = { workspace = true, features = [
     "fs",
     "io-util",
     "macros",
@@ -46,56 +42,54 @@ tokio = { version = "1.49", features = [
     "sync",
     "process",
 ] }
-tokio-util = { version = "0.7", features = ["codec"] }
+tokio-util = { workspace = true, features = ["codec"] }
 async-process = "2.2"
-futures = "0.3"
+futures = { workspace = true }
 futures-lite = "2.3"
 async-stream = "0.3"
 base64 = { workspace = true }
-walkdir = "2.5"
+walkdir = { workspace = true }
 glob = "0.3"
 thiserror = { workspace = true }
-dialoguer = "0.12.0"
+dialoguer = { workspace = true }
 regex = { workspace = true }
-shell-words = "1.1"
+shell-words = { workspace = true }
 tree-sitter = "0.26"
 tree-sitter-bash = "0.25"
-indexmap = { version = "2.13", features = ["serde"] }
-itertools = "0.14.0"
+indexmap = { workspace = true }
+itertools = { workspace = true }
 tempfile = { workspace = true }
 dunce = "1.0"
 include_dir = "0.7"
-once_cell = "1.19"
+once_cell = { workspace = true }
 parking_lot = "0.12"
-sha2 = "0.10"
+sha2 = { workspace = true }
 lru = "0.16"
 num_cpus = { workspace = true }
-chrono = { version = "0.4", features = [
-    "serde",
-] } # For timestamp handling in CLI
+chrono = { workspace = true } # For timestamp handling in CLI
 iana-time-zone = "0.1"
 humantime = "2.1"
 terminal_size = "0.4.3"
-async-trait = "0.1.89"
+async-trait = { workspace = true }
 bytes = "1.11"
 # Dotenv support
-dotenvy = "0.15"
+dotenvy = { workspace = true }
 # Home directory detection
-dirs = "6.0"
+dirs = { workspace = true }
 # YAML support
-serde_yaml = "0.9"
+serde_yaml = { workspace = true }
 # Zip support for skill packaging
 zip = { version = "8.1", default-features = false, features = ["deflate"] }
 # Semantic versioning for Ollama version detection (Codex pattern)
 semver = { workspace = true }
-tracing = "0.1"
-tracing-subscriber = "0.3"
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
 fs2 = { workspace = true }
 # ANSI styling
-anstyle = "1.0"
-anstyle-git = "1.1"
+anstyle = { workspace = true }
+anstyle-git = { workspace = true }
 anstyle-ls = "1.0"
-anstyle-crossterm = "4.0"
+anstyle-crossterm = { workspace = true }
 anstyle-query = "1.0"
 anstream = "1.0"
 colorchoice-clap = "1.0"
@@ -105,7 +99,7 @@ unicode-segmentation = "1.11"
 unicode-width = { workspace = true }
 crossterm = { workspace = true, features = ["event-stream"] }
 nix = { version = "0.31", features = ["user", "signal", "poll", "term"] }
-ratatui = { version = "0.30", default-features = false, features = [
+ratatui = { workspace = true, features = [
     "crossterm",
     "unstable-rendered-line-info",
     "unstable-widget-ref",
@@ -147,21 +141,21 @@ rmcp = { version = "0.15", features = [
     "transport-streamable-http-client-reqwest",
 ] }
 openai-harmony = "0.0.8"
-url = "2.5"
+url = { workspace = true }
 jsonschema = "0.43"
-uuid = { version = "1.21.0", features = ["v4", "fast-rng", "serde"] }
+uuid = { workspace = true, features = ["v4", "fast-rng", "serde"] }
 which = "8.0.0"
 textwrap = "0.16"
 editor-command = "2.0"
 signal-hook = "0.4"
-rand = "0.10"
+rand = { workspace = true }
 rustc-hash = { workspace = true }
 arc-swap = "1.7"
 libloading = { workspace = true }
 
 lsp-types = "0.97.0"
 notify-rust = { version = "4.12", optional = true }
-ring = "0.17"
+ring = { workspace = true }
 
 # A2A (Agent2Agent) Protocol HTTP server support
 axum = { version = "0.8", features = ["json", "macros"], optional = true }
@@ -177,10 +171,10 @@ tokio-tungstenite = { version = "0.28", default-features = false, features = [
 vtcode-config = { path = "../vtcode-config", version = "0.86.5" }
 
 [target.'cfg(target_os = "linux")'.dependencies]
-libc = "0.2"
+libc = { workspace = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
-libc = "0.2"
+libc = { workspace = true }
 xattr = "1.6"
 
 [[example]]
@@ -210,12 +204,12 @@ all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
 [dev-dependencies]
-assert_fs = "1.1"
+assert_fs = { workspace = true }
 mockito = "1.7"
 proptest = "1.10"
-criterion = "0.8"
+criterion = { workspace = true }
 wiremock = "0.6.5"
-serial_test = "3.4"
+serial_test = { workspace = true }
 
 [[bench]]
 name = "tool_pipeline"

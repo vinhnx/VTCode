@@ -527,7 +527,7 @@ pub(crate) async fn stream_and_render_response_with_options_impl(
     if let Some(parser) = plan_parser.as_mut() {
         let trailing_plan_parse = parser.finish();
         if !trailing_plan_parse.stripped_text.is_empty() {
-            if let Some(callback) = on_progress.as_deref_mut() {
+            if let Some(callback) = on_progress {
                 callback(StreamProgressEvent::OutputDelta(
                     trailing_plan_parse.stripped_text.clone(),
                 ));

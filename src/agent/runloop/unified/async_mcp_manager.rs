@@ -406,8 +406,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_start_initialization_skips_when_task_already_running() {
-        let mut config = McpClientConfig::default();
-        config.enabled = true;
+        let config = McpClientConfig {
+            enabled: true,
+            ..McpClientConfig::default()
+        };
         let event_callback: Arc<dyn Fn(McpEvent) + Send + Sync> = Arc::new(|_event| {});
         let manager = AsyncMcpManager::new(config, true, AskForApproval::OnRequest, event_callback);
 

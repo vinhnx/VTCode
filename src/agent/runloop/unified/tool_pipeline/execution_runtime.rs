@@ -79,8 +79,8 @@ pub(super) async fn execute_with_cache_and_streaming(
     let is_cacheable_tool = is_tool_cacheable(name, args_val);
     let cache_target = cache_target_path(name, args_val);
 
-    if is_cacheable_tool {
-        if let Some(cached_status) = lookup_cached_status(
+    if is_cacheable_tool
+        && let Some(cached_status) = lookup_cached_status(
             registry,
             tool_result_cache,
             name,
@@ -89,9 +89,8 @@ pub(super) async fn execute_with_cache_and_streaming(
             CacheLookupPhase::Initial,
         )
         .await
-        {
-            return cached_status;
-        }
+    {
+        return cached_status;
     }
 
     handle.force_redraw();

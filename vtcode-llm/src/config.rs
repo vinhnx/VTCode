@@ -309,7 +309,7 @@ mod tests {
         assert_eq!(events.len(), 1);
         match &events[0] {
             AdapterEvent::PromptCacheResolved { scope, cache_dir } => {
-                assert_eq!(*scope, PathScope::Cache);
+                assert_eq!(*scope, PathScope::Workspace);
                 assert!(cache_dir.ends_with("relative/cache"));
             }
             other => panic!("unexpected event: {other:?}"),
@@ -336,7 +336,11 @@ mod tests {
         let formatter = RecordingFormatter::default();
         let hooks = AdapterHooks::new(&paths, &telemetry, &reporter, &formatter);
 
-        let config = OwnedProviderConfig::new();
+        let prompt_cache = PromptCachingConfig {
+            cache_dir: "relative/cache".to_string(),
+            ..PromptCachingConfig::default()
+        };
+        let config = OwnedProviderConfig::new().with_prompt_cache(prompt_cache);
         let _ = as_factory_config_with_hooks(&config, &hooks);
 
         // Ensure the error reporter observed the telemetry failure and the

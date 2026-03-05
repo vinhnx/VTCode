@@ -1,7 +1,7 @@
 [package]
 name = "vtcode-exec-events"
-version = "0.86.5"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
 rust-version = "1.88"
 description = "Structured execution telemetry event schema used across VT Code crates."
 license = "MIT OR Apache-2.0"
@@ -20,16 +20,16 @@ schema-export = ["dep:schemars"]
 
 [dependencies]
 hashbrown = { workspace = true }
-serde = { version = "1.0", features = ["derive"] }
+serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
-tracing = { version = "0.1", optional = true }
+tracing = { workspace = true, optional = true }
 log = { version = "0.4", optional = true }
 schemars = { workspace = true, optional = true, features = [
     "derive",
     "indexmap2",
 ] }
-uuid = { version = "1.21", features = ["v4", "serde"] }
-chrono = { version = "0.4", features = ["serde"] }
+uuid = { workspace = true, features = ["v4", "serde"] }
+chrono = { workspace = true }
 vtcode-commons = { path = "../vtcode-commons", version = "0.86.5" }
 
 [lints]

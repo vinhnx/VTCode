@@ -136,6 +136,7 @@ mod tests {
         let original_term = env::var("TERM").ok();
         let original_lang = env::var("LANG").ok();
         let original_lc_all = env::var("LC_ALL").ok();
+        let original_lc_ctype = env::var("LC_CTYPE").ok();
         let original_no_unicode = env::var("VTCODE_NO_UNICODE").ok();
 
         // Test with VTCODE_NO_UNICODE set (should disable Unicode)
@@ -159,6 +160,7 @@ mod tests {
         remove_var("TERM");
         remove_var("LANG");
         remove_var("LC_ALL");
+        remove_var("LC_CTYPE");
         assert!(!supports_unicode_box_drawing());
 
         // Restore original values
@@ -173,6 +175,10 @@ mod tests {
         match original_lc_all {
             Some(val) => set_var("LC_ALL", &val),
             None => clear_var("LC_ALL"),
+        }
+        match original_lc_ctype {
+            Some(val) => set_var("LC_CTYPE", &val),
+            None => clear_var("LC_CTYPE"),
         }
         match original_no_unicode {
             Some(val) => set_var("VTCODE_NO_UNICODE", &val),

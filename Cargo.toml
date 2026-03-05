@@ -53,13 +53,46 @@ hashbrown = { version = "0.15", features = ["serde"] }
 rustc-hash = "2.1"
 keyring = "3"
 libloading = "0.8"
+tracing = "0.1"
+chrono = { version = "0.4", features = ["serde"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
+assert_fs = "1.1"
+futures = "0.3"
+once_cell = "1.19"
+indexmap = { version = "2.13", features = ["serde"] }
+async-trait = "0.1.89"
+anstyle = "1.0"
+ratatui = { version = "0.30", default-features = false, features = ["crossterm"] }
+toml = "0.9.11"
+sha2 = "0.10"
+anstyle-git = "1.1"
+tokio-util = "0.7"
+tracing-subscriber = "0.3"
+criterion = "0.8"
+serde_yaml = "0.9"
+serial_test = "3.4"
+dotenvy = "0.15"
+dirs = "6.0"
+anstyle-crossterm = "4.0"
+path-clean = "1.0"
+shell-words = "1.1"
+dialoguer = "0.12.0"
+walkdir = "2.5"
+itertools = "0.14.0"
+memchr = "2.7"
+url = "2.5"
+agent-client-protocol = "0.9.4"
+uuid = "1.21.0"
+ignore = "0.4"
+ring = "0.17"
 
 [workspace.package]
 version = "0.86.5"
-edition = "2021"
+edition = "2024"
 license = "MIT"
 
 [workspace]
+resolver = "2"
 members = [
     "vtcode-acp-client",
     "vtcode-core",
@@ -72,8 +105,10 @@ members = [
     "vtcode-indexer",
     "vtcode-tools",
     "vtcode-bash-runner",
-    "vtcode-exec-events", "vtcode-file-search",
+    "vtcode-exec-events",
+    "vtcode-file-search",
 ]
+default-members = [".", "vtcode-core", "vtcode-tui"]
 exclude = ["zed-extension", "vtcode-process-hardening"]
 
 [patch.crates-io]
@@ -113,57 +148,53 @@ vtcode-config = { path = "vtcode-config", version = "0.86.5" }
 vtcode-core = { path = "vtcode-core", version = "0.86.5", default-features = false }
 vtcode-tui = { path = "vtcode-tui", version = "0.86.5" }
 anyhow = { workspace = true }
-clap = { version = "4.5", features = ["derive"] }
+clap = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
 webbrowser = "1.0"
 notify = "6.1.1" # For file watching functionality
 home = "0.5.9"   # For home directory detection
-tokio-util = { version = "0.7", features = ["compat"] }
+tokio-util = { workspace = true, features = ["compat"] }
 serde = { workspace = true }
-toml = "0.9.8"
-futures = "0.3"
-walkdir = "2.5"
-itertools = "0.14.0"
-memchr = "2.7"
+toml = { workspace = true }
+futures = { workspace = true }
+walkdir = { workspace = true }
+itertools = { workspace = true }
+memchr = { workspace = true }
 mimalloc = { workspace = true }
 tempfile = { workspace = true }
-once_cell = "1.19"
+once_cell = { workspace = true }
 libc = { workspace = true }
-chrono = { version = "0.4", features = [
-    "serde",
-] } # For timestamp handling in CLI
-path-clean = "1.0"
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-async-trait = "0.1.89"
+chrono = { workspace = true } # For timestamp handling in CLI
+path-clean = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
+async-trait = { workspace = true }
 # Environment helpers
-dotenvy = "0.15"
+dotenvy = { workspace = true }
 # Home directory detection
-dirs = "6.0"
+dirs = { workspace = true }
 # Hashing for large output file paths
-sha2 = "0.10"
+sha2 = { workspace = true }
 # ANSI styling
-anstyle = "1.0"
-anstyle-git = "1.1"
-anstyle-crossterm = "4.0"
+anstyle = { workspace = true }
+anstyle-git = { workspace = true }
+anstyle-crossterm = { workspace = true }
 colorchoice = "1.0"
-agent-client-protocol = "0.9.3"
+agent-client-protocol = { workspace = true }
 percent-encoding = "2.3"
-url = "2.5"
-shell-words = "1.1"
-dialoguer = "0.12.0"
+url = { workspace = true }
+shell-words = { workspace = true }
+dialoguer = { workspace = true }
 crossterm = { workspace = true }
 hashbrown = { workspace = true }
-ratatui = { version = "0.30", default-features = false, features = [
-    "crossterm",
-] }
+ratatui = { workspace = true }
 regex = { workspace = true }
 rustc-hash = { workspace = true }
 smallvec = "1.13"
 self_update = { version = "0.42", default-features = false, features = ["archive-tar", "compression-flate2", "rustls"] }
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
-semver = "1.0"
+reqwest = { workspace = true }
+semver = { workspace = true }
 thiserror = { workspace = true }
 axum = { version = "0.8", optional = true }
 
@@ -248,8 +279,8 @@ path = "src/main.rs"
 
 [dev-dependencies]
 tempfile = { workspace = true }
-assert_fs = "1.1"
-indexmap = { version = "2.12", features = ["serde"] }
+assert_fs = { workspace = true }
+indexmap = { workspace = true }
 rand = "0.9"
 regex = { workspace = true }
 assert_cmd = "2.1"

@@ -17,22 +17,26 @@ Example: Instead of "That's a great question about the architecture," jump direc
 
 ## Workspace Structure
 
-VT Code uses an **11-member workspace** architecture:
+VT Code uses a **13-member Cargo workspace**:
 
 ```
 vtcode/                          # Binary entrypoint (src/main.rs)
 ├── vtcode-core/                 # Core library (LLM, tools, config, MCP)
+├── vtcode-tui/                  # TUI surface and session runtime
 ├── vtcode-config/               # Configuration loader & schema
 ├── vtcode-commons/              # Shared utilities
 ├── vtcode-llm/                  # LLM provider abstractions
+├── vtcode-lmstudio/             # LM Studio provider integration
 ├── vtcode-tools/                # Tool implementations
 ├── vtcode-bash-runner/          # Shell execution engine
 ├── vtcode-markdown-store/       # Document storage
 ├── vtcode-indexer/              # Code indexing
 ├── vtcode-exec-events/          # Event definitions
-├── vtcode-acp-client/           # Agent Client Protocol bridge
-└── vtcode-process-hardening/    # Process hardening & security measures
+├── vtcode-file-search/          # Parallel fuzzy file search
+└── vtcode-acp-client/           # Agent Client Protocol bridge
 ```
+
+`vtcode-process-hardening` is intentionally excluded from `[workspace].members` and remains an isolated pre-main hardening crate.
 
 **Key separation**:
 

@@ -14,8 +14,7 @@ pub struct LMStudioClient {
     base_url: String,
 }
 
-const LMSTUDIO_CONNECTION_ERROR: &str =
-    "LM Studio is not responding. Install from https://lmstudio.ai/download and run 'lms server start'.";
+const LMSTUDIO_CONNECTION_ERROR: &str = "LM Studio is not responding. Install from https://lmstudio.ai/download and run 'lms server start'.";
 
 impl LMStudioClient {
     /// Create a client from the configured LM Studio provider.
@@ -269,10 +268,12 @@ mod tests {
         let client = LMStudioClient::from_host_root(server.uri());
         let result = client.fetch_models().await;
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("No 'data' array in response"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("No 'data' array in response")
+        );
     }
 
     #[tokio::test]
@@ -292,10 +293,12 @@ mod tests {
         let client = LMStudioClient::from_host_root(server.uri());
         let result = client.fetch_models().await;
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("Failed to fetch models: 500"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Failed to fetch models: 500")
+        );
     }
 
     #[tokio::test]
@@ -336,10 +339,12 @@ mod tests {
         let client = LMStudioClient::from_host_root(server.uri());
         let result = client.check_server().await;
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("Server returned error: 404"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Server returned error: 404")
+        );
     }
 
     #[test]
