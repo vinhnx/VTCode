@@ -1,14 +1,14 @@
 #!/bin/bash
 
-# vtcode Code Quality Check Script
-# This script runs the same checks as our CI pipeline
+# VT Code Code Quality Check Script
+# This script runs local quality checks with nextest-first test execution
 
 set -e
 
 # Source common utilities
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
-echo "Running vtcode Code Quality Checks..."
+echo "Running VT Code Quality Checks..."
 echo "========================================"
 
 # Function to run rustfmt check
@@ -38,7 +38,17 @@ run_clippy() {
 # Run tests
 run_tests() {
     print_status "Running tests..."
-    if cargo test --workspace; then
+    local test_exit=0
+
+    if cargo nextest --version &> /dev/null; then
+        print_status "Using cargo-nextest..."
+        cargo nextest run || test_exit=$?
+    else
+        print_warning "cargo-nextest not found. Falling back to cargo test."
+        cargo test --workspace || test_exit=$?
+    fi
+
+    if [ $test_exit -eq 0 ]; then
         print_success "All tests passed!"
         return 0
     else
@@ -169,7 +179,7 @@ case "${1:-}" in
         run_docs
         ;;
     "help"|"-h"|"--help")
-        echo "vtcode Code Quality Check Script"
+        echo "VT Code Code Quality Check Script"
         echo ""
         echo "Usage: $0 [COMMAND]"
         echo ""

@@ -16,11 +16,14 @@ VT Code includes a multi-layered test suite designed to ensure reliability and p
 ### Basic Test Commands
 
 ```bash
-# Run all tests
-cargo test
+# Recommended: run all tests quickly
+cargo nextest run
+
+# Fallback: run all tests without nextest
+cargo test --workspace
 
 # Run tests with detailed output
-cargo test -- --nocapture
+cargo nextest run -- --nocapture
 
 # Run specific test
 cargo test test_tool_registry

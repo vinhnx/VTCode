@@ -1,14 +1,14 @@
 #!/bin/bash
 
-# vtcode Development Environment Setup Script
-# This script sets up the development environment with all necessary tools
+# VT Code Development Environment Setup Script
+# This script sets up the development environment with baseline tooling
 
 set -e
 
 # Source common utilities
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
-echo "Setting up vtcode Development Environment..."
+echo "Setting up VT Code Development Environment..."
 echo "=============================================="
 
 # Check if Rust is installed
@@ -50,33 +50,20 @@ install_components() {
     done
 }
 
-# Install development tools
-install_dev_tools() {
-    print_status "Installing development tools..."
+# Install baseline development tools
+install_baseline_tools() {
+    print_status "Checking baseline development tools..."
 
-    # List of tools to install
-    local tools=(
-        "cargo-audit:Security auditing"
-        "cargo-outdated:Check for outdated dependencies"
-        "cargo-udeps:Find unused dependencies"
-        "cargo-msrv:Find minimum supported Rust version"
-        "cargo-license:Check dependency licenses"
-        "cargo-tarpaulin:Code coverage"
-        "cargo-bench:Performance benchmarking"
-        "ripgrep:Fast text search tool"
-        )
-
-    for tool_info in "${tools[@]}"; do
-        local tool=$(echo "$tool_info" | cut -d: -f1)
-        local description=$(echo "$tool_info" | cut -d: -f2)
-
-        print_status "Installing $tool ($description)..."
-        if cargo install "$tool" --locked; then
-            print_success "$tool installed successfully"
+    if cargo nextest --version &> /dev/null; then
+        print_success "cargo-nextest is already installed: $(cargo nextest --version)"
+    else
+        print_status "Installing cargo-nextest..."
+        if cargo install cargo-nextest --locked; then
+            print_success "cargo-nextest installed successfully"
         else
-            print_warning "Failed to install $tool (non-critical)"
+            print_warning "Failed to install cargo-nextest. Falling back to 'cargo test' remains available."
         fi
-    done
+    fi
 }
 
 # Setup git hooks (optional)
@@ -136,6 +123,13 @@ verify_installation() {
         print_error "clippy not working properly"
     fi
 
+    # Check cargo-nextest (optional but recommended)
+    if cargo nextest --version &> /dev/null; then
+        print_success "cargo-nextest: $(cargo nextest --version)"
+    else
+        print_warning "cargo-nextest not detected. 'cargo test --workspace' can be used as fallback."
+    fi
+
     # Test build
     print_status "Testing project build..."
     if cargo check; then
@@ -149,7 +143,7 @@ verify_installation() {
 # Main function
 main() {
     echo ""
-    echo "This script will set up your development environment for vtcode."
+    echo "This script will set up your development environment for VT Code."
     echo ""
 
     # Parse arguments
@@ -162,7 +156,7 @@ main() {
     check_rust
     update_rust
     install_components
-    install_dev_tools
+    install_baseline_tools
     setup_git_hooks "$with_hooks"
     verify_installation
 
@@ -175,12 +169,12 @@ main() {
     echo "  • Run './scripts/check.sh' to verify everything works"
     echo "  • Use 'cargo fmt --all' to format your code"
     echo "  • Use 'cargo clippy' to lint your code"
-    echo "  • Use 'cargo test' to run tests"
+    echo "  • Use 'cargo nextest run' to run tests quickly"
     echo ""
     echo "Useful commands:"
     echo "  • Format code: cargo fmt --all"
     echo "  • Lint code: cargo clippy -- -D warnings"
-    echo "  • Run tests: cargo test --workspace"
+    echo "  • Run tests: cargo nextest run (fallback: cargo test --workspace)"
     echo "  • Build docs: cargo doc --workspace --open"
     echo "  • Check everything: ./scripts/check.sh"
     echo ""
@@ -194,7 +188,7 @@ main() {
 # Help function
 show_help() {
     cat << EOF
-vtcode Development Environment Setup Script
+VT Code Development Environment Setup Script
 
 Usage: $0 [OPTIONS]
 
@@ -206,7 +200,7 @@ This script will:
   • Check Rust installation
   • Update Rust toolchain
   • Install rustfmt and clippy components
-  • Install development tools (cargo-audit, cargo-outdated, etc.)
+  • Install baseline development tools (cargo-nextest)
   • Optionally set up git hooks
   • Verify everything works
 
@@ -214,7 +208,7 @@ After running this script, you can use:
   • ./scripts/check.sh - Run comprehensive code quality checks
   • cargo fmt --all - Format code
   • cargo clippy - Lint code
-  • cargo test - Run tests
+  • cargo nextest run - Run tests (fallback: cargo test --workspace)
 
 To configure API keys:
   • Copy .env.example to .env and add your actual API keys

@@ -24,6 +24,7 @@ Last reviewed: 2026-02-16
 
 ## Engineering References
 
+- [Development Setup](development/DEVELOPMENT_SETUP.md) - Canonical contributor setup and local quality loop.
 - [Language Support Matrix](protocols/LANGUAGE_SUPPORT.md) - Tree-sitter and language support status.
 - [Indexer Notes](modules/vtcode_indexer.md) - Indexer behavior and usage.
 - [Development Guide](development/README.md) - Local dev workflows.

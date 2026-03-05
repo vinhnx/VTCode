@@ -1,6 +1,6 @@
 # Development Scripts
 
-This directory contains scripts to help with development, testing, and maintaining the vtcode codebase.
+This directory contains scripts to help with development, testing, and maintaining the VT Code codebase.
 
 ## Available Scripts
 
@@ -24,9 +24,9 @@ Sets up the complete development environment with all necessary tools.
 -   Checks Rust installation
 -   Updates Rust toolchain
 -   Installs rustfmt and clippy components
--   Installs development tools (cargo-audit, cargo-outdated, etc.)
+-   Installs `cargo-nextest` (recommended local test runner)
 -   Optionally sets up git hooks
--   Verifies everything works
+-   Verifies everything works with `cargo check`
 
 ### `check.sh` - Code Quality Checks
 
@@ -52,7 +52,7 @@ Runs comprehensive code quality checks (same as CI pipeline).
 -   Code formatting (rustfmt)
 -   Linting (clippy)
 -   Build verification
--   Test execution
+-   Test execution (`cargo nextest run`, fallback: `cargo test --workspace`)
 -   Documentation generation
 
 ### `perf/` - Local Performance Workflow
@@ -175,12 +175,12 @@ For new developers:
 
     ```bash
     cargo build
-    cargo test
+    cargo nextest run
     ```
 
 ## API Key Configuration
 
-vtcode supports multiple ways to configure API keys, with the following priority:
+VT Code supports multiple ways to configure API keys, with the following priority:
 
 1. **Environment variables** (highest priority) - Most secure
 2. **.env file** - Convenient for development
@@ -226,8 +226,7 @@ The hook can be bypassed with `git commit --no-verify` if needed.
 
 You can modify these scripts to fit your development workflow:
 
--   Add additional tools to `setup.sh`
--   Modify check criteria in `check.sh`
+-   Add additional checks to `check.sh`
 -   Customize git hooks for your team
 
 ## Troubleshooting
@@ -247,20 +246,16 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source ~/.cargo/env
 ```
 
-### Tools installation fails
+### cargo-nextest installation fails
 
-Some tools might require additional dependencies:
+If `cargo-nextest` installation fails in restricted environments, continue with the fallback test command:
 
 ```bash
-# For cargo-tarpaulin (code coverage)
-sudo apt-get install libssl-dev pkg-config
-
-# For cargo-udeps (unused dependencies)
-rustup install nightly
+cargo test --workspace
 ```
 
 ## Related Documentation
 
+-   [Development Setup](../docs/development/DEVELOPMENT_SETUP.md)
+-   [Testing Guide](../docs/development/testing.md)
 -   [CI/CD Guide](../docs/development/ci-cd.md)
--   [Contributing Guide](../docs/development/README.md)
--   [Code Quality Standards](../docs/project/README.md)

@@ -201,6 +201,7 @@ See [Security Model](./docs/security/SECURITY_MODEL.md) and [Sandbox Deep Dive](
 - [**macOS Alt Shortcut Troubleshooting**](./docs/guides/macos-alt-shortcut-troubleshooting.md) - Solutions for when Alt/Option shortcuts don't work on macOS
 - [**Exec Mode**](./docs/user-guide/exec-mode.md)
 - [**Development**](./docs/development/README.md)
+    - [Development Setup](./docs/development/DEVELOPMENT_SETUP.md)
     - [Testing](./docs/development/testing.md)
     - [CI/CD](./docs/development/ci-cd.md)
     - [**Empirical Evaluation**](./evals/README.md) - Formal framework for measuring LLM performance across safety, logic, and coding benchmarks.

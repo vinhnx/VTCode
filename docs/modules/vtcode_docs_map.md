@@ -37,11 +37,6 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: **Overview**, **Why Asset Synchronization?**, **Synchronized Assets**, **Using the Sync Script**, **Automated Integration**
   - **User Questions**: "What can you tell me about **Asset Synchronization**?", "How does **Overview** work?", "How does **Why Asset Synchronization?** work?"
 
-- **File**: `docs/development/README.md`
-  - **Content**: **Development Guide**
-  - **Topics**: **Getting Started**, **Understanding the Codebase**, **Development Workflows**, **Technical Deep Dives**, **Debugging & Troubleshooting**
-  - **User Questions**: "What can you tell me about **Development Guide**?", "How does **Getting Started** work?", "How does **Understanding the Codebase** work?"
-
 - **File**: `docs/development/testing.md`
   - **Content**: **Testing Guide**
   - **Topics**: **Test Overview**, **Running Tests**, **Test Structure**, **Test Categories**, **Testing Tools and Components**
@@ -66,6 +61,16 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Content**: Desire Paths in VT Code
   - **Topics**: Philosophy, Current Paved Paths, Desire Paths to Implement, How to Report Friction, Implementation Checklist
   - **User Questions**: "What can you tell me about Desire Paths in VT Code?", "How does Philosophy work?", "How does Current Paved Paths work?"
+
+- **File**: `docs/development/README.md`
+  - **Content**: Development Guide
+  - **Topics**: Getting Started, Security and Execution, Performance and Reliability, Maintenance Workflows, Navigation
+  - **User Questions**: "What can you tell me about Development Guide?", "How does Getting Started work?", "How does Security and Execution work?"
+
+- **File**: `docs/development/DEVELOPMENT_SETUP.md`
+  - **Content**: Development Setup
+  - **Topics**: One-Time Setup, Daily Development Loop, Full Quality Gate, Common Commands, Troubleshooting
+  - **User Questions**: "What can you tell me about Development Setup?", "How does One-Time Setup work?", "How does Daily Development Loop work?"
 
 - **File**: `docs/development/EXTENDED_THINKING.md`
   - **Content**: Extended Thinking for Anthropic Models

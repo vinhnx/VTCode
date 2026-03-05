@@ -24,6 +24,8 @@ VT Code represents a modern approach to AI-powered software development, featuri
 -   **Git**: For version control and cloning the repository
 -   **Operating System**: macOS, Linux, or Windows (with WSL2)
 
+For contributor workflow setup (tooling, checks, and test loop), use the canonical [Development Setup](../development/DEVELOPMENT_SETUP.md) guide.
+
 ### API Requirements
 
 Choose one of the supported LLM providers:
@@ -62,10 +64,10 @@ git clone https://github.com/vinhnx/vtcode.git
 cd vtcode
 
 # Build and run in production mode
-./run.sh
+./scripts/run.sh
 
 # Or build and run in development mode
-./run-debug.sh
+./scripts/run-debug.sh
 ```
 
 ### Option 3: Cargo Install (Future)
@@ -114,9 +116,6 @@ cd /path/to/your/project
 
 # Initialize VT Code (creates vtcode.toml and .vtcodegitignore)
 ../vtcode/target/release/vtcode init
-
-# Or if using scripts
-/path/to/vtcode/run.sh init
 ```
 
 ### 4. Start Your First Session
@@ -124,9 +123,6 @@ cd /path/to/your/project
 ```bash
 # Start interactive chat
 ../vtcode/target/release/vtcode chat
-
-# Or with the script
-/path/to/vtcode/run.sh chat
 ```
 
 ### Resume Previous Sessions
