@@ -401,9 +401,11 @@ impl Session {
         }
 
         // Render body content - strip ANSI codes to ensure plain text output.
-        // Use the theme's pty_body color as fallback instead of terminal DIM
-        // for consistent, readable contrast across terminals.
-        let pty_fallback = self.theme.pty_body.or(self.theme.foreground);
+        // Use the session PTY fallback chain (pty_body -> tool_body -> foreground)
+        // and apply a consistent dimmed style for terminal output.
+        let pty_fallback = self
+            .text_fallback(InlineMessageKind::Pty)
+            .or(self.theme.foreground);
         let mut body_spans = Vec::new();
         for segment in &line.segments {
             let stripped_text = render::strip_ansi_codes(&segment.text);

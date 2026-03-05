@@ -53,8 +53,8 @@ pub(super) fn render_message_spans(
         // Render PTY content with a subdued foreground color instead of the
         // terminal DIM modifier, which can be too faint on many terminals.
         // Segments that carry their own ANSI color keep it; uncolored segments
-        // get the theme's pty_body color for consistent, readable contrast.
-        let pty_fallback = theme.pty_body.or(theme.foreground);
+        // use the configured PTY fallback chain from session styling.
+        let pty_fallback = text_fallback_fn(InlineMessageKind::Pty).or(theme.foreground);
         for segment in &line.segments {
             let style = ratatui_pty_style_from_inline(&segment.style, pty_fallback);
             spans.push(Span::styled(segment.text.clone(), style));
