@@ -40,12 +40,19 @@ use anyhow::{Context, Result, anyhow};
 use hashbrown::HashMap;
 use libloading::{Library, Symbol};
 use serde::{Deserialize, Serialize};
+use std::ffi::{CStr, CString};
 use std::path::{Path, PathBuf};
+use std::ptr::NonNull;
 use tracing::{debug, info, warn};
 
 /// Current plugin ABI version
 /// Increment this when breaking changes are made to the plugin interface
 pub const PLUGIN_ABI_VERSION: u32 = 1;
+
+type PluginVersionFn = unsafe extern "C" fn() -> u32;
+type PluginMetadataFn = unsafe extern "C" fn() -> *const libc::c_char;
+type PluginExecuteFn = unsafe extern "C" fn(*const libc::c_char) -> *const libc::c_char;
+type PluginFreeStringFn = unsafe extern "C" fn(*const libc::c_char);
 
 /// Plugin execution context passed to plugin functions
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -128,7 +135,36 @@ pub struct NativePlugin {
     /// Path to the plugin
     path: PathBuf,
     /// Plugin execute function pointer
-    execute_fn: unsafe extern "C" fn(*const libc::c_char) -> *const libc::c_char,
+    execute_fn: PluginExecuteFn,
+    /// Optional plugin-owned deallocator for returned strings
+    free_string_fn: Option<PluginFreeStringFn>,
+}
+
+fn ensure_non_null_c_string_ptr(
+    ptr: *const libc::c_char,
+    context: &'static str,
+) -> Result<NonNull<libc::c_char>> {
+    NonNull::new(ptr.cast_mut()).ok_or_else(|| anyhow!("{context} returned null pointer"))
+}
+
+fn decode_plugin_c_string(
+    ptr: NonNull<libc::c_char>,
+    free_string_fn: Option<PluginFreeStringFn>,
+    utf8_error_context: &'static str,
+) -> Result<String> {
+    let raw_ptr = ptr.as_ptr() as *const libc::c_char;
+    // Safety: `raw_ptr` comes from a plugin ABI function and was validated non-null.
+    let decoded = unsafe { CStr::from_ptr(raw_ptr) }
+        .to_str()
+        .context(utf8_error_context)
+        .map(str::to_owned);
+
+    if let Some(free_fn) = free_string_fn {
+        // Safety: pointer came from the plugin ABI and free_fn is loaded from the same library.
+        unsafe { free_fn(raw_ptr) };
+    }
+
+    decoded
 }
 
 impl std::fmt::Debug for NativePlugin {
@@ -151,7 +187,7 @@ impl NativePlugin {
     pub fn new(library: Library, path: PathBuf) -> Result<Self> {
         // Verify ABI version
         // Safety: symbol name and signature are defined by the plugin ABI.
-        let version_fn: Symbol<unsafe extern "C" fn() -> u32> = unsafe {
+        let version_fn: Symbol<PluginVersionFn> = unsafe {
             library
                 .get(b"vtcode_plugin_version\0")
                 .context("Failed to load vtcode_plugin_version symbol")?
@@ -167,84 +203,76 @@ impl NativePlugin {
             ));
         }
 
+        // Optional cleanup function for plugin-owned strings.
+        // Safety: symbol name and signature are defined by the plugin ABI.
+        let free_string_fn = unsafe {
+            library
+                .get::<PluginFreeStringFn>(b"vtcode_plugin_free_string\0")
+                .map(|symbol| *symbol)
+                .ok()
+        };
+
         // Load metadata
         // Safety: symbol name and signature are defined by the plugin ABI.
-        let metadata_fn: Symbol<unsafe extern "C" fn() -> *const libc::c_char> = unsafe {
+        let metadata_fn: Symbol<PluginMetadataFn> = unsafe {
             library
                 .get(b"vtcode_plugin_metadata\0")
                 .context("Failed to load vtcode_plugin_metadata symbol")?
         };
 
         // Safety: function pointer loaded from the validated ABI symbol above.
-        let metadata_ptr = unsafe { metadata_fn() };
-        if metadata_ptr.is_null() {
-            return Err(anyhow!("Plugin metadata function returned null pointer"));
-        }
-
-        // Safety: pointer was checked for null and must point to a valid C string per ABI.
-        let metadata_json = unsafe { std::ffi::CStr::from_ptr(metadata_ptr) }
-            .to_str()
-            .context("Plugin metadata is not valid UTF-8")?;
+        let metadata_ptr = ensure_non_null_c_string_ptr(
+            unsafe { metadata_fn() },
+            "Plugin metadata function",
+        )?;
+        let metadata_json = decode_plugin_c_string(
+            metadata_ptr,
+            free_string_fn,
+            "Plugin metadata is not valid UTF-8",
+        )?;
 
         let metadata: PluginMetadata =
-            serde_json::from_str(metadata_json).context("Failed to parse plugin metadata JSON")?;
+            serde_json::from_str(&metadata_json).context("Failed to parse plugin metadata JSON")?;
 
         // Load execute function
         // Safety: symbol name and signature are defined by the plugin ABI.
-        let execute_fn: Symbol<unsafe extern "C" fn(*const libc::c_char) -> *const libc::c_char> = unsafe {
+        let execute_fn: Symbol<PluginExecuteFn> = unsafe {
             library
                 .get(b"vtcode_plugin_execute\0")
                 .context("Failed to load vtcode_plugin_execute symbol")?
         };
 
-        // Safety: We need to transmute the Symbol to a function pointer that doesn't borrow
-        // This is safe because we keep the Library alive in the NativePlugin struct
-        let execute_fn_ptr = unsafe {
-            std::mem::transmute::<
-                Symbol<'_, unsafe extern "C" fn(*const libc::c_char) -> *const libc::c_char>,
-                unsafe extern "C" fn(*const libc::c_char) -> *const libc::c_char,
-            >(execute_fn)
-        };
+        let execute_fn_ptr = *execute_fn;
 
         Ok(Self {
             _library: library,
             metadata,
             path,
             execute_fn: execute_fn_ptr,
+            free_string_fn,
         })
     }
 
     /// Execute the plugin with the given context
     pub fn execute(&self, ctx: &PluginContext) -> Result<PluginResult> {
-        let input_json =
-            serde_json::to_string(&ctx.input).context("Failed to serialize plugin input")?;
+        let input_json = serde_json::to_string(ctx).context("Failed to serialize plugin context")?;
 
-        let input_cstr = std::ffi::CString::new(input_json)
-            .context("Failed to create C string from input JSON")?;
+        let input_cstr =
+            CString::new(input_json).context("Failed to create C string from input JSON")?;
 
         // Safety: the C string pointer is valid and `execute_fn` obeys plugin ABI.
-        let result_ptr = unsafe { (self.execute_fn)(input_cstr.as_ptr()) };
-
-        if result_ptr.is_null() {
-            return Err(anyhow!("Plugin execute function returned null pointer"));
-        }
-
-        // Safety: plugin ABI guarantees returned pointer references a valid C string.
-        let result_json = unsafe { std::ffi::CStr::from_ptr(result_ptr) }
-            .to_str()
-            .context("Plugin result is not valid UTF-8")?;
+        let result_ptr = ensure_non_null_c_string_ptr(
+            unsafe { (self.execute_fn)(input_cstr.as_ptr()) },
+            "Plugin execute function",
+        )?;
+        let result_json = decode_plugin_c_string(
+            result_ptr,
+            self.free_string_fn,
+            "Plugin result is not valid UTF-8",
+        )?;
 
         let result: PluginResult =
-            serde_json::from_str(result_json).context("Failed to parse plugin result JSON")?;
-
-        // Free the allocated memory (plugin is responsible for allocation)
-        // We need a separate FFI function for this
-        #[allow(unused_extern_crates, dead_code)]
-        unsafe extern "C" {
-            fn vtcode_plugin_free_string(ptr: *const libc::c_char);
-        }
-        // Try to free, but don't fail if the function doesn't exist
-        // This is optional - plugins can use leak-free allocators
+            serde_json::from_str(&result_json).context("Failed to parse plugin result JSON")?;
 
         Ok(result)
     }
@@ -535,7 +563,20 @@ pub fn validate_plugin_structure(plugin_dir: &Path) -> Result<Vec<String>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::cell::Cell;
     use tempfile::TempDir;
+
+    thread_local! {
+        static TEST_FREE_WAS_CALLED: Cell<bool> = const { Cell::new(false) };
+    }
+
+    unsafe extern "C" fn test_free_string(ptr: *const libc::c_char) {
+        TEST_FREE_WAS_CALLED.with(|was_called| was_called.set(true));
+        if !ptr.is_null() {
+            // Safety: tests pass pointers produced by `CString::into_raw` in this module.
+            let _ = unsafe { CString::from_raw(ptr as *mut libc::c_char) };
+        }
+    }
 
     fn create_test_plugin_dir() -> (TempDir, PathBuf) {
         let temp_dir = TempDir::new().unwrap();
@@ -602,5 +643,56 @@ mod tests {
 
         #[cfg(target_os = "windows")]
         assert_eq!(filename, "my-plugin.dll");
+    }
+
+    #[test]
+    fn test_ensure_non_null_c_string_ptr_rejects_null() {
+        let err = ensure_non_null_c_string_ptr(
+            std::ptr::null::<libc::c_char>(),
+            "Test pointer",
+        )
+        .expect_err("null pointer should be rejected");
+
+        assert!(err.to_string().contains("Test pointer returned null pointer"));
+    }
+
+    #[test]
+    fn test_decode_plugin_c_string_frees_plugin_buffer() {
+        TEST_FREE_WAS_CALLED.with(|was_called| was_called.set(false));
+
+        let raw = CString::new("{\"ok\":true}")
+            .expect("valid C string")
+            .into_raw();
+        let ptr = NonNull::new(raw).expect("non-null raw pointer");
+
+        let decoded = decode_plugin_c_string(
+            ptr,
+            Some(test_free_string),
+            "Plugin result is not valid UTF-8",
+        )
+        .expect("valid UTF-8 payload");
+
+        assert_eq!(decoded, "{\"ok\":true}");
+        TEST_FREE_WAS_CALLED.with(|was_called| assert!(was_called.get()));
+    }
+
+    #[test]
+    fn test_decode_plugin_c_string_invalid_utf8_still_frees_buffer() {
+        TEST_FREE_WAS_CALLED.with(|was_called| was_called.set(false));
+
+        let raw = CString::from_vec_with_nul(vec![0xFF, 0x00])
+            .expect("valid nul-terminated C string")
+            .into_raw();
+        let ptr = NonNull::new(raw).expect("non-null raw pointer");
+
+        let err = decode_plugin_c_string(
+            ptr,
+            Some(test_free_string),
+            "Plugin payload is not valid UTF-8",
+        )
+        .expect_err("invalid UTF-8 should fail decoding");
+
+        assert!(err.to_string().contains("Plugin payload is not valid UTF-8"));
+        TEST_FREE_WAS_CALLED.with(|was_called| assert!(was_called.get()));
     }
 }
