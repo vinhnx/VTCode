@@ -86,8 +86,13 @@ extract /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/src/acp to module 
 
 improve /Users/vinhnguyenxuan/Developer/learn-by-doing/vtcode/src
 
-review and modularize every component in src/ to ensure single responsibility, clear separation of concerns, and maintainable code structure. Identify any files that contain multiple distinct functionalities and refactor them into smaller, focused modules. For example, if a file contains both API client logic and business logic, separate these into an API client module and a service layer module. Ensure that each module has a clear purpose and that related functions and types are grouped together logically. This will i    mprove code readability, facilitate easier testing, and enhance maintainability as the codebase grows.
+review and modularize every component in src/ to ensure single responsibility, clear separation of concerns, and maintainable code structure. Identify any files that contain multiple distinct functionalities and refactor them into smaller, focused modules. For example, if a file contains both API client logic and business logic, separate these into an API client module and a service layer module. Ensure that each module has a clear purpose and that related functions and types are grouped together logically. This will i mprove code readability, facilitate easier testing, and enhance maintainability as the codebase grows.
 
 ---
 
 https://sw.kovidgoyal.net/kitty/graphics-protocol/
+
+1. check stash "(AMPCode) kitty graphic photocol" and use ampcode to continue.
+2. consider showing image as popup and on demand only to save memory and reduce token usage, instead of embedding image data directly in the prompt or response.
+3. suggestion, when an image is detected in the chat user input. show as a [image #N] tag in the user prompt, similiar to [pasted text #N] for pasted text. then the agent can choose to request the image data if needed, and the system can provide the image data in a separate tool call or context update, rather than embedding it directly in the prompt. This would allow for more efficient handling of images without bloating the prompt with large base64 data.
+4. also allow keyboard shortcut to view the image in a popup viewer, so that users can easily view the image without it taking up space in the main chat interface. like keyboard and click on the [image #N] tag to open the image in a popup.
