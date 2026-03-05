@@ -11,7 +11,7 @@ use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_core::utils::file_utils::ensure_dir_exists_sync;
 
-use super::super::files::truncate_text_safe;
+use super::super::files::{display_width, truncate_text_safe};
 use super::super::large_output::{LargeOutputConfig, spool_large_output};
 use crate::agent::runloop::text_tools::CodeFenceBlock;
 
@@ -68,7 +68,7 @@ pub(super) fn build_markdown_code_block(lines: &[&str]) -> String {
     let mut markdown = String::with_capacity(lines.len() * 80 + 16);
     markdown.push_str("```\n");
     for line in lines {
-        let display_line = if line.len() > super::MAX_LINE_LENGTH {
+        let display_line = if display_width(line) > super::MAX_LINE_LENGTH {
             let truncated = truncate_text_safe(line, super::MAX_LINE_LENGTH);
             Cow::Owned(format!("{}...", truncated))
         } else {

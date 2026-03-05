@@ -221,10 +221,8 @@ impl NativePlugin {
         };
 
         // Safety: function pointer loaded from the validated ABI symbol above.
-        let metadata_ptr = ensure_non_null_c_string_ptr(
-            unsafe { metadata_fn() },
-            "Plugin metadata function",
-        )?;
+        let metadata_ptr =
+            ensure_non_null_c_string_ptr(unsafe { metadata_fn() }, "Plugin metadata function")?;
         let metadata_json = decode_plugin_c_string(
             metadata_ptr,
             free_string_fn,
@@ -255,7 +253,8 @@ impl NativePlugin {
 
     /// Execute the plugin with the given context
     pub fn execute(&self, ctx: &PluginContext) -> Result<PluginResult> {
-        let input_json = serde_json::to_string(ctx).context("Failed to serialize plugin context")?;
+        let input_json =
+            serde_json::to_string(ctx).context("Failed to serialize plugin context")?;
 
         let input_cstr =
             CString::new(input_json).context("Failed to create C string from input JSON")?;
@@ -647,13 +646,13 @@ mod tests {
 
     #[test]
     fn test_ensure_non_null_c_string_ptr_rejects_null() {
-        let err = ensure_non_null_c_string_ptr(
-            std::ptr::null::<libc::c_char>(),
-            "Test pointer",
-        )
-        .expect_err("null pointer should be rejected");
+        let err = ensure_non_null_c_string_ptr(std::ptr::null::<libc::c_char>(), "Test pointer")
+            .expect_err("null pointer should be rejected");
 
-        assert!(err.to_string().contains("Test pointer returned null pointer"));
+        assert!(
+            err.to_string()
+                .contains("Test pointer returned null pointer")
+        );
     }
 
     #[test]
@@ -692,7 +691,10 @@ mod tests {
         )
         .expect_err("invalid UTF-8 should fail decoding");
 
-        assert!(err.to_string().contains("Plugin payload is not valid UTF-8"));
+        assert!(
+            err.to_string()
+                .contains("Plugin payload is not valid UTF-8")
+        );
         TEST_FREE_WAS_CALLED.with(|was_called| assert!(was_called.get()));
     }
 }

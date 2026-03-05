@@ -53,7 +53,8 @@ use vtcode_core::ui::markdown;
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use super::files::{
-    colorize_diff_summary_line, format_diff_content_lines_with_numbers, truncate_text_safe,
+    colorize_diff_summary_line, display_width, format_diff_content_lines_with_numbers,
+    truncate_text_safe,
 };
 use super::styles::{GitStyles, LsStyles, select_line_style};
 #[path = "streams_helpers.rs"]
@@ -308,7 +309,7 @@ async fn render_run_command_preview(
         }
 
         display_buffer.clear();
-        if line.len() > MAX_LINE_LENGTH {
+        if display_width(line) > MAX_LINE_LENGTH {
             let truncated = truncate_text_safe(line, MAX_LINE_LENGTH);
             display_buffer.push_str(truncated);
             display_buffer.push_str("...");
@@ -377,7 +378,7 @@ pub(crate) fn render_diff_content_block(
             current_language_hint = language_hint_from_path(&path);
         }
         display_buffer.clear();
-        if line.len() > MAX_LINE_LENGTH {
+        if display_width(line) > MAX_LINE_LENGTH {
             let truncated = truncate_text_safe(line, MAX_LINE_LENGTH);
             display_buffer.push_str(truncated);
             display_buffer.push_str("...");
@@ -564,7 +565,7 @@ pub(crate) async fn render_stream_section(
         } else {
             for line in &tail {
                 // Truncate very long lines to prevent TUI hang
-                let display_line = if line.len() > MAX_LINE_LENGTH {
+                let display_line = if display_width(line) > MAX_LINE_LENGTH {
                     let truncated = truncate_text_safe(line, MAX_LINE_LENGTH);
                     Cow::Owned(format!("{}...", truncated))
                 } else {

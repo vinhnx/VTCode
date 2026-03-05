@@ -1,4 +1,5 @@
 use super::*;
+use unicode_width::UnicodeWidthStr;
 
 #[test]
 fn formats_unified_diff_with_hunk_headers() {
@@ -70,8 +71,31 @@ fn shorten_path_preserves_short() {
 fn shorten_path_truncates_long() {
     let long = "/very/long/deeply/nested/path/to/some/file.rs";
     let short = shorten_path(long, 30);
-    assert!(short.len() <= 45);
+    assert!(UnicodeWidthStr::width(short.as_str()) <= 30);
     assert!(short.contains("file.rs"));
+}
+
+#[test]
+fn pad_to_display_width_handles_wide_chars() {
+    let padded = pad_to_display_width("表", 4);
+    assert_eq!(UnicodeWidthStr::width(padded.as_str()), 4);
+    assert!(padded.starts_with("表"));
+}
+
+#[test]
+fn truncate_text_safe_respects_display_width() {
+    let value = "表表表"; // width = 6
+    let truncated = truncate_text_safe(value, 5);
+    assert_eq!(UnicodeWidthStr::width(truncated), 4);
+    assert_eq!(truncated, "表表");
+}
+
+#[test]
+fn shorten_path_handles_unicode_segments() {
+    let long = "/đường/dẫn/rất/dài/để/kiểm/tra/ファイル/file.rs";
+    let short = shorten_path(long, 20);
+    assert!(short.contains("file.rs"));
+    assert!(UnicodeWidthStr::width(short.as_str()) <= 20);
 }
 
 #[test]
