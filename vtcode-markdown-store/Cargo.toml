@@ -1,11 +1,11 @@
 [package]
 name = "vtcode-markdown-store"
-version = "0.86.5"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
 rust-version = "1.88"
 authors = ["Vinh Nguyen <vinhnguyen2308@gmail.com>"]
 description = "Markdown-backed storage utilities extracted from VT Code"
-license = "MIT"
+license.workspace = true
 readme = "README.md"
 homepage = "https://github.com/vinhnx/vtcode"
 repository = "https://github.com/vinhnx/vtcode"
@@ -25,16 +25,16 @@ kv = []
 cache = []
 
 [dependencies]
-anyhow = "1.0"
-fs2 = "0.4"
-indexmap = { version = "2.13", features = ["serde"] }
-serde = { version = "1.0", features = ["derive"] }
+anyhow = { workspace = true }
+fs2 = { workspace = true }
+indexmap = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
-serde_yaml = "0.9"
+serde_yaml = { workspace = true }
 
 [dev-dependencies]
-tempfile = "3.25"
-serial_test = "3.4"
+tempfile = { workspace = true }
+serial_test = { workspace = true }
 
 [lints]
 workspace = true

@@ -11,7 +11,7 @@
 
 ### Workspace Structure
 
--   Workspace is a two-crate Rust project: CLI binary (`vtcode`) depends on the `vtcode-core` library; workspace members declared in root `Cargo.toml`. F:Cargo.toml†L1-L61
+-   Workspace is a multi-crate Rust project (13 workspace members plus excluded security/support crates): CLI binary (`vtcode`) depends on `vtcode-core` and companion crates (`vtcode-tui`, `vtcode-config`, `vtcode-commons`, etc.), with membership declared in root `Cargo.toml`. F:Cargo.toml†L1-L120
 -   Entry point parses CLI arguments, loads configuration, and dispatches subcommands to domain-specific handlers. F:src/main.rs†L5-L145
 
 ### Core Library (`vtcode-core`)

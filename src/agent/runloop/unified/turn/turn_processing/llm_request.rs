@@ -1428,9 +1428,11 @@ mod tests {
 
     #[test]
     fn prompt_cache_shaping_mode_requires_global_opt_in_and_provider_cache() {
-        let mut cfg = PromptCachingConfig::default();
-        cfg.enabled = true;
-        cfg.cache_friendly_prompt_shaping = true;
+        let mut cfg = PromptCachingConfig {
+            enabled: true,
+            cache_friendly_prompt_shaping: true,
+            ..PromptCachingConfig::default()
+        };
         cfg.providers.openai.enabled = true;
 
         assert_eq!(
@@ -1447,9 +1449,11 @@ mod tests {
 
     #[test]
     fn prompt_cache_shaping_mode_uses_block_mode_for_anthropic_family() {
-        let mut cfg = PromptCachingConfig::default();
-        cfg.enabled = true;
-        cfg.cache_friendly_prompt_shaping = true;
+        let mut cfg = PromptCachingConfig {
+            enabled: true,
+            cache_friendly_prompt_shaping: true,
+            ..PromptCachingConfig::default()
+        };
         cfg.providers.anthropic.enabled = true;
 
         assert_eq!(
@@ -1464,9 +1468,11 @@ mod tests {
 
     #[test]
     fn prompt_cache_shaping_mode_respects_gemini_mode_off() {
-        let mut cfg = PromptCachingConfig::default();
-        cfg.enabled = true;
-        cfg.cache_friendly_prompt_shaping = true;
+        let mut cfg = PromptCachingConfig {
+            enabled: true,
+            cache_friendly_prompt_shaping: true,
+            ..PromptCachingConfig::default()
+        };
         cfg.providers.gemini.enabled = true;
         cfg.providers.gemini.mode = vtcode_core::config::core::GeminiPromptCacheMode::Off;
 
