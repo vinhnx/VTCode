@@ -192,11 +192,18 @@ impl SessionStyles {
     /// Get the fallback text color for a message kind
     pub fn text_fallback(&self, kind: InlineMessageKind) -> Option<AnsiColorEnum> {
         match kind {
-            InlineMessageKind::Agent | InlineMessageKind::Policy => Some(AnsiColor::Magenta.into()),
+            // Assistant content should be legible and clearly distinct from subdued PTY output.
+            InlineMessageKind::Agent => self.theme.foreground.or(self.theme.primary),
+            InlineMessageKind::Policy => self.theme.primary.or(self.theme.foreground),
             InlineMessageKind::User => self.theme.secondary.or(self.theme.foreground),
-            InlineMessageKind::Tool | InlineMessageKind::Pty | InlineMessageKind::Error => {
+            InlineMessageKind::Tool | InlineMessageKind::Error => {
                 self.theme.primary.or(self.theme.foreground)
             }
+            InlineMessageKind::Pty => self
+                .theme
+                .pty_body
+                .or(self.theme.tool_body)
+                .or(self.theme.foreground),
             InlineMessageKind::Info => self.theme.foreground,
             InlineMessageKind::Warning => Some(AnsiColor::Red.into()),
         }

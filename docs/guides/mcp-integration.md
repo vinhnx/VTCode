@@ -49,6 +49,7 @@ following table:
 | `startup_timeout_seconds` | `null` | Optional provider start handshake timeout; inherits `request_timeout_seconds` when unset. |
 | `tool_timeout_seconds` | `null` | Optional per-tool guard for long-running operations. |
 | `experimental_use_rmcp_client` | `true` | Enables the Rust MCP client so HTTP/streamable transports are available. |
+| `requirements` | `enforce = false` | Optional transport-identity allowlist for admitting providers during initialization. |
 | `ui` | `mode = "compact"`, `max_events = 50`, `show_provider_names = true` | Controls event rendering inside the TUI. |
 
 Configure overrides as needed:
@@ -62,11 +63,18 @@ retry_attempts = 2
 startup_timeout_seconds = 90   # optional: provider startup handshake window
 tool_timeout_seconds = 45      # optional: per-tool execution deadline
 experimental_use_rmcp_client = true
+
+[mcp.requirements]
+enforce = false
+allowed_stdio_commands = ["uvx", "npx"]
+allowed_http_endpoints = ["https://mcp.example.com/api"]
 ```
 
 `startup_timeout_seconds` defaults to `None`, which falls back to the global `request_timeout_seconds`
 value. Setting it to `0` disables the startup timeout entirely—handy for first-run npm downloads.
 `tool_timeout_seconds` behaves the same way for individual tool calls.
+When `mcp.requirements.enforce = true`, providers whose stdio `command` or HTTP `endpoint` is not
+allowlisted are skipped during MCP initialization.
 
 ### UI configuration
 

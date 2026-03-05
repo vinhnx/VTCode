@@ -474,7 +474,9 @@ pub(crate) fn describe_tool_action(tool_name: &str, args: &Value) -> (String, Ha
         tool_name.starts_with("mcp::") || tool_name.starts_with("mcp_") || tool_name == "fetch";
 
     // For the actual matching, we need to use the tool name without the "mcp_" prefix
-    let actual_tool_name = if let Some(stripped) = tool_name.strip_prefix("mcp_") {
+    let actual_tool_name = if tool_name.starts_with("mcp__") {
+        tool_name.split("__").last().unwrap_or(tool_name)
+    } else if let Some(stripped) = tool_name.strip_prefix("mcp_") {
         stripped
     } else if tool_name.starts_with("mcp::") {
         // For tools in mcp::provider::name format, extract just the tool name

@@ -2,6 +2,8 @@
 
 This document outlines how VT Code implements Model Context Protocol (MCP) based on Claude's official MCP specifications and best practices.
 
+> Status: this file is a high-level architecture reference. For accurate, current configuration and behavior, use `docs/guides/mcp-integration.md`.
+
 ## Overview
 
 VT Code integrates MCP to connect with external tools, databases, and APIs through the `vtcode-core/src/mcp/` module. MCP provides a standardized interface for AI agents to access tools beyond their native capabilities.
@@ -45,30 +47,7 @@ mcp/
 
 ### Configuration Files
 
-**Project-Scoped** (checked into source control):
-```json
-// .mcp.json
-{
-  "mcpServers": {
-    "server_name": {
-      "command": "npx",
-      "args": ["mcp-server-name"],
-      "type": "stdio",
-      "env": {
-        "API_KEY": "value"
-      }
-    }
-  }
-}
-```
-
-**User-Scoped** (personal, cross-project):
-```
-~/.claude.json
-// Under "mcpServers" field
-```
-
-**Runtime Configuration**:
+**Runtime Configuration (`vtcode.toml`)**:
 ```toml
 # vtcode.toml
 [mcp]
@@ -137,7 +116,7 @@ transport = {
 **Implementation**: `rmcp_transport.rs:create_http_transport()`
 - Requires `experimental_use_rmcp_client = true`
 - Remote server integration
-- OAuth 2.0 authentication support (via `/mcp` CLI command)
+- OAuth CLI login/logout flows are not implemented in VT Code yet
 
 ### 3. Child Process Transport (Advanced)
 
@@ -174,10 +153,9 @@ prompts = ["prompt_name"]
 
 ### Access Control
 
-**Token Management**:
-- Stored securely on disk
-- Automatically refreshed
-- Revocable via `/mcp` CLI
+**Token/API Key Management**:
+- Use `api_key_env` or `env_http_headers` to source credentials from environment variables
+- Avoid embedding secrets directly in config files
 
 **API Key Handling**:
 - Read from environment variables (recommended)
@@ -352,8 +330,9 @@ fn get_status(&self) -> McpClientStatus
 # Configure server
 /mcp config <name> --env KEY=value
 
-# Authenticate remote server
-/mcp authenticate <name>
+# OAuth login/logout placeholders (currently return "not implemented")
+/mcp login <name>
+/mcp logout <name>
 
 # Remove server
 /mcp remove <name>
@@ -464,9 +443,8 @@ pub struct McpProvider {
 - Review output size in tool design
 
 **4. Authentication Failures**
-- Use `/mcp authenticate <name>` for OAuth
-- Verify API keys in environment variables
-- Check token refresh status
+- Verify API keys and header env vars are set
+- Confirm `api_key_env` / `env_http_headers` entries match exported variable names
 
 ### Diagnostic Commands
 
@@ -536,9 +514,8 @@ Implement additional transport types by extending `rmcp_transport.rs`:
    - Monitor token usage with `MAX_MCP_OUTPUT_TOKENS`
 
 4. **Configuration Management**
-   - Use `.mcp.json` for project-specific servers
-   - Use `~/.claude.json` for personal utilities
-   - Use `vtcode.toml` for runtime configuration
+   - Configure MCP providers in `vtcode.toml`
+   - Keep secrets in environment variables
    - Document custom servers in project README
 
 5. **Testing**

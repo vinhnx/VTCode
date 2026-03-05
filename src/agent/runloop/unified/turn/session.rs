@@ -65,6 +65,8 @@ pub(crate) async fn handle_tool_failure(
 
     // MCP event
     if let Some(tool_name) = details.name.strip_prefix("mcp_") {
+        let tool_name = tool_name.trim_start_matches('_');
+        let tool_name = tool_name.split("__").last().unwrap_or(tool_name);
         ctx.renderer
             .line_if_not_empty(vtcode_core::utils::ansi::MessageStyle::Output)?;
         ctx.renderer.line(

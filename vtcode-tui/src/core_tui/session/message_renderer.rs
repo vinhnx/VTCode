@@ -1,6 +1,6 @@
 use ratatui::{style::Modifier, text::Span};
 
-use super::super::style::ratatui_style_from_inline;
+use super::super::style::{ratatui_pty_style_from_inline, ratatui_style_from_inline};
 use super::super::types::{InlineMessageKind, InlineTextStyle, InlineTheme};
 use super::message::{MessageLabels, MessageLine};
 use crate::config::constants::ui;
@@ -56,12 +56,7 @@ pub(super) fn render_message_spans(
         // get the theme's pty_body color for consistent, readable contrast.
         let pty_fallback = theme.pty_body.or(theme.foreground);
         for segment in &line.segments {
-            let pty_style = InlineTextStyle {
-                color: segment.style.color,
-                bg_color: segment.style.bg_color,
-                effects: segment.style.effects,
-            };
-            let style = ratatui_style_from_inline(&pty_style, pty_fallback);
+            let style = ratatui_pty_style_from_inline(&segment.style, pty_fallback);
             spans.push(Span::styled(segment.text.clone(), style));
         }
         if !spans.is_empty() {
