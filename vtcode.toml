@@ -193,7 +193,7 @@ temporal_context_use_utc = false
 # UI theme identifier controlling ANSI styling
 # Default: "ciapre"
 # Type: `string`
-theme = "ansi-classic"
+theme = "ciapre"
 
 # Enable TODO planning helper mode for structured task management
 # Default: true
@@ -1784,6 +1784,11 @@ enabled = false
 # Default: 5
 # Type: `integer`
 max_results = 5
+
+[mcp.requirements]
+enforce = false
+allowed_stdio_commands = []
+allowed_http_endpoints = []
 
 
 [provider.openai]

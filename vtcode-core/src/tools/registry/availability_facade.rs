@@ -5,6 +5,7 @@ use serde_json::Value;
 use crate::tools::names::canonical_tool_name;
 
 use super::ToolRegistry;
+use crate::tools::mcp::legacy_mcp_tool_name;
 
 impl ToolRegistry {
     fn resolve_fallback_seed_tool(&self, failed_tool: &str) -> String {
@@ -149,7 +150,7 @@ impl ToolRegistry {
         }
 
         // If not found, check if it's an MCP tool
-        if let Some(tool_name) = name.strip_prefix("mcp_") {
+        if let Some(tool_name) = legacy_mcp_tool_name(name) {
             if self.has_mcp_tool(tool_name).await {
                 return true;
             }

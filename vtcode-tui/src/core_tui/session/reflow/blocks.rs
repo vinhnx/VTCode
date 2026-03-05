@@ -2,7 +2,7 @@ use ratatui::prelude::*;
 use unicode_width::UnicodeWidthStr;
 use vtcode_commons::diff_paths::{is_diff_addition_line, is_diff_deletion_line};
 
-use super::super::super::style::ratatui_style_from_inline;
+use super::super::super::style::ratatui_pty_style_from_inline;
 use super::super::super::types::InlineMessageKind;
 use super::super::{Session, render, text_utils};
 use super::helpers::{is_tool_summary_line, split_tool_spans};
@@ -407,8 +407,7 @@ impl Session {
         let mut body_spans = Vec::new();
         for segment in &line.segments {
             let stripped_text = render::strip_ansi_codes(&segment.text);
-            let style =
-                ratatui_style_from_inline(&segment.style, pty_fallback).add_modifier(Modifier::DIM);
+            let style = ratatui_pty_style_from_inline(&segment.style, pty_fallback);
             body_spans.push(Span::styled(stripped_text.into_owned(), style));
         }
 

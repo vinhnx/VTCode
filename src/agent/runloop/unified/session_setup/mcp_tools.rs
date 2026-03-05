@@ -1,5 +1,6 @@
 use vtcode_core::llm::provider as uni;
 use vtcode_core::mcp::McpToolInfo;
+use vtcode_core::tools::mcp::model_visible_mcp_tool_name;
 
 fn build_single_mcp_tool_definition(tool: &McpToolInfo) -> uni::ToolDefinition {
     let parameters = vtcode_core::llm::providers::gemini::sanitize_function_parameters(
@@ -14,7 +15,11 @@ fn build_single_mcp_tool_definition(tool: &McpToolInfo) -> uni::ToolDefinition {
         )
     };
 
-    uni::ToolDefinition::function(format!("mcp_{}", tool.name), description, parameters)
+    uni::ToolDefinition::function(
+        model_visible_mcp_tool_name(&tool.provider, &tool.name),
+        description,
+        parameters,
+    )
 }
 
 pub fn build_mcp_tool_definitions(tools: &[McpToolInfo]) -> Vec<uni::ToolDefinition> {

@@ -165,6 +165,8 @@ async fn handle_success_common(
     ctx.session_stats.record_tool(name);
 
     if let Some(tool_name) = name.strip_prefix("mcp_") {
+        let tool_name = tool_name.trim_start_matches('_');
+        let tool_name = tool_name.split("__").last().unwrap_or(tool_name);
         record_mcp_success_event(ctx.mcp_panel_state, tool_name, args_val);
     } else {
         render_tool_output_common(

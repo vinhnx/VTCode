@@ -282,6 +282,7 @@ mod tests {
                 exposed_tools: vec![],
             },
             allowlist: Default::default(),
+            requirements: Default::default(),
             max_concurrent_connections: 10,
             request_timeout_seconds: 30,
             retry_attempts: 3,

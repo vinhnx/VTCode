@@ -1675,6 +1675,50 @@ fn pty_lines_use_subdued_foreground() {
 }
 
 #[test]
+fn assistant_text_is_brighter_than_pty_output() {
+    let agent_fg = Color::Rgb(0xEE, 0xEE, 0xEE);
+    let pty_fg = Color::Rgb(0x7A, 0x7A, 0x7A);
+    let theme = InlineTheme {
+        foreground: Some(AnsiColorEnum::Rgb(RgbColor(0xEE, 0xEE, 0xEE))),
+        pty_body: Some(AnsiColorEnum::Rgb(RgbColor(0x7A, 0x7A, 0x7A))),
+        ..Default::default()
+    };
+
+    let mut session = Session::new(theme, None, VIEW_ROWS);
+    session.push_line(
+        InlineMessageKind::Agent,
+        vec![InlineSegment {
+            text: "assistant reply".to_string(),
+            style: Arc::new(InlineTextStyle::default()),
+        }],
+    );
+    session.push_line(
+        InlineMessageKind::Pty,
+        vec![InlineSegment {
+            text: "pty output".to_string(),
+            style: Arc::new(InlineTextStyle::default()),
+        }],
+    );
+
+    let agent_spans = session.render_message_spans(0);
+    let agent_body = agent_spans
+        .iter()
+        .find(|span| span.content.contains("assistant reply"))
+        .expect("expected assistant body span");
+    assert_eq!(agent_body.style.fg, Some(agent_fg));
+
+    let pty_rendered = session.reflow_pty_lines(1, 80);
+    let pty_body = pty_rendered
+        .iter()
+        .flat_map(|line| line.spans.iter())
+        .find(|span| span.content.contains("pty output"))
+        .expect("expected PTY body span");
+    assert_eq!(pty_body.style.fg, Some(pty_fg));
+    assert!(pty_body.style.add_modifier.contains(Modifier::DIM));
+    assert_ne!(agent_body.style.fg, pty_body.style.fg);
+}
+
+#[test]
 fn transcript_shows_content_when_viewport_smaller_than_padding() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
 

@@ -19,6 +19,10 @@ pub struct McpClientConfig {
     #[serde(default)]
     pub providers: Vec<McpProviderConfig>,
 
+    /// Optional transport-identity requirements for provider admission
+    #[serde(default)]
+    pub requirements: McpRequirementsConfig,
+
     /// MCP server configuration (for vtcode to expose tools)
     #[serde(default)]
     pub server: McpServerConfig,
@@ -155,6 +159,7 @@ impl Default for McpClientConfig {
             enabled: default_mcp_enabled(),
             ui: McpUiConfig::default(),
             providers: Vec::new(),
+            requirements: McpRequirementsConfig::default(),
             server: McpServerConfig::default(),
             allowlist: McpAllowListConfig::default(),
             max_concurrent_connections: default_max_concurrent_connections(),
@@ -167,6 +172,33 @@ impl Default for McpClientConfig {
             connection_pooling_enabled: default_connection_pooling_enabled(),
             connection_timeout_seconds: default_connection_timeout_seconds(),
             tool_cache_capacity: default_tool_cache_capacity(),
+        }
+    }
+}
+
+/// Requirements used to admit MCP providers by transport identity.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct McpRequirementsConfig {
+    /// Whether requirement checks are enforced
+    #[serde(default = "default_mcp_requirements_enforce")]
+    pub enforce: bool,
+
+    /// Allowed stdio command names when enforcement is enabled
+    #[serde(default)]
+    pub allowed_stdio_commands: Vec<String>,
+
+    /// Allowed HTTP endpoints when enforcement is enabled
+    #[serde(default)]
+    pub allowed_http_endpoints: Vec<String>,
+}
+
+impl Default for McpRequirementsConfig {
+    fn default() -> Self {
+        Self {
+            enforce: default_mcp_requirements_enforce(),
+            allowed_stdio_commands: Vec::new(),
+            allowed_http_endpoints: Vec::new(),
         }
     }
 }
@@ -746,6 +778,10 @@ fn default_max_argument_size() -> u32 {
     1024 * 1024 // 1MB
 }
 
+fn default_mcp_requirements_enforce() -> bool {
+    false
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -764,6 +800,9 @@ mod tests {
         assert_eq!(config.request_timeout_seconds, 30);
         assert_eq!(config.retry_attempts, 3);
         assert!(config.providers.is_empty());
+        assert!(!config.requirements.enforce);
+        assert!(config.requirements.allowed_stdio_commands.is_empty());
+        assert!(config.requirements.allowed_http_endpoints.is_empty());
         assert!(!config.server.enabled);
         assert!(!config.allowlist.enforce);
         assert!(config.allowlist.default.tools.is_none());

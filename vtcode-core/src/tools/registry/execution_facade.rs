@@ -14,6 +14,7 @@ use crate::core::memory_pool::SizeRecommendation;
 use crate::mcp::McpToolExecutor;
 use crate::tool_policy::ToolExecutionDecision;
 use crate::tools::error_messages::agent_execution;
+use crate::tools::mcp::legacy_mcp_tool_name;
 use crate::ui::search::fuzzy_match;
 
 use super::LOOP_THROTTLE_MAX_MS;
@@ -31,6 +32,16 @@ static TOOL_REENTRANCY_STACKS: Lazy<Mutex<HashMap<TokioTaskId, Vec<String>>>> =
     Lazy::new(|| Mutex::new(HashMap::new()));
 thread_local! {
     static THREAD_REENTRANCY_STACK: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
+}
+
+fn parse_canonical_mcp_tool_name(name: &str) -> Option<(&str, &str)> {
+    let mut parts = name.splitn(3, "::");
+    match (parts.next()?, parts.next(), parts.next()) {
+        ("mcp", Some(provider), Some(tool)) if !provider.is_empty() && !tool.is_empty() => {
+            Some((provider, tool))
+        }
+        _ => None,
+    }
 }
 
 fn lock_reentrancy_stacks() -> std::sync::MutexGuard<'static, HashMap<TokioTaskId, Vec<String>>> {
@@ -710,13 +721,19 @@ impl ToolRegistry {
             tool_exists = true;
         }
         // If not a standard tool, check if it's an MCP tool
+        if let Some((provider, remote_tool)) = parse_canonical_mcp_tool_name(&tool_name) {
+            needs_pty = true;
+            tool_exists = true;
+            is_mcp_tool = true;
+            mcp_provider = Some(provider.to_string());
+            mcp_tool_name = Some(remote_tool.to_string());
+        }
+
         let mcp_client_opt = { self.mcp_client.read().ok().and_then(|g| g.clone()) };
-        if let Some(mcp_client) = mcp_client_opt {
-            let mut resolved_mcp_name = if let Some(stripped) = name.strip_prefix("mcp_") {
-                stripped.to_string()
-            } else {
-                tool_name_owned.clone()
-            };
+        if !is_mcp_tool && let Some(mcp_client) = mcp_client_opt {
+            let mut resolved_mcp_name = legacy_mcp_tool_name(name)
+                .map(str::to_string)
+                .unwrap_or_else(|| tool_name_owned.clone());
 
             if let Some(alias_target) = self.resolve_mcp_tool_alias(&resolved_mcp_name).await
                 && alias_target != resolved_mcp_name

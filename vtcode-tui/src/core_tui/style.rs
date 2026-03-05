@@ -104,6 +104,16 @@ pub fn ratatui_style_from_inline(
     resolved
 }
 
+/// PTY output style helper: keep configured color, suppress bold, enforce dimmed output.
+pub fn ratatui_pty_style_from_inline(
+    style: &InlineTextStyle,
+    fallback: Option<AnsiColorEnum>,
+) -> Style {
+    ratatui_style_from_inline(style, fallback)
+        .remove_modifier(Modifier::BOLD)
+        .add_modifier(Modifier::DIM)
+}
+
 /// Convert an `anstyle::Style` directly to a `ratatui::style::Style`.
 ///
 /// Provides full effect mapping (bold, italic, underline, dim) in a single step,

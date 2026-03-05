@@ -239,6 +239,11 @@ python3 scripts/generate_config_field_reference.py
 | `mcp.max_concurrent_connections` | `integer` | no | `5` | Maximum number of concurrent MCP connections |
 | `mcp.providers` | `array` | no | `[]` | Configured MCP providers |
 | `mcp.providers[]` | `object` | no | `-` | Configuration for a single MCP provider |
+| `mcp.requirements.allowed_http_endpoints` | `array` | no | `[]` | Allowed HTTP endpoints when MCP requirements enforcement is enabled |
+| `mcp.requirements.allowed_http_endpoints[]` | `string` | no | `-` | - |
+| `mcp.requirements.allowed_stdio_commands` | `array` | no | `[]` | Allowed stdio command names when MCP requirements enforcement is enabled |
+| `mcp.requirements.allowed_stdio_commands[]` | `string` | no | `-` | - |
+| `mcp.requirements.enforce` | `boolean` | no | `false` | Enforce provider admission against transport identity allowlists |
 | `mcp.request_timeout_seconds` | `integer` | no | `30` | Request timeout in seconds |
 | `mcp.retry_attempts` | `integer` | no | `3` | Connection retry attempts |
 | `mcp.security.api_key_env` | `null \| string` | no | `null` | API key for MCP server authentication (environment variable name) |

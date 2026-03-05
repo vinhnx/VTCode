@@ -7,7 +7,7 @@ use ratatui::{
 };
 use unicode_width::UnicodeWidthStr;
 
-use super::super::style::ratatui_style_from_inline;
+use super::super::style::{ratatui_pty_style_from_inline, ratatui_style_from_inline};
 use super::super::types::{InlineMessageKind, InlineTextStyle};
 use super::terminal_capabilities;
 use super::{Session, file_palette::FilePalette, message::MessageLine, text_utils};
@@ -495,8 +495,7 @@ fn reflow_pty_lines(session: &Session, index: usize, width: u16) -> Vec<Line<'st
     let mut body_spans = Vec::new();
     for segment in &line.segments {
         let stripped_text = strip_ansi_codes(&segment.text);
-        let mut style = ratatui_style_from_inline(&segment.style, fallback);
-        style = style.add_modifier(Modifier::DIM);
+        let style = ratatui_pty_style_from_inline(&segment.style, fallback);
         body_spans.push(Span::styled(stripped_text.into_owned(), style));
     }
 

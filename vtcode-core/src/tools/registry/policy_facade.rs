@@ -4,9 +4,20 @@ use anyhow::Result;
 
 use crate::config::ToolsConfig;
 use crate::tool_policy::{ToolPolicy, ToolPolicyManager};
+use crate::tools::mcp::{is_legacy_mcp_tool_name, legacy_mcp_tool_name};
 use crate::tools::names::canonical_tool_name;
 
 use super::{ToolPermissionDecision, ToolRegistry};
+
+fn parse_mcp_policy_target(name: &str) -> Option<(&str, &str)> {
+    let mut parts = name.splitn(3, "::");
+    match (parts.next()?, parts.next(), parts.next()) {
+        ("mcp", Some(provider), Some(tool)) if !provider.is_empty() && !tool.is_empty() => {
+            Some((provider, tool))
+        }
+        _ => None,
+    }
+}
 
 impl ToolRegistry {
     pub async fn enable_full_auto_mode(&self, allowed_tools: &[String]) {
@@ -99,8 +110,20 @@ impl ToolRegistry {
     }
 
     pub async fn evaluate_tool_policy(&self, name: &str) -> Result<ToolPermissionDecision> {
-        if let Some(tool_name) = name.strip_prefix("mcp_") {
+        if let Some(tool_name) = legacy_mcp_tool_name(name) {
             return self.evaluate_mcp_tool_policy(name, tool_name).await;
+        }
+
+        if let Some((_, tool_name)) = parse_mcp_policy_target(name) {
+            return self.evaluate_mcp_tool_policy(name, tool_name).await;
+        }
+
+        if let Some(registration) = self.inventory.registration_for(name)
+            && let Some((_, tool_name)) = parse_mcp_policy_target(registration.name())
+        {
+            return self
+                .evaluate_mcp_tool_policy(registration.name(), tool_name)
+                .await;
         }
 
         let canonical = canonical_tool_name(name);
@@ -203,22 +226,30 @@ impl ToolRegistry {
     }
 
     pub async fn persist_mcp_tool_policy(&self, name: &str, policy: ToolPolicy) -> Result<()> {
-        if !name.starts_with("mcp_") {
-            return Ok(());
-        }
-
-        let Some(tool_name) = name.strip_prefix("mcp_") else {
-            return Ok(());
-        };
-
-        let Some(provider) = self.find_mcp_provider(tool_name).await else {
+        let (provider, tool_name) = if is_legacy_mcp_tool_name(name) {
+            let Some(tool_name) = legacy_mcp_tool_name(name) else {
+                return Ok(());
+            };
+            let Some(provider) = self.find_mcp_provider(tool_name).await else {
+                return Ok(());
+            };
+            (provider, tool_name.to_string())
+        } else if let Some((provider, tool_name)) = parse_mcp_policy_target(name) {
+            (provider.to_string(), tool_name.to_string())
+        } else if let Some(registration) = self.inventory.registration_for(name) {
+            let canonical = registration.name();
+            let Some((provider, tool_name)) = parse_mcp_policy_target(canonical) else {
+                return Ok(());
+            };
+            (provider.to_string(), tool_name.to_string())
+        } else {
             return Ok(());
         };
 
         self.policy_gateway
             .write()
             .await
-            .persist_mcp_tool_policy(&provider, tool_name, policy)
+            .persist_mcp_tool_policy(&provider, &tool_name, policy)
             .await
     }
 }

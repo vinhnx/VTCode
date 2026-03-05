@@ -1,6 +1,7 @@
 use serde_json::Value;
 
 use crate::config::constants::tools as tool_names;
+use crate::tools::mcp::legacy_mcp_tool_name;
 use crate::tools::tool_intent;
 
 pub fn tool_action_label(tool_name: &str, args: &Value) -> String {
@@ -69,8 +70,11 @@ pub fn tool_action_label(tool_name: &str, args: &Value) -> String {
 }
 
 fn normalize_tool_name(tool_name: &str) -> &str {
-    if let Some(stripped) = tool_name.strip_prefix("mcp_") {
+    if let Some(stripped) = legacy_mcp_tool_name(tool_name) {
         return stripped;
+    }
+    if tool_name.starts_with("mcp__") {
+        return tool_name.split("__").last().unwrap_or(tool_name);
     }
     if tool_name.starts_with("mcp::") {
         return tool_name.split("::").last().unwrap_or(tool_name);

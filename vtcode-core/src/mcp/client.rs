@@ -90,6 +90,14 @@ impl McpClient {
                 continue;
             }
 
+            if let Some(reason) = self.requirement_mismatch_reason(provider_config) {
+                warn!(
+                    "Skipping MCP provider '{}' due to requirements policy: {}",
+                    provider_config.name, reason
+                );
+                continue;
+            }
+
             if matches!(provider_config.transport, McpTransportConfig::Http(_))
                 && !self.config.experimental_use_rmcp_client
             {
@@ -861,6 +869,44 @@ impl McpClient {
         }
     }
 
+    fn requirement_mismatch_reason(&self, provider_config: &McpProviderConfig) -> Option<String> {
+        let requirements = &self.config.requirements;
+        if !requirements.enforce {
+            return None;
+        }
+
+        match &provider_config.transport {
+            McpTransportConfig::Stdio(stdio) => {
+                if requirements
+                    .allowed_stdio_commands
+                    .iter()
+                    .any(|allowed| allowed == &stdio.command)
+                {
+                    None
+                } else {
+                    Some(format!(
+                        "stdio command '{}' is not allowlisted",
+                        stdio.command
+                    ))
+                }
+            }
+            McpTransportConfig::Http(http) => {
+                if requirements
+                    .allowed_http_endpoints
+                    .iter()
+                    .any(|allowed| allowed == &http.endpoint)
+                {
+                    None
+                } else {
+                    Some(format!(
+                        "HTTP endpoint '{}' is not allowlisted",
+                        http.endpoint
+                    ))
+                }
+            }
+        }
+    }
+
     fn resolve_startup_timeout(&self, provider_config: &McpProviderConfig) -> Option<Duration> {
         if let Some(timeout_ms) = provider_config.startup_timeout_ms {
             if timeout_ms == 0 {
@@ -1032,5 +1078,81 @@ impl McpToolExecutor for McpClient {
 
     fn get_status(&self) -> McpClientStatus {
         self.get_status()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::McpClient;
+    use crate::config::mcp::{
+        McpClientConfig, McpHttpServerConfig, McpProviderConfig, McpRequirementsConfig,
+        McpStdioServerConfig, McpTransportConfig,
+    };
+
+    fn base_config() -> McpClientConfig {
+        McpClientConfig {
+            enabled: true,
+            requirements: McpRequirementsConfig {
+                enforce: true,
+                allowed_stdio_commands: vec!["uvx".to_string()],
+                allowed_http_endpoints: vec!["https://allowed.example/mcp".to_string()],
+            },
+            ..McpClientConfig::default()
+        }
+    }
+
+    #[test]
+    fn requirements_allow_matching_stdio_command() {
+        let client = McpClient::new(base_config());
+        let provider = McpProviderConfig {
+            name: "time".to_string(),
+            transport: McpTransportConfig::Stdio(McpStdioServerConfig {
+                command: "uvx".to_string(),
+                args: vec![],
+                working_directory: None,
+            }),
+            ..McpProviderConfig::default()
+        };
+
+        assert!(client.requirement_mismatch_reason(&provider).is_none());
+    }
+
+    #[test]
+    fn requirements_block_unmatched_stdio_command() {
+        let client = McpClient::new(base_config());
+        let provider = McpProviderConfig {
+            name: "time".to_string(),
+            transport: McpTransportConfig::Stdio(McpStdioServerConfig {
+                command: "npx".to_string(),
+                args: vec![],
+                working_directory: None,
+            }),
+            ..McpProviderConfig::default()
+        };
+
+        assert!(
+            client
+                .requirement_mismatch_reason(&provider)
+                .is_some_and(|reason| reason.contains("not allowlisted"))
+        );
+    }
+
+    #[test]
+    fn requirements_block_unmatched_http_endpoint() {
+        let client = McpClient::new(base_config());
+        let provider = McpProviderConfig {
+            name: "remote".to_string(),
+            transport: McpTransportConfig::Http(McpHttpServerConfig {
+                endpoint: "https://blocked.example/mcp".to_string(),
+                ..McpHttpServerConfig::default()
+            }),
+            ..McpProviderConfig::default()
+        };
+
+        assert!(
+            client
+                .requirement_mismatch_reason(&provider)
+                .is_some_and(|reason| reason.contains("not allowlisted"))
+        );
     }
 }
