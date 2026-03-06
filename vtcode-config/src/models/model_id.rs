@@ -27,10 +27,16 @@ pub enum ModelId {
     Gemini3FlashPreview,
 
     // OpenAI models
+    /// GPT - Rolling alias for the latest GPT flagship model
+    GPT,
     /// GPT-5 - Latest most capable OpenAI model (2025-08-07)
     GPT5,
     /// GPT-5.2 - Latest flagship general-purpose OpenAI model (2025-12-11)
     GPT52,
+    /// GPT-5.4 - Mainline frontier GPT model for general-purpose and coding work
+    GPT54,
+    /// GPT-5.4 Pro - Higher-compute GPT-5.4 variant for difficult problems
+    GPT54Pro,
     /// GPT-5 Mini - Latest efficient OpenAI model (2025-08-07)
     GPT5Mini,
     /// GPT-5 Nano - Latest most cost-effective OpenAI model (2025-08-07)

@@ -30,8 +30,7 @@ pub fn serialize_tools(tools: &[provider::ToolDefinition], model: &str) -> Optio
                     let name = &func.name;
                     let description = &func.description;
                     let parameters = &func.parameters;
-
-                    json!({
+                    let mut value = json!({
                         "type": &tool.tool_type,
                         "name": name,
                         "description": description,
@@ -41,7 +40,13 @@ pub fn serialize_tools(tools: &[provider::ToolDefinition], model: &str) -> Optio
                             "description": description,
                             "parameters": parameters,
                         }
-                    })
+                    });
+                    if tool.defer_loading == Some(true)
+                        && let Some(obj) = value.as_object_mut()
+                    {
+                        obj.insert("defer_loading".to_string(), json!(true));
+                    }
+                    value
                 }
                 "apply_patch" | "shell" | "custom" | "grammar" => {
                     if is_gpt5_or_newer(model) {
@@ -59,6 +64,7 @@ pub fn serialize_tools(tools: &[provider::ToolDefinition], model: &str) -> Optio
                         return None;
                     }
                 }
+                "tool_search" => json!({ "type": "tool_search" }),
                 _ => json!(tool),
             })
         })
@@ -81,12 +87,18 @@ pub fn serialize_tools_for_responses(tools: &[provider::ToolDefinition]) -> Opti
                 if !seen_names.insert(func.name.clone()) {
                     return None;
                 }
-                Some(json!({
+                let mut value = json!({
                     "type": "function",
                     "name": &func.name,
                     "description": &func.description,
                     "parameters": &func.parameters
-                }))
+                });
+                if tool.defer_loading == Some(true)
+                    && let Some(obj) = value.as_object_mut()
+                {
+                    obj.insert("defer_loading".to_string(), json!(true));
+                }
+                Some(value)
             }
             "apply_patch" => {
                 let name = tool
@@ -168,6 +180,7 @@ pub fn serialize_tools_for_responses(tools: &[provider::ToolDefinition]) -> Opti
                     })
                 })
             }
+            "tool_search" => Some(json!({ "type": "tool_search" })),
             _ => {
                 if let Some(func) = &tool.function {
                     if !seen_names.insert(func.name.clone()) {

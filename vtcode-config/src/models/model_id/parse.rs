@@ -30,8 +30,11 @@ impl FromStr for ModelId {
             }
             s if s == models::GEMINI_3_FLASH_PREVIEW => Ok(ModelId::Gemini3FlashPreview),
             // OpenAI models
+            s if s == models::GPT => Ok(ModelId::GPT),
             s if s == models::GPT_5 => Ok(ModelId::GPT5),
             s if s == models::GPT_5_2 => Ok(ModelId::GPT52),
+            s if s == models::GPT_5_4 => Ok(ModelId::GPT54),
+            s if s == models::GPT_5_4_PRO => Ok(ModelId::GPT54Pro),
             s if s == models::GPT_5_MINI => Ok(ModelId::GPT5Mini),
             s if s == models::GPT_5_NANO => Ok(ModelId::GPT5Nano),
             s if s == models::openai::GPT_5_3_CODEX => Ok(ModelId::GPT53Codex),

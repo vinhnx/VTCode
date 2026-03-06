@@ -262,7 +262,7 @@ provider = "openai"
 api_key_env = "OPENAI_API_KEY"
 
 # Default model to use when no specific model is specified
-default_model = "gpt-5.3-codex"
+default_model = "gpt-5.4"
 
 # Visual theme for the terminal interface
 theme = "ciapre-dark"
@@ -277,8 +277,8 @@ ui_surface = "auto"
 # Lower values reduce memory footprint but may lose context; higher values preserve context but use more memory
 max_conversation_turns = 150
 
-# Reasoning effort level ("low", "medium", "high") - affects model usage and response speed
-reasoning_effort = "medium"
+# Reasoning effort level ("none", "minimal", "low", "medium", "high", "xhigh") - affects model usage and response speed
+reasoning_effort = "none"
 
 # Temperature for main model responses (0.0-1.0)
 temperature = 0.7

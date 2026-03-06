@@ -114,6 +114,23 @@
     "name": "OpenAI",
     "doc": "https://platform.openai.com/docs/models",
     "models": {
+      "gpt": {
+        "id": "gpt",
+        "name": "GPT",
+        "description": "Rolling alias for the latest GPT flagship model.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 1050000
+      },
       "gpt-5.2": {
         "id": "gpt-5.2",
         "name": "GPT-5.2",
@@ -176,6 +193,40 @@
           ]
         },
         "context": 400000
+      },
+      "gpt-5.4": {
+        "id": "gpt-5.4",
+        "name": "GPT-5.4",
+        "description": "Frontier model for complex professional work with long context and image input.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 1050000
+      },
+      "gpt-5.4-pro": {
+        "id": "gpt-5.4-pro",
+        "name": "GPT-5.4 Pro",
+        "description": "Higher-compute GPT-5.4 variant for harder problems and more precise responses.",
+        "reasoning": true,
+        "tool_call": true,
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "context": 1050000
       },
       "gpt-5-codex": {
         "id": "gpt-5-codex",
@@ -284,7 +335,7 @@
         "context": 400000
       }
     },
-    "default_model": "gpt-5.3-codex"
+    "default_model": "gpt-5.4"
   },
   "huggingface": {
     "id": "huggingface",

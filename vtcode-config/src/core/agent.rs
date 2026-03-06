@@ -65,13 +65,13 @@ pub struct AgentConfig {
     #[serde(default = "default_max_conversation_turns")]
     pub max_conversation_turns: usize,
 
-    /// Reasoning effort level for models that support it (none, low, medium, high)
-    /// Applies to: Claude, GPT-5, GPT-5.3, Gemini, Qwen3, DeepSeek with reasoning capability
+    /// Reasoning effort level for models that support it (none, minimal, low, medium, high, xhigh)
+    /// Applies to: Claude, GPT-5 family, Gemini, Qwen3, DeepSeek with reasoning capability
     #[serde(default = "default_reasoning_effort")]
     pub reasoning_effort: ReasoningEffortLevel,
 
     /// Verbosity level for output text (low, medium, high)
-    /// Applies to: GPT-5.3 and other models that support verbosity control
+    /// Applies to: GPT-5.4-family Responses workflows and other models that support verbosity control
     #[serde(default = "default_verbosity")]
     pub verbosity: VerbosityLevel,
 
@@ -483,7 +483,7 @@ const fn default_max_conversation_turns() -> usize {
 
 #[inline]
 fn default_reasoning_effort() -> ReasoningEffortLevel {
-    ReasoningEffortLevel::default()
+    ReasoningEffortLevel::None
 }
 
 #[inline]

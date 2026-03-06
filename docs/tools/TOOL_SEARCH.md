@@ -1,6 +1,9 @@
-# Anthropic Tool Search Integration
+# Tool Search Integration
 
-This document describes VT Code's integration with Anthropic's tool search feature (advanced-tool-use beta), which enables dynamic tool discovery for large tool catalogs.
+This document describes VT Code's tool search integration for providers that support deferred tool loading. VT Code currently supports:
+
+- Anthropic advanced-tool-use beta search tools
+- OpenAI hosted `tool_search` with deferred function loading
 
 ## Overview
 
@@ -9,7 +12,7 @@ The tool search feature allows Claude to search through thousands of tools on-de
 1. **Context efficiency**: Tool definitions can consume massive portions of the context window
 2. **Tool selection accuracy**: Claude's ability to correctly select tools degrades with more than 30-50 tools
 
-## Configuration
+## Anthropic configuration
 
 Add the following to your `vtcode.toml` under the Anthropic provider section:
 
@@ -44,8 +47,11 @@ Claude uses natural language queries to search for tools.
 ```rust
 use vtcode_core::llm::provider::{ToolDefinition, ToolSearchAlgorithm};
 
-// Create a tool search tool
+// Anthropic tool search
 let search_tool = ToolDefinition::tool_search(ToolSearchAlgorithm::Regex);
+
+// OpenAI hosted tool search
+let hosted_search = ToolDefinition::hosted_tool_search();
 
 // Create a deferred tool (not loaded until discovered)
 let deferred_tool = ToolDefinition::function(
@@ -61,6 +67,16 @@ let core_tool = ToolDefinition::function(
     json!({"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]}),
 );
 ```
+
+### OpenAI hosted tool search
+
+For GPT-5.4-family Responses workflows, add `ToolDefinition::hosted_tool_search()` to the request and mark candidate functions with `.with_defer_loading(true)`.
+
+Current VT Code scope for OpenAI:
+
+- Supported: hosted `tool_search`
+- Supported: deferred function schemas
+- Not yet modeled in shared tool definitions: OpenAI namespaces, client-executed `tool_search_output`, or MCP-server search surfaces
 
 ### Handling Tool References
 
@@ -82,7 +98,7 @@ if !response.tool_references.is_empty() {
 
 ## Response Block Types
 
-The Anthropic provider handles these new content block types:
+The Anthropic provider handles these content block types:
 
 - `server_tool_use`: Server-side tool execution (tool search invocation)
 - `tool_search_tool_result`: Results from tool search containing tool references
@@ -96,22 +112,24 @@ When tool search is enabled and the request contains deferred tools, the provide
 anthropic-beta: advanced-tool-use-2025-11-20
 ```
 
-## Limits
+## Limits and guidance
 
 - Maximum tools: 10,000 in catalog
 - Search results: 3-5 most relevant tools per search
 - Pattern length: Maximum 200 characters for regex patterns
-- Model support: Claude Sonnet 4.5+, Claude Opus 4.5+ only
+- Anthropic model support: Claude Sonnet 4.5+, Claude Opus 4.5+ only
+- OpenAI guidance: prefer hosted tool search with GPT-5.4 when the tool inventory is already known at request time
 
 ## Best Practices
 
 1. Keep 3-5 most frequently used tools as non-deferred
 2. Write clear, descriptive tool names and descriptions
 3. Use semantic keywords in descriptions that match how users describe tasks
-4. Add a system prompt section describing available tool categories
+4. For OpenAI, prefer grouping tools conceptually and keep deferred catalogs focused
 5. Monitor which tools Claude discovers to refine descriptions
 
 ## Related Documentation
 
 - [Anthropic Tool Search Documentation](https://docs.anthropic.com/claude/reference/tool-search)
+- [OpenAI Tool Search Guide](https://developers.openai.com/api/docs/guides/tools-tool-search)
 - [Configuration Reference](config/CONFIGURATION_PRECEDENCE.md)

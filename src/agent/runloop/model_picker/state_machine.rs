@@ -1,3 +1,4 @@
+use super::selection::supports_gpt5_none_reasoning;
 use super::*;
 
 impl ModelPickerState {
@@ -117,9 +118,7 @@ impl ModelPickerState {
 
         // For GPT-5.2 and GPT-5.3 Codex models, disable reasoning by setting effort to "none" on the same model
         // rather than switching to a different model
-        if current_selection.model_id.starts_with("gpt-5.2")
-            || current_selection.model_id.starts_with("gpt-5.3")
-        {
+        if supports_gpt5_none_reasoning(&current_selection.model_id) {
             self.selected_reasoning = Some(ReasoningEffortLevel::None);
             renderer.line(
                 MessageStyle::Info,

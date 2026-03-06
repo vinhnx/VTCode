@@ -31,8 +31,8 @@ pub struct LLMRequest {
     /// Parallel tool use configuration following Anthropic best practices
     pub parallel_tool_config: Option<Box<ParallelToolConfig>>,
 
-    /// Reasoning effort level for models that support it (none, low, medium, high)
-    /// Applies to: Claude, GPT-5, GPT-5.1, Gemini, Qwen3, DeepSeek with reasoning capability
+    /// Reasoning effort level for models that support it (none, minimal, low, medium, high, xhigh)
+    /// Applies to: Claude, GPT-5 family, Gemini, Qwen3, DeepSeek with reasoning capability
     pub reasoning_effort: Option<ReasoningEffortLevel>,
 
     /// Effort level for overall token usage (high, medium, low)
@@ -42,7 +42,7 @@ pub struct LLMRequest {
     pub effort: Option<String>,
 
     /// Verbosity level for output text (low, medium, high)
-    /// Applies to: GPT-5.1 and other models that support verbosity control
+    /// Applies to: GPT-5.4-family Responses workflows and other models that support verbosity control
     pub verbosity: Option<VerbosityLevel>,
 
     /// Advanced generation parameters

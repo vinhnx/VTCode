@@ -29,7 +29,7 @@ const DEFAULT_MODEL_CACHE_TTL: Duration = Duration::from_secs(300);
 const GEMINI_DEFAULT_MODEL: &str = "gemini-3-flash-preview";
 
 /// Default model for OpenAI provider
-const OPENAI_DEFAULT_MODEL: &str = "gpt-5.3-codex";
+const OPENAI_DEFAULT_MODEL: &str = "gpt-5.4";
 
 /// Default model for Anthropic provider
 const ANTHROPIC_DEFAULT_MODEL: &str = "claude-opus-4.5";

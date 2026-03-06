@@ -68,7 +68,7 @@ python3 scripts/generate_config_field_reference.py
 | `agent.open_responses.map_tool_calls` | `boolean` | no | `true` | Map internal tool calls to Open Responses function_call items When true, command executions and MCP tool calls are represented as function_call items |
 | `agent.project_doc_max_bytes` | `integer` | no | `16384` | Maximum bytes of AGENTS.md content to load from project hierarchy |
 | `agent.provider` | `string` | no | `"anthropic"` | AI provider for single agent mode (gemini, openai, anthropic, openrouter, zai) |
-| `agent.reasoning_effort` | `string` | no | `"medium"` | Reasoning effort level for models that support it (none, low, medium, high) Applies to: Claude, GPT-5, GPT-5.1, Gemini, Qwen3, DeepSeek with reasoning capability |
+| `agent.reasoning_effort` | `string` | no | `"none"` | Reasoning effort level for models that support it (none, minimal, low, medium, high, xhigh). For GPT-5.4-family models, prefer none/low for execution-heavy work and medium/high for research-heavy work. |
 | `agent.refine_prompts_enabled` | `boolean` | no | `false` | Enable prompt refinement pass before sending to LLM |
 | `agent.refine_prompts_max_passes` | `integer` | no | `1` | Max refinement passes for prompt writing |
 | `agent.refine_prompts_model` | `string` | no | `""` | Optional model override for the refiner (empty = auto pick efficient sibling) |
@@ -88,7 +88,7 @@ python3 scripts/generate_config_field_reference.py
 | `agent.tool_documentation_mode` | `string` | no | `"full"` | Tool documentation mode controlling token overhead for tool definitions Options: minimal (~800 tokens), progressive (~1.2k), full (~3k current) Progressive: signatures upfront, detailed docs on-demand (recommended) Minimal: signatures only, pi-coding-agent style (power users) Full: all documentation upfront (current behavior, default) |
 | `agent.ui_surface` | `string` | no | `"auto"` | Preferred rendering surface for the interactive chat UI (auto, alternate, inline) |
 | `agent.user_instructions` | `null \| string` | no | `null` | Custom instructions provided by the user via configuration to guide agent behavior |
-| `agent.verbosity` | `string` | no | `"medium"` | Verbosity level for output text (low, medium, high) Applies to: GPT-5.1 and other models that support verbosity control |
+| `agent.verbosity` | `string` | no | `"medium"` | Verbosity level for output text (low, medium, high). Applies to GPT-5.4-family Responses workflows and other models that support verbosity control. |
 | `agent.vibe_coding.enable_conversation_memory` | `boolean` | no | `true` | Enable conversation memory for pronoun resolution |
 | `agent.vibe_coding.enable_entity_resolution` | `boolean` | no | `true` | Enable fuzzy entity resolution |
 | `agent.vibe_coding.enable_proactive_context` | `boolean` | no | `true` | Enable proactive context gathering |

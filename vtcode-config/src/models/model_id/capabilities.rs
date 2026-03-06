@@ -45,7 +45,9 @@ impl ModelId {
             ModelId::Gemini31ProPreview
             | ModelId::Gemini31ProPreviewCustomTools
             | ModelId::Gemini31FlashLitePreview => Some(ModelId::Gemini3FlashPreview),
-            ModelId::GPT52 | ModelId::GPT5 => Some(ModelId::GPT5Mini),
+            ModelId::GPT | ModelId::GPT52 | ModelId::GPT54 | ModelId::GPT54Pro | ModelId::GPT5 => {
+                Some(ModelId::GPT5Mini)
+            }
             ModelId::DeepSeekReasoner => Some(ModelId::DeepSeekChat),
             ModelId::ZaiGlm5 => Some(ModelId::OllamaGlm5Cloud),
             ModelId::ClaudeOpus46 | ModelId::ClaudeSonnet46 => Some(ModelId::ClaudeSonnet46),
@@ -81,8 +83,11 @@ impl ModelId {
             ModelId::Gemini31ProPreview
                 | ModelId::Gemini31ProPreviewCustomTools
                 | ModelId::OpenRouterGoogleGemini31ProPreview
+                | ModelId::GPT
                 | ModelId::GPT5
                 | ModelId::GPT52
+                | ModelId::GPT54
+                | ModelId::GPT54Pro
                 | ModelId::GPT53Codex
                 | ModelId::ClaudeOpus46
                 | ModelId::ClaudeSonnet46
@@ -126,8 +131,11 @@ impl ModelId {
                 | ModelId::OpenRouterGoogleGemini31ProPreview
                 | ModelId::Gemini3FlashPreview
                 | ModelId::Gemini31FlashLitePreview
+                | ModelId::GPT
                 | ModelId::GPT5
                 | ModelId::GPT52
+                | ModelId::GPT54
+                | ModelId::GPT54Pro
                 | ModelId::GPT53Codex
                 | ModelId::ClaudeOpus46
                 | ModelId::ClaudeSonnet46
@@ -166,7 +174,9 @@ impl ModelId {
             ModelId::Gemini31FlashLitePreview => "3.1-lite",
             ModelId::Gemini3FlashPreview => "3",
             // OpenAI generations
+            ModelId::GPT => "5.4",
             ModelId::GPT52 => "5.2",
+            ModelId::GPT54 | ModelId::GPT54Pro => "5.4",
             ModelId::GPT53Codex => "5.3",
             ModelId::GPT5
             | ModelId::GPT5Mini
@@ -213,7 +223,14 @@ impl ModelId {
 
     /// Determine if this model supports GPT-5.1+/5.2+/5.3+ shell tool type
     pub fn supports_shell_tool(&self) -> bool {
-        matches!(self, ModelId::GPT52 | ModelId::GPT53Codex)
+        matches!(
+            self,
+            ModelId::GPT
+                | ModelId::GPT52
+                | ModelId::GPT54
+                | ModelId::GPT54Pro
+                | ModelId::GPT53Codex
+        )
     }
 
     /// Determine if this model supports optimized apply_patch tool

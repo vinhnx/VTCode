@@ -71,15 +71,15 @@ fn generate_default_config() -> String {
 
 [agent]
 # Default model to use
-default_model = "gpt-5.3-codex"
+default_model = "gpt-5.4"
 # AI provider (gemini, openai, anthropic)
 provider = "openai"
 # Environment variable containing API key
 api_key_env = "OPENAI_API_KEY"
 # Maximum conversation turns
 max_conversation_turns = 150
-# Reasoning effort level for models that support it (low, medium, high)
-reasoning_effort = "medium"
+# Reasoning effort level for models that support it (none, minimal, low, medium, high, xhigh)
+reasoning_effort = "none"
 # Main model temperature
 temperature = 0.7
 

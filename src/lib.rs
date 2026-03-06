@@ -46,7 +46,7 @@
 //! ```toml
 //! [agent]
 //! provider = "openai"
-//! default_model = "gpt-5.3-codex"
+//! default_model = "gpt-5.4"
 //! ```
 //!
 //! The configuration loader resolves aliases through

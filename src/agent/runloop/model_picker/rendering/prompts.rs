@@ -9,6 +9,7 @@ use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 
 use super::super::selection::{
     SelectionDetail, reasoning_level_description, reasoning_level_label,
+    supports_gpt5_none_reasoning, supports_xhigh_reasoning,
 };
 use super::{CURRENT_BADGE, KEEP_CURRENT_DESCRIPTION, REASONING_OFF_BADGE, STEP_TWO_TITLE};
 
@@ -28,8 +29,7 @@ pub(crate) fn render_reasoning_inline(
     });
 
     // For GPT-5.2 and GPT-5.3 Codex models, show "None" first as the default option (fastest)
-    let is_gpt5_responses =
-        selection.model_id.starts_with("gpt-5.2") || selection.model_id.starts_with("gpt-5.3");
+    let is_gpt5_responses = supports_gpt5_none_reasoning(&selection.model_id);
     if is_gpt5_responses {
         items.push(InlineListItem {
             title: reasoning_level_label(ReasoningEffortLevel::None).to_string(),
@@ -43,8 +43,6 @@ pub(crate) fn render_reasoning_inline(
         });
     }
 
-    let is_codex_max = selection.model_id.contains("codex-max");
-
     let mut levels = vec![
         ReasoningEffortLevel::Minimal,
         ReasoningEffortLevel::Low,
@@ -52,7 +50,7 @@ pub(crate) fn render_reasoning_inline(
         ReasoningEffortLevel::High,
     ];
 
-    if is_codex_max {
+    if supports_xhigh_reasoning(&selection.model_id) {
         levels.push(ReasoningEffortLevel::XHigh);
     }
 
@@ -107,10 +105,12 @@ pub(crate) fn prompt_reasoning_plain(
     selection: &SelectionDetail,
     current: ReasoningEffortLevel,
 ) -> Result<()> {
-    let is_responses_flagship =
-        selection.model_id.starts_with("gpt-5.2") || selection.model_id.starts_with("gpt-5.3");
-    let is_codex_max = selection.model_id.contains("codex-max");
-    let xhigh_suffix = if is_codex_max { "/xhigh" } else { "" };
+    let is_responses_flagship = supports_gpt5_none_reasoning(&selection.model_id);
+    let xhigh_suffix = if supports_xhigh_reasoning(&selection.model_id) {
+        "/xhigh"
+    } else {
+        ""
+    };
 
     if selection.reasoning_optional {
         let prefix = if is_responses_flagship {

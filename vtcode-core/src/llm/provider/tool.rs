@@ -38,7 +38,9 @@ impl std::str::FromStr for ToolSearchAlgorithm {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ToolDefinition {
     /// The type of tool: "function", "apply_patch" (GPT-5.1), "shell" (GPT-5.1), or "custom" (GPT-5 freeform)
-    /// Also supports Anthropic tool types like:
+    /// Also supports provider-native search tools like:
+    /// - "tool_search" (OpenAI hosted tool search)
+    /// - Anthropic tool search revisions:
     /// - "tool_search_tool_regex_20251119", "tool_search_tool_bm25_20251119"
     /// - "web_search_20260209" (and other web_search_* revisions)
     #[serde(rename = "type")]
@@ -220,6 +222,19 @@ impl ToolDefinition {
         }
     }
 
+    /// Create an OpenAI hosted tool search definition.
+    pub fn hosted_tool_search() -> Self {
+        Self {
+            tool_type: "tool_search".to_owned(),
+            function: None,
+            web_search: None,
+            shell: None,
+            grammar: None,
+            strict: None,
+            defer_loading: None,
+        }
+    }
+
     /// Create a new apply_patch tool definition (GPT-5.1 specific)
     /// The apply_patch tool lets models create, update, and delete files using VT Code structured diffs
     pub fn apply_patch(description: String) -> Self {
@@ -330,12 +345,13 @@ impl ToolDefinition {
             "custom" => self.validate_custom(),
             "grammar" => self.validate_grammar(),
             "web_search" => self.validate_web_search(),
+            "tool_search" => Ok(()),
             "tool_search_tool_regex_20251119" | "tool_search_tool_bm25_20251119" => {
                 self.validate_function()
             }
             other if other.starts_with("web_search_") => Ok(()),
             other => Err(format!(
-                "Unsupported tool type: {}. Supported types: function, apply_patch, shell, custom, grammar, web_search, tool_search_tool_*, web_search_*",
+                "Unsupported tool type: {}. Supported types: function, apply_patch, shell, custom, grammar, web_search, tool_search, tool_search_tool_*, web_search_*",
                 other
             )),
         }
@@ -345,7 +361,7 @@ impl ToolDefinition {
     pub fn is_tool_search(&self) -> bool {
         matches!(
             self.tool_type.as_str(),
-            "tool_search_tool_regex_20251119" | "tool_search_tool_bm25_20251119"
+            "tool_search" | "tool_search_tool_regex_20251119" | "tool_search_tool_bm25_20251119"
         )
     }
 

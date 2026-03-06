@@ -37,6 +37,28 @@ pub(crate) struct ResponsesRequestContext<'a> {
     pub prompt_cache_retention: Option<&'a str>,
 }
 
+fn default_reasoning_effort_for_model(model: &str) -> Option<ReasoningEffortLevel> {
+    match model {
+        "gpt" | "gpt-5.2" | "gpt-5.4" => Some(ReasoningEffortLevel::None),
+        "gpt-5" | "gpt-5.4-pro" => Some(ReasoningEffortLevel::Medium),
+        _ if model.starts_with("gpt-5.3") => Some(ReasoningEffortLevel::Medium),
+        _ => None,
+    }
+}
+
+fn allows_sampling_parameters(model: &str, reasoning_effort: Option<ReasoningEffortLevel>) -> bool {
+    match model {
+        "gpt" | "gpt-5.2" | "gpt-5.4" => {
+            matches!(
+                reasoning_effort.unwrap_or(ReasoningEffortLevel::None),
+                ReasoningEffortLevel::None
+            )
+        }
+        "gpt-5" | "gpt-5.4-pro" | "gpt-5-mini" | "gpt-5-nano" => false,
+        _ => true,
+    }
+}
+
 pub(crate) fn build_chat_request(
     request: &provider::LLMRequest,
     ctx: &ChatRequestContext<'_>,
@@ -133,6 +155,9 @@ pub(crate) fn build_chat_request(
         "messages": messages,
         "stream": request.stream
     });
+    let effective_reasoning_effort = request
+        .reasoning_effort
+        .or_else(|| default_reasoning_effort_for_model(&request.model));
 
     let is_native_openai = ctx.base_url.contains("api.openai.com");
     let max_tokens_field = if !is_native_openai {
@@ -147,6 +172,7 @@ pub(crate) fn build_chat_request(
 
     if let Some(temperature) = request.temperature
         && ctx.supports_temperature
+        && allows_sampling_parameters(&request.model, effective_reasoning_effort)
     {
         openai_request["temperature"] = json!(temperature);
     }
@@ -213,6 +239,9 @@ pub(crate) fn build_responses_request(
         "input": responses_payload.input,
         "stream": request.stream,
     });
+    let effective_reasoning_effort = request
+        .reasoning_effort
+        .or_else(|| default_reasoning_effort_for_model(&request.model));
 
     if let Some(max_tokens) = request.max_tokens {
         openai_request[MAX_COMPLETION_TOKENS_FIELD] = json!(max_tokens);
@@ -259,12 +288,15 @@ pub(crate) fn build_responses_request(
 
     if let Some(temperature) = request.temperature
         && ctx.supports_temperature
+        && allows_sampling_parameters(&request.model, effective_reasoning_effort)
     {
         sampling_parameters["temperature"] = json!(temperature);
         has_sampling = true;
     }
 
-    if let Some(top_p) = request.top_p {
+    if let Some(top_p) = request.top_p
+        && allows_sampling_parameters(&request.model, effective_reasoning_effort)
+    {
         sampling_parameters["top_p"] = json!(top_p);
         has_sampling = true;
     }
@@ -325,10 +357,10 @@ pub(crate) fn build_responses_request(
             } else {
                 openai_request["reasoning"] = json!({ "effort": effort.as_str() });
             }
-        } else if openai_request.get("reasoning").is_none() {
-            // Use the default reasoning effort level (medium) for native OpenAI models
-            let default_effort = ReasoningEffortLevel::default().as_str();
-            openai_request["reasoning"] = json!({ "effort": default_effort });
+        } else if openai_request.get("reasoning").is_none()
+            && let Some(default_effort) = default_reasoning_effort_for_model(&request.model)
+        {
+            openai_request["reasoning"] = json!({ "effort": default_effort.as_str() });
         }
     }
 
@@ -377,7 +409,10 @@ pub(crate) fn build_responses_request(
 
     // Set default verbosity for GPT-5.2+ models if no format options specified
     if !has_format_options
-        && (request.model.starts_with("gpt-5.2") || request.model.starts_with("gpt-5.3"))
+        && (matches!(
+            request.model.as_str(),
+            "gpt" | "gpt-5.2" | "gpt-5.4" | "gpt-5.4-pro"
+        ) || request.model.starts_with("gpt-5.3"))
     {
         text_format["verbosity"] = json!("medium");
         has_format_options = true;

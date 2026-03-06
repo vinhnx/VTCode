@@ -13,8 +13,11 @@ impl ModelId {
             | ModelId::Gemini31ProPreviewCustomTools
             | ModelId::Gemini31FlashLitePreview
             | ModelId::Gemini3FlashPreview => Provider::Gemini,
-            ModelId::GPT5
+            ModelId::GPT
+            | ModelId::GPT5
             | ModelId::GPT52
+            | ModelId::GPT54
+            | ModelId::GPT54Pro
             | ModelId::GPT5Mini
             | ModelId::GPT5Nano
             | ModelId::GPT53Codex

@@ -167,12 +167,16 @@ pub(super) fn prompt_reasoning_effort(
 
     let levels = [
         (
+            ReasoningEffortLevel::None,
+            "None – lowest latency, good default for GPT-5.4",
+        ),
+        (
             ReasoningEffortLevel::Low,
             "Low – faster responses, less reasoning",
         ),
         (
             ReasoningEffortLevel::Medium,
-            "Medium – balanced speed and reasoning (recommended)",
+            "Medium – balanced reasoning for harder multi-step work",
         ),
         (
             ReasoningEffortLevel::High,

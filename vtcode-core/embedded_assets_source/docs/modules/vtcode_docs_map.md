@@ -834,11 +834,6 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Topics**: Overview, Architecture, Data Flow, Data Persistence, Integration Points
   - **User Questions**: "What can you tell me about Agent Justification System?", "How does Overview work?", "How does Architecture work?"
 
-- **File**: `docs/tools/TOOL_SEARCH.md`
-  - **Content**: Anthropic Tool Search Integration
-  - **Topics**: Overview, Configuration, Tool Search Algorithms, API Usage, Response Block Types
-  - **User Questions**: "What can you tell me about Anthropic Tool Search Integration?", "How does Overview work?", "How does Configuration work?"
-
 - **File**: `docs/tools/EDITOR_CONFIG.md`
   - **Content**: External Editor Configuration
   - **Topics**: Overview, Configuration, Editor Detection Order, Usage Examples, Setting Your Preferred Editor
@@ -863,6 +858,11 @@ This document serves as an index of all VT Code documentation. When users ask qu
   - **Content**: Prompt Caching Guide
   - **Topics**: Global Settings, Provider Overrides, Prefix Stability Rules, Usage Telemetry, Validation & Testing
   - **User Questions**: "What can you tell me about Prompt Caching Guide?", "How does Global Settings work?", "How does Provider Overrides work?"
+
+- **File**: `docs/tools/TOOL_SEARCH.md`
+  - **Content**: Tool Search Integration
+  - **Topics**: Overview, Anthropic configuration, Tool Search Algorithms, API Usage, Response Block Types
+  - **User Questions**: "What can you tell me about Tool Search Integration?", "How does Overview work?", "How does Anthropic configuration work?"
 
 - **File**: `docs/tools/TOOL_SPECS.md`
   - **Content**: VT Code Tool Specifications (Anthropic-Aligned)

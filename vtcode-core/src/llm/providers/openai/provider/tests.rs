@@ -251,6 +251,58 @@ fn responses_tools_dedupes_apply_patch_and_function() {
 }
 
 #[test]
+fn responses_payload_serializes_hosted_tool_search_and_deferred_function() {
+    let hosted_search = provider::ToolDefinition::hosted_tool_search();
+    let deferred = provider::ToolDefinition::function(
+        "search_docs".to_owned(),
+        "Search internal docs".to_owned(),
+        json!({
+            "type": "object",
+            "properties": { "query": { "type": "string" } },
+            "required": ["query"],
+            "additionalProperties": false
+        }),
+    )
+    .with_defer_loading(true);
+
+    let tools = vec![hosted_search, deferred];
+    let payload = tool_serialization::serialize_tools_for_responses(&tools)
+        .expect("tools should serialize for responses");
+    let arr = payload.as_array().expect("tool array");
+
+    assert!(
+        arr.iter()
+            .any(|tool| tool.get("type").and_then(Value::as_str) == Some("tool_search"))
+    );
+
+    let deferred_tool = arr
+        .iter()
+        .find(|tool| tool.get("name").and_then(Value::as_str) == Some("search_docs"))
+        .expect("deferred function should be present");
+    assert_eq!(deferred_tool["defer_loading"], json!(true));
+}
+
+#[test]
+fn chat_payload_serializes_deferred_function_for_tool_search() {
+    let deferred = provider::ToolDefinition::function(
+        "search_docs".to_owned(),
+        "Search internal docs".to_owned(),
+        json!({
+            "type": "object",
+            "properties": { "query": { "type": "string" } },
+            "required": ["query"],
+            "additionalProperties": false
+        }),
+    )
+    .with_defer_loading(true);
+
+    let payload = tool_serialization::serialize_tools(&[deferred], models::openai::GPT_5_4)
+        .expect("tools should serialize");
+    let arr = payload.as_array().expect("tool array");
+    assert_eq!(arr[0]["defer_loading"], json!(true));
+}
+
+#[test]
 fn responses_payload_sets_instructions_from_system_prompt() {
     let provider = OpenAIProvider::with_model(String::new(), models::openai::GPT_5.to_string());
     let mut request = sample_request(models::openai::GPT_5);
@@ -631,6 +683,43 @@ fn chat_completions_applies_temperature_independent_of_max_tokens() {
 }
 
 #[test]
+fn responses_payload_defaults_gpt_5_4_reasoning_to_none() {
+    let provider = OpenAIProvider::with_model(String::new(), models::openai::GPT_5_4.to_string());
+    let request = sample_request(models::openai::GPT_5_4);
+
+    let payload = provider
+        .convert_to_openai_responses_format(&request)
+        .expect("conversion should succeed");
+
+    assert_eq!(
+        payload
+            .get("reasoning")
+            .and_then(Value::as_object)
+            .and_then(|reasoning| reasoning.get("effort"))
+            .and_then(Value::as_str),
+        Some("none")
+    );
+}
+
+#[test]
+fn responses_payload_omits_sampling_parameters_for_gpt_5_4_high_reasoning() {
+    let provider = OpenAIProvider::with_model(String::new(), models::openai::GPT_5_4.to_string());
+    let mut request = sample_request(models::openai::GPT_5_4);
+    request.reasoning_effort = Some(crate::config::types::ReasoningEffortLevel::High);
+    request.temperature = Some(0.4);
+    request.top_p = Some(0.9);
+
+    let payload = provider
+        .convert_to_openai_responses_format(&request)
+        .expect("conversion should succeed");
+
+    assert!(
+        payload.get("sampling_parameters").is_none(),
+        "sampling parameters should be omitted when GPT-5.4 reasoning is above none"
+    );
+}
+
+#[test]
 fn responses_payload_omits_parallel_tool_config_when_not_supported() {
     let provider = OpenAIProvider::with_model(String::new(), models::openai::GPT_5.to_string());
     let mut request = sample_request(models::openai::GPT_5);
@@ -659,7 +748,10 @@ mod streaming_tests {
     fn test_gpt5_models_disable_streaming() {
         // Test that GPT-5 models return false for supports_streaming
         let test_models = [
+            models::openai::GPT,
             models::openai::GPT_5,
+            models::openai::GPT_5_4,
+            models::openai::GPT_5_4_PRO,
             models::openai::GPT_5_MINI,
             models::openai::GPT_5_NANO,
         ];

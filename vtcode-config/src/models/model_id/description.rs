@@ -21,9 +21,18 @@ impl ModelId {
                 "Our most intelligent model built for speed, combining frontier intelligence with superior search and grounding"
             }
             // OpenAI models
+            ModelId::GPT => {
+                "Rolling alias for the latest GPT flagship model, recommended default for broad general-purpose work"
+            }
             ModelId::GPT5 => "Latest most capable OpenAI model with advanced reasoning",
             ModelId::GPT52 => {
                 "Latest flagship OpenAI model with improved reasoning, xhigh effort, and built-in compaction support"
+            }
+            ModelId::GPT54 => {
+                "Mainline frontier GPT model for general-purpose work, coding, long context, and multi-step agents"
+            }
+            ModelId::GPT54Pro => {
+                "Higher-compute GPT-5.4 variant for tougher problems with deeper reasoning"
             }
             ModelId::GPT5Mini => "Latest efficient OpenAI model, great for most tasks",
             ModelId::GPT5Nano => "Latest most cost-effective OpenAI model",

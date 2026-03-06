@@ -1,6 +1,6 @@
 # Responses API & Reasoning Models
 
-VT Code already routes GPT-5.1 (Codex) and other reasoning-focused models through OpenAI’s Responses API. This guide explains how to unlock the performance and transparency benefits described in the OpenAI recipe for reasoning models and to keep VT Code’s agent workflows aligned with those best practices.
+VT Code routes the GPT-5.4 family and other reasoning-focused models through OpenAI’s Responses API. This guide explains how to unlock the performance, continuity, and long-session behavior described in OpenAI’s GPT-5.4 guidance and to keep VT Code’s agent workflows aligned with those best practices.
 
 ## Key Concepts
 
@@ -12,10 +12,10 @@ VT Code already routes GPT-5.1 (Codex) and other reasoning-focused models throug
 
 ## VT Code configuration guidance
 
-1. **Activate reasoning effort**: Set `reasoning_effort` inside `vtcode.toml` to `medium` or `high` when running more complex tasks (`minimal`/`low` are also accepted). Higher effort levels instruct GPT-5.1 and similar models to spend more tokens on thinking, tooling, and structured reasoning.
+1. **Choose reasoning effort by task shape**: Set `reasoning_effort` inside `vtcode.toml` based on the task, not by defaulting to the highest setting. For GPT-5.4-family models, `none` or `low` works well for execution-heavy and latency-sensitive tasks; `medium` or `high` is better for research-heavy, long-context, or conflict-resolution work; `xhigh` should be reserved for long-horizon agentic tasks where evals justify the extra cost and latency.
 
     ```toml
-    reasoning_effort = "medium"
+    reasoning_effort = "none"
     ```
 
 2. **Surface reasoning summaries**: VT Code exposes the `reasoning_summary` payload (if available) in structured logs and the status line. Ensure `runtime.reasoning_effort` is populated so the frontend can render reasoning-context cues.
@@ -33,9 +33,9 @@ VT Code already routes GPT-5.1 (Codex) and other reasoning-focused models throug
 
     The Responses API will return an encrypted chain of thought inside each reasoning item, and VT Code will replay that token whenever the next turn is dispatched. No reasoning data is stored on disk, yet each step still benefits from the prior reasoning trace.
 
-6. **Cache-friendly prompts**: The Responses API differentiates cached and uncached tokens. Longer prompts (>= 1,024 tokens) benefit from returning everything—including reasoning items—so the cache can match on both the request and internal context. Higher cache hit ratios reduce costs and latency for `o4-mini`, `o3`, and GPT-5-series models.
+6. **Cache-friendly prompts and continuity**: The Responses API differentiates cached and uncached tokens. Longer prompts (>= 1,024 tokens) benefit from returning everything, including reasoning items, so the cache can match on both the request and internal context. Higher cache hit ratios reduce costs and latency for GPT-5-family models, especially during long-running agent loops.
 
-    Tip: VT Code now sends a stable OpenAI routing key per conversation by default via `prompt_cache_key_mode = "session"` under `[prompt_cache.providers.openai]`. Keep this at `session` for better cache locality; set `off` only when you explicitly want to disable key-based routing. You can also instruct the Responses API to retain cached prefixes for longer by setting `prompt_cache_retention` on the request. VT Code exposes this setting as `# prompt_cache_retention = "24h"` (commented out by default). Using a longer retention can reduce costs and latency for frequently repeated prompts in GPT-5.1 if set. The value must be in the format `<number>[s|m|h|d]` (e.g., `24h`) and is restricted to a minimum of `1s` and a maximum of `30d`.
+    Tip: VT Code sends a stable OpenAI routing key per conversation by default via `prompt_cache_key_mode = "session"` under `[prompt_cache.providers.openai]`. Keep this at `session` for better cache locality; set `off` only when you explicitly want to disable key-based routing. You can also instruct the Responses API to retain cached prefixes for longer by setting `prompt_cache_retention` on the request. VT Code exposes this setting as `# prompt_cache_retention = "24h"` (commented out by default). Using a longer retention can reduce costs and latency for frequently repeated prompts in GPT-5.4 and related Responses models. The value must be in the format `<number>[s|m|h|d]` (e.g., `24h`) and is restricted to a minimum of `1s` and a maximum of `30d`.
 
     Example: Enable 24h retention using CLI config overrides for a Responses model:
 
@@ -53,7 +53,7 @@ VT Code already routes GPT-5.1 (Codex) and other reasoning-focused models throug
 
 8. **Reasoning visibility**: When troubleshooting, inspect `.vtcode/logs/trajectory.jsonl` for `reasoning` or `reasoning_summary` entries. The agent’s telemetry also logs `reasoning_effort` (see the inline status line guide) so you can correlate agent decisions with expectation-aligned reasoning levels.
 
-9. **Auto-compaction settings**: Auto compaction is disabled by default. Turn it on explicitly:
+9. **Auto-compaction settings**: Auto compaction is disabled by default. Turn it on explicitly. This matches GPT-5.4 guidance for preserving long-session coherence with Responses `context_management`:
 
     ```toml
     [agent.harness]
@@ -66,7 +66,7 @@ VT Code already routes GPT-5.1 (Codex) and other reasoning-focused models throug
 
 ## Example workflow
 
-1. VT Code sends a Responses API request with `reasoning_effort = "medium"` and `tools` serialized through the shared helper.
+1. VT Code sends a Responses API request with `reasoning_effort = "none"` by default for GPT-5.4 / GPT, and `tools` serialized through the shared helper.
 2. The response includes tool call instructions plus a reasoning item (e.g., `rs_6820f...`). VT Code appends the entire payload back into the context so the next call reuses the reasoning ID.
 3. If you requested encrypted reasoning, the response contains `encrypted_content`; VT Code feeds this string into the next request’s `input` block exactly as received.
 4. Final completion is returned along with `reasoning_summary` text that can be surfaced to the end user for transparency.
@@ -77,4 +77,4 @@ VT Code already routes GPT-5.1 (Codex) and other reasoning-focused models throug
 -   Use reasoning effort tiers together with the status line’s `runtime.reasoning_effort` so your shell hook can show when the agent is "thinking" harder.
 -   Keep `.vtcode/logs/trajectory.jsonl` for post-run analysis and to debug why a tool call required an extra turn.
 
-Following these practices keeps VT Code aligned with OpenAI’s latest reasoning model guidance, delivering better intelligence, lower-cost cached prompts, and compliant encrypted workflows.
+Following these practices keeps VT Code aligned with OpenAI’s latest GPT-5.4 guidance, delivering better continuity, lower-cost cached prompts, and stronger long-horizon agent behavior.

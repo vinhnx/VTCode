@@ -29,7 +29,7 @@ pub enum ReasoningEffortLevel {
     Medium,
     /// High reasoning effort - maps to high thinking level for Gemini 3 Pro
     High,
-    /// Extra high reasoning effort - for gpt-5.3-codex+ long-running tasks
+    /// Extra high reasoning effort - for GPT-5.4-family and similar long-running tasks
     XHigh,
 }
 
@@ -216,7 +216,7 @@ impl<'de> Deserialize<'de> for ToolDocumentationMode {
     }
 }
 
-/// Verbosity level for model output (GPT-5.1 and compatible models)
+/// Verbosity level for model output (GPT-5.4-family and compatible models)
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]

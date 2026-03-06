@@ -168,6 +168,17 @@ pub(super) fn reasoning_level_label(level: ReasoningEffortLevel) -> &'static str
     }
 }
 
+pub(super) fn supports_gpt5_none_reasoning(model_id: &str) -> bool {
+    matches!(model_id, "gpt" | "gpt-5.2" | "gpt-5.4" | "gpt-5.4-pro")
+        || model_id.starts_with("gpt-5.3")
+}
+
+pub(super) fn supports_xhigh_reasoning(model_id: &str) -> bool {
+    matches!(model_id, "gpt" | "gpt-5.4" | "gpt-5.4-pro")
+        || model_id.starts_with("gpt-5.3")
+        || model_id.contains("codex-max")
+}
+
 pub(super) fn reasoning_level_description(level: ReasoningEffortLevel) -> &'static str {
     match level {
         ReasoningEffortLevel::None => "No reasoning overhead - fastest responses",
@@ -176,7 +187,7 @@ pub(super) fn reasoning_level_description(level: ReasoningEffortLevel) -> &'stat
         ReasoningEffortLevel::Medium => reasoning::DESCRIPTION_MEDIUM,
         ReasoningEffortLevel::High => reasoning::DESCRIPTION_HIGH,
         ReasoningEffortLevel::XHigh => {
-            "Maximum reasoning for hardest long-running tasks (gpt-5.2/gpt-5.3-codex+ only)"
+            "Maximum reasoning for hardest long-running tasks (GPT-5.3+/GPT-5.4 family only)"
         }
     }
 }

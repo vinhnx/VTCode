@@ -9,7 +9,7 @@ use super::options::{ModelOption, picker_provider_order};
 use super::rendering::{CUSTOM_PROVIDER_SUBTITLE, CUSTOM_PROVIDER_TITLE, KEEP_CURRENT_DESCRIPTION};
 use super::selection::{
     ReasoningChoice, SelectionDetail, reasoning_level_description, reasoning_level_label,
-    selection_from_option,
+    selection_from_option, supports_xhigh_reasoning,
 };
 
 pub(super) const REFRESH_ENTRY_LABEL: &str = "Refresh local LM Studio/Ollama models";
@@ -161,8 +161,6 @@ pub(super) fn select_reasoning_with_ratatui(
     selection: &SelectionDetail,
     current: ReasoningEffortLevel,
 ) -> Result<Option<ReasoningChoice>> {
-    let is_codex_max = selection.model_id.contains("codex-max");
-
     let mut entries = vec![SelectionEntry::new(
         format!("Keep current ({})", reasoning_level_label(current)),
         Some(KEEP_CURRENT_DESCRIPTION.to_string()),
@@ -177,7 +175,7 @@ pub(super) fn select_reasoning_with_ratatui(
         ReasoningEffortLevel::High,
     ];
 
-    if is_codex_max {
+    if supports_xhigh_reasoning(&selection.model_id) {
         levels.push(ReasoningEffortLevel::XHigh);
     }
 
