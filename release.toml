@@ -7,6 +7,9 @@ push-remote = "origin"
 publish = true
 tag-name = "{{version}}"
 tag-message = "Release {{version}}"
+# Wait between publishing crates to allow crates.io indexing
+# Prevents "failed to select a version" errors for dependent crates
+publish-timeout = 30
 [rate-limit]
 new-packages = 5
 existing-packages = 300
