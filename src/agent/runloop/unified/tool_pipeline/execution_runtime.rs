@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, Mutex as StdMutex};
 
 use serde_json::Value;
 use tokio::sync::Notify;
@@ -9,6 +9,9 @@ use vtcode_core::tools::registry::{ToolProgressCallback, ToolRegistry};
 use vtcode_core::tools::result_cache::{ToolCacheKey, ToolResultCache};
 
 use crate::agent::runloop::tool_output::resolve_stdout_tail_limit;
+use crate::agent::runloop::unified::inline_events::harness::{
+    HarnessEventEmitter, tool_updated_event,
+};
 use crate::agent::runloop::unified::progress::ProgressReporter;
 use crate::agent::runloop::unified::state::CtrlCState;
 use crate::agent::runloop::unified::ui_interaction::PlaceholderSpinner;
@@ -46,6 +49,38 @@ impl Drop for ProgressCallbackGuard<'_> {
     }
 }
 
+fn build_streaming_progress_callback(
+    base_callback: ToolProgressCallback,
+    harness_emitter: Option<HarnessEventEmitter>,
+    tool_item_id: &str,
+    tool_name: &str,
+    args_val: &Value,
+) -> ToolProgressCallback {
+    let Some(harness_emitter) = harness_emitter else {
+        return base_callback;
+    };
+
+    let tool_item_id = tool_item_id.to_string();
+    let tool_name = tool_name.to_string();
+    let args_val = args_val.clone();
+    let aggregated_output = Arc::new(StdMutex::new(String::new()));
+
+    Arc::new(move |progress_tool_name, chunk| {
+        base_callback(progress_tool_name, chunk);
+
+        let mut output = aggregated_output
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        output.push_str(chunk);
+        let _ = harness_emitter.emit(tool_updated_event(
+            tool_item_id.clone(),
+            &tool_name,
+            &args_val,
+            output.clone(),
+        ));
+    })
+}
+
 #[derive(Clone, Copy)]
 enum CacheLookupPhase {
     Initial,
@@ -69,10 +104,12 @@ pub(super) async fn execute_with_cache_and_streaming(
     registry: &mut ToolRegistry,
     tool_result_cache: &Arc<tokio::sync::RwLock<ToolResultCache>>,
     name: &str,
+    tool_item_id: &str,
     args_val: &Value,
     ctrl_c_state: &Arc<CtrlCState>,
     ctrl_c_notify: &Arc<Notify>,
     handle: &vtcode_tui::InlineHandle,
+    harness_emitter: Option<HarnessEventEmitter>,
     vt_cfg: Option<&VTCodeConfig>,
     max_tool_retries: usize,
 ) -> ToolExecutionStatus {
@@ -124,6 +161,13 @@ pub(super) async fn execute_with_cache_and_streaming(
             progress_reporter.clone(),
             tail_limit,
             stream_command,
+        );
+        let callback = build_streaming_progress_callback(
+            callback,
+            harness_emitter,
+            tool_item_id,
+            name,
+            args_val,
         );
         pty_stream_runtime = Some(runtime);
         Some(ProgressCallbackGuard::replace(registry, callback))

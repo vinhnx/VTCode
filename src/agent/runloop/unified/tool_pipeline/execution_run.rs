@@ -147,7 +147,7 @@ pub(crate) async fn run_tool_call_with_args(
     let harness_emitter = ctx.harness_emitter;
     let mut tool_started_emitted = false;
     if let Some(emitter) = harness_emitter {
-        let _ = emitter.emit(tool_started_event(tool_item_id.clone(), name));
+        let _ = emitter.emit(tool_started_event(tool_item_id.clone(), name, args_val));
         tool_started_emitted = true;
     }
     let max_tool_retries = ctx.harness_state.max_tool_retries as usize;
@@ -158,6 +158,7 @@ pub(crate) async fn run_tool_call_with_args(
             tool_started_emitted,
             &tool_item_id,
             name,
+            args_val,
             &outcome.status,
         );
         outcome
@@ -241,6 +242,7 @@ pub(crate) async fn run_tool_call_with_args(
             tool_started_emitted,
             &tool_item_id,
             name,
+            args_val,
             &outcome.status,
         );
         return Ok(outcome);
@@ -261,6 +263,7 @@ pub(crate) async fn run_tool_call_with_args(
             tool_started_emitted,
             &tool_item_id,
             name,
+            args_val,
             &outcome.status,
         );
         return Ok(outcome);
@@ -270,10 +273,12 @@ pub(crate) async fn run_tool_call_with_args(
         ctx.tool_registry,
         ctx.tool_result_cache,
         name,
+        &tool_item_id,
         args_val,
         ctrl_c_state,
         ctrl_c_notify,
         ctx.handle,
+        harness_emitter.cloned(),
         vt_cfg,
         max_tool_retries,
     )
@@ -298,6 +303,7 @@ pub(crate) async fn run_tool_call_with_args(
         tool_started_emitted,
         &tool_item_id,
         name,
+        args_val,
         &pipeline_outcome.status,
     );
     Ok(pipeline_outcome)
@@ -375,7 +381,10 @@ async fn apply_post_execution_side_effects(
                         tool_started_emitted,
                         tool_item_id,
                         name,
+                        args_val,
                         CommandExecutionStatus::Failed,
+                        None,
+                        error.to_string(),
                     );
                     return Err(error);
                 }

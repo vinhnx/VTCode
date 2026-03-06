@@ -228,6 +228,7 @@ impl ExecEventRecorder {
             id: id.clone(),
             details: ThreadItemDetails::CommandExecution(Box::new(CommandExecutionItem {
                 command: command.to_string(),
+                arguments: None,
                 aggregated_output: String::new(),
                 exit_code: None,
                 status: CommandExecutionStatus::InProgress,
@@ -251,6 +252,7 @@ impl ExecEventRecorder {
             id: handle.id.clone(),
             details: ThreadItemDetails::CommandExecution(Box::new(CommandExecutionItem {
                 command: handle.command.clone(),
+                arguments: None,
                 aggregated_output: aggregated_output.to_string(),
                 exit_code,
                 status,

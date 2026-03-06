@@ -382,9 +382,11 @@ impl ResponseBuilder {
                 OutputItem::FunctionCall(FunctionCallItem {
                     id: item.id.clone(),
                     status,
-                    name: "vtcode.run_command".to_string(),
-                    arguments: json!({
-                        "command": cmd.command,
+                    name: cmd.command.clone(),
+                    arguments: cmd.arguments.clone().unwrap_or_else(|| {
+                        json!({
+                            "command": cmd.command,
+                        })
                     }),
                     call_id: Some(item.id.clone()),
                 })
@@ -488,9 +490,10 @@ impl<E: StreamEventEmitter> DualEventEmitter<E> {
 mod tests {
     use super::*;
     use crate::open_responses::{ResponseStreamEvent, events::VecStreamEmitter};
+    use serde_json::json;
     use vtcode_exec_events::{
-        AgentMessageItem, ItemCompletedEvent, ItemStartedEvent, PlanItem, ThreadStartedEvent,
-        TurnCompletedEvent, Usage,
+        AgentMessageItem, CommandExecutionItem, CommandExecutionStatus, ItemCompletedEvent,
+        ItemStartedEvent, PlanItem, ThreadStartedEvent, TurnCompletedEvent, Usage,
     };
 
     #[test]
@@ -762,6 +765,40 @@ mod tests {
                 assert_eq!(custom.data["text"], "- Step 1\n- Step 2");
             }
             _ => panic!("expected custom output for plan item"),
+        }
+    }
+
+    #[test]
+    fn test_command_execution_uses_canonical_arguments() {
+        let mut builder = ResponseBuilder::new("gpt-5");
+        let mut emitter = VecStreamEmitter::new();
+
+        let item = ThreadItem {
+            id: "tool_1".to_string(),
+            details: ThreadItemDetails::CommandExecution(Box::new(CommandExecutionItem {
+                command: "exec_command".to_string(),
+                arguments: Some(json!({
+                    "command": ["git", "status"],
+                    "yield_time_ms": 1000
+                })),
+                aggregated_output: "On branch main".to_string(),
+                exit_code: Some(0),
+                status: CommandExecutionStatus::Completed,
+            })),
+        };
+
+        builder.process_event(
+            &ThreadEvent::ItemCompleted(ItemCompletedEvent { item }),
+            &mut emitter,
+        );
+
+        match &builder.response().output[0] {
+            OutputItem::FunctionCall(call) => {
+                assert_eq!(call.name, "exec_command");
+                assert_eq!(call.arguments["command"][0], "git");
+                assert_eq!(call.arguments["yield_time_ms"], 1000);
+            }
+            other => panic!("expected function call, got {other:?}"),
         }
     }
 }

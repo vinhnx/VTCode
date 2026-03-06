@@ -43,6 +43,7 @@ fn sample_timeline() -> Vec<ThreadEvent> {
                 id: "command.git-init".into(),
                 details: ThreadItemDetails::CommandExecution(Box::new(CommandExecutionItem {
                     command: "git init".into(),
+                    arguments: None,
                     aggregated_output: String::new(),
                     exit_code: None,
                     status: CommandExecutionStatus::InProgress,
@@ -54,6 +55,7 @@ fn sample_timeline() -> Vec<ThreadEvent> {
                 id: "command.git-init".into(),
                 details: ThreadItemDetails::CommandExecution(Box::new(CommandExecutionItem {
                     command: "git init".into(),
+                    arguments: None,
                     aggregated_output: "Initialized empty Git repository".into(),
                     exit_code: None,
                     status: CommandExecutionStatus::InProgress,
@@ -65,6 +67,7 @@ fn sample_timeline() -> Vec<ThreadEvent> {
                 id: "command.git-init".into(),
                 details: ThreadItemDetails::CommandExecution(Box::new(CommandExecutionItem {
                     command: "git init".into(),
+                    arguments: None,
                     aggregated_output: "Initialized empty Git repository".into(),
                     exit_code: Some(0),
                     status: CommandExecutionStatus::Completed,

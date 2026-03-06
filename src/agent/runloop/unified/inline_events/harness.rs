@@ -1,8 +1,9 @@
 use anyhow::{Context, Result};
+use serde_json::Value;
 use std::fs::{File, OpenOptions};
 use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use chrono::Utc;
 use vtcode_config::OpenResponsesConfig;
@@ -18,7 +19,12 @@ use vtcode_core::utils::file_utils::ensure_dir_exists_sync;
 
 use crate::agent::runloop::unified::run_loop_context::TurnRunId;
 
+#[derive(Clone)]
 pub struct HarnessEventEmitter {
+    inner: Arc<HarnessEventEmitterInner>,
+}
+
+struct HarnessEventEmitterInner {
     #[allow(dead_code)]
     path: PathBuf,
     writer: Mutex<BufWriter<File>>,
@@ -45,9 +51,11 @@ impl HarnessEventEmitter {
             .open(&path)
             .with_context(|| format!("Failed to open harness log {}", path.display()))?;
         Ok(Self {
-            path,
-            writer: Mutex::new(BufWriter::new(file)),
-            open_responses: Mutex::new(None),
+            inner: Arc::new(HarnessEventEmitterInner {
+                path,
+                writer: Mutex::new(BufWriter::new(file)),
+                open_responses: Mutex::new(None),
+            }),
         })
     }
 
@@ -78,6 +86,7 @@ impl HarnessEventEmitter {
         integration.start_response(model);
 
         let mut guard = self
+            .inner
             .open_responses
             .lock()
             .map_err(|_| anyhow::anyhow!("Open Responses lock poisoned"))?;
@@ -95,6 +104,7 @@ impl HarnessEventEmitter {
         let payload = VersionedThreadEvent::new(event.clone());
         {
             let mut writer = self
+                .inner
                 .writer
                 .lock()
                 .map_err(|_| anyhow::anyhow!("Harness log lock poisoned"))?;
@@ -110,7 +120,7 @@ impl HarnessEventEmitter {
         }
 
         // Also emit to Open Responses format if enabled
-        if let Ok(mut guard) = self.open_responses.lock()
+        if let Ok(mut guard) = self.inner.open_responses.lock()
             && let Some(ref mut state) = *guard
         {
             state.integration.process_event(&event);
@@ -138,7 +148,7 @@ impl HarnessEventEmitter {
 
     /// Finishes the Open Responses session and writes the terminal marker.
     pub fn finish_open_responses(&self) {
-        if let Ok(mut guard) = self.open_responses.lock()
+        if let Ok(mut guard) = self.inner.open_responses.lock()
             && let Some(ref mut state) = *guard
         {
             let _ = state.integration.finish_response();
@@ -151,7 +161,7 @@ impl HarnessEventEmitter {
 
     #[allow(dead_code)]
     pub fn path(&self) -> &Path {
-        &self.path
+        &self.inner.path
     }
 }
 
@@ -164,36 +174,74 @@ pub fn resolve_event_log_path(path: &str, run_id: &TurnRunId) -> PathBuf {
     base
 }
 
-pub fn tool_started_event(item_id: String, tool_name: &str) -> ThreadEvent {
+fn tool_item(
+    item_id: String,
+    tool_name: &str,
+    args: &Value,
+    status: CommandExecutionStatus,
+    exit_code: Option<i32>,
+    aggregated_output: impl Into<String>,
+) -> ThreadItem {
+    ThreadItem {
+        id: item_id,
+        details: ThreadItemDetails::CommandExecution(Box::new(CommandExecutionItem {
+            command: tool_name.to_string(),
+            arguments: Some(args.clone()),
+            aggregated_output: aggregated_output.into(),
+            exit_code,
+            status,
+        })),
+    }
+}
+
+pub fn tool_started_event(item_id: String, tool_name: &str, args: &Value) -> ThreadEvent {
     ThreadEvent::ItemStarted(ItemStartedEvent {
-        item: ThreadItem {
-            id: item_id,
-            details: ThreadItemDetails::CommandExecution(Box::new(CommandExecutionItem {
-                command: tool_name.to_string(),
-                aggregated_output: String::new(),
-                exit_code: None,
-                status: CommandExecutionStatus::InProgress,
-            })),
-        },
+        item: tool_item(
+            item_id,
+            tool_name,
+            args,
+            CommandExecutionStatus::InProgress,
+            None,
+            String::new(),
+        ),
     })
 }
 
 pub fn tool_completed_event(
     item_id: String,
     tool_name: &str,
+    args: &Value,
     status: CommandExecutionStatus,
     exit_code: Option<i32>,
+    aggregated_output: impl Into<String>,
 ) -> ThreadEvent {
     ThreadEvent::ItemCompleted(ItemCompletedEvent {
-        item: ThreadItem {
-            id: item_id,
-            details: ThreadItemDetails::CommandExecution(Box::new(CommandExecutionItem {
-                command: tool_name.to_string(),
-                aggregated_output: String::new(),
-                exit_code,
-                status,
-            })),
-        },
+        item: tool_item(
+            item_id,
+            tool_name,
+            args,
+            status,
+            exit_code,
+            aggregated_output,
+        ),
+    })
+}
+
+pub fn tool_updated_event(
+    item_id: String,
+    tool_name: &str,
+    args: &Value,
+    aggregated_output: impl Into<String>,
+) -> ThreadEvent {
+    ThreadEvent::ItemUpdated(vtcode_core::exec::events::ItemUpdatedEvent {
+        item: tool_item(
+            item_id,
+            tool_name,
+            args,
+            CommandExecutionStatus::InProgress,
+            None,
+            aggregated_output,
+        ),
     })
 }
 
@@ -217,6 +265,7 @@ pub fn turn_failed_event(message: impl Into<String>) -> ThreadEvent {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
     use tempfile::TempDir;
 
     #[test]
@@ -303,5 +352,78 @@ mod tests {
         assert!(or_content.contains("response.created"));
         assert!(or_content.contains("response.completed"));
         assert!(or_content.contains("[DONE]"));
+    }
+
+    #[test]
+    fn tool_started_event_captures_arguments() {
+        let event = tool_started_event(
+            "tool-1".to_string(),
+            "read_file",
+            &json!({ "path": "README.md" }),
+        );
+
+        let ThreadEvent::ItemStarted(ItemStartedEvent { item }) = event else {
+            panic!("expected item.started");
+        };
+        let ThreadItemDetails::CommandExecution(details) = item.details else {
+            panic!("expected command execution item");
+        };
+
+        assert_eq!(details.command, "read_file");
+        assert_eq!(details.arguments, Some(json!({ "path": "README.md" })));
+        assert_eq!(details.status, CommandExecutionStatus::InProgress);
+    }
+
+    #[test]
+    fn tool_completed_event_captures_output() {
+        let event = tool_completed_event(
+            "tool-1".to_string(),
+            "exec_command",
+            &json!({ "command": ["git", "status"] }),
+            CommandExecutionStatus::Completed,
+            Some(0),
+            "On branch main",
+        );
+
+        let ThreadEvent::ItemCompleted(ItemCompletedEvent { item }) = event else {
+            panic!("expected item.completed");
+        };
+        let ThreadItemDetails::CommandExecution(details) = item.details else {
+            panic!("expected command execution item");
+        };
+
+        assert_eq!(details.command, "exec_command");
+        assert_eq!(
+            details.arguments,
+            Some(json!({ "command": ["git", "status"] }))
+        );
+        assert_eq!(details.aggregated_output, "On branch main");
+        assert_eq!(details.exit_code, Some(0));
+        assert_eq!(details.status, CommandExecutionStatus::Completed);
+    }
+
+    #[test]
+    fn tool_updated_event_captures_streamed_output() {
+        let event = tool_updated_event(
+            "tool-1".to_string(),
+            "exec_command",
+            &json!({ "command": ["git", "status"] }),
+            "On branch main",
+        );
+
+        let ThreadEvent::ItemUpdated(vtcode_core::exec::events::ItemUpdatedEvent { item }) = event
+        else {
+            panic!("expected item.updated");
+        };
+        let ThreadItemDetails::CommandExecution(details) = item.details else {
+            panic!("expected command execution item");
+        };
+
+        assert_eq!(
+            details.arguments,
+            Some(json!({ "command": ["git", "status"] }))
+        );
+        assert_eq!(details.aggregated_output, "On branch main");
+        assert_eq!(details.status, CommandExecutionStatus::InProgress);
     }
 }

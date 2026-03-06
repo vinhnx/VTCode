@@ -419,8 +419,11 @@ pub enum CommandExecutionStatus {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
 pub struct CommandExecutionItem {
-    /// Command string executed by the runner.
+    /// Tool or command identifier executed by the runner.
     pub command: String,
+    /// Arguments passed to the tool invocation, when available.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub arguments: Option<Value>,
     /// Aggregated output emitted by the command.
     #[serde(default)]
     pub aggregated_output: String,

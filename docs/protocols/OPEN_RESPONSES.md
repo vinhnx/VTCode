@@ -189,7 +189,7 @@ let response = builder.response();
 | ---------------------- | -------------------------------------------- |
 | `AgentMessageItem`     | `message` (role: assistant)                  |
 | `ReasoningItem`        | `reasoning`                                  |
-| `CommandExecutionItem` | `function_call` (name: `vtcode.run_command`) |
+| `CommandExecutionItem` | `function_call` (name: recorded tool name)    |
 | `McpToolCallItem`      | `function_call`                              |
 | `FileChangeItem`       | `custom` (type: `vtcode:file_change`)        |
 | `WebSearchItem`        | `custom` (type: `vtcode:web_search`)         |

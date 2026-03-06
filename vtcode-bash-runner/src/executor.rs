@@ -491,6 +491,7 @@ where
 
         CommandExecutionItem {
             command: invocation.command.clone(),
+            arguments: None,
             aggregated_output,
             exit_code: output.and_then(|out| out.status.code()),
             status,
