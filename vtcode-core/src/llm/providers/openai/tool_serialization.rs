@@ -6,6 +6,33 @@ use crate::llm::provider;
 use hashbrown::HashSet;
 use serde_json::{Value, json};
 
+fn dedupe_key(serialized_tool: &Value) -> String {
+    if let Some(name) = serialized_tool.get("name").and_then(Value::as_str) {
+        return format!("name:{name}");
+    }
+
+    serialized_tool.to_string()
+}
+
+fn serialize_responses_hosted_tool(
+    tool_type: &str,
+    config: Option<&Value>,
+    allow_empty_config: bool,
+) -> Option<Value> {
+    let mut payload = serde_json::Map::new();
+    payload.insert("type".to_string(), json!(tool_type));
+
+    match config {
+        Some(Value::Object(config_map)) => {
+            payload.extend(config_map.clone());
+        }
+        Some(Value::Null) | None if allow_empty_config => {}
+        Some(_) | None => return None,
+    }
+
+    Some(Value::Object(payload))
+}
+
 pub fn serialize_tools(tools: &[provider::ToolDefinition], model: &str) -> Option<Value> {
     if tools.is_empty() {
         return None;
@@ -15,16 +42,7 @@ pub fn serialize_tools(tools: &[provider::ToolDefinition], model: &str) -> Optio
     let serialized_tools = tools
         .iter()
         .filter_map(|tool| {
-            let canonical_name = tool
-                .function
-                .as_ref()
-                .map(|f| f.name.as_str())
-                .unwrap_or(tool.tool_type.as_str());
-            if !seen_names.insert(canonical_name.to_string()) {
-                return None;
-            }
-
-            Some(match tool.tool_type.as_str() {
+            let serialized = match tool.tool_type.as_str() {
                 "function" => {
                     let func = tool.function.as_ref()?;
                     let name = &func.name;
@@ -66,7 +84,13 @@ pub fn serialize_tools(tools: &[provider::ToolDefinition], model: &str) -> Optio
                 }
                 "tool_search" => json!({ "type": "tool_search" }),
                 _ => json!(tool),
-            })
+            };
+
+            if !seen_names.insert(dedupe_key(&serialized)) {
+                return None;
+            }
+
+            Some(serialized)
         })
         .collect::<Vec<Value>>();
 
@@ -81,93 +105,67 @@ pub fn serialize_tools_for_responses(tools: &[provider::ToolDefinition]) -> Opti
     let mut seen_names = HashSet::new();
     let serialized_tools = tools
         .iter()
-        .filter_map(|tool| match tool.tool_type.as_str() {
-            "function" => {
-                let func = tool.function.as_ref()?;
-                if !seen_names.insert(func.name.clone()) {
-                    return None;
-                }
-                let mut value = json!({
-                    "type": "function",
-                    "name": &func.name,
-                    "description": &func.description,
-                    "parameters": &func.parameters
-                });
-                if tool.defer_loading == Some(true)
-                    && let Some(obj) = value.as_object_mut()
-                {
-                    obj.insert("defer_loading".to_string(), json!(true));
-                }
-                Some(value)
-            }
-            "apply_patch" => {
-                let name = tool
-                    .function
-                    .as_ref()
-                    .map(|f| f.name.as_str())
-                    .unwrap_or("apply_patch");
-                if !seen_names.insert(name.to_string()) {
-                    return None;
-                }
-                if let Some(func) = tool.function.as_ref() {
-                    Some(json!({
+        .filter_map(|tool| {
+            let serialized = match tool.tool_type.as_str() {
+                "function" => {
+                    let func = tool.function.as_ref()?;
+                    let mut value = json!({
                         "type": "function",
                         "name": &func.name,
                         "description": &func.description,
                         "parameters": &func.parameters
-                    }))
-                } else {
-                    Some(json!({
-                        "type": "function",
-                        "name": "apply_patch",
-                        "description": "Apply VT Code patches. Use format: *** Begin Patch, *** Update File: path, @@ context, -/+ lines, *** End Patch. Do NOT use unified diff (---/+++).",
-                        "parameters": json!({
-                            "type": "object",
-                            "properties": {
-                                "input": { "type": "string", "description": "Patch in VT Code format" },
-                                "patch": { "type": "string", "description": "Alias for input" }
-                            },
-                            "anyOf": [
-                                {"required": ["input"]},
-                                {"required": ["patch"]}
-                            ]
-                        })
-                    }))
-                }
-            }
-            "shell" => tool.function.as_ref().map(|func| {
-                json!({
-                    "type": "function",
-                    "name": &func.name,
-                    "description": &func.description,
-                    "parameters": &func.parameters
-                })
-            }),
-            "custom" => {
-                if let Some(func) = &tool.function {
-                    if !seen_names.insert(func.name.clone()) {
-                        return None;
+                    });
+                    if tool.defer_loading == Some(true)
+                        && let Some(obj) = value.as_object_mut()
+                    {
+                        obj.insert("defer_loading".to_string(), json!(true));
                     }
-                    Some(json!({
+                    Some(value)
+                }
+                "apply_patch" => {
+                    if let Some(func) = tool.function.as_ref() {
+                        Some(json!({
+                            "type": "function",
+                            "name": &func.name,
+                            "description": &func.description,
+                            "parameters": &func.parameters
+                        }))
+                    } else {
+                        Some(json!({
+                            "type": "function",
+                            "name": "apply_patch",
+                            "description": "Apply VT Code patches. Use format: *** Begin Patch, *** Update File: path, @@ context, -/+ lines, *** End Patch. Do NOT use unified diff (---/+++).",
+                            "parameters": json!({
+                                "type": "object",
+                                "properties": {
+                                    "input": { "type": "string", "description": "Patch in VT Code format" },
+                                    "patch": { "type": "string", "description": "Alias for input" }
+                                },
+                                "anyOf": [
+                                    {"required": ["input"]},
+                                    {"required": ["patch"]}
+                                ]
+                            })
+                        }))
+                    }
+                }
+                "shell" => tool.function.as_ref().map(|func| {
+                    json!({
+                        "type": "function",
+                        "name": &func.name,
+                        "description": &func.description,
+                        "parameters": &func.parameters
+                    })
+                }),
+                "custom" => tool.function.as_ref().map(|func| {
+                    json!({
                         "type": "custom",
                         "name": &func.name,
                         "description": &func.description,
                         "format": func.parameters.get("format")
-                    }))
-                } else {
-                    None
-                }
-            }
-            "grammar" => {
-                let name = tool
-                    .function
-                    .as_ref()
-                    .map(|f| f.name.as_str())
-                    .unwrap_or("apply_patch_grammar");
-                if !seen_names.insert(name.to_string()) {
-                    return None;
-                }
-                tool.grammar.as_ref().map(|grammar| {
+                    })
+                }),
+                "grammar" => tool.grammar.as_ref().map(|grammar| {
                     json!({
                         "type": "custom",
                         "name": "apply_patch_grammar",
@@ -178,24 +176,31 @@ pub fn serialize_tools_for_responses(tools: &[provider::ToolDefinition]) -> Opti
                             "definition": &grammar.definition
                         }
                     })
-                })
-            }
-            "tool_search" => Some(json!({ "type": "tool_search" })),
-            _ => {
-                if let Some(func) = &tool.function {
-                    if !seen_names.insert(func.name.clone()) {
-                        return None;
-                    }
-                    Some(json!({
+                }),
+                "tool_search" => Some(json!({ "type": "tool_search" })),
+                "web_search" => {
+                    serialize_responses_hosted_tool("web_search", tool.web_search.as_ref(), true)
+                }
+                "file_search" | "mcp" => serialize_responses_hosted_tool(
+                    tool.tool_type.as_str(),
+                    tool.hosted_tool_config.as_ref(),
+                    false,
+                ),
+                _ => tool.function.as_ref().map(|func| {
+                    json!({
                         "type": "function",
                         "name": &func.name,
                         "description": &func.description,
                         "parameters": &func.parameters
-                    }))
-                } else {
-                    None
-                }
+                    })
+                }),
+            }?;
+
+            if !seen_names.insert(dedupe_key(&serialized)) {
+                return None;
             }
+
+            Some(serialized)
         })
         .collect::<Vec<Value>>();
 

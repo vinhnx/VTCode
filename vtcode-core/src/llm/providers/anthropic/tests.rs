@@ -485,6 +485,7 @@ mod request_builder_tests {
                 tool_type: "web_search_20260209".to_string(),
                 function: None,
                 web_search: None,
+                hosted_tool_config: None,
                 shell: None,
                 grammar: None,
                 strict: None,

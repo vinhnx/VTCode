@@ -23,3 +23,31 @@ fn tool_definition_function_uses_sanitized_description() {
     );
     assert_eq!(tool.function.as_ref().unwrap().description, "Line 1");
 }
+
+#[test]
+fn file_search_tool_definition_requires_object_config() {
+    assert!(
+        ToolDefinition::file_search(json!({"vector_store_ids": ["vs_docs"]}))
+            .validate()
+            .is_ok()
+    );
+    assert!(
+        ToolDefinition::file_search(json!(["vs_docs"]))
+            .validate()
+            .is_err()
+    );
+}
+
+#[test]
+fn mcp_tool_definition_requires_object_config() {
+    assert!(
+        ToolDefinition::mcp(json!({
+            "server_label": "dmcp",
+            "server_url": "https://dmcp-server.deno.dev/sse",
+            "require_approval": "never"
+        }))
+        .validate()
+        .is_ok()
+    );
+    assert!(ToolDefinition::mcp(json!("dmcp")).validate().is_err());
+}

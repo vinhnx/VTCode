@@ -283,6 +283,122 @@ fn responses_payload_serializes_hosted_tool_search_and_deferred_function() {
 }
 
 #[test]
+fn responses_payload_serializes_hosted_web_search_tool() {
+    let provider = OpenAIProvider::with_model(String::new(), models::openai::GPT_5.to_string());
+    let request = provider::LLMRequest {
+        messages: vec![provider::Message::user(
+            "Find the latest VT Code news".to_owned(),
+        )],
+        tools: Some(Arc::new(vec![provider::ToolDefinition::web_search(
+            json!({
+                "search_context_size": "medium"
+            }),
+        )])),
+        model: models::openai::GPT_5.to_string(),
+        ..Default::default()
+    };
+
+    let payload = provider
+        .convert_to_openai_responses_format(&request)
+        .expect("conversion should succeed");
+
+    let tools = payload
+        .get("tools")
+        .and_then(Value::as_array)
+        .expect("tools should exist on payload");
+    assert_eq!(tools.len(), 1);
+    assert_eq!(
+        tools[0].get("type").and_then(Value::as_str),
+        Some("web_search")
+    );
+    assert_eq!(
+        tools[0].get("search_context_size").and_then(Value::as_str),
+        Some("medium")
+    );
+}
+
+#[test]
+fn responses_payload_serializes_file_search_tool() {
+    let provider = OpenAIProvider::with_model(String::new(), models::openai::GPT_5.to_string());
+    let request = provider::LLMRequest {
+        messages: vec![provider::Message::user(
+            "Search the docs vector store".to_owned(),
+        )],
+        tools: Some(Arc::new(vec![provider::ToolDefinition::file_search(
+            json!({
+                "vector_store_ids": ["vs_docs"]
+            }),
+        )])),
+        model: models::openai::GPT_5.to_string(),
+        ..Default::default()
+    };
+
+    let payload = provider
+        .convert_to_openai_responses_format(&request)
+        .expect("conversion should succeed");
+
+    let tools = payload
+        .get("tools")
+        .and_then(Value::as_array)
+        .expect("tools should exist on payload");
+    assert_eq!(tools.len(), 1);
+    assert_eq!(
+        tools[0].get("type").and_then(Value::as_str),
+        Some("file_search")
+    );
+    assert_eq!(
+        tools[0]
+            .get("vector_store_ids")
+            .and_then(Value::as_array)
+            .and_then(|ids| ids.first())
+            .and_then(Value::as_str),
+        Some("vs_docs")
+    );
+}
+
+#[test]
+fn responses_payload_keeps_distinct_remote_mcp_tools() {
+    let provider = OpenAIProvider::with_model(String::new(), models::openai::GPT_5.to_string());
+    let request = provider::LLMRequest {
+        messages: vec![provider::Message::user("Use both MCP servers".to_owned())],
+        tools: Some(Arc::new(vec![
+            provider::ToolDefinition::mcp(json!({
+                "server_label": "dmcp",
+                "server_url": "https://dmcp-server.deno.dev/sse",
+                "require_approval": "never"
+            })),
+            provider::ToolDefinition::mcp(json!({
+                "server_label": "docs",
+                "server_url": "https://docs.example/sse",
+                "require_approval": "never"
+            })),
+        ])),
+        model: models::openai::GPT_5.to_string(),
+        ..Default::default()
+    };
+
+    let payload = provider
+        .convert_to_openai_responses_format(&request)
+        .expect("conversion should succeed");
+
+    let tools = payload
+        .get("tools")
+        .and_then(Value::as_array)
+        .expect("tools should exist on payload");
+    assert_eq!(tools.len(), 2);
+    assert!(
+        tools
+            .iter()
+            .any(|tool| tool.get("server_label").and_then(Value::as_str) == Some("dmcp"))
+    );
+    assert!(
+        tools
+            .iter()
+            .any(|tool| tool.get("server_label").and_then(Value::as_str) == Some("docs"))
+    );
+}
+
+#[test]
 fn chat_payload_serializes_deferred_function_for_tool_search() {
     let deferred = provider::ToolDefinition::function(
         "search_docs".to_owned(),
@@ -400,6 +516,15 @@ fn responses_payload_uses_provider_level_responses_options() {
             .collect::<Vec<_>>(),
         vec!["reasoning.encrypted_content", "output_text.annotations"]
     );
+}
+
+#[test]
+fn supported_models_include_o_series_reasoning_models() {
+    let provider = OpenAIProvider::new("key".to_owned());
+    let supported = provider.supported_models();
+
+    assert!(supported.contains(&models::openai::O3.to_string()));
+    assert!(supported.contains(&models::openai::O4_MINI.to_string()));
 }
 
 #[test]

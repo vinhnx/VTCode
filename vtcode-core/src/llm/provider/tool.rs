@@ -38,8 +38,9 @@ impl std::str::FromStr for ToolSearchAlgorithm {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ToolDefinition {
     /// The type of tool: "function", "apply_patch" (GPT-5.1), "shell" (GPT-5.1), or "custom" (GPT-5 freeform)
-    /// Also supports provider-native search tools like:
+    /// Also supports provider-native and hosted tool types like:
     /// - "tool_search" (OpenAI hosted tool search)
+    /// - "file_search" and "mcp" (OpenAI Responses hosted tools)
     /// - Anthropic tool search revisions:
     /// - "tool_search_tool_regex_20251119", "tool_search_tool_bm25_20251119"
     /// - "web_search_20260209" (and other web_search_* revisions)
@@ -54,6 +55,11 @@ pub struct ToolDefinition {
     /// Provider-native web search configuration payload (e.g. Z.AI `web_search` tool).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub web_search: Option<Value>,
+
+    /// Provider-hosted Responses tool configuration for tool types like
+    /// `file_search` and `mcp`.
+    #[serde(skip, default)]
+    pub hosted_tool_config: Option<Value>,
 
     /// Shell tool configuration (GPT-5.1 specific)
     /// Describes shell command capabilities and constraints
@@ -167,6 +173,7 @@ impl ToolDefinition {
                 parameters,
             }),
             web_search: None,
+            hosted_tool_config: None,
             shell: None,
             grammar: None,
             strict: None,
@@ -215,6 +222,7 @@ impl ToolDefinition {
                 }),
             }),
             web_search: None,
+            hosted_tool_config: None,
             shell: None,
             grammar: None,
             strict: None,
@@ -228,6 +236,7 @@ impl ToolDefinition {
             tool_type: "tool_search".to_owned(),
             function: None,
             web_search: None,
+            hosted_tool_config: None,
             shell: None,
             grammar: None,
             strict: None,
@@ -263,6 +272,7 @@ impl ToolDefinition {
                 }),
             }),
             web_search: None,
+            hosted_tool_config: None,
             shell: None,
             grammar: None,
             strict: None,
@@ -282,6 +292,7 @@ impl ToolDefinition {
                 parameters: json!({}), // Custom tools may not need parameters
             }),
             web_search: None,
+            hosted_tool_config: None,
             shell: None,
             grammar: None,
             strict: None,
@@ -296,6 +307,7 @@ impl ToolDefinition {
             tool_type: "grammar".to_owned(),
             function: None,
             web_search: None,
+            hosted_tool_config: None,
             shell: None,
             grammar: Some(GrammarDefinition { syntax, definition }),
             strict: None,
@@ -309,6 +321,35 @@ impl ToolDefinition {
             tool_type: "web_search".to_owned(),
             function: None,
             web_search: Some(config),
+            hosted_tool_config: None,
+            shell: None,
+            grammar: None,
+            strict: None,
+            defer_loading: None,
+        }
+    }
+
+    /// Create an OpenAI Responses file search tool definition.
+    pub fn file_search(config: Value) -> Self {
+        Self {
+            tool_type: "file_search".to_owned(),
+            function: None,
+            web_search: None,
+            hosted_tool_config: Some(config),
+            shell: None,
+            grammar: None,
+            strict: None,
+            defer_loading: None,
+        }
+    }
+
+    /// Create an OpenAI Responses remote MCP tool definition.
+    pub fn mcp(config: Value) -> Self {
+        Self {
+            tool_type: "mcp".to_owned(),
+            function: None,
+            web_search: None,
+            hosted_tool_config: Some(config),
             shell: None,
             grammar: None,
             strict: None,
@@ -345,13 +386,14 @@ impl ToolDefinition {
             "custom" => self.validate_custom(),
             "grammar" => self.validate_grammar(),
             "web_search" => self.validate_web_search(),
+            "file_search" | "mcp" => self.validate_hosted_tool_config(),
             "tool_search" => Ok(()),
             "tool_search_tool_regex_20251119" | "tool_search_tool_bm25_20251119" => {
                 self.validate_function()
             }
             other if other.starts_with("web_search_") => Ok(()),
             other => Err(format!(
-                "Unsupported tool type: {}. Supported types: function, apply_patch, shell, custom, grammar, web_search, tool_search, tool_search_tool_*, web_search_*",
+                "Unsupported tool type: {}. Supported types: function, apply_patch, shell, custom, grammar, web_search, file_search, mcp, tool_search, tool_search_tool_*, web_search_*",
                 other
             )),
         }
@@ -451,6 +493,17 @@ impl ToolDefinition {
             Ok(())
         } else {
             Err("web_search tool missing web_search configuration".to_owned())
+        }
+    }
+
+    fn validate_hosted_tool_config(&self) -> Result<(), String> {
+        match self.hosted_tool_config.as_ref() {
+            Some(Value::Object(_)) => Ok(()),
+            Some(_) => Err(format!(
+                "{} tool configuration must be a JSON object",
+                self.tool_type
+            )),
+            None => Err(format!("{} tool missing configuration", self.tool_type)),
         }
     }
 }

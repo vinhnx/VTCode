@@ -20,6 +20,7 @@ impl AgentRunner {
                     parameters: decl.parameters,
                 }),
                 web_search: None,
+                hosted_tool_config: None,
                 shell: None,
                 grammar: None,
                 strict: None,

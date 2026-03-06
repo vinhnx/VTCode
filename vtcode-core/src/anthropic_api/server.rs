@@ -638,6 +638,7 @@ fn convert_anthropic_to_llm_request(request: AnthropicMessagesRequest) -> Result
                             tool_type,
                             function: None,
                             web_search: None,
+                            hosted_tool_config: None,
                             shell: None,
                             grammar: None,
                             strict: None,
