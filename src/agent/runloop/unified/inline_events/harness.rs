@@ -10,8 +10,8 @@ use vtcode_config::OpenResponsesConfig;
 #[cfg(test)]
 use vtcode_core::exec::events::ThreadStartedEvent;
 use vtcode_core::exec::events::{
-    CommandExecutionItem, CommandExecutionStatus, ItemCompletedEvent, ItemStartedEvent,
-    ThreadEvent, ThreadItem, ThreadItemDetails, TurnCompletedEvent, TurnFailedEvent,
+    ItemCompletedEvent, ItemStartedEvent, ThreadEvent, ThreadItem, ThreadItemDetails,
+    ToolCallStatus, ToolInvocationItem, ToolOutputItem, TurnCompletedEvent, TurnFailedEvent,
     TurnStartedEvent, Usage, VersionedThreadEvent,
 };
 use vtcode_core::open_responses::{OpenResponsesIntegration, SequencedEvent};
@@ -174,74 +174,74 @@ pub fn resolve_event_log_path(path: &str, run_id: &TurnRunId) -> PathBuf {
     base
 }
 
-fn tool_item(
+fn tool_output_item_id(call_item_id: &str) -> String {
+    format!("{call_item_id}:output")
+}
+
+fn tool_invocation_item(
     item_id: String,
     tool_name: &str,
     args: &Value,
-    status: CommandExecutionStatus,
-    exit_code: Option<i32>,
-    aggregated_output: impl Into<String>,
+    status: ToolCallStatus,
 ) -> ThreadItem {
     ThreadItem {
         id: item_id,
-        details: ThreadItemDetails::CommandExecution(Box::new(CommandExecutionItem {
-            command: tool_name.to_string(),
+        details: ThreadItemDetails::ToolInvocation(ToolInvocationItem {
+            tool_name: tool_name.to_string(),
             arguments: Some(args.clone()),
-            aggregated_output: aggregated_output.into(),
+            status,
+        }),
+    }
+}
+
+fn tool_output_item(
+    call_item_id: &str,
+    status: ToolCallStatus,
+    exit_code: Option<i32>,
+    output: impl Into<String>,
+) -> ThreadItem {
+    ThreadItem {
+        id: tool_output_item_id(call_item_id),
+        details: ThreadItemDetails::ToolOutput(ToolOutputItem {
+            call_id: call_item_id.to_string(),
+            output: output.into(),
             exit_code,
             status,
-        })),
+        }),
     }
 }
 
 pub fn tool_started_event(item_id: String, tool_name: &str, args: &Value) -> ThreadEvent {
     ThreadEvent::ItemStarted(ItemStartedEvent {
-        item: tool_item(
-            item_id,
-            tool_name,
-            args,
-            CommandExecutionStatus::InProgress,
-            None,
-            String::new(),
-        ),
+        item: tool_invocation_item(item_id, tool_name, args, ToolCallStatus::InProgress),
     })
 }
 
-pub fn tool_completed_event(
+pub fn tool_invocation_completed_event(
     item_id: String,
     tool_name: &str,
     args: &Value,
-    status: CommandExecutionStatus,
-    exit_code: Option<i32>,
-    aggregated_output: impl Into<String>,
+    status: ToolCallStatus,
 ) -> ThreadEvent {
     ThreadEvent::ItemCompleted(ItemCompletedEvent {
-        item: tool_item(
-            item_id,
-            tool_name,
-            args,
-            status,
-            exit_code,
-            aggregated_output,
-        ),
+        item: tool_invocation_item(item_id, tool_name, args, status),
     })
 }
 
-pub fn tool_updated_event(
-    item_id: String,
-    tool_name: &str,
-    args: &Value,
-    aggregated_output: impl Into<String>,
+pub fn tool_output_completed_event(
+    call_item_id: String,
+    status: ToolCallStatus,
+    exit_code: Option<i32>,
+    output: impl Into<String>,
 ) -> ThreadEvent {
+    ThreadEvent::ItemCompleted(ItemCompletedEvent {
+        item: tool_output_item(&call_item_id, status, exit_code, output),
+    })
+}
+
+pub fn tool_updated_event(call_item_id: String, output: impl Into<String>) -> ThreadEvent {
     ThreadEvent::ItemUpdated(vtcode_core::exec::events::ItemUpdatedEvent {
-        item: tool_item(
-            item_id,
-            tool_name,
-            args,
-            CommandExecutionStatus::InProgress,
-            None,
-            aggregated_output,
-        ),
+        item: tool_output_item(&call_item_id, ToolCallStatus::InProgress, None, output),
     })
 }
 
@@ -365,22 +365,20 @@ mod tests {
         let ThreadEvent::ItemStarted(ItemStartedEvent { item }) = event else {
             panic!("expected item.started");
         };
-        let ThreadItemDetails::CommandExecution(details) = item.details else {
-            panic!("expected command execution item");
+        let ThreadItemDetails::ToolInvocation(details) = item.details else {
+            panic!("expected tool invocation item");
         };
 
-        assert_eq!(details.command, "read_file");
+        assert_eq!(details.tool_name, "read_file");
         assert_eq!(details.arguments, Some(json!({ "path": "README.md" })));
-        assert_eq!(details.status, CommandExecutionStatus::InProgress);
+        assert_eq!(details.status, ToolCallStatus::InProgress);
     }
 
     #[test]
-    fn tool_completed_event_captures_output() {
-        let event = tool_completed_event(
+    fn tool_output_completed_event_captures_output() {
+        let event = tool_output_completed_event(
             "tool-1".to_string(),
-            "exec_command",
-            &json!({ "command": ["git", "status"] }),
-            CommandExecutionStatus::Completed,
+            ToolCallStatus::Completed,
             Some(0),
             "On branch main",
         );
@@ -388,42 +386,32 @@ mod tests {
         let ThreadEvent::ItemCompleted(ItemCompletedEvent { item }) = event else {
             panic!("expected item.completed");
         };
-        let ThreadItemDetails::CommandExecution(details) = item.details else {
-            panic!("expected command execution item");
+        assert_eq!(item.id, "tool-1:output");
+        let ThreadItemDetails::ToolOutput(details) = item.details else {
+            panic!("expected tool output item");
         };
 
-        assert_eq!(details.command, "exec_command");
-        assert_eq!(
-            details.arguments,
-            Some(json!({ "command": ["git", "status"] }))
-        );
-        assert_eq!(details.aggregated_output, "On branch main");
+        assert_eq!(details.call_id, "tool-1");
+        assert_eq!(details.output, "On branch main");
         assert_eq!(details.exit_code, Some(0));
-        assert_eq!(details.status, CommandExecutionStatus::Completed);
+        assert_eq!(details.status, ToolCallStatus::Completed);
     }
 
     #[test]
     fn tool_updated_event_captures_streamed_output() {
-        let event = tool_updated_event(
-            "tool-1".to_string(),
-            "exec_command",
-            &json!({ "command": ["git", "status"] }),
-            "On branch main",
-        );
+        let event = tool_updated_event("tool-1".to_string(), "On branch main");
 
         let ThreadEvent::ItemUpdated(vtcode_core::exec::events::ItemUpdatedEvent { item }) = event
         else {
             panic!("expected item.updated");
         };
-        let ThreadItemDetails::CommandExecution(details) = item.details else {
-            panic!("expected command execution item");
+        assert_eq!(item.id, "tool-1:output");
+        let ThreadItemDetails::ToolOutput(details) = item.details else {
+            panic!("expected tool output item");
         };
 
-        assert_eq!(
-            details.arguments,
-            Some(json!({ "command": ["git", "status"] }))
-        );
-        assert_eq!(details.aggregated_output, "On branch main");
-        assert_eq!(details.status, CommandExecutionStatus::InProgress);
+        assert_eq!(details.call_id, "tool-1");
+        assert_eq!(details.output, "On branch main");
+        assert_eq!(details.status, ToolCallStatus::InProgress);
     }
 }

@@ -53,16 +53,12 @@ fn build_streaming_progress_callback(
     base_callback: ToolProgressCallback,
     harness_emitter: Option<HarnessEventEmitter>,
     tool_item_id: &str,
-    tool_name: &str,
-    args_val: &Value,
 ) -> ToolProgressCallback {
     let Some(harness_emitter) = harness_emitter else {
         return base_callback;
     };
 
     let tool_item_id = tool_item_id.to_string();
-    let tool_name = tool_name.to_string();
-    let args_val = args_val.clone();
     let aggregated_output = Arc::new(StdMutex::new(String::new()));
 
     Arc::new(move |progress_tool_name, chunk| {
@@ -72,12 +68,7 @@ fn build_streaming_progress_callback(
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         output.push_str(chunk);
-        let _ = harness_emitter.emit(tool_updated_event(
-            tool_item_id.clone(),
-            &tool_name,
-            &args_val,
-            output.clone(),
-        ));
+        let _ = harness_emitter.emit(tool_updated_event(tool_item_id.clone(), output.clone()));
     })
 }
 
@@ -162,13 +153,7 @@ pub(super) async fn execute_with_cache_and_streaming(
             tail_limit,
             stream_command,
         );
-        let callback = build_streaming_progress_callback(
-            callback,
-            harness_emitter,
-            tool_item_id,
-            name,
-            args_val,
-        );
+        let callback = build_streaming_progress_callback(callback, harness_emitter, tool_item_id);
         pty_stream_runtime = Some(runtime);
         Some(ProgressCallbackGuard::replace(registry, callback))
     } else {

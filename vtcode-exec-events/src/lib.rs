@@ -17,7 +17,7 @@ use serde_json::Value;
 pub mod trace;
 
 /// Semantic version of the serialized event schema exported by this crate.
-pub const EVENT_SCHEMA_VERSION: &str = "0.1.0";
+pub const EVENT_SCHEMA_VERSION: &str = "0.2.0";
 
 /// Wraps a [`ThreadEvent`] with schema metadata so downstream consumers can
 /// negotiate compatibility before processing an event stream.
@@ -274,7 +274,7 @@ pub struct ThreadStartedEvent {
     pub thread_id: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
 pub struct TurnStartedEvent {}
 
@@ -367,8 +367,12 @@ pub enum ThreadItemDetails {
     Plan(PlanItem),
     /// Free-form reasoning text produced during a turn.
     Reasoning(ReasoningItem),
-    /// Command execution lifecycle update.
+    /// Command execution lifecycle update for an actual shell/PTY process.
     CommandExecution(Box<CommandExecutionItem>),
+    /// Tool invocation lifecycle update.
+    ToolInvocation(ToolInvocationItem),
+    /// Tool output lifecycle update tied to a tool invocation.
+    ToolOutput(ToolOutputItem),
     /// File change summary associated with the turn.
     FileChange(Box<FileChangeItem>),
     /// MCP tool invocation status.
@@ -432,6 +436,46 @@ pub struct CommandExecutionItem {
     pub exit_code: Option<i32>,
     /// Current status of the command execution.
     pub status: CommandExecutionStatus,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum ToolCallStatus {
+    /// Tool finished successfully.
+    #[default]
+    Completed,
+    /// Tool failed.
+    Failed,
+    /// Tool is still running and may emit additional output.
+    InProgress,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
+pub struct ToolInvocationItem {
+    /// Name of the invoked tool.
+    pub tool_name: String,
+    /// Structured arguments passed to the tool.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub arguments: Option<Value>,
+    /// Current lifecycle status of the invocation.
+    pub status: ToolCallStatus,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "schema-export", derive(schemars::JsonSchema))]
+pub struct ToolOutputItem {
+    /// Identifier of the related invocation item.
+    pub call_id: String,
+    /// Aggregated output emitted by the tool.
+    #[serde(default)]
+    pub output: String,
+    /// Exit code reported by the tool, when available.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub exit_code: Option<i32>,
+    /// Current lifecycle status of the output item.
+    pub status: ToolCallStatus,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -574,6 +618,26 @@ mod tests {
 
         assert_eq!(restored.schema_version, EVENT_SCHEMA_VERSION);
         assert_eq!(restored.event, event);
+        Ok(())
+    }
+
+    #[test]
+    fn tool_invocation_round_trip() -> Result<(), Box<dyn Error>> {
+        let event = ThreadEvent::ItemCompleted(ItemCompletedEvent {
+            item: ThreadItem {
+                id: "tool_1".to_string(),
+                details: ThreadItemDetails::ToolInvocation(ToolInvocationItem {
+                    tool_name: "read_file".to_string(),
+                    arguments: Some(serde_json::json!({ "path": "README.md" })),
+                    status: ToolCallStatus::Completed,
+                }),
+            },
+        });
+
+        let json = serde_json::to_string(&event)?;
+        let restored: ThreadEvent = serde_json::from_str(&json)?;
+
+        assert_eq!(restored, event);
         Ok(())
     }
 }

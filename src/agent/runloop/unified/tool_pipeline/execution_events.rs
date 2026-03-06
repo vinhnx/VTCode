@@ -1,8 +1,8 @@
 use crate::agent::runloop::unified::inline_events::harness::{
-    HarnessEventEmitter, tool_completed_event,
+    HarnessEventEmitter, tool_invocation_completed_event, tool_output_completed_event,
 };
 use serde_json::Value;
-use vtcode_core::exec::events::CommandExecutionStatus;
+use vtcode_core::exec::events::ToolCallStatus;
 
 use super::status::ToolExecutionStatus;
 
@@ -27,7 +27,7 @@ pub(super) fn emit_tool_completion_status(
     tool_item_id: &str,
     tool_name: &str,
     args: &Value,
-    status: CommandExecutionStatus,
+    status: ToolCallStatus,
     exit_code: Option<i32>,
     aggregated_output: impl Into<String>,
 ) {
@@ -36,10 +36,15 @@ pub(super) fn emit_tool_completion_status(
     }
 
     if let Some(emitter) = harness_emitter {
-        let _ = emitter.emit(tool_completed_event(
+        let aggregated_output = aggregated_output.into();
+        let _ = emitter.emit(tool_invocation_completed_event(
             tool_item_id.to_string(),
             tool_name,
             args,
+            status.clone(),
+        ));
+        let _ = emitter.emit(tool_output_completed_event(
+            tool_item_id.to_string(),
             status,
             exit_code,
             aggregated_output,
@@ -62,9 +67,9 @@ pub(super) fn emit_tool_completion_for_status(
             ..
         } => (
             if *command_success {
-                CommandExecutionStatus::Completed
+                ToolCallStatus::Completed
             } else {
-                CommandExecutionStatus::Failed
+                ToolCallStatus::Failed
             },
             output
                 .get("exit_code")
@@ -72,14 +77,12 @@ pub(super) fn emit_tool_completion_for_status(
                 .and_then(|code| i32::try_from(code).ok()),
             aggregated_output_from_value(output),
         ),
-        ToolExecutionStatus::Failure { error } => {
-            (CommandExecutionStatus::Failed, None, error.to_string())
-        }
+        ToolExecutionStatus::Failure { error } => (ToolCallStatus::Failed, None, error.to_string()),
         ToolExecutionStatus::Timeout { error } => {
-            (CommandExecutionStatus::Failed, None, error.message.clone())
+            (ToolCallStatus::Failed, None, error.message.clone())
         }
         ToolExecutionStatus::Cancelled => (
-            CommandExecutionStatus::Failed,
+            ToolCallStatus::Failed,
             None,
             "Tool execution cancelled".to_string(),
         ),
@@ -142,9 +145,9 @@ mod tests {
                 ..
             } => (
                 if *command_success {
-                    CommandExecutionStatus::Completed
+                    ToolCallStatus::Completed
                 } else {
-                    CommandExecutionStatus::Failed
+                    ToolCallStatus::Failed
                 },
                 output
                     .get("exit_code")
@@ -155,7 +158,7 @@ mod tests {
             _ => unreachable!("success status expected"),
         };
 
-        assert_eq!(event_status, CommandExecutionStatus::Failed);
+        assert_eq!(event_status, ToolCallStatus::Failed);
         assert_eq!(exit_code, Some(1));
         assert_eq!(aggregated_output, "boom");
     }

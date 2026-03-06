@@ -5,7 +5,7 @@ use serde_json::Value;
 use tokio::sync::Notify;
 use vtcode_core::config::constants::tools;
 use vtcode_core::config::loader::VTCodeConfig;
-use vtcode_core::exec::events::CommandExecutionStatus;
+use vtcode_core::exec::events::ToolCallStatus;
 use vtcode_core::tools::ToolInvocationId;
 
 use crate::agent::runloop::git::confirm_changes_with_git_diff;
@@ -382,7 +382,7 @@ async fn apply_post_execution_side_effects(
                         tool_item_id,
                         name,
                         args_val,
-                        CommandExecutionStatus::Failed,
+                        ToolCallStatus::Failed,
                         None,
                         error.to_string(),
                     );

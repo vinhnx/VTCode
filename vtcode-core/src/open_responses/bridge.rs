@@ -134,6 +134,7 @@ impl ResponseBuilder {
             ThreadItemDetails::AgentMessage(msg) => msg.text.clone(),
             ThreadItemDetails::Plan(plan) => plan.text.clone(),
             ThreadItemDetails::Reasoning(r) => r.text.clone(),
+            ThreadItemDetails::ToolOutput(output) => output.output.clone(),
             _ => String::new(),
         };
         let active_state = ActiveItemState {
@@ -165,8 +166,31 @@ impl ResponseBuilder {
         let state = if let Some(state) = self.active_items.get_mut(&item.id) {
             state
         } else {
-            // Implicit start: create item and emit Added event
-            self.handle_item_started(item, emitter);
+            if let ThreadItemDetails::ToolOutput(output) = &item.details {
+                let output_index = self.next_output_index;
+                self.next_output_index += 1;
+                self.item_id_to_index.insert(item.id.clone(), output_index);
+
+                let output_item = OutputItem::function_call_output(
+                    item.id.clone(),
+                    Some(output.call_id.clone()),
+                    String::new(),
+                );
+
+                self.response.add_output(output_item.clone());
+                emitter.output_item_added(&self.response.id, output_index, output_item);
+                self.active_items.insert(
+                    item.id.clone(),
+                    ActiveItemState {
+                        output_index,
+                        content_index: 0,
+                        prev_text: String::new(),
+                    },
+                );
+            } else {
+                // Implicit start: create item and emit Added event
+                self.handle_item_started(item, emitter);
+            }
             match self.active_items.get_mut(&item.id) {
                 Some(s) => s,
                 None => return,
@@ -207,6 +231,25 @@ impl ResponseBuilder {
                 if !delta.is_empty() {
                     emitter.reasoning_delta(&self.response.id, &item.id, state.output_index, delta);
                     state.prev_text = r.text.clone();
+                }
+            }
+
+            ThreadItemDetails::ToolOutput(output) => {
+                let delta = if let Some(suffix) = output.output.strip_prefix(&state.prev_text) {
+                    suffix
+                } else {
+                    &output.output
+                };
+
+                if !delta.is_empty() {
+                    emitter.output_text_delta(
+                        &self.response.id,
+                        &item.id,
+                        state.output_index,
+                        state.content_index,
+                        delta,
+                    );
+                    state.prev_text = output.output.clone();
                 }
             }
 
@@ -322,6 +365,17 @@ impl ResponseBuilder {
                     });
                 }
             }
+            OutputItem::FunctionCallOutput(fco) => {
+                if !fco.output.is_empty() {
+                    emitter.emit(ResponseStreamEvent::OutputTextDone {
+                        response_id: self.response.id.clone(),
+                        item_id: item.id.clone(),
+                        output_index,
+                        content_index: 0,
+                        text: fco.output.clone(),
+                    });
+                }
+            }
             _ => {}
         }
 
@@ -337,6 +391,16 @@ impl ResponseBuilder {
                 CommandExecutionStatus::Completed => ItemStatus::Completed,
                 CommandExecutionStatus::Failed => ItemStatus::Failed,
                 CommandExecutionStatus::InProgress => ItemStatus::InProgress,
+            },
+            ThreadItemDetails::ToolInvocation(invocation) => match invocation.status {
+                vtcode_exec_events::ToolCallStatus::Completed => ItemStatus::Completed,
+                vtcode_exec_events::ToolCallStatus::Failed => ItemStatus::Failed,
+                vtcode_exec_events::ToolCallStatus::InProgress => ItemStatus::InProgress,
+            },
+            ThreadItemDetails::ToolOutput(output) => match output.status {
+                vtcode_exec_events::ToolCallStatus::Completed => ItemStatus::Completed,
+                vtcode_exec_events::ToolCallStatus::Failed => ItemStatus::Failed,
+                vtcode_exec_events::ToolCallStatus::InProgress => ItemStatus::InProgress,
             },
             ThreadItemDetails::FileChange(fc) => match fc.status {
                 PatchApplyStatus::Completed => ItemStatus::Completed,
@@ -378,17 +442,35 @@ impl ResponseBuilder {
                 }),
             }),
 
-            ThreadItemDetails::CommandExecution(cmd) => {
+            ThreadItemDetails::CommandExecution(cmd) => OutputItem::Custom(CustomItem {
+                id: item.id.clone(),
+                status,
+                custom_type: "vtcode:command_execution".to_string(),
+                data: json!({
+                    "command": cmd.command,
+                    "arguments": cmd.arguments,
+                    "aggregated_output": cmd.aggregated_output,
+                    "exit_code": cmd.exit_code,
+                    "status": serde_json::to_value(&cmd.status).unwrap_or(serde_json::Value::Null),
+                }),
+            }),
+
+            ThreadItemDetails::ToolInvocation(invocation) => {
                 OutputItem::FunctionCall(FunctionCallItem {
                     id: item.id.clone(),
                     status,
-                    name: cmd.command.clone(),
-                    arguments: cmd.arguments.clone().unwrap_or_else(|| {
-                        json!({
-                            "command": cmd.command,
-                        })
-                    }),
+                    name: invocation.tool_name.clone(),
+                    arguments: invocation.arguments.clone().unwrap_or(json!({})),
                     call_id: Some(item.id.clone()),
+                })
+            }
+
+            ThreadItemDetails::ToolOutput(output) => {
+                OutputItem::FunctionCallOutput(crate::open_responses::FunctionCallOutputItem {
+                    id: item.id.clone(),
+                    status,
+                    call_id: Some(output.call_id.clone()),
+                    output: output.output.clone(),
                 })
             }
 
@@ -493,7 +575,8 @@ mod tests {
     use serde_json::json;
     use vtcode_exec_events::{
         AgentMessageItem, CommandExecutionItem, CommandExecutionStatus, ItemCompletedEvent,
-        ItemStartedEvent, PlanItem, ThreadStartedEvent, TurnCompletedEvent, Usage,
+        ItemStartedEvent, PlanItem, ThreadStartedEvent, ToolCallStatus, ToolInvocationItem,
+        ToolOutputItem, TurnCompletedEvent, Usage,
     };
 
     #[test]
@@ -769,22 +852,20 @@ mod tests {
     }
 
     #[test]
-    fn test_command_execution_uses_canonical_arguments() {
+    fn test_tool_invocation_uses_canonical_arguments() {
         let mut builder = ResponseBuilder::new("gpt-5");
         let mut emitter = VecStreamEmitter::new();
 
         let item = ThreadItem {
             id: "tool_1".to_string(),
-            details: ThreadItemDetails::CommandExecution(Box::new(CommandExecutionItem {
-                command: "exec_command".to_string(),
+            details: ThreadItemDetails::ToolInvocation(ToolInvocationItem {
+                tool_name: "exec_command".to_string(),
                 arguments: Some(json!({
                     "command": ["git", "status"],
                     "yield_time_ms": 1000
                 })),
-                aggregated_output: "On branch main".to_string(),
-                exit_code: Some(0),
-                status: CommandExecutionStatus::Completed,
-            })),
+                status: ToolCallStatus::Completed,
+            }),
         };
 
         builder.process_event(
@@ -799,6 +880,98 @@ mod tests {
                 assert_eq!(call.arguments["yield_time_ms"], 1000);
             }
             other => panic!("expected function call, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_tool_output_updates_stream_as_function_call_output() {
+        let mut builder = ResponseBuilder::new("gpt-5");
+        let mut emitter = VecStreamEmitter::new();
+
+        builder.process_event(
+            &ThreadEvent::ItemUpdated(vtcode_exec_events::ItemUpdatedEvent {
+                item: ThreadItem {
+                    id: "tool_1:output".to_string(),
+                    details: ThreadItemDetails::ToolOutput(ToolOutputItem {
+                        call_id: "tool_1".to_string(),
+                        output: "On branch".to_string(),
+                        exit_code: None,
+                        status: ToolCallStatus::InProgress,
+                    }),
+                },
+            }),
+            &mut emitter,
+        );
+        builder.process_event(
+            &ThreadEvent::ItemCompleted(ItemCompletedEvent {
+                item: ThreadItem {
+                    id: "tool_1:output".to_string(),
+                    details: ThreadItemDetails::ToolOutput(ToolOutputItem {
+                        call_id: "tool_1".to_string(),
+                        output: "On branch main".to_string(),
+                        exit_code: Some(0),
+                        status: ToolCallStatus::Completed,
+                    }),
+                },
+            }),
+            &mut emitter,
+        );
+
+        match &builder.response().output[0] {
+            OutputItem::FunctionCallOutput(output) => {
+                assert_eq!(output.call_id.as_deref(), Some("tool_1"));
+                assert_eq!(output.output, "On branch main");
+            }
+            other => panic!("expected function call output, got {other:?}"),
+        }
+
+        let events = emitter.into_events();
+        assert!(events.iter().any(|event| matches!(
+            event,
+            ResponseStreamEvent::OutputItemAdded {
+                item: OutputItem::FunctionCallOutput(_),
+                ..
+            }
+        )));
+        assert!(events.iter().any(|event| matches!(
+            event,
+            ResponseStreamEvent::OutputTextDelta { delta, .. } if delta == "On branch"
+        )));
+        assert!(events.iter().any(|event| matches!(
+            event,
+            ResponseStreamEvent::OutputTextDone { text, .. } if text == "On branch main"
+        )));
+    }
+
+    #[test]
+    fn test_command_execution_maps_to_custom_extension() {
+        let mut builder = ResponseBuilder::new("gpt-5");
+        let mut emitter = VecStreamEmitter::new();
+
+        builder.process_event(
+            &ThreadEvent::ItemCompleted(ItemCompletedEvent {
+                item: ThreadItem {
+                    id: "cmd_1".to_string(),
+                    details: ThreadItemDetails::CommandExecution(Box::new(CommandExecutionItem {
+                        command: "git status".to_string(),
+                        arguments: Some(json!({ "cwd": "/repo" })),
+                        aggregated_output: "On branch main".to_string(),
+                        exit_code: Some(0),
+                        status: CommandExecutionStatus::Completed,
+                    })),
+                },
+            }),
+            &mut emitter,
+        );
+
+        match &builder.response().output[0] {
+            OutputItem::Custom(custom) => {
+                assert_eq!(custom.custom_type, "vtcode:command_execution");
+                assert_eq!(custom.data["command"], "git status");
+                assert_eq!(custom.data["exit_code"], 0);
+                assert_eq!(custom.data["status"], "completed");
+            }
+            other => panic!("expected custom output, got {other:?}"),
         }
     }
 }

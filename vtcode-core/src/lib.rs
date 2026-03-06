@@ -223,8 +223,8 @@ pub use exec::events::{
     ErrorItem, FileChangeItem, FileUpdateChange, ItemCompletedEvent, ItemStartedEvent,
     ItemUpdatedEvent, McpToolCallItem, McpToolCallStatus, PatchApplyStatus, PatchChangeKind,
     PlanDeltaEvent, PlanItem, ReasoningItem, ThreadEvent, ThreadItem, ThreadItemDetails,
-    ThreadStartedEvent, TurnCompletedEvent, TurnFailedEvent, TurnStartedEvent, Usage,
-    VersionedThreadEvent, WebSearchItem,
+    ThreadStartedEvent, ToolCallStatus, ToolInvocationItem, ToolOutputItem, TurnCompletedEvent,
+    TurnFailedEvent, TurnStartedEvent, Usage, VersionedThreadEvent, WebSearchItem,
 };
 pub use exec::{CodeExecutor, ExecutionConfig, ExecutionResult, Language};
 pub use gemini::{Content, FunctionDeclaration, Part};
