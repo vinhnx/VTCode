@@ -37,9 +37,9 @@ tokio = { workspace = true, features = [
     "time",
     "rt-multi-thread",
 ] }
-vtcode-commons = { path = "../vtcode-commons", version = "0.86.7" }
+vtcode-commons = { path = "../vtcode-commons", version = "0.86.8" }
 serde = { workspace = true, features = ["derive"], optional = true }
-vtcode-exec-events = { path = "../vtcode-exec-events", version = "0.86.7", optional = true }
+vtcode-exec-events = { path = "../vtcode-exec-events", version = "0.86.8", optional = true }
 
 [target.'cfg(unix)'.dependencies]
 libc = { workspace = true }
