@@ -5,9 +5,8 @@ use agent_client_protocol::AgentSideConnection;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::sync::Arc;
-use vtcode_core::core::threads::ThreadBootstrap;
+use vtcode_core::core::threads::{ThreadBootstrap, build_thread_archive_metadata};
 use vtcode_core::llm::provider::{FinishReason, Message};
-use vtcode_core::utils::session_archive::{SessionArchiveMetadata, find_session_by_identifier};
 
 use super::super::constants::*;
 use super::super::types::{SessionData, SessionHandle};
@@ -17,20 +16,12 @@ impl ZedAgent {
         let raw_id = self.next_session_id.get();
         self.next_session_id.set(raw_id + 1);
         let session_id = acp::SessionId::new(Arc::from(format!("{SESSION_PREFIX}-{raw_id}")));
-        let workspace_label = self
-            .config
-            .workspace
-            .file_name()
-            .and_then(|value| value.to_str())
-            .map(|value| value.to_string())
-            .unwrap_or_else(|| "workspace".to_string());
-        let metadata = SessionArchiveMetadata::new(
-            workspace_label,
-            self.config.workspace.to_string_lossy().to_string(),
-            self.config.model.clone(),
-            self.config.provider.clone(),
-            self.config.theme.clone(),
-            self.config.reasoning_effort.as_str().to_string(),
+        let metadata = build_thread_archive_metadata(
+            self.config.workspace.as_path(),
+            &self.config.model,
+            &self.config.provider,
+            &self.config.theme,
+            self.config.reasoning_effort.as_str(),
         );
         let thread = self.thread_manager.start_thread_with_identifier(
             session_id.0.to_string(),
@@ -96,13 +87,11 @@ impl ZedAgent {
         session_id: &acp::SessionId,
         identifier: &str,
     ) -> anyhow::Result<SessionHandle> {
-        let listing = find_session_by_identifier(identifier)
+        let thread = self
+            .thread_manager
+            .resume_thread(identifier)
             .await?
             .ok_or_else(|| anyhow::anyhow!("unknown archived session '{identifier}'"))?;
-        let thread = self.thread_manager.start_thread_with_identifier(
-            listing.identifier(),
-            ThreadBootstrap::from_listing(listing),
-        );
         let handle = SessionHandle {
             data: Rc::new(RefCell::new(SessionData {
                 _session_id: session_id.clone(),

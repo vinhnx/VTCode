@@ -656,7 +656,7 @@ async fn setup_session_archive(
                 resume.snapshot.metadata.theme.clone(),
                 resume.snapshot.metadata.reasoning_effort.clone(),
             )
-            .with_loaded_skills(resume.snapshot.metadata.loaded_skills.clone())
+            .with_loaded_skills(resume.loaded_skills.clone())
             .with_debug_log_path(debug_log_path.clone());
             match create_archive_with_optional_identifier(
                 archive_metadata,

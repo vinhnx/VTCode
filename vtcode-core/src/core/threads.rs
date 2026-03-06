@@ -8,7 +8,7 @@ use anyhow::{Result, anyhow};
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
-use std::path::PathBuf;
+use std::path::Path;
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -52,30 +52,6 @@ impl Default for SubmissionId {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum ThreadOp {
-    ConfigureSession,
-    UserTurn,
-    Interrupt,
-    ResumeFromSnapshot,
-    ForkFromSnapshot,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ThreadSubmission {
-    pub id: SubmissionId,
-    pub op: ThreadOp,
-}
-
-impl ThreadSubmission {
-    pub fn new(op: ThreadOp) -> Self {
-        Self {
-            id: SubmissionId::new(),
-            op,
-        }
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct ThreadEventRecord {
     pub sequence: u64,
@@ -89,7 +65,6 @@ pub struct ThreadEventRecord {
 pub struct ThreadSnapshot {
     pub thread_id: ThreadId,
     pub metadata: Option<SessionArchiveMetadata>,
-    pub archive_path: Option<PathBuf>,
     pub archive_listing: Option<SessionListing>,
     pub messages: Vec<Message>,
     pub loaded_skills: Vec<String>,
@@ -115,29 +90,11 @@ impl ThreadBootstrap {
     }
 
     pub fn from_listing(listing: SessionListing) -> Self {
-        let messages = if let Some(progress) = &listing.snapshot.progress
-            && !progress.recent_messages.is_empty()
-        {
-            progress.recent_messages.iter().map(Message::from).collect()
-        } else if !listing.snapshot.messages.is_empty() {
-            listing.snapshot.messages.iter().map(Message::from).collect()
-        } else {
-            Vec::new()
-        };
-
-        let loaded_skills = listing
-            .snapshot
-            .progress
-            .as_ref()
-            .map(|progress| progress.loaded_skills.clone())
-            .filter(|skills| !skills.is_empty())
-            .unwrap_or_else(|| listing.snapshot.metadata.loaded_skills.clone());
-
         Self {
             metadata: Some(listing.snapshot.metadata.clone()),
+            messages: messages_from_session_listing(&listing),
+            loaded_skills: loaded_skills_from_session_listing(&listing),
             archive_listing: Some(listing),
-            messages,
-            loaded_skills,
         }
     }
 
@@ -157,7 +114,6 @@ struct ThreadEventStore {
     capacity: usize,
     next_sequence: u64,
     events: VecDeque<ThreadEventRecord>,
-    last_dedupe_key: Option<(Option<String>, String)>,
 }
 
 impl ThreadEventStore {
@@ -175,16 +131,6 @@ impl ThreadEventStore {
         turn_id: Option<String>,
         event: ThreadEvent,
     ) {
-        let event_key = serde_json::to_string(&event).unwrap_or_else(|_| format!("{event:?}"));
-        let dedupe_key = (
-            submission_id.as_ref().map(|value| value.as_str().to_string()),
-            event_key,
-        );
-        if self.last_dedupe_key.as_ref() == Some(&dedupe_key) {
-            return;
-        }
-        self.last_dedupe_key = Some(dedupe_key);
-
         let record = ThreadEventRecord {
             sequence: self.next_sequence,
             thread_id: thread_id.clone(),
@@ -208,11 +154,9 @@ impl ThreadEventStore {
 struct ThreadSessionState {
     thread_id: ThreadId,
     metadata: Option<SessionArchiveMetadata>,
-    archive_path: Option<PathBuf>,
     archive_listing: Option<SessionListing>,
     messages: Vec<Message>,
     loaded_skills: Vec<String>,
-    submissions: Vec<ThreadSubmission>,
     turn_in_flight: bool,
 }
 
@@ -221,7 +165,6 @@ impl ThreadSessionState {
         ThreadSnapshot {
             thread_id: self.thread_id.clone(),
             metadata: self.metadata.clone(),
-            archive_path: self.archive_path.clone(),
             archive_listing: self.archive_listing.clone(),
             messages: self.messages.clone(),
             loaded_skills: self.loaded_skills.clone(),
@@ -242,15 +185,12 @@ struct ThreadRuntimeInner {
 
 impl ThreadRuntimeHandle {
     fn new(thread_id: ThreadId, bootstrap: ThreadBootstrap, event_capacity: usize) -> Self {
-        let archive_path = bootstrap.archive_listing.as_ref().map(|listing| listing.path.clone());
         let session = ThreadSessionState {
             thread_id,
             metadata: bootstrap.metadata,
-            archive_path,
             archive_listing: bootstrap.archive_listing,
             messages: bootstrap.messages,
             loaded_skills: bootstrap.loaded_skills,
-            submissions: Vec::new(),
             turn_in_flight: false,
         };
 
@@ -286,32 +226,17 @@ impl ThreadRuntimeHandle {
         self.inner.session.lock().messages.push(message);
     }
 
-    pub fn set_loaded_skills(&self, loaded_skills: Vec<String>) {
-        self.inner.session.lock().loaded_skills = loaded_skills;
-    }
-
-    pub fn loaded_skills(&self) -> Vec<String> {
-        self.inner.session.lock().loaded_skills.clone()
-    }
-
-    pub fn submit(&self, op: ThreadOp) -> Result<ThreadSubmission> {
+    pub fn begin_turn(&self) -> Result<SubmissionId> {
         let mut session = self.inner.session.lock();
-        if matches!(op, ThreadOp::UserTurn) && session.turn_in_flight {
+        if session.turn_in_flight {
             return Err(anyhow!(
                 "thread '{}' already has an in-flight turn",
                 session.thread_id
             ));
         }
 
-        let submission = ThreadSubmission::new(op.clone());
-        if matches!(op, ThreadOp::UserTurn) {
-            session.turn_in_flight = true;
-        }
-        if matches!(op, ThreadOp::Interrupt) {
-            session.turn_in_flight = false;
-        }
-        session.submissions.push(submission.clone());
-        Ok(submission)
+        session.turn_in_flight = true;
+        Ok(SubmissionId::new())
     }
 
     pub fn finish_turn(&self) {
@@ -392,26 +317,57 @@ impl ThreadManager {
     pub async fn resume_thread(&self, identifier: &str) -> Result<Option<ThreadRuntimeHandle>> {
         let listing = find_session_by_identifier(identifier).await?;
         Ok(listing.map(|listing| {
-            self.start_thread_with_identifier(listing.identifier(), ThreadBootstrap::from_listing(listing))
+            self.start_thread_with_identifier(
+                listing.identifier(),
+                ThreadBootstrap::from_listing(listing),
+            )
         }))
     }
 
-    pub async fn fork_thread(
-        &self,
-        source_identifier: &str,
-        workspace_label: &str,
-        custom_suffix: Option<String>,
-    ) -> Result<Option<ThreadRuntimeHandle>> {
-        let Some(listing) = find_session_by_identifier(source_identifier).await? else {
-            return Ok(None);
-        };
+}
 
-        let bootstrap = ThreadBootstrap::from_listing(listing);
-        let handle = self
-            .start_thread(workspace_label, custom_suffix, bootstrap)
-            .await?;
-        Ok(Some(handle))
+pub fn messages_from_session_listing(listing: &SessionListing) -> Vec<Message> {
+    if let Some(progress) = &listing.snapshot.progress
+        && !progress.recent_messages.is_empty()
+    {
+        progress.recent_messages.iter().map(Message::from).collect()
+    } else if !listing.snapshot.messages.is_empty() {
+        listing.snapshot.messages.iter().map(Message::from).collect()
+    } else {
+        Vec::new()
     }
+}
+
+pub fn loaded_skills_from_session_listing(listing: &SessionListing) -> Vec<String> {
+    listing
+        .snapshot
+        .progress
+        .as_ref()
+        .map(|progress| progress.loaded_skills.clone())
+        .filter(|skills| !skills.is_empty())
+        .unwrap_or_else(|| listing.snapshot.metadata.loaded_skills.clone())
+}
+
+pub fn build_thread_archive_metadata(
+    workspace: &Path,
+    model: &str,
+    provider: &str,
+    theme: &str,
+    reasoning_effort: &str,
+) -> SessionArchiveMetadata {
+    let workspace_label = workspace
+        .file_name()
+        .and_then(|value| value.to_str())
+        .unwrap_or("workspace");
+
+    SessionArchiveMetadata::new(
+        workspace_label,
+        workspace.to_string_lossy().to_string(),
+        model,
+        provider,
+        theme,
+        reasoning_effort,
+    )
 }
 
 #[cfg(test)]
@@ -461,8 +417,9 @@ mod tests {
         let handle = manager.start_thread_with_identifier("thread-123", bootstrap);
 
         assert_eq!(handle.thread_id().as_str(), "thread-123");
-        assert_eq!(handle.messages().len(), 1);
-        assert_eq!(handle.loaded_skills(), vec!["repo-skill".to_string()]);
+        let snapshot = handle.snapshot();
+        assert_eq!(snapshot.messages.len(), 1);
+        assert_eq!(snapshot.loaded_skills, vec!["repo-skill".to_string()]);
     }
 
     #[test]
@@ -470,10 +427,10 @@ mod tests {
         let manager = ThreadManager::new();
         let handle = manager.start_thread_with_identifier("thread-123", ThreadBootstrap::new(None));
 
-        let _first = handle.submit(ThreadOp::UserTurn).expect("first turn");
-        let err = handle.submit(ThreadOp::UserTurn).expect_err("second turn should fail");
+        let _first = handle.begin_turn().expect("first turn");
+        let err = handle.begin_turn().expect_err("second turn should fail");
         assert!(err.to_string().contains("in-flight turn"));
         handle.finish_turn();
-        handle.submit(ThreadOp::UserTurn).expect("turn after finish");
+        handle.begin_turn().expect("turn after finish");
     }
 }

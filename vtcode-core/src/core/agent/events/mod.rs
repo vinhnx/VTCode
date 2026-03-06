@@ -3,7 +3,7 @@
 pub mod unified;
 pub use unified::AgentEvent;
 
-use crate::core::threads::{SubmissionId, ThreadOp, ThreadRuntimeHandle};
+use crate::core::threads::{SubmissionId, ThreadRuntimeHandle};
 use crate::exec::events::{
     AgentMessageItem, CommandExecutionItem, CommandExecutionStatus, ErrorItem, FileChangeItem,
     FileUpdateChange, ItemCompletedEvent, ItemStartedEvent, ItemUpdatedEvent, PatchApplyStatus,
@@ -90,7 +90,9 @@ impl ExecEventRecorder {
         if let Some(handle) = &self.thread_handle {
             handle.record_event(submission_id, turn_id, event.clone());
         }
-        self.events.push(event);
+        if self.thread_handle.is_none() {
+            self.events.push(event);
+        }
     }
 
     fn next_item_id(&mut self) -> String {
@@ -101,12 +103,9 @@ impl ExecEventRecorder {
 
     pub fn turn_started(&mut self) {
         if let Some(handle) = &self.thread_handle {
-            match handle.submit(ThreadOp::UserTurn) {
-                Ok(submission) => self.active_submission_id = Some(submission.id),
-                Err(_) => {
-                    handle.finish_turn();
-                    self.active_submission_id = None;
-                }
+            match handle.begin_turn() {
+                Ok(submission_id) => self.active_submission_id = Some(submission_id),
+                Err(_) => self.active_submission_id = None,
             }
             self.active_turn_id = Some(format!("turn-{}", Uuid::new_v4()));
         }
@@ -117,11 +116,7 @@ impl ExecEventRecorder {
         self.record(ThreadEvent::TurnCompleted(TurnCompletedEvent {
             usage: Usage::default(),
         }));
-        if let Some(handle) = &self.thread_handle {
-            handle.finish_turn();
-        }
-        self.active_submission_id = None;
-        self.active_turn_id = None;
+        self.finish_turn();
     }
 
     pub fn turn_failed(&mut self, message: &str) {
@@ -129,6 +124,10 @@ impl ExecEventRecorder {
             message: message.to_string(),
             usage: None,
         }));
+        self.finish_turn();
+    }
+
+    fn finish_turn(&mut self) {
         if let Some(handle) = &self.thread_handle {
             handle.finish_turn();
         }
@@ -357,10 +356,10 @@ impl ExecEventRecorder {
             };
             self.record(ThreadEvent::ItemCompleted(ItemCompletedEvent { item }));
         }
-        if let Some(handle) = &self.thread_handle {
-            return handle.recent_events();
-        }
-        self.events
+        self.thread_handle
+            .as_ref()
+            .map(ThreadRuntimeHandle::recent_events)
+            .unwrap_or(self.events)
     }
 }
 
