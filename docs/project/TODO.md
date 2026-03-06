@@ -782,3 +782,19 @@ DEBUG log
 2026-03-06T16:37:37.228867Z DEBUG tool_execution{tool=task_tracker requested=task_tracker session_id=session-1772814630735 task_id=}: vtcode_core::tools::registry::execution_facade: exit
 2026-03-06T16:37:37.228883Z DEBUG tool_execution{tool=task_tracker requested=task_tracker session_id=session-1772814630735 task_id=}: vtcode_core::tools::registry::execution_facade: close time.busy=526µs time.idle=35.6µs
 ```
+
+---
+
+IMPORTANT: improve this for all interleaved thinking models, not just M2.5. The key point is that if your agent framework or tool execution flow modifies the message history in a way that removes or alters the <think>...</think> tokens, it can significantly degrade the performance of interleaved thinking models. This is because these models rely on those tokens to structure their reasoning process. So, when implementing tool calls and handling message history, ensure that you preserve the integrity of the <think>...</think> content throughout the entire interaction.
+
+```
+One gotcha: M2.5 is an interleaved thinking model — you must preserve <think>...</think> content in assistant turns and pass it back in history, otherwise model performance degrades. GitHub If your VT Code agent strips thinking tokens from message history before re-sending, that'll hurt benchmark scores noticeably.
+```
+
+---
+
+One caveat: GLM-5 uses --reasoning-parser glm45 flag in vLLM/SGLang harborframework, meaning it has interleaved thinking tokens like M2.5. Same rule applies — preserve <think> blocks in message history if your VT Code agent does multi-turn, otherwise reasoning quality degrades mid-task.
+
+==
+
+https://claude.ai/chat/bac1e18f-f11a-496d-b260-7de5948faf7a
