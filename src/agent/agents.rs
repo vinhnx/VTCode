@@ -3,6 +3,9 @@ use std::path::PathBuf;
 use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
 use vtcode_core::config::types::{AgentConfig as CoreAgentConfig, ModelSelectionSource};
 use vtcode_core::core::interfaces::turn::{TurnDriver, TurnDriverParams};
+use vtcode_core::core::threads::{
+    loaded_skills_from_session_listing, messages_from_session_listing,
+};
 use vtcode_core::llm::provider::Message as ProviderMessage;
 use vtcode_core::utils::session_archive::{SessionListing, SessionSnapshot};
 
@@ -11,6 +14,7 @@ pub struct ResumeSession {
     pub identifier: String,
     pub snapshot: SessionSnapshot,
     pub history: Vec<ProviderMessage>,
+    pub loaded_skills: Vec<String>,
     pub path: PathBuf,
     pub is_fork: bool,
 }
@@ -21,22 +25,11 @@ impl ResumeSession {
     }
 
     pub fn from_listing(listing: &SessionListing, is_fork: bool) -> Self {
-        let history_source = if let Some(progress) = &listing.snapshot.progress
-            && !progress.recent_messages.is_empty()
-        {
-            progress.recent_messages.iter()
-        } else if !listing.snapshot.messages.is_empty() {
-            listing.snapshot.messages.iter()
-        } else {
-            [].iter()
-        };
-
-        let history = history_source.map(ProviderMessage::from).collect();
-
         Self {
             identifier: listing.identifier(),
             snapshot: listing.snapshot.clone(),
-            history,
+            history: messages_from_session_listing(listing),
+            loaded_skills: loaded_skills_from_session_listing(listing),
             path: listing.path.clone(),
             is_fork,
         }

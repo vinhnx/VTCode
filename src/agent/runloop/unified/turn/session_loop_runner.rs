@@ -366,7 +366,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                 resume.snapshot.metadata.clone(),
             ))
             .with_messages(resume.history.clone())
-            .with_loaded_skills(resume.snapshot.metadata.loaded_skills.clone())
+            .with_loaded_skills(resume.loaded_skills.clone())
         } else {
             vtcode_core::core::threads::ThreadBootstrap::new(None)
         };
