@@ -728,7 +728,7 @@ impl Tool for ExitPlanModeTool {
         // after the user confirms via the plan confirmation dialog.
         // We keep plan mode active until confirmation is received.
         // The caller should:
-        // 1. Display the plan confirmation modal using show_plan_confirmation()
+        // 1. Display the shared plan confirmation overlay
         // 2. Wait for user approval (PlanApproved action)
         // 3. Only then disable plan mode and enable edit tools
 

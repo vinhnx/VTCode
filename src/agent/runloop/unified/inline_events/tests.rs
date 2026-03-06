@@ -18,7 +18,7 @@ use vtcode_core::core::agent::snapshots::{
 };
 use vtcode_core::llm::provider::{self as uni, LLMRequest, LLMResponse};
 use vtcode_core::utils::ansi::AnsiRenderer;
-use vtcode_tui::{InlineEvent, InlineHandle, PlanConfirmationResult};
+use vtcode_tui::{InlineEvent, InlineHandle, OverlayEvent, OverlaySubmission};
 
 #[derive(Clone)]
 struct DummyProvider;
@@ -190,30 +190,33 @@ async fn plan_confirmation_events_map_to_expected_actions() {
 
     let execute = context
         .process_event(
-            InlineEvent::PlanConfirmation(PlanConfirmationResult::Execute),
+            InlineEvent::Overlay(OverlayEvent::Submitted(OverlaySubmission::Selection(
+                vtcode_tui::InlineListSelection::PlanApprovalExecute,
+            ))),
             &mut queue,
         )
         .await
         .expect("process execute");
     let auto = context
         .process_event(
-            InlineEvent::PlanConfirmation(PlanConfirmationResult::AutoAccept),
+            InlineEvent::Overlay(OverlayEvent::Submitted(OverlaySubmission::Selection(
+                vtcode_tui::InlineListSelection::PlanApprovalAutoAccept,
+            ))),
             &mut queue,
         )
         .await
         .expect("process auto");
     let edit = context
         .process_event(
-            InlineEvent::PlanConfirmation(PlanConfirmationResult::EditPlan),
+            InlineEvent::Overlay(OverlayEvent::Submitted(OverlaySubmission::Selection(
+                vtcode_tui::InlineListSelection::PlanApprovalEditPlan,
+            ))),
             &mut queue,
         )
         .await
         .expect("process edit plan");
     let cancel = context
-        .process_event(
-            InlineEvent::PlanConfirmation(PlanConfirmationResult::Cancel),
-            &mut queue,
-        )
+        .process_event(InlineEvent::Overlay(OverlayEvent::Cancelled), &mut queue)
         .await
         .expect("process cancel");
 

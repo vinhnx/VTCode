@@ -18,8 +18,8 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use super::{
     style::{measure_text_width, ratatui_color_from_ansi, ratatui_style_from_inline},
     types::{
-        InlineCommand, InlineEvent, InlineHeaderContext, InlineMessageKind, InlineTextStyle,
-        InlineTheme,
+        DiffPreviewState, InlineCommand, InlineEvent, InlineHeaderContext, InlineMessageKind,
+        InlineTextStyle, InlineTheme, OverlayRequest,
     },
 };
 use crate::config::constants::ui;
@@ -108,6 +108,74 @@ struct CollapsedPaste {
     full_text: String,
 }
 
+pub(crate) enum ActiveOverlay {
+    Modal(Box<ModalState>),
+    Wizard(Box<WizardModalState>),
+    Diff(Box<DiffPreviewState>),
+}
+
+impl ActiveOverlay {
+    fn as_modal(&self) -> Option<&ModalState> {
+        match self {
+            Self::Modal(state) => Some(state),
+            Self::Wizard(_) | Self::Diff(_) => None,
+        }
+    }
+
+    fn as_modal_mut(&mut self) -> Option<&mut ModalState> {
+        match self {
+            Self::Modal(state) => Some(state),
+            Self::Wizard(_) | Self::Diff(_) => None,
+        }
+    }
+
+    fn as_wizard(&self) -> Option<&WizardModalState> {
+        match self {
+            Self::Wizard(state) => Some(state),
+            Self::Modal(_) | Self::Diff(_) => None,
+        }
+    }
+
+    fn as_wizard_mut(&mut self) -> Option<&mut WizardModalState> {
+        match self {
+            Self::Wizard(state) => Some(state),
+            Self::Modal(_) | Self::Diff(_) => None,
+        }
+    }
+
+    fn as_diff(&self) -> Option<&DiffPreviewState> {
+        match self {
+            Self::Diff(state) => Some(state),
+            Self::Modal(_) | Self::Wizard(_) => None,
+        }
+    }
+
+    fn as_diff_mut(&mut self) -> Option<&mut DiffPreviewState> {
+        match self {
+            Self::Diff(state) => Some(state),
+            Self::Modal(_) | Self::Wizard(_) => None,
+        }
+    }
+
+    fn is_modal_like(&self) -> bool {
+        matches!(self, Self::Modal(_) | Self::Wizard(_))
+    }
+
+    fn restore_input(&self) -> bool {
+        match self {
+            Self::Modal(state) => state.restore_input,
+            Self::Wizard(_) | Self::Diff(_) => true,
+        }
+    }
+
+    fn restore_cursor(&self) -> bool {
+        match self {
+            Self::Modal(state) => state.restore_cursor,
+            Self::Wizard(_) | Self::Diff(_) => true,
+        }
+    }
+}
+
 pub struct Session {
     // --- Managers (Phase 2) ---
     /// Manages user input, cursor, and command history
@@ -171,8 +239,8 @@ pub struct Session {
     pub(crate) queued_inputs: Vec<String>,
     queue_overlay_cache: Option<QueueOverlay>,
     queue_overlay_version: u64,
-    pub(crate) modal: Option<ModalState>,
-    wizard_modal: Option<WizardModalState>,
+    active_overlay: Option<ActiveOverlay>,
+    overlay_queue: VecDeque<OverlayRequest>,
     line_revision_counter: u64,
     /// Track the first line that needs reflow/update to avoid O(N) scans
     first_dirty_line: Option<usize>,
@@ -202,9 +270,6 @@ pub struct Session {
 
     // --- Mouse Text Selection ---
     pub(crate) mouse_selection: MouseSelectionState,
-
-    // --- Diff Preview Modal ---
-    pub(crate) diff_preview: Option<crate::ui::tui::types::DiffPreviewState>,
 
     pub(crate) skip_confirmations: bool,
 

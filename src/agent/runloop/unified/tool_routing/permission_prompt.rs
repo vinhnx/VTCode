@@ -1,20 +1,18 @@
 use std::path::Path;
 use std::sync::Arc;
-use std::time::Duration;
 
 use anyhow::Result;
 use serde_json::Value;
 use tokio::sync::Notify;
-use tokio::task;
 use vtcode_core::core::interfaces::ui::UiSession;
 use vtcode_core::notifications::{NotificationEvent, send_global_notification};
 use vtcode_core::sandboxing::SandboxPermissions as CoreSandboxPermissions;
 use vtcode_core::utils::ansi::AnsiRenderer;
-use vtcode_tui::InlineEvent;
-use vtcode_tui::InlineHandle;
+use vtcode_tui::{InlineHandle, ListOverlayRequest, OverlayRequest, OverlaySubmission};
 
 use crate::agent::runloop::tool_output::format_unified_diff_lines;
-use crate::agent::runloop::unified::state::{CtrlCSignal, CtrlCState};
+use crate::agent::runloop::unified::overlay_prompt::{OverlayWaitOutcome, show_overlay_and_wait};
+use crate::agent::runloop::unified::state::CtrlCState;
 use crate::agent::runloop::unified::ui_interaction::PlaceholderGuard;
 
 use super::HitlDecision;
@@ -531,153 +529,48 @@ pub(super) async fn prompt_tool_permission<S: UiSession + ?Sized>(
     {
         tracing::debug!(error = %err, "Failed to emit HITL notification");
     }
-    handle.show_list_modal(
-        "Tool Permission Required".to_string(),
-        description_lines,
-        options,
-        Some(default_selection),
-        None,
-    );
-
     let _placeholder_guard = PlaceholderGuard::new(handle, default_placeholder);
-    task::yield_now().await;
+    let outcome = show_overlay_and_wait(
+        handle,
+        session,
+        OverlayRequest::List(ListOverlayRequest {
+            title: "Tool Permission Required".to_string(),
+            lines: description_lines,
+            footer_hint: None,
+            items: options,
+            selected: Some(default_selection),
+            search: None,
+            hotkeys: Vec::new(),
+        }),
+        ctrl_c_state,
+        ctrl_c_notify,
+        |submission| match submission {
+            OverlaySubmission::Selection(InlineListSelection::ToolApproval(true)) => {
+                Some(HitlDecision::Approved)
+            }
+            OverlaySubmission::Selection(InlineListSelection::ToolApprovalSession) => {
+                Some(HitlDecision::ApprovedSession)
+            }
+            OverlaySubmission::Selection(InlineListSelection::ToolApprovalPermanent) => {
+                Some(HitlDecision::ApprovedPermanent)
+            }
+            OverlaySubmission::Selection(InlineListSelection::ToolApprovalDenyOnce) => {
+                Some(HitlDecision::DeniedOnce)
+            }
+            OverlaySubmission::Selection(InlineListSelection::ToolApproval(false)) => {
+                Some(HitlDecision::Denied)
+            }
+            OverlaySubmission::Selection(_) => Some(HitlDecision::Denied),
+            _ => None,
+        },
+    )
+    .await?;
 
-    loop {
-        if ctrl_c_state.is_cancel_requested() {
-            handle.close_modal();
-            handle.force_redraw();
-            task::yield_now().await;
-            tokio::time::sleep(Duration::from_millis(100)).await;
-            return Ok(HitlDecision::Interrupt);
-        }
-
-        let notify = ctrl_c_notify.clone();
-        let maybe_event = tokio::select! {
-            _ = notify.notified() => None,
-            event = session.next_event() => event,
-        };
-
-        let Some(event) = maybe_event else {
-            handle.close_modal();
-            handle.force_redraw();
-            task::yield_now().await;
-            tokio::time::sleep(Duration::from_millis(100)).await;
-            if ctrl_c_state.is_cancel_requested() {
-                return Ok(HitlDecision::Interrupt);
-            }
-            return Ok(HitlDecision::Exit);
-        };
-
-        match event {
-            InlineEvent::Interrupt => {
-                let signal = if ctrl_c_state.is_exit_requested() {
-                    CtrlCSignal::Exit
-                } else if ctrl_c_state.is_cancel_requested() {
-                    CtrlCSignal::Cancel
-                } else {
-                    ctrl_c_state.register_signal()
-                };
-                ctrl_c_notify.notify_waiters();
-                handle.close_modal();
-                handle.force_redraw();
-                task::yield_now().await;
-                tokio::time::sleep(Duration::from_millis(100)).await;
-                return if matches!(signal, CtrlCSignal::Exit) {
-                    Ok(HitlDecision::Exit)
-                } else {
-                    Ok(HitlDecision::Interrupt)
-                };
-            }
-            InlineEvent::ListModalSubmit(selection) => {
-                ctrl_c_state.disarm_exit();
-                handle.close_modal();
-                handle.force_redraw();
-                task::yield_now().await;
-                tokio::time::sleep(Duration::from_millis(100)).await;
-
-                match selection {
-                    InlineListSelection::ToolApproval(true) => {
-                        return Ok(HitlDecision::Approved);
-                    }
-                    InlineListSelection::ToolApprovalSession => {
-                        return Ok(HitlDecision::ApprovedSession);
-                    }
-                    InlineListSelection::ToolApprovalPermanent => {
-                        return Ok(HitlDecision::ApprovedPermanent);
-                    }
-                    InlineListSelection::ToolApprovalDenyOnce => {
-                        return Ok(HitlDecision::DeniedOnce);
-                    }
-                    InlineListSelection::ToolApproval(false) => {
-                        return Ok(HitlDecision::Denied);
-                    }
-                    _ => {
-                        return Ok(HitlDecision::Denied);
-                    }
-                }
-            }
-            InlineEvent::ListModalCancel => {
-                ctrl_c_state.disarm_exit();
-                handle.close_modal();
-                handle.force_redraw();
-                task::yield_now().await;
-                tokio::time::sleep(Duration::from_millis(100)).await;
-                return Ok(HitlDecision::Denied);
-            }
-            InlineEvent::WizardModalSubmit(_)
-            | InlineEvent::WizardModalStepComplete { .. }
-            | InlineEvent::WizardModalBack { .. }
-            | InlineEvent::WizardModalCancel => {
-                ctrl_c_state.disarm_exit();
-                return Ok(HitlDecision::Denied);
-            }
-            InlineEvent::Cancel => {
-                ctrl_c_state.disarm_exit();
-                handle.close_modal();
-                handle.force_redraw();
-                task::yield_now().await;
-                tokio::time::sleep(Duration::from_millis(100)).await;
-                return Ok(HitlDecision::Denied);
-            }
-            InlineEvent::ForceCancelPtySession => {
-                ctrl_c_state.disarm_exit();
-                handle.close_modal();
-                handle.force_redraw();
-                task::yield_now().await;
-                tokio::time::sleep(Duration::from_millis(100)).await;
-                return Ok(HitlDecision::Denied);
-            }
-            InlineEvent::Exit => {
-                ctrl_c_state.disarm_exit();
-                handle.close_modal();
-                handle.force_redraw();
-                task::yield_now().await;
-                tokio::time::sleep(Duration::from_millis(100)).await;
-                return Ok(HitlDecision::Exit);
-            }
-            InlineEvent::Submit(_) | InlineEvent::QueueSubmit(_) => {
-                ctrl_c_state.disarm_exit();
-                continue;
-            }
-            InlineEvent::ScrollLineUp
-            | InlineEvent::ScrollLineDown
-            | InlineEvent::ScrollPageUp
-            | InlineEvent::ScrollPageDown
-            | InlineEvent::FileSelected(_)
-            | InlineEvent::ListModalSelectionChanged(_)
-            | InlineEvent::BackgroundOperation
-            | InlineEvent::LaunchEditor
-            | InlineEvent::ToggleMode
-            | InlineEvent::PlanConfirmation(_)
-            | InlineEvent::DiffPreviewApply
-            | InlineEvent::DiffPreviewReject
-            | InlineEvent::DiffPreviewTrustChanged { .. }
-            | InlineEvent::EditQueue
-            | InlineEvent::HistoryPrevious
-            | InlineEvent::HistoryNext => {
-                ctrl_c_state.disarm_exit();
-            }
-        }
+    match outcome {
+        OverlayWaitOutcome::Submitted(decision) => Ok(decision),
+        OverlayWaitOutcome::Cancelled => Ok(HitlDecision::Denied),
+        OverlayWaitOutcome::Interrupted => Ok(HitlDecision::Interrupt),
+        OverlayWaitOutcome::Exit => Ok(HitlDecision::Exit),
     }
 }
 

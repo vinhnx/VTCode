@@ -4,7 +4,10 @@ use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::llm::provider::{self as uni};
 use vtcode_core::utils::ansi::AnsiRenderer;
-use vtcode_tui::{InlineEvent, InlineHandle};
+use vtcode_tui::{
+    InlineEvent, InlineHandle, OverlayEvent, OverlayHotkeyAction, OverlaySelectionChange,
+    OverlaySubmission,
+};
 
 use crate::agent::runloop::model_picker::ModelPickerState;
 use crate::agent::runloop::unified::palettes::ActivePalette;
@@ -66,35 +69,47 @@ impl<'a> InlineEventContext<'a> {
                 queue.edit_latest();
                 InlineLoopAction::Continue
             }
-            InlineEvent::ListModalSubmit(selection) => {
-                self.state.reset_interrupt_state();
-                self.modal
-                    .handle_submit(self.state.renderer(), selection)
-                    .await?
-            }
-            InlineEvent::ListModalSelectionChanged(selection) => self
-                .modal
-                .handle_preview(self.state.renderer(), selection)?,
-            InlineEvent::ListModalCancel => {
-                self.state.reset_interrupt_state();
-                self.modal.handle_cancel(self.state.renderer())?
-            }
-            InlineEvent::WizardModalSubmit(_) => {
-                self.state.reset_interrupt_state();
-                self.input_processor().passive()
-            }
-            InlineEvent::WizardModalStepComplete { .. } => {
-                self.state.reset_interrupt_state();
-                self.input_processor().passive()
-            }
-            InlineEvent::WizardModalBack { .. } => {
-                self.state.reset_interrupt_state();
-                self.input_processor().passive()
-            }
-            InlineEvent::WizardModalCancel => {
-                self.state.reset_interrupt_state();
-                self.input_processor().passive()
-            }
+            InlineEvent::Overlay(overlay_event) => match overlay_event {
+                OverlayEvent::SelectionChanged(OverlaySelectionChange::List(selection)) => self
+                    .modal
+                    .handle_preview(self.state.renderer(), selection)?,
+                OverlayEvent::SelectionChanged(OverlaySelectionChange::DiffTrustMode {
+                    ..
+                }) => {
+                    self.state.reset_interrupt_state();
+                    self.input_processor().passive()
+                }
+                OverlayEvent::Submitted(OverlaySubmission::Selection(selection)) => {
+                    self.state.reset_interrupt_state();
+                    self.modal
+                        .handle_submit(self.state.renderer(), selection)
+                        .await?
+                }
+                OverlayEvent::Submitted(OverlaySubmission::Wizard(_)) => {
+                    self.state.reset_interrupt_state();
+                    self.input_processor().passive()
+                }
+                OverlayEvent::Submitted(OverlaySubmission::DiffApply) => {
+                    self.state.reset_interrupt_state();
+                    InlineLoopAction::DiffApproved
+                }
+                OverlayEvent::Submitted(OverlaySubmission::DiffReject) => {
+                    self.state.reset_interrupt_state();
+                    InlineLoopAction::DiffRejected
+                }
+                OverlayEvent::Submitted(OverlaySubmission::Hotkey(action)) => {
+                    self.state.reset_interrupt_state();
+                    match action {
+                        OverlayHotkeyAction::LaunchEditor => {
+                            self.input_processor().submit("/edit".to_string())
+                        }
+                    }
+                }
+                OverlayEvent::Cancelled => {
+                    self.state.reset_interrupt_state();
+                    self.modal.handle_cancel(self.state.renderer())?
+                }
+            },
             InlineEvent::Cancel => self.control_processor().cancel()?,
             InlineEvent::ForceCancelPtySession => {
                 self.control_processor().force_cancel_pty_session()?
@@ -120,32 +135,6 @@ impl<'a> InlineEventContext<'a> {
             InlineEvent::ToggleMode => {
                 // Shift+Tab: Cycle editing modes via /mode command
                 self.input_processor().submit("/mode".to_string())
-            }
-            InlineEvent::PlanConfirmation(result) => {
-                use vtcode_tui::PlanConfirmationResult;
-                // Handle plan confirmation result (Claude Code style HITL)
-                match result {
-                    PlanConfirmationResult::Execute => {
-                        InlineLoopAction::PlanApproved { auto_accept: false }
-                    }
-                    PlanConfirmationResult::AutoAccept => {
-                        InlineLoopAction::PlanApproved { auto_accept: true }
-                    }
-                    PlanConfirmationResult::EditPlan => InlineLoopAction::PlanEditRequested,
-                    PlanConfirmationResult::Cancel => InlineLoopAction::Continue,
-                }
-            }
-            InlineEvent::DiffPreviewApply => {
-                self.state.reset_interrupt_state();
-                InlineLoopAction::DiffApproved
-            }
-            InlineEvent::DiffPreviewReject => {
-                self.state.reset_interrupt_state();
-                InlineLoopAction::DiffRejected
-            }
-            InlineEvent::DiffPreviewTrustChanged { .. } => {
-                self.state.reset_interrupt_state();
-                self.input_processor().passive()
             }
         };
 

@@ -17,7 +17,7 @@ use super::events::{EventChannels, EventListener, ScrollAccumulator, TerminalEve
 
 /// Check if session has any modal or palette active that uses keyboard navigation
 fn has_active_navigation_ui(session: &Session) -> bool {
-    session.modal.is_some()
+    session.has_active_overlay()
         || session.file_palette_active
         || session.history_picker_state.active
         || crate::ui::tui::session::slash::slash_navigation_available(session)

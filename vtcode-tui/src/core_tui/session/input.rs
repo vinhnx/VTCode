@@ -732,8 +732,7 @@ impl Session {
     }
 
     fn secure_prompt_active(&self) -> bool {
-        self.modal
-            .as_ref()
+        self.modal_state()
             .and_then(|modal| modal.secure_prompt.as_ref())
             .is_some()
     }

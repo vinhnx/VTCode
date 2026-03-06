@@ -173,16 +173,3 @@ impl PlanContent {
         }
     }
 }
-
-/// Result of plan confirmation dialog
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum PlanConfirmationResult {
-    /// Execute the plan - transition to Edit mode
-    Execute,
-    /// Return to planning to edit the plan
-    EditPlan,
-    /// Cancel execution and stay in Plan mode
-    Cancel,
-    /// Auto-accept all future plans in this session
-    AutoAccept,
-}

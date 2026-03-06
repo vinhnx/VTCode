@@ -1,8 +1,9 @@
 use crate::config::constants::ui;
 use crate::ui::search::{fuzzy_match, normalize_query};
 use crate::ui::tui::types::{
-    InlineEvent, InlineListItem, InlineListSearchConfig, InlineListSelection, SecurePromptConfig,
-    WizardModalMode, WizardStep,
+    InlineEvent, InlineListItem, InlineListSearchConfig, InlineListSelection, OverlayEvent,
+    OverlayHotkey, OverlayHotkeyAction, OverlayHotkeyKey, OverlaySelectionChange,
+    OverlaySubmission, SecurePromptConfig, WizardModalMode, WizardStep,
 };
 use ratatui::crossterm::event::{KeyCode, KeyEvent};
 use ratatui::widgets::ListState;
@@ -12,9 +13,9 @@ pub struct ModalState {
     pub title: String,
     pub lines: Vec<String>,
     pub footer_hint: Option<String>,
+    pub hotkeys: Vec<OverlayHotkey>,
     pub list: Option<ModalListState>,
     pub secure_prompt: Option<SecurePromptConfig>,
-    pub is_plan_confirmation: bool,
     #[allow(dead_code)]
     pub restore_input: bool,
     #[allow(dead_code)]
@@ -155,6 +156,25 @@ impl ModalSearchState {
 }
 
 impl ModalState {
+    pub fn hotkey_action(
+        &self,
+        key: &KeyEvent,
+        modifiers: ModalKeyModifiers,
+    ) -> Option<OverlayHotkeyAction> {
+        self.hotkeys.iter().find_map(|hotkey| match hotkey.key {
+            OverlayHotkeyKey::CtrlChar(ch)
+                if modifiers.control
+                    && !modifiers.alt
+                    && !modifiers.command
+                    && matches!(key.code, KeyCode::Char(key_ch) if key_ch.eq_ignore_ascii_case(&ch))
+            =>
+            {
+                Some(hotkey.action.clone())
+            }
+            _ => None,
+        })
+    }
+
     pub fn handle_list_key_event(
         &mut self,
         key: &KeyEvent,
@@ -302,7 +322,9 @@ impl ModalState {
                 if let Some(selection) = list.current_selection()
                     && let Some(adjusted) = map_config_selection_for_arrow(&selection, true)
                 {
-                    return ModalListKeyResult::Submit(InlineEvent::ListModalSubmit(adjusted));
+                    return ModalListKeyResult::Submit(InlineEvent::Overlay(
+                        OverlayEvent::Submitted(OverlaySubmission::Selection(adjusted)),
+                    ));
                 }
                 list.select_previous();
                 if let Some(event) = selection_change_event(list, previous_selection) {
@@ -315,7 +337,9 @@ impl ModalState {
                 if let Some(selection) = list.current_selection()
                     && let Some(adjusted) = map_config_selection_for_arrow(&selection, false)
                 {
-                    return ModalListKeyResult::Submit(InlineEvent::ListModalSubmit(adjusted));
+                    return ModalListKeyResult::Submit(InlineEvent::Overlay(
+                        OverlayEvent::Submitted(OverlaySubmission::Selection(adjusted)),
+                    ));
                 }
                 list.select_next();
                 if let Some(event) = selection_change_event(list, previous_selection) {
@@ -326,12 +350,16 @@ impl ModalState {
             }
             KeyCode::Enter => {
                 if let Some(selection) = list.current_selection() {
-                    ModalListKeyResult::Submit(InlineEvent::ListModalSubmit(selection))
+                    ModalListKeyResult::Submit(InlineEvent::Overlay(OverlayEvent::Submitted(
+                        OverlaySubmission::Selection(selection),
+                    )))
                 } else {
                     ModalListKeyResult::HandledNoRedraw
                 }
             }
-            KeyCode::Esc => ModalListKeyResult::Cancel(InlineEvent::ListModalCancel),
+            KeyCode::Esc => {
+                ModalListKeyResult::Cancel(InlineEvent::Overlay(OverlayEvent::Cancelled))
+            }
             KeyCode::Char(ch) if modifiers.control || modifiers.alt => match ch {
                 'n' | 'N' | 'j' | 'J' => {
                     list.select_next();
@@ -364,7 +392,11 @@ fn selection_change_event(
     if current == previous {
         return None;
     }
-    current.map(InlineEvent::ListModalSelectionChanged)
+    current.map(|selection| {
+        InlineEvent::Overlay(OverlayEvent::SelectionChanged(
+            OverlaySelectionChange::List(selection),
+        ))
+    })
 }
 
 fn map_config_selection_for_arrow(
@@ -1079,7 +1111,9 @@ impl WizardModalState {
             // Enter: select current item and mark step complete
             KeyCode::Enter => self.submit_current_selection(),
             // Escape: cancel wizard
-            KeyCode::Esc => ModalListKeyResult::Cancel(InlineEvent::WizardModalCancel),
+            KeyCode::Esc => {
+                ModalListKeyResult::Cancel(InlineEvent::Overlay(OverlayEvent::Cancelled))
+            }
             // Up/Down/Tab: delegate to current step's list
             KeyCode::Up | KeyCode::Down | KeyCode::Tab | KeyCode::BackTab => {
                 if let Some(step) = self.steps.get_mut(self.current_step) {
@@ -1308,21 +1342,18 @@ impl WizardModalState {
         };
 
         match self.mode {
-            WizardModalMode::TabbedList => {
-                ModalListKeyResult::Submit(InlineEvent::WizardModalSubmit(vec![selection]))
-            }
+            WizardModalMode::TabbedList => ModalListKeyResult::Submit(InlineEvent::Overlay(
+                OverlayEvent::Submitted(OverlaySubmission::Wizard(vec![selection])),
+            )),
             WizardModalMode::MultiStep => {
                 self.complete_current_step(selection.clone());
                 if self.current_step < self.steps.len().saturating_sub(1) {
                     self.current_step += 1;
-                    ModalListKeyResult::Submit(InlineEvent::WizardModalStepComplete {
-                        step: self.current_step.saturating_sub(1),
-                        answer: selection,
-                    })
+                    ModalListKeyResult::Redraw
                 } else {
-                    ModalListKeyResult::Submit(InlineEvent::WizardModalSubmit(
-                        self.collect_answers(),
-                    ))
+                    ModalListKeyResult::Submit(InlineEvent::Overlay(OverlayEvent::Submitted(
+                        OverlaySubmission::Wizard(self.collect_answers()),
+                    )))
                 }
             }
         }

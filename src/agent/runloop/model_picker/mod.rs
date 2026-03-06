@@ -362,7 +362,6 @@ impl ModelPickerState {
                 }
                 InlineListSelection::RefreshDynamicModels => Ok(ModelPickerProgress::NeedsRefresh),
                 InlineListSelection::CustomModel => {
-                    renderer.close_modal();
                     prompt_custom_model_entry(renderer)?;
                     Ok(ModelPickerProgress::InProgress)
                 }
@@ -388,13 +387,9 @@ impl ModelPickerState {
             },
             PickerStep::AwaitReasoning => match choice {
                 InlineListSelection::Reasoning(level) => {
-                    renderer.close_modal();
                     self.apply_reasoning_choice(renderer, from_tui_reasoning(level))
                 }
-                InlineListSelection::DisableReasoning => {
-                    renderer.close_modal();
-                    self.apply_reasoning_off_choice(renderer)
-                }
+                InlineListSelection::DisableReasoning => self.apply_reasoning_off_choice(renderer),
                 InlineListSelection::CustomModel
                 | InlineListSelection::Model(_)
                 | InlineListSelection::RefreshDynamicModels

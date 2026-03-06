@@ -14,7 +14,9 @@ use vtcode_tui::{
 use crate::agent::runloop::unified::turn::utils::{
     enforce_history_limits, truncate_message_content,
 };
-use crate::agent::runloop::unified::wizard_modal::{WizardModalOutcome, wait_for_wizard_modal};
+use crate::agent::runloop::unified::wizard_modal::{
+    WizardModalOutcome, show_wizard_modal_and_wait,
+};
 use crate::agent::runloop::{SkillCommandAction, SkillCommandOutcome, handle_skill_command};
 
 use super::{SlashCommandContext, SlashCommandControl};
@@ -559,17 +561,18 @@ async fn prompt_text(
         freeform_placeholder: Some(placeholder.to_string()),
     };
 
-    ctx.handle.show_wizard_modal_with_mode(
+    let outcome = show_wizard_modal_and_wait(
+        ctx.handle,
+        ctx.session,
         title.to_string(),
         vec![step],
         0,
         None,
         WizardModalMode::MultiStep,
-    );
-    ctx.handle.force_redraw();
-
-    let outcome =
-        wait_for_wizard_modal(ctx.handle, ctx.session, ctx.ctrl_c_state, ctx.ctrl_c_notify).await?;
+        ctx.ctrl_c_state,
+        ctx.ctrl_c_notify,
+    )
+    .await?;
     let value = match outcome {
         WizardModalOutcome::Submitted(selections) => {
             selections

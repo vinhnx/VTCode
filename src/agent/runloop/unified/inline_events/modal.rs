@@ -70,9 +70,6 @@ impl<'a> InlineModalProcessor<'a> {
             InlineListSelection::PlanApprovalEditPlan => {
                 return Ok(InlineLoopAction::PlanEditRequested);
             }
-            InlineListSelection::PlanApprovalCancel => {
-                return Ok(InlineLoopAction::PlanEditRequested);
-            }
             _ => {}
         }
 

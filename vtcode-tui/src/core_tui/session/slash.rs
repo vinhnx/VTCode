@@ -17,7 +17,7 @@ use super::{
 pub(crate) fn split_inline_slash_area(session: &mut Session, area: Rect) -> (Rect, Option<Rect>) {
     if area.height == 0
         || area.width == 0
-        || session.modal.is_some()
+        || session.has_active_overlay()
         || !session.inline_lists_visible()
         || session.file_palette_active
         || session.history_picker_state.active
@@ -52,7 +52,7 @@ pub(crate) fn split_inline_slash_area(session: &mut Session, area: Rect) -> (Rec
 pub fn render_slash_palette(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
     if area.height == 0
         || area.width == 0
-        || session.modal.is_some()
+        || session.has_active_overlay()
         || !session.inline_lists_visible()
     {
         session.slash_palette.clear_visible_rows();
@@ -201,7 +201,7 @@ pub(crate) fn slash_navigation_available(session: &Session) -> bool {
         && session.inline_lists_visible()
         && !session.slash_palette.is_empty()
         && has_prefix
-        && session.modal.is_none()
+        && !session.has_active_overlay()
         && !session.file_palette_active
         && !session.history_picker_state.active
 }

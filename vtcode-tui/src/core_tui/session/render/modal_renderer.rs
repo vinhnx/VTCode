@@ -33,10 +33,9 @@ fn list_desired_rows(list: &ModalListState) -> usize {
 
 fn modal_title_text(session: &Session) -> &str {
     session
-        .wizard_modal
-        .as_ref()
+        .wizard_overlay()
         .map(|wizard| wizard.title.as_str())
-        .or_else(|| session.modal.as_ref().map(|modal| modal.title.as_str()))
+        .or_else(|| session.modal_state().map(|modal| modal.title.as_str()))
         .unwrap_or("")
 }
 
@@ -74,18 +73,18 @@ pub fn split_inline_modal_area(session: &Session, area: Rect) -> (Rect, Option<R
         return (area, None);
     }
 
-    let multiline_list_present = if let Some(wizard) = session.wizard_modal.as_ref() {
+    let multiline_list_present = if let Some(wizard) = session.wizard_overlay() {
         wizard
             .steps
             .get(wizard.current_step)
             .is_some_and(|step| list_has_two_line_items(&step.list))
-    } else if let Some(modal) = session.modal.as_ref() {
+    } else if let Some(modal) = session.modal_state() {
         modal.list.as_ref().is_some_and(list_has_two_line_items)
     } else {
         false
     };
 
-    let desired_lines = if let Some(wizard) = session.wizard_modal.as_ref() {
+    let desired_lines = if let Some(wizard) = session.wizard_overlay() {
         let mut lines = 0usize;
         lines = lines.saturating_add(1); // tabs/header
         if wizard.search.is_some() {
@@ -116,7 +115,7 @@ pub fn split_inline_modal_area(session: &Session, area: Rect) -> (Rect, Option<R
             lines = lines.saturating_add(1); // title row
         }
         lines
-    } else if let Some(modal) = session.modal.as_ref() {
+    } else if let Some(modal) = session.modal_state() {
         let mut lines = modal.lines.len().clamp(1, MAX_INLINE_INSTRUCTION_ROWS);
         if modal.search.is_some() {
             lines = lines.saturating_add(1);
@@ -165,7 +164,7 @@ pub fn render_modal(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
 
     // Auto-approve modals when skip_confirmations is set (for tests and headless mode)
     if session.skip_confirmations
-        && let Some(mut modal) = session.modal.take()
+        && let Some(mut modal) = session.take_modal_state()
     {
         if let Some(list) = &mut modal.list
             && let Some(_selection) = list.current_selection()
@@ -197,7 +196,7 @@ pub fn render_modal(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
         chunks[1]
     };
 
-    if let Some(wizard) = session.wizard_modal.as_mut() {
+    if let Some(wizard) = session.wizard_overlay_mut() {
         frame.render_widget(Clear, body_area);
         if body_area.width == 0 || body_area.height == 0 {
             return;
@@ -206,7 +205,9 @@ pub fn render_modal(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
         return;
     }
 
-    let Some(modal) = session.modal.as_mut() else {
+    let input = session.input_manager.content().to_owned();
+    let cursor = session.input_manager.cursor();
+    let Some(modal) = session.modal_state_mut() else {
         return;
     };
 
@@ -224,8 +225,8 @@ pub fn render_modal(session: &mut Session, frame: &mut Frame<'_>, area: Rect) {
             styles: &styles,
             secure_prompt: modal.secure_prompt.as_ref(),
             search: modal.search.as_ref(),
-            input: session.input_manager.content(),
-            cursor: session.input_manager.cursor(),
+            input: &input,
+            cursor,
         },
     );
 }

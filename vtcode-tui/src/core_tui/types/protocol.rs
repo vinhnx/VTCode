@@ -2,11 +2,9 @@ use std::sync::Arc;
 
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
-use super::diff::{DiffHunk, TrustMode};
-use super::plan::{PlanConfirmationResult, PlanContent};
+use super::overlay::{ListOverlayRequest, ModalOverlayRequest, OverlayEvent, OverlayRequest};
 use super::selection::{
     InlineListItem, InlineListSearchConfig, InlineListSelection, SecurePromptConfig,
-    WizardModalMode, WizardStep,
 };
 use super::style::{EditingMode, InlineHeaderContext, InlineSegment, InlineTextStyle, InlineTheme};
 use crate::core_tui::session::config::AppearanceConfig;
@@ -75,26 +73,10 @@ pub enum InlineCommand {
     SetInput(String),
     ClearInput,
     ForceRedraw,
-    ShowModal {
-        title: String,
-        lines: Vec<String>,
-        secure_prompt: Option<SecurePromptConfig>,
+    ShowOverlay {
+        request: Box<OverlayRequest>,
     },
-    ShowListModal {
-        title: String,
-        lines: Vec<String>,
-        items: Vec<InlineListItem>,
-        selected: Option<InlineListSelection>,
-        search: Option<InlineListSearchConfig>,
-    },
-    ShowWizardModal {
-        title: String,
-        steps: Vec<WizardStep>,
-        current_step: usize,
-        search: Option<InlineListSearchConfig>,
-        mode: WizardModalMode,
-    },
-    CloseModal,
+    CloseOverlay,
     LoadFilePalette {
         files: Vec<String>,
         workspace: std::path::PathBuf,
@@ -108,18 +90,6 @@ pub enum InlineCommand {
     SetEditingMode(EditingMode),
     /// Update autonomous mode state in header context
     SetAutonomousMode(bool),
-    /// Show plan confirmation dialog (human-in-the-loop)
-    /// Displays Implementation Blueprint and asks user to approve before execution
-    ShowPlanConfirmation {
-        plan: Box<PlanContent>,
-    },
-    ShowDiffPreview {
-        file_path: String,
-        before: String,
-        after: String,
-        hunks: Vec<DiffHunk>,
-        current_hunk: usize,
-    },
     SetSkipConfirmations(bool),
     Shutdown,
     /// Update reasoning stage in header context
@@ -132,18 +102,7 @@ pub enum InlineEvent {
     QueueSubmit(String),
     /// Edit the newest queued input (pop into input buffer)
     EditQueue,
-    ListModalSubmit(InlineListSelection),
-    ListModalSelectionChanged(InlineListSelection),
-    ListModalCancel,
-    WizardModalSubmit(Vec<InlineListSelection>),
-    WizardModalStepComplete {
-        step: usize,
-        answer: InlineListSelection,
-    },
-    WizardModalBack {
-        from_step: usize,
-    },
-    WizardModalCancel,
+    Overlay(OverlayEvent),
     Cancel,
     Exit,
     Interrupt,
@@ -157,16 +116,6 @@ pub enum InlineEvent {
     ForceCancelPtySession,
     /// Toggle editing mode (Shift+Tab cycles through Edit -> Plan -> Edit).
     ToggleMode,
-    /// Plan confirmation result (human-in-the-loop)
-    PlanConfirmation(PlanConfirmationResult),
-    /// Diff preview approval - apply edit changes
-    DiffPreviewApply,
-    /// Diff preview rejection - cancel edit changes
-    DiffPreviewReject,
-    /// Diff preview trust mode changed
-    DiffPreviewTrustChanged {
-        mode: TrustMode,
-    },
     HistoryPrevious,
     HistoryNext,
 }
@@ -298,17 +247,23 @@ impl InlineHandle {
         self.send_command(InlineCommand::SetAutonomousMode(enabled));
     }
 
+    pub fn show_overlay(&self, request: OverlayRequest) {
+        self.send_command(InlineCommand::ShowOverlay {
+            request: Box::new(request),
+        });
+    }
+
     pub fn show_modal(
         &self,
         title: String,
         lines: Vec<String>,
         secure_prompt: Option<SecurePromptConfig>,
     ) {
-        self.send_command(InlineCommand::ShowModal {
+        self.show_overlay(OverlayRequest::Modal(ModalOverlayRequest {
             title,
             lines,
             secure_prompt,
-        });
+        }));
     }
 
     pub fn show_list_modal(
@@ -319,60 +274,23 @@ impl InlineHandle {
         selected: Option<InlineListSelection>,
         search: Option<InlineListSearchConfig>,
     ) {
-        self.send_command(InlineCommand::ShowListModal {
+        self.show_overlay(OverlayRequest::List(ListOverlayRequest {
             title,
             lines,
             items,
             selected,
             search,
-        });
+            footer_hint: None,
+            hotkeys: Vec::new(),
+        }));
     }
 
-    pub fn show_wizard_modal_with_mode(
-        &self,
-        title: String,
-        steps: Vec<WizardStep>,
-        current_step: usize,
-        search: Option<InlineListSearchConfig>,
-        mode: WizardModalMode,
-    ) {
-        self.send_command(InlineCommand::ShowWizardModal {
-            title,
-            steps,
-            current_step,
-            search,
-            mode,
-        });
-    }
-
-    pub fn show_tabbed_list_modal(
-        &self,
-        title: String,
-        steps: Vec<WizardStep>,
-        current_step: usize,
-        search: Option<InlineListSearchConfig>,
-    ) {
-        self.show_wizard_modal_with_mode(
-            title,
-            steps,
-            current_step,
-            search,
-            WizardModalMode::TabbedList,
-        );
-    }
-
-    /// Show a multi-step wizard modal with tabs for navigation
-    pub fn show_wizard_modal(
-        &self,
-        title: String,
-        steps: Vec<WizardStep>,
-        search: Option<InlineListSearchConfig>,
-    ) {
-        self.show_wizard_modal_with_mode(title, steps, 0, search, WizardModalMode::MultiStep);
+    pub fn close_overlay(&self) {
+        self.send_command(InlineCommand::CloseOverlay);
     }
 
     pub fn close_modal(&self) {
-        self.send_command(InlineCommand::CloseModal);
+        self.close_overlay();
     }
 
     pub fn clear_screen(&self) {
@@ -385,38 +303,6 @@ impl InlineHandle {
 
     pub fn open_history_picker(&self) {
         self.send_command(InlineCommand::OpenHistoryPicker);
-    }
-
-    /// Show plan confirmation dialog for implementation blueprint review
-    ///
-    /// Displays the implementation plan and asks user to approve before execution.
-    /// User can choose: Execute or Stay in Plan Mode (continue planning).
-    pub fn show_plan_confirmation(&self, plan: PlanContent) {
-        self.send_command(InlineCommand::ShowPlanConfirmation {
-            plan: Box::new(plan),
-        });
-    }
-
-    pub fn show_diff_preview(
-        &self,
-        file_path: String,
-        before: String,
-        after: String,
-        hunks: Vec<DiffHunk>,
-        current_hunk: usize,
-    ) {
-        let resolved_hunk = if hunks.is_empty() {
-            0
-        } else {
-            current_hunk.min(hunks.len().saturating_sub(1))
-        };
-        self.send_command(InlineCommand::ShowDiffPreview {
-            file_path,
-            before,
-            after,
-            hunks,
-            current_hunk: resolved_hunk,
-        });
     }
 
     pub fn set_skip_confirmations(&self, skip: bool) {

@@ -2,8 +2,10 @@ use super::*;
 use crate::config::constants::ui;
 use crate::ui::tui::style::ratatui_style_from_inline;
 use crate::ui::tui::{
-    InlineListItem, InlineListSelection, InlineSegment, InlineTextStyle, InlineTheme,
-    SlashCommandItem, WizardModalMode, WizardStep,
+    InlineListItem, InlineListSearchConfig, InlineListSelection, InlineSegment, InlineTextStyle,
+    InlineTheme, ListOverlayRequest, OverlayEvent, OverlayHotkey, OverlayHotkeyAction,
+    OverlayHotkeyKey, OverlayRequest, OverlaySubmission, SlashCommandItem, WizardModalMode,
+    WizardOverlayRequest, WizardStep,
 };
 use ratatui::crossterm::event::{Event as CrosstermEvent, KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
@@ -789,13 +791,18 @@ fn control_g_launches_editor_from_plan_confirmation_modal() {
         "## Plan of Work\n- Step 1",
         Some(".vtcode/plans/test-plan.md".to_string()),
     );
-    command::show_plan_confirmation_modal(&mut session, plan);
+    show_plan_confirmation_overlay(&mut session, plan);
 
     let event = KeyEvent::new(KeyCode::Char('g'), KeyModifiers::CONTROL);
     let result = session.process_key(event);
 
-    assert!(matches!(result, Some(InlineEvent::LaunchEditor)));
-    assert!(session.modal.is_none());
+    assert!(matches!(
+        result,
+        Some(InlineEvent::Overlay(OverlayEvent::Submitted(
+            OverlaySubmission::Hotkey(OverlayHotkeyAction::LaunchEditor)
+        )))
+    ));
+    assert!(session.modal_state().is_none());
 }
 
 #[test]
@@ -806,11 +813,10 @@ fn plan_confirmation_modal_matches_four_way_gate_copy() {
         "## Implementation Plan\n1. Step",
         Some(".vtcode/plans/test-plan.md".to_string()),
     );
-    command::show_plan_confirmation_modal(&mut session, plan);
+    show_plan_confirmation_overlay(&mut session, plan);
 
     let modal = session
-        .modal
-        .as_ref()
+        .modal_state()
         .expect("plan confirmation modal should be present");
     assert_eq!(modal.title, "Ready to code?");
     assert_eq!(
@@ -903,7 +909,7 @@ fn question_mark_opens_help_overlay_when_input_is_empty() {
     let result = session.process_key(KeyEvent::new(KeyCode::Char('?'), KeyModifiers::NONE));
 
     assert!(result.is_none());
-    let modal = session.modal.as_ref().expect("help modal should open");
+    let modal = session.modal_state().expect("help modal should open");
     assert_eq!(modal.title, "Keyboard Shortcuts");
     assert!(
         modal
@@ -922,7 +928,7 @@ fn question_mark_inserts_character_when_input_has_content() {
     assert!(result.is_none());
     assert_eq!(session.input_manager.content(), "why?");
     assert_eq!(session.cursor(), 4);
-    assert!(session.modal.is_none());
+    assert!(session.modal_state().is_none());
 }
 
 fn request_user_input_step(question_id: &str, label: &str) -> WizardStep {
@@ -949,6 +955,66 @@ fn request_user_input_step(question_id: &str, label: &str) -> WizardStep {
     }
 }
 
+fn show_plan_confirmation_overlay(session: &mut Session, plan: crate::ui::tui::types::PlanContent) {
+    let mut lines: Vec<String> = plan
+        .raw_content
+        .lines()
+        .map(|line| line.to_string())
+        .collect();
+    if lines.is_empty() && !plan.summary.is_empty() {
+        lines.push(plan.summary.clone());
+    }
+    lines.insert(
+        0,
+        "A plan is ready to execute. Would you like to proceed?".to_string(),
+    );
+
+    session.handle_command(InlineCommand::ShowOverlay {
+        request: Box::new(OverlayRequest::List(ListOverlayRequest {
+            title: "Ready to code?".to_string(),
+            lines,
+            footer_hint: plan
+                .file_path
+                .as_ref()
+                .map(|path| format!("ctrl-g to edit in VS Code · {path}")),
+            items: vec![
+                InlineListItem {
+                    title: "Yes, auto-accept edits".to_string(),
+                    subtitle: Some("Execute with auto-approval.".to_string()),
+                    badge: Some("Recommended".to_string()),
+                    indent: 0,
+                    selection: Some(InlineListSelection::PlanApprovalAutoAccept),
+                    search_value: None,
+                },
+                InlineListItem {
+                    title: "Yes, manually approve edits".to_string(),
+                    subtitle: Some(
+                        "Keep context and confirm each edit before applying.".to_string(),
+                    ),
+                    badge: None,
+                    indent: 0,
+                    selection: Some(InlineListSelection::PlanApprovalExecute),
+                    search_value: None,
+                },
+                InlineListItem {
+                    title: "Type feedback to revise the plan".to_string(),
+                    subtitle: Some("Return to plan mode and refine the plan.".to_string()),
+                    badge: None,
+                    indent: 0,
+                    selection: Some(InlineListSelection::PlanApprovalEditPlan),
+                    search_value: None,
+                },
+            ],
+            selected: Some(InlineListSelection::PlanApprovalAutoAccept),
+            search: None,
+            hotkeys: vec![OverlayHotkey {
+                key: OverlayHotkeyKey::CtrlChar('g'),
+                action: OverlayHotkeyAction::LaunchEditor,
+            }],
+        })),
+    });
+}
+
 #[test]
 fn show_list_modal_uses_bottom_inline_panel_min_height() {
     let mut session = Session::new(InlineTheme::default(), None, 30);
@@ -960,12 +1026,16 @@ fn show_list_modal_uses_bottom_inline_panel_min_height() {
         selection: Some(InlineListSelection::SlashCommand("a".to_string())),
         search_value: Some("Option A".to_string()),
     };
-    session.handle_command(InlineCommand::ShowListModal {
-        title: "Pick one".to_string(),
-        lines: vec!["Choose an option".to_string()],
-        items: vec![item],
-        selected: None,
-        search: None,
+    session.handle_command(InlineCommand::ShowOverlay {
+        request: Box::new(OverlayRequest::List(ListOverlayRequest {
+            title: "Pick one".to_string(),
+            lines: vec!["Choose an option".to_string()],
+            footer_hint: None,
+            items: vec![item],
+            selected: None,
+            search: None,
+            hotkeys: Vec::new(),
+        })),
     });
 
     let input_width = VIEW_WIDTH.saturating_sub(2);
@@ -1011,28 +1081,26 @@ fn wizard_multistep_submit_keeps_modal_open_until_last_step() {
         request_user_input_step("q2", "Priority"),
     ];
 
-    session.handle_command(InlineCommand::ShowWizardModal {
-        title: "Questions".to_string(),
-        steps,
-        current_step: 0,
-        search: None,
-        mode: WizardModalMode::MultiStep,
+    session.handle_command(InlineCommand::ShowOverlay {
+        request: Box::new(OverlayRequest::Wizard(WizardOverlayRequest {
+            title: "Questions".to_string(),
+            steps,
+            current_step: 0,
+            search: None,
+            mode: WizardModalMode::MultiStep,
+        })),
     });
-    assert!(session.wizard_modal.is_some());
+    assert!(session.wizard_overlay().is_some());
 
     let first_submit = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    assert!(matches!(
-        first_submit,
-        Some(InlineEvent::WizardModalStepComplete { step: 0, .. })
-    ));
+    assert!(first_submit.is_none());
     assert!(
-        session.wizard_modal.is_some(),
+        session.wizard_overlay().is_some(),
         "wizard should remain open after intermediate step completion"
     );
     assert_eq!(
         session
-            .wizard_modal
-            .as_ref()
+            .wizard_overlay()
             .map(|wizard| wizard.current_step),
         Some(1)
     );
@@ -1040,12 +1108,65 @@ fn wizard_multistep_submit_keeps_modal_open_until_last_step() {
     let final_submit = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     assert!(matches!(
         final_submit,
-        Some(InlineEvent::WizardModalSubmit(selections)) if selections.len() == 2
+        Some(InlineEvent::Overlay(OverlayEvent::Submitted(
+            OverlaySubmission::Wizard(selections)
+        ))) if selections.len() == 2
     ));
     assert!(
-        session.wizard_modal.is_none(),
+        session.wizard_overlay().is_none(),
         "wizard should close after final submission"
     );
+}
+
+#[test]
+fn wizard_search_paste_updates_filter_in_session_handle_event() {
+    let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
+    let (tx, _rx) = mpsc::unbounded_channel();
+
+    session.handle_command(InlineCommand::ShowOverlay {
+        request: Box::new(OverlayRequest::Wizard(WizardOverlayRequest {
+            title: "Question".to_string(),
+            steps: vec![WizardStep {
+                title: "Choose".to_string(),
+                question: "Pick one".to_string(),
+                items: vec![
+                    InlineListItem {
+                        title: "Scope".to_string(),
+                        subtitle: None,
+                        badge: None,
+                        indent: 0,
+                        selection: Some(InlineListSelection::SlashCommand("scope".to_string())),
+                        search_value: Some("scope".to_string()),
+                    },
+                    InlineListItem {
+                        title: "Priority".to_string(),
+                        subtitle: None,
+                        badge: None,
+                        indent: 0,
+                        selection: Some(InlineListSelection::SlashCommand("priority".to_string())),
+                        search_value: Some("priority".to_string()),
+                    },
+                ],
+                completed: false,
+                answer: None,
+                allow_freeform: false,
+                freeform_label: None,
+                freeform_placeholder: None,
+            }],
+            current_step: 0,
+            search: Some(InlineListSearchConfig {
+                label: "Filter".to_string(),
+                placeholder: None,
+            }),
+            mode: WizardModalMode::MultiStep,
+        })),
+    });
+
+    session.handle_event(CrosstermEvent::Paste("prio".to_string()), &tx, None);
+
+    let wizard = session.wizard_overlay().expect("wizard should stay open");
+    assert_eq!(wizard.search.as_ref().map(|search| search.query.as_str()), Some("prio"));
+    assert_eq!(wizard.steps[0].list.visible_indices, vec![1]);
 }
 
 #[test]
@@ -1053,21 +1174,25 @@ fn wizard_tabbed_submit_closes_modal_immediately() {
     let mut session = Session::new(InlineTheme::default(), None, VIEW_ROWS);
     let steps = vec![request_user_input_step("q1", "Single choice")];
 
-    session.handle_command(InlineCommand::ShowWizardModal {
-        title: "Question".to_string(),
-        steps,
-        current_step: 0,
-        search: None,
-        mode: WizardModalMode::TabbedList,
+    session.handle_command(InlineCommand::ShowOverlay {
+        request: Box::new(OverlayRequest::Wizard(WizardOverlayRequest {
+            title: "Question".to_string(),
+            steps,
+            current_step: 0,
+            search: None,
+            mode: WizardModalMode::TabbedList,
+        })),
     });
-    assert!(session.wizard_modal.is_some());
+    assert!(session.wizard_overlay().is_some());
 
     let submit = session.process_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     assert!(matches!(
         submit,
-        Some(InlineEvent::WizardModalSubmit(selections)) if selections.len() == 1
+        Some(InlineEvent::Overlay(OverlayEvent::Submitted(
+            OverlaySubmission::Wizard(selections)
+        ))) if selections.len() == 1
     ));
-    assert!(session.wizard_modal.is_none());
+    assert!(session.wizard_overlay().is_none());
 }
 
 #[test]

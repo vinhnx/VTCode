@@ -2,7 +2,7 @@ use super::*;
 use ratatui::crossterm::event::{KeyEventKind, KeyModifiers, MouseEvent, MouseEventKind};
 use std::sync::Arc;
 
-use super::super::types::ContentPart;
+use super::super::types::{ContentPart, OverlayEvent, OverlaySelectionChange, OverlaySubmission};
 use crate::ui::tui::InlineSegment;
 use crate::ui::tui::session::modal::{ModalKeyModifiers, ModalListKeyResult};
 
@@ -13,6 +13,28 @@ fn input_history_entries(session: &Session) -> Vec<(String, Vec<ContentPart>)> {
         .iter()
         .map(|entry| (entry.content().to_string(), entry.attachment_elements()))
         .collect()
+}
+
+pub(super) fn handle_paste(session: &mut Session, content: &str) {
+    if session.input_enabled {
+        session.insert_paste_text(content);
+        session.check_file_reference_trigger();
+        session.mark_dirty();
+    } else if let Some(modal) = session.modal_state_mut()
+        && let (Some(list), Some(search)) = (modal.list.as_mut(), modal.search.as_mut())
+    {
+        search.insert(content);
+        list.apply_search(&search.query);
+        session.mark_dirty();
+    } else if let Some(wizard) = session.wizard_overlay_mut()
+        && let Some(search) = wizard.search.as_mut()
+    {
+        search.insert(content);
+        if let Some(step) = wizard.steps.get_mut(wizard.current_step) {
+            step.list.apply_search(&search.query);
+        }
+        session.mark_dirty();
+    }
 }
 
 #[allow(dead_code)]
@@ -68,26 +90,7 @@ pub(super) fn handle_event(
             _ => {}
         },
         CrosstermEvent::Paste(content) => {
-            if session.input_enabled {
-                session.insert_paste_text(&content);
-                session.check_file_reference_trigger();
-                session.mark_dirty();
-            } else if let Some(modal) = session.modal.as_mut()
-                && let (Some(list), Some(search)) = (modal.list.as_mut(), modal.search.as_mut())
-            {
-                search.insert(&content);
-                list.apply_search(&search.query);
-                session.mark_dirty();
-            } else if let Some(wizard) = session.wizard_modal.as_mut()
-                && let Some(search) = wizard.search.as_mut()
-            {
-                // Paste into wizard modal search
-                search.insert(&content);
-                if let Some(step) = wizard.steps.get_mut(wizard.current_step) {
-                    step.list.apply_search(&search.query);
-                }
-                session.mark_dirty();
-            }
+            handle_paste(session, &content);
         }
         CrosstermEvent::Resize(_, rows) => {
             render::apply_view_rows(session, rows);
@@ -114,24 +117,22 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
     let has_command = has_super || raw_meta;
     let has_alt = raw_alt && !has_command;
 
-    if let Some(modal) = session.modal.as_mut() {
-        if modal.is_plan_confirmation
-            && has_control
-            && matches!(key.code, KeyCode::Char('g') | KeyCode::Char('G'))
-        {
-            session.close_modal();
+    if let Some(modal) = session.modal_state_mut() {
+        let modal_modifiers = ModalKeyModifiers {
+            control: has_control,
+            alt: has_alt,
+            command: has_command,
+        };
+
+        if let Some(action) = modal.hotkey_action(&key, modal_modifiers) {
+            session.close_overlay();
             session.mark_dirty();
-            return Some(InlineEvent::LaunchEditor);
+            return Some(InlineEvent::Overlay(OverlayEvent::Submitted(
+                OverlaySubmission::Hotkey(action),
+            )));
         }
 
-        let result = modal.handle_list_key_event(
-            &key,
-            ModalKeyModifiers {
-                control: has_control,
-                alt: has_alt,
-                command: has_command,
-            },
-        );
+        let result = modal.handle_list_key_event(&key, modal_modifiers);
 
         match result {
             ModalListKeyResult::Redraw => {
@@ -146,14 +147,14 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                 return None;
             }
             ModalListKeyResult::Submit(event) | ModalListKeyResult::Cancel(event) => {
-                session.close_modal();
+                session.close_overlay();
                 return Some(event);
             }
             ModalListKeyResult::NotHandled => {}
         }
     }
 
-    if let Some(wizard) = session.wizard_modal.as_mut() {
+    if let Some(wizard) = session.wizard_overlay_mut() {
         let result = wizard.handle_key_event(
             &key,
             ModalKeyModifiers {
@@ -176,20 +177,11 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
                 return None;
             }
             ModalListKeyResult::Submit(event) => {
-                let keep_open = matches!(
-                    &event,
-                    InlineEvent::WizardModalStepComplete { .. }
-                        | InlineEvent::WizardModalBack { .. }
-                );
-                if keep_open {
-                    session.mark_dirty();
-                } else {
-                    session.close_modal();
-                }
+                session.close_overlay();
                 return Some(event);
             }
             ModalListKeyResult::Cancel(event) => {
-                session.close_modal();
+                session.close_overlay();
                 return Some(event);
             }
             ModalListKeyResult::NotHandled => {}
@@ -343,8 +335,8 @@ pub(super) fn process_key(session: &mut Session, key: KeyEvent) -> Option<Inline
             Some(InlineEvent::ToggleMode)
         }
         KeyCode::Esc => {
-            if session.modal.is_some() {
-                session.close_modal();
+            if session.has_active_overlay() {
+                session.close_overlay();
                 None
             } else {
                 let is_double_escape = session.input_manager.check_escape_double_tap();
@@ -787,9 +779,9 @@ pub(super) fn handle_diff_preview_key(
     session: &mut Session,
     key: &KeyEvent,
 ) -> Option<InlineEvent> {
-    session.diff_preview.as_ref()?;
+    session.diff_preview_state()?;
 
-    let diff_state = session.diff_preview.as_mut()?;
+    let diff_state = session.diff_preview_state_mut()?;
 
     match key.code {
         KeyCode::Tab => {
@@ -807,38 +799,50 @@ pub(super) fn handle_diff_preview_key(
             None
         }
         KeyCode::Enter => {
-            session.diff_preview = None;
-            session.input_enabled = true;
-            session.cursor_visible = true;
+            session.close_overlay();
             session.mark_dirty();
-            Some(InlineEvent::DiffPreviewApply)
+            Some(InlineEvent::Overlay(OverlayEvent::Submitted(
+                OverlaySubmission::DiffApply,
+            )))
         }
         KeyCode::Esc => {
-            session.diff_preview = None;
-            session.input_enabled = true;
-            session.cursor_visible = true;
+            session.close_overlay();
             session.mark_dirty();
-            Some(InlineEvent::DiffPreviewReject)
+            Some(InlineEvent::Overlay(OverlayEvent::Submitted(
+                OverlaySubmission::DiffReject,
+            )))
         }
         KeyCode::Char('1') => {
             diff_state.trust_mode = crate::ui::tui::types::TrustMode::Once;
+            let mode = diff_state.trust_mode;
             session.mark_dirty();
-            None
+            Some(InlineEvent::Overlay(OverlayEvent::SelectionChanged(
+                OverlaySelectionChange::DiffTrustMode { mode },
+            )))
         }
         KeyCode::Char('2') => {
             diff_state.trust_mode = crate::ui::tui::types::TrustMode::Session;
+            let mode = diff_state.trust_mode;
             session.mark_dirty();
-            None
+            Some(InlineEvent::Overlay(OverlayEvent::SelectionChanged(
+                OverlaySelectionChange::DiffTrustMode { mode },
+            )))
         }
         KeyCode::Char('3') => {
             diff_state.trust_mode = crate::ui::tui::types::TrustMode::Always;
+            let mode = diff_state.trust_mode;
             session.mark_dirty();
-            None
+            Some(InlineEvent::Overlay(OverlayEvent::SelectionChanged(
+                OverlaySelectionChange::DiffTrustMode { mode },
+            )))
         }
         KeyCode::Char('4') => {
             diff_state.trust_mode = crate::ui::tui::types::TrustMode::AutoTrust;
+            let mode = diff_state.trust_mode;
             session.mark_dirty();
-            None
+            Some(InlineEvent::Overlay(OverlayEvent::SelectionChanged(
+                OverlaySelectionChange::DiffTrustMode { mode },
+            )))
         }
         _ => None,
     }

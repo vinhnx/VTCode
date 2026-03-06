@@ -1,19 +1,18 @@
 use std::sync::Arc;
-use std::time::Duration;
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tokio::sync::Notify;
-use tokio::task;
 
 use vtcode_core::core::agent::error_recovery::{ErrorType, RecoveryDiagnostics};
 use vtcode_tui::{
-    InlineEvent, InlineHandle, InlineListItem, InlineListSearchConfig, InlineListSelection,
-    InlineSession,
+    InlineHandle, InlineListItem, InlineListSearchConfig, InlineListSelection, InlineSession,
+    ListOverlayRequest, OverlayRequest, OverlaySubmission,
 };
 
-use crate::agent::runloop::unified::state::{CtrlCSignal, CtrlCState};
+use crate::agent::runloop::unified::overlay_prompt::{OverlayWaitOutcome, show_overlay_and_wait};
+use crate::agent::runloop::unified::state::CtrlCState;
 
 pub struct RecoveryPromptBuilder {
     pub title: String,
@@ -245,103 +244,40 @@ pub async fn execute_recovery_prompt(
         placeholder: Some("Filter options...".to_string()),
     });
 
-    handle.show_list_modal(
-        title,
-        split_question_lines(&parsed.question),
-        items,
-        selected,
-        search,
-    );
-    handle.force_redraw();
-    task::yield_now().await;
+    let outcome = show_overlay_and_wait(
+        handle,
+        session,
+        OverlayRequest::List(ListOverlayRequest {
+            title,
+            lines: split_question_lines(&parsed.question),
+            footer_hint: None,
+            items,
+            selected,
+            search,
+            hotkeys: Vec::new(),
+        }),
+        ctrl_c_state,
+        ctrl_c_notify,
+        |submission| match submission {
+            OverlaySubmission::Selection(InlineListSelection::AskUserChoice {
+                tab_id,
+                choice_id,
+                ..
+            }) => Some((tab_id, choice_id)),
+            _ => None,
+        },
+    )
+    .await?;
 
-    loop {
-        if (*ctrl_c_state).is_cancel_requested() {
-            handle.close_modal();
-            handle.force_redraw();
-            task::yield_now().await;
-            tokio::time::sleep(Duration::from_millis(100)).await;
-            return Ok(json!({"cancelled": true}));
-        }
-
-        let notify = ctrl_c_notify.clone();
-        let maybe_event = tokio::select! {
-            _ = notify.notified() => None,
-            event = session.next_event() => event,
-        };
-
-        let Some(event) = maybe_event else {
-            handle.close_modal();
-            handle.force_redraw();
-            task::yield_now().await;
-            tokio::time::sleep(Duration::from_millis(100)).await;
-            return Ok(json!({"cancelled": true}));
-        };
-
-        match event {
-            InlineEvent::Interrupt => {
-                let signal = if (*ctrl_c_state).is_exit_requested() {
-                    CtrlCSignal::Exit
-                } else if (*ctrl_c_state).is_cancel_requested() {
-                    CtrlCSignal::Cancel
-                } else {
-                    (*ctrl_c_state).register_signal()
-                };
-                ctrl_c_notify.notify_waiters();
-                handle.close_modal();
-                handle.force_redraw();
-                task::yield_now().await;
-                tokio::time::sleep(Duration::from_millis(100)).await;
-
-                return Ok(json!({
-                    "cancelled": true,
-                    "signal": match signal {
-                        CtrlCSignal::Exit => "exit",
-                        CtrlCSignal::Cancel => "cancel",
-                    }
-                }));
-            }
-            InlineEvent::ListModalSubmit(selection) => {
-                (*ctrl_c_state).disarm_exit();
-                handle.close_modal();
-                handle.force_redraw();
-                task::yield_now().await;
-                tokio::time::sleep(Duration::from_millis(100)).await;
-
-                if let InlineListSelection::AskUserChoice {
-                    tab_id, choice_id, ..
-                } = selection
-                {
-                    return Ok(json!({
-                        "tab_id": tab_id,
-                        "choice_id": choice_id
-                    }));
-                }
-
-                return Ok(json!({"cancelled": true}));
-            }
-            InlineEvent::ListModalCancel | InlineEvent::Cancel => {
-                (*ctrl_c_state).disarm_exit();
-                handle.close_modal();
-                handle.force_redraw();
-                task::yield_now().await;
-                tokio::time::sleep(Duration::from_millis(100)).await;
-                return Ok(json!({"cancelled": true}));
-            }
-            InlineEvent::Exit => {
-                (*ctrl_c_state).disarm_exit();
-                handle.close_modal();
-                handle.force_redraw();
-                task::yield_now().await;
-                tokio::time::sleep(Duration::from_millis(100)).await;
-                return Ok(json!({"cancelled": true, "signal": "exit"}));
-            }
-            InlineEvent::Submit(_) | InlineEvent::QueueSubmit(_) => {
-                continue;
-            }
-            _ => {}
-        }
-    }
+    Ok(match outcome {
+        OverlayWaitOutcome::Submitted((tab_id, choice_id)) => json!({
+            "tab_id": tab_id,
+            "choice_id": choice_id
+        }),
+        OverlayWaitOutcome::Cancelled => json!({"cancelled": true}),
+        OverlayWaitOutcome::Interrupted => json!({"cancelled": true, "signal": "cancel"}),
+        OverlayWaitOutcome::Exit => json!({"cancelled": true, "signal": "exit"}),
+    })
 }
 
 pub fn build_recovery_prompt_from_diagnostics(

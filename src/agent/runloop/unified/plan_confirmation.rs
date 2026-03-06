@@ -1,22 +1,21 @@
 //! Plan confirmation HITL flow for Plan -> Edit execution.
 //!
-//! This implementation uses the TUI plan confirmation modal/list widget when available,
-//! with typed input parsing as a compatibility fallback.
+//! This implementation routes plan confirmation through the shared overlay driver.
 
 use std::sync::Arc;
-use std::time::Duration;
 
 use anyhow::Result;
 use serde_json::{Value, json};
 use tokio::sync::Notify;
-use tokio::task;
 
 use vtcode_tui::{
-    InlineEvent, InlineHandle, InlineListSelection, InlineMessageKind, InlineSession,
-    PlanConfirmationResult, PlanContent,
+    InlineHandle, InlineListItem, InlineListSelection, InlineMessageKind, InlineSession,
+    ListOverlayRequest, OverlayHotkey, OverlayHotkeyAction, OverlayHotkeyKey, OverlayRequest,
+    OverlaySubmission, PlanContent,
 };
 
-use super::state::{CtrlCSignal, CtrlCState};
+use super::overlay_prompt::{OverlayWaitOutcome, wait_for_overlay_submission};
+use super::state::CtrlCState;
 
 /// Result of the plan confirmation flow
 #[derive(Debug, Clone)]
@@ -31,13 +30,6 @@ pub enum PlanConfirmationOutcome {
     Cancel,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ParsedPlanChoice {
-    AutoAccept,
-    ManualApprove,
-    Revise,
-}
-
 fn line_count(text: &str) -> usize {
     text.lines().count().max(1)
 }
@@ -45,120 +37,6 @@ fn line_count(text: &str) -> usize {
 fn append_message(handle: &InlineHandle, kind: InlineMessageKind, text: impl Into<String>) {
     let text = text.into();
     handle.append_pasted_message(kind, text.clone(), line_count(&text));
-}
-
-fn normalize_choice_text(text: &str) -> String {
-    text.chars()
-        .map(|ch| {
-            if ch.is_ascii_alphanumeric() || ch.is_ascii_whitespace() {
-                ch.to_ascii_lowercase()
-            } else {
-                ' '
-            }
-        })
-        .collect::<String>()
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
-}
-
-fn parse_plan_choice(input: &str) -> (ParsedPlanChoice, Option<String>) {
-    let trimmed = input.trim();
-    if trimmed.is_empty() {
-        return (ParsedPlanChoice::Revise, None);
-    }
-
-    let parse_numbered = |choice_number: char| -> Option<Option<String>> {
-        let mut chars = trimmed.chars();
-        let first = chars.next()?;
-        if first != choice_number {
-            return None;
-        }
-        let rest = chars.as_str().trim_start_matches(['.', ')', ':', '-', ' ']);
-        if rest.is_empty() {
-            Some(None)
-        } else {
-            Some(Some(rest.to_string()))
-        }
-    };
-
-    if parse_numbered('1').is_some() {
-        return (ParsedPlanChoice::AutoAccept, None);
-    }
-    if parse_numbered('2').is_some() {
-        return (ParsedPlanChoice::ManualApprove, None);
-    }
-    if let Some(feedback) = parse_numbered('3') {
-        return (ParsedPlanChoice::Revise, feedback);
-    }
-    if let Some(feedback) = parse_numbered('4') {
-        return (ParsedPlanChoice::Revise, feedback);
-    }
-
-    let normalized = normalize_choice_text(trimmed);
-    let auto_accept_aliases = [
-        "yes",
-        "y",
-        "continue",
-        "go",
-        "start",
-        "implement",
-        "execute",
-        "auto accept",
-        "auto accept edits",
-        "yes auto accept edits",
-        "option 1",
-        "choice 1",
-        "1",
-        // Backward-compatible aliases from the removed clear-context option.
-        "clear context",
-        "reset context",
-        "clear context auto accept",
-        "reset conversation history",
-    ];
-    if auto_accept_aliases.contains(&normalized.as_str()) {
-        return (ParsedPlanChoice::AutoAccept, None);
-    }
-
-    let manual_aliases = [
-        "manual",
-        "manually approve edits",
-        "manual approve edits",
-        "yes manually approve edits",
-        "approve manually",
-        "option 2",
-        "choice 2",
-        "2",
-    ];
-    if manual_aliases.contains(&normalized.as_str()) {
-        return (ParsedPlanChoice::ManualApprove, None);
-    }
-
-    let revise_aliases = [
-        "no",
-        "stay in plan mode",
-        "keep in plan mode",
-        "keep planning",
-        "continue planning",
-        "stay in plan",
-        "revise",
-        "feedback",
-        "edit plan",
-        "revise plan",
-        "type feedback to revise the plan",
-        "option 3",
-        "choice 3",
-        "3",
-        // Backward-compatible aliases from the previous 4-option prompt.
-        "option 4",
-        "choice 4",
-        "4",
-    ];
-    if revise_aliases.contains(&normalized.as_str()) {
-        return (ParsedPlanChoice::Revise, None);
-    }
-
-    (ParsedPlanChoice::Revise, Some(trimmed.to_string()))
 }
 
 fn render_confirmation_prompt(handle: &InlineHandle, plan: &PlanContent) {
@@ -196,9 +74,68 @@ fn render_confirmation_prompt(handle: &InlineHandle, plan: &PlanContent) {
     );
 }
 
+fn build_plan_confirmation_request(plan: &PlanContent) -> OverlayRequest {
+    let mut lines: Vec<String> = plan
+        .raw_content
+        .lines()
+        .map(|line| line.to_string())
+        .collect();
+    if lines.is_empty() && !plan.summary.is_empty() {
+        lines.push(plan.summary.clone());
+    }
+    lines.insert(
+        0,
+        "A plan is ready to execute. Would you like to proceed?".to_string(),
+    );
+
+    let footer_hint = plan
+        .file_path
+        .as_ref()
+        .map(|path| format!("ctrl-g to edit in VS Code · {path}"));
+    let items = vec![
+        InlineListItem {
+            title: "Yes, auto-accept edits".to_string(),
+            subtitle: Some("Execute with auto-approval.".to_string()),
+            badge: Some("Recommended".to_string()),
+            indent: 0,
+            selection: Some(InlineListSelection::PlanApprovalAutoAccept),
+            search_value: None,
+        },
+        InlineListItem {
+            title: "Yes, manually approve edits".to_string(),
+            subtitle: Some("Keep context and confirm each edit before applying.".to_string()),
+            badge: None,
+            indent: 0,
+            selection: Some(InlineListSelection::PlanApprovalExecute),
+            search_value: None,
+        },
+        InlineListItem {
+            title: "Type feedback to revise the plan".to_string(),
+            subtitle: Some("Return to plan mode and refine the plan.".to_string()),
+            badge: None,
+            indent: 0,
+            selection: Some(InlineListSelection::PlanApprovalEditPlan),
+            search_value: None,
+        },
+    ];
+
+    OverlayRequest::List(ListOverlayRequest {
+        title: "Ready to code?".to_string(),
+        lines,
+        footer_hint,
+        items,
+        selected: Some(InlineListSelection::PlanApprovalAutoAccept),
+        search: None,
+        hotkeys: vec![OverlayHotkey {
+            key: OverlayHotkeyKey::CtrlChar('g'),
+            action: OverlayHotkeyAction::LaunchEditor,
+        }],
+    })
+}
+
 /// Execute the plan confirmation HITL flow after exit_plan_mode tool.
 ///
-/// The plan is rendered as static transcript markdown plus an inline 4-way choice list.
+/// The plan is rendered as static transcript markdown plus an inline confirmation list.
 pub(crate) async fn execute_plan_confirmation(
     handle: &InlineHandle,
     session: &mut InlineSession,
@@ -206,93 +143,36 @@ pub(crate) async fn execute_plan_confirmation(
     ctrl_c_state: &Arc<CtrlCState>,
     ctrl_c_notify: &Arc<Notify>,
 ) -> Result<PlanConfirmationOutcome> {
-    handle.show_plan_confirmation(plan_content.clone());
+    handle.show_overlay(build_plan_confirmation_request(&plan_content));
     render_confirmation_prompt(handle, &plan_content);
-    handle.force_redraw();
-    task::yield_now().await;
-
-    loop {
-        if ctrl_c_state.is_cancel_requested() {
-            handle.force_redraw();
-            task::yield_now().await;
-            tokio::time::sleep(Duration::from_millis(100)).await;
-            return Ok(PlanConfirmationOutcome::Cancel);
-        }
-
-        let notify = ctrl_c_notify.clone();
-        let maybe_event = tokio::select! {
-            _ = notify.notified() => None,
-            event = session.next_event() => event,
-        };
-
-        let Some(event) = maybe_event else {
-            handle.force_redraw();
-            task::yield_now().await;
-            tokio::time::sleep(Duration::from_millis(100)).await;
-            return Ok(PlanConfirmationOutcome::Cancel);
-        };
-
-        match event {
-            InlineEvent::Interrupt => {
-                let signal = if ctrl_c_state.is_exit_requested() {
-                    CtrlCSignal::Exit
-                } else if ctrl_c_state.is_cancel_requested() {
-                    CtrlCSignal::Cancel
-                } else {
-                    ctrl_c_state.register_signal()
-                };
-                ctrl_c_notify.notify_waiters();
-                handle.force_redraw();
-                task::yield_now().await;
-                tokio::time::sleep(Duration::from_millis(100)).await;
-
-                match signal {
-                    CtrlCSignal::Exit => return Ok(PlanConfirmationOutcome::Cancel),
-                    CtrlCSignal::Cancel => return Ok(PlanConfirmationOutcome::Cancel),
+    let outcome =
+        wait_for_overlay_submission(handle, session, ctrl_c_state, ctrl_c_notify, |submission| {
+            match submission {
+                OverlaySubmission::Selection(InlineListSelection::PlanApprovalExecute) => {
+                    Some(PlanConfirmationOutcome::Execute)
                 }
-            }
-            InlineEvent::Submit(text) | InlineEvent::QueueSubmit(text) => {
-                ctrl_c_state.disarm_exit();
-                let (choice, feedback) = parse_plan_choice(&text);
-                if let Some(feedback) = feedback
-                    && !feedback.trim().is_empty()
-                {
-                    handle.set_input(feedback);
+                OverlaySubmission::Selection(InlineListSelection::PlanApprovalAutoAccept) => {
+                    Some(PlanConfirmationOutcome::AutoAccept)
                 }
-                return Ok(match choice {
-                    ParsedPlanChoice::AutoAccept => PlanConfirmationOutcome::AutoAccept,
-                    ParsedPlanChoice::ManualApprove => PlanConfirmationOutcome::Execute,
-                    ParsedPlanChoice::Revise => PlanConfirmationOutcome::EditPlan,
-                });
+                OverlaySubmission::Selection(InlineListSelection::PlanApprovalEditPlan) => {
+                    Some(PlanConfirmationOutcome::EditPlan)
+                }
+                OverlaySubmission::Hotkey(OverlayHotkeyAction::LaunchEditor) => {
+                    handle.set_input("/edit".to_string());
+                    Some(PlanConfirmationOutcome::EditPlan)
+                }
+                OverlaySubmission::Selection(_) => Some(PlanConfirmationOutcome::Cancel),
+                _ => None,
             }
-            InlineEvent::PlanConfirmation(result) => {
-                ctrl_c_state.disarm_exit();
-                return Ok(match result {
-                    PlanConfirmationResult::Execute => PlanConfirmationOutcome::Execute,
-                    PlanConfirmationResult::AutoAccept => PlanConfirmationOutcome::AutoAccept,
-                    PlanConfirmationResult::EditPlan => PlanConfirmationOutcome::EditPlan,
-                    PlanConfirmationResult::Cancel => PlanConfirmationOutcome::Cancel,
-                });
-            }
-            InlineEvent::ListModalSubmit(selection) => {
-                ctrl_c_state.disarm_exit();
-                return Ok(match selection {
-                    InlineListSelection::PlanApprovalExecute => PlanConfirmationOutcome::Execute,
-                    InlineListSelection::PlanApprovalAutoAccept => {
-                        PlanConfirmationOutcome::AutoAccept
-                    }
-                    InlineListSelection::PlanApprovalEditPlan
-                    | InlineListSelection::PlanApprovalCancel => PlanConfirmationOutcome::EditPlan,
-                    _ => PlanConfirmationOutcome::Cancel,
-                });
-            }
-            InlineEvent::ListModalCancel | InlineEvent::Cancel | InlineEvent::Exit => {
-                ctrl_c_state.disarm_exit();
-                return Ok(PlanConfirmationOutcome::Cancel);
-            }
-            _ => {}
-        }
-    }
+        })
+        .await?;
+
+    Ok(match outcome {
+        OverlayWaitOutcome::Submitted(outcome) => outcome,
+        OverlayWaitOutcome::Cancelled
+        | OverlayWaitOutcome::Interrupted
+        | OverlayWaitOutcome::Exit => PlanConfirmationOutcome::Cancel,
+    })
 }
 
 /// Convert plan confirmation outcome to tool result JSON

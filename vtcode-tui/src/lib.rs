@@ -28,11 +28,11 @@ pub use ui::theme::{ThemeSuite, available_theme_suites, theme_suite_id, theme_su
 pub mod prelude {
     pub use crate::{
         EditingMode, InlineCommand, InlineEvent, InlineHandle, InlineMessageKind, InlineSegment,
-        InlineSession, InlineTextStyle, InlineTheme, KeyboardProtocolSettings,
-        PlanConfirmationResult, PlanContent, PlanPhase, PlanStep, SecurePromptConfig,
-        SessionAppearanceConfig, SessionOptions, SessionSurface, SlashCommandItem, TrustMode,
-        WizardModalMode, WizardStep, available_theme_suites, convert_style, spawn_session,
-        spawn_session_with_host, spawn_session_with_options, spawn_session_with_prompts,
+        InlineSession, InlineTextStyle, InlineTheme, KeyboardProtocolSettings, PlanContent,
+        PlanPhase, PlanStep, SecurePromptConfig, SessionAppearanceConfig, SessionOptions,
+        SessionSurface, SlashCommandItem, TrustMode, WizardModalMode, WizardStep,
+        available_theme_suites, convert_style, spawn_session, spawn_session_with_host,
+        spawn_session_with_options, spawn_session_with_prompts,
         spawn_session_with_prompts_and_options, theme_from_styles, theme_suite_id,
         theme_suite_label,
     };

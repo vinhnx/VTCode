@@ -16,7 +16,7 @@ struct FilePaletteRenderRow {
 pub fn split_inline_file_palette_area(session: &mut Session, area: Rect) -> (Rect, Option<Rect>) {
     if area.height == 0
         || area.width == 0
-        || session.modal.is_some()
+        || session.has_active_overlay()
         || !session.inline_lists_visible()
         || session.history_picker_state.active
         || !session.file_palette_active
@@ -53,7 +53,7 @@ pub fn render_file_palette(session: &mut Session, frame: &mut Frame<'_>, area: R
         || !session.inline_lists_visible()
         || area.height == 0
         || area.width == 0
-        || session.modal.is_some()
+        || session.has_active_overlay()
     {
         return;
     }

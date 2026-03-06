@@ -134,8 +134,8 @@ impl Session {
             queued_inputs: Vec::with_capacity(4),
             queue_overlay_cache: None,
             queue_overlay_version: 0,
-            modal: None,
-            wizard_modal: None,
+            active_overlay: None,
+            overlay_queue: VecDeque::new(),
             header_rows: initial_header_rows,
             line_revision_counter: 0,
             first_dirty_line: None,
@@ -164,9 +164,6 @@ impl Session {
 
             // --- Mouse Text Selection ---
             mouse_selection: MouseSelectionState::new(),
-
-            // --- Diff Preview Modal ---
-            diff_preview: None,
 
             skip_confirmations: false,
 

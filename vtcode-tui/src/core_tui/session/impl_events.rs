@@ -60,17 +60,7 @@ impl Session {
                 _ => {}
             },
             CrosstermEvent::Paste(content) => {
-                if self.input_enabled {
-                    self.insert_paste_text(&content);
-                    self.check_file_reference_trigger();
-                    self.mark_dirty();
-                } else if let Some(modal) = self.modal.as_mut()
-                    && let (Some(list), Some(search)) = (modal.list.as_mut(), modal.search.as_mut())
-                {
-                    search.insert(&content);
-                    list.apply_search(&search.query);
-                    self.mark_dirty();
-                }
+                events::handle_paste(self, &content);
             }
             CrosstermEvent::Resize(_, rows) => {
                 self.apply_view_rows(rows);
