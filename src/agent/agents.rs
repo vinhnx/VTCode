@@ -2,7 +2,7 @@ use anyhow::Result;
 use std::path::PathBuf;
 use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
 use vtcode_core::config::types::{AgentConfig as CoreAgentConfig, ModelSelectionSource};
-use vtcode_core::core::interfaces::turn::{TurnDriver, TurnDriverParams};
+use vtcode_core::core::interfaces::{SessionRuntime, SessionRuntimeParams};
 use vtcode_core::core::threads::{
     loaded_skills_from_session_listing, messages_from_session_listing,
 };
@@ -64,9 +64,9 @@ pub async fn run_single_agent_loop(
 
     apply_runtime_overrides(vt_cfg.as_mut(), config);
 
-    let driver = crate::agent::runloop::unified::UnifiedTurnDriver;
+    let runtime = crate::agent::runloop::unified::UnifiedSessionRuntime;
     let mut steering_receiver = None;
-    let params = TurnDriverParams::new(
+    let params = SessionRuntimeParams::new(
         config,
         vt_cfg,
         skip_confirmations,
@@ -75,7 +75,7 @@ pub async fn run_single_agent_loop(
         resume,
         &mut steering_receiver,
     );
-    driver.drive_turn(params).await
+    runtime.run_session(params).await
 }
 
 pub fn apply_runtime_overrides(vt_cfg: Option<&mut VTCodeConfig>, runtime_cfg: &CoreAgentConfig) {

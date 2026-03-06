@@ -45,8 +45,3 @@ pub(crate) const TOOLS_EXCLUDED_FROM_ACP: &[&str] = &[
     tools::EXIT_PLAN_MODE,
     tools::REQUEST_USER_INPUT,
 ];
-
-/// ACP Session Mode identifiers (aligned with https://agentclientprotocol.com/protocol/session-modes.md)
-pub(crate) const MODE_ID_ASK: &str = "ask";
-pub(crate) const MODE_ID_ARCHITECT: &str = "architect";
-pub(crate) const MODE_ID_CODE: &str = "code";

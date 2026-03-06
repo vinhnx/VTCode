@@ -59,6 +59,7 @@ mod tests {
     use vtcode_core::core::agent::snapshots::{
         DEFAULT_CHECKPOINTS_ENABLED, DEFAULT_MAX_AGE_DAYS, DEFAULT_MAX_SNAPSHOTS,
     };
+    use vtcode_core::core::interfaces::SessionMode;
 
     async fn build_agent(workspace: &Path) -> ZedAgent {
         let core_config = CoreAgentConfig {
@@ -176,7 +177,7 @@ mod tests {
         {
             let session = agent.session_handle(&session_id).unwrap();
             let mut data = session.data.borrow_mut();
-            data.current_mode = SessionModeId::new("architect");
+            data.current_mode = SessionMode::Architect;
         }
 
         let args = LoadSessionRequest::new(session_id, temp.path());
@@ -197,10 +198,7 @@ mod tests {
         // Verify initial mode is "code" (default in register_session)
         {
             let session = agent.session_handle(&session_id).unwrap();
-            assert_eq!(
-                session.data.borrow().current_mode,
-                SessionModeId::new("code")
-            );
+            assert_eq!(session.data.borrow().current_mode, SessionMode::Code);
         }
 
         // Switch to "architect"
@@ -212,10 +210,7 @@ mod tests {
         // Verify session mode was updated
         {
             let session = agent.session_handle(&session_id).unwrap();
-            assert_eq!(
-                session.data.borrow().current_mode,
-                SessionModeId::new("architect")
-            );
+            assert_eq!(session.data.borrow().current_mode, SessionMode::Architect);
         }
     }
 }

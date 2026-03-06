@@ -9,6 +9,7 @@ use anyhow::Result;
 use serde_json::{Value, json};
 use std::sync::Arc;
 use vtcode_core::config::constants::tools;
+use vtcode_core::core::interfaces::SessionMode;
 use vtcode_core::llm::provider::ToolCall as ProviderToolCall;
 
 use super::super::types::{RunTerminalMode, SessionHandle, ToolCallResult};
@@ -315,27 +316,17 @@ impl ZedAgent {
             .get("mode_id")
             .and_then(Value::as_str)
             .ok_or_else(|| "missing mode_id".to_string())?;
+        let mode =
+            SessionMode::parse(mode_id).ok_or_else(|| format!("unknown mode_id: {mode_id}"))?;
 
         let session = self
             .session_handle(session_id)
             .ok_or_else(|| "unknown session".to_string())?;
 
-        let acp_mode_id = acp::SessionModeId::new(mode_id);
-
-        if self.update_session_mode(&session, acp_mode_id.clone()) {
-            // Signal mode change to the client
-            self.send_update(
-                session_id,
-                acp::SessionUpdate::CurrentModeUpdate(acp::CurrentModeUpdate::new(acp_mode_id)),
-            )
+        let _ = self
+            .apply_session_mode(session_id, &session, mode)
             .await
-            .map_err(|e| format!("Failed to send mode update: {e}"))?;
-
-            // Refresh available commands for the new mode
-            self.send_available_commands_update(session_id)
-                .await
-                .map_err(|e| format!("Failed to refresh available commands: {e}"))?;
-        }
+            .map_err(|e| format!("Failed to apply mode update: {e}"))?;
 
         let payload = json!({
             TOOL_RESPONSE_KEY_STATUS: TOOL_SUCCESS_LABEL,

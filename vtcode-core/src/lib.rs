@@ -205,9 +205,9 @@ pub use core::memory_pool::{MemoryPool, global_pool};
 pub use core::optimized_agent::{AgentContext, AgentState, OptimizedAgentEngine};
 pub use core::performance_profiler::{BenchmarkResults, BenchmarkUtils, PerformanceProfiler};
 pub use core::threads::{
-    SubmissionId, ThreadBootstrap, ThreadEventRecord, ThreadId, ThreadManager,
-    ThreadRuntimeHandle, ThreadSnapshot, build_thread_archive_metadata,
-    loaded_skills_from_session_listing, messages_from_session_listing,
+    SubmissionId, ThreadBootstrap, ThreadEventRecord, ThreadId, ThreadManager, ThreadRuntimeHandle,
+    ThreadSnapshot, build_thread_archive_metadata, loaded_skills_from_session_listing,
+    messages_from_session_listing,
 };
 pub use vtcode_bash_runner::BashRunner;
 

@@ -2,7 +2,6 @@
 
 use crate::core::agent::events::unified::AgentEvent;
 use crate::core::agent::session::AgentSessionState;
-use crate::exec::events::ThreadEvent; // Temporary compatibility
 use crate::llm::provider::{LLMProvider, LLMRequest, LLMStreamEvent, Usage};
 use anyhow::Result;
 use std::sync::Arc;
@@ -40,25 +39,14 @@ pub struct AgentSessionController {
 
     /// The event sink for emitting unified events.
     event_sink: Option<AgentEventSink>,
-
-    /// Compatibility sink for old-style ThreadEvents (if needed).
-    thread_event_sink: Option<crate::core::agent::events::EventSink>,
 }
 
 use futures::StreamExt;
 
 impl AgentSessionController {
     /// Create a new controller with the given state
-    pub fn new(
-        state: AgentSessionState,
-        event_sink: Option<AgentEventSink>,
-        thread_event_sink: Option<crate::core::agent::events::EventSink>,
-    ) -> Self {
-        Self {
-            state,
-            event_sink,
-            thread_event_sink,
-        }
+    pub fn new(state: AgentSessionState, event_sink: Option<AgentEventSink>) -> Self {
+        Self { state, event_sink }
     }
 
     /// Set an event handler for this controller
@@ -66,16 +54,8 @@ impl AgentSessionController {
         self.event_sink = Some(sink);
     }
 
-    /// Set a legacy thread event handler for this controller
-    pub fn set_thread_event_handler(&mut self, sink: crate::core::agent::events::EventSink) {
-        self.thread_event_sink = Some(sink);
-    }
-
-    /// Emit a unified agent event and handle legacy compatibility.
+    /// Emit a unified agent event.
     pub fn emit(&mut self, event: AgentEvent) {
-        // Emit legacy events first for compatibility
-        self.emit_legacy(&event);
-
         if let Some(sink) = &self.event_sink {
             let mut callback = match sink.lock() {
                 Ok(guard) => guard,
@@ -83,36 +63,6 @@ impl AgentSessionController {
             };
             callback(event);
         }
-    }
-
-    /// Translate `AgentEvent` to `ThreadEvent` for legacy sinks.
-    fn emit_legacy(&mut self, event: &AgentEvent) {
-        let Some(sink) = &self.thread_event_sink else {
-            return;
-        };
-
-        let thread_event = match event {
-            AgentEvent::TurnStarted { .. } => {
-                ThreadEvent::TurnStarted(crate::exec::events::TurnStartedEvent::default())
-            }
-            AgentEvent::TurnCompleted { usage, .. } => {
-                ThreadEvent::TurnCompleted(crate::exec::events::TurnCompletedEvent {
-                    usage: usage.clone(),
-                })
-            }
-            AgentEvent::Error { message } => {
-                ThreadEvent::TurnFailed(crate::exec::events::TurnFailedEvent {
-                    message: message.clone(),
-                    usage: None,
-                })
-            }
-            // Logic for mapping streaming tokens/reasoning to ThreadItems
-            // would go here if we want to fully bridge.
-            _ => return,
-        };
-
-        let mut callback = sink.lock();
-        callback(&thread_event);
     }
 
     /// Drive a single turn in the session.
@@ -379,7 +329,7 @@ mod tests {
             response: response.clone(),
         };
         let state = AgentSessionState::new("session".to_string(), 16, 4, 128_000);
-        let mut controller = AgentSessionController::new(state, None, None);
+        let mut controller = AgentSessionController::new(state, None);
         let mut provider_box: Box<dyn LLMProvider> = Box::new(provider);
         let request = LLMRequest {
             model: "test-model".to_string(),
@@ -448,7 +398,7 @@ mod tests {
         }
 
         let state = AgentSessionState::new("session".to_string(), 16, 4, 128_000);
-        let mut controller = AgentSessionController::new(state, None, None);
+        let mut controller = AgentSessionController::new(state, None);
         let mut provider_box: Box<dyn LLMProvider> = Box::new(PrefixThenCompletedProvider);
         let request = LLMRequest {
             model: "test-model".to_string(),

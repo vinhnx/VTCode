@@ -362,11 +362,9 @@ pub(super) async fn run_single_agent_loop_unified_impl(
         let resume_ref = resume_request.as_ref();
         let thread_manager = vtcode_core::core::threads::ThreadManager::new();
         let thread_bootstrap = if let Some(resume) = resume_ref {
-            vtcode_core::core::threads::ThreadBootstrap::new(Some(
-                resume.snapshot.metadata.clone(),
-            ))
-            .with_messages(resume.history.clone())
-            .with_loaded_skills(resume.loaded_skills.clone())
+            vtcode_core::core::threads::ThreadBootstrap::new(Some(resume.snapshot.metadata.clone()))
+                .with_messages(resume.history.clone())
+                .with_loaded_skills(resume.loaded_skills.clone())
         } else {
             vtcode_core::core::threads::ThreadBootstrap::new(None)
         };
@@ -381,7 +379,10 @@ pub(super) async fn run_single_agent_loop_unified_impl(
         };
         let custom_fork_suffix = resume_ref.and_then(|resume| {
             if resume.is_fork {
-                resume.identifier.strip_prefix("forked-").map(|value| value.to_string())
+                resume
+                    .identifier
+                    .strip_prefix("forked-")
+                    .map(|value| value.to_string())
             } else {
                 None
             }

@@ -61,7 +61,7 @@
 ## Refactoring Plan
 
 1. **Foundational Layering (Weeks 1-2)**
-    - Define cross-cutting interfaces (`TurnDriver`, `UiSession`, `AcpClientAdapter`) inside `vtcode-core` with clear responsibilities.F:vtcode-core/src/core/agent/runner.rs†L1-L170F:src/agent/runloop/unified/turn.rs†L1-L200
+    - Define cross-cutting interfaces (`SessionRuntime`, `UiSession`, `AcpClientAdapter`) inside `vtcode-core` with clear responsibilities.F:vtcode-core/src/core/interfaces/mod.rs†L1-L20F:src/agent/runloop/unified/session_runtime.rs†L1-L27
     - Add unit tests for extracted utilities (e.g., fuzzy search, modal state transitions) before moving logic.
 2. **UI Decomposition (Weeks 2-4)**
     - Move modal/list state structs into `ui/tui/modal.rs`, retaining session orchestrator as thin coordinator.F:vtcode-core/src/ui/tui/session.rs†L37-L140
@@ -79,8 +79,8 @@
 ## Refactoring TODO Checklist
 
 -   [x] Establish interface layer in `vtcode-core` for turn driving, UI sessions, and ACP adapters, ensuring responsibilities are documented and enforced by module boundaries.F:vtcode-core/src/core/agent/runner.rs†L1-L170F:src/agent/runloop/unified/turn.rs†L1-L200
-    -   Introduced the `core::interfaces` module with `TurnDriver`, `UiSession`, and `AcpClientAdapter` traits so the binary depends on narrowly scoped contracts instead of concrete implementations.F:vtcode-core/src/core/interfaces/mod.rs†L1-L11F:vtcode-core/src/core/interfaces/turn.rs†L1-L38F:vtcode-core/src/core/interfaces/ui.rs†L1-L35F:vtcode-core/src/core/interfaces/acp.rs†L1-L26
-    -   Wrapped the unified runloop in a `UnifiedTurnDriver` and wired the CLI to invoke it through the trait while updating tool routing to consume the new `UiSession` abstraction for event handling.F:src/agent/runloop/unified/driver.rs†L1-L23F:src/agent/runloop/mod.rs†L1-L74F:src/agent/runloop/unified/tool_routing.rs†L1-L168F:src/agent/runloop/unified/turn.rs†L240-L520
+    -   Introduced the `core::interfaces` module with `SessionRuntime`, `UiSession`, and `AcpClientAdapter` traits so the binary depends on narrowly scoped contracts instead of concrete implementations.F:vtcode-core/src/core/interfaces/mod.rs†L1-L14F:vtcode-core/src/core/interfaces/session.rs†L1-L77F:vtcode-core/src/core/interfaces/ui.rs†L1-L35F:vtcode-core/src/core/interfaces/acp.rs†L1-L26
+    -   Wrapped the unified runloop in a `UnifiedSessionRuntime` and wired the CLI to invoke it through the shared session contract while updating tool routing to consume the new `UiSession` abstraction for event handling.F:src/agent/runloop/unified/session_runtime.rs†L1-L27F:src/agent/agents.rs†L1-L80F:src/agent/runloop/unified/tool_routing.rs†L1-L168
     -   Exposed a `ZedAcpAdapter` implementing the shared ACP contract so the CLI launches the bridge through a trait-managed entry point.F:src/acp/zed.rs†L1-L60F:src/cli/acp.rs†L1-L60F:src/acp/mod.rs†L1-L5
 -   [x] Capture regression tests for existing UI behaviors (fuzzy search, modal transitions) prior to moving code to new modules.F:vtcode-core/src/ui/tui/session.rs†L1-L160
 -   [x] Extract modal and list management into `ui/tui/modal.rs` and related helpers, leaving `session.rs` as a coordinator over composed components.F:vtcode-core/src/ui/tui/session.rs†L37-L140
