@@ -2,6 +2,16 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.86.11 - 2026-03-06
+
+### Highlights
+#### Features
+
+- Implement thread management and session handling improvements (e775bb58) 
+- Enhance session management with loaded skills and metadata handling (cb99499b) 
+### Other Changes
+### Contributors
+@vinhnx
 ## 0.86.10 - 2026-03-06
 
 ### Highlights
