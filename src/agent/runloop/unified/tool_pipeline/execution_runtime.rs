@@ -10,7 +10,7 @@ use vtcode_core::tools::result_cache::{ToolCacheKey, ToolResultCache};
 
 use crate::agent::runloop::tool_output::resolve_stdout_tail_limit;
 use crate::agent::runloop::unified::inline_events::harness::{
-    HarnessEventEmitter, tool_updated_event,
+    HarnessEventEmitter, tool_output_started_event, tool_updated_event,
 };
 use crate::agent::runloop::unified::progress::ProgressReporter;
 use crate::agent::runloop::unified::state::CtrlCState;
@@ -49,6 +49,12 @@ impl Drop for ProgressCallbackGuard<'_> {
     }
 }
 
+#[derive(Default)]
+struct StreamingToolOutput {
+    started: bool,
+    output: String,
+}
+
 fn build_streaming_progress_callback(
     base_callback: ToolProgressCallback,
     harness_emitter: Option<HarnessEventEmitter>,
@@ -59,16 +65,27 @@ fn build_streaming_progress_callback(
     };
 
     let tool_item_id = tool_item_id.to_string();
-    let aggregated_output = Arc::new(StdMutex::new(String::new()));
+    let state = Arc::new(StdMutex::new(StreamingToolOutput::default()));
 
     Arc::new(move |progress_tool_name, chunk| {
         base_callback(progress_tool_name, chunk);
 
-        let mut output = aggregated_output
+        if chunk.is_empty() {
+            return;
+        }
+
+        let mut state = state
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        output.push_str(chunk);
-        let _ = harness_emitter.emit(tool_updated_event(tool_item_id.clone(), output.clone()));
+        if !state.started {
+            let _ = harness_emitter.emit(tool_output_started_event(tool_item_id.clone()));
+            state.started = true;
+        }
+        state.output.push_str(chunk);
+        let _ = harness_emitter.emit(tool_updated_event(
+            tool_item_id.clone(),
+            state.output.clone(),
+        ));
     })
 }
 

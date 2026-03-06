@@ -228,6 +228,17 @@ pub fn tool_invocation_completed_event(
     })
 }
 
+pub fn tool_output_started_event(call_item_id: String) -> ThreadEvent {
+    ThreadEvent::ItemStarted(ItemStartedEvent {
+        item: tool_output_item(
+            &call_item_id,
+            ToolCallStatus::InProgress,
+            None,
+            String::new(),
+        ),
+    })
+}
+
 pub fn tool_output_completed_event(
     call_item_id: String,
     status: ToolCallStatus,
@@ -395,6 +406,23 @@ mod tests {
         assert_eq!(details.output, "On branch main");
         assert_eq!(details.exit_code, Some(0));
         assert_eq!(details.status, ToolCallStatus::Completed);
+    }
+
+    #[test]
+    fn tool_output_started_event_starts_empty_output_item() {
+        let event = tool_output_started_event("tool-1".to_string());
+
+        let ThreadEvent::ItemStarted(ItemStartedEvent { item }) = event else {
+            panic!("expected item.started");
+        };
+        assert_eq!(item.id, "tool-1:output");
+        let ThreadItemDetails::ToolOutput(details) = item.details else {
+            panic!("expected tool output item");
+        };
+
+        assert_eq!(details.call_id, "tool-1");
+        assert!(details.output.is_empty());
+        assert_eq!(details.status, ToolCallStatus::InProgress);
     }
 
     #[test]

@@ -166,31 +166,8 @@ impl ResponseBuilder {
         let state = if let Some(state) = self.active_items.get_mut(&item.id) {
             state
         } else {
-            if let ThreadItemDetails::ToolOutput(output) = &item.details {
-                let output_index = self.next_output_index;
-                self.next_output_index += 1;
-                self.item_id_to_index.insert(item.id.clone(), output_index);
-
-                let output_item = OutputItem::function_call_output(
-                    item.id.clone(),
-                    Some(output.call_id.clone()),
-                    String::new(),
-                );
-
-                self.response.add_output(output_item.clone());
-                emitter.output_item_added(&self.response.id, output_index, output_item);
-                self.active_items.insert(
-                    item.id.clone(),
-                    ActiveItemState {
-                        output_index,
-                        content_index: 0,
-                        prev_text: String::new(),
-                    },
-                );
-            } else {
-                // Implicit start: create item and emit Added event
-                self.handle_item_started(item, emitter);
-            }
+            // Implicit start: create item and emit Added event
+            self.handle_item_started(item, emitter);
             match self.active_items.get_mut(&item.id) {
                 Some(s) => s,
                 None => return,
@@ -888,6 +865,20 @@ mod tests {
         let mut builder = ResponseBuilder::new("gpt-5");
         let mut emitter = VecStreamEmitter::new();
 
+        builder.process_event(
+            &ThreadEvent::ItemStarted(ItemStartedEvent {
+                item: ThreadItem {
+                    id: "tool_1:output".to_string(),
+                    details: ThreadItemDetails::ToolOutput(ToolOutputItem {
+                        call_id: "tool_1".to_string(),
+                        output: String::new(),
+                        exit_code: None,
+                        status: ToolCallStatus::InProgress,
+                    }),
+                },
+            }),
+            &mut emitter,
+        );
         builder.process_event(
             &ThreadEvent::ItemUpdated(vtcode_exec_events::ItemUpdatedEvent {
                 item: ThreadItem {
