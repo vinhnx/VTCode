@@ -45,8 +45,11 @@ impl AgentRunner {
             // Agent execution status
             let agent_prefix = format!("[{}]", self.agent_type);
             // OPTIMIZATION: Avoid cloning session_id repeatedly by using reference
-            let mut event_recorder =
-                ExecEventRecorder::new(self.session_id.clone(), self.event_sink.clone());
+            let mut event_recorder = ExecEventRecorder::new(
+                self.session_id.clone(),
+                self.event_sink.clone(),
+                Some(self.thread_handle.clone()),
+            );
             event_recorder.turn_started();
             self.runner_println(format_args!(
                 "{} {}",
@@ -512,6 +515,8 @@ impl AgentRunner {
             };
 
             let outcome = controller.state.outcome.clone(); // Clone to avoid moving
+            self.thread_handle
+                .replace_messages(controller.state.messages.clone());
             let summary = self.generate_task_summary(
                 task,
                 &controller.state.modified_files,

@@ -4,9 +4,7 @@ use dialoguer::{Select, theme::ColorfulTheme};
 use std::path::PathBuf;
 use vtcode_core::config::types::AgentConfig as CoreAgentConfig;
 use vtcode_core::utils::colors::style;
-use vtcode_core::utils::session_archive::{
-    SessionListing, find_session_by_identifier, list_recent_sessions,
-};
+use vtcode_core::utils::session_archive::{SessionListing, list_recent_sessions};
 
 use crate::agent::agents::ResumeSession;
 use vtcode::startup::SessionResumeMode;
@@ -63,10 +61,9 @@ async fn select_latest_session(is_fork: bool) -> Result<Option<ResumeSession>> {
 }
 
 async fn load_specific_session(identifier: &str, is_fork: bool) -> Result<ResumeSession> {
-    let listing = find_session_by_identifier(identifier)
+    crate::agent::agents::load_resume_session(identifier, is_fork)
         .await?
-        .ok_or_else(|| anyhow!("No session with identifier '{}' was found.", identifier))?;
-    Ok(convert_listing(&listing, is_fork))
+        .ok_or_else(|| anyhow!("No session with identifier '{}' was found.", identifier))
 }
 
 async fn select_session_interactively(is_fork: bool) -> Result<Option<ResumeSession>> {

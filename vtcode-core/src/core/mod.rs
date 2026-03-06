@@ -47,6 +47,7 @@ pub mod orchestrator_retry;
 pub mod performance_profiler;
 pub mod prompt_caching;
 pub mod telemetry;
+pub mod threads;
 pub mod timeout_detector;
 pub mod trajectory;
 
@@ -56,3 +57,7 @@ pub use execution_context::ExecutionContext;
 pub use memory_pool::{MemoryPool, global_pool};
 pub use optimized_agent::{AgentContext, AgentState, OptimizedAgentEngine};
 pub use performance_profiler::{BenchmarkResults, BenchmarkUtils, PerformanceProfiler};
+pub use threads::{
+    SubmissionId, ThreadBootstrap, ThreadEventRecord, ThreadId, ThreadManager, ThreadOp,
+    ThreadRuntimeHandle, ThreadSnapshot, ThreadSubmission,
+};

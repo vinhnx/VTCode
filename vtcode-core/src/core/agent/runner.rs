@@ -8,6 +8,7 @@ use crate::config::types::{ReasoningEffortLevel, VerbosityLevel};
 use crate::core::agent::events::EventSink;
 use crate::core::agent::state::ApiFailureTracker;
 use crate::core::agent::steering::SteeringMessage;
+use crate::core::threads::{ThreadBootstrap, ThreadRuntimeHandle};
 
 /// Settings for the agent runner
 #[derive(Clone)]
@@ -28,6 +29,7 @@ use crate::llm::provider as uni_provider;
 use crate::llm::{AnyClient, make_client};
 use crate::prompts::system::compose_system_instruction_text;
 use crate::tools::{ToolRegistry, build_function_declarations_cached};
+use crate::utils::session_archive::SessionArchiveMetadata;
 
 use anyhow::{Result, anyhow};
 use parking_lot::Mutex;
@@ -89,6 +91,8 @@ pub struct AgentRunner {
     quiet: bool,
     /// Optional sink for streaming structured events
     event_sink: Option<EventSink>,
+    /// Shared thread runtime state for history/event ownership
+    thread_handle: ThreadRuntimeHandle,
     /// Maximum number of autonomous turns before halting
     max_turns: usize,
     /// Loop detector to prevent infinite exploration
@@ -162,6 +166,28 @@ impl AgentRunner {
         tool_registry.set_agent_type(agent_type.to_string());
         tool_registry.apply_timeout_policy(&config.timeouts);
         let loop_detector = LoopDetector::with_max_repeated_calls(max_repeated_tool_calls);
+        let workspace_label = workspace
+            .file_name()
+            .and_then(|value| value.to_str())
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "workspace".to_string());
+        let thread_metadata = SessionArchiveMetadata::new(
+            workspace_label,
+            workspace.to_string_lossy().to_string(),
+            model.as_str(),
+            config.agent.provider.clone(),
+            config.agent.theme.clone(),
+            settings
+                .reasoning_effort
+                .unwrap_or(config.agent.reasoning_effort)
+                .as_str()
+                .to_string(),
+        );
+        let thread_handle = crate::core::threads::ThreadManager::new()
+            .start_thread_with_identifier(
+                session_id.clone(),
+                ThreadBootstrap::new(Some(thread_metadata)),
+            );
 
         Ok(Self {
             agent_type,
@@ -178,6 +204,7 @@ impl AgentRunner {
             verbosity: settings.verbosity,
             quiet: false,
             event_sink: None,
+            thread_handle,
             max_turns: defaults::DEFAULT_FULL_AUTO_MAX_TURNS,
             loop_detector: Mutex::new(loop_detector),
             failure_tracker: Mutex::new(ApiFailureTracker::new()),

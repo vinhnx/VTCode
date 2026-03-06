@@ -360,10 +360,46 @@ pub(super) async fn run_single_agent_loop_unified_impl(
         let start_code_changes = capture_code_change_snapshot(&config.workspace, "start").await;
         let resume_request = resume_state.take();
         let resume_ref = resume_request.as_ref();
-
-        let session_id = resume_ref
-            .map(|resume| SessionId::from_string(resume.identifier.clone()))
-            .unwrap_or_default();
+        let thread_manager = vtcode_core::core::threads::ThreadManager::new();
+        let thread_bootstrap = if let Some(resume) = resume_ref {
+            vtcode_core::core::threads::ThreadBootstrap::new(Some(
+                resume.snapshot.metadata.clone(),
+            ))
+            .with_messages(resume.history.clone())
+            .with_loaded_skills(resume.snapshot.metadata.loaded_skills.clone())
+        } else {
+            vtcode_core::core::threads::ThreadBootstrap::new(None)
+        };
+        let preferred_thread_id = if let Some(resume) = resume_ref {
+            if resume.is_fork {
+                crate::main_helpers::runtime_archive_session_id()
+            } else {
+                Some(resume.identifier.clone())
+            }
+        } else {
+            crate::main_helpers::runtime_archive_session_id()
+        };
+        let custom_fork_suffix = resume_ref.and_then(|resume| {
+            if resume.is_fork {
+                resume.identifier.strip_prefix("forked-").map(|value| value.to_string())
+            } else {
+                None
+            }
+        });
+        let thread_handle = if let Some(identifier) = preferred_thread_id {
+            thread_manager.start_thread_with_identifier(identifier, thread_bootstrap)
+        } else {
+            let workspace_label = config
+                .workspace
+                .file_name()
+                .and_then(|value| value.to_str())
+                .map(|value| value.to_string())
+                .unwrap_or_else(|| "workspace".to_string());
+            thread_manager
+                .start_thread(&workspace_label, custom_fork_suffix, thread_bootstrap)
+                .await?
+        };
+        let session_id = SessionId::from_string(thread_handle.thread_id().to_string());
         let _session_created_at = Utc::now();
         let _session_state_path = session_path(Path::new(&config.workspace), &session_id);
         let _session_trigger = if resume_ref.is_some() {
@@ -377,7 +413,7 @@ pub(super) async fn run_single_agent_loop_unified_impl(
             .as_ref()
             .map(|cfg| cfg.agent.harness.clone())
             .unwrap_or_default();
-        let turn_run_id = TurnRunId(SessionId::new().0);
+        let turn_run_id = TurnRunId(thread_handle.thread_id().to_string());
         let harness_emitter: Option<HarnessEventEmitter> =
             harness_config.event_log_path.as_ref().and_then(|path| {
                 let resolved = resolve_event_log_path(path, &turn_run_id);

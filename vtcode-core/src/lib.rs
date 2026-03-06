@@ -204,6 +204,10 @@ pub use core::agent::task::{
 pub use core::memory_pool::{MemoryPool, global_pool};
 pub use core::optimized_agent::{AgentContext, AgentState, OptimizedAgentEngine};
 pub use core::performance_profiler::{BenchmarkResults, BenchmarkUtils, PerformanceProfiler};
+pub use core::threads::{
+    SubmissionId, ThreadBootstrap, ThreadEventRecord, ThreadId, ThreadManager, ThreadOp,
+    ThreadRuntimeHandle, ThreadSnapshot, ThreadSubmission,
+};
 pub use vtcode_bash_runner::BashRunner;
 
 pub use core::prompt_caching::{CacheStats, PromptCache, PromptCacheConfig, PromptOptimizer};

@@ -68,11 +68,13 @@ impl acp::Agent for ZedAgent {
         &self,
         args: acp::LoadSessionRequest,
     ) -> Result<acp::LoadSessionResponse, acp::Error> {
-        let Some(session) = self.session_handle(&args.session_id) else {
-            return Err(acp::Error::invalid_params().data(json!({
-                "reason": "unknown_session",
-                "session_id": args.session_id.0
-            })));
+        let session = if let Some(session) = self.session_handle(&args.session_id) {
+            session
+        } else {
+            let identifier = args.session_id.0.as_ref();
+            self.attach_thread_from_archive(&args.session_id, identifier)
+                .await
+                .map_err(|err| acp::Error::internal_error().data(err.to_string()))?
         };
 
         self.send_available_commands_update(&args.session_id)

@@ -43,6 +43,17 @@ impl ResumeSession {
     }
 }
 
+pub async fn load_resume_session(identifier: &str, is_fork: bool) -> Result<Option<ResumeSession>> {
+    let manager = vtcode_core::core::threads::ThreadManager::new();
+    let Some(handle) = manager.resume_thread(identifier).await? else {
+        return Ok(None);
+    };
+    let Some(listing) = handle.archive_listing() else {
+        return Ok(None);
+    };
+    Ok(Some(ResumeSession::from_listing(&listing, is_fork)))
+}
+
 pub async fn run_single_agent_loop(
     config: &CoreAgentConfig,
     skip_confirmations: bool,

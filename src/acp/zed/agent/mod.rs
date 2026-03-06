@@ -11,6 +11,7 @@ use vtcode_core::config::ToolDocumentationMode;
 use vtcode_core::config::constants::tools;
 use vtcode_core::config::types::{AgentConfig as CoreAgentConfig, CapabilityLevel};
 use vtcode_core::config::{AgentClientProtocolZedConfig, CommandsConfig, ToolsConfig};
+use vtcode_core::core::threads::ThreadManager;
 use vtcode_core::llm::provider::ToolDefinition;
 use vtcode_core::tools::file_ops::FileOpsTool;
 use vtcode_core::tools::grep_file::GrepSearchManager;
@@ -42,6 +43,7 @@ pub(crate) struct ZedAgent {
     permission_prompter: Rc<dyn AcpPermissionPrompter>,
     local_tool_registry: Mutex<CoreToolRegistry>,
     file_ops_tool: Option<FileOpsTool>,
+    thread_manager: ThreadManager,
     client_capabilities: Rc<RefCell<Option<acp::ClientCapabilities>>>,
     title: Option<String>,
 }
@@ -136,6 +138,7 @@ impl ZedAgent {
             permission_prompter,
             local_tool_registry: Mutex::new(core_tool_registry),
             file_ops_tool,
+            thread_manager: ThreadManager::new(),
             client_capabilities: Rc::new(RefCell::new(None)),
             title,
         }

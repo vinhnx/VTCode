@@ -5,7 +5,9 @@ use agent_client_protocol::AgentSideConnection;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::sync::Arc;
+use vtcode_core::core::threads::ThreadBootstrap;
 use vtcode_core::llm::provider::{FinishReason, Message};
+use vtcode_core::utils::session_archive::{SessionArchiveMetadata, find_session_by_identifier};
 
 use super::super::constants::*;
 use super::super::types::{SessionData, SessionHandle};
@@ -15,10 +17,29 @@ impl ZedAgent {
         let raw_id = self.next_session_id.get();
         self.next_session_id.set(raw_id + 1);
         let session_id = acp::SessionId::new(Arc::from(format!("{SESSION_PREFIX}-{raw_id}")));
+        let workspace_label = self
+            .config
+            .workspace
+            .file_name()
+            .and_then(|value| value.to_str())
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "workspace".to_string());
+        let metadata = SessionArchiveMetadata::new(
+            workspace_label,
+            self.config.workspace.to_string_lossy().to_string(),
+            self.config.model.clone(),
+            self.config.provider.clone(),
+            self.config.theme.clone(),
+            self.config.reasoning_effort.as_str().to_string(),
+        );
+        let thread = self.thread_manager.start_thread_with_identifier(
+            session_id.0.to_string(),
+            ThreadBootstrap::new(Some(metadata)),
+        );
         let handle = SessionHandle {
             data: Rc::new(RefCell::new(SessionData {
                 _session_id: session_id.clone(),
-                messages: Vec::with_capacity(20),
+                thread,
                 tool_notice_sent: false,
                 current_mode: acp::SessionModeId::new(MODE_ID_CODE),
             })),
@@ -35,7 +56,7 @@ impl ZedAgent {
     }
 
     pub(super) fn push_message(&self, session: &SessionHandle, message: Message) {
-        session.data.borrow_mut().messages.push(message);
+        session.data.borrow().thread.append_message(message);
     }
 
     pub(super) fn should_send_tool_notice(&self, session: &SessionHandle) -> bool {
@@ -66,8 +87,35 @@ impl ZedAgent {
         }
 
         let history = session.data.borrow();
-        messages.extend(history.messages.iter().cloned());
+        messages.extend(history.thread.messages());
         messages
+    }
+
+    pub(super) async fn attach_thread_from_archive(
+        &self,
+        session_id: &acp::SessionId,
+        identifier: &str,
+    ) -> anyhow::Result<SessionHandle> {
+        let listing = find_session_by_identifier(identifier)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("unknown archived session '{identifier}'"))?;
+        let thread = self.thread_manager.start_thread_with_identifier(
+            listing.identifier(),
+            ThreadBootstrap::from_listing(listing),
+        );
+        let handle = SessionHandle {
+            data: Rc::new(RefCell::new(SessionData {
+                _session_id: session_id.clone(),
+                thread,
+                tool_notice_sent: false,
+                current_mode: acp::SessionModeId::new(MODE_ID_CODE),
+            })),
+            cancel_flag: Rc::new(Cell::new(false)),
+        };
+        self.sessions
+            .borrow_mut()
+            .insert(session_id.clone(), handle.clone());
+        Ok(handle)
     }
 
     pub(super) fn stop_reason_from_finish(finish: FinishReason) -> acp::StopReason {

@@ -3,6 +3,7 @@
 pub mod unified;
 pub use unified::AgentEvent;
 
+use crate::core::threads::{SubmissionId, ThreadOp, ThreadRuntimeHandle};
 use crate::exec::events::{
     AgentMessageItem, CommandExecutionItem, CommandExecutionStatus, ErrorItem, FileChangeItem,
     FileUpdateChange, ItemCompletedEvent, ItemStartedEvent, ItemUpdatedEvent, PatchApplyStatus,
@@ -11,6 +12,7 @@ use crate::exec::events::{
 };
 use parking_lot::Mutex;
 use std::sync::Arc;
+use uuid::Uuid;
 
 /// Callback type alias for streaming structured events.
 pub type EventSink = Arc<Mutex<Box<dyn FnMut(&ThreadEvent) + Send>>>;
@@ -33,31 +35,60 @@ pub struct ExecEventRecorder {
     events: Vec<ThreadEvent>,
     next_item_index: u64,
     event_sink: Option<EventSink>,
+    thread_handle: Option<ThreadRuntimeHandle>,
+    active_submission_id: Option<SubmissionId>,
+    active_turn_id: Option<String>,
     active_assistant_message: Option<StreamingAgentMessage>,
     active_reasoning: Option<StreamingAgentMessage>,
     current_reasoning_stage: Option<String>,
 }
 
 impl ExecEventRecorder {
-    pub fn new(thread_id: impl Into<String>, event_sink: Option<EventSink>) -> Self {
+    pub fn new(
+        thread_id: impl Into<String>,
+        event_sink: Option<EventSink>,
+        thread_handle: Option<ThreadRuntimeHandle>,
+    ) -> Self {
+        let thread_id = thread_id.into();
         let mut recorder = Self {
             events: Vec::new(),
             next_item_index: 0,
             event_sink,
+            thread_handle,
+            active_submission_id: None,
+            active_turn_id: None,
             active_assistant_message: None,
             active_reasoning: None,
             current_reasoning_stage: None,
         };
-        recorder.record(ThreadEvent::ThreadStarted(ThreadStartedEvent {
-            thread_id: thread_id.into(),
-        }));
+        recorder.record_with_context(
+            None,
+            None,
+            ThreadEvent::ThreadStarted(ThreadStartedEvent { thread_id }),
+        );
         recorder
     }
 
     fn record(&mut self, event: ThreadEvent) {
+        self.record_with_context(
+            self.active_submission_id.clone(),
+            self.active_turn_id.clone(),
+            event,
+        );
+    }
+
+    fn record_with_context(
+        &mut self,
+        submission_id: Option<SubmissionId>,
+        turn_id: Option<String>,
+        event: ThreadEvent,
+    ) {
         if let Some(sink) = &self.event_sink {
             let mut callback = sink.lock();
             callback(&event);
+        }
+        if let Some(handle) = &self.thread_handle {
+            handle.record_event(submission_id, turn_id, event.clone());
         }
         self.events.push(event);
     }
@@ -69,6 +100,16 @@ impl ExecEventRecorder {
     }
 
     pub fn turn_started(&mut self) {
+        if let Some(handle) = &self.thread_handle {
+            match handle.submit(ThreadOp::UserTurn) {
+                Ok(submission) => self.active_submission_id = Some(submission.id),
+                Err(_) => {
+                    handle.finish_turn();
+                    self.active_submission_id = None;
+                }
+            }
+            self.active_turn_id = Some(format!("turn-{}", Uuid::new_v4()));
+        }
         self.record(ThreadEvent::TurnStarted(TurnStartedEvent::default()));
     }
 
@@ -76,6 +117,11 @@ impl ExecEventRecorder {
         self.record(ThreadEvent::TurnCompleted(TurnCompletedEvent {
             usage: Usage::default(),
         }));
+        if let Some(handle) = &self.thread_handle {
+            handle.finish_turn();
+        }
+        self.active_submission_id = None;
+        self.active_turn_id = None;
     }
 
     pub fn turn_failed(&mut self, message: &str) {
@@ -83,6 +129,11 @@ impl ExecEventRecorder {
             message: message.to_string(),
             usage: None,
         }));
+        if let Some(handle) = &self.thread_handle {
+            handle.finish_turn();
+        }
+        self.active_submission_id = None;
+        self.active_turn_id = None;
     }
 
     pub fn agent_message(&mut self, text: &str) {
@@ -306,6 +357,9 @@ impl ExecEventRecorder {
             };
             self.record(ThreadEvent::ItemCompleted(ItemCompletedEvent { item }));
         }
+        if let Some(handle) = &self.thread_handle {
+            return handle.recent_events();
+        }
         self.events
     }
 }
@@ -315,7 +369,7 @@ mod tests {
     use super::*;
 
     fn make_recorder() -> ExecEventRecorder {
-        ExecEventRecorder::new("thread", None)
+        ExecEventRecorder::new("thread", None, None)
     }
 
     #[test]

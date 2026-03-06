@@ -7,9 +7,7 @@ use vtcode_core::config::loader::VTCodeConfig;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::ui::theme;
 use vtcode_core::utils::ansi::MessageStyle;
-use vtcode_core::utils::session_archive::find_session_by_identifier;
 
-use crate::agent::runloop::ResumeSession;
 use crate::agent::runloop::model_picker::ModelPickerProgress;
 use crate::agent::runloop::prompt::refine_and_enrich_prompt;
 use crate::agent::runloop::tui_compat::{inline_theme_from_core_styles, to_tui_appearance};
@@ -328,10 +326,8 @@ pub(super) async fn run_interaction_loop_impl(
                     &format!("Loading session: {}", session_id),
                 )?;
 
-                match find_session_by_identifier(&session_id).await {
-                    Ok(Some(listing)) => {
-                        let resume = ResumeSession::from_listing(&listing, false);
-
+                match crate::agent::agents::load_resume_session(&session_id, false).await {
+                    Ok(Some(resume)) => {
                         ctx.renderer.line(
                             MessageStyle::Info,
                             &format!("Restarting with session: {}", session_id),
