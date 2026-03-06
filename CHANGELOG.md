@@ -2,6 +2,27 @@
 
 All notable changes to vtcode will be documented in this file.
 ## v0.73.2 - 2026-01-29
+## 0.87.0 - 2026-03-06
+
+### Highlights
+#### Features
+
+- Enhance command execution tracking with arguments and output aggregation (80f4e11e) 
+- Refactor tool execution events to support new output and invocation structures (446a354c) 
+- Add tool output started event and integrate into streaming progress callback (d2551a50) 
+- Add support for OpenAI o3 and o4-mini models in Responses API (38f17b54) 
+- Enhance OpenAI Responses API support with hosted tools and validation (a17b42c8) 
+- Enhance shell execution approval process and protect writable metadata directories (74d40175) 
+### Other Changes
+#### Other
+
+- Update OpenAI model references to GPT-5.4 and adjust reasoning effort defaults (38c7644a) 
+- Implement shell command approval enhancements and justification handling (3ff40170) 
+#### Refactors
+
+- Streamline ToolDefinition creation and improve serialization functions (5b3cc708) 
+### Contributors
+@vinhnx
 ## 0.86.7 - 2026-03-06
 
 ### Highlights
