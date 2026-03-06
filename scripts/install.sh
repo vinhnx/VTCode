@@ -184,10 +184,9 @@ find_latest_release_tag() {
     local tags
     tags=$(echo "$all_releases" | grep -o '"tag_name": "[^"]*"' | cut -d'"' -f4)
 
-    # Iterate through tags to find one with assets
+    # Iterate through tags to find one with assets (use exact tag name from API)
     for tag in $tags; do
         if [[ -n "$tag" ]]; then
-            # Keep 'v' prefix for consistent URL building (GitHub release URLs use vX.Y.Z format)
             if check_version_available "$tag" "$platform"; then
                 echo "$tag"
                 return 0
