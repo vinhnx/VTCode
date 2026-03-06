@@ -323,7 +323,6 @@ impl ThreadManager {
             )
         }))
     }
-
 }
 
 pub fn messages_from_session_listing(listing: &SessionListing) -> Vec<Message> {
@@ -332,7 +331,12 @@ pub fn messages_from_session_listing(listing: &SessionListing) -> Vec<Message> {
     {
         progress.recent_messages.iter().map(Message::from).collect()
     } else if !listing.snapshot.messages.is_empty() {
-        listing.snapshot.messages.iter().map(Message::from).collect()
+        listing
+            .snapshot
+            .messages
+            .iter()
+            .map(Message::from)
+            .collect()
     } else {
         Vec::new()
     }

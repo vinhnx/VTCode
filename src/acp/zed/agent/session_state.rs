@@ -5,13 +5,31 @@ use agent_client_protocol::AgentSideConnection;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::sync::Arc;
+use vtcode_core::core::interfaces::SessionMode;
 use vtcode_core::core::threads::{ThreadBootstrap, build_thread_archive_metadata};
 use vtcode_core::llm::provider::{FinishReason, Message};
 
-use super::super::constants::*;
+use super::super::constants::SESSION_PREFIX;
+use super::super::helpers::{session_mode_id, session_mode_prompt};
 use super::super::types::{SessionData, SessionHandle};
 
 impl ZedAgent {
+    fn build_session_handle(
+        &self,
+        session_id: acp::SessionId,
+        thread: vtcode_core::core::threads::ThreadRuntimeHandle,
+    ) -> SessionHandle {
+        SessionHandle {
+            data: Rc::new(RefCell::new(SessionData {
+                _session_id: session_id,
+                thread,
+                tool_notice_sent: false,
+                current_mode: SessionMode::Code,
+            })),
+            cancel_flag: Rc::new(Cell::new(false)),
+        }
+    }
+
     pub(crate) fn register_session(&self) -> acp::SessionId {
         let raw_id = self.next_session_id.get();
         self.next_session_id.set(raw_id + 1);
@@ -27,15 +45,7 @@ impl ZedAgent {
             session_id.0.to_string(),
             ThreadBootstrap::new(Some(metadata)),
         );
-        let handle = SessionHandle {
-            data: Rc::new(RefCell::new(SessionData {
-                _session_id: session_id.clone(),
-                thread,
-                tool_notice_sent: false,
-                current_mode: acp::SessionModeId::new(MODE_ID_CODE),
-            })),
-            cancel_flag: Rc::new(Cell::new(false)),
-        };
+        let handle = self.build_session_handle(session_id.clone(), thread);
         self.sessions
             .borrow_mut()
             .insert(session_id.clone(), handle);
@@ -58,17 +68,34 @@ impl ZedAgent {
         session.data.borrow_mut().tool_notice_sent = true;
     }
 
-    pub(super) fn update_session_mode(
-        &self,
-        session: &SessionHandle,
-        mode_id: acp::SessionModeId,
-    ) -> bool {
+    pub(super) fn update_session_mode(&self, session: &SessionHandle, mode: SessionMode) -> bool {
         let mut data = session.data.borrow_mut();
-        if data.current_mode == mode_id {
+        if data.current_mode == mode {
             return false;
         }
-        data.current_mode = mode_id;
+        data.current_mode = mode;
         true
+    }
+
+    pub(super) async fn apply_session_mode(
+        &self,
+        session_id: &acp::SessionId,
+        session: &SessionHandle,
+        mode: SessionMode,
+    ) -> Result<bool, acp::Error> {
+        if !self.update_session_mode(session, mode) {
+            return Ok(false);
+        }
+
+        self.send_update(
+            session_id,
+            acp::SessionUpdate::CurrentModeUpdate(acp::CurrentModeUpdate::new(session_mode_id(
+                mode,
+            ))),
+        )
+        .await?;
+
+        Ok(true)
     }
 
     pub(super) fn resolved_messages(&self, session: &SessionHandle) -> Vec<Message> {
@@ -78,6 +105,9 @@ impl ZedAgent {
         }
 
         let history = session.data.borrow();
+        if let Some(prompt) = session_mode_prompt(history.current_mode) {
+            messages.push(Message::system(prompt.to_string()));
+        }
         messages.extend(history.thread.messages());
         messages
     }
@@ -92,15 +122,7 @@ impl ZedAgent {
             .resume_thread(identifier)
             .await?
             .ok_or_else(|| anyhow::anyhow!("unknown archived session '{identifier}'"))?;
-        let handle = SessionHandle {
-            data: Rc::new(RefCell::new(SessionData {
-                _session_id: session_id.clone(),
-                thread,
-                tool_notice_sent: false,
-                current_mode: acp::SessionModeId::new(MODE_ID_CODE),
-            })),
-            cancel_flag: Rc::new(Cell::new(false)),
-        };
+        let handle = self.build_session_handle(session_id.clone(), thread);
         self.sessions
             .borrow_mut()
             .insert(session_id.clone(), handle.clone());

@@ -4,9 +4,8 @@ use std::path::Path;
 use serde_json::{Value, json};
 
 use vtcode_core::config::constants::tools;
+use vtcode_core::core::interfaces::SessionMode;
 use vtcode_core::llm::provider::ToolDefinition;
-
-use crate::acp::zed::constants::{MODE_ID_ARCHITECT, MODE_ID_ASK, MODE_ID_CODE};
 
 pub use super::tooling_provider::ToolRegistryProvider;
 
@@ -298,10 +297,10 @@ impl AcpToolRegistry {
         }
 
         let switch_mode_description = format!(
-            "Switch the current session mode (e.g., from {architect} to {code}). Possible modes: {ask}, {architect}, {code}.",
-            ask = MODE_ID_ASK,
-            architect = MODE_ID_ARCHITECT,
-            code = MODE_ID_CODE
+            "Switch the current session mode. {ask} and {architect} are read-only; {code} enables local implementation tools. Possible modes: {ask}, {architect}, {code}.",
+            ask = SessionMode::Ask.as_str(),
+            architect = SessionMode::Architect.as_str(),
+            code = SessionMode::Code.as_str()
         );
         let switch_mode_schema = json!({
             "type": "object",
@@ -309,7 +308,11 @@ impl AcpToolRegistry {
             "properties": {
                 "mode_id": {
                     "type": "string",
-                    "enum": [MODE_ID_ASK, MODE_ID_ARCHITECT, MODE_ID_CODE],
+                    "enum": [
+                        SessionMode::Ask.as_str(),
+                        SessionMode::Architect.as_str(),
+                        SessionMode::Code.as_str()
+                    ],
                     "description": "The ID of the mode to switch to"
                 }
             },

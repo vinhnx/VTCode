@@ -4,7 +4,6 @@ pub mod context_manager;
 
 mod diagnostics;
 mod display;
-mod driver;
 mod incremental_system_prompt;
 mod inline_events;
 mod intent_extractor;
@@ -21,6 +20,7 @@ mod progress;
 mod prompts;
 mod request_user_input;
 pub(crate) mod run_loop_context;
+mod session_runtime;
 pub mod session_setup;
 pub(crate) mod settings_interactive;
 mod shell;
@@ -54,5 +54,5 @@ pub mod tool_call_safety;
 // Golden path integration for unified tool execution
 pub(crate) mod golden_path;
 
-pub(crate) use driver::UnifiedTurnDriver;
 pub(crate) use intent_extractor::extract_action_from_messages;
+pub(crate) use session_runtime::UnifiedSessionRuntime;

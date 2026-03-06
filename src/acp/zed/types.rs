@@ -3,6 +3,7 @@ use std::cell::{Cell, RefCell};
 use std::mem::discriminant;
 use std::rc::Rc;
 use tokio::sync::oneshot;
+use vtcode_core::core::interfaces::SessionMode;
 use vtcode_core::core::threads::ThreadRuntimeHandle;
 
 use super::constants::{PLAN_STEP_ANALYZE, PLAN_STEP_GATHER_CONTEXT, PLAN_STEP_RESPOND};
@@ -162,7 +163,7 @@ pub(crate) struct SessionData {
     pub(crate) _session_id: acp::SessionId,
     pub(crate) thread: ThreadRuntimeHandle,
     pub(crate) tool_notice_sent: bool,
-    pub(crate) current_mode: acp::SessionModeId,
+    pub(crate) current_mode: SessionMode,
 }
 
 pub(crate) struct NotificationEnvelope {

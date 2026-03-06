@@ -1,14 +1,15 @@
 use super::super::constants::*;
-use super::super::helpers::{acp_session_modes, agent_implementation_info, text_chunk};
+use super::super::helpers::{
+    acp_session_modes, agent_implementation_info, session_mode_id, text_chunk,
+};
 use super::super::types::{PlanProgress, ToolRuntime};
 use super::ZedAgent;
 use agent_client_protocol as acp;
 use anyhow::Result;
 use futures::StreamExt;
-use hashbrown::HashSet;
 use serde_json::json;
-use std::sync::Arc;
 use tracing::warn;
+use vtcode_core::core::interfaces::SessionMode;
 use vtcode_core::llm::factory::ProviderConfig;
 use vtcode_core::llm::factory::{create_provider_for_model, create_provider_with_config};
 use vtcode_core::llm::provider::{LLMRequest, LLMStreamEvent, Message};
@@ -58,8 +59,7 @@ impl acp::Agent for ZedAgent {
 
         self.send_available_commands_update(&session_id).await?;
 
-        let modes =
-            acp::SessionModeState::new(acp::SessionModeId::from(MODE_ID_CODE), available_modes);
+        let modes = acp::SessionModeState::new(session_mode_id(SessionMode::Code), available_modes);
 
         Ok(acp::NewSessionResponse::new(session_id).modes(modes))
     }
@@ -81,7 +81,7 @@ impl acp::Agent for ZedAgent {
             .await?;
 
         let modes = acp::SessionModeState::new(
-            session.data.borrow().current_mode.clone(),
+            session_mode_id(session.data.borrow().current_mode),
             acp_session_modes(),
         );
 
@@ -145,6 +145,7 @@ impl acp::Agent for ZedAgent {
         let mut assistant_message = String::with_capacity(4096);
         let client_supports_read_text_file = self.client_supports_read_text_file();
         let provider_supports_tools = provider.supports_tools(&self.config.model);
+        let mut session_mode = session.data.borrow().current_mode;
         let availability =
             self.tool_availability(provider_supports_tools, client_supports_read_text_file);
         let mut enabled_tools = Vec::with_capacity(5);
@@ -165,16 +166,17 @@ impl acp::Agent for ZedAgent {
             self.mark_tool_notice_sent(&session);
         }
 
-        let has_local_tools = self.acp_tool_registry.has_local_tools();
-        let tools_allowed =
+        let mut has_local_tools = self.local_tools_available(session_mode);
+        let mut tools_allowed =
             provider_supports_tools && (!enabled_tools.is_empty() || has_local_tools);
-        let tool_definitions = self
-            .tool_definitions(provider_supports_tools, &enabled_tools)
+        let mut tool_definitions = self
+            .tool_definitions(provider_supports_tools, &enabled_tools, session_mode)
             .map(std::sync::Arc::new);
         let mut messages = self.resolved_messages(&session);
         let allow_streaming = supports_streaming && !tools_allowed;
 
         tracing::debug!(
+            session_mode = session_mode.as_str(),
             tools_allowed = tools_allowed,
             has_local_tools = has_local_tools,
             acp_tools_count = enabled_tools.len(),
@@ -333,6 +335,13 @@ impl acp::Agent for ZedAgent {
                         break;
                     }
                     messages = self.resolved_messages(&session);
+                    session_mode = session.data.borrow().current_mode;
+                    has_local_tools = self.local_tools_available(session_mode);
+                    tools_allowed =
+                        provider_supports_tools && (!enabled_tools.is_empty() || has_local_tools);
+                    tool_definitions = self
+                        .tool_definitions(provider_supports_tools, &enabled_tools, session_mode)
+                        .map(std::sync::Arc::new);
                     continue;
                 }
 
@@ -405,27 +414,14 @@ impl acp::Agent for ZedAgent {
             return Err(acp::Error::invalid_params().data(json!({ "reason": "unknown_session" })));
         };
 
-        let valid_modes: HashSet<Arc<str>> = [
-            Arc::from(MODE_ID_ASK),
-            Arc::from(MODE_ID_ARCHITECT),
-            Arc::from(MODE_ID_CODE),
-        ]
-        .into_iter()
-        .collect();
-        if !valid_modes.contains(&args.mode_id.0) {
+        let Some(mode) = SessionMode::parse(args.mode_id.0.as_ref()) else {
             return Err(acp::Error::invalid_params()
                 .data(json!({ "reason": "unknown_mode", "mode_id": args.mode_id.0 })));
-        }
+        };
 
-        if self.update_session_mode(&session, args.mode_id.clone()) {
-            self.send_update(
-                &args.session_id,
-                acp::SessionUpdate::CurrentModeUpdate(acp::CurrentModeUpdate::new(
-                    args.mode_id.clone(),
-                )),
-            )
+        let _ = self
+            .apply_session_mode(&args.session_id, &session, mode)
             .await?;
-        }
 
         Ok(acp::SetSessionModeResponse::new())
     }

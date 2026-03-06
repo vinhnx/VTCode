@@ -58,7 +58,7 @@ pub use memory_pool::{MemoryPool, global_pool};
 pub use optimized_agent::{AgentContext, AgentState, OptimizedAgentEngine};
 pub use performance_profiler::{BenchmarkResults, BenchmarkUtils, PerformanceProfiler};
 pub use threads::{
-    SubmissionId, ThreadBootstrap, ThreadEventRecord, ThreadId, ThreadManager,
-    ThreadRuntimeHandle, ThreadSnapshot, build_thread_archive_metadata,
-    loaded_skills_from_session_listing, messages_from_session_listing,
+    SubmissionId, ThreadBootstrap, ThreadEventRecord, ThreadId, ThreadManager, ThreadRuntimeHandle,
+    ThreadSnapshot, build_thread_archive_metadata, loaded_skills_from_session_listing,
+    messages_from_session_listing,
 };

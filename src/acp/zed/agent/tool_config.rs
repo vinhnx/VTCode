@@ -7,25 +7,31 @@ use serde_json::Value;
 use shell_words::split;
 use std::path::{Path, PathBuf};
 use tracing::warn;
+use vtcode_core::core::interfaces::SessionMode;
 use vtcode_core::llm::provider::ToolChoice;
 use vtcode_core::llm::provider::ToolDefinition;
 use vtcode_core::utils::path::ensure_path_within_workspace;
 
 use super::super::constants::*;
-use super::super::helpers::text_chunk;
+use super::super::helpers::{session_mode_allows_local_tools, text_chunk};
 use super::super::types::{RunTerminalMode, ToolDisableReason, ToolRuntime};
 
 impl ZedAgent {
+    pub(super) fn local_tools_available(&self, mode: SessionMode) -> bool {
+        session_mode_allows_local_tools(mode) && self.acp_tool_registry.has_local_tools()
+    }
+
     pub(super) fn tool_definitions(
         &self,
         provider_supports_tools: bool,
         enabled_tools: &[SupportedTool],
+        mode: SessionMode,
     ) -> Option<Vec<ToolDefinition>> {
         if !provider_supports_tools {
             return None;
         }
 
-        let include_local = self.acp_tool_registry.has_local_tools();
+        let include_local = self.local_tools_available(mode);
         if enabled_tools.is_empty() && !include_local {
             None
         } else {

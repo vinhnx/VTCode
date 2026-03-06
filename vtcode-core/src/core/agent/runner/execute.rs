@@ -17,7 +17,6 @@ use crate::llm::provider::{LLMRequest, Message, ToolCall};
 use crate::prompts::system::compose_system_instruction_text;
 use crate::utils::colors::style;
 use anyhow::Result;
-use parking_lot::Mutex;
 use std::sync::Arc;
 use tracing::warn;
 
@@ -108,11 +107,6 @@ impl AgentRunner {
             let mut controller = AgentSessionController::new(
                 session_state,
                 None, // Unified event sink can be added later
-                Some(
-                    self.event_sink
-                        .clone()
-                        .unwrap_or_else(|| Arc::new(Mutex::new(Box::new(|_| {})))),
-                ),
             );
 
             if let Err(err) = self.tool_registry.initialize_async().await {
