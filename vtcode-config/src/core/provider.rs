@@ -8,6 +8,16 @@ pub struct OpenAIConfig {
     /// This is an opt-in path designed for long-running, tool-heavy workflows.
     #[serde(default)]
     pub websocket_mode: bool,
+
+    /// Optional Responses API `store` flag.
+    /// Set to `false` to avoid server-side storage when using Responses-compatible models.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub responses_store: Option<bool>,
+
+    /// Optional Responses API `include` selectors.
+    /// Example: `["reasoning.encrypted_content"]` for encrypted reasoning continuity.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub responses_include: Vec<String>,
 }
 
 /// Anthropic-specific provider configuration
@@ -175,6 +185,8 @@ mod tests {
     fn openai_config_defaults_to_websocket_mode_disabled() {
         let config = OpenAIConfig::default();
         assert!(!config.websocket_mode);
+        assert_eq!(config.responses_store, None);
+        assert!(config.responses_include.is_empty());
     }
 
     #[test]
@@ -182,5 +194,26 @@ mod tests {
         let parsed: OpenAIConfig =
             toml::from_str("websocket_mode = true").expect("config should parse");
         assert!(parsed.websocket_mode);
+        assert_eq!(parsed.responses_store, None);
+        assert!(parsed.responses_include.is_empty());
+    }
+
+    #[test]
+    fn openai_config_parses_responses_options() {
+        let parsed: OpenAIConfig = toml::from_str(
+            r#"
+responses_store = false
+responses_include = ["reasoning.encrypted_content", "output_text.annotations"]
+"#,
+        )
+        .expect("config should parse");
+        assert_eq!(parsed.responses_store, Some(false));
+        assert_eq!(
+            parsed.responses_include,
+            vec![
+                "reasoning.encrypted_content".to_string(),
+                "output_text.annotations".to_string()
+            ]
+        );
     }
 }

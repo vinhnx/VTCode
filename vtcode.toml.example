@@ -1206,6 +1206,19 @@ post_tool_use = [
 ]
 
 # Provider-specific configuration
+[provider.openai]
+# Enable Responses API WebSocket transport for eligible OpenAI models.
+# Default: false
+websocket_mode = false
+
+# Optional Responses API `store` flag for OpenAI reasoning models.
+# Set to false for stateless / ZDR-style workflows.
+# responses_store = false
+
+# Optional Responses API `include` selectors.
+# Example: return encrypted reasoning state so VT Code can replay it on the next turn.
+# responses_include = ["reasoning.encrypted_content"]
+
 [provider.anthropic]
 # DEPRECATED: Model name validation has been removed in v0.75.0+
 # The Anthropic API validates model names directly, so client-side validation

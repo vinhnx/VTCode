@@ -64,7 +64,7 @@ credential_storage_mode = "keyring"
 # Possible values: default
 # Default: "edit"
 # Type: `string`
-default_editing_mode = "edit"
+default_editing_mode = "plan"
 
 # Default model to use
 # Default: "claude-sonnet-4-5"

@@ -8,6 +8,8 @@ pub const SUPPORTED_MODELS: &[&str] = &[
     "gpt-5-mini",
     "gpt-5-nano",
     "gpt-5.3-codex", // GPT-5.3 Codex optimized for agentic coding with reasoning effort support
+    "o3",
+    "o4-mini",
     "gpt-oss-20b",
     "gpt-oss-120b",
 ];
@@ -22,6 +24,8 @@ pub const RESPONSES_API_MODELS: &[&str] = &[
     GPT_5_MINI,
     GPT_5_NANO,
     GPT_5_3_CODEX,
+    O3,
+    O4_MINI,
 ];
 
 /// Models that support the OpenAI reasoning parameter payload
@@ -34,6 +38,8 @@ pub const REASONING_MODELS: &[&str] = &[
     GPT_5_MINI,
     GPT_5_NANO,
     GPT_5_3_CODEX,
+    O3,
+    O4_MINI,
 ];
 
 /// Models that do not expose structured tool calling on the OpenAI platform
@@ -51,5 +57,7 @@ pub const GPT_5_4_PRO: &str = "gpt-5.4-pro";
 pub const GPT_5_MINI: &str = "gpt-5-mini";
 pub const GPT_5_NANO: &str = "gpt-5-nano";
 pub const GPT_5_3_CODEX: &str = "gpt-5.3-codex"; // GPT-5.3 Codex optimized for agentic coding
+pub const O3: &str = "o3";
+pub const O4_MINI: &str = "o4-mini";
 pub const GPT_OSS_20B: &str = "gpt-oss-20b";
 pub const GPT_OSS_120B: &str = "gpt-oss-120b";

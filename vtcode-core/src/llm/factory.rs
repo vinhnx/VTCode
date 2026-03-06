@@ -119,7 +119,12 @@ impl LLMFactory {
         }
 
         let m = trimmed.to_lowercase();
-        if m.starts_with("gpt-oss-") || m.starts_with("gpt-") || m.starts_with("o1") {
+        if m.starts_with("gpt-oss-")
+            || m.starts_with("gpt-")
+            || m.starts_with("o1")
+            || m.starts_with("o3")
+            || m.starts_with("o4")
+        {
             Some("openai".to_owned())
         } else if m.starts_with("claude-") {
             Some("anthropic".to_owned())

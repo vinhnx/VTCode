@@ -364,6 +364,45 @@ fn responses_payload_includes_previous_response_and_optional_fields() {
 }
 
 #[test]
+fn responses_payload_uses_provider_level_responses_options() {
+    let provider = OpenAIProvider::from_config(
+        Some("key".to_owned()),
+        Some(models::openai::O4_MINI.to_string()),
+        None,
+        None,
+        None,
+        None,
+        Some(OpenAIConfig {
+            responses_store: Some(false),
+            responses_include: vec![
+                " reasoning.encrypted_content ".to_string(),
+                "".to_string(),
+                "output_text.annotations".to_string(),
+            ],
+            ..Default::default()
+        }),
+        None,
+    );
+    let request = sample_request(models::openai::O4_MINI);
+
+    let payload = provider
+        .convert_to_openai_responses_format(&request)
+        .expect("conversion should succeed");
+
+    assert_eq!(payload.get("store").and_then(Value::as_bool), Some(false));
+    assert_eq!(
+        payload
+            .get("include")
+            .and_then(Value::as_array)
+            .expect("include should be present")
+            .iter()
+            .filter_map(Value::as_str)
+            .collect::<Vec<_>>(),
+        vec!["reasoning.encrypted_content", "output_text.annotations"]
+    );
+}
+
+#[test]
 fn harmony_detection_handles_common_variants() {
     assert!(OpenAIProvider::uses_harmony("gpt-oss-20b"));
     assert!(OpenAIProvider::uses_harmony("openai/gpt-oss-20b"));
@@ -579,6 +618,7 @@ fn provider_from_config_respects_websocket_mode_opt_in() {
         None,
         Some(OpenAIConfig {
             websocket_mode: true,
+            ..Default::default()
         }),
         None,
     );

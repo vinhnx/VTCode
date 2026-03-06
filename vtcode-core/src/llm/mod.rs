@@ -18,7 +18,7 @@
 //! | Provider | Status | Models |
 //! |----------|--------|---------|
 //! | Gemini | ✓ | gemini-3.1-pro-preview, gemini-3-flash-preview |
-//! | OpenAI | ✓ | gpt-5, gpt-5-mini, gpt-5-nano |
+//! | OpenAI | ✓ | gpt-5, o3, o4-mini, gpt-5-mini, gpt-5-nano |
 //! | Anthropic | ✓ | claude-4.1-opus, claude-4-sonnet |
 //! | xAI | ✓ | grok-2-latest, grok-2-mini |
 //! | DeepSeek | ✓ | deepseek-chat, deepseek-reasoner |

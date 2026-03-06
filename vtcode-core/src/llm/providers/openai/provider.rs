@@ -58,6 +58,8 @@ pub struct OpenAIProvider {
     prompt_cache_settings: OpenAIPromptCacheSettings,
     model_behavior: Option<ModelConfig>,
     websocket_mode: bool,
+    responses_store: Option<bool>,
+    responses_include: Vec<String>,
     websocket_session: AsyncMutex<Option<OpenAIResponsesWebSocketSession>>,
 }
 
@@ -120,6 +122,8 @@ impl OpenAIProvider {
             responses_api_modes: Mutex::new(HashMap::new()),
             model_behavior: None,
             websocket_mode: false,
+            responses_store: None,
+            responses_include: Vec::new(),
             websocket_session: AsyncMutex::new(None),
         }
     }
@@ -172,7 +176,22 @@ impl OpenAIProvider {
         let default_state = Self::default_responses_state(&model);
         let is_native_openai = resolved_base_url.contains("api.openai.com");
         let is_xai = resolved_base_url.contains("api.x.ai");
-        let websocket_mode = openai.map(|cfg| cfg.websocket_mode).unwrap_or(false);
+        let websocket_mode = openai
+            .as_ref()
+            .map(|cfg| cfg.websocket_mode)
+            .unwrap_or(false);
+        let responses_store = openai.as_ref().and_then(|cfg| cfg.responses_store);
+        let responses_include = openai
+            .as_ref()
+            .map(|cfg| {
+                cfg.responses_include
+                    .iter()
+                    .map(|value| value.trim())
+                    .filter(|value| !value.is_empty())
+                    .map(ToOwned::to_owned)
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
 
         let initial_state = if is_xai || !is_native_openai {
             ResponsesApiState::Disabled
@@ -195,6 +214,8 @@ impl OpenAIProvider {
             prompt_cache_settings,
             model_behavior,
             websocket_mode,
+            responses_store,
+            responses_include,
             websocket_session: AsyncMutex::new(None),
         }
     }
@@ -269,20 +290,29 @@ impl OpenAIProvider {
         &self,
         request: &provider::LLMRequest,
     ) -> Result<Value, provider::LLMError> {
+        let mut effective_request = request.clone();
+        if effective_request.response_store.is_none() {
+            effective_request.response_store = self.responses_store;
+        }
+        if effective_request.responses_include.is_none() && !self.responses_include.is_empty() {
+            effective_request.responses_include = Some(self.responses_include.clone());
+        }
+
         let is_native_openai = self.base_url.contains("api.openai.com");
         let ctx = request_builder::ResponsesRequestContext {
-            supports_tools: self.supports_tools(&request.model),
-            supports_parallel_tool_config: self.supports_parallel_tool_config(&request.model),
-            supports_temperature: Self::supports_temperature_parameter(&request.model),
-            supports_reasoning_effort: self.supports_reasoning_effort(&request.model),
-            supports_reasoning: self.supports_reasoning(&request.model),
-            is_responses_api_model: Self::is_responses_api_model(&request.model),
+            supports_tools: self.supports_tools(&effective_request.model),
+            supports_parallel_tool_config: self
+                .supports_parallel_tool_config(&effective_request.model),
+            supports_temperature: Self::supports_temperature_parameter(&effective_request.model),
+            supports_reasoning_effort: self.supports_reasoning_effort(&effective_request.model),
+            supports_reasoning: self.supports_reasoning(&effective_request.model),
+            is_responses_api_model: Self::is_responses_api_model(&effective_request.model),
             supports_prompt_cache_key: is_native_openai,
-            prompt_cache_key: request.prompt_cache_key.as_deref(),
+            prompt_cache_key: effective_request.prompt_cache_key.as_deref(),
             prompt_cache_retention: self.prompt_cache_settings.prompt_cache_retention.as_deref(),
         };
 
-        request_builder::build_responses_request(request, &ctx)
+        request_builder::build_responses_request(&effective_request, &ctx)
     }
 
     fn parse_openai_response(

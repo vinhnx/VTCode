@@ -45,6 +45,14 @@ fn test_provider_auto_detection() {
         factory.provider_from_model("gpt-5-mini"),
         Some("openai".to_string())
     );
+    assert_eq!(
+        factory.provider_from_model("o3"),
+        Some("openai".to_string())
+    );
+    assert_eq!(
+        factory.provider_from_model("o4-mini"),
+        Some("openai".to_string())
+    );
 
     // Test Anthropic models
     assert_eq!(
@@ -117,6 +125,9 @@ fn test_provider_creation() {
 
     let openai = create_provider_for_model(models::GPT_OSS_20B, "test_key".to_string(), None, None);
     assert!(openai.is_ok());
+
+    let openai_reasoning = create_provider_for_model("o4-mini", "test_key".to_string(), None, None);
+    assert!(openai_reasoning.is_ok());
 
     let anthropic = create_provider_for_model(
         models::CLAUDE_SONNET_4_6,
