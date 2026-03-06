@@ -1,3 +1,4 @@
+use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -51,6 +52,86 @@ fn extract_shell_command_text_from_run_args(args: &Value) -> Option<String> {
     }
 }
 
+fn extract_shell_command_words_from_run_args(args: &Value) -> Option<Vec<String>> {
+    let command_value = args.get("command").or_else(|| args.get("raw_command"))?;
+    let mut parts = match command_value {
+        Value::String(command) => shell_words::split(command).ok()?,
+        Value::Array(values) => values
+            .iter()
+            .map(|value| value.as_str().map(ToOwned::to_owned))
+            .collect::<Option<Vec<_>>>()?,
+        _ => return None,
+    };
+
+    if let Some(extra_args) = args.get("args").and_then(Value::as_array) {
+        for value in extra_args {
+            parts.push(value.as_str()?.to_string());
+        }
+    }
+
+    (!parts.is_empty()).then_some(parts)
+}
+
+fn render_shell_command_words(parts: &[String]) -> String {
+    shell_words::join(parts.iter().map(|part| part.as_str()))
+}
+
+fn shell_command_contains_control_operators(command: &str) -> bool {
+    command.contains("&&")
+        || command.contains("||")
+        || command.contains('|')
+        || command.contains(';')
+        || command.contains("$(")
+        || command.contains('`')
+        || command.contains("<<")
+        || command.contains('\n')
+}
+
+fn shell_run_uses_nested_shell(command_words: &[String]) -> bool {
+    let Some(program) = command_words.first() else {
+        return false;
+    };
+    let basename = Path::new(program)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or(program)
+        .to_ascii_lowercase();
+    let args = &command_words[1..];
+
+    match basename.as_str() {
+        "sh" | "bash" | "zsh" | "fish" => args.iter().any(|arg| {
+            matches!(
+                arg.as_str(),
+                "-c" | "-ic" | "-lc" | "--command" | "--login" | "--interactive"
+            )
+        }),
+        "pwsh" | "powershell" | "powershell.exe" => args
+            .iter()
+            .any(|arg| arg.eq_ignore_ascii_case("-command") || arg.eq_ignore_ascii_case("-c")),
+        "cmd" | "cmd.exe" => args
+            .iter()
+            .any(|arg| arg.eq_ignore_ascii_case("/c") || arg.eq_ignore_ascii_case("/k")),
+        _ => false,
+    }
+}
+
+fn shell_command_supports_persistent_approval(args: &Value, command_words: &[String]) -> bool {
+    let Some(command_value) = args.get("command").or_else(|| args.get("raw_command")) else {
+        return false;
+    };
+
+    match command_value {
+        Value::String(command) => {
+            let trimmed = command.trim();
+            !trimmed.is_empty()
+                && !shell_command_contains_control_operators(trimmed)
+                && !shell_run_uses_nested_shell(command_words)
+        }
+        Value::Array(_) => !shell_run_uses_nested_shell(command_words),
+        _ => false,
+    }
+}
+
 fn parse_shell_sandbox_permissions(args: &Value) -> CoreSandboxPermissions {
     args.get("sandbox_permissions")
         .cloned()
@@ -61,28 +142,9 @@ fn parse_shell_sandbox_permissions(args: &Value) -> CoreSandboxPermissions {
         .unwrap_or(CoreSandboxPermissions::UseDefault)
 }
 
-pub(super) fn extract_shell_command_text(
-    tool_name: &str,
-    tool_args: Option<&Value>,
-) -> Option<String> {
-    let args = shell_run_args(tool_name, tool_args)?;
-    extract_shell_command_text_from_run_args(args)
-}
-
-pub(super) fn shell_permission_cache_suffix(
-    tool_name: &str,
-    tool_args: Option<&Value>,
-) -> Option<String> {
-    let args = shell_run_args(tool_name, tool_args)?;
-    let command = extract_shell_command_text_from_run_args(args)?;
+fn shell_permission_scope_suffix(args: &Value) -> String {
     let sandbox_permissions = parse_shell_sandbox_permissions(args);
     let additional_permissions = args.get("additional_permissions");
-
-    if sandbox_permissions == CoreSandboxPermissions::UseDefault && additional_permissions.is_none()
-    {
-        return Some(command);
-    }
-
     let sandbox_permissions = serde_json::to_string(&sandbox_permissions)
         .unwrap_or_else(|_| "\"use_default\"".to_string());
     let additional_permissions = additional_permissions
@@ -91,9 +153,126 @@ pub(super) fn shell_permission_cache_suffix(
         })
         .unwrap_or_else(|| "null".to_string());
 
+    format!(
+        "sandbox_permissions={sandbox_permissions}|additional_permissions={additional_permissions}"
+    )
+}
+
+fn extract_shell_approval_justification(
+    tool_name: &str,
+    tool_args: Option<&Value>,
+) -> Option<String> {
+    let args = shell_run_args(tool_name, tool_args)?;
+    args.get("justification")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+}
+
+pub(super) fn extract_shell_command_text(
+    tool_name: &str,
+    tool_args: Option<&Value>,
+) -> Option<String> {
+    let args = shell_run_args(tool_name, tool_args)?;
+    extract_shell_command_text_from_run_args(args)
+}
+
+pub(super) fn extract_shell_approval_command_words(
+    tool_name: &str,
+    tool_args: Option<&Value>,
+) -> Option<Vec<String>> {
+    let args = shell_run_args(tool_name, tool_args)?;
+    extract_shell_command_words_from_run_args(args)
+}
+
+pub(super) fn extract_shell_approval_command_prefix_words(
+    tool_name: &str,
+    tool_args: Option<&Value>,
+) -> Option<Vec<String>> {
+    let args = shell_run_args(tool_name, tool_args)?;
+    let command_words = extract_shell_approval_command_words(tool_name, tool_args)?;
+    shell_command_supports_persistent_approval(args, &command_words).then_some(command_words)
+}
+
+pub(super) fn extract_shell_permission_scope_signature(
+    tool_name: &str,
+    tool_args: Option<&Value>,
+) -> Option<String> {
+    let args = shell_run_args(tool_name, tool_args)?;
+    Some(shell_permission_scope_suffix(args))
+}
+
+pub(super) fn extract_shell_approval_scope_signature(
+    tool_name: &str,
+    tool_args: Option<&Value>,
+) -> Option<String> {
+    let args = shell_run_args(tool_name, tool_args)?;
+    let command_words = extract_shell_approval_command_words(tool_name, tool_args)?;
+    shell_command_supports_persistent_approval(args, &command_words)
+        .then(|| shell_permission_scope_suffix(args))
+}
+
+pub(super) fn extract_shell_persistent_approval_prefix_rule(
+    tool_name: &str,
+    tool_args: Option<&Value>,
+) -> Option<Vec<String>> {
+    let args = shell_run_args(tool_name, tool_args)?;
+    let command_words = extract_shell_command_words_from_run_args(args)?;
+    if !shell_command_supports_persistent_approval(args, &command_words) {
+        return None;
+    }
+
+    let prefix_rule = args
+        .get("prefix_rule")
+        .and_then(Value::as_array)?
+        .iter()
+        .map(|value| value.as_str().map(ToOwned::to_owned))
+        .collect::<Option<Vec<_>>>()?;
+
+    if prefix_rule.is_empty() || prefix_rule.len() > command_words.len() {
+        return None;
+    }
+
+    prefix_rule
+        .iter()
+        .zip(command_words.iter())
+        .all(|(prefix, command)| prefix == command)
+        .then_some(prefix_rule)
+}
+
+pub(super) fn render_shell_persistent_approval_prefix_entry(
+    tool_name: &str,
+    tool_args: Option<&Value>,
+    prefix_rule: &[String],
+) -> Option<String> {
+    let scope_signature = extract_shell_approval_scope_signature(tool_name, tool_args)?;
     Some(format!(
-        "{command}|sandbox_permissions={sandbox_permissions}|additional_permissions={additional_permissions}"
+        "{}|{}",
+        render_shell_command_words(prefix_rule),
+        scope_signature
     ))
+}
+
+pub(super) fn render_shell_approval_command_words(parts: &[String]) -> String {
+    render_shell_command_words(parts)
+}
+
+pub(super) fn shell_permission_cache_suffix(
+    tool_name: &str,
+    tool_args: Option<&Value>,
+) -> Option<String> {
+    let args = shell_run_args(tool_name, tool_args)?;
+    let command = extract_shell_command_text_from_run_args(args)?;
+    let scope_suffix = shell_permission_scope_suffix(args);
+
+    if parse_shell_sandbox_permissions(args) == CoreSandboxPermissions::UseDefault
+        && args.get("additional_permissions").is_none()
+    {
+        return Some(command);
+    }
+
+    Some(format!("{command}|{scope_suffix}"))
 }
 
 pub(super) fn shell_allows_persistent_decisions(
@@ -201,6 +380,8 @@ pub(super) async fn prompt_tool_permission<S: UiSession + ?Sized>(
     display_name: &str,
     tool_name: &str,
     tool_args: Option<&Value>,
+    approval_learning_key: &str,
+    approval_learning_label: &str,
     _renderer: &mut AnsiRenderer,
     handle: &InlineHandle,
     session: &mut S,
@@ -209,7 +390,8 @@ pub(super) async fn prompt_tool_permission<S: UiSession + ?Sized>(
     default_placeholder: Option<String>,
     approval_reason: Option<&str>,
     justification: Option<&vtcode_core::tools::ToolJustification>,
-    allow_persistent_decisions: bool,
+    persistent_shell_allow_prefix_rule: Option<&[String]>,
+    allow_tool_level_persistent_decisions: bool,
     approval_recorder: Option<&vtcode_core::tools::ApprovalRecorder>,
     hitl_notification_bell: bool,
 ) -> Result<HitlDecision> {
@@ -252,13 +434,19 @@ pub(super) async fn prompt_tool_permission<S: UiSession + ?Sized>(
         description_lines.push(format!("Reason: {}", reason));
     }
 
+    if let Some(shell_justification) = extract_shell_approval_justification(tool_name, tool_args) {
+        description_lines.push(format!("Justification: {}", shell_justification));
+    }
+
     if let Some(just) = justification {
         let just_lines = just.format_for_dialog();
         description_lines.extend(just_lines);
     }
 
     if let Some(recorder) = approval_recorder
-        && let Some(suggestion) = recorder.get_auto_approval_suggestion(tool_name).await
+        && let Some(suggestion) = recorder
+            .get_auto_approval_suggestion(approval_learning_key, approval_learning_label)
+            .await
     {
         description_lines.push(String::new());
         description_lines.push(format!("Suggestion: {}", suggestion));
@@ -287,10 +475,16 @@ pub(super) async fn prompt_tool_permission<S: UiSession + ?Sized>(
         },
     ];
 
-    if allow_persistent_decisions {
+    if allow_tool_level_persistent_decisions || persistent_shell_allow_prefix_rule.is_some() {
+        let subtitle = persistent_shell_allow_prefix_rule
+            .map(|prefix_rule| {
+                let rendered = shell_words::join(prefix_rule.iter().map(|part| part.as_str()));
+                format!("Permanently allow commands that start with `{}`", rendered)
+            })
+            .unwrap_or_else(|| "Permanently allow this tool (saved to policy)".to_string());
         options.push(InlineListItem {
             title: "Always Allow".to_string(),
-            subtitle: Some("Permanently allow this tool (saved to policy)".to_string()),
+            subtitle: Some(subtitle),
             badge: Some("Permanent".to_string()),
             indent: 0,
             selection: Some(InlineListSelection::ToolApprovalPermanent),
@@ -316,7 +510,7 @@ pub(super) async fn prompt_tool_permission<S: UiSession + ?Sized>(
         search_value: Some("deny no reject once temporary 4".to_string()),
     });
 
-    if allow_persistent_decisions {
+    if allow_tool_level_persistent_decisions {
         options.push(InlineListItem {
             title: "Always Deny".to_string(),
             subtitle: Some("Block this tool until policy is changed".to_string()),
@@ -490,7 +684,10 @@ pub(super) async fn prompt_tool_permission<S: UiSession + ?Sized>(
 #[cfg(test)]
 mod tests {
     use super::{
-        extract_shell_command_text, shell_allows_persistent_decisions,
+        extract_shell_approval_command_prefix_words, extract_shell_approval_justification,
+        extract_shell_approval_scope_signature, extract_shell_command_text,
+        extract_shell_persistent_approval_prefix_rule,
+        render_shell_persistent_approval_prefix_entry, shell_allows_persistent_decisions,
         shell_permission_cache_suffix,
     };
     use serde_json::json;
@@ -563,6 +760,115 @@ mod tests {
                 .as_deref()
                 .unwrap_or_default()
                 .contains("with_additional_permissions")
+        );
+    }
+
+    #[test]
+    fn shell_approval_justification_is_extracted_for_run_actions() {
+        let args = json!({
+            "action": "run",
+            "command": "cargo build",
+            "justification": "Do you want to build the project outside the sandbox?"
+        });
+
+        let justification = extract_shell_approval_justification("unified_exec", Some(&args));
+        assert_eq!(
+            justification.as_deref(),
+            Some("Do you want to build the project outside the sandbox?")
+        );
+    }
+
+    #[test]
+    fn shell_approval_justification_ignores_non_run_actions() {
+        let args = json!({
+            "action": "poll",
+            "session_id": "run-123",
+            "justification": "ignored"
+        });
+
+        let justification = extract_shell_approval_justification("unified_exec", Some(&args));
+        assert_eq!(justification, None);
+    }
+
+    #[test]
+    fn shell_persistent_prefix_rule_requires_matching_command_prefix() {
+        let args = json!({
+            "action": "run",
+            "command": "cargo test -p vtcode",
+            "prefix_rule": ["cargo", "build"]
+        });
+
+        let prefix_rule =
+            extract_shell_persistent_approval_prefix_rule("unified_exec", Some(&args));
+        assert_eq!(prefix_rule, None);
+    }
+
+    #[test]
+    fn shell_persistent_prefix_rule_rejects_compound_commands() {
+        let args = json!({
+            "action": "run",
+            "command": "cargo test && cargo fmt",
+            "prefix_rule": ["cargo", "test"]
+        });
+
+        let prefix_rule =
+            extract_shell_persistent_approval_prefix_rule("unified_exec", Some(&args));
+        assert_eq!(prefix_rule, None);
+    }
+
+    #[test]
+    fn shell_approval_prefix_text_normalizes_simple_commands() {
+        let args = json!({
+            "action": "run",
+            "command": ["cargo", "test", "-p", "vtcode"]
+        });
+
+        let command = extract_shell_approval_command_prefix_words("unified_exec", Some(&args));
+        assert_eq!(
+            command,
+            Some(vec![
+                "cargo".to_string(),
+                "test".to_string(),
+                "-p".to_string(),
+                "vtcode".to_string()
+            ])
+        );
+    }
+
+    #[test]
+    fn shell_approval_scope_signature_tracks_requested_permissions() {
+        let args = json!({
+            "action": "run",
+            "command": "cargo test",
+            "sandbox_permissions": "require_escalated"
+        });
+
+        let scope = extract_shell_approval_scope_signature("unified_exec", Some(&args));
+        assert_eq!(
+            scope.as_deref(),
+            Some("sandbox_permissions=\"require_escalated\"|additional_permissions=null")
+        );
+    }
+
+    #[test]
+    fn shell_persistent_approval_entry_includes_scope() {
+        let args = json!({
+            "action": "run",
+            "command": "cargo test -p vtcode",
+            "prefix_rule": ["cargo", "test"],
+            "sandbox_permissions": "require_escalated"
+        });
+
+        let entry = render_shell_persistent_approval_prefix_entry(
+            "unified_exec",
+            Some(&args),
+            &["cargo".to_string(), "test".to_string()],
+        );
+        assert_eq!(
+            entry.as_deref(),
+            Some(
+                "cargo test|sandbox_permissions=\"require_escalated\"|additional_permissions=null"
+            )
         );
     }
 }

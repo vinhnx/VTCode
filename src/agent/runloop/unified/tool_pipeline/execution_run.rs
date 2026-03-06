@@ -9,6 +9,7 @@ use vtcode_core::exec::events::ToolCallStatus;
 use vtcode_core::tools::ToolInvocationId;
 
 use crate::agent::runloop::git::confirm_changes_with_git_diff;
+use crate::agent::runloop::unified::async_mcp_manager::approval_policy_from_human_in_the_loop;
 use crate::agent::runloop::unified::inline_events::harness::{
     HarnessEventEmitter, tool_started_event,
 };
@@ -338,9 +339,10 @@ async fn check_tool_permission(
                 .map(|cfg| cfg.security.hitl_notification_bell)
                 .unwrap_or(true),
             autonomous_mode: ctx.session_stats.is_autonomous_mode(),
-            human_in_the_loop: vt_cfg
+            approval_policy: vt_cfg
                 .map(|cfg| cfg.security.human_in_the_loop)
-                .unwrap_or(true),
+                .map(approval_policy_from_human_in_the_loop)
+                .unwrap_or(vtcode_core::exec_policy::AskForApproval::OnRequest),
             skip_confirmations,
         },
         name,

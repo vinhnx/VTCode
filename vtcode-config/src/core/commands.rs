@@ -10,6 +10,10 @@ pub struct CommandsConfig {
     #[serde(default)]
     pub allow_list: Vec<String>,
 
+    /// Command prefixes that skip future shell approval prompts when matched
+    #[serde(default)]
+    pub approval_prefixes: Vec<String>,
+
     /// Additional directories that should be searched/prepended to PATH for command execution
     #[serde(default = "default_extra_path_entries")]
     pub extra_path_entries: Vec<String>,
@@ -136,6 +140,7 @@ impl Default for CommandsConfig {
     fn default() -> Self {
         Self {
             allow_list: DEFAULT_ALLOW_LIST.iter().map(|s| (*s).into()).collect(),
+            approval_prefixes: Vec::new(),
             extra_path_entries: default_extra_path_entries(),
             deny_list: vec![
                 // Dangerous file deletion

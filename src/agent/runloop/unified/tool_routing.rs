@@ -3,20 +3,21 @@ mod hook_messages;
 mod limit_prompts;
 mod permission_prompt;
 
-use hashbrown::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use tokio::sync::{Notify, RwLock};
 
 use serde_json::Value;
 use vtcode_core::acp::{PermissionGrant, ToolPermissionCache};
+use vtcode_core::config::loader::ConfigManager;
 use vtcode_core::core::interfaces::ui::UiSession;
+use vtcode_core::exec_policy::AskForApproval;
 use vtcode_core::tool_policy::ToolPolicy;
 use vtcode_core::tools::registry::{ToolPermissionDecision, ToolRegistry};
 use vtcode_core::tools::{
-    JustificationExtractor, ToolRiskContext, ToolRiskScorer, ToolSource, WorkspaceTrust,
+    JustificationExtractor, RiskLevel, ToolRiskContext, ToolRiskScorer, ToolSource, WorkspaceTrust,
 };
 use vtcode_core::utils::ansi::{AnsiRenderer, MessageStyle};
 use vtcode_tui::InlineHandle;
@@ -26,7 +27,12 @@ use super::tool_summary::{describe_tool_action, humanize_tool_name};
 use crate::hooks::lifecycle::{LifecycleHookEngine, PreToolHookDecision};
 use hook_messages::render_hook_messages;
 use permission_prompt::{
-    prompt_tool_permission, shell_allows_persistent_decisions, shell_permission_cache_suffix,
+    extract_shell_approval_command_prefix_words, extract_shell_approval_command_words,
+    extract_shell_approval_scope_signature, extract_shell_command_text,
+    extract_shell_permission_scope_signature, extract_shell_persistent_approval_prefix_rule,
+    prompt_tool_permission, render_shell_approval_command_words,
+    render_shell_persistent_approval_prefix_entry, shell_allows_persistent_decisions,
+    shell_permission_cache_suffix,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -50,26 +56,40 @@ pub(crate) enum ToolPermissionFlow {
 
 const APPROVAL_RECORD_TIMEOUT: Duration = Duration::from_millis(500);
 
+#[derive(Debug, Clone)]
+struct ApprovalLearningTarget {
+    approval_key: String,
+    display_label: String,
+}
+
+#[derive(Debug, Clone)]
+struct ToolDisplayLabels {
+    prompt_label: String,
+    learning_label: String,
+}
+
 fn spawn_approval_record_task(
     recorder: &vtcode_core::tools::ApprovalRecorder,
-    tool_name: &str,
+    approval_key: &str,
+    display_label: &str,
     approved: bool,
 ) {
     // Intentionally detached: approval-pattern persistence is non-critical for the
     // current request path and bounded by a short timeout.
     let recorder = recorder.clone();
-    let tool_name = tool_name.to_string();
+    let approval_key = approval_key.to_string();
+    let display_label = display_label.to_string();
     tokio::spawn(async move {
         match tokio::time::timeout(
             APPROVAL_RECORD_TIMEOUT,
-            recorder.record_approval(&tool_name, approved, None),
+            recorder.record_approval(&approval_key, Some(&display_label), approved, None),
         )
         .await
         {
             Ok(Ok(())) => {}
             Ok(Err(err)) => {
                 tracing::debug!(
-                    tool = %tool_name,
+                    approval_key = %approval_key,
                     approved,
                     error = %err,
                     "Approval-pattern write failed"
@@ -77,7 +97,7 @@ fn spawn_approval_record_task(
             }
             Err(_) => {
                 tracing::debug!(
-                    tool = %tool_name,
+                    approval_key = %approval_key,
                     approved,
                     timeout_ms = APPROVAL_RECORD_TIMEOUT.as_millis(),
                     "Approval-pattern write timed out"
@@ -85,6 +105,191 @@ fn spawn_approval_record_task(
             }
         }
     });
+}
+
+fn build_tool_risk_context(tool_name: &str, tool_args: Option<&Value>) -> ToolRiskContext {
+    let mut risk_context = ToolRiskContext::new(
+        tool_name.to_string(),
+        ToolSource::Internal,
+        WorkspaceTrust::Untrusted,
+    );
+    if let Some(args) = tool_args {
+        risk_context.command_args = vec![args.to_string()];
+    }
+    risk_context
+}
+
+fn approval_history_can_skip_prompt(
+    hook_requires_prompt: bool,
+    shell_approval_reason: Option<&str>,
+    risk_level: RiskLevel,
+) -> bool {
+    !hook_requires_prompt && shell_approval_reason.is_none() && risk_level != RiskLevel::Critical
+}
+
+fn approval_policy_rejects_prompt(
+    approval_policy: AskForApproval,
+    requires_rule_prompt: bool,
+    requires_sandbox_prompt: bool,
+) -> bool {
+    match approval_policy {
+        AskForApproval::Never => requires_rule_prompt || requires_sandbox_prompt,
+        AskForApproval::Reject(reject_config) => {
+            (requires_rule_prompt && reject_config.rejects_rules_approval())
+                || (requires_sandbox_prompt && reject_config.rejects_sandbox_approval())
+        }
+        AskForApproval::OnFailure | AskForApproval::OnRequest | AskForApproval::UnlessTrusted => {
+            false
+        }
+    }
+}
+
+fn approval_learning_target(
+    tool_name: &str,
+    tool_args: Option<&Value>,
+    default_learning_label: &str,
+) -> ApprovalLearningTarget {
+    if let Some(scope_signature) = extract_shell_permission_scope_signature(tool_name, tool_args) {
+        if let Some(prefix_rule) =
+            extract_shell_persistent_approval_prefix_rule(tool_name, tool_args)
+            && let Some(rendered_rule) =
+                render_shell_persistent_approval_prefix_entry(tool_name, tool_args, &prefix_rule)
+        {
+            let rendered_prefix = render_shell_approval_command_words(&prefix_rule);
+            return ApprovalLearningTarget {
+                approval_key: rendered_rule,
+                display_label: format!("commands starting with `{rendered_prefix}`"),
+            };
+        }
+
+        if let Some(command_words) = extract_shell_approval_command_words(tool_name, tool_args) {
+            let rendered_command = render_shell_approval_command_words(&command_words);
+            return ApprovalLearningTarget {
+                approval_key: format!("{rendered_command}|{scope_signature}"),
+                display_label: format!("command `{rendered_command}`"),
+            };
+        }
+
+        if let Some(command_text) = extract_shell_command_text(tool_name, tool_args) {
+            return ApprovalLearningTarget {
+                approval_key: format!("{command_text}|{scope_signature}"),
+                display_label: format!("command `{command_text}`"),
+            };
+        }
+
+        let fallback_key = tool_args
+            .map(Value::to_string)
+            .unwrap_or_else(|| tool_name.to_string());
+        return ApprovalLearningTarget {
+            approval_key: format!("{fallback_key}|{scope_signature}"),
+            display_label: default_learning_label.to_string(),
+        };
+    }
+
+    ApprovalLearningTarget {
+        approval_key: tool_name.to_string(),
+        display_label: default_learning_label.to_string(),
+    }
+}
+
+fn tool_display_labels(tool_name: &str, tool_args: Option<&Value>) -> ToolDisplayLabels {
+    let learning_label = humanize_tool_name(tool_name);
+    let prompt_label = tool_args
+        .map(|args| describe_tool_action(tool_name, args).0)
+        .filter(|headline| !headline.is_empty())
+        .unwrap_or_else(|| learning_label.clone());
+
+    ToolDisplayLabels {
+        prompt_label,
+        learning_label,
+    }
+}
+
+const SHELL_APPROVAL_SCOPE_MARKER: &str = "|sandbox_permissions=";
+const DEFAULT_SHELL_APPROVAL_SCOPE_SIGNATURE: &str =
+    "sandbox_permissions=\"use_default\"|additional_permissions=null";
+
+fn shell_command_words_match_prefix(command_words: &[String], prefix_words: &[String]) -> bool {
+    command_words.len() >= prefix_words.len()
+        && prefix_words
+            .iter()
+            .zip(command_words.iter())
+            .all(|(prefix, command)| prefix == command)
+}
+
+fn split_persisted_shell_approval_prefix(entry: &str) -> (&str, Option<&str>) {
+    if let Some(index) = entry.find(SHELL_APPROVAL_SCOPE_MARKER) {
+        let (prefix, scoped) = entry.split_at(index);
+        (prefix, Some(&scoped[1..]))
+    } else {
+        (entry, None)
+    }
+}
+
+fn shell_command_has_persisted_approval_prefix(
+    tool_registry: &ToolRegistry,
+    command_words: &[String],
+    scope_signature: &str,
+) -> bool {
+    if command_words.is_empty() {
+        return false;
+    }
+
+    tool_registry
+        .commands_config()
+        .approval_prefixes
+        .iter()
+        .map(|entry| entry.trim())
+        .filter(|entry| !entry.is_empty())
+        .any(|entry| {
+            let (prefix_text, entry_scope_signature) = split_persisted_shell_approval_prefix(entry);
+            let prefix_words = shell_words::split(prefix_text).ok();
+            let scope_matches = entry_scope_signature
+                .unwrap_or(DEFAULT_SHELL_APPROVAL_SCOPE_SIGNATURE)
+                == scope_signature;
+
+            scope_matches
+                && prefix_words
+                    .as_deref()
+                    .is_some_and(|prefix| shell_command_words_match_prefix(command_words, prefix))
+        })
+}
+
+fn persist_shell_approval_prefix_rule(
+    tool_registry: &ToolRegistry,
+    tool_name: &str,
+    tool_args: Option<&Value>,
+    prefix_rule: &[String],
+) -> Result<String> {
+    let rendered_rule =
+        render_shell_persistent_approval_prefix_entry(tool_name, tool_args, prefix_rule)
+            .context("Failed to render shell approval prefix entry")?;
+    let workspace_root = tool_registry.workspace_root().clone();
+    let mut manager = ConfigManager::load_from_workspace(&workspace_root).with_context(|| {
+        format!(
+            "Failed to load configuration for workspace {}",
+            workspace_root.display()
+        )
+    })?;
+    let mut config = manager.config().clone();
+
+    if !config
+        .commands
+        .approval_prefixes
+        .iter()
+        .any(|existing| existing == &rendered_rule)
+    {
+        config
+            .commands
+            .approval_prefixes
+            .push(rendered_rule.clone());
+        manager
+            .save_config(&config)
+            .context("Failed to persist shell approval prefix")?;
+    }
+
+    tool_registry.apply_commands_config(&config.commands);
+    Ok(rendered_rule)
 }
 
 /// Context for tool permission checks to reduce argument count
@@ -104,7 +309,7 @@ pub(crate) struct ToolPermissionsContext<'a, S: UiSession + ?Sized> {
     pub tool_permission_cache: Option<&'a Arc<RwLock<ToolPermissionCache>>>,
     pub hitl_notification_bell: bool,
     pub autonomous_mode: bool,
-    pub human_in_the_loop: bool,
+    pub approval_policy: AskForApproval,
     pub skip_confirmations: bool,
 }
 
@@ -128,15 +333,11 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
         tool_permission_cache,
         hitl_notification_bell,
         autonomous_mode,
-        human_in_the_loop,
+        approval_policy,
         skip_confirmations,
     } = ctx;
 
     if skip_confirmations {
-        return Ok(ToolPermissionFlow::Approved);
-    }
-
-    if !human_in_the_loop {
         return Ok(ToolPermissionFlow::Approved);
     }
 
@@ -206,9 +407,23 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
         return Ok(ToolPermissionFlow::Denied);
     }
 
-    let shell_approval_reason = tool_registry
+    let persisted_shell_approval =
+        extract_shell_approval_command_prefix_words(tool_name, tool_args)
+            .zip(extract_shell_approval_scope_signature(tool_name, tool_args))
+            .filter(|(command_words, scope_signature)| {
+                shell_command_has_persisted_approval_prefix(
+                    tool_registry,
+                    command_words,
+                    scope_signature,
+                )
+            });
+
+    let mut shell_approval_reason = tool_registry
         .shell_run_approval_reason(tool_name, tool_args)
         .await?;
+    if persisted_shell_approval.is_some() {
+        shell_approval_reason = None;
+    }
     if let Some(reason) = shell_approval_reason.as_deref() {
         tracing::debug!(
             tool = %tool_name,
@@ -225,43 +440,52 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
         return Ok(ToolPermissionFlow::Approved);
     }
 
+    let requires_rule_prompt =
+        hook_requires_prompt || policy_decision == ToolPermissionDecision::Prompt;
+    let requires_sandbox_prompt = shell_approval_reason.is_some();
+    if approval_policy_rejects_prompt(
+        approval_policy,
+        requires_rule_prompt,
+        requires_sandbox_prompt,
+    ) {
+        return Ok(ToolPermissionFlow::Denied);
+    }
+
+    let mut risk_context = build_tool_risk_context(tool_name, tool_args);
+    let display_labels = tool_display_labels(tool_name, tool_args);
+    let approval_learning_target =
+        approval_learning_target(tool_name, tool_args, &display_labels.learning_label);
+
+    if let Some(recorder) = approval_recorder {
+        risk_context.recent_approvals = recorder
+            .get_approval_count(&approval_learning_target.approval_key)
+            .await as usize;
+    }
+    let risk_level = ToolRiskScorer::calculate_risk(&risk_context);
+
     // Check approval patterns for auto-approval before prompting
-    if !hook_requires_prompt
-        && let Some(recorder) = approval_recorder
-        && recorder.should_auto_approve(tool_name).await
+    if approval_history_can_skip_prompt(
+        hook_requires_prompt,
+        shell_approval_reason.as_deref(),
+        risk_level,
+    ) && let Some(recorder) = approval_recorder
+        && recorder
+            .should_auto_approve(&approval_learning_target.approval_key)
+            .await
     {
         tool_registry.mark_tool_preapproved(tool_name).await;
         tracing::debug!(
-            "Auto-approved tool '{}' based on approval pattern history",
-            tool_name
+            approval_key = %approval_learning_target.approval_key,
+            "Auto-approved tool based on approval pattern history"
         );
         return Ok(ToolPermissionFlow::Approved);
     }
-
-    let (headline, _) = tool_args
-        .map(|args| describe_tool_action(tool_name, args))
-        .unwrap_or_else(|| (humanize_tool_name(tool_name), HashSet::new()));
-    let prompt_label = if headline.is_empty() {
-        humanize_tool_name(tool_name)
-    } else {
-        headline
-    };
 
     // Extract justification from decision ledger if not provided
     let extracted_justification = if justification.is_none() {
         if let Some(ledger_ref) = decision_ledger {
             let ledger = ledger_ref.read().await;
             if let Some(latest) = ledger.latest_decision() {
-                // Calculate risk level for this tool
-                let mut risk_context = ToolRiskContext::new(
-                    tool_name.to_string(),
-                    ToolSource::Internal,
-                    WorkspaceTrust::Untrusted,
-                );
-                if let Some(args) = tool_args {
-                    risk_context.command_args = vec![args.to_string()];
-                }
-                let risk_level = ToolRiskScorer::calculate_risk(&risk_context);
                 JustificationExtractor::extract_from_decision(latest, tool_name, &risk_level)
             } else {
                 None
@@ -274,12 +498,17 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
     };
 
     let final_justification = justification.or(extracted_justification.as_ref());
-    let allow_persistent_decisions = shell_allows_persistent_decisions(tool_name, tool_args);
+    let persistent_shell_allow_prefix_rule =
+        extract_shell_persistent_approval_prefix_rule(tool_name, tool_args);
+    let allow_tool_level_persistent_decisions =
+        shell_allows_persistent_decisions(tool_name, tool_args);
 
     let decision = prompt_tool_permission(
-        &prompt_label,
+        &display_labels.prompt_label,
         tool_name,
         tool_args,
+        &approval_learning_target.approval_key,
+        &approval_learning_target.display_label,
         renderer,
         handle,
         session,
@@ -288,7 +517,8 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
         default_placeholder,
         shell_approval_reason.as_deref(),
         final_justification,
-        allow_persistent_decisions,
+        persistent_shell_allow_prefix_rule.as_deref(),
+        allow_tool_level_persistent_decisions,
         approval_recorder,
         hitl_notification_bell,
     )
@@ -312,7 +542,12 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
 
             // Record approval decision for pattern learning (fire-and-forget)
             if let Some(recorder) = approval_recorder {
-                spawn_approval_record_task(recorder, tool_name, true);
+                spawn_approval_record_task(
+                    recorder,
+                    &approval_learning_target.approval_key,
+                    &approval_learning_target.display_label,
+                    true,
+                );
             }
 
             Ok(ToolPermissionFlow::Approved)
@@ -322,42 +557,75 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
             tool_registry.mark_tool_preapproved(tool_name).await;
             tracing::info!("✓ Tool '{}' marked as preapproved", tool_name);
 
-            // Cache permission grant permanently at tool level
-            if let Some(cache) = tool_permission_cache {
-                let mut perm_cache = cache.write().await;
-                perm_cache.cache_grant(tool_name.to_string(), PermissionGrant::Permanent);
-                tracing::info!("✓ Tool '{}' cached as permanently approved", tool_name);
-            }
-
-            // Persist to policy manager IMMEDIATELY
-            if let Err(err) = tool_registry
-                .set_tool_policy(tool_name, ToolPolicy::Allow)
-                .await
-            {
-                tracing::warn!(
-                    "Failed to persist permanent approval for '{}': {}",
+            if let Some(prefix_rule) = persistent_shell_allow_prefix_rule.as_deref() {
+                match persist_shell_approval_prefix_rule(
+                    tool_registry,
                     tool_name,
-                    err
-                );
+                    tool_args,
+                    prefix_rule,
+                ) {
+                    Ok(rendered_rule) => {
+                        if let Some(cache) = tool_permission_cache {
+                            let mut perm_cache = cache.write().await;
+                            perm_cache.cache_grant(cache_key.clone(), PermissionGrant::Permanent);
+                        }
+                        tracing::info!(
+                            tool = %tool_name,
+                            prefix_rule = %rendered_rule,
+                            "✓ Shell approval prefix persisted"
+                        );
+                    }
+                    Err(err) => {
+                        tracing::warn!(
+                            tool = %tool_name,
+                            error = %err,
+                            "Failed to persist shell approval prefix"
+                        );
+                    }
+                }
             } else {
-                tracing::info!("✓ Policy persisted for '{}'", tool_name);
-            }
+                // Cache permission grant permanently at tool level
+                if let Some(cache) = tool_permission_cache {
+                    let mut perm_cache = cache.write().await;
+                    perm_cache.cache_grant(tool_name.to_string(), PermissionGrant::Permanent);
+                    tracing::info!("✓ Tool '{}' cached as permanently approved", tool_name);
+                }
 
-            // Also persist MCP tool policy
-            if let Err(err) = tool_registry
-                .persist_mcp_tool_policy(tool_name, ToolPolicy::Allow)
-                .await
-            {
-                tracing::warn!(
-                    "Failed to persist MCP approval for tool '{}': {}",
-                    tool_name,
-                    err
-                );
+                // Persist to policy manager IMMEDIATELY
+                if let Err(err) = tool_registry
+                    .set_tool_policy(tool_name, ToolPolicy::Allow)
+                    .await
+                {
+                    tracing::warn!(
+                        "Failed to persist permanent approval for '{}': {}",
+                        tool_name,
+                        err
+                    );
+                } else {
+                    tracing::info!("✓ Policy persisted for '{}'", tool_name);
+                }
+
+                // Also persist MCP tool policy
+                if let Err(err) = tool_registry
+                    .persist_mcp_tool_policy(tool_name, ToolPolicy::Allow)
+                    .await
+                {
+                    tracing::warn!(
+                        "Failed to persist MCP approval for tool '{}': {}",
+                        tool_name,
+                        err
+                    );
+                }
             }
 
             // Record approval decision for pattern learning
             if let Some(recorder) = approval_recorder {
-                spawn_approval_record_task(recorder, tool_name, true);
+                spawn_approval_record_task(
+                    recorder,
+                    &approval_learning_target.approval_key,
+                    &approval_learning_target.display_label,
+                    true,
+                );
             }
 
             Ok(ToolPermissionFlow::Approved)
@@ -391,7 +659,14 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
 
             // Record denial decision for pattern learning
             if let Some(recorder) = approval_recorder {
-                let _ = recorder.record_approval(tool_name, false, None).await;
+                let _ = recorder
+                    .record_approval(
+                        &approval_learning_target.approval_key,
+                        Some(&approval_learning_target.display_label),
+                        false,
+                        None,
+                    )
+                    .await;
             }
 
             Ok(ToolPermissionFlow::Denied)
@@ -433,4 +708,240 @@ pub(crate) async fn prompt_tool_loop_limit_increase<S: UiSession + ?Sized>(
         max_limit,
     )
     .await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        approval_history_can_skip_prompt, approval_learning_target, approval_policy_rejects_prompt,
+        persist_shell_approval_prefix_rule, shell_command_has_persisted_approval_prefix,
+        tool_display_labels,
+    };
+    use serde_json::json;
+    use vtcode_core::config::loader::ConfigManager;
+    use vtcode_core::exec_policy::{AskForApproval, RejectConfig};
+    use vtcode_core::tools::RiskLevel;
+    use vtcode_core::tools::registry::ToolRegistry;
+
+    #[test]
+    fn approval_history_auto_approval_rejects_explicit_shell_escalation() {
+        assert!(!approval_history_can_skip_prompt(
+            false,
+            Some("Command requested execution without sandbox restrictions."),
+            RiskLevel::High,
+        ));
+    }
+
+    #[test]
+    fn approval_history_auto_approval_rejects_critical_risk() {
+        assert!(!approval_history_can_skip_prompt(
+            false,
+            None,
+            RiskLevel::Critical,
+        ));
+    }
+
+    #[test]
+    fn approval_history_auto_approval_allows_non_critical_prompt_reuse() {
+        assert!(approval_history_can_skip_prompt(
+            false,
+            None,
+            RiskLevel::High,
+        ));
+    }
+
+    #[test]
+    fn reject_policy_blocks_sandbox_prompts() {
+        assert!(approval_policy_rejects_prompt(
+            AskForApproval::Reject(RejectConfig {
+                sandbox_approval: true,
+                rules: false,
+                mcp_elicitations: false,
+            }),
+            false,
+            true,
+        ));
+    }
+
+    #[test]
+    fn reject_policy_blocks_rule_prompts() {
+        assert!(approval_policy_rejects_prompt(
+            AskForApproval::Reject(RejectConfig {
+                sandbox_approval: false,
+                rules: true,
+                mcp_elicitations: false,
+            }),
+            true,
+            false,
+        ));
+    }
+
+    #[test]
+    fn on_request_policy_keeps_prompts_enabled() {
+        assert!(!approval_policy_rejects_prompt(
+            AskForApproval::OnRequest,
+            true,
+            true,
+        ));
+    }
+
+    #[test]
+    fn shell_learning_target_uses_scoped_prefix_rule() {
+        let args = json!({
+            "action": "run",
+            "command": "cargo test -p vtcode",
+            "prefix_rule": ["cargo", "test"],
+            "sandbox_permissions": "require_escalated",
+        });
+
+        let target = approval_learning_target("unified_exec", Some(&args), "Run command");
+        assert_eq!(
+            target.approval_key,
+            "cargo test|sandbox_permissions=\"require_escalated\"|additional_permissions=null"
+        );
+        assert_eq!(target.display_label, "commands starting with `cargo test`");
+    }
+
+    #[test]
+    fn shell_learning_target_falls_back_to_exact_command_scope() {
+        let args = json!({
+            "action": "run",
+            "command": "cargo test -p vtcode",
+            "prefix_rule": ["cargo", "build"],
+            "sandbox_permissions": "require_escalated",
+        });
+
+        let target = approval_learning_target("unified_exec", Some(&args), "Run command");
+        assert_eq!(
+            target.approval_key,
+            "cargo test -p vtcode|sandbox_permissions=\"require_escalated\"|additional_permissions=null"
+        );
+        assert_eq!(target.display_label, "command `cargo test -p vtcode`");
+    }
+
+    #[test]
+    fn non_shell_display_labels_keep_learning_label_stable() {
+        let args = json!({
+            "path": "src/main.rs"
+        });
+
+        let labels = tool_display_labels("read_file", Some(&args));
+        assert_eq!(labels.learning_label, "Read file");
+        assert_eq!(labels.prompt_label, "Read file src/main.rs");
+    }
+
+    #[tokio::test]
+    async fn shell_approval_prefix_rules_persist_to_workspace_config() {
+        let temp_dir = tempfile::TempDir::new().expect("temp dir");
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+        let args = json!({
+            "action": "run",
+            "command": "cargo test -p vtcode",
+            "sandbox_permissions": "require_escalated",
+        });
+
+        let rendered = persist_shell_approval_prefix_rule(
+            &registry,
+            "unified_exec",
+            Some(&args),
+            &["cargo".to_string(), "test".to_string()],
+        )
+        .expect("persist approval prefix");
+        assert_eq!(
+            rendered,
+            "cargo test|sandbox_permissions=\"require_escalated\"|additional_permissions=null"
+        );
+
+        let saved =
+            ConfigManager::load_from_workspace(temp_dir.path()).expect("reload workspace config");
+        assert!(
+            saved
+                .config()
+                .commands
+                .approval_prefixes
+                .iter()
+                .any(|entry| entry == &rendered)
+        );
+        assert!(shell_command_has_persisted_approval_prefix(
+            &registry,
+            &[
+                "cargo".to_string(),
+                "test".to_string(),
+                "-p".to_string(),
+                "vtcode".to_string()
+            ],
+            "sandbox_permissions=\"require_escalated\"|additional_permissions=null"
+        ));
+    }
+
+    #[tokio::test]
+    async fn shell_approval_prefix_matching_respects_token_boundaries() {
+        let temp_dir = tempfile::TempDir::new().expect("temp dir");
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+        let workspace_root = registry.workspace_root().clone();
+        let mut manager =
+            ConfigManager::load_from_workspace(&workspace_root).expect("load workspace config");
+        let mut config = manager.config().clone();
+        config
+            .commands
+            .approval_prefixes
+            .push("echo hi".to_string());
+        manager.save_config(&config).expect("save config");
+        registry.apply_commands_config(&config.commands);
+
+        assert!(!shell_command_has_persisted_approval_prefix(
+            &registry,
+            &["echo".to_string(), "history".to_string()],
+            "sandbox_permissions=\"use_default\"|additional_permissions=null"
+        ));
+    }
+
+    #[tokio::test]
+    async fn shell_approval_prefix_matching_respects_permission_scope() {
+        let temp_dir = tempfile::TempDir::new().expect("temp dir");
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+        let workspace_root = registry.workspace_root().clone();
+        let mut manager =
+            ConfigManager::load_from_workspace(&workspace_root).expect("load workspace config");
+        let mut config = manager.config().clone();
+        config.commands.approval_prefixes.push(
+            "cargo test|sandbox_permissions=\"require_escalated\"|additional_permissions=null"
+                .to_string(),
+        );
+        manager.save_config(&config).expect("save config");
+        registry.apply_commands_config(&config.commands);
+
+        assert!(!shell_command_has_persisted_approval_prefix(
+            &registry,
+            &[
+                "cargo".to_string(),
+                "test".to_string(),
+                "-p".to_string(),
+                "vtcode".to_string()
+            ],
+            "sandbox_permissions=\"with_additional_permissions\"|additional_permissions={\"fs_write\":[\"/tmp/demo.txt\"]}"
+        ));
+    }
+
+    #[tokio::test]
+    async fn legacy_unscoped_shell_prefixes_do_not_match_escalated_runs() {
+        let temp_dir = tempfile::TempDir::new().expect("temp dir");
+        let registry = ToolRegistry::new(temp_dir.path().to_path_buf()).await;
+        let workspace_root = registry.workspace_root().clone();
+        let mut manager =
+            ConfigManager::load_from_workspace(&workspace_root).expect("load workspace config");
+        let mut config = manager.config().clone();
+        config
+            .commands
+            .approval_prefixes
+            .push("echo hi".to_string());
+        manager.save_config(&config).expect("save config");
+        registry.apply_commands_config(&config.commands);
+
+        assert!(!shell_command_has_persisted_approval_prefix(
+            &registry,
+            &["echo".to_string(), "hi".to_string()],
+            "sandbox_permissions=\"require_escalated\"|additional_permissions=null"
+        ));
+    }
 }

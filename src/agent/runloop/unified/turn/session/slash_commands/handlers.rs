@@ -5,10 +5,12 @@ use vtcode_core::llm::provider::MessageRole;
 use vtcode_core::config::loader::{ConfigManager, VTCodeConfig};
 use vtcode_core::config::types::EditingMode as ConfigEditingMode;
 use vtcode_core::core::decision_tracker::DecisionTracker;
+use vtcode_core::exec_policy::AskForApproval;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::utils::ansi::MessageStyle;
 use vtcode_core::utils::transcript;
 
+use crate::agent::runloop::unified::async_mcp_manager::approval_policy_from_human_in_the_loop;
 use crate::agent::runloop::unified::state::SessionStats;
 use crate::agent::runloop::unified::tool_routing::{ToolPermissionFlow, ensure_tool_permission};
 use crate::hooks::lifecycle::SessionEndReason;
@@ -153,11 +155,12 @@ pub async fn handle_execute_tool(
                 .map(|cfg| cfg.security.hitl_notification_bell)
                 .unwrap_or(true),
             autonomous_mode: ctx.session_stats.is_autonomous_mode(),
-            human_in_the_loop: ctx
+            approval_policy: ctx
                 .vt_cfg
                 .as_ref()
                 .map(|cfg| cfg.security.human_in_the_loop)
-                .unwrap_or(true),
+                .map(approval_policy_from_human_in_the_loop)
+                .unwrap_or(AskForApproval::OnRequest),
             skip_confirmations: false,
         },
         &name,

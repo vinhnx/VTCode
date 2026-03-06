@@ -82,8 +82,11 @@ impl ToolJustification {
 /// Tracks approval patterns to learn from user decisions
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ApprovalPattern {
-    /// Tool name
+    /// Stable approval key used for lookup and persistence
     pub tool_name: String,
+    /// Human-readable label for prompts and summaries
+    #[serde(default)]
+    pub display_name: Option<String>,
     /// Number of times user approved
     pub approve_count: u32,
     /// Number of times user denied
@@ -113,6 +116,10 @@ impl ApprovalPattern {
     /// Return approval count
     pub fn approval_count(&self) -> u32 {
         self.approve_count
+    }
+
+    pub fn display_name<'a>(&'a self, fallback: &'a str) -> &'a str {
+        self.display_name.as_deref().unwrap_or(fallback)
     }
 }
 
@@ -156,27 +163,39 @@ impl JustificationManager {
         Ok(())
     }
 
-    /// Get approval pattern for a tool
-    pub fn get_pattern(&self, tool_name: &str) -> Option<ApprovalPattern> {
+    /// Get approval pattern for a key
+    pub fn get_pattern(&self, approval_key: &str) -> Option<ApprovalPattern> {
         if let Ok(patterns) = self.patterns.lock() {
-            patterns.get(tool_name).cloned()
+            patterns.get(approval_key).cloned()
         } else {
             None
         }
     }
 
     /// Record user approval decision
-    pub fn record_decision(&self, tool_name: &str, approved: bool, reason: Option<String>) {
+    pub fn record_decision(
+        &self,
+        approval_key: &str,
+        display_name: Option<&str>,
+        approved: bool,
+        reason: Option<String>,
+    ) {
         let should_persist = if let Ok(mut patterns) = self.patterns.lock() {
-            let pattern = patterns
-                .entry(tool_name.to_owned())
-                .or_insert_with(|| ApprovalPattern {
-                    tool_name: tool_name.to_owned(),
-                    approve_count: 0,
-                    deny_count: 0,
-                    last_decision: None,
-                    recent_reason: None,
-                });
+            let pattern =
+                patterns
+                    .entry(approval_key.to_owned())
+                    .or_insert_with(|| ApprovalPattern {
+                        tool_name: approval_key.to_owned(),
+                        display_name: display_name.map(str::to_owned),
+                        approve_count: 0,
+                        deny_count: 0,
+                        last_decision: None,
+                        recent_reason: None,
+                    });
+
+            if let Some(display_name) = display_name {
+                pattern.display_name = Some(display_name.to_owned());
+            }
 
             if approved {
                 pattern.approve_count += 1;
@@ -210,9 +229,9 @@ impl JustificationManager {
         Ok(())
     }
 
-    /// Get learning summary for a tool
-    pub fn get_learning_summary(&self, tool_name: &str) -> Option<String> {
-        let pattern = self.get_pattern(tool_name)?;
+    /// Get learning summary for a key
+    pub fn get_learning_summary(&self, approval_key: &str) -> Option<String> {
+        let pattern = self.get_pattern(approval_key)?;
 
         if pattern.approval_count() == 0 {
             return None;
@@ -264,6 +283,7 @@ mod tests {
     fn test_approval_pattern_calculation() {
         let mut pattern = ApprovalPattern {
             tool_name: "read_file".to_owned(),
+            display_name: None,
             approve_count: 9,
             deny_count: 1,
             last_decision: Some(true),
@@ -283,14 +303,38 @@ mod tests {
         let temp_dir = std::env::temp_dir().join(format!("vtcode_test_{}", std::process::id()));
         let manager = JustificationManager::new(temp_dir.clone());
 
-        manager.record_decision("read_file", true, None);
-        manager.record_decision("read_file", true, None);
-        manager.record_decision("read_file", false, None);
+        manager.record_decision("read_file", Some("Read File"), true, None);
+        manager.record_decision("read_file", Some("Read File"), true, None);
+        manager.record_decision("read_file", Some("Read File"), false, None);
 
         let pattern = manager.get_pattern("read_file").unwrap();
         assert_eq!(pattern.approve_count, 2);
         assert_eq!(pattern.deny_count, 1);
         assert_eq!(pattern.approval_rate(), 2.0 / 3.0);
+        assert_eq!(pattern.display_name.as_deref(), Some("Read File"));
+
+        // Cleanup
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_justification_manager_preserves_new_display_name() {
+        let temp_dir = std::env::temp_dir().join(format!("vtcode_test_{}", std::process::id()));
+        let manager = JustificationManager::new(temp_dir.clone());
+
+        manager.record_decision("shell:key", Some("command `cargo test`"), true, None);
+        manager.record_decision(
+            "shell:key",
+            Some("commands starting with `cargo`"),
+            true,
+            None,
+        );
+
+        let pattern = manager.get_pattern("shell:key").unwrap();
+        assert_eq!(
+            pattern.display_name.as_deref(),
+            Some("commands starting with `cargo`")
+        );
 
         // Cleanup
         let _ = std::fs::remove_dir_all(&temp_dir);

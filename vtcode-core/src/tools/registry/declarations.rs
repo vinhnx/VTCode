@@ -331,7 +331,12 @@ fn base_function_declarations() -> Vec<FunctionDeclaration> {
                         },
                         "additionalProperties": false
                     },
-                    "justification": {"type": "string", "description": "Approval question when requesting `require_escalated` execution."},
+                    "justification": {"type": "string", "description": "Approval question shown to the user when requesting `require_escalated` execution. Required when `sandbox_permissions=require_escalated`."},
+                    "prefix_rule": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Optional command prefix to persist when the user chooses permanent approval. Must be a prefix of `command`, and VT Code ignores it for compound shell commands."
+                    },
                     "timeout_secs": {"type": "integer", "description": "Timeout in seconds.", "default": 180},
                     "yield_time_ms": {"type": "integer", "description": "Time to wait for output (ms).", "default": 1000},
                     "confirm": {"type": "boolean", "description": "Confirm destructive ops.", "default": false},

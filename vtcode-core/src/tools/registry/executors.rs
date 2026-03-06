@@ -315,6 +315,7 @@ fn sensitive_paths_from_runtime_config(
 }
 
 const MISSING_ADDITIONAL_PERMISSIONS_MESSAGE: &str = "missing `additional_permissions`; provide `fs_read` and/or `fs_write` when using `with_additional_permissions`";
+const MISSING_ESCALATION_JUSTIFICATION_MESSAGE: &str = "missing `justification`; provide a short approval question when using `sandbox_permissions=require_escalated`";
 
 fn parse_requested_sandbox_permissions(
     payload: &serde_json::Map<String, Value>,
@@ -338,6 +339,16 @@ fn parse_requested_sandbox_permissions(
         .with_context(|| {
             "Invalid additional_permissions. Expected object with fs_read/fs_write string arrays."
         })?;
+
+    if sandbox_permissions.requires_escalated_permissions() {
+        let justification = payload
+            .get("justification")
+            .and_then(Value::as_str)
+            .map(str::trim);
+        if justification.is_none_or(str::is_empty) {
+            return Err(anyhow!(MISSING_ESCALATION_JUSTIFICATION_MESSAGE));
+        }
+    }
 
     let additional_permissions = if sandbox_permissions.uses_additional_permissions() {
         let Some(additional_permissions) = additional_permissions else {
@@ -3185,5 +3196,39 @@ mod sandbox_runtime_tests {
         )
         .expect("require_escalated should bypass sandbox transform");
         assert_eq!(out, command);
+    }
+
+    #[test]
+    fn require_escalated_requires_non_empty_justification() {
+        let payload = json!({
+            "sandbox_permissions": "require_escalated"
+        });
+        let obj = payload.as_object().expect("payload object");
+        let err = parse_requested_sandbox_permissions(obj, PathBuf::from(".").as_path())
+            .expect_err("require_escalated without justification should fail");
+        assert!(err.to_string().contains("missing `justification`"));
+
+        let payload = json!({
+            "sandbox_permissions": "require_escalated",
+            "justification": "   "
+        });
+        let obj = payload.as_object().expect("payload object");
+        let err = parse_requested_sandbox_permissions(obj, PathBuf::from(".").as_path())
+            .expect_err("blank justification should fail");
+        assert!(err.to_string().contains("missing `justification`"));
+    }
+
+    #[test]
+    fn require_escalated_accepts_justified_request() {
+        let payload = json!({
+            "sandbox_permissions": "require_escalated",
+            "justification": "Do you want to rerun this command without sandbox restrictions?"
+        });
+        let obj = payload.as_object().expect("payload object");
+        let (sandbox_permissions, additional_permissions) =
+            parse_requested_sandbox_permissions(obj, PathBuf::from(".").as_path())
+                .expect("justified require_escalated should parse");
+        assert_eq!(sandbox_permissions, SandboxPermissions::RequireEscalated);
+        assert!(additional_permissions.is_none());
     }
 }

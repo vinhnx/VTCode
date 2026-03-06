@@ -9,12 +9,14 @@ use vtcode_core::config::constants::defaults::{
     DEFAULT_MAX_SEQUENTIAL_SPOOL_CHUNK_READS_PER_TURN,
 };
 use vtcode_core::config::constants::tools as tool_names;
+use vtcode_core::exec_policy::AskForApproval;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::tools::registry::ToolExecutionError;
 use vtcode_core::tools::registry::labels::tool_action_label;
 use vtcode_core::tools::tool_intent;
 use vtcode_core::utils::ansi::MessageStyle;
 
+use crate::agent::runloop::unified::async_mcp_manager::approval_policy_from_human_in_the_loop;
 use crate::agent::runloop::unified::tool_call_safety::SafetyError;
 use crate::agent::runloop::unified::tool_routing::{
     ensure_tool_permission, prompt_session_limit_increase,
@@ -1897,11 +1899,12 @@ pub(crate) async fn validate_tool_call<'a>(
                     .map(|cfg| cfg.security.hitl_notification_bell)
                     .unwrap_or(true),
                 autonomous_mode: parts.state.session_stats.is_autonomous_mode(),
-                human_in_the_loop: parts
+                approval_policy: parts
                     .llm
                     .vt_cfg
                     .map(|cfg| cfg.security.human_in_the_loop)
-                    .unwrap_or(true),
+                    .map(approval_policy_from_human_in_the_loop)
+                    .unwrap_or(AskForApproval::OnRequest),
                 skip_confirmations: false, // Normal tool calls should prompt if configured
             },
             &canonical_tool_name,

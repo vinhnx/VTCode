@@ -36,44 +36,45 @@ impl Default for ApprovalRecorder {
 }
 
 impl ApprovalRecorder {
-    /// Record a user's approval decision for a tool
+    /// Record a user's approval decision for a learned approval key
     pub async fn record_approval(
         &self,
-        tool_name: &str,
+        approval_key: &str,
+        display_name: Option<&str>,
         approved: bool,
         reason: Option<String>,
     ) -> Result<()> {
         let manager = self.manager.write().await;
-        manager.record_decision(tool_name, approved, reason);
+        manager.record_decision(approval_key, display_name, approved, reason);
         Ok(())
     }
 
-    /// Get the approval pattern for a tool
-    pub async fn get_pattern(&self, tool_name: &str) -> Option<ApprovalPattern> {
+    /// Get the approval pattern for a learned approval key
+    pub async fn get_pattern(&self, approval_key: &str) -> Option<ApprovalPattern> {
         let manager = self.manager.read().await;
-        manager.get_pattern(tool_name)
+        manager.get_pattern(approval_key)
     }
 
-    /// Check if a tool has high approval rate from history
-    pub async fn has_high_approval_rate(&self, tool_name: &str) -> bool {
+    /// Check if a key has high approval rate from history
+    pub async fn has_high_approval_rate(&self, approval_key: &str) -> bool {
         let manager = self.manager.read().await;
-        if let Some(pattern) = manager.get_pattern(tool_name) {
+        if let Some(pattern) = manager.get_pattern(approval_key) {
             pattern.has_high_approval_rate()
         } else {
             false
         }
     }
 
-    /// Get learning summary for a tool
-    pub async fn get_learning_summary(&self, tool_name: &str) -> Option<String> {
+    /// Get learning summary for a learned approval key
+    pub async fn get_learning_summary(&self, approval_key: &str) -> Option<String> {
         let manager = self.manager.read().await;
-        manager.get_learning_summary(tool_name)
+        manager.get_learning_summary(approval_key)
     }
 
-    /// Get approval count for a tool
-    pub async fn get_approval_count(&self, tool_name: &str) -> u32 {
+    /// Get approval count for a learned approval key
+    pub async fn get_approval_count(&self, approval_key: &str) -> u32 {
         let manager = self.manager.read().await;
-        if let Some(pattern) = manager.get_pattern(tool_name) {
+        if let Some(pattern) = manager.get_pattern(approval_key) {
             pattern.approval_count()
         } else {
             0
@@ -84,23 +85,29 @@ impl ApprovalRecorder {
     /// Rules:
     /// - At least 3 approvals
     /// - Approval rate > 80%
-    pub async fn should_auto_approve(&self, tool_name: &str) -> bool {
+    pub async fn should_auto_approve(&self, approval_key: &str) -> bool {
         let manager = self.manager.read().await;
-        if let Some(pattern) = manager.get_pattern(tool_name) {
+        if let Some(pattern) = manager.get_pattern(approval_key) {
             pattern.has_high_approval_rate()
         } else {
             false
         }
     }
 
-    /// Suggest auto-approval message if user has approved this tool many times
-    pub async fn get_auto_approval_suggestion(&self, tool_name: &str) -> Option<String> {
+    /// Suggest auto-approval message if user has approved this target many times
+    pub async fn get_auto_approval_suggestion(
+        &self,
+        approval_key: &str,
+        fallback_display_name: &str,
+    ) -> Option<String> {
         let manager = self.manager.read().await;
-        if let Some(pattern) = manager.get_pattern(tool_name) {
+        if let Some(pattern) = manager.get_pattern(approval_key) {
             let rate = pattern.approval_rate();
             if pattern.approval_count() >= 5 {
+                let display_name = pattern.display_name(fallback_display_name);
                 return Some(format!(
-                    "You've approved this tool {} times ({:.0}% approval rate)",
+                    "You've approved {} {} times ({:.0}% approval rate)",
+                    display_name,
                     pattern.approval_count(),
                     rate * 100.0
                 ));
@@ -122,19 +129,19 @@ mod tests {
         // Record some approvals
         assert!(
             recorder
-                .record_approval("read_file", true, None)
+                .record_approval("read_file", Some("Read File"), true, None)
                 .await
                 .is_ok()
         );
         assert!(
             recorder
-                .record_approval("read_file", true, None)
+                .record_approval("read_file", Some("Read File"), true, None)
                 .await
                 .is_ok()
         );
         assert!(
             recorder
-                .record_approval("read_file", false, None)
+                .record_approval("read_file", Some("Read File"), false, None)
                 .await
                 .is_ok()
         );
@@ -156,18 +163,22 @@ mod tests {
         // Not enough approvals initially
         assert!(
             recorder
-                .get_auto_approval_suggestion("read_file")
+                .get_auto_approval_suggestion("read_file", "Read File")
                 .await
                 .is_none()
         );
 
         // Add 5 approvals
         for _ in 0..5 {
-            let _ = recorder.record_approval("read_file", true, None).await;
+            let _ = recorder
+                .record_approval("read_file", Some("Read File"), true, None)
+                .await;
         }
 
         // Now we should get a suggestion
-        let suggestion = recorder.get_auto_approval_suggestion("read_file").await;
+        let suggestion = recorder
+            .get_auto_approval_suggestion("read_file", "Read File")
+            .await;
         assert!(suggestion.is_some());
         assert!(suggestion.unwrap().contains("100%"));
 
@@ -185,13 +196,75 @@ mod tests {
 
         // Add 3 approvals (minimum threshold)
         for _ in 0..3 {
-            let _ = recorder.record_approval("run_command", true, None).await;
+            let _ = recorder
+                .record_approval("run_command", Some("Run Command"), true, None)
+                .await;
         }
 
         // Now should auto-approve
         assert!(recorder.should_auto_approve("run_command").await);
 
         // Cleanup
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[tokio::test]
+    async fn test_auto_approval_suggestion_uses_display_name() {
+        let temp_dir = std::env::temp_dir().join(format!("vtcode_test_{}", std::process::id()));
+        let recorder = ApprovalRecorder::new(temp_dir.clone());
+
+        for _ in 0..5 {
+            let _ = recorder
+                .record_approval(
+                    "cargo test|sandbox_permissions=\"require_escalated\"|additional_permissions=null",
+                    Some("commands starting with `cargo test`"),
+                    true,
+                    None,
+                )
+                .await;
+        }
+
+        let suggestion = recorder
+            .get_auto_approval_suggestion(
+                "cargo test|sandbox_permissions=\"require_escalated\"|additional_permissions=null",
+                "fallback label",
+            )
+            .await
+            .expect("suggestion");
+        assert!(suggestion.contains("commands starting with `cargo test`"));
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[tokio::test]
+    async fn test_shell_scoped_history_does_not_reuse_tool_level_key() {
+        let temp_dir = std::env::temp_dir().join(format!("vtcode_test_{}", std::process::id()));
+        let recorder = ApprovalRecorder::new(temp_dir.clone());
+
+        for _ in 0..5 {
+            let _ = recorder
+                .record_approval("unified_exec", Some("Unified Exec"), true, None)
+                .await;
+        }
+
+        assert_eq!(
+            recorder
+                .get_approval_count(
+                    "cargo test|sandbox_permissions=\"require_escalated\"|additional_permissions=null"
+                )
+                .await,
+            0
+        );
+        assert!(
+            recorder
+                .get_auto_approval_suggestion(
+                    "cargo test|sandbox_permissions=\"require_escalated\"|additional_permissions=null",
+                    "commands starting with `cargo test`",
+                )
+                .await
+                .is_none()
+        );
+
         let _ = std::fs::remove_dir_all(&temp_dir);
     }
 }
