@@ -153,8 +153,9 @@ get_download_url() {
         file_ext="zip"
     fi
 
-    # Build download URL (must be on its own line, only echo output is captured)
-    local filename="vtcode-${release_tag}-${platform}.${file_ext}"
+    # Strip 'v' prefix from tag for filename only (URL path keeps the v prefix)
+    local version_tag="${release_tag#v}"
+    local filename="vtcode-${version_tag}-${platform}.${file_ext}"
     echo "${GITHUB_RELEASES}/${release_tag}/${filename}"
 }
 
@@ -186,8 +187,7 @@ find_latest_release_tag() {
     # Iterate through tags to find one with assets
     for tag in $tags; do
         if [[ -n "$tag" ]]; then
-            # Strip 'v' prefix if present for consistent URL building
-            tag="${tag#v}"
+            # Keep 'v' prefix for consistent URL building (GitHub release URLs use vX.Y.Z format)
             if check_version_available "$tag" "$platform"; then
                 echo "$tag"
                 return 0
