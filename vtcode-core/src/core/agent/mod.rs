@@ -10,8 +10,10 @@ pub mod core;
 pub mod display;
 pub mod error_recovery;
 pub mod events;
+pub mod features;
 pub mod runner;
 pub mod session;
+pub mod session_config;
 pub mod snapshots;
 pub mod state;
 pub mod stats;
@@ -21,5 +23,7 @@ pub mod types;
 
 // Re-export main types for convenience
 pub use bootstrap::{AgentComponentBuilder, AgentComponentSet};
+pub use features::{FeatureGate, FeatureSet, FeatureStage, OpenResponsesFeature};
+pub use session_config::ResolvedSessionConfig;
 
 pub use types::*;

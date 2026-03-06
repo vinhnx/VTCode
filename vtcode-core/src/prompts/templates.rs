@@ -43,7 +43,7 @@ impl PromptTemplates {
 
     /// Get tool usage prompt
     pub fn tool_usage_prompt() -> &'static str {
-        "Tools: unified_search (grep/list/tools/errors/agent/web/skill), unified_file (read/write/edit/patch), unified_exec (run/write/poll/inspect/list/close/code), request_user_input (Plan mode only). Prefer unified tools for discovery/files, keep paths scoped, and paginate large reads."
+        "Tools: unified_search (grep/list/tools/errors/agent/web/skill), unified_file (read/write/edit/patch), unified_exec (run/write/poll/inspect/list/close/code), request_user_input (interactive chat when enabled; always available in Plan mode). Prefer unified tools for discovery/files, keep paths scoped, and paginate large reads."
     }
 
     /// Get workspace context prompt

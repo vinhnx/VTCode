@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use tokio::sync::RwLock;
-use vtcode_core::config::constants::tools as tool_names;
+use vtcode_core::core::agent::features::FeatureSet;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::prompts::sort_tool_definitions;
 
@@ -142,19 +142,7 @@ pub(crate) fn should_expose_tool_in_mode(
         return true;
     };
 
-    if name == tool_names::REQUEST_USER_INPUT {
-        return plan_mode && request_user_input_enabled;
-    }
-
-    if name == tool_names::PLAN_TASK_TRACKER {
-        return plan_mode;
-    }
-
-    if name == tool_names::TASK_TRACKER {
-        return true;
-    }
-
-    true
+    FeatureSet::tool_enabled_for_mode(name, plan_mode, request_user_input_enabled)
 }
 
 pub(crate) fn filter_tools_for_mode(
@@ -187,13 +175,14 @@ mod tests {
     use super::*;
     use serde_json::json;
     use tokio::sync::RwLock;
+    use vtcode_core::config::constants::tools as tool_names;
 
     fn function_tool(name: &str) -> uni::ToolDefinition {
         uni::ToolDefinition::function(name.to_string(), name.to_string(), json!({}))
     }
 
     #[test]
-    fn filter_tools_for_mode_hides_plan_only_tools_in_edit_mode() {
+    fn filter_tools_for_mode_hides_only_plan_specific_tools_in_edit_mode() {
         let tools = Arc::new(vec![
             function_tool(tool_names::UNIFIED_SEARCH),
             function_tool(tool_names::PLAN_TASK_TRACKER),
@@ -210,8 +199,8 @@ mod tests {
 
         assert!(names.contains(&tool_names::UNIFIED_SEARCH));
         assert!(names.contains(&tool_names::TASK_TRACKER));
+        assert!(names.contains(&tool_names::REQUEST_USER_INPUT));
         assert!(!names.contains(&tool_names::PLAN_TASK_TRACKER));
-        assert!(!names.contains(&tool_names::REQUEST_USER_INPUT));
     }
 
     #[test]
@@ -291,11 +280,11 @@ mod tests {
         )]));
 
         let first = state
-            .filtered_snapshot_with_stats(&tools, false, true)
+            .filtered_snapshot_with_stats(&tools, false, false)
             .await
             .snapshot;
         let second = state
-            .filtered_snapshot_with_stats(&tools, false, true)
+            .filtered_snapshot_with_stats(&tools, false, false)
             .await
             .snapshot;
         assert!(first.is_none());

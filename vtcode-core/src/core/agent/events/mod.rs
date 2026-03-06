@@ -366,6 +366,7 @@ impl ExecEventRecorder {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::threads::{ThreadBootstrap, ThreadManager};
 
     fn make_recorder() -> ExecEventRecorder {
         ExecEventRecorder::new("thread", None, None)
@@ -407,5 +408,39 @@ mod tests {
             }
             _ => panic!("unexpected event variant"),
         }
+    }
+
+    #[test]
+    fn thread_backed_recorder_reuses_submission_id_within_turn() {
+        let handle =
+            ThreadManager::new().start_thread_with_identifier("thread", ThreadBootstrap::new(None));
+        let mut recorder = ExecEventRecorder::new("thread", None, Some(handle.clone()));
+
+        recorder.turn_started();
+        recorder.agent_message("hello");
+        recorder.turn_completed();
+
+        let records = handle.replay_recent();
+        let submission_ids: std::collections::BTreeSet<String> = records
+            .iter()
+            .filter_map(|record| {
+                record
+                    .submission_id
+                    .as_ref()
+                    .map(|id| id.as_str().to_string())
+            })
+            .collect();
+
+        assert_eq!(submission_ids.len(), 1);
+        assert!(
+            records
+                .iter()
+                .any(|record| matches!(record.event, ThreadEvent::TurnStarted(_))
+                    && record.submission_id.is_some())
+        );
+        assert!(records.iter().any(
+            |record| matches!(record.event, ThreadEvent::TurnCompleted(_))
+                && record.submission_id.is_some()
+        ));
     }
 }

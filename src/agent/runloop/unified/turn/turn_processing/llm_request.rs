@@ -8,6 +8,7 @@ use tokio::task;
 use tracing::debug;
 use vtcode_config::constants::context::TOKEN_BUDGET_HIGH_THRESHOLD;
 use vtcode_core::config::{OpenAIPromptCacheKeyMode, PromptCachingConfig};
+use vtcode_core::core::agent::features::FeatureSet;
 use vtcode_core::exec::events::{
     AgentMessageItem, ItemCompletedEvent, ItemStartedEvent, ItemUpdatedEvent, ReasoningItem,
     ThreadEvent, ThreadItem, ThreadItemDetails,
@@ -535,20 +536,13 @@ fn capture_turn_request_snapshot(
         );
         let prompt_cache_shaping_mode =
             resolve_prompt_cache_shaping_mode(&provider_name, prompt_cache_config);
+        let request_user_input_enabled =
+            FeatureSet::from_config(parts.llm.vt_cfg).request_user_input_enabled(plan_mode, true);
 
         (
             provider_name,
             plan_mode,
-            if plan_mode {
-                true
-            } else {
-                parts
-                    .llm
-                    .vt_cfg
-                    .as_ref()
-                    .map(|cfg| cfg.chat.ask_questions.enabled)
-                    .unwrap_or(true)
-            },
+            request_user_input_enabled,
             parts
                 .llm
                 .provider_client
@@ -662,13 +656,11 @@ fn resolve_context_management(
     active_model: &str,
 ) -> Option<serde_json::Value> {
     let harness_config = ctx.vt_cfg.map(|cfg| &cfg.agent.harness);
-    let auto_compaction_enabled = harness_config
-        .map(|cfg| cfg.auto_compaction_enabled)
-        .unwrap_or(false);
     let supports_server_compaction = ctx
         .provider_client
         .supports_responses_compaction(active_model);
-    if auto_compaction_enabled && supports_server_compaction {
+    let features = FeatureSet::from_config(ctx.vt_cfg);
+    if features.auto_compaction_enabled(supports_server_compaction) {
         let context_size = ctx.provider_client.effective_context_size(active_model);
         let configured_threshold =
             harness_config.and_then(|cfg| cfg.auto_compaction_threshold_tokens);

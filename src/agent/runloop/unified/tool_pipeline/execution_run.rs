@@ -5,6 +5,7 @@ use serde_json::Value;
 use tokio::sync::Notify;
 use vtcode_core::config::constants::tools;
 use vtcode_core::config::loader::VTCodeConfig;
+use vtcode_core::core::agent::features::FeatureSet;
 use vtcode_core::exec::events::ToolCallStatus;
 use vtcode_core::tools::ToolInvocationId;
 
@@ -204,6 +205,8 @@ pub(crate) async fn run_tool_call_with_args(
         }
     }
 
+    let request_user_input_enabled = FeatureSet::from_config(vt_cfg)
+        .request_user_input_enabled(ctx.session_stats.is_plan_mode(), true);
     if let Some(hitl_result) = execute_hitl_tool(
         name,
         ctx.handle,
@@ -211,7 +214,7 @@ pub(crate) async fn run_tool_call_with_args(
         args_val,
         ctrl_c_state,
         ctrl_c_notify,
-        ctx.session_stats.editing_mode,
+        request_user_input_enabled,
     )
     .await
     {

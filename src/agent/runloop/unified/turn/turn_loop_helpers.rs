@@ -12,6 +12,7 @@ use vtcode_core::config::constants::defaults::{
 };
 use vtcode_core::config::constants::tools as tool_names;
 use vtcode_core::config::loader::VTCodeConfig;
+use vtcode_core::core::agent::features::FeatureSet;
 use vtcode_core::core::agent::steering::SteeringMessage;
 use vtcode_core::llm::provider as uni;
 
@@ -28,6 +29,7 @@ pub(super) fn extract_turn_config(
     vt_cfg: Option<&VTCodeConfig>,
     plan_mode_active: bool,
 ) -> PrecomputedTurnConfig {
+    let features = FeatureSet::from_config(vt_cfg);
     vt_cfg
         .map(|cfg| PrecomputedTurnConfig {
             max_tool_loops: if plan_mode_active {
@@ -47,11 +49,7 @@ pub(super) fn extract_turn_config(
                 DEFAULT_MAX_REPEATED_TOOL_CALLS
             },
             max_session_turns: cfg.agent.max_conversation_turns,
-            request_user_input_enabled: if plan_mode_active {
-                true
-            } else {
-                cfg.chat.ask_questions.enabled
-            },
+            request_user_input_enabled: features.request_user_input_enabled(plan_mode_active, true),
         })
         .unwrap_or(PrecomputedTurnConfig {
             max_tool_loops: if plan_mode_active {
@@ -61,7 +59,7 @@ pub(super) fn extract_turn_config(
             },
             tool_repeat_limit: DEFAULT_MAX_REPEATED_TOOL_CALLS,
             max_session_turns: DEFAULT_MAX_CONVERSATION_TURNS,
-            request_user_input_enabled: true,
+            request_user_input_enabled: features.request_user_input_enabled(plan_mode_active, true),
         })
 }
 

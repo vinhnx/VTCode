@@ -607,7 +607,7 @@ pub async fn compose_system_instruction_text(
 
         if cfg.chat.ask_questions.enabled {
             instruction.push_str(
-                "- **request_user_input tool**: Enabled in Plan mode (strictly enforced)\n",
+                "- **request_user_input tool**: Enabled in interactive chat; Plan mode always keeps interview availability\n",
             );
         } else {
             instruction.push_str("- **request_user_input tool**: Disabled in Edit mode; Plan mode still enforces interview tool availability\n");

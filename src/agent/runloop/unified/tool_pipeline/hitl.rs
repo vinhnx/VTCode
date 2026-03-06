@@ -3,7 +3,7 @@ use serde_json::Value;
 use std::sync::Arc;
 use tokio::sync::Notify;
 use vtcode_core::config::constants::tools;
-use vtcode_tui::{EditingMode, InlineHandle, InlineSession};
+use vtcode_tui::{InlineHandle, InlineSession};
 
 use crate::agent::runloop::unified::request_user_input;
 use crate::agent::runloop::unified::state::CtrlCState;
@@ -15,13 +15,10 @@ pub(crate) async fn execute_hitl_tool(
     args: &Value,
     ctrl_c_state: &Arc<CtrlCState>,
     ctrl_c_notify: &Arc<Notify>,
-    editing_mode: EditingMode,
+    request_user_input_enabled: bool,
 ) -> Option<Result<Value>> {
-    if tool_name == tools::REQUEST_USER_INPUT && editing_mode != EditingMode::Plan {
-        let message = format!(
-            "request_user_input is unavailable in {} mode",
-            editing_mode.display_name()
-        );
+    if tool_name == tools::REQUEST_USER_INPUT && !request_user_input_enabled {
+        let message = "request_user_input is unavailable in the current session mode";
         return Some(Err(anyhow!(message)));
     }
 

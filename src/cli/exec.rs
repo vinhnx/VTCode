@@ -155,10 +155,6 @@ async fn handle_exec_command_impl(
     )
     .await?;
 
-    runner
-        .apply_workspace_configuration(vt_cfg)
-        .await
-        .context("Failed to apply workspace configuration to exec runner")?;
     runner.enable_full_auto(&automation_cfg.allowed_tools).await;
     if options.dry_run {
         runner.enable_plan_mode();

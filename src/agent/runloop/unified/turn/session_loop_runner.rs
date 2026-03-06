@@ -7,6 +7,7 @@ use crate::agent::runloop::unified::postamble::{ExitSummaryData, print_exit_summ
 use crate::agent::runloop::unified::run_loop_context::TurnPhase;
 use crate::agent::runloop::unified::turn::turn_loop::TurnLoopOutcome;
 use crate::agent::runloop::welcome::SessionBootstrap;
+use vtcode_core::core::agent::features::FeatureSet;
 
 const PLAN_MODE_MIN_TOOL_CALLS_PER_TURN: usize = 48;
 const CODE_CHANGE_SNAPSHOT_TIMEOUT_MS: u64 = 120;
@@ -425,7 +426,8 @@ pub(super) async fn run_single_agent_loop_unified_impl(
                 .as_ref()
                 .map(|cfg| cfg.agent.open_responses.clone())
                 .unwrap_or_default();
-            if open_responses_config.enabled {
+            let features = FeatureSet::from_config(vt_cfg.as_ref());
+            if features.open_responses.emit_events {
                 let or_path = harness_config.event_log_path.as_ref().map(|base| {
                     let parent = std::path::Path::new(base)
                         .parent()

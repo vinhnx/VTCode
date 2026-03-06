@@ -30,7 +30,7 @@ impl AgentRunner {
     }
 
     pub(super) fn config(&self) -> &VTCodeConfig {
-        self.config.as_ref()
+        self.session_config.effective()
     }
 
     #[allow(dead_code)]

@@ -17,6 +17,13 @@ impl AgentRunner {
         )
     }
 
+    /// Check if a tool is exposed to the active runtime after feature gating.
+    pub(super) async fn is_tool_exposed(&self, tool_name: &str) -> bool {
+        self.features()
+            .allows_tool_name(tool_name, self.tool_registry.is_plan_mode(), false)
+            && self.is_tool_allowed(tool_name).await
+    }
+
     /// Validate if a tool name is safe, registered, and allowed by policy
     #[inline]
     pub(super) async fn is_valid_tool(&self, tool_name: &str) -> bool {
@@ -33,7 +40,7 @@ impl AgentRunner {
         }
 
         // Enforce policy gate: Allow and Prompt are executable, Deny blocks
-        self.is_tool_allowed(canonical).await
+        self.is_tool_exposed(canonical).await
     }
 
     /// Execute a tool by name with given arguments.

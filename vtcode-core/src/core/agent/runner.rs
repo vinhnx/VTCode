@@ -1,11 +1,11 @@
 //! Agent runner for executing individual agent instances
 
 use crate::config::VTCodeConfig;
-use crate::config::constants::defaults;
-use crate::config::loader::ConfigManager;
 use crate::config::models::ModelId;
 use crate::config::types::{ReasoningEffortLevel, VerbosityLevel};
 use crate::core::agent::events::EventSink;
+use crate::core::agent::features::FeatureSet;
+use crate::core::agent::session_config::ResolvedSessionConfig;
 use crate::core::agent::state::ApiFailureTracker;
 use crate::core::agent::steering::SteeringMessage;
 use crate::core::threads::{ThreadBootstrap, ThreadRuntimeHandle, build_thread_archive_metadata};
@@ -35,7 +35,7 @@ use parking_lot::Mutex;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
-use tracing::warn;
+use tracing::{info, warn};
 
 mod config_helpers;
 mod constants;
@@ -55,7 +55,6 @@ mod tool_args;
 mod tool_exec;
 mod types;
 mod validation;
-mod workspace_config;
 
 #[cfg(test)]
 mod tests;
@@ -76,8 +75,8 @@ pub struct AgentRunner {
     session_id: String,
     /// Workspace path
     _workspace: PathBuf,
-    /// Cached vtcode configuration
-    config: Arc<VTCodeConfig>,
+    /// Frozen session-scoped configuration snapshot
+    session_config: Arc<ResolvedSessionConfig>,
     /// Model identifier
     model: String,
     /// API key (for provider client construction in future flows)
@@ -143,36 +142,63 @@ impl AgentRunner {
                 .map_err(|e| anyhow!("Failed to create provider client: {}", e))?;
 
         // Load configuration once to seed system prompt and runtime policies
-        let (config_value, system_prompt) = match ConfigManager::load_from_workspace(&workspace) {
-            Ok(manager) => {
-                let cfg = manager.config().clone();
-                let prompt =
-                    compose_system_instruction_text(workspace.as_path(), Some(&cfg), None).await;
-                (cfg, prompt)
-            }
+        let session_config = match ResolvedSessionConfig::load_from_workspace(&workspace) {
+            Ok(session_config) => session_config,
             Err(err) => {
                 warn!("Failed to load vtcode configuration for system prompt composition: {err:#}");
-                let cfg = VTCodeConfig::default();
-                let prompt = compose_system_instruction_text(workspace.as_path(), None, None).await;
-                (cfg, prompt)
+                ResolvedSessionConfig::from_config(VTCodeConfig::default())
             }
         };
+        let session_config = Arc::new(session_config);
+        let system_prompt = compose_system_instruction_text(
+            workspace.as_path(),
+            Some(session_config.effective()),
+            None,
+        )
+        .await;
 
-        let max_repeated_tool_calls = config_value.tools.max_repeated_tool_calls.max(1);
-        let config = Arc::new(config_value);
+        let max_repeated_tool_calls = session_config
+            .effective()
+            .tools
+            .max_repeated_tool_calls
+            .max(1);
         let tool_registry = ToolRegistry::new(workspace.clone()).await;
         tool_registry.set_harness_session(session_id.clone());
         tool_registry.set_agent_type(agent_type.to_string());
-        tool_registry.apply_timeout_policy(&config.timeouts);
+        tool_registry.apply_timeout_policy(&session_config.effective().timeouts);
+        tool_registry.initialize_async().await?;
+        tool_registry.apply_commands_config(&session_config.effective().commands);
+        tool_registry.apply_sandbox_config(&session_config.effective().sandbox);
+        if let Err(err) = tool_registry
+            .apply_config_policies(&session_config.effective().tools)
+            .await
+        {
+            warn!("Failed to apply tool policies from config: {}", err);
+        }
+        if session_config.effective().mcp.enabled {
+            if let Err(err) = crate::mcp::validate_mcp_config(&session_config.effective().mcp) {
+                warn!("MCP configuration validation error: {err}");
+            }
+            info!("Deferring MCP client initialization to on-demand activation");
+        }
+        if session_config.effective().context.dynamic.enabled
+            && let Err(err) = crate::context::initialize_dynamic_context(
+                &workspace,
+                &session_config.effective().context.dynamic,
+            )
+            .await
+        {
+            warn!("Failed to initialize dynamic context directories: {}", err);
+        }
         let loop_detector = LoopDetector::with_max_repeated_calls(max_repeated_tool_calls);
         let thread_metadata = build_thread_archive_metadata(
             workspace.as_path(),
             model.as_str(),
-            &config.agent.provider,
-            &config.agent.theme,
+            &session_config.effective().agent.provider,
+            &session_config.effective().agent.theme,
             settings
                 .reasoning_effort
-                .unwrap_or(config.agent.reasoning_effort)
+                .unwrap_or(session_config.effective().agent.reasoning_effort)
                 .as_str(),
         );
         let thread_handle = crate::core::threads::ThreadManager::new()
@@ -180,6 +206,12 @@ impl AgentRunner {
                 session_id.clone(),
                 ThreadBootstrap::new(Some(thread_metadata)),
             );
+        let max_turns = session_config
+            .effective()
+            .automation
+            .full_auto
+            .max_turns
+            .max(1);
 
         Ok(Self {
             agent_type,
@@ -189,7 +221,7 @@ impl AgentRunner {
             system_prompt,
             session_id,
             _workspace: workspace,
-            config,
+            session_config,
             model: model.to_string(),
             _api_key: api_key,
             reasoning_effort: settings.reasoning_effort,
@@ -197,7 +229,7 @@ impl AgentRunner {
             quiet: false,
             event_sink: None,
             thread_handle,
-            max_turns: defaults::DEFAULT_FULL_AUTO_MAX_TURNS,
+            max_turns,
             loop_detector: Mutex::new(loop_detector),
             failure_tracker: Mutex::new(ApiFailureTracker::new()),
             context_optimizer: tokio::sync::Mutex::new(ContextOptimizer::new()),
@@ -249,6 +281,10 @@ impl AgentRunner {
             .await;
     }
 
+    pub(crate) fn features(&self) -> FeatureSet {
+        self.session_config.features().clone()
+    }
+
     /// Build available tools for this agent type
     async fn build_agent_tools(&self) -> Result<Vec<Tool>> {
         use crate::llm::providers::gemini::sanitize_function_parameters;
@@ -259,7 +295,7 @@ impl AgentRunner {
         // Filter tools based on agent type and permissions
         let mut allowed_tools = Vec::with_capacity(declarations.len());
         for decl in declarations.iter() {
-            if !self.is_tool_allowed(&decl.name).await {
+            if !self.is_tool_exposed(&decl.name).await {
                 continue;
             }
 
