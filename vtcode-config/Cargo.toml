@@ -37,7 +37,7 @@ thiserror = { workspace = true }
 toml_edit = "0.24.0"
 tracing = { workspace = true }
 urlencoding = "2.1"
-vtcode-commons = { path = "../vtcode-commons", version = "0.86.6" }
+vtcode-commons = { path = "../vtcode-commons", version = "0.86.7" }
 dotenvy = { workspace = true }
 schemars = { workspace = true, optional = true, features = ["indexmap2"] }
 
