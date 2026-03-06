@@ -114,7 +114,7 @@ impl Session {
         }
 
         // Render diff preview modal if active
-        if self.diff_preview.is_some() {
+        if self.diff_preview_state().is_some() {
             diff_preview::render_diff_preview(self, frame, viewport);
         }
 
@@ -255,10 +255,9 @@ fn normalize_panel_height(raw_height: u16, max_panel_height: u16) -> u16 {
 }
 
 fn modal_eligible_for_inline_bottom(session: &Session) -> bool {
-    session.wizard_modal.is_some()
+    session.wizard_overlay().is_some()
         || session
-            .modal
-            .as_ref()
+            .modal_state()
             .is_some_and(|modal| modal.list.is_some())
 }
 

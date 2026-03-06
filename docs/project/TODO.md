@@ -798,3 +798,11 @@ One caveat: GLM-5 uses --reasoning-parser glm45 flag in vLLM/SGLang harborframew
 ==
 
 https://claude.ai/chat/bac1e18f-f11a-496d-b260-7de5948faf7a
+
+--
+
+CODEX plus
+
+main account
+kiweuro
+writedownapp

@@ -84,7 +84,6 @@ impl ModelPickerState {
             return Err(anyhow!("API key requested before selecting a model"));
         };
         if self.inline_enabled {
-            renderer.close_modal();
             show_secure_api_modal(renderer, selection, self.workspace.as_deref());
         }
         prompt_api_key_plain(renderer, selection, self.workspace.as_deref())
@@ -329,7 +328,9 @@ impl ModelPickerState {
         if input.eq_ignore_ascii_case("skip") {
             match self.find_existing_api_key(&selection.env_key) {
                 Ok(Some(ExistingKey::OAuthToken)) => {
-                    renderer.close_modal();
+                    if self.inline_enabled {
+                        renderer.close_modal();
+                    }
                     renderer.line(
                         MessageStyle::Info,
                         &format!(
@@ -345,7 +346,9 @@ impl ModelPickerState {
                     return Ok(ModelPickerProgress::Completed(result?));
                 }
                 Ok(Some(ExistingKey::Environment)) => {
-                    renderer.close_modal();
+                    if self.inline_enabled {
+                        renderer.close_modal();
+                    }
                     renderer.line(
                         MessageStyle::Info,
                         &format!(
@@ -361,7 +364,9 @@ impl ModelPickerState {
                     return Ok(ModelPickerProgress::Completed(result?));
                 }
                 Ok(Some(ExistingKey::WorkspaceDotenv(value))) => {
-                    renderer.close_modal();
+                    if self.inline_enabled {
+                        renderer.close_modal();
+                    }
                     // SAFETY: Keys are sanitized and values come from configuration sources.
                     unsafe {
                         std::env::set_var(&selection.env_key, &value);
@@ -406,7 +411,9 @@ impl ModelPickerState {
         }
 
         self.pending_api_key = Some(input.to_string());
-        renderer.close_modal();
+        if self.inline_enabled {
+            renderer.close_modal();
+        }
         let result = self.build_result();
         Ok(ModelPickerProgress::Completed(result?))
     }

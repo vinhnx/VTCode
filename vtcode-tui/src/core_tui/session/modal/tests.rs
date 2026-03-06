@@ -2,8 +2,8 @@ use super::render::highlight_segments;
 use super::*;
 use crate::config::constants::ui;
 use crate::ui::tui::{
-    InlineEvent, InlineListItem, InlineListSearchConfig, InlineListSelection, WizardStep,
-    types::WizardModalMode,
+    InlineEvent, InlineListItem, InlineListSearchConfig, InlineListSelection, OverlayEvent,
+    OverlaySelectionChange, OverlaySubmission, WizardStep, types::WizardModalMode,
 };
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::style::{Modifier, Style};
@@ -45,9 +45,9 @@ fn sample_list_modal() -> ModalState {
         title: "Test".to_owned(),
         lines: vec![],
         footer_hint: None,
+        hotkeys: Vec::new(),
         list: Some(list_state),
         secure_prompt: None,
-        is_plan_confirmation: false,
         restore_input: true,
         restore_cursor: true,
         search: Some(search_state),
@@ -165,7 +165,9 @@ fn wizard_tabbed_list_enter_submits_single_selection() {
     let result = wizard.handle_key_event(&make_key(KeyCode::Enter), ModalKeyModifiers::default());
 
     match result {
-        ModalListKeyResult::Submit(InlineEvent::WizardModalSubmit(selections)) => {
+        ModalListKeyResult::Submit(InlineEvent::Overlay(OverlayEvent::Submitted(
+            OverlaySubmission::Wizard(selections),
+        ))) => {
             assert_eq!(selections.len(), 1);
             assert!(matches!(
                 selections[0],
@@ -292,7 +294,9 @@ fn wizard_inline_custom_note_sets_other_answer_and_submits_on_enter() {
 
     let result = wizard.handle_key_event(&make_key(KeyCode::Enter), ModalKeyModifiers::default());
     match result {
-        ModalListKeyResult::Submit(InlineEvent::WizardModalSubmit(selections)) => {
+        ModalListKeyResult::Submit(InlineEvent::Overlay(OverlayEvent::Submitted(
+            OverlaySubmission::Wizard(selections),
+        ))) => {
             assert_eq!(selections.len(), 1);
             match &selections[0] {
                 InlineListSelection::RequestUserInputAnswer { other, .. } => {
@@ -348,7 +352,9 @@ fn wizard_multistep_numeric_select_submits() {
     let result =
         wizard.handle_key_event(&make_key(KeyCode::Char('2')), ModalKeyModifiers::default());
     match result {
-        ModalListKeyResult::Submit(InlineEvent::WizardModalSubmit(selections)) => {
+        ModalListKeyResult::Submit(InlineEvent::Overlay(OverlayEvent::Submitted(
+            OverlaySubmission::Wizard(selections),
+        ))) => {
             assert_eq!(selections.len(), 1);
             match &selections[0] {
                 InlineListSelection::RequestUserInputAnswer { selected, .. } => {
@@ -377,9 +383,9 @@ fn sample_list_modal_with_count(count: usize) -> ModalState {
         title: "Test".to_owned(),
         lines: vec![],
         footer_hint: None,
+        hotkeys: Vec::new(),
         list: Some(ModalListState::new(items, None)),
         secure_prompt: None,
-        is_plan_confirmation: false,
         restore_input: true,
         restore_cursor: true,
         search: None,
@@ -482,7 +488,9 @@ fn list_modal_submit_emits_event() {
     let result = modal.handle_list_key_event(&key, ModalKeyModifiers::default());
 
     match result {
-        ModalListKeyResult::Submit(InlineEvent::ListModalSubmit(selection)) => {
+        ModalListKeyResult::Submit(InlineEvent::Overlay(OverlayEvent::Submitted(
+            OverlaySubmission::Selection(selection),
+        ))) => {
             assert_eq!(selection, InlineListSelection::Model(0));
         }
         other => panic!("unexpected result: {:?}", other),
@@ -495,6 +503,7 @@ fn list_modal_space_no_longer_submits_config_action() {
         title: "Config".to_owned(),
         lines: vec![],
         footer_hint: None,
+        hotkeys: Vec::new(),
         list: Some(ModalListState::new(
             vec![InlineListItem {
                 title: "Autonomous mode".to_owned(),
@@ -509,7 +518,6 @@ fn list_modal_space_no_longer_submits_config_action() {
             None,
         )),
         secure_prompt: None,
-        is_plan_confirmation: false,
         restore_input: true,
         restore_cursor: true,
         search: None,
@@ -527,6 +535,7 @@ fn list_modal_alt_d_does_not_toggle_density_for_config_actions() {
         title: "Config".to_owned(),
         lines: vec![],
         footer_hint: None,
+        hotkeys: Vec::new(),
         list: Some(ModalListState::new(
             vec![InlineListItem {
                 title: "Autonomous mode".to_owned(),
@@ -541,7 +550,6 @@ fn list_modal_alt_d_does_not_toggle_density_for_config_actions() {
             None,
         )),
         secure_prompt: None,
-        is_plan_confirmation: false,
         restore_input: true,
         restore_cursor: true,
         search: None,
@@ -616,7 +624,7 @@ fn list_modal_cancel_emits_event() {
     let result = modal.handle_list_key_event(&key, ModalKeyModifiers::default());
 
     match result {
-        ModalListKeyResult::Cancel(InlineEvent::ListModalCancel) => {}
+        ModalListKeyResult::Cancel(InlineEvent::Overlay(OverlayEvent::Cancelled)) => {}
         other => panic!("expected cancel event, got {:?}", other),
     }
 }
@@ -629,9 +637,9 @@ fn list_modal_tab_moves_forward() {
 
     assert!(matches!(
         result,
-        ModalListKeyResult::Emit(InlineEvent::ListModalSelectionChanged(
-            InlineListSelection::Model(1)
-        ))
+        ModalListKeyResult::Emit(InlineEvent::Overlay(OverlayEvent::SelectionChanged(
+            OverlaySelectionChange::List(InlineListSelection::Model(1))
+        )))
     ));
     let selection = modal
         .list
@@ -651,9 +659,9 @@ fn list_modal_backtab_moves_backward() {
 
     assert!(matches!(
         result,
-        ModalListKeyResult::Emit(InlineEvent::ListModalSelectionChanged(
-            InlineListSelection::Model(0)
-        ))
+        ModalListKeyResult::Emit(InlineEvent::Overlay(OverlayEvent::SelectionChanged(
+            OverlaySelectionChange::List(InlineListSelection::Model(0))
+        )))
     ));
     let selection = modal
         .list
@@ -680,9 +688,9 @@ fn list_modal_control_navigation_moves_selection() {
 
     assert!(matches!(
         result,
-        ModalListKeyResult::Emit(InlineEvent::ListModalSelectionChanged(
-            InlineListSelection::Model(0)
-        ))
+        ModalListKeyResult::Emit(InlineEvent::Overlay(OverlayEvent::SelectionChanged(
+            OverlaySelectionChange::List(InlineListSelection::Model(0))
+        )))
     ));
     let selection = modal
         .list
@@ -727,9 +735,9 @@ fn list_modal_page_navigation_respects_viewport() {
     let result = modal.handle_list_key_event(&page_down, ModalKeyModifiers::default());
     assert!(matches!(
         result,
-        ModalListKeyResult::Emit(InlineEvent::ListModalSelectionChanged(
-            InlineListSelection::Model(3)
-        ))
+        ModalListKeyResult::Emit(InlineEvent::Overlay(OverlayEvent::SelectionChanged(
+            OverlaySelectionChange::List(InlineListSelection::Model(3))
+        )))
     ));
 
     let selection = modal
@@ -742,9 +750,9 @@ fn list_modal_page_navigation_respects_viewport() {
     let result = modal.handle_list_key_event(&page_up, ModalKeyModifiers::default());
     assert!(matches!(
         result,
-        ModalListKeyResult::Emit(InlineEvent::ListModalSelectionChanged(
-            InlineListSelection::Model(0)
-        ))
+        ModalListKeyResult::Emit(InlineEvent::Overlay(OverlayEvent::SelectionChanged(
+            OverlaySelectionChange::List(InlineListSelection::Model(0))
+        )))
     ));
 
     let selection = modal

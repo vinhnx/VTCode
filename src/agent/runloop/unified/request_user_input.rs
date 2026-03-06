@@ -4,7 +4,6 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use std::sync::Arc;
 use tokio::sync::Notify;
-use tokio::task;
 
 use vtcode_tui::{
     InlineHandle, InlineListItem, InlineListSelection, InlineMessageKind, InlineSegment,
@@ -12,7 +11,7 @@ use vtcode_tui::{
 };
 
 use super::state::CtrlCState;
-use super::wizard_modal::{WizardModalOutcome, wait_for_wizard_modal};
+use super::wizard_modal::{WizardModalOutcome, show_wizard_modal_and_wait};
 
 /// Arguments parsed from the request_user_input tool call.
 #[derive(Debug, Deserialize)]
@@ -125,11 +124,19 @@ pub(crate) async fn execute_request_user_input_tool(
     let search = None;
 
     let safe_current_step = current_step.min(steps.len().saturating_sub(1));
-    handle.show_wizard_modal_with_mode(title, steps, safe_current_step, search, wizard_mode);
-    handle.force_redraw();
-    task::yield_now().await;
-
-    match wait_for_wizard_modal(handle, session, ctrl_c_state, ctrl_c_notify).await? {
+    match show_wizard_modal_and_wait(
+        handle,
+        session,
+        title,
+        steps,
+        safe_current_step,
+        search,
+        wizard_mode,
+        ctrl_c_state,
+        ctrl_c_notify,
+    )
+    .await?
+    {
         WizardModalOutcome::Submitted(selections) => {
             // Convert selections to response format
             let mut answers: HashMap<String, RequestUserInputAnswer> = HashMap::new();

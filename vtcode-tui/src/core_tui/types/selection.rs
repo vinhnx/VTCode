@@ -1,7 +1,5 @@
 use crate::config::types::ReasoningEffortLevel;
 
-use super::diff::TrustMode;
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum InlineListSelection {
     Model(usize),
@@ -38,18 +36,8 @@ pub enum InlineListSelection {
     PlanApprovalExecute,
     /// Return to planning to edit the plan
     PlanApprovalEditPlan,
-    /// Cancel execution and stay in plan mode
-    PlanApprovalCancel,
     /// Auto-accept all future plans in this session
     PlanApprovalAutoAccept,
-    /// Diff preview approval - apply edit changes
-    DiffPreviewApply,
-    /// Diff preview rejection - cancel edit changes
-    DiffPreviewReject,
-    /// Diff preview trust mode changed
-    DiffPreviewTrustChanged {
-        mode: TrustMode,
-    },
 }
 
 #[derive(Clone, Debug)]
@@ -62,7 +50,7 @@ pub struct InlineListItem {
     pub search_value: Option<String>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct InlineListSearchConfig {
     pub label: String,
     pub placeholder: Option<String>,

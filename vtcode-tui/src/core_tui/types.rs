@@ -1,5 +1,6 @@
 mod content;
 mod diff;
+mod overlay;
 mod plan;
 mod protocol;
 mod selection;
@@ -8,7 +9,12 @@ mod style;
 
 pub use content::ContentPart;
 pub use diff::{DiffHunk, DiffPreviewState, TrustMode};
-pub use plan::{PlanConfirmationResult, PlanContent, PlanPhase, PlanStep};
+pub use overlay::{
+    DiffOverlayRequest, ListOverlayRequest, ModalOverlayRequest, OverlayEvent, OverlayHotkey,
+    OverlayHotkeyAction, OverlayHotkeyKey, OverlayRequest, OverlaySelectionChange,
+    OverlaySubmission, WizardOverlayRequest,
+};
+pub use plan::{PlanContent, PlanPhase, PlanStep};
 pub use protocol::{
     FocusChangeCallback, InlineCommand, InlineEvent, InlineEventCallback, InlineHandle,
     InlineMessageKind, InlineSession,

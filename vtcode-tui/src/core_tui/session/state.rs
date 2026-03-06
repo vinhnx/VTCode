@@ -15,12 +15,12 @@ use ratatui::layout::Rect;
 use tokio::sync::mpsc::UnboundedSender;
 
 use super::super::types::{
-    InlineEvent, InlineListItem, InlineListSearchConfig, InlineListSelection, SecurePromptConfig,
-    WizardModalMode, WizardStep,
+    DiffOverlayRequest, DiffPreviewState, InlineEvent, ListOverlayRequest, ModalOverlayRequest,
+    OverlayRequest, WizardOverlayRequest,
 };
 use super::status_requires_shimmer;
 use super::{
-    Session,
+    ActiveOverlay, Session,
     modal::{ModalListState, ModalSearchState, ModalState, WizardModalState},
 };
 use crate::config::constants::ui;
@@ -223,16 +223,113 @@ impl Session {
         &mut self,
         title: String,
         lines: Vec<String>,
-        secure_prompt: Option<SecurePromptConfig>,
+        secure_prompt: Option<super::super::types::SecurePromptConfig>,
     ) {
-        let state = ModalState {
+        self.show_overlay(OverlayRequest::Modal(ModalOverlayRequest {
             title,
             lines,
+            secure_prompt,
+        }));
+    }
+
+    pub(super) fn show_overlay(&mut self, request: OverlayRequest) {
+        if self.has_active_overlay() {
+            self.overlay_queue.push_back(request);
+            self.mark_dirty();
+            return;
+        }
+        self.activate_overlay(request);
+    }
+
+    pub(crate) fn has_active_overlay(&self) -> bool {
+        self.active_overlay.is_some()
+    }
+
+    pub(crate) fn modal_state(&self) -> Option<&ModalState> {
+        self.active_overlay.as_ref().and_then(ActiveOverlay::as_modal)
+    }
+
+    pub(crate) fn modal_state_mut(&mut self) -> Option<&mut ModalState> {
+        self.active_overlay
+            .as_mut()
+            .and_then(ActiveOverlay::as_modal_mut)
+    }
+
+    pub(crate) fn wizard_overlay(&self) -> Option<&WizardModalState> {
+        self.active_overlay.as_ref().and_then(ActiveOverlay::as_wizard)
+    }
+
+    pub(crate) fn wizard_overlay_mut(&mut self) -> Option<&mut WizardModalState> {
+        self.active_overlay
+            .as_mut()
+            .and_then(ActiveOverlay::as_wizard_mut)
+    }
+
+    pub(crate) fn diff_preview_state(&self) -> Option<&DiffPreviewState> {
+        self.active_overlay.as_ref().and_then(ActiveOverlay::as_diff)
+    }
+
+    pub(crate) fn diff_preview_state_mut(&mut self) -> Option<&mut DiffPreviewState> {
+        self.active_overlay
+            .as_mut()
+            .and_then(ActiveOverlay::as_diff_mut)
+    }
+
+    pub(crate) fn modal_overlay_active(&self) -> bool {
+        self.active_overlay
+            .as_ref()
+            .is_some_and(ActiveOverlay::is_modal_like)
+    }
+
+    pub(crate) fn take_modal_state(&mut self) -> Option<ModalState> {
+        if !self
+            .active_overlay
+            .as_ref()
+            .is_some_and(|overlay| matches!(overlay, ActiveOverlay::Modal(_)))
+        {
+            return None;
+        }
+
+        match self.active_overlay.take() {
+            Some(ActiveOverlay::Modal(state)) => Some(*state),
+            Some(ActiveOverlay::Wizard(_) | ActiveOverlay::Diff(_)) | None => None,
+        }
+    }
+
+    fn activate_overlay(&mut self, request: OverlayRequest) {
+        match request {
+            OverlayRequest::Modal(request) => self.activate_modal_overlay(request),
+            OverlayRequest::List(request) => self.activate_list_overlay(request),
+            OverlayRequest::Wizard(request) => self.activate_wizard_overlay(request),
+            OverlayRequest::Diff(request) => self.activate_diff_overlay(request),
+        }
+    }
+
+    pub(super) fn close_overlay(&mut self) {
+        let Some(state) = self.active_overlay.take() else {
+            return;
+        };
+
+        self.input_enabled = state.restore_input();
+        self.cursor_visible = state.restore_cursor();
+
+        if let Some(next_request) = self.overlay_queue.pop_front() {
+            self.activate_overlay(next_request);
+            return;
+        }
+
+        self.mark_dirty();
+    }
+
+    fn activate_modal_overlay(&mut self, request: ModalOverlayRequest) {
+        let state = ModalState {
+            title: request.title,
+            lines: request.lines,
             footer_hint: None,
+            hotkeys: Vec::new(),
             list: None,
             search: None,
-            secure_prompt,
-            is_plan_confirmation: false,
+            secure_prompt: request.secure_prompt,
             restore_input: true,
             restore_cursor: true,
         };
@@ -240,76 +337,61 @@ impl Session {
             self.input_enabled = false;
         }
         self.cursor_visible = false;
-        self.modal = Some(state);
+        self.active_overlay = Some(ActiveOverlay::Modal(Box::new(state)));
         self.mark_dirty();
     }
 
-    /// Show a modal with a list of selectable items
-    pub(super) fn show_list_modal(
-        &mut self,
-        title: String,
-        lines: Vec<String>,
-        items: Vec<InlineListItem>,
-        selected: Option<InlineListSelection>,
-        search: Option<InlineListSearchConfig>,
-    ) {
+    fn activate_list_overlay(&mut self, request: ListOverlayRequest) {
         self.ensure_inline_lists_visible_for_trigger();
-        let mut list_state = ModalListState::new(items, selected.clone());
-        let search_state = search.map(ModalSearchState::from);
+        let mut list_state = ModalListState::new(request.items, request.selected.clone());
+        let search_state = request.search.map(ModalSearchState::from);
         if let Some(search) = &search_state {
-            list_state.apply_search_with_preference(&search.query, selected);
+            list_state.apply_search_with_preference(&search.query, request.selected);
         }
         let state = ModalState {
-            title,
-            lines,
-            footer_hint: None,
+            title: request.title,
+            lines: request.lines,
+            footer_hint: request.footer_hint,
+            hotkeys: request.hotkeys,
             list: Some(list_state),
             search: search_state,
             secure_prompt: None,
-            is_plan_confirmation: false,
             restore_input: true,
             restore_cursor: true,
         };
         self.input_enabled = false;
         self.cursor_visible = false;
-        self.modal = Some(state);
+        self.active_overlay = Some(ActiveOverlay::Modal(Box::new(state)));
         self.mark_dirty();
     }
 
-    /// Show a multi-step wizard modal with tabs for navigation
-    pub(super) fn show_wizard_modal(
-        &mut self,
-        title: String,
-        steps: Vec<WizardStep>,
-        current_step: usize,
-        search: Option<InlineListSearchConfig>,
-        mode: WizardModalMode,
-    ) {
+    fn activate_wizard_overlay(&mut self, request: WizardOverlayRequest) {
         self.ensure_inline_lists_visible_for_trigger();
-        let wizard = WizardModalState::new(title, steps, current_step, search, mode);
-        self.wizard_modal = Some(wizard);
+        let wizard = WizardModalState::new(
+            request.title,
+            request.steps,
+            request.current_step,
+            request.search,
+            request.mode,
+        );
+        self.active_overlay = Some(ActiveOverlay::Wizard(Box::new(wizard)));
         self.input_enabled = false;
         self.cursor_visible = false;
         self.mark_dirty();
     }
 
-    /// Close the currently open modal
-    pub(super) fn close_modal(&mut self) {
-        if let Some(state) = self.modal.take() {
-            self.input_enabled = true;
-            self.cursor_visible = true;
-            if state.secure_prompt.is_some() {
-                // Secure prompt modal closed, don't restore input
-            }
-            self.mark_dirty();
-            return;
-        }
-
-        if self.wizard_modal.take().is_some() {
-            self.input_enabled = true;
-            self.cursor_visible = true;
-            self.mark_dirty();
-        }
+    fn activate_diff_overlay(&mut self, request: DiffOverlayRequest) {
+        let mut state = DiffPreviewState::new(
+            request.file_path,
+            request.before,
+            request.after,
+            request.hunks,
+        );
+        state.current_hunk = request.current_hunk;
+        self.active_overlay = Some(ActiveOverlay::Diff(Box::new(state)));
+        self.input_enabled = false;
+        self.cursor_visible = false;
+        self.mark_dirty();
     }
 
     /// Scroll operations

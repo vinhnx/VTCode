@@ -3,8 +3,9 @@ use std::sync::Arc;
 use anyhow::Result;
 use tokio::sync::Notify;
 use vtcode_core::core::interfaces::ui::UiSession;
-use vtcode_tui::{InlineEvent, InlineHandle};
+use vtcode_tui::{InlineHandle, ListOverlayRequest, OverlayRequest, OverlaySubmission};
 
+use crate::agent::runloop::unified::overlay_prompt::{OverlayWaitOutcome, show_overlay_and_wait};
 use crate::agent::runloop::unified::state::CtrlCState;
 
 pub(super) async fn prompt_session_limit_increase<S: UiSession + ?Sized>(
@@ -155,55 +156,34 @@ async fn prompt_limit_increase_modal<S: UiSession + ?Sized>(
 ) -> Result<Option<usize>> {
     use vtcode_tui::InlineListSelection;
 
-    handle.show_list_modal(
-        title,
-        description_lines,
-        options.clone(),
-        Some(InlineListSelection::SessionLimitIncrease(default_increment)),
-        None,
-    );
-
-    loop {
-        if ctrl_c_state.is_cancel_requested() {
-            handle.close_modal();
-            handle.force_redraw();
-            return Ok(None);
-        }
-
-        let notify = ctrl_c_notify.clone();
-        let maybe_event = tokio::select! {
-            _ = notify.notified() => None,
-            event = session.next_event() => event,
-        };
-
-        let Some(event) = maybe_event else {
-            handle.close_modal();
-            handle.force_redraw();
-            return Ok(None);
-        };
-
-        match event {
-            InlineEvent::ListModalSubmit(selection) => {
-                handle.close_modal();
-                handle.force_redraw();
-                match selection {
-                    InlineListSelection::SessionLimitIncrease(inc) => return Ok(Some(inc)),
-                    _ => return Ok(None),
-                }
+    let outcome = show_overlay_and_wait(
+        handle,
+        session,
+        OverlayRequest::List(ListOverlayRequest {
+            title,
+            lines: description_lines,
+            footer_hint: None,
+            items: options,
+            selected: Some(InlineListSelection::SessionLimitIncrease(default_increment)),
+            search: None,
+            hotkeys: Vec::new(),
+        }),
+        ctrl_c_state,
+        ctrl_c_notify,
+        |submission| match submission {
+            OverlaySubmission::Selection(InlineListSelection::SessionLimitIncrease(inc)) => {
+                Some(inc)
             }
-            InlineEvent::ListModalCancel | InlineEvent::Cancel | InlineEvent::Exit => {
-                handle.close_modal();
-                handle.force_redraw();
-                return Ok(None);
-            }
-            InlineEvent::Interrupt => {
-                let _signal = ctrl_c_state.register_signal();
-                ctrl_c_notify.notify_waiters();
-                handle.close_modal();
-                handle.force_redraw();
-                return Ok(None);
-            }
-            _ => continue,
-        }
-    }
+            OverlaySubmission::Selection(_) => None,
+            _ => None,
+        },
+    )
+    .await?;
+
+    Ok(match outcome {
+        OverlayWaitOutcome::Submitted(increment) => Some(increment),
+        OverlayWaitOutcome::Cancelled
+        | OverlayWaitOutcome::Interrupted
+        | OverlayWaitOutcome::Exit => None,
+    })
 }

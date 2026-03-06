@@ -21,7 +21,7 @@ use crate::utils::diff_styles::{
 };
 
 pub fn render_diff_preview(session: &Session, frame: &mut Frame<'_>, area: Rect) {
-    let Some(preview) = session.diff_preview.as_ref() else {
+    let Some(preview) = session.diff_preview_state() else {
         return;
     };
 

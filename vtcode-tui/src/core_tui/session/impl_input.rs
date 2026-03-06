@@ -143,33 +143,11 @@ impl Session {
             InlineCommand::ForceRedraw => {
                 self.mark_dirty();
             }
-            InlineCommand::ShowModal {
-                title,
-                lines,
-                secure_prompt,
-            } => {
-                self.show_modal(title, lines, secure_prompt);
+            InlineCommand::ShowOverlay { request } => {
+                self.show_overlay(*request);
             }
-            InlineCommand::ShowListModal {
-                title,
-                lines,
-                items,
-                selected,
-                search,
-            } => {
-                self.show_list_modal(title, lines, items, selected, search);
-            }
-            InlineCommand::ShowWizardModal {
-                title,
-                steps,
-                current_step,
-                search,
-                mode,
-            } => {
-                self.show_wizard_modal(title, steps, current_step, search, mode);
-            }
-            InlineCommand::CloseModal => {
-                self.close_modal();
+            InlineCommand::CloseOverlay => {
+                self.close_overlay();
             }
             InlineCommand::LoadFilePalette { files, workspace } => {
                 self.load_file_palette(files, workspace);
@@ -193,22 +171,10 @@ impl Session {
                 self.header_context.autonomous_mode = enabled;
                 self.needs_redraw = true;
             }
-            InlineCommand::ShowPlanConfirmation { plan } => {
-                command::show_plan_confirmation_modal(self, *plan);
-            }
-            InlineCommand::ShowDiffPreview {
-                file_path,
-                before,
-                after,
-                hunks,
-                current_hunk,
-            } => {
-                command::show_diff_preview(self, file_path, before, after, hunks, current_hunk);
-            }
             InlineCommand::SetSkipConfirmations(skip) => {
                 self.skip_confirmations = skip;
                 if skip {
-                    self.close_modal();
+                    self.close_overlay();
                 }
             }
             InlineCommand::Shutdown => {

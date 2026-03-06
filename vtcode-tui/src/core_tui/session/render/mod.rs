@@ -109,7 +109,7 @@ pub fn render(session: &mut Session, frame: &mut Frame<'_>) {
         render_transcript(session, frame, transcript_body, interactive_bottom_buffer);
         if let Some(modal_area) = modal_area {
             render_modal(session, frame, modal_area);
-        } else if session.modal.is_some() || session.wizard_modal.is_some() {
+        } else if session.modal_overlay_active() {
             render_modal(session, frame, size);
         }
         if let Some(file_palette_area) = file_palette_area {
@@ -136,7 +136,7 @@ pub fn render(session: &mut Session, frame: &mut Frame<'_>) {
         render_transcript(session, frame, transcript_body, interactive_bottom_buffer);
         if let Some(modal_area) = modal_area {
             render_modal(session, frame, modal_area);
-        } else if session.modal.is_some() || session.wizard_modal.is_some() {
+        } else if session.modal_overlay_active() {
             render_modal(session, frame, size);
         }
         if let Some(file_palette_area) = file_palette_area {
