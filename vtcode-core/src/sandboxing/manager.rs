@@ -148,7 +148,7 @@ impl SandboxManager {
 
         // Block sensitive paths BEFORE allowing general read access
         // This ensures deny rules take precedence
-        let sensitive_paths = policy.sensitive_paths();
+        let sensitive_paths = policy.sensitive_paths_for_execution(sandbox_cwd);
         for sp in &sensitive_paths {
             let expanded = sp.expand_path();
             let path_str = expanded.display();
@@ -170,29 +170,14 @@ impl SandboxManager {
                 // No network access for read-only
             }
             SandboxPolicy::WorkspaceWrite {
-                writable_roots,
                 network_access,
                 network_allowlist,
                 ..
             } => {
-                // Allow writing to workspace roots, but protect .git directories
-                // Following Codex pattern: "Agents can modify your workspace but can't mess up your git history."
-                for root in writable_roots {
+                for root in policy.get_writable_roots_with_cwd(sandbox_cwd) {
                     let path = root.root.display();
-                    // First deny writes to .git within this root
-                    profile.push_str(&format!("(deny file-write* (subpath \"{}/.git\"))\n", path));
-                    // Then allow writes to the rest of the root
                     profile.push_str(&format!("(allow file-write* (subpath \"{}\"))\n", path));
                 }
-                // Always allow writing to cwd, but protect .git there too
-                profile.push_str(&format!(
-                    "(deny file-write* (subpath \"{}/.git\"))\n",
-                    sandbox_cwd.display()
-                ));
-                profile.push_str(&format!(
-                    "(allow file-write* (subpath \"{}\"))\n",
-                    sandbox_cwd.display()
-                ));
 
                 // Network access: allowlist-based or legacy boolean
                 let has_network_allowlist = !network_allowlist.is_empty();

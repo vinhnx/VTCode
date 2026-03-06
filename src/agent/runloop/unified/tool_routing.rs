@@ -26,8 +26,7 @@ use super::tool_summary::{describe_tool_action, humanize_tool_name};
 use crate::hooks::lifecycle::{LifecycleHookEngine, PreToolHookDecision};
 use hook_messages::render_hook_messages;
 use permission_prompt::{
-    extract_shell_command_text, prompt_tool_permission, shell_command_requires_prompt,
-    shell_permission_cache_suffix, shell_requests_elevated_sandbox_permissions,
+    prompt_tool_permission, shell_allows_persistent_decisions, shell_permission_cache_suffix,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -151,7 +150,6 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
     }
 
     // Generate cache key - use command text for shell tools to enable granular session approval
-    let command_text = extract_shell_command_text(tool_name, tool_args);
     let cache_key = shell_permission_cache_suffix(tool_name, tool_args)
         .map(|suffix| format!("{tool_name}:{suffix}"))
         .unwrap_or_else(|| tool_name.to_string());
@@ -208,33 +206,20 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
         return Ok(ToolPermissionFlow::Denied);
     }
 
-    let command_requires_prompt = command_text
-        .as_deref()
-        .map(|command| {
-            let requires_prompt = shell_command_requires_prompt(command);
-            if requires_prompt {
-                tracing::debug!(
-                    "Command '{}' requires interactive approval for tool '{}'",
-                    command,
-                    tool_name
-                );
-            }
-            requires_prompt
-        })
-        .unwrap_or(false);
-    let elevated_sandbox_permissions =
-        shell_requests_elevated_sandbox_permissions(tool_name, tool_args);
-    if elevated_sandbox_permissions {
+    let shell_approval_reason = tool_registry
+        .shell_run_approval_reason(tool_name, tool_args)
+        .await?;
+    if let Some(reason) = shell_approval_reason.as_deref() {
         tracing::debug!(
-            "Tool '{}' requested elevated sandbox permissions and requires approval",
-            tool_name
+            tool = %tool_name,
+            reason = %reason,
+            "Shell execution requires interactive approval"
         );
     }
 
     let should_prompt = hook_requires_prompt
         || policy_decision == ToolPermissionDecision::Prompt
-        || command_requires_prompt
-        || elevated_sandbox_permissions;
+        || shell_approval_reason.is_some();
 
     if !should_prompt {
         return Ok(ToolPermissionFlow::Approved);
@@ -289,6 +274,7 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
     };
 
     let final_justification = justification.or(extracted_justification.as_ref());
+    let allow_persistent_decisions = shell_allows_persistent_decisions(tool_name, tool_args);
 
     let decision = prompt_tool_permission(
         &prompt_label,
@@ -300,7 +286,9 @@ pub(crate) async fn ensure_tool_permission<S: UiSession + ?Sized>(
         ctrl_c_state,
         ctrl_c_notify,
         default_placeholder,
+        shell_approval_reason.as_deref(),
         final_justification,
+        allow_persistent_decisions,
         approval_recorder,
         hitl_notification_bell,
     )

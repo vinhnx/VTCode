@@ -37,6 +37,120 @@ use vtcode_config::{
 
 use super::ToolRegistry;
 
+#[derive(Debug, Clone)]
+struct ShellExecutionPlan {
+    approval_reason: Option<String>,
+    sandbox_policy: Option<SandboxPolicy>,
+}
+
+fn push_unique_reason(reasons: &mut Vec<String>, reason: impl Into<String>) {
+    let reason = reason.into();
+    if !reasons.iter().any(|existing| existing == &reason) {
+        reasons.push(reason);
+    }
+}
+
+fn join_shell_approval_reasons(reasons: Vec<String>) -> Option<String> {
+    if reasons.is_empty() {
+        None
+    } else {
+        Some(reasons.join(" "))
+    }
+}
+
+fn shell_permission_approval_reason(permissions: SandboxPermissions) -> Option<&'static str> {
+    match permissions {
+        SandboxPermissions::UseDefault => None,
+        SandboxPermissions::RequireEscalated | SandboxPermissions::BypassSandbox => {
+            Some("Command requested execution without sandbox restrictions.")
+        }
+        SandboxPermissions::WithAdditionalPermissions => {
+            Some("Command requested additional sandboxed filesystem access.")
+        }
+    }
+}
+
+fn shell_run_payload<'a>(
+    tool_name: &str,
+    tool_args: Option<&'a Value>,
+) -> Option<&'a serde_json::Map<String, Value>> {
+    let args = tool_args?.as_object()?;
+    match tool_name {
+        "run_pty_cmd" | "shell" => Some(args),
+        "unified_exec" | "exec_pty_cmd" | "exec" => {
+            let action = args
+                .get("action")
+                .and_then(Value::as_str)
+                .or_else(|| args.get("command").map(|_| "run"));
+            (action == Some("run")).then_some(args)
+        }
+        _ => None,
+    }
+}
+
+fn shell_working_dir_value(payload: &serde_json::Map<String, Value>) -> Option<&str> {
+    payload
+        .get("working_dir")
+        .or_else(|| payload.get("cwd"))
+        .or_else(|| payload.get("workdir"))
+        .and_then(Value::as_str)
+}
+
+fn build_shell_execution_plan(
+    sandbox_config: &vtcode_config::SandboxConfig,
+    workspace_root: &Path,
+    requested_command: &[String],
+    sandbox_permissions: SandboxPermissions,
+    additional_permissions: Option<&AdditionalPermissions>,
+) -> Result<ShellExecutionPlan> {
+    let mut approval_reasons = Vec::new();
+    if crate::command_safety::command_might_be_dangerous(requested_command) {
+        push_unique_reason(
+            &mut approval_reasons,
+            "Command appears dangerous and requires approval.",
+        );
+    }
+    if let Some(reason) = shell_permission_approval_reason(sandbox_permissions) {
+        push_unique_reason(&mut approval_reasons, reason);
+    }
+
+    if sandbox_permissions.requires_escalated_permissions() || !sandbox_config.enabled {
+        return Ok(ShellExecutionPlan {
+            approval_reason: join_shell_approval_reasons(approval_reasons),
+            sandbox_policy: None,
+        });
+    }
+
+    let mut policy = sandbox_policy_from_runtime_config(sandbox_config, workspace_root)?;
+    if matches!(policy, SandboxPolicy::ReadOnly)
+        && command_likely_writes_workspace(requested_command)
+    {
+        push_unique_reason(
+            &mut approval_reasons,
+            "Command appears to modify workspace files and needs workspace-write sandbox access.",
+        );
+        policy = workspace_write_policy_from_runtime_config(sandbox_config, workspace_root);
+    }
+
+    if sandbox_permissions.uses_additional_permissions() {
+        let Some(additional_permissions) = additional_permissions else {
+            return Err(anyhow!(MISSING_ADDITIONAL_PERMISSIONS_MESSAGE));
+        };
+        policy = sandbox_policy_with_additional_permissions(policy, additional_permissions);
+    }
+
+    let sandbox_policy = if matches!(policy, SandboxPolicy::DangerFullAccess) {
+        None
+    } else {
+        Some(policy)
+    };
+
+    Ok(ShellExecutionPlan {
+        approval_reason: join_shell_approval_reasons(approval_reasons),
+        sandbox_policy,
+    })
+}
+
 fn sandbox_policy_from_runtime_config(
     sandbox_config: &vtcode_config::SandboxConfig,
     workspace_root: &Path,
@@ -100,24 +214,6 @@ fn workspace_write_policy_from_runtime_config(
         network_allowlist.clear();
     }
     policy
-}
-
-fn sandbox_policy_for_command(
-    sandbox_config: &vtcode_config::SandboxConfig,
-    workspace_root: &Path,
-    requested_command: &[String],
-) -> Result<SandboxPolicy> {
-    let mut policy = sandbox_policy_from_runtime_config(sandbox_config, workspace_root)?;
-
-    // Keep sandboxing enabled, but avoid blocking normal agent edit/build loops when
-    // read-only mode is accidentally configured for mutating commands.
-    if matches!(policy, SandboxPolicy::ReadOnly)
-        && command_likely_writes_workspace(requested_command)
-    {
-        policy = workspace_write_policy_from_runtime_config(sandbox_config, workspace_root);
-    }
-
-    Ok(policy)
 }
 
 fn resource_limits_from_runtime_config(
@@ -393,25 +489,16 @@ fn apply_runtime_sandbox_to_command(
     sandbox_permissions: SandboxPermissions,
     additional_permissions: Option<&AdditionalPermissions>,
 ) -> Result<Vec<String>> {
-    if sandbox_permissions.requires_escalated_permissions() {
+    let plan = build_shell_execution_plan(
+        sandbox_config,
+        workspace_root,
+        requested_command,
+        sandbox_permissions,
+        additional_permissions,
+    )?;
+    let Some(policy) = plan.sandbox_policy else {
         return Ok(command);
-    }
-
-    if !sandbox_config.enabled {
-        return Ok(command);
-    }
-
-    let mut policy = sandbox_policy_for_command(sandbox_config, workspace_root, requested_command)?;
-    if sandbox_permissions.uses_additional_permissions() {
-        let Some(additional_permissions) = additional_permissions else {
-            return Err(anyhow!(MISSING_ADDITIONAL_PERMISSIONS_MESSAGE));
-        };
-        policy = sandbox_policy_with_additional_permissions(policy, additional_permissions);
-    }
-
-    if matches!(policy, SandboxPolicy::DangerFullAccess) {
-        return Ok(command);
-    }
+    };
     if matches!(policy, SandboxPolicy::ExternalSandbox { .. }) {
         return Err(anyhow!(
             "Sandbox mode 'external' is not supported by local run_pty_cmd execution. \
@@ -522,6 +609,29 @@ fn enforce_sandbox_preflight_guards(
             policy.description(),
             listed
         ));
+    }
+
+    if command_likely_writes_workspace(requested_command) {
+        let mut blocked_write_paths = BTreeSet::new();
+        for argument in requested_command.iter().skip(1) {
+            if let Some(candidate) = resolve_argument_path(argument, working_dir)
+                && !policy.is_path_writable(&candidate, working_dir)
+            {
+                blocked_write_paths.insert(candidate.display().to_string());
+            }
+        }
+        if !blocked_write_paths.is_empty() {
+            let listed = blocked_write_paths
+                .into_iter()
+                .take(3)
+                .collect::<Vec<_>>()
+                .join(", ");
+            return Err(anyhow!(
+                "Command references path(s) blocked for writes by sandbox policy '{}': {}",
+                policy.description(),
+                listed
+            ));
+        }
     }
 
     Ok(())
@@ -983,6 +1093,38 @@ fn resolve_workspace_scoped_path(workspace_root: &Path, raw_path: &str) -> Resul
 }
 
 impl ToolRegistry {
+    pub async fn shell_run_approval_reason(
+        &self,
+        tool_name: &str,
+        tool_args: Option<&Value>,
+    ) -> Result<Option<String>> {
+        let Some(payload) = shell_run_payload(tool_name, tool_args) else {
+            return Ok(None);
+        };
+
+        let (requested_command, _) = parse_command_parts(
+            payload,
+            "shell run request requires a command",
+            "shell run request command cannot be empty",
+        )?;
+        let working_dir_path = self
+            .pty_manager()
+            .resolve_working_dir(shell_working_dir_value(payload))
+            .await?;
+        let (sandbox_permissions, additional_permissions) =
+            parse_requested_sandbox_permissions(payload, &working_dir_path)?;
+        let sandbox_config = self.sandbox_config();
+        let plan = build_shell_execution_plan(
+            &sandbox_config,
+            self.workspace_root(),
+            &requested_command,
+            sandbox_permissions,
+            additional_permissions.as_ref(),
+        )?;
+
+        Ok(plan.approval_reason)
+    }
+
     pub(super) fn unified_exec_executor(&self, args: Value) -> BoxFuture<'_, Result<Value>> {
         Box::pin(async move { self.execute_unified_exec(args).await })
     }
@@ -1490,7 +1632,7 @@ impl ToolRegistry {
 
         let working_dir_path = self
             .pty_manager()
-            .resolve_working_dir(payload.get("working_dir").and_then(|value| value.as_str()))
+            .resolve_working_dir(shell_working_dir_value(payload))
             .await?;
         let (sandbox_permissions, additional_permissions) =
             parse_requested_sandbox_permissions(payload, &working_dir_path)?;
@@ -2796,8 +2938,8 @@ mod unified_action_error_tests {
 #[cfg(test)]
 mod sandbox_runtime_tests {
     use super::{
-        apply_runtime_sandbox_to_command, enforce_sandbox_preflight_guards,
-        parse_requested_sandbox_permissions, sandbox_policy_for_command,
+        apply_runtime_sandbox_to_command, build_shell_execution_plan,
+        enforce_sandbox_preflight_guards, parse_requested_sandbox_permissions,
         sandbox_policy_from_runtime_config,
     };
     use crate::sandboxing::{
@@ -2835,7 +2977,7 @@ mod sandbox_runtime_tests {
     }
 
     #[test]
-    fn read_only_policy_adapts_to_workspace_write_for_mutating_commands() {
+    fn read_only_mutating_command_requires_approval_and_workspace_write() {
         let config = vtcode_config::SandboxConfig {
             enabled: true,
             default_mode: vtcode_config::SandboxMode::ReadOnly,
@@ -2843,14 +2985,23 @@ mod sandbox_runtime_tests {
         };
 
         let command = vec!["cargo".to_string(), "fmt".to_string()];
-        let policy =
-            sandbox_policy_for_command(&config, PathBuf::from("/tmp/ws").as_path(), &command)
-                .unwrap();
-        assert!(matches!(policy, SandboxPolicy::WorkspaceWrite { .. }));
+        let plan = build_shell_execution_plan(
+            &config,
+            PathBuf::from("/tmp/ws").as_path(),
+            &command,
+            SandboxPermissions::UseDefault,
+            None,
+        )
+        .unwrap();
+        assert!(plan.approval_reason.is_some());
+        assert!(matches!(
+            plan.sandbox_policy,
+            Some(SandboxPolicy::WorkspaceWrite { .. })
+        ));
     }
 
     #[test]
-    fn read_only_policy_stays_read_only_for_non_mutating_commands() {
+    fn read_only_non_mutating_command_stays_read_only_without_prompt() {
         let config = vtcode_config::SandboxConfig {
             enabled: true,
             default_mode: vtcode_config::SandboxMode::ReadOnly,
@@ -2858,10 +3009,16 @@ mod sandbox_runtime_tests {
         };
 
         let command = vec!["ls".to_string(), "-la".to_string()];
-        let policy =
-            sandbox_policy_for_command(&config, PathBuf::from("/tmp/ws").as_path(), &command)
-                .unwrap();
-        assert!(matches!(policy, SandboxPolicy::ReadOnly));
+        let plan = build_shell_execution_plan(
+            &config,
+            PathBuf::from("/tmp/ws").as_path(),
+            &command,
+            SandboxPermissions::UseDefault,
+            None,
+        )
+        .unwrap();
+        assert!(plan.approval_reason.is_none());
+        assert!(matches!(plan.sandbox_policy, Some(SandboxPolicy::ReadOnly)));
     }
 
     #[test]
@@ -2905,6 +3062,19 @@ mod sandbox_runtime_tests {
             enforce_sandbox_preflight_guards(&command, &policy, PathBuf::from(".").as_path())
                 .expect_err("sensitive path should be denied");
         assert!(error.to_string().contains("sensitive path"));
+    }
+
+    #[test]
+    fn preflight_blocks_writes_to_protected_workspace_metadata() {
+        let policy = SandboxPolicy::workspace_write(vec![PathBuf::from("/tmp/ws")]);
+        let command = vec![
+            "touch".to_string(),
+            "/tmp/ws/.vtcode/session.json".to_string(),
+        ];
+        let error =
+            enforce_sandbox_preflight_guards(&command, &policy, PathBuf::from("/tmp/ws").as_path())
+                .expect_err("protected workspace metadata should be denied");
+        assert!(error.to_string().contains("blocked for writes"));
     }
 
     #[test]

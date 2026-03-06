@@ -69,25 +69,6 @@ pub(super) fn extract_shell_command_text(
     extract_shell_command_text_from_run_args(args)
 }
 
-pub(super) fn shell_command_requires_prompt(command: &str) -> bool {
-    let trimmed = command.trim();
-    if trimmed.is_empty() {
-        return false;
-    }
-
-    let tokens = shell_words::split(trimmed).unwrap_or_else(|_| {
-        trimmed
-            .split_whitespace()
-            .map(|value| value.to_string())
-            .collect::<Vec<_>>()
-    });
-    if tokens.is_empty() {
-        return false;
-    }
-
-    vtcode_core::command_safety::command_might_be_dangerous(&tokens)
-}
-
 pub(super) fn shell_permission_cache_suffix(
     tool_name: &str,
     tool_args: Option<&Value>,
@@ -115,14 +96,11 @@ pub(super) fn shell_permission_cache_suffix(
     ))
 }
 
-pub(super) fn shell_requests_elevated_sandbox_permissions(
+pub(super) fn shell_allows_persistent_decisions(
     tool_name: &str,
     tool_args: Option<&Value>,
 ) -> bool {
-    let args = shell_run_args(tool_name, tool_args);
-    args.map(parse_shell_sandbox_permissions)
-        .map(|permissions| permissions.requires_approval())
-        .unwrap_or(false)
+    extract_shell_command_text(tool_name, tool_args).is_none()
 }
 
 fn tool_args_diff_preview(tool_name: &str, tool_args: Option<&Value>) -> Option<Vec<String>> {
@@ -229,7 +207,9 @@ pub(super) async fn prompt_tool_permission<S: UiSession + ?Sized>(
     ctrl_c_state: &Arc<CtrlCState>,
     ctrl_c_notify: &Arc<Notify>,
     default_placeholder: Option<String>,
+    approval_reason: Option<&str>,
     justification: Option<&vtcode_core::tools::ToolJustification>,
+    allow_persistent_decisions: bool,
     approval_recorder: Option<&vtcode_core::tools::ApprovalRecorder>,
     hitl_notification_bell: bool,
 ) -> Result<HitlDecision> {
@@ -267,6 +247,11 @@ pub(super) async fn prompt_tool_permission<S: UiSession + ?Sized>(
         }
     }
 
+    if let Some(reason) = approval_reason {
+        description_lines.push(String::new());
+        description_lines.push(format!("Reason: {}", reason));
+    }
+
     if let Some(just) = justification {
         let just_lines = just.format_for_dialog();
         description_lines.extend(just_lines);
@@ -283,7 +268,7 @@ pub(super) async fn prompt_tool_permission<S: UiSession + ?Sized>(
     description_lines.push("Choose how to handle this tool execution:".to_string());
     description_lines.push("Use ↑↓ or Tab to navigate • Enter to select • Esc to deny".to_string());
 
-    let options = vec![
+    let mut options = vec![
         InlineListItem {
             title: "Approve Once".to_string(),
             subtitle: Some("Allow this tool to execute this time only".to_string()),
@@ -300,39 +285,47 @@ pub(super) async fn prompt_tool_permission<S: UiSession + ?Sized>(
             selection: Some(InlineListSelection::ToolApprovalSession),
             search_value: Some("session temporary temp 2".to_string()),
         },
-        InlineListItem {
+    ];
+
+    if allow_persistent_decisions {
+        options.push(InlineListItem {
             title: "Always Allow".to_string(),
             subtitle: Some("Permanently allow this tool (saved to policy)".to_string()),
             badge: Some("Permanent".to_string()),
             indent: 0,
             selection: Some(InlineListSelection::ToolApprovalPermanent),
             search_value: Some("always permanent forever save 3".to_string()),
-        },
-        InlineListItem {
-            title: "".to_string(),
-            subtitle: None,
-            badge: None,
-            indent: 0,
-            selection: None,
-            search_value: None,
-        },
-        InlineListItem {
-            title: "Deny Once".to_string(),
-            subtitle: Some("Reject this tool for now (ask again next time)".to_string()),
-            badge: None,
-            indent: 0,
-            selection: Some(InlineListSelection::ToolApprovalDenyOnce),
-            search_value: Some("deny no reject once temporary 4".to_string()),
-        },
-        InlineListItem {
+        });
+    }
+
+    options.push(InlineListItem {
+        title: "".to_string(),
+        subtitle: None,
+        badge: None,
+        indent: 0,
+        selection: None,
+        search_value: None,
+    });
+
+    options.push(InlineListItem {
+        title: "Deny Once".to_string(),
+        subtitle: Some("Reject this tool for now (ask again next time)".to_string()),
+        badge: None,
+        indent: 0,
+        selection: Some(InlineListSelection::ToolApprovalDenyOnce),
+        search_value: Some("deny no reject once temporary 4".to_string()),
+    });
+
+    if allow_persistent_decisions {
+        options.push(InlineListItem {
             title: "Always Deny".to_string(),
             subtitle: Some("Block this tool until policy is changed".to_string()),
             badge: Some("Persistent".to_string()),
             indent: 0,
             selection: Some(InlineListSelection::ToolApproval(false)),
             search_value: Some("deny no reject cancel never always 5".to_string()),
-        },
-    ];
+        });
+    }
 
     let default_selection = InlineListSelection::ToolApproval(true);
     if hitl_notification_bell
@@ -497,8 +490,8 @@ pub(super) async fn prompt_tool_permission<S: UiSession + ?Sized>(
 #[cfg(test)]
 mod tests {
     use super::{
-        extract_shell_command_text, shell_permission_cache_suffix,
-        shell_requests_elevated_sandbox_permissions,
+        extract_shell_command_text, shell_allows_persistent_decisions,
+        shell_permission_cache_suffix,
     };
     use serde_json::json;
 
@@ -523,39 +516,26 @@ mod tests {
     }
 
     #[test]
-    fn elevated_sandbox_permissions_require_prompt_for_unified_exec_run() {
+    fn shell_runs_disable_persistent_decisions() {
         let args = json!({
             "action": "run",
             "command": "echo hi",
             "sandbox_permissions": "with_additional_permissions"
         });
-        assert!(shell_requests_elevated_sandbox_permissions(
+        assert!(!shell_allows_persistent_decisions(
             "unified_exec",
             Some(&args)
         ));
     }
 
     #[test]
-    fn elevated_sandbox_permissions_ignored_for_unified_exec_poll() {
+    fn non_shell_unified_exec_actions_keep_persistent_decisions() {
         let args = json!({
             "action": "poll",
             "session_id": "run-123",
             "sandbox_permissions": "with_additional_permissions"
         });
-        assert!(!shell_requests_elevated_sandbox_permissions(
-            "unified_exec",
-            Some(&args)
-        ));
-    }
-
-    #[test]
-    fn require_escalated_permissions_require_prompt_for_unified_exec_run() {
-        let args = json!({
-            "action": "run",
-            "command": "echo hi",
-            "sandbox_permissions": "require_escalated"
-        });
-        assert!(shell_requests_elevated_sandbox_permissions(
+        assert!(shell_allows_persistent_decisions(
             "unified_exec",
             Some(&args)
         ));

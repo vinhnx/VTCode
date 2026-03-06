@@ -231,6 +231,25 @@ pub fn default_sensitive_paths() -> Vec<SensitivePath> {
     paths
 }
 
+const PROTECTED_WRITABLE_ROOT_DIR_NAMES: &[&str] = &[".git", ".vtcode", ".codex", ".agents"];
+
+fn protected_writable_root_sensitive_paths(writable_roots: &[WritableRoot]) -> Vec<SensitivePath> {
+    let mut paths = Vec::new();
+
+    for root in writable_roots {
+        for dir_name in PROTECTED_WRITABLE_ROOT_DIR_NAMES {
+            let protected_path = root.root.join(dir_name).display().to_string();
+            if !paths.iter().any(|existing: &SensitivePath| {
+                existing.path == protected_path && !existing.block_read && existing.block_write
+            }) {
+                paths.push(SensitivePath::write_only(protected_path));
+            }
+        }
+    }
+
+    paths
+}
+
 /// Resource limits for sandboxed execution.
 ///
 /// Following the field guide's recommendation for resource accounting:
@@ -792,11 +811,36 @@ impl SandboxPolicy {
         }
     }
 
+    /// Get sensitive paths including write-only protected directories for writable roots.
+    pub fn sensitive_paths_for_execution(&self, cwd: &Path) -> Vec<SensitivePath> {
+        match self {
+            Self::WorkspaceWrite { .. } => {
+                let mut sensitive_paths = self.sensitive_paths();
+                sensitive_paths.extend(protected_writable_root_sensitive_paths(
+                    &self.get_writable_roots_with_cwd(cwd),
+                ));
+                sensitive_paths
+            }
+            _ => self.sensitive_paths(),
+        }
+    }
+
     /// Check if a path is a sensitive location that should be blocked.
     pub fn is_sensitive_path(&self, path: &Path) -> bool {
         self.sensitive_paths()
             .iter()
             .any(|sp| sp.matches(path) && sp.block_read)
+    }
+
+    /// Check if write access to a path is blocked under this policy.
+    pub fn is_path_write_blocked(&self, path: &Path, cwd: &Path) -> bool {
+        match self {
+            Self::DangerFullAccess | Self::ExternalSandbox { .. } => false,
+            _ => self
+                .sensitive_paths_for_execution(cwd)
+                .iter()
+                .any(|sp| sp.matches(path) && sp.block_write),
+        }
     }
 
     /// Check if read access to a path is allowed under this policy.
@@ -868,6 +912,7 @@ impl SandboxPolicy {
             Self::WorkspaceWrite { .. } => {
                 let writable = self.get_writable_roots_with_cwd(cwd);
                 writable.iter().any(|root| path.starts_with(&root.root))
+                    && !self.is_path_write_blocked(path, cwd)
             }
             Self::DangerFullAccess | Self::ExternalSandbox { .. } => true,
         }
@@ -922,6 +967,18 @@ mod tests {
         let cwd = PathBuf::from("/tmp/workspace");
         assert!(policy.is_path_writable(&cwd, &cwd));
         assert!(!policy.is_path_writable(&PathBuf::from("/etc"), &cwd));
+    }
+
+    #[test]
+    fn test_workspace_write_protects_internal_metadata_dirs() {
+        let cwd = PathBuf::from("/tmp/workspace");
+        let policy = SandboxPolicy::workspace_write(vec![cwd.clone()]);
+
+        assert!(!policy.is_path_writable(&cwd.join(".git/config"), &cwd));
+        assert!(!policy.is_path_writable(&cwd.join(".vtcode/cache"), &cwd));
+        assert!(!policy.is_path_writable(&cwd.join(".codex/state"), &cwd));
+        assert!(!policy.is_path_writable(&cwd.join(".agents/skills"), &cwd));
+        assert!(policy.is_path_writable(&cwd.join("src/main.rs"), &cwd));
     }
 
     #[test]
