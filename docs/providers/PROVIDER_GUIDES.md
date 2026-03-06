@@ -15,8 +15,7 @@ This index collects provider-specific guides for configuring VT Code with differ
 -   File inputs are supported for OpenAI Responses API through `input_file` parts.
 -   Supported file input fields in VT Code message parts: `file_id`, `file_data`, `file_url`, `filename`.
 -   `file_url` is Responses API only; VT Code rejects `file_url` when a request uses Chat Completions.
--   OpenAI Responses hosted tools currently map through `ToolDefinition` for `web_search`, `file_search`, hosted `tool_search`, and remote `mcp`.
--   Hosted `file_search` and `mcp` configs are passed through as request objects on the tool entry, matching the OpenAI Responses API shape.
+-   OpenAI Responses hosted tools currently map through `ToolDefinition` for `web_search`, `file_search`, hosted `tool_search`, and remote `mcp`, with hosted config passed through directly on each tool entry.
 -   For large corpora, prefer File Search/Retrieval instead of sending full files inline.
 -   For spreadsheet-heavy analysis, use Hosted Shell workflows instead of large inline sheet prompts.
 

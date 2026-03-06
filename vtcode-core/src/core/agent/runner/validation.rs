@@ -1,5 +1,5 @@
 use super::AgentRunner;
-use crate::llm::provider::{FunctionDefinition, LLMRequest, ToolDefinition};
+use crate::llm::provider::{LLMRequest, ToolDefinition};
 use anyhow::{Result, anyhow};
 use hashbrown::HashSet;
 
@@ -12,20 +12,7 @@ impl AgentRunner {
         let tools: Vec<ToolDefinition> = gemini_tools
             .into_iter()
             .flat_map(|tool| tool.function_declarations)
-            .map(|decl| ToolDefinition {
-                tool_type: "function".to_owned(),
-                function: Some(FunctionDefinition {
-                    name: decl.name,
-                    description: decl.description,
-                    parameters: decl.parameters,
-                }),
-                web_search: None,
-                hosted_tool_config: None,
-                shell: None,
-                grammar: None,
-                strict: None,
-                defer_loading: None,
-            })
+            .map(|decl| ToolDefinition::function(decl.name, decl.description, decl.parameters))
             .collect();
 
         Ok(crate::prompts::sort_tool_definitions(tools))

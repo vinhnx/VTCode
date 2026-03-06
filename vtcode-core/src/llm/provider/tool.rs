@@ -162,16 +162,10 @@ pub(crate) fn sanitize_tool_description(description: &str) -> String {
 }
 
 impl ToolDefinition {
-    /// Create a new tool definition with function type
-    pub fn function(name: String, description: String, parameters: Value) -> Self {
-        let sanitized_description = sanitize_tool_description(&description);
+    fn empty(tool_type: impl Into<String>) -> Self {
         Self {
-            tool_type: "function".to_owned(),
-            function: Some(FunctionDefinition {
-                name,
-                description: sanitized_description,
-                parameters,
-            }),
+            tool_type: tool_type.into(),
+            function: None,
             web_search: None,
             hosted_tool_config: None,
             shell: None,
@@ -179,6 +173,18 @@ impl ToolDefinition {
             strict: None,
             defer_loading: None,
         }
+    }
+
+    /// Create a new tool definition with function type
+    pub fn function(name: String, description: String, parameters: Value) -> Self {
+        let sanitized_description = sanitize_tool_description(&description);
+        let mut tool = Self::empty("function");
+        tool.function = Some(FunctionDefinition {
+            name,
+            description: sanitized_description,
+            parameters,
+        });
+        tool
     }
 
     /// Set whether the tool should be considered strict (Anthropic structured tool use)
@@ -205,156 +211,98 @@ impl ToolDefinition {
             }
         };
 
-        Self {
-            tool_type: tool_type.to_owned(),
-            function: Some(FunctionDefinition {
-                name: name.to_owned(),
-                description: "Search for tools by name, description, or parameters".to_owned(),
-                parameters: json!({
-                    "type": "object",
-                    "properties": {
-                        "query": {
-                            "type": "string",
-                            "description": "Search query (regex pattern for regex variant, natural language for bm25)"
-                        }
-                    },
-                    "required": ["query"]
-                }),
+        let mut tool = Self::empty(tool_type);
+        tool.function = Some(FunctionDefinition {
+            name: name.to_owned(),
+            description: "Search for tools by name, description, or parameters".to_owned(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Search query (regex pattern for regex variant, natural language for bm25)"
+                    }
+                },
+                "required": ["query"]
             }),
-            web_search: None,
-            hosted_tool_config: None,
-            shell: None,
-            grammar: None,
-            strict: None,
-            defer_loading: None,
-        }
+        });
+        tool
     }
 
     /// Create an OpenAI hosted tool search definition.
     pub fn hosted_tool_search() -> Self {
-        Self {
-            tool_type: "tool_search".to_owned(),
-            function: None,
-            web_search: None,
-            hosted_tool_config: None,
-            shell: None,
-            grammar: None,
-            strict: None,
-            defer_loading: None,
-        }
+        Self::empty("tool_search")
     }
 
     /// Create a new apply_patch tool definition (GPT-5.1 specific)
     /// The apply_patch tool lets models create, update, and delete files using VT Code structured diffs
     pub fn apply_patch(description: String) -> Self {
         let sanitized_description = sanitize_tool_description(&description);
-        Self {
-            tool_type: "apply_patch".to_owned(),
-            function: Some(FunctionDefinition {
-                name: "apply_patch".to_owned(),
-                description: sanitized_description,
-                parameters: json!({
-                    "type": "object",
-                    "properties": {
-                        "input": {
-                            "type": "string",
-                            "description": "Patch in VT Code format. MUST use *** Begin Patch, *** Update File: path, @@ context, -/+ lines, *** End Patch. Do NOT use unified diff (---/+++) format."
-                        },
-                        "patch": {
-                            "type": "string",
-                            "description": "Alias for input parameter"
-                        }
+        let mut tool = Self::empty("apply_patch");
+        tool.function = Some(FunctionDefinition {
+            name: "apply_patch".to_owned(),
+            description: sanitized_description,
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "input": {
+                        "type": "string",
+                        "description": "Patch in VT Code format. MUST use *** Begin Patch, *** Update File: path, @@ context, -/+ lines, *** End Patch. Do NOT use unified diff (---/+++) format."
                     },
-                    "anyOf": [
-                        {"required": ["input"]},
-                        {"required": ["patch"]}
-                    ]
-                }),
+                    "patch": {
+                        "type": "string",
+                        "description": "Alias for input parameter"
+                    }
+                },
+                "anyOf": [
+                    {"required": ["input"]},
+                    {"required": ["patch"]}
+                ]
             }),
-            web_search: None,
-            hosted_tool_config: None,
-            shell: None,
-            grammar: None,
-            strict: None,
-            defer_loading: None,
-        }
+        });
+        tool
     }
 
     /// Create a new custom tool definition for freeform function calling (GPT-5 specific)
     /// Allows raw text payloads without JSON wrapping
     pub fn custom(name: String, description: String) -> Self {
         let sanitized_description = sanitize_tool_description(&description);
-        Self {
-            tool_type: "custom".to_owned(),
-            function: Some(FunctionDefinition {
-                name,
-                description: sanitized_description,
-                parameters: json!({}), // Custom tools may not need parameters
-            }),
-            web_search: None,
-            hosted_tool_config: None,
-            shell: None,
-            grammar: None,
-            strict: None,
-            defer_loading: None,
-        }
+        let mut tool = Self::empty("custom");
+        tool.function = Some(FunctionDefinition {
+            name,
+            description: sanitized_description,
+            parameters: json!({}), // Custom tools may not need parameters
+        });
+        tool
     }
 
     /// Create a new grammar tool definition for context-free grammar constraints (GPT-5 specific)
     /// Ensures model output matches predefined syntax
     pub fn grammar(syntax: String, definition: String) -> Self {
-        Self {
-            tool_type: "grammar".to_owned(),
-            function: None,
-            web_search: None,
-            hosted_tool_config: None,
-            shell: None,
-            grammar: Some(GrammarDefinition { syntax, definition }),
-            strict: None,
-            defer_loading: None,
-        }
+        let mut tool = Self::empty("grammar");
+        tool.grammar = Some(GrammarDefinition { syntax, definition });
+        tool
     }
 
     /// Create a provider-native web search tool definition.
     pub fn web_search(config: Value) -> Self {
-        Self {
-            tool_type: "web_search".to_owned(),
-            function: None,
-            web_search: Some(config),
-            hosted_tool_config: None,
-            shell: None,
-            grammar: None,
-            strict: None,
-            defer_loading: None,
-        }
+        let mut tool = Self::empty("web_search");
+        tool.web_search = Some(config);
+        tool
     }
 
     /// Create an OpenAI Responses file search tool definition.
     pub fn file_search(config: Value) -> Self {
-        Self {
-            tool_type: "file_search".to_owned(),
-            function: None,
-            web_search: None,
-            hosted_tool_config: Some(config),
-            shell: None,
-            grammar: None,
-            strict: None,
-            defer_loading: None,
-        }
+        let mut tool = Self::empty("file_search");
+        tool.hosted_tool_config = Some(config);
+        tool
     }
 
     /// Create an OpenAI Responses remote MCP tool definition.
     pub fn mcp(config: Value) -> Self {
-        Self {
-            tool_type: "mcp".to_owned(),
-            function: None,
-            web_search: None,
-            hosted_tool_config: Some(config),
-            shell: None,
-            grammar: None,
-            strict: None,
-            defer_loading: None,
-        }
+        let mut tool = Self::empty("mcp");
+        tool.hosted_tool_config = Some(config);
+        tool
     }
 
     /// Get the function name for easy access

@@ -6,7 +6,7 @@ use crate::llm::provider;
 use hashbrown::HashSet;
 use serde_json::{Value, json};
 
-fn dedupe_key(serialized_tool: &Value) -> String {
+fn responses_dedupe_key(serialized_tool: &Value) -> String {
     if let Some(name) = serialized_tool.get("name").and_then(Value::as_str) {
         return format!("name:{name}");
     }
@@ -14,11 +14,7 @@ fn dedupe_key(serialized_tool: &Value) -> String {
     serialized_tool.to_string()
 }
 
-fn serialize_responses_hosted_tool(
-    tool_type: &str,
-    config: Option<&Value>,
-    allow_empty_config: bool,
-) -> Option<Value> {
+fn serialize_responses_hosted_tool(tool_type: &str, config: Option<&Value>) -> Option<Value> {
     let mut payload = serde_json::Map::new();
     payload.insert("type".to_string(), json!(tool_type));
 
@@ -26,11 +22,26 @@ fn serialize_responses_hosted_tool(
         Some(Value::Object(config_map)) => {
             payload.extend(config_map.clone());
         }
-        Some(Value::Null) | None if allow_empty_config => {}
         Some(_) | None => return None,
     }
 
     Some(Value::Object(payload))
+}
+
+fn serialize_responses_function_tool(
+    func: &provider::FunctionDefinition,
+    defer_loading: bool,
+) -> Value {
+    let mut value = json!({
+        "type": "function",
+        "name": &func.name,
+        "description": &func.description,
+        "parameters": &func.parameters
+    });
+    if defer_loading && let Some(obj) = value.as_object_mut() {
+        obj.insert("defer_loading".to_string(), json!(true));
+    }
+    value
 }
 
 pub fn serialize_tools(tools: &[provider::ToolDefinition], model: &str) -> Option<Value> {
@@ -42,6 +53,15 @@ pub fn serialize_tools(tools: &[provider::ToolDefinition], model: &str) -> Optio
     let serialized_tools = tools
         .iter()
         .filter_map(|tool| {
+            let canonical_name = tool
+                .function
+                .as_ref()
+                .map(|f| f.name.as_str())
+                .unwrap_or(tool.tool_type.as_str());
+            if !seen_names.insert(canonical_name.to_string()) {
+                return None;
+            }
+
             let serialized = match tool.tool_type.as_str() {
                 "function" => {
                     let func = tool.function.as_ref()?;
@@ -86,10 +106,6 @@ pub fn serialize_tools(tools: &[provider::ToolDefinition], model: &str) -> Optio
                 _ => json!(tool),
             };
 
-            if !seen_names.insert(dedupe_key(&serialized)) {
-                return None;
-            }
-
             Some(serialized)
         })
         .collect::<Vec<Value>>();
@@ -109,27 +125,14 @@ pub fn serialize_tools_for_responses(tools: &[provider::ToolDefinition]) -> Opti
             let serialized = match tool.tool_type.as_str() {
                 "function" => {
                     let func = tool.function.as_ref()?;
-                    let mut value = json!({
-                        "type": "function",
-                        "name": &func.name,
-                        "description": &func.description,
-                        "parameters": &func.parameters
-                    });
-                    if tool.defer_loading == Some(true)
-                        && let Some(obj) = value.as_object_mut()
-                    {
-                        obj.insert("defer_loading".to_string(), json!(true));
-                    }
-                    Some(value)
+                    Some(serialize_responses_function_tool(
+                        func,
+                        tool.defer_loading == Some(true),
+                    ))
                 }
                 "apply_patch" => {
                     if let Some(func) = tool.function.as_ref() {
-                        Some(json!({
-                            "type": "function",
-                            "name": &func.name,
-                            "description": &func.description,
-                            "parameters": &func.parameters
-                        }))
+                        Some(serialize_responses_function_tool(func, false))
                     } else {
                         Some(json!({
                             "type": "function",
@@ -149,14 +152,10 @@ pub fn serialize_tools_for_responses(tools: &[provider::ToolDefinition]) -> Opti
                         }))
                     }
                 }
-                "shell" => tool.function.as_ref().map(|func| {
-                    json!({
-                        "type": "function",
-                        "name": &func.name,
-                        "description": &func.description,
-                        "parameters": &func.parameters
-                    })
-                }),
+                "shell" => tool
+                    .function
+                    .as_ref()
+                    .map(|func| serialize_responses_function_tool(func, false)),
                 "custom" => tool.function.as_ref().map(|func| {
                     json!({
                         "type": "custom",
@@ -178,25 +177,18 @@ pub fn serialize_tools_for_responses(tools: &[provider::ToolDefinition]) -> Opti
                     })
                 }),
                 "tool_search" => Some(json!({ "type": "tool_search" })),
-                "web_search" => {
-                    serialize_responses_hosted_tool("web_search", tool.web_search.as_ref(), true)
-                }
+                "web_search" => serialize_responses_hosted_tool("web_search", tool.web_search.as_ref()),
                 "file_search" | "mcp" => serialize_responses_hosted_tool(
                     tool.tool_type.as_str(),
                     tool.hosted_tool_config.as_ref(),
-                    false,
                 ),
-                _ => tool.function.as_ref().map(|func| {
-                    json!({
-                        "type": "function",
-                        "name": &func.name,
-                        "description": &func.description,
-                        "parameters": &func.parameters
-                    })
-                }),
+                _ => tool
+                    .function
+                    .as_ref()
+                    .map(|func| serialize_responses_function_tool(func, false)),
             }?;
 
-            if !seen_names.insert(dedupe_key(&serialized)) {
+            if !seen_names.insert(responses_dedupe_key(&serialized)) {
                 return None;
             }
 
