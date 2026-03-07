@@ -179,10 +179,10 @@ pub(super) fn render_help(
             "  Ctrl+J – Line feed character for multiline",
         )?;
         renderer.line(MessageStyle::Info, "")?;
-        renderer.line(MessageStyle::Info, "Bash mode:")?;
+        renderer.line(MessageStyle::Info, "Shell mode:")?;
         renderer.line(
             MessageStyle::Info,
-            "  !command – Run bash commands directly (e.g., !ls -la)",
+            "  !command – Run shell commands directly (e.g., !ls -la)",
         )?;
         renderer.line(MessageStyle::Info, "")?;
         renderer.line(MessageStyle::Info, "Vim mode (enable with /vim):")?;

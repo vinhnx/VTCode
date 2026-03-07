@@ -507,7 +507,7 @@ if output.len() > max_tokens * 4 {
             return Err(anyhow!(
                 "PTY session command cannot be empty.\n\
                  This is an internal error - command validation should have caught this earlier.\n\
-                 Please report this with the run_pty_cmd parameters used."
+                 Please report this with the command-session parameters used."
             ));
         }
 

@@ -495,7 +495,7 @@ pub(crate) fn describe_tool_action(tool_name: &str, args: &Value) -> (String, Ha
             })
             .unwrap_or_else(|| {
                 (
-                    format!("{}bash", if is_mcp_tool { "MCP " } else { "" }),
+                    format!("{}command", if is_mcp_tool { "MCP " } else { "" }),
                     HashSet::new(),
                 )
             }),
@@ -510,7 +510,7 @@ pub(crate) fn describe_tool_action(tool_name: &str, args: &Value) -> (String, Ha
                     })
                     .unwrap_or_else(|| {
                         (
-                            format!("{}bash", if is_mcp_tool { "MCP " } else { "" }),
+                            format!("{}command", if is_mcp_tool { "MCP " } else { "" }),
                             HashSet::new(),
                         )
                     }),
@@ -774,6 +774,7 @@ mod tests {
     #[test]
     fn run_summary_placeholder_detection_catches_generic_labels() {
         assert!(run_summary_is_placeholder("Ran Use Unified exec"));
+        assert!(run_summary_is_placeholder("Ran command"));
         assert!(run_summary_is_placeholder("Ran bash"));
         assert!(!run_summary_is_placeholder("Ran cargo check -p vtcode"));
     }

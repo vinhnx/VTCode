@@ -2,6 +2,7 @@ use anyhow::anyhow;
 use serde_json::Value;
 use vtcode_core::config::constants::tools;
 use vtcode_core::tools::error_messages::agent_execution;
+use vtcode_core::tools::tool_intent;
 
 use super::status::ToolExecutionStatus;
 
@@ -21,7 +22,7 @@ pub(super) fn is_loop_detection_status(status: &ToolExecutionStatus) -> bool {
 }
 
 pub(super) fn build_tool_status_message(tool_name: &str, args: &Value) -> String {
-    if is_command_tool(tool_name) {
+    if is_command_tool(tool_name, args) {
         let command = args
             .get("command")
             .and_then(|value| value.as_str())
@@ -32,16 +33,8 @@ pub(super) fn build_tool_status_message(tool_name: &str, args: &Value) -> String
     }
 }
 
-fn is_command_tool(tool_name: &str) -> bool {
-    matches!(
-        tool_name,
-        tools::RUN_PTY_CMD
-            | "shell"
-            | tools::UNIFIED_EXEC
-            | tools::EXECUTE_CODE
-            | "exec_pty_cmd"
-            | "exec"
-    )
+fn is_command_tool(tool_name: &str, args: &Value) -> bool {
+    tool_name == tools::EXECUTE_CODE || tool_intent::is_command_run_tool_call(tool_name, args)
 }
 
 pub(crate) fn process_llm_tool_output(output: Value) -> ToolExecutionStatus {

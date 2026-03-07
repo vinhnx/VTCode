@@ -1,4 +1,4 @@
-use crate::config::constants::{defaults, tools as tool_names};
+use crate::config::constants::defaults;
 use crate::llm::provider::{Message, MessageContent, MessageRole, ToolCall};
 use crate::telemetry::perf::PerfSpan;
 use crate::utils::dot_config::DotManager;
@@ -493,12 +493,9 @@ fn progress_transcript_from_recent_messages(recent_messages: &[SessionMessage]) 
 }
 
 fn normalize_session_tool_name(name: &str) -> String {
-    match name {
-        n if n == tool_names::UNIFIED_EXEC || n == "shell" || n == "exec_pty_cmd" => {
-            tool_names::RUN_PTY_CMD.to_string()
-        }
-        _ => name.to_string(),
-    }
+    crate::tools::tool_intent::canonical_unified_exec_tool_name(name)
+        .unwrap_or(name)
+        .to_string()
 }
 
 fn normalize_distinct_tools_for_summary(distinct_tools: &[String]) -> Vec<String> {
@@ -1215,6 +1212,7 @@ fn is_session_file(path: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::constants::tools as tool_names;
     use crate::llm::provider::{ContentPart, ToolCall};
     use anyhow::anyhow;
     use chrono::{TimeZone, Timelike};
@@ -1424,7 +1422,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn session_progress_normalizes_pty_tool_aliases_in_summaries() -> Result<()> {
+    async fn session_progress_normalizes_exec_tool_aliases_in_summaries() -> Result<()> {
         let temp_dir = tempfile::tempdir().context("failed to create temp dir")?;
         let _guard = EnvGuard::set(SESSION_DIR_ENV, temp_dir.path());
 
@@ -1444,8 +1442,17 @@ mod tests {
             distinct_tools: vec![
                 tool_names::UNIFIED_EXEC.to_string(),
                 tool_names::RUN_PTY_CMD.to_string(),
+                tool_names::SEND_PTY_INPUT.to_string(),
+                tool_names::READ_PTY_SESSION.to_string(),
+                tool_names::LIST_PTY_SESSIONS.to_string(),
+                tool_names::CLOSE_PTY_SESSION.to_string(),
+                tool_names::EXECUTE_CODE.to_string(),
+                tool_names::EXEC_COMMAND.to_string(),
+                tool_names::WRITE_STDIN.to_string(),
                 "shell".to_string(),
                 "exec_pty_cmd".to_string(),
+                "exec".to_string(),
+                "container.exec".to_string(),
             ],
             recent_messages: recent,
             turn_number: 2,
@@ -1461,12 +1468,12 @@ mod tests {
 
         assert_eq!(
             snapshot.distinct_tools,
-            vec![tool_names::RUN_PTY_CMD.to_string()]
+            vec![tool_names::UNIFIED_EXEC.to_string()]
         );
         let progress = snapshot.progress.expect("progress should exist");
         assert_eq!(
             progress.tool_summaries,
-            vec![tool_names::RUN_PTY_CMD.to_string()]
+            vec![tool_names::UNIFIED_EXEC.to_string()]
         );
         Ok(())
     }

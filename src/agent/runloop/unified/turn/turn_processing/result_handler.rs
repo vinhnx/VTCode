@@ -1,7 +1,6 @@
 use anyhow::Result;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
-use vtcode_core::config::constants::tools;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::tools::tool_intent;
 
@@ -36,13 +35,7 @@ fn is_command_execution_tool_call(tool_call: &uni::ToolCall) -> bool {
         .parsed_arguments()
         .unwrap_or_else(|_| serde_json::json!({}));
 
-    match tool_name {
-        tools::RUN_PTY_CMD | "shell" => true,
-        tools::UNIFIED_EXEC | "exec_pty_cmd" | "exec" => {
-            tool_intent::unified_exec_action(&args_val).unwrap_or("run") == "run"
-        }
-        _ => false,
-    }
+    tool_intent::is_command_run_tool_call(tool_name, &args_val)
 }
 
 fn should_suppress_pre_tool_result_claim(

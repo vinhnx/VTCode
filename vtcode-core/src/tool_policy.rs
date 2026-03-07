@@ -25,10 +25,8 @@ use crate::utils::file_utils::{
 const AUTO_ALLOW_TOOLS: &[&str] = &[
     tools::UNIFIED_SEARCH,
     tools::READ_FILE,
-    tools::LIST_PTY_SESSIONS,
-    tools::READ_PTY_SESSION,
-    // RUN_PTY_CMD removed - should require prompt in tools_policy mode
-    // since it can execute arbitrary shell commands
+    // Unified exec remains prompt-gated; legacy PTY helpers stay compatibility-only
+    // and are no longer auto-seeded into default policy files.
     "cargo_check",
     "cargo_test",
     "git_status",

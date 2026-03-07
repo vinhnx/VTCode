@@ -17,8 +17,8 @@
 //! ## Usage
 //!
 //! ```rust,ignore
-//! // When processing large PTY output:
-//! let result = spool_large_output(output, "run_pty_cmd", &config)?;
+//! // When processing large unified_exec output:
+//! let result = spool_large_output(output, "unified_exec", &config)?;
 //! if let Some(spool) = result {
 //!     // Send notification to client
 //!     println!("{}", format_agent_notification(&spool));

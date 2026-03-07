@@ -373,7 +373,7 @@ pub async fn intercept_apply_patch(
     // Log warning about using shell for apply_patch
     ctx.session
         .record_warning(format!(
-            "apply_patch was requested via {}. Use the apply_patch tool instead of exec_command.",
+            "apply_patch was requested via {}. Use the apply_patch tool instead of shell command execution.",
             ctx.tool_name
         ))
         .await;

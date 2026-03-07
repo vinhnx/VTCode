@@ -12,6 +12,7 @@ use crate::agent::runloop::unified::turn::tool_outcomes::handlers::{
     ToolOutcomeContext, handle_single_tool_call,
 };
 use vtcode_core::command_safety::shell_parser::parse_shell_commands_tree_sitter;
+use vtcode_core::config::constants::tools;
 use vtcode_core::llm::provider as uni;
 use vtcode_core::session::SessionId;
 
@@ -49,7 +50,7 @@ pub(crate) async fn handle_direct_tool_execution(
         DirectToolInput::InvalidBang { command, diagnosis } => {
             ctx.interaction_ctx.renderer.line(
                 vtcode_core::utils::ansi::MessageStyle::Info,
-                "Shell mode (!): command rejected (invalid bash grammar).",
+                "Shell mode (!): command rejected (invalid shell syntax).",
             )?;
             ctx.interaction_ctx.renderer.line(
                 vtcode_core::utils::ansi::MessageStyle::Info,
@@ -147,21 +148,21 @@ pub(crate) async fn handle_direct_tool_execution(
 }
 
 fn parse_direct_tool_input(input: &str) -> Option<DirectToolInput> {
-    // Check for bash mode with '!' prefix or explicit 'run' command
+    // Check for shell mode with '!' prefix or explicit 'run' command
     let trimmed = input.trim_start();
     if let Some(rest) = trimmed.strip_prefix('!') {
-        let bash_command = rest.trim();
-        if bash_command.is_empty() {
+        let shell_command = rest.trim();
+        if shell_command.is_empty() {
             return None;
         }
-        return match validate_bang_shell_command(bash_command) {
+        return match validate_bang_shell_command(shell_command) {
             Ok(()) => Some(DirectToolInput::Execute {
-                tool_name: "bash".to_string(),
-                args: serde_json::json!({ "command": bash_command }),
+                tool_name: tools::UNIFIED_EXEC.to_string(),
+                args: serde_json::json!({ "action": "run", "command": shell_command }),
                 is_bang_prefix: true,
             }),
             Err(diagnosis) => Some(DirectToolInput::InvalidBang {
-                command: bash_command.to_string(),
+                command: shell_command.to_string(),
                 diagnosis,
             }),
         };
@@ -197,7 +198,11 @@ mod tests {
                 args,
                 is_bang_prefix,
             } => {
-                assert_eq!(tool_name, "bash");
+                assert_eq!(
+                    tool_name,
+                    vtcode_core::config::constants::tools::UNIFIED_EXEC
+                );
+                assert_eq!(args["action"], "run");
                 assert_eq!(args["command"], "echo hello");
                 assert!(is_bang_prefix);
             }
